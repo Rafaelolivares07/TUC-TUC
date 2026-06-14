@@ -1,3 +1,4 @@
+import json
 import random
 import re
 import unicodedata
@@ -145,6 +146,46 @@ def _crear_tablas(conn):
                 pass
     conn.execute("SET statement_timeout = '0'")
     _tablas_listas = True
+
+
+def _asegurar_experiencia_restaurante(conn):
+    conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pantalla_experiencial BOOLEAN DEFAULT FALSE")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS restaurante_experiencia_bloques (
+            id SERIAL PRIMARY KEY,
+            restaurante_id INTEGER NOT NULL REFERENCES restaurantes(id) ON DELETE CASCADE,
+            tipo VARCHAR(20) NOT NULL,
+            titulo VARCHAR(180),
+            texto TEXT,
+            media JSONB DEFAULT '[]'::jsonb,
+            activo BOOLEAN DEFAULT TRUE,
+            orden INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_restaurante_experiencia_bloques
+        ON restaurante_experiencia_bloques(restaurante_id, orden, id)
+    """)
+    conn.commit()
+
+
+def _bloques_experiencia_restaurante(conn, restaurante_id, activo=True):
+    _asegurar_experiencia_restaurante(conn)
+    filtro = "AND activo = TRUE" if activo else ""
+    rows = conn.execute(f"""
+        SELECT id, tipo, titulo, texto, media, activo, orden
+        FROM restaurante_experiencia_bloques
+        WHERE restaurante_id = %s {filtro}
+        ORDER BY orden, id
+    """, (restaurante_id,)).fetchall()
+    bloques = []
+    for r in rows:
+        item = dict(r)
+        item['media'] = item.get('media') or []
+        bloques.append(item)
+    return bloques
 
 
 def _generar_slug(nombre):
@@ -747,6 +788,89 @@ def api_mostrar_nombre(slug):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/restaurante/<slug>/experiencia', methods=['POST'])
+def api_restaurante_experiencia(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    pantalla = bool((request.get_json() or {}).get('pantalla_experiencial', False))
+    conn = get_db_connection()
+    try:
+        _asegurar_experiencia_restaurante(conn)
+        rest = conn.execute("SELECT id, admin_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        if session.get('rol') != 'Administrador' and session.get('usuario_id') != rest['admin_id']:
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        conn.execute("UPDATE restaurantes SET pantalla_experiencial = %s WHERE id = %s", (pantalla, rest['id']))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/restaurante/<slug>/experiencia-bloques', methods=['GET', 'PUT'])
+def api_restaurante_experiencia_bloques(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _asegurar_experiencia_restaurante(conn)
+        rest = conn.execute("SELECT id, admin_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+        if session.get('rol') != 'Administrador' and session.get('usuario_id') != rest['admin_id']:
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        if request.method == 'GET':
+            return jsonify({'ok': True, 'bloques': _bloques_experiencia_restaurante(conn, rest['id'], activo=False)})
+
+        data = request.get_json() or {}
+        bloques = data.get('bloques') or []
+        if not isinstance(bloques, list):
+            return jsonify({'ok': False, 'error': 'Formato invalido'}), 400
+        tipos_validos = {'video', 'collage', 'galeria', 'texto'}
+        conn.execute("DELETE FROM restaurante_experiencia_bloques WHERE restaurante_id = %s", (rest['id'],))
+        for idx, bloque in enumerate(bloques[:12]):
+            if not isinstance(bloque, dict):
+                continue
+            tipo = (bloque.get('tipo') or 'texto').strip().lower()
+            if tipo not in tipos_validos:
+                tipo = 'texto'
+            titulo = (bloque.get('titulo') or '').strip()[:180] or None
+            texto = (bloque.get('texto') or '').strip()[:1200] or None
+            activo = bool(bloque.get('activo', True))
+            media = bloque.get('media') or []
+            if not isinstance(media, list):
+                media = []
+            media = [str(m).strip() for m in media if str(m).strip()]
+            if tipo == 'texto':
+                media = []
+            elif tipo == 'video':
+                media = media[:3]
+            else:
+                media = media[:12]
+            conn.execute("""
+                INSERT INTO restaurante_experiencia_bloques
+                    (restaurante_id, tipo, titulo, texto, media, activo, orden)
+                VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s)
+            """, (rest['id'], tipo, titulo, texto, json.dumps(media), activo, idx))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/restaurante/<slug>/tipo-restaurante', methods=['POST'])
 def api_tipo(slug):
     if 'usuario_id' not in session and not session.get('restaurante_token'):
@@ -1220,9 +1344,10 @@ def restaurante_mesero(slug):
     try:
         conn = get_db_connection()
         _crear_tablas(conn)
+        _asegurar_experiencia_restaurante(conn)
         rest = conn.execute("SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)).fetchone()
-        conn.close()
         if not rest:
+            conn.close()
             return "Restaurante no encontrado", 404
         uid = session.get('usuario_id')
         skip_pin = uid and (session.get('rol') == 'Administrador' or uid == rest['admin_id'])
@@ -1275,7 +1400,7 @@ def restaurante_publico(slug):
                 cliente_data = {'nombre': tercero['nombre'], 'telefono': tercero['telefono'] or '',
                                 'direccion': tercero['direccion'] or '', 'cliente_id': tercero_id}
         solo_carta = bool(rest['solo_carta']) if rest['solo_carta'] is not None else False
-        conn = get_db_connection()
+        bloques_experiencia = _bloques_experiencia_restaurante(conn, rest['id']) if rest['pantalla_experiencial'] else []
         visita = registrar_visita_publica(
             conn,
             'restaurante',
@@ -1285,7 +1410,8 @@ def restaurante_publico(slug):
         )
         conn.close()
         response = make_response(render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre='',
-                                                 cliente_data=cliente_data, solo_carta=solo_carta))
+                                                 cliente_data=cliente_data, solo_carta=solo_carta,
+                                                 bloques_experiencia=bloques_experiencia))
         return respuesta_con_visitante(response, visita)
     except Exception as e:
         return f"Error: {e}", 500
@@ -1296,6 +1422,7 @@ def restaurante_cliente(slug, mesa_nombre):
     try:
         conn = get_db_connection()
         _crear_tablas(conn)
+        _asegurar_experiencia_restaurante(conn)
         rest = conn.execute("SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)).fetchone()
         if not rest:
             conn.close()
@@ -1308,6 +1435,7 @@ def restaurante_cliente(slug, mesa_nombre):
             conn.close()
             return "Mesa no encontrada", 404
         solo_carta = bool(rest['solo_carta']) if rest['solo_carta'] is not None else False
+        bloques_experiencia = _bloques_experiencia_restaurante(conn, rest['id']) if rest['pantalla_experiencial'] else []
         visita = registrar_visita_publica(
             conn,
             'restaurante',
@@ -1319,7 +1447,8 @@ def restaurante_cliente(slug, mesa_nombre):
         )
         conn.close()
         response = make_response(render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre=mesa_nombre,
-                                                 cliente_data=None, solo_carta=solo_carta))
+                                                 cliente_data=None, solo_carta=solo_carta,
+                                                 bloques_experiencia=bloques_experiencia))
         return respuesta_con_visitante(response, visita)
     except Exception as e:
         return f"Error: {e}", 500
@@ -1329,11 +1458,14 @@ def restaurante_cliente(slug, mesa_nombre):
 def promo_restaurante_menu(slug):
     conn = get_db_connection()
     try:
+        _asegurar_experiencia_restaurante(conn)
         rest = conn.execute("SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)).fetchone()
         if not rest:
             return "Restaurante no encontrado", 404
         solo_carta = bool(rest['solo_carta']) if rest['solo_carta'] is not None else False
         txt = request.args.get('txt', '')
+        _asegurar_experiencia_restaurante(conn)
+        bloques_experiencia = _bloques_experiencia_restaurante(conn, rest['id']) if rest['pantalla_experiencial'] else []
         visita = registrar_visita_publica(
             conn,
             'restaurante',
@@ -1343,7 +1475,8 @@ def promo_restaurante_menu(slug):
             detalle=txt or None,
         )
         response = make_response(render_template('restaurante_cliente.html', restaurante=rest, mesa_nombre='',
-                                                 cliente_data=None, solo_carta=solo_carta))
+                                                 cliente_data=None, solo_carta=solo_carta,
+                                                 bloques_experiencia=bloques_experiencia))
         return respuesta_con_visitante(response, visita)
     except Exception as e:
         return f"Error: {e}", 500

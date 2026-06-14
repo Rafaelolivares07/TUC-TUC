@@ -573,6 +573,30 @@
                 </div>
             </div>
 
+            <!-- Pantalla experiencial -->
+            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <div>
+                        <h3 class="font-bold text-gray-700">Pantalla experiencial</h3>
+                        <p class="text-xs text-gray-400">Muestra videos, galerias o frases antes de la carta.</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-experiencia" class="sr-only peer"
+                            {{ 'checked' if (restaurante.pantalla_experiencial | default(false)) }}
+                            onchange="toggleExperiencia(this.checked)">
+                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:bg-amber-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                    <button onclick="agregarBloqueExperiencia('video')" class="border border-gray-200 hover:border-amber-300 bg-white rounded-xl py-3 text-sm font-semibold text-gray-700">+ Video</button>
+                    <button onclick="agregarBloqueExperiencia('collage')" class="border border-gray-200 hover:border-amber-300 bg-white rounded-xl py-3 text-sm font-semibold text-gray-700">+ Collage</button>
+                    <button onclick="agregarBloqueExperiencia('galeria')" class="border border-gray-200 hover:border-amber-300 bg-white rounded-xl py-3 text-sm font-semibold text-gray-700">+ Galeria</button>
+                    <button onclick="agregarBloqueExperiencia('texto')" class="border border-gray-200 hover:border-amber-300 bg-white rounded-xl py-3 text-sm font-semibold text-gray-700">+ Texto</button>
+                </div>
+                <div id="bloques-experiencia" class="space-y-3"></div>
+                <button onclick="guardarBloquesExperiencia()" class="mt-4 w-full bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-xl text-sm font-bold">Guardar contenido experiencial</button>
+            </div>
+
             <!-- Tipo de restaurante -->
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
                 <h3 class="font-bold text-gray-700 mb-2">Tipo de carta</h3>
@@ -945,6 +969,7 @@ function cambiarTab(tab) {
     if (tab === 'mesas') cargarMesas();
     if (tab === 'cuentas') cargarCuentasAdmin();
     if (tab === 'visitantes') cargarVisitantes();
+    if (tab === 'personalizar') cargarBloquesExperiencia();
     if (tab === 'ubicacion') iniciarMapaUbicacion();
 }
 
@@ -2162,6 +2187,212 @@ async function quitarImagenHeader() {
         document.getElementById('header-upload').classList.remove('hidden');
         toast('Imagen quitada');
     }
+}
+
+// ===== PANTALLA EXPERIENCIAL =====
+let bloquesExperiencia = [];
+let bloquesExperienciaCargados = false;
+
+function expHtmlSeguro(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
+async function toggleExperiencia(pantalla_experiencial) {
+    try {
+        const r = await fetch(`${BASE}/experiencia`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pantalla_experiencial})
+        });
+        const data = await r.json();
+        if (data.ok) toast(pantalla_experiencial ? 'Pantalla experiencial activa' : 'Pantalla experiencial desactivada');
+        else {
+            toast(data.error || 'Error', false);
+            document.getElementById('toggle-experiencia').checked = !pantalla_experiencial;
+        }
+    } catch(e) {
+        toast('Error de conexion', false);
+        document.getElementById('toggle-experiencia').checked = !pantalla_experiencial;
+    }
+}
+
+async function cargarBloquesExperiencia() {
+    const cont = document.getElementById('bloques-experiencia');
+    if (!cont) return;
+    if (!bloquesExperienciaCargados) cont.innerHTML = '<div class="text-sm text-gray-400 text-center py-6">Cargando contenido experiencial...</div>';
+    try {
+        const r = await fetch(`${BASE}/experiencia-bloques`);
+        const data = await r.json();
+        if (!data.ok) return toast(data.error || 'Error', false);
+        bloquesExperiencia = (data.bloques || []).map(b => ({
+            tipo: b.tipo || 'texto',
+            titulo: b.titulo || '',
+            texto: b.texto || '',
+            media: Array.isArray(b.media) ? b.media : [],
+            activo: b.activo !== false
+        }));
+        bloquesExperienciaCargados = true;
+        renderBloquesExperiencia();
+    } catch(e) { toast('Error de conexion', false); }
+}
+
+function agregarBloqueExperiencia(tipo) {
+    bloquesExperiencia.push({
+        tipo,
+        titulo: tipo === 'video' ? 'Video destacado' : (tipo === 'texto' ? 'Frase destacada' : 'Momentos reales'),
+        texto: '',
+        media: [],
+        activo: true
+    });
+    renderBloquesExperiencia();
+}
+
+function renderBloquesExperiencia() {
+    const cont = document.getElementById('bloques-experiencia');
+    if (!cont) return;
+    if (!bloquesExperiencia.length) {
+        cont.innerHTML = '<div class="text-center py-8 text-gray-400 bg-white border border-dashed border-gray-200 rounded-xl text-sm">Aun no hay bloques. Agrega un video, galeria, collage o texto.</div>';
+        return;
+    }
+    cont.innerHTML = bloquesExperiencia.map((b, idx) => {
+        const media = Array.isArray(b.media) ? b.media : [];
+        const aceptaImagen = b.tipo === 'collage' || b.tipo === 'galeria';
+        const aceptaUrl = b.tipo !== 'texto';
+        const mediaHtml = media.length ? media.map((m, mi) => {
+            const esVideo = b.tipo === 'video';
+            return `<div class="flex items-center gap-2 bg-white border border-gray-100 rounded-lg p-2">
+                <div class="w-14 h-12 rounded bg-gray-50 border overflow-hidden flex items-center justify-center flex-shrink-0">
+                    ${esVideo ? '<span class="text-[10px] font-bold text-gray-400">VIDEO</span>' : `<img src="${expHtmlSeguro(m)}" class="w-full h-full object-cover">`}
+                </div>
+                <input value="${expHtmlSeguro(m)}" onchange="actualizarMediaBloque(${idx}, ${mi}, this.value)" class="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
+                <button onclick="quitarMediaBloque(${idx}, ${mi})" class="text-xs font-bold text-red-500 px-2">Quitar</button>
+            </div>`;
+        }).join('') : '<p class="text-xs text-gray-400">Sin medios cargados.</p>';
+        return `<div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3 mb-3">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <select onchange="cambiarTipoBloqueExperiencia(${idx}, this.value)" class="border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-semibold">
+                        <option value="video" ${b.tipo === 'video' ? 'selected' : ''}>Video</option>
+                        <option value="collage" ${b.tipo === 'collage' ? 'selected' : ''}>Collage</option>
+                        <option value="galeria" ${b.tipo === 'galeria' ? 'selected' : ''}>Galeria simple</option>
+                        <option value="texto" ${b.tipo === 'texto' ? 'selected' : ''}>Texto corto</option>
+                    </select>
+                    <label class="flex items-center gap-1 text-xs text-gray-500">
+                        <input type="checkbox" ${b.activo !== false ? 'checked' : ''} onchange="bloquesExperiencia[${idx}].activo=this.checked" class="accent-amber-500">
+                        Activo
+                    </label>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="moverBloqueExperiencia(${idx}, -1)" class="w-8 h-8 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50" title="Subir">↑</button>
+                    <button onclick="moverBloqueExperiencia(${idx}, 1)" class="w-8 h-8 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50" title="Bajar">↓</button>
+                    <button onclick="eliminarBloqueExperiencia(${idx})" class="w-8 h-8 rounded-lg border border-red-100 text-red-500 hover:bg-red-50" title="Eliminar">×</button>
+                </div>
+            </div>
+            <div class="grid md:grid-cols-2 gap-3">
+                <input value="${expHtmlSeguro(b.titulo || '')}" placeholder="Titulo corto opcional" oninput="bloquesExperiencia[${idx}].titulo=this.value" class="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                <input value="${expHtmlSeguro(b.texto || '')}" placeholder="Texto breve opcional" oninput="bloquesExperiencia[${idx}].texto=this.value" class="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+            </div>
+            <div class="mt-3 space-y-2">${mediaHtml}</div>
+            ${aceptaUrl ? `<div class="flex flex-col md:flex-row gap-2 mt-3">
+                <input id="exp-media-url-${idx}" placeholder="${b.tipo === 'video' ? 'URL del video (YouTube, Vimeo o MP4)' : 'Pega URL de imagen'}" class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm">
+                <button onclick="agregarUrlMediaBloque(${idx})" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">Agregar URL</button>
+                ${aceptaImagen ? `<button onclick="seleccionarImagenBloqueExperiencia(${idx})" class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">Subir imagen</button>` : ''}
+            </div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function cambiarTipoBloqueExperiencia(idx, tipo) {
+    bloquesExperiencia[idx].tipo = tipo;
+    if (tipo === 'texto') bloquesExperiencia[idx].media = [];
+    renderBloquesExperiencia();
+}
+
+function moverBloqueExperiencia(idx, dir) {
+    const nuevo = idx + dir;
+    if (nuevo < 0 || nuevo >= bloquesExperiencia.length) return;
+    const tmp = bloquesExperiencia[idx];
+    bloquesExperiencia[idx] = bloquesExperiencia[nuevo];
+    bloquesExperiencia[nuevo] = tmp;
+    renderBloquesExperiencia();
+}
+
+function eliminarBloqueExperiencia(idx) {
+    if (!confirm('Eliminar este bloque experiencial?')) return;
+    bloquesExperiencia.splice(idx, 1);
+    renderBloquesExperiencia();
+}
+
+function agregarUrlMediaBloque(idx) {
+    const input = document.getElementById('exp-media-url-' + idx);
+    const url = (input?.value || '').trim();
+    if (!url) return;
+    bloquesExperiencia[idx].media = bloquesExperiencia[idx].media || [];
+    bloquesExperiencia[idx].media.push(url);
+    input.value = '';
+    renderBloquesExperiencia();
+}
+
+function actualizarMediaBloque(idx, mi, valor) {
+    bloquesExperiencia[idx].media[mi] = valor.trim();
+}
+
+function quitarMediaBloque(idx, mi) {
+    bloquesExperiencia[idx].media.splice(mi, 1);
+    renderBloquesExperiencia();
+}
+
+function seleccionarImagenBloqueExperiencia(idx) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = () => {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const maxW = 1100;
+                const w = Math.min(img.width, maxW);
+                const h = Math.round(img.height * (w / img.width));
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                bloquesExperiencia[idx].media = bloquesExperiencia[idx].media || [];
+                bloquesExperiencia[idx].media.push(canvas.toDataURL('image/jpeg', 0.78));
+                renderBloquesExperiencia();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+
+async function guardarBloquesExperiencia() {
+    try {
+        const bloques = bloquesExperiencia.map(b => ({
+            tipo: b.tipo,
+            titulo: (b.titulo || '').trim(),
+            texto: (b.texto || '').trim(),
+            media: (b.media || []).map(m => String(m || '').trim()).filter(Boolean),
+            activo: b.activo !== false
+        }));
+        const r = await fetch(`${BASE}/experiencia-bloques`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({bloques})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            toast('Contenido experiencial guardado');
+            cargarBloquesExperiencia();
+        } else toast(data.error || 'Error', false);
+    } catch(e) { toast('Error de conexion', false); }
 }
 
 // ===== MOSTRAR NOMBRE =====

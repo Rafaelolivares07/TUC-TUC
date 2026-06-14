@@ -100,6 +100,24 @@
             position: relative; width: 100%; height: 100%;
             object-fit: contain; z-index: 1;
         }
+        .exp-media {
+            border-radius: 18px; overflow: hidden;
+            border: 1px solid rgba(245,158,11,0.18);
+            background: rgba(255,255,255,0.78);
+        }
+        .tema-oscuro .exp-media { background: rgba(31,41,55,0.76); border-color: rgba(75,85,99,0.7); }
+        .exp-collage {
+            display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-auto-rows: 86px; gap: 8px;
+        }
+        .exp-collage img:first-child { grid-column: span 2; grid-row: span 2; }
+        .exp-collage img { width: 100%; height: 100%; object-fit: cover; border-radius: 14px; }
+        .exp-gallery {
+            display: grid; grid-auto-flow: column; grid-auto-columns: minmax(210px, 76%);
+            overflow-x: auto; gap: 10px; scroll-snap-type: x mandatory; padding-bottom: 4px;
+        }
+        .exp-gallery img { width: 100%; height: 230px; object-fit: cover; border-radius: 16px; scroll-snap-align: start; }
+        .exp-video-frame iframe, .exp-video-frame video { width: 100%; aspect-ratio: 16 / 9; display: block; border: 0; border-radius: 18px; background: #111; }
     </style>
 </head>
 <body class="min-h-screen tema-{{ restaurante.tema or 'claro' }}">
@@ -151,6 +169,45 @@
             </div>
         </div>
     </div>
+
+    {% set bloques_exp = bloques_experiencia | default([]) %}
+    {% if restaurante.pantalla_experiencial | default(false) and bloques_exp %}
+    <section class="mb-6 space-y-4">
+        {% for bloque in bloques_exp %}
+        <article class="exp-media p-3">
+            {% if bloque.titulo or bloque.texto %}
+            <div class="mb-3 text-center">
+                {% if bloque.titulo %}
+                <h2 class="text-lg font-extrabold txt-primary leading-tight">{{ bloque.titulo }}</h2>
+                {% endif %}
+                {% if bloque.texto %}
+                <p class="text-sm txt-secondary mt-1 leading-relaxed">{{ bloque.texto }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if bloque.tipo == 'video' and bloque.media %}
+            <div class="space-y-3">
+                {% for media in bloque.media %}
+                <div class="exp-video-frame" data-url="{{ media }}"></div>
+                {% endfor %}
+            </div>
+            {% elif bloque.tipo == 'collage' and bloque.media %}
+            <div class="exp-collage">
+                {% for media in bloque.media %}
+                <img src="{{ media }}" alt="{{ bloque.titulo or restaurante.nombre }}" loading="lazy">
+                {% endfor %}
+            </div>
+            {% elif bloque.tipo == 'galeria' and bloque.media %}
+            <div class="exp-gallery">
+                {% for media in bloque.media %}
+                <img src="{{ media }}" alt="{{ bloque.titulo or restaurante.nombre }}" loading="lazy">
+                {% endfor %}
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </section>
+    {% endif %}
 
     <!-- Nombre del cliente -->
     <div id="paso-nombre" class="mb-6">
@@ -984,6 +1041,40 @@ function actualizarInfoEntrega() {
     if (saludo) saludo.innerHTML = `Hola <span class="font-bold text-amber-700">${nombreCliente}</span>, ¿qué vas a pedir?`;
 }
 
+function normalizarVideoUrl(url) {
+    try {
+        const u = new URL(url, window.location.origin);
+        if (u.hostname.includes('youtube.com')) {
+            const id = u.searchParams.get('v') || u.pathname.split('/').filter(Boolean).pop();
+            return id ? `https://www.youtube.com/embed/${id}` : url;
+        }
+        if (u.hostname.includes('youtu.be')) {
+            const id = u.pathname.split('/').filter(Boolean)[0];
+            return id ? `https://www.youtube.com/embed/${id}` : url;
+        }
+        if (u.hostname.includes('vimeo.com')) {
+            const id = u.pathname.split('/').filter(Boolean).pop();
+            return id ? `https://player.vimeo.com/video/${id}` : url;
+        }
+    } catch(e) {}
+    return url;
+}
+
+function inicializarVideosExperiencia() {
+    document.querySelectorAll('.exp-video-frame[data-url]').forEach(frame => {
+        const raw = frame.dataset.url || '';
+        if (!raw || frame.dataset.rendered) return;
+        frame.dataset.rendered = '1';
+        const url = normalizarVideoUrl(raw);
+        const safe = url.replace(/"/g, '&quot;');
+        if (/\.(mp4|webm|ogg)(\?|#|$)/i.test(url)) {
+            frame.innerHTML = `<video src="${safe}" controls playsinline preload="metadata"></video>`;
+        } else {
+            frame.innerHTML = `<iframe src="${safe}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+        }
+    });
+}
+
 // ===== INIT =====
 // Siempre ir directo al menú — datos se recogen al confirmar pedido
 // Recuperar datos guardados en localStorage
@@ -1017,6 +1108,7 @@ if (nombreCliente && saludoEl) {
 } else if (saludoEl) {
     saludoEl.textContent = '¿Qué te gustaría pedir?';
 }
+inicializarVideosExperiencia();
 actualizarInfoEntrega();
 if (TIPO_REST === 'carta') {
     cargarCartaCliente();

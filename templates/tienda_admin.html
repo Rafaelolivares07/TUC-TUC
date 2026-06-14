@@ -3047,7 +3047,7 @@ function renderBloquesExperiencia() {
             ${aceptaUrl ? `<div class="flex flex-col md:flex-row gap-2 mt-3">
                 <input id="exp-media-url-${idx}" placeholder="${b.tipo === 'video' ? 'URL del video (YouTube, Vimeo o MP4)' : 'Pega URL de imagen'}" class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm">
                 <button onclick="agregarUrlMediaBloque(${idx})" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">Agregar URL</button>
-                ${aceptaImagen ? `<button onclick="seleccionarImagenBloqueExperiencia(${idx})" class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">Subir imagen</button>` : ''}
+                ${aceptaImagen ? `<button onclick="seleccionarImagenBloqueExperiencia(${idx})" class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">Subir imagenes</button>` : ''}
             </div>` : ''}
         </div>`;
     }).join('');
@@ -3097,14 +3097,20 @@ function seleccionarImagenBloqueExperiencia(idx) {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = () => {
-        const file = input.files[0];
-        if (!file) return;
-        procesarImagen(file, 1100, 0.78, base64 => {
-            bloquesExperiencia[idx].media = bloquesExperiencia[idx].media || [];
-            bloquesExperiencia[idx].media.push(base64);
-            renderBloquesExperiencia();
-        });
+    input.multiple = true;
+    input.onchange = async () => {
+        const files = Array.from(input.files || []);
+        if (!files.length) return;
+        bloquesExperiencia[idx].media = bloquesExperiencia[idx].media || [];
+        for (const file of files) {
+            await new Promise(resolve => {
+                procesarImagen(file, 1100, 0.78, base64 => {
+                    bloquesExperiencia[idx].media.push(base64);
+                    resolve();
+                });
+            });
+        }
+        renderBloquesExperiencia();
     };
     input.click();
 }

@@ -2298,7 +2298,7 @@ function renderBloquesExperiencia() {
             ${aceptaUrl ? `<div class="flex flex-col md:flex-row gap-2 mt-3">
                 <input id="exp-media-url-${idx}" placeholder="${b.tipo === 'video' ? 'URL del video (YouTube, Vimeo o MP4)' : 'Pega URL de imagen'}" class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm">
                 <button onclick="agregarUrlMediaBloque(${idx})" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">Agregar URL</button>
-                ${aceptaImagen ? `<button onclick="seleccionarImagenBloqueExperiencia(${idx})" class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">Subir imagen</button>` : ''}
+                ${aceptaImagen ? `<button onclick="seleccionarImagenBloqueExperiencia(${idx})" class="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800">Subir imagenes</button>` : ''}
             </div>` : ''}
         </div>`;
     }).join('');
@@ -2348,11 +2348,15 @@ function seleccionarImagenBloqueExperiencia(idx) {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
+    input.multiple = true;
     input.onchange = () => {
-        const file = input.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = e => {
+        const files = Array.from(input.files || []);
+        if (!files.length) return;
+        bloquesExperiencia[idx].media = bloquesExperiencia[idx].media || [];
+        let pendientes = files.length;
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = e => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
@@ -2362,13 +2366,14 @@ function seleccionarImagenBloqueExperiencia(idx) {
                 canvas.width = w;
                 canvas.height = h;
                 canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                bloquesExperiencia[idx].media = bloquesExperiencia[idx].media || [];
                 bloquesExperiencia[idx].media.push(canvas.toDataURL('image/jpeg', 0.78));
-                renderBloquesExperiencia();
+                pendientes -= 1;
+                if (pendientes <= 0) renderBloquesExperiencia();
             };
             img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
+            };
+            reader.readAsDataURL(file);
+        });
     };
     input.click();
 }

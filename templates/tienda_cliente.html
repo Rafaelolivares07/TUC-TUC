@@ -334,6 +334,10 @@
 
             <div id="campo-direccion">
                 <input id="inp-direccion" type="text" placeholder="Direccion de entrega" class="w-full border rounded-lg px-3 py-2 text-sm mb-3">
+                <button type="button" onclick="capturarUbicacionCliente()" class="w-full border border-accion-suave txt-accion bg-accion-suave rounded-lg py-2 text-xs font-bold mb-2">
+                    Usar mi ubicacion para calcular domicilio
+                </button>
+                <p id="txt-domicilio" class="text-xs txt-secondary mb-3">Domicilio por confirmar.</p>
             </div>
 
             <textarea id="inp-notas" placeholder="Notas (opcional)" class="w-full border rounded-lg px-3 py-2 text-sm mb-3" rows="2"></textarea>
@@ -380,6 +384,10 @@ let configNegocio = null;
 let metodoPago = null;
 let ultimoPedidoId = null;
 let clienteData = {{ cliente_data | tojson if cliente_data else 'null' }};
+let clienteLat = null;
+let clienteLon = null;
+let subtotalPedidoActual = 0;
+let totalPedidoActual = 0;
 
 async function cargarConfig() {
     if (!TERCERO_ID) return;
@@ -645,6 +653,52 @@ function selEntrega(tipo) {
     document.getElementById('btn-domicilio').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega transition ${tipo === 'domicilio' ? 'border-accion bg-accion-suave txt-accion' : 'border-gray-200 text-gray-500'}`;
     document.getElementById('btn-recoger').className = `flex-1 py-2 rounded-xl border-2 text-sm font-semibold btn-entrega transition ${tipo === 'recoger' ? 'border-accion bg-accion-suave txt-accion' : 'border-gray-200 text-gray-500'}`;
     document.getElementById('campo-direccion').classList.toggle('hidden', tipo === 'recoger');
+    actualizarDomicilioPedido();
+}
+
+function puntoEnPoligono(lat, lon, poligono) {
+    if (!lat || !lon || !Array.isArray(poligono) || poligono.length < 3) return false;
+    let dentro = false;
+    for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+        const latI = Number(poligono[i].lat), lonI = Number(poligono[i].lon);
+        const latJ = Number(poligono[j].lat), lonJ = Number(poligono[j].lon);
+        const cruza = ((lonI > lon) !== (lonJ > lon)) &&
+            (lat < (latJ - latI) * (lon - lonI) / ((lonJ - lonI) || 1e-12) + latI);
+        if (cruza) dentro = !dentro;
+    }
+    return dentro;
+}
+
+function calcularDomicilioCliente() {
+    if (tipoEntrega !== 'domicilio') return {valor: 0, estado: 'no_aplica', texto: 'Sin domicilio.'};
+    const tarifa = Number(configNegocio?.domicilio_tarifa || 0);
+    const zona = configNegocio?.domicilio_zona || [];
+    if (!tarifa) return {valor: 0, estado: 'por_confirmar', texto: 'Domicilio por confirmar.'};
+    if (!clienteLat || !clienteLon) return {valor: 0, estado: 'por_confirmar', texto: 'Comparte tu ubicacion para calcular el domicilio.'};
+    if (!zona.length || puntoEnPoligono(clienteLat, clienteLon, zona)) {
+        return {valor: tarifa, estado: 'confirmado', texto: `Domicilio: $${tarifa.toLocaleString('es-CO')}`};
+    }
+    if (configNegocio?.domicilio_modo_fuera === 'rechazar') return {valor: 0, estado: 'fuera_cobertura', texto: 'Tu ubicacion esta fuera de cobertura.'};
+    return {valor: 0, estado: 'por_confirmar', texto: 'Domicilio fuera de zona: tarifa por confirmar.'};
+}
+
+function actualizarDomicilioPedido() {
+    const dom = calcularDomicilioCliente();
+    totalPedidoActual = subtotalPedidoActual + Number(dom.valor || 0);
+    const txt = document.getElementById('txt-domicilio');
+    if (txt) txt.textContent = dom.texto;
+    const total = document.getElementById('modal-total');
+    if (total) total.textContent = '$' + totalPedidoActual.toLocaleString('es-CO');
+}
+
+function capturarUbicacionCliente() {
+    if (!navigator.geolocation) return toast('GPS no disponible', true);
+    toast('Localizando...', false);
+    navigator.geolocation.getCurrentPosition(pos => {
+        clienteLat = pos.coords.latitude;
+        clienteLon = pos.coords.longitude;
+        actualizarDomicilioPedido();
+    }, () => toast('No se pudo obtener tu ubicacion', true), {enableHighAccuracy: true, timeout: 10000});
 }
 
 function abrirPedido() {
@@ -663,7 +717,8 @@ function abrirPedido() {
         total += sub;
         return `<div class="flex justify-between text-sm"><span class="txt-secondary">${carrito[k]}x ${nombre}</span><span class="font-semibold txt-primary">$${sub.toLocaleString()}</span></div>`;
     }).join('');
-    document.getElementById('modal-total').textContent = '$' + total.toLocaleString();
+    subtotalPedidoActual = total;
+    actualizarDomicilioPedido();
 
     // Pre-llenar datos del cliente
     const saved = JSON.parse(localStorage.getItem('cliente_' + SLUG) || '{}');
@@ -694,6 +749,8 @@ async function enviarPedido() {
     const telLimpio = telefono.replace(/\D/g, '');
     if (telLimpio.length < 10) return toast('Celular debe tener al menos 10 digitos', true);
     if (tipoEntrega === 'domicilio' && !direccion) return toast('Ingresa la direccion de entrega', true);
+    const dom = calcularDomicilioCliente();
+    if (dom.estado === 'fuera_cobertura') return toast('Tu ubicacion esta fuera de cobertura', true);
 
     const btn = document.getElementById('btn-enviar');
     btn.disabled = true;
@@ -738,6 +795,8 @@ async function enviarPedido() {
                 notas,
                 cliente_id: clienteId,
                 metodo_pago: metodoPago,
+                cliente_lat: clienteLat,
+                cliente_lon: clienteLon,
                 items
             })
         });

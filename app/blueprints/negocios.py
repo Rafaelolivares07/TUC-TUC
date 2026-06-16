@@ -134,7 +134,7 @@ def _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago):
         entrega = _telegram_entrega(row['tipo_entrega'], row['direccion_cliente'])
     else:
         row = conn.execute("""
-            SELECT p.id, COALESCE(p.precio, 0) * COALESCE(p.cantidad, 1) AS total,
+            SELECT p.id, COALESCE(p.precio, 0) * COALESCE(p.cantidad, 1) + COALESCE(p.valor_domicilio, 0) AS total,
                    p.nombre_cliente, p.telefono_cliente, p.tipo_entrega, p.direccion_cliente,
                    p.mesa_nombre, r.nombre AS negocio, r.admin_id
             FROM pedidos_restaurante p
@@ -165,6 +165,15 @@ def _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago):
     _enviar_telegram_negocio(conn, chat_id, msg)
 
 
+def _asegurar_domicilio_restaurante(conn):
+    alters = [
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS domicilio_estado VARCHAR(30) DEFAULT 'no_aplica'",
+    ]
+    for sql in alters:
+        conn.execute(sql)
+
+
 def init_config_negocio(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS config_negocio (
@@ -176,6 +185,9 @@ def init_config_negocio(conn):
         )
     """)
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS metodos_info JSONB DEFAULT '{}'")
+    conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS domicilio_tarifa NUMERIC(12,2) DEFAULT 0")
+    conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS domicilio_modo_fuera VARCHAR(20) DEFAULT 'por_confirmar'")
+    conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS domicilio_zona JSONB DEFAULT '[]'")
 
     # Garantizar que el catálogo de métodos de pago esté completo en prod
     conn.execute("""
@@ -231,7 +243,9 @@ def init_config_negocio(conn):
 
 def _get_config(conn, tercero_id):
     row = conn.execute(
-        "SELECT modalidades, metodos_pago, aviso_pedido, metodos_info FROM config_negocio WHERE tercero_id=%s",
+        """SELECT modalidades, metodos_pago, aviso_pedido, metodos_info,
+                  domicilio_tarifa, domicilio_modo_fuera, domicilio_zona
+           FROM config_negocio WHERE tercero_id=%s""",
         (tercero_id,)
     ).fetchone()
     if row:
@@ -240,6 +254,9 @@ def _get_config(conn, tercero_id):
             'metodos_pago': row['metodos_pago'],
             'aviso_pedido': row['aviso_pedido'],
             'metodos_info': dict(row['metodos_info'] or {}),
+            'domicilio_tarifa': float(row['domicilio_tarifa'] or 0),
+            'domicilio_modo_fuera': row['domicilio_modo_fuera'] or 'por_confirmar',
+            'domicilio_zona': row['domicilio_zona'] or [],
         }
     # Migrar datos existentes de metodos_pago_tienda si los hay
     try:
@@ -255,10 +272,17 @@ def _get_config(conn, tercero_id):
                 'metodos_pago': [m['codigo'] for m in existentes],
                 'aviso_pedido': None,
                 'metodos_info': {},
+                'domicilio_tarifa': 0,
+                'domicilio_modo_fuera': 'por_confirmar',
+                'domicilio_zona': [],
             }
     except Exception:
         pass
-    return {'modalidades': ['domicilio', 'recoger'], 'metodos_pago': ['efectivo'], 'aviso_pedido': None, 'metodos_info': {}}
+    return {
+        'modalidades': ['domicilio', 'recoger'], 'metodos_pago': ['efectivo'],
+        'aviso_pedido': None, 'metodos_info': {}, 'domicilio_tarifa': 0,
+        'domicilio_modo_fuera': 'por_confirmar', 'domicilio_zona': []
+    }
 
 
 @bp.route('/admin/negocio/<int:tercero_id>/config')
@@ -283,6 +307,7 @@ def api_config_get(tercero_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
+        init_config_negocio(conn)
         config = _get_config(conn, tercero_id)
         try:
             catalogo = conn.execute(
@@ -306,22 +331,33 @@ def api_config_save(tercero_id):
     modalidades  = data.get('modalidades', ['domicilio', 'recoger'])
     metodos_pago = data.get('metodos_pago', ['efectivo'])
     aviso_pedido = (data.get('aviso_pedido') or '').strip() or None
+    domicilio_tarifa = float(data.get('domicilio_tarifa') or 0)
+    domicilio_modo_fuera = (data.get('domicilio_modo_fuera') or 'por_confirmar').strip()
+    if domicilio_modo_fuera not in ('por_confirmar', 'rechazar'):
+        domicilio_modo_fuera = 'por_confirmar'
+    domicilio_zona = data.get('domicilio_zona') or []
     conn = get_db_connection()
     try:
+        init_config_negocio(conn)
         conn.execute("""
-            INSERT INTO config_negocio (tercero_id, modalidades, metodos_pago, aviso_pedido, updated_at)
-            VALUES (%s, %s::jsonb, %s::jsonb, %s, NOW())
+            INSERT INTO config_negocio (
+                tercero_id, modalidades, metodos_pago, aviso_pedido,
+                domicilio_tarifa, domicilio_modo_fuera, domicilio_zona, updated_at
+            )
+            VALUES (%s, %s::jsonb, %s::jsonb, %s, %s, %s, %s::jsonb, NOW())
             ON CONFLICT (tercero_id) DO UPDATE SET
                 modalidades  = EXCLUDED.modalidades,
                 metodos_pago = EXCLUDED.metodos_pago,
                 aviso_pedido = EXCLUDED.aviso_pedido,
+                domicilio_tarifa = EXCLUDED.domicilio_tarifa,
+                domicilio_modo_fuera = EXCLUDED.domicilio_modo_fuera,
+                domicilio_zona = EXCLUDED.domicilio_zona,
                 updated_at   = NOW()
-        """, (tercero_id, json.dumps(modalidades), json.dumps(metodos_pago), aviso_pedido))
+        """, (
+            tercero_id, json.dumps(modalidades), json.dumps(metodos_pago), aviso_pedido,
+            domicilio_tarifa, domicilio_modo_fuera, json.dumps(domicilio_zona)
+        ))
         conn.commit()
-        try:
-            _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago)
-        except Exception as exc:
-            print(f'[telegram pago] no se pudo notificar pedido {pedido_id}: {exc}')
         return jsonify({'ok': True})
     except Exception as e:
         try: conn.rollback()
@@ -335,6 +371,7 @@ def api_config_save(tercero_id):
 def api_config_publica(tercero_id):
     conn = get_db_connection()
     try:
+        init_config_negocio(conn)
         config = _get_config(conn, tercero_id)
         try:
             catalogo = conn.execute(
@@ -361,6 +398,9 @@ def api_config_publica(tercero_id):
             'metodos_pago': metodos,
             'aviso_pedido': config['aviso_pedido'],
             'metodos_info': info_publica,
+            'domicilio_tarifa': config.get('domicilio_tarifa', 0),
+            'domicilio_modo_fuera': config.get('domicilio_modo_fuera', 'por_confirmar'),
+            'domicilio_zona': config.get('domicilio_zona', []),
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -380,8 +420,9 @@ def pagar(pedido_id):
                 WHERE p.id = %s
             """, (pedido_id,)).fetchone()
         else:
+            _asegurar_domicilio_restaurante(conn)
             row = conn.execute("""
-                SELECT r.tercero_id, r.nombre, r.slug, p.precio AS total
+                SELECT r.tercero_id, r.nombre, r.slug, COALESCE(p.precio, 0) + COALESCE(p.valor_domicilio, 0) AS total
                 FROM pedidos_restaurante p JOIN restaurantes r ON r.id = p.restaurante_id
                 WHERE p.id = %s
             """, (pedido_id,)).fetchone()
@@ -438,8 +479,9 @@ def api_pagar(pedido_id):
                 """, (pedido_id, metodo_pago, metodo_pago, total_pedido))
         else:
             _asegurar_pagos_restaurante(conn)
+            _asegurar_domicilio_restaurante(conn)
             total_row = conn.execute("""
-                SELECT COALESCE(precio, 0) * COALESCE(cantidad, 1) AS total
+                SELECT COALESCE(precio, 0) * COALESCE(cantidad, 1) + COALESCE(valor_domicilio, 0) AS total
                 FROM pedidos_restaurante
                 WHERE id=%s
             """, (pedido_id,)).fetchone()
@@ -467,6 +509,10 @@ def api_pagar(pedido_id):
                     VALUES (%s, %s, %s, %s)
                 """, (pedido_id, metodo_pago, metodo_pago, total_pedido))
         conn.commit()
+        try:
+            _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago)
+        except Exception as exc:
+            print(f'[telegram pago] no se pudo notificar pedido {pedido_id}: {exc}')
         return jsonify({'ok': True})
     except Exception as e:
         try: conn.rollback()

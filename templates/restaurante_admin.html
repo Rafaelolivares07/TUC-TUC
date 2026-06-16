@@ -651,6 +651,17 @@
     <div class="relative rounded-2xl overflow-hidden mb-3 border border-gray-200" style="height:320px;">
         <div id="mapa-ubicacion" style="width:100%;height:100%;"></div>
     </div>
+    {% if restaurante.tercero_id %}
+    <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-3">
+        <p class="text-xs font-bold text-amber-700 mb-2">Cobertura de domicilio</p>
+        <div class="grid grid-cols-3 gap-2">
+            <button onclick="activarDibujoCobertura()" class="bg-white border border-amber-200 text-amber-700 font-semibold py-2 rounded-lg text-xs">Agregar puntos</button>
+            <button onclick="limpiarCobertura()" class="bg-white border border-gray-200 text-gray-600 font-semibold py-2 rounded-lg text-xs">Limpiar</button>
+            <button onclick="guardarCobertura()" class="bg-amber-600 text-white font-semibold py-2 rounded-lg text-xs">Guardar zona</button>
+        </div>
+        <p id="txt-cobertura" class="text-xs text-gray-500 mt-2">Toca "Agregar puntos" y marca el perimetro donde entregas.</p>
+    </div>
+    {% endif %}
     <button onclick="gpsUbicacion()"
         class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl text-sm mb-2 flex items-center justify-center gap-2">
         📡 Mi ubicación (GPS)
@@ -754,6 +765,7 @@
 
 <script>
 const SLUG = '{{ restaurante.slug if restaurante else "" }}';
+const TERCERO_ID = {{ (restaurante.tercero_id if restaurante else none) | tojson }};
 const TIPO_REST = '{{ restaurante.tipo_restaurante if restaurante else "menu_dia" }}';
 const BASE = SLUG ? `/api/restaurante/${SLUG}` : '';
 const CLIENTE_URL = '{{ cliente_url if cliente_url is defined else "" }}' || window.location.origin;
@@ -981,6 +993,9 @@ function scrollNavTabs(delta) {
 let _mapaUbic = null, _markerUbic = null;
 let _latUbic = {{ restaurante.lat | default(None) | tojson }};
 let _lonUbic = {{ restaurante.lon | default(None) | tojson }};
+let _modoCobertura = false;
+let _coberturaPuntos = [];
+let _configNegocioUbic = null;
 
 function iniciarMapaUbicacion() {
     if (_mapaUbic) { _mapaUbic.resize(); return; }
@@ -1001,8 +1016,12 @@ function iniciarMapaUbicacion() {
         zoom: _latUbic ? 17 : 14,
         attributionControl: false
     });
+    _mapaUbic.on('load', cargarCobertura);
     if (_latUbic && _lonUbic) _colocarMarker(_lonUbic, _latUbic);
-    _mapaUbic.on('click', e => _colocarMarker(e.lngLat.lng, e.lngLat.lat));
+    _mapaUbic.on('click', e => {
+        if (_modoCobertura) agregarPuntoCobertura(e.lngLat.lng, e.lngLat.lat);
+        else _colocarMarker(e.lngLat.lng, e.lngLat.lat);
+    });
 }
 
 function _colocarMarker(lon, lat) {
@@ -2187,6 +2206,77 @@ async function quitarImagenHeader() {
         document.getElementById('header-upload').classList.remove('hidden');
         toast('Imagen quitada');
     }
+}
+
+async function cargarCobertura() {
+    if (!TERCERO_ID) return;
+    try {
+        const r = await fetch(`/api/negocio/${TERCERO_ID}/config`);
+        const d = await r.json();
+        if (!d.ok) return;
+        _configNegocioUbic = d.config || {};
+        _coberturaPuntos = _configNegocioUbic.domicilio_zona || [];
+        dibujarCobertura();
+    } catch(e) {}
+}
+
+function activarDibujoCobertura() {
+    _modoCobertura = !_modoCobertura;
+    document.getElementById('txt-cobertura').textContent = _modoCobertura
+        ? 'Modo cobertura activo: toca el mapa para agregar puntos.'
+        : 'Modo cobertura pausado.';
+}
+
+function agregarPuntoCobertura(lon, lat) {
+    _coberturaPuntos.push({lat, lon});
+    dibujarCobertura();
+}
+
+function limpiarCobertura() {
+    _coberturaPuntos = [];
+    dibujarCobertura();
+}
+
+function dibujarCobertura() {
+    if (!_mapaUbic || !_mapaUbic.isStyleLoaded()) return;
+    const coords = _coberturaPuntos.map(p => [Number(p.lon), Number(p.lat)]);
+    const cerrado = coords.length >= 3 ? [...coords, coords[0]] : coords;
+    const data = {
+        type: 'FeatureCollection',
+        features: coords.length >= 3 ? [{type:'Feature', geometry:{type:'Polygon', coordinates:[cerrado]}, properties:{}}] : []
+    };
+    if (!_mapaUbic.getSource('cobertura-domicilio')) {
+        _mapaUbic.addSource('cobertura-domicilio', {type:'geojson', data});
+        _mapaUbic.addLayer({id:'cobertura-fill', type:'fill', source:'cobertura-domicilio', paint:{'fill-color':'#d97706','fill-opacity':0.16}});
+        _mapaUbic.addLayer({id:'cobertura-line', type:'line', source:'cobertura-domicilio', paint:{'line-color':'#d97706','line-width':2}});
+    } else {
+        _mapaUbic.getSource('cobertura-domicilio').setData(data);
+    }
+    document.getElementById('txt-cobertura').textContent = `${_coberturaPuntos.length} punto(s) de cobertura`;
+}
+
+async function guardarCobertura() {
+    if (!TERCERO_ID) return toast('Este negocio no tiene tercero asociado', false);
+    if (!_configNegocioUbic) await cargarCobertura();
+    if (!_configNegocioUbic) return toast('No se pudo cargar la configuracion actual', false);
+    const cfg = _configNegocioUbic || {};
+    try {
+        const r = await fetch(`/api/negocio/${TERCERO_ID}/config`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                modalidades: cfg.modalidades || ['domicilio', 'recoger'],
+                metodos_pago: cfg.metodos_pago || ['efectivo'],
+                aviso_pedido: cfg.aviso_pedido || '',
+                domicilio_tarifa: Number(cfg.domicilio_tarifa || 0),
+                domicilio_modo_fuera: cfg.domicilio_modo_fuera || 'por_confirmar',
+                domicilio_zona: _coberturaPuntos
+            })
+        });
+        const d = await r.json();
+        if (d.ok) { toast('Cobertura guardada'); await cargarCobertura(); }
+        else toast(d.error || 'Error', false);
+    } catch(e) { toast('Error de conexion', false); }
 }
 
 // ===== PANTALLA EXPERIENCIAL =====

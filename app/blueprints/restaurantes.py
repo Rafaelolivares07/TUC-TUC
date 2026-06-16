@@ -165,6 +165,75 @@ def _asegurar_pagos_restaurante(conn):
     """)
 
 
+def _asegurar_domicilio_restaurante(conn):
+    alters = [
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS subtotal_productos NUMERIC(12,2) DEFAULT 0",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS domicilio_estado VARCHAR(30) DEFAULT 'no_aplica'",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cliente_lat NUMERIC(10,7)",
+        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cliente_lon NUMERIC(10,7)",
+    ]
+    for sql in alters:
+        conn.execute(sql)
+
+
+def _punto_en_poligono(lat, lon, poligono):
+    if lat is None or lon is None or not poligono or len(poligono) < 3:
+        return False
+    dentro = False
+    j = len(poligono) - 1
+    for i, punto in enumerate(poligono):
+        lat_i = float(punto.get('lat') or 0)
+        lon_i = float(punto.get('lon') or 0)
+        lat_j = float(poligono[j].get('lat') or 0)
+        lon_j = float(poligono[j].get('lon') or 0)
+        cruza = ((lon_i > lon) != (lon_j > lon)) and (
+            lat < (lat_j - lat_i) * (lon - lon_i) / ((lon_j - lon_i) or 1e-12) + lat_i
+        )
+        if cruza:
+            dentro = not dentro
+        j = i
+    return dentro
+
+
+def _config_domicilio(conn, tercero_id):
+    if not tercero_id:
+        return {'tarifa': 0, 'modo_fuera': 'por_confirmar', 'zona': []}
+    try:
+        row = conn.execute("""
+            SELECT domicilio_tarifa, domicilio_modo_fuera, domicilio_zona
+            FROM config_negocio WHERE tercero_id=%s
+        """, (tercero_id,)).fetchone()
+        if row:
+            return {
+                'tarifa': float(row['domicilio_tarifa'] or 0),
+                'modo_fuera': row['domicilio_modo_fuera'] or 'por_confirmar',
+                'zona': row['domicilio_zona'] or [],
+            }
+    except Exception:
+        pass
+    return {'tarifa': 0, 'modo_fuera': 'por_confirmar', 'zona': []}
+
+
+def _calcular_domicilio(conn, tercero_id, tipo_entrega, lat, lon):
+    if tipo_entrega != 'domicilio':
+        return 0.0, 'no_aplica'
+    cfg = _config_domicilio(conn, tercero_id)
+    tarifa = float(cfg.get('tarifa') or 0)
+    zona = cfg.get('zona') or []
+    if not tarifa:
+        return 0.0, 'por_confirmar'
+    if lat is None or lon is None:
+        return 0.0, 'por_confirmar'
+    if zona and _punto_en_poligono(float(lat), float(lon), zona):
+        return tarifa, 'confirmado'
+    if not zona:
+        return tarifa, 'confirmado'
+    if cfg.get('modo_fuera') == 'rechazar':
+        return None, 'fuera_cobertura'
+    return 0.0, 'por_confirmar'
+
+
 def _asegurar_experiencia_restaurante(conn):
     conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pantalla_experiencial BOOLEAN DEFAULT FALSE")
     conn.execute("""
@@ -1648,8 +1717,11 @@ def api_pedido_crear(slug):
         direccion_cliente = data.get('direccion_cliente') or None
         cliente_id = data.get('cliente_id')
         metodo_pago = (data.get('metodo_pago') or '').strip() or None
+        cliente_lat = data.get('cliente_lat')
+        cliente_lon = data.get('cliente_lon')
         conn = get_db_connection()
         _crear_tablas(conn)
+        _asegurar_domicilio_restaurante(conn)
         rest = conn.execute(
             "SELECT id, nombre, tipo_restaurante, dias_pagados, tercero_id, admin_id FROM restaurantes WHERE slug = %s",
             (slug,)
@@ -1677,6 +1749,8 @@ def api_pedido_crear(slug):
         precio_total = 0
         items_notificacion = []
         es_carta = rest['tipo_restaurante'] == 'carta' or (rest['tipo_restaurante'] == 'ambos' and data.get('platos'))
+        valor_domicilio = 0.0
+        domicilio_estado = 'no_aplica'
 
         if es_carta:
             platos = data.get('platos', [])
@@ -1684,6 +1758,7 @@ def api_pedido_crear(slug):
                 conn.close()
                 return jsonify({'ok': False, 'error': 'Selecciona al menos un plato'}), 400
             insertados = 0
+            pedidos_insertados = []
             for p in platos:
                 opcion = conn.execute(
                     "SELECT id, nombre, precio FROM productos WHERE id=%s AND negocio_id=%s AND disponible=TRUE",
@@ -1698,10 +1773,14 @@ def api_pedido_crear(slug):
                 nota_item = p.get('nota', '').strip() or None
                 conn.execute("""
                     INSERT INTO pedidos_restaurante
-                    (restaurante_id, mesa_num, mesa_nombre, tipo, plato_id, cantidad, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago)
-                    VALUES (%s, 0, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    (restaurante_id, mesa_num, mesa_nombre, tipo, plato_id, cantidad, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago, subtotal_productos, cliente_lat, cliente_lon)
+                    VALUES (%s, 0, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (rest['id'], mesa_nombre, opcion['id'], cant, precio_item, nota_item,
-                      nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago))
+                      nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago,
+                      precio_item, cliente_lat, cliente_lon))
+                pedidos_insertados.append(conn.execute(
+                    "SELECT currval(pg_get_serial_sequence('pedidos_restaurante','id'))"
+                ).fetchone()[0])
                 if rest['tercero_id']:
                     try:
                         conn.execute("SAVEPOINT sp_inv")
@@ -1726,6 +1805,18 @@ def api_pedido_crear(slug):
             pedido_id = conn.execute(
                 "SELECT currval(pg_get_serial_sequence('pedidos_restaurante','id'))"
             ).fetchone()[0]
+            valor_domicilio, domicilio_estado = _calcular_domicilio(
+                conn, rest['tercero_id'], tipo_entrega, cliente_lat, cliente_lon
+            )
+            if domicilio_estado == 'fuera_cobertura':
+                conn.close()
+                return jsonify({'ok': False, 'error': 'La direccion esta fuera de cobertura de domicilio'}), 400
+            if pedidos_insertados:
+                conn.execute("""
+                    UPDATE pedidos_restaurante
+                    SET valor_domicilio=%s, domicilio_estado=%s
+                    WHERE id=%s
+                """, (float(valor_domicilio or 0), domicilio_estado, pedidos_insertados[-1]))
         else:
             tipo = data.get('tipo')
             sopa_id = data.get('sopa_id')
@@ -1748,6 +1839,12 @@ def api_pedido_crear(slug):
                 if recargo and recargo['recargo']:
                     precio_total += float(recargo['recargo'])
             items_notificacion.append(f"Menu {tipo} - ${precio_total:,.0f}")
+            valor_domicilio, domicilio_estado = _calcular_domicilio(
+                conn, rest['tercero_id'], tipo_entrega, cliente_lat, cliente_lon
+            )
+            if domicilio_estado == 'fuera_cobertura':
+                conn.close()
+                return jsonify({'ok': False, 'error': 'La direccion esta fuera de cobertura de domicilio'}), 400
             for etiqueta, prod_id in (('Sopa', sopa_id), ('Proteina', proteina_id), ('Principio', principio_id)):
                 if prod_id:
                     prod = conn.execute("SELECT nombre FROM productos WHERE id = %s", (prod_id,)).fetchone()
@@ -1755,10 +1852,11 @@ def api_pedido_crear(slug):
                         items_notificacion.append(f"{etiqueta}: {prod['nombre']}")
             conn.execute("""
                 INSERT INTO pedidos_restaurante
-                (restaurante_id, mesa_num, mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago)
-                VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (restaurante_id, mesa_num, mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago, subtotal_productos, valor_domicilio, domicilio_estado, cliente_lat, cliente_lon)
+                VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (rest['id'], mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio_total,
-                  notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago))
+                  notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago,
+                  precio_total, float(valor_domicilio or 0), domicilio_estado, cliente_lat, cliente_lon))
             pedido_id = conn.execute(
                 "SELECT currval(pg_get_serial_sequence('pedidos_restaurante','id'))"
             ).fetchone()[0]
@@ -1794,7 +1892,7 @@ def api_pedido_crear(slug):
         try:
             _notificar_pedido_restaurante(
                 conn, rest, pedido_id, nombre_cliente, telefono_cliente, tipo_entrega,
-                direccion_cliente, mesa_nombre, items_notificacion, precio_total, metodo_pago
+                direccion_cliente, mesa_nombre, items_notificacion, precio_total + float(valor_domicilio or 0), metodo_pago
             )
         except Exception as _e:
             print(f'[telegram] pedido rest {slug}: {_e}')
@@ -1837,6 +1935,7 @@ def api_pedidos(slug):
         conn = get_db_connection()
         _crear_tablas(conn)
         _asegurar_pagos_restaurante(conn)
+        _asegurar_domicilio_restaurante(conn)
         rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
@@ -1845,7 +1944,7 @@ def api_pedidos(slug):
         pedidos = conn.execute(f"""
             SELECT p.id, p.mesa_num, p.mesa_nombre, p.tipo, p.precio, p.estado, p.notas, p.nombre_cliente, p.created_at,
                    p.cantidad, p.tipo_entrega, p.telefono_cliente, p.direccion_cliente, p.cliente_id,
-                   p.metodo_pago, p.comprobante_pago,
+                   p.metodo_pago, p.comprobante_pago, p.valor_domicilio, p.domicilio_estado,
                    s.nombre as sopa_nombre, pr.nombre as proteina_nombre, pr.recargo as proteina_recargo,
                    pi.nombre as principio_nombre, pl.nombre as plato_nombre
             FROM pedidos_restaurante p
@@ -1887,6 +1986,8 @@ def api_pedidos(slug):
                 'direccion_cliente': p['direccion_cliente'], 'cliente_id': p['cliente_id'],
                 'metodo_pago': p['metodo_pago'] or 'efectivo',
                 'comprobante_pago': p['comprobante_pago'] or '',
+                'valor_domicilio': float(p['valor_domicilio'] or 0),
+                'domicilio_estado': p['domicilio_estado'] or 'no_aplica',
                 'pagos': pagos_json,
                 'created_at': p['created_at'].strftime('%H:%M') if p['created_at'] else ''
             })

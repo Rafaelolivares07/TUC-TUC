@@ -1272,6 +1272,17 @@
         <div class="relative rounded-2xl overflow-hidden mb-3 border border-gray-200" style="height:320px;">
             <div id="mapa-ubicacion" style="width:100%;height:100%;"></div>
         </div>
+        {% if tienda.tercero_id %}
+        <div class="bg-rose-50 border border-rose-100 rounded-xl p-3 mb-3">
+            <p class="text-xs font-bold text-rose-700 mb-2">Cobertura de domicilio</p>
+            <div class="grid grid-cols-3 gap-2">
+                <button onclick="activarDibujoCobertura()" class="bg-white border border-rose-200 text-rose-600 font-semibold py-2 rounded-lg text-xs">Agregar puntos</button>
+                <button onclick="limpiarCobertura()" class="bg-white border border-gray-200 text-gray-600 font-semibold py-2 rounded-lg text-xs">Limpiar</button>
+                <button onclick="guardarCobertura()" class="bg-rose-600 text-white font-semibold py-2 rounded-lg text-xs">Guardar zona</button>
+            </div>
+            <p id="txt-cobertura" class="text-xs text-gray-500 mt-2">Toca "Agregar puntos" y marca el perimetro donde entregas.</p>
+        </div>
+        {% endif %}
         <button onclick="gpsUbicacion()"
             class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl text-sm mb-2 flex items-center justify-center gap-2">
             📡 Capturar mi ubicación actual (GPS)
@@ -1290,6 +1301,7 @@
 
 <script>
 const SLUG = '{{ tienda.slug }}';
+const TERCERO_ID = {{ (tienda.tercero_id if tienda else none) | tojson }};
 const BASE = '/api/tienda/' + SLUG;
 const TOKEN = '{{ tienda.token_acceso }}';
 const ADMIN_TEL = '{{ tienda.admin_telefono or "" }}';
@@ -1525,6 +1537,9 @@ async function guardarEntrada() {
 let _mapaUbic = null, _markerUbic = null;
 let _latUbic = {{ (tienda.lat if tienda else none) | tojson }};
 let _lonUbic = {{ (tienda.lon if tienda else none) | tojson }};
+let _modoCobertura = false;
+let _coberturaPuntos = [];
+let _configNegocioUbic = null;
 
 function iniciarMapaUbicacion() {
     if (_mapaUbic) { _mapaUbic.resize(); return; }
@@ -1545,8 +1560,12 @@ function iniciarMapaUbicacion() {
         zoom: _latUbic ? 17 : 14,
         attributionControl: false
     });
+    _mapaUbic.on('load', cargarCobertura);
     if (_latUbic && _lonUbic) _colocarMarker(_lonUbic, _latUbic);
-    _mapaUbic.on('click', e => _colocarMarker(e.lngLat.lng, e.lngLat.lat));
+    _mapaUbic.on('click', e => {
+        if (_modoCobertura) agregarPuntoCobertura(e.lngLat.lng, e.lngLat.lat);
+        else _colocarMarker(e.lngLat.lng, e.lngLat.lat);
+    });
 }
 
 function _colocarMarker(lon, lat) {
@@ -2964,6 +2983,77 @@ async function guardarExperiencia() {
     } catch(e) { toast('Error de conexion', true); }
 }
 
+async function cargarCobertura() {
+    if (!TERCERO_ID) return;
+    try {
+        const r = await fetch(`/api/negocio/${TERCERO_ID}/config`);
+        const d = await r.json();
+        if (!d.ok) return;
+        _configNegocioUbic = d.config || {};
+        _coberturaPuntos = _configNegocioUbic.domicilio_zona || [];
+        dibujarCobertura();
+    } catch(e) {}
+}
+
+function activarDibujoCobertura() {
+    _modoCobertura = !_modoCobertura;
+    document.getElementById('txt-cobertura').textContent = _modoCobertura
+        ? 'Modo cobertura activo: toca el mapa para agregar puntos.'
+        : 'Modo cobertura pausado.';
+}
+
+function agregarPuntoCobertura(lon, lat) {
+    _coberturaPuntos.push({lat, lon});
+    dibujarCobertura();
+}
+
+function limpiarCobertura() {
+    _coberturaPuntos = [];
+    dibujarCobertura();
+}
+
+function dibujarCobertura() {
+    if (!_mapaUbic || !_mapaUbic.isStyleLoaded()) return;
+    const coords = _coberturaPuntos.map(p => [Number(p.lon), Number(p.lat)]);
+    const cerrado = coords.length >= 3 ? [...coords, coords[0]] : coords;
+    const data = {
+        type: 'FeatureCollection',
+        features: coords.length >= 3 ? [{type:'Feature', geometry:{type:'Polygon', coordinates:[cerrado]}, properties:{}}] : []
+    };
+    if (!_mapaUbic.getSource('cobertura-domicilio')) {
+        _mapaUbic.addSource('cobertura-domicilio', {type:'geojson', data});
+        _mapaUbic.addLayer({id:'cobertura-fill', type:'fill', source:'cobertura-domicilio', paint:{'fill-color':'#e11d48','fill-opacity':0.14}});
+        _mapaUbic.addLayer({id:'cobertura-line', type:'line', source:'cobertura-domicilio', paint:{'line-color':'#e11d48','line-width':2}});
+    } else {
+        _mapaUbic.getSource('cobertura-domicilio').setData(data);
+    }
+    document.getElementById('txt-cobertura').textContent = `${_coberturaPuntos.length} punto(s) de cobertura`;
+}
+
+async function guardarCobertura() {
+    if (!TERCERO_ID) return toast('Este negocio no tiene tercero asociado', true);
+    if (!_configNegocioUbic) await cargarCobertura();
+    if (!_configNegocioUbic) return toast('No se pudo cargar la configuracion actual', true);
+    const cfg = _configNegocioUbic || {};
+    try {
+        const r = await fetch(`/api/negocio/${TERCERO_ID}/config`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                modalidades: cfg.modalidades || ['domicilio', 'recoger'],
+                metodos_pago: cfg.metodos_pago || ['efectivo'],
+                aviso_pedido: cfg.aviso_pedido || '',
+                domicilio_tarifa: Number(cfg.domicilio_tarifa || 0),
+                domicilio_modo_fuera: cfg.domicilio_modo_fuera || 'por_confirmar',
+                domicilio_zona: _coberturaPuntos
+            })
+        });
+        const d = await r.json();
+        if (d.ok) { toast('Cobertura guardada', false); await cargarCobertura(); }
+        else toast(d.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
 let bloquesExperiencia = [];
 let bloquesExperienciaCargados = false;
 
@@ -3635,6 +3725,7 @@ function htmlPagosPedido(p) {
     }).join(' ');
     return `<div class="text-xs mt-2 space-y-1">
         <div class="flex flex-wrap gap-1">${filas}</div>
+        ${p.tipo_entrega === 'domicilio' ? `<div class="font-semibold ${p.domicilio_estado === 'por_confirmar' ? 'text-amber-700' : 'text-gray-600'}">Domicilio: ${p.domicilio_estado === 'por_confirmar' ? 'por confirmar' : '$' + Number(p.valor_domicilio || 0).toLocaleString()}</div>` : ''}
         ${contra ? '<div class="font-bold text-amber-700">Contraentrega: cobrar efectivo al entregar.</div>' : ''}
         ${p.tipo_entrega === 'caja' ? '<div class="font-semibold text-blue-700">Origen: caja / autoatencion.</div>' : ''}
     </div>`;
@@ -3714,6 +3805,7 @@ function confirmarEntregaPedido(pedidoId) {
         `Vas a entregar el pedido #${p.id}.`,
         `Origen: ${etiquetaEntregaPedido(p)}${p.nombre_cajero ? ' / ' + p.nombre_cajero : ''}.`,
         `Pago: ${resumenPagosPedido(p)}.`,
+        p.domicilio_estado === 'por_confirmar' ? 'DOMICILIO PENDIENTE: confirma y cobra la tarifa antes de entregar.' : '',
         contra ? 'IMPORTANTE: el cliente escogio contraentrega. Cobrar efectivo al entregar.' : 'Verifica que el pago ya este recibido o soportado.',
         '',
         'Confirmas la entrega?'

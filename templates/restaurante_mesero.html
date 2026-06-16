@@ -584,6 +584,7 @@ function htmlPagosPedido(p) {
     const contra = pagosPedido(p).some(pg => (pg.codigo || '').toLowerCase() === 'contraentrega');
     return `<div class="text-xs text-green-100 mt-1">
         Pago: ${resumenPagosPedido(p)}
+        ${p.tipo_entrega === 'domicilio' ? `<span class="block font-bold ${p.domicilio_estado === 'por_confirmar' ? 'text-yellow-200' : 'text-green-100'}">Domicilio: ${p.domicilio_estado === 'por_confirmar' ? 'por confirmar' : '$' + Number(p.valor_domicilio || 0).toLocaleString()}</span>` : ''}
         ${contra ? '<span class="block font-bold text-yellow-200">Contraentrega: cobrar efectivo al entregar.</span>' : ''}
     </div>`;
 }
@@ -668,6 +669,7 @@ function confirmarEntregado(id) {
         `Vas a entregar el pedido #${p.id}.`,
         `Origen: ${etiquetaOrigenPedido(p)}.`,
         `Pago: ${resumenPagosPedido(p)}.`,
+        p.domicilio_estado === 'por_confirmar' ? 'DOMICILIO PENDIENTE: confirma y cobra la tarifa antes de entregar.' : '',
         contra ? 'IMPORTANTE: el cliente escogio contraentrega. Cobrar efectivo al entregar.' : 'Verifica que el pago ya este recibido o soportado.',
         '',
         'Confirmas la entrega?'

@@ -299,6 +299,11 @@ def _crear_tablas(conn):
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20) DEFAULT 'efectivo'",
+        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS subtotal_productos NUMERIC(12,2) DEFAULT 0",
+        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
+        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS domicilio_estado VARCHAR(30) DEFAULT 'no_aplica'",
+        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS cliente_lat NUMERIC(10,7)",
+        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS cliente_lon NUMERIC(10,7)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS id_cajero INTEGER",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS nombre_cajero VARCHAR(100)",
         "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS id_tercero_cajero INTEGER REFERENCES terceros(id)",
@@ -478,6 +483,63 @@ def _telegram_detalle_entrega_tienda(tipo_entrega, direccion, nombre_cajero):
     if tipo_entrega == 'recoger':
         return "Cliente recoge en el local."
     return f"{tipo_entrega or 'Pedido'}: {direccion or 'N/A'}"
+
+
+def _punto_en_poligono(lat, lon, poligono):
+    if lat is None or lon is None or not poligono or len(poligono) < 3:
+        return False
+    dentro = False
+    j = len(poligono) - 1
+    for i, punto in enumerate(poligono):
+        lat_i = float(punto.get('lat') or 0)
+        lon_i = float(punto.get('lon') or 0)
+        lat_j = float(poligono[j].get('lat') or 0)
+        lon_j = float(poligono[j].get('lon') or 0)
+        cruza = ((lon_i > lon) != (lon_j > lon)) and (
+            lat < (lat_j - lat_i) * (lon - lon_i) / ((lon_j - lon_i) or 1e-12) + lat_i
+        )
+        if cruza:
+            dentro = not dentro
+        j = i
+    return dentro
+
+
+def _config_domicilio(conn, tercero_id):
+    if not tercero_id:
+        return {'tarifa': 0, 'modo_fuera': 'por_confirmar', 'zona': []}
+    try:
+        row = conn.execute("""
+            SELECT domicilio_tarifa, domicilio_modo_fuera, domicilio_zona
+            FROM config_negocio WHERE tercero_id=%s
+        """, (tercero_id,)).fetchone()
+        if row:
+            return {
+                'tarifa': float(row['domicilio_tarifa'] or 0),
+                'modo_fuera': row['domicilio_modo_fuera'] or 'por_confirmar',
+                'zona': row['domicilio_zona'] or [],
+            }
+    except Exception:
+        pass
+    return {'tarifa': 0, 'modo_fuera': 'por_confirmar', 'zona': []}
+
+
+def _calcular_domicilio(conn, tercero_id, tipo_entrega, lat, lon):
+    if tipo_entrega != 'domicilio':
+        return 0.0, 'no_aplica'
+    cfg = _config_domicilio(conn, tercero_id)
+    tarifa = float(cfg.get('tarifa') or 0)
+    zona = cfg.get('zona') or []
+    if not tarifa:
+        return 0.0, 'por_confirmar'
+    if lat is None or lon is None:
+        return 0.0, 'por_confirmar'
+    if zona and _punto_en_poligono(float(lat), float(lon), zona):
+        return tarifa, 'confirmado'
+    if not zona:
+        return tarifa, 'confirmado'
+    if cfg.get('modo_fuera') == 'rechazar':
+        return None, 'fuera_cobertura'
+    return 0.0, 'por_confirmar'
 
 
 def _ip_cliente():
@@ -1995,6 +2057,8 @@ def api_tienda_pedido_crear(slug):
     cliente_id       = data.get('cliente_id')
     metodo_pago      = data.get('metodo_pago', 'efectivo')
     pagos            = data.get('pagos', [])
+    cliente_lat      = data.get('cliente_lat')
+    cliente_lon      = data.get('cliente_lon')
     items            = data.get('items', [])
     id_cajero        = data.get('id_cajero')
     nombre_cajero    = data.get('nombre_cajero', '').strip() or None
@@ -2034,14 +2098,23 @@ def api_tienda_pedido_crear(slug):
             })
         if not items_validos:
             return jsonify({'ok': False, 'error': 'Ningun producto valido en el carrito'}), 400
+        subtotal_productos = total
+        valor_domicilio, domicilio_estado = _calcular_domicilio(
+            conn, tienda['tercero_id'], tipo_entrega, cliente_lat, cliente_lon
+        )
+        if domicilio_estado == 'fuera_cobertura':
+            return jsonify({'ok': False, 'error': 'La direccion esta fuera de cobertura de domicilio'}), 400
+        total = subtotal_productos + float(valor_domicilio or 0)
         conn.execute("""
             INSERT INTO pedidos_tienda
                 (tienda_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente,
-                 tipo_entrega, total, notas, metodo_pago, id_cajero, nombre_cajero, id_tercero_cajero)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 tipo_entrega, total, notas, metodo_pago, id_cajero, nombre_cajero, id_tercero_cajero,
+                 subtotal_productos, valor_domicilio, domicilio_estado, cliente_lat, cliente_lon)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (tienda['id'], cliente_id, nombre_cliente or None, telefono_cliente or None,
               direccion_cliente or None, tipo_entrega, total, notas or None, metodo_pago,
-              id_cajero, nombre_cajero, id_tercero_cajero))
+              id_cajero, nombre_cajero, id_tercero_cajero, subtotal_productos,
+              float(valor_domicilio or 0), domicilio_estado, cliente_lat, cliente_lon))
         pedido_id = conn.execute(
             "SELECT currval(pg_get_serial_sequence('pedidos_tienda', 'id'))"
         ).fetchone()[0]
@@ -2124,6 +2197,8 @@ def api_tienda_pedido_crear(slug):
                 f"📦 Entrega: {entrega}\n"
                 f"💳 Pago elegido: {pagos_txt}\n\n"
                 f"{items_txt}\n\n"
+                f"Subtotal productos: ${subtotal_productos:,.0f}\n"
+                f"Domicilio: {'por confirmar' if domicilio_estado == 'por_confirmar' else '$' + format(float(valor_domicilio or 0), ',.0f')}\n"
                 f"💰 Total: ${total:,.0f}"
             )
             _enviar_telegram_tienda(conn, chat_id, msg)
@@ -2147,7 +2222,8 @@ def api_tienda_pedidos(slug):
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         pedidos = conn.execute("""
             SELECT id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega,
-                   estado, total, notas, created_at, nombre_cajero, metodo_pago, comprobante_pago
+                   estado, total, notas, created_at, nombre_cajero, metodo_pago, comprobante_pago,
+                   subtotal_productos, valor_domicilio, domicilio_estado
             FROM pedidos_tienda WHERE tienda_id = %s AND DATE(created_at) = CURRENT_DATE
             ORDER BY created_at DESC
         """, (tienda['id'],)).fetchall()
@@ -2187,6 +2263,9 @@ def api_tienda_pedidos(slug):
                 'nombre_cajero': p['nombre_cajero'] or '',
                 'metodo_pago': p['metodo_pago'] or 'efectivo',
                 'comprobante_pago': p['comprobante_pago'] or '',
+                'subtotal_productos': float(p['subtotal_productos'] or p['total'] or 0),
+                'valor_domicilio': float(p['valor_domicilio'] or 0),
+                'domicilio_estado': p['domicilio_estado'] or 'no_aplica',
                 'pagos': pagos_json,
                 'items': [{'nombre': i['nombre_producto'], 'cantidad': i['cantidad'], 'precio': float(i['precio_unitario'])} for i in items]
             })

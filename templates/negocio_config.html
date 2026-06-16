@@ -65,6 +65,22 @@
   </div>
 
   <!-- Aviso al finalizar pedido -->
+  <div id="config-domicilio" class="bg-white rounded-2xl shadow p-5 hidden">
+    <h2 class="text-base font-bold text-gray-800 mb-1">Domicilios</h2>
+    <p class="text-sm text-gray-500 mb-4">Define el valor que se suma cuando el cliente esta dentro del area de cobertura.</p>
+    <label class="text-xs font-bold text-gray-500 uppercase">Tarifa fija de domicilio</label>
+    <input id="domicilio-tarifa" type="number" min="0" step="100" placeholder="Ej: 5000"
+           class="w-full border border-gray-200 rounded-xl p-3 text-sm mb-3 focus:outline-none focus:border-indigo-400">
+    <label class="text-xs font-bold text-gray-500 uppercase">Si esta fuera o sin ubicacion</label>
+    <select id="domicilio-modo-fuera"
+            class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-400">
+      <option value="por_confirmar">Aceptar pedido y dejar domicilio por confirmar</option>
+      <option value="rechazar">No permitir el pedido fuera de cobertura</option>
+    </select>
+    <p class="text-xs text-gray-400 mt-3">El area se dibuja en la pestana Ubicacion del negocio.</p>
+  </div>
+
+  <!-- Aviso al finalizar pedido -->
   <div class="bg-white rounded-2xl shadow p-5">
     <h2 class="text-base font-bold text-gray-800 mb-1">Aviso al finalizar pedido</h2>
     <p class="text-sm text-gray-500 mb-3">Texto que ve el cliente al confirmar su pedido. Déjalo vacío si no necesitas ninguno.</p>
@@ -85,6 +101,7 @@
 const TERCERO_ID = {{ tercero_id }};
 let activosMetodos = [];
 let metodos_info_actual = {};
+let domicilioZonaActual = [];
 
 // Qué campo pide cada método especial
 const METODO_INFO_TIPO = {
@@ -125,10 +142,23 @@ async function cargar() {
 
     activosMetodos = d.config.metodos_pago || [];
     metodos_info_actual = d.metodos_info || {};
+    domicilioZonaActual = d.config.domicilio_zona || [];
     renderMetodos(d.catalogo_metodos, activosMetodos);
 
     document.getElementById('aviso-pedido').value = d.config.aviso_pedido || '';
+    document.getElementById('domicilio-tarifa').value = Number(d.config.domicilio_tarifa || 0) || '';
+    document.getElementById('domicilio-modo-fuera').value = d.config.domicilio_modo_fuera || 'por_confirmar';
+    actualizarConfigDomicilioVisible();
   } catch(e) { toast('Error de red', true); }
+}
+
+document.addEventListener('change', e => {
+  if (e.target && e.target.name === 'modalidad') actualizarConfigDomicilioVisible();
+});
+
+function actualizarConfigDomicilioVisible() {
+  const activo = [...document.querySelectorAll('input[name="modalidad"]:checked')].some(cb => cb.value === 'domicilio');
+  document.getElementById('config-domicilio').classList.toggle('hidden', !activo);
 }
 
 function renderMetodos(catalogo, activos) {
@@ -225,7 +255,10 @@ async function toggleMetodo(codigo, nuevoEstado) {
       body: JSON.stringify({
         modalidades: modalidades.length ? modalidades : ['domicilio', 'recoger'],
         metodos_pago: activosMetodos,
-        aviso_pedido
+        aviso_pedido,
+        domicilio_tarifa: Number(document.getElementById('domicilio-tarifa').value || 0),
+        domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera').value,
+        domicilio_zona: domicilioZonaActual
       })
     });
   } catch(e) {}
@@ -295,7 +328,12 @@ async function guardar() {
     const r = await fetch(`/api/negocio/${TERCERO_ID}/config`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ modalidades, metodos_pago: activosMetodos, aviso_pedido })
+      body: JSON.stringify({
+        modalidades, metodos_pago: activosMetodos, aviso_pedido,
+        domicilio_tarifa: Number(document.getElementById('domicilio-tarifa').value || 0),
+        domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera').value,
+        domicilio_zona: domicilioZonaActual
+      })
     });
     const d = await r.json();
     if (!d.ok) { toast(d.error, true); return; }

@@ -1022,13 +1022,25 @@ def api_ubicacion(slug):
             return jsonify({'ok': False, 'error': 'Coordenadas requeridas'}), 400
         conn = get_db_connection()
         _crear_tablas(conn)
-        rest = conn.execute(
-            "SELECT id FROM restaurantes WHERE slug=%s AND (admin_id=%s OR %s)",
-            (slug, uid, session.get('rol') == 'Administrador')
-        ).fetchone()
-        if not rest:
+        rest = conn.execute("""
+            SELECT id, admin_id, tercero_id, token_acceso
+            FROM restaurantes
+            WHERE slug=%s AND activo=TRUE
+        """, (slug,)).fetchone()
+        token_ok = session.get('restaurante_token') and rest and session.get('restaurante_token') == rest['token_acceso']
+        autorizado = (
+            rest and (
+                session.get('rol') == 'Administrador'
+                or uid == rest['admin_id']
+                or uid == rest['tercero_id']
+                or token_ok
+            )
+        )
+        if not autorizado:
             conn.close()
             return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+        if not rest['tercero_id'] and rest['admin_id']:
+            conn.execute("UPDATE restaurantes SET tercero_id=%s WHERE id=%s", (rest['admin_id'], rest['id']))
         conn.execute("UPDATE restaurantes SET lat=%s, lon=%s WHERE id=%s", (lat, lon, rest['id']))
         conn.commit()
         conn.close()
@@ -1805,8 +1817,9 @@ def api_pedido_crear(slug):
             pedido_id = conn.execute(
                 "SELECT currval(pg_get_serial_sequence('pedidos_restaurante','id'))"
             ).fetchone()[0]
+            tercero_config_id = rest['tercero_id'] or rest['admin_id']
             valor_domicilio, domicilio_estado = _calcular_domicilio(
-                conn, rest['tercero_id'], tipo_entrega, cliente_lat, cliente_lon
+                conn, tercero_config_id, tipo_entrega, cliente_lat, cliente_lon
             )
             if domicilio_estado == 'fuera_cobertura':
                 conn.close()
@@ -1839,8 +1852,9 @@ def api_pedido_crear(slug):
                 if recargo and recargo['recargo']:
                     precio_total += float(recargo['recargo'])
             items_notificacion.append(f"Menu {tipo} - ${precio_total:,.0f}")
+            tercero_config_id = rest['tercero_id'] or rest['admin_id']
             valor_domicilio, domicilio_estado = _calcular_domicilio(
-                conn, rest['tercero_id'], tipo_entrega, cliente_lat, cliente_lon
+                conn, tercero_config_id, tipo_entrega, cliente_lat, cliente_lon
             )
             if domicilio_estado == 'fuera_cobertura':
                 conn.close()

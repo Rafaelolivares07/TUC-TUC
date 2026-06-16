@@ -651,7 +651,6 @@
     <div class="relative rounded-2xl overflow-hidden mb-3 border border-gray-200" style="height:320px;">
         <div id="mapa-ubicacion" style="width:100%;height:100%;"></div>
     </div>
-    {% if restaurante.tercero_id %}
     <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-3">
         <p class="text-xs font-bold text-amber-700 mb-2">Cobertura de domicilio</p>
         <div class="grid grid-cols-3 gap-2">
@@ -661,7 +660,6 @@
         </div>
         <p id="txt-cobertura" class="text-xs text-gray-500 mt-2">Toca "Agregar puntos" y marca el perimetro donde entregas.</p>
     </div>
-    {% endif %}
     <button onclick="gpsUbicacion()"
         class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl text-sm mb-2 flex items-center justify-center gap-2">
         📡 Mi ubicación (GPS)
@@ -765,7 +763,7 @@
 
 <script>
 const SLUG = '{{ restaurante.slug if restaurante else "" }}';
-const TERCERO_ID = {{ (restaurante.tercero_id if restaurante else none) | tojson }};
+const TERCERO_ID = {{ ((restaurante.tercero_id or restaurante.admin_id) if restaurante else none) | tojson }};
 const TIPO_REST = '{{ restaurante.tipo_restaurante if restaurante else "menu_dia" }}';
 const BASE = SLUG ? `/api/restaurante/${SLUG}` : '';
 const CLIENTE_URL = '{{ cliente_url if cliente_url is defined else "" }}' || window.location.origin;
@@ -998,7 +996,12 @@ let _coberturaPuntos = [];
 let _configNegocioUbic = null;
 
 function iniciarMapaUbicacion() {
-    if (_mapaUbic) { _mapaUbic.resize(); return; }
+    if (_mapaUbic) {
+        _mapaUbic.resize();
+        cargarCobertura();
+        setTimeout(dibujarCobertura, 120);
+        return;
+    }
     const protocol = new pmtiles.Protocol();
     maplibregl.addProtocol('pmtiles', protocol.tile);
     const centerLat = _latUbic || 3.4516;

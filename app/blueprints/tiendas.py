@@ -1923,12 +1923,24 @@ def api_tienda_ubicacion(slug):
     try:
         _crear_tablas(conn)
         es_admin = session.get('rol') == 'Administrador'
-        if es_admin:
-            tienda = conn.execute("SELECT id, nombre FROM tiendas WHERE slug=%s", (slug,)).fetchone()
-        else:
-            tienda = conn.execute("SELECT id, nombre FROM tiendas WHERE slug=%s AND admin_id=%s", (slug, uid)).fetchone()
-        if not tienda:
+        tienda = conn.execute("""
+            SELECT id, nombre, admin_id, tercero_id, token_acceso
+            FROM tiendas
+            WHERE slug=%s AND activo=TRUE
+        """, (slug,)).fetchone()
+        token_ok = session.get('tienda_token') and tienda and session.get('tienda_token') == tienda['token_acceso']
+        autorizado = (
+            tienda and (
+                es_admin
+                or uid == tienda['admin_id']
+                or uid == tienda['tercero_id']
+                or token_ok
+            )
+        )
+        if not autorizado:
             return jsonify({'ok': False, 'error': 'Sin acceso'}), 403
+        if not tienda['tercero_id'] and tienda['admin_id']:
+            conn.execute("UPDATE tiendas SET tercero_id=%s WHERE id=%s", (tienda['admin_id'], tienda['id']))
         conn.execute("UPDATE tiendas SET lat=%s, lon=%s WHERE id=%s", (lat, lon, tienda['id']))
         conn.commit()
         _registrar_negocio_en_pois(conn, tienda['nombre'], lat, lon, uid)
@@ -2099,8 +2111,9 @@ def api_tienda_pedido_crear(slug):
         if not items_validos:
             return jsonify({'ok': False, 'error': 'Ningun producto valido en el carrito'}), 400
         subtotal_productos = total
+        tercero_config_id = tienda['tercero_id'] or tienda['admin_id']
         valor_domicilio, domicilio_estado = _calcular_domicilio(
-            conn, tienda['tercero_id'], tipo_entrega, cliente_lat, cliente_lon
+            conn, tercero_config_id, tipo_entrega, cliente_lat, cliente_lon
         )
         if domicilio_estado == 'fuera_cobertura':
             return jsonify({'ok': False, 'error': 'La direccion esta fuera de cobertura de domicilio'}), 400

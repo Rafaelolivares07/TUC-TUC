@@ -373,7 +373,7 @@
 
 <script>
 const SLUG = '{{ tienda.slug }}';
-const TERCERO_ID = {{ tienda.tercero_id | tojson }};
+const TERCERO_ID = {{ (tienda.tercero_id or tienda.admin_id) | tojson }};
 const BASE = '/api/tienda/' + SLUG;
 let productos = [];
 let categorias = [];

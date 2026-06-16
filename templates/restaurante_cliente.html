@@ -317,7 +317,7 @@
 const SLUG = '{{ restaurante.slug }}';
 const MESA = "{{ mesa_nombre }}";
 const TIPO_REST = '{{ restaurante.tipo_restaurante }}';
-const TERCERO_ID = {{ restaurante.tercero_id | tojson }};
+const TERCERO_ID = {{ (restaurante.tercero_id or restaurante.admin_id) | tojson }};
 const SOLO_CARTA = {{ solo_carta | tojson }};
 const BASE = `/api/restaurante/${SLUG}`;
 const STORAGE_KEY = `cliente_nombre_${SLUG}`;

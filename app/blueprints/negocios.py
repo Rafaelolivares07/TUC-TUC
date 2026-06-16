@@ -23,6 +23,148 @@ _METODOS_PAGO_CATALOGO = [
 ]
 
 
+def _telegram_label_pago(codigo):
+    labels = {
+        'efectivo': 'Efectivo',
+        'contraentrega': 'Contraentrega en efectivo',
+        'llave': 'Llave bancaria',
+        'qr_bancolombia': 'QR Bancolombia',
+        'transferencia': 'Transferencia',
+        'tarjeta_debito': 'Tarjeta debito',
+        'tarjeta_credito': 'Tarjeta credito',
+        'nequi': 'Nequi',
+        'daviplata': 'Daviplata',
+        'nequi_movil': 'Nequi celular',
+        'nequi_qr': 'Nequi QR',
+        'bancolombia': 'Bancolombia',
+    }
+    key = (codigo or '').strip().lower()
+    return labels.get(key, codigo or 'Sin definir')
+
+
+def _telegram_resumen_pagos(pagos, metodo_pago, total):
+    pagos_validos = [
+        p for p in (pagos or [])
+        if isinstance(p, dict) and float(p.get('monto') or 0) > 0
+    ]
+    if not pagos_validos:
+        pagos_validos = [{'codigo': metodo_pago or 'efectivo', 'nombre': metodo_pago or 'efectivo', 'monto': total}]
+    partes = []
+    contraentrega = False
+    for pago in pagos_validos:
+        codigo = (pago.get('codigo') or metodo_pago or '').strip()
+        nombre = pago.get('nombre') or _telegram_label_pago(codigo)
+        if codigo.lower() == 'contraentrega':
+            contraentrega = True
+            nombre = 'Contraentrega en efectivo'
+        partes.append(f"{nombre}: ${float(pago.get('monto') or 0):,.0f}")
+    alerta = "\n⚠️ Contraentrega: cobrar efectivo al entregar." if contraentrega else ""
+    return ' + '.join(partes) + alerta
+
+
+def _telegram_entrega(tipo_entrega, direccion=None, mesa=None):
+    if tipo_entrega == 'domicilio':
+        return f"Domicilio. Llevar a: {direccion or 'direccion pendiente'}"
+    if tipo_entrega == 'recoger':
+        return "Cliente recoge en el local."
+    if tipo_entrega == 'caja':
+        return "Entrega en el local / caja."
+    if tipo_entrega == 'mesa':
+        return f"Consumo / entrega en mesa: {mesa or 'mesa sin nombre'}"
+    return f"{tipo_entrega or 'Pedido'}: {direccion or mesa or 'N/A'}"
+
+
+def _enviar_telegram_negocio(conn, chat_id, texto):
+    if not chat_id:
+        return
+    try:
+        import os
+        import requests as req
+        token = ''
+        try:
+            config = conn.execute(
+                'SELECT telegram_token FROM "CONFIGURACION_SISTEMA" WHERE id = 1'
+            ).fetchone()
+            if config:
+                token = config['telegram_token'] or ''
+        except Exception:
+            pass
+        token = token or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+        if not token:
+            return
+        req.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={'chat_id': chat_id, 'text': texto, 'parse_mode': 'HTML'},
+            timeout=10
+        )
+    except Exception as exc:
+        print(f'[telegram pago] envio fallido: {exc}')
+
+
+def _chat_id_negocio(conn, chat_id=None, admin_id=None):
+    if chat_id:
+        return chat_id
+    if admin_id:
+        admin = conn.execute(
+            "SELECT telegram_chat_id FROM terceros WHERE id = %s", (admin_id,)
+        ).fetchone()
+        if admin and admin['telegram_chat_id']:
+            return admin['telegram_chat_id']
+    try:
+        config = conn.execute(
+            'SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1'
+        ).fetchone()
+        return config['telegram_chat_id'] if config else None
+    except Exception:
+        return None
+
+
+def _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago):
+    if tipo == 'tienda':
+        row = conn.execute("""
+            SELECT p.id, p.total, p.nombre_cliente, p.telefono_cliente, p.tipo_entrega,
+                   p.direccion_cliente, t.nombre AS negocio, t.telegram_chat_id, t.admin_id
+            FROM pedidos_tienda p
+            JOIN tiendas t ON t.id = p.tienda_id
+            WHERE p.id = %s
+        """, (pedido_id,)).fetchone()
+        if not row:
+            return
+        total = float(row['total'] or 0)
+        entrega = _telegram_entrega(row['tipo_entrega'], row['direccion_cliente'])
+    else:
+        row = conn.execute("""
+            SELECT p.id, COALESCE(p.precio, 0) * COALESCE(p.cantidad, 1) AS total,
+                   p.nombre_cliente, p.telefono_cliente, p.tipo_entrega, p.direccion_cliente,
+                   p.mesa_nombre, r.nombre AS negocio, r.admin_id
+            FROM pedidos_restaurante p
+            JOIN restaurantes r ON r.id = p.restaurante_id
+            WHERE p.id = %s
+        """, (pedido_id,)).fetchone()
+        if not row:
+            return
+        total = float(row['total'] or 0)
+        entrega = _telegram_entrega(row['tipo_entrega'], row['direccion_cliente'], row['mesa_nombre'])
+    try:
+        chat_directo = row['telegram_chat_id']
+    except Exception:
+        chat_directo = None
+    chat_id = _chat_id_negocio(conn, chat_directo, row['admin_id'])
+    if not chat_id:
+        return
+    pagos_txt = _telegram_resumen_pagos(pagos, metodo_pago, total)
+    msg = (
+        f"💳 <b>Pago / forma de pago registrada</b>\n"
+        f"🏪 {row['negocio']}\n"
+        f"🧾 Pedido #{pedido_id}\n"
+        f"👤 {row['nombre_cliente'] or 'Cliente'} - {row['telefono_cliente'] or 'Sin telefono'}\n"
+        f"📦 Entrega: {entrega}\n"
+        f"💳 Pago elegido: {pagos_txt}\n"
+        f"💰 Total: ${total:,.0f}"
+    )
+    _enviar_telegram_negocio(conn, chat_id, msg)
+
+
 def init_config_negocio(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS config_negocio (
@@ -176,6 +318,10 @@ def api_config_save(tercero_id):
                 updated_at   = NOW()
         """, (tercero_id, json.dumps(modalidades), json.dumps(metodos_pago), aviso_pedido))
         conn.commit()
+        try:
+            _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago)
+        except Exception as exc:
+            print(f'[telegram pago] no se pudo notificar pedido {pedido_id}: {exc}')
         return jsonify({'ok': True})
     except Exception as e:
         try: conn.rollback()

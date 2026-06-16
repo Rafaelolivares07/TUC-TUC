@@ -434,6 +434,52 @@ def _enviar_telegram_tienda(*args):
         print(f'[telegram tienda] envio fallido: {_e}')
 
 
+def _telegram_label_pago(codigo):
+    labels = {
+        'efectivo': 'Efectivo',
+        'contraentrega': 'Contraentrega en efectivo',
+        'llave': 'Llave bancaria',
+        'qr_bancolombia': 'QR Bancolombia',
+        'transferencia': 'Transferencia',
+        'tarjeta_debito': 'Tarjeta debito',
+        'tarjeta_credito': 'Tarjeta credito',
+        'nequi': 'Nequi',
+        'daviplata': 'Daviplata',
+    }
+    key = (codigo or '').strip().lower()
+    return labels.get(key, codigo or 'Sin definir')
+
+
+def _telegram_resumen_pagos(pagos, metodo_pago, total):
+    pagos_validos = [
+        p for p in (pagos or [])
+        if isinstance(p, dict) and float(p.get('monto') or 0) > 0
+    ]
+    if not pagos_validos:
+        pagos_validos = [{'codigo': metodo_pago or 'efectivo', 'nombre': metodo_pago or 'efectivo', 'monto': total}]
+    partes = []
+    contraentrega = False
+    for pago in pagos_validos:
+        codigo = (pago.get('codigo') or metodo_pago or '').strip()
+        nombre = pago.get('nombre') or _telegram_label_pago(codigo)
+        if codigo.lower() == 'contraentrega':
+            contraentrega = True
+            nombre = 'Contraentrega en efectivo'
+        partes.append(f"{nombre}: ${float(pago.get('monto') or 0):,.0f}")
+    alerta = "\n⚠️ Contraentrega: cobrar efectivo al entregar." if contraentrega else ""
+    return ' + '.join(partes) + alerta
+
+
+def _telegram_detalle_entrega_tienda(tipo_entrega, direccion, nombre_cajero):
+    if tipo_entrega == 'domicilio':
+        return f"Domicilio. Llevar a: {direccion or 'direccion pendiente'}"
+    if tipo_entrega == 'caja':
+        return f"Entrega en el local / caja. Atendio: {nombre_cajero or 'caja'}"
+    if tipo_entrega == 'recoger':
+        return "Cliente recoge en el local."
+    return f"{tipo_entrega or 'Pedido'}: {direccion or 'N/A'}"
+
+
 def _ip_cliente():
     reenviada = (request.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
     return reenviada or request.remote_addr or ''
@@ -2022,7 +2068,7 @@ def api_tienda_pedido_crear(slug):
                     print(f'[inv] salida tienda {it["producto_id"]}: {_e}')
                     try: conn.execute("ROLLBACK TO SAVEPOINT sp_inv_tienda")
                     except: pass
-        pagos_validos = [p for p in pagos if float(p.get('monto') or 0) > 0]
+        pagos_validos = [p for p in pagos if isinstance(p, dict) and float(p.get('monto') or 0) > 0]
         if pagos_validos:
             for p in pagos_validos:
                 conn.execute("""
@@ -2067,8 +2113,19 @@ def api_tienda_pedido_crear(slug):
                 print(f'[telegram tienda] chat global no disponible: {_e}')
         if chat_id:
             items_txt = '\n'.join([f"  {it['cantidad']}x {it['nombre_producto']} - ${it['precio_unitario'] * it['cantidad']:,.0f}" for it in items_validos])
-            entrega   = 'Domicilio' if tipo_entrega == 'domicilio' else 'Recoger'
-            msg = f"🛒 <b>Nuevo pedido en {tienda['nombre']}</b>\n👤 {nombre_cliente} - {telefono_cliente}\n📦 {entrega}: {direccion_cliente or 'N/A'}\n\n{items_txt}\n\n💰 Total: ${total:,.0f}"
+            entrega = _telegram_detalle_entrega_tienda(tipo_entrega, direccion_cliente, nombre_cajero)
+            pagos_txt = _telegram_resumen_pagos(pagos_validos, metodo_pago, total)
+            cliente_txt = nombre_cliente or nombre_cajero or 'Cliente en local'
+            telefono_txt = telefono_cliente or 'Sin telefono'
+            msg = (
+                f"🛒 <b>Nuevo pedido en {tienda['nombre']}</b>\n"
+                f"🧾 Pedido #{pedido_id}\n"
+                f"👤 {cliente_txt} - {telefono_txt}\n"
+                f"📦 Entrega: {entrega}\n"
+                f"💳 Pago elegido: {pagos_txt}\n\n"
+                f"{items_txt}\n\n"
+                f"💰 Total: ${total:,.0f}"
+            )
             _enviar_telegram_tienda(conn, chat_id, msg)
         else:
             print(f'[telegram tienda] sin chat_id para tienda {slug}')

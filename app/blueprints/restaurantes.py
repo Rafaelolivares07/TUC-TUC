@@ -252,8 +252,34 @@ def _enviar_telegram(*args):
         print(f'[telegram rest] envio fallido: {_e}')
 
 
+def _telegram_label_pago(codigo):
+    labels = {
+        'efectivo': 'Efectivo',
+        'contraentrega': 'Contraentrega en efectivo',
+        'llave': 'Llave bancaria',
+        'qr_bancolombia': 'QR Bancolombia',
+        'transferencia': 'Transferencia',
+        'tarjeta_debito': 'Tarjeta debito',
+        'tarjeta_credito': 'Tarjeta credito',
+        'nequi': 'Nequi',
+        'daviplata': 'Daviplata',
+    }
+    key = (codigo or '').strip().lower()
+    return labels.get(key, codigo or 'Pendiente por escoger')
+
+
+def _telegram_detalle_entrega_restaurante(tipo_entrega, direccion, mesa):
+    if tipo_entrega == 'domicilio':
+        return f"Domicilio. Llevar a: {direccion or 'direccion pendiente'}"
+    if tipo_entrega == 'recoger':
+        return "Cliente recoge en el local."
+    if tipo_entrega == 'mesa':
+        return f"Consumo / entrega en mesa: {mesa or 'mesa sin nombre'}"
+    return f"{tipo_entrega or 'Pedido'}: {direccion or mesa or 'N/A'}"
+
+
 def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo_entrega,
-                                  direccion, mesa, items, total):
+                                  direccion, mesa, items, total, metodo_pago=None):
     try:
         admin_id = rest['admin_id']
         nombre_rest = rest['nombre']
@@ -278,18 +304,17 @@ def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo
     if not chat_id:
         print(f'[telegram rest] sin chat_id para restaurante {nombre_rest}')
         return
-    entrega = {
-        'domicilio': 'Domicilio',
-        'recoger': 'Recoger',
-        'mesa': 'Mesa'
-    }.get(tipo_entrega, tipo_entrega or 'Pedido')
-    ubicacion = direccion or mesa or 'N/A'
     items_txt = '\n'.join(f"  {item}" for item in items) or '  Pedido registrado'
+    entrega = _telegram_detalle_entrega_restaurante(tipo_entrega, direccion, mesa)
+    pago_txt = _telegram_label_pago(metodo_pago)
+    if (metodo_pago or '').lower() == 'contraentrega':
+        pago_txt += "\n⚠️ Contraentrega: cobrar efectivo al entregar."
     msg = (
         f"🍽️ <b>Nuevo pedido en {nombre_rest}</b>\n"
         f"🧾 Pedido #{pedido_id}\n"
         f"👤 {cliente or 'Cliente'} - {telefono or 'Sin telefono'}\n"
-        f"📦 {entrega}: {ubicacion}\n\n"
+        f"📦 Entrega: {entrega}\n"
+        f"💳 Pago elegido: {pago_txt}\n\n"
         f"{items_txt}\n\n"
         f"💰 Total: ${total:,.0f}"
     )
@@ -1769,7 +1794,7 @@ def api_pedido_crear(slug):
         try:
             _notificar_pedido_restaurante(
                 conn, rest, pedido_id, nombre_cliente, telefono_cliente, tipo_entrega,
-                direccion_cliente, mesa_nombre, items_notificacion, precio_total
+                direccion_cliente, mesa_nombre, items_notificacion, precio_total, metodo_pago
             )
         except Exception as _e:
             print(f'[telegram] pedido rest {slug}: {_e}')

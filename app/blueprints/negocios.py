@@ -260,21 +260,66 @@ def api_pagar(pedido_id):
     tipo        = data.get('tipo', '')
     pagos       = data.get('pagos') or []
     comprobante = data.get('comprobante') or None
-    metodo_pago = pagos[0]['codigo'] if pagos else (data.get('metodo_pago') or '').strip() or None
+    metodo_pago = (pagos[0].get('codigo') if pagos and isinstance(pagos[0], dict) else None) or (data.get('metodo_pago') or '').strip() or None
     if not metodo_pago:
         return jsonify({'ok': False, 'error': 'Selecciona un método de pago'}), 400
     conn = get_db_connection()
     try:
         if tipo == 'tienda':
+            total_row = conn.execute("SELECT total FROM pedidos_tienda WHERE id=%s", (pedido_id,)).fetchone()
+            total_pedido = float(total_row['total'] or 0) if total_row else 0
             conn.execute(
                 "UPDATE pedidos_tienda SET metodo_pago=%s, comprobante_pago=%s WHERE id=%s",
                 (metodo_pago, comprobante, pedido_id)
             )
+            conn.execute("DELETE FROM pedido_pagos_tienda WHERE pedido_id=%s", (pedido_id,))
+            pagos_validos = [p for p in pagos if isinstance(p, dict) and float(p.get('monto') or 0) > 0]
+            if pagos_validos:
+                for pago in pagos_validos:
+                    conn.execute("""
+                        INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
+                        VALUES (%s, %s, %s, %s)
+                    """, (
+                        pedido_id,
+                        pago.get('codigo') or metodo_pago,
+                        pago.get('nombre') or pago.get('codigo') or metodo_pago,
+                        float(pago.get('monto') or 0),
+                    ))
+            else:
+                conn.execute("""
+                    INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
+                    VALUES (%s, %s, %s, %s)
+                """, (pedido_id, metodo_pago, metodo_pago, total_pedido))
         else:
+            _asegurar_pagos_restaurante(conn)
+            total_row = conn.execute("""
+                SELECT COALESCE(precio, 0) * COALESCE(cantidad, 1) AS total
+                FROM pedidos_restaurante
+                WHERE id=%s
+            """, (pedido_id,)).fetchone()
+            total_pedido = float(total_row['total'] or 0) if total_row else 0
             conn.execute(
                 "UPDATE pedidos_restaurante SET metodo_pago=%s, comprobante_pago=%s WHERE id=%s",
                 (metodo_pago, comprobante, pedido_id)
             )
+            conn.execute("DELETE FROM pedido_pagos_restaurante WHERE pedido_id=%s", (pedido_id,))
+            pagos_validos = [p for p in pagos if isinstance(p, dict) and float(p.get('monto') or 0) > 0]
+            if pagos_validos:
+                for pago in pagos_validos:
+                    conn.execute("""
+                        INSERT INTO pedido_pagos_restaurante (pedido_id, metodo_codigo, metodo_nombre, monto)
+                        VALUES (%s, %s, %s, %s)
+                    """, (
+                        pedido_id,
+                        pago.get('codigo') or metodo_pago,
+                        pago.get('nombre') or pago.get('codigo') or metodo_pago,
+                        float(pago.get('monto') or 0),
+                    ))
+            else:
+                conn.execute("""
+                    INSERT INTO pedido_pagos_restaurante (pedido_id, metodo_codigo, metodo_nombre, monto)
+                    VALUES (%s, %s, %s, %s)
+                """, (pedido_id, metodo_pago, metodo_pago, total_pedido))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -283,6 +328,23 @@ def api_pagar(pedido_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+def _asegurar_pagos_restaurante(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pedido_pagos_restaurante (
+            id SERIAL PRIMARY KEY,
+            pedido_id INTEGER NOT NULL,
+            metodo_codigo VARCHAR(50),
+            metodo_nombre VARCHAR(100),
+            monto NUMERIC(12,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_pedido_pagos_restaurante_pedido
+        ON pedido_pagos_restaurante(pedido_id)
+    """)
 
 
 @bp.route('/api/negocio/<int:tercero_id>/metodo-info', methods=['POST'])

@@ -2100,6 +2100,23 @@ def api_tienda_pedidos(slug):
                 "SELECT nombre_producto, cantidad, precio_unitario FROM items_pedido_tienda WHERE pedido_id = %s",
                 (p['id'],)
             ).fetchall()
+            pagos = conn.execute("""
+                SELECT metodo_codigo, metodo_nombre, monto
+                FROM pedido_pagos_tienda
+                WHERE pedido_id = %s
+                ORDER BY id
+            """, (p['id'],)).fetchall()
+            pagos_json = [{
+                'codigo': pago['metodo_codigo'] or '',
+                'nombre': pago['metodo_nombre'] or pago['metodo_codigo'] or '',
+                'monto': float(pago['monto'] or 0),
+            } for pago in pagos]
+            if not pagos_json:
+                pagos_json = [{
+                    'codigo': p['metodo_pago'] or 'efectivo',
+                    'nombre': p['metodo_pago'] or 'efectivo',
+                    'monto': float(p['total'] or 0),
+                }]
             resultado.append({
                 'id': p['id'],
                 'nombre_cliente': p['nombre_cliente'] or '',
@@ -2113,6 +2130,7 @@ def api_tienda_pedidos(slug):
                 'nombre_cajero': p['nombre_cajero'] or '',
                 'metodo_pago': p['metodo_pago'] or 'efectivo',
                 'comprobante_pago': p['comprobante_pago'] or '',
+                'pagos': pagos_json,
                 'items': [{'nombre': i['nombre_producto'], 'cantidad': i['cantidad'], 'precio': float(i['precio_unitario'])} for i in items]
             })
         return jsonify({'ok': True, 'pedidos': resultado})

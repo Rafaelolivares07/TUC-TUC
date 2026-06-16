@@ -3589,12 +3589,65 @@ async function adoptarProducto(nombre, categoria) {
 
 // === Pedidos ===
 let pedidosAnteriores = 0;
+let pedidosPorId = {};
+
+function etiquetaMetodoPago(codigo) {
+    const key = (codigo || '').toLowerCase();
+    const labels = {
+        efectivo: 'Efectivo',
+        contraentrega: 'Contraentrega en efectivo',
+        llave: 'Llave bancaria',
+        qr_bancolombia: 'QR Bancolombia',
+        transferencia: 'Transferencia',
+        tarjeta_debito: 'Tarjeta debito',
+        tarjeta_credito: 'Tarjeta credito',
+        nequi: 'Nequi',
+        daviplata: 'Daviplata'
+    };
+    return labels[key] || codigo || 'Sin definir';
+}
+
+function etiquetaEntregaPedido(p) {
+    if (p.tipo_entrega === 'domicilio') return 'Domicilio';
+    if (p.tipo_entrega === 'caja') return 'Caja / autoatencion';
+    if (p.tipo_entrega === 'recoger') return 'Recoger';
+    return p.tipo_entrega || 'Recoger';
+}
+
+function pagosPedido(p) {
+    if (Array.isArray(p.pagos) && p.pagos.length) return p.pagos;
+    return [{codigo: p.metodo_pago || 'efectivo', nombre: p.metodo_pago || 'efectivo', monto: Number(p.total || 0)}];
+}
+
+function resumenPagosPedido(p) {
+    return pagosPedido(p).map(pg => {
+        const nombre = pg.nombre || etiquetaMetodoPago(pg.codigo);
+        return `${nombre}: $${Number(pg.monto || 0).toLocaleString()}`;
+    }).join(' + ');
+}
+
+function htmlPagosPedido(p) {
+    const pagos = pagosPedido(p);
+    const contra = pagos.some(pg => (pg.codigo || '').toLowerCase() === 'contraentrega');
+    const filas = pagos.map(pg => {
+        const nombre = pg.nombre || etiquetaMetodoPago(pg.codigo);
+        return `<span class="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-2 py-1 rounded-full">${nombre}: $${Number(pg.monto || 0).toLocaleString()}</span>`;
+    }).join(' ');
+    return `<div class="text-xs mt-2 space-y-1">
+        <div class="flex flex-wrap gap-1">${filas}</div>
+        ${contra ? '<div class="font-bold text-amber-700">Contraentrega: cobrar efectivo al entregar.</div>' : ''}
+        ${p.tipo_entrega === 'caja' ? '<div class="font-semibold text-blue-700">Origen: caja / autoatencion.</div>' : ''}
+    </div>`;
+}
+
 async function cargarPedidos() {
     try {
         const r = await fetch(BASE + '/pedidos');
         const data = await r.json();
         if (!data.ok) return;
         const pedidos = data.pedidos;
+        pedidosPorId = {};
+        pedidos.forEach(p => { pedidosPorId[p.id] = p; });
         document.getElementById('pedidos-count').textContent = pedidos.length + ' pedido(s)';
         document.getElementById('sin-pedidos').classList.toggle('hidden', pedidos.length > 0);
 
@@ -3610,8 +3663,11 @@ async function cargarPedidos() {
         cont.innerHTML = pedidos.map(p => {
             const estados = {nuevo: 'bg-blue-100 text-blue-700', preparando: 'bg-yellow-100 text-yellow-700', listo: 'bg-green-100 text-green-700', entregado: 'bg-gray-100 text-gray-500'};
             const nextEstado = {nuevo: 'preparando', preparando: 'listo', listo: 'entregado'};
-            const entrega = p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger';
+            const entrega = etiquetaEntregaPedido(p);
             const itemsHtml = p.items.map(i => `<li class="text-sm text-gray-600">${i.cantidad}x ${i.nombre} <span class="text-gray-400">$${(i.precio * i.cantidad).toLocaleString()}</span></li>`).join('');
+            const accion = nextEstado[p.estado] === 'entregado'
+                ? `confirmarEntregaPedido(${p.id})`
+                : `cambiarEstado(${p.id}, '${nextEstado[p.estado]}')`;
             return `<div class="bg-white border rounded-xl p-4">
                 <div class="flex items-start justify-between mb-2">
                     <div>
@@ -3629,10 +3685,11 @@ async function cargarPedidos() {
                 <div class="flex items-center justify-between">
                     <div>
                         <span class="font-bold text-rose-600">Total: $${p.total.toLocaleString()}</span>
-                        <span class="text-xs text-gray-400 ml-2">${p.metodo_pago || 'efectivo'}</span>
+                        <span class="text-xs text-gray-400 ml-2">${resumenPagosPedido(p)}</span>
                     </div>
-                    ${nextEstado[p.estado] ? `<button onclick="cambiarEstado(${p.id}, '${nextEstado[p.estado]}')" class="text-sm bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg font-semibold">${nextEstado[p.estado] === 'preparando' ? 'Preparar' : nextEstado[p.estado] === 'listo' ? 'Marcar listo' : 'Entregar'}</button>` : '<span class="text-xs text-gray-400">Entregado</span>'}
+                    ${nextEstado[p.estado] ? `<button onclick="${accion}" class="text-sm bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg font-semibold">${nextEstado[p.estado] === 'preparando' ? 'Preparar' : nextEstado[p.estado] === 'listo' ? 'Marcar listo' : 'Entregar'}</button>` : '<span class="text-xs text-gray-400">Entregado</span>'}
                 </div>
+                ${htmlPagosPedido(p)}
                 ${p.nombre_cajero ? `<p class="text-xs text-gray-400 mt-2">Cajero: ${p.nombre_cajero}</p>` : ''}
                 ${p.notas ? `<p class="text-xs text-gray-400 mt-1 italic">${p.notas}</p>` : ''}
                 ${p.comprobante_pago ? `<div class="mt-2"><p class="text-xs text-gray-400 mb-1">Comprobante:</p><img src="${p.comprobante_pago}" class="h-20 rounded-lg border cursor-pointer" onclick="verComprobanteAdmin(this.src)"></div>` : ''}
@@ -3647,6 +3704,21 @@ function verComprobanteAdmin(src) {
     overlay.onclick = () => overlay.remove();
     overlay.innerHTML = `<img src="${src}" class="max-w-[85vw] max-h-[85vh] rounded-xl shadow-2xl">`;
     document.body.appendChild(overlay);
+}
+
+function confirmarEntregaPedido(pedidoId) {
+    const p = pedidosPorId[pedidoId];
+    if (!p) return cambiarEstado(pedidoId, 'entregado');
+    const contra = pagosPedido(p).some(pg => (pg.codigo || '').toLowerCase() === 'contraentrega');
+    const msg = [
+        `Vas a entregar el pedido #${p.id}.`,
+        `Origen: ${etiquetaEntregaPedido(p)}${p.nombre_cajero ? ' / ' + p.nombre_cajero : ''}.`,
+        `Pago: ${resumenPagosPedido(p)}.`,
+        contra ? 'IMPORTANTE: el cliente escogio contraentrega. Cobrar efectivo al entregar.' : 'Verifica que el pago ya este recibido o soportado.',
+        '',
+        'Confirmas la entrega?'
+    ].join('\n');
+    if (confirm(msg)) cambiarEstado(pedidoId, 'entregado');
 }
 
 async function cambiarEstado(pedidoId, estado) {

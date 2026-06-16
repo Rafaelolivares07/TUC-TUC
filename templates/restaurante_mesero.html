@@ -542,11 +542,59 @@ function volverAPaso(paso) {
 }
 
 // ===== PEDIDOS ACTIVOS =====
+let pedidosPorId = {};
+
+function etiquetaMetodoPago(codigo) {
+    const key = (codigo || '').toLowerCase();
+    const labels = {
+        efectivo: 'Efectivo',
+        contraentrega: 'Contraentrega en efectivo',
+        llave: 'Llave bancaria',
+        qr_bancolombia: 'QR Bancolombia',
+        transferencia: 'Transferencia',
+        tarjeta_debito: 'Tarjeta debito',
+        tarjeta_credito: 'Tarjeta credito',
+        nequi: 'Nequi',
+        daviplata: 'Daviplata'
+    };
+    return labels[key] || codigo || 'Sin definir';
+}
+
+function etiquetaOrigenPedido(p) {
+    if (p.mesa_nombre) return 'Mesa ' + p.mesa_nombre;
+    if (p.tipo_entrega === 'domicilio') return 'Domicilio';
+    if (p.tipo_entrega === 'recoger') return 'Recoger';
+    if (p.tipo_entrega === 'mesa') return 'Mesa';
+    return p.tipo_entrega || 'Pedido';
+}
+
+function pagosPedido(p) {
+    if (Array.isArray(p.pagos) && p.pagos.length) return p.pagos;
+    return [{codigo: p.metodo_pago || 'efectivo', nombre: p.metodo_pago || 'efectivo', monto: Number(p.precio || 0) * Number(p.cantidad || 1)}];
+}
+
+function resumenPagosPedido(p) {
+    return pagosPedido(p).map(pg => {
+        const nombre = pg.nombre || etiquetaMetodoPago(pg.codigo);
+        return `${nombre}: $${Number(pg.monto || 0).toLocaleString()}`;
+    }).join(' + ');
+}
+
+function htmlPagosPedido(p) {
+    const contra = pagosPedido(p).some(pg => (pg.codigo || '').toLowerCase() === 'contraentrega');
+    return `<div class="text-xs text-green-100 mt-1">
+        Pago: ${resumenPagosPedido(p)}
+        ${contra ? '<span class="block font-bold text-yellow-200">Contraentrega: cobrar efectivo al entregar.</span>' : ''}
+    </div>`;
+}
+
 async function cargarPedidos() {
     try {
         const r = await fetch(`${BASE}/pedidos?estado=pendiente,listo`);
         const data = await r.json();
         if (!data.ok) return;
+        pedidosPorId = {};
+        data.pedidos.forEach(p => { pedidosPorId[p.id] = p; });
 
         const listos = data.pedidos.filter(p => p.estado === 'listo');
         const pendientes = data.pedidos.filter(p => p.estado === 'pendiente');
@@ -563,13 +611,14 @@ async function cargarPedidos() {
                 return `
                     <div class="flex items-center justify-between bg-green-800 rounded-lg p-3">
                         <div>
-                            <span class="font-extrabold text-xl text-white">${p.mesa_nombre ? 'Mesa ' + p.mesa_nombre : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger')}</span>
+                            <span class="font-extrabold text-xl text-white">${etiquetaOrigenPedido(p)}</span>
                             ${p.nombre_cliente ? `<span class="text-green-200 text-sm ml-1">- ${p.nombre_cliente}</span>` : ''}
                             ${p.mesa_num === 0 && p.telefono_cliente ? `<span class="text-green-200 text-xs ml-1">${p.telefono_cliente}</span>` : ''}
                             <span class="text-green-200 text-sm ml-2">${items}</span>
                             ${p.mesa_num === 0 && p.direccion_cliente ? `<div class="text-green-300 text-xs mt-1">${p.direccion_cliente}</div>` : ''}
+                            ${htmlPagosPedido(p)}
                         </div>
-                        <button onclick="marcarEntregado(${p.id})"
+                        <button onclick="confirmarEntregado(${p.id})"
                             class="bg-white text-green-800 px-4 py-2 rounded-lg font-bold text-sm flex-shrink-0">
                             Entregado
                         </button>
@@ -593,7 +642,7 @@ async function cargarPedidos() {
                     <div class="bg-gray-800 rounded-xl p-4 border-2 border-gray-700">
                         <div class="flex justify-between items-start">
                             <div>
-                                <span class="font-bold text-lg">${p.mesa_nombre ? 'Mesa ' + p.mesa_nombre : (p.tipo_entrega === 'domicilio' ? 'Domicilio' : 'Recoger')}</span>
+                                <span class="font-bold text-lg">${etiquetaOrigenPedido(p)}</span>
                                 ${p.nombre_cliente ? `<span class="text-amber-300 text-xs ml-1">${p.nombre_cliente}</span>` : ''}
                                 ${!p.mesa_nombre && p.telefono_cliente ? `<span class="text-gray-400 text-xs ml-1">${p.telefono_cliente}</span>` : ''}
                                 <span class="ml-2 text-xs px-2 py-1 rounded-full bg-yellow-600">En cocina</span>
@@ -609,6 +658,21 @@ async function cargarPedidos() {
             }).join('');
         }
     } catch(e) { console.error(e); }
+}
+
+function confirmarEntregado(id) {
+    const p = pedidosPorId[id];
+    if (!p) return marcarEntregado(id);
+    const contra = pagosPedido(p).some(pg => (pg.codigo || '').toLowerCase() === 'contraentrega');
+    const msg = [
+        `Vas a entregar el pedido #${p.id}.`,
+        `Origen: ${etiquetaOrigenPedido(p)}.`,
+        `Pago: ${resumenPagosPedido(p)}.`,
+        contra ? 'IMPORTANTE: el cliente escogio contraentrega. Cobrar efectivo al entregar.' : 'Verifica que el pago ya este recibido o soportado.',
+        '',
+        'Confirmas la entrega?'
+    ].join('\n');
+    if (confirm(msg)) marcarEntregado(id);
 }
 
 async function marcarEntregado(id) {

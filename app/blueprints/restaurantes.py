@@ -148,6 +148,23 @@ def _crear_tablas(conn):
     _tablas_listas = True
 
 
+def _asegurar_pagos_restaurante(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pedido_pagos_restaurante (
+            id SERIAL PRIMARY KEY,
+            pedido_id INTEGER NOT NULL,
+            metodo_codigo VARCHAR(50),
+            metodo_nombre VARCHAR(100),
+            monto NUMERIC(12,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_pedido_pagos_restaurante_pedido
+        ON pedido_pagos_restaurante(pedido_id)
+    """)
+
+
 def _asegurar_experiencia_restaurante(conn):
     conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pantalla_experiencial BOOLEAN DEFAULT FALSE")
     conn.execute("""
@@ -1794,6 +1811,7 @@ def api_pedidos(slug):
     try:
         conn = get_db_connection()
         _crear_tablas(conn)
+        _asegurar_pagos_restaurante(conn)
         rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
@@ -1802,6 +1820,7 @@ def api_pedidos(slug):
         pedidos = conn.execute(f"""
             SELECT p.id, p.mesa_num, p.mesa_nombre, p.tipo, p.precio, p.estado, p.notas, p.nombre_cliente, p.created_at,
                    p.cantidad, p.tipo_entrega, p.telefono_cliente, p.direccion_cliente, p.cliente_id,
+                   p.metodo_pago, p.comprobante_pago,
                    s.nombre as sopa_nombre, pr.nombre as proteina_nombre, pr.recargo as proteina_recargo,
                    pi.nombre as principio_nombre, pl.nombre as plato_nombre
             FROM pedidos_restaurante p
@@ -1813,18 +1832,41 @@ def api_pedidos(slug):
             AND p.created_at::date = CURRENT_DATE
             ORDER BY p.created_at DESC
         """, (rest['id'], *estados)).fetchall()
+        resultado = []
+        for p in pedidos:
+            pagos = conn.execute("""
+                SELECT metodo_codigo, metodo_nombre, monto
+                FROM pedido_pagos_restaurante
+                WHERE pedido_id = %s
+                ORDER BY id
+            """, (p['id'],)).fetchall()
+            pagos_json = [{
+                'codigo': pago['metodo_codigo'] or '',
+                'nombre': pago['metodo_nombre'] or pago['metodo_codigo'] or '',
+                'monto': float(pago['monto'] or 0),
+            } for pago in pagos]
+            if not pagos_json:
+                pagos_json = [{
+                    'codigo': p['metodo_pago'] or 'efectivo',
+                    'nombre': p['metodo_pago'] or 'efectivo',
+                    'monto': float(p['precio'] or 0) * float(p['cantidad'] or 1),
+                }]
+            resultado.append({
+                'id': p['id'], 'mesa_num': p['mesa_num'], 'mesa_nombre': p['mesa_nombre'] or '',
+                'tipo': p['tipo'], 'precio': float(p['precio']), 'estado': p['estado'],
+                'notas': p['notas'], 'sopa': p['sopa_nombre'], 'proteina': p['proteina_nombre'],
+                'proteina_recargo': float(p['proteina_recargo']) if p['proteina_recargo'] else 0,
+                'principio': p['principio_nombre'], 'plato': p['plato_nombre'],
+                'cantidad': p['cantidad'] or 1, 'nombre_cliente': p['nombre_cliente'],
+                'tipo_entrega': p['tipo_entrega'] or 'mesa', 'telefono_cliente': p['telefono_cliente'],
+                'direccion_cliente': p['direccion_cliente'], 'cliente_id': p['cliente_id'],
+                'metodo_pago': p['metodo_pago'] or 'efectivo',
+                'comprobante_pago': p['comprobante_pago'] or '',
+                'pagos': pagos_json,
+                'created_at': p['created_at'].strftime('%H:%M') if p['created_at'] else ''
+            })
         conn.close()
-        return jsonify({'ok': True, 'pedidos': [{
-            'id': p['id'], 'mesa_num': p['mesa_num'], 'mesa_nombre': p['mesa_nombre'] or '',
-            'tipo': p['tipo'], 'precio': float(p['precio']), 'estado': p['estado'],
-            'notas': p['notas'], 'sopa': p['sopa_nombre'], 'proteina': p['proteina_nombre'],
-            'proteina_recargo': float(p['proteina_recargo']) if p['proteina_recargo'] else 0,
-            'principio': p['principio_nombre'], 'plato': p['plato_nombre'],
-            'cantidad': p['cantidad'] or 1, 'nombre_cliente': p['nombre_cliente'],
-            'tipo_entrega': p['tipo_entrega'] or 'mesa', 'telefono_cliente': p['telefono_cliente'],
-            'direccion_cliente': p['direccion_cliente'], 'cliente_id': p['cliente_id'],
-            'created_at': p['created_at'].strftime('%H:%M') if p['created_at'] else ''
-        } for p in pedidos]})
+        return jsonify({'ok': True, 'pedidos': resultado})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -1958,13 +2000,21 @@ def cobrar_mesa_page(slug, mesa_id):
 def api_cobrar(slug, mesa_id):
     data = request.get_json() or {}
     pagos = data.get('pagos') or []
-    metodo_pago = pagos[0]['codigo'] if pagos else (data.get('metodo_pago') or '').strip() or None
+    metodo_pago = (pagos[0].get('codigo') if pagos and isinstance(pagos[0], dict) else None) or (data.get('metodo_pago') or '').strip() or None
     try:
         conn = get_db_connection()
+        _asegurar_pagos_restaurante(conn)
         rest = conn.execute("SELECT id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        pedidos = conn.execute("""
+            SELECT id, precio, COALESCE(cantidad, 1) AS cantidad
+            FROM pedidos_restaurante
+            WHERE restaurante_id = %s
+            AND (mesa_nombre = %s OR (COALESCE(mesa_nombre,'') = '' AND mesa_num::text = %s))
+            AND estado != 'cobrado' AND created_at::date = CURRENT_DATE
+        """, (rest['id'], mesa_id, mesa_id)).fetchall()
         conn.execute("""
             UPDATE pedidos_restaurante
             SET estado = 'cobrado', metodo_pago = COALESCE(%s, metodo_pago)
@@ -1972,6 +2022,28 @@ def api_cobrar(slug, mesa_id):
             AND (mesa_nombre = %s OR (COALESCE(mesa_nombre,'') = '' AND mesa_num::text = %s))
             AND estado != 'cobrado' AND created_at::date = CURRENT_DATE
         """, (metodo_pago, rest['id'], mesa_id, mesa_id))
+        pagos_validos = [p for p in pagos if isinstance(p, dict) and float(p.get('monto') or 0) > 0]
+        total_mesa = sum(float(p['precio'] or 0) * float(p['cantidad'] or 1) for p in pedidos)
+        for pedido in pedidos:
+            pedido_total = float(pedido['precio'] or 0) * float(pedido['cantidad'] or 1)
+            proporcion = (pedido_total / total_mesa) if total_mesa else 1
+            conn.execute("DELETE FROM pedido_pagos_restaurante WHERE pedido_id=%s", (pedido['id'],))
+            if pagos_validos:
+                for pago in pagos_validos:
+                    conn.execute("""
+                        INSERT INTO pedido_pagos_restaurante (pedido_id, metodo_codigo, metodo_nombre, monto)
+                        VALUES (%s, %s, %s, %s)
+                    """, (
+                        pedido['id'],
+                        pago.get('codigo') or metodo_pago,
+                        pago.get('nombre') or pago.get('codigo') or metodo_pago,
+                        float(pago.get('monto') or 0) * proporcion,
+                    ))
+            elif metodo_pago:
+                conn.execute("""
+                    INSERT INTO pedido_pagos_restaurante (pedido_id, metodo_codigo, metodo_nombre, monto)
+                    VALUES (%s, %s, %s, %s)
+                """, (pedido['id'], metodo_pago, metodo_pago, pedido_total))
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

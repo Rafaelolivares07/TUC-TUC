@@ -1,0 +1,127 @@
+// Vendedores compartido por admins de tiendas y restaurantes
+async function cargarVendedores() {
+    const cont = document.getElementById('lista-vendedores');
+    if (!cont || !window.VENDEDORES_API_BASE) return;
+    try {
+        const r = await fetch(window.VENDEDORES_API_BASE);
+        const d = await r.json();
+        if (!d.ok) { cont.innerHTML = `<p class="text-sm text-red-400 py-4 text-center">${d.error || 'Error'}</p>`; return; }
+        if (!d.vendedores.length) {
+            cont.innerHTML = '<p class="text-sm text-gray-400 py-4 text-center">Sin vendedores asignados aun.</p>';
+            return;
+        }
+        cont.innerHTML = d.vendedores.map(v => {
+            const nombre = htmlVendedor(v.nombre || '');
+            const telefono = htmlVendedor(v.telefono || '');
+            const telAttr = attrVendedor(v.telefono || '');
+            const nombreAttr = attrVendedor(v.nombre || '');
+            return `
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-3 border-b border-gray-100 last:border-0">
+                <div>
+                    <p class="font-semibold text-gray-800 text-sm">${nombre}</p>
+                    <p class="text-xs text-gray-400">${telefono}</p>
+                </div>
+                <div class="flex flex-wrap justify-end gap-2">
+                    <button onclick="abrirDashboardVendedor('${telAttr}')"
+                        class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold px-3 py-1 rounded-lg hover:bg-indigo-50 transition">Dashboard</button>
+                    <button onclick="compartirDashboardVendedor('${telAttr}', '${nombreAttr}')"
+                        class="text-xs text-green-600 hover:text-green-800 font-semibold px-3 py-1 rounded-lg hover:bg-green-50 transition">WhatsApp</button>
+                    <button onclick="eliminarVendedor(${v.id})"
+                        class="text-xs text-red-500 hover:text-red-700 font-semibold px-3 py-1 rounded-lg hover:bg-red-50 transition">Quitar</button>
+                </div>
+            </div>`;
+        }).join('');
+    } catch(e) { cont.innerHTML = '<p class="text-sm text-red-400 py-4 text-center">Error de conexion</p>'; }
+}
+
+async function agregarVendedor() {
+    const tel = document.getElementById('vd-tel').value.trim().replace(/\D/g,'');
+    const nombre = document.getElementById('vd-nombre').value.trim();
+    if (tel.length < 10) { toast('Telefono debe tener al menos 10 digitos', true); return; }
+    try {
+        const r = await fetch(window.VENDEDORES_API_BASE, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ telefono: tel, nombre })
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Vendedor agregado: ' + d.nombre);
+            document.getElementById('vd-tel').value = '';
+            document.getElementById('vd-nombre').value = '';
+            document.getElementById('vd-autocomplete').classList.add('hidden');
+            cargarVendedores();
+        } else { toast(d.error || 'Error al agregar', true); }
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+async function eliminarVendedor(id) {
+    if (!confirm('Quitar a este vendedor del negocio?')) return;
+    try {
+        const r = await fetch(window.VENDEDORES_API_BASE + '/' + id, { method: 'DELETE' });
+        const d = await r.json();
+        if (d.ok) { toast('Vendedor removido'); cargarVendedores(); }
+        else toast(d.error || 'Error', true);
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+function urlDashboardVendedor(tel) {
+    const limpio = (tel || '').replace(/\D/g,'');
+    return `${window.location.origin}/vendedor${limpio ? '?tel=' + encodeURIComponent(limpio) : ''}`;
+}
+
+function telefonoWhatsAppVendedor(tel) {
+    const limpio = (tel || '').replace(/\D/g,'');
+    if (limpio.length === 10) return '57' + limpio;
+    return limpio;
+}
+
+function abrirDashboardVendedor(tel) {
+    window.open(urlDashboardVendedor(tel), '_blank');
+}
+
+function compartirDashboardVendedor(tel, nombre) {
+    const waTel = telefonoWhatsAppVendedor(tel);
+    if (!waTel) { toast('El vendedor no tiene telefono para WhatsApp', true); return; }
+    const url = urlDashboardVendedor(tel);
+    const negocio = window.VENDEDORES_NEGOCIO_NOMBRE ? ` para ${window.VENDEDORES_NEGOCIO_NOMBRE}` : '';
+    const msg = `Hola ${nombre || ''}. Este es tu enlace al dashboard de vendedores TUC TUC${negocio}: ${url}`;
+    window.open(`https://wa.me/${waTel}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+let _vdTimer = null;
+function onVdTelInput(val) {
+    clearTimeout(_vdTimer);
+    const tel = val.replace(/\D/g,'');
+    if (tel.length < 4) { document.getElementById('vd-autocomplete').classList.add('hidden'); return; }
+    _vdTimer = setTimeout(async () => {
+        try {
+            const r = await fetch('/api/vendedor/buscar-terceros?q=' + encodeURIComponent(tel));
+            const d = await r.json();
+            const resultados = Array.isArray(d) ? d : (d.resultados || []);
+            const box = document.getElementById('vd-autocomplete');
+            if (!resultados.length) { box.classList.add('hidden'); return; }
+            box.innerHTML = resultados.map(t =>
+                `<div class="px-3 py-2 hover:bg-gray-50 cursor-pointer" onclick="selVd('${attrVendedor(t.telefono || '')}','${attrVendedor(t.nombre || '')}')">
+                    <span class="font-semibold">${htmlVendedor(t.nombre || '')}</span>
+                    <span class="text-gray-400 ml-2">${htmlVendedor(t.telefono || '')}</span>
+                </div>`
+            ).join('');
+            box.classList.remove('hidden');
+        } catch {}
+    }, 300);
+}
+
+function selVd(tel, nombre) {
+    document.getElementById('vd-tel').value = tel;
+    document.getElementById('vd-nombre').value = nombre;
+    document.getElementById('vd-autocomplete').classList.add('hidden');
+}
+
+function htmlVendedor(value) {
+    return String(value || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function attrVendedor(value) {
+    return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, ' ');
+}

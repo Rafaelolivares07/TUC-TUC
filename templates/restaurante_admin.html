@@ -119,6 +119,9 @@
                 <button onclick="cambiarTab('visitantes')" id="tab-visitantes" class="tab-btn">
                     Visitantes
                 </button>
+                <button onclick="cambiarTab('vendedores')" id="tab-vendedores" class="tab-btn">
+                    Vendedores
+                </button>
                 <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">
                     🎨 Personalizar
                 </button>
@@ -516,6 +519,8 @@
             </div>
         </div>
 
+        {% include 'partials/vendedores_admin_panel.html' %}
+
         <!-- ====== TAB: PERSONALIZAR ====== -->
         <div id="panel-personalizar" class="p-6 hidden">
 
@@ -767,6 +772,8 @@ const SLUG = '{{ restaurante.slug if restaurante else "" }}';
 const TERCERO_ID = {{ ((restaurante.tercero_id or restaurante.admin_id) if restaurante else none) | tojson }};
 const TIPO_REST = '{{ restaurante.tipo_restaurante if restaurante else "menu_dia" }}';
 const BASE = SLUG ? `/api/restaurante/${SLUG}` : '';
+window.VENDEDORES_API_BASE = BASE + '/vendedores';
+window.VENDEDORES_NEGOCIO_NOMBRE = {{ (restaurante.nombre if restaurante else '') | tojson }};
 const CLIENTE_URL = '{{ cliente_url if cliente_url is defined else "" }}' || window.location.origin;
 
 // ===== TOAST =====
@@ -967,7 +974,7 @@ function renderizarVisitantes() {
 
 // ===== TABS =====
 function cambiarTab(tab) {
-    ['catalogo', 'opcmenudia', 'menudia', 'mesas', 'cuentas', 'visitantes', 'personalizar', 'ubicacion'].forEach(t => {
+    ['catalogo', 'opcmenudia', 'menudia', 'mesas', 'cuentas', 'visitantes', 'vendedores', 'personalizar', 'ubicacion'].forEach(t => {
         const panel = document.getElementById(`panel-${t}`);
         const tabEl = document.getElementById(`tab-${t}`);
         if (panel) panel.classList.toggle('hidden', t !== tab);
@@ -980,6 +987,7 @@ function cambiarTab(tab) {
     if (tab === 'mesas') cargarMesas();
     if (tab === 'cuentas') cargarCuentasAdmin();
     if (tab === 'visitantes') cargarVisitantes();
+    if (tab === 'vendedores') cargarVendedores();
     if (tab === 'personalizar') cargarBloquesExperiencia();
     if (tab === 'ubicacion') iniciarMapaUbicacion();
 }
@@ -2671,6 +2679,8 @@ document.addEventListener('visibilitychange', function() {
         document.getElementById('banner-asignar-header').classList.remove('hidden');
     }
 });
+
+{% include 'partials/vendedores_admin_js.html' %}
 </script>
 
 <!-- Powered by -->

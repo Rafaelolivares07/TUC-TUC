@@ -2257,6 +2257,136 @@ def api_ventas(slug):
 
 # ── Docs ──────────────────────────────────────────────────────────────────────
 
+def _asegurar_vendedor_negocios(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vendedor_negocios (
+            id SERIAL PRIMARY KEY,
+            vendedor_id INTEGER NOT NULL,
+            negocio_id INTEGER NOT NULL,
+            activo BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(vendedor_id, negocio_id)
+        )
+    """)
+
+
+def _restaurante_admin_para_vendedores(conn, slug):
+    rest = conn.execute(
+        "SELECT id, nombre, admin_id, tercero_id FROM restaurantes WHERE slug = %s AND activo = TRUE",
+        (slug,)
+    ).fetchone()
+    if not rest:
+        return None, (jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404)
+    if session.get('rol') != 'Administrador' and session.get('usuario_id') != rest['admin_id']:
+        return None, (jsonify({'ok': False, 'error': 'No autorizado'}), 403)
+    tercero_id = rest['tercero_id']
+    if not tercero_id:
+        existente = conn.execute(
+            "SELECT id FROM terceros WHERE nombre = %s AND telefono IS NULL LIMIT 1",
+            (rest['nombre'],)
+        ).fetchone()
+        if existente:
+            tercero_id = existente['id']
+        else:
+            nuevo = conn.execute(
+                "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'negocio') RETURNING id",
+                (rest['nombre'],)
+            ).fetchone()
+            tercero_id = nuevo['id']
+        conn.execute("UPDATE restaurantes SET tercero_id = %s WHERE id = %s", (tercero_id, rest['id']))
+        conn.commit()
+        rest = dict(rest)
+        rest['tercero_id'] = tercero_id
+    return rest, None
+
+
+@bp.route('/api/restaurante/<slug>/vendedores', methods=['GET'])
+def api_restaurante_vendedores_listar(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _asegurar_vendedor_negocios(conn)
+        rest, error = _restaurante_admin_para_vendedores(conn, slug)
+        if error:
+            return error
+        rows = conn.execute("""
+            SELECT vn.id, vn.vendedor_id, t.nombre, t.telefono
+            FROM vendedor_negocios vn
+            JOIN terceros t ON t.id = vn.vendedor_id
+            WHERE vn.negocio_id = %s AND vn.activo = TRUE
+            ORDER BY vn.created_at ASC
+        """, (rest['tercero_id'],)).fetchall()
+        return jsonify({'ok': True, 'vendedores': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/restaurante/<slug>/vendedores', methods=['POST'])
+def api_restaurante_vendedores_agregar(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    telefono = (data.get('telefono') or '').strip().replace(' ', '')
+    nombre = (data.get('nombre') or '').strip()[:100]
+    if not telefono:
+        return jsonify({'ok': False, 'error': 'Telefono requerido'}), 400
+    conn = get_db_connection()
+    try:
+        _asegurar_vendedor_negocios(conn)
+        rest, error = _restaurante_admin_para_vendedores(conn, slug)
+        if error:
+            return error
+        tercero = conn.execute("SELECT id, nombre FROM terceros WHERE telefono = %s", (telefono,)).fetchone()
+        if tercero:
+            vendedor_id = tercero['id']
+            nombre_real = tercero['nombre']
+        else:
+            if not nombre:
+                return jsonify({'ok': False, 'error': 'Vendedor no registrado. Envia tambien su nombre'}), 400
+            nuevo = conn.execute(
+                "INSERT INTO terceros (nombre, telefono, fecha_creacion) VALUES (%s, %s, NOW()) RETURNING id",
+                (nombre, telefono)
+            ).fetchone()
+            vendedor_id = nuevo['id']
+            nombre_real = nombre
+        conn.execute("""
+            INSERT INTO vendedor_negocios (vendedor_id, negocio_id, activo)
+            VALUES (%s, %s, TRUE)
+            ON CONFLICT (vendedor_id, negocio_id) DO UPDATE SET activo = TRUE
+        """, (vendedor_id, rest['tercero_id']))
+        conn.commit()
+        return jsonify({'ok': True, 'vendedor_id': vendedor_id, 'nombre': nombre_real})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/restaurante/<slug>/vendedores/<int:vid>', methods=['DELETE'])
+def api_restaurante_vendedores_eliminar(slug, vid):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _asegurar_vendedor_negocios(conn)
+        rest, error = _restaurante_admin_para_vendedores(conn, slug)
+        if error:
+            return error
+        conn.execute(
+            "UPDATE vendedor_negocios SET activo = FALSE WHERE negocio_id = %s AND id = %s",
+            (rest['tercero_id'], vid)
+        )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/restaurante/<slug>/visitas-publicas')
 def api_restaurante_visitas_publicas(slug):
     if 'usuario_id' not in session:

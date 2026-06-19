@@ -1038,14 +1038,32 @@ const _NEGOCIO_LON = {{ tienda.lon | tojson }};
 const _NEGOCIO_NOMBRE = {{ tienda.nombre | tojson }};
 
 function abrirComoLlegar() {
-    document.getElementById('modal-como-llegar').classList.remove('hidden');
+    irEnMiCarro();
 }
 function cerrarComoLlegar() {
-    document.getElementById('modal-como-llegar').classList.add('hidden');
+    const modal = document.getElementById('modal-como-llegar');
+    if (modal) modal.classList.add('hidden');
 }
 function irEnMiCarro() {
-    const url = `/conduccion-asistida?destino_lat=${_NEGOCIO_LAT}&destino_lon=${_NEGOCIO_LON}&destino_nombre=${encodeURIComponent(_NEGOCIO_NOMBRE)}`;
-    window.location.href = url;
+    const lat = Number(_NEGOCIO_LAT);
+    const lon = Number(_NEGOCIO_LON);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+    const nombre = encodeURIComponent(_NEGOCIO_NOMBRE || 'Destino');
+    const destino = `${lat},${lon}`;
+    const ua = navigator.userAgent || '';
+
+    if (/Android/i.test(ua)) {
+        window.location.href = `geo:0,0?q=${destino}(${nombre})`;
+        return;
+    }
+
+    if (/iPhone|iPad|iPod/i.test(ua)) {
+        window.location.href = `https://maps.apple.com/?daddr=${destino}&q=${nombre}`;
+        return;
+    }
+
+    window.location.href = `https://www.google.com/maps/dir/?api=1&destination=${destino}`;
 }
 function pedirTucTuc() {
     cerrarComoLlegar();

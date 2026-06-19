@@ -1274,12 +1274,13 @@
         </div>
         <div class="bg-rose-50 border border-rose-100 rounded-xl p-3 mb-3">
             <p class="text-xs font-bold text-rose-700 mb-2">Cobertura de domicilio</p>
-            <div class="grid grid-cols-3 gap-2">
-                <button onclick="activarDibujoCobertura()" class="bg-white border border-rose-200 text-rose-600 font-semibold py-2 rounded-lg text-xs">Agregar puntos</button>
+            <div class="grid grid-cols-4 gap-2">
+                <button onclick="activarModoUbicacion()" id="btn-modo-ubicacion" class="bg-rose-600 text-white border border-rose-600 font-semibold py-2 rounded-lg text-xs">Mover negocio</button>
+                <button onclick="activarDibujoCobertura()" id="btn-modo-cobertura" class="bg-white border border-rose-200 text-rose-600 font-semibold py-2 rounded-lg text-xs">Editar zona</button>
                 <button onclick="limpiarCobertura()" class="bg-white border border-gray-200 text-gray-600 font-semibold py-2 rounded-lg text-xs">Limpiar</button>
                 <button onclick="guardarCobertura()" class="bg-rose-600 text-white font-semibold py-2 rounded-lg text-xs">Guardar zona</button>
             </div>
-            <p id="txt-cobertura" class="text-xs text-gray-500 mt-2">Toca "Agregar puntos" y marca el perimetro donde entregas.</p>
+            <p id="txt-cobertura" class="text-xs text-gray-500 mt-2">Modo mover negocio: toca el mapa para cambiar el pin. Usa "Editar zona" para modificar el perimetro.</p>
         </div>
         <button onclick="gpsUbicacion()"
             class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl text-sm mb-2 flex items-center justify-center gap-2">
@@ -1582,6 +1583,7 @@ function _colocarMarker(lon, lat) {
 
 function gpsUbicacion() {
     if (!navigator.geolocation) { toast('GPS no disponible', true); return; }
+    activarModoUbicacion();
     toast('Localizando...', false);
     navigator.geolocation.getCurrentPosition(
         pos => {
@@ -2999,10 +3001,29 @@ async function cargarCobertura() {
 }
 
 function activarDibujoCobertura() {
-    _modoCobertura = !_modoCobertura;
-    document.getElementById('txt-cobertura').textContent = _modoCobertura
-        ? 'Modo cobertura activo: toca el mapa para agregar puntos.'
-        : 'Modo cobertura pausado.';
+    _modoCobertura = true;
+    actualizarModoMapaTexto();
+}
+
+function activarModoUbicacion() {
+    _modoCobertura = false;
+    actualizarModoMapaTexto();
+}
+
+function actualizarModoMapaTexto() {
+    const btnUbic = document.getElementById('btn-modo-ubicacion');
+    const btnCob = document.getElementById('btn-modo-cobertura');
+    if (btnUbic) btnUbic.className = _modoCobertura
+        ? 'bg-white border border-gray-200 text-gray-600 font-semibold py-2 rounded-lg text-xs'
+        : 'bg-rose-600 text-white border border-rose-600 font-semibold py-2 rounded-lg text-xs';
+    if (btnCob) btnCob.className = _modoCobertura
+        ? 'bg-rose-600 text-white border border-rose-600 font-semibold py-2 rounded-lg text-xs'
+        : 'bg-white border border-rose-200 text-rose-600 font-semibold py-2 rounded-lg text-xs';
+    const txt = document.getElementById('txt-cobertura');
+    if (!txt) return;
+    txt.textContent = _modoCobertura
+        ? `${_coberturaPuntos.length} punto(s). Toca el mapa para agregar puntos al perimetro.`
+        : `${_coberturaPuntos.length} punto(s) de cobertura. Modo mover negocio activo.`;
 }
 
 function agregarPuntoCobertura(lon, lat) {
@@ -3030,7 +3051,7 @@ function dibujarCobertura() {
     } else {
         _mapaUbic.getSource('cobertura-domicilio').setData(data);
     }
-    document.getElementById('txt-cobertura').textContent = `${_coberturaPuntos.length} punto(s) de cobertura`;
+    actualizarModoMapaTexto();
 }
 
 async function guardarCobertura() {
@@ -3052,7 +3073,7 @@ async function guardarCobertura() {
             })
         });
         const d = await r.json();
-        if (d.ok) { toast('Cobertura guardada', false); await cargarCobertura(); }
+        if (d.ok) { _modoCobertura = false; toast('Cobertura guardada', false); await cargarCobertura(); actualizarModoMapaTexto(); }
         else toast(d.error || 'Error', true);
     } catch(e) { toast('Error de conexion', true); }
 }

@@ -54,6 +54,69 @@ def crear_tabla_config_tipologia(conn):
     _config_tipologia_lista = True
 
 
+def _contactos_allowed():
+    return session.get('rol') in ('Administrador', 'ClienteVFP', 'Tienda', 'Restaurante') and session.get('usuario_id')
+
+
+def _asegurar_tabla_contactos(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS contactos (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER,
+            tercero_id INTEGER,
+            nombre TEXT,
+            telefono TEXT,
+            chat_token TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    for sql in [
+        "ALTER TABLE contactos ADD COLUMN IF NOT EXISTS tercero_id INTEGER",
+        "ALTER TABLE contactos ADD COLUMN IF NOT EXISTS chat_token TEXT",
+        "ALTER TABLE contactos ADD COLUMN IF NOT EXISTS negocio_id INTEGER",
+    ]:
+        conn.execute(sql)
+    conn.commit()
+
+
+def _contactos_tercero_id(conn):
+    tercero_id = session.get('chat_tercero_id')
+    if tercero_id:
+        return tercero_id
+
+    uid = session.get('usuario_id')
+    rol = session.get('rol')
+    if not uid:
+        return None
+
+    if rol in ('Tienda', 'Restaurante'):
+        return uid
+
+    nombre = session.get('nombre') or ''
+    tercero = None
+    if nombre:
+        tercero = conn.execute(
+            "SELECT id FROM terceros WHERE nombre = %s LIMIT 1",
+            (nombre,)
+        ).fetchone()
+    if tercero:
+        session['chat_tercero_id'] = tercero['id']
+        session.modified = True
+        return tercero['id']
+
+    if nombre:
+        nuevo = conn.execute(
+            "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'admin') RETURNING id",
+            (nombre,)
+        ).fetchone()
+        conn.commit()
+        session['chat_tercero_id'] = nuevo['id']
+        session.modified = True
+        return nuevo['id']
+
+    return uid
+
+
 # ── Telegram ──────────────────────────────────────────────────────────────────
 
 def enviar_notificacion_telegram(mensaje):
@@ -366,6 +429,120 @@ def admin_acceso(codigo):
 @admin_required
 def admin_menu():
     return render_template('admin_menu.html')
+
+
+@bp.route('/admin/contactos')
+def admin_contactos():
+    if not _contactos_allowed():
+        return redirect(url_for('auth.admin_login'))
+    conn = get_db_connection()
+    try:
+        _asegurar_tabla_contactos(conn)
+        tercero_id = _contactos_tercero_id(conn)
+        if not tercero_id:
+            return redirect(url_for('auth.admin_login'))
+        return render_template(
+            'contactos_admin.html',
+            admin_id=tercero_id,
+            nombre_admin=session.get('nombre', '')
+        )
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin/contactos', methods=['GET'])
+def api_admin_contactos_lista():
+    if not _contactos_allowed():
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _asegurar_tabla_contactos(conn)
+        tercero_id = _contactos_tercero_id(conn)
+        rows = conn.execute("""
+            SELECT id, nombre, telefono, created_at::text
+            FROM contactos
+            WHERE tercero_id = %s
+            ORDER BY nombre NULLS LAST, created_at DESC
+        """, (tercero_id,)).fetchall()
+        return jsonify({'ok': True, 'contactos': [dict(r) for r in rows]})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin/contactos/importar', methods=['POST'])
+def api_admin_contactos_importar():
+    if not _contactos_allowed():
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    lista = data.get('contactos', [])
+    if not lista:
+        return jsonify({'ok': False, 'error': 'contactos requeridos'}), 400
+    conn = get_db_connection()
+    try:
+        _asegurar_tabla_contactos(conn)
+        tercero_id = _contactos_tercero_id(conn)
+        insertados = 0
+        omitidos = 0
+        for c in lista:
+            nombre = (c.get('nombre') or '').strip()
+            telefono = (c.get('telefono') or '').strip()
+            if telefono.startswith('00'):
+                telefono = '+' + telefono[2:]
+            if not (nombre or telefono):
+                continue
+            if telefono:
+                existe = conn.execute(
+                    "SELECT 1 FROM contactos WHERE tercero_id = %s AND telefono = %s",
+                    (tercero_id, telefono)
+                ).fetchone()
+                if existe:
+                    omitidos += 1
+                    continue
+            conn.execute(
+                "INSERT INTO contactos (negocio_id, tercero_id, nombre, telefono) VALUES (%s, %s, %s, %s)",
+                (tercero_id, tercero_id, nombre or None, telefono or None)
+            )
+            insertados += 1
+        conn.commit()
+        return jsonify({'ok': True, 'insertados': insertados, 'omitidos': omitidos})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/admin/contactos/<int:cid>', methods=['DELETE'])
+def api_admin_contactos_eliminar(cid):
+    if not _contactos_allowed():
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _asegurar_tabla_contactos(conn)
+        tercero_id = _contactos_tercero_id(conn)
+        conn.execute(
+            "DELETE FROM contactos WHERE id = %s AND tercero_id = %s",
+            (cid, tercero_id)
+        )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 
 
 @bp.route('/admin/parametros')

@@ -88,8 +88,6 @@
 <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-5 py-3 rounded-2xl shadow-lg transition-all duration-300 opacity-0 pointer-events-none z-50 max-w-xs text-center"></div>
 
 <script>
-const ADMIN_ID = {{ admin_id }};
-
 function parseVcf(texto) {
   const contactos = [];
   const bloques = texto.split(/BEGIN:VCARD/i).filter(b => b.trim());
@@ -160,7 +158,7 @@ async function importarTelegramAuto(input) {
     const r = await fetch('/api/admin/contactos/importar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ negocio_id: ADMIN_ID, contactos: lista })
+      body: JSON.stringify({ contactos: lista })
     });
     const d = await r.json();
     input.value = '';
@@ -183,7 +181,7 @@ async function importarTelegram(input) {
     const r = await fetch('/api/admin/contactos/importar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ negocio_id: ADMIN_ID, contactos: lista })
+      body: JSON.stringify({ contactos: lista })
     });
     const d = await r.json();
     input.value = '';
@@ -205,7 +203,7 @@ async function importarVcf(input) {
     const r = await fetch('/api/admin/contactos/importar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ negocio_id: ADMIN_ID, contactos: lista })
+      body: JSON.stringify({ contactos: lista })
     });
     const d = await r.json();
     input.value = '';
@@ -216,7 +214,7 @@ async function importarVcf(input) {
 
 async function cargarContactos() {
   try {
-    const r = await fetch(`/api/admin/contactos?negocio_id=${ADMIN_ID}`);
+    const r = await fetch('/api/admin/contactos');
     const d = await r.json();
     document.getElementById('loading').classList.add('hidden');
     if (d.ok) renderLista(d.contactos);
@@ -279,7 +277,7 @@ async function importarContactos() {
     const r = await fetch('/api/admin/contactos/importar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ negocio_id: ADMIN_ID, contactos: lista })
+      body: JSON.stringify({ contactos: lista })
     });
     const d = await r.json();
     btn.disabled = false;
@@ -299,7 +297,7 @@ async function agregarManual() {
     const r = await fetch('/api/admin/contactos/importar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ negocio_id: ADMIN_ID, contactos: [{ nombre, telefono }] })
+      body: JSON.stringify({ contactos: [{ nombre, telefono }] })
     });
     const d = await r.json();
     if (d.ok) {

@@ -13,6 +13,16 @@ def normalizar_host(host):
     return host
 
 
+def normalizar_dominio_publico(valor):
+    dominio = (valor or '').strip().lower()
+    dominio = dominio.replace('https://', '').replace('http://', '')
+    dominio = dominio.split('/')[0].split('?')[0].split('#')[0]
+    dominio = dominio.split(':')[0].strip().rstrip('.')
+    if dominio.startswith('www.'):
+        dominio = dominio[4:]
+    return dominio
+
+
 def slug_subdominio_publico(host):
     host = normalizar_host(host)
     for suffix in CLIENTE_SUFFIXES:

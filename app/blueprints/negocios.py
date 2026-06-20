@@ -1,6 +1,12 @@
 import json
+import re
+import socket
 from flask import Blueprint, jsonify, request, session, render_template, redirect, url_for
 from ..db import get_db_connection
+from ..dominios_negocio import (
+    asegurar_tabla_dominios_negocio,
+    normalizar_dominio_publico,
+)
 
 bp = Blueprint('negocios', __name__)
 
@@ -285,6 +291,48 @@ def _get_config(conn, tercero_id):
     }
 
 
+def _negocios_del_tercero(conn, tercero_id):
+    negocios = []
+    for tipo, tabla in (('tienda', 'tiendas'), ('restaurante', 'restaurantes')):
+        try:
+            rows = conn.execute(f"""
+                SELECT id, nombre, slug
+                FROM {tabla}
+                WHERE tercero_id = %s AND COALESCE(activo, TRUE) = TRUE
+                ORDER BY nombre
+            """, (tercero_id,)).fetchall()
+            for row in rows:
+                negocios.append({
+                    'tipo_negocio': tipo,
+                    'negocio_id': row['id'],
+                    'nombre': row['nombre'],
+                    'slug': row['slug'],
+                    'url_actual': f"https://{row['slug']}.tuc-tuc.co",
+                })
+        except Exception:
+            pass
+    return negocios
+
+
+def _negocio_pertenece_tercero(conn, tercero_id, tipo_negocio, negocio_id):
+    tabla = 'tiendas' if tipo_negocio == 'tienda' else 'restaurantes' if tipo_negocio == 'restaurante' else ''
+    if not tabla:
+        return False
+    row = conn.execute(
+        f"SELECT 1 FROM {tabla} WHERE id=%s AND tercero_id=%s LIMIT 1",
+        (negocio_id, tercero_id)
+    ).fetchone()
+    return bool(row)
+
+
+def _estado_dns(dominio):
+    try:
+        ip = socket.gethostbyname(dominio)
+        return {'ok': True, 'ip': ip, 'mensaje': f'DNS responde en {ip}'}
+    except Exception:
+        return {'ok': False, 'ip': None, 'mensaje': 'Aun no responde en DNS'}
+
+
 @bp.route('/admin/negocio/<int:tercero_id>/config')
 def admin_config_negocio(tercero_id):
     if 'usuario_id' not in session:
@@ -318,6 +366,155 @@ def api_config_get(tercero_id):
             catalogo = [{'id': 0, 'nombre': 'Efectivo', 'codigo': 'efectivo', 'icono': '💵'}]
         return jsonify({'ok': True, 'config': config, 'catalogo_metodos': catalogo, 'metodos_info': config.get('metodos_info', {})})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/negocio/<int:tercero_id>/dominios', methods=['GET'])
+def api_dominios_get(tercero_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        asegurar_tabla_dominios_negocio(conn)
+        negocios = _negocios_del_tercero(conn, tercero_id)
+        rows = conn.execute("""
+            SELECT id, tipo_negocio, negocio_id, dominio, activo, verificado,
+                   principal, estado, updated_at
+            FROM dominios_negocio
+            WHERE (tipo_negocio, negocio_id) IN (
+                SELECT 'tienda', id FROM tiendas WHERE tercero_id = %s
+                UNION ALL
+                SELECT 'restaurante', id FROM restaurantes WHERE tercero_id = %s
+            )
+            ORDER BY principal DESC, id DESC
+        """, (tercero_id, tercero_id)).fetchall()
+        dominios = []
+        for row in rows:
+            item = {k: row[k] for k in row.keys()}
+            if item.get('updated_at'):
+                item['updated_at'] = item['updated_at'].isoformat()
+            dominios.append(item)
+        return jsonify({
+            'ok': True,
+            'negocios': negocios,
+            'dominios': dominios,
+            'dns': {
+                'cname': 'tuc-tuc.co',
+                'nota': 'Crea un CNAME hacia tuc-tuc.co o apunta el dominio al proxy de Tuc Tuc.',
+            }
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/negocio/<int:tercero_id>/dominios', methods=['POST'])
+def api_dominios_save(tercero_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    tipo_negocio = (data.get('tipo_negocio') or '').strip().lower()
+    negocio_id = int(data.get('negocio_id') or 0)
+    dominio = normalizar_dominio_publico(data.get('dominio'))
+    if tipo_negocio not in ('tienda', 'restaurante') or not negocio_id:
+        return jsonify({'ok': False, 'error': 'Selecciona el negocio'}), 400
+    if not dominio or not re.match(r'^[a-z0-9.-]+\.[a-z]{2,}$', dominio):
+        return jsonify({'ok': False, 'error': 'Dominio no valido'}), 400
+    if dominio.endswith('.tuc-tuc.co') or dominio in ('tuc-tuc.co', 'admin.tuc-tuc.co'):
+        return jsonify({'ok': False, 'error': 'Usa esta opcion solo para dominios propios'}), 400
+    conn = get_db_connection()
+    try:
+        asegurar_tabla_dominios_negocio(conn)
+        if not _negocio_pertenece_tercero(conn, tercero_id, tipo_negocio, negocio_id):
+            return jsonify({'ok': False, 'error': 'Ese negocio no pertenece a este usuario'}), 403
+        dns = _estado_dns(dominio)
+        row = conn.execute("SELECT id, tipo_negocio, negocio_id FROM dominios_negocio WHERE LOWER(dominio)=%s", (dominio,)).fetchone()
+        if row and (row['tipo_negocio'] != tipo_negocio or int(row['negocio_id']) != negocio_id):
+            return jsonify({'ok': False, 'error': 'Ese dominio ya esta asociado a otro negocio'}), 409
+        if row:
+            conn.execute("""
+                UPDATE dominios_negocio
+                SET activo=TRUE, verificado=%s, estado=%s, updated_at=NOW()
+                WHERE id=%s
+            """, (dns['ok'], 'verificado' if dns['ok'] else 'pendiente_dns', row['id']))
+            dominio_id = row['id']
+        else:
+            inserted = conn.execute("""
+                INSERT INTO dominios_negocio (
+                    tipo_negocio, negocio_id, dominio, activo, verificado, principal, estado, updated_at
+                )
+                VALUES (%s, %s, %s, TRUE, %s, FALSE, %s, NOW())
+                RETURNING id
+            """, (tipo_negocio, negocio_id, dominio, dns['ok'], 'verificado' if dns['ok'] else 'pendiente_dns')).fetchone()
+            dominio_id = inserted['id']
+        conn.commit()
+        return jsonify({'ok': True, 'id': dominio_id, 'dominio': dominio, 'dns': dns})
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/negocio/<int:tercero_id>/dominios/<int:dominio_id>/verificar', methods=['POST'])
+def api_dominios_verificar(tercero_id, dominio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        asegurar_tabla_dominios_negocio(conn)
+        row = conn.execute("""
+            SELECT d.*
+            FROM dominios_negocio d
+            WHERE d.id = %s AND (d.tipo_negocio, d.negocio_id) IN (
+                SELECT 'tienda', id FROM tiendas WHERE tercero_id = %s
+                UNION ALL
+                SELECT 'restaurante', id FROM restaurantes WHERE tercero_id = %s
+            )
+        """, (dominio_id, tercero_id, tercero_id)).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': 'Dominio no encontrado'}), 404
+        dns = _estado_dns(row['dominio'])
+        conn.execute("""
+            UPDATE dominios_negocio
+            SET verificado=%s, estado=%s, updated_at=NOW()
+            WHERE id=%s
+        """, (dns['ok'], 'verificado' if dns['ok'] else 'pendiente_dns', dominio_id))
+        conn.commit()
+        return jsonify({'ok': True, 'dns': dns})
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/negocio/<int:tercero_id>/dominios/<int:dominio_id>', methods=['DELETE'])
+def api_dominios_delete(tercero_id, dominio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        asegurar_tabla_dominios_negocio(conn)
+        conn.execute("""
+            UPDATE dominios_negocio
+            SET activo=FALSE, principal=FALSE, updated_at=NOW()
+            WHERE id = %s AND (tipo_negocio, negocio_id) IN (
+                SELECT 'tienda', id FROM tiendas WHERE tercero_id = %s
+                UNION ALL
+                SELECT 'restaurante', id FROM restaurantes WHERE tercero_id = %s
+            )
+        """, (dominio_id, tercero_id, tercero_id))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

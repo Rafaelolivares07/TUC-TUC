@@ -36,6 +36,35 @@
     </div>
   </div>
 
+  <!-- Dominio propio -->
+  <div class="bg-white rounded-2xl shadow p-5">
+    <h2 class="text-base font-bold text-gray-800 mb-1">Dominio propio</h2>
+    <p class="text-sm text-gray-500 mb-4">Conecta la URL publica del negocio con un dominio comprado por el cliente.</p>
+
+    <div id="dominios-negocios" class="space-y-3 mb-4">
+      <p class="text-gray-400 text-sm text-center py-4">Cargando dominios...</p>
+    </div>
+
+    <div class="border border-gray-100 rounded-xl p-3 bg-gray-50 space-y-3">
+      <label class="text-xs font-bold text-gray-500 uppercase">Negocio</label>
+      <select id="dominio-negocio"
+              class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-400"></select>
+      <label class="text-xs font-bold text-gray-500 uppercase">Dominio</label>
+      <div class="flex flex-col sm:flex-row gap-2">
+        <input id="dominio-input" type="text" placeholder="ej: mitienda.com"
+               class="flex-1 border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-400">
+        <button onclick="guardarDominio()"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-3 rounded-xl text-sm transition">
+          Agregar
+        </button>
+      </div>
+      <div class="text-xs text-gray-500 leading-relaxed">
+        DNS sugerido: crea un registro <b>CNAME</b> para <b>www</b> apuntando a <b>tuc-tuc.co</b>.
+        Si quieres usar el dominio raiz, apuntalo desde el proveedor DNS hacia el proxy/hosting de Tuc Tuc.
+      </div>
+    </div>
+  </div>
+
   <!-- Modalidades de entrega -->
   <div class="bg-white rounded-2xl shadow p-5">
     <h2 class="text-base font-bold text-gray-800 mb-1">Modalidades de entrega</h2>
@@ -102,6 +131,8 @@ const TERCERO_ID = {{ tercero_id }};
 let activosMetodos = [];
 let metodos_info_actual = {};
 let domicilioZonaActual = [];
+let negociosDominio = [];
+let dominiosActuales = [];
 
 // Qué campo pide cada método especial
 const METODO_INFO_TIPO = {
@@ -149,6 +180,114 @@ async function cargar() {
     document.getElementById('domicilio-tarifa').value = Number(d.config.domicilio_tarifa || 0) || '';
     document.getElementById('domicilio-modo-fuera').value = d.config.domicilio_modo_fuera || 'por_confirmar';
     actualizarConfigDomicilioVisible();
+  } catch(e) { toast('Error de red', true); }
+}
+
+async function cargarDominios() {
+  try {
+    const r = await fetch(`/api/negocio/${TERCERO_ID}/dominios`);
+    const d = await r.json();
+    if (!d.ok) {
+      document.getElementById('dominios-negocios').innerHTML = `<p class="text-red-500 text-sm">${d.error || 'Error cargando dominios'}</p>`;
+      return;
+    }
+    negociosDominio = d.negocios || [];
+    dominiosActuales = d.dominios || [];
+    renderSelectorDominio();
+    renderDominios();
+  } catch(e) {
+    document.getElementById('dominios-negocios').innerHTML = '<p class="text-red-500 text-sm">Error de red cargando dominios</p>';
+  }
+}
+
+function renderSelectorDominio() {
+  const sel = document.getElementById('dominio-negocio');
+  if (!negociosDominio.length) {
+    sel.innerHTML = '<option value="">Sin tienda o restaurante asociado</option>';
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  sel.innerHTML = negociosDominio.map(n =>
+    `<option value="${n.tipo_negocio}:${n.negocio_id}">${n.nombre} (${n.tipo_negocio})</option>`
+  ).join('');
+}
+
+function renderDominios() {
+  const box = document.getElementById('dominios-negocios');
+  if (!negociosDominio.length) {
+    box.innerHTML = '<p class="text-gray-400 text-sm text-center py-4">Este usuario no tiene negocios asociados.</p>';
+    return;
+  }
+  const porNegocio = {};
+  for (const d of dominiosActuales) {
+    const k = `${d.tipo_negocio}:${d.negocio_id}`;
+    if (!porNegocio[k]) porNegocio[k] = [];
+    porNegocio[k].push(d);
+  }
+  box.innerHTML = negociosDominio.map(n => {
+    const k = `${n.tipo_negocio}:${n.negocio_id}`;
+    const dominios = porNegocio[k] || [];
+    const filas = dominios.length ? dominios.map(d => {
+      const activo = d.activo !== false;
+      const ok = d.verificado === true || d.estado === 'verificado';
+      return `<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-gray-100 p-3 ${activo ? 'bg-white' : 'bg-gray-50 opacity-70'}">
+        <div>
+          <div class="font-bold text-sm text-gray-800">${d.dominio}</div>
+          <div class="text-xs ${ok ? 'text-emerald-600' : 'text-amber-600'}">${ok ? 'DNS verificado' : 'Pendiente de DNS'}${activo ? '' : ' · inactivo'}</div>
+        </div>
+        <div class="flex gap-2">
+          <a href="https://${d.dominio}" target="_blank" class="text-xs font-bold px-3 py-2 rounded-lg bg-gray-100 text-gray-700">Abrir</a>
+          <button onclick="verificarDominio(${d.id})" class="text-xs font-bold px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700">Verificar</button>
+          ${activo ? `<button onclick="desactivarDominio(${d.id})" class="text-xs font-bold px-3 py-2 rounded-lg bg-red-50 text-red-600">Quitar</button>` : ''}
+        </div>
+      </div>`;
+    }).join('') : '<p class="text-xs text-gray-400">Sin dominio propio. URL actual: <b>' + n.url_actual + '</b></p>';
+    return `<div class="rounded-xl border border-gray-100 p-3">
+      <div class="font-bold text-gray-800 text-sm mb-2">${n.nombre}</div>
+      <div class="space-y-2">${filas}</div>
+    </div>`;
+  }).join('');
+}
+
+async function guardarDominio() {
+  const sel = document.getElementById('dominio-negocio').value;
+  const dominio = document.getElementById('dominio-input').value.trim();
+  if (!sel) return toast('Selecciona el negocio', true);
+  if (!dominio) return toast('Escribe el dominio', true);
+  const [tipo_negocio, negocioId] = sel.split(':');
+  try {
+    const r = await fetch(`/api/negocio/${TERCERO_ID}/dominios`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tipo_negocio, negocio_id: Number(negocioId), dominio})
+    });
+    const d = await r.json();
+    if (!d.ok) return toast(d.error || 'No se pudo guardar', true);
+    document.getElementById('dominio-input').value = '';
+    toast(d.dns && d.dns.ok ? 'Dominio guardado y DNS verificado' : 'Dominio guardado. Falta DNS');
+    cargarDominios();
+  } catch(e) { toast('Error de red', true); }
+}
+
+async function verificarDominio(id) {
+  try {
+    const r = await fetch(`/api/negocio/${TERCERO_ID}/dominios/${id}/verificar`, {method: 'POST'});
+    const d = await r.json();
+    if (!d.ok) return toast(d.error || 'No se pudo verificar', true);
+    toast(d.dns && d.dns.ok ? d.dns.mensaje : 'Aun no responde en DNS', !(d.dns && d.dns.ok));
+    cargarDominios();
+  } catch(e) { toast('Error de red', true); }
+}
+
+async function desactivarDominio(id) {
+  if (!confirm('Quitar este dominio del negocio?')) return;
+  try {
+    const r = await fetch(`/api/negocio/${TERCERO_ID}/dominios/${id}`, {method: 'DELETE'});
+    const d = await r.json();
+    if (!d.ok) return toast(d.error || 'No se pudo quitar', true);
+    toast('Dominio desactivado');
+    cargarDominios();
   } catch(e) { toast('Error de red', true); }
 }
 
@@ -342,6 +481,7 @@ async function guardar() {
 }
 
 cargar();
+cargarDominios();
 </script>
 </body>
 </html>

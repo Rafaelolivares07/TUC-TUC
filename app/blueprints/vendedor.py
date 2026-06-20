@@ -354,12 +354,19 @@ def api_vendedor_contactos_lista():
     tel = request.args.get('tel', '').strip()
     if not tel:
         return jsonify({'ok': False, 'error': 'tel requerido'}), 400
-    tid = _tercero_id_por_tel(tel)
-    if not tid:
-        return jsonify({'ok': True, 'contactos': []})
     try:
         conn = get_db_connection()
         _asegurar_tablas(conn)
+        tercero = conn.execute(
+            "SELECT id, nombre FROM terceros WHERE telefono = %s LIMIT 1",
+            (tel,)
+        ).fetchone()
+        if not tercero:
+            conn.close()
+            return jsonify({'ok': True, 'contactos': []})
+        tid = tercero['id']
+        _migrar_contactos_alias_vendedor(conn, tercero['nombre'], tid)
+        conn.commit()
         rows = conn.execute("""
             SELECT c.id, c.nombre, c.telefono, c.created_at::text,
                    COALESCE(c.chat_token,

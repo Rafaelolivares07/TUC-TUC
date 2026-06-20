@@ -30,6 +30,27 @@ def _tercero_id_por_tel(tel):
         return None
 
 
+def _migrar_contactos_alias_vendedor(conn, nombre, vendedor_id):
+    if not nombre or not vendedor_id:
+        return
+    origen = conn.execute(
+        """
+        SELECT id FROM terceros
+        WHERE id <> %s
+          AND nombre ILIKE %s
+          AND (telefono IS NULL OR telefono = '')
+        ORDER BY id DESC LIMIT 1
+        """,
+        (vendedor_id, nombre)
+    ).fetchone()
+    if not origen:
+        return
+    conn.execute(
+        "UPDATE contactos SET tercero_id = %s, negocio_id = %s WHERE tercero_id = %s",
+        (vendedor_id, vendedor_id, origen['id'])
+    )
+
+
 def _asegurar_tablas(conn):
     for sql in [
         """CREATE TABLE IF NOT EXISTS citas_vendedor (
@@ -91,13 +112,14 @@ def api_vendedor_identificar():
         t = conn.execute("SELECT id, nombre FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)).fetchone()
         if t:
             conn.execute("UPDATE terceros SET nombre=%s WHERE id=%s", (nombre, t['id']))
-            conn.commit()
             tid, nom = t['id'], t['nombre']
         else:
             cur = conn.execute("INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id", (nombre, telefono))
             tid = cur.fetchone()[0]
             nom = nombre
-            conn.commit()
+        _asegurar_tablas(conn)
+        _migrar_contactos_alias_vendedor(conn, nombre, tid)
+        conn.commit()
         conn.close()
         return jsonify({'ok': True, 'tercero_id': tid, 'nombre': nom, 'telefono': telefono})
     except Exception as e:

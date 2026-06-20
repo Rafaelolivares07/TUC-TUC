@@ -79,11 +79,18 @@ def _asegurar_tabla_contactos(conn):
     conn.commit()
 
 
-def _contactos_tercero_id(conn):
-    tercero_id = session.get('chat_tercero_id')
-    if tercero_id:
-        return tercero_id
+def _migrar_contactos_tercero(conn, origen_id, destino_id):
+    if not origen_id or not destino_id or int(origen_id) == int(destino_id):
+        return
+    conn.execute(
+        "UPDATE contactos SET tercero_id = %s, negocio_id = %s WHERE tercero_id = %s",
+        (destino_id, destino_id, origen_id)
+    )
+    conn.commit()
 
+
+def _contactos_tercero_id(conn):
+    tercero_actual = session.get('chat_tercero_id')
     uid = session.get('usuario_id')
     rol = session.get('rol')
     if not uid:
@@ -93,6 +100,24 @@ def _contactos_tercero_id(conn):
         return uid
 
     nombre = session.get('nombre') or ''
+    if nombre:
+        tercero_con_tel = conn.execute(
+            """
+            SELECT id FROM terceros
+            WHERE nombre ILIKE %s AND telefono IS NOT NULL AND telefono <> ''
+            ORDER BY id DESC LIMIT 1
+            """,
+            (nombre,)
+        ).fetchone()
+        if tercero_con_tel:
+            _migrar_contactos_tercero(conn, tercero_actual, tercero_con_tel['id'])
+            session['chat_tercero_id'] = tercero_con_tel['id']
+            session.modified = True
+            return tercero_con_tel['id']
+
+    if tercero_actual:
+        return tercero_actual
+
     tercero = None
     if nombre:
         tercero = conn.execute(

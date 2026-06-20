@@ -3,9 +3,6 @@ from flask import Flask, request
 from .config import Config
 from .db import init_db
 
-_CLIENTE_SUFFIXES = ('.tuc-tuc.co',)
-_EXCLUIR_SUBDOMINIOS = {'www', 'bistro', 'api', 'admin', 'mail'}
-
 
 
 def create_app():
@@ -59,24 +56,23 @@ def create_app():
     # Crear tabla config_negocio al arrancar (fuera de request handlers)
     try:
         from .db import get_db_connection
+        from .dominios_negocio import asegurar_tabla_dominios_negocio
         _conn = get_db_connection()
         init_config_negocio(_conn)
+        asegurar_tabla_dominios_negocio(_conn)
         _conn.close()
     except Exception as _e:
         print(f'[negocios] init: {_e}')
 
     @app.before_request
     def _cliente_subdominio():
-        host = request.host.split(':')[0]
-        slug = None
-        for suffix in _CLIENTE_SUFFIXES:
-            if host.endswith(suffix):
-                sub = host[:-len(suffix)]
-                if sub and sub not in _EXCLUIR_SUBDOMINIOS and '.' not in sub:
-                    slug = sub
-                break
-        if not slug:
+        from .dominios_negocio import resolver_negocio_por_host
+
+        negocio_host = resolver_negocio_por_host(request.host)
+        if not negocio_host:
             return
+        slug = negocio_host['slug']
+        tipo_negocio = negocio_host.get('tipo_negocio')
         from .blueprints.restaurantes import (
             restaurante_publico, restaurante_mesero, restaurante_cocina,
             mi_restaurante, restaurante_cliente, cobrar_mesa_page
@@ -87,9 +83,12 @@ def create_app():
         # Detectar tipo de negocio una sola vez
         try:
             conn = get_db_connection()
-            es_tienda = conn.execute(
-                "SELECT 1 FROM tiendas WHERE slug = %s LIMIT 1", (slug,)
-            ).fetchone()
+            if tipo_negocio:
+                es_tienda = tipo_negocio == 'tienda'
+            else:
+                es_tienda = conn.execute(
+                    "SELECT 1 FROM tiendas WHERE slug = %s LIMIT 1", (slug,)
+                ).fetchone()
             conn.close()
         except Exception:
             es_tienda = None

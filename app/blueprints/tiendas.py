@@ -13,6 +13,7 @@ from flask import (Blueprint, Response, jsonify, make_response, redirect,
                    render_template, request, session)
 
 from ..db import get_db_connection
+from ..dominios_negocio import resolver_slug_por_host
 from ..visitas_publicas import (
     listar_visitas_publicas,
     registrar_visita_publica as _registrar_visita_generica,
@@ -3104,13 +3105,7 @@ def _url_publica_proyecto(slug_tienda, cliente, escenario, token=None):
 
 
 def _slug_tienda_desde_host():
-    host = request.host.split(':')[0]
-    sufijo = '.tuc-tuc.co'
-    if host.endswith(sufijo):
-        subdominio = host[:-len(sufijo)]
-        if subdominio and '.' not in subdominio:
-            return subdominio
-    return ''
+    return resolver_slug_por_host(request.host, 'tienda')
 
 
 def solar_proyecto_publico_desde_slugs(tienda_slug, cliente_slug, escenario_slug):

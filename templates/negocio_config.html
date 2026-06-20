@@ -39,14 +39,15 @@
   <!-- Dominio propio -->
   <div class="bg-white rounded-2xl shadow p-5">
     <h2 class="text-base font-bold text-gray-800 mb-1">Dominio propio</h2>
-    <p class="text-sm text-gray-500 mb-4">Conecta la URL publica del negocio con un dominio comprado por el cliente.</p>
+    <p class="text-sm text-gray-500 mb-4">Conecta la pagina publica del negocio con un dominio comprado por el cliente.</p>
 
     <div id="dominios-negocios" class="space-y-3 mb-4">
       <p class="text-gray-400 text-sm text-center py-4">Cargando dominios...</p>
     </div>
 
     <div class="border border-gray-100 rounded-xl p-3 bg-gray-50 space-y-3">
-      <label class="text-xs font-bold text-gray-500 uppercase">Negocio</label>
+      <label id="dominio-negocio-label" class="text-xs font-bold text-gray-500 uppercase">Negocio</label>
+      <div id="dominio-negocio-unico" class="hidden rounded-xl border border-gray-200 bg-white p-3 text-sm font-semibold text-gray-800"></div>
       <select id="dominio-negocio"
               class="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-400"></select>
       <label class="text-xs font-bold text-gray-500 uppercase">Dominio</label>
@@ -59,8 +60,13 @@
         </button>
       </div>
       <div class="text-xs text-gray-500 leading-relaxed">
-        DNS sugerido: crea un registro <b>CNAME</b> para <b>www</b> apuntando a <b>tuc-tuc.co</b>.
-        Si quieres usar el dominio raiz, apuntalo desde el proveedor DNS hacia el proxy/hosting de Tuc Tuc.
+        Para activarlo, entra al proveedor donde compraste el dominio y crea este registro:
+        <div class="mt-2 rounded-lg bg-white border border-gray-100 p-3 font-mono text-[11px] text-gray-700">
+          Tipo: CNAME<br>
+          Nombre: www<br>
+          Destino: tuc-tuc.co
+        </div>
+        <p class="mt-2">Despues presiona <b>Verificar</b>. Si quieres usar el dominio sin www, te ayudamos a configurarlo.</p>
       </div>
     </div>
   </div>
@@ -202,12 +208,30 @@ async function cargarDominios() {
 
 function renderSelectorDominio() {
   const sel = document.getElementById('dominio-negocio');
+  const unico = document.getElementById('dominio-negocio-unico');
+  const label = document.getElementById('dominio-negocio-label');
   if (!negociosDominio.length) {
     sel.innerHTML = '<option value="">Sin tienda o restaurante asociado</option>';
     sel.disabled = true;
+    sel.classList.remove('hidden');
+    unico.classList.add('hidden');
+    label.textContent = 'Negocio';
+    return;
+  }
+  if (negociosDominio.length === 1) {
+    const n = negociosDominio[0];
+    sel.innerHTML = `<option value="${n.tipo_negocio}:${n.negocio_id}" selected>${n.nombre} (${n.tipo_negocio})</option>`;
+    sel.disabled = false;
+    sel.classList.add('hidden');
+    unico.classList.remove('hidden');
+    unico.textContent = `${n.nombre} (${n.tipo_negocio})`;
+    label.textContent = 'Dominio para';
     return;
   }
   sel.disabled = false;
+  sel.classList.remove('hidden');
+  unico.classList.add('hidden');
+  label.textContent = 'Negocio';
   sel.innerHTML = negociosDominio.map(n =>
     `<option value="${n.tipo_negocio}:${n.negocio_id}">${n.nombre} (${n.tipo_negocio})</option>`
   ).join('');

@@ -91,12 +91,20 @@ function compartirDashboardVendedor(tel, nombre) {
 
 let _vdTimer = null;
 function onVdTelInput(val) {
-    clearTimeout(_vdTimer);
     const tel = val.replace(/\D/g,'');
-    if (tel.length < 4) { document.getElementById('vd-autocomplete').classList.add('hidden'); return; }
+    buscarTercerosVendedor(tel, 4);
+}
+
+function onVdNombreInput(val) {
+    buscarTercerosVendedor(val.trim(), 2);
+}
+
+function buscarTercerosVendedor(q, minimo) {
+    clearTimeout(_vdTimer);
+    if (q.length < minimo) { document.getElementById('vd-autocomplete').classList.add('hidden'); return; }
     _vdTimer = setTimeout(async () => {
         try {
-            const r = await fetch('/api/vendedor/buscar-terceros?q=' + encodeURIComponent(tel));
+            const r = await fetch('/api/vendedor/buscar-terceros?q=' + encodeURIComponent(q));
             const d = await r.json();
             const resultados = Array.isArray(d) ? d : (d.resultados || []);
             const box = document.getElementById('vd-autocomplete');
@@ -104,7 +112,7 @@ function onVdTelInput(val) {
             box.innerHTML = resultados.map(t =>
                 `<div class="px-3 py-2 hover:bg-gray-50 cursor-pointer" onclick="selVd('${attrVendedor(t.telefono || '')}','${attrVendedor(t.nombre || '')}')">
                     <span class="font-semibold">${htmlVendedor(t.nombre || '')}</span>
-                    <span class="text-gray-400 ml-2">${htmlVendedor(t.telefono || '')}</span>
+                    <span class="text-gray-400 ml-2">${htmlVendedor(t.telefono || 'Sin telefono')}</span>
                 </div>`
             ).join('');
             box.classList.remove('hidden');

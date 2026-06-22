@@ -16,8 +16,9 @@
             <input id="vd-tel" type="tel" inputmode="numeric" placeholder="Telefono (10 digitos)"
                 class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off"
                 oninput="onVdTelInput(this.value)">
-            <input id="vd-nombre" type="text" placeholder="Nombre (si es nuevo)"
-                class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off">
+            <input id="vd-nombre" type="text" placeholder="Buscar por nombre o escribir uno nuevo"
+                class="border rounded-lg px-3 py-2 text-sm flex-1" autocomplete="off"
+                oninput="onVdNombreInput(this.value)">
             <button onclick="agregarVendedor()"
                 class="bg-rose-600 hover:bg-rose-700 text-white font-semibold px-5 py-2 rounded-lg text-sm flex-shrink-0 transition">
                 Agregar

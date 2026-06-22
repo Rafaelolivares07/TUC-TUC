@@ -1,0 +1,32 @@
+schemaVersion: '2.2'
+description: Read-only capacity snapshot for the shared TUC TUC production server
+mainSteps:
+  - action: aws:runShellScript
+    name: collectCapacity
+    inputs:
+      timeoutSeconds: '30'
+      runCommand:
+        - |
+          mem_total=$(awk '/MemTotal/ {print $2*1024}' /proc/meminfo)
+          mem_available=$(awk '/MemAvailable/ {print $2*1024}' /proc/meminfo)
+          disk_total=$(df -B1 --output=size / | tail -1 | tr -d ' ')
+          disk_available=$(df -B1 --output=avail / | tail -1 | tr -d ' ')
+          load1=$(awk '{print $1}' /proc/loadavg)
+          uptime_seconds=$(awk '{print int($1)}' /proc/uptime)
+          tuctuc_rss=0
+          remote_rss=0
+          for pid in $(pgrep -f gunicorn); do
+            rss_kb=$(awk '/VmRSS/ {print $2+0}' /proc/$pid/status 2>/dev/null)
+            cwd=$(readlink -f /proc/$pid/cwd 2>/dev/null)
+            case "$cwd" in
+              /home/ubuntu/tuctucv2*) tuctuc_rss=$((tuctuc_rss + rss_kb * 1024)) ;;
+              /home/ubuntu/remote-assist*) remote_rss=$((remote_rss + rss_kb * 1024)) ;;
+            esac
+          done
+          lopez_rss=$(ps -eo rss,args | awk '/php-fpm/ && !/awk/ {sum+=$1} END {print (sum+0)*1024}')
+          postgres_rss=$(ps -eo rss,args | awk '/postgres/ && !/awk/ {sum+=$1} END {print (sum+0)*1024}')
+          nginx_rss=$(ps -eo rss,args | awk '/nginx/ && !/awk/ {sum+=$1} END {print (sum+0)*1024}')
+          tuctuc_disk=$(du -sb /home/ubuntu/tuctucv2 2>/dev/null | awk '{print $1+0}')
+          remote_disk=$(du -sb /home/ubuntu/remote-assist 2>/dev/null | awk '{print $1+0}')
+          lopez_disk=$(du -sb /var/www/html 2>/dev/null | awk '{print $1+0}')
+          printf 'mem_total=%s\nmem_available=%s\ndisk_total=%s\ndisk_available=%s\nload1=%s\nuptime_seconds=%s\ntuctuc_rss=%s\nremote_rss=%s\nlopez_rss=%s\npostgres_rss=%s\nnginx_rss=%s\ntuctuc_disk=%s\nremote_disk=%s\nlopez_disk=%s\n' "$mem_total" "$mem_available" "$disk_total" "$disk_available" "$load1" "$uptime_seconds" "$tuctuc_rss" "$remote_rss" "$lopez_rss" "$postgres_rss" "$nginx_rss" "$tuctuc_disk" "$remote_disk" "$lopez_disk"

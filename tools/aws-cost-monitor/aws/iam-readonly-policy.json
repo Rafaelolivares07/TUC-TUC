@@ -1,0 +1,37 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadAccountCostsAndInfrastructure",
+      "Effect": "Allow",
+      "Action": [
+        "ce:GetCostAndUsage",
+        "cloudwatch:GetMetricStatistics",
+        "ec2:DescribeAddresses",
+        "ec2:DescribeInstanceTypes",
+        "ec2:DescribeInstances",
+        "ec2:DescribeNatGateways",
+        "ec2:DescribeSnapshots",
+        "ec2:DescribeVolumes",
+        "ssm:DescribeInstanceInformation",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "RunOnlyFixedCapacityDocument",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": [
+        "arn:aws:ssm:us-east-2:745588110920:document/TucTuc-ReadOnlyCapacityAudit",
+        "arn:aws:ec2:us-east-2:745588110920:instance/i-07469a5fa21d5b167"
+      ]
+    },
+    {
+      "Sid": "ReadCapacityCommandResult",
+      "Effect": "Allow",
+      "Action": "ssm:GetCommandInvocation",
+      "Resource": "*"
+    }
+  ]
+}

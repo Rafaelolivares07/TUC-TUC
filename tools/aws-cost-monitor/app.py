@@ -11,6 +11,7 @@ from flask import Flask, jsonify, render_template, request
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, 'monitor_config.json')
+COST_CACHE_PATH = os.path.join(BASE_DIR, 'cost_cache.json')
 app = Flask(__name__)
 
 _cache = {'at': 0.0, 'data': None}
@@ -25,8 +26,14 @@ def load_config():
 def run_aws(args, timeout=45):
     """Run AWS CLI without a shell and return parsed JSON."""
     try:
+        profile = load_config().get('aws_profile')
+        command = ['aws']
+        if profile:
+            command.extend(['--profile', profile])
+        command.extend(args)
+        command.extend(['--output', 'json'])
         result = subprocess.run(
-            ['aws', *args, '--output', 'json'],
+            command,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -161,6 +168,41 @@ def get_monthly_cost(start_date, end_date):
     return {'services': services, 'total': round(total, 2)}
 
 
+def get_daily_costs(now, force=False):
+    today = now.strftime('%Y-%m-%d')
+    if not force:
+        try:
+            with open(COST_CACHE_PATH, 'r', encoding='utf-8') as fh:
+                cached = json.load(fh)
+            if cached.get('date') == today:
+                return cached
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            pass
+
+    first_current = now.replace(day=1)
+    end_current = now + timedelta(days=1)
+    first_previous = (first_current - timedelta(days=1)).replace(day=1)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        current_future = executor.submit(
+            get_monthly_cost, first_current.strftime('%Y-%m-%d'), end_current.strftime('%Y-%m-%d')
+        )
+        previous_future = executor.submit(
+            get_monthly_cost, first_previous.strftime('%Y-%m-%d'), first_current.strftime('%Y-%m-%d')
+        )
+        result = {
+            'date': today,
+            'cached_at': now.isoformat(timespec='seconds'),
+            'current': current_future.result(),
+            'previous': previous_future.result(),
+        }
+    if 'error' not in result['current'] and 'error' not in result['previous']:
+        temp_path = COST_CACHE_PATH + '.tmp'
+        with open(temp_path, 'w', encoding='utf-8') as fh:
+            json.dump(result, fh, ensure_ascii=False, indent=2)
+        os.replace(temp_path, COST_CACHE_PATH)
+    return result
+
+
 def get_instance_type(region, instance_type):
     response = run_aws(['ec2', 'describe-instance-types', '--region', region, '--instance-types', instance_type])
     if 'error' in response or not response.get('InstanceTypes'):
@@ -221,36 +263,10 @@ def parse_key_values(output):
 
 
 def get_server_capacity(region, instance_id):
-    # Every command is read-only. No package, service or file is changed.
-    command = r"""
-mem_total=$(awk '/MemTotal/ {print $2*1024}' /proc/meminfo)
-mem_available=$(awk '/MemAvailable/ {print $2*1024}' /proc/meminfo)
-disk_total=$(df -B1 --output=size / | tail -1 | tr -d ' ')
-disk_available=$(df -B1 --output=avail / | tail -1 | tr -d ' ')
-load1=$(awk '{print $1}' /proc/loadavg)
-uptime_seconds=$(awk '{print int($1)}' /proc/uptime)
-tuctuc_rss=0
-remote_rss=0
-for pid in $(pgrep -f gunicorn); do
-  rss_kb=$(awk '/VmRSS/ {print $2+0}' /proc/$pid/status 2>/dev/null)
-  cwd=$(readlink -f /proc/$pid/cwd 2>/dev/null)
-  case "$cwd" in
-    /home/ubuntu/tuctucv2*) tuctuc_rss=$((tuctuc_rss + rss_kb * 1024)) ;;
-    /home/ubuntu/remote-assist*) remote_rss=$((remote_rss + rss_kb * 1024)) ;;
-  esac
-done
-lopez_rss=$(ps -eo rss,args | awk '/php-fpm/ && !/awk/ {sum+=$1} END {print (sum+0)*1024}')
-postgres_rss=$(ps -eo rss,args | awk '/postgres/ && !/awk/ {sum+=$1} END {print (sum+0)*1024}')
-nginx_rss=$(ps -eo rss,args | awk '/nginx/ && !/awk/ {sum+=$1} END {print (sum+0)*1024}')
-tuctuc_disk=$(du -sb /home/ubuntu/tuctucv2 2>/dev/null | awk '{print $1+0}')
-remote_disk=$(du -sb /home/ubuntu/remote-assist 2>/dev/null | awk '{print $1+0}')
-lopez_disk=$(du -sb /var/www/html 2>/dev/null | awk '{print $1+0}')
-printf 'mem_total=%s\nmem_available=%s\ndisk_total=%s\ndisk_available=%s\nload1=%s\nuptime_seconds=%s\ntuctuc_rss=%s\nremote_rss=%s\nlopez_rss=%s\npostgres_rss=%s\nnginx_rss=%s\ntuctuc_disk=%s\nremote_disk=%s\nlopez_disk=%s\n' "$mem_total" "$mem_available" "$disk_total" "$disk_available" "$load1" "$uptime_seconds" "$tuctuc_rss" "$remote_rss" "$lopez_rss" "$postgres_rss" "$nginx_rss" "$tuctuc_disk" "$remote_disk" "$lopez_disk"
-""".strip()
+    document_name = load_config().get('ssm_capacity_document', 'TucTuc-ReadOnlyCapacityAudit')
     sent = run_aws([
         'ssm', 'send-command', '--region', region, '--instance-ids', instance_id,
-        '--document-name', 'AWS-RunShellScript', '--comment', 'TUC TUC read-only capacity monitor',
-        '--parameters', json.dumps({'commands': [command]}),
+        '--document-name', document_name, '--comment', 'TUC TUC read-only capacity monitor',
     ])
     if 'error' in sent:
         return sent
@@ -339,12 +355,10 @@ def capacity_status(capacity):
     return {'level': 'healthy', 'label': 'Margen disponible'}
 
 
-def collect_audit():
+def collect_audit(force_costs=False):
     config = load_config()
     now = datetime.now().astimezone()
-    first_current = now.replace(day=1)
-    end_current = now + timedelta(days=1)
-    first_previous = (first_current - timedelta(days=1)).replace(day=1)
+    costs = get_daily_costs(now, force=force_costs)
     data = {
         'instances': [], 'volumes': [], 'elastic_ips': [], 'nat_gateways': [], 'snapshots': [],
         'cost_current': {}, 'cost_previous': {}, 'cloudwatch': {}, 'capacity': {}, 'instance_type': {},
@@ -360,10 +374,6 @@ def collect_audit():
                 ('nat_gateways', executor.submit(get_nat_gateways, region)),
                 ('snapshots', executor.submit(get_snapshots, region)),
             ])
-        tasks.extend([
-            ('cost_current', executor.submit(get_monthly_cost, first_current.strftime('%Y-%m-%d'), end_current.strftime('%Y-%m-%d'))),
-            ('cost_previous', executor.submit(get_monthly_cost, first_previous.strftime('%Y-%m-%d'), first_current.strftime('%Y-%m-%d'))),
-        ])
         for key, future in tasks:
             result = future.result()
             if 'error' in result:
@@ -372,6 +382,13 @@ def collect_audit():
                 data[key].extend(result.get('data', []))
             else:
                 data[key] = result
+
+    data['cost_current'] = costs.get('current', {})
+    data['cost_previous'] = costs.get('previous', {})
+    data['costs_cached_at'] = costs.get('cached_at')
+    for key in ('cost_current', 'cost_previous'):
+        if 'error' in data[key]:
+            data['errors'].append(f"{key}: {data[key]['error']}")
 
     primary_id = config['primary_instance_id']
     primary_region = config['primary_region']
@@ -413,12 +430,13 @@ def index():
 @app.route('/api/audit')
 def api_audit():
     force = request.args.get('refresh') == '1'
+    force_costs = request.args.get('refresh_costs') == '1'
     config = load_config()
     ttl = int(config.get('cache_seconds', 300))
     with _cache_lock:
         if not force and _cache['data'] and time.time() - _cache['at'] < ttl:
             return jsonify(_cache['data'])
-        data = collect_audit()
+        data = collect_audit(force_costs=force_costs)
         _cache['data'] = data
         _cache['at'] = time.time()
         return jsonify(data)

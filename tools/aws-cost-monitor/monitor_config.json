@@ -5,6 +5,8 @@
   ],
   "primary_region": "us-east-2",
   "primary_instance_id": "i-07469a5fa21d5b167",
+  "aws_profile": "tuctuc-monitor",
+  "ssm_capacity_document": "TucTuc-ReadOnlyCapacityAudit",
   "protected_instances": {
     "i-07469a5fa21d5b167": "Produccion compartida: TUC TUC, Lopez Refrigeration y asistencia remota"
   },

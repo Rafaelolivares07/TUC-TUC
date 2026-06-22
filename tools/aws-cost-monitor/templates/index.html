@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Infrastructure Monitor</title>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --line: #dfe4ea;
+      --text: #17202a;
+      --muted: #667085;
+      --green: #147d64;
+      --green-soft: #e8f5f1;
+      --amber: #a15c00;
+      --amber-soft: #fff4df;
+      --red: #b42318;
+      --red-soft: #ffebe9;
+      --blue: #175cd3;
+      --blue-soft: #eaf1ff;
+      --ink: #263238;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, Segoe UI, sans-serif; background: var(--bg); color: var(--text); }
+    button, input { font: inherit; }
+    .shell { max-width: 1440px; margin: 0 auto; padding: 20px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    h1 { margin: 0; font-size: 24px; letter-spacing: 0; }
+    h2 { margin: 0 0 12px; font-size: 17px; letter-spacing: 0; }
+    .subtitle { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .refresh { width: 42px; height: 42px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); display: grid; place-items: center; border-radius: 7px; cursor: pointer; }
+    .refresh:hover { border-color: var(--blue); color: var(--blue); }
+    .refresh:disabled { opacity: .5; cursor: wait; }
+    .banner { display: none; padding: 12px 14px; margin-bottom: 14px; border-radius: 6px; font-size: 13px; border: 1px solid; }
+    .banner.show { display: block; }
+    .banner.warning { color: var(--amber); background: var(--amber-soft); border-color: #f4c36a; }
+    .banner.error { color: var(--red); background: var(--red-soft); border-color: #f2a9a2; }
+    .banner.info { color: var(--blue); background: var(--blue-soft); border-color: #adc6f3; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .metric { background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 15px; min-height: 118px; }
+    .metric-label { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .metric-value { font-size: 27px; font-weight: 750; margin: 13px 0 5px; }
+    .metric-note { color: var(--muted); font-size: 12px; line-height: 1.35; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, .8fr); gap: 16px; }
+    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 16px; margin-bottom: 16px; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .panel-head h2 { margin: 0; }
+    .tag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+    .tag.essential, .tag.healthy, .tag.ok, .tag.in_use { background: var(--green-soft); color: var(--green); }
+    .tag.review, .tag.warning, .tag.cost { background: var(--amber-soft); color: var(--amber); }
+    .tag.critical { background: var(--red-soft); color: var(--red); }
+    .tag.unknown { background: #eef0f2; color: var(--muted); }
+    .capacity-row { display: grid; grid-template-columns: 125px minmax(100px, 1fr) 115px; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid #edf0f2; }
+    .capacity-row:last-child { border-bottom: 0; }
+    .capacity-name { font-size: 13px; font-weight: 700; }
+    .bar { height: 9px; border-radius: 4px; background: #e8ecef; overflow: hidden; }
+    .bar > span { display: block; height: 100%; background: var(--green); }
+    .bar > span.warning { background: #e49b26; }
+    .bar > span.critical { background: var(--red); }
+    .capacity-number { text-align: right; color: var(--muted); font-size: 12px; }
+    .apps { width: 100%; border-collapse: collapse; }
+    .apps th, .apps td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #edf0f2; font-size: 12px; }
+    .apps th { color: var(--muted); font-weight: 700; }
+    .apps td:last-child, .apps th:last-child { text-align: right; }
+    .recommendation { padding: 11px 0; border-bottom: 1px solid #edf0f2; }
+    .recommendation:last-child { border-bottom: 0; }
+    .recommendation-title { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 13px; }
+    .recommendation p { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .cost-list { display: grid; gap: 8px; }
+    .cost-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; font-size: 12px; }
+    .cost-line span:first-child { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    details { background: var(--surface); border: 1px solid var(--line); border-radius: 7px; margin-bottom: 10px; }
+    summary { cursor: pointer; padding: 13px 15px; font-size: 13px; font-weight: 750; }
+    .table-wrap { overflow-x: auto; padding: 0 14px 14px; }
+    table.inventory { width: 100%; border-collapse: collapse; min-width: 720px; }
+    .inventory th, .inventory td { text-align: left; padding: 9px 7px; border-bottom: 1px solid #edf0f2; font-size: 12px; }
+    .inventory th { color: var(--muted); }
+    code { font-family: Consolas, monospace; font-size: 11px; }
+    .footer { color: var(--muted); text-align: center; font-size: 11px; padding: 6px 0 20px; }
+    .loading { min-height: 70vh; display: grid; place-items: center; color: var(--muted); }
+    @media (max-width: 950px) { .metrics { grid-template-columns: repeat(2, minmax(0,1fr)); } .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 560px) { .shell { padding: 13px; } .metrics { grid-template-columns: 1fr; } .capacity-row { grid-template-columns: 95px 1fr; } .capacity-number { grid-column: 2; text-align: left; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <h1>AWS Infrastructure Monitor</h1>
+        <p class="subtitle">Costos, capacidad y protección de TUC TUC y López Refrigeration</p>
+      </div>
+      <button id="refresh" class="refresh" onclick="loadAudit(true)" title="Actualizar auditoría" aria-label="Actualizar auditoría"><i data-lucide="refresh-cw"></i></button>
+    </header>
+
+    <div id="root-warning" class="banner warning"></div>
+    <div id="errors" class="banner error"></div>
+    <div id="cache-note" class="banner info"></div>
+
+    <main id="content" class="loading">Consultando AWS de forma segura...</main>
+    <div id="footer" class="footer"></div>
+  </div>
+
+  <script>
+    const money = value => `$${Number(value || 0).toFixed(2)} USD`;
+    const bytes = value => {
+      if (value === null || value === undefined) return 'Compartido';
+      const units = ['B','KB','MB','GB','TB'];
+      let n = Number(value || 0), i = 0;
+      while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+      return `${n.toFixed(i < 2 ? 0 : 1)} ${units[i]}`;
+    };
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const pct = value => Math.max(0, Math.min(100, Number(value || 0)));
+    const usedPct = available => Math.max(0, 100 - Number(available || 0));
+    const barClass = available => Number(available) < 20 ? 'critical' : Number(available) < 35 ? 'warning' : '';
+    const tag = (level, label) => `<span class="tag ${esc(level || 'unknown')}">${esc(label || 'Sin clasificar')}</span>`;
+
+    async function loadAudit(force=false) {
+      const button = document.getElementById('refresh');
+      button.disabled = true;
+      button.querySelector('svg')?.classList.add('spin');
+      try {
+        const response = await fetch('/api/audit' + (force ? '?refresh=1' : ''));
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        render(data);
+      } catch (error) {
+        document.getElementById('content').className = 'panel';
+        document.getElementById('content').innerHTML = `<h2>No se pudo completar la auditoría</h2><p class="subtitle">${esc(error.message)}</p>`;
+      } finally {
+        button.disabled = false;
+        lucide.createIcons();
+      }
+    }
+
+    function render(data) {
+      const root = document.getElementById('root-warning');
+      root.className = 'banner' + (data.identity?.root_warning ? ' warning show' : '');
+      root.textContent = data.identity?.root_warning
+        ? 'Seguridad pendiente: AWS CLI está autenticado como root. El monitor es solo lectura, pero debemos migrarlo a IAM de lectura.'
+        : '';
+      const errors = document.getElementById('errors');
+      errors.className = 'banner' + (data.errors?.length ? ' error show' : '');
+      errors.textContent = data.errors?.join(' | ') || '';
+
+      const current = Number(data.cost_current?.total || 0);
+      const previous = Number(data.cost_previous?.total || 0);
+      const now = new Date();
+      const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const projected = current / Math.max(1, now.getDate()) * days;
+      const capacity = data.capacity || {};
+      const cloud = data.cloudwatch || {};
+      const specs = data.instance_type || {};
+      const status = data.capacity_status || {};
+      const memAvailable = Number(capacity.memory_available_pct || 0);
+      const diskAvailable = Number(capacity.disk_available_pct || 0);
+
+      document.getElementById('content').className = '';
+      document.getElementById('content').innerHTML = `
+        <section class="metrics">
+          ${metric('receipt-text', 'Costo acumulado', money(current), `Mes anterior: ${money(previous)}`)}
+          ${metric('calendar-range', 'Estimación mensual', money(projected), 'Proyección lineal; Cost Explorer puede tener retraso')}
+          ${metric('server', 'Servidor actual', `${esc(specs.type || 'N/D')} · ${specs.vcpu || '-'} vCPU`, `${specs.memory_mib ? (specs.memory_mib / 1024).toFixed(0) + ' GB RAM' : 'RAM no disponible'} · ${esc(specs.network || '')}`)}
+          ${metric('shield-check', 'Estado de capacidad', esc(status.label || 'Calculando'), `Modo solo lectura · ${data.instances?.length || 0} servidor(es)`)}
+        </section>
+
+        <section class="layout">
+          <div>
+            <div class="panel">
+              <div class="panel-head"><h2>Capacidad incluida en el servidor actual</h2>${tag(status.level, status.label)}</div>
+              ${capacityRow('CPU promedio', 100 - Number(cloud.cpu_average || 0), `${Number(cloud.cpu_average || 0).toFixed(1)}% usado · pico ${Number(cloud.cpu_peak || 0).toFixed(1)}%`)}
+              ${capacityRow('Memoria RAM', memAvailable, `${bytes(capacity.mem_available)} libres de ${bytes(capacity.mem_total)}`)}
+              ${capacityRow('Disco', diskAvailable, `${bytes(capacity.disk_available)} libres de ${bytes(capacity.disk_total)}`)}
+              ${capacityRow('Red 7 días', 100, `${Number(cloud.network_in_gb || 0).toFixed(2)} GB entrada · ${Number(cloud.network_out_gb || 0).toFixed(2)} GB salida`)}
+              <p class="metric-note" style="margin-top:12px">Este margen no es una promesa de cantidad de clientes. Indica cuánto recurso queda antes de ampliar la instancia o el disco.</p>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head"><h2>Consumo aproximado por aplicación</h2><span class="metric-note">Lectura en vivo por procesos y carpetas</span></div>
+              <table class="apps">
+                <thead><tr><th>Aplicación</th><th>Memoria</th><th>Disco de aplicación</th><th>Protección</th></tr></thead>
+                <tbody>${(capacity.applications || []).map(app => `<tr><td><strong>${esc(app.name)}</strong></td><td>${bytes(app.memory_bytes)}</td><td>${bytes(app.disk_bytes)}</td><td>${tag('essential','Esencial')}</td></tr>`).join('') || '<tr><td colspan="4">Sin telemetría interna</td></tr>'}</tbody>
+              </table>
+            </div>
+
+            ${inventory(data)}
+          </div>
+
+          <aside>
+            <div class="panel">
+              <div class="panel-head"><h2>Auditoría de ahorro</h2><span class="tag essential">Solo recomendaciones</span></div>
+              ${(data.recommendations || []).map(item => `<div class="recommendation"><div class="recommendation-title">${tag(item.level, item.level === 'ok' ? 'Correcto' : 'Revisar')} ${esc(item.title)}</div><p>${esc(item.detail)}</p></div>`).join('')}
+            </div>
+            <div class="panel">
+              <h2>Costos por servicio</h2>
+              <div class="cost-list">${(data.cost_current?.services || []).map(item => `<div class="cost-line"><span title="${esc(item.service)}">${esc(item.service)}</span><strong>${money(item.cost)}</strong></div>`).join('') || '<span class="metric-note">Sin datos</span>'}</div>
+            </div>
+            <div class="panel">
+              <h2>Alcance</h2>
+              <p class="metric-note">Regiones auditadas: ${esc((data.regions || []).join(', '))}</p>
+              <p class="metric-note" style="margin-top:8px">Instancia protegida: <code>i-07469a5fa21d5b167</code></p>
+              <p class="metric-note" style="margin-top:8px">Ningún recurso puede eliminarse desde este monitor.</p>
+            </div>
+          </aside>
+        </section>`;
+      document.getElementById('footer').textContent = `Última auditoría: ${new Date(data.timestamp).toLocaleString('es-CO')} · caché ${data.cache_seconds}s · cuenta ${data.identity?.account_id || 'N/D'}`;
+      lucide.createIcons();
+    }
+
+    function metric(icon, label, value, note) {
+      return `<div class="metric"><div class="metric-label"><i data-lucide="${icon}" width="16"></i>${label}</div><div class="metric-value">${value}</div><div class="metric-note">${note}</div></div>`;
+    }
+
+    function capacityRow(name, available, detail) {
+      const free = pct(available);
+      return `<div class="capacity-row"><div class="capacity-name">${name}</div><div class="bar"><span class="${barClass(free)}" style="width:${usedPct(free)}%"></span></div><div class="capacity-number">${free.toFixed(1)}% disponible<br>${detail}</div></div>`;
+    }
+
+    function inventory(data) {
+      return `
+        ${detailsTable('Servidores EC2', data.instances, item => [item.region, item.name || 'Sin nombre', `<code>${esc(item.id)}</code>`, item.type, item.state, tag(item.protection?.level, item.protection?.label)])}
+        ${detailsTable('Volúmenes EBS', data.volumes, item => [item.region, item.name || 'Sin nombre', `<code>${esc(item.id)}</code>`, `${item.size_gb} GB ${esc(item.type)}`, item.attached_to ? `<code>${esc(item.attached_to)}</code>` : 'No asociado', tag(item.protection?.level, item.protection?.label)])}
+        ${detailsTable('IPs elásticas', data.elastic_ips, item => [item.region, `<code>${esc(item.public_ip)}</code>`, `<code>${esc(item.allocation_id)}</code>`, item.instance_id ? `<code>${esc(item.instance_id)}</code>` : (item.network_interface_id ? `<code>${esc(item.network_interface_id)}</code>` : 'No asociada'), '', tag(item.protection?.level, item.protection?.label)])}
+        ${detailsTable('NAT Gateways', data.nat_gateways, item => [item.region, item.id, item.vpc_id, item.state, '', tag(item.protection?.level, item.protection?.label)])}
+        ${detailsTable('Snapshots', data.snapshots, item => [item.region, item.id, `${item.size_gb} GB`, item.start_time || '', esc(item.description), tag(item.protection?.level, item.protection?.label)])}`;
+    }
+
+    function detailsTable(title, rows, mapper) {
+      const body = (rows || []).map(item => `<tr>${mapper(item).map(cell => `<td>${cell ?? ''}</td>`).join('')}</tr>`).join('');
+      return `<details><summary>${esc(title)} · ${(rows || []).length}</summary><div class="table-wrap"><table class="inventory"><thead><tr><th>Región</th><th>Nombre / ID</th><th>Identificador</th><th>Detalle</th><th>Asociación</th><th>Clasificación</th></tr></thead><tbody>${body || '<tr><td colspan="6">Sin recursos</td></tr>'}</tbody></table></div></details>`;
+    }
+
+    lucide.createIcons();
+    loadAudit(false);
+  </script>
+</body>
+</html>

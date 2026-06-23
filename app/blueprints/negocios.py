@@ -194,6 +194,7 @@ def init_config_negocio(conn):
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS domicilio_tarifa NUMERIC(12,2) DEFAULT 0")
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS domicilio_modo_fuera VARCHAR(20) DEFAULT 'por_confirmar'")
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS domicilio_zona JSONB DEFAULT '[]'")
+    conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS mapa_region VARCHAR(30)")
 
     # Garantizar que el catálogo de métodos de pago esté completo en prod
     conn.execute("""
@@ -250,7 +251,7 @@ def init_config_negocio(conn):
 def _get_config(conn, tercero_id):
     row = conn.execute(
         """SELECT modalidades, metodos_pago, aviso_pedido, metodos_info,
-                  domicilio_tarifa, domicilio_modo_fuera, domicilio_zona
+                  domicilio_tarifa, domicilio_modo_fuera, domicilio_zona, mapa_region
            FROM config_negocio WHERE tercero_id=%s""",
         (tercero_id,)
     ).fetchone()
@@ -263,6 +264,7 @@ def _get_config(conn, tercero_id):
             'domicilio_tarifa': float(row['domicilio_tarifa'] or 0),
             'domicilio_modo_fuera': row['domicilio_modo_fuera'] or 'por_confirmar',
             'domicilio_zona': row['domicilio_zona'] or [],
+            'mapa_region': row['mapa_region'],
         }
     # Migrar datos existentes de metodos_pago_tienda si los hay
     try:
@@ -281,13 +283,15 @@ def _get_config(conn, tercero_id):
                 'domicilio_tarifa': 0,
                 'domicilio_modo_fuera': 'por_confirmar',
                 'domicilio_zona': [],
+                'mapa_region': None,
             }
     except Exception:
         pass
     return {
         'modalidades': ['domicilio', 'recoger'], 'metodos_pago': ['efectivo'],
         'aviso_pedido': None, 'metodos_info': {}, 'domicilio_tarifa': 0,
-        'domicilio_modo_fuera': 'por_confirmar', 'domicilio_zona': []
+        'domicilio_modo_fuera': 'por_confirmar', 'domicilio_zona': [],
+        'mapa_region': None
     }
 
 
@@ -322,6 +326,23 @@ def _negocio_pertenece_tercero(conn, tercero_id, tipo_negocio, negocio_id):
         f"SELECT 1 FROM {tabla} WHERE id=%s AND tercero_id=%s LIMIT 1",
         (negocio_id, tercero_id)
     ).fetchone()
+    return bool(row)
+
+
+def _puede_administrar_negocio(conn, tercero_id):
+    if session.get('rol') == 'Administrador':
+        return True
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return False
+    row = conn.execute("""
+        SELECT 1 FROM tiendas
+        WHERE tercero_id = %s AND admin_id = %s
+        UNION ALL
+        SELECT 1 FROM restaurantes
+        WHERE tercero_id = %s AND admin_id = %s
+        LIMIT 1
+    """, (tercero_id, usuario_id, tercero_id, usuario_id)).fetchone()
     return bool(row)
 
 
@@ -559,6 +580,65 @@ def api_config_save(tercero_id):
     except Exception as e:
         try: conn.rollback()
         except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/negocio/<int:tercero_id>/ubicacion-config', methods=['POST'])
+def api_ubicacion_config_save(tercero_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    updates = []
+    params = []
+
+    if 'mapa_region' in data:
+        mapa_region = (data.get('mapa_region') or '').strip().lower()
+        if mapa_region not in ('cali', 'medellin'):
+            return jsonify({'ok': False, 'error': 'Region de mapa no valida'}), 400
+        updates.append('mapa_region = %s')
+        params.append(mapa_region)
+
+    if 'domicilio_zona' in data:
+        zona = data.get('domicilio_zona')
+        if not isinstance(zona, list) or len(zona) > 100:
+            return jsonify({'ok': False, 'error': 'Zona de domicilio no valida'}), 400
+        zona_limpia = []
+        try:
+            for punto in zona:
+                lat = float(punto['lat'])
+                lon = float(punto['lon'])
+                if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                    raise ValueError
+                zona_limpia.append({'lat': lat, 'lon': lon})
+        except (KeyError, TypeError, ValueError):
+            return jsonify({'ok': False, 'error': 'La zona contiene coordenadas no validas'}), 400
+        updates.append('domicilio_zona = %s::jsonb')
+        params.append(json.dumps(zona_limpia))
+
+    if not updates:
+        return jsonify({'ok': False, 'error': 'No hay cambios para guardar'}), 400
+
+    conn = get_db_connection()
+    try:
+        init_config_negocio(conn)
+        if not _puede_administrar_negocio(conn, tercero_id):
+            return jsonify({'ok': False, 'error': 'No autorizado para este negocio'}), 403
+        conn.execute(
+            "INSERT INTO config_negocio (tercero_id) VALUES (%s) ON CONFLICT (tercero_id) DO NOTHING",
+            (tercero_id,)
+        )
+        params.append(tercero_id)
+        conn.execute(
+            f"UPDATE config_negocio SET {', '.join(updates)}, updated_at = NOW() WHERE tercero_id = %s",
+            tuple(params)
+        )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

@@ -1230,41 +1230,12 @@
 
     {% include 'partials/vendedores_admin_panel.html' %}
 
-    <!-- ====== TAB: UBICACIÓN (fuera del overflow-hidden para que MapLibre renderice) ====== -->
-    <div id="panel-ubicacion" class="p-5 hidden bg-white rounded-2xl shadow-lg mb-6">
-        <h2 class="font-semibold text-gray-700 mb-2">Ubicación de la tienda</h2>
-        <p class="text-xs text-gray-400 mb-3">Toca el mapa para marcar el punto exacto de tu negocio, o usa el GPS.</p>
-        {% if tienda.lat and tienda.lon %}
-        <div id="coords-guardadas" class="bg-green-50 border border-green-200 rounded-xl px-4 py-2 mb-3 text-sm text-green-800">
-            📍 Ubicación guardada
-        </div>
-        {% else %}
-        <div id="coords-guardadas" class="hidden bg-green-50 border border-green-200 rounded-xl px-4 py-2 mb-3 text-sm text-green-800">
-            📍 Ubicación guardada
-        </div>
-        {% endif %}
-        <div class="relative rounded-2xl overflow-hidden mb-3 border border-gray-200" style="height:320px;">
-            <div id="mapa-ubicacion" style="width:100%;height:100%;"></div>
-        </div>
-        <div class="bg-rose-50 border border-rose-100 rounded-xl p-3 mb-3">
-            <p class="text-xs font-bold text-rose-700 mb-2">Cobertura de domicilio</p>
-            <div class="grid grid-cols-4 gap-2">
-                <button onclick="activarModoUbicacion()" id="btn-modo-ubicacion" class="bg-rose-600 text-white border border-rose-600 font-semibold py-2 rounded-lg text-xs">Mover negocio</button>
-                <button onclick="activarDibujoCobertura()" id="btn-modo-cobertura" class="bg-white border border-rose-200 text-rose-600 font-semibold py-2 rounded-lg text-xs">Editar zona</button>
-                <button onclick="limpiarCobertura()" class="bg-white border border-gray-200 text-gray-600 font-semibold py-2 rounded-lg text-xs">Limpiar</button>
-                <button onclick="guardarCobertura()" class="bg-rose-600 text-white font-semibold py-2 rounded-lg text-xs">Guardar zona</button>
-            </div>
-            <p id="txt-cobertura" class="text-xs text-gray-500 mt-2">Modo mover negocio: toca el mapa para cambiar el pin. Usa "Editar zona" para modificar el perimetro.</p>
-        </div>
-        <button onclick="gpsUbicacion()"
-            class="w-full bg-blue-600 text-white font-semibold py-3 rounded-xl text-sm mb-2 flex items-center justify-center gap-2">
-            📡 Capturar mi ubicación actual (GPS)
-        </button>
-        <p class="text-xs text-gray-400 text-center mb-3" id="txt-coords-ub">Toca el mapa para marcar el punto</p>
-        <button onclick="guardarUbicacion()" class="w-full bg-green-600 text-white font-semibold py-4 rounded-xl text-base">
-            Guardar ubicación
-        </button>
-    </div>
+    {% set ubicacion_tipo_nombre = 'tienda' %}
+    {% set ubicacion_preposicion = 'de la' %}
+    {% set ubicacion_lat = tienda.lat %}
+    {% set ubicacion_lon = tienda.lon %}
+    {% set ubicacion_color = 'rose' %}
+    {% include 'partials/ubicacion_negocio_panel.html' %}
 
     <!-- Footer -->
     <div class="text-center py-4">
@@ -1509,85 +1480,6 @@ async function guardarEntrada() {
 }
 
 // ── UBICACIÓN (mapa propio) ───────────────────────────────────
-let _mapaUbic = null, _markerUbic = null;
-let _latUbic = {{ (tienda.lat if tienda else none) | tojson }};
-let _lonUbic = {{ (tienda.lon if tienda else none) | tojson }};
-let _modoCobertura = false;
-let _coberturaPuntos = [];
-let _configNegocioUbic = null;
-
-function iniciarMapaUbicacion() {
-    if (_mapaUbic) {
-        _mapaUbic.resize();
-        cargarCobertura();
-        setTimeout(dibujarCobertura, 120);
-        return;
-    }
-    const protocol = new pmtiles.Protocol();
-    maplibregl.addProtocol('pmtiles', protocol.tile);
-    const centerLat = _latUbic || 3.4516;
-    const centerLon = _lonUbic || -76.5320;
-    _mapaUbic = new maplibregl.Map({
-        container: 'mapa-ubicacion',
-        style: {
-            version: 8,
-            glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
-            sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v4/light',
-            sources: { protomaps: { type: 'vector', url: 'pmtiles:///static/maps/cali.pmtiles', attribution: '&copy; OpenStreetMap' } },
-            layers: basemaps.layers('protomaps', basemaps.namedFlavor('light'), { lang: 'es' })
-        },
-        center: [centerLon, centerLat],
-        zoom: _latUbic ? 17 : 14,
-        attributionControl: false
-    });
-    _mapaUbic.on('load', cargarCobertura);
-    if (_latUbic && _lonUbic) _colocarMarker(_lonUbic, _latUbic);
-    _mapaUbic.on('click', e => {
-        if (_modoCobertura) agregarPuntoCobertura(e.lngLat.lng, e.lngLat.lat);
-        else _colocarMarker(e.lngLat.lng, e.lngLat.lat);
-    });
-}
-
-function _colocarMarker(lon, lat) {
-    if (_markerUbic) _markerUbic.remove();
-    const el = document.createElement('div');
-    el.innerHTML = `<svg width="32" height="40" viewBox="0 0 32 40" fill="none"><path d="M16 0C9.37 0 4 5.37 4 12c0 9 12 28 12 28S28 21 28 12C28 5.37 22.63 0 16 0Z" fill="#dc2626"/><circle cx="16" cy="12" r="5" fill="white"/></svg>`;
-    _markerUbic = new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([lon, lat]).addTo(_mapaUbic);
-    _latUbic = lat; _lonUbic = lon;
-    document.getElementById('txt-coords-ub').textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-}
-
-function gpsUbicacion() {
-    if (!navigator.geolocation) { toast('GPS no disponible', true); return; }
-    activarModoUbicacion();
-    toast('Localizando...', false);
-    navigator.geolocation.getCurrentPosition(
-        pos => {
-            if (_mapaUbic) {
-                _mapaUbic.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 17 });
-                _colocarMarker(pos.coords.longitude, pos.coords.latitude);
-            }
-        },
-        () => toast('No se pudo obtener GPS', true),
-        { enableHighAccuracy: true, timeout: 10000 }
-    );
-}
-
-async function guardarUbicacion() {
-    if (_latUbic === null || _lonUbic === null) { toast('Toca el mapa para marcar tu ubicación', true); return; }
-    try {
-        const r = await fetch(`/api/tienda/${SLUG}/admin/ubicacion`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ lat: _latUbic, lon: _lonUbic })
-        });
-        const d = await r.json();
-        if (d.ok) {
-            toast('Ubicación guardada', false);
-            document.getElementById('coords-guardadas').classList.remove('hidden');
-        } else { toast(d.error || 'Error', true); }
-    } catch(e) { toast('Error de conexión', true); }
-}
-
 // === URL pública y enlaces ===
 const URL_PUBLICA = 'https://' + SLUG + '.tuc-tuc.co';
 document.getElementById('url-publica').textContent = URL_PUBLICA;
@@ -2961,96 +2853,6 @@ async function guardarExperiencia() {
         const data = await r.json();
         if (data.ok) toast('Experiencia actualizada');
         else toast(data.error || 'Error', true);
-    } catch(e) { toast('Error de conexion', true); }
-}
-
-async function cargarCobertura() {
-    if (!TERCERO_ID) return;
-    try {
-        const r = await fetch(`/api/negocio/${TERCERO_ID}/config`);
-        const d = await r.json();
-        if (!d.ok) return;
-        _configNegocioUbic = d.config || {};
-        _coberturaPuntos = _configNegocioUbic.domicilio_zona || [];
-        dibujarCobertura();
-    } catch(e) {}
-}
-
-function activarDibujoCobertura() {
-    _modoCobertura = true;
-    actualizarModoMapaTexto();
-}
-
-function activarModoUbicacion() {
-    _modoCobertura = false;
-    actualizarModoMapaTexto();
-}
-
-function actualizarModoMapaTexto() {
-    const btnUbic = document.getElementById('btn-modo-ubicacion');
-    const btnCob = document.getElementById('btn-modo-cobertura');
-    if (btnUbic) btnUbic.className = _modoCobertura
-        ? 'bg-white border border-gray-200 text-gray-600 font-semibold py-2 rounded-lg text-xs'
-        : 'bg-rose-600 text-white border border-rose-600 font-semibold py-2 rounded-lg text-xs';
-    if (btnCob) btnCob.className = _modoCobertura
-        ? 'bg-rose-600 text-white border border-rose-600 font-semibold py-2 rounded-lg text-xs'
-        : 'bg-white border border-rose-200 text-rose-600 font-semibold py-2 rounded-lg text-xs';
-    const txt = document.getElementById('txt-cobertura');
-    if (!txt) return;
-    txt.textContent = _modoCobertura
-        ? `${_coberturaPuntos.length} punto(s). Toca el mapa para agregar puntos al perimetro.`
-        : `${_coberturaPuntos.length} punto(s) de cobertura. Modo mover negocio activo.`;
-}
-
-function agregarPuntoCobertura(lon, lat) {
-    _coberturaPuntos.push({lat, lon});
-    dibujarCobertura();
-}
-
-function limpiarCobertura() {
-    _coberturaPuntos = [];
-    dibujarCobertura();
-}
-
-function dibujarCobertura() {
-    if (!_mapaUbic || !_mapaUbic.isStyleLoaded()) return;
-    const coords = _coberturaPuntos.map(p => [Number(p.lon), Number(p.lat)]);
-    const cerrado = coords.length >= 3 ? [...coords, coords[0]] : coords;
-    const data = {
-        type: 'FeatureCollection',
-        features: coords.length >= 3 ? [{type:'Feature', geometry:{type:'Polygon', coordinates:[cerrado]}, properties:{}}] : []
-    };
-    if (!_mapaUbic.getSource('cobertura-domicilio')) {
-        _mapaUbic.addSource('cobertura-domicilio', {type:'geojson', data});
-        _mapaUbic.addLayer({id:'cobertura-fill', type:'fill', source:'cobertura-domicilio', paint:{'fill-color':'#e11d48','fill-opacity':0.14}});
-        _mapaUbic.addLayer({id:'cobertura-line', type:'line', source:'cobertura-domicilio', paint:{'line-color':'#e11d48','line-width':2}});
-    } else {
-        _mapaUbic.getSource('cobertura-domicilio').setData(data);
-    }
-    actualizarModoMapaTexto();
-}
-
-async function guardarCobertura() {
-    if (!TERCERO_ID) return toast('Este negocio no tiene tercero asociado', true);
-    if (!_configNegocioUbic) await cargarCobertura();
-    if (!_configNegocioUbic) return toast('No se pudo cargar la configuracion actual', true);
-    const cfg = _configNegocioUbic || {};
-    try {
-        const r = await fetch(`/api/negocio/${TERCERO_ID}/config`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                modalidades: cfg.modalidades || ['domicilio', 'recoger'],
-                metodos_pago: cfg.metodos_pago || ['efectivo'],
-                aviso_pedido: cfg.aviso_pedido || '',
-                domicilio_tarifa: Number(cfg.domicilio_tarifa || 0),
-                domicilio_modo_fuera: cfg.domicilio_modo_fuera || 'por_confirmar',
-                domicilio_zona: _coberturaPuntos
-            })
-        });
-        const d = await r.json();
-        if (d.ok) { _modoCobertura = false; toast('Cobertura guardada', false); await cargarCobertura(); actualizarModoMapaTexto(); }
-        else toast(d.error || 'Error', true);
     } catch(e) { toast('Error de conexion', true); }
 }
 
@@ -5597,6 +5399,21 @@ function formatearFecha(fechaStr) {
     }
 }
 </script>
+<script>
+window.TUC_TUC_UBICACION = {
+    tipo: 'tienda',
+    slug: {{ tienda.slug | tojson }},
+    terceroId: {{ ((tienda.tercero_id or tienda.admin_id) if tienda else none) | tojson }},
+    lat: {{ (tienda.lat if tienda else none) | tojson }},
+    lon: {{ (tienda.lon if tienda else none) | tojson }},
+    markerColor: '#dc2626',
+    coverageColor: '#e11d48',
+    activeClasses: 'bg-rose-600 text-white border border-rose-600 font-semibold py-2 rounded-lg text-xs',
+    inactiveClasses: 'bg-white border border-rose-200 text-rose-600 font-semibold py-2 rounded-lg text-xs',
+    notify: (message, error) => toast(message, error)
+};
+</script>
+<script src="/static/JS/ubicacion_negocio.js"></script>
 {% include 'ayuda_contextual_widget.html' %}
 </body>
 </html>

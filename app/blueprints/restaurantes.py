@@ -651,7 +651,7 @@ def api_opciones(slug):
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
         opciones = conn.execute(
             "SELECT id, categoria AS tipo, nombre, recargo, precio, imagen, disponible AS activo, descripcion, orden "
-            "FROM productos WHERE negocio_id = %s ORDER BY orden, id",
+            "FROM productos WHERE negocio_id = %s AND disponible = TRUE ORDER BY orden, id",
             (rest['tercero_id'],)
         ).fetchall()
         conn.close()
@@ -778,6 +778,26 @@ def api_opcion_crear(slug):
         if rest['tipo_restaurante'] == 'menu_dia' and tipo not in ('sopa', 'proteina', 'principio'):
             conn.close()
             return jsonify({'ok': False, 'error': 'Tipo debe ser sopa, proteina o principio'}), 400
+        conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+            (f"producto:{rest['tercero_id']}:{tipo.lower()}:{nombre.lower()}",)
+        )
+        if opcion_id:
+            duplicado = conn.execute(
+                "SELECT id FROM productos WHERE negocio_id=%s AND LOWER(categoria)=%s "
+                "AND LOWER(nombre)=%s AND disponible=TRUE AND id<>%s LIMIT 1",
+                (rest['tercero_id'], tipo.lower(), nombre.lower(), opcion_id)
+            ).fetchone()
+        else:
+            duplicado = conn.execute(
+                "SELECT id FROM productos WHERE negocio_id=%s AND LOWER(categoria)=%s "
+                "AND LOWER(nombre)=%s AND disponible=TRUE LIMIT 1",
+                (rest['tercero_id'], tipo.lower(), nombre.lower())
+            ).fetchone()
+        if duplicado:
+            conn.rollback()
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Ese producto ya existe en el catalogo'}), 409
         if opcion_id:
             conn.execute(
                 "UPDATE productos SET categoria=%s, nombre=%s, recargo=%s, precio=%s, descripcion=%s "
@@ -807,8 +827,14 @@ def api_opcion_eliminar(slug, opcion_id):
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
-        conn.execute("UPDATE productos SET disponible = FALSE WHERE id = %s AND negocio_id = %s",
-                     (opcion_id, rest['tercero_id']))
+        resultado = conn.execute(
+            "UPDATE productos SET disponible = FALSE WHERE id = %s AND negocio_id = %s AND disponible = TRUE",
+            (opcion_id, rest['tercero_id'])
+        )
+        if resultado.rowcount == 0:
+            conn.rollback()
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

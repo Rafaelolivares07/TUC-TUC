@@ -151,7 +151,7 @@
         <div id="panel-catalogo" class="p-6">
             <!-- Formulario agregar -->
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
-                <h3 class="font-bold text-gray-700 mb-3">Agregar plato</h3>
+                <h3 id="catalogo-form-titulo" class="font-bold text-gray-700 mb-3">Agregar plato</h3>
                 <div class="flex flex-col sm:flex-row gap-3">
                     <!-- tipo carta/ambos -->
                     <input id="cat-tipo" type="text" placeholder="Categoría (ej: Entradas)"
@@ -174,8 +174,11 @@
                         class="border rounded-lg px-3 py-2 text-sm w-28 {{ '' if restaurante.tipo_restaurante == 'menu_dia' else 'hidden' }}">
                     <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500"
                         class="border rounded-lg px-3 py-2 text-sm w-28 {{ 'hidden' if restaurante.tipo_restaurante == 'menu_dia' }}">
-                    <button onclick="guardarOpcion()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
+                    <button id="btn-guardar-opcion" onclick="guardarOpcion()" class="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
                         Agregar
+                    </button>
+                    <button id="btn-cancelar-edicion" onclick="limpiarFormCatalogo()" class="hidden border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
+                        Cancelar
                     </button>
                 </div>
                 <textarea id="cat-descripcion" placeholder="Descripción opcional (ingredientes, acompañamientos...)" rows="2"
@@ -1148,6 +1151,9 @@ function renderCatalogo() {
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1h1a2 2 0 110 4h-1v2h1a2 2 0 110 4h-1v1a2 2 0 11-4 0v-1H9v1a2 2 0 11-4 0v-1H4a2 2 0 110-4h1V9H4a2 2 0 010-4h1V4a2 2 0 114 0v1h2V4zM9 9v2h2V9H9zm4 0v2h2V9h-2zM9 13v2h2v-2H9zm4 0v2h2v-2h-2z"/></svg>
                                 </a>
                                 {% endif %}
+                                <button onclick="editarOpcion(${i.id})" class="text-blue-500 hover:text-blue-700" title="Editar">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                </button>
                                 ${esCarta ? `
                                 <button onclick="compartirOpcion(${i.id}, '${i.nombre.replace(/'/g, "\\'")}')" class="text-emerald-500 hover:text-emerald-700" title="Compartir">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
@@ -1167,6 +1173,8 @@ function renderCatalogo() {
 }
 
 let _sortableCatalogo = null;
+let _opcionEditandoId = null;
+let _guardandoOpcion = false;
 function _initSortable() {
     // Destruir instancia previa del contenedor de categorías si existe
     if (_sortableCatalogo) { _sortableCatalogo.destroy(); _sortableCatalogo = null; }
@@ -1230,11 +1238,15 @@ async function guardarOpcion() {
     const nombre = document.getElementById('cat-nombre').value.trim();
     if (!tipo) return toast('Selecciona una categoría', false);
     if (!nombre) return toast('Escribe el nombre', false);
+    if (_guardandoOpcion) return;
 
     document.getElementById('autocomplete-dropdown').classList.add('hidden');
+    const boton = document.getElementById('btn-guardar-opcion');
+    _guardandoOpcion = true;
+    boton.disabled = true;
 
     // Si seleccionó del dropdown y no cambió el nombre → adoptar (copia con imagen)
-    if (productoSeleccionado && productoSeleccionado.nombre === nombre) {
+    if (!_opcionEditandoId && productoSeleccionado && productoSeleccionado.nombre === nombre) {
         try {
             const r = await fetch(`${BASE}/adoptar-producto`, {
                 method: 'POST',
@@ -1245,19 +1257,24 @@ async function guardarOpcion() {
             if (data.ok) {
                 limpiarFormCatalogo();
                 toast('Agregado');
-                cargarCatalogo();
+                await cargarCatalogo();
             } else {
                 toast(data.error, false);
             }
         } catch(e) { toast('Error de conexión', false); }
+        finally { _guardandoOpcion = false; boton.disabled = false; }
         return;
     }
 
     // Crear nuevo producto
-    const body = {tipo, nombre, descripcion: document.getElementById('cat-descripcion').value.trim()};
+    const body = {id: _opcionEditandoId, tipo, nombre, descripcion: document.getElementById('cat-descripcion').value.trim()};
     if (TIPO_REST === 'carta' || TIPO_REST === 'ambos') {
         body.precio = parseFloat(document.getElementById('cat-precio').value) || 0;
-        if (!body.precio) return toast('El precio es obligatorio', false);
+        if (!body.precio) {
+            _guardandoOpcion = false;
+            boton.disabled = false;
+            return toast('El precio es obligatorio', false);
+        }
     } else {
         body.recargo = parseFloat(document.getElementById('cat-recargo').value) || 0;
     }
@@ -1270,19 +1287,47 @@ async function guardarOpcion() {
         });
         const data = await r.json();
         if (data.ok) {
+            const editando = Boolean(_opcionEditandoId);
             limpiarFormCatalogo();
-            toast('Agregado');
-            cargarCatalogo();
+            toast(editando ? 'Cambios guardados' : 'Agregado');
+            await cargarCatalogo();
         } else {
             toast(data.error, false);
         }
     } catch(e) { toast('Error de conexión', false); }
+    finally { _guardandoOpcion = false; boton.disabled = false; }
+}
+
+function editarOpcion(id) {
+    const opcion = catalogoData.find(item => Number(item.id) === Number(id));
+    if (!opcion) return toast('No se encontró el producto', false);
+    _opcionEditandoId = opcion.id;
+    productoSeleccionado = null;
+    const tipoEl = TIPO_REST === 'menu_dia'
+        ? document.getElementById('cat-tipo-md')
+        : document.getElementById('cat-tipo');
+    tipoEl.value = opcion.tipo || '';
+    document.getElementById('cat-nombre').value = opcion.nombre || '';
+    document.getElementById('cat-descripcion').value = opcion.descripcion || '';
+    if (TIPO_REST === 'carta' || TIPO_REST === 'ambos') {
+        document.getElementById('cat-precio').value = Number(opcion.precio || 0);
+    } else {
+        document.getElementById('cat-recargo').value = Number(opcion.recargo || 0);
+    }
+    document.getElementById('catalogo-form-titulo').textContent = 'Editar plato';
+    document.getElementById('btn-guardar-opcion').textContent = 'Guardar cambios';
+    document.getElementById('btn-cancelar-edicion').classList.remove('hidden');
+    document.getElementById('cat-nombre').focus();
 }
 
 function limpiarFormCatalogo() {
     document.getElementById('cat-nombre').value = '';
     document.getElementById('cat-descripcion').value = '';
     productoSeleccionado = null;
+    _opcionEditandoId = null;
+    document.getElementById('catalogo-form-titulo').textContent = 'Agregar plato';
+    document.getElementById('btn-guardar-opcion').textContent = 'Agregar';
+    document.getElementById('btn-cancelar-edicion').classList.add('hidden');
     if (TIPO_REST === 'menu_dia') {
         document.getElementById('cat-recargo').value = '0';
     } else {

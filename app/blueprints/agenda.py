@@ -1,3 +1,5 @@
+import os
+
 from flask import Blueprint, render_template, request, jsonify
 from ..db import get_db_connection
 from .auth import admin_required
@@ -86,9 +88,9 @@ def eliminar_item(item_id):
 
 
 @bp.route('/agenda/merlin', methods=['GET', 'POST'])
-def merlin_agregar():
+def merlin_agenda():
     token = request.args.get('token') or (request.get_json(silent=True) or {}).get('token')
-    if token != 'merlin-agenda-2026':
+    if token != os.environ.get('AGENDA_MERLIN_TOKEN', 'merlin-agenda-2026'):
         return jsonify({'ok': False, 'error': 'Token inválido'}), 403
 
     if request.method == 'GET':
@@ -107,6 +109,36 @@ def merlin_agregar():
 
     _asegurar_tabla()
     data = request.get_json(silent=True) or {}
+    accion = (data.get('accion') or 'agregar').strip().lower()
+
+    if accion in ('completar', 'reabrir'):
+        try:
+            item_id = int(data.get('id'))
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'error': 'ID inválido'}), 400
+
+        completado = accion == 'completar'
+        with get_db_connection() as conn:
+            cur = conn.execute(
+                """UPDATE agenda_items
+                   SET completado = %s
+                   WHERE id = %s
+                   RETURNING id, completado""",
+                (completado, item_id)
+            )
+            row = cur.fetchone()
+            conn.commit()
+        if not row:
+            return jsonify({'ok': False, 'error': 'No encontrado'}), 404
+        return jsonify({
+            'ok': True,
+            'id': row['id'],
+            'completado': row['completado'],
+        })
+
+    if accion != 'agregar':
+        return jsonify({'ok': False, 'error': 'Acción no válida'}), 400
+
     texto = (data.get('texto') or '').strip()
     categoria = (data.get('categoria') or '').strip()
     fecha_limite = (data.get('fecha_limite') or '').strip() or None

@@ -649,9 +649,11 @@ def api_opciones(slug):
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+        solo_publicos = request.args.get('publico') == '1'
+        filtro_publico = " AND precio > 0" if solo_publicos else ""
         opciones = conn.execute(
             "SELECT id, categoria AS tipo, nombre, recargo, precio, imagen, disponible AS activo, descripcion, orden "
-            "FROM productos WHERE negocio_id = %s AND disponible = TRUE ORDER BY orden, id",
+            f"FROM productos WHERE negocio_id = %s AND disponible = TRUE{filtro_publico} ORDER BY orden, id",
             (rest['tercero_id'],)
         ).fetchall()
         conn.close()
@@ -1646,7 +1648,7 @@ def promo_restaurante_imagen(slug, opcion_id):
         if not rest:
             return '', 404
         opcion = conn.execute(
-            "SELECT imagen FROM productos WHERE id = %s AND negocio_id = %s AND disponible = TRUE",
+            "SELECT imagen FROM productos WHERE id = %s AND negocio_id = %s AND disponible = TRUE AND precio > 0",
             (opcion_id, rest['tercero_id'])
         ).fetchone()
         if not opcion or not opcion['imagen']:
@@ -1669,7 +1671,7 @@ def promo_restaurante_opcion(slug, opcion_id):
         if not rest:
             return "Restaurante no encontrado", 404
         opcion = conn.execute(
-            "SELECT id, nombre, descripcion, precio, imagen FROM productos WHERE id = %s AND negocio_id = %s AND disponible = TRUE",
+            "SELECT id, nombre, descripcion, precio, imagen FROM productos WHERE id = %s AND negocio_id = %s AND disponible = TRUE AND precio > 0",
             (opcion_id, rest['tercero_id'])
         ).fetchone()
         if not opcion:
@@ -1799,7 +1801,8 @@ def api_pedido_crear(slug):
             pedidos_insertados = []
             for p in platos:
                 opcion = conn.execute(
-                    "SELECT id, nombre, precio FROM productos WHERE id=%s AND negocio_id=%s AND disponible=TRUE",
+                    "SELECT id, nombre, precio FROM productos "
+                    "WHERE id=%s AND negocio_id=%s AND disponible=TRUE AND precio > 0",
                     (p['plato_id'], rest['tercero_id'])
                 ).fetchone()
                 if not opcion:

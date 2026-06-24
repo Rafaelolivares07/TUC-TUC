@@ -695,7 +695,7 @@ let pedidoEnviando = false;
 
 async function cargarCarta() {
     try {
-        const r = await fetch(`${BASE}/opciones`);
+        const r = await fetch(`${BASE}/opciones?publico=1`);
         const data = await r.json();
         if (!data.ok) return;
         cartaCatalogo = data.opciones.filter(o => o.activo);

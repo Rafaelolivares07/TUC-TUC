@@ -451,7 +451,7 @@ function inicializarVideosExperiencia() {
 // === Productos ===
 async function cargarProductos() {
     try {
-        const r = await fetch(BASE + '/productos');
+        const r = await fetch(BASE + '/productos?publico=1');
         const data = await r.json();
         if (!data.ok) return;
         productos = data.productos;

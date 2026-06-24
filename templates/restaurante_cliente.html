@@ -805,7 +805,7 @@ async function cargarMisPedidos() {
 // ===== CARTA CLIENTE =====
 async function cargarCartaCliente() {
     try {
-        const r = await fetch(`${BASE}/opciones`);
+        const r = await fetch(`${BASE}/opciones?publico=1`);
         const data = await r.json();
         if (!data.ok) return;
         cartaCatalogo = data.opciones.filter(o => o.activo);

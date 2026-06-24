@@ -966,7 +966,7 @@ def promo_tienda_producto(slug, producto_id):
         if not tienda:
             return "Tienda no encontrada", 404
         producto = conn.execute(
-            "SELECT id, nombre, descripcion, precio, imagen FROM productos WHERE id = %s AND negocio_id = (SELECT tercero_id FROM tiendas WHERE id = %s) AND disponible = TRUE",
+            "SELECT id, nombre, descripcion, precio, imagen FROM productos WHERE id = %s AND negocio_id = (SELECT tercero_id FROM tiendas WHERE id = %s) AND disponible = TRUE AND precio > 0",
             (producto_id, tienda['id'])
         ).fetchone()
         if not producto:
@@ -1227,8 +1227,11 @@ def api_tienda_productos(slug):
         tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        solo_publicos = request.args.get('publico') == '1'
+        filtro_publico = " AND disponible = TRUE AND precio > 0" if solo_publicos else ""
         productos = conn.execute(
-            "SELECT id, nombre, categoria, precio, costo, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct FROM productos WHERE negocio_id = %s ORDER BY categoria, orden, nombre",
+            "SELECT id, nombre, categoria, precio, costo, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct "
+            f"FROM productos WHERE negocio_id = %s{filtro_publico} ORDER BY categoria, orden, nombre",
             (tienda['tercero_id'],)
         ).fetchall()
         categorias_media = conn.execute(
@@ -2096,10 +2099,11 @@ def api_tienda_pedido_crear(slug):
         items_validos = []
         for item in items:
             producto = conn.execute(
-                "SELECT id, nombre, precio, disponible, iva_pct FROM productos WHERE id = %s AND negocio_id = %s",
+                "SELECT id, nombre, precio, disponible, iva_pct FROM productos "
+                "WHERE id = %s AND negocio_id = %s AND disponible = TRUE AND precio > 0",
                 (item.get('producto_id'), tienda['tercero_id'])
             ).fetchone()
-            if not producto or not producto['disponible']:
+            if not producto:
                 continue
             cantidad  = max(1, int(item.get('cantidad', 1)))
             precio_u  = float(producto['precio'])

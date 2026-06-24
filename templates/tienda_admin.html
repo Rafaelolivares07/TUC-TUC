@@ -109,7 +109,7 @@
                 <button onclick="cambiarTab('visitantes')" id="tab-visitantes" class="tab-btn">👁️ Visitantes</button>
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/inventario/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📦 Inventario</a>{% else %}<button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📦 Inventario</button>{% endif %}
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/compras/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">Compras y agotados</a>{% endif %}
-                <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">🎨 Tienda</button>
+                <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">🎨 Diseño</button>
                 <button onclick="cambiarTab('acceso')" id="tab-acceso" class="tab-btn">🔑 Acceso</button>
                 <button onclick="cambiarTab('ubicacion')" id="tab-ubicacion" class="tab-btn">📍 Ubicación</button>
                 <a href="https://admin.tuc-tuc.co/contabilidad/tienda/{{ tienda.slug }}" class="tab-btn flex items-center gap-1">📒 Contabilidad</a>
@@ -701,17 +701,10 @@
                     <input type="checkbox" id="chk-pantalla-experiencial" {{ 'checked' if tienda.pantalla_experiencial else '' }} onchange="guardarExperiencia()" class="w-5 h-5 accent-rose-500">
                     <span class="text-sm text-gray-600">Usar pantalla experiencial antes de categorias</span>
                 </label>
-                <p class="text-xs text-gray-400 mb-2">Color principal de botones</p>
-                <div class="flex items-center gap-2 flex-wrap">
-                    {% set color_actual = tienda.color_accion or '#e11d48' %}
-                    {% for c in ['#e11d48','#16a34a','#2563eb','#f59e0b','#111827','#7c3aed'] %}
-                    <button type="button" onclick="seleccionarColorAccion('{{ c }}')" data-color-accion="{{ c }}"
-                        class="color-accion w-9 h-9 rounded-full border-4 {{ 'border-gray-800' if color_actual == c else 'border-white' }} shadow"
-                        style="background: {{ c }}"></button>
-                    {% endfor %}
-                    <input id="color-accion" type="color" value="{{ color_actual }}" onchange="seleccionarColorAccion(this.value)" class="w-10 h-10 rounded border border-gray-200">
-                </div>
             </div>
+
+            {% set color_accion_actual = tienda.color_accion or '#e11d48' %}
+            {% include 'partials/color_accion_selector.html' %}
 
             <!-- Bloques experienciales -->
             <div class="mb-8">

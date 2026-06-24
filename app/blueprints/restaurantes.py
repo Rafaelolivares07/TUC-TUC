@@ -117,6 +117,7 @@ def _crear_tablas(conn):
         "ALTER TABLE terceros ADD COLUMN IF NOT EXISTS direccion TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS imagen_header TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS color_accion VARCHAR(20) DEFAULT '#f59e0b'",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS mostrar_nombre BOOLEAN DEFAULT TRUE",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
@@ -236,6 +237,7 @@ def _calcular_domicilio(conn, tercero_id, tipo_entrega, lat, lon):
 
 def _asegurar_experiencia_restaurante(conn):
     conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pantalla_experiencial BOOLEAN DEFAULT FALSE")
+    conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS color_accion VARCHAR(20) DEFAULT '#f59e0b'")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS restaurante_experiencia_bloques (
             id SERIAL PRIMARY KEY,
@@ -931,7 +933,11 @@ def api_mostrar_nombre(slug):
 def api_restaurante_experiencia(slug):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    pantalla = bool((request.get_json() or {}).get('pantalla_experiencial', False))
+    data = request.get_json() or {}
+    pantalla = bool(data.get('pantalla_experiencial', False))
+    color = (data.get('color_accion') or '').strip()
+    if color and not re.fullmatch(r'#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?', color):
+        return jsonify({'ok': False, 'error': 'Color no valido'}), 400
     conn = get_db_connection()
     try:
         _asegurar_experiencia_restaurante(conn)
@@ -940,7 +946,13 @@ def api_restaurante_experiencia(slug):
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
         if session.get('rol') != 'Administrador' and session.get('usuario_id') != rest['admin_id']:
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
-        conn.execute("UPDATE restaurantes SET pantalla_experiencial = %s WHERE id = %s", (pantalla, rest['id']))
+        if color:
+            conn.execute(
+                "UPDATE restaurantes SET pantalla_experiencial = %s, color_accion = %s WHERE id = %s",
+                (pantalla, color, rest['id'])
+            )
+        else:
+            conn.execute("UPDATE restaurantes SET pantalla_experiencial = %s WHERE id = %s", (pantalla, rest['id']))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:

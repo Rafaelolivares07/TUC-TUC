@@ -1,0 +1,29 @@
+.btn-accion {
+    background: var(--color-accion, #e11d48);
+    color: var(--color-accion-texto, #fff);
+}
+.btn-accion:hover { filter: brightness(0.93); }
+.btn-accion:active { filter: brightness(0.86); }
+.btn-accion-suave {
+    background: color-mix(in srgb, var(--color-accion, #e11d48) 12%, white);
+    border-color: color-mix(in srgb, var(--color-accion, #e11d48) 42%, white);
+    color: color-mix(in srgb, var(--color-accion, #e11d48) 78%, #111827);
+}
+.btn-accion-suave:hover {
+    background: color-mix(in srgb, var(--color-accion, #e11d48) 18%, white);
+}
+.tema-oscuro .btn-accion-suave {
+    background: color-mix(in srgb, var(--color-accion, #e11d48) 18%, #111827);
+    border-color: var(--color-accion, #e11d48);
+    color: var(--color-accion, #e11d48);
+}
+.tema-oscuro .btn-accion-suave:hover {
+    background: color-mix(in srgb, var(--color-accion, #e11d48) 28%, #111827);
+}
+.txt-accion { color: var(--color-accion, #e11d48); }
+.link-accion:hover { color: var(--color-accion, #e11d48); }
+.bg-accion { background: var(--color-accion, #e11d48); }
+.border-accion { border-color: var(--color-accion, #e11d48); }
+.bg-accion-suave { background: color-mix(in srgb, var(--color-accion, #e11d48) 10%, white); }
+.border-accion-suave { border-color: color-mix(in srgb, var(--color-accion, #e11d48) 28%, white); }
+.hover-border-accion:hover { border-color: var(--color-accion, #e11d48); }

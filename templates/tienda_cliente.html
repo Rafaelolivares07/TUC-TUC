@@ -6,6 +6,8 @@
     <title>{{ tienda.nombre }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="/static/CSS/color_accion.css" rel="stylesheet">
+    <script src="/static/JS/color_accion.js" defer></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         body.tema-claro { background: #faf7f2; color: #1f2937; }
@@ -76,22 +78,6 @@
             position: relative; width: 100%; height: auto; display: block;
             z-index: 1;
         }
-        .btn-accion {
-            background: var(--color-accion, #e11d48);
-            color: #fff;
-        }
-        .btn-accion:hover { filter: brightness(0.93); }
-        .txt-accion { color: var(--color-accion, #e11d48); }
-        .link-accion:hover { color: var(--color-accion, #e11d48); }
-        .bg-accion { background: var(--color-accion, #e11d48); }
-        .border-accion { border-color: var(--color-accion, #e11d48); }
-        .bg-accion-suave {
-            background: color-mix(in srgb, var(--color-accion, #e11d48) 10%, white);
-        }
-        .border-accion-suave {
-            border-color: color-mix(in srgb, var(--color-accion, #e11d48) 28%, white);
-        }
-        .hover-border-accion:hover { border-color: var(--color-accion, #e11d48); }
         .cliente-pill {
             position: fixed; top: 12px; right: 12px; z-index: 45;
             max-width: min(220px, calc(100vw - 24px));
@@ -528,7 +514,7 @@ function renderProductos() {
                         `<button onclick="abrirModalVariante(${p.id})" class="w-full mt-2 btn-accion py-2 rounded-lg text-sm font-semibold transition">Elegir opción</button>` :
                     (enCarrito > 0 ?
                         `<div class="flex items-center justify-between mt-2">
-                            <button onclick="cambiarCantidad('${p.id}', -1)" class="w-8 h-8 rounded-full bg-gray-200 text-gray-700 font-bold text-lg flex items-center justify-center">-</button>
+                            <button onclick="cambiarCantidad('${p.id}', -1)" class="w-8 h-8 rounded-full btn-accion-suave border font-bold text-lg flex items-center justify-center">-</button>
                             <span class="font-bold txt-primary">${enCarrito}</span>
                             <button onclick="cambiarCantidad('${p.id}', 1)" class="w-8 h-8 rounded-full btn-accion font-bold text-lg flex items-center justify-center">+</button>
                         </div>` :
@@ -626,7 +612,7 @@ function actualizarCarritoUI() {
                 <p class="text-xs txt-secondary">$${precio.toLocaleString()} x ${carrito[k]}</p>
             </div>
             <div class="flex items-center gap-2">
-                <button onclick="cambiarCantidad('${k}', -1)" class="w-7 h-7 rounded-full bg-gray-200 text-gray-700 font-bold flex items-center justify-center">-</button>
+                <button onclick="cambiarCantidad('${k}', -1)" class="w-7 h-7 rounded-full btn-accion-suave border font-bold flex items-center justify-center">-</button>
                 <span class="font-bold text-sm w-4 text-center">${carrito[k]}</span>
                 <button onclick="cambiarCantidad('${k}', 1)" class="w-7 h-7 rounded-full btn-accion font-bold flex items-center justify-center">+</button>
             </div>

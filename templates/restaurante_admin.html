@@ -123,7 +123,7 @@
                     Vendedores
                 </button>
                 <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">
-                    🎨 Personalizar
+                    🎨 Diseño
                 </button>
                 <button onclick="cambiarTab('ubicacion')" id="tab-ubicacion" class="tab-btn">
                     📍 Ubicación
@@ -604,6 +604,9 @@
                 <div id="bloques-experiencia" class="space-y-3"></div>
                 <button onclick="guardarBloquesExperiencia()" class="mt-4 w-full bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-xl text-sm font-bold">Guardar contenido experiencial</button>
             </div>
+
+            {% set color_accion_actual = restaurante.color_accion or '#f59e0b' %}
+            {% include 'partials/color_accion_selector.html' %}
 
             <!-- Tipo de restaurante -->
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
@@ -2165,22 +2168,39 @@ function expHtmlSeguro(valor) {
     }[ch]));
 }
 
-async function toggleExperiencia(pantalla_experiencial) {
+function seleccionarColorAccion(color) {
+    document.getElementById('color-accion').value = color;
+    document.querySelectorAll('.color-accion').forEach(boton => {
+        boton.classList.toggle('border-gray-800', boton.dataset.colorAccion === color);
+        boton.classList.toggle('border-white', boton.dataset.colorAccion !== color);
+    });
+    guardarDisenoRestaurante('Color actualizado', false);
+}
+
+async function toggleExperiencia() {
+    guardarDisenoRestaurante('Diseño actualizado', true);
+}
+
+async function guardarDisenoRestaurante(mensaje, revertirToggle) {
+    const pantalla_experiencial = document.getElementById('toggle-experiencia').checked;
     try {
         const r = await fetch(`${BASE}/experiencia`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({pantalla_experiencial})
+            body: JSON.stringify({
+                pantalla_experiencial,
+                color_accion: document.getElementById('color-accion').value
+            })
         });
         const data = await r.json();
-        if (data.ok) toast(pantalla_experiencial ? 'Pantalla experiencial activa' : 'Pantalla experiencial desactivada');
+        if (data.ok) toast(mensaje);
         else {
             toast(data.error || 'Error', false);
-            document.getElementById('toggle-experiencia').checked = !pantalla_experiencial;
+            if (revertirToggle) document.getElementById('toggle-experiencia').checked = !pantalla_experiencial;
         }
     } catch(e) {
         toast('Error de conexion', false);
-        document.getElementById('toggle-experiencia').checked = !pantalla_experiencial;
+        if (revertirToggle) document.getElementById('toggle-experiencia').checked = !pantalla_experiencial;
     }
 }
 

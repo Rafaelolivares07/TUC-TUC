@@ -6,6 +6,8 @@
     <title>{{ restaurante.nombre }}{% if mesa_nombre %} - Mesa {{ mesa_nombre }}{% endif %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="/static/CSS/color_accion.css" rel="stylesheet">
+    <script src="/static/JS/color_accion.js" defer></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         body.tema-claro { background: #faf7f2; color: #1f2937; }
@@ -19,8 +21,13 @@
         .toast-ok { background: #059669; }
         .toast-err { background: #dc2626; }
         .tipo-btn.selected { transform: scale(1.03); }
-        .opcion-btn.selected { border-color: #d97706; background: #fffbeb; }
-        .tema-oscuro .opcion-btn.selected { background: #78350f; }
+        .opcion-btn.selected {
+            border-color: var(--color-accion, #f59e0b) !important;
+            background: color-mix(in srgb, var(--color-accion, #f59e0b) 12%, white) !important;
+        }
+        .tema-oscuro .opcion-btn.selected {
+            background: color-mix(in srgb, var(--color-accion, #f59e0b) 28%, #111827) !important;
+        }
 
         /* Cards oscuro */
         .tema-oscuro .card { background: #1f2937; border-color: #374151; }
@@ -31,12 +38,10 @@
         .tema-oscuro .txt-muted { color: #9ca3af; }
         .tema-oscuro .bg-section { background: #1f2937; }
         .tema-oscuro .opcion-btn { background: #1f2937; border-color: #374151; }
-        .tema-oscuro .opcion-btn:hover { border-color: #d97706; }
+        .tema-oscuro .opcion-btn:hover { border-color: var(--color-accion, #f59e0b); }
         .tema-oscuro .tipo-btn { background: #1f2937; }
         .tema-oscuro .tipo-btn.selected { background: #78350f; }
         .tema-oscuro .opcion-btn.selected { background: #78350f; }
-        .tema-oscuro .btn-menos { background: #374151; color: #f3f4f6; }
-        .tema-oscuro .btn-menos:hover { background: #4b5563; }
         .tema-oscuro .modal-card { background: #1f2937; }
         .tema-oscuro .modal-card input { background: #111827; border-color: #4b5563; color: #f3f4f6; }
         .tema-oscuro .modal-card .btn-entrega { border-color: #374151; color: #9ca3af; }
@@ -130,7 +135,7 @@
         .exp-video-frame iframe, .exp-video-frame video { width: 100%; aspect-ratio: 16 / 9; display: block; border: 0; border-radius: 18px; background: #111; }
     </style>
 </head>
-<body class="min-h-screen tema-{{ restaurante.tema or 'claro' }}">
+<body class="min-h-screen tema-{{ restaurante.tema or 'claro' }}" style="--color-accion: {{ restaurante.color_accion or '#f59e0b' }}">
 
 <div id="toast" class="toast"></div>
 
@@ -223,7 +228,7 @@
             <p class="txt-muted mb-3" id="saludo-texto">¿Cómo te llamas?</p>
             <input id="input-nombre" type="text" placeholder="Tu nombre"
                 class="card-input w-full border-2 border-amber-300 rounded-xl px-4 py-3 text-xl text-center font-bold focus:outline-none focus:border-amber-500">
-            <button onclick="guardarNombre()" class="mt-3 bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-xl font-bold w-full text-lg">
+            <button onclick="guardarNombre()" class="mt-3 btn-accion px-6 py-3 rounded-xl font-bold w-full text-lg">
                 Continuar
             </button>
         </div>
@@ -284,10 +289,10 @@
                 <div class="flex items-center justify-between gap-3">
                     <div>
                         <span class="txt-muted text-xs">Total</span>
-                        <div id="cli-precio" class="text-2xl font-extrabold text-amber-600 leading-tight">$0</div>
+                        <div id="cli-precio" class="text-2xl font-extrabold txt-accion leading-tight">$0</div>
                     </div>
                     <button id="btn-pedir" onclick="enviarPedido()"
-                            class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white px-8 py-3 rounded-2xl font-bold text-lg flex-shrink-0 transition-all">
+                            class="btn-accion px-8 py-3 rounded-2xl font-bold text-lg flex-shrink-0 transition-all">
                         Pedir
                     </button>
                 </div>
@@ -563,7 +568,7 @@ function renderTipos() {
                     <span class="text-xl font-bold txt-primary">Completo</span>
                     <p class="txt-muted text-sm">Sopa + Bandeja</p>
                 </div>
-                <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_completo).toLocaleString('es-CO')}</span>
+                <span class="text-xl font-extrabold txt-accion">$${Number(menuHoy.precio_completo).toLocaleString('es-CO')}</span>
             </div>
         </button>
         <button onclick="seleccionarTipo('bandeja')" id="tipo-bandeja"
@@ -573,7 +578,7 @@ function renderTipos() {
                     <span class="text-xl font-bold txt-primary">Bandeja</span>
                     <p class="txt-muted text-sm">Proteína + Principio</p>
                 </div>
-                <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_bandeja).toLocaleString('es-CO')}</span>
+                <span class="text-xl font-extrabold txt-accion">$${Number(menuHoy.precio_bandeja).toLocaleString('es-CO')}</span>
             </div>
         </button>
         <button onclick="seleccionarTipo('sopa')" id="tipo-sopa"
@@ -583,7 +588,7 @@ function renderTipos() {
                     <span class="text-xl font-bold txt-primary">Sopa</span>
                     <p class="txt-muted text-sm">Solo sopa o caldo</p>
                 </div>
-                <span class="text-xl font-extrabold text-amber-600">$${Number(menuHoy.precio_sopa).toLocaleString('es-CO')}</span>
+                <span class="text-xl font-extrabold txt-accion">$${Number(menuHoy.precio_sopa).toLocaleString('es-CO')}</span>
             </div>
         </button>
     `;
@@ -853,12 +858,12 @@ async function cargarCartaCliente() {
                                         <p class="desc-plato text-gray-400 text-xs leading-tight mt-0.5" id="desc-${p.id}">${p.descripcion}</p>
                                         <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>
                                     ` : ''}
-                                    <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString('es-CO')}</span>
+                                    <span class="txt-accion font-bold text-sm">$${Number(p.precio).toLocaleString('es-CO')}</span>
                                     ${!SOLO_CARTA ? `
                                     <div class="flex items-center justify-center gap-3 mt-2">
-                                        <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-9 h-9 rounded-full font-bold text-lg">-</button>
+                                        <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos btn-accion-suave border w-9 h-9 rounded-full font-bold text-lg">-</button>
                                         <span id="cli-cant-${p.id}" class="font-bold txt-primary w-6 text-center text-lg">0</span>
-                                        <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-9 h-9 rounded-full font-bold text-lg">+</button>
+                                        <button onclick="cartaClienteCant(${p.id}, 1)" class="btn-accion w-9 h-9 rounded-full font-bold text-lg">+</button>
                                     </div>
                                     <input id="cli-nota-${p.id}" type="text" placeholder="Nota (ej: sin cebolla)"
                                            class="hidden mt-2 w-full card-input border rounded-lg px-2 py-1 text-xs"
@@ -883,13 +888,13 @@ async function cargarCartaCliente() {
                                             <p class="desc-plato text-gray-400 text-xs leading-tight mt-0.5" id="desc-${p.id}">${p.descripcion}</p>
                                             <button class="btn-ver-desc" id="desc-btn-${p.id}" onclick="toggleDescPlato(${p.id}, event)">Ver más</button>
                                         ` : ''}
-                                        <span class="text-amber-600 font-bold text-sm">$${Number(p.precio).toLocaleString('es-CO')}</span>
+                                        <span class="txt-accion font-bold text-sm">$${Number(p.precio).toLocaleString('es-CO')}</span>
                                     </div>
                                     ${!SOLO_CARTA ? `
                                     <div class="flex items-center gap-2 flex-shrink-0">
-                                        <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos bg-gray-200 hover:bg-gray-300 text-gray-700 w-8 h-8 rounded-full font-bold text-lg">-</button>
+                                        <button onclick="cartaClienteCant(${p.id}, -1)" class="btn-menos btn-accion-suave border w-8 h-8 rounded-full font-bold text-lg">-</button>
                                         <span id="cli-cant-${p.id}" class="font-bold txt-primary w-5 text-center">0</span>
-                                        <button onclick="cartaClienteCant(${p.id}, 1)" class="bg-amber-500 hover:bg-amber-600 text-white w-8 h-8 rounded-full font-bold text-lg">+</button>
+                                        <button onclick="cartaClienteCant(${p.id}, 1)" class="btn-accion w-8 h-8 rounded-full font-bold text-lg">+</button>
                                     </div>` : ''}
                                 </div>
                                 ${!SOLO_CARTA ? `
@@ -1196,14 +1201,14 @@ setInterval(cargarMisPedidos, 10000);
             <input id="reg-direccion" type="text" placeholder="Tu direccion de entrega"
                 class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-amber-500 focus:outline-none hidden">
             <div id="reg-domicilio-info" class="hidden">
-                <button type="button" onclick="capturarUbicacionCliente()" class="w-full border border-amber-200 bg-amber-50 text-amber-700 rounded-xl py-2 text-xs font-bold">
+                <button type="button" onclick="capturarUbicacionCliente()" class="w-full btn-accion-suave border rounded-xl py-2 text-xs font-bold">
                     Usar mi ubicacion para calcular domicilio
                 </button>
                 <p id="txt-domicilio" class="text-xs text-gray-500 mt-2">Domicilio por confirmar.</p>
             </div>
         </div>
         <button onclick="confirmarRegistro()"
-            class="mt-4 bg-green-600 hover:bg-green-700 text-white w-full py-3 rounded-xl font-bold text-lg">
+            class="mt-4 btn-accion w-full py-3 rounded-xl font-bold text-lg">
             Confirmar y Pedir
         </button>
         <button onclick="cerrarModal()" class="mt-2 text-gray-400 text-sm w-full text-center py-2">Cancelar</button>

@@ -1,0 +1,15 @@
+<div class="bg-gray-50 rounded-xl p-4 mb-6">
+    <h3 class="font-bold text-gray-700 mb-1">Color principal de acciones</h3>
+    <p class="text-xs text-gray-400 mb-3">Se aplica a botones de pedido, controles de cantidad y acciones destacadas.</p>
+    <div class="flex items-center gap-2 flex-wrap">
+        {% set color_actual = color_accion_actual or '#e11d48' %}
+        {% for c in ['#e11d48','#16a34a','#39ff14','#2563eb','#f59e0b','#111827','#7c3aed'] %}
+        <button type="button" onclick="seleccionarColorAccion('{{ c }}')" data-color-accion="{{ c }}"
+            class="color-accion w-9 h-9 rounded-full border-4 {{ 'border-gray-800' if color_actual == c else 'border-white' }} shadow"
+            style="background: {{ c }}" title="Usar color {{ c }}"></button>
+        {% endfor %}
+        <input id="color-accion" type="color" value="{{ color_actual }}"
+            onchange="seleccionarColorAccion(this.value)"
+            class="w-10 h-10 rounded border border-gray-200" title="Elegir otro color">
+    </div>
+</div>

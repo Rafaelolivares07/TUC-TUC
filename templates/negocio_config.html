@@ -134,6 +134,14 @@
               class="w-full border border-gray-200 rounded-xl p-3 text-sm text-gray-700 focus:outline-none focus:border-indigo-400 resize-none"></textarea>
   </div>
 
+  <div class="bg-white rounded-2xl shadow p-5">
+    <h2 class="text-base font-bold text-gray-800 mb-1">Mensaje sin pedidos</h2>
+    <p class="text-sm text-gray-500 mb-3">Texto que ve el cliente cuando todavia no tiene pedidos en seguimiento. Dejalo vacio para no mostrar nada.</p>
+    <input id="mensaje-sin-pedidos" type="text" maxlength="180"
+           placeholder="Aun no has pedido nada"
+           class="w-full border border-gray-200 rounded-xl p-3 text-sm text-gray-700 focus:outline-none focus:border-indigo-400">
+  </div>
+
   <!-- Guardar -->
   <button onclick="guardar()"
           class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-2xl text-sm transition shadow">
@@ -193,6 +201,7 @@ async function cargar() {
     renderMetodos(d.catalogo_metodos, activosMetodos);
 
     document.getElementById('aviso-pedido').value = d.config.aviso_pedido || '';
+    document.getElementById('mensaje-sin-pedidos').value = d.config.mensaje_sin_pedidos ?? 'Aun no has pedido nada';
     document.getElementById('domicilio-tarifa').value = Number(d.config.domicilio_tarifa || 0) || '';
     document.getElementById('domicilio-modo-fuera').value = d.config.domicilio_modo_fuera || 'por_confirmar';
     document.getElementById('cambio-efectivo-modo').value = d.config.cambio_efectivo_modo || 'N';
@@ -433,7 +442,8 @@ async function toggleMetodo(codigo, nuevoEstado) {
         domicilio_tarifa: Number(document.getElementById('domicilio-tarifa').value || 0),
         domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera').value,
         domicilio_zona: domicilioZonaActual,
-        cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value
+        cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value,
+        mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos').value
       })
     });
   } catch(e) {}
@@ -508,7 +518,8 @@ async function guardar() {
         domicilio_tarifa: Number(document.getElementById('domicilio-tarifa').value || 0),
         domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera').value,
         domicilio_zona: domicilioZonaActual,
-        cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value
+        cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value,
+        mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos').value
       })
     });
     const d = await r.json();

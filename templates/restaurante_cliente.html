@@ -416,6 +416,7 @@ async function cargarConfig() {
         const d = await r.json();
         if (!d.ok) return;
         configNegocio = d;
+        pintarMensajeSinPedidos();
         const mods = d.modalidades || ['domicilio', 'recoger'];
         const btnD = document.getElementById('btn-domicilio');
         const btnR = document.getElementById('btn-recoger');
@@ -423,6 +424,24 @@ async function cargarConfig() {
         if (btnR) btnR.style.display = mods.includes('recoger') ? '' : 'none';
         if (mods.length === 1) selTipoEntrega(mods[0]);
     } catch(e) {}
+}
+
+function escapeHtmlCliente(txt) {
+    return String(txt || '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
+function mensajeSinPedidosHtml() {
+    const txt = (configNegocio && configNegocio.mensaje_sin_pedidos !== undefined)
+        ? String(configNegocio.mensaje_sin_pedidos || '').trim()
+        : 'Aun no has pedido nada';
+    return txt ? `<p class="text-gray-400 text-center text-sm py-4">${escapeHtmlCliente(txt)}</p>` : '';
+}
+
+function pintarMensajeSinPedidos() {
+    const cont = document.getElementById('mis-pedidos');
+    if (cont && !cont.querySelector('.card')) cont.innerHTML = mensajeSinPedidosHtml();
 }
 
 function puntoEnPoligono(lat, lon, poligono) {
@@ -766,7 +785,7 @@ async function cargarMisPedidos() {
         const cont = document.getElementById('mis-pedidos');
 
         if (mios.length === 0) {
-            cont.innerHTML = '<p class="text-gray-400 text-center text-sm py-4">Aún no has pedido nada</p>';
+            cont.innerHTML = mensajeSinPedidosHtml();
             return;
         }
 

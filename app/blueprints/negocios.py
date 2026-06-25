@@ -63,7 +63,14 @@ def _telegram_resumen_pagos(pagos, metodo_pago, total):
         if codigo.lower() == 'contraentrega':
             contraentrega = True
             nombre = 'Contraentrega en efectivo'
-        partes.append(f"{nombre}: ${float(pago.get('monto') or 0):,.0f}")
+        detalle = f"{nombre}: ${float(pago.get('monto') or 0):,.0f}"
+        recibido = float(pago.get('recibido_con') or 0)
+        devuelta = float(pago.get('devuelta') or max(0, recibido - float(pago.get('monto') or 0)))
+        if codigo.lower() in ('efectivo', 'contraentrega') and recibido > 0:
+            detalle += f" | recibe con ${recibido:,.0f}"
+            if devuelta >= 0:
+                detalle += f" | devuelta ${devuelta:,.0f}"
+        partes.append(detalle)
     alerta = "\n⚠️ Contraentrega: cobrar efectivo al entregar." if contraentrega else ""
     return ' + '.join(partes) + alerta
 
@@ -78,6 +85,24 @@ def _telegram_entrega(tipo_entrega, direccion=None, mesa=None):
     if tipo_entrega == 'mesa':
         return f"Consumo / entrega en mesa: {mesa or 'mesa sin nombre'}"
     return f"{tipo_entrega or 'Pedido'}: {direccion or mesa or 'N/A'}"
+
+
+def _float_pago(valor):
+    try:
+        return float(valor or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _datos_cambio_pago(pago):
+    codigo = (pago.get('codigo') or '').strip().lower() if isinstance(pago, dict) else ''
+    if codigo not in ('efectivo', 'contraentrega'):
+        return None, None
+    monto = _float_pago(pago.get('monto'))
+    recibido = _float_pago(pago.get('recibido_con'))
+    if recibido <= 0:
+        return None, None
+    return recibido, max(0.0, recibido - monto)
 
 
 def _enviar_telegram_negocio(conn, chat_id, texto):
@@ -195,6 +220,7 @@ def init_config_negocio(conn):
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS domicilio_modo_fuera VARCHAR(20) DEFAULT 'por_confirmar'")
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS domicilio_zona JSONB DEFAULT '[]'")
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS mapa_region VARCHAR(30)")
+    conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS cambio_efectivo_modo CHAR(1) DEFAULT 'N'")
 
     # Garantizar que el catálogo de métodos de pago esté completo en prod
     conn.execute("""
@@ -251,7 +277,8 @@ def init_config_negocio(conn):
 def _get_config(conn, tercero_id):
     row = conn.execute(
         """SELECT modalidades, metodos_pago, aviso_pedido, metodos_info,
-                  domicilio_tarifa, domicilio_modo_fuera, domicilio_zona, mapa_region
+                  domicilio_tarifa, domicilio_modo_fuera, domicilio_zona, mapa_region,
+                  cambio_efectivo_modo
            FROM config_negocio WHERE tercero_id=%s""",
         (tercero_id,)
     ).fetchone()
@@ -265,6 +292,7 @@ def _get_config(conn, tercero_id):
             'domicilio_modo_fuera': row['domicilio_modo_fuera'] or 'por_confirmar',
             'domicilio_zona': row['domicilio_zona'] or [],
             'mapa_region': row['mapa_region'],
+            'cambio_efectivo_modo': (row['cambio_efectivo_modo'] or 'N').strip().upper(),
         }
     # Migrar datos existentes de metodos_pago_tienda si los hay
     try:
@@ -284,6 +312,7 @@ def _get_config(conn, tercero_id):
                 'domicilio_modo_fuera': 'por_confirmar',
                 'domicilio_zona': [],
                 'mapa_region': None,
+                'cambio_efectivo_modo': 'N',
             }
     except Exception:
         pass
@@ -291,7 +320,7 @@ def _get_config(conn, tercero_id):
         'modalidades': ['domicilio', 'recoger'], 'metodos_pago': ['efectivo'],
         'aviso_pedido': None, 'metodos_info': {}, 'domicilio_tarifa': 0,
         'domicilio_modo_fuera': 'por_confirmar', 'domicilio_zona': [],
-        'mapa_region': None
+        'mapa_region': None, 'cambio_efectivo_modo': 'N'
     }
 
 
@@ -554,15 +583,19 @@ def api_config_save(tercero_id):
     if domicilio_modo_fuera not in ('por_confirmar', 'rechazar'):
         domicilio_modo_fuera = 'por_confirmar'
     domicilio_zona = data.get('domicilio_zona') or []
+    cambio_efectivo_modo = (data.get('cambio_efectivo_modo') or 'N').strip().upper()
+    if cambio_efectivo_modo not in ('N', 'O', 'R'):
+        cambio_efectivo_modo = 'N'
     conn = get_db_connection()
     try:
         init_config_negocio(conn)
         conn.execute("""
             INSERT INTO config_negocio (
                 tercero_id, modalidades, metodos_pago, aviso_pedido,
-                domicilio_tarifa, domicilio_modo_fuera, domicilio_zona, updated_at
+                domicilio_tarifa, domicilio_modo_fuera, domicilio_zona,
+                cambio_efectivo_modo, updated_at
             )
-            VALUES (%s, %s::jsonb, %s::jsonb, %s, %s, %s, %s::jsonb, NOW())
+            VALUES (%s, %s::jsonb, %s::jsonb, %s, %s, %s, %s::jsonb, %s, NOW())
             ON CONFLICT (tercero_id) DO UPDATE SET
                 modalidades  = EXCLUDED.modalidades,
                 metodos_pago = EXCLUDED.metodos_pago,
@@ -570,10 +603,11 @@ def api_config_save(tercero_id):
                 domicilio_tarifa = EXCLUDED.domicilio_tarifa,
                 domicilio_modo_fuera = EXCLUDED.domicilio_modo_fuera,
                 domicilio_zona = EXCLUDED.domicilio_zona,
+                cambio_efectivo_modo = EXCLUDED.cambio_efectivo_modo,
                 updated_at   = NOW()
         """, (
             tercero_id, json.dumps(modalidades), json.dumps(metodos_pago), aviso_pedido,
-            domicilio_tarifa, domicilio_modo_fuera, json.dumps(domicilio_zona)
+            domicilio_tarifa, domicilio_modo_fuera, json.dumps(domicilio_zona), cambio_efectivo_modo
         ))
         conn.commit()
         return jsonify({'ok': True})
@@ -678,6 +712,7 @@ def api_config_publica(tercero_id):
             'domicilio_tarifa': config.get('domicilio_tarifa', 0),
             'domicilio_modo_fuera': config.get('domicilio_modo_fuera', 'por_confirmar'),
             'domicilio_zona': config.get('domicilio_zona', []),
+            'cambio_efectivo_modo': config.get('cambio_efectivo_modo', 'N'),
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -729,6 +764,13 @@ def api_pagar(pedido_id):
         return jsonify({'ok': False, 'error': 'Selecciona un método de pago'}), 400
     conn = get_db_connection()
     try:
+        try:
+            conn.execute("ALTER TABLE pedido_pagos_tienda ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)")
+            conn.execute("ALTER TABLE pedido_pagos_tienda ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)")
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+        _asegurar_pagos_restaurante(conn)
         if tipo == 'tienda':
             total_row = conn.execute("SELECT total FROM pedidos_tienda WHERE id=%s", (pedido_id,)).fetchone()
             total_pedido = float(total_row['total'] or 0) if total_row else 0
@@ -740,14 +782,18 @@ def api_pagar(pedido_id):
             pagos_validos = [p for p in pagos if isinstance(p, dict) and float(p.get('monto') or 0) > 0]
             if pagos_validos:
                 for pago in pagos_validos:
+                    recibido_con, devuelta = _datos_cambio_pago(pago)
                     conn.execute("""
-                        INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
-                        VALUES (%s, %s, %s, %s)
+                        INSERT INTO pedido_pagos_tienda
+                            (pedido_id, metodo_codigo, metodo_nombre, monto, recibido_con, devuelta)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                     """, (
                         pedido_id,
                         pago.get('codigo') or metodo_pago,
                         pago.get('nombre') or pago.get('codigo') or metodo_pago,
                         float(pago.get('monto') or 0),
+                        recibido_con,
+                        devuelta,
                     ))
             else:
                 conn.execute("""
@@ -771,14 +817,18 @@ def api_pagar(pedido_id):
             pagos_validos = [p for p in pagos if isinstance(p, dict) and float(p.get('monto') or 0) > 0]
             if pagos_validos:
                 for pago in pagos_validos:
+                    recibido_con, devuelta = _datos_cambio_pago(pago)
                     conn.execute("""
-                        INSERT INTO pedido_pagos_restaurante (pedido_id, metodo_codigo, metodo_nombre, monto)
-                        VALUES (%s, %s, %s, %s)
+                        INSERT INTO pedido_pagos_restaurante
+                            (pedido_id, metodo_codigo, metodo_nombre, monto, recibido_con, devuelta)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                     """, (
                         pedido_id,
                         pago.get('codigo') or metodo_pago,
                         pago.get('nombre') or pago.get('codigo') or metodo_pago,
                         float(pago.get('monto') or 0),
+                        recibido_con,
+                        devuelta,
                     ))
             else:
                 conn.execute("""
@@ -814,6 +864,8 @@ def _asegurar_pagos_restaurante(conn):
         CREATE INDEX IF NOT EXISTS idx_pedido_pagos_restaurante_pedido
         ON pedido_pagos_restaurante(pedido_id)
     """)
+    conn.execute("ALTER TABLE pedido_pagos_restaurante ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)")
+    conn.execute("ALTER TABLE pedido_pagos_restaurante ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)")
 
 
 @bp.route('/api/negocio/<int:tercero_id>/metodo-info', methods=['POST'])

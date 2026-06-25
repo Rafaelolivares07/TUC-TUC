@@ -164,6 +164,8 @@ def _asegurar_pagos_restaurante(conn):
         CREATE INDEX IF NOT EXISTS idx_pedido_pagos_restaurante_pedido
         ON pedido_pagos_restaurante(pedido_id)
     """)
+    conn.execute("ALTER TABLE pedido_pagos_restaurante ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)")
+    conn.execute("ALTER TABLE pedido_pagos_restaurante ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)")
 
 
 def _asegurar_domicilio_restaurante(conn):
@@ -256,6 +258,12 @@ def _asegurar_experiencia_restaurante(conn):
         CREATE INDEX IF NOT EXISTS idx_restaurante_experiencia_bloques
         ON restaurante_experiencia_bloques(restaurante_id, orden, id)
     """)
+    conn.commit()
+
+
+def _asegurar_catalogo_adiciones_restaurante(conn):
+    conn.execute("ALTER TABLE productos ADD COLUMN IF NOT EXISTS es_adicion BOOLEAN DEFAULT FALSE")
+    conn.execute("ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS mostrar_adiciones_en_carta BOOLEAN DEFAULT FALSE")
     conn.commit()
 
 
@@ -442,6 +450,7 @@ def admin_restaurante_detalle(slug):
     try:
         conn = get_db_connection()
         _crear_tablas(conn)
+        _asegurar_catalogo_adiciones_restaurante(conn)
         restaurante = conn.execute(
             "SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
         ).fetchone()
@@ -459,6 +468,7 @@ def mi_restaurante(slug):
     try:
         conn = get_db_connection()
         _crear_tablas(conn)
+        _asegurar_catalogo_adiciones_restaurante(conn)
         restaurante = conn.execute(
             "SELECT * FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
         ).fetchone()
@@ -647,19 +657,33 @@ def api_opciones(slug):
     try:
         conn = get_db_connection()
         _crear_tablas(conn)
-        rest = conn.execute("SELECT id, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        _asegurar_catalogo_adiciones_restaurante(conn)
+        rest = conn.execute(
+            "SELECT id, tercero_id, COALESCE(mostrar_adiciones_en_carta, FALSE) AS mostrar_adiciones_en_carta "
+            "FROM restaurantes WHERE slug = %s",
+            (slug,)
+        ).fetchone()
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
         solo_publicos = request.args.get('publico') == '1'
         filtro_publico = " AND precio > 0" if solo_publicos else ""
+        if solo_publicos and not rest['mostrar_adiciones_en_carta']:
+            filtro_publico += " AND COALESCE(es_adicion, FALSE) = FALSE"
         opciones = conn.execute(
-            "SELECT id, categoria AS tipo, nombre, recargo, precio, imagen, disponible AS activo, descripcion, orden "
+            "SELECT id, categoria AS tipo, nombre, recargo, precio, imagen, disponible AS activo, "
+            "descripcion, orden, COALESCE(es_adicion, FALSE) AS es_adicion "
             f"FROM productos WHERE negocio_id = %s AND disponible = TRUE{filtro_publico} ORDER BY orden, id",
             (rest['tercero_id'],)
         ).fetchall()
         conn.close()
-        return jsonify({'ok': True, 'opciones': [dict(o) for o in opciones]})
+        return jsonify({
+            'ok': True,
+            'opciones': [dict(o) for o in opciones],
+            'catalogo': {
+                'mostrar_adiciones_en_carta': bool(rest['mostrar_adiciones_en_carta'])
+            }
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -769,12 +793,14 @@ def api_opcion_crear(slug):
     recargo = data.get('recargo', 0)
     precio = data.get('precio', 0)
     descripcion = data.get('descripcion', '').strip()
+    es_adicion = bool(data.get('es_adicion', False))
     if not tipo:
         return jsonify({'ok': False, 'error': 'Categoría requerida'}), 400
     if not nombre:
         return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
     try:
         conn = get_db_connection()
+        _asegurar_catalogo_adiciones_restaurante(conn)
         rest = conn.execute("SELECT id, tipo_restaurante, tercero_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
         if not rest:
             conn.close()
@@ -804,16 +830,43 @@ def api_opcion_crear(slug):
             return jsonify({'ok': False, 'error': 'Ese producto ya existe en el catalogo'}), 409
         if opcion_id:
             conn.execute(
-                "UPDATE productos SET categoria=%s, nombre=%s, recargo=%s, precio=%s, descripcion=%s "
+                "UPDATE productos SET categoria=%s, nombre=%s, recargo=%s, precio=%s, descripcion=%s, es_adicion=%s "
                 "WHERE id=%s AND negocio_id=%s",
-                (tipo, nombre, recargo, precio, descripcion or None, opcion_id, rest['tercero_id'])
+                (tipo, nombre, recargo, precio, descripcion or None, es_adicion, opcion_id, rest['tercero_id'])
             )
         else:
             conn.execute(
-                "INSERT INTO productos (negocio_id, categoria, nombre, recargo, precio, descripcion) "
-                "VALUES (%s,%s,%s,%s,%s,%s)",
-                (rest['tercero_id'], tipo, nombre, recargo, precio, descripcion or None)
+                "INSERT INTO productos (negocio_id, categoria, nombre, recargo, precio, descripcion, es_adicion) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (rest['tercero_id'], tipo, nombre, recargo, precio, descripcion or None, es_adicion)
             )
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/restaurante/<slug>/catalogo-config', methods=['POST'])
+def api_catalogo_config(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    mostrar = bool(data.get('mostrar_adiciones_en_carta', False))
+    try:
+        conn = get_db_connection()
+        _asegurar_catalogo_adiciones_restaurante(conn)
+        rest = conn.execute("SELECT id, admin_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        if not rest:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
+        if session.get('rol') != 'Administrador' and session.get('usuario_id') != rest['admin_id']:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        conn.execute(
+            "UPDATE restaurantes SET mostrar_adiciones_en_carta = %s WHERE id = %s",
+            (mostrar, rest['id'])
+        )
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
@@ -2014,7 +2067,7 @@ def api_pedidos(slug):
         resultado = []
         for p in pedidos:
             pagos = conn.execute("""
-                SELECT metodo_codigo, metodo_nombre, monto
+                SELECT metodo_codigo, metodo_nombre, monto, recibido_con, devuelta
                 FROM pedido_pagos_restaurante
                 WHERE pedido_id = %s
                 ORDER BY id
@@ -2023,6 +2076,8 @@ def api_pedidos(slug):
                 'codigo': pago['metodo_codigo'] or '',
                 'nombre': pago['metodo_nombre'] or pago['metodo_codigo'] or '',
                 'monto': float(pago['monto'] or 0),
+                'recibido_con': float(pago['recibido_con'] or 0),
+                'devuelta': float(pago['devuelta'] or 0),
             } for pago in pagos]
             if not pagos_json:
                 pagos_json = [{
@@ -2211,14 +2266,25 @@ def api_cobrar(slug, mesa_id):
             conn.execute("DELETE FROM pedido_pagos_restaurante WHERE pedido_id=%s", (pedido['id'],))
             if pagos_validos:
                 for pago in pagos_validos:
+                    codigo_pago = (pago.get('codigo') or '').strip().lower()
+                    recibido_con = None
+                    devuelta = None
+                    if codigo_pago in ('efectivo', 'contraentrega'):
+                        recibido_con_total = float(pago.get('recibido_con') or 0) or None
+                        if recibido_con_total:
+                            recibido_con = recibido_con_total * proporcion
+                            devuelta = max(0, recibido_con - (float(pago.get('monto') or 0) * proporcion))
                     conn.execute("""
-                        INSERT INTO pedido_pagos_restaurante (pedido_id, metodo_codigo, metodo_nombre, monto)
-                        VALUES (%s, %s, %s, %s)
+                        INSERT INTO pedido_pagos_restaurante
+                            (pedido_id, metodo_codigo, metodo_nombre, monto, recibido_con, devuelta)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                     """, (
                         pedido['id'],
                         pago.get('codigo') or metodo_pago,
                         pago.get('nombre') or pago.get('codigo') or metodo_pago,
                         float(pago.get('monto') or 0) * proporcion,
+                        recibido_con,
+                        devuelta,
                     ))
             elif metodo_pago:
                 conn.execute("""

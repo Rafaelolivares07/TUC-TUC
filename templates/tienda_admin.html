@@ -3507,7 +3507,11 @@ function pagosPedido(p) {
 function resumenPagosPedido(p) {
     return pagosPedido(p).map(pg => {
         const nombre = pg.nombre || etiquetaMetodoPago(pg.codigo);
-        return `${nombre}: $${Number(pg.monto || 0).toLocaleString()}`;
+        let txt = `${nombre}: $${Number(pg.monto || 0).toLocaleString()}`;
+        if (['efectivo','contraentrega'].includes((pg.codigo || '').toLowerCase()) && Number(pg.recibido_con || 0) > 0) {
+            txt += ` (recibe $${Number(pg.recibido_con || 0).toLocaleString()}, devuelta $${Number(pg.devuelta || 0).toLocaleString()})`;
+        }
+        return txt;
     }).join(' + ');
 }
 
@@ -3516,7 +3520,10 @@ function htmlPagosPedido(p) {
     const contra = pagos.some(pg => (pg.codigo || '').toLowerCase() === 'contraentrega');
     const filas = pagos.map(pg => {
         const nombre = pg.nombre || etiquetaMetodoPago(pg.codigo);
-        return `<span class="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-2 py-1 rounded-full">${nombre}: $${Number(pg.monto || 0).toLocaleString()}</span>`;
+        const cambio = ['efectivo','contraentrega'].includes((pg.codigo || '').toLowerCase()) && Number(pg.recibido_con || 0) > 0
+            ? ` · recibe $${Number(pg.recibido_con || 0).toLocaleString()} · devuelta $${Number(pg.devuelta || 0).toLocaleString()}`
+            : '';
+        return `<span class="inline-flex items-center gap-1 bg-gray-100 text-gray-700 px-2 py-1 rounded-full">${nombre}: $${Number(pg.monto || 0).toLocaleString()}${cambio}</span>`;
     }).join(' ');
     return `<div class="text-xs mt-2 space-y-1">
         <div class="flex flex-wrap gap-1">${filas}</div>

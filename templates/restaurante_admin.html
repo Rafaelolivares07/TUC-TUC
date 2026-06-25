@@ -149,6 +149,21 @@
 
         <!-- ====== TAB: CATÁLOGO DE OPCIONES ====== -->
         <div id="panel-catalogo" class="p-6">
+            {% if restaurante.tipo_restaurante in ('carta', 'ambos') %}
+            <div class="bg-amber-50 border border-amber-100 rounded-xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                    <h3 class="font-bold text-gray-800 text-sm">Adiciones en la carta</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Los productos marcados como adicion pueden ocultarse como productos independientes.</p>
+                </div>
+                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <input id="mostrar-adiciones-carta" type="checkbox"
+                           class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                           onchange="guardarCatalogoConfig()"
+                           {{ 'checked' if restaurante.mostrar_adiciones_en_carta }}>
+                    Mostrar adiciones como productos
+                </label>
+            </div>
+            {% endif %}
             <!-- Formulario agregar -->
             <div class="bg-gray-50 rounded-xl p-4 mb-6">
                 <h3 id="catalogo-form-titulo" class="font-bold text-gray-700 mb-3">Agregar plato</h3>
@@ -174,6 +189,10 @@
                         class="border rounded-lg px-3 py-2 text-sm w-28 {{ '' if restaurante.tipo_restaurante == 'menu_dia' else 'hidden' }}">
                     <input id="cat-precio" type="number" placeholder="Precio $" min="0" step="500"
                         class="border rounded-lg px-3 py-2 text-sm w-28 {{ 'hidden' if restaurante.tipo_restaurante == 'menu_dia' }}">
+                    <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 {{ 'hidden' if restaurante.tipo_restaurante == 'menu_dia' }}">
+                        <input id="cat-es-adicion" type="checkbox" class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500">
+                        Es adicion
+                    </label>
                     <button id="btn-guardar-opcion" onclick="guardarOpcion()" class="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-semibold flex-shrink-0">
                         Agregar
                     </button>
@@ -1069,6 +1088,28 @@ async function guardarOpcionMenuDia() {
 // ===== CATÁLOGO =====
 let catalogoData = [];
 
+async function guardarCatalogoConfig() {
+    const el = document.getElementById('mostrar-adiciones-carta');
+    if (!el || !BASE) return;
+    try {
+        const r = await fetch(`${BASE}/catalogo-config`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({mostrar_adiciones_en_carta: el.checked})
+        });
+        const data = await r.json();
+        if (data.ok) {
+            toast('Configuracion de carta guardada');
+        } else {
+            toast(data.error || 'No se pudo guardar', false);
+            el.checked = !el.checked;
+        }
+    } catch(e) {
+        toast('Error de conexion', false);
+        el.checked = !el.checked;
+    }
+}
+
 async function cargarCatalogo() {
     if (!SLUG) return;
     try {
@@ -1142,6 +1183,7 @@ function renderCatalogo() {
                                 ` : ''}
                                 <div>
                                     <span class="font-medium text-gray-800 text-sm">${i.nombre}</span>
+                                    ${i.es_adicion ? `<span class="ml-2 bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Adicion</span>` : ''}
                                     ${i.descripcion ? `<p class="text-xs text-gray-400 mt-0.5 leading-tight">${i.descripcion}</p>` : ''}
                                 </div>
                             </div>
@@ -1270,7 +1312,14 @@ async function guardarOpcion() {
     }
 
     // Crear nuevo producto
-    const body = {id: _opcionEditandoId, tipo, nombre, descripcion: document.getElementById('cat-descripcion').value.trim()};
+    const esAdicionEl = document.getElementById('cat-es-adicion');
+    const body = {
+        id: _opcionEditandoId,
+        tipo,
+        nombre,
+        descripcion: document.getElementById('cat-descripcion').value.trim(),
+        es_adicion: Boolean(esAdicionEl && esAdicionEl.checked)
+    };
     if (TIPO_REST === 'carta' || TIPO_REST === 'ambos') {
         body.precio = parseFloat(document.getElementById('cat-precio').value) || 0;
         if (!body.precio) {
@@ -1312,6 +1361,8 @@ function editarOpcion(id) {
     tipoEl.value = opcion.tipo || '';
     document.getElementById('cat-nombre').value = opcion.nombre || '';
     document.getElementById('cat-descripcion').value = opcion.descripcion || '';
+    const esAdicionEl = document.getElementById('cat-es-adicion');
+    if (esAdicionEl) esAdicionEl.checked = Boolean(opcion.es_adicion);
     if (TIPO_REST === 'carta' || TIPO_REST === 'ambos') {
         document.getElementById('cat-precio').value = Number(opcion.precio || 0);
     } else {
@@ -1326,6 +1377,8 @@ function editarOpcion(id) {
 function limpiarFormCatalogo() {
     document.getElementById('cat-nombre').value = '';
     document.getElementById('cat-descripcion').value = '';
+    const esAdicionEl = document.getElementById('cat-es-adicion');
+    if (esAdicionEl) esAdicionEl.checked = false;
     productoSeleccionado = null;
     _opcionEditandoId = null;
     document.getElementById('catalogo-form-titulo').textContent = 'Agregar plato';

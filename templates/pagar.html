@@ -80,10 +80,12 @@ const METODO_NOTAS = {
     llave: 'Paga usando la llave bancaria registrada por el negocio.',
     bancolombia_qr: 'Escanea el QR desde Bancolombia o una app compatible.'
 };
+const METODOS_EFECTIVO = new Set(['efectivo','contraentrega']);
 
 let metodosDisponibles = [];
 let comprobanteB64 = null;
 let configMetodos = {};
+let cambioEfectivoModo = 'N';
 
 async function init() {
     try {
@@ -91,6 +93,7 @@ async function init() {
         const d = await r.json();
         if (!d.ok) throw new Error();
         configMetodos = d;
+        cambioEfectivoModo = d.cambio_efectivo_modo || 'N';
         metodosDisponibles = d.metodos_pago && d.metodos_pago.length
             ? d.metodos_pago
             : [{nombre: 'Efectivo', codigo: 'efectivo', icono: '💵'}];
@@ -114,6 +117,15 @@ function renderMetodos() {
                    class="border-2 rounded-xl px-3 py-2 text-sm w-28 text-right font-bold focus:border-amber-400 focus:outline-none"
                    oninput="onInputPago('${m.codigo}')">
         </div>
+        ${METODOS_EFECTIVO.has(m.codigo) && cambioEfectivoModo !== 'N' ? `
+        <div id="cambio-box-${m.codigo}" class="hidden ml-10 -mt-1 mb-2 bg-gray-50 border border-gray-100 rounded-xl p-3">
+            <label class="block text-[11px] font-bold uppercase text-gray-400 mb-1">Â¿Con cuÃ¡nto pagas?</label>
+            <input type="number" min="0" step="100" placeholder="Ej: 100000"
+                   id="recibido-${m.codigo}"
+                   class="w-full border rounded-xl px-3 py-2 text-sm text-right font-bold focus:border-amber-400 focus:outline-none"
+                   oninput="validarPagos()">
+            <p id="devuelta-${m.codigo}" class="text-xs font-semibold text-emerald-600 mt-1 hidden"></p>
+        </div>` : ''}
     `).join('');
     if (metodosDisponibles.length === 1) {
         const inp = document.getElementById(`mp-${metodosDisponibles[0].codigo}`);
@@ -141,9 +153,46 @@ function onInputPago(codigo) {
     }
 }
 
+function actualizarCambioEfectivo(codigo, monto) {
+    const box = document.getElementById(`cambio-box-${codigo}`);
+    if (!box) return true;
+    const input = document.getElementById(`recibido-${codigo}`);
+    const txt = document.getElementById(`devuelta-${codigo}`);
+    box.classList.toggle('hidden', monto <= 0);
+    if (monto <= 0) {
+        if (input) input.value = '';
+        if (txt) txt.classList.add('hidden');
+        return true;
+    }
+    const recibido = parseFloat(input?.value || 0);
+    if (!recibido) {
+        if (txt) txt.classList.add('hidden');
+        return cambioEfectivoModo !== 'R';
+    }
+    const devuelta = recibido - monto;
+    if (txt) {
+        txt.textContent = devuelta >= 0
+            ? `Devuelta estimada: $${Math.round(devuelta).toLocaleString('es-CO')}`
+            : `Faltan $${Math.round(Math.abs(devuelta)).toLocaleString('es-CO')}`;
+        txt.classList.toggle('text-red-500', devuelta < 0);
+        txt.classList.toggle('text-emerald-600', devuelta >= 0);
+        txt.classList.remove('hidden');
+    }
+    return devuelta >= 0;
+}
+
 function getPagos() {
     const pagos = metodosDisponibles
-        .map(m => ({codigo: m.codigo, nombre: m.nombre, monto: parseFloat(document.getElementById(`mp-${m.codigo}`)?.value || 0)}))
+        .map(m => {
+            const monto = parseFloat(document.getElementById(`mp-${m.codigo}`)?.value || 0);
+            const pago = {codigo: m.codigo, nombre: m.nombre, monto};
+            const recibido = parseFloat(document.getElementById(`recibido-${m.codigo}`)?.value || 0);
+            if (METODOS_EFECTIVO.has(m.codigo) && recibido > 0) {
+                pago.recibido_con = recibido;
+                pago.devuelta = Math.max(0, recibido - monto);
+            }
+            return pago;
+        })
         .filter(p => p.monto > 0);
     if (!pagos.length && TOTAL <= 0 && metodosDisponibles.length) {
         const m = metodosDisponibles[0];
@@ -154,6 +203,11 @@ function getPagos() {
 
 function validarPagos() {
     const suma = metodosDisponibles.reduce((s, m) => s + (parseFloat(document.getElementById(`mp-${m.codigo}`)?.value || 0)), 0);
+    let cambioOk = true;
+    metodosDisponibles.forEach(m => {
+        const monto = parseFloat(document.getElementById(`mp-${m.codigo}`)?.value || 0);
+        if (!actualizarCambioEfectivo(m.codigo, monto)) cambioOk = false;
+    });
     const alerta = document.getElementById('pago-alerta');
     const btn = document.getElementById('btn-confirmar');
     if (suma === 0 && TOTAL > 0) {
@@ -163,6 +217,12 @@ function validarPagos() {
     } else if (TOTAL > 0 && Math.round(suma) !== Math.round(TOTAL)) {
         const diff = Math.round(TOTAL - suma);
         alerta.textContent = diff > 0 ? `Faltan $${diff.toLocaleString()}` : `Excede $${Math.abs(diff).toLocaleString()}`;
+        alerta.classList.remove('hidden');
+        btn.disabled = true;
+    } else if (!cambioOk) {
+        alerta.textContent = cambioEfectivoModo === 'R'
+            ? 'Indica con cuanto paga el cliente en efectivo'
+            : 'El valor recibido en efectivo debe cubrir ese pago';
         alerta.classList.remove('hidden');
         btn.disabled = true;
     } else {

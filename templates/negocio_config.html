@@ -97,6 +97,16 @@
     <div id="lista-metodos">
       <p class="text-gray-400 text-sm text-center py-6">Cargando...</p>
     </div>
+    <div class="mt-5 border-t border-gray-100 pt-4">
+      <label class="text-xs font-bold text-gray-500 uppercase">Cambio para efectivo</label>
+      <select id="cambio-efectivo-modo"
+              class="mt-2 w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-400">
+        <option value="N">No preguntar</option>
+        <option value="O">Preguntar opcional</option>
+        <option value="R">Preguntar obligatorio</option>
+      </select>
+      <p class="text-xs text-gray-400 mt-2">Aplica solo para efectivo y contraentrega en efectivo.</p>
+    </div>
   </div>
 
   <!-- Aviso al finalizar pedido -->
@@ -185,6 +195,7 @@ async function cargar() {
     document.getElementById('aviso-pedido').value = d.config.aviso_pedido || '';
     document.getElementById('domicilio-tarifa').value = Number(d.config.domicilio_tarifa || 0) || '';
     document.getElementById('domicilio-modo-fuera').value = d.config.domicilio_modo_fuera || 'por_confirmar';
+    document.getElementById('cambio-efectivo-modo').value = d.config.cambio_efectivo_modo || 'N';
     actualizarConfigDomicilioVisible();
   } catch(e) { toast('Error de red', true); }
 }
@@ -421,7 +432,8 @@ async function toggleMetodo(codigo, nuevoEstado) {
         aviso_pedido,
         domicilio_tarifa: Number(document.getElementById('domicilio-tarifa').value || 0),
         domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera').value,
-        domicilio_zona: domicilioZonaActual
+        domicilio_zona: domicilioZonaActual,
+        cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value
       })
     });
   } catch(e) {}
@@ -495,7 +507,8 @@ async function guardar() {
         modalidades, metodos_pago: activosMetodos, aviso_pedido,
         domicilio_tarifa: Number(document.getElementById('domicilio-tarifa').value || 0),
         domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera').value,
-        domicilio_zona: domicilioZonaActual
+        domicilio_zona: domicilioZonaActual,
+        cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value
       })
     });
     const d = await r.json();

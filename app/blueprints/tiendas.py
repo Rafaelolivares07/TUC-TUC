@@ -313,6 +313,8 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_tienda_cajeros_tienda ON tienda_cajeros(tienda_id)",
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN nombre DROP NOT NULL",
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN codigo DROP NOT NULL",
+        "ALTER TABLE pedido_pagos_tienda ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)",
+        "ALTER TABLE pedido_pagos_tienda ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)",
         "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS desktop_layout VARCHAR(20) DEFAULT 'movil'",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS movil_cols SMALLINT DEFAULT 2",
@@ -471,7 +473,17 @@ def _telegram_resumen_pagos(pagos, metodo_pago, total):
         if codigo.lower() == 'contraentrega':
             contraentrega = True
             nombre = 'Contraentrega en efectivo'
-        partes.append(f"{nombre}: ${float(pago.get('monto') or 0):,.0f}")
+        detalle = f"{nombre}: ${float(pago.get('monto') or 0):,.0f}"
+        try:
+            recibido = float(pago.get('recibido_con') or 0)
+            devuelta = float(pago.get('devuelta') or max(0, recibido - float(pago.get('monto') or 0)))
+        except (TypeError, ValueError):
+            recibido, devuelta = 0, 0
+        if codigo.lower() in ('efectivo', 'contraentrega') and recibido > 0:
+            detalle += f" | recibe con ${recibido:,.0f}"
+            if devuelta >= 0:
+                detalle += f" | devuelta ${devuelta:,.0f}"
+        partes.append(detalle)
     alerta = "\n⚠️ Contraentrega: cobrar efectivo al entregar." if contraentrega else ""
     return ' + '.join(partes) + alerta
 
@@ -2162,10 +2174,18 @@ def api_tienda_pedido_crear(slug):
         pagos_validos = [p for p in pagos if isinstance(p, dict) and float(p.get('monto') or 0) > 0]
         if pagos_validos:
             for p in pagos_validos:
+                codigo_pago = (p.get('codigo') or '').strip().lower()
+                recibido_con = None
+                devuelta = None
+                if codigo_pago in ('efectivo', 'contraentrega'):
+                    recibido_con = float(p.get('recibido_con') or 0) or None
+                    if recibido_con:
+                        devuelta = max(0, recibido_con - float(p.get('monto') or 0))
                 conn.execute("""
-                    INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
-                    VALUES (%s,%s,%s,%s)
-                """, (pedido_id, p['codigo'], p.get('nombre', p['codigo']), float(p['monto'])))
+                    INSERT INTO pedido_pagos_tienda
+                        (pedido_id, metodo_codigo, metodo_nombre, monto, recibido_con, devuelta)
+                    VALUES (%s,%s,%s,%s,%s,%s)
+                """, (pedido_id, p['codigo'], p.get('nombre', p['codigo']), float(p['monto']), recibido_con, devuelta))
         else:
             conn.execute("""
                 INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
@@ -2252,7 +2272,7 @@ def api_tienda_pedidos(slug):
                 (p['id'],)
             ).fetchall()
             pagos = conn.execute("""
-                SELECT metodo_codigo, metodo_nombre, monto
+                SELECT metodo_codigo, metodo_nombre, monto, recibido_con, devuelta
                 FROM pedido_pagos_tienda
                 WHERE pedido_id = %s
                 ORDER BY id
@@ -2261,6 +2281,8 @@ def api_tienda_pedidos(slug):
                 'codigo': pago['metodo_codigo'] or '',
                 'nombre': pago['metodo_nombre'] or pago['metodo_codigo'] or '',
                 'monto': float(pago['monto'] or 0),
+                'recibido_con': float(pago['recibido_con'] or 0),
+                'devuelta': float(pago['devuelta'] or 0),
             } for pago in pagos]
             if not pagos_json:
                 pagos_json = [{

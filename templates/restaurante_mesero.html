@@ -576,7 +576,11 @@ function pagosPedido(p) {
 function resumenPagosPedido(p) {
     return pagosPedido(p).map(pg => {
         const nombre = pg.nombre || etiquetaMetodoPago(pg.codigo);
-        return `${nombre}: $${Number(pg.monto || 0).toLocaleString()}`;
+        let txt = `${nombre}: $${Number(pg.monto || 0).toLocaleString()}`;
+        if (['efectivo','contraentrega'].includes((pg.codigo || '').toLowerCase()) && Number(pg.recibido_con || 0) > 0) {
+            txt += ` (recibe $${Number(pg.recibido_con || 0).toLocaleString()}, devuelta $${Number(pg.devuelta || 0).toLocaleString()})`;
+        }
+        return txt;
     }).join(' + ');
 }
 

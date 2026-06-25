@@ -305,6 +305,10 @@
                     </div>
                     <span id="sticky-estado" class="text-xs px-3 py-1.5 rounded-full font-bold flex-shrink-0 bg-yellow-100 text-yellow-700">Preparando...</span>
                 </div>
+                <button id="btn-pagar-pedido-activo" onclick="irAPagarPedidoActivo()"
+                        class="hidden mt-2 w-full btn-accion py-2.5 rounded-xl font-bold text-sm">
+                    Ir a pagar
+                </button>
             </div>
         </div>
 
@@ -356,6 +360,7 @@ let principioSeleccionado = null;
 let nombreCliente = '';
 let pedidoEnviando = false;
 let pedidoActivoResumen = null;
+let pedidoActivoPagoId = null;
 
 function mostrarBarraPedir(modoMenu = false) {
     if (pedidoActivoResumen) {
@@ -383,8 +388,9 @@ function ocultarBarraPedir() {
     if (notas) notas.value = '';
 }
 
-function mostrarPedidoActivo(resumen) {
+function mostrarPedidoActivo(resumen, pedidoId = null) {
     pedidoActivoResumen = resumen;
+    if (pedidoId) pedidoActivoPagoId = pedidoId;
     const bCarrito = document.getElementById('barra-carrito');
     const bActivo = document.getElementById('barra-pedido-activo');
     if (bCarrito) bCarrito.style.display = 'none';
@@ -394,7 +400,14 @@ function mostrarPedidoActivo(resumen) {
     actualizarStickyEstado('pendiente');
     const barra = document.getElementById('barra-pedir');
     if (barra) barra.style.display = 'block';
+    const btnPago = document.getElementById('btn-pagar-pedido-activo');
+    if (btnPago) btnPago.classList.toggle('hidden', !(pedidoActivoPagoId && !MESA));
     document.body.classList.add('barra-pedir-visible');
+}
+
+function irAPagarPedidoActivo() {
+    if (!pedidoActivoPagoId) return toast('No encuentro el pedido para pagar', false);
+    window.location.href = `/pagar/${pedidoActivoPagoId}?tipo=restaurante&slug=${SLUG}`;
 }
 
 function actualizarStickyEstado(estado) {
@@ -750,13 +763,13 @@ async function enviarPedido() {
                 b.classList.remove('selected', 'border-amber-500', 'bg-amber-50');
                 b.classList.add('border-transparent');
             });
-            if (MESA === '') {
-                window.location.href = `/pagar/${data.pedido_id}?tipo=restaurante&slug=${SLUG}`;
-            } else {
-                mostrarPedidoActivo(resumenMenu);
-                mostrarAvisoPedido();
-                cargarMisPedidos();
-            }
+                if (MESA === '') {
+                    window.location.href = `/pagar/${data.pedido_id}?tipo=restaurante&slug=${SLUG}`;
+                } else {
+                    mostrarPedidoActivo(resumenMenu, data.pedido_id);
+                    mostrarAvisoPedido();
+                    cargarMisPedidos();
+                }
         } else {
             if (data.error === 'suscripcion_agotada') {
                 toast('El restaurante no está disponible en este momento', false);
@@ -794,12 +807,16 @@ async function cargarMisPedidos() {
             : [p.sopa, p.proteina, p.principio].filter(Boolean).join('+') || 'Menú'
         ).filter(Boolean).join(' · ');
         const estadoAgregado = mios.every(p => p.estado === 'listo') ? 'listo' : 'pendiente';
+        const pedidoPagoId = mios.length ? mios[0].id : null;
         if (pedidoActivoResumen) {
             const el = document.getElementById('sticky-items');
             if (el) el.textContent = resumenTodos;
+            if (pedidoPagoId) pedidoActivoPagoId = pedidoPagoId;
             actualizarStickyEstado(estadoAgregado);
+            const btnPago = document.getElementById('btn-pagar-pedido-activo');
+            if (btnPago) btnPago.classList.toggle('hidden', !(pedidoActivoPagoId && !MESA));
         } else if (Object.keys(carrito).length === 0 && !tipoSeleccionado) {
-            mostrarPedidoActivo(resumenTodos);
+            mostrarPedidoActivo(resumenTodos, pedidoPagoId);
             actualizarStickyEstado(estadoAgregado);
         }
 
@@ -821,6 +838,7 @@ async function cargarMisPedidos() {
                             ${esListo ? 'LISTO' : 'Preparando...'}
                         </span>
                     </div>
+                    ${!MESA ? `<button onclick="window.location.href='/pagar/${p.id}?tipo=restaurante&slug=${SLUG}'" class="mt-2 text-xs font-bold txt-accion">Ir a pagar</button>` : ''}
                 </div>
             `;
         }).join('');
@@ -1096,7 +1114,7 @@ enviarPedido = async function() {
                 if (MESA === '') {
                     window.location.href = `/pagar/${data.pedido_id}?tipo=restaurante&slug=${SLUG}`;
                 } else {
-                    mostrarPedidoActivo(resumenCarta);
+                    mostrarPedidoActivo(resumenCarta, data.pedido_id);
                     mostrarAvisoPedido();
                     cargarMisPedidos();
                 }

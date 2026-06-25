@@ -410,7 +410,12 @@ def _auth_rest(slug, conn):
     uid = session.get('usuario_id')
     tok = session.get('restaurante_token')
     es_admin = session.get('rol') == 'Administrador'
-    autenticado = es_admin or (uid and uid == rest['admin_id']) or (tok and tok == rest['token_acceso'])
+    autenticado = (
+        es_admin
+        or (uid and uid == rest['admin_id'])
+        or (uid and uid == rest['tercero_id'])
+        or (tok and tok == rest['token_acceso'])
+    )
     return rest, autenticado
 
 
@@ -868,11 +873,11 @@ def api_catalogo_config(slug):
     try:
         conn = get_db_connection()
         _asegurar_catalogo_adiciones_restaurante(conn)
-        rest = conn.execute("SELECT id, admin_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+        rest, auth = _auth_rest(slug, conn)
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
-        if session.get('rol') != 'Administrador' and session.get('usuario_id') != rest['admin_id']:
+        if not auth:
             conn.close()
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
         conn.execute(

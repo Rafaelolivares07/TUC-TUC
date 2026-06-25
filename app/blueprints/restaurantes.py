@@ -676,10 +676,22 @@ def api_opciones(slug):
             f"FROM productos WHERE negocio_id = %s AND disponible = TRUE{filtro_publico} ORDER BY orden, id",
             (rest['tercero_id'],)
         ).fetchall()
+        adiciones = []
+        if solo_publicos:
+            adiciones = conn.execute(
+                "SELECT id, categoria AS tipo, nombre, recargo, precio, imagen, disponible AS activo, "
+                "descripcion, orden, COALESCE(es_adicion, FALSE) AS es_adicion "
+                "FROM productos "
+                "WHERE negocio_id = %s AND disponible = TRUE AND precio > 0 "
+                "AND COALESCE(es_adicion, FALSE) = TRUE "
+                "ORDER BY orden, id",
+                (rest['tercero_id'],)
+            ).fetchall()
         conn.close()
         return jsonify({
             'ok': True,
             'opciones': [dict(o) for o in opciones],
+            'adiciones': [dict(o) for o in adiciones],
             'catalogo': {
                 'mostrar_adiciones_en_carta': bool(rest['mostrar_adiciones_en_carta'])
             }
@@ -1873,10 +1885,37 @@ def api_pedido_crear(slug):
                 if not opcion:
                     continue
                 cant = p.get('cantidad', 1)
-                precio_item = float(opcion['precio']) * cant
+                precio_base = float(opcion['precio']) * cant
+                precio_adiciones = 0.0
+                adiciones_txt = []
+                adiciones = p.get('adiciones') or []
+                if isinstance(adiciones, list):
+                    for ad in adiciones:
+                        try:
+                            ad_id = int(ad.get('producto_id') or ad.get('id') or 0)
+                            ad_cant = int(ad.get('cantidad') or 0)
+                        except (TypeError, ValueError):
+                            continue
+                        if ad_id <= 0 or ad_cant <= 0:
+                            continue
+                        adicion = conn.execute(
+                            "SELECT id, nombre, precio FROM productos "
+                            "WHERE id=%s AND negocio_id=%s AND disponible=TRUE AND precio > 0 "
+                            "AND COALESCE(es_adicion, FALSE)=TRUE",
+                            (ad_id, rest['tercero_id'])
+                        ).fetchone()
+                        if not adicion:
+                            continue
+                        subtotal_ad = float(adicion['precio']) * ad_cant
+                        precio_adiciones += subtotal_ad
+                        adiciones_txt.append(f"{ad_cant}x {adicion['nombre']} (+${subtotal_ad:,.0f})")
+                precio_item = precio_base + precio_adiciones
                 precio_total += precio_item
-                items_notificacion.append(f"{cant}x {opcion['nombre']} - ${precio_item:,.0f}")
-                nota_item = p.get('nota', '').strip() or None
+                detalle_adiciones = f" [{'; '.join(adiciones_txt)}]" if adiciones_txt else ""
+                items_notificacion.append(f"{cant}x {opcion['nombre']}{detalle_adiciones} - ${precio_item:,.0f}")
+                nota_base = p.get('nota', '').strip()
+                nota_adiciones = f"Adiciones: {', '.join(adiciones_txt)}" if adiciones_txt else ""
+                nota_item = " | ".join([txt for txt in (nota_base, nota_adiciones) if txt]) or None
                 conn.execute("""
                     INSERT INTO pedidos_restaurante
                     (restaurante_id, mesa_num, mesa_nombre, tipo, plato_id, cantidad, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago, subtotal_productos, cliente_lat, cliente_lon)

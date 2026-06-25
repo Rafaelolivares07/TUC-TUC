@@ -347,6 +347,7 @@ let clienteLon = null;
 let menuHoy = null;
 let opcionesHoy = [];
 let cartaCatalogo = [];
+let cartaAdiciones = [];
 let carrito = {};
 let tipoSeleccionado = null;
 let sopaSeleccionada = null;
@@ -814,6 +815,7 @@ async function cargarCartaCliente() {
         const data = await r.json();
         if (!data.ok) return;
         cartaCatalogo = data.opciones.filter(o => o.activo);
+        cartaAdiciones = (data.adiciones || []).filter(o => o.activo);
         carrito = {};
 
         if (cartaCatalogo.length === 0) {
@@ -867,7 +869,8 @@ async function cargarCartaCliente() {
                                     </div>
                                     <input id="cli-nota-${p.id}" type="text" placeholder="Nota (ej: sin cebolla)"
                                            class="hidden mt-2 w-full card-input border rounded-lg px-2 py-1 text-xs"
-                                           oninput="notaCarritoCliente(${p.id}, this.value)">` : ''}
+                                           oninput="notaCarritoCliente(${p.id}, this.value)">
+                                    ${renderAdicionesCliente(p.id)}` : ''}
                                 </div>
                             </div>
                         `).join('')}
@@ -900,7 +903,8 @@ async function cargarCartaCliente() {
                                 ${!SOLO_CARTA ? `
                                 <input id="cli-nota-${p.id}" type="text" placeholder="Nota (ej: sin cebolla)"
                                        class="hidden mt-2 w-full card-input border rounded-lg px-3 py-1.5 text-xs"
-                                       oninput="notaCarritoCliente(${p.id}, this.value)">` : ''}
+                                       oninput="notaCarritoCliente(${p.id}, this.value)">
+                                ${renderAdicionesCliente(p.id)}` : ''}
                             </div>
                         `).join('')}
                     </div>
@@ -918,13 +922,36 @@ async function cargarCartaCliente() {
     } catch(e) { console.error(e); }
 }
 
+function renderAdicionesCliente(platoId) {
+    if (!cartaAdiciones.length) return '';
+    return `
+        <div id="cli-adiciones-${platoId}" class="hidden mt-2 border-t border-gray-100 pt-2">
+            <p class="text-[11px] font-bold text-gray-400 uppercase mb-1">Adiciones</p>
+            <div class="space-y-1">
+                ${cartaAdiciones.filter(ad => ad.id !== platoId).map(ad => `
+                    <div class="flex items-center justify-between gap-2 text-xs">
+                        <div class="min-w-0">
+                            <span class="font-semibold txt-primary block leading-tight">${ad.nombre}</span>
+                            <span class="txt-accion font-bold">+$${Number(ad.precio || 0).toLocaleString('es-CO')}</span>
+                        </div>
+                        <div class="flex items-center gap-1 flex-shrink-0">
+                            <button onclick="cartaClienteAdicion(${platoId}, ${ad.id}, -1)" class="btn-accion-suave border w-7 h-7 rounded-full font-bold">-</button>
+                            <span id="cli-ad-${platoId}-${ad.id}" class="font-bold txt-primary w-5 text-center">0</span>
+                            <button onclick="cartaClienteAdicion(${platoId}, ${ad.id}, 1)" class="btn-accion w-7 h-7 rounded-full font-bold">+</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>`;
+}
+
 function cartaClienteCant(id, delta) {
     const actual = carrito[id] ? carrito[id].cantidad : 0;
     const nueva = actual + delta;
     if (nueva <= 0) {
         delete carrito[id];
     } else {
-        carrito[id] = { cantidad: nueva, nota: carrito[id]?.nota || '' };
+        carrito[id] = { cantidad: nueva, nota: carrito[id]?.nota || '', adiciones: carrito[id]?.adiciones || {} };
     }
     const span = document.getElementById(`cli-cant-${id}`);
     if (span) span.textContent = nueva > 0 ? nueva : 0;
@@ -933,6 +960,29 @@ function cartaClienteCant(id, delta) {
         if (nueva > 0) inputNota.classList.remove('hidden');
         else { inputNota.classList.add('hidden'); inputNota.value = ''; }
     }
+    const boxAdiciones = document.getElementById(`cli-adiciones-${id}`);
+    if (boxAdiciones) {
+        if (nueva > 0) boxAdiciones.classList.remove('hidden');
+        else {
+            boxAdiciones.classList.add('hidden');
+            cartaAdiciones.forEach(ad => {
+                const spanAd = document.getElementById(`cli-ad-${id}-${ad.id}`);
+                if (spanAd) spanAd.textContent = '0';
+            });
+        }
+    }
+    cartaClienteTotal();
+}
+
+function cartaClienteAdicion(platoId, adicionId, delta) {
+    if (!carrito[platoId]) return;
+    if (!carrito[platoId].adiciones) carrito[platoId].adiciones = {};
+    const actual = carrito[platoId].adiciones[adicionId] || 0;
+    const nueva = Math.max(0, actual + delta);
+    if (nueva <= 0) delete carrito[platoId].adiciones[adicionId];
+    else carrito[platoId].adiciones[adicionId] = nueva;
+    const span = document.getElementById(`cli-ad-${platoId}-${adicionId}`);
+    if (span) span.textContent = nueva;
     cartaClienteTotal();
 }
 
@@ -944,7 +994,13 @@ function cartaClienteTotal() {
     let total = 0;
     Object.keys(carrito).forEach(id => {
         const plato = cartaCatalogo.find(p => p.id === parseInt(id));
-        if (plato) total += plato.precio * carrito[id].cantidad;
+        if (plato) {
+            total += plato.precio * carrito[id].cantidad;
+            Object.entries(carrito[id].adiciones || {}).forEach(([adId, cant]) => {
+                const ad = cartaAdiciones.find(a => a.id === parseInt(adId));
+                if (ad) total += ad.precio * cant;
+            });
+        }
     });
     document.getElementById('cli-precio').textContent = `$${Number(total).toLocaleString('es-CO')}`;
     if (!SOLO_CARTA) {
@@ -966,7 +1022,11 @@ enviarPedido = async function() {
         const platos = Object.keys(carrito).map(id => ({
             plato_id: parseInt(id),
             cantidad: carrito[id].cantidad,
-            nota: carrito[id].nota || ''
+            nota: carrito[id].nota || '',
+            adiciones: Object.entries(carrito[id].adiciones || {}).map(([productoId, cantidad]) => ({
+                producto_id: parseInt(productoId),
+                cantidad
+            }))
         }));
         if (platos.length === 0) return toast('Agrega al menos un plato', false);
         pedidoEnviando = true;
@@ -994,7 +1054,11 @@ enviarPedido = async function() {
                 toast('Pedido enviado');
                 const resumenCarta = Object.keys(carrito).map(id => {
                     const p = cartaCatalogo.find(x => x.id == id);
-                    return p ? `${carrito[id].cantidad > 1 ? carrito[id].cantidad+'x ' : ''}${p.nombre}` : '';
+                    const ads = Object.entries(carrito[id].adiciones || {}).map(([adId, cant]) => {
+                        const ad = cartaAdiciones.find(a => a.id == adId);
+                        return ad ? `${cant}x ${ad.nombre}` : '';
+                    }).filter(Boolean);
+                    return p ? `${carrito[id].cantidad > 1 ? carrito[id].cantidad+'x ' : ''}${p.nombre}${ads.length ? ' + ' + ads.join(', ') : ''}` : '';
                 }).filter(Boolean).join(', ');
                 carrito = {};
                 cartaCatalogo.forEach(p => {
@@ -1002,6 +1066,12 @@ enviarPedido = async function() {
                     if (s) s.textContent = '0';
                     const n = document.getElementById(`cli-nota-${p.id}`);
                     if (n) { n.value = ''; n.classList.add('hidden'); }
+                    const box = document.getElementById(`cli-adiciones-${p.id}`);
+                    if (box) box.classList.add('hidden');
+                    cartaAdiciones.forEach(ad => {
+                        const sAd = document.getElementById(`cli-ad-${p.id}-${ad.id}`);
+                        if (sAd) sAd.textContent = '0';
+                    });
                 });
                 cartaClienteTotal();
                 if (MESA === '') {

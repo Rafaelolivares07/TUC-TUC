@@ -198,13 +198,18 @@ def subir(sala_id):
     return jsonify(ok=True, agregadas=agregadas)
 
 
-COBALT_API = 'https://api.cobalt.tools/'
+COBALT_APIS = [
+    api.strip()
+    for api in os.environ.get(
+        'COBALT_API_URLS',
+        'https://api.cobalt.tools/,https://api.cobalt.liubquanti.click/'
+    ).split(',')
+    if api.strip()
+]
 COBALT_HEADERS = {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Origin': 'https://cobalt.tools',
-    'Referer': 'https://cobalt.tools/',
 }
 
 
@@ -226,49 +231,60 @@ def _descargar_youtube_con_cobalt(url, tmp_path):
         'downloadMode': 'audio',
         'audioFormat': 'mp3',
     }).encode()
-    req = urllib.request.Request(
-        COBALT_API,
-        data=payload,
-        headers=_cobalt_headers(),
-        method='POST',
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as response:
-            cobalt = _json.loads(response.read())
-    except urllib.error.HTTPError as error:
-        body = error.read().decode('utf-8', errors='ignore')[:300]
-        return None, f'Cobalt HTTP {error.code}: {body}'
-    except Exception as error:
-        return None, f'Cobalt no respondio: {error}'
+    errores = []
+    for api_url in COBALT_APIS:
+        try:
+            req = urllib.request.Request(
+                api_url,
+                data=payload,
+                headers=_cobalt_headers(),
+                method='POST',
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=25) as response:
+                    cobalt = _json.loads(response.read())
+            except urllib.error.HTTPError as error:
+                body = error.read().decode('utf-8', errors='ignore')[:300]
+                errores.append(f'{api_url}: HTTP {error.code}: {body}')
+                continue
+        except Exception as error:
+            errores.append(f'{api_url}: {error}')
+            continue
 
-    status = cobalt.get('status')
-    if status == 'error':
-        msg = cobalt.get('error', {}).get('code', 'error desconocido')
-        return None, f'Cobalt: {msg}'
-    if status not in ('stream', 'tunnel', 'redirect'):
-        return None, f'Cobalt estado inesperado: {status}'
+        status = cobalt.get('status')
+        if status == 'error':
+            msg = cobalt.get('error', {}).get('code', 'error desconocido')
+            errores.append(f'{api_url}: {msg}')
+            continue
+        if status not in ('stream', 'tunnel', 'redirect'):
+            errores.append(f'{api_url}: estado inesperado {status}')
+            continue
 
-    download_url = cobalt.get('url') or cobalt.get('audio')
-    if not download_url:
-        return None, 'Cobalt no entrego URL de descarga'
+        download_url = cobalt.get('url') or cobalt.get('audio')
+        if not download_url:
+            errores.append(f'{api_url}: sin URL de descarga')
+            continue
 
-    title = cobalt.get('filename', 'audio').rsplit('.', 1)[0]
-    try:
-        dl_req = urllib.request.Request(download_url, headers={
-            'User-Agent': COBALT_HEADERS['User-Agent'],
-        })
-        with urllib.request.urlopen(dl_req, timeout=120) as response, open(tmp_path, 'wb') as file:
-            while True:
-                chunk = response.read(65536)
-                if not chunk:
-                    break
-                file.write(chunk)
-    except Exception as error:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        return None, f'Error descargando audio: {error}'
+        title = cobalt.get('filename', 'audio').rsplit('.', 1)[0]
+        try:
+            dl_req = urllib.request.Request(download_url, headers={
+                'User-Agent': COBALT_HEADERS['User-Agent'],
+            })
+            with urllib.request.urlopen(dl_req, timeout=120) as response, open(tmp_path, 'wb') as file:
+                while True:
+                    chunk = response.read(65536)
+                    if not chunk:
+                        break
+                    file.write(chunk)
+        except Exception as error:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            errores.append(f'{api_url}: error descargando audio: {error}')
+            continue
 
-    return {'path': tmp_path, 'nombre': title + '.mp3'}, None
+        return {'path': tmp_path, 'nombre': title + '.mp3'}, None
+
+    return None, ' | '.join(errores) or 'Cobalt no respondio'
 
 
 def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):

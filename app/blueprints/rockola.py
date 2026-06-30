@@ -32,6 +32,15 @@ CREATE TABLE IF NOT EXISTS rockola_cola (
     posicion  INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_cola_sala ON rockola_cola(sala_id, posicion);
+CREATE TABLE IF NOT EXISTS rockola_biblioteca (
+    archivo_id TEXT PRIMARY KEY,
+    sala_id    TEXT NOT NULL,
+    nombre     TEXT NOT NULL,
+    owner      TEXT NOT NULL DEFAULT 'anon',
+    origen     TEXT NOT NULL DEFAULT 'archivo',
+    creado_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_biblioteca_sala ON rockola_biblioteca(sala_id, creado_en DESC);
 """
 
 _lock = threading.Lock()
@@ -100,6 +109,31 @@ def _max_pos(conn, sala_id):
     return row['m'] if row else -1
 
 
+def _recordar_cancion(conn, sala_id, archivo_id, nombre, owner, origen):
+    conn.execute(
+        """
+        INSERT INTO rockola_biblioteca (archivo_id, sala_id, nombre, owner, origen)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (archivo_id) DO UPDATE
+        SET nombre = EXCLUDED.nombre,
+            owner = EXCLUDED.owner,
+            origen = EXCLUDED.origen
+        """,
+        (archivo_id, sala_id, nombre, owner, origen),
+    )
+
+
+def _agregar_a_cola(conn, sala_id, archivo_id, nombre, owner):
+    pos_actual = _max_pos(conn, sala_id) + 1
+    conn.execute(
+        """
+        INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        (archivo_id, sala_id, nombre, owner, pos_actual),
+    )
+
+
 def _upload_dir(sala_id):
     base = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'rockola_tmp')
     folder = os.path.join(base, sala_id)
@@ -150,19 +184,12 @@ def subir(sala_id):
     conn = _connect()
     try:
         with _lock:
-            pos_actual = _max_pos(conn, sala_id)
             for file in files:
                 ext = os.path.splitext(file.filename)[1].lower()
                 nombre_id = str(uuid.uuid4()) + ext
                 file.save(os.path.join(upload_dir, nombre_id))
-                pos_actual += 1
-                conn.execute(
-                    """
-                    INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
-                    VALUES (%s, %s, %s, %s, %s)
-                    """,
-                    (nombre_id, sala_id, file.filename, owner, pos_actual),
-                )
+                _agregar_a_cola(conn, sala_id, nombre_id, file.filename, owner)
+                _recordar_cancion(conn, sala_id, nombre_id, file.filename, owner, 'archivo')
                 agregadas.append({'id': nombre_id, 'nombre': file.filename, 'owner': owner})
             conn.commit()
     finally:
@@ -252,14 +279,8 @@ def youtube(sala_id):
     conn = _connect()
     try:
         with _lock:
-            pos_actual = _max_pos(conn, sala_id) + 1
-            conn.execute(
-                """
-                INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
-                VALUES (%s, %s, %s, %s, %s)
-                """,
-                (archivo_final, sala_id, nombre_display, owner, pos_actual),
-            )
+            _agregar_a_cola(conn, sala_id, archivo_final, nombre_display, owner)
+            _recordar_cancion(conn, sala_id, archivo_final, nombre_display, owner, 'youtube')
             conn.commit()
     finally:
         conn.close()
@@ -287,6 +308,67 @@ def cola(sala_id):
         sync_pos=sala['sync_pos'],
         sync_ts=sala['sync_ts'],
     )
+
+
+@bp.route('/<sala_id>/biblioteca')
+def biblioteca(sala_id):
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT archivo_id AS id, nombre, owner, origen, creado_en
+            FROM rockola_biblioteca
+            WHERE sala_id = %s
+            ORDER BY creado_en DESC
+            LIMIT 80
+            """,
+            (sala_id,),
+        ).fetchall()
+        canciones = [_row_dict(row) for row in rows]
+    finally:
+        conn.close()
+    return jsonify(ok=True, canciones=canciones)
+
+
+@bp.route('/<sala_id>/biblioteca/<archivo_id>/poner', methods=['POST'])
+def poner_desde_biblioteca(sala_id, archivo_id):
+    data = request.get_json(silent=True) or {}
+    owner = data.get('owner', 'anon')
+
+    conn = _connect()
+    try:
+        with _lock:
+            row = conn.execute(
+                """
+                SELECT archivo_id, nombre
+                FROM rockola_biblioteca
+                WHERE sala_id = %s AND archivo_id = %s
+                """,
+                (sala_id, archivo_id),
+            ).fetchone()
+            if not row:
+                return jsonify(ok=False, error='Cancion no encontrada'), 404
+
+            nombre = row['nombre']
+            nuevo_id = str(uuid.uuid4()) + os.path.splitext(archivo_id)[1]
+            origen = os.path.join(_upload_dir(sala_id), archivo_id)
+            destino = os.path.join(_upload_dir(sala_id), nuevo_id)
+            if not os.path.exists(origen):
+                return jsonify(ok=False, error='Archivo no disponible en el servidor'), 404
+
+            with open(origen, 'rb') as src, open(destino, 'wb') as dst:
+                while True:
+                    chunk = src.read(65536)
+                    if not chunk:
+                        break
+                    dst.write(chunk)
+
+            _agregar_a_cola(conn, sala_id, nuevo_id, nombre, owner)
+            conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify(ok=True, agregadas=[{'id': nuevo_id, 'nombre': nombre, 'owner': owner}])
 
 
 @bp.route('/<sala_id>/sync_control', methods=['POST'])

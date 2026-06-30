@@ -199,22 +199,22 @@ input[type=text]::placeholder { color: var(--muted2); font-weight: 400; font-siz
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab activo" onclick="setModo('sync')">🎶 Sync</button>
-    <button class="tab" onclick="setModo('restaurante')">🍽 Restaurante</button>
+    <button class="tab activo" onclick="setModo('sync')">🎶 Tu Emisora</button>
+    <button class="tab" onclick="setModo('restaurante')">🎵 Tu Rockola</button>
   </div>
 
   <!-- SYNC -->
   <div class="seccion visible" id="sec-sync">
-    <p class="desc">Todos escuchan <strong>la misma canción</strong> al mismo tiempo. Comparte el código con quien quieras.</p>
-    <input type="text" id="codigo-sync" placeholder="Código de sala" maxlength="20" oninput="validar()">
+    <p class="desc">Una emisora privada para escuchar <strong>la misma música</strong> aunque estén lejos.</p>
+    <input type="text" id="codigo-sync" placeholder="Nombre de tu emisora" maxlength="20" oninput="validar()">
     <button class="btn-gen" onclick="generarCodigo()">⚡ Generar código aleatorio</button>
-    <button class="btn" id="btn-sync" onclick="entrarSync()" disabled>Entrar a la sala →</button>
+    <button class="btn" id="btn-sync" onclick="entrarSync()" disabled>Entrar a la emisora →</button>
   </div>
 
   <!-- RESTAURANTE -->
   <div class="seccion" id="sec-restaurante">
-    <p class="desc">Un reproductor en el local. Los clientes suben canciones desde su celular.</p>
-    <label class="field-label">Código del local</label>
+    <p class="desc">Una fuente de sonido en el lugar. Las personas programan canciones desde su celular.</p>
+    <label class="field-label">Nombre de tu rockola</label>
     <input type="text" id="codigo-rest" placeholder="mi-bar, rancho..." maxlength="30" oninput="validar()">
     <div class="divider"><span>entrar como</span></div>
     <button class="btn" onclick="entrarReproductor()">▶ Soy el reproductor del local</button>

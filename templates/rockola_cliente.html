@@ -88,6 +88,18 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 .upload-msg.ok    { color:#22c55e; }
 .upload-msg.error { color:#ef4444; }
 
+/* Library */
+.library-box { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:16px; margin-bottom:14px; }
+.library-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.library-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); }
+.library-list { list-style:none; max-height:190px; overflow:auto; padding-right:2px; }
+.library-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid rgba(0,212,255,.08); }
+.library-item:first-child { border-top:none; }
+.library-name { flex:1; min-width:0; font-size:13px; font-weight:650; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.library-origin { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; }
+.library-btn { border:1px solid var(--border); background:var(--ac1-bg); color:var(--ac1); border-radius:9px; padding:7px 10px; font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:800; cursor:pointer; flex-shrink:0; }
+.library-empty { text-align:center; color:var(--muted2); font-size:13px; padding:10px 0 4px; }
+
 /* Queue */
 .queue-box { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:16px; }
 .queue-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
@@ -175,6 +187,15 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
   <button class="btn" id="btn-poner" onclick="poner()" disabled>Selecciona una canción</button>
   <div class="upload-msg" id="upload-msg"></div>
 
+  <div class="library-box">
+    <div class="library-head">
+      <div class="library-label">Canciones anteriores</div>
+    </div>
+    <ul class="library-list" id="lista-biblioteca">
+      <li class="library-empty">Esta sala todavía no tiene canciones recordadas</li>
+    </ul>
+  </div>
+
   <!-- Queue -->
   <div class="queue-box">
     <div class="queue-label" id="queue-label">Cola del local</div>
@@ -201,6 +222,7 @@ const progFill   = document.getElementById('prog-fill');
 const progLabel  = document.getElementById('prog-label');
 const listaCola  = document.getElementById('lista-cola');
 const queueLabel = document.getElementById('queue-label');
+const listaBiblioteca = document.getElementById('lista-biblioteca');
 
 let tabActual       = 'archivo';
 let archivosValidos = [];
@@ -361,6 +383,7 @@ function onSuccess(n) {
   }
   btnPoner.disabled    = true;
   btnPoner.textContent = tabActual === 'archivo' ? 'Selecciona una canción' : 'Pega un link de YouTube';
+  actualizarBiblioteca();
 }
 
 function onError(msg) {
@@ -415,8 +438,52 @@ async function actualizarCola() {
   } catch(e) {}
 }
 
+function renderBiblioteca(canciones) {
+  if (!canciones.length) {
+    listaBiblioteca.innerHTML = '<li class="library-empty">Esta sala todavía no tiene canciones recordadas</li>';
+    return;
+  }
+  listaBiblioteca.innerHTML = canciones.map(c => `
+    <li class="library-item">
+      <div class="library-name" title="${c.nombre}">${c.nombre.replace(/\.[^.]+$/,'')}</div>
+      <div class="library-origin">${c.origen || 'audio'}</div>
+      <button class="library-btn" onclick="ponerRecordada('${c.id}')">Poner</button>
+    </li>
+  `).join('');
+}
+
+async function actualizarBiblioteca() {
+  try {
+    const res = await fetch(`/rockola/${SALA}/biblioteca`);
+    const data = await res.json();
+    renderBiblioteca(data.canciones || []);
+  } catch(e) {}
+}
+
+async function ponerRecordada(id) {
+  try {
+    const res = await fetch(`/rockola/${SALA}/biblioteca/${encodeURIComponent(id)}/poner`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ owner: OWNER })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      uploadMsg.textContent = 'Canción recordada en cola';
+      uploadMsg.className = 'upload-msg ok';
+      actualizarCola();
+      actualizarBiblioteca();
+    } else {
+      onError(data.error);
+    }
+  } catch(e) {
+    onError('Error de conexión');
+  }
+}
+
 setInterval(actualizarCola, 2500);
 actualizarCola();
+actualizarBiblioteca();
 </script>
 </body>
 </html>

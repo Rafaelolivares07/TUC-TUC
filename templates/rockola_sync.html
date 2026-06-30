@@ -94,6 +94,18 @@ audio { width:100%; filter:invert(1) hue-rotate(180deg); opacity:.75; }
 .upload-status.ok    { color:#22c55e; font-weight:600; }
 .upload-status.error { color:#ef4444; }
 
+/* Library */
+.library-box { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:16px; margin-bottom:12px; }
+.library-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.library-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); }
+.library-list { list-style:none; max-height:180px; overflow:auto; padding-right:2px; }
+.library-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid rgba(0,212,255,.08); }
+.library-item:first-child { border-top:none; }
+.library-name { flex:1; min-width:0; font-size:13px; font-weight:650; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.library-origin { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; }
+.library-btn { border:1px solid var(--border); background:var(--ac1-bg); color:var(--ac1); border-radius:9px; padding:7px 10px; font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:800; cursor:pointer; flex-shrink:0; }
+.library-empty { text-align:center; color:var(--muted2); font-size:13px; padding:10px 0 4px; }
+
 /* Queue */
 .queue-box   { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:16px; }
 .queue-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
@@ -121,7 +133,7 @@ audio { width:100%; filter:invert(1) hue-rotate(180deg); opacity:.75; }
     <circle cx="20" cy="20" r="5"  fill="none" stroke="#00d4ff" stroke-width=".4" stroke-opacity=".2"/>
     <circle cx="20" cy="20" r="11" fill="none" stroke="#00d4ff" stroke-width=".4" stroke-opacity=".2"/>
   </svg>
-  <div class="activar-sala">Sala sync</div>
+  <div class="activar-sala">Tu emisora</div>
   <div class="activar-nombre">Código <span>{{ sala_id | upper }}</span></div>
   <div class="activar-sub">Activa el audio para unirte</div>
   <button class="btn-activar" onclick="activar()">▶ Entrar a la sala</button>
@@ -202,6 +214,15 @@ audio { width:100%; filter:invert(1) hue-rotate(180deg); opacity:.75; }
       <div class="upload-status" id="estado-subir"></div>
     </div>
 
+    <div class="library-box">
+      <div class="library-head">
+        <div class="library-label">Canciones anteriores</div>
+      </div>
+      <ul class="library-list" id="lista-biblioteca">
+        <li class="library-empty">Esta emisora todavía no tiene canciones recordadas</li>
+      </ul>
+    </div>
+
     <!-- Queue -->
     <div class="queue-box">
       <div class="queue-label" id="queue-label">Cola</div>
@@ -226,6 +247,7 @@ const nombreEl    = document.getElementById('nombre-actual');
 const listaCola   = document.getElementById('lista-cola');
 const estadoSubir = document.getElementById('estado-subir');
 const btnSubir    = document.getElementById('btn-subir');
+const listaBiblioteca = document.getElementById('lista-biblioteca');
 const progBg      = document.getElementById('prog-bg');
 const progFill    = document.getElementById('prog-fill');
 const progLabel   = document.getElementById('prog-label');
@@ -368,11 +390,55 @@ function onSuccess(n) {
   archivosValidos = [];
   btnSubir.textContent = tabActual==='archivo' ? 'Selecciona canciones' : 'Pega un link de YouTube';
   btnSubir.disabled    = true;
+  actualizarBiblioteca();
 }
 
 function onError(msg) {
   estadoSubir.textContent = msg || 'Error';
   estadoSubir.className   = 'upload-status error';
+}
+
+function renderBiblioteca(canciones) {
+  if (!canciones.length) {
+    listaBiblioteca.innerHTML = '<li class="library-empty">Esta emisora todavía no tiene canciones recordadas</li>';
+    return;
+  }
+  listaBiblioteca.innerHTML = canciones.map(c => `
+    <li class="library-item">
+      <div class="library-name" title="${c.nombre}">${c.nombre.replace(/\.[^.]+$/,'')}</div>
+      <div class="library-origin">${c.origen || 'audio'}</div>
+      <button class="library-btn" onclick="ponerRecordada('${c.id}')">Poner</button>
+    </li>
+  `).join('');
+}
+
+async function actualizarBiblioteca() {
+  try {
+    const res = await fetch(`/rockola/${SALA}/biblioteca`);
+    const data = await res.json();
+    renderBiblioteca(data.canciones || []);
+  } catch(e) {}
+}
+
+async function ponerRecordada(id) {
+  try {
+    const res = await fetch(`/rockola/${SALA}/biblioteca/${encodeURIComponent(id)}/poner`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ owner: OWNER })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      estadoSubir.textContent = 'Canción recordada en cola';
+      estadoSubir.className = 'upload-status ok';
+      verificarCola();
+      actualizarBiblioteca();
+    } else {
+      onError(data.error);
+    }
+  } catch(e) {
+    onError('Error de conexión');
+  }
 }
 
 /* ── Sortable ── */
@@ -406,6 +472,7 @@ function activar() {
 
   setInterval(verificarCola, 2500);
   verificarCola();
+  actualizarBiblioteca();
 }
 
 player.addEventListener('ended', () => {

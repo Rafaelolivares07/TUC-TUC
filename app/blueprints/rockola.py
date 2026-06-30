@@ -208,56 +208,51 @@ COBALT_HEADERS = {
 }
 
 
-@bp.route('/<sala_id>/youtube', methods=['POST'])
-def youtube(sala_id):
+def _cobalt_headers():
+    headers = dict(COBALT_HEADERS)
+    token = os.environ.get('COBALT_API_KEY') or os.environ.get('COBALT_JWT')
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
+    return headers
+
+
+def _descargar_youtube_con_cobalt(url, tmp_path):
     import json as _json
     import urllib.error
     import urllib.request
 
-    data = request.get_json(silent=True) or {}
-    url = data.get('url', '').strip()
-    owner = data.get('owner', 'anon')
-
-    if not url or ('youtube.com' not in url and 'youtu.be' not in url):
-        return jsonify(ok=False, error='URL de YouTube invalida'), 400
-
+    payload = _json.dumps({
+        'url': url,
+        'downloadMode': 'audio',
+        'audioFormat': 'mp3',
+    }).encode()
+    req = urllib.request.Request(
+        COBALT_API,
+        data=payload,
+        headers=_cobalt_headers(),
+        method='POST',
+    )
     try:
-        payload = _json.dumps({
-            'url': url,
-            'downloadMode': 'audio',
-            'audioFormat': 'mp3',
-        }).encode()
-        req = urllib.request.Request(
-            COBALT_API,
-            data=payload,
-            headers=COBALT_HEADERS,
-            method='POST',
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=20) as response:
-                cobalt = _json.loads(response.read())
-        except urllib.error.HTTPError as error:
-            body = error.read().decode('utf-8', errors='ignore')[:300]
-            return jsonify(ok=False, error=f'Cobalt HTTP {error.code}: {body}'), 502
+        with urllib.request.urlopen(req, timeout=20) as response:
+            cobalt = _json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        body = error.read().decode('utf-8', errors='ignore')[:300]
+        return None, f'Cobalt HTTP {error.code}: {body}'
     except Exception as error:
-        return jsonify(ok=False, error=f'Cobalt no respondio: {error}'), 502
+        return None, f'Cobalt no respondio: {error}'
 
     status = cobalt.get('status')
     if status == 'error':
         msg = cobalt.get('error', {}).get('code', 'error desconocido')
-        return jsonify(ok=False, error=f'Cobalt: {msg}'), 400
+        return None, f'Cobalt: {msg}'
     if status not in ('stream', 'tunnel', 'redirect'):
-        return jsonify(ok=False, error=f'Cobalt estado inesperado: {status}'), 502
+        return None, f'Cobalt estado inesperado: {status}'
 
     download_url = cobalt.get('url') or cobalt.get('audio')
     if not download_url:
-        return jsonify(ok=False, error='Cobalt no entrego URL de descarga'), 502
+        return None, 'Cobalt no entrego URL de descarga'
 
     title = cobalt.get('filename', 'audio').rsplit('.', 1)[0]
-    upload_dir = _upload_dir(sala_id)
-    nombre_id = str(uuid.uuid4())
-    tmp_path = os.path.join(upload_dir, nombre_id + '.mp3')
-
     try:
         dl_req = urllib.request.Request(download_url, headers={
             'User-Agent': COBALT_HEADERS['User-Agent'],
@@ -271,10 +266,63 @@ def youtube(sala_id):
     except Exception as error:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-        return jsonify(ok=False, error=f'Error descargando audio: {error}'), 502
+        return None, f'Error descargando audio: {error}'
 
-    archivo_final = nombre_id + '.mp3'
-    nombre_display = title + '.mp3'
+    return {'path': tmp_path, 'nombre': title + '.mp3'}, None
+
+
+def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
+    try:
+        import yt_dlp
+    except Exception:
+        return None, 'yt-dlp no esta disponible en el servidor'
+
+    outtmpl = os.path.join(upload_dir, nombre_id + '.%(ext)s')
+    opts = {
+        'format': 'bestaudio[ext=m4a]/bestaudio/best',
+        'outtmpl': outtmpl,
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+    }
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            path = ydl.prepare_filename(info)
+    except Exception as error:
+        return None, f'yt-dlp no pudo descargar el audio: {error}'
+
+    if not os.path.exists(path):
+        return None, 'yt-dlp no genero archivo de audio'
+
+    title = info.get('title') or 'audio'
+    ext = os.path.splitext(path)[1] or '.m4a'
+    return {'path': path, 'nombre': title + ext}, None
+
+
+@bp.route('/<sala_id>/youtube', methods=['POST'])
+def youtube(sala_id):
+    data = request.get_json(silent=True) or {}
+    url = data.get('url', '').strip()
+    owner = data.get('owner', 'anon')
+
+    if not url or ('youtube.com' not in url and 'youtu.be' not in url):
+        return jsonify(ok=False, error='URL de YouTube invalida'), 400
+
+    upload_dir = _upload_dir(sala_id)
+    nombre_id = str(uuid.uuid4())
+    tmp_path = os.path.join(upload_dir, nombre_id + '.mp3')
+
+    descarga, error_cobalt = _descargar_youtube_con_cobalt(url, tmp_path)
+    if not descarga:
+        descarga, error_ytdlp = _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id)
+        if not descarga:
+            if 'api.auth.jwt.missing' in (error_cobalt or ''):
+                return jsonify(ok=False, error='YouTube no esta disponible: Cobalt ahora exige token y yt-dlp no pudo resolver la descarga.'), 502
+            return jsonify(ok=False, error=error_ytdlp or error_cobalt or 'No se pudo descargar el audio'), 502
+
+    archivo_final = os.path.basename(descarga['path'])
+    nombre_display = descarga['nombre']
 
     conn = _connect()
     try:

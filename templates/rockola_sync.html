@@ -6,6 +6,7 @@
 <title>Tuc Tuc Rockola · {{ sala_id | upper }}</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 :root {
@@ -39,6 +40,8 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 .sala-badge { font-size:12px; font-weight:700; letter-spacing:2px; color:var(--ac1); background:var(--ac1-bg); border:1px solid var(--border); padding:6px 14px; border-radius:8px; }
 .btn-share { background:none; border:1px solid var(--border); color:var(--muted); font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; cursor:pointer; transition:all .2s; }
 .btn-share:hover { border-color:var(--ac1); color:var(--ac1); }
+.qr-panel { display:none; background:#fff; border-radius:14px; padding:14px; margin-bottom:12px; justify-content:center; }
+.qr-panel.visible { display:flex; }
 
 /* Now playing */
 .now-playing { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:20px; margin-bottom:12px; }
@@ -148,6 +151,7 @@ audio { width:100%; filter:invert(1) hue-rotate(180deg); opacity:.75; }
       <div class="sala-badge">{{ sala_id | upper }}</div>
       <button class="btn-share" onclick="compartir()">Compartir</button>
     </div>
+    <div class="qr-panel" id="qr-panel"><div id="qr-sala"></div></div>
 
     <!-- Now playing -->
     <div class="now-playing">
@@ -260,6 +264,11 @@ let reproduciendo   = false;
 let cancionActual   = null;
 let archivosValidos = [];
 let aplicandoSync   = false;
+let qrGenerado      = false;
+
+function urlSala() {
+  return `https://rockola.tuc-tuc.co/emisora/${encodeURIComponent(SALA)}`;
+}
 
 /* ── Tabs ── */
 function setTab(tab) {
@@ -564,9 +573,23 @@ function setWaveActive(on) {
 }
 
 function compartir() {
-  const url = window.location.href;
-  if (navigator.share) navigator.share({ title:'Tuc Tuc Rockola', text:`Sala ${SALA.toUpperCase()}`, url });
-  else navigator.clipboard.writeText(url).then(() => alert('URL copiada ✓'));
+  const url = urlSala();
+  if (navigator.share) {
+    navigator.share({ title:'Tu Emisora', text:`Emisora ${SALA.toUpperCase()}`, url });
+  } else {
+    navigator.clipboard.writeText(url).then(() => alert('URL copiada ✓'));
+  }
+  const panel = document.getElementById('qr-panel');
+  panel.classList.add('visible');
+  if (!qrGenerado && window.QRCode) {
+    new QRCode(document.getElementById('qr-sala'), {
+      text: url,
+      width: 190,
+      height: 190,
+      correctLevel: QRCode.CorrectLevel.M
+    });
+    qrGenerado = true;
+  }
 }
 </script>
 </body>

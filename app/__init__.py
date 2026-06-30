@@ -68,6 +68,29 @@ def create_app():
 
     @app.before_request
     def _cliente_subdominio():
+        host_limpio = (request.host or '').split(':')[0].strip().lower().rstrip('.')
+        if host_limpio == 'rockola.tuc-tuc.co':
+            from .blueprints.rockola import entrada, sync, cliente_sala, reproductor_sala
+
+            if request.path.startswith('/api/') or request.path.startswith('/static/'):
+                return
+            partes = [p for p in request.path.strip('/').split('/') if p]
+            if not partes:
+                return entrada()
+            if partes[0] == 'rockola':
+                if len(partes) == 1:
+                    return entrada()
+                if len(partes) == 2:
+                    return cliente_sala(partes[1])
+                return
+            if partes[0] in ('emisora', 'sync') and len(partes) >= 2:
+                return sync(partes[1])
+            if partes[0] == 'cliente' and len(partes) >= 2:
+                return cliente_sala(partes[1])
+            if partes[0] == 'reproductor' and len(partes) >= 2:
+                return reproductor_sala(partes[1])
+            return entrada()
+
         from .dominios_negocio import resolver_negocio_por_host
 
         negocio_host = resolver_negocio_por_host(request.host)

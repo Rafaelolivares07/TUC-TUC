@@ -6,6 +6,7 @@
 <title>Tuc Tuc Rockola · {{ sala_id | upper }}</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -28,6 +29,10 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 .sala-tag { display:inline-block; margin-top:8px; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--ac1); background:var(--ac1-bg); border:1px solid var(--border); padding:5px 14px; border-radius:8px; }
 
 .tagline { color:var(--muted); font-size:13px; text-align:center; margin-bottom:20px; line-height:1.6; }
+.share-row { display:flex; gap:8px; margin-bottom:14px; }
+.share-btn { flex:1; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface); color:var(--ac1); font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:800; cursor:pointer; }
+.qr-panel { display:none; background:#fff; border-radius:14px; padding:14px; margin-bottom:14px; justify-content:center; }
+.qr-panel.visible { display:flex; }
 
 /* TABS — archivo vs youtube */
 .source-tabs { display:flex; gap:4px; background:var(--surface); border-radius:12px; padding:4px; margin-bottom:16px; }
@@ -142,6 +147,12 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 
   <p class="tagline">Pon tu canción — suena en el local 🔊</p>
 
+  <div class="share-row">
+    <button class="share-btn" onclick="compartirSala()">Compartir enlace</button>
+    <button class="share-btn" onclick="toggleQR()">QR</button>
+  </div>
+  <div class="qr-panel" id="qr-panel"><div id="qr-sala"></div></div>
+
   <!-- Tabs -->
   <div class="source-tabs">
     <button class="stab activo" onclick="setTab('archivo')">📁 Archivo</button>
@@ -226,6 +237,37 @@ const listaBiblioteca = document.getElementById('lista-biblioteca');
 
 let tabActual       = 'archivo';
 let archivosValidos = [];
+let qrGenerado = false;
+
+function urlSala() {
+  return `https://rockola.tuc-tuc.co/rockola/${encodeURIComponent(SALA)}`;
+}
+
+function compartirSala() {
+  const url = urlSala();
+  if (navigator.share) {
+    navigator.share({ title: 'Tu Rockola', text: `Rockola ${SALA.toUpperCase()}`, url });
+  } else {
+    navigator.clipboard.writeText(url).then(() => {
+      uploadMsg.textContent = 'Enlace copiado';
+      uploadMsg.className = 'upload-msg ok';
+    });
+  }
+}
+
+function toggleQR() {
+  const panel = document.getElementById('qr-panel');
+  panel.classList.toggle('visible');
+  if (!qrGenerado && window.QRCode) {
+    new QRCode(document.getElementById('qr-sala'), {
+      text: urlSala(),
+      width: 190,
+      height: 190,
+      correctLevel: QRCode.CorrectLevel.M
+    });
+    qrGenerado = true;
+  }
+}
 
 /* ── Tabs ── */
 function setTab(tab) {

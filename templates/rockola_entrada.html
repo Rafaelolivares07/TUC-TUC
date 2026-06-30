@@ -255,22 +255,28 @@ function limpiar(v) {
   return v.trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'');
 }
 
+function rockolaBase() {
+  const host = window.location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') return '';
+  return 'https://rockola.tuc-tuc.co';
+}
+
 function entrarSync() {
   const c = limpiar(document.getElementById('codigo-sync').value);
   if (c.length < 2) return;
-  window.location.href = `/rockola/sync/${c}`;
+  window.location.href = `${rockolaBase()}/emisora/${c}`;
 }
 
 function entrarReproductor() {
   const c = limpiar(document.getElementById('codigo-rest').value);
   if (c.length < 2) return;
-  window.location.href = `/rockola/${c}/reproductor`;
+  window.location.href = `${rockolaBase()}/reproductor/${c}`;
 }
 
 function entrarCliente() {
   const c = limpiar(document.getElementById('codigo-rest').value);
   if (c.length < 2) return;
-  window.location.href = `/rockola/${c}/cliente`;
+  window.location.href = `${rockolaBase()}/rockola/${c}`;
 }
 
 document.addEventListener('keydown', e => {

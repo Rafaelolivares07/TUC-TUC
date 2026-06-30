@@ -2,8 +2,8 @@ from .db import get_db_connection
 
 
 CLIENTE_SUFFIXES = ('.tuc-tuc.co',)
-EXCLUIR_SUBDOMINIOS = {'www', 'bistro', 'api', 'admin', 'mail'}
-HOSTS_PLATAFORMA = {'tuc-tuc.co', 'www.tuc-tuc.co', 'admin.tuc-tuc.co', 'localhost', '127.0.0.1', '0.0.0.0'}
+EXCLUIR_SUBDOMINIOS = {'www', 'bistro', 'api', 'admin', 'mail', 'rockola'}
+HOSTS_PLATAFORMA = {'tuc-tuc.co', 'www.tuc-tuc.co', 'admin.tuc-tuc.co', 'rockola.tuc-tuc.co', 'localhost', '127.0.0.1', '0.0.0.0'}
 
 
 def normalizar_host(host):

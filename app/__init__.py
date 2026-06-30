@@ -33,6 +33,7 @@ def create_app():
     from .blueprints.chat import bp as chat_bp
     from .blueprints.negocios import bp as negocios_bp, init_config_negocio
     from .blueprints.backup import bp as backup_bp
+    from .blueprints.rockola import bp as rockola_bp
 
     app.register_blueprint(core_bp)
     app.register_blueprint(auth_bp)
@@ -52,6 +53,7 @@ def create_app():
     app.register_blueprint(chat_bp)
     app.register_blueprint(negocios_bp)
     app.register_blueprint(backup_bp)
+    app.register_blueprint(rockola_bp)
 
     # Crear tabla config_negocio al arrancar (fuera de request handlers)
     try:

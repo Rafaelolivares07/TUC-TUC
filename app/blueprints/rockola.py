@@ -1,25 +1,21 @@
 """
-rockola.py — Blueprint con cola persistente en PostgreSQL + YouTube via yt-dlp
-Drop-in replacement del blueprint original.
+Rockola Tuc Tuc: salas con cola persistente en PostgreSQL.
+
+La UI usa polling HTTP, subida de archivos locales y descarga de audio desde
+YouTube mediante cobalt.tools. El modulo no toca la BD al importarse para que
+un fallo de Rockola no tumbe el arranque general de Tuc Tuc.
 """
 
-from flask import Blueprint, render_template, request, jsonify, send_from_directory
-from sqlalchemy import create_engine, text
-import os, uuid, threading
+import os
+import threading
+import uuid
+
+from flask import Blueprint, jsonify, render_template, request, send_from_directory
+
+from app.db import get_db_connection
+
 
 bp = Blueprint('rockola', __name__, url_prefix='/rockola')
-
-# ── Base de datos ─────────────────────────────────────────────────────────────
-DATABASE_URL = os.environ.get('DATABASE_URL', '')
-if DATABASE_URL.startswith('postgres://'):
-    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=300,
-    connect_args={"connect_timeout": 10}
-)
 
 INIT_SQL = """
 CREATE TABLE IF NOT EXISTS rockola_salas (
@@ -38,82 +34,108 @@ CREATE TABLE IF NOT EXISTS rockola_cola (
 CREATE INDEX IF NOT EXISTS idx_cola_sala ON rockola_cola(sala_id, posicion);
 """
 
-def init_db():
-    with engine.connect() as conn:
-        conn.execute(text(INIT_SQL))
-        conn.commit()
-
-try:
-    init_db()
-except Exception as e:
-    print(f'[rockola] Aviso: no se pudo inicializar DB: {e}')
-
-# ── Helpers DB ────────────────────────────────────────────────────────────────
 _lock = threading.Lock()
+_db_ready = False
+
+
+def _row_dict(row):
+    return {k: row[k] for k in row.keys()}
+
+
+def _ensure_db():
+    global _db_ready
+    if _db_ready:
+        return
+    with _lock:
+        if _db_ready:
+            return
+        conn = get_db_connection()
+        try:
+            conn.execute(INIT_SQL)
+            conn.commit()
+            _db_ready = True
+        finally:
+            conn.close()
+
+
+def _connect():
+    _ensure_db()
+    return get_db_connection()
+
 
 def _get_sala(conn, sala_id):
     row = conn.execute(
-        text("SELECT * FROM rockola_salas WHERE sala_id = :sid"),
-        {'sid': sala_id}
+        "SELECT * FROM rockola_salas WHERE sala_id = %s",
+        (sala_id,),
     ).fetchone()
-    if not row:
-        conn.execute(
-            text("INSERT INTO rockola_salas (sala_id) VALUES (:sid) ON CONFLICT DO NOTHING"),
-            {'sid': sala_id}
-        )
-        conn.commit()
-        return {'sala_id': sala_id, 'sync_estado': 'play', 'sync_pos': 0.0, 'sync_ts': 0.0}
-    return dict(row._mapping)
+    if row:
+        return _row_dict(row)
+
+    conn.execute(
+        "INSERT INTO rockola_salas (sala_id) VALUES (%s) ON CONFLICT DO NOTHING",
+        (sala_id,),
+    )
+    conn.commit()
+    return {'sala_id': sala_id, 'sync_estado': 'play', 'sync_pos': 0.0, 'sync_ts': 0.0}
+
 
 def _get_cola(conn, sala_id):
     rows = conn.execute(
-        text("SELECT id, nombre, owner FROM rockola_cola WHERE sala_id = :sid ORDER BY posicion ASC"),
-        {'sid': sala_id}
+        """
+        SELECT id, nombre, owner
+        FROM rockola_cola
+        WHERE sala_id = %s
+        ORDER BY posicion ASC
+        """,
+        (sala_id,),
     ).fetchall()
-    return [dict(r._mapping) for r in rows]
+    return [_row_dict(row) for row in rows]
+
 
 def _max_pos(conn, sala_id):
     row = conn.execute(
-        text("SELECT COALESCE(MAX(posicion), -1) as m FROM rockola_cola WHERE sala_id = :sid"),
-        {'sid': sala_id}
+        "SELECT COALESCE(MAX(posicion), -1) AS m FROM rockola_cola WHERE sala_id = %s",
+        (sala_id,),
     ).fetchone()
-    return row.m if row else -1
+    return row['m'] if row else -1
+
 
 def _upload_dir(sala_id):
     base = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'rockola_tmp')
-    d = os.path.join(base, sala_id)
-    os.makedirs(d, exist_ok=True)
-    return d
+    folder = os.path.join(base, sala_id)
+    os.makedirs(folder, exist_ok=True)
+    return folder
 
-
-# ── Páginas ───────────────────────────────────────────────────────────────────
 
 @bp.route('/')
 def entrada():
     return render_template('rockola_entrada.html')
 
+
 @bp.route('/cliente')
 def cliente():
     return render_template('rockola_cliente.html', sala_id='default', modo='restaurante')
+
 
 @bp.route('/reproductor')
 def reproductor():
     return render_template('rockola_reproductor.html', sala_id='default')
 
+
 @bp.route('/<sala_id>/cliente')
 def cliente_sala(sala_id):
     return render_template('rockola_cliente.html', sala_id=sala_id, modo='restaurante')
+
 
 @bp.route('/<sala_id>/reproductor')
 def reproductor_sala(sala_id):
     return render_template('rockola_reproductor.html', sala_id=sala_id)
 
+
 @bp.route('/sync/<sala_id>')
 def sync(sala_id):
     return render_template('rockola_sync.html', sala_id=sala_id)
 
-
-# ── API: subir archivo ────────────────────────────────────────────────────────
 
 @bp.route('/<sala_id>/subir', methods=['POST'])
 def subir(sala_id):
@@ -122,28 +144,32 @@ def subir(sala_id):
     if not files:
         return jsonify(ok=False, error='sin archivo'), 400
 
-    agregadas  = []
+    agregadas = []
     upload_dir = _upload_dir(sala_id)
 
-    with _lock, engine.connect() as conn:
-        pos_actual = _max_pos(conn, sala_id)
-        for f in files:
-            ext       = os.path.splitext(f.filename)[1].lower()
-            nombre_id = str(uuid.uuid4()) + ext
-            f.save(os.path.join(upload_dir, nombre_id))
-            pos_actual += 1
-            conn.execute(text("""
-                INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
-                VALUES (:id, :sala_id, :nombre, :owner, :pos)
-            """), {'id': nombre_id, 'sala_id': sala_id, 'nombre': f.filename,
-                   'owner': owner, 'pos': pos_actual})
-            agregadas.append({'id': nombre_id, 'nombre': f.filename, 'owner': owner})
-        conn.commit()
+    conn = _connect()
+    try:
+        with _lock:
+            pos_actual = _max_pos(conn, sala_id)
+            for file in files:
+                ext = os.path.splitext(file.filename)[1].lower()
+                nombre_id = str(uuid.uuid4()) + ext
+                file.save(os.path.join(upload_dir, nombre_id))
+                pos_actual += 1
+                conn.execute(
+                    """
+                    INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (nombre_id, sala_id, file.filename, owner, pos_actual),
+                )
+                agregadas.append({'id': nombre_id, 'nombre': file.filename, 'owner': owner})
+            conn.commit()
+    finally:
+        conn.close()
 
     return jsonify(ok=True, agregadas=agregadas)
 
-
-# ── API: YouTube → cola ───────────────────────────────────────────────────────
 
 COBALT_API = 'https://api.cobalt.tools/'
 COBALT_HEADERS = {
@@ -154,33 +180,40 @@ COBALT_HEADERS = {
     'Referer': 'https://cobalt.tools/',
 }
 
+
 @bp.route('/<sala_id>/youtube', methods=['POST'])
 def youtube(sala_id):
-    """
-    Descarga audio de YouTube via cobalt.tools (evita bot-check de Render).
-    """
-    import urllib.request, urllib.error, json as _json, re
+    import json as _json
+    import urllib.error
+    import urllib.request
 
-    data  = request.get_json(silent=True) or {}
-    url   = data.get('url', '').strip()
+    data = request.get_json(silent=True) or {}
+    url = data.get('url', '').strip()
     owner = data.get('owner', 'anon')
 
     if not url or ('youtube.com' not in url and 'youtu.be' not in url):
-        return jsonify(ok=False, error='URL de YouTube inválida'), 400
+        return jsonify(ok=False, error='URL de YouTube invalida'), 400
 
-    # 1. Pedir a cobalt la URL de descarga
     try:
-        payload = _json.dumps({'url': url, 'downloadMode': 'audio', 'audioFormat': 'mp3'}).encode()
-        req = urllib.request.Request(COBALT_API, data=payload,
-                                     headers=COBALT_HEADERS, method='POST')
+        payload = _json.dumps({
+            'url': url,
+            'downloadMode': 'audio',
+            'audioFormat': 'mp3',
+        }).encode()
+        req = urllib.request.Request(
+            COBALT_API,
+            data=payload,
+            headers=COBALT_HEADERS,
+            method='POST',
+        )
         try:
-            with urllib.request.urlopen(req, timeout=20) as r:
-                cobalt = _json.loads(r.read())
-        except urllib.error.HTTPError as he:
-            body = he.read().decode('utf-8', errors='ignore')[:300]
-            return jsonify(ok=False, error=f'Cobalt HTTP {he.code}: {body}'), 502
-    except Exception as e:
-        return jsonify(ok=False, error=f'Cobalt no respondió: {e}'), 502
+            with urllib.request.urlopen(req, timeout=20) as response:
+                cobalt = _json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            body = error.read().decode('utf-8', errors='ignore')[:300]
+            return jsonify(ok=False, error=f'Cobalt HTTP {error.code}: {body}'), 502
+    except Exception as error:
+        return jsonify(ok=False, error=f'Cobalt no respondio: {error}'), 502
 
     status = cobalt.get('status')
     if status == 'error':
@@ -189,125 +222,155 @@ def youtube(sala_id):
     if status not in ('stream', 'tunnel', 'redirect'):
         return jsonify(ok=False, error=f'Cobalt estado inesperado: {status}'), 502
 
-    dl_url  = cobalt.get('url') or cobalt.get('audio')
-    titulo  = cobalt.get('filename', 'audio').rsplit('.', 1)[0]
+    download_url = cobalt.get('url') or cobalt.get('audio')
+    if not download_url:
+        return jsonify(ok=False, error='Cobalt no entrego URL de descarga'), 502
 
-    # 2. Descargar el audio desde cobalt
+    title = cobalt.get('filename', 'audio').rsplit('.', 1)[0]
     upload_dir = _upload_dir(sala_id)
-    nombre_id  = str(uuid.uuid4())
-    tmp_path   = os.path.join(upload_dir, nombre_id + '.mp3')
+    nombre_id = str(uuid.uuid4())
+    tmp_path = os.path.join(upload_dir, nombre_id + '.mp3')
 
     try:
-        dl_req = urllib.request.Request(dl_url, headers={
-            'User-Agent': COBALT_HEADERS['User-Agent']
+        dl_req = urllib.request.Request(download_url, headers={
+            'User-Agent': COBALT_HEADERS['User-Agent'],
         })
-        with urllib.request.urlopen(dl_req, timeout=120) as r, \
-             open(tmp_path, 'wb') as f:
+        with urllib.request.urlopen(dl_req, timeout=120) as response, open(tmp_path, 'wb') as file:
             while True:
-                chunk = r.read(65536)
+                chunk = response.read(65536)
                 if not chunk:
                     break
-                f.write(chunk)
-    except Exception as e:
+                file.write(chunk)
+    except Exception as error:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-        return jsonify(ok=False, error=f'Error descargando audio: {e}'), 502
+        return jsonify(ok=False, error=f'Error descargando audio: {error}'), 502
 
-    archivo_final  = nombre_id + '.mp3'
-    nombre_display = titulo + '.mp3'
+    archivo_final = nombre_id + '.mp3'
+    nombre_display = title + '.mp3'
 
-    with _lock, engine.connect() as conn:
-        pos_actual = _max_pos(conn, sala_id) + 1
-        conn.execute(text("""
-            INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
-            VALUES (:id, :sala_id, :nombre, :owner, :pos)
-        """), {'id': archivo_final, 'sala_id': sala_id, 'nombre': nombre_display,
-               'owner': owner, 'pos': pos_actual})
-        conn.commit()
+    conn = _connect()
+    try:
+        with _lock:
+            pos_actual = _max_pos(conn, sala_id) + 1
+            conn.execute(
+                """
+                INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (archivo_final, sala_id, nombre_display, owner, pos_actual),
+            )
+            conn.commit()
+    finally:
+        conn.close()
 
     return jsonify(ok=True, agregadas=[{
         'id': archivo_final,
         'nombre': nombre_display,
-        'owner': owner
+        'owner': owner,
     }])
 
 
-# ── API: cola, sync, siguiente, reordenar, archivo ───────────────────────────
-
 @bp.route('/<sala_id>/cola')
 def cola(sala_id):
-    with engine.connect() as conn:
-        sala  = _get_sala(conn, sala_id)
+    conn = _connect()
+    try:
+        sala = _get_sala(conn, sala_id)
         items = _get_cola(conn, sala_id)
+    finally:
+        conn.close()
+
     return jsonify(
-        ok=True, cola=items,
+        ok=True,
+        cola=items,
         sync_estado=sala['sync_estado'],
         sync_pos=sala['sync_pos'],
-        sync_ts=sala['sync_ts']
+        sync_ts=sala['sync_ts'],
     )
 
 
 @bp.route('/<sala_id>/sync_control', methods=['POST'])
 def sync_control(sala_id):
-    data = request.get_json()
-    with _lock, engine.connect() as conn:
-        _get_sala(conn, sala_id)
-        conn.execute(text("""
-            UPDATE rockola_salas
-            SET sync_estado = :estado, sync_pos = :pos, sync_ts = :ts
-            WHERE sala_id = :sid
-        """), {'estado': data.get('estado','play'), 'pos': data.get('pos',0.0),
-               'ts': data.get('ts',0.0), 'sid': sala_id})
-        conn.commit()
+    data = request.get_json(silent=True) or {}
+    conn = _connect()
+    try:
+        with _lock:
+            _get_sala(conn, sala_id)
+            conn.execute(
+                """
+                UPDATE rockola_salas
+                SET sync_estado = %s, sync_pos = %s, sync_ts = %s
+                WHERE sala_id = %s
+                """,
+                (data.get('estado', 'play'), data.get('pos', 0.0), data.get('ts', 0.0), sala_id),
+            )
+            conn.commit()
+    finally:
+        conn.close()
     return jsonify(ok=True)
 
 
 @bp.route('/<sala_id>/siguiente', methods=['POST'])
 def siguiente(sala_id):
-    data       = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or {}
     cancion_id = data.get('id')
-    with _lock, engine.connect() as conn:
-        items = _get_cola(conn, sala_id)
-        if items and (not cancion_id or items[0]['id'] == cancion_id):
-            conn.execute(
-                text("DELETE FROM rockola_cola WHERE id = :id AND sala_id = :sid"),
-                {'id': items[0]['id'], 'sid': sala_id}
-            )
-            conn.execute(text("""
-                UPDATE rockola_salas
-                SET sync_estado='play', sync_pos=0.0, sync_ts=0.0
-                WHERE sala_id = :sid
-            """), {'sid': sala_id})
-            conn.commit()
+    conn = _connect()
+    try:
+        with _lock:
+            items = _get_cola(conn, sala_id)
+            if items and (not cancion_id or items[0]['id'] == cancion_id):
+                conn.execute(
+                    "DELETE FROM rockola_cola WHERE id = %s AND sala_id = %s",
+                    (items[0]['id'], sala_id),
+                )
+                conn.execute(
+                    """
+                    UPDATE rockola_salas
+                    SET sync_estado = 'play', sync_pos = 0.0, sync_ts = 0.0
+                    WHERE sala_id = %s
+                    """,
+                    (sala_id,),
+                )
+                conn.commit()
+    finally:
+        conn.close()
     return jsonify(ok=True)
 
 
 @bp.route('/<sala_id>/reordenar', methods=['POST'])
 def reordenar(sala_id):
-    data        = request.get_json()
+    data = request.get_json(silent=True) or {}
     nuevo_orden = data.get('orden', [])
-    owner       = data.get('owner')
-    modo        = data.get('modo', 'restaurante')
+    owner = data.get('owner')
+    modo = data.get('modo', 'restaurante')
 
-    with _lock, engine.connect() as conn:
-        items  = _get_cola(conn, sala_id)
-        por_id = {item['id']: item for item in items}
-        nueva_cola = []
-        for id_ in nuevo_orden:
-            if id_ in por_id:
-                item = por_id[id_]
-                if modo == 'sync' or item['owner'] == owner:
+    conn = _connect()
+    try:
+        with _lock:
+            items = _get_cola(conn, sala_id)
+            por_id = {item['id']: item for item in items}
+            nueva_cola = []
+            for id_ in nuevo_orden:
+                if id_ in por_id:
+                    item = por_id[id_]
+                    if modo == 'sync' or item['owner'] == owner:
+                        nueva_cola.append(item)
+            ids_nuevos = {item['id'] for item in nueva_cola}
+            for item in items:
+                if item['id'] not in ids_nuevos:
                     nueva_cola.append(item)
-        ids_nuevos = {i['id'] for i in nueva_cola}
-        for item in items:
-            if item['id'] not in ids_nuevos:
-                nueva_cola.append(item)
-        for i, item in enumerate(nueva_cola):
-            conn.execute(text("""
-                UPDATE rockola_cola SET posicion = :pos
-                WHERE id = :id AND sala_id = :sid
-            """), {'pos': i, 'id': item['id'], 'sid': sala_id})
-        conn.commit()
+            for index, item in enumerate(nueva_cola):
+                conn.execute(
+                    """
+                    UPDATE rockola_cola
+                    SET posicion = %s
+                    WHERE id = %s AND sala_id = %s
+                    """,
+                    (index, item['id'], sala_id),
+                )
+            conn.commit()
+    finally:
+        conn.close()
     return jsonify(ok=True)
 
 
@@ -317,4 +380,4 @@ def archivo(sala_id, nombre_id):
 
 
 def register_events(socketio):
-    pass
+    return None

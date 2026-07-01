@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tuc Tuc Rockola · Reproductor</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -133,6 +135,68 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .volume-box input { flex: 1; accent-color: var(--ac1); }
 .volume-value { width: 42px; text-align: right; font-size: 13px; font-weight: 800; color: var(--ac1); }
 
+/* Admin modules */
+.panel-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.panel-title { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+.share-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.qr-panel { display:none; background:#fff; border-radius:14px; padding:14px; margin-top:12px; justify-content:center; }
+.qr-panel.visible { display:flex; }
+.source-tabs { display:flex; gap:4px; background:var(--surface2); border-radius:12px; padding:4px; margin-bottom:14px; }
+.stab { flex:1; padding:10px 0; border-radius:9px; border:none; background:transparent; color:var(--muted); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:13px; cursor:pointer; }
+.stab.activo { background:var(--ac1-bg); color:var(--ac1); box-shadow:inset 0 0 0 1.5px var(--ac1); }
+.sec { display:none; }
+.sec.visible { display:block; }
+.drop-zone {
+  border:2px dashed var(--border);
+  border-radius:18px;
+  padding:24px 18px;
+  text-align:center;
+  position:relative;
+  background:var(--surface2);
+  margin-bottom:12px;
+}
+.drop-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+.drop-zone.selected { border-color:var(--ac1); background:var(--ac1-bg); }
+.drop-title { font-size:14px; font-weight:800; color:var(--text); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.drop-sub { font-size:12px; color:var(--muted); }
+.yt-box { background:var(--surface2); border:1px solid var(--border); border-radius:16px; padding:14px; margin-bottom:12px; }
+.yt-input {
+  width:100%;
+  padding:13px 14px;
+  background:#091425;
+  border:1.5px solid var(--border);
+  border-radius:12px;
+  color:var(--text);
+  font-family:'Space Grotesk',sans-serif;
+  outline:none;
+}
+.yt-input:focus { border-color:var(--ac1); }
+.yt-preview { display:none; margin-top:10px; align-items:center; gap:10px; }
+.yt-preview.visible { display:flex; }
+.yt-thumb { width:56px; height:42px; border-radius:8px; object-fit:cover; background:var(--muted2); }
+.yt-titulo { font-size:13px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.action-btn { width:100%; padding:12px; border:none; border-radius:11px; background:var(--ac-grad); color:#00101b; font-family:'Space Grotesk',sans-serif; font-weight:900; cursor:pointer; }
+.action-btn:disabled { background:var(--surface2); color:var(--muted); cursor:default; }
+.progress { display:none; margin:10px 0; }
+.progress-track { height:4px; border-radius:4px; background:var(--surface2); overflow:hidden; }
+.progress-fill { height:100%; width:0%; background:var(--ac-grad); }
+.status-msg { min-height:18px; margin-top:8px; text-align:center; font-size:12px; font-weight:800; color:var(--muted); }
+.status-msg.ok { color:#22c55e; }
+.status-msg.error { color:#ef4444; }
+.library-list { list-style:none; max-height:190px; overflow:auto; }
+.library-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid rgba(0,212,255,.08); }
+.library-item:first-child { border-top:none; }
+.library-name { flex:1; min-width:0; font-size:13px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.library-origin { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; }
+.library-btn { border:1px solid var(--border); background:var(--ac1-bg); color:var(--ac1); border-radius:9px; padding:7px 10px; font-weight:900; cursor:pointer; }
+.library-empty { text-align:center; color:var(--muted2); font-size:13px; padding:12px 0; }
+
 /* Queue */
 .queue-box {
   background: var(--surface);
@@ -150,6 +214,7 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   margin-bottom: 6px;
 }
 .q-num { font-size: 12px; color: var(--muted); font-weight: 600; width: 24px; flex-shrink: 0; }
+.handle { color: var(--muted); cursor: grab; font-size: 16px; flex-shrink: 0; }
 .q-nombre { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-remove { border:1px solid rgba(255,77,109,.35); background:rgba(255,77,109,.1); color:#ff4d6d; border-radius:8px; padding:7px 9px; font-weight:800; cursor:pointer; }
 .queue-empty { text-align: center; color: var(--muted2); font-size: 13px; padding: 20px 0; }
@@ -221,6 +286,54 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
       <button class="btn-control" style="margin-top:12px;width:100%;padding:12px" onclick="saltarActual()">Saltar actual</button>
     </div>
 
+    <div class="panel-box">
+      <div class="panel-title">Compartir sala</div>
+      <div class="share-grid">
+        <button class="btn-control" onclick="copiarCliente()">Clientes</button>
+        <button class="btn-control" onclick="toggleQR()">QR</button>
+      </div>
+      <div class="qr-panel" id="qr-panel"><div id="qr-sala"></div></div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-title">Agregar canciones</div>
+      <div class="source-tabs">
+        <button class="stab activo" onclick="setTab('archivo')">Archivo</button>
+        <button class="stab" onclick="setTab('youtube')">YouTube</button>
+      </div>
+
+      <div class="sec visible" id="sec-archivo">
+        <div class="drop-zone" id="drop-zone">
+          <input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="archivosSeleccionados()">
+          <div class="drop-title" id="drop-title">Elegir canciones</div>
+          <div class="drop-sub" id="drop-sub">MP3, AAC, WAV, FLAC</div>
+        </div>
+      </div>
+
+      <div class="sec" id="sec-youtube">
+        <div class="yt-box">
+          <input class="yt-input" id="yt-url" type="url" placeholder="https://youtube.com/watch?v=..." oninput="ytInputChange()" onpaste="setTimeout(ytInputChange,50)">
+          <div class="yt-preview" id="yt-preview">
+            <img class="yt-thumb" id="yt-thumb" src="" alt="">
+            <div class="yt-titulo" id="yt-titulo">Link de YouTube listo</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="progress" id="prog-wrap">
+        <div class="progress-track"><div class="progress-fill" id="prog-fill"></div></div>
+      </div>
+      <button class="action-btn" id="btn-poner" onclick="poner()" disabled>Selecciona una cancion</button>
+      <div class="status-msg" id="upload-msg"></div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-title">Canciones anteriores</div>
+      <ul class="library-list" id="lista-biblioteca">
+        <li class="library-empty">Esta sala todavia no tiene canciones recordadas</li>
+      </ul>
+    </div>
+
     <div class="queue-box">
       <div class="queue-label" id="queue-label">Próximas canciones</div>
       <ul class="queue-list" id="lista-cola">
@@ -243,12 +356,21 @@ const waveViz     = document.getElementById('wave-viz');
 const queueLabel  = document.getElementById('queue-label');
 const volumenEl   = document.getElementById('volumen');
 const volumenValorEl = document.getElementById('volumen-valor');
+const btnPoner = document.getElementById('btn-poner');
+const uploadMsg = document.getElementById('upload-msg');
+const progWrap = document.getElementById('prog-wrap');
+const progFill = document.getElementById('prog-fill');
+const listaBiblioteca = document.getElementById('lista-biblioteca');
 const ADMIN_KEY = '{{ admin_key }}';
+const OWNER = 'reproductor';
 
 let reproduciendo = false;
 let cancionActual = null;
 let volumenActual = 80;
 let guardandoVolumen = null;
+let tabActual = 'archivo';
+let archivosValidos = [];
+let qrGenerado = false;
 
 function activar() {
   document.getElementById('pantalla-activar').style.display = 'none';
@@ -257,6 +379,7 @@ function activar() {
   player.pause();
   setInterval(verificarCola, 2500);
   verificarCola();
+  actualizarBiblioteca();
 }
 
 player.addEventListener('ended', () => {
@@ -286,7 +409,7 @@ async function verificarCola() {
       if (c.id !== cancionActual) {
         cancionActual = c.id;
         reproduciendo = true;
-        nombreEl.textContent = c.nombre.replace(/\.[^.]+$/, '');
+        nombreEl.textContent = limpiarNombre(c.nombre);
         player.src = `/rockola/${SALA}/archivo/${c.id}`;
         player.load();
         player.play().then(() => {
@@ -328,6 +451,216 @@ async function guardarVolumen() {
   });
 }
 
+function limpiarNombre(nombre) {
+  return (nombre || '').replace(/\.[^.]+$/, '');
+}
+
+function urlCliente() {
+  return `https://rockola.tuc-tuc.co/rockola/${encodeURIComponent(SALA)}`;
+}
+
+function copiarCliente() {
+  const url = urlCliente();
+  if (navigator.share) {
+    navigator.share({ title:'Tu Rockola', text:`Sala ${SALA.toUpperCase()}`, url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(url).then(() => mostrarMensaje('Enlace copiado', 'ok'));
+  }
+}
+
+function toggleQR() {
+  const panel = document.getElementById('qr-panel');
+  panel.classList.toggle('visible');
+  if (!qrGenerado && window.QRCode) {
+    new QRCode(document.getElementById('qr-sala'), {
+      text: urlCliente(),
+      width: 190,
+      height: 190,
+      correctLevel: QRCode.CorrectLevel.M
+    });
+    qrGenerado = true;
+  }
+}
+
+function setTab(tab) {
+  tabActual = tab;
+  document.querySelectorAll('.stab').forEach((b, i) => {
+    b.classList.toggle('activo', (i === 0 && tab === 'archivo') || (i === 1 && tab === 'youtube'));
+  });
+  document.getElementById('sec-archivo').classList.toggle('visible', tab === 'archivo');
+  document.getElementById('sec-youtube').classList.toggle('visible', tab === 'youtube');
+  resetAgregar();
+}
+
+function resetAgregar() {
+  btnPoner.disabled = true;
+  btnPoner.textContent = tabActual === 'archivo' ? 'Selecciona una cancion' : 'Pega un link de YouTube';
+  uploadMsg.textContent = '';
+  uploadMsg.className = 'status-msg';
+  progWrap.style.display = 'none';
+  progFill.style.width = '0%';
+}
+
+function archivosSeleccionados() {
+  archivosValidos = [...document.getElementById('archivo').files];
+  if (!archivosValidos.length) return;
+  document.getElementById('drop-zone').classList.add('selected');
+  document.getElementById('drop-title').textContent = archivosValidos.length === 1
+    ? limpiarNombre(archivosValidos[0].name)
+    : `${archivosValidos.length} canciones`;
+  document.getElementById('drop-sub').textContent = 'Listo para poner en cola';
+  btnPoner.textContent = archivosValidos.length === 1 ? 'Poner en cola' : `Poner ${archivosValidos.length} en cola`;
+  btnPoner.disabled = false;
+}
+
+function ytInputChange() {
+  const url = document.getElementById('yt-url').value.trim();
+  const esYt = url.includes('youtube.com') || url.includes('youtu.be');
+  btnPoner.disabled = !esYt;
+  btnPoner.textContent = esYt ? 'Poner en cola' : 'Pega un link de YouTube';
+  const preview = document.getElementById('yt-preview');
+  if (esYt) {
+    const vidId = url.match(/(?:v=|youtu\.be\/)([^&?\/]{11})/)?.[1];
+    if (vidId) document.getElementById('yt-thumb').src = `https://img.youtube.com/vi/${vidId}/mqdefault.jpg`;
+    preview.className = 'yt-preview visible';
+  } else {
+    preview.className = 'yt-preview';
+  }
+}
+
+function poner() {
+  if (tabActual === 'archivo') subirArchivo();
+  else subirYoutube();
+}
+
+function subirArchivo() {
+  if (!archivosValidos.length) return;
+  btnPoner.disabled = true;
+  progWrap.style.display = 'block';
+  const form = new FormData();
+  form.append('owner', OWNER);
+  archivosValidos.forEach(file => form.append('archivo', file));
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', `/rockola/${SALA}/subir`);
+  xhr.upload.onprogress = event => {
+    if (event.lengthComputable) progFill.style.width = Math.round(event.loaded / event.total * 100) + '%';
+  };
+  xhr.onload = () => {
+    progWrap.style.display = 'none';
+    try {
+      const res = JSON.parse(xhr.responseText);
+      if (res.ok) onAgregarOk(res.agregadas.length);
+      else mostrarMensaje(res.error || 'No se pudo subir', 'error');
+    } catch(e) {
+      mostrarMensaje('Error ' + xhr.status, 'error');
+    }
+  };
+  xhr.onerror = () => {
+    progWrap.style.display = 'none';
+    mostrarMensaje('Error de conexion', 'error');
+  };
+  xhr.send(form);
+}
+
+function subirYoutube() {
+  const url = document.getElementById('yt-url').value.trim();
+  if (!url) return;
+  btnPoner.disabled = true;
+  progWrap.style.display = 'block';
+  let avance = 0;
+  const timer = setInterval(() => {
+    avance = Math.min(avance + Math.random() * 4, 85);
+    progFill.style.width = avance + '%';
+  }, 400);
+  fetch(`/rockola/${SALA}/youtube`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ url, owner:OWNER })
+  })
+  .then(r => r.json())
+  .then(res => {
+    clearInterval(timer);
+    progFill.style.width = '100%';
+    setTimeout(() => { progWrap.style.display = 'none'; progFill.style.width = '0%'; }, 250);
+    if (res.ok) {
+      document.getElementById('yt-url').value = '';
+      document.getElementById('yt-preview').className = 'yt-preview';
+      onAgregarOk(1);
+    } else {
+      mostrarMensaje(res.error || 'No se pudo descargar', 'error');
+      btnPoner.disabled = false;
+    }
+  })
+  .catch(() => {
+    clearInterval(timer);
+    progWrap.style.display = 'none';
+    mostrarMensaje('Error de conexion', 'error');
+    btnPoner.disabled = false;
+  });
+}
+
+function onAgregarOk(cantidad) {
+  const texto = cantidad === 1 ? 'Cancion en cola' : `${cantidad} canciones en cola`;
+  if (tabActual === 'archivo') {
+    document.getElementById('archivo').value = '';
+    document.getElementById('drop-zone').classList.remove('selected');
+    document.getElementById('drop-title').textContent = 'Elegir canciones';
+    document.getElementById('drop-sub').textContent = 'MP3, AAC, WAV, FLAC';
+    archivosValidos = [];
+  }
+  resetAgregar();
+  mostrarMensaje(texto, 'ok');
+  verificarCola();
+  actualizarBiblioteca();
+}
+
+function mostrarMensaje(texto, tipo) {
+  uploadMsg.textContent = texto;
+  uploadMsg.className = 'status-msg ' + (tipo || '');
+}
+
+async function actualizarBiblioteca() {
+  try {
+    const res = await fetch(`/rockola/${SALA}/biblioteca`);
+    const data = await res.json();
+    renderBiblioteca(data.canciones || []);
+  } catch(e) {}
+}
+
+function renderBiblioteca(canciones) {
+  if (!canciones.length) {
+    listaBiblioteca.innerHTML = '<li class="library-empty">Esta sala todavia no tiene canciones recordadas</li>';
+    return;
+  }
+  listaBiblioteca.innerHTML = canciones.map(c => `
+    <li class="library-item">
+      <div class="library-name" title="${c.nombre}">${limpiarNombre(c.nombre)}</div>
+      <div class="library-origin">${c.origen || 'audio'}</div>
+      <button class="library-btn" onclick="ponerRecordada('${c.id}')">Poner</button>
+    </li>
+  `).join('');
+}
+
+async function ponerRecordada(id) {
+  try {
+    const res = await fetch(`/rockola/${SALA}/biblioteca/${encodeURIComponent(id)}/poner`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ owner:OWNER })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      mostrarMensaje('Cancion recordada en cola', 'ok');
+      verificarCola();
+      actualizarBiblioteca();
+    } else {
+      mostrarMensaje(data.error || 'No se pudo poner', 'error');
+    }
+  } catch(e) {
+    mostrarMensaje('Error de conexion', 'error');
+  }
+}
+
 function renderCola(cola) {
   queueLabel.textContent = 'Cola · ' + cola.length + (cola.length === 1 ? ' canción' : ' canciones');
   if (cola.length === 0) {
@@ -335,9 +668,10 @@ function renderCola(cola) {
     return;
   }
   listaCola.innerHTML = cola.map((c, i) => `
-    <li class="queue-item">
+    <li class="queue-item" data-id="${c.id}">
+      <span class="handle">⠿</span>
       <span class="q-num">${i === 0 ? '▶' : '#'+(i + 1)}</span>
-      <span class="q-nombre">${c.nombre.replace(/\.[^.]+$/, '')}</span>
+      <span class="q-nombre">${limpiarNombre(c.nombre)}</span>
       <button class="q-remove" onclick="quitar('${c.id}')">Quitar</button>
     </li>
   `).join('');
@@ -374,6 +708,22 @@ function abrirControl() {
 
 volumenEl.addEventListener('input', programarGuardarVolumen);
 aplicarVolumen(volumenEl.value);
+
+if (window.Sortable) {
+  Sortable.create(listaCola, {
+    animation: 150,
+    handle: '.handle',
+    onEnd: async () => {
+      const orden = [...listaCola.querySelectorAll('.queue-item')].map(el => el.dataset.id);
+      await fetch(`/rockola/${SALA}/reordenar`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ orden, modo:'reproductor' })
+      });
+      verificarCola();
+    }
+  });
+}
 
 function setVinylSpinning(on) {
   vinylSpin.style.animation = on ? 'spin 3s linear infinite' : 'none';

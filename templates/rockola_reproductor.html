@@ -119,6 +119,19 @@ body {
 .wave-viz { display: flex; align-items: center; justify-content: center; gap: 3px; height: 28px; margin-bottom: 20px; }
 .wave-bar { width: 3px; border-radius: 2px; background: var(--ac1); }
 audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
+.volume-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.volume-label { font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+.volume-box input { flex: 1; accent-color: var(--ac1); }
+.volume-value { width: 42px; text-align: right; font-size: 13px; font-weight: 800; color: var(--ac1); }
 
 /* Queue */
 .queue-box {
@@ -200,6 +213,11 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
         <div class="wave-bar" style="height:5px;opacity:.25"></div>
       </div>
       <audio id="player" controls></audio>
+      <div class="volume-box">
+        <div class="volume-label">Volumen</div>
+        <input id="volumen" type="range" min="0" max="100" value="80">
+        <div class="volume-value" id="volumen-valor">80%</div>
+      </div>
       <button class="btn-control" style="margin-top:12px;width:100%;padding:12px" onclick="saltarActual()">Saltar actual</button>
     </div>
 
@@ -223,10 +241,14 @@ const estadoEl    = document.getElementById('estado');
 const vinylSpin   = document.getElementById('vinyl-spin');
 const waveViz     = document.getElementById('wave-viz');
 const queueLabel  = document.getElementById('queue-label');
+const volumenEl   = document.getElementById('volumen');
+const volumenValorEl = document.getElementById('volumen-valor');
 const ADMIN_KEY = '{{ admin_key }}';
 
 let reproduciendo = false;
 let cancionActual = null;
+let volumenActual = 80;
+let guardandoVolumen = null;
 
 function activar() {
   document.getElementById('pantalla-activar').style.display = 'none';
@@ -256,6 +278,7 @@ async function verificarCola() {
     const data = await res.json();
     const cola = data.cola || [];
 
+    aplicarVolumen(data.volumen);
     renderCola(cola);
 
     if (!reproduciendo && cola.length > 0) {
@@ -281,6 +304,28 @@ async function verificarCola() {
   } catch(e) {
     estadoEl.textContent = 'Sin conexión ✗';
   }
+}
+
+function aplicarVolumen(volumen) {
+  const normalizado = Math.max(0, Math.min(100, parseInt(volumen ?? volumenActual, 10) || 0));
+  volumenActual = normalizado;
+  player.volume = normalizado / 100;
+  if (document.activeElement !== volumenEl) volumenEl.value = normalizado;
+  volumenValorEl.textContent = normalizado + '%';
+}
+
+function programarGuardarVolumen() {
+  aplicarVolumen(volumenEl.value);
+  clearTimeout(guardandoVolumen);
+  guardandoVolumen = setTimeout(guardarVolumen, 250);
+}
+
+async function guardarVolumen() {
+  await fetch(`/rockola/${SALA}/volumen`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ modo:'reproductor', volumen:volumenActual })
+  });
 }
 
 function renderCola(cola) {
@@ -326,6 +371,9 @@ async function quitar(id) {
 function abrirControl() {
   window.open(`https://rockola.tuc-tuc.co/control/${encodeURIComponent(SALA)}?key=${encodeURIComponent(ADMIN_KEY)}`, '_blank');
 }
+
+volumenEl.addEventListener('input', programarGuardarVolumen);
+aplicarVolumen(volumenEl.value);
 
 function setVinylSpinning(on) {
   vinylSpin.style.animation = on ? 'spin 3s linear infinite' : 'none';

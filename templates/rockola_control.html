@@ -39,6 +39,9 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 .login { display:none; }
 .login.visible { display:block; }
 input { width:100%; padding:13px; border-radius:11px; border:1px solid var(--border); background:var(--surface2); color:var(--text); outline:none; font-family:'Space Grotesk',sans-serif; margin:8px 0; }
+.volume-row { display:flex; align-items:center; gap:12px; margin-top:8px; }
+.volume-row input { flex:1; margin:0; accent-color:var(--ac1); }
+.volume-value { width:46px; text-align:right; font-size:13px; font-weight:800; color:var(--ac1); }
 </style>
 </head>
 <body>
@@ -69,6 +72,15 @@ input { width:100%; padding:13px; border-radius:11px; border:1px solid var(--bor
     </div>
 
     <div class="card">
+      <div class="label">Volumen del reproductor</div>
+      <div class="muted">Controla el volumen interno de la sala. El equipo fisico sigue teniendo su propio volumen.</div>
+      <div class="volume-row">
+        <input id="volumen" type="range" min="0" max="100" value="80">
+        <div class="volume-value" id="volumen-valor">80%</div>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="label">Compartir</div>
       <div class="actions">
         <button class="btn secondary" onclick="copiar(clienteUrl)">Clientes</button>
@@ -93,6 +105,10 @@ let adminKey = localStorage.getItem('rockola_admin_' + SALA) || urlKey || '';
 let clienteUrl = `https://rockola.tuc-tuc.co/rockola/${encodeURIComponent(SALA)}`;
 let controlUrl = `https://rockola.tuc-tuc.co/control/${encodeURIComponent(SALA)}?key=${encodeURIComponent(adminKey || SERVER_KEY)}`;
 const colaEl = document.getElementById('cola');
+const volumenEl = document.getElementById('volumen');
+const volumenValorEl = document.getElementById('volumen-valor');
+let volumenActual = 80;
+let guardandoVolumen = null;
 
 if (urlKey) localStorage.setItem('rockola_admin_' + SALA, urlKey);
 
@@ -129,6 +145,7 @@ async function actualizar() {
   const r = await fetch(`/rockola/${SALA}/cola`);
   const d = await r.json();
   const cola = d.cola || [];
+  aplicarVolumen(d.volumen);
   document.getElementById('sonando').textContent = cola[0] ? limpiarNombre(cola[0].nombre) : 'Esperando canciones...';
   renderCola(cola);
 }
@@ -187,10 +204,33 @@ async function quitar(id) {
   actualizar();
 }
 
+function aplicarVolumen(volumen) {
+  const normalizado = Math.max(0, Math.min(100, parseInt(volumen ?? volumenActual, 10) || 0));
+  volumenActual = normalizado;
+  if (document.activeElement !== volumenEl) volumenEl.value = normalizado;
+  volumenValorEl.textContent = normalizado + '%';
+}
+
+function programarGuardarVolumen() {
+  aplicarVolumen(volumenEl.value);
+  clearTimeout(guardandoVolumen);
+  guardandoVolumen = setTimeout(guardarVolumen, 250);
+}
+
+async function guardarVolumen() {
+  await fetch(`/rockola/${SALA}/volumen`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ modo:'control', admin_key:adminKey, volumen:volumenActual })
+  });
+}
+
 function copiar(url) {
   navigator.clipboard.writeText(url).then(() => alert('Enlace copiado'));
 }
 
+volumenEl.addEventListener('input', programarGuardarVolumen);
+aplicarVolumen(volumenEl.value);
 actualizar();
 setInterval(actualizar, 3500);
 </script>

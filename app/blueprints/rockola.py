@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS rockola_salas (
     admin_key    TEXT,
     sync_estado  TEXT  NOT NULL DEFAULT 'play',
     sync_pos     FLOAT NOT NULL DEFAULT 0.0,
-    sync_ts      FLOAT NOT NULL DEFAULT 0.0
+    sync_ts      FLOAT NOT NULL DEFAULT 0.0,
+    volumen      INTEGER NOT NULL DEFAULT 80
 );
 CREATE TABLE IF NOT EXISTS rockola_cola (
     id        TEXT PRIMARY KEY,
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS rockola_biblioteca (
 );
 CREATE INDEX IF NOT EXISTS idx_biblioteca_sala ON rockola_biblioteca(sala_id, creado_en DESC);
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS admin_key TEXT;
+ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS volumen INTEGER NOT NULL DEFAULT 80;
 """
 
 _lock = threading.Lock()
@@ -96,7 +98,7 @@ def _get_sala(conn, sala_id):
         (sala_id, admin_key),
     )
     conn.commit()
-    return {'sala_id': sala_id, 'admin_key': admin_key, 'sync_estado': 'play', 'sync_pos': 0.0, 'sync_ts': 0.0}
+    return {'sala_id': sala_id, 'admin_key': admin_key, 'sync_estado': 'play', 'sync_pos': 0.0, 'sync_ts': 0.0, 'volumen': 80}
 
 
 def _get_cola(conn, sala_id):
@@ -183,6 +185,14 @@ def _reset_sync(conn, sala_id):
         """,
         (sala_id,),
     )
+
+
+def _normalizar_volumen(valor):
+    try:
+        volumen = int(valor)
+    except (TypeError, ValueError):
+        volumen = 80
+    return max(0, min(100, volumen))
 
 
 @bp.route('/')
@@ -432,6 +442,7 @@ def cola(sala_id):
         sync_estado=sala['sync_estado'],
         sync_pos=sala['sync_pos'],
         sync_ts=sala['sync_ts'],
+        volumen=_normalizar_volumen(sala.get('volumen')),
     )
 
 
@@ -451,6 +462,29 @@ def admin_info(sala_id):
         control_url=f'https://rockola.tuc-tuc.co/control/{sala_id}?key={key}' if key else '',
         reproductor_url=f'https://rockola.tuc-tuc.co/reproductor/{sala_id}',
     )
+
+
+@bp.route('/<sala_id>/volumen', methods=['POST'])
+def volumen(sala_id):
+    data = request.get_json(silent=True) or {}
+    conn = _connect()
+    try:
+        with _lock:
+            if not _es_admin_sala(conn, sala_id, data):
+                return jsonify(ok=False, error='No autorizado'), 403
+            volumen_nuevo = _normalizar_volumen(data.get('volumen'))
+            conn.execute(
+                """
+                UPDATE rockola_salas
+                SET volumen = %s
+                WHERE sala_id = %s
+                """,
+                (volumen_nuevo, sala_id),
+            )
+            conn.commit()
+    finally:
+        conn.close()
+    return jsonify(ok=True, volumen=volumen_nuevo)
 
 
 @bp.route('/<sala_id>/biblioteca')

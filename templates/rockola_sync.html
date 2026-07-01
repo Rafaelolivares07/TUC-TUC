@@ -120,6 +120,7 @@ audio { width:100%; filter:invert(1) hue-rotate(180deg); opacity:.75; }
 .queue-item.playing .q-nombre { color:var(--ac1); }
 .q-pos   { font-size:11px; color:var(--muted); flex-shrink:0; font-weight:600; }
 .queue-item.playing .q-pos { color:var(--ac1); }
+.q-remove { border:1px solid rgba(255,77,109,.35); background:rgba(255,77,109,.1); color:#ff4d6d; border-radius:8px; padding:7px 9px; font-weight:800; cursor:pointer; }
 .queue-empty { text-align:center; color:var(--muted2); font-size:13px; padding:20px 0; }
 </style>
 </head>
@@ -559,7 +560,22 @@ function renderCola(cola) {
       <span class="handle">⠿</span>
       <span class="q-nombre">${c.nombre.replace(/\.[^.]+$/,'')}</span>
       <span class="q-pos">${i===0&&reproduciendo?'▶ AHORA':'#'+(i+1)}</span>
+      <button class="q-remove" onclick="quitar('${c.id}')">Quitar</button>
     </li>`).join('');
+}
+
+async function quitar(id) {
+  await fetch(`/rockola/${SALA}/quitar`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id, owner: OWNER, modo:'sync' })
+  });
+  if (id === cancionActual) {
+    player.pause();
+    reproduciendo = false;
+    cancionActual = null;
+  }
+  verificarCola();
 }
 
 function setVinylSpinning(on) { vinylSpin.style.animation = on ? 'spin 3s linear infinite' : 'none'; }

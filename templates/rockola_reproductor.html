@@ -95,6 +95,7 @@ body {
   display: flex; align-items: center; gap: 6px;
   font-size: 12px; font-weight: 700; color: #22c55e;
 }
+.btn-control { background:var(--surface2); border:1px solid var(--border); color:var(--ac1); border-radius:8px; padding:7px 10px; font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:800; cursor:pointer; }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 2s ease-in-out infinite; }
 .sala-badge {
   font-size: 12px; font-weight: 700; letter-spacing: 2px;
@@ -137,6 +138,7 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 }
 .q-num { font-size: 12px; color: var(--muted); font-weight: 600; width: 24px; flex-shrink: 0; }
 .q-nombre { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-remove { border:1px solid rgba(255,77,109,.35); background:rgba(255,77,109,.1); color:#ff4d6d; border-radius:8px; padding:7px 9px; font-weight:800; cursor:pointer; }
 .queue-empty { text-align: center; color: var(--muted2); font-size: 13px; padding: 20px 0; }
 
 #estado { text-align: center; font-size: 11px; color: var(--muted2); margin-top: 12px; }
@@ -171,7 +173,7 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
     <div class="header">
       <button class="header-back" onclick="window.location.href='/rockola/'">← Salir</button>
       <div class="sala-badge">{{ sala_id | upper }}</div>
-      <div class="live-badge"><div class="live-dot"></div> EN VIVO</div>
+      <button class="btn-control" onclick="abrirControl()">Control</button>
     </div>
 
     <div class="now-card">
@@ -198,6 +200,7 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
         <div class="wave-bar" style="height:5px;opacity:.25"></div>
       </div>
       <audio id="player" controls></audio>
+      <button class="btn-control" style="margin-top:12px;width:100%;padding:12px" onclick="saltarActual()">Saltar actual</button>
     </div>
 
     <div class="queue-box">
@@ -220,6 +223,7 @@ const estadoEl    = document.getElementById('estado');
 const vinylSpin   = document.getElementById('vinyl-spin');
 const waveViz     = document.getElementById('wave-viz');
 const queueLabel  = document.getElementById('queue-label');
+const ADMIN_KEY = '{{ admin_key }}';
 
 let reproduciendo = false;
 let cancionActual = null;
@@ -280,18 +284,47 @@ async function verificarCola() {
 }
 
 function renderCola(cola) {
-  const resto = cola.slice(reproduciendo ? 1 : 0);
-  queueLabel.textContent = 'Próximas · ' + resto.length + (resto.length === 1 ? ' canción' : ' canciones');
-  if (resto.length === 0) {
+  queueLabel.textContent = 'Cola · ' + cola.length + (cola.length === 1 ? ' canción' : ' canciones');
+  if (cola.length === 0) {
     listaCola.innerHTML = '<li class="queue-empty">Cola vacía</li>';
     return;
   }
-  listaCola.innerHTML = resto.map((c, i) => `
+  listaCola.innerHTML = cola.map((c, i) => `
     <li class="queue-item">
-      <span class="q-num">#${i + 2}</span>
+      <span class="q-num">${i === 0 ? '▶' : '#'+(i + 1)}</span>
       <span class="q-nombre">${c.nombre.replace(/\.[^.]+$/, '')}</span>
+      <button class="q-remove" onclick="quitar('${c.id}')">Quitar</button>
     </li>
   `).join('');
+}
+
+async function saltarActual() {
+  await fetch(`/rockola/${SALA}/saltar`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ modo:'reproductor' })
+  });
+  reproduciendo = false;
+  cancionActual = null;
+  verificarCola();
+}
+
+async function quitar(id) {
+  await fetch(`/rockola/${SALA}/quitar`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id, modo:'reproductor' })
+  });
+  if (id === cancionActual) {
+    player.pause();
+    reproduciendo = false;
+    cancionActual = null;
+  }
+  verificarCola();
+}
+
+function abrirControl() {
+  window.open(`https://rockola.tuc-tuc.co/control/${encodeURIComponent(SALA)}?key=${encodeURIComponent(ADMIN_KEY)}`, '_blank');
 }
 
 function setVinylSpinning(on) {

@@ -20,6 +20,7 @@ bp = Blueprint('rockola', __name__, url_prefix='/rockola')
 INIT_SQL = """
 CREATE TABLE IF NOT EXISTS rockola_salas (
     sala_id      TEXT PRIMARY KEY,
+    admin_key    TEXT,
     sync_estado  TEXT  NOT NULL DEFAULT 'play',
     sync_pos     FLOAT NOT NULL DEFAULT 0.0,
     sync_ts      FLOAT NOT NULL DEFAULT 0.0
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS rockola_biblioteca (
     creado_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_biblioteca_sala ON rockola_biblioteca(sala_id, creado_en DESC);
+ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS admin_key TEXT;
 """
 
 _lock = threading.Lock()
@@ -78,14 +80,23 @@ def _get_sala(conn, sala_id):
         (sala_id,),
     ).fetchone()
     if row:
-        return _row_dict(row)
+        sala = _row_dict(row)
+        if not sala.get('admin_key'):
+            sala['admin_key'] = uuid.uuid4().hex
+            conn.execute(
+                "UPDATE rockola_salas SET admin_key = %s WHERE sala_id = %s",
+                (sala['admin_key'], sala_id),
+            )
+            conn.commit()
+        return sala
 
+    admin_key = uuid.uuid4().hex
     conn.execute(
-        "INSERT INTO rockola_salas (sala_id) VALUES (%s) ON CONFLICT DO NOTHING",
-        (sala_id,),
+        "INSERT INTO rockola_salas (sala_id, admin_key) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+        (sala_id, admin_key),
     )
     conn.commit()
-    return {'sala_id': sala_id, 'sync_estado': 'play', 'sync_pos': 0.0, 'sync_ts': 0.0}
+    return {'sala_id': sala_id, 'admin_key': admin_key, 'sync_estado': 'play', 'sync_pos': 0.0, 'sync_ts': 0.0}
 
 
 def _get_cola(conn, sala_id):
@@ -99,6 +110,18 @@ def _get_cola(conn, sala_id):
         (sala_id,),
     ).fetchall()
     return [_row_dict(row) for row in rows]
+
+
+def _get_item_cola(conn, sala_id, archivo_id):
+    row = conn.execute(
+        """
+        SELECT id, nombre, owner
+        FROM rockola_cola
+        WHERE sala_id = %s AND id = %s
+        """,
+        (sala_id, archivo_id),
+    ).fetchone()
+    return _row_dict(row) if row else None
 
 
 def _max_pos(conn, sala_id):
@@ -141,6 +164,27 @@ def _upload_dir(sala_id):
     return folder
 
 
+def _es_admin_sala(conn, sala_id, data):
+    if data.get('modo') == 'reproductor':
+        return True
+    admin_key = (data.get('admin_key') or request.headers.get('X-Rockola-Admin-Key') or '').strip()
+    if not admin_key:
+        return False
+    sala = _get_sala(conn, sala_id)
+    return admin_key == (sala.get('admin_key') or '')
+
+
+def _reset_sync(conn, sala_id):
+    conn.execute(
+        """
+        UPDATE rockola_salas
+        SET sync_estado = 'play', sync_pos = 0.0, sync_ts = 0.0
+        WHERE sala_id = %s
+        """,
+        (sala_id,),
+    )
+
+
 @bp.route('/')
 def entrada():
     return render_template('rockola_entrada.html')
@@ -163,7 +207,24 @@ def cliente_sala(sala_id):
 
 @bp.route('/<sala_id>/reproductor')
 def reproductor_sala(sala_id):
-    return render_template('rockola_reproductor.html', sala_id=sala_id)
+    conn = _connect()
+    try:
+        sala = _get_sala(conn, sala_id)
+    finally:
+        conn.close()
+    return render_template('rockola_reproductor.html', sala_id=sala_id, admin_key=sala.get('admin_key', ''))
+
+
+@bp.route('/<sala_id>/control')
+def control_sala(sala_id):
+    key = (request.args.get('key') or '').strip()
+    conn = _connect()
+    try:
+        sala = _get_sala(conn, sala_id)
+    finally:
+        conn.close()
+    admin_key = sala.get('admin_key', '') if key and key == sala.get('admin_key') else ''
+    return render_template('rockola_control.html', sala_id=sala_id, admin_key=admin_key)
 
 
 @bp.route('/sync/<sala_id>')
@@ -374,6 +435,24 @@ def cola(sala_id):
     )
 
 
+@bp.route('/<sala_id>/admin-info')
+def admin_info(sala_id):
+    key = (request.args.get('key') or '').strip()
+    conn = _connect()
+    try:
+        sala = _get_sala(conn, sala_id)
+        autorizado = bool(key and key == (sala.get('admin_key') or ''))
+    finally:
+        conn.close()
+    return jsonify(
+        ok=True,
+        autorizado=autorizado,
+        cliente_url=f'https://rockola.tuc-tuc.co/rockola/{sala_id}',
+        control_url=f'https://rockola.tuc-tuc.co/control/{sala_id}?key={key}' if key else '',
+        reproductor_url=f'https://rockola.tuc-tuc.co/reproductor/{sala_id}',
+    )
+
+
 @bp.route('/<sala_id>/biblioteca')
 def biblioteca(sala_id):
     conn = _connect()
@@ -469,15 +548,66 @@ def siguiente(sala_id):
                     "DELETE FROM rockola_cola WHERE id = %s AND sala_id = %s",
                     (items[0]['id'], sala_id),
                 )
-                conn.execute(
-                    """
-                    UPDATE rockola_salas
-                    SET sync_estado = 'play', sync_pos = 0.0, sync_ts = 0.0
-                    WHERE sala_id = %s
-                    """,
-                    (sala_id,),
-                )
+                _reset_sync(conn, sala_id)
                 conn.commit()
+    finally:
+        conn.close()
+    return jsonify(ok=True)
+
+
+@bp.route('/<sala_id>/saltar', methods=['POST'])
+def saltar(sala_id):
+    data = request.get_json(silent=True) or {}
+    conn = _connect()
+    try:
+        with _lock:
+            if not _es_admin_sala(conn, sala_id, data):
+                return jsonify(ok=False, error='No autorizado'), 403
+            items = _get_cola(conn, sala_id)
+            if items:
+                conn.execute(
+                    "DELETE FROM rockola_cola WHERE id = %s AND sala_id = %s",
+                    (items[0]['id'], sala_id),
+                )
+                _reset_sync(conn, sala_id)
+                conn.commit()
+    finally:
+        conn.close()
+    return jsonify(ok=True)
+
+
+@bp.route('/<sala_id>/quitar', methods=['POST'])
+def quitar(sala_id):
+    data = request.get_json(silent=True) or {}
+    archivo_id = data.get('id')
+    owner = data.get('owner')
+    modo = data.get('modo', 'cliente')
+    if not archivo_id:
+        return jsonify(ok=False, error='Falta cancion'), 400
+
+    conn = _connect()
+    try:
+        with _lock:
+            items = _get_cola(conn, sala_id)
+            if not items:
+                return jsonify(ok=True)
+            item = _get_item_cola(conn, sala_id, archivo_id)
+            if not item:
+                return jsonify(ok=True)
+
+            es_actual = items[0]['id'] == archivo_id
+            es_admin = _es_admin_sala(conn, sala_id, data)
+            autorizado = es_admin or modo == 'sync' or (item.get('owner') == owner and not es_actual)
+            if not autorizado:
+                return jsonify(ok=False, error='No autorizado'), 403
+
+            conn.execute(
+                "DELETE FROM rockola_cola WHERE id = %s AND sala_id = %s",
+                (archivo_id, sala_id),
+            )
+            if es_actual:
+                _reset_sync(conn, sala_id)
+            conn.commit()
     finally:
         conn.close()
     return jsonify(ok=True)
@@ -494,12 +624,13 @@ def reordenar(sala_id):
     try:
         with _lock:
             items = _get_cola(conn, sala_id)
+            es_admin = _es_admin_sala(conn, sala_id, data)
             por_id = {item['id']: item for item in items}
             nueva_cola = []
             for id_ in nuevo_orden:
                 if id_ in por_id:
                     item = por_id[id_]
-                    if modo == 'sync' or item['owner'] == owner:
+                    if es_admin or modo == 'sync' or item['owner'] == owner:
                         nueva_cola.append(item)
             ids_nuevos = {item['id'] for item in nueva_cola}
             for item in items:

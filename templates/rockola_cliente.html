@@ -120,6 +120,7 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 .q-sub  { font-size:11px; color:var(--muted); margin-top:2px; }
 .q-pos  { font-size:11px; color:var(--muted); flex-shrink:0; font-weight:600; }
 .queue-item.playing .q-pos { color:var(--ac1); }
+.q-remove { border:1px solid rgba(255,77,109,.35); background:rgba(255,77,109,.1); color:#ff4d6d; border-radius:8px; padding:7px 9px; font-weight:800; cursor:pointer; }
 .queue-empty { text-align:center; color:var(--muted2); font-size:13px; padding:20px 0; }
 .wave-mini { display:inline-flex; align-items:center; gap:2px; height:14px; vertical-align:middle; }
 .wave-mini span { display:inline-block; width:2px; background:var(--ac1); border-radius:2px; animation:wave .9s ease-in-out infinite; }
@@ -468,8 +469,24 @@ function renderCola(cola) {
         ? `<span class="wave-mini"><span style="animation-delay:0s"></span><span style="animation-delay:.15s"></span><span style="animation-delay:.3s"></span></span>`
         : '#'+(i+1)
       }</span>
+      ${mia && !playing ? `<button class="q-remove" onclick="quitarMia('${c.id}')">Quitar</button>` : ''}
     </li>`;
   }).join('');
+}
+
+async function quitarMia(id) {
+  try {
+    const res = await fetch(`/rockola/${SALA}/quitar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, owner: OWNER, modo: 'cliente' })
+    });
+    const data = await res.json();
+    if (!data.ok) onError(data.error);
+    actualizarCola();
+  } catch(e) {
+    onError('Error de conexión');
+  }
 }
 
 async function actualizarCola() {

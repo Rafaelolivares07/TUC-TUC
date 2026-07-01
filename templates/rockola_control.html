@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control Rockola · {{ sala_id | upper }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+:root {
+  --ac1:#00d4ff; --ac1-bg:rgba(0,212,255,.08); --bg:#060c18;
+  --surface:#0d1a2e; --surface2:#132440; --border:rgba(0,212,255,.15);
+  --text:#e2eeff; --muted:#4a6480; --danger:#ff4d6d;
+}
+body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:20px 16px 50px; }
+.wrap { max-width:480px; margin:0 auto; }
+.header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
+.title { font-size:22px; font-weight:800; }
+.tag { font-size:11px; font-weight:800; letter-spacing:1.8px; color:var(--ac1); border:1px solid var(--border); background:var(--ac1-bg); padding:6px 10px; border-radius:8px; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:16px; margin-bottom:12px; }
+.label { font-size:11px; font-weight:800; letter-spacing:1.4px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+.now { font-size:18px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.muted { color:var(--muted); font-size:13px; line-height:1.5; }
+.actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+.btn { border:none; border-radius:11px; padding:12px; font-family:'Space Grotesk',sans-serif; font-weight:800; cursor:pointer; background:linear-gradient(135deg,#00d4ff,#0066ff); color:#00101b; }
+.btn.secondary { background:var(--surface2); color:var(--ac1); border:1px solid var(--border); }
+.btn.danger { background:rgba(255,77,109,.12); color:var(--danger); border:1px solid rgba(255,77,109,.35); }
+.queue { list-style:none; }
+.item { display:flex; align-items:center; gap:10px; padding:11px 0; border-top:1px solid rgba(0,212,255,.08); }
+.item:first-child { border-top:none; }
+.handle { color:var(--muted); cursor:grab; font-size:16px; }
+.song { flex:1; min-width:0; }
+.song-name { font-size:14px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.song-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+.mini { border:1px solid var(--border); background:var(--surface2); color:var(--ac1); border-radius:9px; padding:8px 9px; font-weight:800; cursor:pointer; }
+.mini.danger { color:var(--danger); border-color:rgba(255,77,109,.35); }
+.empty { text-align:center; color:var(--muted); padding:18px 0; font-size:13px; }
+.login { display:none; }
+.login.visible { display:block; }
+input { width:100%; padding:13px; border-radius:11px; border:1px solid var(--border); background:var(--surface2); color:var(--text); outline:none; font-family:'Space Grotesk',sans-serif; margin:8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <div class="title">Control de Rockola</div>
+      <div class="muted">Administra la cola sin reproducir audio.</div>
+    </div>
+    <div class="tag">{{ sala_id | upper }}</div>
+  </div>
+
+  <div class="card login" id="login-box">
+    <div class="label">Llave de control</div>
+    <div class="muted">Pega la llave o abre el enlace privado de control.</div>
+    <input id="key-input" type="text" placeholder="Llave de administración">
+    <button class="btn" onclick="guardarKey()">Entrar al control</button>
+  </div>
+
+  <div id="panel">
+    <div class="card">
+      <div class="label">Sonando ahora</div>
+      <div class="now" id="sonando">Esperando canciones...</div>
+      <div class="actions">
+        <button class="btn danger" onclick="saltarActual()">Saltar actual</button>
+        <button class="btn secondary" onclick="actualizar()">Actualizar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label">Compartir</div>
+      <div class="actions">
+        <button class="btn secondary" onclick="copiar(clienteUrl)">Clientes</button>
+        <button class="btn secondary" onclick="copiar(controlUrl)">Delegar control</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" id="queue-label">Cola</div>
+      <ul class="queue" id="cola">
+        <li class="empty">Sin canciones en cola</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+const SALA = '{{ sala_id }}';
+const SERVER_KEY = '{{ admin_key }}';
+const urlKey = new URLSearchParams(window.location.search).get('key') || '';
+let adminKey = localStorage.getItem('rockola_admin_' + SALA) || urlKey || '';
+let clienteUrl = `https://rockola.tuc-tuc.co/rockola/${encodeURIComponent(SALA)}`;
+let controlUrl = `https://rockola.tuc-tuc.co/control/${encodeURIComponent(SALA)}?key=${encodeURIComponent(adminKey || SERVER_KEY)}`;
+const colaEl = document.getElementById('cola');
+
+if (urlKey) localStorage.setItem('rockola_admin_' + SALA, urlKey);
+
+function mostrarLogin(on) {
+  document.getElementById('login-box').classList.toggle('visible', on);
+  document.getElementById('panel').style.display = on ? 'none' : 'block';
+}
+
+function guardarKey() {
+  adminKey = document.getElementById('key-input').value.trim();
+  if (!adminKey) return;
+  localStorage.setItem('rockola_admin_' + SALA, adminKey);
+  controlUrl = `https://rockola.tuc-tuc.co/control/${encodeURIComponent(SALA)}?key=${encodeURIComponent(adminKey)}`;
+  mostrarLogin(false);
+  actualizar();
+}
+
+async function verificarKey() {
+  if (!adminKey && SERVER_KEY) {
+    adminKey = SERVER_KEY;
+    localStorage.setItem('rockola_admin_' + SALA, adminKey);
+  }
+  if (!adminKey) { mostrarLogin(true); return false; }
+  const r = await fetch(`/rockola/${SALA}/admin-info?key=${encodeURIComponent(adminKey)}`);
+  const d = await r.json();
+  clienteUrl = d.cliente_url || clienteUrl;
+  controlUrl = d.control_url || controlUrl;
+  mostrarLogin(!d.autorizado);
+  return d.autorizado;
+}
+
+async function actualizar() {
+  if (!(await verificarKey())) return;
+  const r = await fetch(`/rockola/${SALA}/cola`);
+  const d = await r.json();
+  const cola = d.cola || [];
+  document.getElementById('sonando').textContent = cola[0] ? limpiarNombre(cola[0].nombre) : 'Esperando canciones...';
+  renderCola(cola);
+}
+
+function limpiarNombre(nombre) {
+  return (nombre || '').replace(/\.[^.]+$/, '');
+}
+
+function renderCola(cola) {
+  document.getElementById('queue-label').textContent = `Cola · ${cola.length} canción${cola.length === 1 ? '' : 'es'}`;
+  if (!cola.length) {
+    colaEl.innerHTML = '<li class="empty">Sin canciones en cola</li>';
+    return;
+  }
+  colaEl.innerHTML = cola.map((c, i) => `
+    <li class="item" data-id="${c.id}">
+      <span class="handle">⠿</span>
+      <div class="song">
+        <div class="song-name">${limpiarNombre(c.nombre)}</div>
+        <div class="song-sub">${i === 0 ? 'Sonando ahora' : '#' + (i + 1)}</div>
+      </div>
+      <button class="mini danger" onclick="quitar('${c.id}')">Quitar</button>
+    </li>
+  `).join('');
+}
+
+Sortable.create(colaEl, {
+  animation: 150,
+  handle: '.handle',
+  onEnd: async () => {
+    const orden = [...colaEl.querySelectorAll('.item')].map(el => el.dataset.id);
+    await fetch(`/rockola/${SALA}/reordenar`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ orden, modo:'control', admin_key:adminKey })
+    });
+    actualizar();
+  }
+});
+
+async function saltarActual() {
+  await fetch(`/rockola/${SALA}/saltar`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ modo:'control', admin_key:adminKey })
+  });
+  actualizar();
+}
+
+async function quitar(id) {
+  await fetch(`/rockola/${SALA}/quitar`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id, modo:'control', admin_key:adminKey })
+  });
+  actualizar();
+}
+
+function copiar(url) {
+  navigator.clipboard.writeText(url).then(() => alert('Enlace copiado'));
+}
+
+actualizar();
+setInterval(actualizar, 3500);
+</script>
+</body>
+</html>

@@ -211,6 +211,21 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .library-origin { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; }
 .library-btn { border:1px solid var(--border); background:var(--ac1-bg); color:var(--ac1); border-radius:9px; padding:7px 10px; font-weight:900; cursor:pointer; }
 .library-empty { text-align:center; color:var(--muted2); font-size:13px; padding:12px 0; }
+.local-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.hidden-input { position:absolute; left:-9999px; width:1px; height:1px; opacity:0; }
+.local-search {
+  width:100%;
+  padding:12px 13px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--surface2);
+  color:var(--text);
+  font-family:'Space Grotesk',sans-serif;
+  outline:none;
+  margin-bottom:10px;
+}
+.local-search:focus { border-color:var(--ac1); }
+.local-meta { color:var(--muted2); font-size:11px; margin-top:2px; }
 
 /* Queue */
 .queue-box {
@@ -348,6 +363,20 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
     </div>
 
     <div class="panel-box">
+      <div class="panel-title">Biblioteca de este dispositivo</div>
+      <div class="local-actions">
+        <button class="btn-control" onclick="abrirSelectorCarpeta()">Agregar carpeta</button>
+        <button class="btn-control" onclick="abrirSelectorAudios()">Agregar audios</button>
+      </div>
+      <input class="hidden-input" id="folder-input" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" webkitdirectory directory multiple onchange="indexarArchivosLocales(this.files)">
+      <input class="hidden-input" id="local-files-input" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="indexarArchivosLocales(this.files)">
+      <input class="local-search" id="local-search" type="search" placeholder="Buscar en este dispositivo..." oninput="renderBibliotecaLocal()">
+      <ul class="library-list" id="lista-local">
+        <li class="library-empty">Agrega una carpeta o canciones para no volver al explorador.</li>
+      </ul>
+    </div>
+
+    <div class="panel-box">
       <div class="panel-title">Canciones anteriores</div>
       <ul class="library-list" id="lista-biblioteca">
         <li class="library-empty">Esta sala todavia no tiene canciones recordadas</li>
@@ -381,6 +410,8 @@ const uploadMsg = document.getElementById('upload-msg');
 const progWrap = document.getElementById('prog-wrap');
 const progFill = document.getElementById('prog-fill');
 const listaBiblioteca = document.getElementById('lista-biblioteca');
+const listaLocal = document.getElementById('lista-local');
+const localSearch = document.getElementById('local-search');
 const deviceState = document.getElementById('device-state');
 const deviceActions = document.getElementById('device-actions');
 const btnActivar = document.getElementById('btn-activar');
@@ -395,6 +426,8 @@ let tabActual = 'archivo';
 let archivosValidos = [];
 let qrGenerado = false;
 let salaDisponible = false;
+let cancionesLocales = [];
+let localObjectUrl = null;
 
 function getDeviceId() {
   let id = localStorage.getItem('rockola_device_id');
@@ -470,6 +503,7 @@ async function activar() {
   setInterval(verificarCola, 2500);
   verificarCola();
   actualizarBiblioteca();
+  cargarBibliotecaLocal();
 }
 
 player.addEventListener('ended', () => {
@@ -500,7 +534,22 @@ async function verificarCola() {
         cancionActual = c.id;
         reproduciendo = true;
         nombreEl.textContent = limpiarNombre(c.nombre);
-        player.src = `/rockola/${SALA}/archivo/${c.id}`;
+        if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
+        if (c.id.startsWith('local-')) {
+          const local = await obtenerCancionLocal(c.id);
+          if (!local || !local.blob) {
+            reproduciendo = false;
+            estadoEl.textContent = 'No disponible en este dispositivo';
+            setVinylSpinning(false);
+            setWaveActive(false);
+            return;
+          }
+          localObjectUrl = URL.createObjectURL(local.blob);
+          player.src = localObjectUrl;
+        } else {
+          localObjectUrl = null;
+          player.src = `/rockola/${SALA}/archivo/${c.id}`;
+        }
         player.load();
         player.play().then(() => {
           setVinylSpinning(true);
@@ -709,6 +758,155 @@ function mostrarMensaje(texto, tipo) {
   uploadMsg.className = 'status-msg ' + (tipo || '');
 }
 
+function abrirSelectorCarpeta() {
+  document.getElementById('folder-input').click();
+}
+
+function abrirSelectorAudios() {
+  document.getElementById('local-files-input').click();
+}
+
+function hashTexto(texto) {
+  let hash = 0;
+  for (let i = 0; i < texto.length; i++) {
+    hash = ((hash << 5) - hash) + texto.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function idLocalArchivo(file) {
+  return `local-${getDeviceId()}-${hashTexto([file.name, file.size, file.lastModified].join('|'))}`;
+}
+
+function abrirDbLocal() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('rockola_local_library_v1', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('songs')) {
+        const store = db.createObjectStore('songs', { keyPath:'id' });
+        store.createIndex('deviceId', 'deviceId', { unique:false });
+        store.createIndex('nombre', 'nombre', { unique:false });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function guardarCancionLocal(file) {
+  const db = await abrirDbLocal();
+  const cancion = {
+    id: idLocalArchivo(file),
+    deviceId: getDeviceId(),
+    nombre: file.name,
+    tipo: file.type || 'audio/mpeg',
+    size: file.size,
+    actualizado: Date.now(),
+    blob: file,
+  };
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('songs', 'readwrite');
+    tx.objectStore('songs').put(cancion);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+  return cancion;
+}
+
+async function obtenerCancionLocal(id) {
+  const db = await abrirDbLocal();
+  const cancion = await new Promise((resolve, reject) => {
+    const tx = db.transaction('songs', 'readonly');
+    const req = tx.objectStore('songs').get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return cancion;
+}
+
+async function cargarBibliotecaLocal() {
+  try {
+    const db = await abrirDbLocal();
+    cancionesLocales = await new Promise((resolve, reject) => {
+      const tx = db.transaction('songs', 'readonly');
+      const req = tx.objectStore('songs').getAll();
+      req.onsuccess = () => resolve((req.result || []).filter(c => c.deviceId === getDeviceId()));
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    cancionesLocales.sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
+    renderBibliotecaLocal();
+  } catch(e) {
+    listaLocal.innerHTML = '<li class="library-empty">Este navegador no permitio abrir biblioteca local.</li>';
+  }
+}
+
+async function indexarArchivosLocales(fileList) {
+  const files = [...(fileList || [])].filter(file =>
+    (file.type || '').startsWith('audio/') || /\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(file.name)
+  );
+  if (!files.length) {
+    mostrarMensaje('No encontre audios en la seleccion', 'error');
+    return;
+  }
+  mostrarMensaje(`Guardando ${files.length} audio(s) en este dispositivo...`, '');
+  let guardadas = 0;
+  for (const file of files) {
+    await guardarCancionLocal(file);
+    guardadas++;
+  }
+  document.getElementById('folder-input').value = '';
+  document.getElementById('local-files-input').value = '';
+  await cargarBibliotecaLocal();
+  mostrarMensaje(`${guardadas} audio(s) disponibles en este dispositivo`, 'ok');
+}
+
+function renderBibliotecaLocal() {
+  const filtro = (localSearch.value || '').trim().toLowerCase();
+  const canciones = cancionesLocales
+    .filter(c => !filtro || limpiarNombre(c.nombre).toLowerCase().includes(filtro))
+    .slice(0, 80);
+  if (!canciones.length) {
+    listaLocal.innerHTML = filtro
+      ? '<li class="library-empty">No encontre canciones con ese texto.</li>'
+      : '<li class="library-empty">Agrega una carpeta o canciones para no volver al explorador.</li>';
+    return;
+  }
+  listaLocal.innerHTML = canciones.map(c => `
+    <li class="library-item">
+      <div class="library-name" title="${c.nombre}">
+        ${limpiarNombre(c.nombre)}
+        <div class="local-meta">${Math.max(1, Math.round((c.size || 0) / 1024 / 1024))} MB · este dispositivo</div>
+      </div>
+      <button class="library-btn" onclick="ponerLocal('${c.id}')">Poner</button>
+    </li>
+  `).join('');
+}
+
+async function ponerLocal(id) {
+  const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
+  if (!cancion) {
+    mostrarMensaje('Esa cancion ya no esta disponible aqui', 'error');
+    return;
+  }
+  const res = await fetch(`/rockola/${SALA}/local`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ local_id:cancion.id, nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId() })
+  });
+  const data = await res.json();
+  if (data.ok) {
+    mostrarMensaje('Cancion local en cola', 'ok');
+    verificarCola();
+  } else {
+    mostrarMensaje(data.error || 'No se pudo poner en cola', 'error');
+  }
+}
+
 async function actualizarBiblioteca() {
   try {
     const res = await fetch(`/rockola/${SALA}/biblioteca`);
@@ -726,7 +924,7 @@ function renderBiblioteca(canciones) {
     <li class="library-item">
       <div class="library-name" title="${c.nombre}">${limpiarNombre(c.nombre)}</div>
       <div class="library-origin">${c.origen || 'audio'}</div>
-      <button class="library-btn" onclick="ponerRecordada('${c.id}')">Poner</button>
+      <button class="library-btn" onclick="${c.origen === 'local' ? `ponerLocal('${c.id}')` : `ponerRecordada('${c.id}')`}">Poner</button>
     </li>
   `).join('');
 }

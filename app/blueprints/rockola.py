@@ -513,6 +513,26 @@ def youtube(sala_id):
     }])
 
 
+@bp.route('/<sala_id>/local', methods=['POST'])
+def agregar_local(sala_id):
+    data = request.get_json(silent=True) or {}
+    local_id = (data.get('local_id') or '').strip()
+    nombre = (data.get('nombre') or 'Cancion local').strip()
+    owner = data.get('owner', 'reproductor')
+    if not local_id.startswith('local-'):
+        return jsonify(ok=False, error='Cancion local invalida'), 400
+
+    conn = _connect()
+    try:
+        with _lock:
+            _agregar_a_cola(conn, sala_id, local_id, nombre, owner)
+            _recordar_cancion(conn, sala_id, local_id, nombre, owner, 'local')
+            conn.commit()
+    finally:
+        conn.close()
+    return jsonify(ok=True, agregadas=[{'id': local_id, 'nombre': nombre, 'owner': owner}])
+
+
 @bp.route('/<sala_id>/cola')
 def cola(sala_id):
     conn = _connect()

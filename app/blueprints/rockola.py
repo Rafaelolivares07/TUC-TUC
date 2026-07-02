@@ -21,10 +21,13 @@ INIT_SQL = """
 CREATE TABLE IF NOT EXISTS rockola_salas (
     sala_id      TEXT PRIMARY KEY,
     admin_key    TEXT,
+    dispositivo_reproductor_id TEXT,
+    dispositivo_reproductor_nombre TEXT,
     sync_estado  TEXT  NOT NULL DEFAULT 'play',
     sync_pos     FLOAT NOT NULL DEFAULT 0.0,
     sync_ts      FLOAT NOT NULL DEFAULT 0.0,
-    volumen      INTEGER NOT NULL DEFAULT 80
+    volumen      INTEGER NOT NULL DEFAULT 80,
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS rockola_cola (
     id        TEXT PRIMARY KEY,
@@ -45,6 +48,9 @@ CREATE TABLE IF NOT EXISTS rockola_biblioteca (
 CREATE INDEX IF NOT EXISTS idx_biblioteca_sala ON rockola_biblioteca(sala_id, creado_en DESC);
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS admin_key TEXT;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS volumen INTEGER NOT NULL DEFAULT 80;
+ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS dispositivo_reproductor_id TEXT;
+ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS dispositivo_reproductor_nombre TEXT;
+ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
 """
 
 _lock = threading.Lock()
@@ -195,9 +201,89 @@ def _normalizar_volumen(valor):
     return max(0, min(100, volumen))
 
 
+def _sala_para_dispositivo(sala, dispositivo_id=None):
+    owner_id = sala.get('dispositivo_reproductor_id') or ''
+    disponible = (not owner_id) or (bool(dispositivo_id) and owner_id == dispositivo_id)
+    return {
+        'sala_id': sala.get('sala_id'),
+        'dispositivo_reproductor_id': owner_id,
+        'dispositivo_reproductor_nombre': sala.get('dispositivo_reproductor_nombre') or '',
+        'disponible_reproductor': disponible,
+        'puede_agregar': True,
+    }
+
+
 @bp.route('/')
 def entrada():
     return render_template('rockola_entrada.html')
+
+
+@bp.route('/salas')
+def salas():
+    dispositivo_id = (request.args.get('device_id') or '').strip()
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT sala_id, dispositivo_reproductor_id, dispositivo_reproductor_nombre, actualizado_en
+            FROM rockola_salas
+            ORDER BY actualizado_en DESC
+            LIMIT 80
+            """
+        ).fetchall()
+        lista = [_sala_para_dispositivo(_row_dict(row), dispositivo_id) for row in rows]
+    finally:
+        conn.close()
+    return jsonify(ok=True, salas=lista)
+
+
+@bp.route('/<sala_id>/info')
+def sala_info(sala_id):
+    dispositivo_id = (request.args.get('device_id') or '').strip()
+    conn = _connect()
+    try:
+        sala = _get_sala(conn, sala_id)
+    finally:
+        conn.close()
+    return jsonify(ok=True, sala=_sala_para_dispositivo(sala, dispositivo_id))
+
+
+@bp.route('/<sala_id>/vincular-reproductor', methods=['POST'])
+def vincular_reproductor(sala_id):
+    data = request.get_json(silent=True) or {}
+    dispositivo_id = (data.get('device_id') or '').strip()
+    dispositivo_nombre = (data.get('device_name') or 'Este dispositivo').strip()[:80]
+    tomar_control = bool(data.get('tomar_control'))
+    if not dispositivo_id:
+        return jsonify(ok=False, error='Falta dispositivo'), 400
+
+    conn = _connect()
+    try:
+        with _lock:
+            sala = _get_sala(conn, sala_id)
+            owner_id = sala.get('dispositivo_reproductor_id') or ''
+            if owner_id and owner_id != dispositivo_id and not tomar_control:
+                return jsonify(
+                    ok=False,
+                    error='Sala asociada a otro reproductor',
+                    sala=_sala_para_dispositivo(sala, dispositivo_id),
+                ), 409
+
+            conn.execute(
+                """
+                UPDATE rockola_salas
+                SET dispositivo_reproductor_id = %s,
+                    dispositivo_reproductor_nombre = %s,
+                    actualizado_en = CURRENT_TIMESTAMP
+                WHERE sala_id = %s
+                """,
+                (dispositivo_id, dispositivo_nombre, sala_id),
+            )
+            conn.commit()
+            sala = _get_sala(conn, sala_id)
+    finally:
+        conn.close()
+    return jsonify(ok=True, sala=_sala_para_dispositivo(sala, dispositivo_id))
 
 
 @bp.route('/cliente')

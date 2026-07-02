@@ -80,6 +80,8 @@ def create_app():
             if partes[0] == 'rockola':
                 if len(partes) == 1:
                     return entrada()
+                if len(partes) == 2 and partes[1] == 'salas':
+                    return
                 if len(partes) == 2:
                     return cliente_sala(partes[1])
                 return

@@ -6,254 +6,112 @@
 <title>Tuc Tuc Rockola</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
+* { box-sizing:border-box; margin:0; padding:0; }
 :root {
-  --ac1: #00d4ff;
-  --ac1-dim: rgba(0,212,255,0.15);
-  --ac1-bg: rgba(0,212,255,0.08);
-  --ac2: #0066ff;
-  --ac-grad: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
-  --bg: #060c18;
-  --surface: #0d1a2e;
-  --surface2: #132440;
-  --border: rgba(0,212,255,0.15);
-  --text: #e2eeff;
-  --muted: #4a6480;
-  --muted2: #2a3d55;
+  --ac1:#00d4ff; --ac2:#0066ff; --ac-bg:rgba(0,212,255,.08);
+  --bg:#060c18; --surface:#0d1a2e; --surface2:#132440;
+  --border:rgba(0,212,255,.15); --text:#e2eeff; --muted:#7890aa; --muted2:#40556d;
 }
-
-body {
-  font-family: 'Space Grotesk', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-@keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-@keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
-@keyframes slideIn { from { opacity:0; transform:translateX(16px); } to { opacity:1; transform:translateX(0); } }
-
-.card {
-  width: 100%;
-  max-width: 380px;
-  animation: fadeUp 0.4s ease both;
-}
-
-/* LOGO */
-.logo-wrap { text-align: center; margin-bottom: 40px; }
-.vinyl {
-  display: inline-block;
-  margin-bottom: 14px;
-}
-.logo-text { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
-.logo-text span { color: var(--ac1); }
-
-/* TABS */
-.tabs {
-  display: flex;
-  gap: 4px;
-  background: var(--surface);
-  border-radius: 12px;
-  padding: 4px;
-  margin-bottom: 28px;
-}
-.tab {
-  flex: 1;
-  padding: 11px 0;
-  border-radius: 9px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.tab.activo {
-  background: var(--ac1-bg);
-  color: var(--ac1);
-  box-shadow: inset 0 0 0 1.5px var(--ac1);
-}
-
-/* SECCIONES */
-.seccion { display: none; }
-.seccion.visible { display: block; animation: slideIn 0.25s ease; }
-
-.desc {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.7;
-  text-align: center;
-  margin-bottom: 22px;
-}
-.desc strong { color: var(--text); }
-
-label.field-label {
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 8px;
-}
-
+body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:18px 14px 40px; }
+.wrap { width:100%; max-width:460px; margin:0 auto; }
+.top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:8px 0 18px; }
+.brand { font-size:24px; font-weight:900; letter-spacing:-.4px; }
+.brand span { color:var(--ac1); }
+.device { text-align:right; min-width:0; }
+.device-label { color:var(--muted2); font-size:10px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; }
+.device-name { color:var(--muted); font-size:12px; font-weight:800; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; background:var(--surface); padding:5px; border-radius:14px; margin-bottom:16px; }
+.tab { border:0; border-radius:10px; padding:12px 8px; background:transparent; color:var(--muted); font:800 14px 'Space Grotesk'; cursor:pointer; }
+.tab.active { background:var(--ac-bg); color:var(--ac1); box-shadow:inset 0 0 0 1px var(--border); }
+.section { display:none; }
+.section.active { display:block; }
+.hint { color:var(--muted); font-size:13px; line-height:1.55; margin-bottom:14px; }
+.box { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:14px; margin-bottom:12px; }
+.box-title { font-size:11px; color:var(--muted); font-weight:900; letter-spacing:1.4px; text-transform:uppercase; margin-bottom:10px; }
+.row { display:flex; gap:8px; }
 input[type=text] {
-  width: 100%;
-  padding: 14px 18px;
-  background: var(--surface2);
-  border: 1.5px solid var(--border);
-  border-radius: 12px;
-  color: var(--text);
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 20px;
-  letter-spacing: 3px;
-  text-align: center;
-  outline: none;
-  text-transform: uppercase;
-  transition: border-color 0.2s;
-  margin-bottom: 10px;
+  width:100%; min-height:48px; padding:12px 14px; border-radius:12px;
+  border:1px solid var(--border); background:var(--surface2); color:var(--text);
+  font:800 16px 'Space Grotesk'; outline:none;
 }
-input[type=text]:focus { border-color: var(--ac1); }
-input[type=text]::placeholder { color: var(--muted2); font-weight: 400; font-size: 14px; letter-spacing: 0; text-transform: none; }
-
-.btn-gen {
-  width: 100%;
-  padding: 10px;
-  background: transparent;
-  border: 1.5px dashed var(--border);
-  border-radius: 10px;
-  color: var(--ac1);
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  margin-bottom: 20px;
-  transition: all 0.2s;
-}
-.btn-gen:hover { background: var(--ac1-bg); border-color: var(--ac1); }
-
+input[type=text]:focus { border-color:var(--ac1); }
 .btn {
-  width: 100%;
-  padding: 15px;
-  border-radius: 12px;
-  border: none;
-  background: var(--ac-grad);
-  color: #000;
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 800;
-  font-size: 16px;
-  cursor: pointer;
-  transition: opacity 0.2s, box-shadow 0.2s;
-  box-shadow: 0 4px 24px var(--ac1-dim);
-  margin-bottom: 10px;
+  border:0; border-radius:12px; padding:13px 14px; background:linear-gradient(135deg,var(--ac1),var(--ac2));
+  color:#00101b; font:900 14px 'Space Grotesk'; cursor:pointer; min-height:46px;
 }
-.btn:disabled { background: var(--surface2); color: var(--muted); box-shadow: none; cursor: default; }
-.btn.secondary {
-  background: var(--ac1-bg);
-  color: var(--ac1);
-  box-shadow: none;
-  border: 1.5px solid var(--border);
-}
-.btn.secondary:disabled { background: var(--surface2); color: var(--muted); border-color: transparent; }
-
-.divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 16px 0;
-  color: var(--muted2);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.btn.secondary { background:var(--surface2); color:var(--ac1); border:1px solid var(--border); }
+.btn.ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
+.btn.small { padding:9px 10px; min-height:36px; font-size:12px; }
+.room-list { display:grid; gap:8px; }
+.room { background:var(--surface2); border:1px solid rgba(0,212,255,.1); border-radius:14px; padding:12px; }
+.room.disabled { opacity:.72; }
+.room-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.room-name { font-size:15px; font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pill { font-size:10px; font-weight:900; letter-spacing:.8px; text-transform:uppercase; color:var(--ac1); background:var(--ac-bg); border:1px solid var(--border); border-radius:999px; padding:5px 8px; flex-shrink:0; }
+.pill.off { color:var(--muted); background:transparent; }
+.room-note { color:var(--muted); font-size:12px; line-height:1.45; margin-bottom:10px; }
+.room-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.empty { color:var(--muted2); font-size:13px; text-align:center; padding:12px 0 2px; }
+.footer { margin-top:18px; color:var(--muted2); font-size:11px; text-align:center; }
 </style>
 </head>
 <body>
-<div class="card">
-
-  <!-- Logo -->
-  <div class="logo-wrap">
-    <div class="vinyl">
-      <svg width="56" height="56" viewBox="0 0 40 40">
-        <circle cx="20" cy="20" r="19" fill="#0d1a2e" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.4"/>
-        <circle cx="20" cy="20" r="13" fill="#090f1c"/>
-        <circle cx="20" cy="20" r="8" fill="#0d1a2e" stroke="#00d4ff" stroke-width="0.8" stroke-opacity="0.3"/>
-        <circle cx="20" cy="20" r="3" fill="#00d4ff"/>
-        <circle cx="20" cy="20" r="1.2" fill="#060c18"/>
-        <circle cx="20" cy="20" r="5" fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
-        <circle cx="20" cy="20" r="11" fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
-      </svg>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">Tu <span>Rockola</span></div>
+    <div class="device">
+      <div class="device-label">Dispositivo</div>
+      <div class="device-name" id="device-name">...</div>
     </div>
-    <div class="logo-text">Tuc Tuc <span>Rockola</span></div>
   </div>
 
-  <!-- Tabs -->
   <div class="tabs">
-    <button class="tab activo" onclick="setModo('sync')">🎶 Tu Emisora</button>
-    <button class="tab" onclick="setModo('restaurante')">🎵 Tu Rockola</button>
+    <button class="tab active" id="tab-rockola" onclick="setModo('rockola')">Tu Rockola</button>
+    <button class="tab" id="tab-emisora" onclick="setModo('emisora')">Tu Emisora</button>
   </div>
 
-  <!-- SYNC -->
-  <div class="seccion visible" id="sec-sync">
-    <p class="desc">Una emisora privada para escuchar <strong>la misma música</strong> aunque estén lejos.</p>
-    <input type="text" id="codigo-sync" placeholder="Nombre de tu emisora" maxlength="20" oninput="validar()">
-    <button class="btn-gen" onclick="generarCodigo()">⚡ Generar código aleatorio</button>
-    <button class="btn" id="btn-sync" onclick="entrarSync()" disabled>Entrar a la emisora →</button>
-  </div>
+  <section class="section active" id="sec-rockola">
+    <p class="hint">La sala suena en un dispositivo reproductor. Desde otros equipos puedes agregar canciones, pero no reproducir su biblioteca local.</p>
 
-  <!-- RESTAURANTE -->
-  <div class="seccion" id="sec-restaurante">
-    <p class="desc">Una fuente de sonido en el lugar. Las personas programan canciones desde su celular.</p>
-    <label class="field-label">Nombre de tu rockola</label>
-    <input type="text" id="codigo-rest" placeholder="mi-bar, rancho..." maxlength="30" oninput="validar()">
-    <div class="divider"><span>entrar como</span></div>
-    <button class="btn" onclick="entrarReproductor()">▶ Soy el reproductor del local</button>
-    <button class="btn secondary" onclick="entrarCliente()">🎵 Soy un cliente</button>
-  </div>
+    <div class="box">
+      <div class="box-title">Crear o abrir sala en este dispositivo</div>
+      <div class="row">
+        <input type="text" id="codigo-rockola" placeholder="mi-bar, casa, cumple..." maxlength="30">
+        <button class="btn" onclick="abrirReproductorDesdeInput()">Abrir</button>
+      </div>
+    </div>
 
+    <div class="box">
+      <div class="box-title">Disponibles aqui</div>
+      <div class="room-list" id="salas-disponibles"><div class="empty">Cargando salas...</div></div>
+    </div>
+
+    <div class="box">
+      <div class="box-title">Suenan en otro dispositivo</div>
+      <div class="room-list" id="salas-otras"><div class="empty">Cargando salas...</div></div>
+    </div>
+  </section>
+
+  <section class="section" id="sec-emisora">
+    <p class="hint">Una emisora privada para escuchar juntos a distancia.</p>
+    <div class="box">
+      <div class="box-title">Nombre de tu emisora</div>
+      <div class="row">
+        <input type="text" id="codigo-emisora" placeholder="luna, viaje, salsa..." maxlength="24">
+        <button class="btn" onclick="entrarEmisora()">Entrar</button>
+      </div>
+      <button class="btn ghost" style="width:100%;margin-top:8px" onclick="generarCodigo()">Generar nombre</button>
+    </div>
+  </section>
+
+  <div class="footer">AWS coordina la sala. La musica pertenece al dispositivo que reproduce.</div>
 </div>
 
 <script>
-let modoActual = 'sync';
-
-function setModo(modo) {
-  modoActual = modo;
-  document.querySelectorAll('.tab').forEach((t,i) =>
-    t.classList.toggle('activo', (i===0&&modo==='sync')||(i===1&&modo==='restaurante'))
-  );
-  document.getElementById('sec-sync').classList.toggle('visible', modo==='sync');
-  document.getElementById('sec-restaurante').classList.toggle('visible', modo==='restaurante');
-}
-
-function validar() {
-  const val = modoActual === 'sync'
-    ? document.getElementById('codigo-sync').value.trim()
-    : document.getElementById('codigo-rest').value.trim();
-  const btn = document.getElementById('btn-sync');
-  if (btn) btn.disabled = val.length < 2;
-}
-
-function generarCodigo() {
-  const ws = ['LUNA','SOL','RIO','MAR','FUEGO','CIELO','LLUVIA','VIENTO','NORTE','BRISA'];
-  const n = Math.floor(Math.random()*90)+10;
-  const codigo = ws[Math.floor(Math.random()*ws.length)] + n;
-  document.getElementById('codigo-sync').value = codigo;
-  document.getElementById('btn-sync').disabled = false;
-}
-
-function limpiar(v) {
-  return v.trim().toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'');
-}
+const DEVICE_KEY = 'rockola_device_id';
+const DEVICE_NAME_KEY = 'rockola_device_name';
+let modoActual = 'rockola';
+let salasCache = [];
 
 function rockolaBase() {
   const host = window.location.hostname;
@@ -261,28 +119,140 @@ function rockolaBase() {
   return 'https://rockola.tuc-tuc.co';
 }
 
-function entrarSync() {
-  const c = limpiar(document.getElementById('codigo-sync').value);
-  if (c.length < 2) return;
-  window.location.href = `${rockolaBase()}/emisora/${c}`;
+function getDeviceId() {
+  let id = localStorage.getItem(DEVICE_KEY);
+  if (!id) {
+    id = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem(DEVICE_KEY, id);
+  }
+  return id;
 }
 
-function entrarReproductor() {
-  const c = limpiar(document.getElementById('codigo-rest').value);
-  if (c.length < 2) return;
-  window.location.href = `${rockolaBase()}/reproductor/${c}`;
+function defaultDeviceName() {
+  const ua = navigator.userAgent || '';
+  if (/iPhone/i.test(ua)) return 'iPhone';
+  if (/Android/i.test(ua)) return 'Android';
+  if (/Windows/i.test(ua)) return 'Windows';
+  if (/Macintosh/i.test(ua)) return 'Mac';
+  return 'Este dispositivo';
 }
 
-function entrarCliente() {
-  const c = limpiar(document.getElementById('codigo-rest').value);
-  if (c.length < 2) return;
-  window.location.href = `${rockolaBase()}/rockola/${c}`;
+function getDeviceName() {
+  let name = localStorage.getItem(DEVICE_NAME_KEY);
+  if (!name) {
+    name = defaultDeviceName();
+    localStorage.setItem(DEVICE_NAME_KEY, name);
+  }
+  return name;
+}
+
+function setModo(modo) {
+  modoActual = modo;
+  document.getElementById('tab-rockola').classList.toggle('active', modo === 'rockola');
+  document.getElementById('tab-emisora').classList.toggle('active', modo === 'emisora');
+  document.getElementById('sec-rockola').classList.toggle('active', modo === 'rockola');
+  document.getElementById('sec-emisora').classList.toggle('active', modo === 'emisora');
+}
+
+function limpiar(v) {
+  return (v || '').trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+function recordarSalaLocal(salaId) {
+  const key = 'rockola_salas_recientes';
+  const actuales = JSON.parse(localStorage.getItem(key) || '[]').filter(s => s !== salaId);
+  actuales.unshift(salaId);
+  localStorage.setItem(key, JSON.stringify(actuales.slice(0, 20)));
+}
+
+function abrirReproductor(salaId) {
+  recordarSalaLocal(salaId);
+  window.location.href = `${rockolaBase()}/reproductor/${encodeURIComponent(salaId)}`;
+}
+
+function agregarComoCliente(salaId) {
+  recordarSalaLocal(salaId);
+  window.location.href = `${rockolaBase()}/rockola/${encodeURIComponent(salaId)}`;
+}
+
+function abrirControl(salaId) {
+  window.location.href = `${rockolaBase()}/control/${encodeURIComponent(salaId)}`;
+}
+
+function abrirReproductorDesdeInput() {
+  const sala = limpiar(document.getElementById('codigo-rockola').value);
+  if (sala.length < 2) return;
+  abrirReproductor(sala);
+}
+
+function entrarEmisora() {
+  const sala = limpiar(document.getElementById('codigo-emisora').value);
+  if (sala.length < 2) return;
+  window.location.href = `${rockolaBase()}/emisora/${encodeURIComponent(sala)}`;
+}
+
+function generarCodigo() {
+  const palabras = ['luna','sol','rio','brisa','norte','cielo','salsa','viaje'];
+  document.getElementById('codigo-emisora').value = palabras[Math.floor(Math.random() * palabras.length)] + '-' + (Math.floor(Math.random() * 90) + 10);
+}
+
+function renderSala(sala, disponible) {
+  const nombre = sala.sala_id;
+  const dueno = sala.dispositivo_reproductor_nombre || 'otro dispositivo';
+  const nota = disponible
+    ? 'Esta sala puede reproducirse desde este dispositivo.'
+    : `Esta sala suena en ${dueno}. Desde aqui puedes agregar canciones, pero no reproducir.`;
+  return `
+    <div class="room ${disponible ? '' : 'disabled'}">
+      <div class="room-head">
+        <div class="room-name">${nombre}</div>
+        <div class="pill ${disponible ? '' : 'off'}">${disponible ? 'Disponible' : 'Remota'}</div>
+      </div>
+      <div class="room-note">${nota}</div>
+      <div class="room-actions">
+        ${disponible
+          ? `<button class="btn small" onclick="abrirReproductor('${nombre}')">Reproducir</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar</button>`
+          : `<button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar canciones</button><button class="btn ghost small" onclick="abrirControl('${nombre}')">Control</button>`
+        }
+      </div>
+    </div>
+  `;
+}
+
+function renderSalas(salas) {
+  const disponibles = salas.filter(s => s.disponible_reproductor);
+  const otras = salas.filter(s => !s.disponible_reproductor);
+  document.getElementById('salas-disponibles').innerHTML = disponibles.length
+    ? disponibles.map(s => renderSala(s, true)).join('')
+    : '<div class="empty">No hay salas de este dispositivo todavia.</div>';
+  document.getElementById('salas-otras').innerHTML = otras.length
+    ? otras.map(s => renderSala(s, false)).join('')
+    : '<div class="empty">No hay salas remotas registradas.</div>';
+}
+
+async function cargarSalas() {
+  const deviceId = getDeviceId();
+  document.getElementById('device-name').textContent = getDeviceName();
+  try {
+    const res = await fetch(`/rockola/salas?device_id=${encodeURIComponent(deviceId)}`);
+    const data = await res.json();
+    salasCache = data.salas || [];
+    const recientes = JSON.parse(localStorage.getItem('rockola_salas_recientes') || '[]')
+      .filter(salaId => !salasCache.some(s => s.sala_id === salaId))
+      .map(salaId => ({ sala_id:salaId, disponible_reproductor:true, dispositivo_reproductor_nombre:getDeviceName() }));
+    renderSalas([...recientes, ...salasCache]);
+  } catch(e) {
+    renderSalas([]);
+  }
 }
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
-  if (modoActual === 'sync') entrarSync();
+  if (modoActual === 'rockola') abrirReproductorDesdeInput();
+  else entrarEmisora();
 });
+
+cargarSalas();
 </script>
 </body>
 </html>

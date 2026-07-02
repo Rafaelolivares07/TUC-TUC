@@ -54,7 +54,22 @@ body {
 .activar-tag { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
 .activar-titulo { font-size: 30px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
 .activar-titulo span { color: var(--ac1); }
-.activar-sub { font-size: 13px; color: var(--muted); line-height: 1.7; max-width: 280px; margin: 0 auto 40px; }
+.activar-sub { font-size: 13px; color: var(--muted); line-height: 1.7; max-width: 280px; margin: 0 auto 22px; }
+.device-state {
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.device-state.warn { border-color: rgba(255,190,80,.35); color: #ffd08a; background: rgba(255,190,80,.07); }
+.device-actions { display:none; width:100%; max-width:340px; margin:0 auto 18px; grid-template-columns:1fr 1fr; gap:8px; }
+.device-actions.visible { display:grid; }
 .btn-activar {
   padding: 20px 64px;
   font-size: 20px;
@@ -239,8 +254,13 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   </div>
   <div class="activar-tag">Reproductor del local</div>
   <div class="activar-titulo">Sala <span>{{ sala_id | upper }}</span></div>
-  <div class="activar-sub">Los clientes suben canciones desde su celular. Activa la rockola para empezar.</div>
-  <button class="btn-activar" onclick="activar()">▶ Activar Rockola</button>
+  <div class="activar-sub">La sala queda asociada al dispositivo que reproduce la musica.</div>
+  <div class="device-state" id="device-state">Verificando este dispositivo...</div>
+  <div class="device-actions" id="device-actions">
+    <button class="btn-control" onclick="entrarComoCliente()">Agregar canciones</button>
+    <button class="btn-control" onclick="abrirControl()">Control</button>
+  </div>
+  <button class="btn-activar" id="btn-activar" onclick="activar()">Activar Rockola</button>
   <button class="btn-back" onclick="window.location.href='/rockola/'">← Volver</button>
 </div>
 
@@ -361,6 +381,9 @@ const uploadMsg = document.getElementById('upload-msg');
 const progWrap = document.getElementById('prog-wrap');
 const progFill = document.getElementById('prog-fill');
 const listaBiblioteca = document.getElementById('lista-biblioteca');
+const deviceState = document.getElementById('device-state');
+const deviceActions = document.getElementById('device-actions');
+const btnActivar = document.getElementById('btn-activar');
 const ADMIN_KEY = '{{ admin_key }}';
 const OWNER = 'reproductor';
 
@@ -371,8 +394,75 @@ let guardandoVolumen = null;
 let tabActual = 'archivo';
 let archivosValidos = [];
 let qrGenerado = false;
+let salaDisponible = false;
 
-function activar() {
+function getDeviceId() {
+  let id = localStorage.getItem('rockola_device_id');
+  if (!id) {
+    id = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('rockola_device_id', id);
+  }
+  return id;
+}
+
+function getDeviceName() {
+  let name = localStorage.getItem('rockola_device_name');
+  if (!name) {
+    const ua = navigator.userAgent || '';
+    name = /iPhone/i.test(ua) ? 'iPhone' : (/Android/i.test(ua) ? 'Android' : (/Windows/i.test(ua) ? 'Windows' : 'Este dispositivo'));
+    localStorage.setItem('rockola_device_name', name);
+  }
+  return name;
+}
+
+function setDeviceMessage(texto, warn=false) {
+  if (!deviceState) return;
+  deviceState.textContent = texto;
+  deviceState.classList.toggle('warn', warn);
+}
+
+async function verificarDispositivoSala() {
+  try {
+    const res = await fetch(`/rockola/${SALA}/info?device_id=${encodeURIComponent(getDeviceId())}`);
+    const data = await res.json();
+    const sala = data.sala || {};
+    salaDisponible = !!sala.disponible_reproductor;
+    if (salaDisponible) {
+      setDeviceMessage(sala.dispositivo_reproductor_nombre
+        ? `Disponible en este dispositivo: ${getDeviceName()}.`
+        : `Esta sala puede asociarse a ${getDeviceName()}.`);
+      btnActivar.disabled = false;
+      deviceActions.classList.remove('visible');
+    } else {
+      setDeviceMessage(`Esta sala suena en ${sala.dispositivo_reproductor_nombre || 'otro dispositivo'}. Desde aqui puedes agregar canciones, pero no reproducir.`, true);
+      btnActivar.disabled = true;
+      deviceActions.classList.add('visible');
+    }
+  } catch(e) {
+    setDeviceMessage('No pude verificar la sala. Revisa la conexion.', true);
+  }
+}
+
+async function vincularEsteReproductor() {
+  const res = await fetch(`/rockola/${SALA}/vincular-reproductor`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ device_id:getDeviceId(), device_name:getDeviceName() })
+  });
+  const data = await res.json();
+  if (!data.ok) {
+    const sala = data.sala || {};
+    setDeviceMessage(`Esta sala suena en ${sala.dispositivo_reproductor_nombre || 'otro dispositivo'}. Desde aqui puedes agregar canciones, pero no reproducir.`, true);
+    btnActivar.disabled = true;
+    deviceActions.classList.add('visible');
+    return false;
+  }
+  salaDisponible = true;
+  return true;
+}
+
+async function activar() {
+  if (!(await vincularEsteReproductor())) return;
   document.getElementById('pantalla-activar').style.display = 'none';
   document.getElementById('pantalla-principal').style.display = 'block';
   player.play().catch(() => {});
@@ -706,8 +796,13 @@ function abrirControl() {
   window.open(`https://rockola.tuc-tuc.co/control/${encodeURIComponent(SALA)}?key=${encodeURIComponent(ADMIN_KEY)}`, '_blank');
 }
 
+function entrarComoCliente() {
+  window.location.href = `https://rockola.tuc-tuc.co/rockola/${encodeURIComponent(SALA)}`;
+}
+
 volumenEl.addEventListener('input', programarGuardarVolumen);
 aplicarVolumen(volumenEl.value);
+verificarDispositivoSala();
 
 if (window.Sortable) {
   Sortable.create(listaCola, {

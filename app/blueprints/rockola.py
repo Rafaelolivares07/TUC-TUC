@@ -203,12 +203,14 @@ def _normalizar_volumen(valor):
 
 def _sala_para_dispositivo(sala, dispositivo_id=None):
     owner_id = sala.get('dispositivo_reproductor_id') or ''
-    disponible = (not owner_id) or (bool(dispositivo_id) and owner_id == dispositivo_id)
+    sin_reproductor = not owner_id
+    disponible = bool(dispositivo_id) and owner_id == dispositivo_id
     return {
         'sala_id': sala.get('sala_id'),
         'dispositivo_reproductor_id': owner_id,
         'dispositivo_reproductor_nombre': sala.get('dispositivo_reproductor_nombre') or '',
         'disponible_reproductor': disponible,
+        'sin_reproductor': sin_reproductor,
         'puede_agregar': True,
     }
 
@@ -284,6 +286,30 @@ def vincular_reproductor(sala_id):
     finally:
         conn.close()
     return jsonify(ok=True, sala=_sala_para_dispositivo(sala, dispositivo_id))
+
+
+@bp.route('/<sala_id>/eliminar', methods=['POST'])
+def eliminar_sala(sala_id):
+    data = request.get_json(silent=True) or {}
+    dispositivo_id = (data.get('device_id') or '').strip()
+    confirmar = (data.get('confirmar') or '').strip().lower()
+    if confirmar != sala_id.lower():
+        return jsonify(ok=False, error='Confirmacion invalida'), 400
+
+    conn = _connect()
+    try:
+        with _lock:
+            sala = _get_sala(conn, sala_id)
+            owner_id = sala.get('dispositivo_reproductor_id') or ''
+            if owner_id and dispositivo_id and owner_id != dispositivo_id:
+                return jsonify(ok=False, error='Esta sala pertenece a otro dispositivo'), 403
+            conn.execute("DELETE FROM rockola_cola WHERE sala_id = %s", (sala_id,))
+            conn.execute("DELETE FROM rockola_biblioteca WHERE sala_id = %s", (sala_id,))
+            conn.execute("DELETE FROM rockola_salas WHERE sala_id = %s", (sala_id,))
+            conn.commit()
+    finally:
+        conn.close()
+    return jsonify(ok=True)
 
 
 @bp.route('/cliente')

@@ -90,6 +90,11 @@ input[type=text]:focus { border-color:var(--ac1); }
       <div class="box-title">Suenan en otro dispositivo</div>
       <div class="room-list" id="salas-otras"><div class="empty">Cargando salas...</div></div>
     </div>
+
+    <div class="box">
+      <div class="box-title">Sin reproductor asignado</div>
+      <div class="room-list" id="salas-huerfanas"><div class="empty">Cargando salas...</div></div>
+    </div>
   </section>
 
   <section class="section" id="sec-emisora">
@@ -219,15 +224,55 @@ function renderSala(sala, disponible) {
   `;
 }
 
+function renderSalaHuerfana(sala) {
+  const nombre = sala.sala_id;
+  return `
+    <div class="room">
+      <div class="room-head">
+        <div class="room-name">${nombre}</div>
+        <div class="pill off">Sin reproductor</div>
+      </div>
+      <div class="room-note">Esta sala existe, pero aun no pertenece a ningun dispositivo. Puedes tomarla aqui o eliminarla si fue una prueba.</div>
+      <div class="room-actions">
+        <button class="btn small" onclick="abrirReproductor('${nombre}')">Tomar sala</button>
+        <button class="btn ghost small" onclick="eliminarSala('${nombre}')">Eliminar</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderSalas(salas) {
   const disponibles = salas.filter(s => s.disponible_reproductor);
-  const otras = salas.filter(s => !s.disponible_reproductor);
+  const huerfanas = salas.filter(s => s.sin_reproductor);
+  const otras = salas.filter(s => !s.disponible_reproductor && !s.sin_reproductor);
   document.getElementById('salas-disponibles').innerHTML = disponibles.length
     ? disponibles.map(s => renderSala(s, true)).join('')
     : '<div class="empty">No hay salas de este dispositivo todavia.</div>';
   document.getElementById('salas-otras').innerHTML = otras.length
     ? otras.map(s => renderSala(s, false)).join('')
     : '<div class="empty">No hay salas remotas registradas.</div>';
+  document.getElementById('salas-huerfanas').innerHTML = huerfanas.length
+    ? huerfanas.map(renderSalaHuerfana).join('')
+    : '<div class="empty">No hay salas sin reproductor.</div>';
+}
+
+async function eliminarSala(salaId) {
+  const confirmar = prompt(`Escribe ${salaId} para eliminar esta sala.`);
+  if ((confirmar || '').trim().toLowerCase() !== salaId.toLowerCase()) return;
+  const res = await fetch(`/rockola/${encodeURIComponent(salaId)}/eliminar`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ device_id:getDeviceId(), confirmar:salaId })
+  });
+  const data = await res.json();
+  if (!data.ok) {
+    alert(data.error || 'No se pudo eliminar la sala');
+    return;
+  }
+  const recientesKey = 'rockola_salas_recientes';
+  const recientes = JSON.parse(localStorage.getItem(recientesKey) || '[]').filter(s => s !== salaId);
+  localStorage.setItem(recientesKey, JSON.stringify(recientes));
+  cargarSalas();
 }
 
 async function cargarSalas() {

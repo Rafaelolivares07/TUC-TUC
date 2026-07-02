@@ -460,10 +460,10 @@ async function verificarDispositivoSala() {
     const data = await res.json();
     const sala = data.sala || {};
     salaDisponible = !!sala.disponible_reproductor;
-    if (salaDisponible) {
-      setDeviceMessage(sala.dispositivo_reproductor_nombre
+    if (salaDisponible || sala.sin_reproductor) {
+      setDeviceMessage(salaDisponible
         ? `Disponible en este dispositivo: ${getDeviceName()}.`
-        : `Esta sala puede asociarse a ${getDeviceName()}.`);
+        : `Esta sala aun no tiene reproductor. Puedes tomarla en ${getDeviceName()}.`);
       btnActivar.disabled = false;
       deviceActions.classList.remove('visible');
     } else {

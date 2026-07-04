@@ -913,6 +913,55 @@ function idLocalArchivo(file) {
   return `local-${getDeviceId()}-${hashTexto([file.name, file.size, file.lastModified].join('|'))}`;
 }
 
+function huellaCancionLocal(cancion) {
+  return `song-${hashTexto([
+    limpiarNombre(cancion.nombre).toLowerCase(),
+    cancion.size || 0,
+    cancion.tipo || ''
+  ].join('|'))}`;
+}
+
+function metadataCancionLocal(cancion) {
+  return {
+    cancion_id: huellaCancionLocal(cancion),
+    local_id: cancion.id,
+    titulo: limpiarNombre(cancion.nombre),
+    archivo_nombre: cancion.nombre,
+    tamano_bytes: cancion.size || 0,
+    mime: cancion.tipo || '',
+  };
+}
+
+let sincronizandoCatalogo = null;
+async function sincronizarCatalogoLocal() {
+  if (sincronizandoCatalogo) clearTimeout(sincronizandoCatalogo);
+  sincronizandoCatalogo = setTimeout(async () => {
+    try {
+      await fetch('/rockola/catalogo/local', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          dispositivo: {
+            id: getDeviceId(),
+            nombre: getDeviceName(),
+            user_agent: navigator.userAgent || '',
+          },
+          canciones: cancionesLocales.map(metadataCancionLocal),
+          listas: playlistsLocales.map(p => ({
+            lista_id: p.id,
+            nombre: p.nombre,
+            canciones: p.canciones || [],
+          })),
+        })
+      });
+    } catch(e) {
+      console.warn('No se pudo sincronizar catalogo local', e);
+    } finally {
+      sincronizandoCatalogo = null;
+    }
+  }, 500);
+}
+
 function abrirDbLocal() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open('rockola_local_library_v1', 2);
@@ -979,6 +1028,7 @@ async function cargarBibliotecaLocal() {
     db.close();
     cancionesLocales.sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
     renderBibliotecaLocal();
+    sincronizarCatalogoLocal();
   } catch(e) {
     listaLocal.innerHTML = '<li class="library-empty">Este navegador no permitio abrir biblioteca local.</li>';
   }
@@ -1054,6 +1104,7 @@ async function cargarListasLocales() {
     db.close();
     playlistsLocales.sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
     renderListasLocales();
+    sincronizarCatalogoLocal();
   } catch(e) {
     listaPlaylists.innerHTML = '<li class="library-empty">No pude abrir las listas de este dispositivo.</li>';
   }

@@ -46,6 +46,41 @@ CREATE TABLE IF NOT EXISTS rockola_biblioteca (
     creado_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_biblioteca_sala ON rockola_biblioteca(sala_id, creado_en DESC);
+CREATE TABLE IF NOT EXISTS rockola_dispositivos (
+    dispositivo_id TEXT PRIMARY KEY,
+    nombre         TEXT NOT NULL DEFAULT 'Dispositivo',
+    user_agent     TEXT,
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS rockola_canciones (
+    cancion_id     TEXT PRIMARY KEY,
+    titulo         TEXT NOT NULL,
+    archivo_nombre TEXT,
+    tamano_bytes   BIGINT,
+    mime           TEXT,
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS rockola_dispositivo_canciones (
+    dispositivo_id TEXT NOT NULL REFERENCES rockola_dispositivos(dispositivo_id) ON DELETE CASCADE,
+    cancion_id     TEXT NOT NULL REFERENCES rockola_canciones(cancion_id) ON DELETE CASCADE,
+    local_id       TEXT NOT NULL,
+    disponible     BOOLEAN NOT NULL DEFAULT TRUE,
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (dispositivo_id, cancion_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dispositivo_canciones_cancion ON rockola_dispositivo_canciones(cancion_id);
+CREATE TABLE IF NOT EXISTS rockola_listas (
+    lista_id       TEXT PRIMARY KEY,
+    dispositivo_id TEXT NOT NULL REFERENCES rockola_dispositivos(dispositivo_id) ON DELETE CASCADE,
+    nombre         TEXT NOT NULL,
+    actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS rockola_lista_canciones (
+    lista_id   TEXT NOT NULL REFERENCES rockola_listas(lista_id) ON DELETE CASCADE,
+    cancion_id TEXT NOT NULL REFERENCES rockola_canciones(cancion_id) ON DELETE CASCADE,
+    posicion   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (lista_id, cancion_id)
+);
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS admin_key TEXT;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS volumen INTEGER NOT NULL DEFAULT 80;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS dispositivo_reproductor_id TEXT;
@@ -557,6 +592,111 @@ def agregar_local(sala_id):
     finally:
         conn.close()
     return jsonify(ok=True, agregadas=[{'id': local_id, 'nombre': nombre, 'owner': owner}])
+
+
+@bp.route('/catalogo/local', methods=['POST'])
+def sincronizar_catalogo_local():
+    data = request.get_json(silent=True) or {}
+    dispositivo = data.get('dispositivo') or {}
+    dispositivo_id = (dispositivo.get('id') or '').strip()
+    if not dispositivo_id:
+        return jsonify(ok=False, error='dispositivo requerido'), 400
+
+    nombre_dispositivo = (dispositivo.get('nombre') or 'Dispositivo').strip()[:120]
+    user_agent = (dispositivo.get('user_agent') or request.headers.get('User-Agent') or '')[:300]
+    canciones = data.get('canciones') or []
+    listas = data.get('listas') or []
+
+    conn = _connect()
+    try:
+        with _lock:
+            conn.execute(
+                """
+                INSERT INTO rockola_dispositivos (dispositivo_id, nombre, user_agent, actualizado_en)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (dispositivo_id) DO UPDATE
+                SET nombre = EXCLUDED.nombre,
+                    user_agent = EXCLUDED.user_agent,
+                    actualizado_en = CURRENT_TIMESTAMP
+                """,
+                (dispositivo_id, nombre_dispositivo, user_agent),
+            )
+
+            canciones_validas = {}
+            for cancion in canciones[:1000]:
+                cancion_id = (cancion.get('cancion_id') or '').strip()
+                local_id = (cancion.get('local_id') or '').strip()
+                titulo = (cancion.get('titulo') or cancion.get('nombre') or 'Cancion').strip()[:240]
+                if not cancion_id or not local_id:
+                    continue
+                canciones_validas[local_id] = cancion_id
+                conn.execute(
+                    """
+                    INSERT INTO rockola_canciones (cancion_id, titulo, archivo_nombre, tamano_bytes, mime, actualizado_en)
+                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (cancion_id) DO UPDATE
+                    SET titulo = EXCLUDED.titulo,
+                        archivo_nombre = EXCLUDED.archivo_nombre,
+                        tamano_bytes = EXCLUDED.tamano_bytes,
+                        mime = EXCLUDED.mime,
+                        actualizado_en = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        cancion_id,
+                        titulo,
+                        (cancion.get('archivo_nombre') or titulo)[:260],
+                        int(cancion.get('tamano_bytes') or 0),
+                        (cancion.get('mime') or '')[:120],
+                    ),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO rockola_dispositivo_canciones
+                        (dispositivo_id, cancion_id, local_id, disponible, actualizado_en)
+                    VALUES (%s, %s, %s, TRUE, CURRENT_TIMESTAMP)
+                    ON CONFLICT (dispositivo_id, cancion_id) DO UPDATE
+                    SET local_id = EXCLUDED.local_id,
+                        disponible = TRUE,
+                        actualizado_en = CURRENT_TIMESTAMP
+                    """,
+                    (dispositivo_id, cancion_id, local_id),
+                )
+
+            for lista in listas[:200]:
+                lista_id = (lista.get('lista_id') or '').strip()
+                nombre = (lista.get('nombre') or 'Lista').strip()[:180]
+                if not lista_id:
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO rockola_listas (lista_id, dispositivo_id, nombre, actualizado_en)
+                    VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (lista_id) DO UPDATE
+                    SET nombre = EXCLUDED.nombre,
+                        actualizado_en = CURRENT_TIMESTAMP
+                    """,
+                    (lista_id, dispositivo_id, nombre),
+                )
+                conn.execute("DELETE FROM rockola_lista_canciones WHERE lista_id = %s", (lista_id,))
+                for posicion, local_id in enumerate(lista.get('canciones') or []):
+                    cancion_id = canciones_validas.get(local_id)
+                    if not cancion_id:
+                        continue
+                    conn.execute(
+                        """
+                        INSERT INTO rockola_lista_canciones (lista_id, cancion_id, posicion)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (lista_id, cancion_id) DO UPDATE
+                        SET posicion = EXCLUDED.posicion
+                        """,
+                        (lista_id, cancion_id, posicion),
+                    )
+
+            conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify(ok=True, canciones=len(canciones), listas=len(listas))
 
 
 @bp.route('/<sala_id>/cola')

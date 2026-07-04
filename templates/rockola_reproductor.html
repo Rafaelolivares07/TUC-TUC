@@ -266,6 +266,7 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .playlist-section { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:14px; margin-bottom:12px; }
 .playlist-section-title { color:var(--muted); font-size:11px; font-weight:900; letter-spacing:1.4px; text-transform:uppercase; margin-bottom:10px; }
 .playlist-list { list-style:none; }
+.playlist-list.scrollable { max-height:min(310px, 42vh); overflow:auto; padding-right:4px; }
 .playlist-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid rgba(0,212,255,.08); }
 .playlist-row:first-child { border-top:none; }
 .playlist-handle { color:var(--muted); cursor:grab; font-size:16px; }
@@ -469,7 +470,7 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
     <div class="playlist-section">
       <div class="playlist-section-title">Agregar canciones</div>
       <input class="local-search" id="playlist-add-search" type="search" placeholder="Buscar en mi biblioteca..." oninput="renderAgregarALista()">
-      <ul class="playlist-list" id="playlist-add-results">
+      <ul class="playlist-list scrollable" id="playlist-add-results">
         <li class="playlist-empty">Busca canciones de este dispositivo.</li>
       </ul>
     </div>
@@ -477,7 +478,7 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
     <div class="playlist-section">
       <div class="playlist-section-title" id="playlist-count">0 canciones</div>
       <input class="local-search" id="playlist-song-search" type="search" placeholder="Buscar en esta lista..." oninput="renderEditorLista()">
-      <ul class="playlist-list" id="playlist-song-list">
+      <ul class="playlist-list scrollable" id="playlist-song-list">
         <li class="playlist-empty">Esta lista esta vacia.</li>
       </ul>
     </div>
@@ -1231,7 +1232,7 @@ function renderAgregarALista() {
   const existentes = new Set(lista.canciones || []);
   const canciones = cancionesLocales
     .filter(c => !filtro || c.nombre.toLowerCase().includes(filtro))
-    .slice(0, 60);
+    .slice(0, 30);
   if (!canciones.length) {
     playlistAddResults.innerHTML = '<li class="playlist-empty">No encontre canciones en este dispositivo.</li>';
     return;

@@ -264,7 +264,22 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 }
 .playlist-title { font-size:18px; font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .playlist-section { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:14px; margin-bottom:12px; }
-.playlist-section-title { color:var(--muted); font-size:11px; font-weight:900; letter-spacing:1.4px; text-transform:uppercase; margin-bottom:10px; }
+.playlist-section-title {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  color:var(--text);
+  background:rgba(0,212,255,.08);
+  border-left:3px solid var(--ac1);
+  border-radius:0 10px 10px 0;
+  padding:7px 10px 7px 9px;
+  font-size:12px;
+  font-weight:950;
+  letter-spacing:1.1px;
+  text-transform:uppercase;
+  margin-bottom:12px;
+}
+.playlist-section-count { color:var(--muted); font-size:12px; font-weight:800; margin:0 0 10px; }
 .playlist-list { list-style:none; }
 .playlist-list.scrollable { max-height:min(310px, 42vh); overflow:auto; padding-right:4px; }
 .playlist-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid rgba(0,212,255,.08); }
@@ -460,7 +475,7 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
     </div>
 
     <div class="playlist-section">
-      <div class="playlist-section-title">Nombre</div>
+      <div class="playlist-section-title">Nombre de la lista</div>
       <div class="playlist-create">
         <input class="playlist-input" id="playlist-editor-name" type="text" placeholder="Nombre de la lista">
         <button class="btn-control" onclick="renombrarListaActual()">Guardar</button>
@@ -476,7 +491,8 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
     </div>
 
     <div class="playlist-section">
-      <div class="playlist-section-title" id="playlist-count">0 canciones</div>
+      <div class="playlist-section-title">Canciones de la lista</div>
+      <div class="playlist-section-count" id="playlist-count">0 canciones</div>
       <input class="local-search" id="playlist-song-search" type="search" placeholder="Buscar en esta lista..." oninput="renderEditorLista()">
       <ul class="playlist-list scrollable" id="playlist-song-list">
         <li class="playlist-empty">Esta lista esta vacia.</li>

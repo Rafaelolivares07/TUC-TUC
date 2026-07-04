@@ -219,6 +219,16 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 
   <div class="library-box">
     <div class="library-head">
+      <div class="library-label">Mis listas en este dispositivo</div>
+    </div>
+    <div class="library-note">Listas creadas en este celular. Se envian a la sala con las canciones disponibles aqui.</div>
+    <ul class="library-list" id="lista-mis-listas">
+      <li class="library-empty">Todavia no tienes listas en este dispositivo.</li>
+    </ul>
+  </div>
+
+  <div class="library-box">
+    <div class="library-head">
       <div class="library-label">Canciones anteriores</div>
     </div>
     <ul class="library-list" id="lista-biblioteca">
@@ -255,11 +265,13 @@ const queueLabel = document.getElementById('queue-label');
 const listaBiblioteca = document.getElementById('lista-biblioteca');
 const listaMiBiblioteca = document.getElementById('lista-mi-biblioteca');
 const miBibliotecaSearch = document.getElementById('mi-biblioteca-search');
+const listaMisListas = document.getElementById('lista-mis-listas');
 
 let tabActual       = 'archivo';
 let archivosValidos = [];
 let qrGenerado = false;
 let cancionesLocales = [];
+let playlistsLocales = [];
 let sincronizandoCatalogo = null;
 
 function getDeviceId() {
@@ -462,9 +474,27 @@ async function cargarMiBiblioteca() {
     db.close();
     cancionesLocales.sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
     renderMiBiblioteca();
+    await cargarMisListas();
     sincronizarCatalogoLocal();
   } catch(e) {
     listaMiBiblioteca.innerHTML = '<li class="library-empty">Este navegador no permitio abrir tu biblioteca.</li>';
+  }
+}
+
+async function cargarMisListas() {
+  try {
+    const db = await abrirDbLocal();
+    playlistsLocales = await new Promise((resolve, reject) => {
+      const tx = db.transaction('playlists', 'readonly');
+      const req = tx.objectStore('playlists').getAll();
+      req.onsuccess = () => resolve((req.result || []).filter(p => p.deviceId === getDeviceId()));
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    playlistsLocales.sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
+    renderMisListas();
+  } catch(e) {
+    listaMisListas.innerHTML = '<li class="library-empty">No pude abrir tus listas en este dispositivo.</li>';
   }
 }
 
@@ -489,7 +519,11 @@ async function sincronizarCatalogoLocal() {
             user_agent: navigator.userAgent || '',
           },
           canciones: cancionesLocales.map(metadataCancionLocal),
-          listas: [],
+          listas: playlistsLocales.map(p => ({
+            lista_id: p.id,
+            nombre: p.nombre,
+            canciones: p.canciones || [],
+          })),
         })
       });
     } catch(e) {
@@ -520,6 +554,26 @@ function renderMiBiblioteca() {
       <button class="library-btn" onclick="enviarMiCancion('${c.id}')">Enviar</button>
     </li>
   `).join('');
+}
+
+function renderMisListas() {
+  if (!playlistsLocales.length) {
+    listaMisListas.innerHTML = '<li class="library-empty">Todavia no tienes listas en este dispositivo.</li>';
+    return;
+  }
+  listaMisListas.innerHTML = playlistsLocales.map(p => {
+    const total = (p.canciones || []).length;
+    const disponibles = (p.canciones || []).filter(id => cancionesLocales.some(c => c.id === id)).length;
+    return `
+      <li class="library-item">
+        <div class="library-name" title="${p.nombre}">
+          ${p.nombre}
+          <div class="library-origin">${disponibles}/${total} disponibles aqui</div>
+        </div>
+        <button class="library-btn" onclick="enviarMiLista('${p.id}')">Enviar</button>
+      </li>
+    `;
+  }).join('');
 }
 
 function ytInputChange() {
@@ -584,6 +638,16 @@ function subirArchivo() {
   xhr.send(form);
 }
 
+function subirCancionLocal(cancion) {
+  const form = new FormData();
+  form.append('owner', OWNER);
+  form.append('archivo', cancion.blob, cancion.nombre);
+  return fetch(`/rockola/${SALA}/subir`, {
+    method: 'POST',
+    body: form,
+  }).then(r => r.json());
+}
+
 async function enviarMiCancion(id) {
   const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
   if (!cancion || !cancion.blob) {
@@ -594,43 +658,72 @@ async function enviarMiCancion(id) {
   progWrap.style.display = 'block';
   progLabel.textContent = 'Enviando desde tu biblioteca...';
 
-  const form = new FormData();
-  form.append('owner', OWNER);
-  form.append('archivo', cancion.blob, cancion.nombre);
-
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', `/rockola/${SALA}/subir`);
-  xhr.upload.onprogress = e => {
-    if (e.lengthComputable) {
-      const pct = Math.round(e.loaded/e.total*100);
-      progFill.style.width = pct + '%';
-      progLabel.textContent = `Enviando... ${pct}%`;
-    }
-  };
-  xhr.onload = () => {
+  try {
+    const res = await subirCancionLocal(cancion);
     progWrap.style.display = 'none';
     progFill.style.width = '0%';
-    try {
-      const res = JSON.parse(xhr.responseText);
-      if (res.ok) {
-        uploadMsg.textContent = 'Cancion enviada a esta sala';
-        uploadMsg.className = 'upload-msg ok';
-        actualizarCola();
-        actualizarBiblioteca();
-        sincronizarCatalogoLocal();
-      } else {
-        onError(res.error);
-      }
-    } catch(e) {
-      onError('Error ' + xhr.status);
+    if (res.ok) {
+      uploadMsg.textContent = 'Cancion enviada a esta sala';
+      uploadMsg.className = 'upload-msg ok';
+      actualizarCola();
+      actualizarBiblioteca();
+      sincronizarCatalogoLocal();
+    } else {
+      onError(res.error);
     }
-    btnPoner.disabled = tabActual === 'archivo' ? !archivosValidos.length : true;
-  };
-  xhr.onerror = () => {
+  } catch(e) {
     progWrap.style.display = 'none';
     onError('Error de conexion');
-  };
-  xhr.send(form);
+  } finally {
+    btnPoner.disabled = tabActual === 'archivo' ? !archivosValidos.length : true;
+  }
+}
+
+async function enviarMiLista(id) {
+  const lista = playlistsLocales.find(p => p.id === id);
+  if (!lista || !(lista.canciones || []).length) {
+    onError('La lista esta vacia');
+    return;
+  }
+  btnPoner.disabled = true;
+  progWrap.style.display = 'block';
+  progFill.style.width = '0%';
+  progLabel.textContent = `Enviando ${lista.nombre}...`;
+
+  let enviadas = 0;
+  let faltantes = 0;
+  const ids = lista.canciones || [];
+  for (let i = 0; i < ids.length; i++) {
+    const cancion = cancionesLocales.find(c => c.id === ids[i]) || await obtenerCancionLocal(ids[i]);
+    if (!cancion || !cancion.blob) {
+      faltantes++;
+      continue;
+    }
+    try {
+      const res = await subirCancionLocal(cancion);
+      if (res.ok) enviadas++;
+    } catch(e) {
+      faltantes++;
+    }
+    const pct = Math.round(((i + 1) / ids.length) * 100);
+    progFill.style.width = pct + '%';
+    progLabel.textContent = `Enviando lista... ${pct}%`;
+  }
+
+  progWrap.style.display = 'none';
+  progFill.style.width = '0%';
+  if (enviadas) {
+    uploadMsg.textContent = faltantes
+      ? `${enviadas} cancion(es) enviadas; ${faltantes} no estaban en este dispositivo`
+      : `${enviadas} cancion(es) de ${lista.nombre} enviadas`;
+    uploadMsg.className = 'upload-msg ok';
+    actualizarCola();
+    actualizarBiblioteca();
+    sincronizarCatalogoLocal();
+  } else {
+    onError('Ninguna cancion de esta lista esta disponible aqui');
+  }
+  btnPoner.disabled = tabActual === 'archivo' ? !archivosValidos.length : true;
 }
 
 function subirYoutube() {

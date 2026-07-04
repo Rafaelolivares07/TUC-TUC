@@ -240,6 +240,37 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .playlist-input:focus { border-color:var(--ac1); }
 .playlist-actions { display:flex; align-items:center; gap:8px; flex-shrink:0; }
 .playlist-mini { border:1px solid var(--border); background:transparent; color:var(--muted); border-radius:9px; padding:7px 9px; font-weight:900; cursor:pointer; }
+.playlist-screen {
+  position:fixed;
+  inset:0;
+  z-index:50;
+  display:none;
+  background:var(--bg);
+  color:var(--text);
+  overflow:auto;
+}
+.playlist-screen.visible { display:block; }
+.playlist-shell { max-width:520px; margin:0 auto; padding:14px 14px 40px; }
+.playlist-header {
+  position:sticky;
+  top:0;
+  z-index:2;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 0 14px;
+  background:var(--bg);
+}
+.playlist-title { font-size:18px; font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.playlist-section { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:14px; margin-bottom:12px; }
+.playlist-section-title { color:var(--muted); font-size:11px; font-weight:900; letter-spacing:1.4px; text-transform:uppercase; margin-bottom:10px; }
+.playlist-list { list-style:none; }
+.playlist-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px solid rgba(0,212,255,.08); }
+.playlist-row:first-child { border-top:none; }
+.playlist-handle { color:var(--muted); cursor:grab; font-size:16px; }
+.playlist-song { flex:1; min-width:0; font-size:13px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.playlist-empty { color:var(--muted2); font-size:13px; text-align:center; padding:14px 0; }
 
 /* Queue */
 .queue-box {
@@ -419,6 +450,40 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   </div>
 </div>
 
+<div class="playlist-screen" id="playlist-screen">
+  <div class="playlist-shell">
+    <div class="playlist-header">
+      <button class="btn-control" onclick="cerrarEditorLista()">Volver</button>
+      <div class="playlist-title" id="playlist-editor-title">Lista</div>
+      <button class="playlist-mini" onclick="eliminarListaActual()">Eliminar</button>
+    </div>
+
+    <div class="playlist-section">
+      <div class="playlist-section-title">Nombre</div>
+      <div class="playlist-create">
+        <input class="playlist-input" id="playlist-editor-name" type="text" placeholder="Nombre de la lista">
+        <button class="btn-control" onclick="renombrarListaActual()">Guardar</button>
+      </div>
+    </div>
+
+    <div class="playlist-section">
+      <div class="playlist-section-title">Agregar canciones</div>
+      <input class="local-search" id="playlist-add-search" type="search" placeholder="Buscar en mi biblioteca..." oninput="renderAgregarALista()">
+      <ul class="playlist-list" id="playlist-add-results">
+        <li class="playlist-empty">Busca canciones de este dispositivo.</li>
+      </ul>
+    </div>
+
+    <div class="playlist-section">
+      <div class="playlist-section-title" id="playlist-count">0 canciones</div>
+      <input class="local-search" id="playlist-song-search" type="search" placeholder="Buscar en esta lista..." oninput="renderEditorLista()">
+      <ul class="playlist-list" id="playlist-song-list">
+        <li class="playlist-empty">Esta lista esta vacia.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
 <script>
 const SALA = '{{ sala_id }}';
 const player      = document.getElementById('player');
@@ -439,6 +504,14 @@ const listaLocal = document.getElementById('lista-local');
 const localSearch = document.getElementById('local-search');
 const listaPlaylists = document.getElementById('lista-playlists');
 const playlistNameInput = document.getElementById('playlist-name');
+const playlistScreen = document.getElementById('playlist-screen');
+const playlistEditorTitle = document.getElementById('playlist-editor-title');
+const playlistEditorName = document.getElementById('playlist-editor-name');
+const playlistAddSearch = document.getElementById('playlist-add-search');
+const playlistAddResults = document.getElementById('playlist-add-results');
+const playlistSongSearch = document.getElementById('playlist-song-search');
+const playlistSongList = document.getElementById('playlist-song-list');
+const playlistCount = document.getElementById('playlist-count');
 const deviceState = document.getElementById('device-state');
 const deviceActions = document.getElementById('device-actions');
 const btnActivar = document.getElementById('btn-activar');
@@ -456,6 +529,7 @@ let salaDisponible = false;
 let cancionesLocales = [];
 let playlistsLocales = [];
 let localObjectUrl = null;
+let playlistActualId = null;
 
 function getDeviceId() {
   let id = localStorage.getItem('rockola_device_id');
@@ -565,7 +639,7 @@ async function verificarCola() {
         nombreEl.textContent = limpiarNombre(c.nombre);
         if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
         if (c.id.startsWith('local-')) {
-          const local = await obtenerCancionLocal(c.id);
+          const local = await obtenerCancionLocal(idLocalBase(c.id));
           if (!local || !local.blob) {
             reproduciendo = false;
             estadoEl.textContent = 'No disponible en este dispositivo';
@@ -621,6 +695,20 @@ async function guardarVolumen() {
 
 function limpiarNombre(nombre) {
   return (nombre || '').replace(/\.[^.]+$/, '');
+}
+
+function idLocalBase(id) {
+  return String(id || '').split('__q__')[0];
+}
+
+function idLocalCola(id) {
+  return `${idLocalBase(id)}__q__${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function escapeHtml(valor) {
+  return String(valor || '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
 }
 
 function urlCliente() {
@@ -1021,16 +1109,37 @@ function renderListasLocales() {
   }
   listaPlaylists.innerHTML = playlistsLocales.map(p => `
     <li class="library-item">
-      <div class="library-name" title="${p.nombre}">
-        ${p.nombre}
+      <div class="library-name" title="${escapeHtml(p.nombre)}">
+        ${escapeHtml(p.nombre)}
         <div class="local-meta">${(p.canciones || []).length} cancion(es)</div>
       </div>
       <div class="playlist-actions">
-        <button class="library-btn" onclick="ponerLista('${p.id}')">Poner</button>
-        <button class="playlist-mini" onclick="eliminarLista('${p.id}')">Eliminar</button>
+        <button class="playlist-mini" onclick="ponerLista('${p.id}')">Agregar</button>
+        <button class="library-btn" onclick="ponerListaAhora('${p.id}')">Ahora</button>
+        <button class="playlist-mini" onclick="abrirEditorLista('${p.id}')">Editar</button>
       </div>
     </li>
   `).join('');
+}
+
+function listaActual() {
+  return playlistsLocales.find(p => p.id === playlistActualId);
+}
+
+async function agregarListaACola(lista) {
+  let agregadas = 0;
+  for (const songId of lista.canciones || []) {
+    const cancion = cancionesLocales.find(c => c.id === songId) || await obtenerCancionLocal(songId);
+    if (!cancion) continue;
+    const res = await fetch(`/rockola/${SALA}/local`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ local_id:idLocalCola(cancion.id), nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId() })
+    });
+    const data = await res.json();
+    if (data.ok) agregadas++;
+  }
+  return agregadas;
 }
 
 async function ponerLista(id) {
@@ -1039,20 +1148,159 @@ async function ponerLista(id) {
     mostrarMensaje('La lista esta vacia', 'error');
     return;
   }
-  let agregadas = 0;
-  for (const songId of lista.canciones) {
-    const cancion = cancionesLocales.find(c => c.id === songId) || await obtenerCancionLocal(songId);
-    if (!cancion) continue;
-    const res = await fetch(`/rockola/${SALA}/local`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ local_id:cancion.id, nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId() })
-    });
-    const data = await res.json();
-    if (data.ok) agregadas++;
-  }
+  const agregadas = await agregarListaACola(lista);
   mostrarMensaje(agregadas ? `${agregadas} cancion(es) de ${lista.nombre} en cola` : 'Ninguna cancion disponible en este dispositivo', agregadas ? 'ok' : 'error');
   verificarCola();
+}
+
+async function limpiarColaActual() {
+  const res = await fetch(`/rockola/${SALA}/cola`);
+  const data = await res.json();
+  for (const item of data.cola || []) {
+    await fetch(`/rockola/${SALA}/quitar`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ id:item.id, modo:'reproductor' })
+    });
+  }
+  if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
+  localObjectUrl = null;
+  player.pause();
+  player.removeAttribute('src');
+  reproduciendo = false;
+  cancionActual = null;
+  setVinylSpinning(false);
+  setWaveActive(false);
+}
+
+async function ponerListaAhora(id) {
+  const lista = playlistsLocales.find(p => p.id === id);
+  if (!lista || !(lista.canciones || []).length) {
+    mostrarMensaje('La lista esta vacia', 'error');
+    return;
+  }
+  await limpiarColaActual();
+  const agregadas = await agregarListaACola(lista);
+  mostrarMensaje(agregadas ? `${lista.nombre} suena ahora` : 'Ninguna cancion disponible en este dispositivo', agregadas ? 'ok' : 'error');
+  verificarCola();
+}
+
+function abrirEditorLista(id) {
+  const lista = playlistsLocales.find(p => p.id === id);
+  if (!lista) return;
+  playlistActualId = id;
+  playlistEditorTitle.textContent = lista.nombre;
+  playlistEditorName.value = lista.nombre;
+  playlistAddSearch.value = '';
+  playlistSongSearch.value = '';
+  playlistScreen.classList.add('visible');
+  renderAgregarALista();
+  renderEditorLista();
+}
+
+function cerrarEditorLista() {
+  playlistScreen.classList.remove('visible');
+  playlistActualId = null;
+}
+
+async function renombrarListaActual() {
+  const lista = listaActual();
+  const nombre = (playlistEditorName.value || '').trim();
+  if (!lista || nombre.length < 2) {
+    mostrarMensaje('Escribe un nombre para la lista', 'error');
+    return;
+  }
+  const repetida = playlistsLocales.some(p => p.id !== lista.id && p.nombre.toLowerCase() === nombre.toLowerCase());
+  if (repetida) {
+    mostrarMensaje('Ya existe una lista con ese nombre', 'error');
+    return;
+  }
+  lista.nombre = nombre;
+  lista.actualizado = Date.now();
+  await guardarLista(lista);
+  await cargarListasLocales();
+  playlistActualId = lista.id;
+  playlistEditorTitle.textContent = nombre;
+  mostrarMensaje('Lista actualizada', 'ok');
+}
+
+function renderAgregarALista() {
+  const lista = listaActual();
+  if (!lista) return;
+  const filtro = (playlistAddSearch.value || '').trim().toLowerCase();
+  const existentes = new Set(lista.canciones || []);
+  const canciones = cancionesLocales
+    .filter(c => !filtro || c.nombre.toLowerCase().includes(filtro))
+    .slice(0, 60);
+  if (!canciones.length) {
+    playlistAddResults.innerHTML = '<li class="playlist-empty">No encontre canciones en este dispositivo.</li>';
+    return;
+  }
+  playlistAddResults.innerHTML = canciones.map(c => {
+    const agregada = existentes.has(c.id);
+    return `
+      <li class="playlist-row">
+        <div class="playlist-song">${escapeHtml(limpiarNombre(c.nombre))}</div>
+        <button class="${agregada ? 'playlist-mini' : 'library-btn'}" ${agregada ? 'disabled' : ''} onclick="agregarCancionAListaActual('${c.id}')">${agregada ? 'Agregada' : 'Agregar'}</button>
+      </li>
+    `;
+  }).join('');
+}
+
+async function agregarCancionAListaActual(songId) {
+  const lista = listaActual();
+  const cancion = cancionesLocales.find(c => c.id === songId) || await obtenerCancionLocal(songId);
+  if (!lista || !cancion) {
+    mostrarMensaje('Esa cancion ya no esta disponible aqui', 'error');
+    return;
+  }
+  if (!lista.canciones.includes(cancion.id)) lista.canciones.push(cancion.id);
+  lista.actualizado = Date.now();
+  await guardarLista(lista);
+  await cargarListasLocales();
+  playlistActualId = lista.id;
+  renderAgregarALista();
+  renderEditorLista();
+}
+
+function renderEditorLista() {
+  const lista = listaActual();
+  if (!lista) return;
+  const filtro = (playlistSongSearch.value || '').trim().toLowerCase();
+  const ids = lista.canciones || [];
+  playlistCount.textContent = `${ids.length} ${ids.length === 1 ? 'cancion' : 'canciones'}`;
+  const filas = ids.map(id => {
+    const cancion = cancionesLocales.find(c => c.id === id);
+    return {
+      id,
+      nombre: cancion ? limpiarNombre(cancion.nombre) : 'No disponible en este dispositivo',
+      disponible: !!cancion,
+    };
+  }).filter(c => !filtro || c.nombre.toLowerCase().includes(filtro));
+
+  if (!filas.length) {
+    playlistSongList.innerHTML = '<li class="playlist-empty">Esta lista esta vacia o no coincide con la busqueda.</li>';
+    return;
+  }
+  playlistSongList.innerHTML = filas.map(c => `
+    <li class="playlist-row" data-id="${c.id}">
+      <span class="playlist-handle">⋮⋮</span>
+      <div class="playlist-song">${escapeHtml(c.nombre)}${c.disponible ? '' : '<div class="local-meta">Archivo no encontrado aqui</div>'}</div>
+      <button class="playlist-mini" onclick="quitarDeListaActual('${c.id}')">Quitar</button>
+    </li>
+  `).join('');
+}
+
+async function quitarDeListaActual(songId) {
+  const lista = listaActual();
+  if (!lista) return;
+  lista.canciones = (lista.canciones || []).filter(id => id !== songId);
+  lista.actualizado = Date.now();
+  await guardarLista(lista);
+  await cargarListasLocales();
+  playlistActualId = lista.id;
+  renderAgregarALista();
+  renderEditorLista();
 }
 
 async function eliminarLista(id) {
@@ -1071,6 +1319,13 @@ async function eliminarLista(id) {
   mostrarMensaje('Lista eliminada', 'ok');
 }
 
+async function eliminarListaActual() {
+  const lista = listaActual();
+  if (!lista) return;
+  await eliminarLista(lista.id);
+  cerrarEditorLista();
+}
+
 async function ponerLocal(id) {
   const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
   if (!cancion) {
@@ -1080,7 +1335,7 @@ async function ponerLocal(id) {
   const res = await fetch(`/rockola/${SALA}/local`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ local_id:cancion.id, nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId() })
+    body: JSON.stringify({ local_id:idLocalCola(cancion.id), nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId() })
   });
   const data = await res.json();
   if (data.ok) {
@@ -1198,6 +1453,25 @@ if (window.Sortable) {
         body: JSON.stringify({ orden, modo:'reproductor' })
       });
       verificarCola();
+    }
+  });
+  Sortable.create(playlistSongList, {
+    animation: 150,
+    handle: '.playlist-handle',
+    onEnd: async () => {
+      const lista = listaActual();
+      if (!lista) return;
+      if ((playlistSongSearch.value || '').trim()) {
+        renderEditorLista();
+        mostrarMensaje('Limpia la busqueda para ordenar toda la lista', 'error');
+        return;
+      }
+      lista.canciones = [...playlistSongList.querySelectorAll('.playlist-row')].map(el => el.dataset.id);
+      lista.actualizado = Date.now();
+      await guardarLista(lista);
+      await cargarListasLocales();
+      playlistActualId = lista.id;
+      renderEditorLista();
     }
   });
 }

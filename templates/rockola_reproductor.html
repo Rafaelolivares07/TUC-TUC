@@ -669,6 +669,7 @@ async function verificarCola() {
         } else {
           localObjectUrl = null;
           player.src = `/rockola/${SALA}/archivo/${c.id}`;
+          guardarArchivoServidorEnBiblioteca(c);
         }
         player.load();
         player.play().then(() => {
@@ -913,6 +914,10 @@ function idLocalArchivo(file) {
   return `local-${getDeviceId()}-${hashTexto([file.name, file.size, file.lastModified].join('|'))}`;
 }
 
+function idLocalServidor(archivoId, nombre, size) {
+  return `local-${getDeviceId()}-${hashTexto(['server', archivoId, nombre, size || 0].join('|'))}`;
+}
+
 function huellaCancionLocal(cancion) {
   return `song-${hashTexto([
     limpiarNombre(cancion.nombre).toLowerCase(),
@@ -1004,6 +1009,27 @@ async function guardarCancionLocal(file) {
   return cancion;
 }
 
+async function guardarBlobComoCancionLocal(blob, nombre, archivoId) {
+  const db = await abrirDbLocal();
+  const cancion = {
+    id: idLocalServidor(archivoId, nombre, blob.size),
+    deviceId: getDeviceId(),
+    nombre,
+    tipo: blob.type || 'audio/mpeg',
+    size: blob.size,
+    actualizado: Date.now(),
+    blob,
+  };
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('songs', 'readwrite');
+    tx.objectStore('songs').put(cancion);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+  return cancion;
+}
+
 async function obtenerCancionLocal(id) {
   const db = await abrirDbLocal();
   const cancion = await new Promise((resolve, reject) => {
@@ -1014,6 +1040,24 @@ async function obtenerCancionLocal(id) {
   });
   db.close();
   return cancion;
+}
+
+const cacheServidorEnCurso = new Set();
+async function guardarArchivoServidorEnBiblioteca(item) {
+  if (!item || !item.id || item.id.startsWith('local-') || cacheServidorEnCurso.has(item.id)) return;
+  cacheServidorEnCurso.add(item.id);
+  try {
+    const res = await fetch(`/rockola/${SALA}/archivo/${encodeURIComponent(item.id)}`);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    if (!blob || !blob.size) return;
+    await guardarBlobComoCancionLocal(blob, item.nombre || 'Cancion enviada', item.id);
+    await cargarBibliotecaLocal();
+  } catch(e) {
+    console.warn('No se pudo guardar esta cancion en el reproductor', e);
+  } finally {
+    cacheServidorEnCurso.delete(item.id);
+  }
 }
 
 async function cargarBibliotecaLocal() {

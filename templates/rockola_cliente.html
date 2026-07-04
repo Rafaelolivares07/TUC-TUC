@@ -104,6 +104,13 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 .library-origin { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; }
 .library-btn { border:1px solid var(--border); background:var(--ac1-bg); color:var(--ac1); border-radius:9px; padding:7px 10px; font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:800; cursor:pointer; flex-shrink:0; }
 .library-empty { text-align:center; color:var(--muted2); font-size:13px; padding:10px 0 4px; }
+.library-note { color:var(--muted); font-size:11px; line-height:1.45; margin:-4px 0 10px; }
+.library-search {
+  width:100%; padding:10px 12px; margin-bottom:8px;
+  background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+  color:var(--text); font-family:'Space Grotesk',sans-serif; font-size:13px; outline:none;
+}
+.library-search:focus { border-color:var(--ac1); }
 
 /* Queue */
 .queue-box { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:16px; }
@@ -201,6 +208,17 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 
   <div class="library-box">
     <div class="library-head">
+      <div class="library-label">Mi biblioteca en este dispositivo</div>
+    </div>
+    <div class="library-note">Audios que ya usaste desde este celular. No se guardan como archivos en AWS.</div>
+    <input class="library-search" id="mi-biblioteca-search" type="search" placeholder="Buscar en mi biblioteca..." oninput="renderMiBiblioteca()">
+    <ul class="library-list" id="lista-mi-biblioteca">
+      <li class="library-empty">Todavia no has guardado canciones en este dispositivo.</li>
+    </ul>
+  </div>
+
+  <div class="library-box">
+    <div class="library-head">
       <div class="library-label">Canciones anteriores</div>
     </div>
     <ul class="library-list" id="lista-biblioteca">
@@ -235,10 +253,90 @@ const progLabel  = document.getElementById('prog-label');
 const listaCola  = document.getElementById('lista-cola');
 const queueLabel = document.getElementById('queue-label');
 const listaBiblioteca = document.getElementById('lista-biblioteca');
+const listaMiBiblioteca = document.getElementById('lista-mi-biblioteca');
+const miBibliotecaSearch = document.getElementById('mi-biblioteca-search');
 
 let tabActual       = 'archivo';
 let archivosValidos = [];
 let qrGenerado = false;
+let cancionesLocales = [];
+let sincronizandoCatalogo = null;
+
+function getDeviceId() {
+  let id = localStorage.getItem('rockola_device_id');
+  if (!id) {
+    id = 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('rockola_device_id', id);
+  }
+  return id;
+}
+
+function getDeviceName() {
+  let name = localStorage.getItem('rockola_device_name');
+  if (!name) {
+    const ua = navigator.userAgent || '';
+    name = /iPhone/i.test(ua) ? 'iPhone' : (/Android/i.test(ua) ? 'Android' : (/Windows/i.test(ua) ? 'Windows' : 'Este dispositivo'));
+    localStorage.setItem('rockola_device_name', name);
+  }
+  return name;
+}
+
+function limpiarNombre(nombre) {
+  return (nombre || '').replace(/\.[^.]+$/, '');
+}
+
+function hashTexto(texto) {
+  let hash = 0;
+  for (let i = 0; i < texto.length; i++) {
+    hash = ((hash << 5) - hash) + texto.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function idLocalArchivo(file) {
+  return `local-${getDeviceId()}-${hashTexto([file.name, file.size, file.lastModified].join('|'))}`;
+}
+
+function huellaCancionLocal(cancion) {
+  return `song-${hashTexto([
+    limpiarNombre(cancion.nombre).toLowerCase(),
+    cancion.size || 0,
+    cancion.tipo || ''
+  ].join('|'))}`;
+}
+
+function metadataCancionLocal(cancion) {
+  return {
+    cancion_id: huellaCancionLocal(cancion),
+    local_id: cancion.id,
+    titulo: limpiarNombre(cancion.nombre),
+    archivo_nombre: cancion.nombre,
+    tamano_bytes: cancion.size || 0,
+    mime: cancion.tipo || '',
+  };
+}
+
+function abrirDbLocal() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('rockola_local_library_v1', 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('songs')) {
+        const store = db.createObjectStore('songs', { keyPath:'id' });
+        store.createIndex('deviceId', 'deviceId', { unique:false });
+        store.createIndex('nombre', 'nombre', { unique:false });
+      }
+      if (!db.objectStoreNames.contains('playlists')) {
+        const store = db.createObjectStore('playlists', { keyPath:'id' });
+        store.createIndex('deviceId', 'deviceId', { unique:false });
+        store.createIndex('nombre', 'nombre', { unique:false });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
 
 function urlSala() {
   return `https://rockola.tuc-tuc.co/rockola/${encodeURIComponent(SALA)}`;
@@ -319,6 +417,111 @@ function archivosSeleccionados() {
 }
 
 /* ── YouTube ── */
+async function guardarCancionLocal(file) {
+  const db = await abrirDbLocal();
+  const cancion = {
+    id: idLocalArchivo(file),
+    deviceId: getDeviceId(),
+    nombre: file.name,
+    tipo: file.type || 'audio/mpeg',
+    size: file.size,
+    actualizado: Date.now(),
+    blob: file,
+  };
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('songs', 'readwrite');
+    tx.objectStore('songs').put(cancion);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+  return cancion;
+}
+
+async function obtenerCancionLocal(id) {
+  const db = await abrirDbLocal();
+  const cancion = await new Promise((resolve, reject) => {
+    const tx = db.transaction('songs', 'readonly');
+    const req = tx.objectStore('songs').get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return cancion;
+}
+
+async function cargarMiBiblioteca() {
+  try {
+    const db = await abrirDbLocal();
+    cancionesLocales = await new Promise((resolve, reject) => {
+      const tx = db.transaction('songs', 'readonly');
+      const req = tx.objectStore('songs').getAll();
+      req.onsuccess = () => resolve((req.result || []).filter(c => c.deviceId === getDeviceId()));
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    cancionesLocales.sort((a, b) => (b.actualizado || 0) - (a.actualizado || 0));
+    renderMiBiblioteca();
+    sincronizarCatalogoLocal();
+  } catch(e) {
+    listaMiBiblioteca.innerHTML = '<li class="library-empty">Este navegador no permitio abrir tu biblioteca.</li>';
+  }
+}
+
+async function guardarArchivosEnMiBiblioteca(files) {
+  for (const file of files || []) {
+    await guardarCancionLocal(file);
+  }
+  await cargarMiBiblioteca();
+}
+
+async function sincronizarCatalogoLocal() {
+  if (sincronizandoCatalogo) clearTimeout(sincronizandoCatalogo);
+  sincronizandoCatalogo = setTimeout(async () => {
+    try {
+      await fetch('/rockola/catalogo/local', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          dispositivo: {
+            id: getDeviceId(),
+            nombre: getDeviceName(),
+            user_agent: navigator.userAgent || '',
+          },
+          canciones: cancionesLocales.map(metadataCancionLocal),
+          listas: [],
+        })
+      });
+    } catch(e) {
+      console.warn('No se pudo sincronizar mi biblioteca', e);
+    } finally {
+      sincronizandoCatalogo = null;
+    }
+  }, 500);
+}
+
+function renderMiBiblioteca() {
+  const filtro = (miBibliotecaSearch.value || '').trim().toLowerCase();
+  const canciones = cancionesLocales
+    .filter(c => !filtro || limpiarNombre(c.nombre).toLowerCase().includes(filtro))
+    .slice(0, 80);
+  if (!canciones.length) {
+    listaMiBiblioteca.innerHTML = filtro
+      ? '<li class="library-empty">No encontre canciones con ese texto.</li>'
+      : '<li class="library-empty">Todavia no has guardado canciones en este dispositivo.</li>';
+    return;
+  }
+  listaMiBiblioteca.innerHTML = canciones.map(c => `
+    <li class="library-item">
+      <div class="library-name" title="${c.nombre}">
+        ${limpiarNombre(c.nombre)}
+        <div class="library-origin">este dispositivo</div>
+      </div>
+      <button class="library-btn" onclick="enviarMiCancion('${c.id}')">Enviar</button>
+    </li>
+  `).join('');
+}
+
 function ytInputChange() {
   const url = document.getElementById('yt-url').value.trim();
   const esYt = url.includes('youtube.com') || url.includes('youtu.be');
@@ -365,16 +568,68 @@ function subirArchivo() {
       progLabel.textContent = `Subiendo... ${pct}%`;
     }
   };
-  xhr.onload = () => {
+  xhr.onload = async () => {
     progWrap.style.display = 'none';
     progFill.style.width   = '0%';
     try {
       const res = JSON.parse(xhr.responseText);
-      if (res.ok) onSuccess(res.agregadas.length);
+      if (res.ok) {
+        await guardarArchivosEnMiBiblioteca(archivosValidos);
+        onSuccess(res.agregadas.length);
+      }
       else onError(res.error);
     } catch(e) { onError('Error ' + xhr.status); }
   };
   xhr.onerror = () => { progWrap.style.display='none'; onError('Error de conexión'); };
+  xhr.send(form);
+}
+
+async function enviarMiCancion(id) {
+  const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
+  if (!cancion || !cancion.blob) {
+    onError('Esa cancion ya no esta disponible en este dispositivo');
+    return;
+  }
+  btnPoner.disabled = true;
+  progWrap.style.display = 'block';
+  progLabel.textContent = 'Enviando desde tu biblioteca...';
+
+  const form = new FormData();
+  form.append('owner', OWNER);
+  form.append('archivo', cancion.blob, cancion.nombre);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', `/rockola/${SALA}/subir`);
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) {
+      const pct = Math.round(e.loaded/e.total*100);
+      progFill.style.width = pct + '%';
+      progLabel.textContent = `Enviando... ${pct}%`;
+    }
+  };
+  xhr.onload = () => {
+    progWrap.style.display = 'none';
+    progFill.style.width = '0%';
+    try {
+      const res = JSON.parse(xhr.responseText);
+      if (res.ok) {
+        uploadMsg.textContent = 'Cancion enviada a esta sala';
+        uploadMsg.className = 'upload-msg ok';
+        actualizarCola();
+        actualizarBiblioteca();
+        sincronizarCatalogoLocal();
+      } else {
+        onError(res.error);
+      }
+    } catch(e) {
+      onError('Error ' + xhr.status);
+    }
+    btnPoner.disabled = tabActual === 'archivo' ? !archivosValidos.length : true;
+  };
+  xhr.onerror = () => {
+    progWrap.style.display = 'none';
+    onError('Error de conexion');
+  };
   xhr.send(form);
 }
 
@@ -543,6 +798,7 @@ async function ponerRecordada(id) {
 setInterval(actualizarCola, 2500);
 actualizarCola();
 actualizarBiblioteca();
+cargarMiBiblioteca();
 </script>
 </body>
 </html>

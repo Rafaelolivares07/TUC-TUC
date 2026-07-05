@@ -14,16 +14,80 @@ body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg
 .note{font-size:13px;line-height:1.5;color:var(--muted);margin-bottom:12px}.box{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:14px;margin-bottom:12px}
 .title{font-size:11px;font-weight:900;color:var(--muted);letter-spacing:1.4px;text-transform:uppercase;margin-bottom:10px}
 .tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}.btn{border:1px solid var(--border);background:rgba(0,212,255,.08);color:var(--ac);border-radius:10px;padding:11px 12px;font-weight:900;cursor:pointer}
-.btn.primary{width:100%;background:linear-gradient(135deg,#00d4ff,#0066ff);color:#00101b;border:0;margin-top:10px}.btn:disabled{opacity:.45}
+.btn.primary{display:block;text-align:center;text-decoration:none;width:100%;background:linear-gradient(135deg,#00d4ff,#0066ff);color:#00101b;border:0;margin-top:10px;box-sizing:border-box}
+.btn:disabled{opacity:.45}
 .list{list-style:none;max-height:52vh;overflow:auto;padding-right:4px}.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid rgba(0,212,255,.08)}
 .row:first-child{border-top:0}.name{flex:1;min-width:0;font-size:13px;font-weight:760;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .meta{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-top:2px}.empty{text-align:center;color:var(--muted2);font-size:13px;padding:14px 0}
 input[type=checkbox]{width:22px;height:22px;accent-color:var(--ac)}.status{font-size:13px;color:var(--muted);min-height:20px;margin-top:8px}.ok{color:#22c55e}.err{color:#ff4d6d}
+
+/* Alerta Premium para navegador interno */
+.warning-box {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #ffb83d;
+  line-height: 1.6;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+.warning-box b {
+  color: #fff;
+  font-size: 14px;
+}
+.warning-box ol {
+  margin-top: 10px;
+  padding-left: 20px;
+}
+.warning-box li {
+  margin-bottom: 6px;
+}
+.btn-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  background: #ffb83d;
+  color: #060c18;
+  border: 0;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(255, 184, 61, 0.25);
+}
+.btn-copy:hover {
+  background: #ffa80f;
+  transform: translateY(-1px);
+}
+.btn-copy:active {
+  transform: translateY(0);
+}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="brand">Biblioteca <span>Compartida</span></div>
+  
+  <!-- Advertencia para Navegador Interno -->
+  <div id="inapp-warning" style="display:none;" class="warning-box">
+    ⚠️ <b>Navegador interno detectado (WhatsApp, Instagram, etc.)</b><br>
+    Estás abriendo este enlace dentro de otra aplicación. Las canciones que guardes aquí <b>no aparecerán</b> en tu aplicación de Rockola (PWA) instalada debido a que estas apps aíslan el almacenamiento.<br>
+    <br>
+    <b>Cómo solucionarlo:</b>
+    <ol>
+      <li>Pulsa el botón de menú (los tres puntos <b>⋮</b> o la flecha de compartir) en la esquina superior derecha.</li>
+      <li>Selecciona <b>"Abrir en el navegador"</b> o <b>"Abrir en Chrome/Safari"</b>.</li>
+      <li>O si prefieres, copia el enlace aquí abajo y pégalo directamente en tu navegador principal:</li>
+    </ol>
+    <button class="btn-copy" onclick="copiarEnlaceCompartido(this)">📋 Copiar enlace de la biblioteca</button>
+  </div>
+
   <p class="note" id="intro">Cargando biblioteca...</p>
   <div class="box">
     <div class="title">Escoge que guardar en este dispositivo</div>
@@ -34,6 +98,9 @@ input[type=checkbox]{width:22px;height:22px;accent-color:var(--ac)}.status{font-
     <ul class="list" id="song-list"><li class="empty">Cargando...</li></ul>
     <button class="btn primary" id="save-btn" onclick="guardarSeleccion()">Guardar seleccion</button>
     <div class="status" id="status"></div>
+    <div id="action-after-save" style="display:none; margin-top:10px;">
+      <a href="/rockola/" class="btn primary">◀ Ir a mi Rockola</a>
+    </div>
   </div>
 </div>
 
@@ -131,9 +198,41 @@ async function guardarSeleccion(){
   status.className='status ok';
   btn.disabled=false;
   guardando=false;
+  
+  // Mostrar el botón para regresar a la rockola
+  document.getElementById('action-after-save').style.display = 'block';
 }
+
+/* Detección de navegador interno / Webviews */
+function detectInAppBrowser() {
+  const ua = navigator.userAgent || navigator.vendor || window.opera;
+  return /FBAN|FBAV|Instagram|WhatsApp|Messenger|Line|Snapchat|Telegram|MicroMessenger|wv|WebView/i.test(ua) ||
+         ( /iPhone|iPad|iPod/.test(ua) && !/Safari/i.test(ua) && !/CriOS/i.test(ua) && !/FxiOS/i.test(ua) );
+}
+
+function checkInApp() {
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (!isStandalone && detectInAppBrowser()) {
+    document.getElementById('inapp-warning').style.display = 'block';
+  }
+}
+
+function copiarEnlaceCompartido(btn) {
+  const url = window.location.href;
+  navigator.clipboard.writeText(url).then(() => {
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '✅ Enlace copiado';
+    setTimeout(() => btn.innerHTML = originalText, 2500);
+  }).catch(() => {
+    alert('No se pudo copiar automáticamente. Por favor copia la URL del navegador.');
+  });
+}
+
 if('serviceWorker'in navigator){navigator.serviceWorker.register('/rockola/pwa/sw.js',{scope:'/'}).catch(()=>{})}
 cargar().catch(e=>{document.getElementById('intro').textContent=e.message;document.getElementById('song-list').innerHTML='<li class="empty">No pude abrir esta biblioteca compartida.</li>'});
+
+// Ejecutar detección al cargar
+checkInApp();
 </script>
 </body>
 </html>

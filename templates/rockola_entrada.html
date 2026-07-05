@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#00d4ff">
+<link rel="manifest" href="/rockola/pwa/manifest.json">
 <title>Tuc Tuc Rockola</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -108,6 +110,12 @@ input[type=text]:focus { border-color:var(--ac1); }
       <button class="btn ghost" style="width:100%;margin-top:8px" onclick="generarCodigo()">Generar nombre</button>
     </div>
   </section>
+
+  <div class="box">
+    <div class="box-title">Sin internet</div>
+    <p class="hint" style="margin-bottom:10px">Usa la musica y listas guardadas en este dispositivo.</p>
+    <button class="btn secondary" style="width:100%" onclick="window.location.href='/rockola/pwa/offline'">Abrir modo offline</button>
+  </div>
 
   <div class="footer">AWS coordina la sala. La musica pertenece al dispositivo que reproduce.</div>
 </div>
@@ -298,6 +306,9 @@ document.addEventListener('keydown', e => {
 });
 
 cargarSalas();
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/rockola/pwa/sw.js', { scope: '/' }).catch(() => {});
+}
 </script>
 </body>
 </html>

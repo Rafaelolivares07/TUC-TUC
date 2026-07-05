@@ -6,11 +6,12 @@ YouTube mediante cobalt.tools. El modulo no toca la BD al importarse para que
 un fallo de Rockola no tumbe el arranque general de Tuc Tuc.
 """
 
+import json
 import os
 import threading
 import uuid
 
-from flask import Blueprint, jsonify, render_template, request, send_from_directory
+from flask import Blueprint, Response, jsonify, render_template, request, send_from_directory
 
 from app.db import get_db_connection
 
@@ -270,6 +271,87 @@ def _sala_para_dispositivo(sala, dispositivo_id=None):
 @bp.route('/')
 def entrada():
     return render_template('rockola_entrada.html')
+
+
+@bp.route('/pwa/manifest.json')
+def pwa_manifest():
+    manifest = {
+        "name": "Tu Rockola",
+        "short_name": "Rockola",
+        "description": "Rockola Tuc Tuc con biblioteca local y modo offline",
+        "start_url": "/rockola/",
+        "scope": "/",
+        "display": "standalone",
+        "background_color": "#060c18",
+        "theme_color": "#00d4ff",
+        "icons": [
+            {"src": "/static/TUCTUC%20192X192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/static/TUCTUC%20512X512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+    }
+    return Response(json.dumps(manifest), mimetype='application/manifest+json')
+
+
+@bp.route('/pwa/sw.js')
+def pwa_sw():
+    js = """
+const CACHE = 'rockola-pwa-v1';
+const CORE = [
+  '/rockola/',
+  '/rockola/pwa/offline',
+  '/rockola/pwa/manifest.json',
+  '/static/TUCTUC%20192X192.png',
+  '/static/TUCTUC%20512X512.png'
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(cache => cache.put(req, copy));
+        return res;
+      }).catch(() => caches.match(req).then(hit => hit || caches.match('/rockola/pwa/offline')))
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith('/static/') || url.pathname.startsWith('/rockola/pwa/')) {
+    event.respondWith(
+      caches.match(req).then(hit => hit || fetch(req).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(cache => cache.put(req, copy));
+        return res;
+      }))
+    );
+  }
+});
+"""
+    resp = Response(js, mimetype='application/javascript')
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
+
+@bp.route('/pwa/offline')
+def pwa_offline():
+    return render_template('rockola_offline.html')
 
 
 @bp.route('/salas')

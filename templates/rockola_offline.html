@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#00d4ff">
+<link rel="manifest" href="/rockola/pwa/manifest.json">
+<title>Tu Rockola Offline</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ac:#00d4ff;--bg:#060c18;--surface:#0d1a2e;--surface2:#132440;--border:rgba(0,212,255,.16);--text:#e2eeff;--muted:#7890aa;--muted2:#40556d}
+body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:18px 14px 44px}
+.wrap{width:100%;max-width:520px;margin:0 auto}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 16px}
+.brand{font-size:23px;font-weight:900;letter-spacing:-.4px}.brand span{color:var(--ac)}
+.state{font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.box{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:14px;margin-bottom:12px}
+.title{font-size:11px;font-weight:900;color:var(--muted);letter-spacing:1.4px;text-transform:uppercase;margin-bottom:10px}
+.note{font-size:13px;line-height:1.5;color:var(--muted);margin-bottom:10px}
+.now{font-size:15px;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:10px}
+audio{width:100%;filter:invert(1) hue-rotate(180deg);opacity:.85}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid rgba(0,212,255,.08)}
+.row:first-child{border-top:0}.name{flex:1;min-width:0;font-size:13px;font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-top:2px}
+.btn{border:1px solid var(--border);background:rgba(0,212,255,.08);color:var(--ac);border-radius:10px;padding:9px 11px;font-weight:900;cursor:pointer}
+.btn.primary{background:linear-gradient(135deg,#00d4ff,#0066ff);color:#00101b;border:0}.btn:disabled{opacity:.45}
+.list{list-style:none;max-height:260px;overflow:auto;padding-right:4px}
+.empty{text-align:center;color:var(--muted2);font-size:13px;padding:14px 0}
+.search{width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;margin-bottom:8px;outline:0}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">Tu <span>Rockola</span></div>
+    <div class="state" id="net-state">Offline local</div>
+  </div>
+
+  <div class="box">
+    <div class="title">Modo solo este dispositivo</div>
+    <p class="note">Reproduce musica guardada en este navegador. No usa salas, AWS, YouTube ni otros dispositivos.</p>
+    <div class="now" id="now">Esperando musica local...</div>
+    <audio id="player" controls></audio>
+    <div class="actions">
+      <button class="btn" onclick="playPrev()">Anterior</button>
+      <button class="btn primary" onclick="playNext()">Siguiente</button>
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="title">Listas locales</div>
+    <ul class="list" id="playlist-list"><li class="empty">Cargando listas...</li></ul>
+  </div>
+
+  <div class="box">
+    <div class="title">Biblioteca local</div>
+    <input class="search" id="search" type="search" placeholder="Buscar canciones..." oninput="renderSongs()">
+    <ul class="list" id="song-list"><li class="empty">Cargando biblioteca...</li></ul>
+  </div>
+</div>
+
+<script>
+const DB_NAME = 'rockola_local_library_v1';
+const DEVICE_KEY = 'rockola_device_id';
+const player = document.getElementById('player');
+const nowEl = document.getElementById('now');
+const songList = document.getElementById('song-list');
+const playlistList = document.getElementById('playlist-list');
+const search = document.getElementById('search');
+let songs = [];
+let playlists = [];
+let queue = [];
+let current = -1;
+let objectUrl = null;
+
+function getDeviceId(){return localStorage.getItem(DEVICE_KEY)||''}
+function clean(n){return (n||'').replace(/\.[^.]+$/,'')}
+function openDb(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME,2);
+    req.onupgradeneeded=()=> {
+      const db=req.result;
+      if(!db.objectStoreNames.contains('songs')) db.createObjectStore('songs',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('playlists')) db.createObjectStore('playlists',{keyPath:'id'});
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function loadLocal(){
+  try{
+    const db=await openDb();
+    songs=await new Promise((resolve,reject)=>{
+      const tx=db.transaction('songs','readonly'); const req=tx.objectStore('songs').getAll();
+      req.onsuccess=()=>resolve((req.result||[]).filter(s=>!getDeviceId()||s.deviceId===getDeviceId()));
+      req.onerror=()=>reject(req.error);
+    });
+    playlists=await new Promise((resolve,reject)=>{
+      const tx=db.transaction('playlists','readonly'); const req=tx.objectStore('playlists').getAll();
+      req.onsuccess=()=>resolve((req.result||[]).filter(p=>!getDeviceId()||p.deviceId===getDeviceId()));
+      req.onerror=()=>reject(req.error);
+    });
+    db.close();
+    songs.sort((a,b)=>(b.actualizado||0)-(a.actualizado||0));
+    playlists.sort((a,b)=>(b.actualizado||0)-(a.actualizado||0));
+    renderSongs(); renderPlaylists();
+  }catch(e){
+    songList.innerHTML='<li class="empty">No pude abrir la biblioteca local.</li>';
+  }
+}
+function renderSongs(){
+  const q=(search.value||'').trim().toLowerCase();
+  const visible=songs.filter(s=>!q||clean(s.nombre).toLowerCase().includes(q)).slice(0,120);
+  if(!visible.length){songList.innerHTML='<li class="empty">No hay canciones locales.</li>';return}
+  songList.innerHTML=visible.map(s=>`
+    <li class="row">
+      <div class="name">${clean(s.nombre)}<div class="meta">${Math.max(1,Math.round((s.size||0)/1024/1024))} MB</div></div>
+      <button class="btn" onclick="playSong('${s.id}')">Sonar</button>
+    </li>`).join('');
+}
+function renderPlaylists(){
+  if(!playlists.length){playlistList.innerHTML='<li class="empty">No hay listas locales.</li>';return}
+  playlistList.innerHTML=playlists.map(p=>{
+    const count=(p.canciones||[]).filter(id=>songs.some(s=>s.id===id)).length;
+    return `<li class="row"><div class="name">${p.nombre}<div class="meta">${count}/${(p.canciones||[]).length} disponibles</div></div><button class="btn" onclick="playPlaylist('${p.id}')">Sonar</button></li>`;
+  }).join('');
+}
+function setQueue(ids){
+  queue=ids.map(id=>songs.find(s=>s.id===id)).filter(Boolean);
+  current=-1; playNext();
+}
+function playSong(id){setQueue([id])}
+function playPlaylist(id){
+  const p=playlists.find(x=>x.id===id);
+  if(!p)return;
+  setQueue(p.canciones||[]);
+}
+function playCurrent(){
+  const s=queue[current];
+  if(!s||!s.blob)return;
+  if(objectUrl)URL.revokeObjectURL(objectUrl);
+  objectUrl=URL.createObjectURL(s.blob);
+  player.src=objectUrl;
+  nowEl.textContent=clean(s.nombre);
+  player.play().catch(()=>{});
+}
+function playNext(){if(!queue.length)return;current=(current+1)%queue.length;playCurrent()}
+function playPrev(){if(!queue.length)return;current=(current-1+queue.length)%queue.length;playCurrent()}
+player.addEventListener('ended', playNext);
+document.getElementById('net-state').textContent = navigator.onLine ? 'Local disponible' : 'Offline local';
+window.addEventListener('online',()=>document.getElementById('net-state').textContent='Local disponible');
+window.addEventListener('offline',()=>document.getElementById('net-state').textContent='Offline local');
+loadLocal();
+</script>
+</body>
+</html>

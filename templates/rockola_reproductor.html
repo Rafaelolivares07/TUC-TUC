@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#00d4ff">
+<link rel="manifest" href="/rockola/pwa/manifest.json">
 <title>Tuc Tuc Rockola · Reproductor</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
@@ -1634,6 +1636,9 @@ function setWaveActive(on) {
       b.style.opacity   = '.25';
     }
   });
+}
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/rockola/pwa/sw.js', { scope: '/' }).catch(() => {});
 }
 </script>
 </body>

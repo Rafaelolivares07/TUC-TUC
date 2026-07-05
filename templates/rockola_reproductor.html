@@ -1030,6 +1030,10 @@ async function guardarBlobComoCancionLocal(blob, nombre, archivoId) {
   return cancion;
 }
 
+function idListaRecibida(listaId, listaNombre) {
+  return `plist-${getDeviceId()}-recv-${hashTexto([listaId || '', listaNombre || 'Lista recibida'].join('|'))}`;
+}
+
 async function obtenerCancionLocal(id) {
   const db = await abrirDbLocal();
   const cancion = await new Promise((resolve, reject) => {
@@ -1051,13 +1055,38 @@ async function guardarArchivoServidorEnBiblioteca(item) {
     if (!res.ok) return;
     const blob = await res.blob();
     if (!blob || !blob.size) return;
-    await guardarBlobComoCancionLocal(blob, item.nombre || 'Cancion enviada', item.id);
+    const cancion = await guardarBlobComoCancionLocal(blob, item.nombre || 'Cancion enviada', item.id);
+    await guardarCancionEnListaRecibida(item, cancion.id);
     await cargarBibliotecaLocal();
   } catch(e) {
     console.warn('No se pudo guardar esta cancion en el reproductor', e);
   } finally {
     cacheServidorEnCurso.delete(item.id);
   }
+}
+
+async function guardarCancionEnListaRecibida(item, localSongId) {
+  if (!item.lista_envio_id || !item.lista_envio_nombre || localSongId === undefined) return;
+  const listaId = idListaRecibida(item.lista_envio_id, item.lista_envio_nombre);
+  const posicion = Number.isInteger(item.lista_envio_posicion) ? item.lista_envio_posicion : parseInt(item.lista_envio_posicion || 0, 10);
+  let lista = playlistsLocales.find(p => p.id === listaId);
+  if (!lista) {
+    lista = {
+      id: listaId,
+      deviceId: getDeviceId(),
+      nombre: item.lista_envio_nombre,
+      canciones: [],
+      actualizado: Date.now(),
+    };
+  }
+  const canciones = (lista.canciones || []).filter(Boolean);
+  if (!canciones.includes(localSongId)) {
+    canciones.splice(Math.max(0, posicion || 0), 0, localSongId);
+  }
+  lista.canciones = canciones;
+  lista.actualizado = Date.now();
+  await guardarLista(lista);
+  await cargarListasLocales();
 }
 
 async function cargarBibliotecaLocal() {

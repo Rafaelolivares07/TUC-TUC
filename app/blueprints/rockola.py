@@ -34,7 +34,10 @@ CREATE TABLE IF NOT EXISTS rockola_cola (
     sala_id   TEXT    NOT NULL,
     nombre    TEXT    NOT NULL,
     owner     TEXT    NOT NULL DEFAULT 'anon',
-    posicion  INTEGER NOT NULL DEFAULT 0
+    posicion  INTEGER NOT NULL DEFAULT 0,
+    lista_envio_id TEXT,
+    lista_envio_nombre TEXT,
+    lista_envio_posicion INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_cola_sala ON rockola_cola(sala_id, posicion);
 CREATE TABLE IF NOT EXISTS rockola_biblioteca (
@@ -86,6 +89,9 @@ ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS volumen INTEGER NOT NULL DEFA
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS dispositivo_reproductor_id TEXT;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS dispositivo_reproductor_nombre TEXT;
 ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS actualizado_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS lista_envio_id TEXT;
+ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS lista_envio_nombre TEXT;
+ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS lista_envio_posicion INTEGER;
 """
 
 _lock = threading.Lock()
@@ -145,7 +151,7 @@ def _get_sala(conn, sala_id):
 def _get_cola(conn, sala_id):
     rows = conn.execute(
         """
-        SELECT id, nombre, owner
+        SELECT id, nombre, owner, lista_envio_id, lista_envio_nombre, lista_envio_posicion
         FROM rockola_cola
         WHERE sala_id = %s
         ORDER BY posicion ASC
@@ -189,14 +195,25 @@ def _recordar_cancion(conn, sala_id, archivo_id, nombre, owner, origen):
     )
 
 
-def _agregar_a_cola(conn, sala_id, archivo_id, nombre, owner):
+def _agregar_a_cola(conn, sala_id, archivo_id, nombre, owner, lista_envio=None):
     pos_actual = _max_pos(conn, sala_id) + 1
+    lista_envio = lista_envio or {}
     conn.execute(
         """
-        INSERT INTO rockola_cola (id, sala_id, nombre, owner, posicion)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO rockola_cola
+            (id, sala_id, nombre, owner, posicion, lista_envio_id, lista_envio_nombre, lista_envio_posicion)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
-        (archivo_id, sala_id, nombre, owner, pos_actual),
+        (
+            archivo_id,
+            sala_id,
+            nombre,
+            owner,
+            pos_actual,
+            lista_envio.get('id'),
+            lista_envio.get('nombre'),
+            lista_envio.get('posicion'),
+        ),
     )
 
 
@@ -392,6 +409,20 @@ def sync(sala_id):
 @bp.route('/<sala_id>/subir', methods=['POST'])
 def subir(sala_id):
     owner = request.form.get('owner', 'anon')
+    lista_envio_id = (request.form.get('lista_id') or '').strip() or None
+    lista_envio_nombre = (request.form.get('lista_nombre') or '').strip() or None
+    lista_envio_posicion_raw = (request.form.get('lista_posicion') or '').strip()
+    try:
+        lista_envio_posicion = int(lista_envio_posicion_raw) if lista_envio_posicion_raw != '' else None
+    except ValueError:
+        lista_envio_posicion = None
+    lista_envio = None
+    if lista_envio_id and lista_envio_nombre:
+        lista_envio = {
+            'id': lista_envio_id[:120],
+            'nombre': lista_envio_nombre[:180],
+            'posicion': lista_envio_posicion,
+        }
     files = request.files.getlist('archivo')
     if not files:
         return jsonify(ok=False, error='sin archivo'), 400
@@ -406,7 +437,7 @@ def subir(sala_id):
                 ext = os.path.splitext(file.filename)[1].lower()
                 nombre_id = str(uuid.uuid4()) + ext
                 file.save(os.path.join(upload_dir, nombre_id))
-                _agregar_a_cola(conn, sala_id, nombre_id, file.filename, owner)
+                _agregar_a_cola(conn, sala_id, nombre_id, file.filename, owner, lista_envio)
                 _recordar_cancion(conn, sala_id, nombre_id, file.filename, owner, 'archivo')
                 agregadas.append({'id': nombre_id, 'nombre': file.filename, 'owner': owner})
             conn.commit()

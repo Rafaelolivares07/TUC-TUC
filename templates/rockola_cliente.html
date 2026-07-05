@@ -638,10 +638,15 @@ function subirArchivo() {
   xhr.send(form);
 }
 
-function subirCancionLocal(cancion) {
+function subirCancionLocal(cancion, listaMeta) {
   const form = new FormData();
   form.append('owner', OWNER);
   form.append('archivo', cancion.blob, cancion.nombre);
+  if (listaMeta) {
+    form.append('lista_id', listaMeta.id);
+    form.append('lista_nombre', listaMeta.nombre);
+    form.append('lista_posicion', listaMeta.posicion);
+  }
   return fetch(`/rockola/${SALA}/subir`, {
     method: 'POST',
     body: form,
@@ -700,7 +705,11 @@ async function enviarMiLista(id) {
       continue;
     }
     try {
-      const res = await subirCancionLocal(cancion);
+      const res = await subirCancionLocal(cancion, {
+        id: lista.id,
+        nombre: lista.nombre,
+        posicion: i,
+      });
       if (res.ok) enviadas++;
     } catch(e) {
       faltantes++;

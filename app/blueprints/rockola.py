@@ -225,6 +225,16 @@ def _upload_dir(sala_id):
     return folder
 
 
+def _share_dir(share_id=None):
+    base = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'rockola_share')
+    os.makedirs(base, exist_ok=True)
+    if not share_id:
+        return base
+    folder = os.path.join(base, share_id)
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+
 def _es_admin_sala(conn, sala_id, data):
     if data.get('modo') == 'reproductor':
         return True
@@ -352,6 +362,71 @@ self.addEventListener('fetch', event => {
 @bp.route('/pwa/offline')
 def pwa_offline():
     return render_template('rockola_offline.html')
+
+
+@bp.route('/compartir/biblioteca', methods=['POST'])
+def compartir_biblioteca():
+    share_id = uuid.uuid4().hex[:12]
+    folder = _share_dir(share_id)
+    metadata_raw = request.form.get('metadata') or '{}'
+    try:
+        metadata = json.loads(metadata_raw)
+    except Exception:
+        metadata = {}
+
+    canciones_meta = metadata.get('canciones') or []
+    por_local_id = {
+        (c.get('local_id') or '').strip(): c
+        for c in canciones_meta
+        if (c.get('local_id') or '').strip()
+    }
+    canciones = []
+    for file in request.files.getlist('archivo'):
+        local_id = (file.filename or '').strip()
+        meta = por_local_id.get(local_id, {})
+        ext = os.path.splitext(file.filename or meta.get('archivo_nombre') or 'audio.mp3')[1].lower() or '.mp3'
+        archivo_id = uuid.uuid4().hex + ext
+        file.save(os.path.join(folder, archivo_id))
+        canciones.append({
+            'id': archivo_id,
+            'local_id_origen': local_id,
+            'nombre': meta.get('archivo_nombre') or file.filename or meta.get('titulo') or 'Cancion',
+            'titulo': meta.get('titulo') or os.path.splitext(file.filename or 'Cancion')[0],
+            'tamano_bytes': int(meta.get('tamano_bytes') or 0),
+            'mime': meta.get('mime') or file.mimetype or 'audio/mpeg',
+        })
+
+    manifest = {
+        'share_id': share_id,
+        'nombre': (metadata.get('nombre') or 'Biblioteca compartida')[:160],
+        'dispositivo': metadata.get('dispositivo') or {},
+        'canciones': canciones,
+        'listas': metadata.get('listas') or [],
+    }
+    with open(os.path.join(folder, 'manifest.json'), 'w', encoding='utf-8') as f:
+        json.dump(manifest, f, ensure_ascii=False)
+
+    return jsonify(ok=True, share_id=share_id, url=f'https://rockola.tuc-tuc.co/rockola/compartir/{share_id}')
+
+
+@bp.route('/compartir/<share_id>')
+def compartir_biblioteca_page(share_id):
+    return render_template('rockola_compartir.html', share_id=share_id)
+
+
+@bp.route('/compartir/<share_id>/manifest')
+def compartir_biblioteca_manifest(share_id):
+    path = os.path.join(_share_dir(share_id), 'manifest.json')
+    if not os.path.exists(path):
+        return jsonify(ok=False, error='Biblioteca compartida no encontrada'), 404
+    with open(path, 'r', encoding='utf-8') as f:
+        manifest = json.load(f)
+    return jsonify(ok=True, **manifest)
+
+
+@bp.route('/compartir/<share_id>/archivo/<archivo_id>')
+def compartir_biblioteca_archivo(share_id, archivo_id):
+    return send_from_directory(_share_dir(share_id), archivo_id)
 
 
 @bp.route('/salas')

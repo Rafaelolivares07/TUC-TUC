@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#00d4ff">
+<link rel="manifest" href="/rockola/pwa/manifest.json">
+<title>Biblioteca Compartida · Rockola</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ac:#00d4ff;--bg:#060c18;--surface:#0d1a2e;--surface2:#132440;--border:rgba(0,212,255,.16);--text:#e2eeff;--muted:#7890aa;--muted2:#40556d}
+body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:18px 14px 44px}
+.wrap{width:100%;max-width:520px;margin:0 auto}.brand{font-size:23px;font-weight:900;margin:8px 0 4px}.brand span{color:var(--ac)}
+.note{font-size:13px;line-height:1.5;color:var(--muted);margin-bottom:12px}.box{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:14px;margin-bottom:12px}
+.title{font-size:11px;font-weight:900;color:var(--muted);letter-spacing:1.4px;text-transform:uppercase;margin-bottom:10px}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}.btn{border:1px solid var(--border);background:rgba(0,212,255,.08);color:var(--ac);border-radius:10px;padding:11px 12px;font-weight:900;cursor:pointer}
+.btn.primary{width:100%;background:linear-gradient(135deg,#00d4ff,#0066ff);color:#00101b;border:0;margin-top:10px}.btn:disabled{opacity:.45}
+.list{list-style:none;max-height:52vh;overflow:auto;padding-right:4px}.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid rgba(0,212,255,.08)}
+.row:first-child{border-top:0}.name{flex:1;min-width:0;font-size:13px;font-weight:760;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-top:2px}.empty{text-align:center;color:var(--muted2);font-size:13px;padding:14px 0}
+input[type=checkbox]{width:22px;height:22px;accent-color:var(--ac)}.status{font-size:13px;color:var(--muted);min-height:20px;margin-top:8px}.ok{color:#22c55e}.err{color:#ff4d6d}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">Biblioteca <span>Compartida</span></div>
+  <p class="note" id="intro">Cargando biblioteca...</p>
+  <div class="box">
+    <div class="title">Escoge que guardar en este dispositivo</div>
+    <div class="tools">
+      <button class="btn" onclick="seleccionarTodo(true)">Seleccionar todo</button>
+      <button class="btn" onclick="seleccionarTodo(false)">Limpiar</button>
+    </div>
+    <ul class="list" id="song-list"><li class="empty">Cargando...</li></ul>
+    <button class="btn primary" id="save-btn" onclick="guardarSeleccion()">Guardar seleccion</button>
+    <div class="status" id="status"></div>
+  </div>
+</div>
+
+<script>
+const SHARE_ID = '{{ share_id }}';
+const DB_NAME = 'rockola_local_library_v1';
+const DEVICE_KEY = 'rockola_device_id';
+const DEVICE_NAME_KEY = 'rockola_device_name';
+let manifest = null;
+let guardando = false;
+
+function getDeviceId(){
+  let id=localStorage.getItem(DEVICE_KEY);
+  if(!id){id='dev-'+Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem(DEVICE_KEY,id)}
+  return id;
+}
+function getDeviceName(){
+  let n=localStorage.getItem(DEVICE_NAME_KEY);
+  if(!n){const ua=navigator.userAgent||'';n=/iPhone/i.test(ua)?'iPhone':(/Android/i.test(ua)?'Android':(/Windows/i.test(ua)?'Windows':'Este dispositivo'));localStorage.setItem(DEVICE_NAME_KEY,n)}
+  return n;
+}
+function clean(n){return (n||'').replace(/\.[^.]+$/,'')}
+function hashTexto(texto){let h=0;for(let i=0;i<texto.length;i++){h=((h<<5)-h)+texto.charCodeAt(i);h|=0}return Math.abs(h).toString(36)}
+function localId(archivo){return `local-${getDeviceId()}-share-${hashTexto([SHARE_ID,archivo.id,archivo.nombre].join('|'))}`}
+function songId(c){return `song-${hashTexto([clean(c.nombre).toLowerCase(),c.tamano_bytes||0,c.mime||''].join('|'))}`}
+function openDb(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME,2);
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('songs'))db.createObjectStore('songs',{keyPath:'id'});if(!db.objectStoreNames.contains('playlists'))db.createObjectStore('playlists',{keyPath:'id'})};
+    req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+  });
+}
+async function putStore(storeName,value){
+  const db=await openDb();
+  await new Promise((resolve,reject)=>{const tx=db.transaction(storeName,'readwrite');tx.objectStore(storeName).put(value);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});
+  db.close();
+}
+async function cargar(){
+  const res=await fetch(`/rockola/compartir/${SHARE_ID}/manifest`);
+  const data=await res.json();
+  if(!data.ok) throw new Error(data.error||'No disponible');
+  manifest=data;
+  const origen=(data.dispositivo&&data.dispositivo.nombre)||'otro dispositivo';
+  document.getElementById('intro').textContent=`${data.nombre||'Biblioteca compartida'} · enviada desde ${origen}. Escoge una o varias canciones y guardalas localmente.`;
+  render();
+}
+function render(){
+  const canciones=manifest.canciones||[];
+  if(!canciones.length){document.getElementById('song-list').innerHTML='<li class="empty">No hay canciones compartidas.</li>';return}
+  document.getElementById('song-list').innerHTML=canciones.map(c=>`
+    <li class="row">
+      <input type="checkbox" class="song-check" value="${c.id}" checked>
+      <div class="name">${clean(c.nombre)}<div class="meta">${Math.max(1,Math.round((c.tamano_bytes||0)/1024/1024))} MB</div></div>
+    </li>
+  `).join('');
+}
+function seleccionarTodo(on){document.querySelectorAll('.song-check').forEach(c=>c.checked=on)}
+async function syncCatalog(canciones,listas){
+  await fetch('/rockola/catalogo/local',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    dispositivo:{id:getDeviceId(),nombre:getDeviceName(),user_agent:navigator.userAgent||''},
+    canciones:canciones.map(c=>({cancion_id:songId(c),local_id:localId(c),titulo:clean(c.nombre),archivo_nombre:c.nombre,tamano_bytes:c.tamano_bytes||0,mime:c.mime||''})),
+    listas:listas.map(l=>({lista_id:l.id,nombre:l.nombre,canciones:l.canciones||[]}))
+  })}).catch(()=>{});
+}
+async function guardarSeleccion(){
+  if(guardando||!manifest)return;
+  guardando=true;
+  const status=document.getElementById('status');
+  const btn=document.getElementById('save-btn');
+  btn.disabled=true;
+  const seleccionados=new Set([...document.querySelectorAll('.song-check:checked')].map(c=>c.value));
+  const canciones=(manifest.canciones||[]).filter(c=>seleccionados.has(c.id));
+  if(!canciones.length){status.textContent='Selecciona al menos una cancion.';status.className='status err';btn.disabled=false;guardando=false;return}
+  const mapaOrigenNuevo={};
+  let guardadas=0;
+  for(const c of canciones){
+    status.textContent=`Guardando ${guardadas+1}/${canciones.length}...`;
+    const res=await fetch(`/rockola/compartir/${SHARE_ID}/archivo/${encodeURIComponent(c.id)}`);
+    const blob=await res.blob();
+    const id=localId(c);
+    mapaOrigenNuevo[c.local_id_origen]=id;
+    await putStore('songs',{id,deviceId:getDeviceId(),nombre:c.nombre,tipo:c.mime||blob.type||'audio/mpeg',size:blob.size||c.tamano_bytes||0,actualizado:Date.now(),blob});
+    guardadas++;
+  }
+  const listasGuardadas=[];
+  for(const lista of manifest.listas||[]){
+    const ids=(lista.canciones||[]).map(id=>mapaOrigenNuevo[id]).filter(Boolean);
+    if(!ids.length)continue;
+    const nueva={id:`plist-${getDeviceId()}-share-${hashTexto([SHARE_ID,lista.lista_id||lista.id||lista.nombre].join('|'))}`,deviceId:getDeviceId(),nombre:lista.nombre||'Lista compartida',canciones:ids,actualizado:Date.now()};
+    await putStore('playlists',nueva);
+    listasGuardadas.push(nueva);
+  }
+  await syncCatalog(canciones,listasGuardadas);
+  status.textContent=`Listo: ${guardadas} cancion(es) guardadas${listasGuardadas.length?` y ${listasGuardadas.length} lista(s)`:''}.`;
+  status.className='status ok';
+  btn.disabled=false;
+  guardando=false;
+}
+if('serviceWorker'in navigator){navigator.serviceWorker.register('/rockola/pwa/sw.js',{scope:'/'}).catch(()=>{})}
+cargar().catch(e=>{document.getElementById('intro').textContent=e.message;document.getElementById('song-list').innerHTML='<li class="empty">No pude abrir esta biblioteca compartida.</li>'});
+</script>
+</body>
+</html>

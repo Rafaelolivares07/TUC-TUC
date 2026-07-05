@@ -1097,7 +1097,15 @@ async function cargarBibliotecaLocal() {
     cancionesLocales = await new Promise((resolve, reject) => {
       const tx = db.transaction('songs', 'readonly');
       const req = tx.objectStore('songs').getAll();
-      req.onsuccess = () => resolve((req.result || []).filter(c => c.deviceId === getDeviceId()));
+      req.onsuccess = () => {
+        const todas = req.result || [];
+        let propias = todas.filter(c => c.deviceId === getDeviceId());
+        if (!propias.length && todas.length && todas[0].deviceId) {
+          localStorage.setItem('rockola_device_id', todas[0].deviceId);
+          propias = todas.filter(c => c.deviceId === getDeviceId());
+        }
+        resolve(propias);
+      };
       req.onerror = () => reject(req.error);
     });
     db.close();

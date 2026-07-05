@@ -93,7 +93,12 @@ async function loadLocal(){
     const db=await openDb();
     songs=await new Promise((resolve,reject)=>{
       const tx=db.transaction('songs','readonly'); const req=tx.objectStore('songs').getAll();
-      req.onsuccess=()=>resolve((req.result||[]).filter(s=>!getDeviceId()||s.deviceId===getDeviceId()));
+      req.onsuccess=()=>{
+        const todas=req.result||[];
+        let propias=todas.filter(s=>!getDeviceId()||s.deviceId===getDeviceId());
+        if(!propias.length&&todas.length&&todas[0].deviceId){localStorage.setItem(DEVICE_KEY,todas[0].deviceId);propias=todas.filter(s=>s.deviceId===getDeviceId())}
+        resolve(propias);
+      };
       req.onerror=()=>reject(req.error);
     });
     playlists=await new Promise((resolve,reject)=>{

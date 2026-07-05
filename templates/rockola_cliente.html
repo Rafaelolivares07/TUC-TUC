@@ -113,6 +113,10 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
   color:var(--text); font-family:'Space Grotesk',sans-serif; font-size:13px; outline:none;
 }
 .library-search:focus { border-color:var(--ac1); }
+.share-panel { display:none; background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:12px; margin:10px 0; }
+.share-panel.visible { display:block; }
+.share-link { word-break:break-all; color:var(--ac1); font-size:12px; line-height:1.45; margin:8px 0; }
+.share-qr { display:flex; justify-content:center; background:#fff; border-radius:12px; padding:10px; margin-top:8px; }
 
 /* Queue */
 .queue-box { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:16px; }
@@ -211,8 +215,14 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
   <div class="library-box">
     <div class="library-head">
       <div class="library-label">Mi biblioteca en este dispositivo</div>
+      <button class="library-btn" onclick="compartirMiBiblioteca()">Compartir</button>
     </div>
     <div class="library-note">Audios que ya usaste desde este celular. No se guardan como archivos en AWS.</div>
+    <div class="share-panel" id="share-panel">
+      <div class="library-note">Crea un enlace temporal para que otra persona escoja que canciones guardar.</div>
+      <div class="share-link" id="share-link"></div>
+      <div class="share-qr" id="share-qr"></div>
+    </div>
     <input class="library-search" id="mi-biblioteca-search" type="search" placeholder="Buscar en mi biblioteca..." oninput="renderMiBiblioteca()">
     <ul class="library-list" id="lista-mi-biblioteca">
       <li class="library-empty">Todavia no has guardado canciones en este dispositivo.</li>
@@ -268,6 +278,9 @@ const listaBiblioteca = document.getElementById('lista-biblioteca');
 const listaMiBiblioteca = document.getElementById('lista-mi-biblioteca');
 const miBibliotecaSearch = document.getElementById('mi-biblioteca-search');
 const listaMisListas = document.getElementById('lista-mis-listas');
+const sharePanel = document.getElementById('share-panel');
+const shareLink = document.getElementById('share-link');
+const shareQr = document.getElementById('share-qr');
 
 let tabActual       = 'archivo';
 let archivosValidos = [];
@@ -470,7 +483,15 @@ async function cargarMiBiblioteca() {
     cancionesLocales = await new Promise((resolve, reject) => {
       const tx = db.transaction('songs', 'readonly');
       const req = tx.objectStore('songs').getAll();
-      req.onsuccess = () => resolve((req.result || []).filter(c => c.deviceId === getDeviceId()));
+      req.onsuccess = () => {
+        const todas = req.result || [];
+        let propias = todas.filter(c => c.deviceId === getDeviceId());
+        if (!propias.length && todas.length && todas[0].deviceId) {
+          localStorage.setItem('rockola_device_id', todas[0].deviceId);
+          propias = todas.filter(c => c.deviceId === getDeviceId());
+        }
+        resolve(propias);
+      };
       req.onerror = () => reject(req.error);
     });
     db.close();
@@ -576,6 +597,43 @@ function renderMisListas() {
       </li>
     `;
   }).join('');
+}
+
+async function compartirMiBiblioteca() {
+  if (!cancionesLocales.length) {
+    onError('No tienes canciones locales para compartir');
+    return;
+  }
+  sharePanel.classList.add('visible');
+  shareLink.textContent = 'Creando enlace...';
+  shareQr.innerHTML = '';
+  const form = new FormData();
+  const canciones = cancionesLocales.map(metadataCancionLocal);
+  form.append('metadata', JSON.stringify({
+    nombre: `Biblioteca de ${getDeviceName()}`,
+    dispositivo: { id:getDeviceId(), nombre:getDeviceName() },
+    canciones,
+    listas: playlistsLocales.map(p => ({
+      lista_id: p.id,
+      nombre: p.nombre,
+      canciones: p.canciones || [],
+    })),
+  }));
+  for (const cancion of cancionesLocales) {
+    if (cancion.blob) form.append('archivo', cancion.blob, cancion.id);
+  }
+  try {
+    const res = await fetch('/rockola/compartir/biblioteca', { method:'POST', body:form });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'No se pudo compartir');
+    shareLink.textContent = data.url;
+    if (window.QRCode) {
+      new QRCode(shareQr, { text:data.url, width:180, height:180, correctLevel:QRCode.CorrectLevel.M });
+    }
+    if (navigator.share) navigator.share({ title:'Biblioteca Rockola', text:'Escoge canciones de mi biblioteca', url:data.url }).catch(() => {});
+  } catch(e) {
+    shareLink.textContent = e.message || 'No se pudo crear el enlace';
+  }
 }
 
 function ytInputChange() {

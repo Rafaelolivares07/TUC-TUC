@@ -81,8 +81,8 @@ async function cargar(){
   render();
 }
 function render(){
-  const canciones=manifest.canciones||[];
-  if(!canciones.length){document.getElementById('song-list').innerHTML='<li class="empty">No hay canciones compartidas.</li>';return}
+  const canciones=(manifest.canciones||[]).filter(c=>c.id);
+  if(!canciones.length){document.getElementById('song-list').innerHTML='<li class="empty">Todavia no hay canciones listas en este enlace.</li>';return}
   document.getElementById('song-list').innerHTML=canciones.map(c=>`
     <li class="row">
       <input type="checkbox" class="song-check" value="${c.id}" checked>
@@ -105,7 +105,7 @@ async function guardarSeleccion(){
   const btn=document.getElementById('save-btn');
   btn.disabled=true;
   const seleccionados=new Set([...document.querySelectorAll('.song-check:checked')].map(c=>c.value));
-  const canciones=(manifest.canciones||[]).filter(c=>seleccionados.has(c.id));
+  const canciones=(manifest.canciones||[]).filter(c=>c.id&&seleccionados.has(c.id));
   if(!canciones.length){status.textContent='Selecciona al menos una cancion.';status.className='status err';btn.disabled=false;guardando=false;return}
   const mapaOrigenNuevo={};
   let guardadas=0;

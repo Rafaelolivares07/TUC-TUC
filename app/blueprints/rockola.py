@@ -235,6 +235,65 @@ def _share_dir(share_id=None):
     return folder
 
 
+def _share_manifest_path(share_id):
+    return os.path.join(_share_dir(share_id), 'manifest.json')
+
+
+def _read_share_manifest(share_id):
+    path = _share_manifest_path(share_id)
+    if not os.path.exists(path):
+        return None
+    with open(path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _write_share_manifest(share_id, manifest):
+    with open(_share_manifest_path(share_id), 'w', encoding='utf-8') as f:
+        json.dump(manifest, f, ensure_ascii=False)
+
+
+def _build_share_manifest(share_id, metadata):
+    canciones = []
+    for cancion in metadata.get('canciones') or []:
+        local_id = (cancion.get('local_id') or '').strip()
+        if not local_id:
+            continue
+        canciones.append({
+            'id': None,
+            'local_id_origen': local_id,
+            'nombre': cancion.get('archivo_nombre') or cancion.get('titulo') or 'Cancion',
+            'titulo': cancion.get('titulo') or cancion.get('archivo_nombre') or 'Cancion',
+            'tamano_bytes': int(cancion.get('tamano_bytes') or 0),
+            'mime': cancion.get('mime') or 'audio/mpeg',
+        })
+    return {
+        'share_id': share_id,
+        'nombre': (metadata.get('nombre') or 'Biblioteca compartida')[:160],
+        'dispositivo': metadata.get('dispositivo') or {},
+        'canciones': canciones,
+        'listas': metadata.get('listas') or [],
+    }
+
+
+def _share_url(share_id):
+    return f'https://rockola.tuc-tuc.co/rockola/compartir/{share_id}'
+
+
+def _attach_share_file(manifest, local_id, file, archivo_id):
+    canciones = manifest.setdefault('canciones', [])
+    meta = next((c for c in canciones if c.get('local_id_origen') == local_id), None)
+    if not meta:
+        meta = {'local_id_origen': local_id}
+        canciones.append(meta)
+    meta.update({
+        'id': archivo_id,
+        'nombre': meta.get('nombre') or file.filename or 'Cancion',
+        'titulo': meta.get('titulo') or os.path.splitext(file.filename or 'Cancion')[0],
+        'tamano_bytes': int(meta.get('tamano_bytes') or 0),
+        'mime': meta.get('mime') or file.mimetype or 'audio/mpeg',
+    })
+
+
 def _es_admin_sala(conn, sala_id, data):
     if data.get('modo') == 'reproductor':
         return True
@@ -374,39 +433,45 @@ def compartir_biblioteca():
     except Exception:
         metadata = {}
 
-    canciones_meta = metadata.get('canciones') or []
-    por_local_id = {
-        (c.get('local_id') or '').strip(): c
-        for c in canciones_meta
-        if (c.get('local_id') or '').strip()
-    }
-    canciones = []
+    manifest = _build_share_manifest(share_id, metadata)
     for file in request.files.getlist('archivo'):
         local_id = (file.filename or '').strip()
-        meta = por_local_id.get(local_id, {})
-        ext = os.path.splitext(file.filename or meta.get('archivo_nombre') or 'audio.mp3')[1].lower() or '.mp3'
+        ext = os.path.splitext(file.filename or 'audio.mp3')[1].lower() or '.mp3'
         archivo_id = uuid.uuid4().hex + ext
         file.save(os.path.join(folder, archivo_id))
-        canciones.append({
-            'id': archivo_id,
-            'local_id_origen': local_id,
-            'nombre': meta.get('archivo_nombre') or file.filename or meta.get('titulo') or 'Cancion',
-            'titulo': meta.get('titulo') or os.path.splitext(file.filename or 'Cancion')[0],
-            'tamano_bytes': int(meta.get('tamano_bytes') or 0),
-            'mime': meta.get('mime') or file.mimetype or 'audio/mpeg',
-        })
+        _attach_share_file(manifest, local_id, file, archivo_id)
 
-    manifest = {
-        'share_id': share_id,
-        'nombre': (metadata.get('nombre') or 'Biblioteca compartida')[:160],
-        'dispositivo': metadata.get('dispositivo') or {},
-        'canciones': canciones,
-        'listas': metadata.get('listas') or [],
-    }
-    with open(os.path.join(folder, 'manifest.json'), 'w', encoding='utf-8') as f:
-        json.dump(manifest, f, ensure_ascii=False)
+    _write_share_manifest(share_id, manifest)
 
-    return jsonify(ok=True, share_id=share_id, url=f'https://rockola.tuc-tuc.co/rockola/compartir/{share_id}')
+    return jsonify(ok=True, share_id=share_id, url=_share_url(share_id))
+
+
+@bp.route('/compartir/biblioteca/iniciar', methods=['POST'])
+def compartir_biblioteca_iniciar():
+    data = request.get_json(silent=True) or {}
+    metadata = data.get('metadata') or data
+    share_id = uuid.uuid4().hex[:12]
+    _share_dir(share_id)
+    manifest = _build_share_manifest(share_id, metadata if isinstance(metadata, dict) else {})
+    _write_share_manifest(share_id, manifest)
+    return jsonify(ok=True, share_id=share_id, url=_share_url(share_id))
+
+
+@bp.route('/compartir/<share_id>/archivo', methods=['POST'])
+def compartir_biblioteca_subir_archivo(share_id):
+    local_id = (request.form.get('local_id') or '').strip()
+    file = request.files.get('archivo')
+    if not local_id or not file:
+        return jsonify(ok=False, error='Falta la cancion para compartir'), 400
+    manifest = _read_share_manifest(share_id)
+    if not manifest:
+        return jsonify(ok=False, error='Biblioteca compartida no encontrada'), 404
+    ext = os.path.splitext(file.filename or 'audio.mp3')[1].lower() or '.mp3'
+    archivo_id = uuid.uuid4().hex + ext
+    file.save(os.path.join(_share_dir(share_id), archivo_id))
+    _attach_share_file(manifest, local_id, file, archivo_id)
+    _write_share_manifest(share_id, manifest)
+    return jsonify(ok=True, archivo_id=archivo_id)
 
 
 @bp.route('/compartir/<share_id>')
@@ -416,11 +481,9 @@ def compartir_biblioteca_page(share_id):
 
 @bp.route('/compartir/<share_id>/manifest')
 def compartir_biblioteca_manifest(share_id):
-    path = os.path.join(_share_dir(share_id), 'manifest.json')
-    if not os.path.exists(path):
+    manifest = _read_share_manifest(share_id)
+    if not manifest:
         return jsonify(ok=False, error='Biblioteca compartida no encontrada'), 404
-    with open(path, 'r', encoding='utf-8') as f:
-        manifest = json.load(f)
     return jsonify(ok=True, **manifest)
 
 

@@ -604,12 +604,16 @@ async function compartirMiBiblioteca() {
     onError('No tienes canciones locales para compartir');
     return;
   }
+  const cancionesConArchivo = cancionesLocales.filter(c => c.blob);
+  if (!cancionesConArchivo.length) {
+    onError('No hay archivos locales disponibles para compartir');
+    return;
+  }
   sharePanel.classList.add('visible');
-  shareLink.textContent = 'Creando enlace...';
+  shareLink.textContent = 'Preparando enlace...';
   shareQr.innerHTML = '';
-  const form = new FormData();
   const canciones = cancionesLocales.map(metadataCancionLocal);
-  form.append('metadata', JSON.stringify({
+  const metadata = {
     nombre: `Biblioteca de ${getDeviceName()}`,
     dispositivo: { id:getDeviceId(), nombre:getDeviceName() },
     canciones,
@@ -618,14 +622,25 @@ async function compartirMiBiblioteca() {
       nombre: p.nombre,
       canciones: p.canciones || [],
     })),
-  }));
-  for (const cancion of cancionesLocales) {
-    if (cancion.blob) form.append('archivo', cancion.blob, cancion.id);
-  }
+  };
   try {
-    const res = await fetch('/rockola/compartir/biblioteca', { method:'POST', body:form });
+    const res = await fetch('/rockola/compartir/biblioteca/iniciar', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ metadata }),
+    });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'No se pudo compartir');
+    for (let i = 0; i < cancionesConArchivo.length; i++) {
+      const cancion = cancionesConArchivo[i];
+      shareLink.textContent = `Subiendo ${i + 1}/${cancionesConArchivo.length}: ${limpiarNombre(cancion.nombre)}`;
+      const form = new FormData();
+      form.append('local_id', cancion.id);
+      form.append('archivo', cancion.blob, cancion.nombre || `${cancion.id}.mp3`);
+      const up = await fetch(`/rockola/compartir/${data.share_id}/archivo`, { method:'POST', body:form });
+      const subida = await up.json().catch(() => ({}));
+      if (!up.ok || !subida.ok) throw new Error(subida.error || `No se pudo subir ${limpiarNombre(cancion.nombre)}`);
+    }
     shareLink.textContent = data.url;
     if (window.QRCode) {
       new QRCode(shareQr, { text:data.url, width:180, height:180, correctLevel:QRCode.CorrectLevel.M });

@@ -164,6 +164,10 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .share-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .qr-panel { display:none; background:#fff; border-radius:14px; padding:14px; margin-top:12px; justify-content:center; }
 .qr-panel.visible { display:flex; }
+.share-panel { display:none; background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:12px; margin:10px 0; }
+.share-panel.visible { display:block; }
+.share-link { word-break:break-all; color:var(--ac1); font-size:12px; line-height:1.45; margin:8px 0; }
+.share-qr { display:flex; justify-content:center; background:#fff; border-radius:12px; padding:10px; margin-top:8px; }
 .source-tabs { display:flex; gap:4px; background:var(--surface2); border-radius:12px; padding:4px; margin-bottom:14px; }
 .stab { flex:1; padding:10px 0; border-radius:9px; border:none; background:transparent; color:var(--muted); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:13px; cursor:pointer; }
 .stab.activo { background:var(--ac1-bg); color:var(--ac1); box-shadow:inset 0 0 0 1.5px var(--ac1); }
@@ -213,7 +217,7 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .library-origin { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; }
 .library-btn { border:1px solid var(--border); background:var(--ac1-bg); color:var(--ac1); border-radius:9px; padding:7px 10px; font-weight:900; cursor:pointer; }
 .library-empty { text-align:center; color:var(--muted2); font-size:13px; padding:12px 0; }
-.local-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.local-actions { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin-bottom:10px; }
 .hidden-input { position:absolute; left:-9999px; width:1px; height:1px; opacity:0; }
 .local-search {
   width:100%;
@@ -430,6 +434,12 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
       <div class="local-actions">
         <button class="btn-control" onclick="abrirSelectorCarpeta()">Agregar carpeta</button>
         <button class="btn-control" onclick="abrirSelectorAudios()">Agregar audios</button>
+        <button class="btn-control" onclick="compartirMiBiblioteca()">Compartir</button>
+      </div>
+      <div class="share-panel" id="share-panel">
+        <div class="library-origin">Enlace temporal para que otro dispositivo guarde canciones de esta biblioteca</div>
+        <div class="share-link" id="share-link"></div>
+        <div class="share-qr" id="share-qr"></div>
       </div>
       <input class="hidden-input" id="folder-input" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" webkitdirectory directory multiple onchange="indexarArchivosLocales(this.files)">
       <input class="hidden-input" id="local-files-input" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="indexarArchivosLocales(this.files)">
@@ -531,6 +541,9 @@ const playlistAddResults = document.getElementById('playlist-add-results');
 const playlistSongSearch = document.getElementById('playlist-song-search');
 const playlistSongList = document.getElementById('playlist-song-list');
 const playlistCount = document.getElementById('playlist-count');
+const sharePanel = document.getElementById('share-panel');
+const shareLink = document.getElementById('share-link');
+const shareQr = document.getElementById('share-qr');
 const deviceState = document.getElementById('device-state');
 const deviceActions = document.getElementById('device-actions');
 const btnActivar = document.getElementById('btn-activar');
@@ -967,6 +980,61 @@ async function sincronizarCatalogoLocal() {
       sincronizandoCatalogo = null;
     }
   }, 500);
+}
+
+async function compartirMiBiblioteca() {
+  if (!cancionesLocales.length) {
+    mostrarMensaje('No tienes canciones locales para compartir', 'error');
+    return;
+  }
+  const cancionesConArchivo = cancionesLocales.filter(c => c.blob);
+  if (!cancionesConArchivo.length) {
+    mostrarMensaje('No hay archivos locales disponibles para compartir', 'error');
+    return;
+  }
+  sharePanel.classList.add('visible');
+  shareLink.textContent = 'Preparando enlace...';
+  shareQr.innerHTML = '';
+  const metadata = {
+    nombre: `Biblioteca de ${getDeviceName()}`,
+    dispositivo: { id:getDeviceId(), nombre:getDeviceName() },
+    canciones: cancionesLocales.map(metadataCancionLocal),
+    listas: playlistsLocales.map(p => ({
+      lista_id: p.id,
+      nombre: p.nombre,
+      canciones: p.canciones || [],
+    })),
+  };
+  try {
+    const res = await fetch('/rockola/compartir/biblioteca/iniciar', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ metadata }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'No se pudo compartir');
+    for (let i = 0; i < cancionesConArchivo.length; i++) {
+      const cancion = cancionesConArchivo[i];
+      shareLink.textContent = `Subiendo ${i + 1}/${cancionesConArchivo.length}: ${limpiarNombre(cancion.nombre)}`;
+      const form = new FormData();
+      form.append('local_id', cancion.id);
+      form.append('archivo', cancion.blob, cancion.nombre || `${cancion.id}.mp3`);
+      const up = await fetch(`/rockola/compartir/${data.share_id}/archivo`, { method:'POST', body:form });
+      const subida = await up.json().catch(() => ({}));
+      if (!up.ok || !subida.ok) throw new Error(subida.error || `No se pudo subir ${limpiarNombre(cancion.nombre)}`);
+    }
+    shareLink.textContent = data.url;
+    if (window.QRCode) {
+      new QRCode(shareQr, { text:data.url, width:180, height:180, correctLevel:QRCode.CorrectLevel.M });
+    }
+    if (navigator.share) {
+      navigator.share({ title:'Biblioteca Rockola', text:'Escoge canciones de mi biblioteca', url:data.url }).catch(() => {});
+    }
+    mostrarMensaje('Enlace de biblioteca listo', 'ok');
+  } catch(e) {
+    shareLink.textContent = e.message || 'No se pudo crear el enlace';
+    mostrarMensaje(shareLink.textContent, 'error');
+  }
 }
 
 function abrirDbLocal() {

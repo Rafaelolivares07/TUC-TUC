@@ -225,7 +225,7 @@ function renderSala(sala, disponible) {
       <div class="room-actions">
         ${disponible
           ? `<button class="btn small" onclick="abrirReproductor('${nombre}')">Reproducir</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar</button>`
-          : `<button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar canciones</button><button class="btn ghost small" onclick="abrirControl('${nombre}')">Control</button>`
+          : `<button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar canciones</button><button class="btn ghost small" onclick="reclamarSala('${nombre}')">Reclamar</button>`
         }
       </div>
     </div>
@@ -262,6 +262,27 @@ function renderSalas(salas) {
   document.getElementById('salas-huerfanas').innerHTML = huerfanas.length
     ? huerfanas.map(renderSalaHuerfana).join('')
     : '<div class="empty">No hay salas sin reproductor.</div>';
+}
+
+async function reclamarSala(salaId) {
+  const confirmar = prompt(`Esta sala suena en otro dispositivo. Escribe ${salaId} para moverla a este dispositivo.`);
+  if ((confirmar || '').trim().toLowerCase() !== salaId.toLowerCase()) return;
+  const res = await fetch(`/rockola/${encodeURIComponent(salaId)}/vincular-reproductor`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      device_id:getDeviceId(),
+      device_name:getDeviceName(),
+      tomar_control:true
+    })
+  });
+  const data = await res.json();
+  if (!data.ok) {
+    alert(data.error || 'No se pudo reclamar la sala');
+    return;
+  }
+  recordarSalaLocal(salaId);
+  abrirReproductor(salaId);
 }
 
 async function eliminarSala(salaId) {

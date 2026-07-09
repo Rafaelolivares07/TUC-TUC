@@ -1047,6 +1047,11 @@ def api_produccion_registrar(negocio_id):
 
 # ── UI ─────────────────────────────────────────────────────────────────────────
 
+@bp.route('/debug/session')
+def debug_session():
+    return jsonify(dict(session))
+
+
 @bp.route('/admin/inventario/<int:negocio_id>')
 def admin_inventario(negocio_id):
     if 'usuario_id' not in session:

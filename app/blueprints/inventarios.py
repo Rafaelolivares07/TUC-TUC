@@ -358,6 +358,11 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         """, (negocio_id, producto_id, bodega,
               float(stock_nuevo), float(costo_nuevo), float(val_exi_nuevo)))
 
+    # Actualizar también el costo base del producto
+    conn.execute("""
+        UPDATE productos SET costo=%s WHERE id=%s AND negocio_id=%s
+    """, (float(costo_nuevo), producto_id, negocio_id))
+
     # Asiento COGS automático en salidas por venta (best-effort, no bloquea)
     if tipo == 'salida' and motivo == 'venta' and _asiento_costo_mov:
         try:
@@ -532,7 +537,8 @@ def api_inventario_productos(negocio_id):
         if error:
             return error
         rows = conn.execute("""
-            SELECT p.id, p.nombre, p.categoria, p.precio, p.costo,
+            SELECT p.id, p.nombre, p.categoria, p.precio,
+                   COALESCE(s.costo_und, p.costo) AS costo,
                    p.codigo_barra, p.iva_pct, p.disponible, p.orden,
                    COALESCE(s.stock, 0) AS stock
             FROM productos p

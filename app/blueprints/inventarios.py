@@ -805,7 +805,7 @@ def api_inventario_kardex(producto_id):
         if error:
             return error
         rows = conn.execute("""
-            SELECT tipo, motivo, cantidad, stock_anterior, stock_nuevo,
+            SELECT id, tipo, motivo, cantidad, stock_anterior, stock_nuevo,
                    valor_unitario, costo_und, notas, tipo_documento,
                    documento_numero, documento_fecha, proveedor_id,
                    proveedor_nombre, iva_total, documento_total,
@@ -838,7 +838,7 @@ def api_tienda_inventario_kardex(slug):
         if error:
             return error
         rows = conn.execute("""
-            SELECT tipo, motivo, cantidad, stock_anterior, stock_nuevo,
+            SELECT id, tipo, motivo, cantidad, stock_anterior, stock_nuevo,
                    valor_unitario, costo_und, notas, tipo_documento,
                    documento_numero, documento_fecha, proveedor_id,
                    proveedor_nombre, iva_total, documento_total,

@@ -1241,7 +1241,7 @@ const SLUG = '{{ tienda.slug }}';
 const TERCERO_ID = {{ ((tienda.tercero_id or tienda.admin_id) if tienda else none) | tojson }};
 const BASE = '/api/tienda/' + SLUG;
 window.VENDEDORES_API_BASE = BASE + '/vendedores';
-window.VENDEDORES_NEGOCIO_NOMBRE = {{ tienda.nombre | tojson }};
+window.VENDEDORES_NEGOCIO_NOMBRE = {{ (tienda.nombre if tienda else none) | tojson }};
 const TOKEN = '{{ tienda.token_acceso }}';
 const ADMIN_TEL = '{{ tienda.admin_telefono or "" }}';
 const ES_TIENDA_SOLAR = SLUG === 'home-solar-panel';
@@ -5402,7 +5402,7 @@ function formatearFecha(fechaStr) {
 <script>
 window.TUC_TUC_UBICACION = {
     tipo: 'tienda',
-    slug: {{ tienda.slug | tojson }},
+    slug: {{ (tienda.slug if tienda else none) | tojson }},
     terceroId: {{ ((tienda.tercero_id or tienda.admin_id) if tienda else none) | tojson }},
     lat: {{ (tienda.lat if tienda else none) | tojson }},
     lon: {{ (tienda.lon if tienda else none) | tojson }},

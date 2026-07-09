@@ -1,6 +1,0 @@
-server.ini
-__pycache__/
-*.pyc
-agente.ini
-agente_*.lock
-!templates/reporte*.html

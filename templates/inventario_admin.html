@@ -933,12 +933,8 @@ async function confirmarAnulacion(movimientoId) {
     document.getElementById('btn-anular-item').disabled = false;
     document.getElementById('btn-anular-doc').disabled = false;
     
-    // Si no tiene otros items ni comprobante, ocultar botón de anular todo el documento
-    if ((!d.otros_items || d.otros_items.length === 0) && !d.comprobante) {
-      document.getElementById('btn-anular-doc').classList.add('hidden');
-    } else {
-      document.getElementById('btn-anular-doc').classList.remove('hidden');
-    }
+    // Mostrar siempre ambos botones para evitar confusión
+    document.getElementById('btn-anular-doc').classList.remove('hidden');
 
   } catch (err) {
     cont.innerHTML = `<div class="text-red-500 font-semibold p-2">Error de conexión: ${err.message}</div>`;

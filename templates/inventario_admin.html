@@ -147,6 +147,33 @@
   </div>
 </div>
 
+<!-- ── OVERLAY MODAL ANULACIÓN ────────────────────────────────────── -->
+<div id="overlay-anulacion" class="overlay hidden" onclick="if(event.target===this)cerrarModalAnulacion()">
+  <div class="modal" style="max-width:520px">
+    <h3 class="text-lg font-bold mb-2">Confirmar Anulación</h3>
+    <p class="text-sm text-gray-500 mb-4">¿Cómo deseas procesar la eliminación de esta transacción?</p>
+    
+    <div id="anulacion-detalles" class="space-y-4 mb-6 text-sm">
+      <!-- Se llenará vía JS -->
+    </div>
+
+    <div class="flex flex-col sm:flex-row gap-3 justify-end">
+      <button onclick="cerrarModalAnulacion()" 
+              class="px-4 py-2 rounded-xl border text-sm font-semibold text-gray-600 hover:bg-gray-50 order-last sm:order-none">
+        Cancelar
+      </button>
+      <button id="btn-anular-item" onclick="ejecutarAnulacion(false)" 
+              class="px-4 py-2 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold text-sm">
+        Eliminar solo este ítem
+      </button>
+      <button id="btn-anular-doc" onclick="ejecutarAnulacion(true)" 
+              class="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm font-bold">
+        Anular todo el documento
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ── HEADER ───────────────────────────────────────────────────────── -->
 <div class="max-w-5xl mx-auto">
   <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-rose-500">
@@ -365,10 +392,11 @@
             <th class="num">Costo und</th>
             <th>Documento</th>
             <th>Notas</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="tabla-kardex">
-          <tr><td colspan="8" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
+          <tr><td colspan="10" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
         </tbody>
       </table>
     </div>
@@ -729,12 +757,12 @@ function verKardex(id, nombre) {
 }
 async function cargarKardex(productoId) {
   const tb = document.getElementById('tabla-kardex');
-  tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+  tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
   const r = await fetch(`/api/inventario/producto/${productoId}/kardex`);
   const d = await r.json();
   if (!d.ok) { toast(d.error, false); return; }
   if (!d.movimientos.length) {
-    tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
     return;
   }
   tb.innerHTML = d.movimientos.map(m => `
@@ -751,6 +779,10 @@ async function cargarKardex(productoId) {
         ${m.proveedor_nombre ? `<div class="text-gray-400">${m.proveedor_nombre}</div>` : ''}
       </td>
       <td class="text-xs text-gray-400">${m.notas || ''}</td>
+      <td class="text-center">
+        <button onclick="confirmarAnulacion(${m.id})" title="Anular/Eliminar"
+                class="text-red-500 hover:text-red-700 font-bold text-xs p-1">🗑️</button>
+      </td>
     </tr>
   `).join('');
 }
@@ -824,6 +856,140 @@ async function registrarProduccion() {
     cargarProductos();
   } else {
     toast(d.error, false);
+  }
+}
+
+// ── Anulación de Documentos ──────────────────────────────────────────────────
+let anulacionMovId = null;
+
+function cerrarModalAnulacion() {
+  document.getElementById('overlay-anulacion').classList.add('hidden');
+  anulacionMovId = null;
+}
+
+async function confirmarAnulacion(movimientoId) {
+  anulacionMovId = movimientoId;
+  const cont = document.getElementById('anulacion-detalles');
+  cont.innerHTML = '<div class="text-center py-4 text-gray-500">Cargando detalles de anulación…</div>';
+  
+  // Deshabilitar botones mientras carga
+  document.getElementById('btn-anular-item').disabled = true;
+  document.getElementById('btn-anular-doc').disabled = true;
+  document.getElementById('overlay-anulacion').classList.remove('hidden');
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/previsualizar?movimiento_id=${movimientoId}`);
+    const d = await r.json();
+    if (!d.ok) {
+      cont.innerHTML = `<div class="text-red-500 font-semibold p-2">Error: ${d.error}</div>`;
+      return;
+    }
+
+    const item = d.item_seleccionado;
+    let html = `
+      <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
+        <span class="font-bold text-gray-700">Ítem seleccionado:</span>
+        <div class="mt-1">
+          <span class="badge ${item.tipo === 'entrada' ? 'badge-entrada' : 'badge-salida'}">${item.tipo}</span>
+          <strong>${item.nombre_producto}</strong> - ${item.cantidad} unidades
+        </div>
+        ${item.tipo_documento ? `<div class="text-xs text-gray-400 mt-1">Doc: ${item.tipo_documento} ${item.documento_numero || ''}</div>` : ''}
+      </div>
+    `;
+
+    if (d.otros_items && d.otros_items.length > 0) {
+      html += `
+        <div class="border border-orange-100 rounded-xl p-3 bg-orange-50/50">
+          <span class="font-bold text-orange-850" style="color: #c2410c;">Otros ítems en el mismo documento (${d.otros_items.length}):</span>
+          <ul class="list-disc pl-5 mt-1 space-y-0.5 text-xs text-orange-700">
+            ${d.otros_items.map(o => `<li><strong>${o.nombre_producto}</strong> (${o.tipo}: ${o.cantidad} und)</li>`).join('')}
+          </ul>
+        </div>
+      `;
+    }
+
+    if (d.comprobante) {
+      html += `
+        <div class="border border-red-100 rounded-xl p-3 bg-red-50/50">
+          <span class="font-bold text-red-850" style="color: #b91c1c;">Asiento contable asociado:</span>
+          <div class="text-xs text-red-700 mt-1">
+            <strong>${d.comprobante.numero_comprobante}</strong> - ${d.comprobante.descripcion || ''} 
+            (Débitos: $${parseFloat(d.comprobante.total_debitos).toLocaleString()})
+          </div>
+          <p class="text-[10px] text-red-500 mt-1">Se eliminará físicamente este comprobante de la contabilidad.</p>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-xl p-3">
+          No se detectaron comprobantes contables vinculados a este documento.
+        </div>
+      `;
+    }
+
+    cont.innerHTML = html;
+    
+    // Habilitar botones
+    document.getElementById('btn-anular-item').disabled = false;
+    document.getElementById('btn-anular-doc').disabled = false;
+    
+    // Si no tiene otros items ni comprobante, ocultar botón de anular todo el documento
+    if ((!d.otros_items || d.otros_items.length === 0) && !d.comprobante) {
+      document.getElementById('btn-anular-doc').classList.add('hidden');
+    } else {
+      document.getElementById('btn-anular-doc').classList.remove('hidden');
+    }
+
+  } catch (err) {
+    cont.innerHTML = `<div class="text-red-500 font-semibold p-2">Error de conexión: ${err.message}</div>`;
+  }
+}
+
+async function ejecutarAnulacion(anularTodo) {
+  if (!anulacionMovId) return;
+  
+  if (!confirm(`¿Estás seguro de que deseas ${anularTodo ? 'anular todo el documento (incluyendo contabilidad e inventarios vinculados)' : 'eliminar solo este ítem del inventario'}? esta acción no se puede deshacer.`)) {
+    return;
+  }
+
+  // Deshabilitar botones de acción durante el guardado
+  document.getElementById('btn-anular-item').disabled = true;
+  document.getElementById('btn-anular-doc').disabled = true;
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/anular`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        movimiento_id: anulacionMovId,
+        anular_todo: anularTodo
+      })
+    });
+    
+    const d = await r.json();
+    if (!d.ok) {
+      toast(d.error, false);
+      document.getElementById('btn-anular-item').disabled = false;
+      document.getElementById('btn-anular-doc').disabled = false;
+      return;
+    }
+
+    toast(`Anulación exitosa. ${d.movimientos_borrados} movimientos borrados y ${d.comprobantes_borrados} asientos contables eliminados.`);
+    cerrarModalAnulacion();
+    
+    // Recargar productos (para actualizar stock en la tabla principal)
+    cargarProductos();
+    
+    // Si la pestaña Kardex está activa y hay un producto seleccionado, recargar el Kardex
+    const selectId = document.getElementById('kardex-ac-id').value;
+    if (selectId) {
+      cargarKardex(selectId);
+    }
+    
+  } catch (err) {
+    toast(`Error de red: ${err.message}`, false);
+    document.getElementById('btn-anular-item').disabled = false;
+    document.getElementById('btn-anular-doc').disabled = false;
   }
 }
 

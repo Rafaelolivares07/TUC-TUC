@@ -105,6 +105,8 @@ def _asegurar_tablas(conn):
             total_creditos     NUMERIC(12,2) DEFAULT 0,
             registrado_por     INTEGER,
             notas              TEXT,
+            origen_tipo        VARCHAR(50),
+            origen_id          VARCHAR(100),
             created_at         TIMESTAMP DEFAULT NOW()
         )
     """)
@@ -171,6 +173,8 @@ def _asegurar_tablas(conn):
         "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS predeterminado BOOLEAN DEFAULT FALSE",
         # numero_documento en comprobantes_contables para cruce con inventario
         "ALTER TABLE comprobantes_contables  ADD COLUMN IF NOT EXISTS numero_documento INTEGER",
+        "ALTER TABLE comprobantes_contables  ADD COLUMN IF NOT EXISTS origen_tipo   VARCHAR(50)",
+        "ALTER TABLE comprobantes_contables  ADD COLUMN IF NOT EXISTS origen_id     VARCHAR(100)",
         # tipo_documento y numero_documento en movimientos_inventario
         "ALTER TABLE movimientos_inventario  ADD COLUMN IF NOT EXISTS tipo_documento   VARCHAR(50)",
         "ALTER TABLE movimientos_inventario  ADD COLUMN IF NOT EXISTS numero_documento INTEGER",
@@ -488,7 +492,8 @@ def ejecutar_programaciones_job(app):
 # ── Motor contable ────────────────────────────────────────────
 
 def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
-                                  registrado_por=None, fecha=None, descripcion_override=None):
+                                  registrado_por=None, fecha=None, descripcion_override=None,
+                                  origen_tipo=None, origen_id=None):
     """
     Motor parametrizable best-effort.
     Retorna comprobante_id (int) o None si no hay parametrización activa.
@@ -572,11 +577,11 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
     comp_id = conn.execute("""
         INSERT INTO comprobantes_contables
             (negocio_id, numero_comprobante, numero_documento, tipo, fecha, descripcion,
-             total_debitos, total_creditos, registrado_por, notas)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Generado automáticamente')
+             total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Generado automáticamente',%s,%s)
         RETURNING id
     """, (negocio_id, numero, num_doc, tipo_doc_codigo, fecha_uso, desc,
-          total_deb, total_cred, registrado_por)).fetchone()['id']
+          total_deb, total_cred, registrado_por, origen_tipo, origen_id)).fetchone()['id']
 
     for m in mov_list:
         conn.execute("""
@@ -673,7 +678,8 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
 
 
 def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_total,
-                                  componentes, registrado_por=None, descripcion=None):
+                                  componentes, registrado_por=None, descripcion=None,
+                                  origen_tipo=None, origen_id=None):
     """
     Asiento de producción — reclasificación dentro del 14x:
       Débito  cuenta_inve del producto terminado  × costo_total
@@ -740,11 +746,11 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
     comp_id = conn.execute("""
         INSERT INTO comprobantes_contables
             (negocio_id, numero_comprobante, tipo, fecha, descripcion,
-             total_debitos, total_creditos, registrado_por, notas)
-        VALUES (%s,%s,'PRODUCCION',%s,%s,%s,%s,%s,'Producción automática')
+             total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id)
+        VALUES (%s,%s,'PRODUCCION',%s,%s,%s,%s,%s,'Producción automática',%s,%s)
         RETURNING id
     """, (negocio_id, numero, fecha_uso, desc,
-          monto_total, total_cred, registrado_por)).fetchone()['id']
+          monto_total, total_cred, registrado_por, origen_tipo, origen_id)).fetchone()['id']
 
     conn.execute("""
         INSERT INTO movimientos_contables

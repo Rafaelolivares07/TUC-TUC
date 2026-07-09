@@ -99,6 +99,8 @@ def _crear_tablas(conn):
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS documento_total NUMERIC(14,2)",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS recargo DECIMAL(10,2) DEFAULT 0",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
+        "ALTER TABLE comprobantes_contables ADD COLUMN IF NOT EXISTS origen_tipo VARCHAR(50)",
+        "ALTER TABLE comprobantes_contables ADD COLUMN IF NOT EXISTS origen_id VARCHAR(100)",
     ]
     for sql in alters:
         try:
@@ -400,14 +402,18 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
 
 
 def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
+    from datetime import datetime
     lineas = data.get('lineas', [])
     motivo = data.get('motivo', 'compra')
-    notas = _txt(data.get('notas'))
+    notas = _txt(data.get('notes') or data.get('notas'))
     if not lineas:
         return {'ok': False, 'error': 'Debe agregar al menos una linea'}, 400
 
-    tipo_documento = _txt(data.get('tipo_documento'))
+    tipo_documento = _txt(data.get('tipo_documento')) or 'otro'
     documento_numero = _txt(data.get('documento_numero') or data.get('numero_documento'))
+    if not documento_numero:
+        documento_numero = f"ENT-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
     documento_fecha = _fecha_o_none(data.get('documento_fecha') or data.get('fecha_documento'))
     proveedor_id = _int_o_none(data.get('proveedor_id') or data.get('tercero_id'))
     proveedor_nombre = _txt(data.get('proveedor_nombre'))
@@ -472,7 +478,9 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                               {'subtotal_compra': float(subtotal_compra),
                                'iva_compra': float(iva_total),
                                'total_compra': float(documento_total)},
-                              registrado_por=usuario_id)
+                              registrado_por=usuario_id,
+                              origen_tipo='inventario_entrada',
+                              origen_id=f"{tipo_documento}:{documento_numero}")
         except Exception as _e:
             print(f'[cont] compra negocio={negocio_id}: {_e}')
 
@@ -1012,18 +1020,21 @@ def api_produccion_registrar(negocio_id):
         # Costo unitario del terminado = total componentes / cantidad producida
         costo_unitario = costo_total / cantidad if cantidad > 0 else Decimal('0')
 
+        import time
+        prod_token = f"PROD-{int(time.time())}"
+
         # Salida de cada componente
         for c in componentes:
             cant_comp = Decimal(str(c['cantidad'])) * cantidad
             _mov_directo(conn, negocio_id, c['componente_id'], cant_comp,
                          'salida', 'produccion', session['usuario_id'],
-                         notas=notas, referencia_tipo='produccion')
+                         notas=notas, referencia_tipo='produccion', referencia_id=prod_token)
 
         # Entrada del terminado con costo calculado desde componentes
         _mov_directo(conn, negocio_id, producto_id, cantidad,
                      'entrada', 'produccion', session['usuario_id'],
                      valor_unitario=costo_unitario,
-                     notas=notas, referencia_tipo='produccion')
+                     notas=notas, referencia_tipo='produccion', referencia_id=prod_token)
 
         # Asiento contable de producción (best-effort, no bloquea)
         if _asiento_produccion:
@@ -1031,7 +1042,9 @@ def api_produccion_registrar(negocio_id):
                 _asiento_produccion(
                     conn, negocio_id, producto_id, float(costo_total), comps_cont,
                     registrado_por=session['usuario_id'],
-                    descripcion=f'Producción {producto["nombre"]} x{float(cantidad)}'
+                    descripcion=f'Producción {producto["nombre"]} x{float(cantidad)}',
+                    origen_tipo='produccion',
+                    origen_id=prod_token
                 )
             except Exception as _e:
                 print(f'[cont] produccion prod={producto_id}: {_e}')
@@ -1043,6 +1056,271 @@ def api_produccion_registrar(negocio_id):
             'producto':       producto['nombre'],
             'costo_unitario': float(costo_unitario),
             'costo_total':    float(costo_total),
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+def _recostear_producto(conn, negocio_id, producto_id):
+    """
+    Recalcula cronológicamente los saldos de inventario y el costo promedio de un producto.
+    """
+    from decimal import Decimal
+    movs = conn.execute("""
+        SELECT id, tipo, cantidad, valor_unitario
+        FROM movimientos_inventario
+        WHERE negocio_id = %s AND producto_id = %s
+        ORDER BY created_at ASC, id ASC
+    """, (negocio_id, producto_id)).fetchall()
+
+    stock = Decimal('0')
+    val_existencia = Decimal('0')
+    costo_und = Decimal('0')
+
+    for m in movs:
+        cant_m = Decimal(str(m['cantidad']))
+        signo = Decimal('1') if m['tipo'] == 'entrada' else Decimal('-1')
+        stock_ant = stock
+        stock_nuevo = stock_ant + cant_m * signo
+
+        if m['tipo'] == 'entrada' and m['valor_unitario'] is not None:
+            vu = Decimal(str(m['valor_unitario']))
+            costo_und = (val_existencia + cant_m * vu) / stock_nuevo if stock_nuevo > 0 else vu
+            val_existencia = stock_nuevo * costo_und if stock_nuevo > 0 else Decimal('0')
+        else:
+            val_existencia = stock_nuevo * costo_und if stock_nuevo > 0 else Decimal('0')
+
+        valor_total = cant_m * (Decimal(str(m['valor_unitario'])) if m['valor_unitario'] is not None else costo_und)
+
+        conn.execute("""
+            UPDATE movimientos_inventario
+            SET stock_anterior = %s,
+                stock_nuevo = %s,
+                costo_und = %s,
+                valor_total = %s
+            WHERE id = %s
+        """, (float(stock_ant), float(stock_nuevo), float(costo_und), float(valor_total), m['id']))
+
+        stock = stock_nuevo
+
+    saldo_final = conn.execute("""
+        SELECT id FROM saldos_inventario
+        WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
+    """, (negocio_id, producto_id)).fetchone()
+
+    if saldo_final:
+        conn.execute("""
+            UPDATE saldos_inventario
+            SET stock = %s, costo_und = %s, valor_existencia = %s, updated_at = NOW()
+            WHERE id = %s
+        """, (float(stock), float(costo_und), float(val_existencia), saldo_final['id']))
+    else:
+        conn.execute("""
+            INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock, costo_und, valor_existencia)
+            VALUES (%s, %s, 1, %s, %s, %s)
+        """, (negocio_id, producto_id, float(stock), float(costo_und), float(val_existencia)))
+
+    conn.execute("""
+        UPDATE productos
+        SET costo = %s
+        WHERE id = %s AND negocio_id = %s
+    """, (float(costo_und), producto_id, negocio_id))
+
+
+@bp.route('/api/inventario/<int:negocio_id>/documento/previsualizar')
+def api_documento_previsualizar(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    movimiento_id = request.args.get('movimiento_id', type=int)
+    if not movimiento_id:
+        return jsonify({'ok': False, 'error': 'movimiento_id requerido'}), 400
+
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        mov = conn.execute("""
+            SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.cantidad, 
+                   m.tipo_documento, m.documento_numero, m.referencia_id, m.referencia_tipo,
+                   m.created_at, m.documento_total
+            FROM movimientos_inventario m
+            WHERE m.id = %s AND m.negocio_id = %s
+        """, (movimiento_id, negocio_id)).fetchone()
+
+        if not mov:
+            return jsonify({'ok': False, 'error': 'Movimiento no encontrado'}), 404
+
+        mov_dict = dict(mov)
+        otros_items = []
+        origen_id = None
+        origen_tipo = None
+
+        if mov['referencia_tipo'] == 'produccion' and mov['referencia_id']:
+            origen_tipo = 'produccion'
+            origen_id = mov['referencia_id']
+            rows = conn.execute("""
+                SELECT id, producto_id, nombre_producto, tipo, cantidad
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND referencia_tipo = 'produccion' AND referencia_id = %s AND id != %s
+            """, (negocio_id, mov['referencia_id'], movimiento_id)).fetchall()
+            otros_items = [dict(r) for r in rows]
+
+        elif mov['tipo_documento'] and mov['documento_numero']:
+            origen_tipo = 'inventario_entrada'
+            origen_id = f"{mov['tipo_documento']}:{mov['documento_numero']}"
+            rows = conn.execute("""
+                SELECT id, producto_id, nombre_producto, tipo, cantidad
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND tipo_documento = %s AND documento_numero = %s AND id != %s
+            """, (negocio_id, mov['tipo_documento'], mov['documento_numero'], movimiento_id)).fetchall()
+            otros_items = [dict(r) for r in rows]
+
+        comprobante = None
+        if origen_id and origen_tipo:
+            comp_row = conn.execute("""
+                SELECT id, numero_comprobante, tipo, total_debitos, descripcion, fecha
+                FROM comprobantes_contables
+                WHERE negocio_id = %s AND origen_tipo = %s AND origen_id = %s
+                LIMIT 1
+            """, (negocio_id, origen_tipo, origen_id)).fetchone()
+            if comp_row:
+                comprobante = dict(comp_row)
+
+        if not comprobante and mov['tipo_documento'] and mov['documento_numero']:
+            comp_row = conn.execute("""
+                SELECT id, numero_comprobante, tipo, total_debitos, descripcion, fecha
+                FROM comprobantes_contables
+                WHERE negocio_id = %s AND tipo = 'COMPRA'
+                  AND ABS(total_debitos - %s) < 0.05
+                  AND fecha = %s::date
+                LIMIT 1
+            """, (negocio_id, float(mov['documento_total'] or 0), mov['created_at'].date())).fetchone()
+            if comp_row:
+                comprobante = dict(comp_row)
+
+        return jsonify({
+            'ok': True,
+            'item_seleccionado': mov_dict,
+            'otros_items': otros_items,
+            'comprobante': comprobante
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/documento/anular', methods=['POST'])
+def api_documento_anular(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    data = request.get_json() or {}
+    movimiento_id = data.get('movimiento_id')
+    anular_todo = bool(data.get('anular_todo', False))
+
+    if not movimiento_id:
+        return jsonify({'ok': False, 'error': 'movimiento_id requerido'}), 400
+
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        mov = conn.execute("""
+            SELECT id, producto_id, tipo, cantidad, tipo_documento, documento_numero,
+                   referencia_id, referencia_tipo, documento_total, created_at
+            FROM movimientos_inventario
+            WHERE id = %s AND negocio_id = %s
+        """, (movimiento_id, negocio_id)).fetchone()
+
+        if not mov:
+            return jsonify({'ok': False, 'error': 'Movimiento no encontrado'}), 404
+
+        movimientos_a_borrar = []
+        productos_a_recostear = set()
+        comprobantes_a_borrar = []
+
+        if anular_todo:
+            origen_id = None
+            origen_tipo = None
+
+            if mov['referencia_tipo'] == 'produccion' and mov['referencia_id']:
+                origen_tipo = 'produccion'
+                origen_id = mov['referencia_id']
+                rows = conn.execute("""
+                    SELECT id, producto_id FROM movimientos_inventario
+                    WHERE negocio_id = %s AND referencia_tipo = 'produccion' AND referencia_id = %s
+                """, (negocio_id, mov['referencia_id'])).fetchall()
+                for r in rows:
+                    movimientos_a_borrar.append(r['id'])
+                    productos_a_recostear.add(r['producto_id'])
+
+            elif mov['tipo_documento'] and mov['documento_numero']:
+                origen_tipo = 'inventario_entrada'
+                origen_id = f"{mov['tipo_documento']}:{mov['documento_numero']}"
+                rows = conn.execute("""
+                    SELECT id, producto_id FROM movimientos_inventario
+                    WHERE negocio_id = %s AND tipo_documento = %s AND documento_numero = %s
+                """, (negocio_id, mov['tipo_documento'], mov['documento_numero'])).fetchall()
+                for r in rows:
+                    movimientos_a_borrar.append(r['id'])
+                    productos_a_recostear.add(r['producto_id'])
+
+            else:
+                movimientos_a_borrar.append(mov['id'])
+                productos_a_recostear.add(mov['producto_id'])
+
+            if origen_id and origen_tipo:
+                comp_row = conn.execute("""
+                    SELECT id FROM comprobantes_contables
+                    WHERE negocio_id = %s AND origen_tipo = %s AND origen_id = %s
+                """, (negocio_id, origen_tipo, origen_id)).fetchone()
+                if comp_row:
+                    comprobantes_a_borrar.append(comp_row['id'])
+
+            if not comprobantes_a_borrar and mov['tipo_documento'] and mov['documento_numero']:
+                comp_row = conn.execute("""
+                    SELECT id FROM comprobantes_contables
+                    WHERE negocio_id = %s AND tipo = 'COMPRA'
+                      AND ABS(total_debitos - %s) < 0.05
+                      AND fecha = %s::date
+                """, (negocio_id, float(mov['documento_total'] or 0), mov['created_at'].date())).fetchone()
+                if comp_row:
+                    comprobantes_a_borrar.append(comp_row['id'])
+
+        else:
+            movimientos_a_borrar.append(mov['id'])
+            productos_a_recostear.add(mov['producto_id'])
+
+        for comp_id in comprobantes_a_borrar:
+            conn.execute("DELETE FROM movimientos_contables WHERE comprobante_id = %s", (comp_id,))
+            conn.execute("DELETE FROM comprobantes_contables WHERE id = %s", (comp_id,))
+
+        for mov_id in movimientos_a_borrar:
+            conn.execute("DELETE FROM movimientos_inventario WHERE id = %s", (mov_id,))
+
+        productos_recosteados = []
+        for prod_id in productos_a_recostear:
+            _recostear_producto(conn, negocio_id, prod_id)
+            p_info = conn.execute("SELECT nombre FROM productos WHERE id=%s", (prod_id,)).fetchone()
+            productos_recosteados.append(p_info['nombre'] if p_info else f"Prod #{prod_id}")
+
+        conn.commit()
+
+        return jsonify({
+            'ok': True,
+            'movimientos_borrados': len(movimientos_a_borrar),
+            'comprobantes_borrados': len(comprobantes_a_borrar),
+            'productos_recosteados': productos_recosteados
         })
     except Exception as e:
         conn.rollback()

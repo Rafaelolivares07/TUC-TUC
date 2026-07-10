@@ -464,6 +464,11 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
     else if (e.key === 'Escape') { list.classList.add('hidden'); }
   });
   inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 200));
+  inp.addEventListener('focus', () => {
+    if (typeof cargarProductos === 'function') {
+      cargarProductos();
+    }
+  });
 
   function renderAC() {
     const q = inp.value.toLowerCase().trim();

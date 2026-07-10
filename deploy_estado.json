@@ -1,7 +1,6 @@
 {
-  "commit": "2391389",
-  "estado": "live",
-  "iniciado": "2026-07-05T11:57:12.717237",
-  "mensaje": "Improve rockola library sharing flow",
-  "live_at": "2026-07-05T11:58:04.665367"
+  "commit": "3a7f558",
+  "estado": "pendiente",
+  "iniciado": "2026-07-09T10:15:27.844872",
+  "mensaje": "ui(inventario): always show both annulment buttons to avoid confusion"
 }

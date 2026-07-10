@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Consulta de Cuentas — SAR</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  body { background: #f4f7fb; font-size: 13px; }
+  .panel-filtros { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 14px 20px; margin-bottom: 14px; }
+  .panel-totales { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 12px 20px; margin-bottom: 14px; }
+  .total-box { text-align: center; }
+  .total-box .val      { font-size: 17px; font-weight: 700; color: #003f7f; }
+  .total-box .val.deb  { color: #1a7f5a; }
+  .total-box .val.cre  { color: #b91c1c; }
+  .total-box .lbl { font-size: 11px; color: #888; text-transform: uppercase; }
+  #tabla-wrap { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; overflow-x: auto; }
+  table { font-size: 12px; }
+  thead th { background: #003f7f; color: #fff; cursor: pointer; user-select: none; white-space: nowrap; }
+  thead th:hover { background: #00539f; }
+  thead th .sort-ico { opacity: .5; font-size: 10px; }
+  thead th.sort-asc  .sort-ico::after { content: ' ▲'; opacity: 1; }
+  thead th.sort-desc .sort-ico::after { content: ' ▼'; opacity: 1; }
+  tbody tr:nth-child(even) { background: #f0f6ff; }
+  tbody tr:hover { background: #d6eaff; }
+  .num { text-align: right; }
+  .deb { color: #1a7f5a; }
+  .cre { color: #b91c1c; }
+  .fila-total td { font-weight: 700; background: #e8f0ff !important; border-top: 2px solid #003f7f; }
+  .spinner-wrap { text-align: center; padding: 40px; color: #888; }
+</style>
+</head>
+<body>
+<div class="container-fluid py-3">
+
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <a href="/" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left me-1"></i>Menú</a>
+    <h5 class="mb-0 fw-bold" style="color:#003f7f"><i class="bi bi-journal-text me-2"></i>Consulta de Cuentas</h5>
+    <span id="badge-fuente" class="badge" style="font-size:11px"></span>
+  </div>
+
+  <!-- Filtros -->
+  <div class="panel-filtros">
+    <div class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Cuenta <span class="fw-normal text-muted">(código)</span></label>
+        <input type="text" id="f-cuenta" class="form-control form-control-sm" style="width:160px" placeholder="Ej: 1305">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Empresa</label>
+        <select id="f-empresa" class="form-select form-select-sm" style="min-width:110px">
+          <option value="">Todas</option>
+          {% for emp in empresas %}<option value="{{ emp }}">{{ emp }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Desde</label>
+        <input type="date" id="f-desde" class="form-control form-control-sm" value="{{ desde }}">
+      </div>
+      <div class="col-auto">
+        <label class="form-label mb-1 small fw-semibold">Hasta</label>
+        <input type="date" id="f-hasta" class="form-control form-control-sm" value="{{ hasta }}">
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-primary btn-sm" style="min-width:120px" onclick="consultar()">
+          <i class="bi bi-search me-1"></i>Consultar
+        </button>
+      </div>
+      <div class="col-auto" id="btn-excel-wrap" style="display:none">
+        <button class="btn btn-success btn-sm" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      <div class="col-auto ms-auto">
+        <small id="info-registros" class="text-muted"></small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Totales -->
+  <div class="panel-totales" id="panel-totales" style="display:none">
+    <div class="row g-3">
+      <div class="col total-box">
+        <div class="val" id="t-terceros">—</div>
+        <div class="lbl">Terceros</div>
+      </div>
+      <div class="col total-box">
+        <div class="val deb" id="t-deb">—</div>
+        <div class="lbl">Total Débito</div>
+      </div>
+      <div class="col total-box">
+        <div class="val cre" id="t-cre">—</div>
+        <div class="lbl">Total Crédito</div>
+      </div>
+      <div class="col total-box">
+        <div class="val" id="t-neto">—</div>
+        <div class="lbl">Neto (Déb−Cré)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla -->
+  <div id="tabla-wrap">
+    <div class="spinner-wrap" id="estado-inicial">
+      <i class="bi bi-arrow-up-circle text-primary fs-4"></i>
+      <div class="mt-2">Ingrese un código de cuenta y pulse Consultar</div>
+    </div>
+    <div class="spinner-wrap d-none" id="spinner">
+      <div class="spinner-border text-primary" role="status"></div>
+      <div class="mt-2">Consultando…</div>
+    </div>
+    <table class="table table-bordered table-hover mb-0 d-none" id="tabla">
+      <thead>
+        <tr>
+          <th onclick="ordenar(0)" data-col="0">IDENTIFICACIÓN<span class="sort-ico"></span></th>
+          <th onclick="ordenar(1)" data-col="1">NOMBRE<span class="sort-ico"></span></th>
+          <th onclick="ordenar(2)" data-col="2" class="num">DÉBITO<span class="sort-ico"></span></th>
+          <th onclick="ordenar(3)" data-col="3" class="num">CRÉDITO<span class="sort-ico"></span></th>
+          <th onclick="ordenar(4)" data-col="4" class="num">NETO<span class="sort-ico"></span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+      <tfoot>
+        <tr class="fila-total">
+          <td colspan="2">TOTAL</td>
+          <td class="num" id="ft-deb"></td>
+          <td class="num" id="ft-cre"></td>
+          <td class="num" id="ft-neto"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const _conFuente = p => Object.assign({}, p, {fuente: localStorage.getItem('sar_fuente')||'local', cliente_id: localStorage.getItem('sar_cliente_id')||''});
+let _rows = [], _sortCol = 1, _sortAsc = true;
+const COLS = ['identificacion','nombre','tot_deb','tot_cre','neto'];
+const fmt  = n => Number(n).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+function consultar() {
+  const cuenta = document.getElementById('f-cuenta').value.trim();
+  if (!cuenta) { alert('Ingrese un código de cuenta'); return; }
+  const filtros = {
+    cuenta,
+    empresa: document.getElementById('f-empresa').value,
+    desde:   document.getElementById('f-desde').value,
+    hasta:   document.getElementById('f-hasta').value,
+  };
+  if (!filtros.desde || !filtros.hasta) { alert('Seleccione rango de fechas'); return; }
+
+  document.getElementById('estado-inicial').classList.add('d-none');
+  document.getElementById('spinner').classList.remove('d-none');
+  document.getElementById('tabla').classList.add('d-none');
+  document.getElementById('panel-totales').style.display = 'none';
+  document.getElementById('btn-excel-wrap').style.display = 'none';
+  document.getElementById('info-registros').textContent = '';
+
+  fetch('/api/reporte/consulta_cuentas', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(_conFuente(filtros))
+  })
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('spinner').classList.add('d-none');
+    if (!data.ok) { alert('Error: ' + data.error); document.getElementById('estado-inicial').classList.remove('d-none'); return; }
+    _rows = data.rows;
+    mostrarTotales(_rows);
+    renderTabla();
+    document.getElementById('btn-excel-wrap').style.display = '';
+    document.getElementById('info-registros').textContent = data.total + ' terceros · ' + data.elapsed + 's';
+  })
+  .catch(e => {
+    document.getElementById('spinner').classList.add('d-none');
+    document.getElementById('estado-inicial').classList.remove('d-none');
+    alert('Error de conexión: ' + e);
+  });
+}
+
+function mostrarTotales(rows) {
+  const totDeb  = rows.reduce((s, r) => s + r.tot_deb, 0);
+  const totCre  = rows.reduce((s, r) => s + r.tot_cre, 0);
+  const neto    = totDeb - totCre;
+  document.getElementById('t-terceros').textContent = rows.length;
+  document.getElementById('t-deb').textContent      = '$ ' + fmt(totDeb);
+  document.getElementById('t-cre').textContent      = '$ ' + fmt(totCre);
+  document.getElementById('t-neto').textContent     = '$ ' + fmt(neto);
+  document.getElementById('t-neto').className       = 'val ' + (neto >= 0 ? 'deb' : 'cre');
+  document.getElementById('ft-deb').textContent     = fmt(totDeb);
+  document.getElementById('ft-cre').textContent     = fmt(totCre);
+  document.getElementById('ft-neto').textContent    = fmt(neto);
+  document.getElementById('panel-totales').style.display = '';
+}
+
+function renderTabla() {
+  const field = COLS[_sortCol];
+  const sorted = [..._rows].sort((a, b) => {
+    let va = a[field] ?? '', vb = b[field] ?? '';
+    if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+    return _sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+  });
+
+  document.getElementById('tbody').innerHTML = sorted.map(r => `
+    <tr>
+      <td>${r.identificacion}</td>
+      <td>${r.nombre}</td>
+      <td class="num deb">${fmt(r.tot_deb)}</td>
+      <td class="num cre">${fmt(r.tot_cre)}</td>
+      <td class="num ${r.neto >= 0 ? 'deb' : 'cre'}">${fmt(r.neto)}</td>
+    </tr>`).join('');
+
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+    if (parseInt(th.dataset.col) === _sortCol)
+      th.classList.add(_sortAsc ? 'sort-asc' : 'sort-desc');
+  });
+  document.getElementById('tabla').classList.remove('d-none');
+}
+
+function ordenar(col) {
+  if (_sortCol === col) _sortAsc = !_sortAsc; else { _sortCol = col; _sortAsc = true; }
+  if (_rows.length) renderTabla();
+}
+
+function exportarExcel() {
+  fetch('/api/reporte/consulta_cuentas/excel', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      cuenta:   document.getElementById('f-cuenta').value.trim(),
+      empresa:  document.getElementById('f-empresa').value,
+      desde:    document.getElementById('f-desde').value,
+      hasta:    document.getElementById('f-hasta').value,
+    })
+  }).then(r => r.blob()).then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `consulta_cuentas_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.click(); URL.revokeObjectURL(url);
+  });
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') consultar();
+});
+
+(function actualizarBadgeFuente() {
+  const fuente  = localStorage.getItem('sar_fuente') || 'local';
+  const cliente = (localStorage.getItem('sar_cliente_id') || '').trim();
+  const ruta    = (localStorage.getItem('sar_ruta_bd')    || '').trim();
+  const badge   = document.getElementById('badge-fuente');
+  if (fuente === 'remoto') {
+    badge.innerHTML = `REMOTO${cliente ? ' · <b>' + cliente + '</b>' : ''}${ruta ? '<br><small style="font-weight:400;opacity:.85">' + ruta + '</small>' : ''}`;
+    badge.className = 'badge bg-warning text-dark';
+  } else {
+    badge.innerHTML = `LOCAL${ruta ? '<br><small style="font-weight:400;opacity:.85">' + ruta + '</small>' : ''}`;
+    badge.className = 'badge bg-success';
+  }
+})();
+</script>
+</body>
+</html>

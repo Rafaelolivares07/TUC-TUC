@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Admin Agente — SAR Reportes</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+header {
+  background: #003F7F; color: #fff; padding: 14px 24px;
+  display: flex; align-items: center; gap: 16px;
+}
+header h1 { font-size: 1.1rem; font-weight: 600; }
+header a { color: #aad4ff; font-size: 0.85rem; text-decoration: none; margin-left: auto; }
+
+.toolbar {
+  background: #fff; padding: 12px 24px; border-bottom: 1px solid #dde;
+  display: flex; align-items: center; gap: 12px;
+}
+.toolbar label { font-size: 0.85rem; color: #555; }
+.toolbar select {
+  padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;
+  font-size: 0.9rem; background: #fff; cursor: pointer;
+}
+.toolbar button {
+  padding: 7px 16px; border: none; border-radius: 6px; cursor: pointer;
+  font-size: 0.85rem; font-weight: 600;
+}
+.btn-primary { background: #003F7F; color: #fff; }
+.btn-primary:hover { background: #00529f; }
+.btn-secondary { background: #e8edf5; color: #003F7F; }
+.btn-secondary:hover { background: #d5dff0; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 20px 24px;
+  max-width: 1400px;
+}
+
+.card {
+  background: #fff; border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  overflow: hidden;
+}
+.card-header {
+  background: #003F7F; color: #fff;
+  padding: 10px 16px; font-size: 0.9rem; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-body { padding: 16px; }
+
+/* Estado */
+.section-title {
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  color: #6677aa; letter-spacing: .5px; margin: 12px 0 6px;
+}
+.section-title:first-child { margin-top: 0; }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 99px;
+  font-size: 0.75rem; font-weight: 600;
+}
+.badge-on  { background: #d4edda; color: #155724; }
+.badge-off { background: #f8d7da; color: #721c24; }
+.badge-warn{ background: #fff3cd; color: #856404; }
+
+.proc-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.proc-table td { padding: 4px 6px; border-bottom: 1px solid #f0f0f8; }
+.proc-table td:first-child { color: #444; }
+.proc-table td:last-child { text-align: right; }
+
+.startup-list { font-size: 0.82rem; }
+.startup-list li { padding: 3px 0; border-bottom: 1px solid #f5f5fb; list-style: none; color: #333; }
+
+.log-box {
+  background: #1a1a2e; color: #a8d8a8; font-family: 'Consolas', monospace;
+  font-size: 0.75rem; padding: 10px; border-radius: 6px;
+  max-height: 180px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+}
+
+.info-row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 0.85rem; }
+.info-row span:first-child { color: #6677aa; min-width: 90px; }
+
+/* Archivos */
+.path-input {
+  width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px;
+  font-size: 0.85rem; font-family: 'Consolas', monospace;
+}
+.path-input:focus { outline: none; border-color: #003F7F; }
+
+.quick-paths { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.qp-btn {
+  padding: 4px 10px; border: 1px solid #ccd; border-radius: 99px;
+  font-size: 0.75rem; cursor: pointer; background: #f5f6fb;
+  color: #334; transition: all .15s;
+}
+.qp-btn:hover { background: #e0e8ff; border-color: #99aedd; }
+
+.file-viewer {
+  background: #1a1a2e; color: #c8e6ff; font-family: 'Consolas', monospace;
+  font-size: 0.75rem; padding: 10px; border-radius: 6px;
+  min-height: 120px; max-height: 420px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-all; margin-top: 10px;
+}
+.file-meta { font-size: 0.78rem; color: #6677aa; margin: 6px 0; }
+
+.spinner { display: none; margin-left: 8px; color: #aaa; font-size: 0.8rem; }
+.spinner.active { display: inline; }
+
+#estado-ts { font-size: 0.75rem; color: #aaa; margin-left: auto; }
+</style>
+</head>
+<body>
+
+<nav style="background:#003F7F;padding:10px 24px;display:flex;align-items:center;gap:20px">
+  <span style="color:#fff;font-weight:700;font-size:.95rem">SAR Reportes</span>
+  <a href="/" style="color:#aad4ff;font-size:.85rem;text-decoration:none">📊 Reportes</a>
+  <a href="/admin" style="color:#fff;font-size:.85rem;text-decoration:none;font-weight:600">⚙ Agente</a>
+  <a href="https://admin.tuc-tuc.co/admin/permisos-reportes" target="_blank"
+     style="color:#aad4ff;font-size:.85rem;text-decoration:none">🔑 Permisos</a>
+</nav>
+
+<header>
+  <h1>⚙ Admin Agente</h1>
+</header>
+
+<div class="toolbar">
+  <label>Agente:</label>
+  <select id="sel-agente">
+    <option value="">Cargando...</option>
+  </select>
+  <button class="btn-primary" onclick="cargarEstado()">↺ Actualizar estado</button>
+  <span id="estado-ts"></span>
+</div>
+
+<div class="layout">
+
+  <!-- Panel Estado -->
+  <div class="card">
+    <div class="card-header">
+      📊 Estado de la máquina
+      <span class="spinner" id="spin-estado">⏳ consultando...</span>
+    </div>
+    <div class="card-body" id="panel-estado">
+      <p style="color:#aaa;font-size:.85rem">Selecciona un agente y pulsa Actualizar.</p>
+    </div>
+  </div>
+
+  <!-- Panel Archivos -->
+  <div class="card">
+    <div class="card-header">📁 Leer archivo remoto</div>
+    <div class="card-body">
+
+      <div class="section-title">Rutas frecuentes</div>
+      <div class="quick-paths">
+        <button class="qp-btn" onclick="setPath(String.raw`C:\S.A.R\alegra_daemon.log`, 80)">alegra_daemon.log</button>
+        <button class="qp-btn" onclick="setPath(String.raw`C:\S.A.R\alegra_vfp.log`, 50)">alegra_vfp.log</button>
+        <button class="qp-btn" onclick="setPath(String.raw`C:\S.A.R\startup_error.txt`, 0)">startup_error.txt</button>
+        <button class="qp-btn" onclick="setPath(String.raw`C:\S.A.R\RutaBaseDatos\ruta.dbf`, 0)">ruta.dbf</button>
+        <button class="qp-btn" onclick="setPath(String.raw`C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\admin_agent.log`, 60)">admin_agent.log</button>
+      </div>
+
+      <div class="section-title">Ruta del archivo</div>
+      <input type="text" class="path-input" id="inp-ruta" placeholder="C:\ruta\completa\archivo.log">
+
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+        <label style="font-size:.82rem;color:#555">Últimas líneas:</label>
+        <input type="number" id="inp-lineas" value="50" min="0" max="2000"
+          style="width:70px;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:.85rem">
+        <span style="font-size:.75rem;color:#999">(0 = binario completo)</span>
+      </div>
+
+      <button class="btn-primary" style="margin-top:12px;width:100%" onclick="pedirArchivo()">
+        ↓ Traer archivo
+      </button>
+      <span class="spinner" id="spin-archivo">⏳ descargando...</span>
+
+      <div id="file-result" style="display:none">
+        <div class="file-meta" id="file-meta"></div>
+        <div class="file-viewer" id="file-viewer"></div>
+        <button class="btn-secondary" style="margin-top:8px;font-size:.78rem" onclick="descargarTexto()">
+          ⬇ Descargar como .txt
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- layout -->
+
+<script>
+let _fileContenido = '';
+let _fileNombre    = '';
+
+// ── Cargar agentes al inicio ──────────────────────────────────────────────────
+async function cargarAgentes() {
+  try {
+    const r = await fetch('/api/agentes');
+    const data = await r.json();
+    const sel = document.getElementById('sel-agente');
+    sel.innerHTML = '';
+    (data.agentes || []).forEach(a => {
+      const op = document.createElement('option');
+      op.value = a.cliente_id;
+      op.textContent = `${a.nombre} (${a.cliente_id}) ${a.conectado ? '🟢' : '🔴'}`;
+      if (!a.conectado) op.disabled = true;
+      sel.appendChild(op);
+    });
+    if (!data.agentes || !data.agentes.length) {
+      sel.innerHTML = '<option value="">Sin agentes conectados</option>';
+    }
+  } catch(e) {
+    document.getElementById('sel-agente').innerHTML = '<option value="">Error cargando agentes</option>';
+  }
+}
+
+// ── Estado ────────────────────────────────────────────────────────────────────
+async function cargarEstado() {
+  const cliente_id = document.getElementById('sel-agente').value;
+  if (!cliente_id) { alert('Selecciona un agente'); return; }
+
+  document.getElementById('spin-estado').classList.add('active');
+  document.getElementById('panel-estado').innerHTML = '';
+
+  try {
+    const r = await fetch('/api/estado', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({cliente_id, items:['todo']})
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error);
+
+    const e = data.estado;
+    let html = '';
+
+    // BD
+    const bd = e.bd || {};
+    html += `<div class="section-title">Base de datos</div>`;
+    html += `<div class="info-row"><span>Ruta:</span><span style="font-family:monospace;font-size:.8rem">${bd.ruta||'?'}</span></div>`;
+    html += `<div class="info-row"><span>Accesible:</span><span class="badge ${bd.accesible?'badge-on':'badge-off'}">${bd.accesible?'SÍ':'NO'}</span></div>`;
+
+    // Alegra daemon
+    const al = e.alegra_daemon || {};
+    html += `<div class="section-title">Alegra Daemon</div>`;
+    html += `<div class="info-row"><span>Estado:</span><span class="badge ${al.activo?'badge-on':(al.en_pausa?'badge-warn':'badge-off')}">${al.activo?'ACTIVO':(al.en_pausa?'EN PAUSA':'INACTIVO')}</span></div>`;
+    if (al.pid) html += `<div class="info-row"><span>PID:</span><span>${al.pid}</span></div>`;
+    if (al.ultimas_lineas) {
+      html += `<div class="section-title">Últimas líneas log Alegra</div>`;
+      html += `<div class="log-box">${escHtml(al.ultimas_lineas)}</div>`;
+    }
+
+    // Procesos
+    html += `<div class="section-title">Procesos</div>`;
+    html += `<table class="proc-table">`;
+    const proc = (e.procesos || {}).activos || {};
+    Object.entries(proc).forEach(([nombre, activo]) => {
+      html += `<tr><td>${nombre}</td><td><span class="badge ${activo?'badge-on':'badge-off'}">${activo?'Corriendo':'Detenido'}</span></td></tr>`;
+    });
+    html += `</table>`;
+
+    // Startup
+    const st = e.startup || {};
+    html += `<div class="section-title">Startup Windows</div>`;
+    html += `<ul class="startup-list">`;
+    (st.archivos || []).filter(f => f !== 'desktop.ini').forEach(f => {
+      html += `<li>📄 ${escHtml(f)}</li>`;
+    });
+    html += `</ul>`;
+
+    document.getElementById('panel-estado').innerHTML = html;
+    document.getElementById('estado-ts').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    document.getElementById('panel-estado').innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
+  } finally {
+    document.getElementById('spin-estado').classList.remove('active');
+  }
+}
+
+// ── Archivos ──────────────────────────────────────────────────────────────────
+function setPath(ruta, lineas) {
+  document.getElementById('inp-ruta').value = ruta;
+  document.getElementById('inp-lineas').value = lineas;
+}
+
+async function pedirArchivo() {
+  const cliente_id = document.getElementById('sel-agente').value;
+  const ruta       = document.getElementById('inp-ruta').value.trim();
+  const lineas     = parseInt(document.getElementById('inp-lineas').value) || 0;
+  if (!cliente_id) { alert('Selecciona un agente'); return; }
+  if (!ruta)       { alert('Ingresa una ruta'); return; }
+
+  document.getElementById('spin-archivo').classList.add('active');
+  document.getElementById('file-result').style.display = 'none';
+
+  try {
+    const r = await fetch('/api/archivo', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({cliente_id, ruta, ultimas_lineas: lineas})
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error);
+
+    _fileNombre = data.nombre || 'archivo';
+
+    if (data.contenido !== undefined) {
+      // Texto
+      _fileContenido = data.contenido;
+      let meta = `${data.nombre}  •  ${(data.bytes/1024).toFixed(1)} KB  •  ${data.total_lineas} líneas totales`;
+      if (lineas) meta += `  •  mostrando últimas ${lineas}`;
+      document.getElementById('file-meta').textContent = meta;
+      document.getElementById('file-viewer').textContent = data.contenido;
+    } else {
+      // Binario base64
+      _fileContenido = data.contenido_b64;
+      document.getElementById('file-meta').textContent =
+        `${data.nombre}  •  ${(data.bytes/1024).toFixed(1)} KB  •  binario (base64)${data.truncado?' [TRUNCADO]':''}`;
+      document.getElementById('file-viewer').textContent = data.contenido_b64.substring(0, 2000) + (data.contenido_b64.length > 2000 ? '\n...' : '');
+    }
+    document.getElementById('file-result').style.display = 'block';
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally {
+    document.getElementById('spin-archivo').classList.remove('active');
+  }
+}
+
+function descargarTexto() {
+  const blob = new Blob([_fileContenido], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = _fileNombre;
+  a.click();
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+cargarAgentes();
+</script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+- 43 - - 44 -
+Solar Power SystemSolar Power System
+The technical specifications of this document are subject to change without any notice
+• Pure sine wave output
+• Friendly user interface;MFD (multi-function display)
+• 3 Steps charging
+• Overload and short-circuit protection
+• Set charging voltage/charging current.
+• Battery low voltage shutdown point can be set to 10/10.5/11V
+• Set utility priority/ Battery priority
+• Set utility input wide/narrow range
+• Inverter voltage can be set to 100/110/120;frequency can be set to 50/60Hz
+• Set utility charging on/off switch
+• Built-in 80A MPPT charger
+This split phase solar inverter PV3300 TLV series, capacity range from 1KW-6KW, DC 12V/24V/48V, it’s applicable to 110VAC/120VAC markets 
+demands, which has AC output of single phase 110VAC/120V,  split phase 220V/240V; In LCD display, you can set output voltage, frequency, charging 
+voltage, charging current to design best use based on different loads applications; meanwhile, it has built-in MPPT solar charge controller 80A, you can 
+take use of sunshine freely and save electricity bills. 
+1. Battery -/+
+2. Remote port
+3. BTS
+4. AGS
+5. USB
+6. AC input protect: Input protect breaker
+7. PV -/+
+8. AC output: HOT1 - N 100VAC/110VAC/120VAC
+9. AC output: HOT2 - N 100VAC/110VAC/120VAC
+10. AC output: HOT1 - HOT2 200VAC/220VAC/240VAC
+11. AC input: HOT1 - HOT2 200VAC/220VAC/240VAC
+12. Switch on/off
+MODEL
+PV33-
+1012
+TLV
+PV33-
+1512
+TLV
+PV33-
+1524
+TLV
+PV33-
+2012
+TLV
+PV33-
+2024
+TLV
+PV33-
+3024
+TLV
+PV33-
+3048
+TLV
+PV33-
+4024
+TLV
+PV33-
+4048
+TLV
+PV33-
+5048
+TLV
+PV33-
+6048
+TLV
+Inverter
+Output
+Rated power 1KW 1.5KW 2KW 3KW 4KW 5KW 6KW
+Power factor 1
+Wave form Pure sine wave
+Output voltage RMS 100V / 110V / 120VAC (200V / 220V / 240VAC, L+L) ±10% 
+Output frequency 50Hz or 60Hz (±0.3Hz) 
+Inverter efficiency (peak) >85%
+Line mode efficiency >95%
+Overload 100%<Load<110% (alarm 5min then stop output ) / 110%<Load<125% (alarm 60s then stop output) /
+ Load > 125% (alarm 10s then stop output )
+Surge rating 3000VA 4500VA 6000VA 9000VA 12000VA 15000VA 18000VA
+Capable of starting electric motor 1HP 1HP 1.5HP 1.5HP 2HP 3HP
+Battery
+Battery voltage 12VDC/24VDC 24VDC/48VDC 48VDC
+Minimum start voltage (10V / 10.5V / 11V )+0.5V for 12VDC mode (*2 for 24VDC, *4 for 48VDC)
+Low battery voltage cut off 10V / 10.5V / 11V for 12VDC mode (*2 for 24VDC, *4 for 48VDC)
+Low battery voltage alarm (10V / 10.5V / 11V )+0.5V for 12VDC mode (*2 for 24VDC, *4 for 48VDC)
+High battery voltage alarm (13.8-14.5V)+1V for 12VDC mode  (*2 for 24VDC, *4 for 48VDC)
+High Battery Voltage Recover (13.8-14.5V)+0.5V  for 12VDC mode  (*2 for 24VDC, *4 for 48VDC)
+Save mode Load ≤50±20W(120V)/100±20W(220V)
+AC Input
+Mode
+Input waveform Pure sine wave
+Nominal input voltage 200Vac / 220Vac / 240Vac
+Max input voltage 270Vac MAX
+Input frequency 50Hz / 60Hz (auto sensing)
+Efficiency (AC mode) >95% (load, full battery)
+Transfer time AC to DC 15ms(typical)
+Solar
+Charger
+Maximum PV Array Power 1250W 1250W 2500W 1250W 2500W 2500W 5000W 2500W 5000W 5000W 5000W
+Maximum PV Charge Current 80A
+DC Voltage 12V / 24V 24V / 48V 24V / 48V
+MPPT Range @ Operating Voltage 16~95VDC @ 12V / 30~130VDC @ 24V 30~130VDC @ 24V  / 
+60~130VDC @48V 60~130VDC @48V
+Maximum PV Array Open Circuit Voltage 100±2Vdc / 145±2Vdc 145±2Vdc 145±2Vdc
+Maximum Efficiency >98%
+Standby Power Consumption <2W
+Charge
+Mode
+12V 30A 45A 60A / / / /
+24V 20A 25A 30A 40A 60A / /
+48V / / / 20A 30A 35A 40A
+Min charge current 10A. Change by every 5A
+Dimensions
+Dimensions (W*H*D) 277*196*466mm 277*186*621mm
+Ship Dimensions (W*H*D) 376*306*592mm 376*296*747mm
+Net Weight (Solar CHG)(kg) 17.2 17.7 21.8 20.7 25.2 25.5 38.9 36.5 38 39
+Shipping Weight (Solar CHG)(kg) 20 20.7 24.8 23.5 28.2 28.2 43 40.7 39.2 40.2
+Warranty 1year
+PV3300 TLV Series (AC220/240V: 1KW-6KW) 
+Low Frequency Split Phase Solar Inverter
+Specification
+Load
+Generator
+Power Grid
+Air-conditioner
+Fridge
+PC
+TV
+Washing machine
+Introduction
+Features
+Back panel printing description Solar system connection
+Solar Panel
+BAT input
+BAT charge
+Battery
+1. LCD Display
+2. Status Indicator
+3. Charging Indicator
+4. Fault Indicator
+5. Function Buttons
+51 234
+7 3 4 5 2 810 9 1112 61
+[ PV3300 TLV 4-6K ]

@@ -1,0 +1,112 @@
+- 37 - - 38 -
+The technical specifications of this document are subject to change without any notice
+Solar Power System Solar Power System
+Specification
+• Smart LCD setting(Working modes, Charge Current, Charge voltage, etc.)
+• Built-in MPPT solar charge controller 100A (200A Optional)
+• MPPT efÏciency max 98%
+• Powerful charge rate up to 80Amp
+• DC start &Automatic Self-Diagnostic Function
+• USB monitoring function
+• Supporting AGS, BTS port
+• Compatible to generator
+PV3500 TLV Series (8KW-12KW) 
+Low Frequency Solar Inverter
+Features
+Introduction
+Back panel printing description Solar system connection
+MODEL PV35-8048 TLV PV35-10048 TLV PV35-12048 TLV
+Nominal Battery System Voltage 48VDC 48VDC 48VDC
+INVERTER
+OUTPUT
+Rated power 8.0KW 10.0KW 12.0KW
+Surge rating 24000VA 30000VA 36000VA
+Capable of starting electric motor 4HP 5HP 6HP
+Waveform Pure sine wave / same as input (bypass mode)
+Nominal output voltage RMS 100V/110V/120V/200V/220V/240V
+Output frequency 50Hz / 60Hz ± 0.3Hz
+Inverter effciency(peak) >88%
+Line mode efÏciency >95%
+Power factor 1.0
+Typical transfer time 20ms(max)
+AC INPUT
+Voltage 220V/230V/240V
+Selectable voltage range 90-280 VAC (APL)
+Frequency range 50Hz / 60Hz
+BATTERY
+Low battery voltage cutoff 40-48VDC for 48VDC mode
+Low battery voltage recover 42-50VDC for 48VDC mode
+High battery voltage cutoff 60VDC for 48VDC mode
+High battery voltage recover 57VDC for 48VDC mode
+Idle consumption-search mode < 60W when power saver on
+AC CHARGER
+Output voltage Depends on battery type
+Charger AC input breaker rating 80A 80A 80A
+Overcharge protection S.D. 31.4VDC for 24VDC mode (62.8VDC for 48VDC mode )
+Maximum charge current 60A 70A 80A
+BTS Continuous output power Yes Variances in charging voltage & S.D. voltage base on the battery temperature
+BYPASS
+&
+PROTECTION
+Input voltage waveform Sine wave (grid or generator)
+Nominal input frequency 50Hz or 60Hz
+Overload protection (SMPS Load) Circuit breaker
+Output short circuit protection Circuit breaker
+Bypass breaker rating 63A 63A 63A
+Max bypass current 80Amp
+SOLAR
+CHARGER
+Maximum PV charge current 100A//200A
+DC voltage 48V
+Maximim PV array power 5000W(10000W for 200A optional)
+MPPT range @ operating voltage(VDC) 64~235VDC
+Maximum PV array open circuit voltage 250VDC
+Maximum effciency >98%
+Standby power consumption <2W
+MECHANICAL
+SPECIFICATIONS
+Mounting Wall mount
+Dimensions (W*H*D) 670*410*215mm
+Net weight (solar CHG) (kg) 69+2.5 75.75+2.5 75.75+2.5
+Shipping dimensions (W*H*D) 884*618*443mm
+Shipping weight (Solar CHG) (kg) 82.5+2.5 89+2.5 92+2.5
+OTHER
+Operation temperature range 0°C to 40°C
+Storage temperature -15°C to 60°C
+Audible noise 60dB MAX
+Display LED+LCD
+Loading (20GP/40GP/40HQ) 140pcs / 280pcs / 320pcs
+PV3500 TLV series is a multi-function inverter ,combining functions of inverter and MPPT solar charger controller, solar charger and battery charger 
+to offer uninterruptible power support. The comprehensive LCD display offers user-configurable and easy-accessible button operation such as battery 
+charging current, AC/solar charger priority, and selectable input voltage based on different applications.
+1. Switch ON/OFF
+2. LCD display
+3. A C / I n v e r t e r  i n d i c a t o r                                        
+4. Charging indicator
+5. Fault indicator
+6. BAT-
+7. BAT+
+8. U S B  c o m m u n i c a t i o n  p o r t                                        
+9. AC input/Bypass breaker
+10. AC output breaker 
+11. Remote control port
+12. Fan
+13. BTS
+14. AGS
+15. AC input
+16. AC outputr
+17. Ground
+18. PV input 
+AC Output
+AC Input
+Solar Panel
+Battery
+Generator
+1 2 3 4 5
+6 7 8 9 10
+11 12 13 14 15 16 1817
+LAPTOP
+LIGHTING
+AIR-CONDITIONER
+TV
+FAN

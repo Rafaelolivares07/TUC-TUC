@@ -1,0 +1,6 @@
+==================================================
+  Reportes SAR — localhost:5003
+  Modo Rafael — sin restricciones (cliente_id vacío en server.ini)
+==================================================
+ * Serving Flask app 'server'
+ * Debug mode: on

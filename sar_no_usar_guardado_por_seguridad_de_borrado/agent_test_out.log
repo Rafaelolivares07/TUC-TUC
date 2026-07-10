@@ -1,0 +1,20 @@
+=== Admin Agent - cliente: rafael | nombre: Oficina Rafael | ip: 192.168.1.10 ===
+Servidor: https://admin.tuc-tuc.co
+BD: C:\D\PILAR PERALTA\BASEDATOSEMPRESAS
+Conectado. Token: dc8484882598...
+Esperando consultas... (Ctrl+C para salir)
+
+Consulta #648: ejecutar_reporte
+  -> OK #648 (3)
+Consulta #649: consulta_estado
+  -> OK #649 (4)
+Consulta #650: subir_archivo
+  -> OK #650 (4)
+Consulta #651: subir_archivo
+  -> OK #651 (4)
+Consulta #652: buscar_empresas
+  -> OK #652 (2)
+Consulta #653: buscar_empresas
+  -> OK #653 (2)
+Consulta #654: ejecutar_reporte
+  -> OK #654 (3)

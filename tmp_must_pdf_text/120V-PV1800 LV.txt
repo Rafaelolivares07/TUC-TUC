@@ -1,0 +1,94 @@
+PRODUCTS- 120V
+*The technical specifications of this document are subject to change without any notice
+PV1800 LV Series is a multi-function inverter/charger, combining functions 
+of inverter, MPPT solar charger and battery charger to offer uninterruptible 
+power support with portable size. Its comprehensive LCD display offers user-
+configurable and easy-accessible button operation such as battery charging 
+current, AC/solar charger priority, and acceptable input voltage based on 
+different applications.
+1~3KW | 120V | Wifi
+ ■ Pure sine wave solar inverter
+ ■ Output power factor 1
+ ■ Built-in 80A MPPT solar charger
+ ■ 2 units can be wired in parallel to create a split-phase system
+ with 120V and 240V capabilities (only for 3kw)
+ ■ Support parallel operation up to 3 units (only for 3kw)
+ ■ WIFI remote monitoring (optional)
+ ■ CAN/RS485 communication for BMS
+ ■ Compatible to generator
+HIGH FREQUENCY OFF GRID SOLAR INVERTER
+PV1800 LV Series
+Solar system connection
+Back panel description
+Inverter
+FridgeTV Lighting Fans
+AC Input
+PV input
+Solar Panel 
+Generator
+Utility
+BAT input
+Battery
+1. AC input
+2. AC output
+3. Circuit breaker
+4. Battery input
+5. PV input
+6. Power on/off switch
+7. RS-485 Communication port
+8. USB
+9. Dry contact
+10. USB wifi
+11. Parallel switch (only for parallel model)
+12. Parallel communication port (only for parallel model)
+MODEL PV18-1012
+LV
+PV18-1512
+LV
+PV18-1524
+LV
+PV18-2024
+LV
+PV18-3024
+LV
+PV18-3048
+LV
+Nominal Battery System Voltage 12VDC 12VDC 24VDC 24VDC 24VDC 48VDC
+INVERTER OUTPUT
+Rated Power 1000W 1500W 1500W 2000W 3000W 3000W
+Surge Power 1000W 1500W 1500W 4000W 6000W 6000W
+Waveform Pure sine wave
+AC Voltage Regulation (Batt.Mode) 120VAC ±5%
+Inverter Efficiency(Peak) 90%~93%
+Transfer Time 10ms (UPS / UL) 20ms (APL)
+AC INPUT
+Voltage 120VAC
+Selectable Voltage Range 107~132VAC(UL)
+Frequency Range 50Hz / 60Hz(Auto sensing)
+BATTERY
+Normal voltage 12VDC 12VDC 24VDC 24VDC 24VDC 48VDC
+Floating Charge Voltage 13.7VDC 13.7VDC 27.4VDC 27.4VDC 27.4VDC 54.8VDC
+Overcharge Protection 15VDC 15VDC 30VDC 30VDC 30VDC 60VDC
+SOLAR CHARGER & AC CHARGER
+Max. PV Array Open 
+Circuit Voltage 105V 145V 160V 160V 450VDC 250VDC
+Max. Solar Charge Current 60A 60A 60A 60A 100A 80A
+PV Array MPPT Voltage Range 15~105VDC 15~130VDC 30~128VDC 30~128VDC 90-430VDC 60-200VDC
+PV Input Power 750W 750W 1500W 1500W 4000W 4000W
+Maximum Efficiency 98%
+Maximum AC Charge Current 10A 10A 30A 40A 80A 60A
+Maximum Charge Current 70A 70A 90A 100A 100A 140A
+MECHANICAL SPECIFICATIONS
+Machine Dimension (W*H*D)(mm) 224*321*95 255*321*125 254.5*367.4*103 329*485*134
+Package Dimension (W*H*D)(mm) 410*188*300 416*216*342 436*189*331 575*425*229
+N.W(kg) 5.0 5.5 5.4 5.5 8 10
+G.W(kg) 6.0 6.5 6.4 6.5 9.5 11.5
+OTHER
+Humidity 5% to 95% Relative humidity (Non-condensing)
+Operating Temperature -10°C~50°C
+Storage Temperature -15°C~60°C
+Standard Warranty 2 years
+CERTIFICATION & STANDARDS
+CE-LVD (IEC62109-1, EN IEC62109-2); UKCA-(BS EN 62109-1, BS EN 62109-2)
+1 32 64 5
+987 11 12 10

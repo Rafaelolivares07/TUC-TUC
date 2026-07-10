@@ -1,0 +1,146 @@
+- 23 - - 24 -
+Solar Power SystemSolar Power System
+Specification
+• Pure sine wave output
+• Friendly user interface
+• 3 Steps charging
+• MFD (multi-function display)
+• Overload and short-circuit protection
+• Set charging voltage/charging current.
+• Battery low voltage shutdown point can be set to 10/10.5/11V
+• Power-save mode
+• Set utility priority/ Battery priority
+• Set utility input wide/narrow range
+• Inverter voltage can be set to 120V:110V/115V/120V 220V:220V/230V/240V
+• Inverter frequency can be set to 50/60Hz
+• Set utility charging on/off switch
+• 80A MPPT charger
+Low Frequency Power Inverter/Charger
+PV3000 LMPK Series (1KW-6KW)
+Features
+PV3000 LVHM series is very economical pure sine wave inverter, AC charger inbuilt, from 20A to 60A; Solar/AC priority is configurable, when setting
+solar priority, solar will charge batteries as first priority, and AC can also charge batteries when solar charger current too lower, in this way system
+charge is optimazed best. it enables inverter to operate with all kinds of home appliances.
+Introduction
+Back panel printing description Solar system connection
+1. LCD display
+2. AC LED
+3. INV LED
+4. Fault
+5. Menu
+6. UP
+7. Down
+8. Enter
+9. Switch ON/OFF
+1. BAT -
+2. BAT +
+3. USB
+4. Remote port
+5. FAN
+6. Charger input protect
+7. Inverter output protect
+8. GND
+9. AC input
+10. AC output
+11. AGS
+12. BTS
+13. AC Output 10A(MAX)
+14. PV input
+AC Output
+AC Input
+Solar Panel
+Battery
+2
+8
+MODEL PV30-1KW
+LMPK
+PV30-1.5KW
+LMPK
+PV30-2KW
+LMPK
+PV30-3KW
+LMPK
+PV30-4KW
+LMPK
+PV30-5KW
+LMPK
+PV30-6KW
+LMPK
+Nominal Battery System Voltage 12VDC 24VDC 12VDC 24VDC 12VDC 24VDC 24VDC 48VDC 24VDC 48VDC 48VDC 48VDC
+INVERTER
+OUTPUT
+Rated Power 1 KW 1.5 KW 2 KW 3 KW 4 KW 5 KW 6 KW
+Surge Rating(20ms) 3 KW 4.5 KW 6 KW 9 KW 12 KW 15 KW 18 KW
+Capable Of Starting Electric Motor 1HP 1HP 1HP 2HP 3HP
+Waveform Pure sine wave \ same as input (bypass mode)
+Nominal Output Voltage RMS 110V \ 115V \ 120VAC(±10% RMS)
+Output Frequency 50Hz \ 60Hz ±0.3Hz
+Inverter Efficiency (Peak) >88%
+Line Mode Efficiency >95%
+Power Factor 1.0
+Typical Transfer Time 10ms(max)
+AC
+INPUT
+Voltage 230VAC
+Selectable Voltage Range 95~135VAC (For personal computers)
+Frequency Range 50Hz \ 60Hz(Auto sensing) 40~80Hz
+BATTERY
+Minimum Start Voltage 10.5VDC \ 11VDC for 12VDC mode(*2 for 24VDC, *4 for 48VDC)
+Low Battery Alarm 11VDC ±0.3V for 12VDC mode(*2 for 24VDC, *4 for 48VDC)
+Low Battery Cut Off 10.5VDC ±0.3V for 12VDC mode(*2 for 24VDC, *4 for 48VDC)
+High Voltage Alarm 16.0VDC ±0.3V for 12VDC mode(*2 for 24VDC, *4 for 48VDC)
+High Battery Voltage Recover 15.5VDC ±0.3V for 12VDC mode
+Idie Consumption-Search Mode <25W when power saver on
+CHARGER
+Output Voltage Depends on battery type
+Charge AC Input
+Breaker Rating
+120V 1K\12A 1.5K\16A 2K\30A 3K\40A 4-6K\NC
+230V 1-1.5K\10A 2-3K\30A 4-6K\40A
+Overcharge Protection S.D. 15.7VDC for 12VDC mode (*2 for 24VDC mode, *4 for 48VDC mode)
+Maximum Charge Current 30A 20A 45A 25A 60A 30A 40A 20A 60A 30A 35A 40A
+BYPASS
+&
+PROTECTION
+Input Voltage Waveform Sine wave (grid or generator)
+Nominal Input Frequency 50Hz or 60Hz
+Overload Protection (SMPS Load) Circuit breaker
+Output Short Circuit Protection Circuit breaker
+Bypass Breaker Rating
+230V 1-3K\30A 4-6K\40A
+120V 1K\16A 1.5K\20A 2K\30A 3K\40A 4-6K\63A
+Max Bypass Current 30Amp
+SOLAR
+CHARGER
+Maximum PV Array Power 1250W 2500W 1250W 2500W 1250W 2500W 2500W 5000W 2500W 5000W 5000W 5000W
+Maximum PV Charge Current 80A±4A
+DC Voltage 12V \ 24V auto work 24V \ 48V auto work
+MPPT Range @ Operating Voltage 16~100VDC @ 12V/32~145VDC @ 24V 32~145VDC @ 24V/64~145VDC @ 48V
+Maximum PV Array Open Circuit 
+Voltage 145VDC
+Standby Power Consumption <2W
+MECHANICAL
+SPECIFICATIONS
+Mounting Wall Mount
+Dimensions (W*H*D) 423*247*197mm 597*247*197mm
+Net Weight (Solar CHG)(kg) 17.2 17.7 21.8 20.7 25.2 25.5 38.9 36.5 45.7 45.9
+Shipping Dimensions (W*H*D) 585*387*322mm 758*387*322mm
+Shipping Weight (Solar CHG)(kg) 20 20.7 24.8 23.5 28.2 28.2 43 40.7 50 50
+OTHER
+Operation Temperature Range 0℃ to 40℃
+Storage Temperature -15℃ to 60℃
+Audible Noise 60dB MAX
+Display LED+LCD
+Standard Warranty 1 year
+2
+5
+6
+1
+3
+4
+8
+7
+9
+1 5 12 11 3 4
+6 7
+8 14 9 10 8 13

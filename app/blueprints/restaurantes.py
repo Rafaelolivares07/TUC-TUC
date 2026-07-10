@@ -73,19 +73,41 @@ def _crear_tablas(conn):
             opcion_id INTEGER NOT NULL,
             agotado BOOLEAN DEFAULT FALSE
         )""",
-        """CREATE TABLE IF NOT EXISTS pedidos_restaurante (
+        """CREATE TABLE IF NOT EXISTS pedidos (
             id SERIAL PRIMARY KEY,
-            restaurante_id INTEGER NOT NULL,
-            mesa_num INTEGER NOT NULL,
-            tipo VARCHAR(20) NOT NULL,
+            tienda_id INTEGER,
+            restaurante_id INTEGER,
+            negocio_id INTEGER,
+            id_cajero VARCHAR(50),
+            nombre_cajero VARCHAR(100),
+            id_tercero_cajero INTEGER,
+            cliente_id INTEGER,
+            nombre_cliente VARCHAR(100),
+            telefono_cliente VARCHAR(20),
+            direccion_cliente TEXT,
+            tipo_entrega VARCHAR(20) DEFAULT 'domicilio',
+            estado VARCHAR(20) DEFAULT 'nuevo',
+            total DECIMAL(12,2) DEFAULT 0,
+            subtotal_productos DECIMAL(12,2) DEFAULT 0,
+            valor_domicilio DECIMAL(12,2) DEFAULT 0,
+            domicilio_estado VARCHAR(30) DEFAULT 'no_aplica',
+            cliente_lat DECIMAL(10,7),
+            cliente_lon DECIMAL(10,7),
+            notas TEXT,
+            metodo_pago VARCHAR(20),
+            comprobante_pago TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            
+            -- Restaurantes
+            mesa_num INTEGER,
+            mesa_nombre VARCHAR(20),
+            tipo VARCHAR(20),
             sopa_id INTEGER,
             proteina_id INTEGER,
             principio_id INTEGER,
-            precio DECIMAL(10,2) NOT NULL,
-            estado VARCHAR(20) DEFAULT 'pendiente',
-            notas TEXT,
-            nombre_cliente VARCHAR(100),
-            created_at TIMESTAMP DEFAULT NOW()
+            plato_id INTEGER,
+            cantidad INTEGER DEFAULT 1,
+            precio DECIMAL(12,2)
         )""",
         """CREATE TABLE IF NOT EXISTS pagos_restaurante (
             id SERIAL PRIMARY KEY,
@@ -99,10 +121,10 @@ def _crear_tablas(conn):
         conn.execute(sql)
     conn.commit()
     alters = [
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS nombre_cliente VARCHAR(100)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS nombre_cliente VARCHAR(100)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tipo_restaurante VARCHAR(20) DEFAULT 'menu_dia'",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS plato_id INTEGER",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cantidad INTEGER DEFAULT 1",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS plato_id INTEGER",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cantidad INTEGER DEFAULT 1",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_id INTEGER",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_telefono VARCHAR(20)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS admin_nombre VARCHAR(255)",
@@ -110,10 +132,10 @@ def _crear_tablas(conn):
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_mesero VARCHAR(10)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS pin_cocina VARCHAR(10)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS dias_pagados INTEGER DEFAULT 0",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS tipo_entrega VARCHAR(20) DEFAULT 'mesa'",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS telefono_cliente VARCHAR(20)",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS direccion_cliente TEXT",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cliente_id INTEGER",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS tipo_entrega VARCHAR(20) DEFAULT 'mesa'",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS telefono_cliente VARCHAR(20)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS direccion_cliente TEXT",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cliente_id INTEGER",
         "ALTER TABLE terceros ADD COLUMN IF NOT EXISTS direccion TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS imagen_header TEXT",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tema VARCHAR(10) DEFAULT 'claro'",
@@ -126,14 +148,14 @@ def _crear_tablas(conn):
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS es_ejemplo BOOLEAN DEFAULT FALSE",
         "ALTER TABLE mesas_restaurante ADD COLUMN IF NOT EXISTS nombre VARCHAR(20)",
         "ALTER TABLE mesas_restaurante ADD COLUMN IF NOT EXISTS sector VARCHAR(100)",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS mesa_nombre VARCHAR(20)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS mesa_nombre VARCHAR(20)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "UPDATE restaurantes SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS solo_carta BOOLEAN DEFAULT FALSE",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS ref_vendedor VARCHAR(50)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS descripcion TEXT",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20)",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
     ]
     conn.execute("SET statement_timeout = '3000'")
     for sql in alters:
@@ -151,30 +173,32 @@ def _crear_tablas(conn):
 
 def _asegurar_pagos_restaurante(conn):
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS pedido_pagos_restaurante (
+        CREATE TABLE IF NOT EXISTS pedido_pagos (
             id SERIAL PRIMARY KEY,
-            pedido_id INTEGER NOT NULL,
-            metodo_codigo VARCHAR(50),
-            metodo_nombre VARCHAR(100),
-            monto NUMERIC(12,2) NOT NULL,
+            pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+            metodo_codigo VARCHAR(50) NOT NULL,
+            metodo_nombre VARCHAR(100) NOT NULL,
+            monto DECIMAL(12,2) NOT NULL,
+            recibido_con DECIMAL(12,2),
+            devuelta DECIMAL(12,2),
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_pedido_pagos_restaurante_pedido
-        ON pedido_pagos_restaurante(pedido_id)
+        CREATE INDEX IF NOT EXISTS idx_pedido_pagos_pedido
+        ON pedido_pagos(pedido_id)
     """)
-    conn.execute("ALTER TABLE pedido_pagos_restaurante ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)")
-    conn.execute("ALTER TABLE pedido_pagos_restaurante ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)")
+    conn.execute("ALTER TABLE pedido_pagos ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)")
+    conn.execute("ALTER TABLE pedido_pagos ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)")
 
 
 def _asegurar_domicilio_restaurante(conn):
     alters = [
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS subtotal_productos NUMERIC(12,2) DEFAULT 0",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS domicilio_estado VARCHAR(30) DEFAULT 'no_aplica'",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cliente_lat NUMERIC(10,7)",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS cliente_lon NUMERIC(10,7)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS subtotal_productos NUMERIC(12,2) DEFAULT 0",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS domicilio_estado VARCHAR(30) DEFAULT 'no_aplica'",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cliente_lat NUMERIC(10,7)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cliente_lon NUMERIC(10,7)",
     ]
     for sql in alters:
         conn.execute(sql)
@@ -435,7 +459,7 @@ def admin_restaurante_lista():
         restaurantes = []
         for r in restaurantes_raw:
             dias_usados = conn.execute(
-                "SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos_restaurante WHERE restaurante_id = %s",
+                "SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos WHERE restaurante_id = %s",
                 (r['id'],)
             ).fetchone()['dias']
             d = dict(r)
@@ -1511,7 +1535,7 @@ def api_suscripcion(slug):
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
         dias_pagados = rest['dias_pagados'] or 0
         dias_usados = conn.execute(
-            "SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos_restaurante WHERE restaurante_id = %s",
+            "SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos WHERE restaurante_id = %s",
             (rest['id'],)
         ).fetchone()['dias']
         conn.close()
@@ -1856,11 +1880,11 @@ def api_pedido_crear(slug):
         dias_pagados = rest['dias_pagados'] or 0
         if dias_pagados > 0:
             dias_usados = conn.execute(
-                "SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos_restaurante WHERE restaurante_id = %s",
+                "SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos WHERE restaurante_id = %s",
                 (rest['id'],)
             ).fetchone()['dias']
             tiene_pedidos_hoy = conn.execute(
-                "SELECT 1 FROM pedidos_restaurante WHERE restaurante_id = %s AND DATE(created_at) = CURRENT_DATE LIMIT 1",
+                "SELECT 1 FROM pedidos WHERE restaurante_id = %s AND DATE(created_at) = CURRENT_DATE LIMIT 1",
                 (rest['id'],)
             ).fetchone()
             if not tiene_pedidos_hoy and dias_usados >= dias_pagados:
@@ -1922,14 +1946,14 @@ def api_pedido_crear(slug):
                 nota_adiciones = f"Adiciones: {', '.join(adiciones_txt)}" if adiciones_txt else ""
                 nota_item = " | ".join([txt for txt in (nota_base, nota_adiciones) if txt]) or None
                 conn.execute("""
-                    INSERT INTO pedidos_restaurante
-                    (restaurante_id, mesa_num, mesa_nombre, tipo, plato_id, cantidad, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago, subtotal_productos, cliente_lat, cliente_lon)
-                    VALUES (%s, 0, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (rest['id'], mesa_nombre, opcion['id'], cant, precio_item, nota_item,
+                    INSERT INTO pedidos
+                    (restaurante_id, negocio_id, mesa_num, mesa_nombre, tipo, plato_id, cantidad, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago, subtotal_productos, cliente_lat, cliente_lon)
+                    VALUES (%s, %s, 0, %s, 'carta', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (rest['id'], rest['tercero_id'], mesa_nombre, opcion['id'], cant, precio_item, nota_item,
                       nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago,
                       precio_item, cliente_lat, cliente_lon))
                 pedidos_insertados.append(conn.execute(
-                    "SELECT currval(pg_get_serial_sequence('pedidos_restaurante','id'))"
+                    "SELECT currval(pg_get_serial_sequence('pedidos','id'))"
                 ).fetchone()[0])
                 if rest['tercero_id']:
                     try:
@@ -1953,7 +1977,7 @@ def api_pedido_crear(slug):
                 conn.close()
                 return jsonify({'ok': False, 'error': 'Platos no encontrados en el menú'}), 400
             pedido_id = conn.execute(
-                "SELECT currval(pg_get_serial_sequence('pedidos_restaurante','id'))"
+                "SELECT currval(pg_get_serial_sequence('pedidos','id'))"
             ).fetchone()[0]
             tercero_config_id = rest['tercero_id'] or rest['admin_id']
             valor_domicilio, domicilio_estado = _calcular_domicilio(
@@ -1964,7 +1988,7 @@ def api_pedido_crear(slug):
                 return jsonify({'ok': False, 'error': 'La direccion esta fuera de cobertura de domicilio'}), 400
             if pedidos_insertados:
                 conn.execute("""
-                    UPDATE pedidos_restaurante
+                    UPDATE pedidos
                     SET valor_domicilio=%s, domicilio_estado=%s
                     WHERE id=%s
                 """, (float(valor_domicilio or 0), domicilio_estado, pedidos_insertados[-1]))
@@ -2003,14 +2027,14 @@ def api_pedido_crear(slug):
                     if prod:
                         items_notificacion.append(f"{etiqueta}: {prod['nombre']}")
             conn.execute("""
-                INSERT INTO pedidos_restaurante
-                (restaurante_id, mesa_num, mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago, subtotal_productos, valor_domicilio, domicilio_estado, cliente_lat, cliente_lon)
-                VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (rest['id'], mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio_total,
+                INSERT INTO pedidos
+                (restaurante_id, negocio_id, mesa_num, mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio, notas, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago, subtotal_productos, valor_domicilio, domicilio_estado, cliente_lat, cliente_lon)
+                VALUES (%s, %s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (rest['id'], rest['tercero_id'], mesa_nombre, tipo, sopa_id, proteina_id, principio_id, precio_total,
                   notas or None, nombre_cliente, tipo_entrega, telefono_cliente, direccion_cliente, cliente_id, metodo_pago,
                   precio_total, float(valor_domicilio or 0), domicilio_estado, cliente_lat, cliente_lon))
             pedido_id = conn.execute(
-                "SELECT currval(pg_get_serial_sequence('pedidos_restaurante','id'))"
+                "SELECT currval(pg_get_serial_sequence('pedidos','id'))"
             ).fetchone()[0]
             if rest['tercero_id']:
                 for prod_id in filter(None, [sopa_id, proteina_id, principio_id]):
@@ -2066,7 +2090,7 @@ def api_restaurante_pedido_comprobante(slug, pedido_id):
         if not rest:
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
         cur = conn.execute(
-            "UPDATE pedidos_restaurante SET comprobante_pago=%s WHERE id=%s AND restaurante_id=%s",
+            "UPDATE pedidos SET comprobante_pago=%s WHERE id=%s AND restaurante_id=%s",
             (imagen, pedido_id, rest['id'])
         )
         if cur.rowcount == 0:
@@ -2099,7 +2123,7 @@ def api_pedidos(slug):
                    p.metodo_pago, p.comprobante_pago, p.valor_domicilio, p.domicilio_estado,
                    s.nombre as sopa_nombre, pr.nombre as proteina_nombre, pr.recargo as proteina_recargo,
                    pi.nombre as principio_nombre, pl.nombre as plato_nombre
-            FROM pedidos_restaurante p
+            FROM pedidos p
             LEFT JOIN productos s ON s.id = p.sopa_id
             LEFT JOIN productos pr ON pr.id = p.proteina_id
             LEFT JOIN productos pi ON pi.id = p.principio_id
@@ -2112,7 +2136,7 @@ def api_pedidos(slug):
         for p in pedidos:
             pagos = conn.execute("""
                 SELECT metodo_codigo, metodo_nombre, monto, recibido_con, devuelta
-                FROM pedido_pagos_restaurante
+                FROM pedido_pagos
                 WHERE pedido_id = %s
                 ORDER BY id
             """, (p['id'],)).fetchall()
@@ -2159,7 +2183,7 @@ def api_pedido_listo(slug, pedido_id):
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
-        conn.execute("UPDATE pedidos_restaurante SET estado='listo' WHERE id=%s AND restaurante_id=%s AND estado='pendiente'",
+        conn.execute("UPDATE pedidos SET estado='listo' WHERE id=%s AND restaurante_id=%s AND estado='pendiente'",
                      (pedido_id, rest['id']))
         conn.commit()
         conn.close()
@@ -2176,7 +2200,7 @@ def api_pedido_entregado(slug, pedido_id):
         if not rest:
             conn.close()
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
-        conn.execute("UPDATE pedidos_restaurante SET estado='entregado' WHERE id=%s AND restaurante_id=%s AND estado='listo'",
+        conn.execute("UPDATE pedidos SET estado='entregado' WHERE id=%s AND restaurante_id=%s AND estado='listo'",
                      (pedido_id, rest['id']))
         conn.commit()
         conn.close()
@@ -2229,7 +2253,7 @@ def api_cuentas(slug):
         cuentas = conn.execute("""
             SELECT COALESCE(NULLIF(mesa_nombre,''), mesa_num::text) as mesa_id,
                    COUNT(*) as cantidad, SUM(precio) as total
-            FROM pedidos_restaurante
+            FROM pedidos
             WHERE restaurante_id = %s AND estado != 'cobrado' AND created_at::date = CURRENT_DATE
             GROUP BY COALESCE(NULLIF(mesa_nombre,''), mesa_num::text)
             ORDER BY COALESCE(NULLIF(mesa_nombre,''), mesa_num::text)
@@ -2253,7 +2277,7 @@ def cobrar_mesa_page(slug, mesa_id):
             return "Restaurante no encontrado", 404
         row = conn.execute("""
             SELECT COALESCE(SUM(precio), 0) AS total
-            FROM pedidos_restaurante
+            FROM pedidos
             WHERE restaurante_id=%s
             AND (mesa_nombre=%s OR (COALESCE(mesa_nombre,'')='' AND mesa_num::text=%s))
             AND estado != 'cobrado' AND created_at::date = CURRENT_DATE
@@ -2290,13 +2314,13 @@ def api_cobrar(slug, mesa_id):
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
         pedidos = conn.execute("""
             SELECT id, precio, COALESCE(cantidad, 1) AS cantidad
-            FROM pedidos_restaurante
+            FROM pedidos
             WHERE restaurante_id = %s
             AND (mesa_nombre = %s OR (COALESCE(mesa_nombre,'') = '' AND mesa_num::text = %s))
             AND estado != 'cobrado' AND created_at::date = CURRENT_DATE
         """, (rest['id'], mesa_id, mesa_id)).fetchall()
         conn.execute("""
-            UPDATE pedidos_restaurante
+            UPDATE pedidos
             SET estado = 'cobrado', metodo_pago = COALESCE(%s, metodo_pago)
             WHERE restaurante_id = %s
             AND (mesa_nombre = %s OR (COALESCE(mesa_nombre,'') = '' AND mesa_num::text = %s))
@@ -2307,7 +2331,7 @@ def api_cobrar(slug, mesa_id):
         for pedido in pedidos:
             pedido_total = float(pedido['precio'] or 0) * float(pedido['cantidad'] or 1)
             proporcion = (pedido_total / total_mesa) if total_mesa else 1
-            conn.execute("DELETE FROM pedido_pagos_restaurante WHERE pedido_id=%s", (pedido['id'],))
+            conn.execute("DELETE FROM pedido_pagos WHERE pedido_id=%s", (pedido['id'],))
             if pagos_validos:
                 for pago in pagos_validos:
                     codigo_pago = (pago.get('codigo') or '').strip().lower()
@@ -2319,7 +2343,7 @@ def api_cobrar(slug, mesa_id):
                             recibido_con = recibido_con_total * proporcion
                             devuelta = max(0, recibido_con - (float(pago.get('monto') or 0) * proporcion))
                     conn.execute("""
-                        INSERT INTO pedido_pagos_restaurante
+                        INSERT INTO pedido_pagos
                             (pedido_id, metodo_codigo, metodo_nombre, monto, recibido_con, devuelta)
                         VALUES (%s, %s, %s, %s, %s, %s)
                     """, (
@@ -2332,7 +2356,7 @@ def api_cobrar(slug, mesa_id):
                     ))
             elif metodo_pago:
                 conn.execute("""
-                    INSERT INTO pedido_pagos_restaurante (pedido_id, metodo_codigo, metodo_nombre, monto)
+                    INSERT INTO pedido_pagos (pedido_id, metodo_codigo, metodo_nombre, monto)
                     VALUES (%s, %s, %s, %s)
                 """, (pedido['id'], metodo_pago, metodo_pago, pedido_total))
         conn.commit()
@@ -2352,7 +2376,7 @@ def api_venta_dia(slug):
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
         venta = conn.execute("""
             SELECT COUNT(*) as cantidad, COALESCE(SUM(precio),0) as total
-            FROM pedidos_restaurante
+            FROM pedidos
             WHERE restaurante_id = %s AND estado = 'cobrado' AND created_at::date = CURRENT_DATE
         """, (rest['id'],)).fetchone()
         conn.close()
@@ -2379,7 +2403,7 @@ def api_ventas(slug):
                    p.cantidad, p.tipo_entrega, p.telefono_cliente, p.direccion_cliente, p.created_at,
                    s.nombre as sopa_nombre, pr.nombre as proteina_nombre,
                    pi.nombre as principio_nombre, pl.nombre as plato_nombre
-            FROM pedidos_restaurante p
+            FROM pedidos p
             LEFT JOIN productos s ON s.id = p.sopa_id
             LEFT JOIN productos pr ON pr.id = p.proteina_id
             LEFT JOIN productos pi ON pi.id = p.principio_id

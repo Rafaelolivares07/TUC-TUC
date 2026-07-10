@@ -1,0 +1,498 @@
+"""
+server.py — Servidor Flask de reportes multi-origen
+Puerto: 5003 (no pisa el administrator_web.py actual en :5002)
+
+Uso:
+    python server.py
+
+Rutas:
+    GET  /                          → menú de reportes
+    GET  /reporte/<id>              → UI del reporte
+    POST /api/reporte/<id>          → ejecutar reporte, retorna JSON
+    GET  /api/empresas              → lista de empresas (fuente local)
+"""
+
+import os, sys, datetime, time, io, configparser, threading, subprocess
+
+VERSION = '1.2.2'
+
+def _exe_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+def _bundle_dir():
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
+sys.path.insert(0, _bundle_dir())
+
+from flask import Flask, render_template, request, jsonify, send_file, session
+from data_layer import DataLayer, leer_ruta_bd
+from reportes import CATALOGO
+
+try:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
+
+app = Flask(__name__, template_folder=os.path.join(_bundle_dir(), 'templates'))
+app.secret_key = 'sar-reportes-2026'
+
+# ── Configuración AWS ─────────────────────────────────────────────────────────
+_cfg = configparser.ConfigParser()
+_cfg.read(os.path.join(_exe_dir(), 'server.ini'), encoding='utf-8-sig')
+BASE_URL_AWS = _cfg.get('aws', 'base_url',   fallback='https://admin.tuc-tuc.co')
+AWS_USUARIO  = _cfg.get('aws', 'usuario',   fallback='')
+AWS_PASSWORD = _cfg.get('aws', 'password',  fallback='')
+CLIENTE_ID   = _cfg.get('aws', 'cliente_id', fallback='').strip()
+
+_aws_session     = None   # requests.Session con cookie de AWS reutilizable
+_aws_session_ok  = False  # True después de login exitoso
+_permisos_cache  = None   # {fuente: set(reporte_id)}
+_permisos_ts     = 0.0    # timestamp de la última carga
+_PERMISOS_TTL    = 30     # segundos antes de refrescar
+
+# ── Auto-update ───────────────────────────────────────────────────────────────
+_update = {
+    'disponible': False,
+    'version':    None,
+    'url':        None,
+    'estado':     'idle',   # idle | descargando | listo | error
+    'progreso':   0,        # 0-100
+    'mensaje':    '',
+}
+
+
+def _tuple_version(v):
+    try:    return tuple(int(x) for x in str(v).split('.'))
+    except: return (0,)
+
+
+def _chequear_update():
+    """Corre en thread background al arrancar. Consulta el servidor."""
+    time.sleep(8)  # esperar a que Flask levante
+    try:
+        import requests as _req
+        r = _req.get(f'{BASE_URL_AWS}/api/version/agentes', timeout=10)
+        data = r.json()
+        if not data.get('ok'):
+            return
+        info = data.get('sar_reportes', {})
+        v_remota = info.get('version', '0')
+        if _tuple_version(v_remota) > _tuple_version(VERSION):
+            _update['disponible'] = True
+            _update['version']    = v_remota
+            _update['url']        = info.get('url', '')
+            _update['estado']     = 'disponible'
+            _update['mensaje']    = f'Nueva versión {v_remota} disponible'
+    except Exception:
+        pass
+
+
+def _descargar_y_aplicar():
+    """Descarga el nuevo EXE y crea el updater.bat. Corre en thread."""
+    import requests as _req
+    exe_dir  = _exe_dir()
+    exe_actual = os.path.join(exe_dir, 'SarReportes.exe') if getattr(sys, 'frozen', False) else None
+    exe_nuevo  = os.path.join(exe_dir, 'SarReportes_new.exe')
+    bat_path   = os.path.join(exe_dir, 'updater.bat')
+
+    try:
+        _update['estado']   = 'descargando'
+        _update['progreso'] = 0
+        _update['mensaje']  = 'Descargando actualización...'
+
+        r = _req.get(_update['url'], stream=True, timeout=120)
+        r.raise_for_status()
+        total = int(r.headers.get('content-length', 0))
+        descargado = 0
+
+        with open(exe_nuevo, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=65536):
+                if chunk:
+                    f.write(chunk)
+                    descargado += len(chunk)
+                    if total:
+                        _update['progreso'] = int(descargado * 100 / total)
+
+        _update['progreso'] = 100
+        _update['mensaje']  = 'Descarga completa. Aplicando...'
+        _update['estado']   = 'listo'
+
+        if exe_actual:
+            # Crear batch que espera, reemplaza y relanza
+            bat = (
+                f'@echo off\r\n'
+                f'timeout /t 3 /nobreak > nul\r\n'
+                f'move /y "{exe_nuevo}" "{exe_actual}"\r\n'
+                f'start "" "{exe_actual}"\r\n'
+                f'del "%~f0"\r\n'
+            )
+            with open(bat_path, 'w', encoding='ascii') as f:
+                f.write(bat)
+            time.sleep(1)
+            subprocess.Popen(
+                ['cmd', '/c', bat_path],
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+                close_fds=True
+            )
+            time.sleep(1)
+            os._exit(0)
+        else:
+            _update['mensaje'] = 'Descargado. Reinicia manualmente (modo desarrollo).'
+
+    except Exception as e:
+        _update['estado']  = 'error'
+        _update['mensaje'] = f'Error: {e}'
+
+
+threading.Thread(target=_chequear_update, daemon=True).start()
+
+
+def _cargar_permisos(cliente_id=None):
+    """Carga permisos desde AWS para cliente_id dado (o CLIENTE_ID del ini).
+    Sin cliente_id → sin restricciones. Se cachea TTL segundos."""
+    global _permisos_cache, _permisos_ts
+    cid = (cliente_id or CLIENTE_ID).strip()
+    if not cid:
+        _permisos_cache = None
+        _permisos_ts    = time.time()
+        return
+    try:
+        r = _aws_get(f'/api/admin-agent/reportes-permisos/{cid}', timeout=8)
+        data = r.json()
+        if data.get('ok'):
+            cache = {'local': set(), 'remoto': set()}
+            for p in data.get('permisos', []):
+                fuente = p.get('fuente', 'local')
+                if fuente in cache:
+                    cache[fuente].add(p['reporte_id'])
+            _permisos_cache = cache
+            _permisos_ts    = time.time()
+    except Exception:
+        _permisos_cache = None  # si falla AWS, no bloquear — mostrar todo
+
+
+def _permisos_vigentes(cliente_id=None):
+    """Recarga si el cache expiró o el cliente_id cambia."""
+    if time.time() - _permisos_ts > _PERMISOS_TTL:
+        _cargar_permisos(cliente_id)
+    return _permisos_cache
+
+def _get_aws_session():
+    """Retorna una requests.Session autenticada en AWS. Re-login si la cookie expiró."""
+    import requests as req
+    global _aws_session, _aws_session_ok
+    if _aws_session and _aws_session_ok:
+        return _aws_session
+    s = req.Session()
+    s.post(f'{BASE_URL_AWS}/admin/login',
+           data={'usuario': AWS_USUARIO, 'password': AWS_PASSWORD},
+           timeout=10, allow_redirects=True)
+    _aws_session_ok = 'session' in s.cookies
+    _aws_session = s
+    return s
+
+
+def _aws_get(path, timeout=10):
+    """GET autenticado a AWS. Re-login automático si devuelve 401."""
+    global _aws_session_ok
+    for _ in range(2):
+        s = _get_aws_session()
+        r = s.get(f'{BASE_URL_AWS}{path}', timeout=timeout)
+        if r.status_code == 401:
+            _aws_session_ok = False  # forzar re-login en siguiente intento
+            continue
+        return r
+    raise RuntimeError('No se pudo autenticar en AWS')
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _get_data_layer():
+    """Construye DataLayer según fuente guardada en sesión Flask."""
+    fuente     = session.get('fuente', 'local')
+    cliente_id = session.get('cliente_id', '').strip()
+    if fuente == 'remoto':
+        return DataLayer(fuente='remoto', base_url=BASE_URL_AWS,
+                         cliente_id=cliente_id,
+                         aws_session=_get_aws_session())
+    ruta_bd = leer_ruta_bd()
+    return DataLayer(fuente='local', ruta_bd=ruta_bd)
+
+
+def _get_filtros():
+    """Extrae filtros comunes del request (GET o POST JSON)."""
+    if request.method == 'POST':
+        data = request.get_json() or {}
+    else:
+        data = request.args.to_dict()
+    return data
+
+
+# ── Fuente de datos (sesión) ──────────────────────────────────────────────────
+
+@app.route('/api/fuente', methods=['POST'])
+def set_fuente():
+    data = request.get_json() or {}
+    session['fuente']     = data.get('fuente', 'local')
+    session['cliente_id'] = data.get('cliente_id', '')
+    return jsonify({'ok': True})
+
+@app.route('/admin')
+def admin_agente():
+    return render_template('admin_agente.html')
+
+
+@app.route('/api/agentes')
+def api_agentes():
+    """Proxy hacia AWS — retorna agentes conectados."""
+    try:
+        r = _aws_get('/api/admin-agent/agentes', timeout=8)
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'agentes': []})
+
+
+# ── Rutas principales ─────────────────────────────────────────────────────────
+
+def _catalogo_filtrado(fuente, cliente_id=None):
+    """Devuelve el catálogo filtrado según permisos. Sin cliente_id efectivo → todo visible."""
+    cache = _permisos_vigentes(cliente_id)
+    if cache is None:
+        return CATALOGO
+    permitidos = cache.get(fuente, set())
+    return {k: v for k, v in CATALOGO.items() if k in permitidos}
+
+
+@app.route('/')
+def menu():
+    from collections import defaultdict
+    fuente   = session.get('fuente', 'local')
+    catalogo = _catalogo_filtrado(fuente, CLIENTE_ID)  # siempre el usuario local, no el agente
+    categorias = defaultdict(list)
+    for r in catalogo.values():
+        categorias[getattr(r, 'CATEGORIA', 'General')].append(
+            {'id': r.ID, 'nombre': r.NOMBRE}
+        )
+    try:
+        ruta_bd_local = leer_ruta_bd()
+    except Exception:
+        ruta_bd_local = ''
+    return render_template('menu.html', categorias=dict(categorias),
+                           fuente=fuente,
+                           cliente_id=session.get('cliente_id', ''),
+                           ruta_bd_local=ruta_bd_local)
+
+
+@app.route('/reporte/<reporte_id>')
+def ver_reporte(reporte_id):
+    if reporte_id not in CATALOGO:
+        return 'Reporte no encontrado', 404
+    try:
+        empresas = _get_empresas_local()
+    except Exception:
+        empresas = []
+    hoy   = datetime.date.today()
+    desde = hoy.replace(day=1).isoformat()
+    hasta = hoy.isoformat()
+    template = f'reporte_{reporte_id}.html'
+    return render_template(template, empresas=empresas, desde=desde, hasta=hasta)
+
+
+# ── API datos ─────────────────────────────────────────────────────────────────
+
+@app.route('/api/reporte/<reporte_id>', methods=['POST'])
+def api_reporte(reporte_id):
+    if reporte_id not in CATALOGO:
+        return jsonify({'ok': False, 'error': 'Reporte no encontrado'}), 404
+    modulo     = CATALOGO[reporte_id]
+    body       = request.get_json() or {}
+    fuente     = body.pop('fuente',     session.get('fuente',     'local'))
+    cliente_id = body.pop('cliente_id', session.get('cliente_id', '')).strip()
+    session['fuente']     = fuente
+    session['cliente_id'] = cliente_id
+    filtros = body
+    t0      = time.time()
+    try:
+        dl = _get_data_layer()
+        if fuente == 'remoto':
+            # El agente calcula el reporte completo localmente — solo llegan rows finales
+            rows = dl.ejecutar_reporte(reporte_id, filtros)
+        else:
+            tablas = modulo.tablas_requeridas(filtros)
+            datos  = dl.leer(tablas)
+            rows   = modulo.calcular(datos, filtros)
+        elapsed = round(time.time() - t0, 1)
+        return jsonify({'ok': True, 'rows': rows, 'elapsed': elapsed,
+                        'total': len(rows)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/reporte/<reporte_id>/excel', methods=['POST'])
+def api_reporte_excel(reporte_id):
+    if not HAS_OPENPYXL:
+        return 'openpyxl no instalado', 500
+    if reporte_id not in CATALOGO:
+        return 'Reporte no encontrado', 404
+    modulo  = CATALOGO[reporte_id]
+    body    = request.get_json() or {}
+    fuente     = body.pop('fuente',     session.get('fuente',     'local'))
+    cliente_id = body.pop('cliente_id', session.get('cliente_id', '')).strip()
+    session['fuente']     = fuente
+    session['cliente_id'] = cliente_id
+    filtros = body
+    try:
+        dl = _get_data_layer()
+        if fuente == 'remoto':
+            rows = dl.ejecutar_reporte(reporte_id, filtros)
+        else:
+            tablas = modulo.tablas_requeridas(filtros)
+            datos  = dl.leer(tablas)
+            rows   = modulo.calcular(datos, filtros)
+        buf    = _generar_excel(reporte_id, rows, filtros)
+        fname  = f'{reporte_id}_{datetime.date.today()}.xlsx'
+        return send_file(buf, as_attachment=True, download_name=fname,
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    except Exception as e:
+        return str(e), 500
+
+
+@app.route('/api/empresas')
+def api_empresas():
+    try:
+        empresas = _get_empresas_local()
+        return jsonify({'ok': True, 'empresas': empresas})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'empresas': []})
+
+
+@app.route('/api/estado', methods=['POST'])
+def api_estado():
+    """Envía consulta_estado al agente remoto y retorna el resultado."""
+    body       = request.get_json() or {}
+    cliente_id = body.get('cliente_id', session.get('cliente_id', '')).strip()
+    items      = body.get('items', ['todo'])
+    if not cliente_id:
+        return jsonify({'ok': False, 'error': 'cliente_id requerido'})
+    try:
+        dl  = DataLayer(fuente='remoto', base_url=BASE_URL_AWS,
+                        cliente_id=cliente_id, aws_session=_get_aws_session())
+        res = dl.consultar('consulta_estado', {'items': items})
+        return jsonify({'ok': True, 'estado': res})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+@app.route('/api/archivo', methods=['POST'])
+def api_archivo():
+    """Pide al agente remoto leer un archivo y lo retorna."""
+    body       = request.get_json() or {}
+    cliente_id = body.get('cliente_id', session.get('cliente_id', '')).strip()
+    ruta       = body.get('ruta', '')
+    ultimas_lineas = int(body.get('ultimas_lineas', 0))
+    if not cliente_id or not ruta:
+        return jsonify({'ok': False, 'error': 'cliente_id y ruta requeridos'})
+    try:
+        dl  = DataLayer(fuente='remoto', base_url=BASE_URL_AWS,
+                        cliente_id=cliente_id, aws_session=_get_aws_session())
+        res = dl.consultar('subir_archivo', {'ruta': ruta, 'ultimas_lineas': ultimas_lineas})
+        return jsonify({'ok': True, **res})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)})
+
+
+# ── Auto-update rutas ─────────────────────────────────────────────────────────
+
+@app.route('/api/update/estado')
+def api_update_estado():
+    return jsonify({**_update, 'version_actual': VERSION})
+
+
+@app.route('/api/update/aplicar', methods=['POST'])
+def api_update_aplicar():
+    if not _update['disponible'] or _update['estado'] in ('descargando', 'listo'):
+        return jsonify({'ok': False, 'error': 'No hay update disponible o ya en proceso'})
+    threading.Thread(target=_descargar_y_aplicar, daemon=True).start()
+    return jsonify({'ok': True})
+
+
+# ── Helpers internos ──────────────────────────────────────────────────────────
+
+def _get_empresas_local():
+    """Muestrea PROD_FACT1 para obtener códigos de empresa únicos."""
+    import struct
+    from agente import leer_header
+    ENC     = 'cp1252'
+    ruta_bd = leer_ruta_bd()
+    path    = os.path.join(ruta_bd, 'PROD_FACT1.DBF')
+    num, hsz, rec_size, campos = leer_header(path)
+    campos_map = {c['nombre']: c for c in campos}
+    emp_c = campos_map.get('EMPRESA')
+    if not emp_c:
+        return []
+    with open(path, 'rb') as f:
+        f.seek(hsz)
+        raw = f.read(num * rec_size)
+    empresas = set()
+    paso = max(1, num // 500)
+    for i in range(0, num, paso):
+        b = raw[i*rec_size:(i+1)*rec_size]
+        if b[0] == 0x2A:
+            continue
+        o, n = emp_c['offset'], emp_c['longitud']
+        emp = b[o:o+n].rstrip(b' ').decode(ENC, 'replace').strip()
+        if emp:
+            empresas.add(emp)
+    return sorted(empresas)
+
+
+def _generar_excel(reporte_id, rows, filtros):
+    """Genera Excel básico para cualquier reporte."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = reporte_id
+    hdr_font = Font(bold=True, color='FFFFFF')
+    hdr_fill = PatternFill('solid', fgColor='003F7F')
+
+    if not rows:
+        ws.append(['Sin resultados'])
+    else:
+        cols = list(rows[0].keys())
+        ws.append(cols)
+        for cell in ws[1]:
+            cell.font = hdr_font
+            cell.fill = hdr_fill
+        for r in rows:
+            ws.append([r.get(c, '') for c in cols])
+
+    ws.append([])
+    ws.append([f'Generado: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}'])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+if __name__ == '__main__':
+    import socket as _socket
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        _lock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        try:
+            _lock.bind(('127.0.0.1', 47837))
+            _lock.listen(1)
+        except OSError:
+            sys.exit(0)
+        print('=' * 50)
+        print('  Reportes SAR — localhost:5003')
+        if CLIENTE_ID:
+            print(f'  Cliente: {CLIENTE_ID} — permisos se cargan al primer acceso')
+        else:
+            print('  Modo Rafael — sin restricciones (cliente_id vacío en server.ini)')
+        print('='  * 50)
+    app.run(host='0.0.0.0', port=5003, debug=True, use_reloader=True)

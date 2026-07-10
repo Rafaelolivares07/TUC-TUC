@@ -109,7 +109,7 @@ def _restaurante_pedidos_para_pago(conn, pedido_id):
     pedido = conn.execute("""
         SELECT p.id, p.restaurante_id, p.cliente_id, p.mesa_nombre, p.tipo_entrega,
                r.tercero_id, r.nombre, r.slug
-        FROM pedidos_restaurante p
+        FROM pedidos p
         JOIN restaurantes r ON r.id = p.restaurante_id
         WHERE p.id = %s
     """, (pedido_id,)).fetchone()
@@ -119,7 +119,7 @@ def _restaurante_pedidos_para_pago(conn, pedido_id):
     if pedido['cliente_id'] and not (pedido['mesa_nombre'] or '').strip():
         pedidos = conn.execute("""
             SELECT id, COALESCE(precio, 0) AS precio, COALESCE(valor_domicilio, 0) AS valor_domicilio
-            FROM pedidos_restaurante
+            FROM pedidos
             WHERE restaurante_id = %s
               AND cliente_id = %s
               AND COALESCE(mesa_nombre, '') = ''
@@ -130,7 +130,7 @@ def _restaurante_pedidos_para_pago(conn, pedido_id):
     else:
         pedidos = conn.execute("""
             SELECT id, COALESCE(precio, 0) AS precio, COALESCE(valor_domicilio, 0) AS valor_domicilio
-            FROM pedidos_restaurante
+            FROM pedidos
             WHERE id = %s
         """, (pedido_id,)).fetchall()
 
@@ -189,7 +189,7 @@ def _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago):
         row = conn.execute("""
             SELECT p.id, p.total, p.nombre_cliente, p.telefono_cliente, p.tipo_entrega,
                    p.direccion_cliente, t.nombre AS negocio, t.telegram_chat_id, t.admin_id
-            FROM pedidos_tienda p
+            FROM pedidos p
             JOIN tiendas t ON t.id = p.tienda_id
             WHERE p.id = %s
         """, (pedido_id,)).fetchone()
@@ -202,7 +202,7 @@ def _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago):
             SELECT p.id, COALESCE(p.precio, 0) + COALESCE(p.valor_domicilio, 0) AS total,
                    p.nombre_cliente, p.telefono_cliente, p.tipo_entrega, p.direccion_cliente,
                    p.mesa_nombre, r.nombre AS negocio, r.admin_id
-            FROM pedidos_restaurante p
+            FROM pedidos p
             JOIN restaurantes r ON r.id = p.restaurante_id
             WHERE p.id = %s
         """, (pedido_id,)).fetchone()
@@ -233,8 +233,8 @@ def _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago):
 
 def _asegurar_domicilio_restaurante(conn):
     alters = [
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
-        "ALTER TABLE pedidos_restaurante ADD COLUMN IF NOT EXISTS domicilio_estado VARCHAR(30) DEFAULT 'no_aplica'",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS domicilio_estado VARCHAR(30) DEFAULT 'no_aplica'",
     ]
     for sql in alters:
         conn.execute(sql)
@@ -774,7 +774,7 @@ def pagar(pedido_id):
         if tipo == 'tienda':
             row = conn.execute("""
                 SELECT t.tercero_id, t.nombre, t.slug, p.total
-                FROM pedidos_tienda p JOIN tiendas t ON t.id = p.tienda_id
+                FROM pedidos p JOIN tiendas t ON t.id = p.tienda_id
                 WHERE p.id = %s
             """, (pedido_id,)).fetchone()
             total_pago = float(row['total'] or 0) if row else 0.0
@@ -808,26 +808,26 @@ def api_pagar(pedido_id):
     conn = get_db_connection()
     try:
         try:
-            conn.execute("ALTER TABLE pedido_pagos_tienda ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)")
-            conn.execute("ALTER TABLE pedido_pagos_tienda ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)")
+            conn.execute("ALTER TABLE pedido_pagos ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)")
+            conn.execute("ALTER TABLE pedido_pagos ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)")
         except Exception:
             try: conn.rollback()
             except Exception: pass
         _asegurar_pagos_restaurante(conn)
         if tipo == 'tienda':
-            total_row = conn.execute("SELECT total FROM pedidos_tienda WHERE id=%s", (pedido_id,)).fetchone()
+            total_row = conn.execute("SELECT total FROM pedidos WHERE id=%s", (pedido_id,)).fetchone()
             total_pedido = float(total_row['total'] or 0) if total_row else 0
             conn.execute(
-                "UPDATE pedidos_tienda SET metodo_pago=%s, comprobante_pago=%s WHERE id=%s",
+                "UPDATE pedidos SET metodo_pago=%s, comprobante_pago=%s WHERE id=%s",
                 (metodo_pago, comprobante, pedido_id)
             )
-            conn.execute("DELETE FROM pedido_pagos_tienda WHERE pedido_id=%s", (pedido_id,))
+            conn.execute("DELETE FROM pedido_pagos WHERE pedido_id=%s", (pedido_id,))
             pagos_validos = [p for p in pagos if isinstance(p, dict) and float(p.get('monto') or 0) > 0]
             if pagos_validos:
                 for pago in pagos_validos:
                     recibido_con, devuelta = _datos_cambio_pago(pago)
                     conn.execute("""
-                        INSERT INTO pedido_pagos_tienda
+                        INSERT INTO pedido_pagos
                             (pedido_id, metodo_codigo, metodo_nombre, monto, recibido_con, devuelta)
                         VALUES (%s, %s, %s, %s, %s, %s)
                     """, (
@@ -840,7 +840,7 @@ def api_pagar(pedido_id):
                     ))
             else:
                 conn.execute("""
-                    INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
+                    INSERT INTO pedido_pagos (pedido_id, metodo_codigo, metodo_nombre, monto)
                     VALUES (%s, %s, %s, %s)
                 """, (pedido_id, metodo_pago, metodo_pago, total_pedido))
         else:
@@ -852,10 +852,10 @@ def api_pagar(pedido_id):
             pedido_ids = [p['id'] for p in pedidos_pago]
             placeholders = ','.join(['%s'] * len(pedido_ids))
             conn.execute(
-                f"UPDATE pedidos_restaurante SET metodo_pago=%s, comprobante_pago=%s WHERE id IN ({placeholders})",
+                f"UPDATE pedidos SET metodo_pago=%s, comprobante_pago=%s WHERE id IN ({placeholders})",
                 (metodo_pago, comprobante, *pedido_ids)
             )
-            conn.execute(f"DELETE FROM pedido_pagos_restaurante WHERE pedido_id IN ({placeholders})", tuple(pedido_ids))
+            conn.execute(f"DELETE FROM pedido_pagos WHERE pedido_id IN ({placeholders})", tuple(pedido_ids))
             pagos_validos = [p for p in pagos if isinstance(p, dict) and float(p.get('monto') or 0) > 0]
             base_total = sum(float(p['precio'] or 0) for p in pedidos_pago) or total_pedido or 1
             for pedido in pedidos_pago:
@@ -864,7 +864,7 @@ def api_pagar(pedido_id):
                     for pago in pagos_validos:
                         recibido_con, devuelta = _datos_cambio_pago(pago)
                         conn.execute("""
-                            INSERT INTO pedido_pagos_restaurante
+                            INSERT INTO pedido_pagos
                                 (pedido_id, metodo_codigo, metodo_nombre, monto, recibido_con, devuelta)
                             VALUES (%s, %s, %s, %s, %s, %s)
                         """, (
@@ -877,7 +877,7 @@ def api_pagar(pedido_id):
                         ))
                 else:
                     conn.execute("""
-                        INSERT INTO pedido_pagos_restaurante (pedido_id, metodo_codigo, metodo_nombre, monto)
+                        INSERT INTO pedido_pagos (pedido_id, metodo_codigo, metodo_nombre, monto)
                         VALUES (%s, %s, %s, %s)
                     """, (pedido['id'], metodo_pago, metodo_pago, float(pedido['precio'] or 0)))
         conn.commit()
@@ -896,21 +896,23 @@ def api_pagar(pedido_id):
 
 def _asegurar_pagos_restaurante(conn):
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS pedido_pagos_restaurante (
+        CREATE TABLE IF NOT EXISTS pedido_pagos (
             id SERIAL PRIMARY KEY,
-            pedido_id INTEGER NOT NULL,
-            metodo_codigo VARCHAR(50),
-            metodo_nombre VARCHAR(100),
-            monto NUMERIC(12,2) NOT NULL,
+            pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+            metodo_codigo VARCHAR(50) NOT NULL,
+            metodo_nombre VARCHAR(100) NOT NULL,
+            monto DECIMAL(12,2) NOT NULL,
+            recibido_con DECIMAL(12,2),
+            devuelta DECIMAL(12,2),
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_pedido_pagos_restaurante_pedido
-        ON pedido_pagos_restaurante(pedido_id)
+        CREATE INDEX IF NOT EXISTS idx_pedido_pagos_pedido
+        ON pedido_pagos(pedido_id)
     """)
-    conn.execute("ALTER TABLE pedido_pagos_restaurante ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)")
-    conn.execute("ALTER TABLE pedido_pagos_restaurante ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)")
+    conn.execute("ALTER TABLE pedido_pagos ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)")
+    conn.execute("ALTER TABLE pedido_pagos ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)")
 
 
 @bp.route('/api/negocio/<int:tercero_id>/metodo-info', methods=['POST'])

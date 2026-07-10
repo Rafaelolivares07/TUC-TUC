@@ -1,0 +1,130 @@
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5003
+Press CTRL+C to quit
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 107-972-904
+127.0.0.1 - - [15/May/2026 16:21:29] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 16:30:55] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 16:30:55] "GET /favicon.ico HTTP/1.1" 404 -
+ * Detected change in 'C:\\Users\\RAFAEL OLIVARES\\Documents\\TucTucV2\\sar-reportes\\server.py', reloading
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 107-972-904
+127.0.0.1 - - [15/May/2026 16:58:43] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 18:33:20] "GET / HTTP/1.1" 200 -
+ * Detected change in 'C:\\Users\\RAFAEL OLIVARES\\Documents\\TucTucV2\\sar-reportes\\server.py', reloading
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 107-972-904
+127.0.0.1 - - [15/May/2026 19:23:11] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 19:23:20] "GET /admin HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 19:23:24] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 19:26:02] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 19:27:47] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 19:27:55] "GET /api/empresas HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 19:28:06] "GET /admin HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 19:35:23] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 19:35:27] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:16:05] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:16:11] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:16:37] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:17:20] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:22:30] "POST /api/fuente HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:22:34] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:22:34] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:22:38] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:22:38] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:22:41] "POST /api/fuente HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:22:43] "POST /api/fuente HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:23:31] "GET /admin HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:23:32] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:28:04] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:28:05] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:28:09] "POST /api/fuente HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:28:55] "GET /reporte/inventario HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:29:11] "POST /api/reporte/inventario HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:40:20] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:40:26] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:40:27] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:40:31] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:40:32] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:46:04] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:46:04] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:53:53] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:53:54] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:53:58] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 20:53:58] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:14:51] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:14:51] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:16:14] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:16:14] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:16:20] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:16:21] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:17:07] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:17:07] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:28] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:29] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:33] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:34] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:36] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:37] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:38] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:39] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:40] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:41] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:42] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:43] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:43] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:44] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:45] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:45] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:46] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:46] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:48] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:24:48] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:25:22] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:25:23] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:25:32] "POST /api/fuente HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:26:36] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:26:36] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:26:45] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:26:45] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:26:53] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:26:53] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:27:06] "POST /api/fuente HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:27:08] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:27:32] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:27:39] "GET /api/empresas HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:28:24] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:28:57] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:29:00] "POST /api/fuente HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:29:06] "GET /reporte/reg_ctas HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:29:50] "POST /api/reporte/reg_ctas HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:30:16] "GET /reporte/reg_ctas HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:30:45] "POST /api/reporte/reg_ctas HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:31:07] "GET /reporte/inventario HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:31:18] "POST /api/reporte/inventario HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:49:09] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:49:10] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:49:15] "POST /api/fuente HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:49:18] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:49:22] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:49:31] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:49:34] "POST /api/fuente HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:49:41] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:49:42] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:50:07] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:50:08] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:51:09] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:51:09] "GET /api/agentes HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:51:11] "POST /api/fuente HTTP/1.1" 200 -
+127.0.0.1 - - [15/May/2026 21:51:16] "GET /api/agentes HTTP/1.1" 200 -
+ * Detected change in 'C:\\Users\\RAFAEL OLIVARES\\Documents\\TucTucV2\\sar-reportes\\server.py', reloading
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 107-972-904
+ * Detected change in 'C:\\Users\\RAFAEL OLIVARES\\Documents\\TucTucV2\\sar-reportes\\server.py', reloading
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 107-972-904

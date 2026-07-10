@@ -64,26 +64,49 @@ def _crear_tablas(conn):
             activo BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT NOW()
         )""",
-        """CREATE TABLE IF NOT EXISTS pedidos_tienda (
+        """CREATE TABLE IF NOT EXISTS pedidos (
             id SERIAL PRIMARY KEY,
-            tienda_id INTEGER NOT NULL,
+            tienda_id INTEGER,
+            restaurante_id INTEGER,
+            negocio_id INTEGER,
+            id_cajero VARCHAR(50),
+            nombre_cajero VARCHAR(100),
+            id_tercero_cajero INTEGER,
             cliente_id INTEGER,
             nombre_cliente VARCHAR(100),
             telefono_cliente VARCHAR(20),
             direccion_cliente TEXT,
             tipo_entrega VARCHAR(20) DEFAULT 'domicilio',
             estado VARCHAR(20) DEFAULT 'nuevo',
-            total DECIMAL(10,2) DEFAULT 0,
+            total DECIMAL(12,2) DEFAULT 0,
+            subtotal_productos DECIMAL(12,2) DEFAULT 0,
+            valor_domicilio DECIMAL(12,2) DEFAULT 0,
+            domicilio_estado VARCHAR(30) DEFAULT 'no_aplica',
+            cliente_lat DECIMAL(10,7),
+            cliente_lon DECIMAL(10,7),
             notas TEXT,
-            created_at TIMESTAMP DEFAULT NOW()
+            metodo_pago VARCHAR(20),
+            comprobante_pago TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            
+            -- Restaurantes
+            mesa_num INTEGER,
+            mesa_nombre VARCHAR(20),
+            tipo VARCHAR(20),
+            sopa_id INTEGER,
+            proteina_id INTEGER,
+            principio_id INTEGER,
+            plato_id INTEGER,
+            cantidad INTEGER DEFAULT 1,
+            precio DECIMAL(12,2)
         )""",
-        """CREATE TABLE IF NOT EXISTS items_pedido_tienda (
+        """CREATE TABLE IF NOT EXISTS pedido_items (
             id SERIAL PRIMARY KEY,
-            pedido_id INTEGER NOT NULL,
+            pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
             producto_id INTEGER NOT NULL,
             nombre_producto VARCHAR(255),
             cantidad INTEGER DEFAULT 1,
-            precio_unitario DECIMAL(10,2) NOT NULL,
+            precio_unitario DECIMAL(12,2) NOT NULL,
             created_at TIMESTAMP DEFAULT NOW()
         )""",
         """CREATE TABLE IF NOT EXISTS producto_atributos (
@@ -169,12 +192,14 @@ def _crear_tablas(conn):
             orden INTEGER DEFAULT 0,
             UNIQUE(tienda_id, catalogo_id)
         )""",
-        """CREATE TABLE IF NOT EXISTS pedido_pagos_tienda (
+        """CREATE TABLE IF NOT EXISTS pedido_pagos (
             id SERIAL PRIMARY KEY,
-            pedido_id INTEGER NOT NULL,
-            metodo_codigo VARCHAR(50),
-            metodo_nombre VARCHAR(100),
-            monto NUMERIC(12,2) NOT NULL,
+            pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+            metodo_codigo VARCHAR(50) NOT NULL,
+            metodo_nombre VARCHAR(100) NOT NULL,
+            monto DECIMAL(12,2) NOT NULL,
+            recibido_con DECIMAL(12,2),
+            devuelta DECIMAL(12,2),
             created_at TIMESTAMP DEFAULT NOW()
         )""",
         """CREATE TABLE IF NOT EXISTS tienda_categorias (
@@ -299,22 +324,22 @@ def _crear_tablas(conn):
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lat NUMERIC(10,7)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS lon NUMERIC(10,7)",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
-        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20) DEFAULT 'efectivo'",
-        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS subtotal_productos NUMERIC(12,2) DEFAULT 0",
-        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
-        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS domicilio_estado VARCHAR(30) DEFAULT 'no_aplica'",
-        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS cliente_lat NUMERIC(10,7)",
-        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS cliente_lon NUMERIC(10,7)",
-        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS id_cajero INTEGER",
-        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS nombre_cajero VARCHAR(100)",
-        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS id_tercero_cajero INTEGER REFERENCES terceros(id)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20) DEFAULT 'efectivo'",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS subtotal_productos NUMERIC(12,2) DEFAULT 0",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS valor_domicilio NUMERIC(12,2) DEFAULT 0",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS domicilio_estado VARCHAR(30) DEFAULT 'no_aplica'",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cliente_lat NUMERIC(10,7)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cliente_lon NUMERIC(10,7)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS id_cajero VARCHAR(50)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS nombre_cajero VARCHAR(100)",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS id_tercero_cajero INTEGER REFERENCES terceros(id)",
         "ALTER TABLE tienda_cajeros ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "CREATE INDEX IF NOT EXISTS idx_catalogo_productos_codigo ON catalogo_productos(codigo_barra)",
         "CREATE INDEX IF NOT EXISTS idx_tienda_cajeros_tienda ON tienda_cajeros(tienda_id)",
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN nombre DROP NOT NULL",
         "ALTER TABLE metodos_pago_tienda ALTER COLUMN codigo DROP NOT NULL",
-        "ALTER TABLE pedido_pagos_tienda ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)",
-        "ALTER TABLE pedido_pagos_tienda ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)",
+        "ALTER TABLE pedido_pagos ADD COLUMN IF NOT EXISTS recibido_con NUMERIC(12,2)",
+        "ALTER TABLE pedido_pagos ADD COLUMN IF NOT EXISTS devuelta NUMERIC(12,2)",
         "UPDATE tiendas SET tercero_id = admin_id WHERE tercero_id IS NULL AND admin_id IS NOT NULL",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS desktop_layout VARCHAR(20) DEFAULT 'movil'",
         "ALTER TABLE tiendas ADD COLUMN IF NOT EXISTS movil_cols SMALLINT DEFAULT 2",
@@ -335,7 +360,7 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_tienda_visitas_publicas_proyecto ON tienda_visitas_publicas(proyecto_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_tienda_experiencia_bloques ON tienda_experiencia_bloques(tienda_id, orden, id)",
         "ALTER TABLE metodos_pago_catalogo ADD COLUMN IF NOT EXISTS grupo VARCHAR(30)",
-        "ALTER TABLE pedidos_tienda ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi QR', 'nequi_qr', '📲', 21, 'nequi') ON CONFLICT (codigo) DO NOTHING",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Nequi Celular', 'nequi_movil', '📱', 22, 'nequi') ON CONFLICT (codigo) DO NOTHING",
         "INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, orden, grupo) VALUES ('Bancolombia QR', 'bancolombia_qr', '🏦', 31, 'bancolombia') ON CONFLICT (codigo) DO UPDATE SET nombre = EXCLUDED.nombre, icono = EXCLUDED.icono, orden = EXCLUDED.orden, grupo = EXCLUDED.grupo, activo = TRUE",
@@ -638,7 +663,7 @@ def admin_tienda_lista():
         tiendas = []
         for t in tiendas_raw:
             dias_usados = conn.execute(
-                "SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos_tienda WHERE tienda_id = %s",
+                "SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos WHERE tienda_id = %s",
                 (t['id'],)
             ).fetchone()['dias']
             t_dict = dict(t)
@@ -802,77 +827,85 @@ def tienda_publica(slug):
         conn.close()
 
 
-# ── Caja POS ───────────────────────────────────────────────────────────────────
+# ── Caja POS Genérica ──────────────────────────────────────────────────────────
 
+def _obtener_negocio_por_slug(conn, slug):
+    tienda = conn.execute(
+        "SELECT id, nombre, 'tienda' as tipo_negocio, tercero_id, color_primario, imagen_header, telegram_chat_id, admin_id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+    ).fetchone()
+    if tienda:
+        return dict(tienda)
+    restaurante = conn.execute(
+        "SELECT id, nombre, 'restaurante' as tipo_negocio, tercero_id, NULL as color_primario, NULL as imagen_header, telegram_chat_id, admin_id FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+    ).fetchone()
+    if restaurante:
+        res = dict(restaurante)
+        res['color_primario'] = '#e11d48'
+        res['imagen_header'] = None
+        return res
+    return None
+
+@bp.route('/caja/<slug>')
 @bp.route('/tienda/<slug>/caja')
 def tienda_caja(slug):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute(
-            "SELECT id, nombre, imagen_header, color_primario, tercero_id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
-        ).fetchone()
-        if not tienda:
-            return "Tienda no encontrada", 404
-        return render_template('tienda_caja.html', tienda=tienda, slug=slug)
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return "Negocio no encontrado", 404
+        return render_template('caja.html', tienda=negocio, slug=slug)
     except Exception as e:
         return str(e), 500
     finally:
         conn.close()
 
-
-# ── Promo páginas ──────────────────────────────────────────────────────────────
-
+@bp.route('/admin/caja/<slug>')
 @bp.route('/admin/tienda/<slug>/caja')
 @solo_admin
 def admin_tienda_caja(slug):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute(
-            "SELECT id, nombre, imagen_header, color_primario, tercero_id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
-        ).fetchone()
-        if not tienda:
-            return "Tienda no encontrada", 404
-        return render_template('tienda_caja.html', tienda=tienda, slug=slug, modo_admin=True)
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return "Negocio no encontrado", 404
+        return render_template('caja.html', tienda=negocio, slug=slug, modo_admin=True)
     except Exception as e:
         return str(e), 500
     finally:
         conn.close()
 
-
+@bp.route('/caja/<slug>/cliente/<token>')
 @bp.route('/tienda/<slug>/caja/cliente/<token>')
 def tienda_caja_cliente(slug, token):
     conn = get_db_connection()
     try:
-        tienda = conn.execute(
-            "SELECT id, nombre, imagen_header FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
-        ).fetchone()
-        if not tienda:
-            return "Tienda no encontrada", 404
-        return render_template('tienda_caja_cliente.html', tienda=tienda, slug=slug, token=token)
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return "Negocio no encontrado", 404
+        return render_template('caja_cliente.html', tienda=negocio, slug=slug, token=token)
     finally:
         conn.close()
 
-
+@bp.route('/api/caja/<slug>/sesion', methods=['POST'])
 @bp.route('/api/tienda/<slug>/caja/sesion', methods=['POST'])
 def api_tienda_caja_sesion_crear(slug):
     _limpiar_sesiones_caja()
     conn = get_db_connection()
     try:
-        tienda = conn.execute(
-            "SELECT id, nombre FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
-        ).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
 
         token = secrets.token_urlsafe(18)
         update_key = secrets.token_urlsafe(24)
         ahora = time.time()
         _sesiones_caja_cliente[token] = {
             'slug': slug,
-            'tienda_id': tienda['id'],
-            'tienda_nombre': tienda['nombre'],
+            'tienda_id': negocio['id'] if negocio['tipo_negocio'] == 'tienda' else None,
+            'restaurante_id': negocio['id'] if negocio['tipo_negocio'] == 'restaurante' else None,
+            'tienda_nombre': negocio['nombre'],
             'update_key': update_key,
             'estado': 'activa',
             'items': [],
@@ -882,11 +915,12 @@ def api_tienda_caja_sesion_crear(slug):
             'updated_at': ahora,
             'created_at': ahora,
         }
-        return jsonify({'ok': True, 'token': token, 'update_key': update_key, 'url': f'/tienda/{slug}/caja/cliente/{token}'})
+        return jsonify({'ok': True, 'token': token, 'update_key': update_key, 'url': f'/caja/{slug}/cliente/{token}'})
     finally:
         conn.close()
 
 
+@bp.route('/api/caja/<slug>/sesion/<token>', methods=['GET', 'POST'])
 @bp.route('/api/tienda/<slug>/caja/sesion/<token>', methods=['GET', 'POST'])
 def api_tienda_caja_sesion(slug, token):
     _limpiar_sesiones_caja()
@@ -1231,30 +1265,34 @@ def api_tienda_dias_pagados(slug):
 
 # ── API productos ──────────────────────────────────────────────────────────────
 
+@bp.route('/api/caja/<slug>/productos')
 @bp.route('/api/tienda/<slug>/productos')
 def api_tienda_productos(slug):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
         solo_publicos = request.args.get('publico') == '1'
         filtro_publico = " AND disponible = TRUE AND precio > 0" if solo_publicos else ""
         productos = conn.execute(
             "SELECT id, nombre, categoria, precio, costo, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct "
             f"FROM productos WHERE negocio_id = %s{filtro_publico} ORDER BY categoria, orden, nombre",
-            (tienda['tercero_id'],)
+            (negocio['tercero_id'],)
         ).fetchall()
-        categorias_media = conn.execute(
-            """
-            SELECT categoria, imagen
-            FROM tienda_categorias
-            WHERE tienda_id = %s
-            """,
-            (tienda['id'],)
-        ).fetchall()
-        media_por_categoria = {c['categoria']: c['imagen'] for c in categorias_media}
+        
+        media_por_categoria = {}
+        if negocio['tipo_negocio'] == 'tienda':
+            categorias_media = conn.execute(
+                """
+                SELECT categoria, imagen
+                FROM tienda_categorias
+                WHERE tienda_id = %s
+                """,
+                (negocio['id'],)
+            ).fetchall()
+            media_por_categoria = {c['categoria']: c['imagen'] for c in categorias_media}
         resultado = []
         for p in productos:
             nv = conn.execute("SELECT COUNT(*) FROM producto_variantes WHERE producto_id = %s", (p['id'],)).fetchone()[0]
@@ -1912,7 +1950,7 @@ def api_tienda_pedido_comprobante(slug, pedido_id):
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         cur = conn.execute(
-            "UPDATE pedidos_tienda SET comprobante_pago=%s WHERE id=%s AND tienda_id=%s",
+            "UPDATE pedidos SET comprobante_pago=%s WHERE id=%s AND tienda_id=%s",
             (imagen, pedido_id, tienda['id'])
         )
         if cur.rowcount == 0:
@@ -2074,6 +2112,7 @@ def api_tienda_registrar_cliente(slug):
         conn.close()
 
 
+@bp.route('/api/caja/<slug>/pedido', methods=['POST'])
 @bp.route('/api/tienda/<slug>/pedido', methods=['POST'])
 def api_tienda_pedido_crear(slug):
     data             = request.get_json() or {}
@@ -2098,13 +2137,30 @@ def api_tienda_pedido_crear(slug):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute(
-            "SELECT id, nombre, dias_pagados, telegram_chat_id, fecha_vence, tercero_id, admin_id FROM tiendas WHERE slug = %s AND activo = TRUE",
-            (slug,)
-        ).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        fecha_vence = tienda['fecha_vence']
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        
+        tienda = negocio
+        telegram_chat_id = negocio['telegram_chat_id']
+        fecha_vence = None
+        admin_id = negocio['admin_id']
+
+        if negocio['tipo_negocio'] == 'tienda':
+            tienda = conn.execute(
+                "SELECT id, nombre, dias_pagados, telegram_chat_id, fecha_vence, tercero_id, admin_id FROM tiendas WHERE id = %s",
+                (negocio['id'],)
+            ).fetchone()
+            telegram_chat_id = tienda['telegram_chat_id']
+            fecha_vence = tienda['fecha_vence']
+            admin_id = tienda['admin_id']
+        else:
+            restaurante = conn.execute(
+                "SELECT id, nombre, admin_id, token_acceso FROM restaurantes WHERE id = %s",
+                (negocio['id'],)
+            ).fetchone()
+            admin_id = restaurante['admin_id']
+
         if fecha_vence and date.today() > fecha_vence:
             return jsonify({'ok': False, 'error': 'suscripcion_agotada', 'fecha_vence': str(fecha_vence)}), 402
         total = 0
@@ -2113,7 +2169,7 @@ def api_tienda_pedido_crear(slug):
             producto = conn.execute(
                 "SELECT id, nombre, precio, disponible, iva_pct FROM productos "
                 "WHERE id = %s AND negocio_id = %s AND disponible = TRUE AND precio > 0",
-                (item.get('producto_id'), tienda['tercero_id'])
+                (item.get('producto_id'), negocio['tercero_id'])
             ).fetchone()
             if not producto:
                 continue
@@ -2128,7 +2184,7 @@ def api_tienda_pedido_crear(slug):
         if not items_validos:
             return jsonify({'ok': False, 'error': 'Ningun producto valido en el carrito'}), 400
         subtotal_productos = total
-        tercero_config_id = tienda['tercero_id'] or tienda['admin_id']
+        tercero_config_id = negocio['tercero_id'] or admin_id
         valor_domicilio, domicilio_estado = _calcular_domicilio(
             conn, tercero_config_id, tipo_entrega, cliente_lat, cliente_lon
         )
@@ -2136,28 +2192,32 @@ def api_tienda_pedido_crear(slug):
             return jsonify({'ok': False, 'error': 'La direccion esta fuera de cobertura de domicilio'}), 400
         total = subtotal_productos + float(valor_domicilio or 0)
         conn.execute("""
-            INSERT INTO pedidos_tienda
-                (tienda_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente,
+            INSERT INTO pedidos
+                (tienda_id, restaurante_id, negocio_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente,
                  tipo_entrega, total, notas, metodo_pago, id_cajero, nombre_cajero, id_tercero_cajero,
                  subtotal_productos, valor_domicilio, domicilio_estado, cliente_lat, cliente_lon)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (tienda['id'], cliente_id, nombre_cliente or None, telefono_cliente or None,
-              direccion_cliente or None, tipo_entrega, total, notas or None, metodo_pago,
-              id_cajero, nombre_cajero, id_tercero_cajero, subtotal_productos,
-              float(valor_domicilio or 0), domicilio_estado, cliente_lat, cliente_lon))
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            negocio['id'] if negocio['tipo_negocio'] == 'tienda' else None,
+            negocio['id'] if negocio['tipo_negocio'] == 'restaurante' else None,
+            negocio['tercero_id'], cliente_id, nombre_cliente or None, telefono_cliente or None,
+            direccion_cliente or None, tipo_entrega, total, notas or None, metodo_pago,
+            id_cajero, nombre_cajero, id_tercero_cajero, subtotal_productos,
+            float(valor_domicilio or 0), domicilio_estado, cliente_lat, cliente_lon
+        ))
         pedido_id = conn.execute(
-            "SELECT currval(pg_get_serial_sequence('pedidos_tienda', 'id'))"
+            "SELECT currval(pg_get_serial_sequence('pedidos', 'id'))"
         ).fetchone()[0]
         for it in items_validos:
             conn.execute("""
-                INSERT INTO items_pedido_tienda (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario)
+                INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario)
                 VALUES (%s,%s,%s,%s,%s)
             """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario']))
-            if tienda['tercero_id']:
+            if negocio['tercero_id']:
                 try:
                     conn.execute("SAVEPOINT sp_inv_tienda")
                     _aplicar_tarjeta(
-                        conn, tienda['tercero_id'],
+                        conn, negocio['tercero_id'],
                         producto_id    = it['producto_id'],
                         cantidad       = it['cantidad'],
                         tipo           = 'salida',
@@ -2182,16 +2242,16 @@ def api_tienda_pedido_crear(slug):
                     if recibido_con:
                         devuelta = max(0, recibido_con - float(p.get('monto') or 0))
                 conn.execute("""
-                    INSERT INTO pedido_pagos_tienda
+                    INSERT INTO pedido_pagos
                         (pedido_id, metodo_codigo, metodo_nombre, monto, recibido_con, devuelta)
                     VALUES (%s,%s,%s,%s,%s,%s)
                 """, (pedido_id, p['codigo'], p.get('nombre', p['codigo']), float(p['monto']), recibido_con, devuelta))
         else:
             conn.execute("""
-                INSERT INTO pedido_pagos_tienda (pedido_id, metodo_codigo, metodo_nombre, monto)
+                INSERT INTO pedido_pagos (pedido_id, metodo_codigo, metodo_nombre, monto)
                 VALUES (%s,%s,%s,%s)
             """, (pedido_id, metodo_pago, metodo_pago, total))
-        if tienda['tercero_id'] and _asiento_auto:
+        if negocio['tercero_id'] and _asiento_auto:
             try:
                 iva_total = sum(
                     it['precio_unitario'] * it['cantidad'] * it['iva_pct'] / 100
@@ -2262,18 +2322,18 @@ def api_tienda_pedidos(slug):
             SELECT id, nombre_cliente, telefono_cliente, direccion_cliente, tipo_entrega,
                    estado, total, notas, created_at, nombre_cajero, metodo_pago, comprobante_pago,
                    subtotal_productos, valor_domicilio, domicilio_estado
-            FROM pedidos_tienda WHERE tienda_id = %s AND DATE(created_at) = CURRENT_DATE
+            FROM pedidos WHERE tienda_id = %s AND DATE(created_at) = CURRENT_DATE
             ORDER BY created_at DESC
         """, (tienda['id'],)).fetchall()
         resultado = []
         for p in pedidos:
             items = conn.execute(
-                "SELECT nombre_producto, cantidad, precio_unitario FROM items_pedido_tienda WHERE pedido_id = %s",
+                "SELECT nombre_producto, cantidad, precio_unitario FROM pedido_items WHERE pedido_id = %s",
                 (p['id'],)
             ).fetchall()
             pagos = conn.execute("""
                 SELECT metodo_codigo, metodo_nombre, monto, recibido_con, devuelta
-                FROM pedido_pagos_tienda
+                FROM pedido_pagos
                 WHERE pedido_id = %s
                 ORDER BY id
             """, (p['id'],)).fetchall()
@@ -2329,7 +2389,7 @@ def api_tienda_pedido_estado(slug, pedido_id):
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         conn.execute(
-            "UPDATE pedidos_tienda SET estado = %s WHERE id = %s AND tienda_id = %s",
+            "UPDATE pedidos SET estado = %s WHERE id = %s AND tienda_id = %s",
             (estado, pedido_id, tienda['id'])
         )
         conn.commit()
@@ -2352,7 +2412,7 @@ def api_tienda_suscripcion(slug):
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         dias_usados  = conn.execute(
-            "SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos_tienda WHERE tienda_id = %s",
+            "SELECT COUNT(DISTINCT DATE(created_at)) as dias FROM pedidos WHERE tienda_id = %s",
             (tienda['id'],)
         ).fetchone()['dias']
         dias_pagados = tienda['dias_pagados'] or 0
@@ -2367,8 +2427,9 @@ def api_tienda_suscripcion(slug):
         conn.close()
 
 
-# ── Caja PIN y cajeros ─────────────────────────────────────────────────────────
+# ── Caja PIN y cajeros POS Genérica ─────────────────────────────────────────────
 
+@bp.route('/api/caja/<slug>/verificar-pin-caja', methods=['POST'])
 @bp.route('/api/tienda/<slug>/verificar-pin-caja', methods=['POST'])
 def api_tienda_verificar_pin_caja(slug):
     pin = ((request.get_json() or {}).get('pin') or '').strip()
@@ -2377,12 +2438,15 @@ def api_tienda_verificar_pin_caja(slug):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
         cajero = conn.execute(
-            "SELECT id, nombre, tercero_id FROM tienda_cajeros WHERE tienda_id = %s AND pin = %s AND activo = TRUE",
-            (tienda['id'], pin)
+            "SELECT id, nombre, tercero_id FROM tienda_cajeros WHERE "
+            "(tienda_id = %s OR restaurante_id = %s) AND pin = %s AND activo = TRUE",
+            (negocio['id'] if negocio['tipo_negocio'] == 'tienda' else None,
+             negocio['id'] if negocio['tipo_negocio'] == 'restaurante' else None,
+             pin)
         ).fetchone()
         if not cajero:
             return jsonify({'ok': False, 'error': 'PIN incorrecto o cajero inactivo'}), 403
@@ -2393,19 +2457,31 @@ def api_tienda_verificar_pin_caja(slug):
         conn.close()
 
 
+@bp.route('/api/caja/<slug>/pin-caja', methods=['GET', 'POST'])
 @bp.route('/api/tienda/<slug>/pin-caja', methods=['GET', 'POST'])
 def api_tienda_pin_caja(slug):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id, pin_caja FROM tiendas WHERE slug = %s", (slug,)).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        if negocio['tipo_negocio'] == 'tienda':
+            tienda = conn.execute("SELECT id, pin_caja FROM tiendas WHERE id = %s", (negocio['id'],)).fetchone()
+            pin_caja = tienda['pin_caja'] or ''
+        else:
+            restaurante = conn.execute("SELECT id, pin_mesero as pin_caja FROM restaurantes WHERE id = %s", (negocio['id'],)).fetchone()
+            pin_caja = restaurante['pin_caja'] or ''
+
         if request.method == 'GET':
-            return jsonify({'ok': True, 'pin_caja': tienda['pin_caja'] or ''})
+            return jsonify({'ok': True, 'pin_caja': pin_caja})
+            
         nuevo_pin = ((request.get_json() or {}).get('pin_caja') or '').strip()
-        conn.execute("UPDATE tiendas SET pin_caja = %s WHERE id = %s", (nuevo_pin or None, tienda['id']))
+        if negocio['tipo_negocio'] == 'tienda':
+            conn.execute("UPDATE tiendas SET pin_caja = %s WHERE id = %s", (nuevo_pin or None, negocio['id']))
+        else:
+            conn.execute("UPDATE restaurantes SET pin_mesero = %s WHERE id = %s", (nuevo_pin or None, negocio['id']))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -2414,6 +2490,7 @@ def api_tienda_pin_caja(slug):
         conn.close()
 
 
+@bp.route('/api/caja/<slug>/cajeros', methods=['GET'])
 @bp.route('/api/tienda/<slug>/cajeros', methods=['GET'])
 def api_tienda_cajeros_listar(slug):
     if 'usuario_id' not in session:
@@ -2421,12 +2498,14 @@ def api_tienda_cajeros_listar(slug):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
         cajeros = conn.execute(
-            "SELECT id, nombre, pin, activo FROM tienda_cajeros WHERE tienda_id = %s ORDER BY id",
-            (tienda['id'],)
+            "SELECT id, nombre, pin, activo FROM tienda_cajeros WHERE "
+            "(tienda_id = %s OR restaurante_id = %s) ORDER BY id",
+            (negocio['id'] if negocio['tipo_negocio'] == 'tienda' else None,
+             negocio['id'] if negocio['tipo_negocio'] == 'restaurante' else None)
         ).fetchall()
         return jsonify({'ok': True, 'cajeros': [dict(c) for c in cajeros]})
     except Exception as e:
@@ -2435,6 +2514,7 @@ def api_tienda_cajeros_listar(slug):
         conn.close()
 
 
+@bp.route('/api/caja/<slug>/cajero', methods=['POST'])
 @bp.route('/api/tienda/<slug>/cajero', methods=['POST'])
 def api_tienda_cajero_crear(slug):
     if 'usuario_id' not in session:
@@ -2448,10 +2528,17 @@ def api_tienda_cajero_crear(slug):
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        if conn.execute("SELECT id FROM tienda_cajeros WHERE tienda_id = %s AND pin = %s", (tienda['id'], pin)).fetchone():
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        dup = conn.execute(
+            "SELECT id FROM tienda_cajeros WHERE "
+            "(tienda_id = %s OR restaurante_id = %s) AND pin = %s",
+            (negocio['id'] if negocio['tipo_negocio'] == 'tienda' else None,
+             negocio['id'] if negocio['tipo_negocio'] == 'restaurante' else None,
+             pin)
+        ).fetchone()
+        if dup:
             return jsonify({'ok': False, 'error': 'Ya existe un cajero con ese PIN'}), 409
         tercero = conn.execute("SELECT id, nombre FROM terceros WHERE telefono = %s", (telefono,)).fetchone()
         if not tercero:
@@ -2462,8 +2549,10 @@ def api_tienda_cajero_crear(slug):
         tercero_id = tercero['id']
         nombre     = nombre_custom or tercero['nombre']
         cajero = conn.execute(
-            "INSERT INTO tienda_cajeros (tienda_id, tercero_id, nombre, pin) VALUES (%s,%s,%s,%s) RETURNING id",
-            (tienda['id'], tercero_id, nombre, pin)
+            "INSERT INTO tienda_cajeros (tienda_id, restaurante_id, tercero_id, nombre, pin) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+            (negocio['id'] if negocio['tipo_negocio'] == 'tienda' else None,
+             negocio['id'] if negocio['tipo_negocio'] == 'restaurante' else None,
+             tercero_id, nombre, pin)
         ).fetchone()
         conn.commit()
         return jsonify({'ok': True, 'id': cajero['id'], 'nombre': nombre, 'tercero_id': tercero_id})
@@ -2477,18 +2566,22 @@ def api_tienda_cajero_crear(slug):
         conn.close()
 
 
+@bp.route('/api/caja/<slug>/cajero/<int:cajero_id>/toggle', methods=['POST'])
 @bp.route('/api/tienda/<slug>/cajero/<int:cajero_id>/toggle', methods=['POST'])
 def api_tienda_cajero_toggle(slug, cajero_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
         conn.execute(
-            "UPDATE tienda_cajeros SET activo = NOT activo WHERE id = %s AND tienda_id = %s",
-            (cajero_id, tienda['id'])
+            "UPDATE tienda_cajeros SET activo = NOT activo WHERE id = %s AND "
+            "(tienda_id = %s OR restaurante_id = %s)",
+            (cajero_id,
+             negocio['id'] if negocio['tipo_negocio'] == 'tienda' else None,
+             negocio['id'] if negocio['tipo_negocio'] == 'restaurante' else None)
         )
         conn.commit()
         nuevo = conn.execute("SELECT activo FROM tienda_cajeros WHERE id = %s", (cajero_id,)).fetchone()
@@ -2499,16 +2592,23 @@ def api_tienda_cajero_toggle(slug, cajero_id):
         conn.close()
 
 
+@bp.route('/api/caja/<slug>/cajero/<int:cajero_id>', methods=['DELETE'])
 @bp.route('/api/tienda/<slug>/cajero/<int:cajero_id>', methods=['DELETE'])
 def api_tienda_cajero_eliminar(slug, cajero_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
-        tienda = conn.execute("SELECT id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
-        if not tienda:
-            return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
-        conn.execute("DELETE FROM tienda_cajeros WHERE id = %s AND tienda_id = %s", (cajero_id, tienda['id']))
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        conn.execute(
+            "DELETE FROM tienda_cajeros WHERE id = %s AND "
+            "(tienda_id = %s OR restaurante_id = %s)",
+            (cajero_id,
+             negocio['id'] if negocio['tipo_negocio'] == 'tienda' else None,
+             negocio['id'] if negocio['tipo_negocio'] == 'restaurante' else None)
+        )
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:

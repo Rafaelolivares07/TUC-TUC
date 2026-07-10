@@ -1,0 +1,279 @@
+Manual Usuario Regulador Carga Solar PWM    10A, 20A, 30A 
+L
+ea detenidamente este manual antes de utilizar el regulador. 
+1. Instrucciones de seguridad.
+1.1. Mantenga su instalación lejos de cualquier dispositivo inflamable o explosivo, gases corrosivos, polvo, etc.
+1.2. Proteja el regulador de la luz solar directa y de la lluvia.
+1.3. Prevenga la ubicación del regulador para que no quede expuesta a líquidos o ambientes húmedos.
+1.4. No desmonte el regulador.
+1.
+5. No lo apoye sobre la batería. Su cuerpo metálico puede cortocircuitar los bornes de la misma.
+1.6. No toque los terminales o el cuerpo metálico con las manos húmedas.
+2. Introducción de producto.
+2.1. Propósito
+Esta gama de reguladores forma parte de una familia de controladores de carga de tipo PWM con avanzadas funciones 
+de configuración y monitorización. Su diseño permite una instalación rápida y sencilla. Una carga y descarga 
+optimizada prolonga la vida de las baterías de un modo considerable. Utilice siempre un controlador de carga para 
+proteger la vida de sus baterías. Los parámetros de carga se muestran de manera explícita en la pantalla LCD.  
+2.2. Funciones 
+2.2.1. Carga multi-etapas PWM. 
+2.2.2. Ajustes predefinidos para 3 tecnologías de baterías de plomo. 
+2.2.3. Detección automática o manual del voltaje de trabajo de baterías. 
+2.2.4. Parámetros ajustables de carga y descarga. 
+2.2.5. Carga con compensación de temperatura. 
+2.2.6. Puerto opcional de comunicaciones (no incluido). 
+2.2.7. Protección para conexión inversa de panel y sobre-corriente de entrada. 
+2.2.8. Protección por bajo voltaje, exceso de voltaje, conexión inversa de batería y descarga inversa de batería.  
+2.2.9. Protección para sobre-corriente y cortocircuito en salida de consumo CC.  
+2.2.10. Protección interna por temperatura elevada. 
+3. Instalación
+3.1. Tamaño y esquema unifilar.
+
+ 
+3.2. Procedimiento de instalación. 
+Por favor, asegúrese de que la batería y el panel solar están desconectados de los cables que va a utilizar 
+para conectar en el regulador. El contacto entre los cables positivo y negativo provocará un cortocircuito si 
+éstos están conectados a la batería o al panel. Una vez se conecten al regulador podrá conectar los otros 
+extremos del cableado a baterías y a paneles en este mismo orden.  
+Deje un espacio disponible de al menos 15cm por cada lado para poder disipar el calor del propio regulador.  
+Utilice cableado de un mínimo de 4mm² siendo recomendable utilizar cable solar de 6mm². 
+ 
+3.2.1. Asegúrese que el lugar de instalación cumple con los mínimos requerimientos de seguridad. 
+3.2.2. Asegúrese de que el voltaje de baterías es el mismo que el de paneles y ambos son compatibles con este regulador. 
+3.2.3. Conecte primero la batería al regulador. Podrá ver que la pantalla LCD se enciende. Si no es así acuda al punto 5.2. 
+3.2.4. Conecte posteriormente el panel solar al regulador. Si hay producción el controlador empezará la carga de la batería 
+inmediatamente y lo podrá observar sobre la propia pantalla. 
+3.2.5. Conecte las cargas en corriente continua en caso de disponer de ellas. 
+3.2.6. Si tiene que desconectar el regulador por cualquier motivo, debe hacerlo en orden inverso. Primero los consumos en 
+corriente continua, posteriormente paneles solares y por último las baterías. 
+ 
+4. Instrucciones de uso. 
+4.1. Símbolos en pantalla. 
+1-LVR, ABSORB, LVD, FLOAT, P (estado de carga de la batería) 
+2-Día y noche. 
+3-Tipo de batería seleccionada (FLD, GEL, SLD). Si no aparece, la batería seleccionada es USR. 
+4-Cargando desde panel. 
+5- Dibujo batería. 
+6- Descargando. 
+7- Temporizador. 
+8- Estado de carga estimado. 
+9- Estado de las cargas. 
+10- Unidad de medida. 
+11- Área de información numérica. 
+ 
+4.2. Menús pantalla LCD. 
+4.2.1. Secuencia de arranque. 
+ 
+ 
+ 
+• Se iluminan todos los ítems de la pantalla para poder ver que funciona correctamente. 
+• Voltaje de la batería detectado por el controlador. 
+• Intensidad de carga o de descarga máxima del sistema. 
+ 
+4.2.2. Secuencia principal de información en pantalla. 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+Voltaje del sistema Intensidad de carga Versión firmware 
+Voltaje de batería Temperatura Corriente carga Corriente descarga 
+Ah carga 
+acumulados 
+Ah descarga 
+acumulados 
+Código de error 
+ 
+• Para ir avanzando entre las pantallas hay que pulsar el botón izquierdo. Una vez lleguemos a la última pantalla, volveremos a la 
+primera de las opciones de visualización. 
+• En la pantalla “voltaje de batería” o “código de error” si pulsamos el botón derecho habilitaremos y deshabilitaremos la salida 
+de consumo en corriente continua. 
+• En cualquiera de las pantallas de Ah acumulados, si pulsamos más de 3 segundos seguidos el botón izquierdo, el contador se 
+reiniciará. 
+• En la pantalla “voltaje de batería” si pulsamos ambos botones simultáneamente de manera prolongada podremos resetear el 
+regulador a sus ajustes de fábrica. 
+ 
+4.2.3. Batería 
+ 
+ 
+ 
+• En el menú principal estando en “voltaje de batería”, si pulsamos durante más de 3 segundos el botón izquierdo accederemos a 
+éste submenú. Mediante pulsaciones cortas del botón izquierdo avanzaremos entre estas 3 opciones. Si hacemos una pulsación 
+corta del botón derecho, podremos cambiar los valores de cada una de estas opciones. Para guardar los cambios haremos de 
+nuevo una pulsación larga del botón izquierdo. Si no tocamos nada en 20 segundos, saldremos al menú principal sin guardar 
+cambios. 
+• Se pueden establecer 4 tipos de batería para usar los voltajes predefinidos del fabricante (GEL, SLD, FLD y USR) Sólo en caso de 
+elegir USR podremos cambiar los voltajes de cada etapa de carga a nuestro gusto. 
+• En la detección de batería puede estar en AUO (detección automática) o bien establecer nosotros manualmente el voltaje de 
+trabajo de nuestra batería. 
+• El código de comunicaciones no tiene efecto puesto que el regulador no dispone de dicho puerto. 
+El regulador se reinicia automáticamente cuando se cambia la tecnología de baterías o el voltaje del sistema. 
+ 
+4.2.4. Ajustes de carga 
+ 
+ 
+ 
+• En el menú principal estando en “corriente carga”, si pulsamos durante más de 3 segundos el botón izquierdo accederemos a 
+éste submenú. Mediante pulsaciones cortas del botón izquierdo avanzaremos entre estas 3 opciones. Si hacemos una pulsación 
+corta del botón derecho, podremos cambiar los valores de cada una de estas opciones. Para guardar los cambios haremos de 
+nuevo una pulsación larga del botón izquierdo. Si no tocamos nada en 20 segundos, saldremos al menú principal sin guardar 
+cambios. 
+• Sólo se pueden realizar cambios en cada uno de estos apartados si hemos elegido el tipo de batería USR. 
+ 
+4.2.5. Salida de consumo CC 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+• En el menú principal estando en “corriente carga”, si pulsamos durante más de 3 segundos el botón izquierdo accederemos a 
+este submenú. Mediante pulsaciones cortas del botón izquierdo avanzaremos entre estas 3 opciones. Si hacemos una pulsación 
+corta del botón derecho, podremos cambiar los valores de cada una de estas opciones. Para guardar los cambios haremos de 
+nuevo una pulsación larga del botón izquierdo. Si no tocamos nada en 20 segundos, saldremos al menú principal sin guardar 
+cambios. 
+Voltaje de batería Tipo batería Tipo detección batería Código comunicación 
+Corriente carga Voltaje flotación Voltaje absorción Voltaje ecualización 
+Voltaje flotación 
+Corriente descarga Voltaje reconexión Modo trabajo Voltaje desconexión 
+Momento encendido 
+nocturno 
+Tiempo de actividad 
+nocturna 
+Activación previa al 
+amanecer 
+ 
+ 
+• Modos de trabajo de la salida de consumo CC. 
+ 
+Código Modo de trabajo de consumo en CC 
+L00 Modo normal con activación manual. 
+L01 Control automático con activación tras anochecer y antes de amanecer. 
+L02 Control automático en iluminación. 
+Los diferentes modos de trabajo tienen configuraciones que se pueden ajustar en el submenú anterior. 
+ 
+5. Fallos 
+5.1. Códigos de error y solución a los mismos. 
+Código de error Causa Solución 
+E01 Batería con exceso de descarga Recargue la batería manualmente (sin el regulador) 
+E02 Exceso de consumo en cargas CC – se desconecta 
+esta salida 
+Reducir consumos en la conexión CC y reconectar pulsando el botón 
+izquierdo. O bien esperar 10 minutos para la reconexión automática. 
+E03 Cortocircuito en cargas CC – se desconecta esta 
+salida 
+Corregir el cortocircuito y reconectar pulsando el botón izquierdo. O 
+bien esperar 10 minutos para la reconexión automática. 
+E04 Fallo en la detección de la batería Asegúrese de una conexión correcta y firme entre regulador y 
+batería. Que la carga de la batería no sea excesivamente baja. 
+Asegúrese de que si existe otro regulador sobre la misma batería, el 
+voltaje del mismo no sea excesivamente alto. 
+E05 Carga de batería interrumpida debida a un exceso de 
+temperatura 
+Permita que el regulador baje su temperatura y se reinicie 
+automáticamente. 
+E06 Sobre-voltaje en paneles Asegúrese de que el voltaje en circuito abierto no es demasiado 
+elevado. Reduzca las conexiones en serie de paneles. 
+E07 Carga de batería interrumpida debido a un exceso de 
+corriente en paneles 
+Compruebe la potencia de los paneles solares. Reduzca la potencia 
+conectada y espere al reinicio automático del regulador 
+ 
+Fallo Corrección 
+No hay señal ni puesta en marcha de la pantalla Asegúrese de que la batería no está conectada al revés. 
+Asegúrese de que la conexión entre batería y regulador es correcta. 
+Asegúrese de que si tiene protecciones entre ambos componentes estén en la 
+posición correcta (desconectador, fusible, etc.) 
+No hay carga hacia la batería Asegúrese de que el panel no está conectado al revés. 
+Asegúrese de que el cableado entre panel y batería no está interrumpido y que 
+llega tensión a los extremos que están en el regulador. 
+La salida de consumo no funciona Asegúrese de que la conexión en cargas CC no está conectada al revés. 
+Asegúrese de que el controlador no tiene activada la protección por sobrecarga, 
+cortocircuito, sobre-voltaje o voltaje bajo. 
+La salida de consumo no se activa cuando la 
+hemos programado 
+Asegúrese de que el modo de salida de consumo está correctamente 
+configurado. 
+Asegúrese que el voltaje de batería no es excesivamente bajo. 
+La salida de consumo no se activa cuando 
+anochece con el modo automático nocturno 
+Asegúrese de que el modo de salida de consumo está correctamente 
+configurado. 
+Asegúrese de que el panel solar no recibe ningún tipo de iluminación de otras 
+fuentes. 
+ 
+6. Post-Venta 
+6.1. Garantía. 
+La garantía del fabricante cubre cualquier daño del regulador en los 2 primeros años de uso siempre que su mal 
+funcionamiento sea ajeno al usuario. Cualquier manipulación del aparato conllevará la anulación de la garantía. Todos 
+los fallos derivados de no seguir las instrucciones del presente manual conllevará la anulación de la garantía. Para 
+cualquier duda consulte con su punto de venta o comercial. 
+ 
+  
+ 
+ 
+7. Datos técnicos 
+Modelo 10A 12/24V 20A 12/24V 30A 12/24V 
+Entrada 
+Voltaje FV ≤50V 
+Intensidad nominal 10A 20A 30A 
+Salida 
+Voltaje sistema 12V/24V Auto 
+Desconexión por alto voltaje (HVD) 16.00V x1 / x2 
+Intensidad descarga nominal 10A 20A 30A 
+Autoconsumo ≤13mA 
+Caída de tensión circuito carga ≤0.21V ≤0.24V 
+Caída de tensión circuito descarga ≤0.12V ≤0.1V 
+Modo de carga PWM Multi-etapas (carga, absorción, flotación, ecualización) 
+Voltaje Carga Flotación 13.8V (13V~15V) x1 / x2 
+Voltaje Carga Absorción 
+2 horas duración 
+14.4V (13V~15V) x1 / x2 
+Voltaje Carga Ecualización 14.6V (13V~15.5V) x1 / x2 
+Protección Bajo Voltaje (LVD) 10.8V (10V~14V) x1 / x2 
+Reconexión Bajo Voltaje (LVR) 12.6V (10V~14V) x1 / x2 
+Salida USB 5V 1A 
+ 
+Características 
+físicas 
+Sección cableado 6mm² 10mm² 16mm² 
+Temperatura trabajo -20 ~ +50°C 
+Tamaño (L x W x H) 188 x 95 x 46.5mm 
+Peso neto 355g 
+ 
+ 
+Tipo de batería: 
+Tipo batería Voltaje de 
+flotación 
+Voltaje de 
+absorción 
+Tiempo de 
+absorción (h) 
+Voltaje de 
+ecualización 
+Tiempo de 
+ecualización (h) 
+Intervalo entre 
+ecualizaciones (días) 
+GEL 13.8 14.2 2 - - - 
+Sellada (SLD) 13.8 14.4 2 14.6 2 28 
+Plomo abierto (FLD) 13.8 14.6 2 14.8 2 28 
+Personalizada (USR) 13.8 14.4 2 14.6 2 28 
+ 
+Modo de carga 
+ 
+ 
+ 
+Modo de consumo 
+Voltaje  ecualización 
+Voltaje  absorción 
+Voltaje  flotación 
+modo iluminación nocturna 
+modo normal 
+modo iluminación nocturna con 
+activación automática horas después 
+del anochecer y antes del amanecer 

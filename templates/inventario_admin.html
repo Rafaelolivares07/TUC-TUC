@@ -219,11 +219,12 @@
             <th class="num">Precio</th>
             <th class="num">Costo</th>
             <th class="num">Stock</th>
+            <th class="num">Costo Total</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="tabla-productos">
-          <tr><td colspan="6" class="text-center text-gray-400 py-8">Cargando…</td></tr>
+          <tr><td colspan="7" class="text-center text-gray-400 py-8">Cargando…</td></tr>
         </tbody>
       </table>
     </div>
@@ -522,7 +523,7 @@ function abrirTarjetaInicialDesdeUrl() {
 function renderTablaProductos(lista) {
   const tb = document.getElementById('tabla-productos');
   if (!lista.length) {
-    tb.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">Sin productos</td></tr>';
+    tb.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">Sin productos</td></tr>';
     return;
   }
   tb.innerHTML = lista.map(p => `
@@ -532,6 +533,7 @@ function renderTablaProductos(lista) {
       <td class="num">${fmtMon(p.precio)}</td>
       <td class="num">${fmtMon(p.costo)}</td>
       <td class="num font-bold ${Number(p.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${fmt(p.stock)}</td>
+      <td class="num font-semibold text-gray-700">${fmtMon(Number(p.costo || 0) * Number(p.stock || 0))}</td>
       <td>
         <div class="flex gap-2 justify-end">
           <button onclick='abrirModalProducto(${JSON.stringify(p)})' title="Editar"

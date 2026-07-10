@@ -97,6 +97,8 @@ def _crear_tablas(conn):
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS proveedor_nombre VARCHAR(255)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS iva_total NUMERIC(14,2)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS documento_total NUMERIC(14,2)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS iva_valor NUMERIC(14,2) DEFAULT 0",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS recargo DECIMAL(10,2) DEFAULT 0",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
         "ALTER TABLE comprobantes_contables ADD COLUMN IF NOT EXISTS origen_tipo VARCHAR(50)",
@@ -295,7 +297,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                  tipo_documento=None, documento_numero=None,
                  documento_fecha=None, proveedor_id=None,
                  proveedor_nombre=None, iva_total=None,
-                 documento_total=None):
+                 documento_total=None, iva_pct=None, iva_valor=None):
     """Movimiento directo sobre un producto, sin pasar por tarjeta estándar."""
     signo  = Decimal('1') if tipo == 'entrada' else Decimal('-1')
     cantidad = Decimal(str(cantidad))
@@ -328,8 +330,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
              cantidad, stock_anterior, stock_nuevo, registrado_por, notas,
              valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo,
              tipo_documento, documento_numero, documento_fecha, proveedor_id,
-             proveedor_nombre, iva_total, documento_total)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             proveedor_nombre, iva_total, documento_total, iva_pct, iva_valor)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         negocio_id, producto_id,
         nombre_prod['nombre'] if nombre_prod else '',
@@ -343,7 +345,9 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         tipo_documento, documento_numero, documento_fecha, proveedor_id,
         proveedor_nombre,
         float(iva_total) if iva_total is not None else None,
-        float(documento_total) if documento_total is not None else None
+        float(documento_total) if documento_total is not None else None,
+        float(iva_pct) if iva_pct is not None else 0.0,
+        float(iva_valor) if iva_valor is not None else 0.0
     ))
 
     if saldo:
@@ -381,7 +385,7 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      tipo_documento=None, documento_numero=None,
                      documento_fecha=None, proveedor_id=None,
                      proveedor_nombre=None, iva_total=None,
-                     documento_total=None):
+                     documento_total=None, iva_pct=None, iva_valor=None):
     """Aplica entrada o salida según tarjeta estándar. Sin tarjeta → 1:1 sobre sí mismo."""
     componentes = conn.execute(
         "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
@@ -398,7 +402,8 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      registrado_por, valor_unitario, notas, bodega,
                      referencia_id, referencia_tipo, tipo_documento,
                      documento_numero, documento_fecha, proveedor_id,
-                     proveedor_nombre, iva_total, documento_total)
+                     proveedor_nombre, iva_total, documento_total,
+                     iva_pct, iva_valor)
 
 
 def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
@@ -417,8 +422,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     documento_fecha = _fecha_o_none(data.get('documento_fecha') or data.get('fecha_documento'))
     proveedor_id = _int_o_none(data.get('proveedor_id') or data.get('tercero_id'))
     proveedor_nombre = _txt(data.get('proveedor_nombre'))
-    iva_total = _dec(data.get('iva') or data.get('iva_total'))
     subtotal_compra = Decimal('0')
+    iva_total = Decimal('0')
     advertencias = []
 
     if proveedor_id and not proveedor_nombre:
@@ -430,6 +435,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
         if not prov:
             return {'ok': False, 'error': 'Proveedor no encontrado'}, 400
 
+    # Primer ciclo: validación y cálculo de subtotales e IVA acumulado
+    lineas_procesadas = []
     for ln in lineas:
         prod_id = int(ln['producto_id'])
         prod = conn.execute(
@@ -446,19 +453,37 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                 'error': f'"{prod["nombre"]}" es un ensamble - no se puede comprar directamente. '
                          f'Compre sus componentes: {nombres}'
             }, 400
-        subtotal_compra += _dec(ln.get('cantidad')) * _dec(ln.get('valor_unitario'))
+
+        cant = _dec(ln.get('cantidad'))
+        vu = _dec(ln.get('valor_unitario'))
+        iva_pct = _dec(ln.get('iva_pct') or '0')
+
+        line_subtotal = cant * vu
+        line_iva_val = line_subtotal * (iva_pct / Decimal('100'))
+
+        subtotal_compra += line_subtotal
+        iva_total += line_iva_val
+
+        lineas_procesadas.append({
+            'producto_id': prod_id,
+            'cantidad': cant,
+            'valor_unitario': vu,
+            'iva_pct': iva_pct,
+            'iva_valor': line_iva_val
+        })
 
     documento_total = subtotal_compra + iva_total
 
-    for ln in lineas:
+    # Segundo ciclo: registrar movimientos
+    for ln in lineas_procesadas:
         _aplicar_tarjeta(
             conn, negocio_id,
-            producto_id=int(ln['producto_id']),
+            producto_id=ln['producto_id'],
             cantidad=float(ln['cantidad']),
             tipo='entrada',
             motivo=motivo,
             registrado_por=usuario_id,
-            valor_unitario=float(ln.get('valor_unitario') or 0) or None,
+            valor_unitario=float(ln['valor_unitario']) if ln['valor_unitario'] else None,
             notas=notas,
             referencia_id=data.get('referencia_id'),
             referencia_tipo=data.get('referencia_tipo'),
@@ -469,6 +494,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             proveedor_nombre=proveedor_nombre,
             iva_total=iva_total,
             documento_total=documento_total,
+            iva_pct=ln['iva_pct'],
+            iva_valor=ln['iva_valor']
         )
 
     if _asiento_auto:

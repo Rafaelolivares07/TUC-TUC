@@ -232,7 +232,7 @@
   <!-- ── TAB ENTRADAS ──────────────────────────────────────────────── -->
   <div id="tab-entradas" class="hidden bg-white rounded-2xl shadow p-5">
     <h2 class="font-bold text-gray-700 mb-4">Registrar entrada de mercancía</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
       <div>
         <label>Motivo</label>
         <select id="entrada-motivo">
@@ -241,10 +241,6 @@
           <option value="devolucion">Devolución</option>
           <option value="inicial">Inventario inicial</option>
         </select>
-      </div>
-      <div>
-        <label>Notas (opcional)</label>
-        <input id="entrada-notas" type="text" placeholder="">
       </div>
       <div>
         <label>Tipo doc.</label>
@@ -264,21 +260,23 @@
         <label>Fecha documento</label>
         <input id="entrada-fecha-doc" type="date">
       </div>
-      <div>
+      <div class="sm:col-span-2">
         <label>Proveedor</label>
         <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor">
       </div>
-      <div>
-        <label>IVA</label>
-        <input id="entrada-iva" type="number" min="0" step="0.01" value="0" oninput="calcularTotalesEntrada()">
+      <div class="sm:col-span-2">
+        <label>Notas (opcional)</label>
+        <input id="entrada-notas" type="text" placeholder="">
       </div>
     </div>
 
     <div class="mb-3">
       <div class="grid grid-cols-12 gap-2 mb-1 px-1">
-        <span class="col-span-5 text-xs font-bold text-gray-400 uppercase">Producto</span>
-        <span class="col-span-3 text-xs font-bold text-gray-400 uppercase">Cantidad</span>
-        <span class="col-span-3 text-xs font-bold text-gray-400 uppercase">Costo unit.</span>
+        <span class="col-span-3 text-xs font-bold text-gray-400 uppercase">Producto</span>
+        <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Cantidad</span>
+        <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Costo unit.</span>
+        <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Total Línea</span>
+        <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">IVA %</span>
         <span class="col-span-1"></span>
       </div>
       <div id="entrada-lineas" class="space-y-2"></div>
@@ -674,16 +672,26 @@ function agregarLineaEntrada() {
   const div = document.createElement('div');
   div.className = 'grid grid-cols-12 gap-2 items-end';
   div.innerHTML = `
-    <div class="col-span-5 relative">
+    <div class="col-span-3 relative">
       <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off">
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
       <input type="hidden" id="ent-id-${idx}">
     </div>
-    <div class="col-span-3">
-      <input type="number" id="ent-cant-${idx}" placeholder="Cant." min="0.0001" step="0.0001" value="1" oninput="calcularTotalesEntrada()">
+    <div class="col-span-2">
+      <input type="number" id="ent-cant-${idx}" placeholder="Cant." min="0.0001" step="0.0001" value="1" oninput="calcularCostoFila(${idx}, 'cant')">
     </div>
-    <div class="col-span-3">
-      <input type="number" id="ent-vu-${idx}" placeholder="Costo" min="0" step="0.01" value="" oninput="calcularTotalesEntrada()">
+    <div class="col-span-2">
+      <input type="number" id="ent-vu-${idx}" placeholder="Costo" min="0" step="0.0001" value="" oninput="calcularCostoFila(${idx}, 'vu')">
+    </div>
+    <div class="col-span-2">
+      <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="" oninput="calcularCostoFila(${idx}, 'total')">
+    </div>
+    <div class="col-span-2">
+      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full">
+        <option value="0">0%</option>
+        <option value="5">5%</option>
+        <option value="19" selected>19%</option>
+      </select>
     </div>
     <div class="col-span-1 flex justify-center">
       <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
@@ -692,7 +700,54 @@ function agregarLineaEntrada() {
   `;
   cont.appendChild(div);
   entradaLineas.push(div);
-  setupAC(`ent-ac-${idx}`, `ent-ac-list-${idx}`, `ent-id-${idx}`, () => productos, null);
+  
+  setupAC(`ent-ac-${idx}`, `ent-ac-list-${idx}`, `ent-id-${idx}`, () => productos, (selected) => {
+    const prod = productos.find(p => p.id === selected.id);
+    if (prod) {
+      document.getElementById(`ent-vu-${idx}`).value = prod.costo || '';
+      
+      const pct = Math.round(prod.iva_pct || 0);
+      const select = document.getElementById(`ent-iva-pct-${idx}`);
+      if (select) {
+        if ([0, 5, 19].includes(pct)) {
+          select.value = pct.toString();
+        } else {
+          select.value = '19';
+        }
+      }
+      
+      calcularCostoFila(idx, 'vu');
+    }
+  });
+  
+  calcularTotalesEntrada();
+}
+
+function calcularCostoFila(idx, target) {
+  const cantInput = document.getElementById(`ent-cant-${idx}`);
+  const vuInput = document.getElementById(`ent-vu-${idx}`);
+  const totalInput = document.getElementById(`ent-total-${idx}`);
+  
+  if (!cantInput || !vuInput || !totalInput) return;
+  
+  const cant = parseFloat(cantInput.value) || 0;
+  
+  if (target === 'cant' || target === 'vu') {
+    const vu = parseFloat(vuInput.value) || 0;
+    if (cant > 0 && vu > 0) {
+      totalInput.value = (cant * vu).toFixed(2);
+    } else {
+      totalInput.value = '';
+    }
+  } else if (target === 'total') {
+    const total = parseFloat(totalInput.value) || 0;
+    if (cant > 0 && total > 0) {
+      vuInput.value = (total / cant).toFixed(4);
+    } else {
+      vuInput.value = '';
+    }
+  }
+  
   calcularTotalesEntrada();
 }
 
@@ -700,29 +755,36 @@ function calcularTotalesEntrada() {
   const cont = document.getElementById('entrada-lineas');
   const divs = cont.querySelectorAll('.grid');
   let subtotal = 0;
+  let ivaTotal = 0;
   
   divs.forEach(div => {
     const cantInput = div.querySelector('input[id^="ent-cant-"]');
     const vuInput = div.querySelector('input[id^="ent-vu-"]');
-    if (cantInput && vuInput) {
+    const ivaSelect = div.querySelector('select[id^="ent-iva-pct-"]');
+    if (cantInput && vuInput && ivaSelect) {
       const cant = parseFloat(cantInput.value) || 0;
       const vu = parseFloat(vuInput.value) || 0;
-      subtotal += cant * vu;
+      const ivaPct = parseFloat(ivaSelect.value) || 0;
+      
+      const lineSubtotal = cant * vu;
+      const lineIva = lineSubtotal * (ivaPct / 100);
+      
+      subtotal += lineSubtotal;
+      ivaTotal += lineIva;
     }
   });
   
-  const ivaInput = document.getElementById('entrada-iva');
-  const iva = parseFloat(ivaInput ? ivaInput.value : 0) || 0;
-  const total = subtotal + iva;
+  const total = subtotal + ivaTotal;
   
   const subtotalEl = document.getElementById('entrada-subtotal-val');
   const ivaEl = document.getElementById('entrada-iva-val');
   const totalEl = document.getElementById('entrada-total-val');
   
   if (subtotalEl) subtotalEl.textContent = `$${subtotal.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (ivaEl) ivaEl.textContent = `$${iva.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (ivaEl) ivaEl.textContent = `$${ivaTotal.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (totalEl) totalEl.textContent = `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
 async function registrarEntrada() {
   const motivo = document.getElementById('entrada-motivo').value;
   const notas  = document.getElementById('entrada-notas').value.trim() || null;
@@ -730,24 +792,33 @@ async function registrarEntrada() {
   const numero_documento = document.getElementById('entrada-num-doc').value.trim() || null;
   const fecha_documento = document.getElementById('entrada-fecha-doc').value || null;
   const proveedor_nombre = document.getElementById('entrada-proveedor').value.trim() || null;
-  const iva = parseFloat(document.getElementById('entrada-iva').value) || 0;
   const cont   = document.getElementById('entrada-lineas');
   const divs   = [...cont.querySelectorAll('.grid')];
   const lineas = [];
+  let ivaAcumulado = 0;
+
   for (const [i, div] of divs.entries()) {
-    const inputs = div.querySelectorAll('input[type=hidden], input[type=number]');
-    const id = div.querySelector('input[type=hidden]').value;
-    const cant = parseFloat(div.querySelectorAll('input[type=number]')[0].value);
-    const vu   = parseFloat(div.querySelectorAll('input[type=number]')[1].value) || null;
+    const id = div.querySelector('input[id^="ent-id-"]').value;
+    const cant = parseFloat(div.querySelector('input[id^="ent-cant-"]').value);
+    const vu   = parseFloat(div.querySelector('input[id^="ent-vu-"]').value) || null;
+    const ivaPct = parseFloat(div.querySelector('select[id^="ent-iva-pct-"]').value) || 0;
+
     if (!id || !cant) { toast(`Línea ${i+1}: producto y cantidad requeridos`, false); return; }
-    lineas.push({producto_id: parseInt(id), cantidad: cant, valor_unitario: vu});
+
+    const lineSubtotal = cant * (vu || 0);
+    const lineIva = lineSubtotal * (ivaPct / 100);
+    ivaAcumulado += lineIva;
+
+    lineas.push({producto_id: parseInt(id), cantidad: cant, valor_unitario: vu, iva_pct: ivaPct});
   }
+
   if (!lineas.length) { toast('Agrega al menos una línea', false); return; }
+
   const r = await fetch(`/api/inventario/${NEGOCIO_ID}/entrada`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       lineas, motivo, notas, tipo_documento, numero_documento,
-      fecha_documento, proveedor_nombre, iva
+      fecha_documento, proveedor_nombre, iva: ivaAcumulado
     })
   });
   const d = await r.json();
@@ -757,7 +828,6 @@ async function registrarEntrada() {
     entradaLineas = [];
     document.getElementById('entrada-num-doc').value = '';
     document.getElementById('entrada-proveedor').value = '';
-    document.getElementById('entrada-iva').value = '0';
     calcularTotalesEntrada();
     cargarProductos();
   } else {

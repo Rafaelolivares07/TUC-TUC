@@ -836,7 +836,7 @@ def _obtener_negocio_por_slug(conn, slug):
     if tienda:
         return dict(tienda)
     restaurante = conn.execute(
-        "SELECT id, nombre, 'restaurante' as tipo_negocio, tercero_id, NULL as color_primario, NULL as imagen_header, telegram_chat_id, admin_id FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        "SELECT id, nombre, 'restaurante' as tipo_negocio, tercero_id, NULL as color_primario, NULL as imagen_header, NULL as telegram_chat_id, admin_id FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
     ).fetchone()
     if restaurante:
         res = dict(restaurante)

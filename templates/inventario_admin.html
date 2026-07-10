@@ -270,7 +270,7 @@
       </div>
       <div>
         <label>IVA</label>
-        <input id="entrada-iva" type="number" min="0" step="0.01" value="0">
+        <input id="entrada-iva" type="number" min="0" step="0.01" value="0" oninput="calcularTotalesEntrada()">
       </div>
     </div>
 
@@ -288,6 +288,19 @@
             class="w-full py-2 border-2 border-dashed border-gray-300 rounded-xl text-sm font-semibold text-gray-400 hover:border-rose-400 hover:text-rose-500 mb-5">
       + Agregar línea
     </button>
+
+    <!-- Totales del Documento en tiempo real -->
+    <div class="bg-gray-50 p-4 rounded-xl mb-4 border border-gray-200 flex flex-wrap justify-between items-center gap-3">
+      <div class="text-sm font-medium text-gray-600">
+        Subtotal: <span id="entrada-subtotal-val" class="font-bold text-gray-800">$0.00</span>
+      </div>
+      <div class="text-sm font-medium text-gray-600">
+        IVA: <span id="entrada-iva-val" class="font-bold text-gray-800">$0.00</span>
+      </div>
+      <div class="text-base font-bold text-gray-700">
+        Total Documento: <span id="entrada-total-val" class="text-rose-600 font-extrabold text-lg">$0.00</span>
+      </div>
+    </div>
 
     <div class="flex justify-end">
       <button onclick="registrarEntrada()"
@@ -667,19 +680,48 @@ function agregarLineaEntrada() {
       <input type="hidden" id="ent-id-${idx}">
     </div>
     <div class="col-span-3">
-      <input type="number" id="ent-cant-${idx}" placeholder="Cant." min="0.0001" step="0.0001" value="1">
+      <input type="number" id="ent-cant-${idx}" placeholder="Cant." min="0.0001" step="0.0001" value="1" oninput="calcularTotalesEntrada()">
     </div>
     <div class="col-span-3">
-      <input type="number" id="ent-vu-${idx}" placeholder="Costo" min="0" step="0.01" value="">
+      <input type="number" id="ent-vu-${idx}" placeholder="Costo" min="0" step="0.01" value="" oninput="calcularTotalesEntrada()">
     </div>
     <div class="col-span-1 flex justify-center">
-      <button onclick="this.closest('.grid').remove()"
+      <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
               class="text-red-400 hover:text-red-600 font-bold text-lg">×</button>
     </div>
   `;
   cont.appendChild(div);
   entradaLineas.push(div);
   setupAC(`ent-ac-${idx}`, `ent-ac-list-${idx}`, `ent-id-${idx}`, () => productos, null);
+  calcularTotalesEntrada();
+}
+
+function calcularTotalesEntrada() {
+  const cont = document.getElementById('entrada-lineas');
+  const divs = cont.querySelectorAll('.grid');
+  let subtotal = 0;
+  
+  divs.forEach(div => {
+    const cantInput = div.querySelector('input[id^="ent-cant-"]');
+    const vuInput = div.querySelector('input[id^="ent-vu-"]');
+    if (cantInput && vuInput) {
+      const cant = parseFloat(cantInput.value) || 0;
+      const vu = parseFloat(vuInput.value) || 0;
+      subtotal += cant * vu;
+    }
+  });
+  
+  const ivaInput = document.getElementById('entrada-iva');
+  const iva = parseFloat(ivaInput ? ivaInput.value : 0) || 0;
+  const total = subtotal + iva;
+  
+  const subtotalEl = document.getElementById('entrada-subtotal-val');
+  const ivaEl = document.getElementById('entrada-iva-val');
+  const totalEl = document.getElementById('entrada-total-val');
+  
+  if (subtotalEl) subtotalEl.textContent = `$${subtotal.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (ivaEl) ivaEl.textContent = `$${iva.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (totalEl) totalEl.textContent = `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 async function registrarEntrada() {
   const motivo = document.getElementById('entrada-motivo').value;
@@ -716,6 +758,7 @@ async function registrarEntrada() {
     document.getElementById('entrada-num-doc').value = '';
     document.getElementById('entrada-proveedor').value = '';
     document.getElementById('entrada-iva').value = '0';
+    calcularTotalesEntrada();
     cargarProductos();
   } else {
     toast(d.error, false);

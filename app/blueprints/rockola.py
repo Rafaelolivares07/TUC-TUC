@@ -1564,7 +1564,6 @@ def debug_disk():
     if os.name != 'nt':
         for name in os.listdir('/'):
             path = os.path.join('/', name)
-            # Skip directories that can hang or represent virtual filesystems
             if name in ('sys', 'proc', 'dev', 'run', 'mnt', 'media', 'lost+found', 'tmp', 'boot'):
                 continue
             if os.path.isdir(path) and not os.path.islink(path):
@@ -1588,6 +1587,51 @@ def debug_disk():
         free_percent=(free / total) * 100,
         root_dirs=root_dirs
     )
+
+
+@bp.route('/debug/cleanup', methods=['POST'])
+def debug_cleanup():
+    import subprocess
+    import shutil
+    import os
+    
+    results = {}
+    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    
+    # 1. Delete PyInstaller build folders
+    build_dir = os.path.join(app_dir, 'build')
+    ra_build_dir = os.path.join(app_dir, 'remote-assist', 'build')
+    
+    for folder in (build_dir, ra_build_dir):
+        if os.path.exists(folder):
+            try:
+                shutil.rmtree(folder)
+                results[f'delete_{os.path.basename(folder)}'] = 'success'
+            except Exception as e:
+                results[f'delete_{os.path.basename(folder)}'] = f'error: {e}'
+                
+    # 2. Run git gc
+    try:
+        cmd = subprocess.run(['git', 'gc', '--prune=now'], cwd=app_dir, capture_output=True, text=True, timeout=60)
+        results['git_gc'] = f'stdout: {cmd.stdout.strip()}, stderr: {cmd.stderr.strip()}'
+    except Exception as e:
+        results['git_gc'] = f'error: {e}'
+        
+    # 3. Clean APT cache
+    try:
+        cmd = subprocess.run(['sudo', 'apt-get', 'clean'], capture_output=True, text=True, timeout=30)
+        results['apt_clean'] = f'code: {cmd.returncode}'
+    except Exception as e:
+        results['apt_clean'] = f'error: {e}'
+        
+    # 4. Vacuum journald logs
+    try:
+        cmd = subprocess.run(['sudo', 'journalctl', '--vacuum-time=3d'], capture_output=True, text=True, timeout=30)
+        results['journal_vacuum'] = f'stdout: {cmd.stdout.strip()}'
+    except Exception as e:
+        results['journal_vacuum'] = f'error: {e}'
+        
+    return jsonify(results)
 
 
 def register_events(socketio):

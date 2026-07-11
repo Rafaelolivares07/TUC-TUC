@@ -1,7 +1,7 @@
 {
-  "commit": "9b4c14d",
+  "commit": "ed2d424",
   "estado": "live",
-  "iniciado": "2026-07-11T14:09:52.049587",
-  "mensaje": "temp: diagnostic route for file sizes",
-  "live_at": "2026-07-11T14:10:14.508735"
+  "iniciado": "2026-07-11T14:11:39.862534",
+  "mensaje": "temp: update diagnostic route to list root dir sizes",
+  "live_at": "2026-07-11T14:12:02.695848"
 }

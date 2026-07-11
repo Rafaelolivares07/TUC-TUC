@@ -1589,7 +1589,7 @@ def debug_disk():
     )
 
 
-@bp.route('/debug/cleanup', methods=['POST'])
+@bp.route('/debug/cleanup', methods=['GET', 'POST'])
 def debug_cleanup():
     import subprocess
     import shutil

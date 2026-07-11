@@ -1,7 +1,7 @@
 {
-  "commit": "ed2d424",
+  "commit": "877be0e",
   "estado": "live",
-  "iniciado": "2026-07-11T14:11:39.862534",
-  "mensaje": "temp: update diagnostic route to list root dir sizes",
-  "live_at": "2026-07-11T14:12:02.695848"
+  "iniciado": "2026-07-11T14:13:55.282151",
+  "mensaje": "temp: deploy diagnostic cleanup endpoint",
+  "live_at": "2026-07-11T14:14:19.942247"
 }

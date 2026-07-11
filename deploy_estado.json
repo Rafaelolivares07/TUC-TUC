@@ -1,7 +1,7 @@
 {
-  "commit": "1ae82d9",
+  "commit": "9b4c14d",
   "estado": "live",
-  "iniciado": "2026-07-11T14:05:41.545969",
-  "mensaje": "feat: trigger immediate skip-crossfade on next button and add inactive room tmp folder cleaner",
-  "live_at": "2026-07-11T14:06:04.702042"
+  "iniciado": "2026-07-11T14:09:52.049587",
+  "mensaje": "temp: diagnostic route for file sizes",
+  "live_at": "2026-07-11T14:10:14.508735"
 }

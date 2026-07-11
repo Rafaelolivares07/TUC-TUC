@@ -1612,21 +1612,24 @@ def debug_cleanup():
                 
     # 2. Run git gc
     try:
-        cmd = subprocess.run(['git', 'gc', '--prune=now'], cwd=app_dir, capture_output=True, text=True, timeout=60)
+        git_path = '/usr/bin/git' if os.path.exists('/usr/bin/git') else 'git'
+        cmd = subprocess.run([git_path, 'gc', '--prune=now'], cwd=app_dir, capture_output=True, text=True, timeout=60)
         results['git_gc'] = f'stdout: {cmd.stdout.strip()}, stderr: {cmd.stderr.strip()}'
     except Exception as e:
         results['git_gc'] = f'error: {e}'
         
     # 3. Clean APT cache
     try:
-        cmd = subprocess.run(['sudo', 'apt-get', 'clean'], capture_output=True, text=True, timeout=30)
+        sudo_path = '/usr/bin/sudo' if os.path.exists('/usr/bin/sudo') else 'sudo'
+        cmd = subprocess.run([sudo_path, 'apt-get', 'clean'], capture_output=True, text=True, timeout=30)
         results['apt_clean'] = f'code: {cmd.returncode}'
     except Exception as e:
         results['apt_clean'] = f'error: {e}'
         
     # 4. Vacuum journald logs
     try:
-        cmd = subprocess.run(['sudo', 'journalctl', '--vacuum-time=3d'], capture_output=True, text=True, timeout=30)
+        sudo_path = '/usr/bin/sudo' if os.path.exists('/usr/bin/sudo') else 'sudo'
+        cmd = subprocess.run([sudo_path, 'journalctl', '--vacuum-time=3d'], capture_output=True, text=True, timeout=30)
         results['journal_vacuum'] = f'stdout: {cmd.stdout.strip()}'
     except Exception as e:
         results['journal_vacuum'] = f'error: {e}'

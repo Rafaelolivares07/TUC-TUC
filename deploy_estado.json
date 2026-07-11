@@ -1,7 +1,7 @@
 {
-  "commit": "877be0e",
+  "commit": "00e1a1d",
   "estado": "live",
-  "iniciado": "2026-07-11T14:13:55.282151",
-  "mensaje": "temp: deploy diagnostic cleanup endpoint",
-  "live_at": "2026-07-11T14:14:19.942247"
+  "iniciado": "2026-07-11T14:15:26.114737",
+  "mensaje": "temp: support GET on debug cleanup",
+  "live_at": "2026-07-11T14:15:51.683996"
 }

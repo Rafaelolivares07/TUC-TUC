@@ -1650,6 +1650,10 @@ async function iniciarCrossfade(secs) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: oldActiveSongId })
+      }).then(() => {
+        verificarCola();
+      }).catch(() => {
+        verificarCola();
       });
       
       transitioning = false;

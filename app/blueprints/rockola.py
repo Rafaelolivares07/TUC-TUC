@@ -276,6 +276,21 @@ def _share_dir(share_id=None):
     return folder
 
 
+def _limpiar_compartidos_antiguos():
+    try:
+        import shutil
+        import time
+        base = _share_dir()
+        now = time.time()
+        for name in os.listdir(base):
+            path = os.path.join(base, name)
+            if os.path.isdir(path):
+                if now - os.path.getmtime(path) > 3600:
+                    shutil.rmtree(path)
+    except Exception:
+        pass
+
+
 def _share_manifest_path(share_id):
     return os.path.join(_share_dir(share_id), 'manifest.json')
 
@@ -619,6 +634,7 @@ def compartir_biblioteca():
 
 @bp.route('/compartir/biblioteca/iniciar', methods=['POST'])
 def compartir_biblioteca_iniciar():
+    _limpiar_compartidos_antiguos()
     data = request.get_json(silent=True) or {}
     metadata = data.get('metadata') or data
     share_id = uuid.uuid4().hex[:12]
@@ -650,6 +666,18 @@ def compartir_biblioteca_page(share_id):
     return render_template('rockola_compartir.html', share_id=share_id)
 
 
+@bp.route('/compartir/<share_id>/eliminar', methods=['POST'])
+def compartir_biblioteca_eliminar(share_id):
+    try:
+        import shutil
+        folder = _share_dir(share_id)
+        if os.path.exists(folder):
+            shutil.rmtree(folder)
+    except Exception:
+        pass
+    return jsonify(ok=True)
+
+
 @bp.route('/compartir/<share_id>/manifest')
 def compartir_biblioteca_manifest(share_id):
     manifest = _read_share_manifest(share_id)
@@ -665,6 +693,7 @@ def compartir_biblioteca_archivo(share_id, archivo_id):
 
 @bp.route('/salas')
 def salas():
+    _limpiar_compartidos_antiguos()
     dispositivo_id = (request.args.get('device_id') or '').strip()
     conn = _connect()
     try:

@@ -199,6 +199,9 @@ async function guardarSeleccion(){
   btn.disabled=false;
   guardando=false;
   
+  // Eliminar archivos del tránsito temporal en el servidor
+  fetch(`/rockola/compartir/${SHARE_ID}/eliminar`, { method: 'POST' }).catch(()=>{});
+  
   // Mostrar el botón para regresar a la rockola
   document.getElementById('action-after-save').style.display = 'block';
 }

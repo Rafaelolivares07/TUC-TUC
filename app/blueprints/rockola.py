@@ -1537,5 +1537,17 @@ def blanquear_pin():
     return jsonify(ok=True)
 
 
+@bp.route('/debug/disk')
+def debug_disk():
+    import shutil
+    total, used, free = shutil.disk_usage('/')
+    return jsonify(
+        total_gb=total / (1024**3),
+        used_gb=used / (1024**3),
+        free_gb=free / (1024**3),
+        free_percent=(free / total) * 100
+    )
+
+
 def register_events(socketio):
     return None

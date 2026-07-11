@@ -6,6 +6,10 @@ Antes de responder cualquier cosa, leer estos archivos:
 2. `C:\Users\RAFAEL OLIVARES\Documents\docs\_sesion\estado_activo.md`
 3. `C:\Users\RAFAEL OLIVARES\Documents\docs\tuctuc\convenios_desarrollo.md`
 
+## PROTOCOLO DE INTERRUPCIÓN MÍNIMA (EVITAR PROMPTS)
+- **Evitar consola**: Preferir el uso de herramientas directas de lectura/escritura de archivos (`view_file`, `replace_file_content`, `write_to_file`, `list_dir`) ya que se ejecutan de forma silenciosa.
+- **Uso de run_command**: Usar `run_command` únicamente para operaciones que no tengan herramientas nativas equivalentes (operaciones Git, ejecución de scripts o monitoreo de red/procesos), ya que el chat de Antigravity exige aprobación del usuario en cada comando.
+
 ## AL FINAL DE CADA SESIÓN — actualizar obligatorio
 Actualizar `C:\Users\RAFAEL OLIVARES\Documents\docs\_sesion\estado_activo.md` con:
 - Cambios pendientes de commit

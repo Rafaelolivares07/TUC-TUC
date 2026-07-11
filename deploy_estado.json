@@ -1,7 +1,7 @@
 {
-  "commit": "73e291a",
+  "commit": "542137d",
   "estado": "live",
-  "iniciado": "2026-07-11T14:00:45.667006",
-  "mensaje": "temp: debug disk route",
-  "live_at": "2026-07-11T14:01:08.425743"
+  "iniciado": "2026-07-11T14:02:15.803183",
+  "mensaje": "temp: update debug disk to print folder sizes",
+  "live_at": "2026-07-11T14:02:38.436448"
 }

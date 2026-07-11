@@ -2201,6 +2201,14 @@ function actualizarPlayPauseBtn(isPlaying) {
 }
 
 async function saltarActual() {
+  const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
+  const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
+  
+  if (crossfadeEnabled && currentCola && currentCola.length >= 2 && !transitioning) {
+    iniciarCrossfade(crossfadeDuration);
+    return;
+  }
+
   const idTerminada = cancionActual;
   reproduciendo = false;
   cancionActual = null;

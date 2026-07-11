@@ -247,7 +247,7 @@ def _upload_dir(sala_id):
     return folder
 
 
-def _limpiar_archivos_antiguos(upload_dir, max_archivos=30):
+def _limpiar_archivos_antiguos(upload_dir, max_archivos=10):
     try:
         archivos = []
         for f in os.listdir(upload_dir):
@@ -262,6 +262,22 @@ def _limpiar_archivos_antiguos(upload_dir, max_archivos=30):
                     os.remove(path)
                 except Exception:
                     pass
+    except Exception:
+        pass
+
+
+def _limpiar_salas_temporales_antiguas():
+    try:
+        import shutil
+        import time
+        base = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'rockola_tmp')
+        if os.path.exists(base):
+            now = time.time()
+            for name in os.listdir(base):
+                path = os.path.join(base, name)
+                if os.path.isdir(path):
+                    if now - os.path.getmtime(path) > 86400:
+                        shutil.rmtree(path)
     except Exception:
         pass
 
@@ -694,6 +710,7 @@ def compartir_biblioteca_archivo(share_id, archivo_id):
 @bp.route('/salas')
 def salas():
     _limpiar_compartidos_antiguos()
+    _limpiar_salas_temporales_antiguas()
     dispositivo_id = (request.args.get('device_id') or '').strip()
     conn = _connect()
     try:
@@ -1535,39 +1552,6 @@ def blanquear_pin():
         conn.close()
 
     return jsonify(ok=True)
-
-
-@bp.route('/debug/disk')
-def debug_disk():
-    import shutil
-    import os
-    
-    def get_dir_size(path):
-        total = 0
-        if os.path.exists(path):
-            for root, dirs, files in os.walk(path):
-                for f in files:
-                    fp = os.path.join(root, f)
-                    try:
-                        total += os.path.getsize(fp)
-                    except Exception:
-                        pass
-        return total / (1024**2) # Size in MB
-        
-    static_path = os.path.join(os.path.dirname(__file__), '..', '..', 'static')
-    tmp_path = os.path.join(static_path, 'rockola_tmp')
-    share_path = os.path.join(static_path, 'rockola_share')
-    
-    total, used, free = shutil.disk_usage('/')
-    
-    return jsonify(
-        total_gb=total / (1024**3),
-        used_gb=used / (1024**3),
-        free_gb=free / (1024**3),
-        free_percent=(free / total) * 100,
-        rockola_tmp_mb=get_dir_size(tmp_path),
-        rockola_share_mb=get_dir_size(share_path)
-    )
 
 
 def register_events(socketio):

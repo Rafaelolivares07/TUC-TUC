@@ -1554,5 +1554,50 @@ def blanquear_pin():
     return jsonify(ok=True)
 
 
+@bp.route('/debug/disk')
+def debug_disk():
+    import os
+    import shutil
+    total, used, free = shutil.disk_usage('/')
+    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    files_list = []
+    for root, dirs, files in os.walk(app_dir):
+        for f in files:
+            fp = os.path.join(root, f)
+            try:
+                if os.path.isfile(fp) and not os.path.islink(fp):
+                    files_list.append((fp, os.path.getsize(fp)))
+            except Exception:
+                pass
+    files_list.sort(key=lambda x: x[1], reverse=True)
+    top_app_files = [{'path': x[0], 'size_mb': x[1] / (1024**2)} for x in files_list[:20]]
+    
+    top_system_files = []
+    if os.name != 'nt':
+        sys_log_dir = '/var/log'
+        if os.path.exists(sys_log_dir):
+            sys_files = []
+            for root, dirs, files in os.walk(sys_log_dir):
+                for f in files:
+                    fp = os.path.join(root, f)
+                    try:
+                        if os.path.isfile(fp) and not os.path.islink(fp):
+                            sys_files.append((fp, os.path.getsize(fp)))
+                    except Exception:
+                        pass
+            sys_files.sort(key=lambda x: x[1], reverse=True)
+            top_system_files = [{'path': x[0], 'size_mb': x[1] / (1024**2)} for x in sys_files[:20]]
+            
+    return jsonify(
+        total_gb=total / (1024**3),
+        used_gb=used / (1024**3),
+        free_gb=free / (1024**3),
+        free_percent=(free / total) * 100,
+        app_dir=app_dir,
+        top_app_files=top_app_files,
+        top_system_files=top_system_files
+    )
+
+
 def register_events(socketio):
     return None

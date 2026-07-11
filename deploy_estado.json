@@ -1,7 +1,7 @@
 {
-  "commit": "542137d",
+  "commit": "1ae82d9",
   "estado": "live",
-  "iniciado": "2026-07-11T14:02:15.803183",
-  "mensaje": "temp: update debug disk to print folder sizes",
-  "live_at": "2026-07-11T14:02:38.436448"
+  "iniciado": "2026-07-11T14:05:41.545969",
+  "mensaje": "feat: trigger immediate skip-crossfade on next button and add inactive room tmp folder cleaner",
+  "live_at": "2026-07-11T14:06:04.702042"
 }

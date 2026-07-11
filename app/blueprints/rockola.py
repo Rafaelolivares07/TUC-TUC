@@ -1554,57 +1554,5 @@ def blanquear_pin():
     return jsonify(ok=True)
 
 
-@bp.route('/debug/disk')
-def debug_disk():
-    import os
-    import shutil
-    
-    total, used, free = shutil.disk_usage('/')
-    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    
-    def get_dir_size_mb(path):
-        size = 0
-        if os.path.exists(path):
-            try:
-                for root, dirs, files in os.walk(path):
-                    for f in files:
-                        fp = os.path.join(root, f)
-                        try:
-                            if not os.path.islink(fp):
-                                size += os.path.getsize(fp)
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-        return size / (1024**2)
-
-    folder_details = []
-    if os.path.exists(app_dir):
-        for name in os.listdir(app_dir):
-            path = os.path.join(app_dir, name)
-            if os.path.isdir(path) and not os.path.islink(path):
-                folder_details.append({
-                    'name': name,
-                    'size_mb': get_dir_size_mb(path)
-                })
-            elif os.path.isfile(path) and not os.path.islink(path):
-                folder_details.append({
-                    'name': name,
-                    'size_mb': os.path.getsize(path) / (1024**2),
-                    'is_file': True
-                })
-                
-    folder_details.sort(key=lambda x: x['size_mb'], reverse=True)
-
-    return jsonify(
-        total_gb=total / (1024**3),
-        used_gb=used / (1024**3),
-        free_gb=free / (1024**3),
-        free_percent=(free / total) * 100,
-        app_dir=app_dir,
-        contents=folder_details
-    )
-
-
 def register_events(socketio):
     return None

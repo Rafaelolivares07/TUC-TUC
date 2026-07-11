@@ -1530,6 +1530,7 @@ function renderBibliotecaLocal() {
         <div class="local-meta">${Math.max(1, Math.round((c.size || 0) / 1024 / 1024))} MB · este dispositivo</div>
       </div>
       <button class="playlist-mini" onclick="agregarCancionALista('${c.id}')">Lista</button>
+      <button class="playlist-mini" onclick="descargarLocal('${c.id}')" title="Descargar archivo">💾</button>
       <button class="library-btn" onclick="ponerLocal('${c.id}')">Poner</button>
     </li>
   `).join('');
@@ -1870,6 +1871,22 @@ async function ponerLocal(id) {
   } else {
     mostrarMensaje(data.error || 'No se pudo poner en cola', 'error');
   }
+}
+
+async function descargarLocal(id) {
+  const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
+  if (!cancion || !cancion.blob) {
+    mostrarMensaje("Archivo no disponible en este dispositivo", "error");
+    return;
+  }
+  const url = URL.createObjectURL(cancion.blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = cancion.nombre;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 async function actualizarBiblioteca() {

@@ -1,7 +1,7 @@
 {
-  "commit": "0d468c0",
+  "commit": "2a958a4",
   "estado": "live",
-  "iniciado": "2026-07-11T09:53:21.402775",
-  "mensaje": "feat: upgrade player controls with vertical volume, custom crossfade duration, and anterior logic",
-  "live_at": "2026-07-11T09:53:43.935735"
+  "iniciado": "2026-07-11T10:01:10.185383",
+  "mensaje": "feat: glassmorphic central play/pause button, remove redundant controls, and add server-sync for crossfade duration",
+  "live_at": "2026-07-11T10:01:33.453087"
 }

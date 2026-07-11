@@ -410,31 +410,47 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   position: relative;
   display: inline-block;
   cursor: pointer;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+.vinyl-container:active {
+  transform: scale(0.96);
+}
+.vinyl-wrap {
+  transition: opacity 0.3s;
+}
+.vinyl-container.paused .vinyl-wrap {
+  opacity: 0.5;
 }
 .vinyl-play-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
-  background: rgba(4, 8, 16, 0.4);
-  backdrop-filter: blur(2px);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.vinyl-container:hover .vinyl-play-overlay,
-.vinyl-container.paused .vinyl-play-overlay {
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: all 0.2s ease-in-out;
   opacity: 1;
 }
+.vinyl-container:hover .vinyl-play-overlay {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--ac1);
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+}
 .vinyl-play-icon {
-  font-size: 32px;
+  font-size: 24px;
   color: #fff;
-  filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.6));
+  line-height: 1;
+  transition: transform 0.2s;
+  margin-left: 2px;
 }
 .progress-container {
   width: 100%;
@@ -598,10 +614,9 @@ input:checked + .slider:before {
           <span class="time-label" id="time-total">0:00</span>
         </div>
 
-        <!-- Controles Prev / Play-Pause / Next -->
+        <!-- Controles Prev / Next -->
         <div class="player-controls">
           <button class="btn-control-round" onclick="anteriorCancion()" title="Anterior (Retroceder)">⏮</button>
-          <button class="btn-control-round btn-play-pause" onclick="togglePlayPause()" id="btn-play-pause" title="Play/Pause">▶</button>
           <button class="btn-control-round" onclick="saltarActual()" title="Siguiente (Saltar)">⏭</button>
         </div>
 
@@ -936,6 +951,17 @@ async function verificarCola() {
     currentCola = cola;
 
     aplicarVolumen(data.volumen);
+    
+    const toggleInput = document.getElementById('fundido-toggle');
+    const rangeInput = document.getElementById('fundido-segundos');
+    if (toggleInput && document.activeElement !== toggleInput && data.fundido_cruzado !== undefined) {
+      toggleInput.checked = data.fundido_cruzado;
+    }
+    if (rangeInput && document.activeElement !== rangeInput && data.fundido_segundos !== undefined) {
+      rangeInput.value = data.fundido_segundos;
+      const secLabel = document.getElementById('fundido-sec-label');
+      if (secLabel) secLabel.textContent = 'Duración: ' + data.fundido_segundos + 's';
+    }
     renderCola(cola);
 
     if (transitioning) return;
@@ -1938,6 +1964,23 @@ function entrarComoCliente() {
 }
 
 volumenEl.addEventListener('input', programarGuardarVolumen);
+
+document.getElementById('fundido-toggle').addEventListener('change', guardarFundidoSettings);
+document.getElementById('fundido-segundos').addEventListener('change', guardarFundidoSettings);
+
+async function guardarFundidoSettings() {
+  const isCruzado = document.getElementById('fundido-toggle').checked;
+  const secs = parseInt(document.getElementById('fundido-segundos').value) || 12;
+  await fetch(`/rockola/${SALA}/fundido`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fundido_cruzado: isCruzado,
+      fundido_segundos: secs,
+      key: ADMIN_KEY
+    })
+  });
+}
 aplicarVolumen(volumenEl.value);
 verificarDispositivoSala();
 
@@ -2020,17 +2063,18 @@ function togglePlayPause() {
 }
 
 function actualizarPlayPauseBtn(isPlaying) {
-  const btn = document.getElementById('btn-play-pause');
   const icon = document.getElementById('vinyl-play-icon');
   const container = document.querySelector('.vinyl-container');
-  if (!btn || !icon || !container) return;
+  if (!icon || !container) return;
   if (isPlaying) {
-    btn.textContent = '⏸';
     icon.textContent = '⏸';
+    icon.style.marginLeft = '0';
     container.classList.remove('paused');
+    container.classList.add('playing');
   } else {
-    btn.textContent = '▶';
     icon.textContent = '▶';
+    icon.style.marginLeft = '2px';
+    container.classList.remove('playing');
     container.classList.add('paused');
   }
 }

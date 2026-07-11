@@ -1,6 +1,7 @@
 {
-  "commit": "b640e91",
-  "estado": "pendiente",
-  "iniciado": "2026-07-11T09:25:04.493738",
-  "mensaje": "feat: add double PIN confirmation and user profile management in Rockola"
+  "commit": "0d468c0",
+  "estado": "live",
+  "iniciado": "2026-07-11T09:53:21.402775",
+  "mensaje": "feat: upgrade player controls with vertical volume, custom crossfade duration, and anterior logic",
+  "live_at": "2026-07-11T09:53:43.935735"
 }

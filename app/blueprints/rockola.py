@@ -120,6 +120,8 @@ def _ensure_db():
             conn.execute("ALTER TABLE rockola_biblioteca ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL;")
             conn.execute("ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS reproducida BOOLEAN DEFAULT FALSE;")
             conn.execute("ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS reproducida_en TIMESTAMP;")
+            conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_cruzado BOOLEAN DEFAULT TRUE;")
+            conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_segundos INTEGER DEFAULT 12;")
             try:
                 conn.execute("ALTER TABLE rockola_cola DROP COLUMN IF EXISTS owner;")
             except Exception:
@@ -1119,6 +1121,8 @@ def cola(sala_id):
         sync_pos=sala['sync_pos'],
         sync_ts=sala['sync_ts'],
         volumen=_normalizar_volumen(sala.get('volumen')),
+        fundido_cruzado=bool(sala.get('fundido_cruzado') if sala.get('fundido_cruzado') is not None else True),
+        fundido_segundos=int(sala.get('fundido_segundos') if sala.get('fundido_segundos') is not None else 12),
     )
 
 
@@ -1161,6 +1165,35 @@ def volumen(sala_id):
     finally:
         conn.close()
     return jsonify(ok=True, volumen=volumen_nuevo)
+
+
+@bp.route('/<sala_id>/fundido', methods=['POST'])
+def fundido(sala_id):
+    data = request.get_json(silent=True) or {}
+    conn = _connect()
+    try:
+        with _lock:
+            if not _es_admin_sala(conn, sala_id, data):
+                return jsonify(ok=False, error='No autorizado'), 403
+            
+            cruzado = data.get('fundido_cruzado')
+            segundos = data.get('fundido_segundos')
+            
+            if cruzado is not None:
+                conn.execute(
+                    "UPDATE rockola_salas SET fundido_cruzado = %s WHERE sala_id = %s",
+                    (bool(cruzado), sala_id)
+                )
+            if segundos is not None:
+                segundos = max(2, min(50, int(segundos)))
+                conn.execute(
+                    "UPDATE rockola_salas SET fundido_segundos = %s WHERE sala_id = %s",
+                    (segundos, sala_id)
+                )
+            conn.commit()
+    finally:
+        conn.close()
+    return jsonify(ok=True)
 
 
 @bp.route('/<sala_id>/biblioteca')

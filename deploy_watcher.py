@@ -126,7 +126,7 @@ def main():
     ESTADO_FILE.write_text(json.dumps(estado, indent=2), encoding='utf-8')
     notificar_windows(
         'TUC TUC — Deploy Timeout ⚠️',
-        f'El commit {commit[:7]} no apareció en {MAX_MIN} min. Revisar Render.'
+        f'El commit {commit[:7]} no apareció en {MAX_MIN} min. Revisar logs del servidor.'
     )
     print(f'[watcher] Timeout tras {MAX_MIN} minutos.')
 

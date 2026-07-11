@@ -1,7 +1,7 @@
 {
-  "commit": "8bb24e5",
+  "commit": "73e291a",
   "estado": "live",
-  "iniciado": "2026-07-11T13:55:44.915264",
-  "mensaje": "feat: implement immediate shared folder deletion and hourly orphan shared file cleaner",
-  "live_at": "2026-07-11T13:56:07.647760"
+  "iniciado": "2026-07-11T14:00:45.667006",
+  "mensaje": "temp: debug disk route",
+  "live_at": "2026-07-11T14:01:08.425743"
 }

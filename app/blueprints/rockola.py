@@ -1540,12 +1540,33 @@ def blanquear_pin():
 @bp.route('/debug/disk')
 def debug_disk():
     import shutil
+    import os
+    
+    def get_dir_size(path):
+        total = 0
+        if os.path.exists(path):
+            for root, dirs, files in os.walk(path):
+                for f in files:
+                    fp = os.path.join(root, f)
+                    try:
+                        total += os.path.getsize(fp)
+                    except Exception:
+                        pass
+        return total / (1024**2) # Size in MB
+        
+    static_path = os.path.join(os.path.dirname(__file__), '..', '..', 'static')
+    tmp_path = os.path.join(static_path, 'rockola_tmp')
+    share_path = os.path.join(static_path, 'rockola_share')
+    
     total, used, free = shutil.disk_usage('/')
+    
     return jsonify(
         total_gb=total / (1024**3),
         used_gb=used / (1024**3),
         free_gb=free / (1024**3),
-        free_percent=(free / total) * 100
+        free_percent=(free / total) * 100,
+        rockola_tmp_mb=get_dir_size(tmp_path),
+        rockola_share_mb=get_dir_size(share_path)
     )
 
 

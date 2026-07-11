@@ -48,7 +48,7 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 .np-top { display:flex; align-items:center; gap:16px; margin-bottom:16px; }
 .np-info { flex:1; overflow:hidden; }
 .np-label  { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
-.np-nombre { font-size:17px; font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.np-nombre { width: 100%; max-width: 100%; font-size:17px; font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .wave-viz  { display:flex; align-items:center; gap:3px; height:26px; flex-shrink:0; }
 .wave-bar  { width:3px; border-radius:2px; background:var(--ac1); }
 audio { width:100%; filter:invert(1) hue-rotate(180deg); opacity:.75; }
@@ -615,17 +615,29 @@ input:checked + .slider:before {
         </div>
 
         <!-- Toggle Switch para Fundido de Audio con Segundos Parametrizables -->
-        <div class="toggle-row">
-          <span class="toggle-label" style="display:flex; flex-direction:column; align-items:flex-start;">
-            <span>Fundido cruzado</span>
-            <span style="font-size:10px; color:var(--muted); font-weight:normal;" id="fundido-sec-label">Duración: 12s</span>
-          </span>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <input type="range" id="fundido-segundos" min="2" max="50" value="12" style="width:70px; accent-color:var(--ac1);" oninput="document.getElementById('fundido-sec-label').textContent='Duración: '+this.value+'s'">
+        <div class="toggle-row" style="display:flex; flex-direction:column; gap:12px; width:100%; border-top:1px solid rgba(255,255,255,0.06); padding-top:12px; margin-top:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <span class="toggle-label" style="font-weight:700;">Fundido cruzado</span>
             <label class="switch">
               <input type="checkbox" id="fundido-toggle" checked>
               <span class="slider"></span>
             </label>
+          </div>
+          
+          <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+              <span style="color:var(--muted); text-align:left;">Iniciar fundido a los:</span>
+              <span style="color:var(--ac1); font-weight:800;" id="fundido-sec-label">12s</span>
+            </div>
+            <input type="range" id="fundido-segundos" min="2" max="60" value="12" style="width:100%; accent-color:var(--ac1);" oninput="document.getElementById('fundido-sec-label').textContent=this.value+'s'">
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+              <span style="color:var(--muted); text-align:left;">Duración del fundido/cruce:</span>
+              <span style="color:var(--ac1); font-weight:800;" id="fundido-dur-label">5s</span>
+            </div>
+            <input type="range" id="fundido-duracion" min="1" max="20" value="5" style="width:100%; accent-color:var(--ac1);" oninput="document.getElementById('fundido-dur-label').textContent=this.value+'s'">
           </div>
         </div>
 
@@ -983,9 +995,10 @@ function handlePlayerTimeUpdate(e) {
   actualizarProgreso();
   
   const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
-  const crossfadeSecs = parseInt(document.getElementById('fundido-segundos').value) || 12;
-  if (crossfadeEnabled && p.duration && (p.duration - p.currentTime <= crossfadeSecs) && !transitioning) {
-    iniciarCrossfade(crossfadeSecs);
+  const crossfadeAnticipation = parseInt(document.getElementById('fundido-segundos').value) || 12;
+  const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
+  if (crossfadeEnabled && p.duration && (p.duration - p.currentTime <= crossfadeAnticipation) && !transitioning) {
+    iniciarCrossfade(crossfadeDuration);
   }
 }
 
@@ -1001,13 +1014,19 @@ async function verificarCola() {
 
     const toggleInput = document.getElementById('fundido-toggle');
     const rangeInput = document.getElementById('fundido-segundos');
+    const durationInput = document.getElementById('fundido-duracion');
     if (toggleInput && document.activeElement !== toggleInput && data.fundido_cruzado !== undefined) {
       toggleInput.checked = data.fundido_cruzado;
     }
     if (rangeInput && document.activeElement !== rangeInput && data.fundido_segundos !== undefined) {
       rangeInput.value = data.fundido_segundos;
       const secLabel = document.getElementById('fundido-sec-label');
-      if (secLabel) secLabel.textContent = 'Duración: ' + data.fundido_segundos + 's';
+      if (secLabel) secLabel.textContent = data.fundido_segundos + 's';
+    }
+    if (durationInput && document.activeElement !== durationInput && data.fundido_duracion !== undefined) {
+      durationInput.value = data.fundido_duracion;
+      const durLabel = document.getElementById('fundido-dur-label');
+      if (durLabel) durLabel.textContent = data.fundido_duracion + 's';
     }
 
     if (transitioning) return;
@@ -1462,10 +1481,11 @@ async function saltarActual() {
   }
   actualizarPlayPauseBtn(false);
   
+  const key = localStorage.getItem('rockola_admin_' + SALA) || '';
   await fetch(`/rockola/${SALA}/saltar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: idTerminada })
+    body: JSON.stringify({ id: idTerminada, admin_key: key })
   });
   
   verificarCola();
@@ -1479,10 +1499,11 @@ async function anteriorCancion() {
     actualizarProgreso();
   } else {
     try {
+      const key = localStorage.getItem('rockola_admin_' + SALA) || '';
       const res = await fetch(`/rockola/${SALA}/anterior`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({ admin_key: key })
       });
       const data = await res.json();
       if (data.ok) {
@@ -1536,6 +1557,10 @@ async function iniciarCrossfade(secs) {
       fadeProgress = 1;
       clearInterval(fadeInterval);
       
+      // Asegurar volúmenes finales antes del swap y limpieza
+      player.volume = 0;
+      standbyPlayer.volume = startVol;
+      
       player.pause();
       player.removeAttribute('src');
       
@@ -1555,6 +1580,7 @@ async function iniciarCrossfade(secs) {
       });
       
       transitioning = false;
+      return;
     }
     
     if (player) player.volume = startVol * (1 - fadeProgress);
@@ -1600,7 +1626,30 @@ async function checkAutologin() {
 
 document.addEventListener('DOMContentLoaded', () => {
   checkAutologin();
+  const toggleInput = document.getElementById('fundido-toggle');
+  const rangeInput = document.getElementById('fundido-segundos');
+  const durationInput = document.getElementById('fundido-duracion');
+  if (toggleInput) toggleInput.addEventListener('change', guardarFundidoSettings);
+  if (rangeInput) rangeInput.addEventListener('change', guardarFundidoSettings);
+  if (durationInput) durationInput.addEventListener('change', guardarFundidoSettings);
 });
+
+async function guardarFundidoSettings() {
+  const isCruzado = document.getElementById('fundido-toggle').checked;
+  const secs = parseInt(document.getElementById('fundido-segundos').value) || 12;
+  const dur = parseInt(document.getElementById('fundido-duracion').value) || 5;
+  const key = localStorage.getItem('rockola_admin_' + SALA) || '';
+  await fetch(`/rockola/${SALA}/fundido`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fundido_cruzado: isCruzado,
+      fundido_segundos: secs,
+      fundido_duracion: dur,
+      admin_key: key
+    })
+  });
+}
 </script>
 </body>
 </html>

@@ -122,6 +122,7 @@ def _ensure_db():
             conn.execute("ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS reproducida_en TIMESTAMP;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_cruzado BOOLEAN DEFAULT TRUE;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_segundos INTEGER DEFAULT 12;")
+            conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_duracion INTEGER DEFAULT 5;")
             try:
                 conn.execute("ALTER TABLE rockola_cola DROP COLUMN IF EXISTS owner;")
             except Exception:
@@ -244,6 +245,25 @@ def _upload_dir(sala_id):
     folder = os.path.join(base, sala_id)
     os.makedirs(folder, exist_ok=True)
     return folder
+
+
+def _limpiar_archivos_antiguos(upload_dir, max_archivos=30):
+    try:
+        archivos = []
+        for f in os.listdir(upload_dir):
+            path = os.path.join(upload_dir, f)
+            if os.path.isfile(path):
+                archivos.append((path, os.path.getmtime(path)))
+        archivos.sort(key=lambda x: x[1])
+        if len(archivos) > max_archivos:
+            a_borrar = archivos[:len(archivos) - max_archivos]
+            for path, _ in a_borrar:
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 
 def _share_dir(share_id=None):
@@ -812,6 +832,7 @@ def subir(sala_id):
                 _agregar_a_cola(conn, sala_id, nombre_id, file.filename, tercero_id, lista_envio)
                 _recordar_cancion(conn, sala_id, nombre_id, file.filename, tercero_id, 'archivo')
                 agregadas.append({'id': nombre_id, 'nombre': file.filename, 'owner': owner_nombre, 'tercero_id': tercero_id})
+            _limpiar_archivos_antiguos(upload_dir)
             conn.commit()
     finally:
         conn.close()
@@ -967,6 +988,7 @@ def youtube(sala_id):
         with _lock:
             _agregar_a_cola(conn, sala_id, archivo_final, nombre_display, tercero_id)
             _recordar_cancion(conn, sala_id, archivo_final, nombre_display, tercero_id, 'youtube')
+            _limpiar_archivos_antiguos(upload_dir)
             conn.commit()
     finally:
         conn.close()
@@ -1123,6 +1145,7 @@ def cola(sala_id):
         volumen=_normalizar_volumen(sala.get('volumen')),
         fundido_cruzado=bool(sala.get('fundido_cruzado') if sala.get('fundido_cruzado') is not None else True),
         fundido_segundos=int(sala.get('fundido_segundos') if sala.get('fundido_segundos') is not None else 12),
+        fundido_duracion=int(sala.get('fundido_duracion') if sala.get('fundido_duracion') is not None else 5),
     )
 
 
@@ -1178,6 +1201,7 @@ def fundido(sala_id):
             
             cruzado = data.get('fundido_cruzado')
             segundos = data.get('fundido_segundos')
+            duracion = data.get('fundido_duracion')
             
             if cruzado is not None:
                 conn.execute(
@@ -1185,10 +1209,16 @@ def fundido(sala_id):
                     (bool(cruzado), sala_id)
                 )
             if segundos is not None:
-                segundos = max(2, min(50, int(segundos)))
+                segundos = max(2, min(60, int(segundos)))
                 conn.execute(
                     "UPDATE rockola_salas SET fundido_segundos = %s WHERE sala_id = %s",
                     (segundos, sala_id)
+                )
+            if duracion is not None:
+                duracion = max(1, min(20, int(duracion)))
+                conn.execute(
+                    "UPDATE rockola_salas SET fundido_duracion = %s WHERE sala_id = %s",
+                    (duracion, sala_id)
                 )
             conn.commit()
     finally:

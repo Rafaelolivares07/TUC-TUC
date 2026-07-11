@@ -134,7 +134,7 @@ body {
 }
 .vinyl-wrap { display: flex; justify-content: center; margin-bottom: 28px; }
 .np-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-.np-nombre { font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 16px; min-height: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-nombre { width: 100%; max-width: 100%; font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 16px; min-height: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wave-viz { display: flex; align-items: center; justify-content: center; gap: 3px; height: 28px; margin-bottom: 20px; }
 .wave-bar { width: 3px; border-radius: 2px; background: var(--ac1); }
 audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
@@ -339,30 +339,46 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   min-width: 0;
 }
 .volume-sidebar {
-  width: 48px;
+  width: 54px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 12px 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 16px 8px;
+  box-sizing: border-box;
 }
 .volume-icon {
-  font-size: 14px;
-  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  color: var(--ac1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   user-select: none;
+}
+.volume-svg {
+  width: 26px;
+  height: 26px;
+  color: var(--ac1);
+  transition: transform 0.2s;
+}
+.volume-sidebar:hover .volume-svg {
+  transform: scale(1.15);
 }
 .volume-slider-vert {
   -webkit-appearance: slider-vertical;
   writing-mode: bt-lr;
-  width: 8px;
-  height: 140px;
+  width: 10px;
+  height: 82%;
   accent-color: var(--ac1);
   background: rgba(255,255,255,0.05);
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
+  margin: 10px 0;
+  padding: 0;
 }
 .volume-val-vert {
   font-size: 10px;
@@ -374,83 +390,62 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  margin-top: 15px;
+  gap: 28px;
+  margin-top: 18px;
   width: 100%;
 }
 .btn-control-round {
-  width: 48px;
-  height: 48px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--surface2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text);
-  font-size: 18px;
+  font-size: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   outline: none;
 }
 .btn-control-round:hover {
   border-color: var(--ac1);
   color: var(--ac1);
-  background: var(--ac1-bg);
-}
-.btn-control-round.btn-play-pause {
-  width: 58px;
-  height: 58px;
-  background: var(--ac-grad);
-  color: #000;
-  border: none;
-  font-size: 22px;
+  background: rgba(0, 212, 255, 0.1);
+  transform: scale(1.08);
 }
 .vinyl-container {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px);
   cursor: pointer;
-  margin-bottom: 24px;
-  transition: transform 0.2s, opacity 0.2s;
+  margin: 16px auto 24px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.vinyl-container:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--ac1);
+  box-shadow: 0 0 25px rgba(0, 212, 255, 0.4);
+  transform: scale(1.05);
 }
 .vinyl-container:active {
   transform: scale(0.96);
 }
-.vinyl-wrap {
-  transition: opacity 0.3s;
-}
-.vinyl-container.paused .vinyl-wrap {
-  opacity: 0.5;
-}
-.vinyl-play-overlay {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  transition: all 0.2s ease-in-out;
-  opacity: 1;
-}
-.vinyl-container:hover .vinyl-play-overlay {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: var(--ac1);
-  box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
-}
 .vinyl-play-icon {
-  font-size: 24px;
+  font-size: 56px;
   color: #fff;
   line-height: 1;
-  transition: transform 0.2s;
-  margin-left: 2px;
+  transition: all 0.2s ease;
+  margin-left: 6px;
 }
 .progress-container {
   width: 100%;
@@ -576,20 +571,7 @@ input:checked + .slider:before {
     <div class="now-card">
       <div class="now-main">
         <div class="vinyl-container" id="vinyl-btn" onclick="togglePlayPause()">
-          <div class="vinyl-wrap">
-            <svg id="vinyl-spin" width="120" height="120" viewBox="0 0 40 40">
-              <circle cx="20" cy="20" r="19" fill="#0d1a2e" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.4"/>
-              <circle cx="20" cy="20" r="13" fill="#090f1c"/>
-              <circle cx="20" cy="20" r="8" fill="#0d1a2e" stroke="#00d4ff" stroke-width="0.8" stroke-opacity="0.3"/>
-              <circle cx="20" cy="20" r="3" fill="#00d4ff"/>
-              <circle cx="20" cy="20" r="1.2" fill="#060c18"/>
-              <circle cx="20" cy="20" r="5"  fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
-              <circle cx="20" cy="20" r="11" fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
-            </svg>
-          </div>
-          <div class="vinyl-play-overlay">
-            <div class="vinyl-play-icon" id="vinyl-play-icon">▶</div>
-          </div>
+          <div class="vinyl-play-icon" id="vinyl-play-icon">▶</div>
         </div>
         
         <div class="np-label">Sonando ahora</div>
@@ -621,17 +603,29 @@ input:checked + .slider:before {
         </div>
 
         <!-- Toggle Switch para Fundido de Audio con Segundos Parametrizables -->
-        <div class="toggle-row">
-          <span class="toggle-label" style="display:flex; flex-direction:column; align-items:flex-start;">
-            <span>Fundido cruzado</span>
-            <span style="font-size:10px; color:var(--muted); font-weight:normal;" id="fundido-sec-label">Duración: 12s</span>
-          </span>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <input type="range" id="fundido-segundos" min="2" max="50" value="12" style="width:70px; accent-color:var(--ac1);" oninput="document.getElementById('fundido-sec-label').textContent='Duración: '+this.value+'s'">
+        <div class="toggle-row" style="display:flex; flex-direction:column; gap:12px; width:100%; border-top:1px solid rgba(255,255,255,0.06); padding-top:12px; margin-top:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <span class="toggle-label" style="font-weight:700;">Fundido cruzado</span>
             <label class="switch">
               <input type="checkbox" id="fundido-toggle" checked>
               <span class="slider"></span>
             </label>
+          </div>
+          
+          <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+              <span style="color:var(--muted); text-align:left;">Iniciar fundido a los:</span>
+              <span style="color:var(--ac1); font-weight:800;" id="fundido-sec-label">12s</span>
+            </div>
+            <input type="range" id="fundido-segundos" min="2" max="60" value="12" style="width:100%; accent-color:var(--ac1);" oninput="document.getElementById('fundido-sec-label').textContent=this.value+'s'">
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+              <span style="color:var(--muted); text-align:left;">Duración del fundido/cruce:</span>
+              <span style="color:var(--ac1); font-weight:800;" id="fundido-dur-label">5s</span>
+            </div>
+            <input type="range" id="fundido-duracion" min="1" max="20" value="5" style="width:100%; accent-color:var(--ac1);" oninput="document.getElementById('fundido-dur-label').textContent=this.value+'s'">
           </div>
         </div>
 
@@ -642,7 +636,12 @@ input:checked + .slider:before {
 
       <!-- Barra de Volumen Vertical en el margen derecho -->
       <div class="volume-sidebar">
-        <span class="volume-icon">🔊</span>
+        <span class="volume-icon">
+          <svg class="volume-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+        </span>
         <input id="volumen" type="range" min="0" max="100" value="80" class="volume-slider-vert" oninput="cambiarVolumenLocal(this.value)">
         <span class="volume-val-vert" id="volumen-valor">80%</span>
       </div>
@@ -937,9 +936,10 @@ function handlePlayerTimeUpdate(e) {
   actualizarProgreso();
   
   const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
-  const crossfadeSecs = parseInt(document.getElementById('fundido-segundos').value) || 12;
-  if (crossfadeEnabled && p.duration && (p.duration - p.currentTime <= crossfadeSecs) && !transitioning) {
-    iniciarCrossfade(crossfadeSecs);
+  const crossfadeAnticipation = parseInt(document.getElementById('fundido-segundos').value) || 12;
+  const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
+  if (crossfadeEnabled && p.duration && (p.duration - p.currentTime <= crossfadeAnticipation) && !transitioning) {
+    iniciarCrossfade(crossfadeDuration);
   }
 }
 
@@ -954,13 +954,19 @@ async function verificarCola() {
     
     const toggleInput = document.getElementById('fundido-toggle');
     const rangeInput = document.getElementById('fundido-segundos');
+    const durationInput = document.getElementById('fundido-duracion');
     if (toggleInput && document.activeElement !== toggleInput && data.fundido_cruzado !== undefined) {
       toggleInput.checked = data.fundido_cruzado;
     }
     if (rangeInput && document.activeElement !== rangeInput && data.fundido_segundos !== undefined) {
       rangeInput.value = data.fundido_segundos;
       const secLabel = document.getElementById('fundido-sec-label');
-      if (secLabel) secLabel.textContent = 'Duración: ' + data.fundido_segundos + 's';
+      if (secLabel) secLabel.textContent = data.fundido_segundos + 's';
+    }
+    if (durationInput && document.activeElement !== durationInput && data.fundido_duracion !== undefined) {
+      durationInput.value = data.fundido_duracion;
+      const durLabel = document.getElementById('fundido-dur-label');
+      if (durLabel) durLabel.textContent = data.fundido_duracion + 's';
     }
     renderCola(cola);
 
@@ -1984,17 +1990,21 @@ volumenEl.addEventListener('input', programarGuardarVolumen);
 
 document.getElementById('fundido-toggle').addEventListener('change', guardarFundidoSettings);
 document.getElementById('fundido-segundos').addEventListener('change', guardarFundidoSettings);
+document.getElementById('fundido-duracion').addEventListener('change', guardarFundidoSettings);
 
 async function guardarFundidoSettings() {
   const isCruzado = document.getElementById('fundido-toggle').checked;
   const secs = parseInt(document.getElementById('fundido-segundos').value) || 12;
+  const dur = parseInt(document.getElementById('fundido-duracion').value) || 5;
   await fetch(`/rockola/${SALA}/fundido`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       fundido_cruzado: isCruzado,
       fundido_segundos: secs,
-      key: ADMIN_KEY
+      fundido_duracion: dur,
+      admin_key: ADMIN_KEY,
+      modo: 'reproductor'
     })
   });
 }
@@ -2005,6 +2015,9 @@ if (window.Sortable) {
   Sortable.create(listaCola, {
     animation: 150,
     handle: '.handle',
+    delay: 50,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 5,
     onEnd: async () => {
       const orden = [...listaCola.querySelectorAll('.queue-item')].map(el => el.dataset.id);
       await fetch(`/rockola/${SALA}/reordenar`, {
@@ -2018,6 +2031,9 @@ if (window.Sortable) {
   Sortable.create(playlistSongList, {
     animation: 150,
     handle: '.playlist-handle',
+    delay: 50,
+    delayOnTouchOnly: true,
+    touchStartThreshold: 5,
     onEnd: async () => {
       const lista = listaActual();
       if (!lista) return;
@@ -2053,29 +2069,61 @@ function formatTime(secs) {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-function seekAudio(e) {
+async function seekAudio(e) {
   if (!player.duration) return;
   const rect = document.getElementById('progress-bar').getBoundingClientRect();
   const x = e.clientX - rect.left;
   const width = rect.width;
   const percent = x / width;
-  player.currentTime = percent * player.duration;
+  const targetTime = percent * player.duration;
+  player.currentTime = targetTime;
   actualizarProgreso();
+  
+  await fetch(`/rockola/${SALA}/sync_control`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      estado: player.paused ? 'pause' : 'play',
+      pos: targetTime,
+      ts: Date.now() / 1000,
+      modo: 'reproductor'
+    })
+  });
 }
 
-function togglePlayPause() {
+async function togglePlayPause() {
   if (!player.src) return;
   if (player.paused) {
-    player.play().then(() => {
+    player.play().then(async () => {
       setVinylSpinning(true);
       setWaveActive(true);
       actualizarPlayPauseBtn(true);
+      await fetch(`/rockola/${SALA}/sync_control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          estado: 'play',
+          pos: player.currentTime,
+          ts: Date.now() / 1000,
+          modo: 'reproductor'
+        })
+      });
     }).catch(()=>{});
   } else {
     player.pause();
     setVinylSpinning(false);
     setWaveActive(false);
     actualizarPlayPauseBtn(false);
+    await fetch(`/rockola/${SALA}/sync_control`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        estado: 'pause',
+        pos: player.currentTime,
+        ts: Date.now() / 1000,
+        modo: 'reproductor'
+      })
+    });
   }
 }
 
@@ -2112,7 +2160,7 @@ async function saltarActual() {
   await fetch(`/rockola/${SALA}/saltar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: idTerminada, key: ADMIN_KEY })
+    body: JSON.stringify({ id: idTerminada, admin_key: ADMIN_KEY, modo: 'reproductor' })
   });
   
   verificarCola();
@@ -2129,7 +2177,7 @@ async function anteriorCancion() {
       const res = await fetch(`/rockola/${SALA}/anterior`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: ADMIN_KEY })
+        body: JSON.stringify({ admin_key: ADMIN_KEY, modo: 'reproductor' })
       });
       const data = await res.json();
       if (data.ok) {
@@ -2194,6 +2242,10 @@ async function iniciarCrossfade(secs) {
       fadeProgress = 1;
       clearInterval(fadeInterval);
       
+      // Asegurar volúmenes finales antes del swap y limpieza
+      player.volume = 0;
+      standbyPlayer.volume = startVol;
+      
       player.pause();
       player.removeAttribute('src');
       
@@ -2213,6 +2265,7 @@ async function iniciarCrossfade(secs) {
       });
       
       transitioning = false;
+      return;
     }
     
     if (player) player.volume = startVol * (1 - fadeProgress);
@@ -2221,7 +2274,9 @@ async function iniciarCrossfade(secs) {
 }
 
 function setVinylSpinning(on) {
-  vinylSpin.style.animation = on ? 'spin 3s linear infinite' : 'none';
+  if (vinylSpin) {
+    vinylSpin.style.animation = on ? 'spin 3s linear infinite' : 'none';
+  }
 }
 
 function setWaveActive(on) {

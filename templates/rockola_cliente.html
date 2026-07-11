@@ -29,6 +29,8 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 .logo-text  { font-size:22px; font-weight:800; letter-spacing:-.5px; }
 .logo-text span { color:var(--ac1); }
 .sala-tag { display:inline-block; margin-top:8px; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--ac1); background:var(--ac1-bg); border:1px solid var(--border); padding:5px 14px; border-radius:8px; }
+.perfil-tag { display:inline-block; margin-top:8px; font-size:11px; font-weight:700; color:#fff; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); padding:5px 12px; border-radius:8px; cursor:pointer; transition:background .2s; }
+.perfil-tag:hover { background:rgba(255,255,255,0.12); border-color:var(--ac1); }
 
 .tagline { color:var(--muted); font-size:13px; text-align:center; margin-bottom:20px; line-height:1.6; }
 .share-row { display:flex; gap:8px; margin-bottom:14px; }
@@ -351,11 +353,51 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
       <input type="text" id="ident-nombre" placeholder="Ej: Juan Pérez">
       <label for="ident-pin-nuevo">Crea tu PIN de 4 dígitos (Celular)</label>
       <input type="password" id="ident-pin-nuevo" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 24px; letter-spacing: 10px;">
+      <label for="ident-pin-confirmar">Confirma tu PIN</label>
+      <input type="password" id="ident-pin-confirmar" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 24px; letter-spacing: 10px;">
       <button class="modal-btn" onclick="registrarTercero()">Registrar e Ingresar</button>
       <button class="modal-btn btn-secondary" onclick="volverPaso1()">← Cambiar número</button>
     </div>
     
     <div id="ident-error" class="modal-error" style="display: none;"></div>
+  </div>
+</div>
+
+<!-- Modal de Perfil/Cambiar PIN -->
+<div id="perfil-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-content">
+    <h3>Mi Perfil</h3>
+    <p class="modal-desc">Consulta tus datos o actualiza tu PIN de seguridad de TUC TUC.</p>
+    
+    <div style="margin-bottom: 15px;">
+      <label>Número de Celular</label>
+      <input type="text" id="perf-telefono" readonly style="opacity: 0.6; cursor: not-allowed; margin-bottom: 0;">
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+      <label for="perf-nombre">Nombre</label>
+      <input type="text" id="perf-nombre" placeholder="Tu nombre" style="margin-bottom: 0;">
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label for="perf-pin-actual">PIN Actual (Requerido para guardar)</label>
+      <input type="password" id="perf-pin-actual" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 18px; letter-spacing: 5px; margin-bottom: 0;">
+    </div>
+
+    <div style="margin-bottom: 15px;">
+      <label for="perf-pin-nuevo">Nuevo PIN (Dejar vacío para no cambiar)</label>
+      <input type="password" id="perf-pin-nuevo" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 18px; letter-spacing: 5px; margin-bottom: 0;">
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      <label for="perf-pin-confirmar">Confirmar Nuevo PIN</label>
+      <input type="password" id="perf-pin-confirmar" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 18px; letter-spacing: 5px; margin-bottom: 0;">
+    </div>
+    
+    <button class="modal-btn" onclick="guardarPerfil()">Guardar Cambios</button>
+    <button class="modal-btn btn-secondary" onclick="cerrarPerfil()">Cerrar</button>
+    
+    <div id="perf-error" class="modal-error" style="display: none;"></div>
   </div>
 </div>
 
@@ -373,7 +415,10 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
       <circle cx="20" cy="20" r="11" fill="none" stroke="#00d4ff" stroke-width=".4" stroke-opacity=".2"/>
     </svg>
     <div class="logo-text">Tuc Tuc <span>Rockola</span></div>
-    <div class="sala-tag">{{ sala_id | upper }}</div>
+    <div style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 8px; flex-wrap: wrap;">
+      <div class="sala-tag">{{ sala_id | upper }}</div>
+      <button id="btn-perfil" class="perfil-tag" onclick="abrirPerfil()" style="display: none;">👤 <span id="perfil-nombre"></span></button>
+    </div>
   </div>
 
   <p class="tagline">Pon tu canción — suena en el local 🔊</p>
@@ -1301,6 +1346,7 @@ async function iniciarSesionPIN() {
     CURRENT_TERCERO_ID = data.tercero_id;
     localStorage.setItem('rockola_telefono', tel);
     localStorage.setItem('rockola_nombre', data.nombre);
+    actualizarPillPerfil(data.nombre);
     document.getElementById('ident-modal').style.display = 'none';
     actualizarCola();
   } catch(e) {
@@ -1315,6 +1361,8 @@ async function registrarTercero() {
   const nombre = nombreInput.value.trim();
   const pinInput = document.getElementById('ident-pin-nuevo');
   const pin = pinInput.value.trim();
+  const pinConfirmarInput = document.getElementById('ident-pin-confirmar');
+  const pinConfirmar = pinConfirmarInput.value.trim();
   const errDiv = document.getElementById('ident-error');
   errDiv.style.display = 'none';
 
@@ -1325,6 +1373,11 @@ async function registrarTercero() {
   }
   if (pin.length !== 4 || isNaN(pin)) {
     errDiv.textContent = 'El PIN debe ser de 4 dígitos';
+    errDiv.style.display = 'block';
+    return;
+  }
+  if (pin !== pinConfirmar) {
+    errDiv.textContent = 'Los PINs no coinciden';
     errDiv.style.display = 'block';
     return;
   }
@@ -1345,6 +1398,7 @@ async function registrarTercero() {
     CURRENT_TERCERO_ID = data.tercero_id;
     localStorage.setItem('rockola_telefono', tel);
     localStorage.setItem('rockola_nombre', data.nombre);
+    actualizarPillPerfil(data.nombre);
     document.getElementById('ident-modal').style.display = 'none';
     actualizarCola();
   } catch(e) {
@@ -1353,8 +1407,89 @@ async function registrarTercero() {
   }
 }
 
+function actualizarPillPerfil(nombre) {
+  if (nombre && CURRENT_TERCERO_ID !== null) {
+    document.getElementById('perfil-nombre').textContent = nombre;
+    document.getElementById('btn-perfil').style.display = 'inline-block';
+  } else {
+    document.getElementById('btn-perfil').style.display = 'none';
+  }
+}
+
+function abrirPerfil() {
+  document.getElementById('perf-telefono').value = localStorage.getItem('rockola_telefono') || '';
+  document.getElementById('perf-nombre').value = localStorage.getItem('rockola_nombre') || '';
+  document.getElementById('perf-pin-actual').value = '';
+  document.getElementById('perf-pin-nuevo').value = '';
+  document.getElementById('perf-pin-confirmar').value = '';
+  document.getElementById('perf-error').style.display = 'none';
+  document.getElementById('perfil-modal').style.display = 'flex';
+}
+
+function cerrarPerfil() {
+  document.getElementById('perfil-modal').style.display = 'none';
+}
+
+async function guardarPerfil() {
+  const nombre = document.getElementById('perf-nombre').value.trim();
+  const pinActual = document.getElementById('perf-pin-actual').value.trim();
+  const pinNuevo = document.getElementById('perf-pin-nuevo').value.trim();
+  const pinConfirmar = document.getElementById('perf-pin-confirmar').value.trim();
+  const errDiv = document.getElementById('perf-error');
+  errDiv.style.display = 'none';
+
+  if (!nombre) {
+    errDiv.textContent = 'El nombre es requerido';
+    errDiv.style.display = 'block';
+    return;
+  }
+  if (!pinActual) {
+    errDiv.textContent = 'Ingresa tu PIN actual para confirmar';
+    errDiv.style.display = 'block';
+    return;
+  }
+  if (pinNuevo) {
+    if (pinNuevo.length !== 4 || isNaN(pinNuevo)) {
+      errDiv.textContent = 'El nuevo PIN debe tener 4 números';
+      errDiv.style.display = 'block';
+      return;
+    }
+    if (pinNuevo !== pinConfirmar) {
+      errDiv.textContent = 'Los nuevos PINs no coinciden';
+      errDiv.style.display = 'block';
+      return;
+    }
+  }
+
+  try {
+    const res = await fetch('/rockola/actualizar-perfil', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre: nombre, pin_actual: pinActual, pin_nuevo: pinNuevo })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      errDiv.textContent = data.error || 'Error al guardar';
+      errDiv.style.display = 'block';
+      return;
+    }
+
+    localStorage.setItem('rockola_nombre', data.nombre);
+    actualizarPillPerfil(data.nombre);
+    cerrarPerfil();
+    showToast('Perfil actualizado con éxito ✓', 'ok');
+    actualizarCola();
+  } catch(e) {
+    errDiv.textContent = 'Error de red. Intenta de nuevo.';
+    errDiv.style.display = 'block';
+  }
+}
+
 async function checkAutologin() {
-  if (CURRENT_TERCERO_ID !== null) return;
+  if (CURRENT_TERCERO_ID !== null) {
+    actualizarPillPerfil(localStorage.getItem('rockola_nombre'));
+    return;
+  }
   
   const localTel = localStorage.getItem('rockola_telefono');
   if (localTel) {

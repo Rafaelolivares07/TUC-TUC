@@ -431,6 +431,59 @@ def identificar():
         conn.close()
 
 
+@bp.route('/actualizar-perfil', methods=['POST'])
+def actualizar_perfil():
+    tercero_id = session.get('usuario_id')
+    if not tercero_id:
+        return jsonify(ok=False, error='Sesión no iniciada'), 401
+
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip()
+    pin_actual = (data.get('pin_actual') or '').strip()
+    pin_nuevo = (data.get('pin_nuevo') or '').strip()
+
+    if not nombre:
+        return jsonify(ok=False, error='El nombre es requerido'), 400
+
+    conn = get_db_connection()
+    try:
+        tercero = conn.execute(
+            "SELECT pin_seguridad, telefono FROM terceros WHERE id = %s",
+            (tercero_id,)
+        ).fetchone()
+
+        if not tercero:
+            return jsonify(ok=False, error='Tercero no encontrado'), 404
+
+        if tercero['pin_seguridad']:
+            if not pin_actual:
+                return jsonify(ok=False, error='PIN actual requerido para realizar cambios'), 400
+            if not check_password_hash(tercero['pin_seguridad'], pin_actual):
+                return jsonify(ok=False, error='PIN actual incorrecto'), 401
+
+        if pin_nuevo:
+            if len(pin_nuevo) != 4 or not pin_nuevo.isdigit():
+                return jsonify(ok=False, error='El nuevo PIN debe tener 4 números'), 400
+            new_hash = generate_password_hash(pin_nuevo)
+            conn.execute(
+                "UPDATE terceros SET nombre = %s, pin_seguridad = %s WHERE id = %s",
+                (nombre, new_hash, tercero_id)
+            )
+        else:
+            conn.execute(
+                "UPDATE terceros SET nombre = %s WHERE id = %s",
+                (nombre, tercero_id)
+            )
+        conn.commit()
+
+        session['nombre'] = nombre
+        return jsonify(ok=True, nombre=nombre, telefono=tercero['telefono'])
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/')
 def entrada():
     return render_template('rockola_entrada.html')

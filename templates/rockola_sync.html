@@ -122,9 +122,160 @@ audio { width:100%; filter:invert(1) hue-rotate(180deg); opacity:.75; }
 .queue-item.playing .q-pos { color:var(--ac1); }
 .q-remove { border:1px solid rgba(255,77,109,.35); background:rgba(255,77,109,.1); color:#ff4d6d; border-radius:8px; padding:7px 9px; font-weight:800; cursor:pointer; }
 .queue-empty { text-align:center; color:var(--muted2); font-size:13px; padding:20px 0; }
+
+/* Estilos del Modal de Identificación */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(4, 8, 16, 0.85);
+  backdrop-filter: blur(15px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-content {
+  background: rgba(14, 23, 41, 0.75);
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  width: 100%;
+  max-width: 400px;
+  padding: 30px;
+  text-align: left;
+  color: #fff;
+  animation: fadeIn 0.3s ease-out;
+}
+.modal-content h3 {
+  font-size: 22px;
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #00d4ff;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+}
+.modal-desc {
+  font-size: 13px;
+  color: #a0aec0;
+  line-height: 1.5;
+  margin-bottom: 25px;
+}
+.modal-content label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #718096;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.modal-content input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(9, 15, 28, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 15px;
+  margin-bottom: 20px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.modal-content input:focus {
+  border-color: #00d4ff;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+}
+.modal-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #005f73, #0a9396);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.modal-btn:hover {
+  opacity: 0.95;
+}
+.modal-btn:active {
+  transform: scale(0.98);
+}
+.modal-btn.btn-secondary {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #a0aec0;
+}
+.modal-btn.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+.modal-status {
+  font-size: 13px;
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.modal-error {
+  font-size: 13px;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  padding: 10px;
+  border-radius: 8px;
+  margin-top: 15px;
+  text-align: center;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
 </style>
 </head>
 <body>
+
+<!-- Modal de Identificación Dinámico -->
+<div id="ident-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-content">
+    <h3>Identifícate en Tuc Tuc</h3>
+    <p class="modal-desc">Ingresa tu número de celular para poder agregar canciones en esta sala sincronizada.</p>
+    
+    <div id="ident-step-1">
+      <label for="ident-telefono">Número de Celular</label>
+      <input type="tel" id="ident-telefono" placeholder="Ej: 3001234567" maxlength="15">
+      <button class="modal-btn" onclick="verificarTelefono()">Continuar</button>
+    </div>
+
+    <div id="ident-step-registrado" style="display: none;">
+      <p class="modal-status">✓ Hola <strong id="ident-nombre-usuario"></strong>. Tu número ya está registrado en TUC TUC.</p>
+      <label for="ident-pin">Ingresa tu PIN de 4 dígitos</label>
+      <input type="password" id="ident-pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 24px; letter-spacing: 10px;">
+      <button class="modal-btn" onclick="iniciarSesionPIN()">Ingresar</button>
+      <button class="modal-btn btn-secondary" onclick="volverPaso1()">← Cambiar número</button>
+    </div>
+
+    <div id="ident-step-nuevo" style="display: none;">
+      <p class="modal-status">✨ Bienvenido. Crea tu cuenta en TUC TUC:</p>
+      <label for="ident-nombre">Tu Nombre</label>
+      <input type="text" id="ident-nombre" placeholder="Ej: Juan Pérez">
+      <label for="ident-pin-nuevo">Crea tu PIN de 4 dígitos (Celular)</label>
+      <input type="password" id="ident-pin-nuevo" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 24px; letter-spacing: 10px;">
+      <button class="modal-btn" onclick="registrarTercero()">Registrar e Ingresar</button>
+      <button class="modal-btn btn-secondary" onclick="volverPaso1()">← Cambiar número</button>
+    </div>
+    
+    <div id="ident-error" class="modal-error" style="display: none;"></div>
+  </div>
+</div>
 
 <!-- ACTIVAR -->
 <div id="pantalla-activar">
@@ -241,11 +392,8 @@ audio { width:100%; filter:invert(1) hue-rotate(180deg); opacity:.75; }
 
 <script>
 const SALA  = '{{ sala_id }}';
-const OWNER = localStorage.getItem('rockola_owner_' + SALA) || (() => {
-  const id = Math.random().toString(36).slice(2,8);
-  localStorage.setItem('rockola_owner_' + SALA, id);
-  return id;
-})();
+let CURRENT_TERCERO_ID = {{ session.get('usuario_id') or 'null' }};
+const OWNER = localStorage.getItem('rockola_nombre') || 'Anónimo';
 
 const player      = document.getElementById('player');
 const nombreEl    = document.getElementById('nombre-actual');
@@ -607,6 +755,156 @@ function compartir() {
     qrGenerado = true;
   }
 }
+
+// Identificación con PIN
+function mostrarModalIdent() {
+  document.getElementById('ident-modal').style.display = 'flex';
+  document.getElementById('ident-step-1').style.display = 'block';
+  document.getElementById('ident-step-registrado').style.display = 'none';
+  document.getElementById('ident-step-nuevo').style.display = 'none';
+  document.getElementById('ident-error').style.display = 'none';
+}
+
+function volverPaso1() {
+  document.getElementById('ident-step-1').style.display = 'block';
+  document.getElementById('ident-step-registrado').style.display = 'none';
+  document.getElementById('ident-step-nuevo').style.display = 'none';
+  document.getElementById('ident-error').style.display = 'none';
+}
+
+async function verificarTelefono() {
+  const telInput = document.getElementById('ident-telefono');
+  const tel = telInput.value.trim();
+  const errDiv = document.getElementById('ident-error');
+  errDiv.style.display = 'none';
+
+  if (!tel || tel.replace(/[^0-9]/g, '').length < 7) {
+    errDiv.textContent = 'Ingresa un número de celular válido';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  try {
+    const res = await fetch(`/rockola/verificar-telefono?tel=${encodeURIComponent(tel)}`);
+    const data = await res.json();
+    if (!data.ok) {
+      errDiv.textContent = data.error || 'Error al verificar';
+      errDiv.style.display = 'block';
+      return;
+    }
+
+    document.getElementById('ident-step-1').style.display = 'none';
+    if (data.existe) {
+      document.getElementById('ident-nombre-usuario').textContent = data.nombre || '';
+      document.getElementById('ident-step-registrado').style.display = 'block';
+      setTimeout(() => document.getElementById('ident-pin').focus(), 100);
+    } else {
+      document.getElementById('ident-step-nuevo').style.display = 'block';
+      setTimeout(() => document.getElementById('ident-nombre').focus(), 100);
+    }
+  } catch(e) {
+    errDiv.textContent = 'Error de red. Intenta de nuevo.';
+    errDiv.style.display = 'block';
+  }
+}
+
+async function iniciarSesionPIN() {
+  const tel = document.getElementById('ident-telefono').value.trim();
+  const pinInput = document.getElementById('ident-pin');
+  const pin = pinInput.value.trim();
+  const errDiv = document.getElementById('ident-error');
+  errDiv.style.display = 'none';
+
+  if (pin.length !== 4 || isNaN(pin)) {
+    errDiv.textContent = 'El PIN debe ser de 4 dígitos';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  try {
+    const res = await fetch('/rockola/identificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telefono: tel, pin: pin })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      errDiv.textContent = data.error || 'PIN incorrecto';
+      errDiv.style.display = 'block';
+      return;
+    }
+
+    CURRENT_TERCERO_ID = data.tercero_id;
+    localStorage.setItem('rockola_telefono', tel);
+    localStorage.setItem('rockola_nombre', data.nombre);
+    document.getElementById('ident-modal').style.display = 'none';
+    verificarCola();
+  } catch(e) {
+    errDiv.textContent = 'Error de red. Intenta de nuevo.';
+    errDiv.style.display = 'block';
+  }
+}
+
+async function registrarTercero() {
+  const tel = document.getElementById('ident-telefono').value.trim();
+  const nombreInput = document.getElementById('ident-nombre');
+  const nombre = nombreInput.value.trim();
+  const pinInput = document.getElementById('ident-pin-nuevo');
+  const pin = pinInput.value.trim();
+  const errDiv = document.getElementById('ident-error');
+  errDiv.style.display = 'none';
+
+  if (!nombre) {
+    errDiv.textContent = 'Ingresa tu nombre';
+    errDiv.style.display = 'block';
+    return;
+  }
+  if (pin.length !== 4 || isNaN(pin)) {
+    errDiv.textContent = 'El PIN debe ser de 4 dígitos';
+    errDiv.style.display = 'block';
+    return;
+  }
+
+  try {
+    const res = await fetch('/rockola/identificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telefono: tel, nombre: nombre, pin: pin })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      errDiv.textContent = data.error || 'Error al registrar';
+      errDiv.style.display = 'block';
+      return;
+    }
+
+    CURRENT_TERCERO_ID = data.tercero_id;
+    localStorage.setItem('rockola_telefono', tel);
+    localStorage.setItem('rockola_nombre', data.nombre);
+    document.getElementById('ident-modal').style.display = 'none';
+    verificarCola();
+  } catch(e) {
+    errDiv.textContent = 'Error de red. Intenta de nuevo.';
+    errDiv.style.display = 'block';
+  }
+}
+
+async function checkAutologin() {
+  if (CURRENT_TERCERO_ID !== null) return;
+  
+  const localTel = localStorage.getItem('rockola_telefono');
+  if (localTel) {
+    document.getElementById('ident-telefono').value = localTel;
+    mostrarModalIdent();
+    verificarTelefono();
+  } else {
+    mostrarModalIdent();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  checkAutologin();
+});
 </script>
 </body>
 </html>

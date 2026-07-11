@@ -11,7 +11,8 @@ import os
 import threading
 import uuid
 
-from flask import Blueprint, Response, jsonify, render_template, request, send_from_directory
+from flask import Blueprint, Response, jsonify, render_template, request, send_from_directory, session
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.db import get_db_connection
 
@@ -34,7 +35,7 @@ CREATE TABLE IF NOT EXISTS rockola_cola (
     id        TEXT PRIMARY KEY,
     sala_id   TEXT    NOT NULL,
     nombre    TEXT    NOT NULL,
-    owner     TEXT    NOT NULL DEFAULT 'anon',
+    tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL,
     posicion  INTEGER NOT NULL DEFAULT 0,
     lista_envio_id TEXT,
     lista_envio_nombre TEXT,
@@ -45,7 +46,7 @@ CREATE TABLE IF NOT EXISTS rockola_biblioteca (
     archivo_id TEXT PRIMARY KEY,
     sala_id    TEXT NOT NULL,
     nombre     TEXT NOT NULL,
-    owner      TEXT NOT NULL DEFAULT 'anon',
+    tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL,
     origen     TEXT NOT NULL DEFAULT 'archivo',
     creado_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -113,6 +114,18 @@ def _ensure_db():
         conn = get_db_connection()
         try:
             conn.execute(INIT_SQL)
+            # Asegurar migraciones
+            conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS pin_seguridad VARCHAR(255);")
+            conn.execute("ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL;")
+            conn.execute("ALTER TABLE rockola_biblioteca ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL;")
+            try:
+                conn.execute("ALTER TABLE rockola_cola DROP COLUMN IF EXISTS owner;")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE rockola_biblioteca DROP COLUMN IF EXISTS owner;")
+            except Exception:
+                pass
             conn.commit()
             _db_ready = True
         finally:
@@ -152,10 +165,11 @@ def _get_sala(conn, sala_id):
 def _get_cola(conn, sala_id):
     rows = conn.execute(
         """
-        SELECT id, nombre, owner, lista_envio_id, lista_envio_nombre, lista_envio_posicion
-        FROM rockola_cola
-        WHERE sala_id = %s
-        ORDER BY posicion ASC
+        SELECT c.id, c.nombre, c.tercero_id, t.nombre AS owner, c.lista_envio_id, c.lista_envio_nombre, c.lista_envio_posicion
+        FROM rockola_cola c
+        LEFT JOIN terceros t ON c.tercero_id = t.id
+        WHERE c.sala_id = %s
+        ORDER BY c.posicion ASC
         """,
         (sala_id,),
     ).fetchall()
@@ -165,9 +179,10 @@ def _get_cola(conn, sala_id):
 def _get_item_cola(conn, sala_id, archivo_id):
     row = conn.execute(
         """
-        SELECT id, nombre, owner
-        FROM rockola_cola
-        WHERE sala_id = %s AND id = %s
+        SELECT c.id, c.nombre, c.tercero_id, t.nombre AS owner
+        FROM rockola_cola c
+        LEFT JOIN terceros t ON c.tercero_id = t.id
+        WHERE c.sala_id = %s AND c.id = %s
         """,
         (sala_id, archivo_id),
     ).fetchone()
@@ -182,34 +197,36 @@ def _max_pos(conn, sala_id):
     return row['m'] if row else -1
 
 
-def _recordar_cancion(conn, sala_id, archivo_id, nombre, owner, origen):
+def _recordar_cancion(conn, sala_id, archivo_id, nombre, tercero_id, origen):
+    tid = int(tercero_id) if tercero_id else None
     conn.execute(
         """
-        INSERT INTO rockola_biblioteca (archivo_id, sala_id, nombre, owner, origen)
+        INSERT INTO rockola_biblioteca (archivo_id, sala_id, nombre, tercero_id, origen)
         VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (archivo_id) DO UPDATE
         SET nombre = EXCLUDED.nombre,
-            owner = EXCLUDED.owner,
+            tercero_id = EXCLUDED.tercero_id,
             origen = EXCLUDED.origen
         """,
-        (archivo_id, sala_id, nombre, owner, origen),
+        (archivo_id, sala_id, nombre, tid, origen),
     )
 
 
-def _agregar_a_cola(conn, sala_id, archivo_id, nombre, owner, lista_envio=None):
+def _agregar_a_cola(conn, sala_id, archivo_id, nombre, tercero_id, lista_envio=None):
     pos_actual = _max_pos(conn, sala_id) + 1
     lista_envio = lista_envio or {}
+    tid = int(tercero_id) if tercero_id else None
     conn.execute(
         """
         INSERT INTO rockola_cola
-            (id, sala_id, nombre, owner, posicion, lista_envio_id, lista_envio_nombre, lista_envio_posicion)
+            (id, sala_id, nombre, tercero_id, posicion, lista_envio_id, lista_envio_nombre, lista_envio_posicion)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             archivo_id,
             sala_id,
             nombre,
-            owner,
+            tid,
             pos_actual,
             lista_envio.get('id'),
             lista_envio.get('nombre'),
@@ -335,6 +352,83 @@ def _sala_para_dispositivo(sala, dispositivo_id=None):
         'sin_reproductor': sin_reproductor,
         'puede_agregar': True,
     }
+
+
+@bp.route('/verificar-telefono')
+def verificar_telefono():
+    telefono = (request.args.get('tel') or '').strip()
+    tel_limpio = ''.join(c for c in telefono if c.isdigit())
+    if not tel_limpio:
+        return jsonify(ok=False, error='Teléfono inválido'), 400
+
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT id, nombre, pin_seguridad FROM terceros WHERE REGEXP_REPLACE(COALESCE(telefono, ''), '[^0-9]', '', 'g') = %s LIMIT 1",
+            (tel_limpio,),
+        ).fetchone()
+        tiene_pin = bool(row and row['pin_seguridad'])
+        return jsonify(ok=True, existe=bool(row), tiene_pin=tiene_pin, nombre=row['nombre'] if row else None)
+    finally:
+        conn.close()
+
+
+@bp.route('/identificar', methods=['POST'])
+def identificar():
+    data = request.get_json() or {}
+    telefono = (data.get('telefono') or '').strip()
+    nombre = (data.get('nombre') or '').strip()
+    pin = (data.get('pin') or '').strip()
+
+    tel_limpio = ''.join(c for c in telefono if c.isdigit())
+    if not tel_limpio:
+        return jsonify(ok=False, error='Teléfono requerido'), 400
+
+    if len(pin) != 4 or not pin.isdigit():
+        return jsonify(ok=False, error='El PIN debe tener 4 números'), 400
+
+    conn = _connect()
+    try:
+        tercero = conn.execute(
+            "SELECT id, nombre, pin_seguridad FROM terceros WHERE REGEXP_REPLACE(COALESCE(telefono, ''), '[^0-9]', '', 'g') = %s LIMIT 1",
+            (tel_limpio,),
+        ).fetchone()
+
+        if tercero:
+            if tercero['pin_seguridad']:
+                if not check_password_hash(tercero['pin_seguridad'], pin):
+                    return jsonify(ok=False, error='PIN incorrecto'), 401
+            else:
+                pin_hash = generate_password_hash(pin)
+                conn.execute(
+                    "UPDATE terceros SET pin_seguridad = %s WHERE id = %s",
+                    (pin_hash, tercero['id']),
+                )
+                conn.commit()
+            
+            tercero_id = tercero['id']
+            nombre_final = tercero['nombre']
+        else:
+            if not nombre:
+                return jsonify(ok=False, error='Nombre requerido para registro nuevo'), 400
+            
+            pin_hash = generate_password_hash(pin)
+            cur = conn.execute(
+                "INSERT INTO terceros (nombre, telefono, pin_seguridad, tipo_tercero) VALUES (%s, %s, %s, 'invitado') RETURNING id",
+                (nombre, telefono, pin_hash),
+            )
+            tercero_id = cur.fetchone()['id']
+            conn.commit()
+            nombre_final = nombre
+
+        session['usuario_id'] = tercero_id
+        session['nombre'] = nombre_final
+        session['telefono'] = telefono
+        session['rol'] = 'Cliente'
+
+        return jsonify(ok=True, tercero_id=tercero_id, nombre=nombre_final)
+    finally:
+        conn.close()
 
 
 @bp.route('/')
@@ -628,7 +722,8 @@ def sync(sala_id):
 
 @bp.route('/<sala_id>/subir', methods=['POST'])
 def subir(sala_id):
-    owner = request.form.get('owner', 'anon')
+    tercero_id = session.get('usuario_id')
+    owner_nombre = session.get('nombre', 'Anónimo')
     lista_envio_id = (request.form.get('lista_id') or '').strip() or None
     lista_envio_nombre = (request.form.get('lista_nombre') or '').strip() or None
     lista_envio_posicion_raw = (request.form.get('lista_posicion') or '').strip()
@@ -657,9 +752,9 @@ def subir(sala_id):
                 ext = os.path.splitext(file.filename)[1].lower()
                 nombre_id = str(uuid.uuid4()) + ext
                 file.save(os.path.join(upload_dir, nombre_id))
-                _agregar_a_cola(conn, sala_id, nombre_id, file.filename, owner, lista_envio)
-                _recordar_cancion(conn, sala_id, nombre_id, file.filename, owner, 'archivo')
-                agregadas.append({'id': nombre_id, 'nombre': file.filename, 'owner': owner})
+                _agregar_a_cola(conn, sala_id, nombre_id, file.filename, tercero_id, lista_envio)
+                _recordar_cancion(conn, sala_id, nombre_id, file.filename, tercero_id, 'archivo')
+                agregadas.append({'id': nombre_id, 'nombre': file.filename, 'owner': owner_nombre, 'tercero_id': tercero_id})
             conn.commit()
     finally:
         conn.close()
@@ -789,7 +884,8 @@ def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
 def youtube(sala_id):
     data = request.get_json(silent=True) or {}
     url = data.get('url', '').strip()
-    owner = data.get('owner', 'anon')
+    tercero_id = session.get('usuario_id')
+    owner_nombre = session.get('nombre', 'Anónimo')
 
     if not url or ('youtube.com' not in url and 'youtu.be' not in url):
         return jsonify(ok=False, error='URL de YouTube invalida'), 400
@@ -812,8 +908,8 @@ def youtube(sala_id):
     conn = _connect()
     try:
         with _lock:
-            _agregar_a_cola(conn, sala_id, archivo_final, nombre_display, owner)
-            _recordar_cancion(conn, sala_id, archivo_final, nombre_display, owner, 'youtube')
+            _agregar_a_cola(conn, sala_id, archivo_final, nombre_display, tercero_id)
+            _recordar_cancion(conn, sala_id, archivo_final, nombre_display, tercero_id, 'youtube')
             conn.commit()
     finally:
         conn.close()
@@ -821,7 +917,8 @@ def youtube(sala_id):
     return jsonify(ok=True, agregadas=[{
         'id': archivo_final,
         'nombre': nombre_display,
-        'owner': owner,
+        'owner': owner_nombre,
+        'tercero_id': tercero_id,
     }])
 
 
@@ -830,19 +927,20 @@ def agregar_local(sala_id):
     data = request.get_json(silent=True) or {}
     local_id = (data.get('local_id') or '').strip()
     nombre = (data.get('nombre') or 'Cancion local').strip()
-    owner = data.get('owner', 'reproductor')
+    tercero_id = session.get('usuario_id')
+    owner_nombre = session.get('nombre', 'Anónimo')
     if not local_id.startswith('local-'):
         return jsonify(ok=False, error='Cancion local invalida'), 400
 
     conn = _connect()
     try:
         with _lock:
-            _agregar_a_cola(conn, sala_id, local_id, nombre, owner)
-            _recordar_cancion(conn, sala_id, local_id, nombre, owner, 'local')
+            _agregar_a_cola(conn, sala_id, local_id, nombre, tercero_id)
+            _recordar_cancion(conn, sala_id, local_id, nombre, tercero_id, 'local')
             conn.commit()
     finally:
         conn.close()
-    return jsonify(ok=True, agregadas=[{'id': local_id, 'nombre': nombre, 'owner': owner}])
+    return jsonify(ok=True, agregadas=[{'id': local_id, 'nombre': nombre, 'owner': owner_nombre, 'tercero_id': tercero_id}])
 
 
 @bp.route('/catalogo/local', methods=['POST'])
@@ -1032,8 +1130,8 @@ def biblioteca(sala_id):
 
 @bp.route('/<sala_id>/biblioteca/<archivo_id>/poner', methods=['POST'])
 def poner_desde_biblioteca(sala_id, archivo_id):
-    data = request.get_json(silent=True) or {}
-    owner = data.get('owner', 'anon')
+    tercero_id = session.get('usuario_id')
+    owner_nombre = session.get('nombre', 'Anónimo')
 
     conn = _connect()
     try:
@@ -1063,12 +1161,12 @@ def poner_desde_biblioteca(sala_id, archivo_id):
                         break
                     dst.write(chunk)
 
-            _agregar_a_cola(conn, sala_id, nuevo_id, nombre, owner)
+            _agregar_a_cola(conn, sala_id, nuevo_id, nombre, tercero_id)
             conn.commit()
     finally:
         conn.close()
 
-    return jsonify(ok=True, agregadas=[{'id': nuevo_id, 'nombre': nombre, 'owner': owner}])
+    return jsonify(ok=True, agregadas=[{'id': nuevo_id, 'nombre': nombre, 'owner': owner_nombre, 'tercero_id': tercero_id}])
 
 
 @bp.route('/<sala_id>/sync_control', methods=['POST'])
@@ -1137,10 +1235,11 @@ def saltar(sala_id):
 def quitar(sala_id):
     data = request.get_json(silent=True) or {}
     archivo_id = data.get('id')
-    owner = data.get('owner')
     modo = data.get('modo', 'cliente')
     if not archivo_id:
         return jsonify(ok=False, error='Falta cancion'), 400
+
+    session_tercero_id = session.get('usuario_id')
 
     conn = _connect()
     try:
@@ -1154,7 +1253,9 @@ def quitar(sala_id):
 
             es_actual = items[0]['id'] == archivo_id
             es_admin = _es_admin_sala(conn, sala_id, data)
-            autorizado = es_admin or modo == 'sync' or (item.get('owner') == owner and not es_actual)
+            autorizado = es_admin or modo == 'sync' or (
+                session_tercero_id is not None and item.get('tercero_id') == session_tercero_id and not es_actual
+            )
             if not autorizado:
                 return jsonify(ok=False, error='No autorizado'), 403
 
@@ -1174,8 +1275,8 @@ def quitar(sala_id):
 def reordenar(sala_id):
     data = request.get_json(silent=True) or {}
     nuevo_orden = data.get('orden', [])
-    owner = data.get('owner')
     modo = data.get('modo', 'restaurante')
+    session_tercero_id = session.get('usuario_id')
 
     conn = _connect()
     try:
@@ -1187,7 +1288,9 @@ def reordenar(sala_id):
             for id_ in nuevo_orden:
                 if id_ in por_id:
                     item = por_id[id_]
-                    if es_admin or modo == 'sync' or item['owner'] == owner:
+                    if es_admin or modo == 'sync' or (
+                        session_tercero_id is not None and item.get('tercero_id') == session_tercero_id
+                    ):
                         nueva_cola.append(item)
             ids_nuevos = {item['id'] for item in nueva_cola}
             for item in items:
@@ -1211,6 +1314,31 @@ def reordenar(sala_id):
 @bp.route('/<sala_id>/archivo/<nombre_id>')
 def archivo(sala_id, nombre_id):
     return send_from_directory(_upload_dir(sala_id), nombre_id)
+
+
+@bp.route('/admin/blanquear-pin', methods=['POST'])
+def blanquear_pin():
+    if not (session.get('rol') in ('Administrador', 'ClienteVFP', 'Tienda', 'Restaurante') and session.get('usuario_id')):
+        return jsonify(ok=False, error='No autorizado'), 403
+
+    data = request.get_json() or {}
+    tercero_id = data.get('tercero_id')
+    if not tercero_id:
+        return jsonify(ok=False, error='Falta tercero_id'), 400
+
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "UPDATE terceros SET pin_seguridad = NULL WHERE id = %s",
+            (tercero_id,)
+        )
+        conn.commit()
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)), 500
+    finally:
+        conn.close()
+
+    return jsonify(ok=True)
 
 
 def register_events(socketio):

@@ -242,6 +242,13 @@ function renderLista(contactos) {
         <p class="font-medium text-gray-900 truncate">${c.nombre || '(sin nombre)'}</p>
         <p class="text-sm text-gray-500">${c.telefono || '(sin teléfono)'}</p>
       </div>
+      <button onclick="blanquearPin(${c.id})" title="Blanquear PIN de seguridad"
+              class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-300 hover:text-amber-500 hover:bg-amber-50 transition-colors flex-shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+        </svg>
+      </button>
       <button onclick="eliminar(${c.id}, this)"
               class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -251,6 +258,25 @@ function renderLista(contactos) {
       </button>`;
     lista.appendChild(div);
   });
+}
+
+async function blanquearPin(id) {
+  if (!confirm('¿Restablecer/blanquear el PIN de seguridad de este cliente?')) return;
+  try {
+    const r = await fetch('/rockola/admin/blanquear-pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tercero_id: id })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('PIN de seguridad restablecido ✓');
+    } else {
+      toast('Error: ' + d.error);
+    }
+  } catch(e) {
+    toast('Error de red');
+  }
 }
 
 async function importarContactos() {

@@ -1,7 +1,7 @@
 {
-  "commit": "6d60031",
+  "commit": "f728812",
   "estado": "live",
-  "iniciado": "2026-07-11T13:33:22.983023",
-  "mensaje": "feat: two-slider crossfade config, fix skip/back endpoints, fix crossfade cut bug, and add old file disk cleaner",
-  "live_at": "2026-07-11T13:33:49.534290"
+  "iniciado": "2026-07-11T13:43:26.715459",
+  "mensaje": "fix: touch seeking, vector play/pause shapes, mute toggle by clicking speaker, and song title wrapping",
+  "live_at": "2026-07-11T13:43:50.144146"
 }

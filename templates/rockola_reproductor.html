@@ -2023,6 +2023,7 @@ async function guardarFundidoSettings() {
 }
 aplicarVolumen(volumenEl.value);
 verificarDispositivoSala();
+initProgressBarDrag();
 
 if (window.Sortable) {
   Sortable.create(listaCola, {
@@ -2065,7 +2066,9 @@ if (window.Sortable) {
   });
 }
 
+let isDraggingProgress = false;
 function actualizarProgreso() {
+  if (isDraggingProgress) return;
   if (!player.duration) return;
   const current = player.currentTime;
   const total = player.duration;
@@ -2082,34 +2085,66 @@ function formatTime(secs) {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-async function seekAudio(e) {
-  if (!player.duration) return;
-  const rect = document.getElementById('progress-bar').getBoundingClientRect();
-  let clientX = e.clientX;
-  if (e.touches && e.touches.length) {
-    clientX = e.touches[0].clientX;
-  } else if (e.changedTouches && e.changedTouches.length) {
-    clientX = e.changedTouches[0].clientX;
+function initProgressBarDrag() {
+  const progressBar = document.getElementById('progress-bar');
+  const progressFill = document.getElementById('progress-fill');
+  const timeCurrent = document.getElementById('time-current');
+  if (!progressBar || !player) return;
+  
+  function getPercent(e) {
+    const rect = progressBar.getBoundingClientRect();
+    let clientX = e.clientX;
+    if (e.touches && e.touches.length) {
+      clientX = e.touches[0].clientX;
+    } else if (e.changedTouches && e.changedTouches.length) {
+      clientX = e.changedTouches[0].clientX;
+    }
+    if (clientX === undefined) return 0;
+    const x = clientX - rect.left;
+    return Math.max(0, Math.min(1, x / rect.width));
   }
-  if (clientX === undefined) return;
   
-  const x = clientX - rect.left;
-  const width = rect.width;
-  const percent = Math.max(0, Math.min(1, x / width));
-  const targetTime = percent * player.duration;
-  player.currentTime = targetTime;
-  actualizarProgreso();
+  function handleStart(e) {
+    if (!player.duration) return;
+    isDraggingProgress = true;
+    handleMove(e);
+  }
   
-  await fetch(`/rockola/${SALA}/sync_control`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      estado: player.paused ? 'pause' : 'play',
-      pos: targetTime,
-      ts: Date.now() / 1000,
-      modo: 'reproductor'
-    })
-  });
+  function handleMove(e) {
+    if (!isDraggingProgress || !player.duration) return;
+    const percent = getPercent(e);
+    progressFill.style.width = (percent * 100) + '%';
+    timeCurrent.textContent = formatTime(percent * player.duration);
+  }
+  
+  async function handleEnd(e) {
+    if (!isDraggingProgress || !player.duration) return;
+    const percent = getPercent(e);
+    const targetTime = percent * player.duration;
+    player.currentTime = targetTime;
+    isDraggingProgress = false;
+    actualizarProgreso();
+    
+    await fetch(`/rockola/${SALA}/sync_control`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        estado: player.paused ? 'pause' : 'play',
+        pos: targetTime,
+        ts: Date.now() / 1000,
+        modo: 'reproductor'
+      })
+    });
+  }
+  
+  progressBar.addEventListener('mousedown', handleStart);
+  progressBar.addEventListener('touchstart', handleStart, { passive: true });
+  
+  window.addEventListener('mousemove', handleMove, { passive: true });
+  window.addEventListener('touchmove', handleMove, { passive: true });
+  
+  window.addEventListener('mouseup', handleEnd);
+  window.addEventListener('touchend', handleEnd);
 }
 
 async function togglePlayPause() {

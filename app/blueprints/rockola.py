@@ -118,6 +118,8 @@ def _ensure_db():
             conn.execute("ALTER TABLE terceros ADD COLUMN IF NOT EXISTS pin_seguridad VARCHAR(255);")
             conn.execute("ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL;")
             conn.execute("ALTER TABLE rockola_biblioteca ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL;")
+            conn.execute("ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS reproducida BOOLEAN DEFAULT FALSE;")
+            conn.execute("ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS reproducida_en TIMESTAMP;")
             try:
                 conn.execute("ALTER TABLE rockola_cola DROP COLUMN IF EXISTS owner;")
             except Exception:
@@ -168,7 +170,7 @@ def _get_cola(conn, sala_id):
         SELECT c.id, c.nombre, c.tercero_id, t.nombre AS owner, c.lista_envio_id, c.lista_envio_nombre, c.lista_envio_posicion
         FROM rockola_cola c
         LEFT JOIN terceros t ON c.tercero_id = t.id
-        WHERE c.sala_id = %s
+        WHERE c.sala_id = %s AND c.reproducida = FALSE
         ORDER BY c.posicion ASC
         """,
         (sala_id,),
@@ -1253,7 +1255,7 @@ def siguiente(sala_id):
             items = _get_cola(conn, sala_id)
             if items and (not cancion_id or items[0]['id'] == cancion_id):
                 conn.execute(
-                    "DELETE FROM rockola_cola WHERE id = %s AND sala_id = %s",
+                    "UPDATE rockola_cola SET reproducida = TRUE, reproducida_en = NOW() WHERE id = %s AND sala_id = %s",
                     (items[0]['id'], sala_id),
                 )
                 _reset_sync(conn, sala_id)
@@ -1274,8 +1276,57 @@ def saltar(sala_id):
             items = _get_cola(conn, sala_id)
             if items:
                 conn.execute(
-                    "DELETE FROM rockola_cola WHERE id = %s AND sala_id = %s",
+                    "UPDATE rockola_cola SET reproducida = TRUE, reproducida_en = NOW() WHERE id = %s AND sala_id = %s",
                     (items[0]['id'], sala_id),
+                )
+                _reset_sync(conn, sala_id)
+                conn.commit()
+    finally:
+        conn.close()
+    return jsonify(ok=True)
+
+
+@bp.route('/<sala_id>/anterior', methods=['POST'])
+def anterior(sala_id):
+    data = request.get_json(silent=True) or {}
+    conn = _connect()
+    try:
+        with _lock:
+            if not _es_admin_sala(conn, sala_id, data):
+                return jsonify(ok=False, error='No autorizado'), 403
+            
+            # Obtener el último tema reproducido para esta sala
+            row = conn.execute(
+                """
+                SELECT id, posicion FROM rockola_cola
+                WHERE sala_id = %s AND reproducida = TRUE
+                ORDER BY reproducida_en DESC
+                LIMIT 1
+                """,
+                (sala_id,)
+            ).fetchone()
+            
+            if row:
+                # Encontrar la menor posición de los pendientes para colocar este antes
+                min_pos_row = conn.execute(
+                    "SELECT MIN(posicion) FROM rockola_cola WHERE sala_id = %s AND reproducida = FALSE",
+                    (sala_id,)
+                ).fetchone()
+                
+                new_pos = 0
+                if min_pos_row and min_pos_row[0] is not None:
+                    new_pos = min_pos_row[0] - 1
+                else:
+                    new_pos = row['posicion']
+
+                # Desmarcar el tema como reproducido y reubicado
+                conn.execute(
+                    """
+                    UPDATE rockola_cola 
+                    SET reproducida = FALSE, reproducida_en = NULL, posicion = %s
+                    WHERE id = %s AND sala_id = %s
+                    """,
+                    (new_pos, row['id'], sala_id),
                 )
                 _reset_sync(conn, sala_id)
                 conn.commit()

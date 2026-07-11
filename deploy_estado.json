@@ -1,6 +1,6 @@
 {
-  "commit": "3a7f558",
+  "commit": "b640e91",
   "estado": "pendiente",
-  "iniciado": "2026-07-09T10:15:27.844872",
-  "mensaje": "ui(inventario): always show both annulment buttons to avoid confusion"
+  "iniciado": "2026-07-11T09:25:04.493738",
+  "mensaje": "feat: add double PIN confirmation and user profile management in Rockola"
 }

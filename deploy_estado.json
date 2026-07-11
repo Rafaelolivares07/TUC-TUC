@@ -1,7 +1,7 @@
 {
-  "commit": "4abaa55",
+  "commit": "1bf717c",
   "estado": "live",
-  "iniciado": "2026-07-11T14:39:58.048211",
-  "mensaje": "temp: deploy git shallow route",
-  "live_at": "2026-07-11T14:40:21.351016"
+  "iniciado": "2026-07-11T14:41:30.393956",
+  "mensaje": "temp: update git shallow route to return sizes",
+  "live_at": "2026-07-11T14:41:54.002355"
 }

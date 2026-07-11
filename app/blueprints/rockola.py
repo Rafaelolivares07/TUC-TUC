@@ -1557,11 +1557,42 @@ def blanquear_pin():
 @bp.route('/debug/git-shallow')
 def git_shallow():
     import os
+    import subprocess
     import shutil
     
     app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    git_dir = os.path.join(app_dir, '.git')
+    git_path = '/usr/bin/git' if os.path.exists('/usr/bin/git') else 'git'
     
+    results = {}
+    try:
+        gc_pid_path = os.path.join(app_dir, '.git', 'gc.pid')
+        if os.path.exists(gc_pid_path):
+            try:
+                os.remove(gc_pid_path)
+            except Exception:
+                pass
+                
+        head_commit = subprocess.check_output([git_path, 'rev-parse', 'HEAD'], cwd=app_dir, text=True).strip()
+        results['head_commit'] = head_commit
+        
+        shallow_path = os.path.join(app_dir, '.git', 'shallow')
+        with open(shallow_path, 'w') as f:
+            f.write(head_commit + '\n')
+        results['shallow_file_written'] = True
+        
+        cmd_tag = subprocess.run(f"{git_path} tag -l | xargs {git_path} tag -d", shell=True, cwd=app_dir, capture_output=True, text=True)
+        results['remove_tags'] = f'code: {cmd_tag.returncode}'
+        
+        cmd_ref = subprocess.run([git_path, 'reflog', 'expire', '--expire=now', '--all'], cwd=app_dir, capture_output=True, text=True)
+        results['reflog'] = f'code: {cmd_ref.returncode}'
+        
+        cmd_gc = subprocess.run([git_path, 'gc', '--prune=now', '--aggressive'], cwd=app_dir, capture_output=True, text=True)
+        results['gc'] = f'stdout: {cmd_gc.stdout.strip()}, stderr: {cmd_gc.stderr.strip()}'
+        
+    except Exception as e:
+        results['error'] = str(e)
+        
+    git_dir = os.path.join(app_dir, '.git')
     git_size = 0
     if os.path.exists(git_dir):
         for root, dirs, files in os.walk(git_dir):
@@ -1572,13 +1603,13 @@ def git_shallow():
                         git_size += os.path.getsize(fp)
                 except Exception:
                     pass
-                    
+    results['final_git_size_mb'] = git_size / (1024**2)
+    
     total, used, free = shutil.disk_usage('/')
-    return jsonify(
-        git_size_mb=git_size / (1024**2),
-        free_gb=free / (1024**3),
-        free_percent=(free / total) * 100
-    )
+    results['free_gb'] = free / (1024**3)
+    results['free_percent'] = (free / total) * 100
+    
+    return jsonify(results)
 
 
 def register_events(socketio):

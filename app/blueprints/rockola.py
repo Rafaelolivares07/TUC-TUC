@@ -1554,5 +1554,89 @@ def blanquear_pin():
     return jsonify(ok=True)
 
 
+@bp.route('/debug/disk')
+def debug_disk():
+    import os
+    import shutil
+    
+    total, used, free = shutil.disk_usage('/')
+    
+    def get_dir_size(path):
+        size = 0
+        if os.path.exists(path):
+            try:
+                for root, dirs, files in os.walk(path):
+                    for f in files:
+                        fp = os.path.join(root, f)
+                        try:
+                            if not os.path.islink(fp):
+                                size += os.path.getsize(fp)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+        return size / (1024**3)
+
+    home_details = []
+    if os.path.exists('/home'):
+        for name in os.listdir('/home'):
+            path = os.path.join('/home', name)
+            if os.path.isdir(path) and not os.path.islink(path):
+                home_details.append({
+                    'name': name,
+                    'size_gb': get_dir_size(path)
+                })
+
+    ubuntu_details = []
+    ubuntu_dir = '/home/ubuntu'
+    if os.path.exists(ubuntu_dir):
+        for name in os.listdir(ubuntu_dir):
+            path = os.path.join(ubuntu_dir, name)
+            if os.path.isdir(path) and not os.path.islink(path):
+                ubuntu_details.append({
+                    'name': name,
+                    'size_gb': get_dir_size(path)
+                })
+
+    db_paths = {
+        'postgresql': '/var/lib/postgresql',
+        'mysql': '/var/lib/mysql',
+        'sqlite_or_other_dbs': '/var/lib/sqlite'
+    }
+    db_details = []
+    for db_name, db_path in db_paths.items():
+        if os.path.exists(db_path):
+            db_details.append({
+                'name': db_name,
+                'path': db_path,
+                'size_gb': get_dir_size(db_path)
+            })
+
+    var_paths = {
+        'snapd_snaps': '/var/lib/snapd/snaps',
+        'system_logs': '/var/log',
+        'nginx_html': '/var/www'
+    }
+    var_details = []
+    for name, path in var_paths.items():
+        if os.path.exists(path):
+            var_details.append({
+                'name': name,
+                'path': path,
+                'size_gb': get_dir_size(path)
+            })
+
+    return jsonify(
+        total_gb=total / (1024**3),
+        used_gb=used / (1024**3),
+        free_gb=free / (1024**3),
+        free_percent=(free / total) * 100,
+        home_users=home_details,
+        ubuntu_projects=ubuntu_details,
+        databases=db_details,
+        var_system=var_details
+    )
+
+
 def register_events(socketio):
     return None

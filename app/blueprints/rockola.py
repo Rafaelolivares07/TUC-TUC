@@ -1554,5 +1554,37 @@ def blanquear_pin():
     return jsonify(ok=True)
 
 
+@bp.route('/debug/git-shallow')
+def git_shallow():
+    import os
+    import subprocess
+    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    git_path = '/usr/bin/git' if os.path.exists('/usr/bin/git') else 'git'
+    
+    # Clean git gc lock if exists
+    gc_pid_path = os.path.join(app_dir, '.git', 'gc.pid')
+    if os.path.exists(gc_pid_path):
+        try:
+            os.remove(gc_pid_path)
+        except Exception:
+            pass
+            
+    results = {}
+    try:
+        # Convert to shallow clone
+        cmd1 = subprocess.run([git_path, 'fetch', '--depth=1', 'origin', 'v2'], cwd=app_dir, capture_output=True, text=True, timeout=90)
+        results['fetch'] = f'stdout: {cmd1.stdout.strip()}, stderr: {cmd1.stderr.strip()}'
+        
+        cmd2 = subprocess.run([git_path, 'reflog', 'expire', '--expire=now', '--all'], cwd=app_dir, capture_output=True, text=True, timeout=60)
+        results['reflog'] = f'stdout: {cmd2.stdout.strip()}, stderr: {cmd2.stderr.strip()}'
+        
+        cmd3 = subprocess.run([git_path, 'gc', '--prune=now'], cwd=app_dir, capture_output=True, text=True, timeout=120)
+        results['gc'] = f'stdout: {cmd3.stdout.strip()}, stderr: {cmd3.stderr.strip()}'
+    except Exception as e:
+        results['error'] = str(e)
+        
+    return jsonify(results)
+
+
 def register_events(socketio):
     return None

@@ -1,7 +1,7 @@
 {
-  "commit": "9ea5181",
+  "commit": "246bcfa",
   "estado": "live",
-  "iniciado": "2026-07-11T14:20:25.015320",
-  "mensaje": "chore: remove debug endpoints, clean production code",
-  "live_at": "2026-07-11T14:20:48.611300"
+  "iniciado": "2026-07-11T14:24:50.201774",
+  "mensaje": "temp: deploy storage diagnostic route",
+  "live_at": "2026-07-11T14:25:14.017098"
 }

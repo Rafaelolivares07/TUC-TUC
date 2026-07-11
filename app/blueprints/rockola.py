@@ -1560,8 +1560,9 @@ def debug_disk():
     import shutil
     
     total, used, free = shutil.disk_usage('/')
+    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     
-    def get_dir_size(path):
+    def get_dir_size_mb(path):
         size = 0
         if os.path.exists(path):
             try:
@@ -1575,66 +1576,33 @@ def debug_disk():
                             pass
             except Exception:
                 pass
-        return size / (1024**3)
+        return size / (1024**2)
 
-    home_details = []
-    if os.path.exists('/home'):
-        for name in os.listdir('/home'):
-            path = os.path.join('/home', name)
+    folder_details = []
+    if os.path.exists(app_dir):
+        for name in os.listdir(app_dir):
+            path = os.path.join(app_dir, name)
             if os.path.isdir(path) and not os.path.islink(path):
-                home_details.append({
+                folder_details.append({
                     'name': name,
-                    'size_gb': get_dir_size(path)
+                    'size_mb': get_dir_size_mb(path)
                 })
-
-    ubuntu_details = []
-    ubuntu_dir = '/home/ubuntu'
-    if os.path.exists(ubuntu_dir):
-        for name in os.listdir(ubuntu_dir):
-            path = os.path.join(ubuntu_dir, name)
-            if os.path.isdir(path) and not os.path.islink(path):
-                ubuntu_details.append({
+            elif os.path.isfile(path) and not os.path.islink(path):
+                folder_details.append({
                     'name': name,
-                    'size_gb': get_dir_size(path)
+                    'size_mb': os.path.getsize(path) / (1024**2),
+                    'is_file': True
                 })
-
-    db_paths = {
-        'postgresql': '/var/lib/postgresql',
-        'mysql': '/var/lib/mysql',
-        'sqlite_or_other_dbs': '/var/lib/sqlite'
-    }
-    db_details = []
-    for db_name, db_path in db_paths.items():
-        if os.path.exists(db_path):
-            db_details.append({
-                'name': db_name,
-                'path': db_path,
-                'size_gb': get_dir_size(db_path)
-            })
-
-    var_paths = {
-        'snapd_snaps': '/var/lib/snapd/snaps',
-        'system_logs': '/var/log',
-        'nginx_html': '/var/www'
-    }
-    var_details = []
-    for name, path in var_paths.items():
-        if os.path.exists(path):
-            var_details.append({
-                'name': name,
-                'path': path,
-                'size_gb': get_dir_size(path)
-            })
+                
+    folder_details.sort(key=lambda x: x['size_mb'], reverse=True)
 
     return jsonify(
         total_gb=total / (1024**3),
         used_gb=used / (1024**3),
         free_gb=free / (1024**3),
         free_percent=(free / total) * 100,
-        home_users=home_details,
-        ubuntu_projects=ubuntu_details,
-        databases=db_details,
-        var_system=var_details
+        app_dir=app_dir,
+        contents=folder_details
     )
 
 

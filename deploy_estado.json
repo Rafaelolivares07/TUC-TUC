@@ -1,7 +1,7 @@
 {
-  "commit": "8b2a539",
+  "commit": "4abaa55",
   "estado": "live",
-  "iniciado": "2026-07-11T14:28:02.948611",
-  "mensaje": "chore: cleanup project scanner debug route",
-  "live_at": "2026-07-11T14:28:26.574795"
+  "iniciado": "2026-07-11T14:39:58.048211",
+  "mensaje": "temp: deploy git shallow route",
+  "live_at": "2026-07-11T14:40:21.351016"
 }

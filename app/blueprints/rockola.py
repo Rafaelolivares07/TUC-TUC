@@ -1557,33 +1557,28 @@ def blanquear_pin():
 @bp.route('/debug/git-shallow')
 def git_shallow():
     import os
-    import subprocess
-    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    git_path = '/usr/bin/git' if os.path.exists('/usr/bin/git') else 'git'
+    import shutil
     
-    # Clean git gc lock if exists
-    gc_pid_path = os.path.join(app_dir, '.git', 'gc.pid')
-    if os.path.exists(gc_pid_path):
-        try:
-            os.remove(gc_pid_path)
-        except Exception:
-            pass
-            
-    results = {}
-    try:
-        # Convert to shallow clone
-        cmd1 = subprocess.run([git_path, 'fetch', '--depth=1', 'origin', 'v2'], cwd=app_dir, capture_output=True, text=True, timeout=90)
-        results['fetch'] = f'stdout: {cmd1.stdout.strip()}, stderr: {cmd1.stderr.strip()}'
-        
-        cmd2 = subprocess.run([git_path, 'reflog', 'expire', '--expire=now', '--all'], cwd=app_dir, capture_output=True, text=True, timeout=60)
-        results['reflog'] = f'stdout: {cmd2.stdout.strip()}, stderr: {cmd2.stderr.strip()}'
-        
-        cmd3 = subprocess.run([git_path, 'gc', '--prune=now'], cwd=app_dir, capture_output=True, text=True, timeout=120)
-        results['gc'] = f'stdout: {cmd3.stdout.strip()}, stderr: {cmd3.stderr.strip()}'
-    except Exception as e:
-        results['error'] = str(e)
-        
-    return jsonify(results)
+    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    git_dir = os.path.join(app_dir, '.git')
+    
+    git_size = 0
+    if os.path.exists(git_dir):
+        for root, dirs, files in os.walk(git_dir):
+            for f in files:
+                fp = os.path.join(root, f)
+                try:
+                    if not os.path.islink(fp):
+                        git_size += os.path.getsize(fp)
+                except Exception:
+                    pass
+                    
+    total, used, free = shutil.disk_usage('/')
+    return jsonify(
+        git_size_mb=git_size / (1024**2),
+        free_gb=free / (1024**3),
+        free_percent=(free / total) * 100
+    )
 
 
 def register_events(socketio):

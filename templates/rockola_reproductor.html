@@ -134,7 +134,7 @@ body {
 }
 .vinyl-wrap { display: flex; justify-content: center; margin-bottom: 28px; }
 .np-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-.np-nombre { width: 100%; max-width: 100%; font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 16px; min-height: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-nombre { width: 100%; max-width: 100%; font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 16px; min-height: 28px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; white-space: normal; line-height: 1.3; }
 .wave-viz { display: flex; align-items: center; justify-content: center; gap: 3px; height: 28px; margin-bottom: 20px; }
 .wave-bar { width: 3px; border-radius: 2px; background: var(--ac1); }
 audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
@@ -441,11 +441,13 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   transform: scale(0.96);
 }
 .vinyl-play-icon {
-  font-size: 56px;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #fff;
-  line-height: 1;
   transition: all 0.2s ease;
-  margin-left: 6px;
 }
 .progress-container {
   width: 100%;
@@ -571,7 +573,7 @@ input:checked + .slider:before {
     <div class="now-card">
       <div class="now-main">
         <div class="vinyl-container" id="vinyl-btn" onclick="togglePlayPause()">
-          <div class="vinyl-play-icon" id="vinyl-play-icon">▶</div>
+          <div class="vinyl-play-icon" id="vinyl-play-icon"><svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
         </div>
         
         <div class="np-label">Sonando ahora</div>
@@ -590,7 +592,7 @@ input:checked + .slider:before {
         <!-- Barra de Progreso Horizontal -->
         <div class="progress-container">
           <span class="time-label" id="time-current">0:00</span>
-          <div class="progress-bar-wrap" id="progress-bar" onclick="seekAudio(event)">
+          <div class="progress-bar-wrap" id="progress-bar" onclick="seekAudio(event)" ontouchstart="seekAudio(event)">
             <div class="progress-bar-fill" id="progress-fill" style="width: 0%;"></div>
           </div>
           <span class="time-label" id="time-total">0:00</span>
@@ -634,15 +636,14 @@ input:checked + .slider:before {
         <audio id="player2" style="display:none;"></audio>
       </div>
 
-      <!-- Barra de Volumen Vertical en el margen derecho -->
       <div class="volume-sidebar">
-        <span class="volume-icon">
+        <span class="volume-icon" onclick="toggleMute()" style="cursor:pointer;" title="Silenciar">
           <svg class="volume-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
             <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
           </svg>
         </span>
-        <input id="volumen" type="range" min="0" max="100" value="80" class="volume-slider-vert" oninput="cambiarVolumenLocal(this.value)">
+        <input id="volumen" type="range" min="0" max="100" value="80" class="volume-slider-vert" oninput="programarGuardarVolumen()">
         <span class="volume-val-vert" id="volumen-valor">80%</span>
       </div>
     </div>
@@ -1027,6 +1028,18 @@ function aplicarVolumen(volumen) {
 
 function programarGuardarVolumen() {
   aplicarVolumen(volumenEl.value);
+  clearTimeout(guardandoVolumen);
+  guardandoVolumen = setTimeout(guardarVolumen, 250);
+}
+
+let volumenPrevio = 80;
+function toggleMute() {
+  if (volumenActual > 0) {
+    volumenPrevio = volumenActual;
+    aplicarVolumen(0);
+  } else {
+    aplicarVolumen(volumenPrevio);
+  }
   clearTimeout(guardandoVolumen);
   guardandoVolumen = setTimeout(guardarVolumen, 250);
 }
@@ -2072,9 +2085,17 @@ function formatTime(secs) {
 async function seekAudio(e) {
   if (!player.duration) return;
   const rect = document.getElementById('progress-bar').getBoundingClientRect();
-  const x = e.clientX - rect.left;
+  let clientX = e.clientX;
+  if (e.touches && e.touches.length) {
+    clientX = e.touches[0].clientX;
+  } else if (e.changedTouches && e.changedTouches.length) {
+    clientX = e.changedTouches[0].clientX;
+  }
+  if (clientX === undefined) return;
+  
+  const x = clientX - rect.left;
   const width = rect.width;
-  const percent = x / width;
+  const percent = Math.max(0, Math.min(1, x / width));
   const targetTime = percent * player.duration;
   player.currentTime = targetTime;
   actualizarProgreso();
@@ -2132,13 +2153,13 @@ function actualizarPlayPauseBtn(isPlaying) {
   const container = document.querySelector('.vinyl-container');
   if (!icon || !container) return;
   if (isPlaying) {
-    icon.textContent = '⏸';
+    icon.innerHTML = '<svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
     icon.style.marginLeft = '0';
     container.classList.remove('paused');
     container.classList.add('playing');
   } else {
-    icon.textContent = '▶';
-    icon.style.marginLeft = '2px';
+    icon.innerHTML = '<svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+    icon.style.marginLeft = '6px';
     container.classList.remove('playing');
     container.classList.add('paused');
   }

@@ -1,7 +1,7 @@
 {
-  "commit": "00e1a1d",
+  "commit": "9a81a23",
   "estado": "live",
-  "iniciado": "2026-07-11T14:15:26.114737",
-  "mensaje": "temp: support GET on debug cleanup",
-  "live_at": "2026-07-11T14:15:51.683996"
+  "iniciado": "2026-07-11T14:18:12.544650",
+  "mensaje": "feat: refresh queue after crossfade completes and use absolute paths for git and sudo in cleanup route",
+  "live_at": "2026-07-11T14:18:37.182851"
 }

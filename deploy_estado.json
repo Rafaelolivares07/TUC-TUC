@@ -1,7 +1,7 @@
 {
-  "commit": "01581b0",
+  "commit": "65d0850",
   "estado": "live",
-  "iniciado": "2026-07-11T14:45:09.578453",
-  "mensaje": "temp: update git-shallow to show status without executing commands",
-  "live_at": "2026-07-11T14:45:33.466859"
+  "iniciado": "2026-07-11T14:46:46.464960",
+  "mensaje": "temp: deploy async git-shallow route",
+  "live_at": "2026-07-11T14:47:09.745622"
 }

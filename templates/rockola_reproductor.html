@@ -973,6 +973,34 @@ async function verificarCola() {
 
     if (transitioning) return;
 
+    if (reproduciendo && cola.length > 0) {
+      const c = cola[0];
+      if (c.id !== cancionActual) {
+        console.log("Detección de salto remoto de canción:", c.nombre);
+        const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
+        const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
+        if (crossfadeEnabled) {
+          iniciarCrossfade(crossfadeDuration, c);
+          return;
+        } else {
+          cancionActual = c.id;
+          if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
+          if (c.id.startsWith('local-')) {
+            const local = await obtenerCancionLocal(idLocalBase(c.id));
+            if (local && local.blob) {
+              localObjectUrl = URL.createObjectURL(local.blob);
+              player.src = localObjectUrl;
+            }
+          } else {
+            localObjectUrl = null;
+            player.src = `/rockola/${SALA}/archivo/${c.id}`;
+          }
+          player.load();
+          player.play().catch(() => {});
+        }
+      }
+    }
+
     if (!reproduciendo && cola.length > 0) {
       const c = cola[0];
       if (c.id !== cancionActual) {
@@ -2263,13 +2291,13 @@ async function anteriorCancion() {
   }
 }
 
-async function iniciarCrossfade(secs) {
+async function iniciarCrossfade(secs, targetSong = null) {
   if (transitioning) return;
-  if (currentCola.length < 2) return;
+  const nextSong = targetSong || (currentCola && currentCola[1]);
+  if (!nextSong) return;
   
   transitioning = true;
   const oldActiveSongId = cancionActual;
-  const nextSong = currentCola[1];
   
   console.log(`Iniciando fundido cruzado de ${secs}s para:`, nextSong.nombre);
   

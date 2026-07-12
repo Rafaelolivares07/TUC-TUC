@@ -601,8 +601,12 @@ input:checked + .slider:before {
 
         <!-- Controles Prev / Next -->
         <div class="player-controls">
-          <button class="btn-control-round" onclick="anteriorCancion()" title="Anterior (Retroceder)">⏮</button>
-          <button class="btn-control-round" onclick="saltarActual()" title="Siguiente (Saltar)">⏭</button>
+          <button class="btn-control-round" onclick="anteriorCancion()" title="Anterior (Retroceder)">
+            <svg style="width:24px;height:24px;display:block;margin:auto;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          </button>
+          <button class="btn-control-round" onclick="saltarActual()" title="Siguiente (Saltar)">
+            <svg style="width:24px;height:24px;display:block;margin:auto;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6zm9-12h2v12h-2z"/></svg>
+          </button>
         </div>
 
         <!-- Toggle Switch para Fundido de Audio con Segundos Parametrizables -->
@@ -900,14 +904,22 @@ async function vincularEsteReproductor(tomarControl = false) {
 }
 
 async function reclamarReproductor() {
+  // Synchronously unlock player before the async await call breaks the gesture context
+  player.play().then(() => player.pause()).catch(() => {});
+  
   if (await vincularEsteReproductor(true)) {
     btnReclamar.style.display = 'none';
     btnActivar.style.display = 'inline-block';
-    activar();
+    activar(true);
   }
 }
 
-async function activar() {
+async function activar(skipUnlock = false) {
+  if (!skipUnlock) {
+    // Synchronously unlock player before the async await call breaks the gesture context
+    player.play().then(() => player.pause()).catch(() => {});
+  }
+  
   if (!(await vincularEsteReproductor())) return;
   document.getElementById('pantalla-activar').style.display = 'none';
   document.getElementById('pantalla-principal').style.display = 'block';

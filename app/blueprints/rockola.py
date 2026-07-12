@@ -1558,10 +1558,41 @@ def blanquear_pin():
 def git_shallow():
     import os
     import shutil
+    import subprocess
+    import threading
     
     app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     git_dir = os.path.join(app_dir, '.git')
+    git_path = '/usr/bin/git' if os.path.exists('/usr/bin/git') else 'git'
     
+    should_run = request.args.get('run') == '1'
+    status_msg = "Idle"
+    
+    if should_run:
+        def run_gc_async():
+            try:
+                gc_pid_path = os.path.join(git_dir, 'gc.pid')
+                if os.path.exists(gc_pid_path):
+                    try:
+                        os.remove(gc_pid_path)
+                    except Exception:
+                        pass
+                
+                head_commit = subprocess.check_output([git_path, 'rev-parse', 'HEAD'], cwd=app_dir, text=True).strip()
+                shallow_path = os.path.join(git_dir, 'shallow')
+                with open(shallow_path, 'w') as f:
+                    f.write(head_commit + '\n')
+                
+                subprocess.run(f"{git_path} tag -l | xargs {git_path} tag -d", shell=True, cwd=app_dir)
+                subprocess.run([git_path, 'reflog', 'expire', '--expire=now', '--all'], cwd=app_dir)
+                subprocess.run([git_path, 'prune', '--expire=now'], cwd=app_dir)
+                subprocess.run([git_path, 'gc', '--prune=now', '--aggressive'], cwd=app_dir)
+            except Exception:
+                pass
+        
+        threading.Thread(target=run_gc_async).start()
+        status_msg = "Started background pruning"
+        
     git_size = 0
     if os.path.exists(git_dir):
         for root, dirs, files in os.walk(git_dir):
@@ -1575,6 +1606,7 @@ def git_shallow():
                     
     total, used, free = shutil.disk_usage('/')
     return jsonify(
+        status=status_msg,
         git_size_mb=git_size / (1024**2),
         free_gb=free / (1024**3),
         free_percent=(free / total) * 100

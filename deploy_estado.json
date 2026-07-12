@@ -1,7 +1,7 @@
 {
-  "commit": "615f16d",
+  "commit": "2f390d1",
   "estado": "live",
-  "iniciado": "2026-07-11T20:05:58.064330",
-  "mensaje": "temp: deploy fast synchronous git gc",
-  "live_at": "2026-07-11T20:06:20.472768"
+  "iniciado": "2026-07-11T20:08:34.905965",
+  "mensaje": "temp: deploy git shallow clone folder swap",
+  "live_at": "2026-07-11T20:08:58.167340"
 }

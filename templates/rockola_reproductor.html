@@ -557,6 +557,7 @@ input:checked + .slider:before {
     <button class="btn-control" onclick="abrirControl()">Control</button>
   </div>
   <button class="btn-activar" id="btn-activar" onclick="activar()">Activar Rockola</button>
+  <button class="btn-activar" id="btn-reclamar" style="display:none; background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); color: #fff; margin-bottom: 12px;" onclick="reclamarReproductor()">Tomar Control de la Rockola</button>
   <button class="btn-back" onclick="window.location.href='/rockola/'">← Volver</button>
 </div>
 
@@ -812,6 +813,7 @@ const shareQr = document.getElementById('share-qr');
 const deviceState = document.getElementById('device-state');
 const deviceActions = document.getElementById('device-actions');
 const btnActivar = document.getElementById('btn-activar');
+const btnReclamar = document.getElementById('btn-reclamar');
 const ADMIN_KEY = '{{ admin_key }}';
 const OWNER = 'reproductor';
 
@@ -864,10 +866,13 @@ async function verificarDispositivoSala() {
         ? `Disponible en este dispositivo: ${getDeviceName()}.`
         : `Esta sala aun no tiene reproductor. Puedes tomarla en ${getDeviceName()}.`);
       btnActivar.disabled = false;
+      btnActivar.style.display = 'inline-block';
+      btnReclamar.style.display = 'none';
       deviceActions.classList.remove('visible');
     } else {
-      setDeviceMessage(`Esta sala suena en ${sala.dispositivo_reproductor_nombre || 'otro dispositivo'}. Desde aqui puedes agregar canciones, pero no reproducir.`, true);
-      btnActivar.disabled = true;
+      setDeviceMessage(`Esta sala suena en ${sala.dispositivo_reproductor_nombre || 'otro dispositivo'}.`, true);
+      btnActivar.style.display = 'none';
+      btnReclamar.style.display = 'inline-block';
       deviceActions.classList.add('visible');
     }
   } catch(e) {
@@ -875,22 +880,31 @@ async function verificarDispositivoSala() {
   }
 }
 
-async function vincularEsteReproductor() {
+async function vincularEsteReproductor(tomarControl = false) {
   const res = await fetch(`/rockola/${SALA}/vincular-reproductor`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ device_id:getDeviceId(), device_name:getDeviceName() })
+    body: JSON.stringify({ device_id:getDeviceId(), device_name:getDeviceName(), tomar_control: tomarControl })
   });
   const data = await res.json();
   if (!data.ok) {
     const sala = data.sala || {};
-    setDeviceMessage(`Esta sala suena en ${sala.dispositivo_reproductor_nombre || 'otro dispositivo'}. Desde aqui puedes agregar canciones, pero no reproducir.`, true);
-    btnActivar.disabled = true;
+    setDeviceMessage(`Esta sala suena en ${sala.dispositivo_reproductor_nombre || 'otro dispositivo'}.`, true);
+    btnActivar.style.display = 'none';
+    btnReclamar.style.display = 'inline-block';
     deviceActions.classList.add('visible');
     return false;
   }
   salaDisponible = true;
   return true;
+}
+
+async function reclamarReproductor() {
+  if (await vincularEsteReproductor(true)) {
+    btnReclamar.style.display = 'none';
+    btnActivar.style.display = 'inline-block';
+    activar();
+  }
 }
 
 async function activar() {

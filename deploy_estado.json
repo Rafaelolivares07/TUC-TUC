@@ -1,7 +1,7 @@
 {
-  "commit": "5f5e99e",
+  "commit": "5dc6e4a",
   "estado": "live",
-  "iniciado": "2026-07-11T19:55:09.215226",
-  "mensaje": "fix: next song synchronization on remote skip and clean git-shallow",
-  "live_at": "2026-07-11T19:55:34.388646"
+  "iniciado": "2026-07-11T19:56:31.402530",
+  "mensaje": "temp: deploy conditional git-shallow route",
+  "live_at": "2026-07-11T19:56:53.816073"
 }

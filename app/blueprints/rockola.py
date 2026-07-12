@@ -1570,25 +1570,42 @@ def git_shallow():
     
     if should_run:
         def run_gc_async():
-            try:
-                gc_pid_path = os.path.join(git_dir, 'gc.pid')
-                if os.path.exists(gc_pid_path):
-                    try:
-                        os.remove(gc_pid_path)
-                    except Exception:
-                        pass
-                
-                head_commit = subprocess.check_output([git_path, 'rev-parse', 'HEAD'], cwd=app_dir, text=True).strip()
-                shallow_path = os.path.join(git_dir, 'shallow')
-                with open(shallow_path, 'w') as f:
-                    f.write(head_commit + '\n')
-                
-                subprocess.run(f"{git_path} tag -l | xargs {git_path} tag -d", shell=True, cwd=app_dir)
-                subprocess.run([git_path, 'reflog', 'expire', '--expire=now', '--all'], cwd=app_dir)
-                subprocess.run([git_path, 'prune', '--expire=now'], cwd=app_dir)
-                subprocess.run([git_path, 'gc', '--prune=now', '--aggressive'], cwd=app_dir)
-            except Exception:
-                pass
+            log_file = os.path.join(app_dir, 'git_gc_log.txt')
+            with open(log_file, 'w') as log:
+                try:
+                    log.write("Starting GC...\n")
+                    
+                    gc_pid_path = os.path.join(git_dir, 'gc.pid')
+                    if os.path.exists(gc_pid_path):
+                        try:
+                            os.remove(gc_pid_path)
+                            log.write("Removed gc.pid\n")
+                        except Exception as e:
+                            log.write(f"Error removing gc.pid: {e}\n")
+                    
+                    head_commit = subprocess.check_output([git_path, 'rev-parse', 'HEAD'], cwd=app_dir, text=True).strip()
+                    log.write(f"HEAD commit: {head_commit}\n")
+                    
+                    shallow_path = os.path.join(git_dir, 'shallow')
+                    with open(shallow_path, 'w') as f:
+                        f.write(head_commit + '\n')
+                    log.write("Wrote shallow file\n")
+                    
+                    cmd_tag = subprocess.run(f"{git_path} tag -l | xargs {git_path} tag -d", shell=True, cwd=app_dir, capture_output=True, text=True)
+                    log.write(f"Tag delete code: {cmd_tag.returncode}, stdout: {cmd_tag.stdout.strip()}, stderr: {cmd_tag.stderr.strip()}\n")
+                    
+                    cmd_ref = subprocess.run([git_path, 'reflog', 'expire', '--expire=now', '--all'], cwd=app_dir, capture_output=True, text=True)
+                    log.write(f"Reflog expire code: {cmd_ref.returncode}, stdout: {cmd_ref.stdout.strip()}, stderr: {cmd_ref.stderr.strip()}\n")
+                    
+                    cmd_prune = subprocess.run([git_path, 'prune', '--expire=now'], cwd=app_dir, capture_output=True, text=True)
+                    log.write(f"Prune code: {cmd_prune.returncode}, stdout: {cmd_prune.stdout.strip()}, stderr: {cmd_prune.stderr.strip()}\n")
+                    
+                    cmd_gc = subprocess.run([git_path, 'gc', '--prune=now', '--aggressive'], cwd=app_dir, capture_output=True, text=True)
+                    log.write(f"GC code: {cmd_gc.returncode}, stdout: {cmd_gc.stdout.strip()}, stderr: {cmd_gc.stderr.strip()}\n")
+                    
+                    log.write("GC Completed successfully!\n")
+                except Exception as e:
+                    log.write(f"GC Failed: {e}\n")
         
         threading.Thread(target=run_gc_async).start()
         status_msg = "Started background pruning"
@@ -1611,6 +1628,18 @@ def git_shallow():
         free_gb=free / (1024**3),
         free_percent=(free / total) * 100
     )
+
+
+@bp.route('/debug/git-shallow-log')
+def git_shallow_log():
+    import os
+    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    log_file = os.path.join(app_dir, 'git_gc_log.txt')
+    if os.path.exists(log_file):
+        with open(log_file, 'r') as f:
+            content = f.read()
+        return content, 200, {'Content-Type': 'text/plain'}
+    return "Log file not found", 404
 
 
 def register_events(socketio):

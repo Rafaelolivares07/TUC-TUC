@@ -1607,13 +1607,11 @@ def git_shallow():
                     cmd_prune = subprocess.run([git_path, 'prune', '--expire=now'], cwd=app_dir, capture_output=True, text=True)
                     log.write(f"Prune code: {cmd_prune.returncode}, stdout: {cmd_prune.stdout.strip()}, stderr: {cmd_prune.stderr.strip()}\n")
                     
-                    # Run GC completely detached with nohup to avoid Gunicorn thread timeouts
-                    log.write("Launching detached git gc --prune=now --aggressive in background...\n")
-                    log.flush()
-                    
-                    cmd_gc_str = f"nohup {git_path} gc --prune=now --aggressive >> {log_file} 2>&1 &"
-                    subprocess.run(cmd_gc_str, shell=True, cwd=app_dir)
-                    log.write("Detached background GC process launched.\n")
+                    # Run fast synchronous GC without --aggressive
+                    log.write("Running fast synchronous git gc --prune=now...\n")
+                    cmd_gc = subprocess.run([git_path, 'gc', '--prune=now'], cwd=app_dir, capture_output=True, text=True)
+                    log.write(f"GC code: {cmd_gc.returncode}, stdout: {cmd_gc.stdout.strip()}, stderr: {cmd_gc.stderr.strip()}\n")
+                    log.write("GC Completed successfully!\n")
                 except Exception as e:
                     log.write(f"GC Failed: {e}\n")
         

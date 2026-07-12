@@ -1573,47 +1573,32 @@ def git_shallow():
             log_file = os.path.join(app_dir, 'git_gc_log.txt')
             with open(log_file, 'w') as log:
                 try:
-                    log.write("Starting GC...\n")
+                    log.write("Starting fresh shallow clone swap...\n")
                     
-                    gc_pid_path = os.path.join(git_dir, 'gc.pid')
-                    if os.path.exists(gc_pid_path):
-                        try:
-                            os.remove(gc_pid_path)
-                            log.write("Removed gc.pid\n")
-                        except Exception as e:
-                            log.write(f"Error removing gc.pid: {e}\n")
+                    temp_git_clone_dir = os.path.join(os.path.dirname(app_dir), 'tuctucv2_temp')
+                    if os.path.exists(temp_git_clone_dir):
+                        shutil.rmtree(temp_git_clone_dir, ignore_errors=True)
+                        log.write("Cleaned up old temp clone dir\n")
                     
-                    head_commit = subprocess.check_output([git_path, 'rev-parse', 'HEAD'], cwd=app_dir, text=True).strip()
-                    log.write(f"HEAD commit: {head_commit}\n")
+                    log.write("Running git clone --depth 1...\n")
+                    cmd_clone = subprocess.run(
+                        [git_path, 'clone', '--depth', '1', '--branch', 'v2', 'https://github.com/Rafaelolivares07/TUC-TUC.git', temp_git_clone_dir],
+                        capture_output=True,
+                        text=True,
+                        timeout=60
+                    )
+                    log.write(f"Clone code: {cmd_clone.returncode}, stdout: {cmd_clone.stdout.strip()}, stderr: {cmd_clone.stderr.strip()}\n")
                     
-                    shallow_path = os.path.join(git_dir, 'shallow')
-                    with open(shallow_path, 'w') as f:
-                        f.write(head_commit + '\n')
-                    log.write("Wrote shallow file\n")
-                    
-                    # Delete tags using Python list+delete instead of xargs
-                    tags_output = subprocess.check_output([git_path, 'tag', '-l'], cwd=app_dir, text=True).strip()
-                    tags = [t.strip() for t in tags_output.split('\n') if t.strip()]
-                    if tags:
-                        cmd_tag = subprocess.run([git_path, 'tag', '-d'] + tags, cwd=app_dir, capture_output=True, text=True)
-                        log.write(f"Deleted tags: {tags}, code: {cmd_tag.returncode}\n")
+                    if cmd_clone.returncode == 0 and os.path.exists(os.path.join(temp_git_clone_dir, '.git')):
+                        # Swap .git
+                        shutil.rmtree(git_dir, ignore_errors=True)
+                        shutil.move(os.path.join(temp_git_clone_dir, '.git'), git_dir)
+                        shutil.rmtree(temp_git_clone_dir, ignore_errors=True)
+                        log.write("Successfully swapped .git folder with a clean 1.5MB shallow clone!\n")
                     else:
-                        log.write("No tags found to delete\n")
-                    
-                    # Run reflog and prune
-                    cmd_ref = subprocess.run([git_path, 'reflog', 'expire', '--expire=now', '--all'], cwd=app_dir, capture_output=True, text=True)
-                    log.write(f"Reflog expire code: {cmd_ref.returncode}, stdout: {cmd_ref.stdout.strip()}, stderr: {cmd_ref.stderr.strip()}\n")
-                    
-                    cmd_prune = subprocess.run([git_path, 'prune', '--expire=now'], cwd=app_dir, capture_output=True, text=True)
-                    log.write(f"Prune code: {cmd_prune.returncode}, stdout: {cmd_prune.stdout.strip()}, stderr: {cmd_prune.stderr.strip()}\n")
-                    
-                    # Run fast synchronous GC without --aggressive
-                    log.write("Running fast synchronous git gc --prune=now...\n")
-                    cmd_gc = subprocess.run([git_path, 'gc', '--prune=now'], cwd=app_dir, capture_output=True, text=True)
-                    log.write(f"GC code: {cmd_gc.returncode}, stdout: {cmd_gc.stdout.strip()}, stderr: {cmd_gc.stderr.strip()}\n")
-                    log.write("GC Completed successfully!\n")
+                        log.write("Clone failed, aborting swap.\n")
                 except Exception as e:
-                    log.write(f"GC Failed: {e}\n")
+                    log.write(f"Swap Failed: {e}\n")
         
         threading.Thread(target=run_gc_async).start()
         status_msg = "Started background pruning"

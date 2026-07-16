@@ -217,10 +217,35 @@ def _recordar_cancion(conn, sala_id, archivo_id, nombre, tercero_id, origen):
     )
 
 
-def _agregar_a_cola(conn, sala_id, archivo_id, nombre, tercero_id, lista_envio=None):
-    pos_actual = _max_pos(conn, sala_id) + 1
+def _agregar_a_cola(conn, sala_id, archivo_id, nombre, tercero_id, lista_envio=None, modo='final'):
     lista_envio = lista_envio or {}
     tid = int(tercero_id) if tercero_id else None
+    
+    if modo == 'ya':
+        # Shift all items up by 1
+        conn.execute(
+            "UPDATE rockola_cola SET posicion = posicion + 1 WHERE sala_id = %s",
+            (sala_id,)
+        )
+        pos_actual = 0
+    elif modo == 'siguiente':
+        # Find the currently playing song's position (lowest position)
+        row = conn.execute(
+            "SELECT MIN(posicion) FROM rockola_cola WHERE sala_id = %s",
+            (sala_id,)
+        ).fetchone()
+        current_pos = row[0] if row and row[0] is not None else -1
+        
+        # Shift items with position greater than current_pos
+        conn.execute(
+            "UPDATE rockola_cola SET posicion = posicion + 1 WHERE sala_id = %s AND posicion > %s",
+            (sala_id, current_pos)
+        )
+        pos_actual = current_pos + 1
+    else:
+        # 'final'
+        pos_actual = _max_pos(conn, sala_id) + 1
+
     conn.execute(
         """
         INSERT INTO rockola_cola
@@ -1052,6 +1077,7 @@ def agregar_local(sala_id):
     data = request.get_json(silent=True) or {}
     local_id = (data.get('local_id') or '').strip()
     nombre = (data.get('nombre') or 'Cancion local').strip()
+    modo = (data.get('modo') or 'final').strip().lower()
     tercero_id = session.get('usuario_id')
     owner_nombre = session.get('nombre', 'Anónimo')
     if not local_id.startswith('local-'):
@@ -1060,7 +1086,7 @@ def agregar_local(sala_id):
     conn = _connect()
     try:
         with _lock:
-            _agregar_a_cola(conn, sala_id, local_id, nombre, tercero_id)
+            _agregar_a_cola(conn, sala_id, local_id, nombre, tercero_id, modo=modo)
             _recordar_cancion(conn, sala_id, local_id, nombre, tercero_id, 'local')
             conn.commit()
     finally:
@@ -1294,6 +1320,8 @@ def biblioteca(sala_id):
 
 @bp.route('/<sala_id>/biblioteca/<archivo_id>/poner', methods=['POST'])
 def poner_desde_biblioteca(sala_id, archivo_id):
+    data = request.get_json(silent=True) or {}
+    modo = (data.get('modo') or 'final').strip().lower()
     tercero_id = session.get('usuario_id')
     owner_nombre = session.get('nombre', 'Anónimo')
 
@@ -1325,7 +1353,7 @@ def poner_desde_biblioteca(sala_id, archivo_id):
                         break
                     dst.write(chunk)
 
-            _agregar_a_cola(conn, sala_id, nuevo_id, nombre, tercero_id)
+            _agregar_a_cola(conn, sala_id, nuevo_id, nombre, tercero_id, modo=modo)
             conn.commit()
     finally:
         conn.close()

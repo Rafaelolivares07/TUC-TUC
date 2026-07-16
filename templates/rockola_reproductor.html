@@ -531,6 +531,40 @@ input:checked + .slider:before {
   transform: translateX(20px);
   background-color: var(--ac1);
 }
+/* Dropdown de Opciones de Poner */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+.dropdown-content {
+  display: none;
+  position: absolute;
+  right: 0;
+  background-color: var(--surface2);
+  min-width: 140px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.5);
+  z-index: 100;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-top: 4px;
+}
+.dropdown-content a {
+  color: var(--text);
+  padding: 8px 12px;
+  text-decoration: none;
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+.dropdown-content a:hover {
+  background-color: rgba(255,255,255,0.06);
+  color: var(--ac1);
+}
+.dropdown.show .dropdown-content {
+  display: block;
+}
 </style>
 </head>
 <body>
@@ -1603,8 +1637,14 @@ function renderBibliotecaLocal() {
         <div class="local-meta">${Math.max(1, Math.round((c.size || 0) / 1024 / 1024))} MB · este dispositivo</div>
       </div>
       <button class="playlist-mini" onclick="agregarCancionALista('${c.id}')">Lista</button>
-      <button class="playlist-mini" onclick="descargarLocal('${c.id}')" title="Descargar archivo">💾</button>
-      <button class="library-btn" onclick="ponerLocal('${c.id}')">Poner</button>
+      <div class="dropdown" id="dd-local-${c.id}">
+        <button class="library-btn" onclick="toggleDropdown(event, 'dd-local-${c.id}')">Poner ▾</button>
+        <div class="dropdown-content">
+          <a href="#" onclick="ponerLocal('${c.id}', 'ya')">⚡ Sonar ya</a>
+          <a href="#" onclick="ponerLocal('${c.id}', 'siguiente')">⏭️ Sonar después</a>
+          <a href="#" onclick="ponerLocal('${c.id}', 'final')">📝 Poner al final</a>
+        </div>
+      </div>
     </li>
   `).join('');
 }
@@ -1926,7 +1966,7 @@ async function eliminarListaActual() {
   cerrarEditorLista();
 }
 
-async function ponerLocal(id) {
+async function ponerLocal(id, modo = 'final') {
   const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
   if (!cancion) {
     mostrarMensaje('Esa cancion ya no esta disponible aqui', 'error');
@@ -1935,7 +1975,7 @@ async function ponerLocal(id) {
   const res = await fetch(`/rockola/${SALA}/local`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ local_id:idLocalCola(cancion.id), nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId() })
+    body: JSON.stringify({ local_id:idLocalCola(cancion.id), nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId(), modo: modo })
   });
   const data = await res.json();
   if (data.ok) {
@@ -1945,23 +1985,6 @@ async function ponerLocal(id) {
     mostrarMensaje(data.error || 'No se pudo poner en cola', 'error');
   }
 }
-
-async function descargarLocal(id) {
-  const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
-  if (!cancion || !cancion.blob) {
-    mostrarMensaje("Archivo no disponible en este dispositivo", "error");
-    return;
-  }
-  const url = URL.createObjectURL(cancion.blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = cancion.nombre;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 async function actualizarBiblioteca() {
   try {
     const res = await fetch(`/rockola/${SALA}/biblioteca`);
@@ -1979,17 +2002,24 @@ function renderBiblioteca(canciones) {
     <li class="library-item">
       <div class="library-name" title="${c.nombre}">${limpiarNombre(c.nombre)}</div>
       <div class="library-origin">${c.origen || 'audio'}</div>
-      <button class="library-btn" onclick="${c.origen === 'local' ? `ponerLocal('${c.id}')` : `ponerRecordada('${c.id}')`}">Poner</button>
+      <div class="dropdown" id="dd-recv-${c.id}">
+        <button class="library-btn" onclick="toggleDropdown(event, 'dd-recv-${c.id}')">Poner ▾</button>
+        <div class="dropdown-content">
+          <a href="#" onclick="${c.origen === 'local' ? `ponerLocal('${c.id}', 'ya')` : `ponerRecordada('${c.id}', 'ya')`}">⚡ Sonar ya</a>
+          <a href="#" onclick="${c.origen === 'local' ? `ponerLocal('${c.id}', 'siguiente')` : `ponerRecordada('${c.id}', 'siguiente')`}">⏭️ Sonar después</a>
+          <a href="#" onclick="${c.origen === 'local' ? `ponerLocal('${c.id}', 'final')` : `ponerRecordada('${c.id}', 'final')`}">📝 Poner al final</a>
+        </div>
+      </div>
     </li>
   `).join('');
 }
 
-async function ponerRecordada(id) {
+async function ponerRecordada(id, modo = 'final') {
   try {
     const res = await fetch(`/rockola/${SALA}/biblioteca/${encodeURIComponent(id)}/poner`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ owner:OWNER })
+      body: JSON.stringify({ owner:OWNER, modo: modo })
     });
     const data = await res.json();
     if (data.ok) {
@@ -2003,6 +2033,21 @@ async function ponerRecordada(id) {
     mostrarMensaje('Error de conexion', 'error');
   }
 }
+
+function toggleDropdown(event, dropdownId) {
+  event.stopPropagation();
+  document.querySelectorAll('.dropdown.show').forEach(d => {
+    if (d.id !== dropdownId) d.classList.remove('show');
+  });
+  const d = document.getElementById(dropdownId);
+  if (d) d.classList.toggle('show');
+}
+
+window.addEventListener('click', () => {
+  document.querySelectorAll('.dropdown.show').forEach(d => {
+    d.classList.remove('show');
+  });
+});
 
 function renderCola(cola) {
   queueLabel.textContent = 'Cola · ' + cola.length + (cola.length === 1 ? ' canción' : ' canciones');

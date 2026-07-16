@@ -752,12 +752,7 @@ input:checked + .slider:before {
       </ul>
     </div>
 
-    <div class="panel-box">
-      <div class="panel-title">Canciones anteriores</div>
-      <ul class="library-list" id="lista-biblioteca">
-        <li class="library-empty">Esta sala todavia no tiene canciones recordadas</li>
-      </ul>
-    </div>
+
 
     <div class="queue-box">
       <div class="queue-label" id="queue-label">Próximas canciones</div>
@@ -959,7 +954,6 @@ async function activar(skipUnlock = false) {
   player.pause();
   setInterval(verificarCola, 2500);
   verificarCola();
-  actualizarBiblioteca();
   cargarBibliotecaLocal();
   cargarListasLocales();
 }
@@ -1276,7 +1270,6 @@ function onAgregarOk(cantidad) {
   resetAgregar();
   mostrarMensaje(texto, 'ok');
   verificarCola();
-  actualizarBiblioteca();
 }
 
 function mostrarMensaje(texto, tipo) {
@@ -1946,55 +1939,6 @@ async function ponerLocal(id, modo = 'final') {
   } else {
     mostrarMensaje(data.error || 'No se pudo poner en cola', 'error');
   }
-}
-async function actualizarBiblioteca() {
-  try {
-    const res = await fetch(`/rockola/${SALA}/biblioteca`);
-    const data = await res.json();
-    renderBiblioteca(data.canciones || []);
-  } catch(e) {}
-}
-
-function renderBiblioteca(canciones) {
-  if (!canciones.length) {
-    listaBiblioteca.innerHTML = '<li class="library-empty">Esta sala todavia no tiene canciones recordadas</li>';
-    return;
-  }
-  listaBiblioteca.innerHTML = canciones.map(c => `
-    <li class="library-item">
-      <div class="library-name" title="${c.nombre}">${limpiarNombre(c.nombre)}</div>
-      <div class="library-origin">${c.origen || 'audio'}</div>
-      <div class="dropdown" id="dd-recv-${c.id}">
-        <button class="library-btn" onclick="toggleDropdown(event, 'dd-recv-${c.id}')">Poner ▾</button>
-        <div class="dropdown-content">
-          <a href="#" onclick="${c.origen === 'local' ? `ponerLocal('${c.id}', 'ya')` : `ponerRecordada('${c.id}', 'ya')`}">⚡ Sonar ya</a>
-          <a href="#" onclick="${c.origen === 'local' ? `ponerLocal('${c.id}', 'siguiente')` : `ponerRecordada('${c.id}', 'siguiente')`}">⏭️ Sonar después</a>
-          <a href="#" onclick="${c.origen === 'local' ? `ponerLocal('${c.id}', 'final')` : `ponerRecordada('${c.id}', 'final')`}">📝 Poner al final</a>
-        </div>
-      </div>
-    </li>
-  `).join('');
-}
-
-async function ponerRecordada(id, modo = 'final') {
-  try {
-    const res = await fetch(`/rockola/${SALA}/biblioteca/${encodeURIComponent(id)}/poner`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ owner:OWNER, modo: modo })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      mostrarMensaje('Cancion recordada en cola', 'ok');
-      verificarCola();
-      actualizarBiblioteca();
-    } else {
-      mostrarMensaje(data.error || 'No se pudo poner', 'error');
-    }
-  } catch(e) {
-    mostrarMensaje('Error de conexion', 'error');
-  }
-}
 
 function toggleDropdown(event, dropdownId) {
   event.stopPropagation();

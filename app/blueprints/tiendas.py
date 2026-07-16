@@ -10,7 +10,7 @@ import uuid
 from datetime import date, timedelta
 
 from flask import (Blueprint, Response, jsonify, make_response, redirect,
-                   render_template, request, session)
+                   render_template, request, session, flash, url_for)
 
 from ..db import get_db_connection
 from ..dominios_negocio import resolver_slug_por_host
@@ -831,12 +831,12 @@ def tienda_publica(slug):
 
 def _obtener_negocio_por_slug(conn, slug):
     tienda = conn.execute(
-        "SELECT id, nombre, 'tienda' as tipo_negocio, tercero_id, color_primario, imagen_header, telegram_chat_id, admin_id FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
+        "SELECT id, nombre, 'tienda' as tipo_negocio, tercero_id, color_primario, imagen_header, telegram_chat_id, admin_id, token_acceso FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
     ).fetchone()
     if tienda:
         return dict(tienda)
     restaurante = conn.execute(
-        "SELECT id, nombre, 'restaurante' as tipo_negocio, tercero_id, NULL as color_primario, NULL as imagen_header, NULL as telegram_chat_id, admin_id FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        "SELECT id, nombre, 'restaurante' as tipo_negocio, tercero_id, NULL as color_primario, NULL as imagen_header, NULL as telegram_chat_id, admin_id, token_acceso FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
     ).fetchone()
     if restaurante:
         res = dict(restaurante)
@@ -862,7 +862,6 @@ def tienda_caja(slug):
 
 @bp.route('/admin/caja/<slug>')
 @bp.route('/admin/tienda/<slug>/caja')
-@solo_admin
 def admin_tienda_caja(slug):
     conn = get_db_connection()
     try:
@@ -870,6 +869,24 @@ def admin_tienda_caja(slug):
         negocio = _obtener_negocio_por_slug(conn, slug)
         if not negocio:
             return "Negocio no encontrado", 404
+        
+        uid = session.get('usuario_id')
+        es_admin_sistema = session.get('rol') == 'Administrador'
+        tok_tienda = session.get('tienda_token')
+        tok_rest = session.get('restaurante_token')
+        
+        es_dueno = False
+        if uid and uid == negocio['admin_id']:
+            es_dueno = True
+        elif negocio['tipo_negocio'] == 'tienda' and tok_tienda and tok_tienda == negocio.get('token_acceso'):
+            es_dueno = True
+        elif negocio['tipo_negocio'] == 'restaurante' and tok_rest and tok_rest == negocio.get('token_acceso'):
+            es_dueno = True
+
+        if not (es_admin_sistema or es_dueno):
+            flash('Acceso denegado. Se requiere ser administrador o dueño del negocio.', 'danger')
+            return redirect(url_for('auth.admin_login'))
+            
         return render_template('caja.html', tienda=negocio, slug=slug, modo_admin=True)
     except Exception as e:
         return str(e), 500

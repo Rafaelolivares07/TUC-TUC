@@ -915,7 +915,7 @@ COBALT_APIS = [
     api.strip()
     for api in os.environ.get(
         'COBALT_API_URLS',
-        'https://api.cobalt.tools/,https://api.cobalt.liubquanti.click/'
+        'https://api.cobalt.liubquanti.click/,https://melon.clxxped.lol/,https://api-cobalt.eversiege.network/,https://cobalt.alpha.wolfy.love/,https://api.qwkuns.me/,https://subito-c.meowing.de/,https://grapefruit.clxxped.lol/'
     ).split(',')
     if api.strip()
 ]
@@ -954,7 +954,7 @@ def _descargar_youtube_con_cobalt(url, tmp_path):
                 method='POST',
             )
             try:
-                with urllib.request.urlopen(req, timeout=25) as response:
+                with urllib.request.urlopen(req, timeout=6) as response:
                     cobalt = _json.loads(response.read())
             except urllib.error.HTTPError as error:
                 body = error.read().decode('utf-8', errors='ignore')[:300]

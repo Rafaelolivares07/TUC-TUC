@@ -1054,10 +1054,11 @@ def youtube(sala_id):
     archivo_final = os.path.basename(descarga['path'])
     nombre_display = descarga['nombre']
 
+    modo = data.get('modo', 'final').strip()
     conn = _connect()
     try:
         with _lock:
-            _agregar_a_cola(conn, sala_id, archivo_final, nombre_display, tercero_id)
+            _agregar_a_cola(conn, sala_id, archivo_final, nombre_display, tercero_id, modo=modo)
             _recordar_cancion(conn, sala_id, archivo_final, nombre_display, tercero_id, 'youtube')
             _limpiar_archivos_antiguos(upload_dir)
             conn.commit()

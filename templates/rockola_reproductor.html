@@ -718,9 +718,9 @@ input:checked + .slider:before {
         <div class="progress-track"><div class="progress-fill" id="prog-fill"></div></div>
       </div>
 
-      <div class="dropdown" style="width: 100%;">
+      <div class="dropdown" id="dd-youtube" style="width: 100%;">
         <button class="action-btn" id="btn-poner" onclick="toggleDropdown(event, 'dd-youtube')" disabled style="width: 100%;">Pega un link de YouTube ▾</button>
-        <div class="dropdown-content" id="dd-youtube" style="left: 0; right: 0; width: 100%; box-sizing: border-box;">
+        <div class="dropdown-content" style="left: 0; right: 0; width: 100%; box-sizing: border-box;">
           <a href="#" onclick="poner('ya')">⚡ Sonar ya</a>
           <a href="#" onclick="poner('siguiente')">⏭️ Sonar después</a>
           <a href="#" onclick="poner('final')">📝 Poner al final</a>
@@ -1274,6 +1274,9 @@ function onAgregarOk(cantidad) {
   }
   const check = document.getElementById('yt-ver-video');
   if (check) check.checked = false;
+  
+  const ddYt = document.getElementById('dd-youtube');
+  if (ddYt) ddYt.classList.remove('show');
   
   resetAgregar();
   mostrarMensaje(texto, 'ok');

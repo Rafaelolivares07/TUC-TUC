@@ -697,34 +697,27 @@ input:checked + .slider:before {
     </div>
 
     <div class="panel-box">
-      <div class="panel-title">Agregar canciones</div>
-      <div class="source-tabs">
-        <button class="stab activo" onclick="setTab('archivo')">Archivo</button>
-        <button class="stab" onclick="setTab('youtube')">YouTube</button>
-      </div>
+      <div class="panel-title">Agregar desde YouTube</div>
 
-      <div class="sec visible" id="sec-archivo">
-        <div class="drop-zone" id="drop-zone">
-          <input type="file" id="archivo" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="archivosSeleccionados()">
-          <div class="drop-title" id="drop-title">Elegir canciones</div>
-          <div class="drop-sub" id="drop-sub">MP3, AAC, WAV, FLAC</div>
-        </div>
-      </div>
-
-      <div class="sec" id="sec-youtube">
+      <div class="sec visible" id="sec-youtube">
         <div class="yt-box">
           <input class="yt-input" id="yt-url" type="url" placeholder="https://youtube.com/watch?v=..." oninput="ytInputChange()" onpaste="setTimeout(ytInputChange,50)">
           <div class="yt-preview" id="yt-preview">
-            <img class="yt-thumb" id="yt-thumb" src="" alt="">
+            <!-- Selector para Ver Video o Solo Audio -->
+            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; cursor: pointer; color: var(--ac1);">
+              <input type="checkbox" id="yt-ver-video" onchange="ytInputChange()" style="cursor:pointer;"> 📺 Ver Video (Streaming)
+            </label>
+            <div id="yt-video-container" style="width: 100%; border-radius: 8px; overflow: hidden; background: #000; display: none; margin-bottom: 8px;"></div>
+            <img class="yt-thumb" id="yt-thumb" src="" alt="" style="width:100%; max-height:180px; object-fit:cover; border-radius:8px;">
             <div class="yt-titulo" id="yt-titulo">Link de YouTube listo</div>
           </div>
         </div>
       </div>
 
-      <div class="progress" id="prog-wrap">
+      <div class="progress" id="prog-wrap" style="display:none;">
         <div class="progress-track"><div class="progress-fill" id="prog-fill"></div></div>
       </div>
-      <button class="action-btn" id="btn-poner" onclick="poner()" disabled>Selecciona una cancion</button>
+      <button class="action-btn" id="btn-poner" onclick="poner()" disabled>Pega un link de YouTube</button>
       <div class="status-msg" id="upload-msg"></div>
     </div>
 
@@ -859,8 +852,7 @@ let reproduciendo = false;
 let cancionActual = null;
 let volumenActual = 80;
 let guardandoVolumen = null;
-let tabActual = 'archivo';
-let archivosValidos = [];
+let tabActual = 'youtube';
 let qrGenerado = false;
 let salaDisponible = false;
 let cancionesLocales = [];
@@ -1185,35 +1177,13 @@ function toggleQR() {
   }
 }
 
-function setTab(tab) {
-  tabActual = tab;
-  document.querySelectorAll('.stab').forEach((b, i) => {
-    b.classList.toggle('activo', (i === 0 && tab === 'archivo') || (i === 1 && tab === 'youtube'));
-  });
-  document.getElementById('sec-archivo').classList.toggle('visible', tab === 'archivo');
-  document.getElementById('sec-youtube').classList.toggle('visible', tab === 'youtube');
-  resetAgregar();
-}
-
 function resetAgregar() {
   btnPoner.disabled = true;
-  btnPoner.textContent = tabActual === 'archivo' ? 'Selecciona una cancion' : 'Pega un link de YouTube';
+  btnPoner.textContent = 'Pega un link de YouTube';
   uploadMsg.textContent = '';
   uploadMsg.className = 'status-msg';
   progWrap.style.display = 'none';
   progFill.style.width = '0%';
-}
-
-function archivosSeleccionados() {
-  archivosValidos = [...document.getElementById('archivo').files];
-  if (!archivosValidos.length) return;
-  document.getElementById('drop-zone').classList.add('selected');
-  document.getElementById('drop-title').textContent = archivosValidos.length === 1
-    ? limpiarNombre(archivosValidos[0].name)
-    : `${archivosValidos.length} canciones`;
-  document.getElementById('drop-sub').textContent = 'Listo para poner en cola';
-  btnPoner.textContent = archivosValidos.length === 1 ? 'Poner en cola' : `Poner ${archivosValidos.length} en cola`;
-  btnPoner.disabled = false;
 }
 
 function ytInputChange() {
@@ -1221,48 +1191,36 @@ function ytInputChange() {
   const esYt = url.includes('youtube.com') || url.includes('youtu.be');
   btnPoner.disabled = !esYt;
   btnPoner.textContent = esYt ? 'Poner en cola' : 'Pega un link de YouTube';
+  
   const preview = document.getElementById('yt-preview');
+  const verVideo = document.getElementById('yt-ver-video').checked;
+  const videoContainer = document.getElementById('yt-video-container');
+  const thumb = document.getElementById('yt-thumb');
+  
   if (esYt) {
     const vidId = url.match(/(?:v=|youtu\.be\/)([^&?\/]{11})/)?.[1];
-    if (vidId) document.getElementById('yt-thumb').src = `https://img.youtube.com/vi/${vidId}/mqdefault.jpg`;
+    if (vidId) {
+      thumb.src = `https://img.youtube.com/vi/${vidId}/mqdefault.jpg`;
+      if (verVideo) {
+        videoContainer.innerHTML = `<iframe style="width:100%; height:180px; border:none;" src="https://www.youtube.com/embed/${vidId}?autoplay=1&mute=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+        videoContainer.style.display = 'block';
+        thumb.style.display = 'none';
+      } else {
+        videoContainer.innerHTML = '';
+        videoContainer.style.display = 'none';
+        thumb.style.display = 'block';
+      }
+    }
     preview.className = 'yt-preview visible';
   } else {
     preview.className = 'yt-preview';
+    videoContainer.innerHTML = '';
+    videoContainer.style.display = 'none';
   }
 }
 
 function poner() {
-  if (tabActual === 'archivo') subirArchivo();
-  else subirYoutube();
-}
-
-function subirArchivo() {
-  if (!archivosValidos.length) return;
-  btnPoner.disabled = true;
-  progWrap.style.display = 'block';
-  const form = new FormData();
-  form.append('owner', OWNER);
-  archivosValidos.forEach(file => form.append('archivo', file));
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', `/rockola/${SALA}/subir`);
-  xhr.upload.onprogress = event => {
-    if (event.lengthComputable) progFill.style.width = Math.round(event.loaded / event.total * 100) + '%';
-  };
-  xhr.onload = () => {
-    progWrap.style.display = 'none';
-    try {
-      const res = JSON.parse(xhr.responseText);
-      if (res.ok) onAgregarOk(res.agregadas.length);
-      else mostrarMensaje(res.error || 'No se pudo subir', 'error');
-    } catch(e) {
-      mostrarMensaje('Error ' + xhr.status, 'error');
-    }
-  };
-  xhr.onerror = () => {
-    progWrap.style.display = 'none';
-    mostrarMensaje('Error de conexion', 'error');
-  };
-  xhr.send(form);
+  subirYoutube();
 }
 
 function subirYoutube() {
@@ -1304,13 +1262,17 @@ function subirYoutube() {
 
 function onAgregarOk(cantidad) {
   const texto = cantidad === 1 ? 'Cancion en cola' : `${cantidad} canciones en cola`;
-  if (tabActual === 'archivo') {
-    document.getElementById('archivo').value = '';
-    document.getElementById('drop-zone').classList.remove('selected');
-    document.getElementById('drop-title').textContent = 'Elegir canciones';
-    document.getElementById('drop-sub').textContent = 'MP3, AAC, WAV, FLAC';
-    archivosValidos = [];
+  document.getElementById('yt-url').value = '';
+  const preview = document.getElementById('yt-preview');
+  if (preview) preview.className = 'yt-preview';
+  const videoContainer = document.getElementById('yt-video-container');
+  if (videoContainer) {
+    videoContainer.innerHTML = '';
+    videoContainer.style.display = 'none';
   }
+  const check = document.getElementById('yt-ver-video');
+  if (check) check.checked = false;
+  
   resetAgregar();
   mostrarMensaje(texto, 'ok');
   verificarCola();

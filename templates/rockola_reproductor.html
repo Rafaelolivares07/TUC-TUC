@@ -744,6 +744,10 @@ input:checked + .slider:before {
       <input class="hidden-input" id="folder-input" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" webkitdirectory directory multiple onchange="indexarArchivosLocales(this.files)">
       <input class="hidden-input" id="local-files-input" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="indexarArchivosLocales(this.files)">
       <input class="local-search" id="local-search" type="search" placeholder="Buscar en este dispositivo..." oninput="renderBibliotecaLocal()">
+      <div id="banner-permiso-directorio" style="display:none; background: rgba(255, 193, 7, 0.15); border: 1px solid #ffc107; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 0.9rem; color: #ffc107; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+        <span>⚠️ TucTuc necesita permiso para acceder a tu carpeta vinculada.</span>
+        <button class="btn-control" style="margin: 0; padding: 4px 8px; font-size: 0.8rem;" onclick="restablecerPermisoDirectorio()">Dar permiso</button>
+      </div>
       <ul class="library-list" id="lista-local">
         <li class="library-empty">Agrega una carpeta o canciones para no volver al explorador.</li>
       </ul>
@@ -964,6 +968,7 @@ async function activar(skipUnlock = false) {
   verificarCola();
   cargarBibliotecaLocal();
   cargarListasLocales();
+  chequearYRestaurarDirectorio();
 }
 
 function handlePlayerEnded(e) {
@@ -996,6 +1001,34 @@ function handlePlayerTimeUpdate(e) {
   if (crossfadeEnabled && p.duration && (p.duration - p.currentTime <= crossfadeAnticipation) && !transitioning) {
     iniciarCrossfade(crossfadeDuration);
   }
+}
+
+async function obtenerUrlDeAudio(c) {
+  let local = null;
+  if (c.id.startsWith('local-')) {
+    local = await obtenerCancionLocal(idLocalBase(c.id));
+  } else {
+    local = await obtenerCancionLocal(c.id);
+  }
+  
+  if (local) {
+    if (local.blob) {
+      return { url: URL.createObjectURL(local.blob), esLocal: true };
+    } else if (local.esFisico) {
+      const dirHandle = await obtenerDirectorioHandle();
+      const permiso = dirHandle ? await verificarPermisosDirectorio(dirHandle, false) : false;
+      if (dirHandle && permiso) {
+        try {
+          const fileHandle = await dirHandle.getFileHandle(local.nombre);
+          const file = await fileHandle.getFile();
+          return { url: URL.createObjectURL(file), esLocal: true };
+        } catch(err) {
+          console.warn('No pude leer el archivo fisico:', err);
+        }
+      }
+    }
+  }
+  return { url: `/rockola/${SALA}/archivo/${c.id}`, esLocal: false };
 }
 
 async function verificarCola() {
@@ -1039,16 +1072,9 @@ async function verificarCola() {
         } else {
           cancionActual = c.id;
           if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
-          if (c.id.startsWith('local-')) {
-            const local = await obtenerCancionLocal(idLocalBase(c.id));
-            if (local && local.blob) {
-              localObjectUrl = URL.createObjectURL(local.blob);
-              player.src = localObjectUrl;
-            }
-          } else {
-            localObjectUrl = null;
-            player.src = `/rockola/${SALA}/archivo/${c.id}`;
-          }
+          const resAudio = await obtenerUrlDeAudio(c);
+          localObjectUrl = resAudio.esLocal ? resAudio.url : null;
+          player.src = resAudio.url;
           player.load();
           player.play().catch(() => {});
         }
@@ -1063,21 +1089,10 @@ async function verificarCola() {
         nombreEl.textContent = limpiarNombre(c.nombre);
         actualizarPlayPauseBtn(true);
         if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
-        if (c.id.startsWith('local-')) {
-          const local = await obtenerCancionLocal(idLocalBase(c.id));
-          if (!local || !local.blob) {
-            reproduciendo = false;
-            estadoEl.textContent = 'No disponible en este dispositivo';
-            setVinylSpinning(false);
-            setWaveActive(false);
-            actualizarPlayPauseBtn(false);
-            return;
-          }
-          localObjectUrl = URL.createObjectURL(local.blob);
-          player.src = localObjectUrl;
-        } else {
-          localObjectUrl = null;
-          player.src = `/rockola/${SALA}/archivo/${c.id}`;
+        const resAudio = await obtenerUrlDeAudio(c);
+        localObjectUrl = resAudio.esLocal ? resAudio.url : null;
+        player.src = resAudio.url;
+        if (!resAudio.esLocal) {
           guardarArchivoServidorEnBiblioteca(c);
         }
         player.load();
@@ -1288,8 +1303,111 @@ function mostrarMensaje(texto, tipo) {
   uploadMsg.className = 'status-msg ' + (tipo || '');
 }
 
-function abrirSelectorCarpeta() {
-  document.getElementById('folder-input').click();
+async function abrirSelectorCarpeta() {
+  if (typeof window.showDirectoryPicker === 'function') {
+    try {
+      const handle = await window.showDirectoryPicker({
+        mode: 'readwrite'
+      });
+      await guardarDirectorioHandle(handle);
+      await indexarCarpetaFisica(handle);
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.error(e);
+        mostrarMensaje('No pude abrir la carpeta: ' + e.message, 'error');
+      }
+    }
+  } else {
+    document.getElementById('folder-input').click();
+  }
+}
+
+async function indexarCarpetaFisica(dirHandle) {
+  if (!dirHandle) return;
+  const permiso = await verificarPermisosDirectorio(dirHandle, true);
+  if (!permiso) {
+    mostrarMensaje('Se requieren permisos de lectura/escritura para la carpeta vinculada', 'error');
+    mostrarBannerPermiso(true);
+    return;
+  }
+  mostrarBannerPermiso(false);
+  
+  mostrarMensaje('Escaneando archivos de la carpeta...', '');
+  let count = 0;
+  try {
+    const db = await abrirDbLocal();
+    const tx = db.transaction('songs', 'readwrite');
+    const store = tx.objectStore('songs');
+    
+    for await (const entry of dirHandle.values()) {
+      if (entry.kind === 'file' && /\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(entry.name)) {
+        const file = await entry.getFile();
+        const localId = 'local-' + hashTexto(entry.name.toLowerCase() + '-' + file.size);
+        const cancion = {
+          id: localId,
+          deviceId: getDeviceId(),
+          nombre: entry.name,
+          tipo: file.type || 'audio/mpeg',
+          size: file.size,
+          actualizado: Date.now(),
+          esFisico: true
+        };
+        store.put(cancion);
+        count++;
+      }
+    }
+    await new Promise((resolve) => {
+      tx.oncomplete = resolve;
+    });
+    db.close();
+    
+    await cargarBibliotecaLocal();
+    mostrarMensaje(`${count} canción(es) disponible(s) en tu carpeta física`, 'ok');
+  } catch(e) {
+    console.error(e);
+    mostrarMensaje('Error al indexar archivos: ' + e.message, 'error');
+  }
+}
+
+async function chequearYRestaurarDirectorio() {
+  const handle = await obtenerDirectorioHandle();
+  if (handle) {
+    const options = { mode: 'readwrite' };
+    try {
+      const permiso = await handle.queryPermission(options);
+      if (permiso === 'granted') {
+        mostrarBannerPermiso(false);
+        await indexarCarpetaFisica(handle);
+      } else {
+        mostrarBannerPermiso(true);
+      }
+    } catch(e) {
+      console.warn('No se pudieron verificar permisos:', e);
+      mostrarBannerPermiso(true);
+    }
+  } else {
+    mostrarBannerPermiso(false);
+  }
+}
+
+function mostrarBannerPermiso(mostrar) {
+  const banner = document.getElementById('banner-permiso-directorio');
+  if (banner) {
+    banner.style.display = mostrar ? 'flex' : 'none';
+  }
+}
+
+async function restablecerPermisoDirectorio() {
+  const handle = await obtenerDirectorioHandle();
+  if (handle) {
+    const permiso = await verificarPermisosDirectorio(handle, true);
+    if (permiso) {
+      mostrarBannerPermiso(false);
+      await indexarCarpetaFisica(handle);
+    } else {
+      mostrarMensaje('Permiso denegado por el usuario', 'error');
+    }
+  }
 }
 
 function abrirSelectorAudios() {
@@ -1419,7 +1537,7 @@ async function compartirMiBiblioteca() {
 
 function abrirDbLocal() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('rockola_local_library_v1', 2);
+    const req = indexedDB.open('rockola_local_library_v1', 3);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains('songs')) {
@@ -1432,11 +1550,63 @@ function abrirDbLocal() {
         store.createIndex('deviceId', 'deviceId', { unique:false });
         store.createIndex('nombre', 'nombre', { unique:false });
       }
+      if (!db.objectStoreNames.contains('config')) {
+        db.createObjectStore('config', { keyPath:'key' });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
+
+let directorioFisicoHandle = null;
+
+async function guardarDirectorioHandle(handle) {
+  const db = await abrirDbLocal();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction('config', 'readwrite');
+    tx.objectStore('config').put({ key: 'directory_handle', handle });
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+  directorioFisicoHandle = handle;
+}
+
+async function obtenerDirectorioHandle() {
+  if (directorioFisicoHandle) return directorioFisicoHandle;
+  try {
+    const db = await abrirDbLocal();
+    const config = await new Promise((resolve, reject) => {
+      const tx = db.transaction('config', 'readonly');
+      const req = tx.objectStore('config').get('directory_handle');
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    if (config && config.handle) {
+      directorioFisicoHandle = config.handle;
+      return config.handle;
+    }
+  } catch(e) {
+    console.error('Error al recuperar manejador de directorio:', e);
+  }
+  return null;
+}
+
+async function verificarPermisosDirectorio(handle, writeable = true) {
+  if (!handle) return false;
+  const opts = {};
+  if (writeable) opts.mode = 'readwrite';
+  try {
+    if ((await handle.queryPermission(opts)) === 'granted') return true;
+    if ((await handle.requestPermission(opts)) === 'granted') return true;
+  } catch(e) {
+    console.warn('Permiso denegado para directorio:', e);
+  }
+  return false;
+}
+
 
 async function guardarCancionLocal(file) {
   const db = await abrirDbLocal();
@@ -1496,6 +1666,10 @@ async function obtenerCancionLocal(id) {
   return cancion;
 }
 
+function limpiarNombreArchivo(nombre) {
+  return nombre.replace(/[\\/:*?"<>|]/g, '_');
+}
+
 const cacheServidorEnCurso = new Set();
 async function guardarArchivoServidorEnBiblioteca(item) {
   if (!item || !item.id || item.id.startsWith('local-') || cacheServidorEnCurso.has(item.id)) return;
@@ -1505,8 +1679,50 @@ async function guardarArchivoServidorEnBiblioteca(item) {
     if (!res.ok) return;
     const blob = await res.blob();
     if (!blob || !blob.size) return;
-    const cancion = await guardarBlobComoCancionLocal(blob, item.nombre || 'Cancion enviada', item.id);
-    await guardarCancionEnListaRecibida(item, cancion.id);
+    
+    // Comprobar si tenemos una carpeta física vinculada
+    const handle = await obtenerDirectorioHandle();
+    const permiso = handle ? await verificarPermisosDirectorio(handle, true) : false;
+    
+    let cancionId = null;
+    if (handle && permiso) {
+      const safeName = limpiarNombreArchivo(item.nombre || 'Cancion_enviada') + '.mp3';
+      try {
+        const fileHandle = await handle.getFileHandle(safeName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        
+        const db = await abrirDbLocal();
+        const cancion = {
+          id: item.id, // ID del servidor original
+          deviceId: getDeviceId(),
+          nombre: safeName,
+          tipo: blob.type || 'audio/mpeg',
+          size: blob.size,
+          actualizado: Date.now(),
+          esFisico: true
+        };
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction('songs', 'readwrite');
+          tx.objectStore('songs').put(cancion);
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+        });
+        db.close();
+        cancionId = cancion.id;
+        console.log(`Cancion ${item.nombre} guardada fisicamente en disco`);
+      } catch(errDisk) {
+        console.error('Error al guardar fisicamente en disco, reintentando con IndexedDB:', errDisk);
+      }
+    }
+    
+    if (!cancionId) {
+      const cancion = await guardarBlobComoCancionLocal(blob, item.nombre || 'Cancion enviada', item.id);
+      cancionId = cancion.id;
+    }
+    
+    await guardarCancionEnListaRecibida(item, cancionId);
     await cargarBibliotecaLocal();
   } catch(e) {
     console.warn('No se pudo guardar esta cancion en el reproductor', e);
@@ -2292,17 +2508,8 @@ async function iniciarCrossfade(secs, targetSong = null) {
   
   console.log(`Iniciando fundido cruzado de ${secs}s para:`, nextSong.nombre);
   
-  if (nextSong.id.startsWith('local-')) {
-    const local = await obtenerCancionLocal(idLocalBase(nextSong.id));
-    if (local && local.blob) {
-      standbyPlayer.src = URL.createObjectURL(local.blob);
-    } else {
-      transitioning = false;
-      return;
-    }
-  } else {
-    standbyPlayer.src = `/rockola/${SALA}/archivo/${nextSong.id}`;
-  }
+  const resAudio = await obtenerUrlDeAudio(nextSong);
+  standbyPlayer.src = resAudio.url;
   
   standbyPlayer.load();
   standbyPlayer.volume = 0;

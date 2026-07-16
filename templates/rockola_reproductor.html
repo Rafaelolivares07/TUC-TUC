@@ -1312,6 +1312,11 @@ function mostrarMensaje(texto, tipo) {
 }
 
 async function abrirSelectorCarpeta() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.seleccionarYScanearCarpeta === 'function') {
+    window.AndroidBridge.seleccionarYScanearCarpeta();
+    return;
+  }
+  
   if (typeof window.showDirectoryPicker === 'function') {
     try {
       const handle = await window.showDirectoryPicker({
@@ -1327,6 +1332,44 @@ async function abrirSelectorCarpeta() {
     }
   } else {
     document.getElementById('folder-input').click();
+  }
+}
+
+async function procesarCarpetaNativa(files) {
+  if (!Array.isArray(files)) return;
+  mostrarMensaje('Indexando canciones de tu carpeta...', '');
+  try {
+    const db = await abrirDbLocal();
+    const tx = db.transaction('songs', 'readwrite');
+    const store = tx.objectStore('songs');
+    
+    let count = 0;
+    for (const file of files) {
+      if (file.nombre && /\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(file.nombre)) {
+        const localId = 'local-' + hashTexto(file.nombre.toLowerCase() + '-' + (file.size || 0));
+        const cancion = {
+          id: localId,
+          deviceId: getDeviceId(),
+          nombre: file.nombre,
+          tipo: 'audio/mpeg',
+          size: file.size || 0,
+          actualizado: Date.now(),
+          esFisico: true
+        };
+        store.put(cancion);
+        count++;
+      }
+    }
+    await new Promise((resolve) => {
+      tx.oncomplete = resolve;
+    });
+    db.close();
+    
+    await cargarBibliotecaLocal();
+    mostrarMensaje(`${count} canción(es) vinculada(s) con éxito en tu celular`, 'ok');
+  } catch(e) {
+    console.error(e);
+    mostrarMensaje('Error al indexar la carpeta nativa: ' + e.message, 'error');
   }
 }
 

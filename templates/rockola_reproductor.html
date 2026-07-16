@@ -1014,6 +1014,13 @@ async function obtenerUrlDeAudio(c) {
   if (local) {
     if (local.blob) {
       return { url: URL.createObjectURL(local.blob), esLocal: true };
+    } else if (local.esAndroidFisico) {
+      if (window.AndroidBridge && typeof window.AndroidBridge.obtenerRutaLocal === 'function') {
+        const localPath = window.AndroidBridge.obtenerRutaLocal(local.id);
+        if (localPath) {
+          return { url: localPath, esLocal: true };
+        }
+      }
     } else if (local.esFisico) {
       const dirHandle = await obtenerDirectorioHandle();
       const permiso = dirHandle ? await verificarPermisosDirectorio(dirHandle, false) : false;
@@ -1617,28 +1624,7 @@ async function guardarCancionLocal(file) {
     tipo: file.type || 'audio/mpeg',
     size: file.size,
     actualizado: Date.now(),
-    blob: file,
-  };
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction('songs', 'readwrite');
-    tx.objectStore('songs').put(cancion);
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
-  return cancion;
-}
-
-async function guardarBlobComoCancionLocal(blob, nombre, archivoId) {
-  const db = await abrirDbLocal();
-  const cancion = {
-    id: idLocalServidor(archivoId, nombre, blob.size),
-    deviceId: getDeviceId(),
-    nombre,
-    tipo: blob.type || 'audio/mpeg',
-    size: blob.size,
-    actualizado: Date.now(),
-    blob,
+    esFisico: true
   };
   await new Promise((resolve, reject) => {
     const tx = db.transaction('songs', 'readwrite');
@@ -1675,16 +1661,44 @@ async function guardarArchivoServidorEnBiblioteca(item) {
   if (!item || !item.id || item.id.startsWith('local-') || cacheServidorEnCurso.has(item.id)) return;
   cacheServidorEnCurso.add(item.id);
   try {
+    // 1. Android Bridge Check
+    if (window.AndroidBridge && typeof window.AndroidBridge.descargarAudio === 'function') {
+      const downloadUrl = `${window.location.origin}/rockola/${SALA}/archivo/${encodeURIComponent(item.id)}`;
+      window.AndroidBridge.descargarAudio(item.id, item.nombre || 'Cancion_enviada', downloadUrl);
+      
+      const db = await abrirDbLocal();
+      const cancion = {
+        id: item.id,
+        deviceId: getDeviceId(),
+        nombre: item.nombre || 'Cancion_enviada',
+        tipo: 'audio/mpeg',
+        size: 0,
+        actualizado: Date.now(),
+        esAndroidFisico: true
+      };
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('songs', 'readwrite');
+        tx.objectStore('songs').put(cancion);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+      
+      await guardarCancionEnListaRecibida(item, item.id);
+      await cargarBibliotecaLocal();
+      console.log(`Descarga delegada a la app nativa de Android para: ${item.nombre}`);
+      return;
+    }
+
+    // 2. Si no es Android, descargar y escribir físicamente en la carpeta de PC
     const res = await fetch(`/rockola/${SALA}/archivo/${encodeURIComponent(item.id)}`);
     if (!res.ok) return;
     const blob = await res.blob();
     if (!blob || !blob.size) return;
     
-    // Comprobar si tenemos una carpeta física vinculada
     const handle = await obtenerDirectorioHandle();
     const permiso = handle ? await verificarPermisosDirectorio(handle, true) : false;
     
-    let cancionId = null;
     if (handle && permiso) {
       const safeName = limpiarNombreArchivo(item.nombre || 'Cancion_enviada') + '.mp3';
       try {
@@ -1695,7 +1709,7 @@ async function guardarArchivoServidorEnBiblioteca(item) {
         
         const db = await abrirDbLocal();
         const cancion = {
-          id: item.id, // ID del servidor original
+          id: item.id,
           deviceId: getDeviceId(),
           nombre: safeName,
           tipo: blob.type || 'audio/mpeg',
@@ -1710,20 +1724,17 @@ async function guardarArchivoServidorEnBiblioteca(item) {
           tx.onerror = () => reject(tx.error);
         });
         db.close();
-        cancionId = cancion.id;
+        
+        await guardarCancionEnListaRecibida(item, cancion.id);
+        await cargarBibliotecaLocal();
         console.log(`Cancion ${item.nombre} guardada fisicamente en disco`);
       } catch(errDisk) {
-        console.error('Error al guardar fisicamente en disco, reintentando con IndexedDB:', errDisk);
+        console.error('Error al guardar fisicamente en disco:', errDisk);
+        mostrarMensaje('Error al escribir el archivo físico en el disco.', 'error');
       }
+    } else {
+      mostrarMensaje('Error: Vincula una carpeta física para guardar y reproducir las canciones localmente.', 'error');
     }
-    
-    if (!cancionId) {
-      const cancion = await guardarBlobComoCancionLocal(blob, item.nombre || 'Cancion enviada', item.id);
-      cancionId = cancion.id;
-    }
-    
-    await guardarCancionEnListaRecibida(item, cancionId);
-    await cargarBibliotecaLocal();
   } catch(e) {
     console.warn('No se pudo guardar esta cancion en el reproductor', e);
   } finally {

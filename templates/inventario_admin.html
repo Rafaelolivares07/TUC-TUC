@@ -262,7 +262,15 @@
         <input id="entrada-fecha-doc" type="date">
       </div>
       <div class="sm:col-span-2 relative">
-        <label>Proveedor</label>
+        <label class="flex justify-between items-center">
+          <span>Proveedor</span>
+          <button type="button" id="btn-crear-proveedor" onclick="crearProveedorNuevo()" class="hidden text-xs text-rose-500 hover:text-rose-700 font-bold bg-transparent border-0 p-0 cursor-pointer">
+            ➕ Crear proveedor
+          </button>
+          <span id="badge-proveedor-creado" class="hidden text-xs text-green-600 font-bold">
+            ✅ ¡Creado!
+          </span>
+        </label>
         <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor" autocomplete="off">
         <div id="entrada-proveedor-list" class="ac-list hidden"></div>
         <input type="hidden" id="entrada-proveedor-id">
@@ -876,6 +884,36 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
   });
 }
 
+async function crearProveedorNuevo() {
+  const nombre = document.getElementById('entrada-proveedor').value.trim();
+  if (!nombre) return;
+  
+  try {
+    const r = await fetch('/api/inventario/proveedores/crear', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ nombre: nombre })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('entrada-proveedor-id').value = d.id;
+      document.getElementById('btn-crear-proveedor').classList.add('hidden');
+      
+      const badge = document.getElementById('badge-proveedor-creado');
+      badge.textContent = `✅ ¡Proveedor "${nombre}" creado!`;
+      badge.classList.remove('hidden');
+      toast('Proveedor creado con éxito');
+      
+      verificarDocumentoExistente();
+    } else {
+      toast(d.error || 'Error al crear proveedor', false);
+    }
+  } catch(e) {
+    console.error(e);
+    toast('Error de red al crear proveedor', false);
+  }
+}
+
 async function verificarDocumentoExistente() {
   const tipo = document.getElementById('entrada-tipo-doc').value;
   const num = document.getElementById('entrada-num-doc').value.trim();
@@ -979,6 +1017,16 @@ async function registrarEntrada() {
   const fecha_documento = document.getElementById('entrada-fecha-doc').value || null;
   const proveedor_nombre = document.getElementById('entrada-proveedor').value.trim() || null;
   const proveedor_id = document.getElementById('entrada-proveedor-id').value || null;
+
+  if (proveedor_nombre && !proveedor_id) {
+    toast('El proveedor no está registrado ni seleccionado. Por favor haz clic en "Crear proveedor" o selecciona uno de la lista.', false);
+    return;
+  }
+  if (!proveedor_id) {
+    toast('Debe seleccionar o crear un proveedor', false);
+    return;
+  }
+
   const cont   = document.getElementById('entrada-lineas');
   const divs   = [...cont.querySelectorAll('.grid')];
   const lineas = [];
@@ -1016,6 +1064,8 @@ async function registrarEntrada() {
     document.getElementById('entrada-num-doc').value = '';
     document.getElementById('entrada-proveedor').value = '';
     document.getElementById('entrada-proveedor-id').value = '';
+    document.getElementById('btn-crear-proveedor').classList.add('hidden');
+    document.getElementById('badge-proveedor-creado').classList.add('hidden');
     calcularTotalesEntrada();
     cargarProductos();
   } else {
@@ -1309,7 +1359,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // AC proveedor
   setupRemoteAC('entrada-proveedor', 'entrada-proveedor-list', 'entrada-proveedor-id', '/api/inventario/proveedores/buscar', () => {
+    document.getElementById('btn-crear-proveedor').classList.add('hidden');
+    document.getElementById('badge-proveedor-creado').classList.add('hidden');
     verificarDocumentoExistente();
+  });
+
+  document.getElementById('entrada-proveedor').addEventListener('input', (e) => {
+    const val = e.target.value.trim();
+    const btn = document.getElementById('btn-crear-proveedor');
+    const badge = document.getElementById('badge-proveedor-creado');
+    badge.classList.add('hidden');
+    if (val.length > 1) {
+      btn.classList.remove('hidden');
+    } else {
+      btn.classList.add('hidden');
+    }
   });
 
   document.getElementById('entrada-tipo-doc').addEventListener('change', verificarDocumentoExistente);

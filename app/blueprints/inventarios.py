@@ -431,28 +431,17 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     iva_total = Decimal('0')
     advertencias = []
 
-    if proveedor_nombre and not proveedor_id:
-        row_prov = conn.execute(
-            "SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1",
-            (proveedor_nombre,)
-        ).fetchone()
-        if row_prov:
-            proveedor_id = row_prov['id']
-        else:
-            row_ins = conn.execute(
-                "INSERT INTO terceros (nombre) VALUES (%s) RETURNING id",
-                (proveedor_nombre,)
-            ).fetchone()
-            proveedor_id = row_ins['id']
+    # Strict validation: provider ID is required and must exist
+    if not proveedor_id:
+        return {'ok': False, 'error': 'Debe seleccionar un proveedor de la lista o crearlo antes de continuar'}, 400
 
-    if proveedor_id and not proveedor_nombre:
-        prov = conn.execute(
-            "SELECT nombre FROM terceros WHERE id = %s",
-            (proveedor_id,)
-        ).fetchone()
-        proveedor_nombre = prov['nombre'] if prov else None
-        if not prov:
-            return {'ok': False, 'error': 'Proveedor no encontrado'}, 400
+    prov = conn.execute(
+        "SELECT nombre FROM terceros WHERE id = %s",
+        (proveedor_id,)
+    ).fetchone()
+    if not prov:
+        return {'ok': False, 'error': 'Proveedor no encontrado'}, 400
+    proveedor_nombre = prov['nombre']
 
     # Overwrite check: if document already exists, clean up old records first
     if tipo_documento and documento_numero and proveedor_id:
@@ -1477,6 +1466,31 @@ def api_buscar_proveedores():
         return jsonify([{'id': r['id'], 'nombre': r['nombre'], 'telefono': r['telefono']} for r in rows])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/proveedores/crear', methods=['POST'])
+def api_crear_proveedor():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    nombre = _txt(data.get('nombre'))
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre de proveedor requerido'}), 400
+    conn = get_db_connection()
+    try:
+        # Check if already exists
+        row = conn.execute("SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1", (nombre,)).fetchone()
+        if row:
+            return jsonify({'ok': True, 'id': row['id'], 'mensaje': 'Ya existía'})
+        # Insert new
+        row_ins = conn.execute("INSERT INTO terceros (nombre) VALUES (%s) RETURNING id", (nombre,)).fetchone()
+        conn.commit()
+        return jsonify({'ok': True, 'id': row_ins['id'], 'mensaje': 'Creado con éxito'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
 

@@ -868,6 +868,45 @@ let playlistsLocales = [];
 let localObjectUrl = null;
 let playlistActualId = null;
 
+function mostrarCargando(titulo, subtitulo) {
+  let overlay = document.getElementById('loading-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'loading-overlay';
+    overlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(26,26,46,0.96); z-index:99999; display:flex; align-items:center; justify-content:center; flex-direction:column; color:white; font-family:sans-serif; padding: 20px; text-align: center;';
+    
+    const style = document.createElement('style');
+    style.innerHTML = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+    
+    const spinner = document.createElement('div');
+    spinner.style.cssText = 'border:4px solid rgba(255,255,255,0.1); border-left-color:#00b4d8; border-radius:50%; width:50px; height:50px; animation:spin 1s linear infinite;';
+    
+    const titleEl = document.createElement('h3');
+    titleEl.id = 'loading-title';
+    titleEl.style.cssText = 'margin-top:20px; font-weight:600; font-size:18px; margin-bottom:8px;';
+    
+    const subtitleEl = document.createElement('p');
+    subtitleEl.id = 'loading-subtitle';
+    subtitleEl.style.cssText = 'color:#a0a0c0; font-size:14px; line-height: 1.4;';
+    
+    overlay.appendChild(spinner);
+    overlay.appendChild(titleEl);
+    overlay.appendChild(subtitleEl);
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('loading-title').textContent = titulo || 'Cargando...';
+  document.getElementById('loading-subtitle').textContent = subtitulo || 'Por favor espera...';
+  overlay.style.display = 'flex';
+}
+
+function ocultarCargando() {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) {
+    overlay.style.display = 'none';
+  }
+}
+
 function getDeviceId() {
   let id = localStorage.getItem('rockola_device_id');
   if (!id) {
@@ -1015,14 +1054,14 @@ async function obtenerUrlDeAudio(c) {
   if (local) {
     if (local.blob) {
       return { url: URL.createObjectURL(local.blob), esLocal: true };
-    } else if (local.esAndroidFisico) {
-      if (window.AndroidBridge && typeof window.AndroidBridge.obtenerRutaLocal === 'function') {
-        const localPath = window.AndroidBridge.obtenerRutaLocal(local.id);
-        if (localPath) {
-          return { url: localPath, esLocal: true };
-        }
+    }
+    if (window.AndroidBridge && typeof window.AndroidBridge.obtenerRutaLocal === 'function') {
+      const localPath = window.AndroidBridge.obtenerRutaLocal(local.nombre || local.id);
+      if (localPath) {
+        return { url: localPath, esLocal: true };
       }
-    } else if (local.esFisico) {
+    }
+    if (local.esFisico) {
       const dirHandle = await obtenerDirectorioHandle();
       const permiso = dirHandle ? await verificarPermisosDirectorio(dirHandle, false) : false;
       if (dirHandle && permiso) {
@@ -1313,6 +1352,7 @@ function mostrarMensaje(texto, tipo) {
 
 async function abrirSelectorCarpeta() {
   if (window.AndroidBridge && typeof window.AndroidBridge.seleccionarYScanearCarpeta === 'function') {
+    mostrarCargando("Abriendo selector...", "Elige la carpeta donde tienes tu música en el celular.");
     window.AndroidBridge.seleccionarYScanearCarpeta();
     return;
   }
@@ -1335,9 +1375,28 @@ async function abrirSelectorCarpeta() {
   }
 }
 
+function notificarEscaneoNativo() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.obtenerCancionesEscaneadas === 'function') {
+    try {
+      const jsonStr = window.AndroidBridge.obtenerCancionesEscaneadas();
+      const files = JSON.parse(jsonStr);
+      procesarCarpetaNativa(files);
+    } catch(e) {
+      console.error("Error al parsear canciones escaneadas:", e);
+      ocultarCargando();
+      mostrarMensaje("Error al procesar las canciones del celular", "error");
+    }
+  } else {
+    ocultarCargando();
+  }
+}
+
 async function procesarCarpetaNativa(files) {
-  if (!Array.isArray(files)) return;
-  mostrarMensaje('Indexando canciones de tu carpeta...', '');
+  if (!Array.isArray(files)) {
+    ocultarCargando();
+    return;
+  }
+  mostrarCargando("Guardando música...", "Registrando " + files.length + " canciones en la rockola...");
   try {
     const db = await abrirDbLocal();
     const tx = db.transaction('songs', 'readwrite');
@@ -1366,9 +1425,11 @@ async function procesarCarpetaNativa(files) {
     db.close();
     
     await cargarBibliotecaLocal();
+    ocultarCargando();
     mostrarMensaje(`${count} canción(es) vinculada(s) con éxito en tu celular`, 'ok');
   } catch(e) {
     console.error(e);
+    ocultarCargando();
     mostrarMensaje('Error al indexar la carpeta nativa: ' + e.message, 'error');
   }
 }
@@ -1817,13 +1878,7 @@ async function cargarBibliotecaLocal() {
       const tx = db.transaction('songs', 'readonly');
       const req = tx.objectStore('songs').getAll();
       req.onsuccess = () => {
-        const todas = req.result || [];
-        let propias = todas.filter(c => c.deviceId === getDeviceId());
-        if (!propias.length && todas.length && todas[0].deviceId) {
-          localStorage.setItem('rockola_device_id', todas[0].deviceId);
-          propias = todas.filter(c => c.deviceId === getDeviceId());
-        }
-        resolve(propias);
+        resolve(req.result || []);
       };
       req.onerror = () => reject(req.error);
     });
@@ -1908,7 +1963,7 @@ async function cargarListasLocales() {
     playlistsLocales = await new Promise((resolve, reject) => {
       const tx = db.transaction('playlists', 'readonly');
       const req = tx.objectStore('playlists').getAll();
-      req.onsuccess = () => resolve((req.result || []).filter(p => p.deviceId === getDeviceId()));
+      req.onsuccess = () => resolve(req.result || []);
       req.onerror = () => reject(req.error);
     });
     db.close();

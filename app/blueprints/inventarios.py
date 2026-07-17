@@ -1565,7 +1565,7 @@ def api_unificar_terceros(negocio_id):
         
         # 2. Update cotizaciones
         conn.execute(f"""
-            UPDATE cotizaciones 
+            UPDATE cotizaciones_compras 
             SET tercero_id = %s 
             WHERE tercero_id IN ({placeholders})
         """, (principal_id,) + tuple(sobrantes_ids))

@@ -238,9 +238,7 @@ def construir_propuesta_rotacion(conn, negocio_id, dias_alerta_agotamiento=2,
         if estado in ('agotado_real', 'agotado_funcional', 'comprar_pronto'):
             cantidad_sugerida = _ceil(demanda_diaria * Decimal(str(dias_cobertura_objetivo)) - stock)
 
-        cotizacion = None
-        if cantidad_sugerida > 0:
-            cotizacion = _mejor_cotizacion(conn, negocio_id, row['id'], cantidad_sugerida)
+        cotizacion = _mejor_cotizacion(conn, negocio_id, row['id'], cantidad_sugerida)
 
         confianza = _confianza(row, promedio_7, promedio_30)
         alertas = _alertas(row, promedio_7, promedio_30, confianza, cotizacion)

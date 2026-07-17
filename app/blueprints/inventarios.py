@@ -505,7 +505,7 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             documento_numero=documento_numero,
             documento_fecha=documento_fecha,
             proveedor_id=proveedor_id,
-            proveedor_nombre=proveedor_nombre,
+            proveedor_nombre=None,  # Normalized: name is fetched via JOIN from terceros
             iva_total=iva_total,
             documento_total=documento_total,
             iva_pct=ln['iva_pct'],
@@ -846,14 +846,15 @@ def api_inventario_kardex(producto_id):
         if error:
             return error
         rows = conn.execute("""
-            SELECT id, tipo, motivo, cantidad, stock_anterior, stock_nuevo,
-                   valor_unitario, costo_und, notas, tipo_documento,
-                   documento_numero, documento_fecha, proveedor_id,
-                   proveedor_nombre, iva_total, documento_total,
-                   TO_CHAR(created_at, 'DD/MM/YY HH24:MI') AS fecha
-            FROM movimientos_inventario
-            WHERE producto_id = %s
-            ORDER BY created_at DESC LIMIT 300
+            SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
+                   m.valor_unitario, m.costo_und, m.notas, m.tipo_documento,
+                   m.documento_numero, m.documento_fecha, m.proveedor_id,
+                   COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
+                   TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') AS fecha
+            FROM movimientos_inventario m
+            LEFT JOIN terceros t ON t.id = m.proveedor_id
+            WHERE m.producto_id = %s
+            ORDER BY m.created_at DESC LIMIT 300
         """, (producto_id,)).fetchall()
         return jsonify({'ok': True, 'movimientos': [dict(r) for r in rows]})
     except Exception as e:
@@ -879,14 +880,15 @@ def api_tienda_inventario_kardex(slug):
         if error:
             return error
         rows = conn.execute("""
-            SELECT id, tipo, motivo, cantidad, stock_anterior, stock_nuevo,
-                   valor_unitario, costo_und, notas, tipo_documento,
-                   documento_numero, documento_fecha, proveedor_id,
-                   proveedor_nombre, iva_total, documento_total,
-                   TO_CHAR(created_at, 'DD/MM/YY HH24:MI') AS fecha
-            FROM movimientos_inventario
-            WHERE producto_id = %s AND negocio_id = %s
-            ORDER BY created_at DESC LIMIT 300
+            SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
+                   m.valor_unitario, m.costo_und, m.notas, m.tipo_documento,
+                   m.documento_numero, m.documento_fecha, m.proveedor_id,
+                   COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
+                   TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') AS fecha
+            FROM movimientos_inventario m
+            LEFT JOIN terceros t ON t.id = m.proveedor_id
+            WHERE m.producto_id = %s AND m.negocio_id = %s
+            ORDER BY m.created_at DESC LIMIT 300
         """, (producto_id, negocio_id)).fetchall()
         return jsonify({'ok': True, 'movimientos': [dict(r) for r in rows]})
     except Exception as e:

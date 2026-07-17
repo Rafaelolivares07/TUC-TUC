@@ -562,6 +562,36 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             iva_valor=ln['iva_valor']
         )
 
+        # Feed/update quote (cotizacion) from this entry if it's a purchase and has a price
+        if motivo == 'compra' and proveedor_id and ln['valor_unitario'] and float(ln['valor_unitario']) > 0:
+            from datetime import timedelta, date
+            vu = float(ln['valor_unitario'])
+            f_cot = documento_fecha or date.today()
+            f_vence = f_cot + timedelta(days=180)
+            
+            # Check if a quote exists for this product and provider (origin='compra')
+            cot_row = conn.execute("""
+                SELECT id FROM cotizaciones_compras
+                WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s AND origen = 'compra'
+                LIMIT 1
+            """, (negocio_id, proveedor_id, ln['producto_id'])).fetchone()
+            
+            if cot_row:
+                conn.execute("""
+                    UPDATE cotizaciones_compras
+                    SET numero_cotizacion = %s, fecha_cotizacion = %s, fecha_vencimiento = %s,
+                        precio = %s, unidades_item = 1, validada_proveedor = TRUE, updated_at = NOW()
+                    WHERE id = %s
+                """, (documento_numero, f_cot, f_vence, vu, cot_row['id']))
+            else:
+                conn.execute("""
+                    INSERT INTO cotizaciones_compras
+                        (negocio_id, numero_cotizacion, tercero_id, item_id, fecha_cotizacion,
+                         fecha_vencimiento, descripcion_presentacion, unidades_item, precio,
+                         origen, validada_proveedor, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 1, %s, 'compra', TRUE, NOW())
+                """, (negocio_id, documento_numero, proveedor_id, ln['producto_id'], f_cot, f_vence, 'Unidad (entrada)', vu))
+
     if _asiento_auto:
         try:
             if documento_total > 0:

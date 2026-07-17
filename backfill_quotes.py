@@ -1,10 +1,25 @@
 import os
-from datetime import timedelta, datetime
-from decimal import Decimal
-from app.db import get_db_connection
+import psycopg2
+from datetime import timedelta
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(override=True)
+db_url = os.environ.get('DATABASE_URL', '')
+if db_url.startswith('postgres://'):
+    db_url = db_url.replace('postgres://', 'postgresql://', 1)
 
 def backfill():
-    conn = get_db_connection()
+    if not db_url:
+        print("DATABASE_URL no está configurada en el entorno.")
+        return
+
+    print("Conectando a la base de datos...")
+    conn = psycopg2.connect(db_url)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor if hasattr(psycopg2, 'extras') else None)
+    
+    # If standard cursor, we can map manually, or use psycopg2.extras
+    # Let's write a standard cursor query to be safe of psycopg2.extras availability
     try:
         # Fetch all purchase movements with valid provider and price
         query = """
@@ -16,7 +31,11 @@ def backfill():
               AND valor_unitario IS NOT NULL AND valor_unitario > 0
             ORDER BY created_at ASC
         """
-        rows = conn.execute(query).fetchall()
+        cursor.execute(query)
+        # Fetch description to map columns manually
+        columns = [desc[0] for desc in cursor.description]
+        rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
         print(f"Encontrados {len(rows)} movimientos de compra históricos.")
         
         migrados = 0
@@ -28,28 +47,35 @@ def backfill():
             producto_id = r['producto_id']
             vu = float(r['valor_unitario'])
             doc_num = r['documento_numero'] or f"ENT-{r['created_at'].strftime('%Y%m%d')}"
-            f_cot = r['documento_fecha'] or r['created_at'].date()
+            
+            # handle date formatting safely
+            f_cot = r['documento_fecha']
+            if not f_cot:
+                f_cot = r['created_at'].date()
             f_vence = f_cot + timedelta(days=180)
             
             # Check if a quote exists
-            cot = conn.execute("""
+            cursor.execute("""
                 SELECT id, fecha_cotizacion FROM cotizaciones_compras
                 WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s AND origen = 'compra'
                 LIMIT 1
-            """, (negocio_id, proveedor_id, producto_id)).fetchone()
+            """, (negocio_id, proveedor_id, producto_id))
+            cot_row = cursor.fetchone()
             
-            if cot:
+            if cot_row:
+                cot_id = cot_row[0]
+                cot_fecha = cot_row[1]
                 # Update only if this purchase is newer or same date
-                if f_cot >= cot['fecha_cotizacion']:
-                    conn.execute("""
+                if f_cot >= cot_fecha:
+                    cursor.execute("""
                         UPDATE cotizaciones_compras
                         SET numero_cotizacion = %s, fecha_cotizacion = %s, fecha_vencimiento = %s,
                             precio = %s, unidades_item = 1, validada_proveedor = TRUE, updated_at = NOW()
                         WHERE id = %s
-                    """, (doc_num, f_cot, f_vence, vu, cot['id']))
+                    """, (doc_num, f_cot, f_vence, vu, cot_id))
                     actualizados += 1
             else:
-                conn.execute("""
+                cursor.execute("""
                     INSERT INTO cotizaciones_compras
                         (negocio_id, numero_cotizacion, tercero_id, item_id, fecha_cotizacion,
                          fecha_vencimiento, descripcion_presentacion, unidades_item, precio,
@@ -64,8 +90,8 @@ def backfill():
         conn.rollback()
         print(f"Error durante la migración: {e}")
     finally:
+        cursor.close()
         conn.close()
 
 if __name__ == '__main__':
-    # Set the working dir context if needed
     backfill()

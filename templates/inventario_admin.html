@@ -261,9 +261,11 @@
         <label>Fecha documento</label>
         <input id="entrada-fecha-doc" type="date">
       </div>
-      <div class="sm:col-span-2">
+      <div class="sm:col-span-2 relative">
         <label>Proveedor</label>
-        <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor">
+        <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor" autocomplete="off">
+        <div id="entrada-proveedor-list" class="ac-list hidden"></div>
+        <input type="hidden" id="entrada-proveedor-id">
       </div>
       <div class="sm:col-span-2">
         <label>Notas (opcional)</label>
@@ -491,6 +493,57 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
       });
     });
     list.classList.remove('hidden');
+  }
+  function highlightAC(items) {
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+  }
+}
+
+function setupRemoteAC(inputId, listId, hiddenId, searchUrl) {
+  const inp = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  const hid = document.getElementById(hiddenId);
+  let idx = -1, timer = null;
+
+  inp.addEventListener('input', () => {
+    clearTimeout(timer);
+    hid.value = ''; // Limpiar ID al escribir
+    timer = setTimeout(() => search(), 280);
+  });
+  inp.addEventListener('keydown', e => {
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') { idx = Math.min(idx + 1, items.length - 1); highlightAC(items); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { idx = Math.max(idx - 1, 0); highlightAC(items); e.preventDefault(); }
+    else if (e.key === 'Enter' && idx >= 0) { items[idx]?.click(); e.preventDefault(); }
+    else if (e.key === 'Escape') { list.classList.add('hidden'); }
+  });
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+  async function search() {
+    const q = inp.value.trim();
+    if (q.length < 2) { list.classList.add('hidden'); return; }
+    try {
+      const r = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}`);
+      const matches = await r.json();
+      if (!matches.length) { list.classList.add('hidden'); return; }
+      idx = -1;
+      list.innerHTML = matches.map(p =>
+        `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
+          ${p.nombre}${p.telefono ? ` <span class="text-gray-400">(${p.telefono})</span>` : ''}
+         </div>`
+      ).join('');
+      list.querySelectorAll('.ac-item').forEach(el => {
+        el.addEventListener('mousedown', () => {
+          hid.value = el.dataset.id;
+          inp.value = el.dataset.nombre;
+          list.classList.add('hidden');
+        });
+      });
+      list.classList.remove('hidden');
+    } catch(e) {
+      console.error(e);
+    }
   }
   function highlightAC(items) {
     items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
@@ -799,6 +852,7 @@ async function registrarEntrada() {
   const numero_documento = document.getElementById('entrada-num-doc').value.trim() || null;
   const fecha_documento = document.getElementById('entrada-fecha-doc').value || null;
   const proveedor_nombre = document.getElementById('entrada-proveedor').value.trim() || null;
+  const proveedor_id = document.getElementById('entrada-proveedor-id').value || null;
   const cont   = document.getElementById('entrada-lineas');
   const divs   = [...cont.querySelectorAll('.grid')];
   const lineas = [];
@@ -825,7 +879,7 @@ async function registrarEntrada() {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       lineas, motivo, notas, tipo_documento, numero_documento,
-      fecha_documento, proveedor_nombre, iva: ivaAcumulado
+      fecha_documento, proveedor_nombre, proveedor_id, iva: ivaAcumulado
     })
   });
   const d = await r.json();
@@ -835,6 +889,7 @@ async function registrarEntrada() {
     entradaLineas = [];
     document.getElementById('entrada-num-doc').value = '';
     document.getElementById('entrada-proveedor').value = '';
+    document.getElementById('entrada-proveedor-id').value = '';
     calcularTotalesEntrada();
     cargarProductos();
   } else {
@@ -1125,6 +1180,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // AC producción (limpia preview al cambiar producto)
   setupAC('prod-ac-input', 'prod-ac-list', 'prod-ac-id', () => productos, () => limpiarPreview());
+
+  // AC proveedor
+  setupRemoteAC('entrada-proveedor', 'entrada-proveedor-list', 'entrada-proveedor-id', '/api/inventario/proveedores/buscar');
 
   // Enter en modal producto
   document.getElementById('mp-nombre').addEventListener('keydown', e => {

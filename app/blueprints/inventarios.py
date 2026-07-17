@@ -426,6 +426,20 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     iva_total = Decimal('0')
     advertencias = []
 
+    if proveedor_nombre and not proveedor_id:
+        row_prov = conn.execute(
+            "SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1",
+            (proveedor_nombre,)
+        ).fetchone()
+        if row_prov:
+            proveedor_id = row_prov['id']
+        else:
+            row_ins = conn.execute(
+                "INSERT INTO terceros (nombre) VALUES (%s) RETURNING id",
+                (proveedor_nombre,)
+            ).fetchone()
+            proveedor_id = row_ins['id']
+
     if proveedor_id and not proveedor_nombre:
         prov = conn.execute(
             "SELECT nombre FROM terceros WHERE id = %s",
@@ -1356,7 +1370,26 @@ def api_documento_anular(negocio_id):
         conn.close()
 
 
-# ── UI ─────────────────────────────────────────────────────────────────────────
+@bp.route('/api/inventario/proveedores/buscar')
+def api_buscar_proveedores():
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT id, nombre, telefono 
+            FROM terceros 
+            WHERE (tipo_tercero IS NULL OR tipo_tercero IN ('persona', 'proveedor', 'negocio'))
+              AND nombre ILIKE %s 
+            ORDER BY nombre 
+            LIMIT 50
+        """, (f'%{q}%',)).fetchall()
+        return jsonify([{'id': r['id'], 'nombre': r['nombre'], 'telefono': r['telefono']} for r in rows])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 
 @bp.route('/admin/inventario/<int:negocio_id>')

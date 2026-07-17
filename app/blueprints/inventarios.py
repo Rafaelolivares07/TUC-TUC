@@ -699,12 +699,19 @@ def api_inventario_tarjeta_ver(producto_id):
         if error:
             return error
         rows = conn.execute("""
-            SELECT te.componente_id, te.cantidad, p.nombre
+            SELECT te.componente_id, te.cantidad, p.nombre,
+                   COALESCE(s.costo_und, p.costo, 0) AS costo_und
             FROM tarjeta_estandar te
             JOIN productos p ON p.id = te.componente_id
+            LEFT JOIN saldos_inventario s ON s.negocio_id = p.negocio_id AND s.producto_id = p.id AND s.bodega = 1
             WHERE te.producto_id = %s
         """, (producto_id,)).fetchall()
-        return jsonify({'ok': True, 'componentes': [dict(r) for r in rows]})
+        return jsonify({'ok': True, 'componentes': [{
+            'componente_id': r['componente_id'],
+            'cantidad': float(r['cantidad']),
+            'nombre': r['nombre'],
+            'costo_und': float(r['costo_und'] or 0)
+        } for r in rows]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

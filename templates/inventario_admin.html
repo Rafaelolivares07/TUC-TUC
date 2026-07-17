@@ -681,7 +681,12 @@ async function cargarTarjeta(productoId) {
   const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`);
   const d = await r.json();
   if (!d.ok) return;
-  tarjetaLineas = d.componentes.map(c => ({componente_id: c.componente_id, nombre: c.nombre, cantidad: c.cantidad}));
+  tarjetaLineas = d.componentes.map(c => ({
+    componente_id: c.componente_id, 
+    nombre: c.nombre, 
+    cantidad: c.cantidad,
+    costo_und: c.costo_und || 0
+  }));
   renderLineasTarjeta();
 }
 function renderLineasTarjeta() {
@@ -690,16 +695,49 @@ function renderLineasTarjeta() {
     cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-2">Sin componentes (se tratará como producto simple)</p>';
     return;
   }
-  cont.innerHTML = tarjetaLineas.map((ln, i) => `
-    <div class="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
-      <span class="flex-1 text-sm font-semibold">${ln.nombre}</span>
-      <input type="number" value="${ln.cantidad}" min="0.0001" step="0.0001"
-             onchange="tarjetaLineas[${i}].cantidad=parseFloat(this.value)||1"
-             style="width:80px">
-      <button onclick="tarjetaLineas.splice(${i},1);renderLineasTarjeta()"
-              class="text-red-400 hover:text-red-600 font-bold text-lg leading-none">×</button>
+  
+  let totalReceta = 0;
+  let html = tarjetaLineas.map((ln, i) => {
+    const costoUnd = parseFloat(ln.costo_und || 0);
+    const cantidad = parseFloat(ln.cantidad || 0);
+    const subtotal = cantidad * costoUnd;
+    totalReceta += subtotal;
+    
+    return `
+      <div class="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-xl px-3 py-2">
+        <div class="col-span-5 text-sm font-semibold text-gray-700 truncate" title="${ln.nombre}">
+          ${ln.nombre}
+        </div>
+        <div class="col-span-2">
+          <input type="number" value="${cantidad}" min="0.0001" step="0.0001"
+                 oninput="tarjetaLineas[${i}].cantidad = parseFloat(this.value) || 0; renderLineasTarjeta();"
+                 class="w-full text-center px-1 py-1 border border-gray-200 rounded-lg text-sm"
+                 style="height: 32px;">
+        </div>
+        <div class="col-span-2 text-right text-xs text-gray-500 font-medium">
+          $${costoUnd.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+        </div>
+        <div class="col-span-2 text-right text-sm font-bold text-gray-800">
+          $${subtotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+        </div>
+        <div class="col-span-1 flex justify-end">
+          <button onclick="tarjetaLineas.splice(${i},1); renderLineasTarjeta();"
+                  class="text-red-400 hover:text-red-600 font-bold text-lg leading-none">×</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  html += `
+    <div class="flex justify-between items-center bg-rose-50 border border-rose-100 rounded-xl px-4 py-3 mt-3">
+      <span class="text-sm font-bold text-rose-800">Costo total de receta:</span>
+      <span class="text-base font-extrabold text-rose-900">
+        $${totalReceta.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+      </span>
     </div>
-  `).join('');
+  `;
+  
+  cont.innerHTML = html;
 }
 function agregarLineaTarjeta() {
   const id = parseInt(document.getElementById('tarjeta-ac-id').value);
@@ -707,7 +745,11 @@ function agregarLineaTarjeta() {
   const cant = parseFloat(document.getElementById('tarjeta-ac-cant').value) || 1;
   if (!id || !nombre) { toast('Selecciona un producto del buscador', false); return; }
   if (tarjetaLineas.find(l => l.componente_id === id)) { toast('Ya está en la tarjeta', false); return; }
-  tarjetaLineas.push({componente_id: id, nombre, cantidad: cant});
+  
+  const prod = productos.find(p => p.id === id);
+  const costo = prod ? (prod.costo || 0) : 0;
+  
+  tarjetaLineas.push({componente_id: id, nombre, cantidad: cant, costo_und: costo});
   renderLineasTarjeta();
   document.getElementById('tarjeta-ac-input').value = '';
   document.getElementById('tarjeta-ac-id').value = '';

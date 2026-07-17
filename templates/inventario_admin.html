@@ -500,7 +500,7 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
   }
 }
 
-function setupRemoteAC(inputId, listId, hiddenId, searchUrl) {
+function setupRemoteAC(inputId, listId, hiddenId, searchUrl, onSelect) {
   const inp = document.getElementById(inputId);
   const list = document.getElementById(listId);
   const hid = document.getElementById(hiddenId);
@@ -538,6 +538,7 @@ function setupRemoteAC(inputId, listId, hiddenId, searchUrl) {
           hid.value = el.dataset.id;
           inp.value = el.dataset.nombre;
           list.classList.add('hidden');
+          if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
         });
       });
       list.classList.remove('hidden');
@@ -781,6 +782,89 @@ function agregarLineaEntrada() {
   });
   
   calcularTotalesEntrada();
+}
+
+function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valorUnitario, ivaPct) {
+  const cont = document.getElementById('entrada-lineas');
+  const idx = entradaLineas.length;
+  const div = document.createElement('div');
+  div.className = 'grid grid-cols-12 gap-2 items-end';
+  div.innerHTML = `
+    <div class="col-span-3 relative">
+      <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off" value="${productoNombre.replace(/"/g,'&quot;')}">
+      <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
+      <input type="hidden" id="ent-id-${idx}" value="${productoId}">
+    </div>
+    <div class="col-span-2">
+      <input type="number" id="ent-cant-${idx}" placeholder="Cant." min="0" step="0.0001" value="${cantidad}" oninput="calcularCostoFila(${idx}, 'cant')">
+    </div>
+    <div class="col-span-2">
+      <input type="number" id="ent-vu-${idx}" placeholder="Costo" min="0" step="0.0001" value="${valorUnitario}" oninput="calcularCostoFila(${idx}, 'vu')">
+    </div>
+    <div class="col-span-2">
+      <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="${(cantidad * valorUnitario).toFixed(2)}" oninput="calcularCostoFila(${idx}, 'total')">
+    </div>
+    <div class="col-span-2">
+      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full">
+        <option value="0" ${ivaPct === 0 ? 'selected' : ''}>0%</option>
+        <option value="5" ${ivaPct === 5 ? 'selected' : ''}>5%</option>
+        <option value="19" ${ivaPct === 19 ? 'selected' : ''}>19%</option>
+      </select>
+    </div>
+    <div class="col-span-1 flex justify-center">
+      <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
+              class="text-red-400 hover:text-red-600 font-bold text-lg">×</button>
+    </div>
+  `;
+  cont.appendChild(div);
+  entradaLineas.push(div);
+  
+  setupAC(`ent-ac-${idx}`, `ent-ac-list-${idx}`, `ent-id-${idx}`, () => productos, (selected) => {
+    const prod = productos.find(p => p.id === selected.id);
+    if (prod) {
+      document.getElementById(`ent-vu-${idx}`).value = prod.costo || '';
+      const pct = Math.round(prod.iva_pct || 0);
+      const select = document.getElementById(`ent-iva-pct-${idx}`);
+      if (select) {
+        if ([0, 5, 19].includes(pct)) select.value = pct.toString();
+        else select.value = '0';
+      }
+      calcularCostoFila(idx, 'vu');
+    }
+  });
+}
+
+async function verificarDocumentoExistente() {
+  const tipo = document.getElementById('entrada-tipo-doc').value;
+  const num = document.getElementById('entrada-num-doc').value.trim();
+  const provId = document.getElementById('entrada-proveedor-id').value;
+  const provNombre = document.getElementById('entrada-proveedor').value.trim();
+  
+  if (!tipo || !num || (!provId && !provNombre)) {
+    return;
+  }
+  
+  try {
+    const url = `/api/inventario/${NEGOCIO_ID}/documento/consultar?tipo_documento=${encodeURIComponent(tipo)}&documento_numero=${encodeURIComponent(num)}&proveedor_id=${provId || ''}&proveedor_nombre=${encodeURIComponent(provNombre)}`;
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.ok && d.existe) {
+      toast('Factura/Documento existente cargado para modificar', true);
+      if (d.notas) {
+        document.getElementById('entrada-notas').value = d.notas;
+      }
+      const cont = document.getElementById('entrada-lineas');
+      cont.innerHTML = '';
+      entradaLineas = [];
+      
+      for (const item of d.items) {
+        agregarLineaEntradaConDatos(item.producto_id, item.nombre_producto, item.cantidad, item.valor_unitario, item.iva_pct);
+      }
+      calcularTotalesEntrada();
+    }
+  } catch(e) {
+    console.error(e);
+  }
 }
 
 function calcularCostoFila(idx, target) {
@@ -1182,7 +1266,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupAC('prod-ac-input', 'prod-ac-list', 'prod-ac-id', () => productos, () => limpiarPreview());
 
   // AC proveedor
-  setupRemoteAC('entrada-proveedor', 'entrada-proveedor-list', 'entrada-proveedor-id', '/api/inventario/proveedores/buscar');
+  setupRemoteAC('entrada-proveedor', 'entrada-proveedor-list', 'entrada-proveedor-id', '/api/inventario/proveedores/buscar', () => {
+    verificarDocumentoExistente();
+  });
+
+  document.getElementById('entrada-tipo-doc').addEventListener('change', verificarDocumentoExistente);
+  document.getElementById('entrada-num-doc').addEventListener('blur', verificarDocumentoExistente);
 
   // Enter en modal producto
   document.getElementById('mp-nombre').addEventListener('keydown', e => {

@@ -108,6 +108,7 @@
                 <button onclick="cambiarTab('cotizaciones')" id="tab-cotizaciones" class="tab-btn">Cotizaciones</button>
                 <button onclick="cambiarTab('visitantes')" id="tab-visitantes" class="tab-btn">👁️ Visitantes</button>
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/inventario/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📦 Inventario</a>{% else %}<button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📦 Inventario</button>{% endif %}
+                {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/mantenimiento/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">🛠️ Mantenimiento</a>{% endif %}
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/compras/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">Compras y agotados</a>{% endif %}
                 <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">🎨 Diseño</button>
                 <button onclick="cambiarTab('acceso')" id="tab-acceso" class="tab-btn">🔑 Acceso</button>

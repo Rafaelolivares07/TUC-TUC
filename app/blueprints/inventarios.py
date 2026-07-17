@@ -95,6 +95,7 @@ def _crear_tablas(conn):
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS documento_fecha DATE",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES terceros(id)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS proveedor_nombre VARCHAR(255)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS producto_padre_id INTEGER REFERENCES productos(id)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS iva_total NUMERIC(14,2)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS documento_total NUMERIC(14,2)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS iva_pct NUMERIC(5,2) DEFAULT 0",
@@ -297,7 +298,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                  tipo_documento=None, documento_numero=None,
                  documento_fecha=None, proveedor_id=None,
                  proveedor_nombre=None, iva_total=None,
-                 documento_total=None, iva_pct=None, iva_valor=None):
+                 documento_total=None, iva_pct=None, iva_valor=None,
+                 producto_padre_id=None):
     """Movimiento directo sobre un producto, sin pasar por tarjeta estándar."""
     signo  = Decimal('1') if tipo == 'entrada' else Decimal('-1')
     cantidad = Decimal(str(cantidad))
@@ -330,8 +332,9 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
              cantidad, stock_anterior, stock_nuevo, registrado_por, notas,
              valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo,
              tipo_documento, documento_numero, documento_fecha, proveedor_id,
-             proveedor_nombre, iva_total, documento_total, iva_pct, iva_valor)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             proveedor_nombre, iva_total, documento_total, iva_pct, iva_valor,
+             producto_padre_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         negocio_id, producto_id,
         nombre_prod['nombre'] if nombre_prod else '',
@@ -347,7 +350,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         float(iva_total) if iva_total is not None else None,
         float(documento_total) if documento_total is not None else None,
         float(iva_pct) if iva_pct is not None else 0.0,
-        float(iva_valor) if iva_valor is not None else 0.0
+        float(iva_valor) if iva_valor is not None else 0.0,
+        producto_padre_id
     ))
 
     if saldo:
@@ -398,12 +402,13 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
     cantidad = Decimal(str(cantidad))
     for comp in componentes:
         cant_comp = Decimal(str(comp['cantidad'])) * cantidad
+        padre_id = producto_id if comp['componente_id'] != producto_id else None
         _mov_directo(conn, negocio_id, comp['componente_id'], cant_comp, tipo, motivo,
                      registrado_por, valor_unitario, notas, bodega,
                      referencia_id, referencia_tipo, tipo_documento,
                      documento_numero, documento_fecha, proveedor_id,
                      proveedor_nombre, iva_total, documento_total,
-                     iva_pct, iva_valor)
+                     iva_pct, iva_valor, producto_padre_id=padre_id)
 
 
 def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
@@ -448,6 +453,51 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
         proveedor_nombre = prov['nombre'] if prov else None
         if not prov:
             return {'ok': False, 'error': 'Proveedor no encontrado'}, 400
+
+    # Overwrite check: if document already exists, clean up old records first
+    if tipo_documento and documento_numero and proveedor_id:
+        existing_movs = conn.execute("""
+            SELECT id, producto_id, documento_total, created_at 
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND tipo = 'entrada'
+              AND tipo_documento = %s AND documento_numero = %s AND proveedor_id = %s
+        """, (negocio_id, tipo_documento, documento_numero, proveedor_id)).fetchall()
+        
+        if existing_movs:
+            mov_ids = [m['id'] for m in existing_movs]
+            prod_ids_to_recost = {m['producto_id'] for m in existing_movs}
+            
+            # Delete accounting vouchers linked to this document
+            origen_id = f"{tipo_documento}:{documento_numero}"
+            origen_tipo = 'inventario_entrada'
+            
+            comp_rows = conn.execute("""
+                SELECT id FROM comprobantes_contables
+                WHERE negocio_id = %s AND origen_tipo = %s AND origen_id = %s
+            """, (negocio_id, origen_tipo, origen_id)).fetchall()
+            
+            for c in comp_rows:
+                conn.execute("DELETE FROM movimientos_contables WHERE comprobante_id = %s", (c['id'],))
+                conn.execute("DELETE FROM comprobantes_contables WHERE id = %s", (c['id'],))
+                
+            if not comp_rows and existing_movs[0]['documento_total'] is not None:
+                fallback_comp = conn.execute("""
+                    SELECT id FROM comprobantes_contables
+                    WHERE negocio_id = %s AND tipo = 'COMPRA'
+                      AND ABS(total_debitos - %s) < 0.05
+                      AND fecha = %s::date
+                """, (negocio_id, float(existing_movs[0]['documento_total']), existing_movs[0]['created_at'].date())).fetchone()
+                if fallback_comp:
+                    conn.execute("DELETE FROM movimientos_contables WHERE comprobante_id = %s", (fallback_comp['id'],))
+                    conn.execute("DELETE FROM comprobantes_contables WHERE id = %s", (fallback_comp['id'],))
+            
+            # Delete old movements
+            placeholders_m = ', '.join(['%s'] * len(mov_ids))
+            conn.execute(f"DELETE FROM movimientos_inventario WHERE id IN ({placeholders_m})", tuple(mov_ids))
+            
+            # Recost old products temporarily
+            for p_id in prod_ids_to_recost:
+                _recostear_producto(conn, negocio_id, p_id)
 
     # Primer ciclo: validación y cálculo de subtotales e IVA acumulado
     lineas_procesadas = []
@@ -1413,5 +1463,160 @@ def admin_inventario(negocio_id):
                                volver_label=contexto['volver_label'])
     except Exception as e:
         return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/admin/mantenimiento/<int:negocio_id>')
+def admin_negocio_mantenimiento(negocio_id):
+    if 'usuario_id' not in session:
+        return redirect(url_for('auth.admin_login'))
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto:
+            return "Negocio no encontrado", 404
+        if not _puede_gestionar_negocio(contexto):
+            return "No autorizado para este negocio", 403
+        return render_template('mantenimiento_admin.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=contexto['negocio_nombre'],
+                               volver_url=contexto['volver_url'],
+                               volver_label=contexto['volver_label'])
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/unificar-terceros', methods=['POST'])
+def api_unificar_terceros(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto or not _puede_gestionar_negocio(contexto):
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+            
+        data = request.get_json() or {}
+        principal_id = _int_o_none(data.get('principal_id'))
+        sobrantes_ids = data.get('sobrantes_ids', [])
+        
+        # Clean and validate IDs
+        sobrantes_ids = [int(x) for x in sobrantes_ids if _int_o_none(x) is not None]
+        
+        if not principal_id:
+            return jsonify({'ok': False, 'error': 'Debe seleccionar el tercero principal'}), 400
+        if not sobrantes_ids:
+            return jsonify({'ok': False, 'error': 'Debe seleccionar al menos un tercero sobrante'}), 400
+        if principal_id in sobrantes_ids:
+            return jsonify({'ok': False, 'error': 'El tercero principal no puede estar en la lista de sobrantes'}), 400
+            
+        # Verify principal exists
+        p_row = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (principal_id,)).fetchone()
+        if not p_row:
+            return jsonify({'ok': False, 'error': 'El tercero principal no existe'}), 400
+            
+        # Verify sobrantes exist
+        placeholders = ', '.join(['%s'] * len(sobrantes_ids))
+        s_rows = conn.execute(f"SELECT id, nombre FROM terceros WHERE id IN ({placeholders})", tuple(sobrantes_ids)).fetchall()
+        if len(s_rows) != len(sobrantes_ids):
+            return jsonify({'ok': False, 'error': 'Uno o más terceros sobrantes no existen'}), 400
+            
+        # Start transaction to merge
+        # 1. Update movimientos_inventario
+        conn.execute(f"""
+            UPDATE movimientos_inventario 
+            SET proveedor_id = %s 
+            WHERE proveedor_id IN ({placeholders})
+        """, (principal_id,) + tuple(sobrantes_ids))
+        
+        # 2. Update cotizaciones
+        conn.execute(f"""
+            UPDATE cotizaciones 
+            SET tercero_id = %s 
+            WHERE tercero_id IN ({placeholders})
+        """, (principal_id,) + tuple(sobrantes_ids))
+        
+        # 3. Delete duplicates from terceros
+        conn.execute(f"""
+            DELETE FROM terceros 
+            WHERE id IN ({placeholders})
+        """, tuple(sobrantes_ids))
+        
+        conn.commit()
+        return jsonify({'ok': True, 'mensaje': f'Se han unificado {len(sobrantes_ids)} terceros en "{p_row["nombre"]}"'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/documento/consultar')
+def api_consultar_documento_existente(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+        
+    tipo_doc = request.args.get('tipo_documento', '').strip()
+    num_doc = request.args.get('documento_numero', '').strip()
+    proveedor_id = _int_o_none(request.args.get('proveedor_id'))
+    proveedor_nombre = request.args.get('proveedor_nombre', '').strip()
+    
+    if not tipo_doc or not num_doc:
+        return jsonify({'ok': False, 'error': 'Tipo y número de documento requeridos'}), 400
+        
+    conn = get_db_connection()
+    try:
+        # Check if there is any movement with this key
+        if proveedor_id:
+            query = """
+                SELECT id, producto_id, nombre_producto, cantidad, valor_unitario, iva_pct, notas
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND tipo = 'entrada' 
+                  AND tipo_documento = %s AND documento_numero = %s AND proveedor_id = %s
+                ORDER BY id
+            """
+            params = (negocio_id, tipo_doc, num_doc, proveedor_id)
+        else:
+            query = """
+                SELECT id, producto_id, nombre_producto, cantidad, valor_unitario, iva_pct, notas
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND tipo = 'entrada' 
+                  AND tipo_documento = %s AND documento_numero = %s AND proveedor_nombre = %s
+                ORDER BY id
+            """
+            params = (negocio_id, tipo_doc, num_doc, proveedor_nombre)
+            
+        rows = conn.execute(query, params).fetchall()
+        if not rows:
+            return jsonify({'ok': True, 'existe': False})
+            
+        # Get notes from first movement
+        first_row = conn.execute("""
+            SELECT notas FROM movimientos_inventario
+            WHERE negocio_id = %s AND tipo = 'entrada' 
+              AND tipo_documento = %s AND documento_numero = %s AND (proveedor_id = %s OR proveedor_nombre = %s)
+            LIMIT 1
+        """, (negocio_id, tipo_doc, num_doc, proveedor_id, proveedor_nombre)).fetchone()
+        notes = first_row['notas'] if first_row else ''
+            
+        return jsonify({
+            'ok': True,
+            'existe': True,
+            'notas': notes,
+            'items': [{
+                'producto_id': r['producto_id'],
+                'nombre_producto': r['nombre_producto'],
+                'cantidad': float(r['cantidad']),
+                'valor_unitario': float(r['valor_unitario'] or 0),
+                'iva_pct': float(r['iva_pct'] or 0),
+                'notas': r['notas']
+            } for r in rows]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

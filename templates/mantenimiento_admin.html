@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mantenimiento — {{ negocio_nombre }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+    .card-tool {
+      background: white; border-radius: 16px; padding: 24px;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .card-tool:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    }
+    .ac-list {
+      position: absolute; background: white; border: 1px solid #e5e7eb;
+      border-radius: 8px; box-shadow: 0 4px 12px #0001;
+      max-height: 220px; overflow-y: auto; z-index: 100; width: 100%;
+    }
+    .ac-item { padding: 8px 12px; cursor: pointer; font-size: .85rem; }
+    .ac-item:hover, .ac-item.ac-focus { background: #fef2f2; color: #e11d48; }
+    .toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
+      z-index: 9999; opacity: 0; transition: opacity .3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    .toast-ok { background: #059669; }
+    .toast-err { background: #dc2626; }
+  </style>
+</head>
+<body class="p-4 sm:p-6 min-h-screen">
+<div id="toast" class="toast"></div>
+
+<div class="max-w-4xl mx-auto">
+  <!-- Header -->
+  <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-rose-500">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div>
+        <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Mantenimiento de Negocio</p>
+        <h1 class="text-xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
+      </div>
+      <div class="flex gap-3">
+        <a href="/admin/inventario/{{ negocio_id }}" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">Inventario</a>
+        <a href="{{ volver_url or '/admin' }}" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">{{ volver_label or 'Admin' }}</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISTA PRINCIPAL: TABLERO DE HERRAMIENTAS -->
+  <div id="panel-dashboard" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    
+    <!-- Tarjeta: Unificación de Terceros -->
+    <div class="card-tool flex flex-col justify-between">
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-2xl">👥</span>
+          <h2 class="text-lg font-bold text-gray-800">Unificación de Terceros</h2>
+        </div>
+        <p class="text-sm text-gray-600 mb-6">
+          Permite fusionar clientes o proveedores duplicados (ej: por diferencias en digitación), transfiriendo todo su historial de movimientos y cotizaciones a un único registro principal y eliminando los sobrantes.
+        </p>
+      </div>
+      <button onclick="abrirHerramienta('unificar-terceros')" class="w-full py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition text-sm">
+        Abrir Herramienta
+      </button>
+    </div>
+
+    <!-- Tarjeta: Depuración de Catálogo (Próximamente) -->
+    <div class="card-tool opacity-60 flex flex-col justify-between border border-dashed border-gray-300">
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-2xl text-gray-400">📦</span>
+          <h2 class="text-lg font-bold text-gray-700">Depuración de Catálogo</h2>
+          <span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-semibold">Próximamente</span>
+        </div>
+        <p class="text-sm text-gray-500 mb-6">
+          Herramienta para depurar o archivar masivamente productos del catálogo que no tengan existencias ni movimientos históricos de ventas o compras.
+        </p>
+      </div>
+      <button disabled class="w-full py-2.5 bg-gray-100 text-gray-400 font-semibold rounded-xl cursor-not-allowed text-sm">
+        Próximamente
+      </button>
+    </div>
+
+    <!-- Tarjeta: Recosteo de Inventario (Próximamente) -->
+    <div class="card-tool opacity-60 flex flex-col justify-between border border-dashed border-gray-300">
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-2xl text-gray-400">📊</span>
+          <h2 class="text-lg font-bold text-gray-700">Recosteo de Productos</h2>
+          <span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-semibold">Próximamente</span>
+        </div>
+        <p class="text-sm text-gray-500 mb-6">
+          Regenera el costo promedio ponderado de tus productos de forma retroactiva, procesando cronológicamente todas las entradas registradas.
+        </p>
+      </div>
+      <button disabled class="w-full py-2.5 bg-gray-100 text-gray-400 font-semibold rounded-xl cursor-not-allowed text-sm">
+        Próximamente
+      </button>
+    </div>
+
+  </div>
+
+  <!-- VISTA HERRAMIENTA: UNIFICAR TERCEROS -->
+  <div id="panel-unificar-terceros" class="hidden bg-white rounded-2xl shadow-lg p-6">
+    <div class="flex items-center justify-between mb-6 pb-3 border-b">
+      <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+        <span>👥</span> Unificar Clientes / Proveedores (Terceros)
+      </h2>
+      <button onclick="volverAlMenu()" class="text-sm text-gray-500 hover:text-gray-700 font-semibold flex items-center gap-1">
+        ← Volver
+      </button>
+    </div>
+
+    <div class="space-y-6">
+      
+      <!-- Paso 1: Seleccionar el Tercero Principal -->
+      <div class="bg-rose-50/50 p-4 rounded-xl border border-rose-100">
+        <h3 class="font-bold text-sm text-rose-800 mb-2">1. Tercero Principal (El registro que se CONSERVA)</h3>
+        <p class="text-xs text-rose-700/80 mb-3">
+          Todo el historial se transferirá a esta cuenta y este será el único nombre que aparecerá en el sistema.
+        </p>
+        <div class="relative">
+          <input id="ac-principal" type="text" placeholder="Buscar y seleccionar tercero principal..." autocomplete="off" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500">
+          <div id="ac-principal-list" class="ac-list hidden"></div>
+          <input type="hidden" id="ac-principal-id">
+        </div>
+        <div id="selected-principal-badge" class="mt-2 hidden">
+          <span class="inline-flex items-center gap-1 text-xs bg-rose-600 text-white font-bold px-3 py-1 rounded-full">
+            <span>Destino:</span> <span id="principal-nombre-lbl"></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Paso 2: Seleccionar los Terceros Sobrantes -->
+      <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+        <h3 class="font-bold text-sm text-gray-700 mb-2">2. Terceros Duplicados / Sobrantes (Los registros que se ELIMINAN)</h3>
+        <p class="text-xs text-gray-500 mb-3">
+          Selecciona uno o más registros que quieres fusionar. Su historial pasará al Principal y luego estos serán eliminados.
+        </p>
+        <div class="relative mb-3">
+          <input id="ac-sobrante" type="text" placeholder="Buscar y agregar terceros sobrantes..." autocomplete="off" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500">
+          <div id="ac-sobrante-list" class="ac-list hidden"></div>
+        </div>
+        
+        <!-- Lista de seleccionados -->
+        <div class="space-y-1.5" id="sobrantes-list-container">
+          <p class="text-xs text-gray-400 italic">No has agregado ningún tercero sobrante.</p>
+        </div>
+      </div>
+
+      <!-- Paso 3: Confirmación y Envío -->
+      <div class="p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-xs flex gap-3">
+        <span class="text-lg">⚠️</span>
+        <div>
+          <h4 class="font-bold mb-1">¡Advertencia de Seguridad!</h4>
+          <p>
+            Esta acción es definitiva y modificará el historial de compras, ventas y cotizaciones en la base de datos de forma irreversible. Asegúrate de haber seleccionado correctamente el principal y los sobrantes.
+          </p>
+        </div>
+      </div>
+
+      <!-- Acciones de guardar -->
+      <div class="flex justify-end gap-3 pt-3 border-t">
+        <button onclick="volverAlMenu()" class="px-5 py-2.5 border rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+        <button id="btn-unificar" onclick="confirmarFusion()" class="px-6 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-sm transition">
+          Confirmar y Unificar
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+  const NEGOCIO_ID = {{ negocio_id }};
+  let sobrantes = [];
+
+  function toast(msg, ok = true) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `toast show ${ok ? 'toast-ok' : 'toast-err'}`;
+    setTimeout(() => el.classList.remove('show'), 3500);
+  }
+
+  function abrirHerramienta(toolId) {
+    document.getElementById('panel-dashboard').classList.add('hidden');
+    document.getElementById('panel-unificar-terceros').classList.remove('hidden');
+    resetUnificarForm();
+  }
+
+  function volverAlMenu() {
+    document.getElementById('panel-unificar-terceros').classList.add('hidden');
+    document.getElementById('panel-dashboard').classList.remove('hidden');
+  }
+
+  function resetUnificarForm() {
+    document.getElementById('ac-principal').value = '';
+    document.getElementById('ac-principal-id').value = '';
+    document.getElementById('selected-principal-badge').classList.add('hidden');
+    document.getElementById('ac-sobrante').value = '';
+    sobrantes = [];
+    renderSobrantes();
+  }
+
+  // Configuración de autocompletados
+  setupRemoteAC('ac-principal', 'ac-principal-list', ({id, nombre}) => {
+    document.getElementById('ac-principal-id').value = id;
+    document.getElementById('ac-principal').value = nombre;
+    document.getElementById('principal-nombre-lbl').textContent = nombre;
+    document.getElementById('selected-principal-badge').classList.remove('hidden');
+    
+    // Si estaba en sobrantes, removerlo
+    sobrantes = sobrantes.filter(s => s.id !== id);
+    renderSobrantes();
+  });
+
+  setupRemoteAC('ac-sobrante', 'ac-sobrante-list', ({id, nombre}) => {
+    document.getElementById('ac-sobrante').value = '';
+    const principalId = +document.getElementById('ac-principal-id').value;
+    if (id === principalId) {
+      toast('El sobrante no puede ser el mismo tercero principal', false);
+      return;
+    }
+    if (sobrantes.some(s => s.id === id)) {
+      toast('Este tercero ya ha sido agregado', false);
+      return;
+    }
+    sobrantes.push({id, nombre});
+    renderSobrantes();
+  });
+
+  function renderSobrantes() {
+    const container = document.getElementById('sobrantes-list-container');
+    if (!sobrantes.length) {
+      container.innerHTML = '<p class="text-xs text-gray-400 italic">No has agregado ningún tercero sobrante.</p>';
+      return;
+    }
+    container.innerHTML = sobrantes.map(s => `
+      <div class="flex items-center justify-between bg-white border border-gray-150 rounded-lg px-3 py-1.5 text-sm shadow-sm">
+        <span class="font-semibold text-gray-700">${s.nombre} <span class="text-xs text-gray-400">(ID: ${s.id})</span></span>
+        <button onclick="removerSobrante(${s.id})" class="text-red-500 hover:text-red-700 font-bold px-2 py-0.5 text-sm">&times;</button>
+      </div>
+    `).join('');
+  }
+
+  function removerSobrante(id) {
+    sobrantes = sobrantes.filter(s => s.id !== id);
+    renderSobrantes();
+  }
+
+  async function confirmarFusion() {
+    const principalId = +document.getElementById('ac-principal-id').value;
+    const principalNombre = document.getElementById('principal-nombre-lbl').textContent;
+    if (!principalId) return toast('Debe seleccionar el tercero principal', false);
+    if (!sobrantes.length) return toast('Debe agregar al menos un tercero sobrante', false);
+
+    const nombresSobrantes = sobrantes.map(s => `"${s.nombre}"`).join(', ');
+    const confirmed = confirm(`¿Estás seguro de que deseas fusionar los terceros ${nombresSobrantes} en "${principalNombre}"?\n\nEsta acción modificará todos sus registros históricos y eliminará las cuentas duplicadas.`);
+    if (!confirmed) return;
+
+    const btn = document.getElementById('btn-unificar');
+    btn.disabled = true;
+    btn.textContent = 'Procesando fusión...';
+
+    try {
+      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/unificar-terceros`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          principal_id: principalId,
+          sobrantes_ids: sobrantes.map(s => s.id)
+        })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast('Fusión completada con éxito');
+        resetUnificarForm();
+        setTimeout(() => volverAlMenu(), 1500);
+      } else {
+        toast(d.error, false);
+      }
+    } catch(err) {
+      toast(`Error de red: ${err.message}`, false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Confirmar y Unificar';
+    }
+  }
+
+  // Helper autocomplete remoto
+  function setupRemoteAC(inputId, listId, onSelect) {
+    const inp = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    let idx = -1, timer = null;
+
+    inp.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => search(), 280);
+    });
+    inp.addEventListener('keydown', e => {
+      const items = list.querySelectorAll('.ac-item');
+      if (e.key === 'ArrowDown') { idx = Math.min(idx + 1, items.length - 1); highlightAC(items); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { idx = Math.max(idx - 1, 0); highlightAC(items); e.preventDefault(); }
+      else if (e.key === 'Enter' && idx >= 0) { items[idx]?.click(); e.preventDefault(); }
+      else if (e.key === 'Escape') { list.classList.add('hidden'); }
+    });
+    inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+    async function search() {
+      const q = inp.value.trim();
+      if (q.length < 2) { list.classList.add('hidden'); return; }
+      try {
+        const r = await fetch(`/api/inventario/proveedores/buscar?q=${encodeURIComponent(q)}`);
+        const matches = await r.json();
+        if (!matches.length) { list.classList.add('hidden'); return; }
+        idx = -1;
+        list.innerHTML = matches.map(p =>
+          `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
+            ${p.nombre}${p.telefono ? ` <span class="text-gray-400">(${p.telefono})</span>` : ''}
+           </div>`
+        ).join('');
+        list.querySelectorAll('.ac-item').forEach(el => {
+          el.addEventListener('mousedown', () => {
+            list.classList.add('hidden');
+            if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+          });
+        });
+        list.classList.remove('hidden');
+      } catch(e) {
+        console.error(e);
+      }
+    }
+    function highlightAC(items) {
+      items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+      if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+    }
+  }
+</script>
+</body>
+</html>

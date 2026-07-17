@@ -431,6 +431,8 @@ const NEGOCIO_ID = {{ negocio_id }};
 let productos = [];
 let tarjetaLineas = []; // {componente_id, nombre, cantidad}
 let entradaLineas = []; // {el: HTMLElement}
+let activeACInputId = null;
+let activeACHiddenId = null;
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function toast(msg, ok = true) {
@@ -485,15 +487,29 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
     const q = inp.value.toLowerCase().trim();
     if (q.length < 2) { list.classList.add('hidden'); return; }
     const matches = data().filter(p => p.nombre.toLowerCase().includes(q)).slice(0, 15);
-    if (!matches.length) { list.classList.add('hidden'); return; }
     idx = -1;
-    list.innerHTML = matches.map(p =>
-      `<div class="ac-item" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
+    
+    let html = matches.map(p =>
+      `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
         ${p.nombre}${p.categoria ? ` <span class="text-gray-400">(${p.categoria})</span>` : ''}
        </div>`
     ).join('');
+
+    // Append Crear option at the bottom
+    html += `
+      <div class="ac-item text-left px-3 py-2 hover:bg-rose-50 cursor-pointer text-rose-500 font-bold border-t border-gray-100" data-crear="true" data-nombre="${inp.value.replace(/"/g,'&quot;')}">
+        ➕ Crear nuevo producto: "${inp.value}"
+      </div>
+    `;
+    
+    list.innerHTML = html;
     list.querySelectorAll('.ac-item').forEach(el => {
       el.addEventListener('mousedown', () => {
+        if (el.dataset.crear) {
+          list.classList.add('hidden');
+          abrirModalCrearDesdeAC(inputId, hiddenId, el.dataset.nombre);
+          return;
+        }
         document.getElementById(hiddenId).value = el.dataset.id;
         inp.value = el.dataset.nombre;
         list.classList.add('hidden');
@@ -506,6 +522,13 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
     items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
     if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
   }
+}
+
+function abrirModalCrearDesdeAC(inputId, hiddenId, nombre) {
+  activeACInputId = inputId;
+  activeACHiddenId = hiddenId;
+  abrirModalProducto();
+  document.getElementById('mp-nombre').value = nombre;
 }
 
 function setupRemoteAC(inputId, listId, hiddenId, searchUrl, onSelect) {
@@ -664,7 +687,36 @@ async function guardarProducto() {
   if (d.ok) {
     toast(id ? 'Producto actualizado' : 'Producto creado');
     cerrarModalProducto();
-    cargarProductos();
+    
+    if (!id && activeACInputId && activeACHiddenId) {
+      const inputId = activeACInputId;
+      const hiddenId = activeACHiddenId;
+      document.getElementById(hiddenId).value = d.id;
+      document.getElementById(inputId).value = nombre;
+      
+      if (inputId.startsWith('ent-ac-')) {
+        const idx = inputId.replace('ent-ac-', '');
+        const select = document.getElementById(`ent-iva-pct-${idx}`);
+        cargarProductos().then(() => {
+          const prod = productos.find(p => p.id === d.id);
+          if (prod) {
+            document.getElementById(`ent-vu-${idx}`).value = prod.costo || '';
+            const pct = Math.round(prod.iva_pct || 0);
+            if (select) {
+              if ([0, 5, 19].includes(pct)) select.value = pct.toString();
+              else select.value = '0';
+            }
+            calcularCostoFila(idx, 'vu');
+          }
+        });
+      } else {
+        cargarProductos();
+      }
+      activeACInputId = null;
+      activeACHiddenId = null;
+    } else {
+      cargarProductos();
+    }
   } else {
     toast(d.error, false);
   }

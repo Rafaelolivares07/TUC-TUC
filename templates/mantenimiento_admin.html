@@ -512,12 +512,23 @@
     vacio.classList.add('hidden');
     resultados.classList.add('hidden');
     
-    auditorDocumentoSeleccionado = { tipo, numero, terceroId };
-    
     try {
       const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/auditar-documento?tipo_documento=${encodeURIComponent(tipo)}&documento_numero=${encodeURIComponent(numero)}&proveedor_id=${terceroId}`);
       const d = await r.json();
       if (!d.ok) throw new Error(d.error || 'Error al cargar detalles del documento');
+      
+      // Store selected doc state for delete/edit actions
+      let provId = terceroId;
+      let provNombre = '';
+      if (d.inventario && d.inventario.length > 0) {
+        provId = d.inventario[0].proveedor_id || provId;
+        provNombre = d.inventario[0].proveedor_nombre || '';
+      } else if (d.ventas) {
+        provId = d.ventas.tercero_id || provId;
+        provNombre = d.ventas.cliente_nombre || '';
+      }
+      
+      auditorDocumentoSeleccionado = { tipo, numero, terceroId: provId, terceroNombre: provNombre };
       
       // Render Inventario
       const cardInv = document.getElementById('aud-card-inventario');
@@ -640,10 +651,10 @@
 
   function modificarDocumentoAuditor() {
     if (!auditorDocumentoSeleccionado) return;
-    const { tipo, numero } = auditorDocumentoSeleccionado;
+    const { tipo, numero, terceroId, terceroNombre } = auditorDocumentoSeleccionado;
     
     if (tipo === 'factura' || tipo === 'remision' || tipo === 'entrada' || tipo === 'salida') {
-      window.location.href = `/admin/inventario/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo)}&num_doc=${encodeURIComponent(numero)}#entradas`;
+      window.location.href = `/admin/inventario/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo)}&num_doc=${encodeURIComponent(numero)}&prov_id=${encodeURIComponent(terceroId || '')}&prov_nom=${encodeURIComponent(terceroNombre || '')}#entradas`;
     } else {
       toast('Modificación directa no disponible para este tipo de documento a través de este atajo.', false);
     }

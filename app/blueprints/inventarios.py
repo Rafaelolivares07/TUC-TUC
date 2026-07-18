@@ -1567,7 +1567,7 @@ def api_auditar_documento(negocio_id):
     try:
         # 1. Query movimientos_inventario
         sql_inv = """
-            SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad, valor_unitario, valor_total, iva_pct, created_at, proveedor_nombre
+            SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad, valor_unitario, valor_total, iva_pct, created_at, proveedor_id, proveedor_nombre
             FROM movimientos_inventario
             WHERE negocio_id = %s AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s)
         """
@@ -1589,6 +1589,7 @@ def api_auditar_documento(negocio_id):
                 'valor_total': float(r['valor_total'] or 0),
                 'iva_pct': float(r['iva_pct'] or 0),
                 'created_at': r['created_at'].isoformat() if r['created_at'] else None,
+                'proveedor_id': r['proveedor_id'],
                 'proveedor_nombre': r['proveedor_nombre']
             } for r in rows_inv
         ]
@@ -1672,6 +1673,7 @@ def api_auditar_documento(negocio_id):
                     'estado': ped_row['estado'],
                     'notas': ped_row['notas'],
                     'cliente_nombre': cliente_nombre,
+                    'tercero_id': ped_row['id_tercero'],
                     'items': [
                         {
                             'id': pi['id'],

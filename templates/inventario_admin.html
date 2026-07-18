@@ -1440,10 +1440,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const qTipoDoc = urlParams.get('tipo_doc');
   const qNumDoc = urlParams.get('num_doc');
+  const qProvId = urlParams.get('prov_id');
+  const qProvNom = urlParams.get('prov_nom');
   if (qTipoDoc && qNumDoc) {
     mostrarTab('entradas');
     document.getElementById('entrada-tipo-doc').value = qTipoDoc;
     document.getElementById('entrada-num-doc').value = qNumDoc;
+    if (qProvId) {
+      document.getElementById('entrada-proveedor-id').value = qProvId;
+    }
+    if (qProvNom) {
+      document.getElementById('entrada-proveedor').value = qProvNom;
+      const btnCrear = document.getElementById('btn-crear-proveedor');
+      if (btnCrear) btnCrear.classList.add('hidden');
+      const badgeProv = document.getElementById('badge-proveedor-creado');
+      if (badgeProv) badgeProv.classList.add('hidden');
+    }
     setTimeout(() => verificarDocumentoExistente(), 150);
   }
 });

@@ -1387,16 +1387,9 @@ async function cargarTiposDocEntrada() {
       const filtrados = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'entrada');
       const select = document.getElementById('entrada-tipo-doc');
       if (select) {
-        if (filtrados.length > 0) {
-          select.innerHTML = filtrados.map(t => `<option value="${t.codigo}">${t.nombre} (${t.codigo})</option>`).join('');
-        } else {
-          select.innerHTML = `
-            <option value="factura">Factura (FALLBACK)</option>
-            <option value="remision">Remisión (FALLBACK)</option>
-            <option value="ajuste">Ajuste (FALLBACK)</option>
-            <option value="devolucion">Devolución (FALLBACK)</option>
-            <option value="otro">Otro (FALLBACK)</option>
-          `;
+        select.innerHTML = filtrados.map(t => `<option value="${t.codigo}">${t.nombre} (${t.codigo})</option>`).join('');
+        if (!filtrados.length) {
+          select.innerHTML = '<option value="">No hay tipos de doc. de entrada configurados</option>';
         }
       }
     }

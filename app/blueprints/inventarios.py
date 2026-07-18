@@ -1495,6 +1495,62 @@ def api_crear_proveedor():
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/documentos-tercero/<int:tercero_id>', methods=['GET'])
+def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        # Query unique documents in movimientos_inventario (purchases/entries)
+        rows_inv = conn.execute("""
+            SELECT DISTINCT tipo_documento, documento_numero, documento_fecha, SUM(valor_total) AS total
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND proveedor_id = %s
+            GROUP BY tipo_documento, documento_numero, documento_fecha
+            ORDER BY documento_fecha DESC, documento_numero DESC
+        """, (negocio_id, tercero_id)).fetchall()
+        
+        documentos = []
+        for r in rows_inv:
+            documentos.append({
+                'tipo_documento': r['tipo_documento'] or 'otro',
+                'documento_numero': r['documento_numero'],
+                'fecha': r['documento_fecha'].isoformat() if r['documento_fecha'] else None,
+                'origen': 'inventario',
+                'total': float(r['total'] or 0)
+            })
+            
+        # Query unique documents in pedidos (sales/orders)
+        rows_ped = conn.execute("""
+            SELECT id, fecha, total, estado
+            FROM pedidos
+            WHERE id_tercero = %s
+            ORDER BY fecha DESC, id DESC
+        """, (tercero_id,)).fetchall()
+        
+        for r in rows_ped:
+            documentos.append({
+                'tipo_documento': 'pedido_venta',
+                'documento_numero': str(r['id']),
+                'fecha': r['fecha'].date().isoformat() if r['fecha'] else None,
+                'origen': 'ventas',
+                'total': float(r['total'] or 0),
+                'estado': r['estado']
+            })
+            
+        # Sort combined documents by date descending
+        documentos.sort(key=lambda d: d['fecha'] or '', reverse=True)
+        
+        return jsonify({
+            'ok': True,
+            'documentos': documentos
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/auditar-documento', methods=['GET'])
 def api_auditar_documento(negocio_id):
     if 'usuario_id' not in session:

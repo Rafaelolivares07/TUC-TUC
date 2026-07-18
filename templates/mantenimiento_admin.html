@@ -205,37 +205,75 @@
       </button>
     </div>
 
-    <!-- Filtros de búsqueda -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
-      <div>
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo de Documento</label>
-        <select id="auditor-tipo" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500 bg-white">
-          <option value="factura">Factura (Compra / Venta)</option>
-          <option value="remision">Remisión</option>
-          <option value="entrada">Entrada simple</option>
-          <option value="salida">Salida simple / Ajuste</option>
-        </select>
+    <!-- Paso 1: Seleccionar Tercero (Cliente / Proveedor) -->
+    <div class="bg-rose-50/50 p-4 rounded-xl border border-rose-100 mb-6">
+      <label class="block text-xs font-bold text-rose-800 uppercase mb-1">1. Seleccionar Cliente / Proveedor (Tercero)</label>
+      <p class="text-xs text-rose-700/80 mb-3">
+        Busca al tercero para visualizar su historial de transacciones y documentos registrados.
+      </p>
+      <div class="relative">
+        <input id="auditor-tercero" type="text" placeholder="Buscar por nombre..." autocomplete="off" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500 bg-white">
+        <div id="auditor-tercero-list" class="ac-list hidden"></div>
+        <input type="hidden" id="auditor-tercero-id">
       </div>
-      <div>
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Número de Documento</label>
-        <input id="auditor-numero" type="text" placeholder="FAC-1004, 125, etc." class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500">
+      <div id="selected-aud-tercero-badge" class="mt-2 hidden">
+        <span class="inline-flex items-center gap-1 text-xs bg-rose-600 text-white font-bold px-3 py-1 rounded-full">
+          <span>Tercero:</span> <span id="aud-tercero-nombre-lbl"></span>
+        </span>
       </div>
-      <button onclick="consultarDocumentoAuditor()" class="w-full py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition text-sm">
-        🔍 Consultar Documento
-      </button>
+    </div>
+
+    <!-- Paso 2: Historial y Filtros (se muestra cuando hay un tercero seleccionado) -->
+    <div id="auditor-panel-historico" class="hidden space-y-4 mb-6">
+      <div class="flex items-center justify-between gap-4 flex-wrap bg-gray-50 p-4 rounded-xl border border-gray-200">
+        <div class="w-full sm:w-auto">
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Filtrar por Tipo</label>
+          <select id="auditor-filtro-tipo" onchange="filtrarTablaHistorico()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none bg-white">
+            <option value="todos">Todos los tipos</option>
+          </select>
+        </div>
+        <div class="w-full sm:w-auto flex-1 max-w-xs">
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Filtrar por Número de Documento</label>
+          <input id="auditor-filtro-numero" type="text" oninput="filtrarTablaHistorico()" placeholder="Buscar número..." class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none w-full bg-white">
+        </div>
+      </div>
+
+      <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+        <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5 mb-3">
+          <span>📅</span> Historial de Documentos del Tercero
+        </h3>
+        <div class="overflow-x-auto max-h-60 overflow-y-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b text-gray-400">
+                <th class="py-2">Tipo de Documento</th>
+                <th class="py-2">Número de Documento</th>
+                <th class="py-2">Fecha</th>
+                <th class="py-2 text-right">Monto Total</th>
+                <th class="py-2 text-center">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="aud-tbody-historico">
+              <tr>
+                <td colspan="5" class="text-center text-gray-400 py-6">Selecciona un tercero para cargar el historial</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- Indicador de Carga -->
     <div id="auditor-cargando" class="hidden text-center py-10">
-      <p class="text-gray-400 font-semibold animate-pulse">Consultando registros en el sistema...</p>
+      <p class="text-gray-400 font-semibold animate-pulse">Cargando datos del documento en el sistema...</p>
     </div>
 
     <!-- Estado Vacío -->
     <div id="auditor-vacio" class="text-center py-12 border-2 border-dashed border-gray-200 rounded-2xl">
       <span class="text-4xl block mb-2">🔎</span>
-      <h3 class="font-bold text-gray-700 text-sm">Ingresa un documento para auditar</h3>
+      <h3 class="font-bold text-gray-700 text-sm">Selecciona un documento del historial</h3>
       <p class="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
-        Buscaremos movimientos de inventario, asientos contables de diario y pedidos asociados a este número.
+        Una vez seleccionado el tercero y el documento, buscaremos movimientos de inventario, asientos contables de diario y pedidos asociados.
       </p>
     </div>
 
@@ -376,18 +414,96 @@
     document.getElementById('panel-dashboard').classList.remove('hidden');
   }
 
+  let auditorDocumentosHistorial = [];
+  let auditorDocumentoSeleccionado = null;
+
   function resetAuditorForm() {
-    document.getElementById('auditor-numero').value = '';
+    document.getElementById('auditor-tercero').value = '';
+    document.getElementById('auditor-tercero-id').value = '';
+    document.getElementById('selected-aud-tercero-badge').classList.add('hidden');
+    document.getElementById('auditor-panel-historico').classList.add('hidden');
     document.getElementById('auditor-vacio').classList.remove('hidden');
     document.getElementById('auditor-resultados').classList.add('hidden');
     document.getElementById('auditor-cargando').classList.add('hidden');
+    auditorDocumentosHistorial = [];
+    auditorDocumentoSeleccionado = null;
   }
 
-  async function consultarDocumentoAuditor() {
-    const tipo = document.getElementById('auditor-tipo').value;
-    const num = document.getElementById('auditor-numero').value.trim();
-    if (!num) return toast('Ingresa el número de documento', false);
+  async function cargarDocumentosTercero(terceroId) {
+    const loader = document.getElementById('auditor-cargando');
+    const panelHistorico = document.getElementById('auditor-panel-historico');
+    const selectTipo = document.getElementById('auditor-filtro-tipo');
     
+    loader.classList.remove('hidden');
+    panelHistorico.classList.add('hidden');
+    document.getElementById('auditor-resultados').classList.add('hidden');
+    document.getElementById('auditor-vacio').classList.remove('hidden');
+    
+    try {
+      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/documentos-tercero/${terceroId}`);
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'Error al cargar historial');
+      
+      auditorDocumentosHistorial = d.documentos || [];
+      
+      // Populate unique document types in filter select
+      const uniqueTypes = [...new Set(auditorDocumentosHistorial.map(doc => doc.tipo_documento))].sort();
+      selectTipo.innerHTML = '<option value="todos">Todos los tipos</option>' + 
+        uniqueTypes.map(t => `<option value="${t}">${t.toUpperCase()}</option>`).join('');
+      
+      renderTablaHistorico(auditorDocumentosHistorial);
+      panelHistorico.classList.remove('hidden');
+    } catch(e) {
+      console.error(e);
+      toast(e.message || 'Error al cargar historial del tercero', false);
+    } finally {
+      loader.classList.add('hidden');
+    }
+  }
+
+  function renderTablaHistorico(docs) {
+    const tbody = document.getElementById('aud-tbody-historico');
+    const terceroId = document.getElementById('auditor-tercero-id').value;
+    
+    if (!docs.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5" class="text-center text-gray-400 py-6">Sin documentos históricos encontrados para este tercero</td>
+        </tr>
+      `;
+      return;
+    }
+    
+    tbody.innerHTML = docs.map(doc => `
+      <tr class="border-b hover:bg-gray-50">
+        <td class="py-2.5 font-bold text-gray-700">${doc.tipo_documento.toUpperCase()}</td>
+        <td class="py-2.5 font-mono text-gray-800">${doc.documento_numero}</td>
+        <td class="py-2.5 text-gray-500">${doc.fecha ? new Date(doc.fecha).toLocaleDateString('es-CO') : '—'}</td>
+        <td class="py-2.5 text-right font-semibold text-gray-700">$${doc.total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+        <td class="py-2.5 text-center">
+          <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero}', '${terceroId}')" 
+                  class="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-lg text-xs transition">
+            🔎 Auditar
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function filtrarTablaHistorico() {
+    const filterTipo = document.getElementById('auditor-filtro-tipo').value.toLowerCase();
+    const filterNum = document.getElementById('auditor-filtro-numero').value.trim().toLowerCase();
+    
+    const filtered = auditorDocumentosHistorial.filter(doc => {
+      const matchTipo = (filterTipo === 'todos' || doc.tipo_documento.toLowerCase() === filterTipo);
+      const matchNum = doc.documento_numero.toLowerCase().includes(filterNum);
+      return matchTipo && matchNum;
+    });
+    
+    renderTablaHistorico(filtered);
+  }
+
+  async function consultarDocumentoDetalle(tipo, numero, terceroId) {
     const loader = document.getElementById('auditor-cargando');
     const vacio = document.getElementById('auditor-vacio');
     const resultados = document.getElementById('auditor-resultados');
@@ -396,20 +512,12 @@
     vacio.classList.add('hidden');
     resultados.classList.add('hidden');
     
+    auditorDocumentoSeleccionado = { tipo, numero, terceroId };
+    
     try {
-      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/auditar-documento?tipo_documento=${encodeURIComponent(tipo)}&documento_numero=${encodeURIComponent(num)}`);
+      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/auditar-documento?tipo_documento=${encodeURIComponent(tipo)}&documento_numero=${encodeURIComponent(numero)}&proveedor_id=${terceroId}`);
       const d = await r.json();
-      if (!d.ok) throw new Error(d.error || 'Error en consulta');
-      
-      if (!d.existe) {
-        toast('No se encontraron registros para este documento', false);
-        vacio.classList.remove('hidden');
-        loader.classList.add('hidden');
-        return;
-      }
-      
-      loader.classList.add('hidden');
-      resultados.classList.remove('hidden');
+      if (!d.ok) throw new Error(d.error || 'Error al cargar detalles del documento');
       
       // Render Inventario
       const cardInv = document.getElementById('aud-card-inventario');
@@ -482,20 +590,22 @@
         tbodyVtas.innerHTML = '';
       }
       
-    } catch (e) {
+      resultados.classList.remove('hidden');
+      resultados.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch(e) {
       console.error(e);
-      toast(e.message || 'Error al consultar documento', false);
+      toast(e.message || 'Error al obtener detalles del documento', false);
       vacio.classList.remove('hidden');
+    } finally {
       loader.classList.add('hidden');
     }
   }
 
   async function anularDocumentoAuditor() {
-    const tipo = document.getElementById('auditor-tipo').value;
-    const num = document.getElementById('auditor-numero').value.trim();
-    if (!num) return;
+    if (!auditorDocumentoSeleccionado) return;
+    const { tipo, numero, terceroId } = auditorDocumentoSeleccionado;
     
-    const confirmed = confirm(`¿ESTÁS ABSOLUTAMENTE SEGURO de que deseas ANULAR COMPLETAMENTE el documento "${num}"?\n\nEsta acción borrará irreversiblemente los comprobantes contables del diario, los movimientos de inventario y actualizará el estado de facturación. Los costos promedio de stock se recalcularán automáticamente de forma retroactiva.`);
+    const confirmed = confirm(`¿ESTÁS ABSOLUTAMENTE SEGURO de que deseas ANULAR COMPLETAMENTE el documento "${numero}"?\n\nEsta acción borrará irreversiblemente los comprobantes contables del diario, los movimientos de inventario y actualizará el estado de facturación. Los costos promedio de stock se recalcularán automáticamente de forma retroactiva.`);
     if (!confirmed) return;
     
     const btn = document.getElementById('btn-aud-anular');
@@ -508,13 +618,14 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           tipo_documento: tipo,
-          documento_numero: num
+          documento_numero: numero,
+          proveedor_id: terceroId
         })
       });
       const d = await r.json();
       if (d.ok) {
         toast('Documento y todos sus registros anulados con éxito');
-        resetAuditorForm();
+        cargarDocumentosTercero(terceroId);
       } else {
         toast(d.error || 'Error al anular documento', false);
       }
@@ -528,12 +639,11 @@
   }
 
   function modificarDocumentoAuditor() {
-    const tipo = document.getElementById('auditor-tipo').value;
-    const num = document.getElementById('auditor-numero').value.trim();
-    if (!num) return;
+    if (!auditorDocumentoSeleccionado) return;
+    const { tipo, numero } = auditorDocumentoSeleccionado;
     
     if (tipo === 'factura' || tipo === 'remision' || tipo === 'entrada' || tipo === 'salida') {
-      window.location.href = `/admin/inventario/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo)}&num_doc=${encodeURIComponent(num)}#entradas`;
+      window.location.href = `/admin/inventario/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo)}&num_doc=${encodeURIComponent(numero)}#entradas`;
     } else {
       toast('Modificación directa no disponible para este tipo de documento a través de este atajo.', false);
     }
@@ -573,6 +683,14 @@
     }
     sobrantes.push({id, nombre});
     renderSobrantes();
+  });
+
+  setupRemoteAC('auditor-tercero', 'auditor-tercero-list', ({id, nombre}) => {
+    document.getElementById('auditor-tercero-id').value = id;
+    document.getElementById('auditor-tercero').value = nombre;
+    document.getElementById('aud-tercero-nombre-lbl').textContent = nombre;
+    document.getElementById('selected-aud-tercero-badge').classList.remove('hidden');
+    cargarDocumentosTercero(id);
   });
 
   function renderSobrantes() {

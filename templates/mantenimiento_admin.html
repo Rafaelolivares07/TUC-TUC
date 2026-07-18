@@ -653,7 +653,8 @@
     if (!auditorDocumentoSeleccionado) return;
     const { tipo, numero, terceroId, terceroNombre } = auditorDocumentoSeleccionado;
     
-    if (tipo === 'factura' || tipo === 'remision' || tipo === 'entrada' || tipo === 'salida') {
+    const tipoLower = (tipo || '').toLowerCase();
+    if (tipoLower !== 'pedido_venta' && tipoLower !== 'ventas') {
       window.location.href = `/admin/inventario/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo)}&num_doc=${encodeURIComponent(numero)}&prov_id=${encodeURIComponent(terceroId || '')}&prov_nom=${encodeURIComponent(terceroNombre || '')}#entradas`;
     } else {
       toast('Modificación directa no disponible para este tipo de documento a través de este atajo.', false);

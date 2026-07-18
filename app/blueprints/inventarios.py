@@ -419,8 +419,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     if not lineas:
         return {'ok': False, 'error': 'Debe agregar al menos una linea'}, 400
 
-    tipo_documento = _txt(data.get('tipo_documento')) or 'otro'
-    documento_numero = _txt(data.get('documento_numero') or data.get('numero_documento'))
+    tipo_documento = (_txt(data.get('tipo_documento')) or 'otro').upper()
+    documento_numero = (_txt(data.get('documento_numero') or data.get('numero_documento')) or '').upper()
     if not documento_numero:
         documento_numero = f"ENT-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
@@ -1922,7 +1922,7 @@ def api_consultar_documento_existente(negocio_id):
                 SELECT id, producto_id, nombre_producto, cantidad, valor_unitario, iva_pct, notas
                 FROM movimientos_inventario
                 WHERE negocio_id = %s AND tipo = 'entrada' 
-                  AND tipo_documento = %s AND documento_numero = %s AND proveedor_id = %s
+                  AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s) AND proveedor_id = %s
                 ORDER BY id
             """
             params = (negocio_id, tipo_doc, num_doc, proveedor_id)
@@ -1931,7 +1931,7 @@ def api_consultar_documento_existente(negocio_id):
                 SELECT id, producto_id, nombre_producto, cantidad, valor_unitario, iva_pct, notas
                 FROM movimientos_inventario
                 WHERE negocio_id = %s AND tipo = 'entrada' 
-                  AND tipo_documento = %s AND documento_numero = %s AND proveedor_nombre = %s
+                  AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s) AND proveedor_nombre = %s
                 ORDER BY id
             """
             params = (negocio_id, tipo_doc, num_doc, proveedor_nombre)
@@ -1944,7 +1944,7 @@ def api_consultar_documento_existente(negocio_id):
         first_row = conn.execute("""
             SELECT notas FROM movimientos_inventario
             WHERE negocio_id = %s AND tipo = 'entrada' 
-              AND tipo_documento = %s AND documento_numero = %s AND (proveedor_id = %s OR proveedor_nombre = %s)
+              AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s) AND (proveedor_id = %s OR proveedor_nombre = %s)
             LIMIT 1
         """, (negocio_id, tipo_doc, num_doc, proveedor_id, proveedor_nombre)).fetchone()
         notes = first_row['notas'] if first_row else ''

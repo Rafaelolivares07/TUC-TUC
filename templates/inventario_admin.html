@@ -1451,7 +1451,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const qProvNom = urlParams.get('prov_nom');
   if (qTipoDoc && qNumDoc) {
     mostrarTab('entradas');
-    document.getElementById('entrada-tipo-doc').value = qTipoDoc;
+    const selectEl = document.getElementById('entrada-tipo-doc');
+    const opt = selectEl ? [...selectEl.options].find(o => o.value.toLowerCase() === qTipoDoc.toLowerCase()) : null;
+    if (opt) {
+      selectEl.value = opt.value;
+    } else if (selectEl) {
+      selectEl.value = qTipoDoc;
+    }
     document.getElementById('entrada-num-doc').value = qNumDoc;
     if (qProvId) {
       document.getElementById('entrada-proveedor-id').value = qProvId;

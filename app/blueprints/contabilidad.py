@@ -909,7 +909,7 @@ def api_tipos_doc_get(negocio_id):
     try:
         conn = get_db_connection()
         rows = conn.execute(
-            "SELECT id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado "
+            "SELECT id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento "
             "FROM tipos_documento_negocio WHERE negocio_id=%s ORDER BY codigo", (negocio_id,)
         ).fetchall()
         conn.close()
@@ -929,6 +929,15 @@ def api_tipos_doc_post(negocio_id):
     nombre        = (data.get('nombre') or '').strip()
     numero_inicio = int(data.get('numero_inicio') or 1)
     predeterminado = bool(data.get('predeterminado', False))
+    mueve_inventario = bool(data.get('mueve_inventario', False))
+    tipo_movimiento = data.get('tipo_movimiento')
+    if tipo_movimiento:
+        tipo_movimiento = tipo_movimiento.strip().lower()
+        if tipo_movimiento not in ('entrada', 'salida'):
+            tipo_movimiento = None
+    else:
+        tipo_movimiento = None
+
     if not codigo or not nombre:
         return jsonify({'ok': False, 'error': 'Código y nombre son requeridos'}), 400
     from ..db import get_db_connection
@@ -936,11 +945,11 @@ def api_tipos_doc_post(negocio_id):
         conn = get_db_connection()
         _asegurar_tablas(conn)
         nuevo = conn.execute("""
-            INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, predeterminado)
-            VALUES (%s,%s,%s,%s,%s)
+            INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (negocio_id, codigo) DO NOTHING
-            RETURNING id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado
-        """, (negocio_id, codigo, nombre, numero_inicio, predeterminado)).fetchone()
+            RETURNING id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento
+        """, (negocio_id, codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento)).fetchone()
         conn.commit(); conn.close()
         if not nuevo:
             return jsonify({'ok': False, 'error': f'El código {codigo} ya existe'}), 409
@@ -975,6 +984,21 @@ def api_tipos_doc_patch(negocio_id, tid):
             conn.execute(
                 "UPDATE tipos_documento_negocio SET predeterminado=%s WHERE id=%s AND negocio_id=%s",
                 (bool(data['predeterminado']), tid, negocio_id))
+        if 'mueve_inventario' in data:
+            conn.execute(
+                "UPDATE tipos_documento_negocio SET mueve_inventario=%s WHERE id=%s AND negocio_id=%s",
+                (bool(data['mueve_inventario']), tid, negocio_id))
+        if 'tipo_movimiento' in data:
+            tipo_mov = data['tipo_movimiento']
+            if tipo_mov:
+                tipo_mov = tipo_mov.strip().lower()
+                if tipo_mov not in ('entrada', 'salida'):
+                    tipo_mov = None
+            else:
+                tipo_mov = None
+            conn.execute(
+                "UPDATE tipos_documento_negocio SET tipo_movimiento=%s WHERE id=%s AND negocio_id=%s",
+                (tipo_mov, tid, negocio_id))
         conn.commit(); conn.close()
         return jsonify({'ok': True})
     except Exception as e:

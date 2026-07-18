@@ -233,24 +233,11 @@
   <!-- ── TAB ENTRADAS ──────────────────────────────────────────────── -->
   <div id="tab-entradas" class="hidden bg-white rounded-2xl shadow p-5">
     <h2 class="font-bold text-gray-700 mb-4">Registrar entrada de mercancía</h2>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-      <div>
-        <label>Motivo</label>
-        <select id="entrada-motivo">
-          <option value="compra">Compra</option>
-          <option value="ajuste">Ajuste</option>
-          <option value="devolucion">Devolución</option>
-          <option value="inicial">Inventario inicial</option>
-        </select>
-      </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
       <div>
         <label>Tipo doc.</label>
         <select id="entrada-tipo-doc">
-          <option value="factura">Factura</option>
-          <option value="remision">Remision</option>
-          <option value="ajuste">Ajuste</option>
-          <option value="devolucion">Devolucion</option>
-          <option value="otro">Otro</option>
+          <option value="">Cargando tipos...</option>
         </select>
       </div>
       <div>
@@ -1062,9 +1049,9 @@ function calcularTotalesEntrada() {
 }
 
 async function registrarEntrada() {
-  const motivo = document.getElementById('entrada-motivo').value;
-  const notas  = document.getElementById('entrada-notas').value.trim() || null;
   const tipo_documento = document.getElementById('entrada-tipo-doc').value || null;
+  const motivo = (tipo_documento || 'compra').toLowerCase();
+  const notas  = document.getElementById('entrada-notas').value.trim() || null;
   const numero_documento = document.getElementById('entrada-num-doc').value.trim() || null;
   const fecha_documento = document.getElementById('entrada-fecha-doc').value || null;
   const proveedor_nombre = document.getElementById('entrada-proveedor').value.trim() || null;
@@ -1392,9 +1379,36 @@ async function ejecutarAnulacion(anularTodo) {
   }
 }
 
+async function cargarTiposDocEntrada() {
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
+    const d = await r.json();
+    if (d.ok) {
+      const filtrados = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'entrada');
+      const select = document.getElementById('entrada-tipo-doc');
+      if (select) {
+        if (filtrados.length > 0) {
+          select.innerHTML = filtrados.map(t => `<option value="${t.codigo}">${t.nombre} (${t.codigo})</option>`).join('');
+        } else {
+          select.innerHTML = `
+            <option value="factura">Factura (FALLBACK)</option>
+            <option value="remision">Remisión (FALLBACK)</option>
+            <option value="ajuste">Ajuste (FALLBACK)</option>
+            <option value="devolucion">Devolución (FALLBACK)</option>
+            <option value="otro">Otro (FALLBACK)</option>
+          `;
+        }
+      }
+    }
+  } catch(e) {
+    console.error('Error al cargar tipos de documento para entradas:', e);
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   await cargarProductos();
+  await cargarTiposDocEntrada();
   abrirTarjetaInicialDesdeUrl();
   document.getElementById('entrada-fecha-doc').value = new Date().toISOString().slice(0, 10);
 

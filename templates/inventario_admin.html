@@ -1435,6 +1435,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('mp-nombre').addEventListener('keydown', e => {
     if (e.key === 'Enter') guardarProducto();
   });
+
+  // URL check to pre-load document edit
+  const urlParams = new URLSearchParams(window.location.search);
+  const qTipoDoc = urlParams.get('tipo_doc');
+  const qNumDoc = urlParams.get('num_doc');
+  if (qTipoDoc && qNumDoc) {
+    mostrarTab('entradas');
+    document.getElementById('entrada-tipo-doc').value = qTipoDoc;
+    document.getElementById('entrada-num-doc').value = qNumDoc;
+    setTimeout(() => verificarDocumentoExistente(), 150);
+  }
 });
 </script>
 </body>

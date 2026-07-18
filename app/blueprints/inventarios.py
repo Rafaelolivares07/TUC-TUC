@@ -1495,6 +1495,243 @@ def api_crear_proveedor():
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/auditar-documento', methods=['GET'])
+def api_auditar_documento(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    tipo_doc = request.args.get('tipo_documento', '').strip()
+    num_doc = request.args.get('documento_numero', '').strip()
+    proveedor_id = request.args.get('proveedor_id', '').strip()
+    
+    if not tipo_doc or not num_doc:
+        return jsonify({'ok': False, 'error': 'tipo_documento y documento_numero requeridos'}), 400
+    
+    conn = get_db_connection()
+    try:
+        # 1. Query movimientos_inventario
+        sql_inv = """
+            SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad, valor_unitario, valor_total, iva_pct, created_at, proveedor_nombre
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s)
+        """
+        params_inv = [negocio_id, tipo_doc, num_doc]
+        if proveedor_id:
+            sql_inv += " AND proveedor_id = %s"
+            params_inv.append(int(proveedor_id))
+        
+        rows_inv = conn.execute(sql_inv, tuple(params_inv)).fetchall()
+        items_inventario = [
+            {
+                'id': r['id'],
+                'producto_id': r['producto_id'],
+                'nombre_producto': r['nombre_producto'],
+                'tipo': r['tipo'],
+                'motivo': r['motivo'],
+                'cantidad': float(r['cantidad']),
+                'valor_unitario': float(r['valor_unitario'] or 0),
+                'valor_total': float(r['valor_total'] or 0),
+                'iva_pct': float(r['iva_pct'] or 0),
+                'created_at': r['created_at'].isoformat() if r['created_at'] else None,
+                'proveedor_nombre': r['proveedor_nombre']
+            } for r in rows_inv
+        ]
+        
+        # 2. Query comprobantes_contables and movimientos_contables
+        origen_id = f"{tipo_doc}:{num_doc}"
+        comp_row = conn.execute("""
+            SELECT id, numero_comprobante, tipo, fecha, descripcion, total_debitos, total_creditos, notas
+            FROM comprobantes_contables
+            WHERE negocio_id = %s AND (
+                (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
+                OR (numero_comprobante ILIKE %s)
+            )
+            LIMIT 1
+        """, (negocio_id, origen_id, f'%{num_doc}%')).fetchone()
+        
+        comprobante = None
+        if comp_row:
+            entries = conn.execute("""
+                SELECT mc.id, mc.cuenta_id, mc.cuenta, mc.concepto, mc.tipo, mc.monto
+                FROM movimientos_contables mc
+                WHERE mc.negocio_id = %s AND mc.comprobante_id = %s
+                ORDER BY mc.tipo DESC, mc.id
+            """, (negocio_id, comp_row['id'])).fetchall()
+            
+            comprobante = {
+                'id': comp_row['id'],
+                'numero_comprobante': comp_row['numero_comprobante'],
+                'tipo': comp_row['tipo'],
+                'fecha': comp_row['fecha'].isoformat() if comp_row['fecha'] else None,
+                'descripcion': comp_row['descripcion'],
+                'total_debitos': float(comp_row['total_debitos'] or 0),
+                'total_creditos': float(comp_row['total_creditos'] or 0),
+                'notas': comp_row['notas'],
+                'asientos': [
+                    {
+                        'id': e['id'],
+                        'cuenta_id': e['cuenta_id'],
+                        'cuenta': e['cuenta'],
+                        'concepto': e['concepto'],
+                        'tipo': e['tipo'],
+                        'monto': float(e['monto'] or 0)
+                    } for e in entries
+                ]
+            }
+        
+        # 3. Query sales (pedidos & pedido_items)
+        pedido = None
+        pedido_id = None
+        try:
+            pedido_id = int(num_doc)
+        except ValueError:
+            pass
+        
+        if pedido_id:
+            ped_row = conn.execute("""
+                SELECT p.id, p.fecha, p.total, p.metodo_pago, p.estado, p.notas, p.id_tercero
+                FROM pedidos p
+                WHERE p.id = %s
+                LIMIT 1
+            """, (pedido_id,)).fetchone()
+            
+            if ped_row:
+                p_items = conn.execute("""
+                    SELECT pi.id, pi.producto_id, pi.nombre_producto, pi.cantidad, pi.precio_unitario
+                    FROM pedido_items pi
+                    WHERE pi.pedido_id = %s
+                """, (pedido_id,)).fetchall()
+                
+                cliente_nombre = None
+                if ped_row['id_tercero']:
+                    cli_row = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (ped_row['id_tercero'],)).fetchone()
+                    if cli_row:
+                        cliente_nombre = cli_row['nombre']
+                        
+                pedido = {
+                    'id': ped_row['id'],
+                    'fecha': ped_row['fecha'].isoformat() if ped_row['fecha'] else None,
+                    'total': float(ped_row['total'] or 0),
+                    'metodo_pago': ped_row['metodo_pago'],
+                    'estado': ped_row['estado'],
+                    'notas': ped_row['notas'],
+                    'cliente_nombre': cliente_nombre,
+                    'items': [
+                        {
+                            'id': pi['id'],
+                            'producto_id': pi['producto_id'],
+                            'nombre_producto': pi['nombre_producto'],
+                            'cantidad': float(pi['cantidad']),
+                            'precio_unitario': float(pi['precio_unitario'] or 0),
+                            'subtotal': float(pi['cantidad'] * pi['precio_unitario'])
+                        } for pi in p_items
+                    ]
+                }
+        
+        return jsonify({
+            'ok': True,
+            'existe': bool(items_inventario or comprobante or pedido),
+            'inventario': items_inventario,
+            'contabilidad': comprobante,
+            'ventas': pedido
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/anular-documento', methods=['POST'])
+def api_anular_documento(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    data = request.get_json() or {}
+    tipo_doc = _txt(data.get('tipo_documento'))
+    num_doc = _txt(data.get('documento_numero'))
+    proveedor_id = data.get('proveedor_id')
+    
+    if not tipo_doc or not num_doc:
+        return jsonify({'ok': False, 'error': 'tipo_documento y documento_numero son requeridos'}), 400
+    
+    conn = get_db_connection()
+    try:
+        deleted_inventario = 0
+        deleted_contables = 0
+        deleted_comprobantes = 0
+        pedido_anulado = False
+        
+        # Get inventory movement IDs to be deleted, and their product IDs (for recosteo!)
+        sql_inv = """
+            SELECT id, producto_id 
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s)
+        """
+        params_inv = [negocio_id, tipo_doc, num_doc]
+        if proveedor_id:
+            sql_inv += " AND proveedor_id = %s"
+            params_inv.append(int(proveedor_id))
+        
+        movs = conn.execute(sql_inv, tuple(params_inv)).fetchall()
+        mov_ids = [m['id'] for m in movs]
+        prod_ids = list({m['producto_id'] for m in movs})
+        
+        # Delete inventory movements
+        if mov_ids:
+            placeholders = ','.join(['%s'] * len(mov_ids))
+            conn.execute(f"DELETE FROM movimientos_inventario WHERE id IN ({placeholders})", tuple(mov_ids))
+            deleted_inventario = len(mov_ids)
+        
+        # Delete accounting vouchers & entries
+        origen_id = f"{tipo_doc}:{num_doc}"
+        comp_rows = conn.execute("""
+            SELECT id FROM comprobantes_contables
+            WHERE negocio_id = %s AND (
+                (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
+                OR (numero_comprobante ILIKE %s)
+            )
+        """, (negocio_id, origen_id, f'%{num_doc}%')).fetchall()
+        comp_ids = [c['id'] for c in comp_rows]
+        
+        if comp_ids:
+            placeholders = ','.join(['%s'] * len(comp_ids))
+            cur_mc = conn.execute(f"DELETE FROM movimientos_contables WHERE comprobante_id IN ({placeholders})", tuple(comp_ids))
+            deleted_contables = cur_mc.rowcount
+            cur_cc = conn.execute(f"DELETE FROM comprobantes_contables WHERE id IN ({placeholders})", tuple(comp_ids))
+            deleted_comprobantes = cur_cc.rowcount
+            
+        # Void sales order
+        pedido_id = None
+        try:
+            pedido_id = int(num_doc)
+        except ValueError:
+            pass
+        
+        if pedido_id:
+            ped_row = conn.execute("SELECT id FROM pedidos WHERE id = %s LIMIT 1", (pedido_id,)).fetchone()
+            if ped_row:
+                conn.execute("UPDATE pedidos SET estado = 'anulado' WHERE id = %s", (pedido_id,))
+                pedido_anulado = True
+                
+        # Recosteo: Recalculate stock and average cost for all affected products
+        for prod_id in prod_ids:
+            _recostear_producto(conn, negocio_id, prod_id)
+            
+        conn.commit()
+        return jsonify({
+            'ok': True,
+            'deleted_inventario': deleted_inventario,
+            'deleted_contables': deleted_contables,
+            'deleted_comprobantes': deleted_comprobantes,
+            'pedido_anulado': pedido_anulado
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/admin/inventario/<int:negocio_id>')
 def admin_inventario(negocio_id):
     if 'usuario_id' not in session:

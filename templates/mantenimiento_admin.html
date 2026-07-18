@@ -71,6 +71,22 @@
       </button>
     </div>
 
+    <!-- Tarjeta: Auditoría de Documentos -->
+    <div class="card-tool flex flex-col justify-between">
+      <div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-2xl">🔍</span>
+          <h2 class="text-lg font-bold text-gray-800">Auditoría de Documentos</h2>
+        </div>
+        <p class="text-sm text-gray-600 mb-6">
+          Permite buscar cualquier número de documento en todo el sistema, cruzando inventarios, asientos contables y ventas. Ofrece la opción de anular todo el documento de forma definitiva y atómica o redireccionar para modificarlo.
+        </p>
+      </div>
+      <button onclick="abrirHerramienta('auditor-documentos')" class="w-full py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition text-sm">
+        Abrir Herramienta
+      </button>
+    </div>
+
     <!-- Tarjeta: Depuración de Catálogo (Próximamente) -->
     <div class="card-tool opacity-60 flex flex-col justify-between border border-dashed border-gray-300">
       <div>
@@ -178,6 +194,158 @@
 
   </div>
 
+  <!-- VISTA HERRAMIENTA: AUDITOR DE DOCUMENTOS -->
+  <div id="panel-auditor-documentos" class="hidden bg-white rounded-2xl shadow-lg p-6">
+    <div class="flex items-center justify-between mb-6 pb-3 border-b">
+      <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+        <span>🔍</span> Consola de Auditoría de Documentos
+      </h2>
+      <button onclick="volverAlMenu()" class="text-sm text-gray-500 hover:text-gray-700 font-semibold flex items-center gap-1">
+        ← Volver
+      </button>
+    </div>
+
+    <!-- Filtros de búsqueda -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo de Documento</label>
+        <select id="auditor-tipo" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500 bg-white">
+          <option value="factura">Factura (Compra / Venta)</option>
+          <option value="remision">Remisión</option>
+          <option value="entrada">Entrada simple</option>
+          <option value="salida">Salida simple / Ajuste</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Número de Documento</label>
+        <input id="auditor-numero" type="text" placeholder="FAC-1004, 125, etc." class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500">
+      </div>
+      <button onclick="consultarDocumentoAuditor()" class="w-full py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition text-sm">
+        🔍 Consultar Documento
+      </button>
+    </div>
+
+    <!-- Indicador de Carga -->
+    <div id="auditor-cargando" class="hidden text-center py-10">
+      <p class="text-gray-400 font-semibold animate-pulse">Consultando registros en el sistema...</p>
+    </div>
+
+    <!-- Estado Vacío -->
+    <div id="auditor-vacio" class="text-center py-12 border-2 border-dashed border-gray-200 rounded-2xl">
+      <span class="text-4xl block mb-2">🔎</span>
+      <h3 class="font-bold text-gray-700 text-sm">Ingresa un documento para auditar</h3>
+      <p class="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+        Buscaremos movimientos de inventario, asientos contables de diario y pedidos asociados a este número.
+      </p>
+    </div>
+
+    <!-- Resultados -->
+    <div id="auditor-resultados" class="hidden space-y-6">
+      
+      <!-- 📦 Card: Inventario -->
+      <div id="aud-card-inventario" class="hidden bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+        <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5 mb-3">
+          <span>📦</span> Movimientos de Inventario (Kardex)
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b text-gray-400">
+                <th class="py-2">Producto</th>
+                <th class="py-2">Tipo</th>
+                <th class="py-2">Motivo</th>
+                <th class="py-2 text-right">Cantidad</th>
+                <th class="py-2 text-right">Valor Unitario</th>
+                <th class="py-2 text-right">Valor Total</th>
+              </tr>
+            </thead>
+            <tbody id="aud-tbody-inventario"></tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- 🏛️ Card: Contabilidad -->
+      <div id="aud-card-contabilidad" class="hidden bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+        <div class="flex justify-between items-start gap-4 mb-3">
+          <div>
+            <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5">
+              <span>🏛️</span> Asiento Contable Diario
+            </h3>
+            <p id="aud-lbl-cc-concepto" class="text-xs text-gray-500 mt-0.5"></p>
+          </div>
+          <span id="aud-badge-cc-numero" class="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-0.5 rounded-full"></span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b text-gray-400">
+                <th class="py-2">Cuenta PUC</th>
+                <th class="py-2">Concepto</th>
+                <th class="py-2 text-right">Débito</th>
+                <th class="py-2 text-right">Crédito</th>
+              </tr>
+            </thead>
+            <tbody id="aud-tbody-contabilidad"></tbody>
+            <tfoot>
+              <tr class="border-t font-bold text-gray-800">
+                <td colspan="2" class="py-2 text-right">Totales:</td>
+                <td id="aud-val-cc-debito" class="py-2 text-right text-green-700"></td>
+                <td id="aud-val-cc-credito" class="py-2 text-right text-green-700"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      
+      <!-- 🛒 Card: Ventas/Facturación -->
+      <div id="aud-card-ventas" class="hidden bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+        <div class="flex justify-between items-start gap-4 mb-3">
+          <div>
+            <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5">
+              <span>🛒</span> Pedido de Ventas / Facturación
+            </h3>
+            <p id="aud-lbl-venta-cliente" class="text-xs text-gray-500 mt-0.5"></p>
+          </div>
+          <span id="aud-badge-venta-estado" class="text-xs font-bold px-2 py-0.5 rounded-full"></span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b text-gray-400">
+                <th class="py-2">Producto</th>
+                <th class="py-2 text-right">Cantidad</th>
+                <th class="py-2 text-right">Precio Unitario</th>
+                <th class="py-2 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="aud-tbody-ventas"></tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Advertencia de Zona de Peligro -->
+      <div class="p-4 rounded-xl border border-rose-200 bg-rose-50/50 text-rose-900 text-xs flex gap-3">
+        <span class="text-lg">⚠️</span>
+        <div>
+          <h4 class="font-bold mb-1">Zona de Peligro / Anulación Definitiva</h4>
+          <p>
+            Al anular este documento se eliminarán permanentemente todos sus movimientos de inventario, asientos de diario contables y se marcarán como anulados los pedidos relacionados. Los saldos de stock y costos promedio de los productos afectados se recalcularán automáticamente de forma cronológica.
+          </p>
+        </div>
+      </div>
+      
+      <div class="flex justify-end gap-3 pt-3 border-t">
+        <button id="btn-aud-modificar" onclick="modificarDocumentoAuditor()" class="px-5 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+          ✏️ Ir a Modificar
+        </button>
+        <button id="btn-aud-anular" onclick="anularDocumentoAuditor()" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition">
+          Anular todo el documento
+        </button>
+      </div>
+
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -193,13 +361,182 @@
 
   function abrirHerramienta(toolId) {
     document.getElementById('panel-dashboard').classList.add('hidden');
-    document.getElementById('panel-unificar-terceros').classList.remove('hidden');
-    resetUnificarForm();
+    if (toolId === 'unificar-terceros') {
+      document.getElementById('panel-unificar-terceros').classList.remove('hidden');
+      resetUnificarForm();
+    } else if (toolId === 'auditor-documentos') {
+      document.getElementById('panel-auditor-documentos').classList.remove('hidden');
+      resetAuditorForm();
+    }
   }
 
   function volverAlMenu() {
     document.getElementById('panel-unificar-terceros').classList.add('hidden');
+    document.getElementById('panel-auditor-documentos').classList.add('hidden');
     document.getElementById('panel-dashboard').classList.remove('hidden');
+  }
+
+  function resetAuditorForm() {
+    document.getElementById('auditor-numero').value = '';
+    document.getElementById('auditor-vacio').classList.remove('hidden');
+    document.getElementById('auditor-resultados').classList.add('hidden');
+    document.getElementById('auditor-cargando').classList.add('hidden');
+  }
+
+  async function consultarDocumentoAuditor() {
+    const tipo = document.getElementById('auditor-tipo').value;
+    const num = document.getElementById('auditor-numero').value.trim();
+    if (!num) return toast('Ingresa el número de documento', false);
+    
+    const loader = document.getElementById('auditor-cargando');
+    const vacio = document.getElementById('auditor-vacio');
+    const resultados = document.getElementById('auditor-resultados');
+    
+    loader.classList.remove('hidden');
+    vacio.classList.add('hidden');
+    resultados.classList.add('hidden');
+    
+    try {
+      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/auditar-documento?tipo_documento=${encodeURIComponent(tipo)}&documento_numero=${encodeURIComponent(num)}`);
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'Error en consulta');
+      
+      if (!d.existe) {
+        toast('No se encontraron registros para este documento', false);
+        vacio.classList.remove('hidden');
+        loader.classList.add('hidden');
+        return;
+      }
+      
+      loader.classList.add('hidden');
+      resultados.classList.remove('hidden');
+      
+      // Render Inventario
+      const cardInv = document.getElementById('aud-card-inventario');
+      const tbodyInv = document.getElementById('aud-tbody-inventario');
+      if (d.inventario && d.inventario.length) {
+        cardInv.classList.remove('hidden');
+        tbodyInv.innerHTML = d.inventario.map(item => `
+          <tr class="border-b">
+            <td class="py-2 font-semibold text-gray-700">${item.nombre_producto}</td>
+            <td class="py-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.tipo === 'entrada' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${item.tipo}</span></td>
+            <td class="py-2 text-gray-500">${item.motivo || '—'}</td>
+            <td class="py-2 text-right">${item.cantidad.toLocaleString('es-CO')}</td>
+            <td class="py-2 text-right">$${item.valor_unitario.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+            <td class="py-2 text-right font-bold text-gray-800">$${item.valor_total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+          </tr>
+        `).join('');
+      } else {
+        cardInv.classList.add('hidden');
+        tbodyInv.innerHTML = '';
+      }
+      
+      // Render Contabilidad
+      const cardCont = document.getElementById('aud-card-contabilidad');
+      const tbodyCont = document.getElementById('aud-tbody-contabilidad');
+      if (d.contabilidad) {
+        cardCont.classList.remove('hidden');
+        document.getElementById('aud-badge-cc-numero').textContent = d.contabilidad.numero_comprobante;
+        document.getElementById('aud-lbl-cc-concepto').textContent = `Fecha: ${d.contabilidad.fecha} | Concepto: ${d.contabilidad.descripcion || '—'}`;
+        
+        tbodyCont.innerHTML = d.contabilidad.asientos.map(e => `
+          <tr class="border-b">
+            <td class="py-2 font-semibold text-gray-700">${e.cuenta}</td>
+            <td class="py-2 text-gray-500">${e.concepto || '—'}</td>
+            <td class="py-2 text-right text-gray-800">${e.tipo === 'D' ? '$' + e.monto.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—'}</td>
+            <td class="py-2 text-right text-gray-800">${e.tipo === 'C' ? '$' + e.monto.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—'}</td>
+          </tr>
+        `).join('');
+        document.getElementById('aud-val-cc-debito').textContent = '$' + d.contabilidad.total_debitos.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('aud-val-cc-credito').textContent = '$' + d.contabilidad.total_creditos.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      } else {
+        cardCont.classList.add('hidden');
+        tbodyCont.innerHTML = '';
+      }
+      
+      // Render Ventas
+      const cardVtas = document.getElementById('aud-card-ventas');
+      const tbodyVtas = document.getElementById('aud-tbody-ventas');
+      if (d.ventas) {
+        cardVtas.classList.remove('hidden');
+        document.getElementById('aud-lbl-venta-cliente').textContent = `Cliente: ${d.ventas.cliente_nombre || 'Mostrador'} | Fecha: ${new Date(d.ventas.fecha).toLocaleDateString('es-CO')} | Pago: ${d.ventas.metodo_pago || '—'}`;
+        
+        const badgeEst = document.getElementById('aud-badge-venta-estado');
+        badgeEst.textContent = d.ventas.estado.toUpperCase();
+        if (d.ventas.estado === 'anulado') {
+          badgeEst.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-800';
+        } else {
+          badgeEst.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800';
+        }
+        
+        tbodyVtas.innerHTML = d.ventas.items.map(item => `
+          <tr class="border-b">
+            <td class="py-2 font-semibold text-gray-700">${item.nombre_producto}</td>
+            <td class="py-2 text-right">${item.cantidad.toLocaleString('es-CO')}</td>
+            <td class="py-2 text-right">$${item.precio_unitario.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+            <td class="py-2 text-right font-bold text-gray-800">$${item.subtotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+          </tr>
+        `).join('');
+      } else {
+        cardVtas.classList.add('hidden');
+        tbodyVtas.innerHTML = '';
+      }
+      
+    } catch (e) {
+      console.error(e);
+      toast(e.message || 'Error al consultar documento', false);
+      vacio.classList.remove('hidden');
+      loader.classList.add('hidden');
+    }
+  }
+
+  async function anularDocumentoAuditor() {
+    const tipo = document.getElementById('auditor-tipo').value;
+    const num = document.getElementById('auditor-numero').value.trim();
+    if (!num) return;
+    
+    const confirmed = confirm(`¿ESTÁS ABSOLUTAMENTE SEGURO de que deseas ANULAR COMPLETAMENTE el documento "${num}"?\n\nEsta acción borrará irreversiblemente los comprobantes contables del diario, los movimientos de inventario y actualizará el estado de facturación. Los costos promedio de stock se recalcularán automáticamente de forma retroactiva.`);
+    if (!confirmed) return;
+    
+    const btn = document.getElementById('btn-aud-anular');
+    btn.disabled = true;
+    btn.textContent = 'Anulando transacción...';
+    
+    try {
+      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/anular-documento`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          tipo_documento: tipo,
+          documento_numero: num
+        })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast('Documento y todos sus registros anulados con éxito');
+        resetAuditorForm();
+      } else {
+        toast(d.error || 'Error al anular documento', false);
+      }
+    } catch (e) {
+      console.error(e);
+      toast('Error de red al anular documento', false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Anular todo el documento';
+    }
+  }
+
+  function modificarDocumentoAuditor() {
+    const tipo = document.getElementById('auditor-tipo').value;
+    const num = document.getElementById('auditor-numero').value.trim();
+    if (!num) return;
+    
+    if (tipo === 'factura' || tipo === 'remision' || tipo === 'entrada' || tipo === 'salida') {
+      window.location.href = `/admin/inventario/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo)}&num_doc=${encodeURIComponent(num)}#entradas`;
+    } else {
+      toast('Modificación directa no disponible para este tipo de documento a través de este atajo.', false);
+    }
   }
 
   function resetUnificarForm() {

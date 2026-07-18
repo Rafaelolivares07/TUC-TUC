@@ -43,10 +43,10 @@
 
   <div class="bg-white rounded-2xl shadow mb-5 px-4 py-2">
     <div class="flex gap-2 overflow-x-auto">
-      <a href="#politicas" class="px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600">Politicas de rotacion</a>
-      <a href="#cotizaciones" class="px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600">Cotizaciones</a>
-      <a href="#agotados" class="px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600">Informe de agotados</a>
-      <a href="#proveedores" class="px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600">Proveedores</a>
+      <a href="#politicas" class="subtab-link px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600 transition-colors">Politicas de rotacion</a>
+      <a href="#cotizaciones" class="subtab-link px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600 transition-colors">Cotizaciones</a>
+      <a href="#agotados" class="subtab-link px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600 transition-colors">Informe de agotados</a>
+      <a href="#proveedores" class="subtab-link px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600 transition-colors">Proveedores</a>
     </div>
   </div>
 
@@ -401,11 +401,26 @@ function renderKpis() {
   document.getElementById('kpi-estimado').textContent = money(compra.reduce((s, i) => s + Number(i.valor_estimado || 0), 0));
 }
 
+function updateActiveSubtab() {
+  const hash = window.location.hash || '#politicas';
+  document.querySelectorAll('.subtab-link').forEach(link => {
+    const isActive = link.getAttribute('href') === hash;
+    if (isActive) {
+      link.className = "subtab-link px-3 py-2 rounded-lg text-sm font-bold bg-rose-500 text-white shadow-sm transition-all";
+    } else {
+      link.className = "subtab-link px-3 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600 transition-colors";
+    }
+  });
+}
+
+window.addEventListener('hashchange', updateActiveSubtab);
+
 document.addEventListener('DOMContentLoaded', () => {
   const vence = new Date();
   vence.setDate(vence.getDate() + 180);
   document.getElementById('cot-vence').value = vence.toISOString().slice(0, 10);
   cargarPropuesta();
+  updateActiveSubtab();
 });
 </script>
 </body>

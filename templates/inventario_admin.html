@@ -193,6 +193,7 @@
   <div class="bg-white rounded-2xl shadow mb-5 px-4 py-2">
     <div id="nav-tabs" class="flex gap-1 overflow-x-auto">
       <button class="tab-btn tab-active" onclick="mostrarTab('productos')">Productos</button>
+      <button class="tab-btn" onclick="mostrarTab('tarjetas')">Tarjetas Estándar</button>
       <button class="tab-btn" onclick="mostrarTab('entradas')">Entradas</button>
       <button class="tab-btn" onclick="mostrarTab('produccion')">Producción</button>
       <button class="tab-btn" onclick="mostrarTab('stock')">Stock</button>
@@ -224,6 +225,51 @@
           </tr>
         </thead>
         <tbody id="tabla-productos">
+          <tr><td colspan="7" class="text-center text-gray-400 py-8">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── TAB TARJETAS ESTÁNDAR ───────────────────────────────────── -->
+  <div id="tab-tarjetas" class="hidden bg-white rounded-2xl shadow p-5">
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+      <div>
+        <h2 class="font-bold text-gray-700 text-lg">Margen y Tarjetas Estándar</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Analiza el costo de recetas, precios de venta y márgenes de contribución.</p>
+      </div>
+      <div class="w-full sm:w-64">
+        <input id="tarjetas-filtro" type="text" placeholder="Buscar producto o categoría…" oninput="filtrarTarjetas()"
+               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
+      </div>
+    </div>
+    
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100 select-none">
+            <th class="px-3 py-3 w-8"></th>
+            <th onclick="ordenarTarjetas('nombre')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">
+              Producto <span id="sort-nombre" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarTarjetas('categoria')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">
+              Categoría <span id="sort-categoria" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarTarjetas('costo_total')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
+              Costo Total <span id="sort-costo_total" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarTarjetas('precio')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
+              Precio <span id="sort-precio" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarTarjetas('margen_usd')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
+              Margen ($) <span id="sort-margen_usd" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarTarjetas('margen_pct')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
+              Margen (%) <span id="sort-margen_pct" class="text-gray-400">↕</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="tabla-tarjetas-resumen">
           <tr><td colspan="7" class="text-center text-gray-400 py-8">Cargando…</td></tr>
         </tbody>
       </table>
@@ -458,15 +504,17 @@ function toast(msg, ok = true) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-const TABS = ['productos', 'entradas', 'produccion', 'stock', 'kardex'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'stock', 'kardex'];
 function mostrarTab(t) {
   TABS.forEach(id => {
-    document.getElementById(`tab-${id}`).classList.toggle('hidden', id !== t);
+    const el = document.getElementById(`tab-${id}`);
+    if (el) el.classList.toggle('hidden', id !== t);
   });
   document.querySelectorAll('.tab-btn').forEach((btn, i) => {
     btn.classList.toggle('tab-active', TABS[i] === t);
   });
   if (t === 'stock') cargarStock();
+  if (t === 'tarjetas') cargarTarjetasResumen();
 }
 
 // ── Formateo ──────────────────────────────────────────────────────────────────
@@ -1504,6 +1552,177 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => verificarDocumentoExistente(), 150);
   }
 });
+
+// ── Tarjetas Estándar sub-tab ──────────────────────────────────────────────────
+let tarjetasData = [];
+let tarjetasFiltradas = [];
+let sortColumna = 'nombre';
+let sortAscendente = true;
+let expandedRecetas = new Set();
+
+async function cargarTarjetasResumen() {
+  const tb = document.getElementById('tabla-tarjetas-resumen');
+  tb.innerHTML = `<tr><td colspan="7" class="text-center text-gray-400 py-8">Cargando datos contables y recetas…</td></tr>`;
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/tarjetas-resumen`);
+    const d = await r.json();
+    if (d.ok) {
+      tarjetasData = d.productos;
+      tarjetasFiltradas = [...tarjetasData];
+      filtrarTarjetas();
+    } else {
+      tb.innerHTML = `<tr><td colspan="7" class="text-center text-red-500 font-semibold py-8">${d.error}</td></tr>`;
+    }
+  } catch(e) {
+    tb.innerHTML = `<tr><td colspan="7" class="text-center text-red-500 font-semibold py-8">Error de red al conectar con la API</td></tr>`;
+  }
+}
+
+function filtrarTarjetas() {
+  const query = document.getElementById('tarjetas-filtro').value.trim().toLowerCase();
+  if (!query) {
+    tarjetasFiltradas = [...tarjetasData];
+  } else {
+    tarjetasFiltradas = tarjetasData.filter(p => 
+      p.nombre.toLowerCase().includes(query) || 
+      (p.categoria && p.categoria.toLowerCase().includes(query))
+    );
+  }
+  aplicarOrdenTarjetas();
+}
+
+function ordenarTarjetas(columna) {
+  if (sortColumna === columna) {
+    sortAscendente = !sortAscendente;
+  } else {
+    sortColumna = columna;
+    sortAscendente = true;
+  }
+  
+  const columnas = ['nombre', 'categoria', 'costo_total', 'precio', 'margen_usd', 'margen_pct'];
+  columnas.forEach(col => {
+    const el = document.getElementById(`sort-${col}`);
+    if (el) {
+      if (col === sortColumna) {
+        el.textContent = sortAscendente ? '▲' : '▼';
+        el.className = 'text-rose-500 font-bold';
+      } else {
+        el.textContent = '↕';
+        el.className = 'text-gray-400';
+      }
+    }
+  });
+  
+  aplicarOrdenTarjetas();
+}
+
+function aplicarOrdenTarjetas() {
+  tarjetasFiltradas.sort((a, b) => {
+    let valA = a[sortColumna];
+    let valB = b[sortColumna];
+    
+    if (valA == null) valA = '';
+    if (valB == null) valB = '';
+    
+    if (typeof valA === 'string') {
+      return sortAscendente 
+        ? valA.localeCompare(valB, 'es', {numeric: true, sensitivity: 'base'}) 
+        : valB.localeCompare(valA, 'es', {numeric: true, sensitivity: 'base'});
+    } else {
+      return sortAscendente ? (valA - valB) : (valB - valA);
+    }
+  });
+  
+  renderTarjetasTable();
+}
+
+function toggleExpandReceta(prodId) {
+  if (expandedRecetas.has(prodId)) {
+    expandedRecetas.delete(prodId);
+  } else {
+    expandedRecetas.add(prodId);
+  }
+  renderTarjetasTable();
+}
+
+function renderTarjetasTable() {
+  const tb = document.getElementById('tabla-tarjetas-resumen');
+  if (!tarjetasFiltradas.length) {
+    tb.innerHTML = `<tr><td colspan="7" class="text-center text-gray-400 py-8">No se encontraron productos coincidentes.</td></tr>`;
+    return;
+  }
+  
+  let html = '';
+  tarjetasFiltradas.forEach(p => {
+    const isExpanded = expandedRecetas.has(p.id);
+    const badgeTarjeta = p.tiene_tarjeta 
+      ? `<span class="badge ml-2 text-[10px]" style="background:#e0f2fe;color:#0369a1">Receta</span>` 
+      : `<span class="badge ml-2 text-[10px]" style="background:#f3f4f6;color:#4b5563">Directo</span>`;
+      
+    let colorMargen = 'text-gray-700';
+    if (p.precio > 0) {
+      if (p.margen_pct >= 40) colorMargen = 'text-green-600 font-bold';
+      else if (p.margen_pct >= 20) colorMargen = 'text-green-500 font-semibold';
+      else if (p.margen_pct > 0) colorMargen = 'text-amber-500';
+      else colorMargen = 'text-red-500 font-bold';
+    }
+    
+    const caretIcon = p.tiene_tarjeta
+      ? `<button onclick="toggleExpandReceta(${p.id})" class="text-gray-500 hover:text-rose-500 focus:outline-none transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}">
+           ▶
+         </button>`
+      : '';
+
+    html += `
+      <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100">
+        <td class="px-3 py-3 text-center">${caretIcon}</td>
+        <td class="px-3 py-3 font-semibold text-gray-800 flex items-center">
+          ${p.nombre} ${badgeTarjeta}
+        </td>
+        <td class="px-3 py-3 text-gray-500">${p.categoria || 'Sin Categoría'}</td>
+        <td class="px-3 py-3 text-right num font-mono text-gray-700">$ ${fmt(p.costo_total)}</td>
+        <td class="px-3 py-3 text-right num font-mono text-gray-700">$ ${fmt(p.precio)}</td>
+        <td class="px-3 py-3 text-right num font-mono ${colorMargen}">$ ${fmt(p.margen_usd)}</td>
+        <td class="px-3 py-3 text-right num font-mono ${colorMargen}">${fmt(p.margen_pct)} %</td>
+      </tr>
+    `;
+    
+    if (isExpanded && p.tiene_tarjeta) {
+      html += `
+        <tr class="bg-rose-50/10 border-b border-gray-100">
+          <td></td>
+          <td colspan="6" class="px-4 py-3">
+            <div class="bg-white rounded-xl border border-rose-100/60 p-3 shadow-inner max-w-2xl">
+              <span class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Detalle de Componentes</span>
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="text-gray-400 border-b border-gray-100">
+                    <th class="text-left pb-1">Insumo / Materia Prima</th>
+                    <th class="text-right pb-1">Cantidad</th>
+                    <th class="text-right pb-1">Costo Unit.</th>
+                    <th class="text-right pb-1">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${p.componentes.map(c => `
+                    <tr class="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                      <td class="py-1.5 text-left font-medium text-gray-700">${c.nombre}</td>
+                      <td class="py-1.5 text-right num text-gray-600">${fmt(c.cantidad)}</td>
+                      <td class="py-1.5 text-right num font-mono text-gray-500">$ ${fmt(c.costo_und)}</td>
+                      <td class="py-1.5 text-right num font-mono font-semibold text-gray-700">$ ${fmt(c.costo_total)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+  });
+  
+  tb.innerHTML = html;
+}
 </script>
 </body>
 </html>

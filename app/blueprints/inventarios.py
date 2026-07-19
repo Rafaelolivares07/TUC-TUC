@@ -1995,3 +1995,91 @@ def api_consultar_documento_existente(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/tarjetas-resumen')
+def api_inventario_tarjetas_resumen(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+            
+        # 1. Fetch all products
+        productos = conn.execute("""
+            SELECT id, nombre, categoria, precio, costo AS costo_base 
+            FROM productos 
+            WHERE negocio_id = %s
+            ORDER BY nombre
+        """, (negocio_id,)).fetchall()
+        
+        # 2. Fetch all recipe lines for this business
+        recipe_lines = conn.execute("""
+            SELECT te.producto_id, te.componente_id, te.cantidad,
+                   p.nombre AS componente_nombre,
+                   COALESCE(s.costo_und, p.costo, 0) AS costo_und
+            FROM tarjeta_estandar te
+            JOIN productos p ON p.id = te.componente_id
+            LEFT JOIN saldos_inventario s ON s.producto_id = te.componente_id
+                AND s.negocio_id = %s AND s.bodega = 1
+            WHERE p.negocio_id = %s
+        """, (negocio_id, negocio_id)).fetchall()
+        
+        # Group recipe lines by product_id
+        recipes_by_prod = {}
+        for r in recipe_lines:
+            pid = r['producto_id']
+            if pid not in recipes_by_prod:
+                recipes_by_prod[pid] = []
+            recipes_by_prod[pid].append(r)
+            
+        # 3. Assemble response list
+        resumen = []
+        for p in productos:
+            pid = p['id']
+            lines = recipes_by_prod.get(pid, [])
+            tiene_tarjeta = len(lines) > 0
+            
+            costo_total = Decimal('0')
+            componentes_list = []
+            
+            if tiene_tarjeta:
+                for line in lines:
+                    cant = Decimal(str(line['cantidad']))
+                    costo_u = Decimal(str(line['costo_und']))
+                    line_cost = cant * costo_u
+                    costo_total += line_cost
+                    componentes_list.append({
+                        'componente_id': line['componente_id'],
+                        'nombre': line['componente_nombre'],
+                        'cantidad': float(cant),
+                        'costo_und': float(costo_u),
+                        'costo_total': float(line_cost)
+                    })
+            else:
+                costo_total = Decimal(str(p['costo_base'] or 0))
+                
+            precio = Decimal(str(p['precio'] or 0))
+            margen_usd = precio - costo_total
+            margen_pct = (margen_usd / precio * 100) if precio > 0 else Decimal('0')
+            
+            resumen.append({
+                'id': pid,
+                'nombre': p['nombre'],
+                'categoria': p['categoria'],
+                'precio': float(precio),
+                'tiene_tarjeta': tiene_tarjeta,
+                'costo_total': float(costo_total),
+                'margen_usd': float(margen_usd),
+                'margen_pct': float(margen_pct),
+                'componentes': componentes_list
+            })
+            
+        return jsonify({'ok': True, 'productos': resumen})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()

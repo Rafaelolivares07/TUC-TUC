@@ -422,7 +422,21 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     tipo_documento = (_txt(data.get('tipo_documento')) or 'otro').upper()
     documento_numero = (_txt(data.get('documento_numero') or data.get('numero_documento')) or '').upper()
     if not documento_numero:
-        documento_numero = f"ENT-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        td = conn.execute("""
+            SELECT id, consecutivo, numero_inicio 
+            FROM tipos_documento_negocio 
+            WHERE negocio_id = %s AND codigo = %s
+        """, (negocio_id, tipo_documento)).fetchone()
+        if td:
+            num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
+            documento_numero = str(num)
+            conn.execute("""
+                UPDATE tipos_documento_negocio 
+                SET consecutivo = %s 
+                WHERE id = %s
+            """, (num, td['id']))
+        else:
+            documento_numero = f"ENT-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
     documento_fecha = _fecha_o_none(data.get('documento_fecha') or data.get('fecha_documento'))
     proveedor_id = _int_o_none(data.get('proveedor_id') or data.get('tercero_id'))
@@ -544,7 +558,7 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             documento_numero=documento_numero,
             documento_fecha=documento_fecha,
             proveedor_id=proveedor_id,
-            proveedor_nombre=None,  # Normalized: name is fetched via JOIN from terceros
+            proveedor_nombre=proveedor_nombre,
             iva_total=iva_total,
             documento_total=documento_total,
             iva_pct=ln['iva_pct'],
@@ -1037,7 +1051,8 @@ def api_produccion_preview(negocio_id):
         componentes = conn.execute("""
             SELECT te.componente_id AS id, p.nombre,
                    te.cantidad AS cant_tarjeta,
-                   COALESCE(s.stock, 0) AS stock_actual
+                   COALESCE(s.stock, 0) AS stock_actual,
+                   COALESCE(s.costo_und, p.costo, 0) AS costo_und
             FROM tarjeta_estandar te
             JOIN productos p ON p.id = te.componente_id
             LEFT JOIN saldos_inventario s
@@ -1050,9 +1065,14 @@ def api_produccion_preview(negocio_id):
         qty = Decimal(str(cantidad))
         lineas = []
         puede_producir = True
+        costo_total_produccion = Decimal('0')
         for c in componentes:
             a_consumir  = Decimal(str(c['cant_tarjeta'])) * qty
             stock_actual = Decimal(str(c['stock_actual']))
+            costo_und    = Decimal(str(c['costo_und']))
+            costo_total  = a_consumir * costo_und
+            costo_total_produccion += costo_total
+            
             suficiente  = stock_actual >= a_consumir
             if not suficiente:
                 puede_producir = False
@@ -1061,13 +1081,19 @@ def api_produccion_preview(negocio_id):
                 'nombre':       c['nombre'],
                 'a_consumir':   float(a_consumir),
                 'stock_actual': float(stock_actual),
+                'costo_und':    float(costo_und),
+                'costo_total':  float(costo_total),
                 'suficiente':   suficiente,
             })
+            
+        costo_unitario_produccion = costo_total_produccion / qty if qty > 0 else Decimal('0')
         return jsonify({
             'ok': True,
             'producto': producto['nombre'],
             'cantidad': cantidad,
             'puede_producir': puede_producir,
+            'costo_total_produccion': float(costo_total_produccion),
+            'costo_unitario_produccion': float(costo_unitario_produccion),
             'lineas': lineas,
         })
     except Exception as e:
@@ -1111,12 +1137,15 @@ def api_produccion_registrar(negocio_id):
         comps_cont   = []
         for c in componentes:
             a_consumir = Decimal(str(c['cantidad'])) * cantidad
-            saldo = conn.execute(
-                "SELECT COALESCE(stock,0) AS stock, COALESCE(costo_und,0) AS costo_und "
-                "FROM saldos_inventario "
-                "WHERE negocio_id=%s AND producto_id=%s AND bodega=1",
-                (negocio_id, c['componente_id'])
-            ).fetchone()
+            saldo = conn.execute("""
+                SELECT COALESCE(s.stock, 0) AS stock,
+                       COALESCE(s.costo_und, p.costo, 0) AS costo_und
+                FROM productos p
+                LEFT JOIN saldos_inventario s
+                       ON s.producto_id = p.id
+                      AND s.negocio_id  = %s AND s.bodega = 1
+                WHERE p.id = %s AND p.negocio_id = %s
+            """, (negocio_id, c['componente_id'], negocio_id)).fetchone()
             stock_actual = Decimal(str(saldo['stock']))     if saldo else Decimal('0')
             costo_und    = Decimal(str(saldo['costo_und'])) if saldo else Decimal('0')
             if stock_actual < a_consumir:

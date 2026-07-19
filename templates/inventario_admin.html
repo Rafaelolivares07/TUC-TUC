@@ -332,19 +332,46 @@
     <div id="prod-preview" class="hidden mb-5">
       <p id="prod-preview-titulo" class="text-sm font-semibold text-gray-600 mb-3"></p>
       <div class="overflow-x-auto rounded-xl border border-gray-100">
-        <table>
+        <table class="w-full text-sm">
           <thead>
-            <tr>
-              <th>Componente</th>
-              <th class="num">A consumir</th>
-              <th class="num">Stock actual</th>
-              <th>Estado</th>
+            <tr class="bg-gray-50 text-xs uppercase text-gray-500">
+              <th class="px-3 py-2 text-left">Componente</th>
+              <th class="px-3 py-2 text-right">Stock actual</th>
+              <th class="px-3 py-2 text-right">A consumir</th>
+              <th class="px-3 py-2 text-right">Costo unit.</th>
+              <th class="px-3 py-2 text-right">Total Línea</th>
+              <th class="px-3 py-2 text-center">Estado</th>
             </tr>
           </thead>
           <tbody id="prod-preview-tabla"></tbody>
+          <tfoot>
+            <tr class="bg-gray-50 border-t border-gray-100 font-bold text-gray-700">
+              <td class="px-3 py-3 text-left">Total costo producción</td>
+              <td colspan="3"></td>
+              <td id="prod-resumen-total" class="px-3 py-3 text-right text-rose-600"></td>
+              <td></td>
+            </tr>
+            <tr class="bg-gray-50 border-t border-gray-100 font-bold text-gray-700">
+              <td class="px-3 py-3 text-left">Costo unitario estimado</td>
+              <td colspan="3"></td>
+              <td id="prod-resumen-unitario" class="px-3 py-3 text-right text-rose-600"></td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
-      <div id="prod-alerta" class="hidden mt-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold"></div>
+      
+      <!-- Accounting impact help box -->
+      <div class="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-[11px] text-blue-700 flex flex-col gap-1">
+        <span class="font-bold flex items-center gap-1.5">🛈 Registro Contable de Producción:</span>
+        <span>Si está habilitada la contabilidad de producción, al registrar se generará un comprobante de reclasificación interna:</span>
+        <ul class="list-disc pl-4 mt-1 space-y-0.5">
+          <li><b>Crédito (Salida de inventario):</b> Cuentas 14x de los componentes por su costo total consumido.</li>
+          <li><b>Débito (Entrada de inventario):</b> Cuenta 14x del producto terminado por el costo total acumulado.</li>
+        </ul>
+      </div>
+
+      <div id="prod-alerta" class="hidden mt-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold font-normal"></div>
     </div>
     <div class="flex justify-end">
       <button id="prod-btn-registrar" onclick="registrarProduccion()" disabled
@@ -1202,16 +1229,21 @@ async function previsualizarProduccion() {
   const tb = document.getElementById('prod-preview-tabla');
   tb.innerHTML = d.lineas.map(l => `
     <tr>
-      <td class="font-semibold">${l.nombre}</td>
-      <td class="num">${fmt(l.a_consumir)}</td>
-      <td class="num ${l.suficiente ? 'text-green-600' : 'text-red-500 font-bold'}">${fmt(l.stock_actual)}</td>
-      <td>
+      <td class="px-3 py-2 text-left font-semibold">${l.nombre}</td>
+      <td class="px-3 py-2 text-right num ${l.suficiente ? 'text-green-600' : 'text-red-500 font-bold'}">${fmt(l.stock_actual)}</td>
+      <td class="px-3 py-2 text-right num">${fmt(l.a_consumir)}</td>
+      <td class="px-3 py-2 text-right num font-mono">${fmt(l.costo_und)}</td>
+      <td class="px-3 py-2 text-right num font-mono font-semibold">${fmt(l.costo_total)}</td>
+      <td class="px-3 py-2 text-center">
         ${l.suficiente
           ? '<span class="badge" style="background:#d1fae5;color:#065f46">✓ OK</span>'
           : '<span class="badge" style="background:#fee2e2;color:#991b1b">✗ Insuficiente</span>'}
       </td>
     </tr>
   `).join('');
+
+  document.getElementById('prod-resumen-total').textContent = '$ ' + fmt(d.costo_total_produccion);
+  document.getElementById('prod-resumen-unitario').textContent = '$ ' + fmt(d.costo_unitario_produccion);
 
   const alerta = document.getElementById('prod-alerta');
   if (!d.puede_producir) {

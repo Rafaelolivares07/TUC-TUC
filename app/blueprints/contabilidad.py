@@ -166,11 +166,24 @@ def _asegurar_tablas(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_prog_neg ON programaciones_contables(negocio_id)")
     conn.commit()
 
-    # Columnas nuevas en tipos_documento_negocio
+    # config_contabilidad_negocio: global switches for automated accounting settings
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS config_contabilidad_negocio (
+            negocio_id                INTEGER PRIMARY KEY,
+            contab_entradas_categoria BOOLEAN NOT NULL DEFAULT FALSE,
+            contab_costos_categoria   BOOLEAN NOT NULL DEFAULT FALSE,
+            contab_produccion         BOOLEAN NOT NULL DEFAULT FALSE
+        )
+    """)
+    conn.commit()
+
+    # Columnas nuevas en tipos_documento_negocio y otras tablas
     for sql in [
         "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS consecutivo    INTEGER DEFAULT 0",
         "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS numero_inicio  INTEGER DEFAULT 1",
         "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS predeterminado BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS mueve_inventario BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS tipo_movimiento VARCHAR(20) DEFAULT NULL",
         # numero_documento en comprobantes_contables para cruce con inventario
         "ALTER TABLE comprobantes_contables  ADD COLUMN IF NOT EXISTS numero_documento INTEGER",
         "ALTER TABLE comprobantes_contables  ADD COLUMN IF NOT EXISTS origen_tipo   VARCHAR(50)",
@@ -610,7 +623,7 @@ def _tipo_doc_para_modulo(conn, negocio_id, modulo):
 
 
 def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_und,
-                                 registrado_por=None, descripcion=None):
+                                 registrado_por=None, descripcion=None, producto_padre_id=None):
     """
     Genera asiento COGS para una salida de inventario por venta:
       Débito  cuenta_cos  (6x) — costo de ventas
@@ -618,6 +631,11 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
     Busca la cuenta via grupos_inventario usando productos.categoria.
     Retorna comprobante_id o None si no hay grupo configurado.
     """
+    # Verify switch
+    cfg = conn.execute("SELECT contab_costos_categoria FROM config_contabilidad_negocio WHERE negocio_id = %s", (negocio_id,)).fetchone()
+    if not cfg or not cfg['contab_costos_categoria']:
+        return None
+
     producto = conn.execute(
         "SELECT nombre, categoria FROM productos WHERE id=%s AND negocio_id=%s",
         (producto_id, negocio_id)
@@ -625,17 +643,30 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
     if not producto or not producto['categoria']:
         return None
 
-    grupo = conn.execute(
-        "SELECT gi.cuenta_inve_id, gi.cuenta_cos_id, "
-        "       pi.codigo AS cod_inve, pi.nombre AS nom_inve, "
-        "       pc.codigo AS cod_cos,  pc.nombre AS nom_cos "
-        "FROM grupos_inventario gi "
-        "JOIN cuentas_puc pi ON pi.id = gi.cuenta_inve_id "
-        "JOIN cuentas_puc pc ON pc.id = gi.cuenta_cos_id "
-        "WHERE gi.negocio_id=%s AND gi.nombre=%s",
-        (negocio_id, producto['categoria'])
-    ).fetchone()
-    if not grupo:
+    # Resolve category for the Cost of Sales account (6x)
+    cat_costo = producto['categoria']
+    if producto_padre_id:
+        padre = conn.execute("SELECT categoria, nombre FROM productos WHERE id=%s AND negocio_id=%s", (producto_padre_id, negocio_id)).fetchone()
+        if padre and padre['categoria']:
+            cat_costo = padre['categoria']
+
+    # Load inventory account of component's category
+    grupo_inve = conn.execute("""
+        SELECT gi.cuenta_inve_id, c.codigo AS cod_inve, c.nombre AS nom_inve
+        FROM grupos_inventario gi
+        JOIN cuentas_puc c ON c.id = gi.cuenta_inve_id
+        WHERE gi.negocio_id=%s AND gi.nombre=%s
+    """, (negocio_id, producto['categoria'])).fetchone()
+
+    # Load cost account of sold product's category
+    grupo_costo = conn.execute("""
+        SELECT gi.cuenta_cos_id, c.codigo AS cod_cos, c.nombre AS nom_cos
+        FROM grupos_inventario gi
+        JOIN cuentas_puc c ON c.id = gi.cuenta_cos_id
+        WHERE gi.negocio_id=%s AND gi.nombre=%s
+    """, (negocio_id, cat_costo)).fetchone()
+
+    if not grupo_inve or not grupo_costo:
         return None
 
     monto = float(Decimal(str(cantidad)) * Decimal(str(costo_und)))
@@ -658,20 +689,20 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
         RETURNING id
     """, (negocio_id, numero, fecha_uso, desc, monto, monto, registrado_por)).fetchone()['id']
 
-    # Débito costo de ventas (6x)
+    # Débito costo de ventas (6x) - from sold product category
     conn.execute("""
         INSERT INTO movimientos_contables
             (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
         VALUES (%s,%s,%s,%s,%s,'debito',%s,%s)
-    """, (negocio_id, comp_id, grupo['cuenta_cos_id'], grupo['cod_cos'], grupo['nom_cos'],
+    """, (negocio_id, comp_id, grupo_costo['cuenta_cos_id'], grupo_costo['cod_cos'], grupo_costo['nom_cos'],
           monto, registrado_por))
 
-    # Crédito inventario (14x)
+    # Crédito inventario (14x) - from component/ingredient category
     conn.execute("""
         INSERT INTO movimientos_contables
             (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
         VALUES (%s,%s,%s,%s,%s,'credito',%s,%s)
-    """, (negocio_id, comp_id, grupo['cuenta_inve_id'], grupo['cod_inve'], grupo['nom_inve'],
+    """, (negocio_id, comp_id, grupo_inve['cuenta_inve_id'], grupo_inve['cod_inve'], grupo_inve['nom_inve'],
           monto, registrado_por))
 
     return comp_id
@@ -687,6 +718,10 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
     componentes: lista de dicts {producto_id, cantidad, costo_und}
     Retorna comprobante_id o None si falta algún grupo configurado.
     """
+    # Verify switch
+    cfg = conn.execute("SELECT contab_produccion FROM config_contabilidad_negocio WHERE negocio_id = %s", (negocio_id,)).fetchone()
+    if not cfg or not cfg['contab_produccion']:
+        return None
     def _cuenta_inve(prod_id, categ):
         if not categ:
             return None
@@ -1667,3 +1702,44 @@ def api_programaciones_ejecutar(negocio_id, pid):
         try: conn.rollback(); conn.close()
         except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/config', methods=['GET', 'POST'])
+def api_contabilidad_config(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        _asegurar_tablas(conn)
+        
+        # Ensure row exists
+        row = conn.execute("SELECT contab_entradas_categoria, contab_costos_categoria, contab_produccion FROM config_contabilidad_negocio WHERE negocio_id = %s", (negocio_id,)).fetchone()
+        if not row:
+            conn.execute("INSERT INTO config_contabilidad_negocio (negocio_id, contab_entradas_categoria, contab_costos_categoria, contab_produccion) VALUES (%s, FALSE, FALSE, FALSE) ON CONFLICT (negocio_id) DO NOTHING", (negocio_id,))
+            conn.commit()
+            row = {'contab_entradas_categoria': False, 'contab_costos_categoria': False, 'contab_produccion': False}
+        
+        if request.method == 'POST':
+            data = request.get_json() or {}
+            contab_entradas_categoria = bool(data.get('contab_entradas_categoria'))
+            contab_costos_categoria = bool(data.get('contab_costos_categoria'))
+            contab_produccion = bool(data.get('contab_produccion'))
+            
+            conn.execute("""
+                UPDATE config_contabilidad_negocio
+                SET contab_entradas_categoria = %s,
+                    contab_costos_categoria = %s,
+                    contab_produccion = %s
+                WHERE negocio_id = %s
+            """, (contab_entradas_categoria, contab_costos_categoria, contab_produccion, negocio_id))
+            conn.commit()
+            return jsonify({'ok': True})
+            
+        return jsonify({'ok': True, 'config': dict(row)})
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()

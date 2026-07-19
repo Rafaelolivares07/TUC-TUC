@@ -1,7 +1,6 @@
 {
-  "commit": "2f390d1",
-  "estado": "live",
-  "iniciado": "2026-07-11T20:08:34.905965",
-  "mensaje": "temp: deploy git shallow clone folder swap",
-  "live_at": "2026-07-11T20:08:58.167340"
+  "commit": "f610dba",
+  "estado": "pendiente",
+  "iniciado": "2026-07-18T11:10:42.063049",
+  "mensaje": "docs(contabilidad): update explanation legend in inventory groups to detail 14x entry registration behavior"
 }

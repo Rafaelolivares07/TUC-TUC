@@ -155,6 +155,60 @@
         Además, al definir la cuenta de inventario (14x), se establece la cuenta contable que registrará las entradas a inventario,
         independientemente de si existe o no un tipo de documento asociado y parametrizado contablemente.
       </p>
+
+      <!-- Accounting automation global toggles -->
+      <div class="bg-gray-50 rounded-2xl p-5 mb-6 border border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        <!-- Toggle 1: Entradas -->
+        <div class="flex flex-col justify-between bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <div>
+            <div class="flex items-center justify-between mb-2 gap-2">
+              <span class="font-bold text-gray-800 text-sm flex items-center gap-1.5">🛠️ Contabilizar entradas por categoría</span>
+              <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input type="checkbox" id="chk-contab-entradas" onchange="guardarConfigContable()" class="sr-only peer">
+                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+            <p class="text-[11px] text-gray-500 leading-relaxed">
+              Habilita el registro automático de débitos a las cuentas 14x parametrizadas en cada categoría al ingresar mercancía. La contrapartida (crédito) es global y se heredará del tipo de documento seleccionado en la entrada.
+            </p>
+          </div>
+        </div>
+
+        <!-- Toggle 2: Costos -->
+        <div class="flex flex-col justify-between bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <div>
+            <div class="flex items-center justify-between mb-2 gap-2">
+              <span class="font-bold text-gray-800 text-sm flex items-center gap-1.5">💸 Contabilizar costos de venta (COGS)</span>
+              <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input type="checkbox" id="chk-contab-costos" onchange="guardarConfigContable()" class="sr-only peer">
+                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+            <p class="text-[11px] text-gray-500 leading-relaxed font-normal">
+              Habilita el registro automático del costo de ventas (Débito 6x / Crédito 14x) por partida doble al confirmar ventas. El costo afectará la cuenta 6x de la categoría del producto facturado. La disminución de inventario (Crédito 14x) se aplicará a la cuenta de inventario del producto vendido, o, si el producto se ensambla al momento de la venta, a las cuentas de inventario correspondientes a cada uno de los componentes/ingredientes que conforman el producto según su tarjeta estándar o receta.
+            </p>
+          </div>
+        </div>
+
+        <!-- Toggle 3: Produccion -->
+        <div class="flex flex-col justify-between bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <div>
+            <div class="flex items-center justify-between mb-2 gap-2">
+              <span class="font-bold text-gray-800 text-sm flex items-center gap-1.5">🍞 Contabilizar producción / ensambles</span>
+              <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input type="checkbox" id="chk-contab-produccion" onchange="guardarConfigContable()" class="sr-only peer">
+                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+            <p class="text-[11px] text-gray-500 leading-relaxed font-normal">
+              Habilita el registro automático de reclasificación interna de inventarios (Crédito 14x a los ingredientes/materias primas consumidas y Débito 14x al producto terminado que ingresa al stock) al procesar órdenes en el módulo de Producción.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
       <table class="w-full text-sm">
         <thead><tr class="bg-gray-50 text-xs uppercase text-gray-500">
           <th class="px-3 py-2 text-left">Categoría</th>
@@ -411,7 +465,7 @@ function cambiarTab(t) {
   });
   if (t === 'tipos')   cargarTiposDocs();
   if (t === 'params')  { cargarTiposDocs(); cargarParametros(); }
-  if (t === 'grupos')  cargarGrupos();
+  if (t === 'grupos')  { cargarGrupos(); cargarConfigContable(); }
   if (t === 'progs')   { progCargarTipos(); progCargarLista(); }
   if (t === 'comps')   cargarComprobantes();
   if (t === 'manual') { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
@@ -1143,6 +1197,43 @@ document.addEventListener('click', e => {
     document.querySelectorAll('.ac-drop, .man-ac-list').forEach(el => el.classList.add('hidden'));
   }
 });
+
+async function cargarConfigContable() {
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config`);
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('chk-contab-entradas').checked = d.config.contab_entradas_categoria;
+      document.getElementById('chk-contab-costos').checked = d.config.contab_costos_categoria;
+      document.getElementById('chk-contab-produccion').checked = d.config.contab_produccion;
+    }
+  } catch(e) {
+    console.error('Error al cargar config contable:', e);
+  }
+}
+
+async function guardarConfigContable() {
+  try {
+    const body = {
+      contab_entradas_categoria: document.getElementById('chk-contab-entradas').checked,
+      contab_costos_categoria: document.getElementById('chk-contab-costos').checked,
+      contab_produccion: document.getElementById('chk-contab-produccion').checked
+    };
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Configuración contable actualizada');
+    } else {
+      toast(d.error, false);
+    }
+  } catch(e) {
+    toast('Error de red al guardar configuración', false);
+  }
+}
 
 // Fecha hoy por defecto
 document.getElementById('man-fecha').value = new Date().toISOString().slice(0,10);

@@ -571,12 +571,30 @@ const fmtMon = n => (n == null ? '—' : '$' + Number(n).toLocaleString('es-CO',
 function setupAC(inputId, listId, hiddenId, data, onSelect) {
   const inp = document.getElementById(inputId);
   const list = document.getElementById(listId);
+  if (!inp || !list) return;
   let idx = -1, timer = null;
 
-  inp.addEventListener('input', () => {
+  const normalizeStr = str => (str || '').toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+  async function ensureData() {
+    if ((!data() || !data().length) && typeof cargarProductos === 'function') {
+      await cargarProductos();
+    }
+  }
+
+  inp.addEventListener('input', async () => {
     clearTimeout(timer);
-    timer = setTimeout(() => renderAC(), 280);
+    await ensureData();
+    timer = setTimeout(() => renderAC(), 180);
   });
+
+  inp.addEventListener('focus', async () => {
+    await ensureData();
+    if (inp.value.trim().length >= 1) {
+      renderAC();
+    }
+  });
+
   inp.addEventListener('keydown', e => {
     const items = list.querySelectorAll('.ac-item');
     if (e.key === 'ArrowDown') { idx = Math.min(idx + 1, items.length - 1); highlightAC(items); e.preventDefault(); }
@@ -584,35 +602,47 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
     else if (e.key === 'Enter' && idx >= 0) { items[idx]?.click(); e.preventDefault(); }
     else if (e.key === 'Escape') { list.classList.add('hidden'); }
   });
-  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 200));
-  inp.addEventListener('focus', () => {
-    if (typeof cargarProductos === 'function') {
-      cargarProductos();
-    }
-  });
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
 
   function renderAC() {
-    const q = inp.value.toLowerCase().trim();
-    if (q.length < 2) { list.classList.add('hidden'); return; }
-    const matches = data().filter(p => p.nombre.toLowerCase().includes(q)).slice(0, 15);
+    const rawQ = inp.value;
+    const qNorm = normalizeStr(rawQ);
+    if (!qNorm) { list.classList.add('hidden'); return; }
+    
+    const itemsList = data() || [];
+    const matches = itemsList.filter(p => {
+      if (!p || !p.nombre) return false;
+      const nameNorm = normalizeStr(p.nombre);
+      const catNorm = normalizeStr(p.categoria);
+      return nameNorm.includes(qNorm) || catNorm.includes(qNorm);
+    }).slice(0, 20);
+
     idx = -1;
     
     let html = matches.map(p =>
-      `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
-        ${p.nombre}${p.categoria ? ` <span class="text-gray-400">(${p.categoria})</span>` : ''}
+      `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${(p.nombre || '').replace(/"/g,'&quot;')}">
+        <span class="font-semibold text-gray-800">${p.nombre}</span>${p.categoria ? ` <span class="text-xs text-gray-400">(${p.categoria})</span>` : ''}
        </div>`
     ).join('');
 
-    // Append Crear option at the bottom
-    html += `
-      <div class="ac-item text-left px-3 py-2 hover:bg-rose-50 cursor-pointer text-rose-500 font-bold border-t border-gray-100" data-crear="true" data-nombre="${inp.value.replace(/"/g,'&quot;')}">
-        ➕ Crear nuevo producto: "${inp.value}"
-      </div>
-    `;
+    if (rawQ.trim().length >= 2) {
+      html += `
+        <div class="ac-item text-left px-3 py-2 hover:bg-rose-50 cursor-pointer text-rose-600 font-bold border-t border-gray-100 text-xs flex items-center gap-1" data-crear="true" data-nombre="${rawQ.replace(/"/g,'&quot;')}">
+          <span>➕ Crear nuevo producto:</span> <span class="italic text-gray-700">"${rawQ}"</span>
+        </div>
+      `;
+    }
     
+    if (!html) {
+      list.classList.add('hidden');
+      return;
+    }
+
     list.innerHTML = html;
     list.querySelectorAll('.ac-item').forEach(el => {
-      el.addEventListener('mousedown', () => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
         if (el.dataset.crear) {
           list.classList.add('hidden');
           abrirModalCrearDesdeAC(inputId, hiddenId, el.dataset.nombre);
@@ -626,6 +656,7 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
     });
     list.classList.remove('hidden');
   }
+
   function highlightAC(items) {
     items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
     if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});

@@ -153,7 +153,7 @@
       </div>
       <div style="width:80px">
         <label class="text-xs font-semibold text-gray-600 mb-1 block">Cant.</label>
-        <input id="tarjeta-ac-cant" type="number" min="0.0001" step="0.0001" value="1" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center">
+        <input id="tarjeta-ac-cant" type="number" min="1" step="1" value="1" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center">
       </div>
       <button onclick="agregarLineaTarjeta()" class="px-3 py-1.5 rounded-lg bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 transition-colors">+</button>
     </div>
@@ -826,7 +826,7 @@ async function cargarTarjeta(productoId) {
   tarjetaLineas = d.componentes.map(c => ({
     componente_id: c.componente_id, 
     nombre: c.nombre, 
-    cantidad: c.cantidad,
+    cantidad: Math.round(parseFloat(c.cantidad) || 1),
     costo_und: c.costo_und || 0
   }));
   renderLineasTarjeta();
@@ -842,6 +842,33 @@ function ordenarComponentesModal(columna) {
     modalSortAsc = true;
   }
   renderLineasTarjeta();
+}
+
+function actualizarCantidadComponente(index, valStr) {
+  let val = parseInt(valStr, 10);
+  if (isNaN(val) || val < 1) val = 1;
+  tarjetaLineas[index].cantidad = val;
+  
+  const costoUnd = parseFloat(tarjetaLineas[index].costo_und || 0);
+  const subtotal = val * costoUnd;
+  const subEl = document.getElementById(`modal-subtotal-${index}`);
+  if (subEl) {
+    subEl.textContent = '$' + subtotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+  recalcularTotalRecetaModal();
+}
+
+function recalcularTotalRecetaModal() {
+  let totalReceta = 0;
+  tarjetaLineas.forEach(ln => {
+    const c = parseFloat(ln.costo_und || 0);
+    const q = parseInt(ln.cantidad, 10) || 1;
+    totalReceta += (c * q);
+  });
+  const totalValEl = document.getElementById('tarjeta-total-val');
+  if (totalValEl) {
+    totalValEl.textContent = '$' + totalReceta.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
 }
 
 function renderLineasTarjeta() {
@@ -867,14 +894,14 @@ function renderLineasTarjeta() {
       valB = b.nombre || '';
       return modalSortAsc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
     } else if (modalSortCol === 'cantidad') {
-      valA = parseFloat(a.cantidad || 0);
-      valB = parseFloat(b.cantidad || 0);
+      valA = parseInt(a.cantidad || 0, 10);
+      valB = parseInt(b.cantidad || 0, 10);
     } else if (modalSortCol === 'costo_und') {
       valA = parseFloat(a.costo_und || 0);
       valB = parseFloat(b.costo_und || 0);
     } else if (modalSortCol === 'subtotal') {
-      valA = parseFloat(a.cantidad || 0) * parseFloat(a.costo_und || 0);
-      valB = parseFloat(b.cantidad || 0) * parseFloat(b.costo_und || 0);
+      valA = (parseInt(a.cantidad || 0, 10)) * parseFloat(a.costo_und || 0);
+      valB = (parseInt(b.cantidad || 0, 10)) * parseFloat(b.costo_und || 0);
     }
     return modalSortAsc ? (valA - valB) : (valB - valA);
   });
@@ -886,7 +913,7 @@ function renderLineasTarjeta() {
 
   let rowsHtml = tarjetaLineas.map((ln, i) => {
     const costoUnd = parseFloat(ln.costo_und || 0);
-    const cantidad = parseFloat(ln.cantidad || 0);
+    const cantidad = Math.round(parseFloat(ln.cantidad || 1));
     const subtotal = cantidad * costoUnd;
     totalReceta += subtotal;
     
@@ -896,15 +923,16 @@ function renderLineasTarjeta() {
           ${ln.nombre}
         </td>
         <td class="py-2 px-1 text-center">
-          <input type="number" value="${cantidad}" min="0.0001" step="0.0001"
-                 oninput="tarjetaLineas[${i}].cantidad = parseFloat(this.value) || 0; renderLineasTarjeta();"
-                 class="w-20 text-center px-1 py-1 border border-gray-200 rounded-lg text-xs font-mono"
+          <input type="number" value="${cantidad}" min="1" step="1"
+                 oninput="actualizarCantidadComponente(${i}, this.value)"
+                 onblur="if(!this.value || parseInt(this.value,10)<1) { this.value=1; actualizarCantidadComponente(${i}, 1); }"
+                 class="w-20 text-center px-1 py-1 border border-gray-200 rounded-lg text-xs font-mono font-semibold"
                  style="height: 28px;">
         </td>
         <td class="py-2 px-2 text-right num font-mono text-xs text-gray-500">
           $${costoUnd.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
         </td>
-        <td class="py-2 px-2 text-right num font-mono text-xs font-bold text-gray-800">
+        <td id="modal-subtotal-${i}" class="py-2 px-2 text-right num font-mono text-xs font-bold text-gray-800">
           $${subtotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
         </td>
         <td class="py-2 px-1 text-center">
@@ -948,7 +976,7 @@ function renderLineasTarjeta() {
 function agregarLineaTarjeta() {
   const id = parseInt(document.getElementById('tarjeta-ac-id').value);
   const nombre = document.getElementById('tarjeta-ac-input').value.trim();
-  const cant = parseFloat(document.getElementById('tarjeta-ac-cant').value) || 1;
+  const cant = parseInt(document.getElementById('tarjeta-ac-cant').value, 10) || 1;
   if (!id || !nombre) { toast('Selecciona un producto del buscador', false); return; }
   if (tarjetaLineas.find(l => l.componente_id === id)) { toast('Ya está en la tarjeta', false); return; }
   
@@ -1866,7 +1894,7 @@ function renderTarjetasTable() {
                     ${compList.map(c => `
                       <tr class="border-b border-gray-100 last:border-0 hover:bg-white transition-colors">
                         <td class="py-1.5 px-2 text-left font-medium text-gray-700">${c.nombre}</td>
-                        <td class="py-1.5 px-2 text-right num text-gray-600 font-mono">${fmt(c.cantidad)}</td>
+                        <td class="py-1.5 px-2 text-right num text-gray-600 font-mono">${Math.round(parseFloat(c.cantidad) || 0)}</td>
                         <td class="py-1.5 px-2 text-right num font-mono text-gray-500">$ ${fmt(c.costo_und)}</td>
                         <td class="py-1.5 px-2 text-right num font-mono font-semibold text-gray-800">$ ${fmt(c.costo_total)}</td>
                       </tr>

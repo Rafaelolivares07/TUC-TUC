@@ -817,28 +817,31 @@ function renderTablaProductos(lista) {
     return;
   }
   
-  tb.innerHTML = lista.map(p => `
-    <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
-      <td class="px-3 py-2.5 font-semibold text-gray-800">${p.nombre}${!p.disponible ? ' <span class="text-xs text-gray-400">(inactivo)</span>' : ''}</td>
-      <td class="px-3 py-2.5 text-gray-500 text-xs">${p.categoria || '—'}</td>
-      <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${fmtMon(p.precio)}</td>
-      <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${fmtMon(p.costo)}</td>
-      <td class="px-3 py-2.5 text-right num font-mono font-bold ${Number(p.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${fmt(p.stock)}</td>
-      <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-700">${fmtMon(Number(p.costo || 0) * Number(p.stock || 0))}</td>
-      <td class="px-3 py-2.5">
-        <div class="flex gap-1.5 justify-end">
-          <button onclick='abrirModalProducto(${JSON.stringify(p)})' title="Editar producto"
-                  class="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 font-semibold transition-colors">✏️</button>
-          <button onclick='abrirModalTarjeta(${p.id}, "${p.nombre.replace(/"/g,'&quot;')}")' title="Tarjeta estándar"
-                  class="text-xs px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 font-semibold text-blue-600 transition-colors">🧩</button>
-          <button onclick='verKardex(${p.id}, "${p.nombre.replace(/"/g,'&quot;')}")' title="Kardex"
-                  class="text-xs px-2 py-1 rounded-lg bg-yellow-50 hover:bg-yellow-100 font-semibold text-yellow-600 transition-colors">📊</button>
-          <button onclick='eliminarProducto(${p.id}, "${p.nombre.replace(/"/g,'&quot;')}")' title="Eliminar producto"
-                  class="text-xs px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 font-semibold text-red-600 transition-colors">🗑️</button>
-        </div>
-      </td>
-    </tr>
-  `).join('');
+  tb.innerHTML = lista.map(p => {
+    const safeNombre = (p.nombre || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `
+      <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
+        <td class="px-3 py-2.5 font-semibold text-gray-800">${p.nombre}${!p.disponible ? ' <span class="text-xs text-gray-400">(inactivo)</span>' : ''}</td>
+        <td class="px-3 py-2.5 text-gray-500 text-xs">${p.categoria || '—'}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${fmtMon(p.precio)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${fmtMon(p.costo)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono font-bold ${Number(p.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${fmt(p.stock)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-700">${fmtMon(Number(p.costo || 0) * Number(p.stock || 0))}</td>
+        <td class="px-3 py-2.5">
+          <div class="flex gap-1.5 justify-end">
+            <button onclick="abrirModalProducto(${p.id})" title="Editar producto"
+                    class="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 font-semibold transition-colors">✏️</button>
+            <button onclick="abrirModalTarjeta(${p.id}, '${safeNombre}')" title="Tarjeta estándar"
+                    class="text-xs px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 font-semibold text-blue-600 transition-colors">🧩</button>
+            <button onclick="verKardex(${p.id}, '${safeNombre}')" title="Kardex"
+                    class="text-xs px-2 py-1 rounded-lg bg-yellow-50 hover:bg-yellow-100 font-semibold text-yellow-600 transition-colors">📊</button>
+            <button onclick="eliminarProducto(${p.id}, '${safeNombre}')" title="Eliminar producto"
+                    class="text-xs px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 font-semibold text-red-600 transition-colors">🗑️</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 async function eliminarProducto(id, nombre) {
@@ -861,10 +864,17 @@ async function eliminarProducto(id, nombre) {
 }
 
 // ── Modal producto ────────────────────────────────────────────────────────────
-function abrirModalProducto(p = null) {
+function abrirModalProducto(pOrId = null) {
+  let p = null;
+  if (typeof pOrId === 'object' && pOrId !== null) {
+    p = pOrId;
+  } else if (pOrId) {
+    p = productos.find(x => Number(x.id) === Number(pOrId)) || null;
+  }
+
   document.getElementById('modal-producto-titulo').textContent = p ? 'Editar producto' : 'Nuevo producto';
   document.getElementById('mp-id').value       = p ? p.id : '';
-  document.getElementById('mp-nombre').value   = p ? p.nombre : '';
+  document.getElementById('mp-nombre').value   = p ? (p.nombre || '') : '';
   document.getElementById('mp-categoria').value = p ? (p.categoria || '') : '';
   document.getElementById('mp-codigo').value   = p ? (p.codigo_barra || '') : '';
   document.getElementById('mp-precio').value   = p ? p.precio : '0';

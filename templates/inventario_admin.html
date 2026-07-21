@@ -105,9 +105,14 @@
         <label>IVA %</label>
         <input id="mp-iva" type="number" min="0" step="0.01" placeholder="0">
       </div>
-      <div class="flex items-end gap-2">
-        <input type="checkbox" id="mp-disponible" class="w-4 h-4 accent-rose-500" style="width:16px">
-        <label for="mp-disponible" style="margin:0;font-size:.85rem;color:#374151;">Disponible</label>
+      <div class="sm:col-span-2 bg-gray-50 border border-gray-200 p-3 rounded-xl flex flex-col gap-1">
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" id="mp-disponible" class="w-4 h-4 accent-rose-500 rounded cursor-pointer">
+          <span class="text-xs font-bold text-gray-800">🟢 Producto Activo / Disponible en ventas</span>
+        </label>
+        <p class="text-[11px] text-gray-500 italic ml-6">
+          Desmarca esta casilla para inactivar el producto. Se ocultará de la carta/POS y de las consultas de ventas sin borrar su historial.
+        </p>
       </div>
       <div class="sm:col-span-2">
         <label>Descripción</label>
@@ -231,6 +236,11 @@
     <div class="flex items-center gap-3 mb-4 flex-wrap">
       <input id="filtro-productos" type="text" placeholder="Filtrar por nombre o categoría…"
              oninput="filtrarTablaProductos()" style="max-width:260px">
+      <select id="filtro-estado-productos" onchange="filtrarTablaProductos()" class="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-rose-500">
+        <option value="todos">Todos los estados</option>
+        <option value="activos" selected>Solo Activos 🟢</option>
+        <option value="inactivos">Solo Inactivos 🔴</option>
+      </select>
       <button onclick="abrirModalProducto()"
               class="ml-auto px-4 py-2 bg-rose-500 text-white text-sm font-bold rounded-xl hover:bg-rose-600">
         + Producto
@@ -761,10 +771,15 @@ function ordenarProductos(columna) {
 
 function filtrarTablaProductos() {
   const term = (document.getElementById('filtro-productos')?.value || '').toLowerCase().trim();
-  let lista = productos.filter(p => 
-    (p.nombre || '').toLowerCase().includes(term) ||
-    (p.categoria || '').toLowerCase().includes(term)
-  );
+  const estadoFiltro = document.getElementById('filtro-estado-productos')?.value || 'todos';
+
+  let lista = productos.filter(p => {
+    const matchTerm = (p.nombre || '').toLowerCase().includes(term) || (p.categoria || '').toLowerCase().includes(term);
+    if (!matchTerm) return false;
+    if (estadoFiltro === 'activos') return !!p.disponible;
+    if (estadoFiltro === 'inactivos') return !p.disponible;
+    return true;
+  });
 
   lista.sort((a, b) => {
     let valA, valB;
@@ -819,9 +834,16 @@ function renderTablaProductos(lista) {
   
   tb.innerHTML = lista.map(p => {
     const safeNombre = (p.nombre || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const estadoBtn = p.disponible 
+      ? `<button onclick="toggleEstadoProducto(${p.id}, false)" title="Haz clic para inactivar producto" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition">🟢 Activo</button>`
+      : `<button onclick="toggleEstadoProducto(${p.id}, true)" title="Haz clic para activar producto" class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition">🔴 Inactivo</button>`;
+
     return `
-      <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
-        <td class="px-3 py-2.5 font-semibold text-gray-800">${p.nombre}${!p.disponible ? ' <span class="text-xs text-gray-400">(inactivo)</span>' : ''}</td>
+      <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors ${!p.disponible ? 'bg-gray-50/70' : ''}">
+        <td class="px-3 py-2.5 font-semibold text-gray-800 flex items-center gap-2">
+          <span>${p.nombre}</span>
+          ${estadoBtn}
+        </td>
         <td class="px-3 py-2.5 text-gray-500 text-xs">${p.categoria || '—'}</td>
         <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${fmtMon(p.precio)}</td>
         <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${fmtMon(p.costo)}</td>
@@ -842,6 +864,38 @@ function renderTablaProductos(lista) {
       </tr>
     `;
   }).join('');
+}
+
+async function toggleEstadoProducto(id, nuevoEstado) {
+  const p = productos.find(x => Number(x.id) === Number(id));
+  if (!p) return;
+  try {
+    const r = await fetch(`/api/inventario/producto/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        nombre: p.nombre,
+        categoria: p.categoria,
+        codigo_barra: p.codigo_barra,
+        precio: p.precio,
+        costo: p.costo,
+        iva_pct: p.iva_pct,
+        disponible: nuevoEstado,
+        descripcion: p.descripcion
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      p.disponible = nuevoEstado;
+      toast(nuevoEstado ? '🟢 Producto activado (disponible para venta)' : '🔴 Producto inactivado (oculto de ventas)');
+      filtrarTablaProductos();
+    } else {
+      toast(d.error || 'No se pudo cambiar el estado', false);
+    }
+  } catch(e) {
+    console.error(e);
+    toast('Error de red al cambiar estado del producto', false);
+  }
 }
 
 async function eliminarProducto(id, nombre) {

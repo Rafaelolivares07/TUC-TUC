@@ -574,22 +574,24 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
   if (!inp || !list) return;
   let idx = -1, timer = null;
 
-  const normalizeStr = str => (str || '').toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-
-  async function ensureData() {
-    if ((!data() || !data().length) && typeof cargarProductos === 'function') {
-      await cargarProductos();
+  const normalizeStr = str => {
+    if (!str) return '';
+    try {
+      return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    } catch (e) {
+      return str.toString().toLowerCase().trim();
     }
-  }
+  };
 
-  inp.addEventListener('input', async () => {
+  inp.addEventListener('input', () => {
     clearTimeout(timer);
-    await ensureData();
-    timer = setTimeout(() => renderAC(), 180);
+    timer = setTimeout(() => renderAC(), 150);
   });
 
-  inp.addEventListener('focus', async () => {
-    await ensureData();
+  inp.addEventListener('focus', () => {
+    if (typeof cargarProductos === 'function' && (!productos || !productos.length)) {
+      cargarProductos();
+    }
     if (inp.value.trim().length >= 1) {
       renderAC();
     }
@@ -610,7 +612,12 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
     const qNorm = normalizeStr(rawQ);
     if (!qNorm) { list.classList.add('hidden'); return; }
     
-    const itemsList = data() || [];
+    const itemsList = typeof data === 'function' ? data() : (data || []);
+    if (!itemsList || !itemsList.length) {
+      list.classList.add('hidden');
+      return;
+    }
+
     const matches = itemsList.filter(p => {
       if (!p || !p.nombre) return false;
       const nameNorm = normalizeStr(p.nombre);
@@ -632,11 +639,6 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
           <span>➕ Crear nuevo producto:</span> <span class="italic text-gray-700">"${rawQ}"</span>
         </div>
       `;
-    }
-    
-    if (!html) {
-      list.classList.add('hidden');
-      return;
     }
 
     list.innerHTML = html;

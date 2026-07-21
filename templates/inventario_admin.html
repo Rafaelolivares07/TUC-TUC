@@ -239,14 +239,26 @@
     <div class="overflow-x-auto">
       <table>
         <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Categoría</th>
-            <th class="num">Precio</th>
-            <th class="num">Costo</th>
-            <th class="num">Stock</th>
-            <th class="num">Costo Total</th>
-            <th></th>
+          <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100 select-none">
+            <th onclick="ordenarProductos('nombre')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">
+              Producto <span id="sort-prod-nombre" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarProductos('categoria')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">
+              Categoría <span id="sort-prod-categoria" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarProductos('precio')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">
+              Precio <span id="sort-prod-precio" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarProductos('costo')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">
+              Costo <span id="sort-prod-costo" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarProductos('stock')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">
+              Stock <span id="sort-prod-stock" class="text-gray-400">↕</span>
+            </th>
+            <th onclick="ordenarProductos('costo_total')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">
+              Costo Total <span id="sort-prod-costo_total" class="text-gray-400">↕</span>
+            </th>
+            <th class="px-3 py-3 text-right">Acciones</th>
           </tr>
         </thead>
         <tbody id="tabla-productos">
@@ -680,12 +692,15 @@ function setupRemoteAC(inputId, listId, hiddenId, searchUrl, onSelect) {
 }
 
 // ── Cargar productos ──────────────────────────────────────────────────────────
+let prodSortCol = 'nombre';
+let prodSortAsc = true;
+
 async function cargarProductos() {
   const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos`);
   const d = await r.json();
   if (!d.ok) { toast(d.error, false); return []; }
   productos = d.productos;
-  renderTablaProductos(productos);
+  filtrarTablaProductos();
   return productos;
 }
 
@@ -701,40 +716,115 @@ function abrirTarjetaInicialDesdeUrl() {
   }
 }
 
+function ordenarProductos(columna) {
+  if (prodSortCol === columna) {
+    prodSortAsc = !prodSortAsc;
+  } else {
+    prodSortCol = columna;
+    prodSortAsc = true;
+  }
+  filtrarTablaProductos();
+}
+
+function filtrarTablaProductos() {
+  const term = (document.getElementById('filtro-productos')?.value || '').toLowerCase().trim();
+  let lista = productos.filter(p => 
+    (p.nombre || '').toLowerCase().includes(term) ||
+    (p.categoria || '').toLowerCase().includes(term)
+  );
+
+  lista.sort((a, b) => {
+    let valA, valB;
+    if (prodSortCol === 'nombre') {
+      valA = a.nombre || '';
+      valB = b.nombre || '';
+      return prodSortAsc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
+    } else if (prodSortCol === 'categoria') {
+      valA = a.categoria || '';
+      valB = b.categoria || '';
+      return prodSortAsc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
+    } else if (prodSortCol === 'precio') {
+      valA = parseFloat(a.precio || 0);
+      valB = parseFloat(b.precio || 0);
+    } else if (prodSortCol === 'costo') {
+      valA = parseFloat(a.costo || 0);
+      valB = parseFloat(b.costo || 0);
+    } else if (prodSortCol === 'stock') {
+      valA = parseFloat(a.stock || 0);
+      valB = parseFloat(b.stock || 0);
+    } else if (prodSortCol === 'costo_total') {
+      valA = parseFloat(a.costo || 0) * parseFloat(a.stock || 0);
+      valB = parseFloat(b.costo || 0) * parseFloat(b.stock || 0);
+    }
+    return prodSortAsc ? (valA - valB) : (valB - valA);
+  });
+
+  renderTablaProductos(lista);
+}
+
 function renderTablaProductos(lista) {
   const tb = document.getElementById('tabla-productos');
+  
+  // Update sort icons
+  ['nombre', 'categoria', 'precio', 'costo', 'stock', 'costo_total'].forEach(col => {
+    const el = document.getElementById(`sort-prod-${col}`);
+    if (el) {
+      if (prodSortCol === col) {
+        el.textContent = prodSortAsc ? '▲' : '▼';
+        el.className = 'text-rose-500 font-bold';
+      } else {
+        el.textContent = '↕';
+        el.className = 'text-gray-400';
+      }
+    }
+  });
+
   if (!lista.length) {
     tb.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">Sin productos</td></tr>';
     return;
   }
+  
   tb.innerHTML = lista.map(p => `
-    <tr>
-      <td class="font-semibold">${p.nombre}${!p.disponible ? ' <span class="text-xs text-gray-400">(inactivo)</span>' : ''}</td>
-      <td class="text-gray-500 text-xs">${p.categoria || '—'}</td>
-      <td class="num">${fmtMon(p.precio)}</td>
-      <td class="num">${fmtMon(p.costo)}</td>
-      <td class="num font-bold ${Number(p.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${fmt(p.stock)}</td>
-      <td class="num font-semibold text-gray-700">${fmtMon(Number(p.costo || 0) * Number(p.stock || 0))}</td>
-      <td>
-        <div class="flex gap-2 justify-end">
-          <button onclick='abrirModalProducto(${JSON.stringify(p)})' title="Editar"
-                  class="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 font-semibold">✏️</button>
+    <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
+      <td class="px-3 py-2.5 font-semibold text-gray-800">${p.nombre}${!p.disponible ? ' <span class="text-xs text-gray-400">(inactivo)</span>' : ''}</td>
+      <td class="px-3 py-2.5 text-gray-500 text-xs">${p.categoria || '—'}</td>
+      <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${fmtMon(p.precio)}</td>
+      <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${fmtMon(p.costo)}</td>
+      <td class="px-3 py-2.5 text-right num font-mono font-bold ${Number(p.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${fmt(p.stock)}</td>
+      <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-700">${fmtMon(Number(p.costo || 0) * Number(p.stock || 0))}</td>
+      <td class="px-3 py-2.5">
+        <div class="flex gap-1.5 justify-end">
+          <button onclick='abrirModalProducto(${JSON.stringify(p)})' title="Editar producto"
+                  class="text-xs px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 font-semibold transition-colors">✏️</button>
           <button onclick='abrirModalTarjeta(${p.id}, "${p.nombre.replace(/"/g,'&quot;')}")' title="Tarjeta estándar"
-                  class="text-xs px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 font-semibold text-blue-600">🧩</button>
+                  class="text-xs px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 font-semibold text-blue-600 transition-colors">🧩</button>
           <button onclick='verKardex(${p.id}, "${p.nombre.replace(/"/g,'&quot;')}")' title="Kardex"
-                  class="text-xs px-2 py-1 rounded-lg bg-yellow-50 hover:bg-yellow-100 font-semibold text-yellow-600">📊</button>
+                  class="text-xs px-2 py-1 rounded-lg bg-yellow-50 hover:bg-yellow-100 font-semibold text-yellow-600 transition-colors">📊</button>
+          <button onclick='eliminarProducto(${p.id}, "${p.nombre.replace(/"/g,'&quot;')}")' title="Eliminar producto"
+                  class="text-xs px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 font-semibold text-red-600 transition-colors">🗑️</button>
         </div>
       </td>
     </tr>
   `).join('');
 }
 
-function filtrarTablaProductos() {
-  const q = document.getElementById('filtro-productos').value.toLowerCase();
-  if (!q) { renderTablaProductos(productos); return; }
-  renderTablaProductos(productos.filter(p =>
-    p.nombre.toLowerCase().includes(q) || (p.categoria || '').toLowerCase().includes(q)
-  ));
+async function eliminarProducto(id, nombre) {
+  if (!confirm(`¿Estás seguro de eliminar el producto "${nombre}"?\n\nEl sistema verificará que no posea movimientos de inventario, recetas o ventas asociadas.`)) {
+    return;
+  }
+  try {
+    const r = await fetch(`/api/inventario/producto/${id}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Producto eliminado correctamente');
+      cargarProductos();
+    } else {
+      toast(d.error || 'No se pudo eliminar el producto', false);
+    }
+  } catch(e) {
+    console.error(e);
+    toast('Error de red al eliminar el producto', false);
+  }
 }
 
 // ── Modal producto ────────────────────────────────────────────────────────────
@@ -1307,6 +1397,7 @@ async function registrarEntrada() {
     cont.innerHTML = '';
     entradaLineas = [];
     document.getElementById('entrada-num-doc').value = '';
+    document.getElementById('entrada-notas').value = '';
     document.getElementById('entrada-proveedor').value = '';
     document.getElementById('entrada-proveedor-id').value = '';
     document.getElementById('btn-crear-proveedor').classList.add('hidden');

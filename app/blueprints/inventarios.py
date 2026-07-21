@@ -658,7 +658,84 @@ def api_inventario_producto_crear():
         conn.close()
 
 
-@bp.route('/api/inventario/<int:negocio_id>/productos')
+@bp.route('/api/inventario/producto/<int:producto_id>', methods=['DELETE'])
+def api_inventario_producto_eliminar(producto_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        negocio_id = _negocio_id_de_producto(conn, producto_id)
+        if not negocio_id:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        # Check 1: Movimientos de inventario
+        mov_cnt = conn.execute(
+            "SELECT COUNT(*) FROM movimientos_inventario WHERE producto_id = %s",
+            (producto_id,)
+        ).fetchone()[0]
+        if mov_cnt > 0:
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar el producto porque registra {mov_cnt} movimiento(s) de inventario.'
+            }), 400
+
+        # Check 2: Tarjeta estándar propia (receta configurada)
+        receta_cnt = conn.execute(
+            "SELECT COUNT(*) FROM tarjeta_estandar WHERE producto_id = %s",
+            (producto_id,)
+        ).fetchone()[0]
+        if receta_cnt > 0:
+            return jsonify({
+                'ok': False,
+                'error': 'No se puede eliminar el producto porque tiene una tarjeta estándar (receta) configurada. Elimine la receta primero.'
+            }), 400
+
+        # Check 3: Componente en tarjeta estándar de otros productos
+        comp_cnt = conn.execute(
+            "SELECT COUNT(*) FROM tarjeta_estandar WHERE componente_id = %s",
+            (producto_id,)
+        ).fetchone()[0]
+        if comp_cnt > 0:
+            return jsonify({
+                'ok': False,
+                'error': 'No se puede eliminar el producto porque es componente de la tarjeta estándar de otros productos.'
+            }), 400
+
+        # Check 4: Historial de ventas / pedidos
+        ventas_r = conn.execute(
+            "SELECT COUNT(*) FROM pedido_items WHERE producto_id = %s",
+            (producto_id,)
+        ).fetchone()[0]
+        ventas_t = conn.execute(
+            "SELECT COUNT(*) FROM items_pedido_tienda WHERE producto_id = %s",
+            (producto_id,)
+        ).fetchone()[0]
+        total_ventas = ventas_r + ventas_t
+        if total_ventas > 0:
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar el producto porque registra un historial de {total_ventas} venta(s)/pedido(s).'
+            }), 400
+
+        # All checks passed! Delete product dependent sub-records and product
+        conn.execute("DELETE FROM saldos_inventario WHERE producto_id = %s", (producto_id,))
+        conn.execute("DELETE FROM producto_atributos WHERE producto_id = %s", (producto_id,))
+        conn.execute("DELETE FROM producto_variantes WHERE producto_id = %s", (producto_id,))
+        conn.execute("DELETE FROM producto_imagenes WHERE producto_id = %s", (producto_id,))
+        conn.execute("DELETE FROM productos WHERE id = %s AND negocio_id = %s", (producto_id, negocio_id))
+        conn.commit()
+
+        return jsonify({'ok': True, 'mensaje': 'Producto eliminado correctamente'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 def api_inventario_productos(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401

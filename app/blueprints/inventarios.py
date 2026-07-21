@@ -736,6 +736,9 @@ def api_inventario_producto_eliminar(producto_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/productos')
 def api_inventario_productos(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401

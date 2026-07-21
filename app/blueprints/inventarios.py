@@ -1077,7 +1077,7 @@ def api_tienda_inventario_kardex(slug):
         conn.close()
 
 
-@bp.route('/api/inventario/producto/<int:producto_id>', methods=['POST'])
+@bp.route('/api/inventario/producto/<int:producto_id>', methods=['POST', 'PUT'])
 def api_inventario_producto_editar(producto_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401

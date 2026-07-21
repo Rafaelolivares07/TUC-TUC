@@ -871,7 +871,7 @@ async function toggleEstadoProducto(id, nuevoEstado) {
   if (!p) return;
   try {
     const r = await fetch(`/api/inventario/producto/${id}`, {
-      method: 'PUT',
+      method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         nombre: p.nombre,

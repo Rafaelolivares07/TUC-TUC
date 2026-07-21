@@ -134,7 +134,13 @@
       <input type="hidden" id="tarjeta-prod-id">
     </div>
 
-    <!-- Scrollable Component Container -->
+    <!-- Informational Legend -->
+    <div class="flex-shrink-0 bg-blue-50/70 border border-blue-100 rounded-xl p-2.5 mb-3 flex items-start gap-2 text-xs text-blue-800">
+      <span class="text-base leading-none">💡</span>
+      <div>
+        <span class="font-bold">Modo borrador:</span> Las cantidades ingresadas deben ser <strong>números enteros</strong>. Los cambios en insumos o cantidades se aplicarán permanentemente <strong>únicamente al presionar "Guardar tarjeta"</strong>.
+      </div>
+    </div>
     <div id="tarjeta-lineas" class="flex-1 space-y-2 mb-3 overflow-y-auto custom-scrollbar pr-1 border border-gray-100 rounded-xl p-2 bg-gray-50/50" style="min-height:160px; max-height:60vh;"></div>
     
     <!-- Fixed Summary Total Box -->
@@ -263,6 +269,14 @@
       </div>
     </div>
     
+    <!-- Informational Legend Banner -->
+    <div class="bg-amber-50/80 border border-amber-200/70 rounded-xl px-3 py-2 mb-4 flex items-center justify-between gap-2 text-xs text-amber-900 shadow-xs">
+      <div class="flex items-center gap-2">
+        <span class="text-sm">ℹ️</span>
+        <span>Las cantidades de componentes se expresan en <strong>números enteros</strong>. Haz clic en <strong>"✏️ Tarjeta"</strong> para modificar cualquier receta y confirma tus cambios presionado <strong>"Guardar tarjeta"</strong>.</span>
+      </div>
+    </div>
+
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead>

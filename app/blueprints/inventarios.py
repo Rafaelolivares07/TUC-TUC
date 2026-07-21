@@ -1027,7 +1027,7 @@ def api_inventario_kardex(producto_id):
             return error
         rows = conn.execute("""
             SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
-                   m.valor_unitario, m.costo_und, m.notas, m.tipo_documento,
+                   m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
                    m.documento_numero, m.documento_fecha, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
                    TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') AS fecha
@@ -1061,7 +1061,7 @@ def api_tienda_inventario_kardex(slug):
             return error
         rows = conn.execute("""
             SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
-                   m.valor_unitario, m.costo_und, m.notas, m.tipo_documento,
+                   m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
                    m.documento_numero, m.documento_fecha, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
                    TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') AS fecha

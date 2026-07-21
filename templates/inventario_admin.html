@@ -523,12 +523,12 @@
           <tr>
             <th>Fecha</th>
             <th>Tipo</th>
-            <th>Motivo</th>
             <th class="num">Cant.</th>
             <th class="num">Ant.</th>
             <th class="num">Nuevo</th>
             <th class="num">Costo und</th>
-            <th>Documento</th>
+            <th class="num">Total Línea</th>
+            <th>Documento / Proveedor</th>
             <th>Notas</th>
             <th></th>
           </tr>
@@ -576,6 +576,14 @@ function mostrarTab(t) {
 // ── Formateo ──────────────────────────────────────────────────────────────────
 const fmt = n => (n == null ? '—' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 2}));
 const fmtMon = n => (n == null ? '—' : '$' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}));
+const fmtUnitCost = n => {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  if (val === 0) return '$0,00';
+  const hasSubCents = Math.abs(val % 0.01) > 0.000001;
+  const decimals = (Math.abs(val) < 1 || hasSubCents) ? 6 : 2;
+  return '$' + val.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: decimals });
+};
 
 // ── Autocomplete genérico ─────────────────────────────────────────────────────
 function setupAC(inputId, listId, hiddenId, data, onSelect) {
@@ -1553,26 +1561,33 @@ async function cargarKardex(productoId) {
     tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
     return;
   }
-  tb.innerHTML = d.movimientos.map(m => `
-    <tr>
-      <td class="text-xs text-gray-500 whitespace-nowrap">${m.fecha}</td>
-      <td><span class="badge ${m.tipo === 'entrada' ? 'badge-entrada' : 'badge-salida'}">${m.tipo}</span></td>
-      <td class="text-xs text-gray-500">${m.motivo}</td>
-      <td class="num">${fmt(m.cantidad)}</td>
-      <td class="num text-gray-400">${fmt(m.stock_anterior)}</td>
-      <td class="num font-semibold">${fmt(m.stock_nuevo)}</td>
-      <td class="num text-xs">${m.costo_und != null ? fmtMon(m.costo_und) : '—'}</td>
-      <td class="text-xs text-gray-500">
-        ${(m.tipo_documento || m.documento_numero) ? `${m.tipo_documento || ''} ${m.documento_numero || ''}` : ''}
-        ${m.proveedor_nombre ? `<div class="text-gray-400">${m.proveedor_nombre}</div>` : ''}
-      </td>
-      <td class="text-xs text-gray-400">${m.notas || ''}</td>
-      <td class="text-center">
-        <button onclick="confirmarAnulacion(${m.id})" title="Anular/Eliminar"
-                class="text-red-500 hover:text-red-700 font-bold text-xs p-1">🗑️</button>
-      </td>
-    </tr>
-  `).join('');
+  tb.innerHTML = d.movimientos.map(m => {
+    const unitCostVal = m.costo_und ?? m.valor_unitario;
+    const lineTotal = (m.valor_total != null && Number(m.valor_total) > 0) 
+      ? Number(m.valor_total) 
+      : (Number(m.cantidad || 0) * Number(unitCostVal || 0));
+
+    return `
+      <tr>
+        <td class="text-xs text-gray-500 whitespace-nowrap">${m.fecha}</td>
+        <td><span class="badge ${m.tipo === 'entrada' ? 'badge-entrada' : 'badge-salida'}">${m.tipo}</span></td>
+        <td class="num">${fmt(m.cantidad)}</td>
+        <td class="num text-gray-400">${fmt(m.stock_anterior)}</td>
+        <td class="num font-semibold">${fmt(m.stock_nuevo)}</td>
+        <td class="num font-mono text-xs">${fmtUnitCost(unitCostVal)}</td>
+        <td class="num font-mono font-semibold text-gray-800">${fmtMon(lineTotal)}</td>
+        <td class="text-xs text-gray-500">
+          ${(m.tipo_documento || m.documento_numero) ? `${m.tipo_documento || ''} ${m.documento_numero || ''}` : ''}
+          ${m.proveedor_nombre ? `<div class="text-gray-400 font-semibold">${m.proveedor_nombre}</div>` : ''}
+        </td>
+        <td class="text-xs text-gray-400">${m.notas || ''}</td>
+        <td class="text-center">
+          <button onclick="confirmarAnulacion(${m.id})" title="Anular/Eliminar"
+                  class="text-red-500 hover:text-red-700 font-bold text-xs p-1">🗑️</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // ── Producción ────────────────────────────────────────────────────────────────

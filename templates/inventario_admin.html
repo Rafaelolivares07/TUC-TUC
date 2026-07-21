@@ -118,12 +118,22 @@
 
 <!-- ── OVERLAY MODAL TARJETA ESTÁNDAR ──────────────────────────────── -->
 <div id="overlay-tarjeta" class="overlay hidden" onclick="if(event.target===this)cerrarModalTarjeta()">
-  <div class="modal" style="max-width:480px">
-    <h3 class="text-lg font-bold mb-1">Tarjeta estándar</h3>
-    <p id="tarjeta-nombre-prod" class="text-sm text-gray-500 mb-4"></p>
+  <div class="modal" style="max-width:540px">
+    <div class="flex items-center justify-between mb-1">
+      <h3 class="text-lg font-bold">Tarjeta estándar</h3>
+      <span id="tarjeta-items-count" class="text-xs bg-rose-50 text-rose-700 px-2.5 py-0.5 rounded-full font-semibold">0 componentes</span>
+    </div>
+    <p id="tarjeta-nombre-prod" class="text-sm text-gray-500 mb-3"></p>
     <input type="hidden" id="tarjeta-prod-id">
 
-    <div id="tarjeta-lineas" class="space-y-2 mb-3"></div>
+    <!-- Container for scrollable lines -->
+    <div id="tarjeta-lineas" class="space-y-2 mb-3 max-h-60 overflow-y-auto pr-1 border border-gray-100 rounded-xl p-2 bg-gray-50/50"></div>
+    
+    <!-- Summary total box -->
+    <div id="tarjeta-total-box" class="flex justify-between items-center bg-rose-50 border border-rose-100 rounded-xl px-4 py-2 mb-4">
+      <span class="text-xs font-bold text-rose-800">Costo total de receta:</span>
+      <span id="tarjeta-total-val" class="text-sm font-extrabold text-rose-900">$0.00</span>
+    </div>
 
     <!-- Agregar componente -->
     <div class="flex gap-2 items-end mb-5">
@@ -267,6 +277,7 @@
             <th onclick="ordenarTarjetas('margen_pct')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
               Margen (%) <span id="sort-margen_pct" class="text-gray-400">↕</span>
             </th>
+            <th class="px-3 py-3 text-center w-24">Acción</th>
           </tr>
         </thead>
         <tbody id="tabla-tarjetas-resumen">
@@ -813,8 +824,16 @@ async function cargarTarjeta(productoId) {
 }
 function renderLineasTarjeta() {
   const cont = document.getElementById('tarjeta-lineas');
+  const countEl = document.getElementById('tarjeta-items-count');
+  const totalValEl = document.getElementById('tarjeta-total-val');
+  
+  if (countEl) {
+    countEl.textContent = `${tarjetaLineas.length} componente${tarjetaLineas.length === 1 ? '' : 's'}`;
+  }
+
   if (!tarjetaLineas.length) {
-    cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-2">Sin componentes (se tratará como producto simple)</p>';
+    cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">Sin componentes (se tratará como producto simple)</p>';
+    if (totalValEl) totalValEl.textContent = '$ 0,00';
     return;
   }
   
@@ -826,7 +845,7 @@ function renderLineasTarjeta() {
     totalReceta += subtotal;
     
     return `
-      <div class="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-xl px-3 py-2">
+      <div class="grid grid-cols-12 gap-2 items-center bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-xs">
         <div class="col-span-5 text-sm font-semibold text-gray-700 truncate" title="${ln.nombre}">
           ${ln.nombre}
         </div>
@@ -850,16 +869,10 @@ function renderLineasTarjeta() {
     `;
   }).join('');
   
-  html += `
-    <div class="flex justify-between items-center bg-rose-50 border border-rose-100 rounded-xl px-4 py-3 mt-3">
-      <span class="text-sm font-bold text-rose-800">Costo total de receta:</span>
-      <span class="text-base font-extrabold text-rose-900">
-        $${totalReceta.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-      </span>
-    </div>
-  `;
-  
   cont.innerHTML = html;
+  if (totalValEl) {
+    totalValEl.textContent = '$' + totalReceta.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
 }
 function agregarLineaTarjeta() {
   const id = parseInt(document.getElementById('tarjeta-ac-id').value);
@@ -886,7 +899,12 @@ async function guardarTarjeta() {
     body: JSON.stringify({lineas})
   });
   const d = await r.json();
-  if (d.ok) { toast('Tarjeta guardada'); cerrarModalTarjeta(); }
+  if (d.ok) {
+    toast('Tarjeta guardada');
+    cerrarModalTarjeta();
+    cargarProductos();
+    cargarTarjetasResumen();
+  }
   else toast(d.error, false);
 }
 
@@ -1648,7 +1666,7 @@ function toggleExpandReceta(prodId) {
 function renderTarjetasTable() {
   const tb = document.getElementById('tabla-tarjetas-resumen');
   if (!tarjetasFiltradas.length) {
-    tb.innerHTML = `<tr><td colspan="7" class="text-center text-gray-400 py-8">No se encontraron productos coincidentes.</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="8" class="text-center text-gray-400 py-8">No se encontraron productos coincidentes.</td></tr>`;
     return;
   }
   
@@ -1673,6 +1691,8 @@ function renderTarjetasTable() {
          </button>`
       : '';
 
+    const safeNombre = p.nombre.replace(/"/g, '&quot;');
+
     html += `
       <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100">
         <td class="px-3 py-3 text-center">${caretIcon}</td>
@@ -1684,6 +1704,13 @@ function renderTarjetasTable() {
         <td class="px-3 py-3 text-right num font-mono text-gray-700">$ ${fmt(p.precio)}</td>
         <td class="px-3 py-3 text-right num font-mono ${colorMargen}">$ ${fmt(p.margen_usd)}</td>
         <td class="px-3 py-3 text-right num font-mono ${colorMargen}">${fmt(p.margen_pct)} %</td>
+        <td class="px-3 py-3 text-center">
+          <button onclick="abrirModalTarjeta(${p.id}, '${safeNombre}')"
+                  class="px-2.5 py-1 text-xs bg-gray-100 hover:bg-rose-50 hover:text-rose-600 text-gray-700 rounded-lg font-medium transition-all shadow-xs flex items-center justify-center gap-1 mx-auto"
+                  title="Editar tarjeta estándar">
+            ✏️ Tarjeta
+          </button>
+        </td>
       </tr>
     `;
     
@@ -1691,29 +1718,44 @@ function renderTarjetasTable() {
       html += `
         <tr class="bg-rose-50/10 border-b border-gray-100">
           <td></td>
-          <td colspan="6" class="px-4 py-3">
-            <div class="bg-white rounded-xl border border-rose-100/60 p-3 shadow-inner max-w-2xl">
-              <span class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Detalle de Componentes</span>
-              <table class="w-full text-xs">
-                <thead>
-                  <tr class="text-gray-400 border-b border-gray-100">
-                    <th class="text-left pb-1">Insumo / Materia Prima</th>
-                    <th class="text-right pb-1">Cantidad</th>
-                    <th class="text-right pb-1">Costo Unit.</th>
-                    <th class="text-right pb-1">Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${p.componentes.map(c => `
-                    <tr class="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
-                      <td class="py-1.5 text-left font-medium text-gray-700">${c.nombre}</td>
-                      <td class="py-1.5 text-right num text-gray-600">${fmt(c.cantidad)}</td>
-                      <td class="py-1.5 text-right num font-mono text-gray-500">$ ${fmt(c.costo_und)}</td>
-                      <td class="py-1.5 text-right num font-mono font-semibold text-gray-700">$ ${fmt(c.costo_total)}</td>
+          <td colspan="7" class="px-4 py-3">
+            <div class="bg-white rounded-xl border border-rose-100/60 p-3.5 shadow-xs max-w-3xl">
+              <div class="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">Detalle de Componentes</span>
+                  <span class="text-[11px] bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full font-semibold">${p.componentes.length} item${p.componentes.length === 1 ? '' : 's'}</span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="text-xs font-mono font-bold text-gray-800">Total Receta: $ ${fmt(p.costo_total)}</span>
+                  <button onclick="abrirModalTarjeta(${p.id}, '${safeNombre}')" 
+                          class="px-2.5 py-1 text-xs bg-rose-500 hover:bg-rose-600 text-white rounded-lg font-semibold shadow-xs transition-all flex items-center gap-1">
+                    ✏️ Editar Receta
+                  </button>
+                </div>
+              </div>
+              
+              <div class="max-h-56 overflow-y-auto pr-1 border border-gray-100 rounded-lg bg-gray-50/30">
+                <table class="w-full text-xs">
+                  <thead class="sticky top-0 bg-white shadow-xs">
+                    <tr class="text-gray-500 border-b border-gray-100">
+                      <th class="text-left py-1.5 px-2 font-semibold">Insumo / Materia Prima</th>
+                      <th class="text-right py-1.5 px-2 font-semibold">Cantidad</th>
+                      <th class="text-right py-1.5 px-2 font-semibold">Costo Unit.</th>
+                      <th class="text-right py-1.5 px-2 font-semibold">Subtotal</th>
                     </tr>
-                  `).join('')}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    ${p.componentes.map(c => `
+                      <tr class="border-b border-gray-100 last:border-0 hover:bg-white transition-colors">
+                        <td class="py-1.5 px-2 text-left font-medium text-gray-700">${c.nombre}</td>
+                        <td class="py-1.5 px-2 text-right num text-gray-600 font-mono">${fmt(c.cantidad)}</td>
+                        <td class="py-1.5 px-2 text-right num font-mono text-gray-500">$ ${fmt(c.costo_und)}</td>
+                        <td class="py-1.5 px-2 text-right num font-mono font-semibold text-gray-800">$ ${fmt(c.costo_total)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </td>
         </tr>

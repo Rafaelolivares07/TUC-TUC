@@ -706,8 +706,14 @@ def api_inventario_tarjeta_ver(producto_id):
                    COALESCE(s.costo_und, p.costo, 0) AS costo_und
             FROM tarjeta_estandar te
             JOIN productos p ON p.id = te.componente_id
-            LEFT JOIN saldos_inventario s ON s.negocio_id = p.negocio_id AND s.producto_id = p.id AND s.bodega = 1
+            LEFT JOIN (
+                SELECT DISTINCT ON (producto_id, negocio_id) producto_id, negocio_id, costo_und
+                FROM saldos_inventario
+                WHERE bodega = 1
+                ORDER BY producto_id, negocio_id, id DESC
+            ) s ON s.producto_id = p.id AND s.negocio_id = p.negocio_id
             WHERE te.producto_id = %s
+            ORDER BY te.id ASC
         """, (producto_id,)).fetchall()
         return jsonify({'ok': True, 'componentes': [{
             'componente_id': r['componente_id'],
@@ -2022,11 +2028,17 @@ def api_inventario_tarjetas_resumen(negocio_id):
                    p.nombre AS componente_nombre,
                    COALESCE(s.costo_und, p.costo, 0) AS costo_und
             FROM tarjeta_estandar te
+            JOIN productos prod ON prod.id = te.producto_id
             JOIN productos p ON p.id = te.componente_id
-            LEFT JOIN saldos_inventario s ON s.producto_id = te.componente_id
-                AND s.negocio_id = %s AND s.bodega = 1
-            WHERE p.negocio_id = %s
-        """, (negocio_id, negocio_id)).fetchall()
+            LEFT JOIN (
+                SELECT DISTINCT ON (producto_id, negocio_id) producto_id, negocio_id, costo_und
+                FROM saldos_inventario
+                WHERE bodega = 1
+                ORDER BY producto_id, negocio_id, id DESC
+            ) s ON s.producto_id = te.componente_id AND s.negocio_id = prod.negocio_id
+            WHERE prod.negocio_id = %s
+            ORDER BY te.id ASC
+        """, (negocio_id,)).fetchall()
         
         # Group recipe lines by product_id
         recipes_by_prod = {}

@@ -10,6 +10,11 @@
     body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
     #nav-tabs { scrollbar-width: none; -ms-overflow-style: none; }
     #nav-tabs::-webkit-scrollbar { display: none; }
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9; }
     .tab-btn {
       flex-shrink: 0; min-width: 90px; padding: 10px 16px;
       font-size: 0.82rem; font-weight: 600; border-radius: 999px;
@@ -130,7 +135,7 @@
     </div>
 
     <!-- Scrollable Component Container -->
-    <div id="tarjeta-lineas" class="flex-1 space-y-2 mb-3 overflow-y-auto pr-1 border border-gray-100 rounded-xl p-2 bg-gray-50/50" style="min-height:120px; max-height:50vh;"></div>
+    <div id="tarjeta-lineas" class="flex-1 space-y-2 mb-3 overflow-y-auto custom-scrollbar pr-1 border border-gray-100 rounded-xl p-2 bg-gray-50/50" style="min-height:160px; max-height:60vh;"></div>
     
     <!-- Fixed Summary Total Box -->
     <div id="tarjeta-total-box" class="flex-shrink-0 flex justify-between items-center bg-rose-50 border border-rose-100 rounded-xl px-4 py-2 mb-3">
@@ -826,6 +831,19 @@ async function cargarTarjeta(productoId) {
   }));
   renderLineasTarjeta();
 }
+let modalSortCol = 'nombre';
+let modalSortAsc = true;
+
+function ordenarComponentesModal(columna) {
+  if (modalSortCol === columna) {
+    modalSortAsc = !modalSortAsc;
+  } else {
+    modalSortCol = columna;
+    modalSortAsc = true;
+  }
+  renderLineasTarjeta();
+}
+
 function renderLineasTarjeta() {
   const cont = document.getElementById('tarjeta-lineas');
   const countEl = document.getElementById('tarjeta-items-count');
@@ -836,43 +854,92 @@ function renderLineasTarjeta() {
   }
 
   if (!tarjetaLineas.length) {
-    cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">Sin componentes (se tratará como producto simple)</p>';
+    cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">Sin componentes (se tratará como producto simple)</p>';
     if (totalValEl) totalValEl.textContent = '$ 0,00';
     return;
   }
   
+  // Sort modal components
+  tarjetaLineas.sort((a, b) => {
+    let valA, valB;
+    if (modalSortCol === 'nombre') {
+      valA = a.nombre || '';
+      valB = b.nombre || '';
+      return modalSortAsc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
+    } else if (modalSortCol === 'cantidad') {
+      valA = parseFloat(a.cantidad || 0);
+      valB = parseFloat(b.cantidad || 0);
+    } else if (modalSortCol === 'costo_und') {
+      valA = parseFloat(a.costo_und || 0);
+      valB = parseFloat(b.costo_und || 0);
+    } else if (modalSortCol === 'subtotal') {
+      valA = parseFloat(a.cantidad || 0) * parseFloat(a.costo_und || 0);
+      valB = parseFloat(b.cantidad || 0) * parseFloat(b.costo_und || 0);
+    }
+    return modalSortAsc ? (valA - valB) : (valB - valA);
+  });
+
   let totalReceta = 0;
-  let html = tarjetaLineas.map((ln, i) => {
+  
+  const getSortIcon = col => (modalSortCol === col ? (modalSortAsc ? '▲' : '▼') : '↕');
+  const getSortClass = col => (modalSortCol === col ? 'text-rose-500 font-bold' : 'text-gray-400');
+
+  let rowsHtml = tarjetaLineas.map((ln, i) => {
     const costoUnd = parseFloat(ln.costo_und || 0);
     const cantidad = parseFloat(ln.cantidad || 0);
     const subtotal = cantidad * costoUnd;
     totalReceta += subtotal;
     
     return `
-      <div class="grid grid-cols-12 gap-2 items-center bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-xs">
-        <div class="col-span-5 text-sm font-semibold text-gray-700 truncate" title="${ln.nombre}">
+      <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+        <td class="py-2 px-2 text-left font-semibold text-gray-700 truncate max-w-[160px]" title="${ln.nombre}">
           ${ln.nombre}
-        </div>
-        <div class="col-span-2">
+        </td>
+        <td class="py-2 px-1 text-center">
           <input type="number" value="${cantidad}" min="0.0001" step="0.0001"
                  oninput="tarjetaLineas[${i}].cantidad = parseFloat(this.value) || 0; renderLineasTarjeta();"
-                 class="w-full text-center px-1 py-1 border border-gray-200 rounded-lg text-sm"
-                 style="height: 32px;">
-        </div>
-        <div class="col-span-2 text-right text-xs text-gray-500 font-medium">
+                 class="w-20 text-center px-1 py-1 border border-gray-200 rounded-lg text-xs font-mono"
+                 style="height: 28px;">
+        </td>
+        <td class="py-2 px-2 text-right num font-mono text-xs text-gray-500">
           $${costoUnd.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-        </div>
-        <div class="col-span-2 text-right text-sm font-bold text-gray-800">
+        </td>
+        <td class="py-2 px-2 text-right num font-mono text-xs font-bold text-gray-800">
           $${subtotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-        </div>
-        <div class="col-span-1 flex justify-end">
+        </td>
+        <td class="py-2 px-1 text-center">
           <button onclick="tarjetaLineas.splice(${i},1); renderLineasTarjeta();"
-                  class="text-red-400 hover:text-red-600 font-bold text-lg leading-none">×</button>
-        </div>
-      </div>
+                  class="text-red-400 hover:text-red-600 font-bold text-base leading-none">×</button>
+        </td>
+      </tr>
     `;
   }).join('');
   
+  let html = `
+    <table class="w-full text-xs">
+      <thead class="sticky top-0 bg-gray-50 shadow-xs border-b border-gray-200 z-10 select-none">
+        <tr class="text-gray-500 uppercase text-[11px]">
+          <th onclick="ordenarComponentesModal('nombre')" class="py-2 px-2 text-left font-bold cursor-pointer hover:bg-gray-100 transition-colors">
+            Insumo / Materia Prima <span class="${getSortClass('nombre')}">${getSortIcon('nombre')}</span>
+          </th>
+          <th onclick="ordenarComponentesModal('cantidad')" class="py-2 px-1 text-center font-bold cursor-pointer hover:bg-gray-100 transition-colors" style="width:90px;">
+            Cant. <span class="${getSortClass('cantidad')}">${getSortIcon('cantidad')}</span>
+          </th>
+          <th onclick="ordenarComponentesModal('costo_und')" class="py-2 px-2 text-right font-bold cursor-pointer hover:bg-gray-100 transition-colors">
+            Costo Unit. <span class="${getSortClass('costo_und')}">${getSortIcon('costo_und')}</span>
+          </th>
+          <th onclick="ordenarComponentesModal('subtotal')" class="py-2 px-2 text-right font-bold cursor-pointer hover:bg-gray-100 transition-colors">
+            Subtotal <span class="${getSortClass('subtotal')}">${getSortIcon('subtotal')}</span>
+          </th>
+          <th class="py-2 px-1 w-6"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+  `;
+
   cont.innerHTML = html;
   if (totalValEl) {
     totalValEl.textContent = '$' + totalReceta.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -1667,6 +1734,20 @@ function toggleExpandReceta(prodId) {
   renderTarjetasTable();
 }
 
+let compSortStates = {};
+
+function ordenarComponentesReporte(prodId, columna) {
+  if (!compSortStates[prodId]) {
+    compSortStates[prodId] = { col: columna, asc: true };
+  } else if (compSortStates[prodId].col === columna) {
+    compSortStates[prodId].asc = !compSortStates[prodId].asc;
+  } else {
+    compSortStates[prodId].col = columna;
+    compSortStates[prodId].asc = true;
+  }
+  renderTarjetasTable();
+}
+
 function renderTarjetasTable() {
   const tb = document.getElementById('tabla-tarjetas-resumen');
   if (!tarjetasFiltradas.length) {
@@ -1719,11 +1800,36 @@ function renderTarjetasTable() {
     `;
     
     if (isExpanded && p.tiene_tarjeta) {
+      // Sort components for this product
+      let compList = [...p.componentes];
+      const st = compSortStates[p.id] || { col: 'nombre', asc: true };
+      compList.sort((a, b) => {
+        let valA, valB;
+        if (st.col === 'nombre') {
+          valA = a.nombre || '';
+          valB = b.nombre || '';
+          return st.asc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
+        } else if (st.col === 'cantidad') {
+          valA = parseFloat(a.cantidad || 0);
+          valB = parseFloat(b.cantidad || 0);
+        } else if (st.col === 'costo_und') {
+          valA = parseFloat(a.costo_und || 0);
+          valB = parseFloat(b.costo_und || 0);
+        } else if (st.col === 'costo_total') {
+          valA = parseFloat(a.costo_total || 0);
+          valB = parseFloat(b.costo_total || 0);
+        }
+        return st.asc ? (valA - valB) : (valB - valA);
+      });
+
+      const getCompSortIcon = col => (st.col === col ? (st.asc ? '▲' : '▼') : '↕');
+      const getCompSortClass = col => (st.col === col ? 'text-rose-500 font-bold' : 'text-gray-400');
+
       html += `
         <tr class="bg-rose-50/10 border-b border-gray-100">
           <td></td>
           <td colspan="7" class="px-4 py-3">
-            <div class="bg-white rounded-xl border border-rose-100/60 p-3.5 shadow-xs max-w-3xl">
+            <div class="bg-white rounded-xl border border-rose-100/60 p-3.5 shadow-xs max-w-4xl">
               <div class="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">Detalle de Componentes</span>
@@ -1738,18 +1844,26 @@ function renderTarjetasTable() {
                 </div>
               </div>
               
-              <div class="max-h-[520px] overflow-y-auto pr-1 border border-gray-100 rounded-lg bg-gray-50/30">
+              <div class="max-h-[600px] overflow-y-auto custom-scrollbar border border-gray-100 rounded-lg bg-gray-50/30">
                 <table class="w-full text-xs">
-                  <thead class="sticky top-0 bg-white shadow-xs">
-                    <tr class="text-gray-500 border-b border-gray-100">
-                      <th class="text-left py-1.5 px-2 font-semibold">Insumo / Materia Prima</th>
-                      <th class="text-right py-1.5 px-2 font-semibold">Cantidad</th>
-                      <th class="text-right py-1.5 px-2 font-semibold">Costo Unit.</th>
-                      <th class="text-right py-1.5 px-2 font-semibold">Subtotal</th>
+                  <thead class="sticky top-0 bg-white shadow-xs z-10 select-none">
+                    <tr class="text-gray-500 border-b border-gray-200">
+                      <th onclick="ordenarComponentesReporte(${p.id}, 'nombre')" class="text-left py-1.5 px-2 font-semibold cursor-pointer hover:bg-gray-100 transition-colors">
+                        Insumo / Materia Prima <span class="${getCompSortClass('nombre')}">${getCompSortIcon('nombre')}</span>
+                      </th>
+                      <th onclick="ordenarComponentesReporte(${p.id}, 'cantidad')" class="text-right py-1.5 px-2 font-semibold cursor-pointer hover:bg-gray-100 transition-colors">
+                        Cantidad <span class="${getCompSortClass('cantidad')}">${getCompSortIcon('cantidad')}</span>
+                      </th>
+                      <th onclick="ordenarComponentesReporte(${p.id}, 'costo_und')" class="text-right py-1.5 px-2 font-semibold cursor-pointer hover:bg-gray-100 transition-colors">
+                        Costo Unit. <span class="${getCompSortClass('costo_und')}">${getCompSortIcon('costo_und')}</span>
+                      </th>
+                      <th onclick="ordenarComponentesReporte(${p.id}, 'costo_total')" class="text-right py-1.5 px-2 font-semibold cursor-pointer hover:bg-gray-100 transition-colors">
+                        Subtotal <span class="${getCompSortClass('costo_total')}">${getCompSortIcon('costo_total')}</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${p.componentes.map(c => `
+                    ${compList.map(c => `
                       <tr class="border-b border-gray-100 last:border-0 hover:bg-white transition-colors">
                         <td class="py-1.5 px-2 text-left font-medium text-gray-700">${c.nombre}</td>
                         <td class="py-1.5 px-2 text-right num text-gray-600 font-mono">${fmt(c.cantidad)}</td>

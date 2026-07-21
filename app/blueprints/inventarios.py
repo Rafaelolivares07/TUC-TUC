@@ -104,6 +104,10 @@ def _crear_tablas(conn):
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
         "ALTER TABLE comprobantes_contables ADD COLUMN IF NOT EXISTS origen_tipo VARCHAR(50)",
         "ALTER TABLE comprobantes_contables ADD COLUMN IF NOT EXISTS origen_id VARCHAR(100)",
+        "ALTER TABLE movimientos_inventario ALTER COLUMN valor_unitario TYPE NUMERIC(16,6)",
+        "ALTER TABLE movimientos_inventario ALTER COLUMN costo_und TYPE NUMERIC(16,6)",
+        "ALTER TABLE saldos_inventario ALTER COLUMN costo_und TYPE NUMERIC(16,6)",
+        "ALTER TABLE productos ALTER COLUMN costo TYPE NUMERIC(16,6)",
     ]
     for sql in alters:
         try:

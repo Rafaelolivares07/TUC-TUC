@@ -1332,7 +1332,7 @@ def api_produccion_registrar(negocio_id):
         costo_unitario = costo_total / cantidad if cantidad > 0 else Decimal('0')
 
         import time
-        prod_token = f"PROD-{int(time.time())}"
+        prod_token = int(time.time())
 
         # Salida de cada componente
         for i, c in enumerate(componentes):

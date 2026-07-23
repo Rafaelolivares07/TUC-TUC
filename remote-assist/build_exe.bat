@@ -8,6 +8,8 @@ echo  Empaquetando agente_cliente.py → AsistenciaTucTuc.exe
 echo.
 
 pyinstaller --onefile --windowed --name "AsistenciaTucTuc" ^
+  --noupx ^
+  --version-file=file_version_info.txt ^
   --hidden-import=mss ^
   --hidden-import=mss.windows ^
   --hidden-import=PIL ^

@@ -1262,10 +1262,12 @@ def api_produccion_registrar(negocio_id):
         prod_token = f"PROD-{int(time.time())}"
 
         # Salida de cada componente
-        for c in componentes:
+        for i, c in enumerate(componentes):
             cant_comp = Decimal(str(c['cantidad'])) * cantidad
+            comp_cost = comps_cont[i]['costo_und']
             _mov_directo(conn, negocio_id, c['componente_id'], cant_comp,
                          'salida', 'produccion', session['usuario_id'],
+                         valor_unitario=comp_cost,
                          notas=notas, referencia_tipo='produccion', referencia_id=prod_token)
 
         # Entrada del terminado con costo calculado desde componentes

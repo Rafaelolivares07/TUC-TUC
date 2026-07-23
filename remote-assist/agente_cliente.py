@@ -106,12 +106,24 @@ def _auto_update():
                         lbl_pct.config(text=f"{pct}%")
                         root_upd.update()
         root_upd.destroy()
-        # PyInstaller --onefile no bloquea el EXE original — se puede sobreescribir en caliente
-        _sh.copy2(tmp_exe, exe_actual)
-        os.remove(tmp_exe)
-        time.sleep(0.3)
-        _sp.Popen([exe_actual])
-        time.sleep(0.5)
+        # Crear un archivo .bat intermediario para realizar la actualización,
+        # ya que en Windows no se puede sobreescribir un ejecutable en ejecución (da PermissionError).
+        bat_path = os.path.join(_tmp.gettempdir(), 'update_tuctuc.bat')
+        with open(bat_path, 'w', encoding='utf-8') as f:
+            f.write(f'''@echo off
+title TUC TUC - Actualizando
+echo Esperando a que el proceso anterior finalice...
+:loop
+taskkill /F /FI "IMAGENAME eq AsistenciaTucTuc.exe" > NUL 2>&1
+timeout /t 1 /nobreak > NUL
+copy /y "{tmp_exe}" "{exe_actual}" > NUL 2>&1
+if errorlevel 1 goto loop
+echo Actualizacion completada.
+start "" "{exe_actual}"
+del "{tmp_exe}"
+del "%~f0"
+''')
+        _sp.Popen([bat_path], creationflags=0x08000000)  # CREATE_NO_WINDOW = 0x08000000
         sys.exit(0)
     except Exception:
         try:

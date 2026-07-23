@@ -1273,6 +1273,9 @@ def api_produccion_registrar(negocio_id):
     producto_id = int(data.get('producto_id') or 0)
     cantidad    = Decimal(str(data.get('cantidad') or 1))
     notas       = data.get('notas') or None
+    tipo_documento = (data.get('tipo_documento') or '').strip().upper() or None
+    documento_numero = (data.get('documento_numero') or '').strip().upper() or None
+
     if not producto_id or cantidad <= 0:
         return jsonify({'ok': False, 'error': 'producto_id y cantidad requeridos'}), 400
     conn = get_db_connection()
@@ -1281,6 +1284,23 @@ def api_produccion_registrar(negocio_id):
         _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
+        
+        # Consecutivo de producción si aplica
+        if tipo_documento and not documento_numero:
+            td = conn.execute("""
+                SELECT id, consecutivo, numero_inicio
+                FROM tipos_documento_negocio
+                WHERE negocio_id = %s AND codigo = %s
+            """, (negocio_id, tipo_documento)).fetchone()
+            if td:
+                num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
+                documento_numero = str(num)
+                conn.execute("""
+                    UPDATE tipos_documento_negocio
+                    SET consecutivo = %s
+                    WHERE id = %s
+                """, (num, td['id']))
+
         producto = conn.execute(
             "SELECT nombre FROM productos WHERE id=%s AND negocio_id=%s",
             (producto_id, negocio_id)
@@ -1342,13 +1362,15 @@ def api_produccion_registrar(negocio_id):
                          'salida', 'produccion', session['usuario_id'],
                          valor_unitario=comp_cost,
                          notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
-                         producto_padre_id=producto_id)
+                         producto_padre_id=producto_id,
+                         tipo_documento=tipo_documento, documento_numero=documento_numero)
 
         # Entrada del terminado con costo calculado desde componentes
         _mov_directo(conn, negocio_id, producto_id, cantidad,
                      'entrada', 'produccion', session['usuario_id'],
                      valor_unitario=costo_unitario,
-                     notas=notas, referencia_tipo='produccion', referencia_id=prod_token)
+                     notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
+                     tipo_documento=tipo_documento, documento_numero=documento_numero)
 
         # Asiento contable de producción (best-effort, no bloquea)
         if _asiento_produccion:
@@ -1358,7 +1380,9 @@ def api_produccion_registrar(negocio_id):
                     registrado_por=session['usuario_id'],
                     descripcion=f'Producción {producto["nombre"]} x{float(cantidad)}',
                     origen_tipo='produccion',
-                    origen_id=prod_token
+                    origen_id=prod_token,
+                    tipo_documento=tipo_documento,
+                    documento_numero=documento_numero
                 )
             except Exception as _e:
                 print(f'[cont] produccion prod={producto_id}: {_e}')

@@ -414,6 +414,21 @@
   <!-- ── TAB PRODUCCIÓN ───────────────────────────────────────────── -->
   <div id="tab-produccion" class="hidden bg-white rounded-2xl shadow p-5">
     <h2 class="font-bold text-gray-700 mb-4">Registrar producción</h2>
+    
+    <!-- Selección de Documento de Producción -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4" style="max-width:500px">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo doc. producción</label>
+        <select id="prod-tipo-doc" onchange="mostrarConsecutivoProduccion()" class="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none">
+          <option value="">Cargando tipos...</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">No. documento</label>
+        <input id="prod-num-doc" type="text" readonly placeholder="Auto-consecutivo" class="w-full border rounded-xl px-3 py-2 text-sm bg-gray-50 text-gray-500 outline-none">
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
       <div class="sm:col-span-2 relative">
         <label>Producto a producir</label>
@@ -1936,6 +1951,8 @@ async function registrarProduccion() {
   const id    = parseInt(idVal);
   const qty   = parseFloat(document.getElementById('prod-cantidad').value);
   const notas = document.getElementById('prod-notas').value.trim() || null;
+  const tipo_documento = document.getElementById('prod-tipo-doc').value || null;
+  const documento_numero = document.getElementById('prod-num-doc').value || null;
   
   const btn = document.getElementById('prod-btn-registrar');
   if (btn) btn.disabled = true;
@@ -1944,7 +1961,7 @@ async function registrarProduccion() {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({producto_id: id, cantidad: qty, notas})
+      body: JSON.stringify({producto_id: id, cantidad: qty, notas, tipo_documento, documento_numero})
     });
     const d = await r.json();
     if (d.ok) {
@@ -1955,6 +1972,7 @@ async function registrarProduccion() {
       document.getElementById('prod-notas').value = '';
       limpiarPreview();
       cargarProductos();
+      cargarTiposDocProduccion();
     } else {
       toast(d.error || 'Error al registrar la producción', false);
       if (btn) btn.disabled = false;
@@ -2115,11 +2133,47 @@ async function cargarTiposDocEntrada() {
   }
 }
 
+let tiposDocProduccion = [];
+async function cargarTiposDocProduccion() {
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
+    const d = await r.json();
+    if (d.ok) {
+      tiposDocProduccion = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'produccion');
+      const select = document.getElementById('prod-tipo-doc');
+      if (select) {
+        select.innerHTML = tiposDocProduccion.map(t => `<option value="${t.codigo}">${t.nombre} (${t.codigo})</option>`).join('');
+        if (!tiposDocProduccion.length) {
+          select.innerHTML = '<option value="">No hay tipos de doc. de producción configurados</option>';
+        }
+        mostrarConsecutivoProduccion();
+      }
+    }
+  } catch(e) {
+    console.error('Error al cargar tipos de documento para producción:', e);
+  }
+}
+
+function mostrarConsecutivoProduccion() {
+  const code = document.getElementById('prod-tipo-doc').value;
+  const td = tiposDocProduccion.find(t => t.codigo === code);
+  const input = document.getElementById('prod-num-doc');
+  if (input) {
+    if (td) {
+      const nextNum = Math.max((td.consecutivo || 0) + 1, (td.numero_inicio || 1));
+      input.value = nextNum;
+    } else {
+      input.value = '';
+    }
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   await fetchDefaultPresentacion();
   await cargarProductos();
   await cargarTiposDocEntrada();
+  await cargarTiposDocProduccion();
   abrirTarjetaInicialDesdeUrl();
   document.getElementById('entrada-fecha-doc').value = new Date().toISOString().slice(0, 10);
 

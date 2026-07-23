@@ -709,8 +709,9 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
 
 
 def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_total,
-                                  componentes, registrado_por=None, descripcion=None,
-                                  origen_tipo=None, origen_id=None):
+                                 componentes, registrado_por=None, descripcion=None,
+                                 origen_tipo=None, origen_id=None,
+                                 tipo_documento=None, documento_numero=None):
     """
     Asiento de producción — reclasificación dentro del 14x:
       Débito  cuenta_inve del producto terminado  × costo_total
@@ -771,11 +772,14 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
 
     fecha_uso = _date.today()
     desc = descripcion or f'Producción: {terminado["nombre"]}'
-    cnt = conn.execute(
-        "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id=%s AND tipo='PRODUCCION'",
-        (negocio_id,)
-    ).fetchone()['n']
-    numero = f"AUTO-PRODUCCION-{(cnt or 0) + 1:04d}"
+    if tipo_documento and documento_numero:
+        numero = f"{tipo_documento}-{documento_numero}"
+    else:
+        cnt = conn.execute(
+            "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id=%s AND tipo='PRODUCCION'",
+            (negocio_id,)
+        ).fetchone()['n']
+        numero = f"AUTO-PRODUCCION-{(cnt or 0) + 1:04d}"
     total_cred = sum(l['monto'] for l in lineas_cred)
 
     comp_id = conn.execute("""
@@ -968,7 +972,7 @@ def api_tipos_doc_post(negocio_id):
     tipo_movimiento = data.get('tipo_movimiento')
     if tipo_movimiento:
         tipo_movimiento = tipo_movimiento.strip().lower()
-        if tipo_movimiento not in ('entrada', 'salida'):
+        if tipo_movimiento not in ('entrada', 'salida', 'produccion', 'venta'):
             tipo_movimiento = None
     else:
         tipo_movimiento = None
@@ -1027,7 +1031,7 @@ def api_tipos_doc_patch(negocio_id, tid):
             tipo_mov = data['tipo_movimiento']
             if tipo_mov:
                 tipo_mov = tipo_mov.strip().lower()
-                if tipo_mov not in ('entrada', 'salida'):
+                if tipo_mov not in ('entrada', 'salida', 'produccion', 'venta'):
                     tipo_mov = None
             else:
                 tipo_mov = None

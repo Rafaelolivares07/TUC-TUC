@@ -110,6 +110,8 @@
           <option value="">— Tipo Movimiento —</option>
           <option value="entrada">Entrada</option>
           <option value="salida">Salida</option>
+          <option value="produccion">Producción</option>
+          <option value="venta">Venta</option>
         </select>
       </div>
       <div class="flex items-center gap-4 mb-4">
@@ -564,6 +566,8 @@ async function cargarTiposDocs() {
           <option value="" ${!t.tipo_movimiento?'selected':''}>—</option>
           <option value="entrada" ${t.tipo_movimiento==='entrada'?'selected':''}>Entrada</option>
           <option value="salida" ${t.tipo_movimiento==='salida'?'selected':''}>Salida</option>
+          <option value="produccion" ${t.tipo_movimiento==='produccion'?'selected':''}>Producción</option>
+          <option value="venta" ${t.tipo_movimiento==='venta'?'selected':''}>Venta</option>
         </select>
       </td>
       <td class="px-3 py-2 text-center">

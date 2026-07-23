@@ -562,21 +562,21 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
         if not pres_id:
             existente_default = conn.execute("""
                 SELECT id FROM presentaciones
-                WHERE LOWER(nombre) = 'unidad (entrada)' AND equivalencia = 1.0
+                WHERE LOWER(nombre) = 'unidad' AND equivalencia = 1.0
                 LIMIT 1
             """, ()).fetchone()
             if existente_default:
                 pres_id = existente_default['id']
-                pres_nombre = 'Unidad (entrada)'
+                pres_nombre = 'Unidad'
                 pres_equiv = Decimal('1.0')
             else:
                 row_pres = conn.execute("""
                     INSERT INTO presentaciones (nombre, equivalencia)
-                    VALUES ('Unidad (entrada)', 1.0)
+                    VALUES ('Unidad', 1.0)
                     RETURNING id
                 """).fetchone()
                 pres_id = row_pres['id']
-                pres_nombre = 'Unidad (entrada)'
+                pres_nombre = 'Unidad'
                 pres_equiv = Decimal('1.0')
         else:
             r_p = conn.execute("SELECT nombre, equivalencia FROM presentaciones WHERE id=%s", (pres_id,)).fetchone()

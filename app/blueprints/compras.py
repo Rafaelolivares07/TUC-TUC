@@ -56,6 +56,49 @@ def _asegurar_tablas(conn):
         except Exception:
             pass
             
+    # Auto-run inline deduplication and unique constraint creation on first load
+    try:
+        conn.execute("""
+            INSERT INTO presentaciones (nombre, equivalencia)
+            VALUES ('Unidad', 1.0)
+            ON CONFLICT (LOWER(nombre), equivalencia) DO NOTHING;
+        """)
+        
+        u_row = conn.execute("SELECT id FROM presentaciones WHERE LOWER(nombre) = 'unidad' AND equivalencia = 1.0 LIMIT 1").fetchone()
+        ue_row = conn.execute("SELECT id FROM presentaciones WHERE LOWER(nombre) = 'unidad (entrada)' AND equivalencia = 1.0 LIMIT 1").fetchone()
+        
+        if u_row:
+            u_id = u_row['id']
+            if ue_row:
+                ue_id = ue_row['id']
+                conn.execute("UPDATE movimientos_inventario SET presentacion_id = %s WHERE presentacion_id = %s", (u_id, ue_id))
+                conn.execute("UPDATE cotizaciones_compras SET presentacion_id = %s WHERE presentacion_id = %s", (u_id, ue_id))
+                conn.execute("DELETE FROM presentaciones WHERE id = %s", (ue_id,))
+            
+            conn.execute("UPDATE movimientos_inventario SET presentacion_id = %s WHERE presentacion_id IS NULL", (u_id,))
+            conn.execute("UPDATE cotizaciones_compras SET presentacion_id = %s WHERE presentacion_id IS NULL", (u_id,))
+            
+        conn.execute("""
+            DELETE FROM cotizaciones_compras c
+            WHERE c.id NOT IN (
+                SELECT MAX(id)
+                FROM cotizaciones_compras
+                GROUP BY negocio_id, tercero_id, item_id, presentacion_id
+            );
+        """)
+        
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_cotizaciones_compras_unique 
+            ON cotizaciones_compras (negocio_id, tercero_id, item_id, presentacion_id);
+        """)
+    except Exception as e:
+        import sys
+        print("Error running inline quotes migration:", e, file=sys.stderr)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
     conn.commit()
     _tablas_listas = True
 

@@ -1645,25 +1645,45 @@ async function previsualizarProduccion() {
 }
 
 async function registrarProduccion() {
-  if (!prodPuedeRegistrar) return;
-  const id    = parseInt(document.getElementById('prod-ac-id').value);
+  const idVal = document.getElementById('prod-ac-id').value;
+  if (!idVal) {
+    toast('Selecciona un producto a producir de la lista', false);
+    return;
+  }
+  if (!prodPuedeRegistrar) {
+    toast('No se puede registrar. Primero genera la vista previa y asegúrate de contar con stock suficiente de componentes.', false);
+    return;
+  }
+  const id    = parseInt(idVal);
   const qty   = parseFloat(document.getElementById('prod-cantidad').value);
   const notas = document.getElementById('prod-notas').value.trim() || null;
-  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({producto_id: id, cantidad: qty, notas})
-  });
-  const d = await r.json();
-  if (d.ok) {
-    toast(`Producción registrada: ${d.producido} × ${d.producto}`);
-    document.getElementById('prod-ac-input').value = '';
-    document.getElementById('prod-ac-id').value = '';
-    document.getElementById('prod-cantidad').value = '1';
-    document.getElementById('prod-notas').value = '';
-    limpiarPreview();
-    cargarProductos();
-  } else {
-    toast(d.error, false);
+  
+  const btn = document.getElementById('prod-btn-registrar');
+  if (btn) btn.disabled = true;
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({producto_id: id, cantidad: qty, notas})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✅ Producción registrada: ${d.producido} × ${d.producto}`);
+      document.getElementById('prod-ac-input').value = '';
+      document.getElementById('prod-ac-id').value = '';
+      document.getElementById('prod-cantidad').value = '1';
+      document.getElementById('prod-notas').value = '';
+      limpiarPreview();
+      cargarProductos();
+    } else {
+      toast(d.error || 'Error al registrar la producción', false);
+      if (btn) btn.disabled = false;
+    }
+  } catch(e) {
+    console.error(e);
+    toast('Error de red al registrar producción', false);
+    if (btn) btn.disabled = false;
   }
 }
 

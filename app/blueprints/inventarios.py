@@ -1197,8 +1197,8 @@ def api_produccion_registrar(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     data        = request.get_json() or {}
-    producto_id = data.get('producto_id', type=int) if hasattr(data.get('producto_id'), '__class__') else int(data.get('producto_id', 0))
-    cantidad    = Decimal(str(data.get('cantidad', 1)))
+    producto_id = int(data.get('producto_id') or 0)
+    cantidad    = Decimal(str(data.get('cantidad') or 1))
     notas       = data.get('notas') or None
     if not producto_id or cantidad <= 0:
         return jsonify({'ok': False, 'error': 'producto_id y cantidad requeridos'}), 400

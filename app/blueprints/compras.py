@@ -554,31 +554,78 @@ def api_cotizaciones_crear(negocio_id):
                 """, (pres_nombre, float(pres_equiv))).fetchone()
                 pres_id = row_pres['id']
 
-        row = conn.execute("""
-            INSERT INTO cotizaciones_compras
-                (negocio_id, numero_cotizacion, tercero_id, item_id,
-                 fecha_cotizacion, fecha_vencimiento, descripcion_presentacion,
-                 unidades_item, precio, origen, validada_proveedor, observaciones,
-                 updated_at, presentacion_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),%s)
-            RETURNING id
-        """, (
-            negocio_id,
-            _txt(data.get('numero_cotizacion')),
-            tercero_id,
-            int(item_id),
-            fecha_cot,
-            fecha_vence,
-            pres_nombre,
-            float(unidades_item),
-            float(precio),
-            _txt(data.get('origen')) or 'manual',
-            bool(data.get('validada_proveedor', False)),
-            _txt(data.get('observaciones')),
-            pres_id
-        )).fetchone()
+        # Ensure we have a default presentation if none is resolved
+        if not pres_id:
+            existente_default = conn.execute("""
+                SELECT id FROM presentaciones
+                WHERE LOWER(nombre) = 'unidad' AND equivalencia = 1.0
+                LIMIT 1
+            """, ()).fetchone()
+            if existente_default:
+                pres_id = existente_default['id']
+            else:
+                row_pres = conn.execute("""
+                    INSERT INTO presentaciones (nombre, equivalencia)
+                    VALUES ('Unidad', 1.0)
+                    RETURNING id
+                """).fetchone()
+                pres_id = row_pres['id']
+
+        existing = conn.execute("""
+            SELECT id FROM cotizaciones_compras
+            WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s AND presentacion_id = %s
+            LIMIT 1
+        """, (negocio_id, tercero_id, int(item_id), pres_id)).fetchone()
+
+        if existing:
+            conn.execute("""
+                UPDATE cotizaciones_compras
+                SET numero_cotizacion = %s, fecha_cotizacion = %s, fecha_vencimiento = %s,
+                    descripcion_presentacion = %s, unidades_item = %s, precio = %s,
+                    origen = %s, validada_proveedor = %s, observaciones = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+            """, (
+                _txt(data.get('numero_cotizacion')),
+                fecha_cot,
+                fecha_vence,
+                pres_nombre or 'Unidad',
+                float(unidades_item),
+                float(precio),
+                _txt(data.get('origen')) or 'manual',
+                bool(data.get('validada_proveedor', False)),
+                _txt(data.get('observaciones')),
+                existing['id']
+            ))
+            cot_id = existing['id']
+        else:
+            row = conn.execute("""
+                INSERT INTO cotizaciones_compras
+                    (negocio_id, numero_cotizacion, tercero_id, item_id,
+                     fecha_cotizacion, fecha_vencimiento, descripcion_presentacion,
+                     unidades_item, precio, origen, validada_proveedor, observaciones,
+                     updated_at, presentacion_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),%s)
+                RETURNING id
+            """, (
+                negocio_id,
+                _txt(data.get('numero_cotizacion')),
+                tercero_id,
+                int(item_id),
+                fecha_cot,
+                fecha_vence,
+                pres_nombre or 'Unidad',
+                float(unidades_item),
+                float(precio),
+                _txt(data.get('origen')) or 'manual',
+                bool(data.get('validada_proveedor', False)),
+                _txt(data.get('observaciones')),
+                pres_id
+            )).fetchone()
+            cot_id = row['id']
+
         conn.commit()
-        return jsonify({'ok': True, 'id': row['id']})
+        return jsonify({'ok': True, 'id': cot_id})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500

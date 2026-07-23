@@ -372,11 +372,13 @@
 
     <div class="mb-3">
       <div class="grid grid-cols-12 gap-2 mb-1 px-1">
-        <span class="col-span-3 text-xs font-bold text-gray-400 uppercase">Producto</span>
+        <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Producto</span>
+        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase">Cant. Emp.</span>
         <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Presentación / Empaque</span>
-        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase">Cant.</span>
-        <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Costo unit.</span>
+        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase">Cant. Base</span>
+        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase">Cost. Emp.</span>
         <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Total Línea</span>
+        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase">Cost. Base</span>
         <span class="col-span-1 text-xs font-bold text-gray-400 uppercase">IVA %</span>
         <span class="col-span-1"></span>
       </div>
@@ -573,6 +575,20 @@ let tarjetaLineas = []; // {componente_id, nombre, cantidad}
 let entradaLineas = []; // {el: HTMLElement}
 let activeACInputId = null;
 let activeACHiddenId = null;
+let defaultPresentacionId = null;
+
+async function fetchDefaultPresentacion() {
+  try {
+    const r = await fetch('/api/inventario/presentaciones/buscar?q=Unidad');
+    const d = await r.json();
+    if (d.ok && d.presentaciones.length) {
+      const u = d.presentaciones.find(p => p.nombre.toLowerCase() === 'unidad' && Number(p.equivalencia) === 1);
+      if (u) defaultPresentacionId = u.id;
+    }
+  } catch(e) {
+    console.error("Error loading default presentation:", e);
+  }
+}
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function toast(msg, ok = true) {
@@ -1347,24 +1363,31 @@ function agregarLineaEntrada() {
   const div = document.createElement('div');
   div.className = 'grid grid-cols-12 gap-2 items-end';
   div.innerHTML = `
-    <div class="col-span-3 relative">
+    <div class="col-span-2 relative">
       <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off">
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
       <input type="hidden" id="ent-id-${idx}">
     </div>
+    <div class="col-span-1">
+      <input type="number" id="ent-cant-emp-${idx}" placeholder="Cant. Emp." min="0" step="0.0001" value="0" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
+    </div>
     <div class="col-span-2 relative">
-      <input type="text" id="ent-pres-${idx}" placeholder="Empaque (ej: Caja x 12)" autocomplete="off">
+      <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="Unidad">
       <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
-      <input type="hidden" id="ent-pres-id-${idx}">
+      <input type="hidden" id="ent-pres-id-${idx}" value="${defaultPresentacionId || ''}">
+      <input type="hidden" id="ent-pres-equiv-${idx}" value="1.0">
     </div>
     <div class="col-span-1">
-      <input type="number" id="ent-cant-${idx}" placeholder="Cant." min="0" step="0.0001" value="0" oninput="calcularCostoFila(${idx}, 'cant')">
+      <input type="number" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center">
+    </div>
+    <div class="col-span-1">
+      <input type="number" id="ent-costo-emp-${idx}" placeholder="Costo" min="0" step="0.000001" value="" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
     </div>
     <div class="col-span-2">
-      <input type="number" id="ent-vu-${idx}" placeholder="Costo" min="0" step="0.000001" value="" oninput="calcularCostoFila(${idx}, 'vu')">
+      <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="" oninput="calcularCostoFilaEmpaque(${idx}, 'total')">
     </div>
-    <div class="col-span-2">
-      <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="" oninput="calcularCostoFila(${idx}, 'total')">
+    <div class="col-span-1">
+      <input type="number" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right">
     </div>
     <div class="col-span-1">
       <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full">
@@ -1381,22 +1404,46 @@ function agregarLineaEntrada() {
   cont.appendChild(div);
   entradaLineas.push(div);
   
-  setupAC(`ent-ac-${idx}`, `ent-ac-list-${idx}`, `ent-id-${idx}`, () => productos, (selected) => {
+  setupAC(`ent-ac-${idx}`, `ent-ac-list-${idx}`, `ent-id-${idx}`, () => productos, async (selected) => {
     const prod = productos.find(p => p.id === selected.id);
     if (prod) {
-      document.getElementById(`ent-vu-${idx}`).value = prod.costo || '';
-      
       const pct = Math.round(prod.iva_pct || 0);
       const select = document.getElementById(`ent-iva-pct-${idx}`);
       if (select) {
-        if ([0, 5, 19].includes(pct)) {
-          select.value = pct.toString();
-        } else {
-          select.value = '0';
+        if ([0, 5, 19].includes(pct)) select.value = pct.toString();
+        else select.value = '0';
+      }
+      
+      const provId = document.getElementById('entrada-proveedor-id').value;
+      let loadedPres = false;
+      if (provId) {
+        try {
+          const r = await fetch(`/api/inventario/${NEGOCIO_ID}/producto/${prod.id}/proveedor/${provId}/ultima-presentacion`);
+          const d = await r.json();
+          if (d.ok) {
+            document.getElementById(`ent-pres-${idx}`).value = d.presentacion_nombre || 'Unidad';
+            document.getElementById(`ent-pres-id-${idx}`).value = d.presentacion_id || defaultPresentacionId || '';
+            document.getElementById(`ent-pres-equiv-${idx}`).value = d.equivalencia || '1.0';
+            if (prod.costo) {
+              document.getElementById(`ent-costo-emp-${idx}`).value = (prod.costo * d.equivalencia).toFixed(4);
+            }
+            loadedPres = true;
+          }
+        } catch(e) {
+          console.error("Error fetching last presentation:", e);
         }
       }
       
-      calcularCostoFila(idx, 'vu');
+      if (!loadedPres) {
+        document.getElementById(`ent-pres-${idx}`).value = 'Unidad';
+        document.getElementById(`ent-pres-id-${idx}`).value = defaultPresentacionId || '';
+        document.getElementById(`ent-pres-equiv-${idx}`).value = '1.0';
+        if (prod.costo) {
+          document.getElementById(`ent-costo-emp-${idx}`).value = prod.costo;
+        }
+      }
+      
+      calcularCostoFilaEmpaque(idx, 'equiv');
     }
   });
 
@@ -1404,30 +1451,43 @@ function agregarLineaEntrada() {
   calcularTotalesEntrada();
 }
 
-function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valorUnitario, ivaPct, presentacionId = null, presentacionNombre = '') {
+function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valorUnitario, ivaPct, presentacionId = null, presentacionNombre = '', presentacionEquivalencia = 1.0) {
   const cont = document.getElementById('entrada-lineas');
   const idx = entradaLineas.length;
   const div = document.createElement('div');
   div.className = 'grid grid-cols-12 gap-2 items-end';
+  
+  const equiv = parseFloat(presentacionEquivalencia) || 1.0;
+  const cantEmp = (parseFloat(cantidad) || 0) / equiv;
+  const costoEmp = (parseFloat(valorUnitario) || 0) * equiv;
+  const totalL = (parseFloat(cantidad) || 0) * (parseFloat(valorUnitario) || 0);
+
   div.innerHTML = `
-    <div class="col-span-3 relative">
+    <div class="col-span-2 relative">
       <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off" value="${productoNombre.replace(/"/g,'&quot;')}">
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
       <input type="hidden" id="ent-id-${idx}" value="${productoId}">
     </div>
+    <div class="col-span-1">
+      <input type="number" id="ent-cant-emp-${idx}" placeholder="Cant. Emp." min="0" step="0.0001" value="${cantEmp}" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
+    </div>
     <div class="col-span-2 relative">
-      <input type="text" id="ent-pres-${idx}" placeholder="Empaque (ej: Caja x 12)" autocomplete="off" value="${presentacionNombre.replace(/"/g,'&quot;')}">
+      <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="${(presentacionNombre || 'Unidad').replace(/"/g,'&quot;')}">
       <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
-      <input type="hidden" id="ent-pres-id-${idx}" value="${presentacionId || ''}">
+      <input type="hidden" id="ent-pres-id-${idx}" value="${presentacionId || defaultPresentacionId || ''}">
+      <input type="hidden" id="ent-pres-equiv-${idx}" value="${equiv}">
     </div>
     <div class="col-span-1">
-      <input type="number" id="ent-cant-${idx}" placeholder="Cant." min="0" step="0.0001" value="${cantidad}" oninput="calcularCostoFila(${idx}, 'cant')">
+      <input type="number" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center" value="${cantidad}">
+    </div>
+    <div class="col-span-1">
+      <input type="number" id="ent-costo-emp-${idx}" placeholder="Costo" min="0" step="0.000001" value="${costoEmp.toFixed(4)}" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
     </div>
     <div class="col-span-2">
-      <input type="number" id="ent-vu-${idx}" placeholder="Costo" min="0" step="0.000001" value="${valorUnitario}" oninput="calcularCostoFila(${idx}, 'vu')">
+      <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="${totalL.toFixed(2)}" oninput="calcularCostoFilaEmpaque(${idx}, 'total')">
     </div>
-    <div class="col-span-2">
-      <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="${(cantidad * valorUnitario).toFixed(2)}" oninput="calcularCostoFila(${idx}, 'total')">
+    <div class="col-span-1">
+      <input type="number" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right" value="${valorUnitario}">
     </div>
     <div class="col-span-1">
       <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full">
@@ -1447,18 +1507,63 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
   setupAC(`ent-ac-${idx}`, `ent-ac-list-${idx}`, `ent-id-${idx}`, () => productos, (selected) => {
     const prod = productos.find(p => p.id === selected.id);
     if (prod) {
-      document.getElementById(`ent-vu-${idx}`).value = prod.costo || '';
       const pct = Math.round(prod.iva_pct || 0);
       const select = document.getElementById(`ent-iva-pct-${idx}`);
       if (select) {
         if ([0, 5, 19].includes(pct)) select.value = pct.toString();
         else select.value = '0';
       }
-      calcularCostoFila(idx, 'vu');
+      calcularCostoFilaEmpaque(idx, 'equiv');
     }
   });
 
   setupPresentacionAC(idx);
+}
+
+function calcularCostoFilaEmpaque(idx, target) {
+  const cantEmpInput = document.getElementById(`ent-cant-emp-${idx}`);
+  const equivInput = document.getElementById(`ent-pres-equiv-${idx}`);
+  const cantBaseInput = document.getElementById(`ent-cant-base-${idx}`);
+  const costoEmpInput = document.getElementById(`ent-costo-emp-${idx}`);
+  const totalInput = document.getElementById(`ent-total-${idx}`);
+  const vuInput = document.getElementById(`ent-vu-${idx}`);
+  
+  if (!cantEmpInput || !equivInput || !cantBaseInput || !costoEmpInput || !totalInput || !vuInput) return;
+  
+  const cantEmp = parseFloat(cantEmpInput.value) || 0;
+  const equiv = parseFloat(equivInput.value) || 1.0;
+  
+  const cantBase = cantEmp * equiv;
+  cantBaseInput.value = cantBase > 0 ? cantBase.toFixed(4) : '';
+  
+  if (target === 'cant' || target === 'costo_emp' || target === 'equiv') {
+    const costoEmp = parseFloat(costoEmpInput.value) || 0;
+    
+    if (cantEmp > 0 && costoEmp > 0) {
+      totalInput.value = (cantEmp * costoEmp).toFixed(2);
+    } else {
+      totalInput.value = '';
+    }
+    
+    if (costoEmp > 0 && equiv > 0) {
+      vuInput.value = (costoEmp / equiv).toFixed(6);
+    } else {
+      vuInput.value = '';
+    }
+  } else if (target === 'total') {
+    const totalVal = parseFloat(totalInput.value) || 0;
+    
+    if (cantEmp > 0 && totalVal > 0) {
+      costoEmpInput.value = (totalVal / cantEmp).toFixed(4);
+      const costoEmp = parseFloat(costoEmpInput.value) || 0;
+      vuInput.value = (costoEmp / equiv).toFixed(6);
+    } else {
+      costoEmpInput.value = '';
+      vuInput.value = '';
+    }
+  }
+  
+  calcularTotalesEntrada();
 }
 
 async function crearProveedorNuevo() {
@@ -1522,7 +1627,8 @@ async function verificarDocumentoExistente() {
           item.valor_unitario,
           item.iva_pct,
           item.presentacion_id,
-          item.presentacion_nombre
+          item.presentacion_nombre,
+          item.presentacion_equivalencia
         );
       }
       calcularTotalesEntrada();
@@ -1533,31 +1639,7 @@ async function verificarDocumentoExistente() {
 }
 
 function calcularCostoFila(idx, target) {
-  const cantInput = document.getElementById(`ent-cant-${idx}`);
-  const vuInput = document.getElementById(`ent-vu-${idx}`);
-  const totalInput = document.getElementById(`ent-total-${idx}`);
-  
-  if (!cantInput || !vuInput || !totalInput) return;
-  
-  const cant = parseFloat(cantInput.value) || 0;
-  
-  if (target === 'cant' || target === 'vu') {
-    const vu = parseFloat(vuInput.value) || 0;
-    if (cant > 0 && vu > 0) {
-      totalInput.value = (cant * vu).toFixed(2);
-    } else {
-      totalInput.value = '';
-    }
-  } else if (target === 'total') {
-    const total = parseFloat(totalInput.value) || 0;
-    if (cant > 0 && total > 0) {
-      vuInput.value = (total / cant).toFixed(6);
-    } else {
-      vuInput.value = '';
-    }
-  }
-  
-  calcularTotalesEntrada();
+  calcularCostoFilaEmpaque(idx, target);
 }
 
 function calcularTotalesEntrada() {
@@ -1567,17 +1649,18 @@ function calcularTotalesEntrada() {
   let ivaTotal = 0;
   
   divs.forEach(div => {
-    const cantInput = div.querySelector('input[id^="ent-cant-"]');
-    const vuInput = div.querySelector('input[id^="ent-vu-"]');
     const totalInput = div.querySelector('input[id^="ent-total-"]');
     const ivaSelect = div.querySelector('select[id^="ent-iva-pct-"]');
-    if (cantInput && vuInput && ivaSelect) {
-      const cant = parseFloat(cantInput.value) || 0;
-      const vu = parseFloat(vuInput.value) || 0;
+    const cantBaseInput = div.querySelector('input[id^="ent-cant-base-"]');
+    const vuInput = div.querySelector('input[id^="ent-vu-"]');
+    
+    if (ivaSelect) {
       const totalVal = totalInput ? (parseFloat(totalInput.value) || 0) : 0;
+      const cantBase = cantBaseInput ? (parseFloat(cantBaseInput.value) || 0) : 0;
+      const vu = vuInput ? (parseFloat(vuInput.value) || 0) : 0;
       const ivaPct = parseFloat(ivaSelect.value) || 0;
       
-      const lineSubtotal = totalVal > 0 ? totalVal : (cant * vu);
+      const lineSubtotal = totalVal > 0 ? totalVal : (cantBase * vu);
       const lineIva = lineSubtotal * (ivaPct / 100);
       
       subtotal += lineSubtotal;
@@ -1621,12 +1704,13 @@ async function registrarEntrada() {
 
   for (const [i, div] of divs.entries()) {
     const id = div.querySelector('input[id^="ent-id-"]').value;
-    const cant = parseFloat(div.querySelector('input[id^="ent-cant-"]').value);
+    const cant = parseFloat(div.querySelector('input[id^="ent-cant-base-"]').value);
     const vu   = parseFloat(div.querySelector('input[id^="ent-vu-"]').value) || null;
     const totalInputVal = div.querySelector('input[id^="ent-total-"]')?.value;
     const ivaPct = parseFloat(div.querySelector('select[id^="ent-iva-pct-"]').value) || 0;
     const presId = div.querySelector('input[id^="ent-pres-id-"]')?.value || null;
     const presNombre = div.querySelector('input[id^="ent-pres-"]')?.value || null;
+    const presEquiv = parseFloat(div.querySelector('input[id^="ent-pres-equiv-"]')?.value) || 1.0;
 
     if (!id || !cant) { toast(`Línea ${i+1}: producto y cantidad requeridos`, false); return; }
 
@@ -1641,7 +1725,8 @@ async function registrarEntrada() {
       valor_unitario: vu,
       iva_pct: ivaPct,
       presentacion_id: presId ? parseInt(presId) : null,
-      presentacion_nombre: presNombre
+      presentacion_nombre: presNombre,
+      presentacion_equivalencia: presEquiv
     });
   }
 
@@ -2027,6 +2112,7 @@ async function cargarTiposDocEntrada() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  await fetchDefaultPresentacion();
   await cargarProductos();
   await cargarTiposDocEntrada();
   abrirTarjetaInicialDesdeUrl();

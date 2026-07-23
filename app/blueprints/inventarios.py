@@ -2115,7 +2115,7 @@ def api_consultar_documento_existente(negocio_id):
         if proveedor_id:
             query = """
 SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.iva_pct, m.notas,
-       m.presentacion_id, p_pres.nombre AS presentacion_nombre
+       m.presentacion_id, p_pres.nombre AS presentacion_nombre, p_pres.equivalencia AS presentacion_equivalencia
 FROM movimientos_inventario m
 LEFT JOIN presentaciones p_pres ON p_pres.id = m.presentacion_id
 WHERE m.negocio_id = %s AND m.tipo = 'entrada'
@@ -2126,7 +2126,7 @@ ORDER BY m.id
         else:
             query = """
 SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.iva_pct, m.notas,
-       m.presentacion_id, p_pres.nombre AS presentacion_nombre
+       m.presentacion_id, p_pres.nombre AS presentacion_nombre, p_pres.equivalencia AS presentacion_equivalencia
 FROM movimientos_inventario m
 LEFT JOIN presentaciones p_pres ON p_pres.id = m.presentacion_id
 WHERE m.negocio_id = %s AND m.tipo = 'entrada'
@@ -2160,7 +2160,8 @@ ORDER BY m.id
                 'iva_pct': float(r['iva_pct'] or 0),
                 'notas': r['notas'],
                 'presentacion_id': r['presentacion_id'],
-                'presentacion_nombre': r['presentacion_nombre'] or ''
+                'presentacion_nombre': r['presentacion_nombre'] or '',
+                'presentacion_equivalencia': float(r['presentacion_equivalencia'] or 1.0)
             } for r in rows]
         })
     except Exception as e:
@@ -2352,6 +2353,52 @@ def api_presentaciones_crear():
         })
     except Exception as e:
         conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/producto/<int:producto_id>/proveedor/<int:proveedor_id>/ultima-presentacion')
+def api_ultima_presentacion(negocio_id, producto_id, proveedor_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        row = conn.execute("""
+            SELECT c.presentacion_id, p.nombre AS presentacion_nombre, p.equivalencia
+            FROM cotizaciones_compras c
+            JOIN presentaciones p ON p.id = c.presentacion_id
+            WHERE c.negocio_id = %s AND c.tercero_id = %s AND c.item_id = %s
+            ORDER BY c.fecha_cotizacion DESC, c.id DESC
+            LIMIT 1
+        """, (negocio_id, proveedor_id, producto_id)).fetchone()
+        
+        if row:
+            return jsonify({
+                'ok': True,
+                'encontrada': True,
+                'presentacion_id': row['presentacion_id'],
+                'presentacion_nombre': row['presentacion_nombre'],
+                'equivalencia': float(row['equivalencia'])
+            })
+            
+        u_row = conn.execute("""
+            SELECT id, nombre, equivalencia FROM presentaciones
+            WHERE LOWER(nombre) = 'unidad' AND equivalencia = 1.0
+            LIMIT 1
+        """).fetchone()
+        
+        if u_row:
+            return jsonify({
+                'ok': True,
+                'encontrada': False,
+                'presentacion_id': u_row['id'],
+                'presentacion_nombre': u_row['nombre'],
+                'equivalencia': float(u_row['equivalencia'])
+            })
+            
+        return jsonify({'ok': True, 'encontrada': False, 'presentacion_id': None, 'presentacion_nombre': 'Unidad', 'equivalencia': 1.0})
+    except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

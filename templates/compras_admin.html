@@ -22,6 +22,13 @@
     .sin_rotacion { background: #e5e7eb; color: #4b5563; }
     .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border-radius: 8px; background: #dc2626; color: white; font-weight: 700; opacity: 0; transition: opacity .2s; }
     .toast.show { opacity: 1; }
+    .ac-list {
+      position: absolute; background: white; border: 1px solid #e5e7eb;
+      border-radius: 8px; box-shadow: 0 4px 12px #0001;
+      max-height: 220px; overflow-y: auto; z-index: 100; width: 100%;
+    }
+    .ac-item { padding: 8px 12px; cursor: pointer; font-size: .85rem; }
+    .ac-item:hover, .ac-item.ac-focus { background: #fef2f2; color: #e11d48; }
   </style>
 </head>
 <body class="p-4 sm:p-6 min-h-screen">
@@ -268,6 +275,7 @@ async function cargarCotizaciones() {
 }
 
 async function guardarCotizacion() {
+  const presId = document.getElementById('cot-presentacion-id').value;
   const body = {
     item_id: parseInt(document.getElementById('cot-producto').value),
     proveedor_nombre: document.getElementById('cot-proveedor').value.trim(),
@@ -277,7 +285,8 @@ async function guardarCotizacion() {
     unidades_item: parseFloat(document.getElementById('cot-unidades').value) || 1,
     precio: parseFloat(document.getElementById('cot-precio').value) || 0,
     observaciones: document.getElementById('cot-observaciones').value.trim() || null,
-    validada_proveedor: true
+    validada_proveedor: true,
+    presentacion_id: presId ? parseInt(presId) : null
   };
   if (!body.item_id) return toast('Selecciona producto');
   if (!body.proveedor_nombre) return toast('Proveedor requerido');
@@ -301,6 +310,7 @@ function limpiarCotizacion() {
   document.getElementById('cot-proveedor').value = '';
   document.getElementById('cot-numero').value = '';
   document.getElementById('cot-presentacion').value = '';
+  document.getElementById('cot-presentacion-id').value = '';
   document.getElementById('cot-unidades').value = '1';
   document.getElementById('cot-precio').value = '';
   document.getElementById('cot-observaciones').value = '';
@@ -509,11 +519,115 @@ function updateActiveSubtab() {
 
 window.addEventListener('hashchange', updateActiveSubtab);
 
+function setupPresentacionAC() {
+  const inp = document.getElementById('cot-presentacion');
+  const list = document.getElementById('cot-pres-list');
+  const hid = document.getElementById('cot-presentacion-id');
+  const equivInput = document.getElementById('cot-unidades');
+  if (!inp || !list || !hid || !equivInput) return;
+  
+  let currentFocus = -1;
+  let timer = null;
+
+  inp.addEventListener('input', () => {
+    clearTimeout(timer);
+    hid.value = '';
+    timer = setTimeout(() => search(), 200);
+  });
+
+  inp.addEventListener('keydown', e => {
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') { currentFocus = Math.min(currentFocus + 1, items.length - 1); highlightAC(items); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { currentFocus = Math.max(currentFocus - 1, 0); highlightAC(items); e.preventDefault(); }
+    else if (e.key === 'Enter' && currentFocus >= 0) { items[currentFocus]?.click(); e.preventDefault(); }
+    else if (e.key === 'Escape') { list.classList.add('hidden'); }
+  });
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+  function highlightAC(items) {
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === currentFocus));
+  }
+
+  async function search() {
+    const q = inp.value.trim();
+    if (!q) { list.classList.add('hidden'); return; }
+    try {
+      const r = await fetch(`/api/inventario/presentaciones/buscar?q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if (!d.ok) return;
+      
+      let html = d.presentaciones.map(p => `
+        <div class="ac-item text-left px-3 py-1.5 hover:bg-rose-50 cursor-pointer text-xs"
+             data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}" data-equiv="${p.equivalencia}">
+          <div class="font-semibold text-gray-800">${p.nombre}</div>
+          <div class="text-[10px] text-gray-400">Equivale a: ${p.equivalencia} unidades base</div>
+        </div>
+      `).join('');
+
+      html += `
+        <div class="ac-item text-left px-3 py-2 hover:bg-rose-50 cursor-pointer text-rose-600 font-bold border-t border-gray-100 text-xs flex items-center gap-1"
+             data-crear="true" data-nombre="${q.replace(/"/g,'&quot;')}">
+          <span>➕ Crear:</span> <span class="italic text-gray-700">"${q}"</span>
+        </div>
+      `;
+
+      list.innerHTML = html;
+      list.querySelectorAll('.ac-item').forEach(el => {
+        el.addEventListener('mousedown', async (e) => {
+          e.preventDefault();
+          list.classList.add('hidden');
+
+          if (el.dataset.crear) {
+            const nombre = el.dataset.nombre;
+            const equivStr = prompt(`Definir equivalencia para "${nombre}":\n\n¿A cuántas unidades equivale esta presentación?`, "1");
+            if (equivStr === null) return;
+            const equivVal = parseFloat(equivStr);
+            if (isNaN(equivVal) || equivVal <= 0) {
+              toast('Equivalencia inválida');
+              return;
+            }
+
+            try {
+              const res = await fetch('/api/inventario/presentaciones/crear', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nombre, equivalencia: equivVal })
+              });
+              const data = await res.json();
+              if (data.ok) {
+                hid.value = data.presentacion.id;
+                inp.value = data.presentacion.nombre;
+                equivInput.value = data.presentacion.equivalencia;
+                toast(`✅ Creado: ${data.presentacion.nombre}`);
+              } else {
+                toast(data.error || 'Error al crear presentación');
+              }
+            } catch (err) {
+              console.error(err);
+              toast('Error de red al crear presentación');
+            }
+            return;
+          }
+
+          hid.value = el.dataset.id;
+          inp.value = el.dataset.nombre;
+          equivInput.value = el.dataset.equiv || '1';
+        });
+      });
+      list.classList.remove('hidden');
+    } catch (err) {
+      console.error(err);
+    }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const vence = new Date();
   vence.setDate(vence.getDate() + 180);
   document.getElementById('cot-vence').value = vence.toISOString().slice(0, 10);
   cargarPropuesta();
+  setupPresentacionAC();
   updateActiveSubtab();
 });
 </script>

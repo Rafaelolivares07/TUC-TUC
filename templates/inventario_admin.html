@@ -2173,6 +2173,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const qProvId = urlParams.get('prov_id');
   const qProvNom = urlParams.get('prov_nom');
   if (qTipoDoc && qNumDoc) {
+    // Clear URL parameters immediately to prevent reload loops on F5
+    window.history.replaceState({}, document.title, window.location.pathname + '#entradas');
     mostrarTab('entradas');
     const selectEl = document.getElementById('entrada-tipo-doc');
     const opt = selectEl ? [...selectEl.options].find(o => o.value.toLowerCase() === qTipoDoc.toLowerCase()) : null;

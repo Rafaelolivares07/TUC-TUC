@@ -116,13 +116,13 @@
       <table>
         <thead>
           <tr>
-            <th>Producto</th>
-            <th>Proveedor</th>
-            <th>Presentacion</th>
-            <th class="num">Unidades</th>
-            <th class="num">Precio</th>
-            <th class="num">Precio und</th>
-            <th>Vence</th>
+            <th class="cursor-pointer select-none" onclick="ordenarCotizaciones('item_nombre')">Producto <span id="sort-cot-item_nombre">↕️</span></th>
+            <th class="cursor-pointer select-none" onclick="ordenarCotizaciones('proveedor_nombre')">Proveedor <span id="sort-cot-proveedor_nombre">↕️</span></th>
+            <th class="cursor-pointer select-none" onclick="ordenarCotizaciones('descripcion_presentacion')">Presentación <span id="sort-cot-descripcion_presentacion">↕️</span></th>
+            <th class="num cursor-pointer select-none" onclick="ordenarCotizaciones('unidades_item')">Unidades <span id="sort-cot-unidades_item">↕️</span></th>
+            <th class="num cursor-pointer select-none" onclick="ordenarCotizaciones('precio')">Precio <span id="sort-cot-precio">↕️</span></th>
+            <th class="num cursor-pointer select-none" onclick="ordenarCotizaciones('precio_unitario')">Precio und <span id="sort-cot-precio_unitario">↕️</span></th>
+            <th class="cursor-pointer select-none" onclick="ordenarCotizaciones('fecha_vencimiento')">Vence <span id="sort-cot-fecha_vencimiento">↕️</span></th>
             <th></th>
           </tr>
         </thead>
@@ -173,14 +173,14 @@
       <table>
         <thead>
           <tr>
-            <th>Producto</th>
-            <th>Estado</th>
-            <th class="num">Stock</th>
-            <th class="num">Demanda/dia</th>
-            <th class="num">Dias</th>
-            <th class="num">Sugerido</th>
-            <th>Proveedor</th>
-            <th class="num">Estimado</th>
+            <th class="cursor-pointer select-none" onclick="ordenarItems('producto_nombre')">Producto <span id="sort-item-producto_nombre">↕️</span></th>
+            <th class="cursor-pointer select-none" onclick="ordenarItems('estado_rotacion')">Estado <span id="sort-item-estado_rotacion">↕️</span></th>
+            <th class="num cursor-pointer select-none" onclick="ordenarItems('stock_actual')">Stock <span id="sort-item-stock_actual">↕️</span></th>
+            <th class="num cursor-pointer select-none" onclick="ordenarItems('demanda_diaria')">Demanda/dia <span id="sort-item-demanda_diaria">↕️</span></th>
+            <th class="num cursor-pointer select-none" onclick="ordenarItems('dias_para_agotarse')">Dias <span id="sort-item-dias_para_agotarse">↕️</span></th>
+            <th class="num cursor-pointer select-none" onclick="ordenarItems('sugerido')">Sugerido <span id="sort-item-sugerido">↕️</span></th>
+            <th class="cursor-pointer select-none" onclick="ordenarItems('proveedor_nombre')">Proveedor <span id="sort-item-proveedor_nombre">↕️</span></th>
+            <th class="num cursor-pointer select-none" onclick="ordenarItems('valor_estimado')">Estimado <span id="sort-item-valor_estimado">↕️</span></th>
             <th>Alertas</th>
           </tr>
         </thead>
@@ -203,6 +203,10 @@
 const NEGOCIO_ID = {{ negocio_id }};
 let propuesta = null;
 let cotizaciones = [];
+let cotSortCol = '';
+let cotSortAsc = true;
+let itemsSortCol = '';
+let itemsSortAsc = true;
 
 const fmt = n => Number(n || 0).toLocaleString('es-CO', {maximumFractionDigits: 2});
 const money = n => '$' + Number(n || 0).toLocaleString('es-CO', {maximumFractionDigits: 0});
@@ -319,6 +323,7 @@ function renderCotizaciones() {
   const tb = document.getElementById('tabla-cotizaciones');
   if (!cotizaciones.length) {
     tb.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-6">Sin cotizaciones cargadas</td></tr>';
+    actualizarIconosOrdenCotizaciones();
     return;
   }
   tb.innerHTML = cotizaciones.map(c => `
@@ -333,6 +338,46 @@ function renderCotizaciones() {
       <td class="num"><button onclick="eliminarCotizacion(${c.id})" class="text-red-500 text-xs font-bold">Eliminar</button></td>
     </tr>
   `).join('');
+  actualizarIconosOrdenCotizaciones();
+}
+
+function ordenarCotizaciones(col) {
+  if (cotSortCol === col) {
+    cotSortAsc = !cotSortAsc;
+  } else {
+    cotSortCol = col;
+    cotSortAsc = true;
+  }
+  
+  cotizaciones.sort((a, b) => {
+    let valA = a[col];
+    let valB = b[col];
+    
+    if (valA == null) valA = (typeof valB === 'number') ? 0 : '';
+    if (valB == null) valB = (typeof valA === 'number') ? 0 : '';
+    
+    if (typeof valA === 'string') valA = valA.toLowerCase();
+    if (typeof valB === 'string') valB = valB.toLowerCase();
+    
+    if (valA < valB) return cotSortAsc ? -1 : 1;
+    if (valA > valB) return cotSortAsc ? 1 : -1;
+    return 0;
+  });
+  
+  renderCotizaciones();
+}
+
+function actualizarIconosOrdenCotizaciones() {
+  const cols = ['item_nombre', 'proveedor_nombre', 'descripcion_presentacion', 'unidades_item', 'precio', 'precio_unitario', 'fecha_vencimiento'];
+  cols.forEach(col => {
+    const el = document.getElementById(`sort-cot-${col}`);
+    if (!el) return;
+    if (cotSortCol === col) {
+      el.textContent = cotSortAsc ? ' 🔼' : ' 🔽';
+    } else {
+      el.textContent = ' ↕️';
+    }
+  });
 }
 
 function itemsFiltrados() {
@@ -350,6 +395,7 @@ function renderItems() {
   const items = itemsFiltrados();
   if (!items.length) {
     tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Sin items para mostrar</td></tr>';
+    actualizarIconosOrdenItems();
     return;
   }
   tb.innerHTML = items.map(i => `
@@ -371,6 +417,54 @@ function renderItems() {
       <td class="text-xs text-gray-500">${(i.alertas || []).join('<br>')}</td>
     </tr>
   `).join('');
+  actualizarIconosOrdenItems();
+}
+
+function ordenarItems(col) {
+  if (itemsSortCol === col) {
+    itemsSortAsc = !itemsSortAsc;
+  } else {
+    itemsSortCol = col;
+    itemsSortAsc = true;
+  }
+  
+  if (!propuesta || !propuesta.items) return;
+  
+  propuesta.items.sort((a, b) => {
+    let valA, valB;
+    if (col === 'sugerido') {
+      valA = a.cantidad_final || a.cantidad_sugerida || 0;
+      valB = b.cantidad_final || b.cantidad_sugerida || 0;
+    } else {
+      valA = a[col];
+      valB = b[col];
+    }
+    
+    if (valA == null) valA = (typeof valB === 'number') ? 0 : '';
+    if (valB == null) valB = (typeof valA === 'number') ? 0 : '';
+    
+    if (typeof valA === 'string') valA = valA.toLowerCase();
+    if (typeof valB === 'string') valB = valB.toLowerCase();
+    
+    if (valA < valB) return itemsSortAsc ? -1 : 1;
+    if (valA > valB) return itemsSortAsc ? 1 : -1;
+    return 0;
+  });
+  
+  renderItems();
+}
+
+function actualizarIconosOrdenItems() {
+  const cols = ['producto_nombre', 'estado_rotacion', 'stock_actual', 'demanda_diaria', 'dias_para_agotarse', 'sugerido', 'proveedor_nombre', 'valor_estimado'];
+  cols.forEach(col => {
+    const el = document.getElementById(`sort-item-${col}`);
+    if (!el) return;
+    if (itemsSortCol === col) {
+      el.textContent = itemsSortAsc ? ' 🔼' : ' 🔽';
+    } else {
+      el.textContent = ' ↕️';
+    }
+  });
 }
 
 function renderProveedores() {

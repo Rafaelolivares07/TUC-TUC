@@ -74,6 +74,12 @@ def _crear_tablas(conn):
             referencia_tipo  VARCHAR(50),
             created_at       TIMESTAMP DEFAULT NOW()
         )""",
+        """CREATE TABLE IF NOT EXISTS presentaciones (
+            id           SERIAL PRIMARY KEY,
+            nombre       VARCHAR(100) NOT NULL,
+            equivalencia NUMERIC(14,4) NOT NULL DEFAULT 1.0,
+            created_at   TIMESTAMP DEFAULT NOW()
+        )""",
     ]
     for sql in sqls:
         try:
@@ -89,6 +95,8 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_productos_negocio ON productos(negocio_id)",
         "CREATE INDEX IF NOT EXISTS idx_tarjeta_producto ON tarjeta_estandar(producto_id)",
         "CREATE INDEX IF NOT EXISTS idx_saldos_negocio_producto ON saldos_inventario(negocio_id, producto_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_presentaciones_unique ON presentaciones(LOWER(nombre), equivalencia)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS presentacion_id INTEGER REFERENCES presentaciones(id)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS costo_und NUMERIC(12,4)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS tipo_documento VARCHAR(50)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS documento_numero VARCHAR(80)",
@@ -303,7 +311,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                  documento_fecha=None, proveedor_id=None,
                  proveedor_nombre=None, iva_total=None,
                  documento_total=None, iva_pct=None, iva_valor=None,
-                 producto_padre_id=None):
+                 producto_padre_id=None, presentacion_id=None):
     """Movimiento directo sobre un producto, sin pasar por tarjeta estándar."""
     signo  = Decimal('1') if tipo == 'entrada' else Decimal('-1')
     cantidad = Decimal(str(cantidad))
@@ -337,8 +345,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
              valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo,
              tipo_documento, documento_numero, documento_fecha, proveedor_id,
              proveedor_nombre, iva_total, documento_total, iva_pct, iva_valor,
-             producto_padre_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             producto_padre_id, presentacion_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         negocio_id, producto_id,
         nombre_prod['nombre'] if nombre_prod else '',
@@ -355,7 +363,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         float(documento_total) if documento_total is not None else None,
         float(iva_pct) if iva_pct is not None else 0.0,
         float(iva_valor) if iva_valor is not None else 0.0,
-        producto_padre_id
+        producto_padre_id, presentacion_id
     ))
 
     if saldo:
@@ -393,7 +401,8 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      tipo_documento=None, documento_numero=None,
                      documento_fecha=None, proveedor_id=None,
                      proveedor_nombre=None, iva_total=None,
-                     documento_total=None, iva_pct=None, iva_valor=None):
+                     documento_total=None, iva_pct=None, iva_valor=None,
+                     presentacion_id=None):
     """Aplica entrada o salida según tarjeta estándar. Sin tarjeta → 1:1 sobre sí mismo."""
     componentes = conn.execute(
         "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
@@ -407,12 +416,14 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
     for comp in componentes:
         cant_comp = Decimal(str(comp['cantidad'])) * cantidad
         padre_id = producto_id if comp['componente_id'] != producto_id else None
+        pres_id = presentacion_id if comp['componente_id'] == producto_id else None
         _mov_directo(conn, negocio_id, comp['componente_id'], cant_comp, tipo, motivo,
                      registrado_por, valor_unitario, notas, bodega,
                      referencia_id, referencia_tipo, tipo_documento,
                      documento_numero, documento_fecha, proveedor_id,
                      proveedor_nombre, iva_total, documento_total,
-                     iva_pct, iva_valor, producto_padre_id=padre_id)
+                     iva_pct, iva_valor, producto_padre_id=padre_id,
+                     presentacion_id=pres_id)
 
 
 def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
@@ -525,6 +536,54 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                          f'Compre sus componentes: {nombres}'
             }, 400
 
+        pres_id = _int_o_none(ln.get('presentacion_id'))
+        pres_nombre = _txt(ln.get('presentacion_nombre') or ln.get('presentacion') or ln.get('descripcion_presentacion'))
+        try:
+            pres_equiv = Decimal(str(ln.get('presentacion_equivalencia') or ln.get('unidades_item') or 1.0))
+        except Exception:
+            pres_equiv = Decimal('1.0')
+
+        if not pres_id and pres_nombre:
+            existente_pres = conn.execute("""
+                SELECT id FROM presentaciones
+                WHERE LOWER(nombre) = LOWER(%s) AND equivalencia = %s
+                LIMIT 1
+            """, (pres_nombre, float(pres_equiv))).fetchone()
+            if existente_pres:
+                pres_id = existente_pres['id']
+            else:
+                row_pres = conn.execute("""
+                    INSERT INTO presentaciones (nombre, equivalencia)
+                    VALUES (%s, %s)
+                    RETURNING id
+                """, (pres_nombre, float(pres_equiv))).fetchone()
+                pres_id = row_pres['id']
+
+        if not pres_id:
+            existente_default = conn.execute("""
+                SELECT id FROM presentaciones
+                WHERE LOWER(nombre) = 'unidad (entrada)' AND equivalencia = 1.0
+                LIMIT 1
+            """, ()).fetchone()
+            if existente_default:
+                pres_id = existente_default['id']
+                pres_nombre = 'Unidad (entrada)'
+                pres_equiv = Decimal('1.0')
+            else:
+                row_pres = conn.execute("""
+                    INSERT INTO presentaciones (nombre, equivalencia)
+                    VALUES ('Unidad (entrada)', 1.0)
+                    RETURNING id
+                """).fetchone()
+                pres_id = row_pres['id']
+                pres_nombre = 'Unidad (entrada)'
+                pres_equiv = Decimal('1.0')
+        else:
+            r_p = conn.execute("SELECT nombre, equivalencia FROM presentaciones WHERE id=%s", (pres_id,)).fetchone()
+            if r_p:
+                pres_nombre = r_p['nombre']
+                pres_equiv = Decimal(str(r_p['equivalencia']))
+
         cant = _dec(ln.get('cantidad'))
         vu = _dec(ln.get('valor_unitario'))
         iva_pct = _dec(ln.get('iva_pct') or '0')
@@ -540,7 +599,10 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             'cantidad': cant,
             'valor_unitario': vu,
             'iva_pct': iva_pct,
-            'iva_valor': line_iva_val
+            'iva_valor': line_iva_val,
+            'presentacion_id': pres_id,
+            'presentacion_nombre': pres_nombre,
+            'presentacion_equivalencia': pres_equiv
         })
 
     documento_total = subtotal_compra + iva_total
@@ -566,7 +628,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             iva_total=iva_total,
             documento_total=documento_total,
             iva_pct=ln['iva_pct'],
-            iva_valor=ln['iva_valor']
+            iva_valor=ln['iva_valor'],
+            presentacion_id=ln['presentacion_id']
         )
 
         # Feed/update quote (cotizacion) from this entry if it's a purchase and has a price
@@ -576,28 +639,34 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             f_cot = documento_fecha or date.today()
             f_vence = f_cot + timedelta(days=180)
             
-            # Check if a quote exists for this product and provider (origin='compra')
+            pres_id = ln['presentacion_id']
+            pres_nombre = ln['presentacion_nombre']
+            pres_equiv = float(ln['presentacion_equivalencia'])
+            precio_cot = vu * pres_equiv
+            
+            # Check if a quote exists for this product, provider, and presentation
             cot_row = conn.execute("""
                 SELECT id FROM cotizaciones_compras
-                WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s AND origen = 'compra'
+                WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s AND presentacion_id = %s
                 LIMIT 1
-            """, (negocio_id, proveedor_id, ln['producto_id'])).fetchone()
+            """, (negocio_id, proveedor_id, ln['producto_id'], pres_id)).fetchone()
             
             if cot_row:
                 conn.execute("""
                     UPDATE cotizaciones_compras
                     SET numero_cotizacion = %s, fecha_cotizacion = %s, fecha_vencimiento = %s,
-                        precio = %s, unidades_item = 1, validada_proveedor = TRUE, updated_at = NOW()
+                        precio = %s, unidades_item = %s, descripcion_presentacion = %s,
+                        validada_proveedor = TRUE, updated_at = NOW()
                     WHERE id = %s
-                """, (documento_numero, f_cot, f_vence, vu, cot_row['id']))
+                """, (documento_numero, f_cot, f_vence, precio_cot, pres_equiv, pres_nombre, cot_row['id']))
             else:
                 conn.execute("""
                     INSERT INTO cotizaciones_compras
                         (negocio_id, numero_cotizacion, tercero_id, item_id, fecha_cotizacion,
                          fecha_vencimiento, descripcion_presentacion, unidades_item, precio,
-                         origen, validada_proveedor, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 1, %s, 'compra', TRUE, NOW())
-                """, (negocio_id, documento_numero, proveedor_id, ln['producto_id'], f_cot, f_vence, 'Unidad (entrada)', vu))
+                         origen, validada_proveedor, updated_at, presentacion_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'compra', TRUE, NOW(), %s)
+                """, (negocio_id, documento_numero, proveedor_id, ln['producto_id'], f_cot, f_vence, pres_nombre, pres_equiv, precio_cot, pres_id))
 
     if _asiento_auto:
         try:
@@ -2045,21 +2114,25 @@ def api_consultar_documento_existente(negocio_id):
         # Check if there is any movement with this key
         if proveedor_id:
             query = """
-                SELECT id, producto_id, nombre_producto, cantidad, valor_unitario, iva_pct, notas
-                FROM movimientos_inventario
-                WHERE negocio_id = %s AND tipo = 'entrada' 
-                  AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s) AND proveedor_id = %s
-                ORDER BY id
-            """
+SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.iva_pct, m.notas,
+       m.presentacion_id, p_pres.nombre AS presentacion_nombre
+FROM movimientos_inventario m
+LEFT JOIN presentaciones p_pres ON p_pres.id = m.presentacion_id
+WHERE m.negocio_id = %s AND m.tipo = 'entrada'
+AND LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) = LOWER(%s) AND m.proveedor_id = %s
+ORDER BY m.id
+"""
             params = (negocio_id, tipo_doc, num_doc, proveedor_id)
         else:
             query = """
-                SELECT id, producto_id, nombre_producto, cantidad, valor_unitario, iva_pct, notas
-                FROM movimientos_inventario
-                WHERE negocio_id = %s AND tipo = 'entrada' 
-                  AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s) AND proveedor_nombre = %s
-                ORDER BY id
-            """
+SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.iva_pct, m.notas,
+       m.presentacion_id, p_pres.nombre AS presentacion_nombre
+FROM movimientos_inventario m
+LEFT JOIN presentaciones p_pres ON p_pres.id = m.presentacion_id
+WHERE m.negocio_id = %s AND m.tipo = 'entrada'
+AND LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) = LOWER(%s) AND m.proveedor_nombre = %s
+ORDER BY m.id
+"""
             params = (negocio_id, tipo_doc, num_doc, proveedor_nombre)
             
         rows = conn.execute(query, params).fetchall()
@@ -2085,7 +2158,9 @@ def api_consultar_documento_existente(negocio_id):
                 'cantidad': float(r['cantidad']),
                 'valor_unitario': float(r['valor_unitario'] or 0),
                 'iva_pct': float(r['iva_pct'] or 0),
-                'notas': r['notas']
+                'notas': r['notas'],
+                'presentacion_id': r['presentacion_id'],
+                'presentacion_nombre': r['presentacion_nombre'] or ''
             } for r in rows]
         })
     except Exception as e:
@@ -2183,6 +2258,100 @@ def api_inventario_tarjetas_resumen(negocio_id):
             
         return jsonify({'ok': True, 'productos': resumen})
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/presentaciones/buscar')
+def api_presentaciones_buscar():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    q = request.args.get('q', '').strip()
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        query_sql = """
+            SELECT id, nombre, equivalencia 
+            FROM presentaciones
+        """
+        params = []
+        if q:
+            try:
+                val = float(q)
+                query_sql += " WHERE nombre ILIKE %s OR equivalencia = %s"
+                params = [f"%{q}%", val]
+            except ValueError:
+                query_sql += " WHERE nombre ILIKE %s"
+                params = [f"%{q}%"]
+        
+        query_sql += " ORDER BY nombre ASC LIMIT 50"
+        rows = conn.execute(query_sql, tuple(params)).fetchall()
+        
+        return jsonify({
+            'ok': True,
+            'presentaciones': [{
+                'id': r['id'],
+                'nombre': r['nombre'],
+                'equivalencia': float(r['equivalencia'])
+            } for r in rows]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/presentaciones/crear', methods=['POST'])
+def api_presentaciones_crear():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip()
+    try:
+        equivalencia = Decimal(str(data.get('equivalencia') or 1.0))
+    except Exception:
+        equivalencia = Decimal('1.0')
+        
+    if not nombre or equivalencia <= 0:
+        return jsonify({'ok': False, 'error': 'Nombre y equivalencia válidos requeridos'}), 400
+        
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        existente = conn.execute("""
+            SELECT id, nombre, equivalencia FROM presentaciones
+            WHERE LOWER(nombre) = LOWER(%s) AND equivalencia = %s
+            LIMIT 1
+        """, (nombre, float(equivalencia))).fetchone()
+        
+        if existente:
+            return jsonify({
+                'ok': True,
+                'presentacion': {
+                    'id': existente['id'],
+                    'nombre': existente['nombre'],
+                    'equivalencia': float(existente['equivalencia'])
+                }
+            })
+            
+        row = conn.execute("""
+            INSERT INTO presentaciones (nombre, equivalencia)
+            VALUES (%s, %s)
+            RETURNING id, nombre, equivalencia
+        """, (nombre, float(equivalencia))).fetchone()
+        conn.commit()
+        
+        return jsonify({
+            'ok': True,
+            'presentacion': {
+                'id': row['id'],
+                'nombre': row['nombre'],
+                'equivalencia': float(row['equivalencia'])
+            }
+        })
+    except Exception as e:
+        conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

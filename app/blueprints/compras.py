@@ -16,6 +16,16 @@ def _asegurar_tablas(conn):
         return
 
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS presentaciones (
+            id SERIAL PRIMARY KEY,
+            nombre VARCHAR(100) NOT NULL,
+            equivalencia NUMERIC(14,4) NOT NULL DEFAULT 1.0,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_presentaciones_unique ON presentaciones(LOWER(nombre), equivalencia)")
+
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS cotizaciones_compras (
             id SERIAL PRIMARY KEY,
             negocio_id INTEGER NOT NULL,
@@ -36,6 +46,16 @@ def _asegurar_tablas(conn):
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cotcomp_neg_item ON cotizaciones_compras(negocio_id, item_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cotcomp_vigencia ON cotizaciones_compras(fecha_vencimiento)")
+    
+    # Alter to add presentacion_id column
+    try:
+        conn.execute("ALTER TABLE cotizaciones_compras ADD COLUMN IF NOT EXISTS presentacion_id INTEGER REFERENCES presentaciones(id)")
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+            
     conn.commit()
     _tablas_listas = True
 
@@ -513,13 +533,34 @@ def api_cotizaciones_crear(negocio_id):
 
         fecha_cot = _date_or_default(data.get('fecha_cotizacion'), date.today())
         fecha_vence = _date_or_default(data.get('fecha_vencimiento'), fecha_cot + timedelta(days=180))
+
+        pres_id = data.get('presentacion_id')
+        pres_nombre = _txt(data.get('descripcion_presentacion'))
+        pres_equiv = unidades_item
+
+        if not pres_id and pres_nombre:
+            existente_pres = conn.execute("""
+                SELECT id FROM presentaciones
+                WHERE LOWER(nombre) = LOWER(%s) AND equivalencia = %s
+                LIMIT 1
+            """, (pres_nombre, float(pres_equiv))).fetchone()
+            if existente_pres:
+                pres_id = existente_pres['id']
+            else:
+                row_pres = conn.execute("""
+                    INSERT INTO presentaciones (nombre, equivalencia)
+                    VALUES (%s, %s)
+                    RETURNING id
+                """, (pres_nombre, float(pres_equiv))).fetchone()
+                pres_id = row_pres['id']
+
         row = conn.execute("""
             INSERT INTO cotizaciones_compras
                 (negocio_id, numero_cotizacion, tercero_id, item_id,
                  fecha_cotizacion, fecha_vencimiento, descripcion_presentacion,
                  unidades_item, precio, origen, validada_proveedor, observaciones,
-                 updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                 updated_at, presentacion_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),%s)
             RETURNING id
         """, (
             negocio_id,
@@ -528,12 +569,13 @@ def api_cotizaciones_crear(negocio_id):
             int(item_id),
             fecha_cot,
             fecha_vence,
-            _txt(data.get('descripcion_presentacion')),
+            pres_nombre,
             float(unidades_item),
             float(precio),
             _txt(data.get('origen')) or 'manual',
             bool(data.get('validada_proveedor', False)),
             _txt(data.get('observaciones')),
+            pres_id
         )).fetchone()
         conn.commit()
         return jsonify({'ok': True, 'id': row['id']})
@@ -574,24 +616,47 @@ def api_cotizaciones_actualizar(cotizacion_id):
             return jsonify({'ok': False, 'error': 'Proveedor requerido'}), 400
         fecha_cot = _date_or_default(data.get('fecha_cotizacion'), existente['fecha_cotizacion'] or date.today())
         fecha_vence = _date_or_default(data.get('fecha_vencimiento'), fecha_cot + timedelta(days=180))
+
+        pres_id = data.get('presentacion_id')
+        pres_nombre = _txt(data.get('descripcion_presentacion'))
+        pres_equiv = unidades_item
+
+        if not pres_id and pres_nombre:
+            existente_pres = conn.execute("""
+                SELECT id FROM presentaciones
+                WHERE LOWER(nombre) = LOWER(%s) AND equivalencia = %s
+                LIMIT 1
+            """, (pres_nombre, float(pres_equiv))).fetchone()
+            if existente_pres:
+                pres_id = existente_pres['id']
+            else:
+                row_pres = conn.execute("""
+                    INSERT INTO presentaciones (nombre, equivalencia)
+                    VALUES (%s, %s)
+                    RETURNING id
+                """, (pres_nombre, float(pres_equiv))).fetchone()
+                pres_id = row_pres['id']
+
         conn.execute("""
             UPDATE cotizaciones_compras
             SET numero_cotizacion=%s, tercero_id=%s, fecha_cotizacion=%s,
                 fecha_vencimiento=%s, descripcion_presentacion=%s,
                 unidades_item=%s, precio=%s, origen=%s,
-                validada_proveedor=%s, observaciones=%s, updated_at=NOW()
+                validada_proveedor=%s, observaciones=%s, updated_at=NOW(),
+                presentacion_id=%s
             WHERE id=%s
         """, (
             _txt(data.get('numero_cotizacion')),
             tercero_id,
             fecha_cot,
             fecha_vence,
-            _txt(data.get('descripcion_presentacion')),
+            pres_nombre,
             float(unidades_item),
             float(precio),
             _txt(data.get('origen')) or 'manual',
             bool(data.get('validada_proveedor', False)),
             _txt(data.get('observaciones')),
+            pres_id,
             cotizacion_id,
         ))
         conn.commit()

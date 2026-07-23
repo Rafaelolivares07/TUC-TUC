@@ -373,10 +373,11 @@
     <div class="mb-3">
       <div class="grid grid-cols-12 gap-2 mb-1 px-1">
         <span class="col-span-3 text-xs font-bold text-gray-400 uppercase">Producto</span>
-        <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Cantidad</span>
+        <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Presentación / Empaque</span>
+        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase">Cant.</span>
         <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Costo unit.</span>
         <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">Total Línea</span>
-        <span class="col-span-2 text-xs font-bold text-gray-400 uppercase">IVA %</span>
+        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase">IVA %</span>
         <span class="col-span-1"></span>
       </div>
       <div id="entrada-lineas" class="space-y-2"></div>
@@ -762,6 +763,106 @@ function setupRemoteAC(inputId, listId, hiddenId, searchUrl, onSelect) {
   function highlightAC(items) {
     items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
     if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+  }
+}
+
+function setupPresentacionAC(idx) {
+  const inp = document.getElementById(`ent-pres-${idx}`);
+  const list = document.getElementById(`ent-pres-list-${idx}`);
+  const hid = document.getElementById(`ent-pres-id-${idx}`);
+  if (!inp || !list || !hid) return;
+  
+  let currentFocus = -1;
+  let timer = null;
+
+  inp.addEventListener('input', () => {
+    clearTimeout(timer);
+    hid.value = ''; // Reset ID if user is typing a new one
+    timer = setTimeout(() => search(), 200);
+  });
+
+  inp.addEventListener('keydown', e => {
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') { currentFocus = Math.min(currentFocus + 1, items.length - 1); highlightAC(items); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { currentFocus = Math.max(currentFocus - 1, 0); highlightAC(items); e.preventDefault(); }
+    else if (e.key === 'Enter' && currentFocus >= 0) { items[currentFocus]?.click(); e.preventDefault(); }
+    else if (e.key === 'Escape') { list.classList.add('hidden'); }
+  });
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+  function highlightAC(items) {
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === currentFocus));
+  }
+
+  async function search() {
+    const q = inp.value.trim();
+    if (!q) { list.classList.add('hidden'); return; }
+    try {
+      const r = await fetch(`/api/inventario/presentaciones/buscar?q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if (!d.ok) return;
+      
+      let html = d.presentaciones.map(p => `
+        <div class="ac-item text-left px-3 py-1.5 hover:bg-rose-50 cursor-pointer text-xs"
+             data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}" data-equiv="${p.equivalencia}">
+          <div class="font-semibold text-gray-800">${p.nombre}</div>
+          <div class="text-[10px] text-gray-400">Equivale a: ${fmt(p.equivalencia)} unidades base</div>
+        </div>
+      `).join('');
+
+      html += `
+        <div class="ac-item text-left px-3 py-2 hover:bg-rose-50 cursor-pointer text-rose-600 font-bold border-t border-gray-100 text-xs flex items-center gap-1"
+             data-crear="true" data-nombre="${q.replace(/"/g,'&quot;')}">
+          <span>➕ Crear:</span> <span class="italic text-gray-700">"${q}"</span>
+        </div>
+      `;
+
+      list.innerHTML = html;
+      list.querySelectorAll('.ac-item').forEach(el => {
+        el.addEventListener('mousedown', async (e) => {
+          e.preventDefault();
+          list.classList.add('hidden');
+
+          if (el.dataset.crear) {
+            const nombre = el.dataset.nombre;
+            const equivStr = prompt(`Definir equivalencia para "${nombre}":\n\n¿A cuántas unidades base (gramos, mililitros, unidades) equivale esta presentación?`, "1");
+            if (equivStr === null) return;
+            const equiv = parseFloat(equivStr);
+            if (isNaN(equiv) || equiv <= 0) {
+              toast('Equivalencia inválida', false);
+              return;
+            }
+
+            try {
+              const res = await fetch('/api/inventario/presentaciones/crear', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nombre, equivalencia: equiv })
+              });
+              const data = await res.json();
+              if (data.ok) {
+                hid.value = data.presentacion.id;
+                inp.value = data.presentacion.nombre;
+                toast(`✅ Creado: ${data.presentacion.nombre} (${data.presentacion.equivalencia})`);
+              } else {
+                toast(data.error || 'Error al crear presentación', false);
+              }
+            } catch (err) {
+              console.error(err);
+              toast('Error de red al crear presentación', false);
+            }
+            return;
+          }
+
+          hid.value = el.dataset.id;
+          inp.value = el.dataset.nombre;
+        });
+      });
+      list.classList.remove('hidden');
+    } catch (err) {
+      console.error(err);
+    }
   }
 }
 
@@ -1251,7 +1352,12 @@ function agregarLineaEntrada() {
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
       <input type="hidden" id="ent-id-${idx}">
     </div>
-    <div class="col-span-2">
+    <div class="col-span-2 relative">
+      <input type="text" id="ent-pres-${idx}" placeholder="Empaque (ej: Caja x 12)" autocomplete="off">
+      <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
+      <input type="hidden" id="ent-pres-id-${idx}">
+    </div>
+    <div class="col-span-1">
       <input type="number" id="ent-cant-${idx}" placeholder="Cant." min="0" step="0.0001" value="0" oninput="calcularCostoFila(${idx}, 'cant')">
     </div>
     <div class="col-span-2">
@@ -1260,7 +1366,7 @@ function agregarLineaEntrada() {
     <div class="col-span-2">
       <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="" oninput="calcularCostoFila(${idx}, 'total')">
     </div>
-    <div class="col-span-2">
+    <div class="col-span-1">
       <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full">
         <option value="0" selected>0%</option>
         <option value="5">5%</option>
@@ -1293,11 +1399,12 @@ function agregarLineaEntrada() {
       calcularCostoFila(idx, 'vu');
     }
   });
-  
+
+  setupPresentacionAC(idx);
   calcularTotalesEntrada();
 }
 
-function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valorUnitario, ivaPct) {
+function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valorUnitario, ivaPct, presentacionId = null, presentacionNombre = '') {
   const cont = document.getElementById('entrada-lineas');
   const idx = entradaLineas.length;
   const div = document.createElement('div');
@@ -1308,7 +1415,12 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
       <input type="hidden" id="ent-id-${idx}" value="${productoId}">
     </div>
-    <div class="col-span-2">
+    <div class="col-span-2 relative">
+      <input type="text" id="ent-pres-${idx}" placeholder="Empaque (ej: Caja x 12)" autocomplete="off" value="${presentacionNombre.replace(/"/g,'&quot;')}">
+      <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
+      <input type="hidden" id="ent-pres-id-${idx}" value="${presentacionId || ''}">
+    </div>
+    <div class="col-span-1">
       <input type="number" id="ent-cant-${idx}" placeholder="Cant." min="0" step="0.0001" value="${cantidad}" oninput="calcularCostoFila(${idx}, 'cant')">
     </div>
     <div class="col-span-2">
@@ -1317,7 +1429,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
     <div class="col-span-2">
       <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="${(cantidad * valorUnitario).toFixed(2)}" oninput="calcularCostoFila(${idx}, 'total')">
     </div>
-    <div class="col-span-2">
+    <div class="col-span-1">
       <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full">
         <option value="0" ${ivaPct === 0 ? 'selected' : ''}>0%</option>
         <option value="5" ${ivaPct === 5 ? 'selected' : ''}>5%</option>
@@ -1345,6 +1457,8 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
       calcularCostoFila(idx, 'vu');
     }
   });
+
+  setupPresentacionAC(idx);
 }
 
 async function crearProveedorNuevo() {
@@ -1401,7 +1515,15 @@ async function verificarDocumentoExistente() {
       entradaLineas = [];
       
       for (const item of d.items) {
-        agregarLineaEntradaConDatos(item.producto_id, item.nombre_producto, item.cantidad, item.valor_unitario, item.iva_pct);
+        agregarLineaEntradaConDatos(
+          item.producto_id,
+          item.nombre_producto,
+          item.cantidad,
+          item.valor_unitario,
+          item.iva_pct,
+          item.presentacion_id,
+          item.presentacion_nombre
+        );
       }
       calcularTotalesEntrada();
     }
@@ -1503,6 +1625,8 @@ async function registrarEntrada() {
     const vu   = parseFloat(div.querySelector('input[id^="ent-vu-"]').value) || null;
     const totalInputVal = div.querySelector('input[id^="ent-total-"]')?.value;
     const ivaPct = parseFloat(div.querySelector('select[id^="ent-iva-pct-"]').value) || 0;
+    const presId = div.querySelector('input[id^="ent-pres-id-"]')?.value || null;
+    const presNombre = div.querySelector('input[id^="ent-pres-"]')?.value || null;
 
     if (!id || !cant) { toast(`Línea ${i+1}: producto y cantidad requeridos`, false); return; }
 
@@ -1511,7 +1635,14 @@ async function registrarEntrada() {
     const lineIva = lineSubtotal * (ivaPct / 100);
     ivaAcumulado += lineIva;
 
-    lineas.push({producto_id: parseInt(id), cantidad: cant, valor_unitario: vu, iva_pct: ivaPct});
+    lineas.push({
+      producto_id: parseInt(id),
+      cantidad: cant,
+      valor_unitario: vu,
+      iva_pct: ivaPct,
+      presentacion_id: presId ? parseInt(presId) : null,
+      presentacion_nombre: presNombre
+    });
   }
 
   if (!lineas.length) { toast('Agrega al menos una línea', false); return; }

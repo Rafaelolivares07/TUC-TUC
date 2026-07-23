@@ -102,13 +102,15 @@
         <label>Vence</label>
         <input id="cot-vence" type="date">
       </div>
-      <div class="sm:col-span-2">
-        <label>Presentacion</label>
-        <input id="cot-presentacion" type="text" placeholder="Caja x 12">
+      <div class="sm:col-span-2 relative">
+        <label>Presentación / Empaque</label>
+        <input id="cot-presentacion" type="text" placeholder="Caja x 12" autocomplete="off">
+        <div id="cot-pres-list" class="ac-list hidden"></div>
+        <input type="hidden" id="cot-presentacion-id">
       </div>
       <div>
         <label>Unidades item</label>
-        <input id="cot-unidades" type="number" min="0.0001" step="0.0001" value="1">
+        <input id="cot-unidades" type="number" min="0.0001" step="0.0001" value="1" readonly class="bg-gray-50 text-gray-500 font-mono text-center">
       </div>
       <div>
         <label>Precio</label>

@@ -1030,9 +1030,11 @@ def api_inventario_kardex(producto_id):
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
                    m.documento_numero, m.documento_fecha, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
-                   TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') AS fecha
+                   TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') AS fecha,
+                   p_padre.nombre AS producto_padre_nombre
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
+            LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             WHERE m.producto_id = %s
             ORDER BY m.created_at DESC LIMIT 300
         """, (producto_id,)).fetchall()
@@ -1064,9 +1066,11 @@ def api_tienda_inventario_kardex(slug):
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
                    m.documento_numero, m.documento_fecha, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
-                   TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') AS fecha
+                   TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') AS fecha,
+                   p_padre.nombre AS producto_padre_nombre
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
+            LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             WHERE m.producto_id = %s AND m.negocio_id = %s
             ORDER BY m.created_at DESC LIMIT 300
         """, (producto_id, negocio_id)).fetchall()
@@ -1268,7 +1272,8 @@ def api_produccion_registrar(negocio_id):
             _mov_directo(conn, negocio_id, c['componente_id'], cant_comp,
                          'salida', 'produccion', session['usuario_id'],
                          valor_unitario=comp_cost,
-                         notas=notas, referencia_tipo='produccion', referencia_id=prod_token)
+                         notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
+                         producto_padre_id=producto_id)
 
         # Entrada del terminado con costo calculado desde componentes
         _mov_directo(conn, negocio_id, producto_id, cantidad,

@@ -510,20 +510,39 @@
 
   <!-- ── TAB KARDEX ────────────────────────────────────────────────── -->
   <div id="tab-kardex" class="hidden bg-white rounded-2xl shadow p-5">
-    <div class="mb-4 relative" style="max-width:360px">
-      <label>Producto</label>
-      <input id="kardex-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off"
-             oninput="filtrarACKardex()">
-      <div id="kardex-ac-list" class="ac-list hidden"></div>
-      <input type="hidden" id="kardex-ac-id">
+    <div class="flex items-end justify-between mb-4 flex-wrap gap-4 border-b border-gray-100 pb-4">
+      <div class="relative w-full sm:max-w-xs">
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide">Consultar Producto</label>
+        <input id="kardex-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off"
+               oninput="filtrarACKardex()">
+        <div id="kardex-ac-list" class="ac-list hidden"></div>
+        <input type="hidden" id="kardex-ac-id">
+      </div>
+      
+      <!-- Product Summary Panel -->
+      <div id="kardex-resumen-producto" class="hidden flex items-center gap-4 bg-gray-50 border border-gray-150 p-3 rounded-xl ml-auto">
+        <div class="text-xs text-gray-500 border-r border-gray-200 pr-4">
+          <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Stock Disponible</span>
+          <span id="kp-stock" class="text-sm font-extrabold text-gray-800">0</span>
+        </div>
+        <div class="text-xs text-gray-500 border-r border-gray-200 pr-4">
+          <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Costo Prom. Actual</span>
+          <span id="kp-costo-prom" class="text-sm font-extrabold text-indigo-600 font-mono">0</span>
+        </div>
+        <div class="text-xs text-gray-500 pr-1">
+          <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Valor Inventario</span>
+          <span id="kp-valor-existencia" class="text-sm font-extrabold text-emerald-600 font-mono">0</span>
+        </div>
+      </div>
     </div>
+
     <div class="overflow-x-auto">
       <table class="w-full text-xs">
         <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
           <tr class="text-gray-500 uppercase text-[10px]">
             <th rowspan="2" class="px-3 py-2 text-left">Fecha</th>
             <th colspan="3" class="px-3 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100/50">CANTIDADES</th>
-            <th rowspan="2" class="px-3 py-2 text-right num">Costo und</th>
+            <th colspan="2" class="px-3 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100/50">COSTOS UNITARIOS</th>
             <th rowspan="2" class="px-3 py-2 text-right num">Total Línea</th>
             <th rowspan="2" class="px-3 py-2 text-left">Documento / Proveedor / Origen</th>
             <th rowspan="2" class="px-3 py-2 text-left">Notas</th>
@@ -533,10 +552,12 @@
             <th class="px-3 py-1.5 text-right num font-semibold bg-emerald-50/30 text-emerald-800 border-r border-gray-100">Entradas</th>
             <th class="px-3 py-1.5 text-right num font-semibold bg-rose-50/30 text-rose-800 border-r border-gray-100">Salidas</th>
             <th class="px-3 py-1.5 text-right num font-semibold bg-gray-100/30 text-gray-800">Saldo</th>
+            <th class="px-3 py-1.5 text-right num font-semibold bg-blue-50/30 text-blue-800 border-r border-gray-100" title="Costo unitario del movimiento">Costo Trans.</th>
+            <th class="px-3 py-1.5 text-right num font-semibold bg-purple-50/30 text-purple-800" title="Costo promedio ponderado resultante">Costo Prom.</th>
           </tr>
         </thead>
         <tbody id="tabla-kardex" class="divide-y divide-gray-100">
-          <tr><td colspan="9" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
+          <tr><td colspan="10" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
         </tbody>
       </table>
     </div>
@@ -1555,16 +1576,32 @@ function verKardex(id, nombre) {
 }
 async function cargarKardex(productoId) {
   const tb = document.getElementById('tabla-kardex');
-  tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+  tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+  
+  // Render product summary bar
+  const prod = productos.find(p => Number(p.id) === Number(productoId));
+  const summaryPanel = document.getElementById('kardex-resumen-producto');
+  if (prod && summaryPanel) {
+    document.getElementById('kp-stock').textContent = fmt(prod.stock);
+    document.getElementById('kp-costo-prom').textContent = fmtUnitCost(prod.costo);
+    document.getElementById('kp-valor-existencia').textContent = fmtMon(Number(prod.costo || 0) * Number(prod.stock || 0));
+    summaryPanel.classList.remove('hidden');
+  } else if (summaryPanel) {
+    summaryPanel.classList.add('hidden');
+  }
+
   const r = await fetch(`/api/inventario/producto/${productoId}/kardex`);
   const d = await r.json();
   if (!d.ok) { toast(d.error, false); return; }
   if (!d.movimientos.length) {
-    tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
     return;
   }
   tb.innerHTML = d.movimientos.map(m => {
-    const unitCostVal = m.costo_und ?? m.valor_unitario;
+    const transCostVal = m.valor_unitario;
+    const avgCostVal = m.costo_und;
+    
+    const unitCostVal = avgCostVal ?? transCostVal;
     const lineTotal = (m.valor_total != null && Number(m.valor_total) > 0) 
       ? Number(m.valor_total) 
       : (Number(m.cantidad || 0) * Number(unitCostVal || 0));
@@ -1597,7 +1634,8 @@ async function cargarKardex(productoId) {
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
         <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${fmt(m.stock_nuevo)}</td>
-        <td class="px-3 py-2.5 text-right num font-mono text-xs text-gray-600">${fmtUnitCost(unitCostVal)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-xs text-gray-600 border-r border-gray-100/50">${fmtUnitCost(transCostVal)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-xs text-gray-600">${fmtUnitCost(avgCostVal)}</td>
         <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-800">${fmtMon(lineTotal)}</td>
         <td class="px-3 py-2.5 text-xs text-gray-600">${docOrProveedorInfo}</td>
         <td class="px-3 py-2.5 text-xs text-gray-400 max-w-[140px] truncate" title="${m.notes || m.notas || ''}">${m.notes || m.notas || ''}</td>
@@ -1869,6 +1907,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // AC kardex
   setupAC('kardex-ac-input', 'kardex-ac-list', 'kardex-ac-id', () => productos, ({id, nombre}) => {
     cargarKardex(id);
+  });
+  document.getElementById('kardex-ac-input').addEventListener('input', (e) => {
+    if (!e.target.value.trim()) {
+      document.getElementById('kardex-resumen-producto')?.classList.add('hidden');
+    }
   });
 
   // AC producción (limpia preview al cambiar producto)

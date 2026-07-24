@@ -1860,6 +1860,7 @@ def api_auditar_documento(negocio_id):
                 'total_debitos': float(comp_row['total_debitos'] or 0),
                 'total_creditos': float(comp_row['total_creditos'] or 0),
                 'notas': comp_row['notas'],
+                'documento_fisico': num_doc,
                 'asientos': [
                     {
                         'id': e['id'],

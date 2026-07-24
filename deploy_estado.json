@@ -1,6 +1,6 @@
 {
-  "commit": "e132b23",
+  "commit": "95d2c63",
   "estado": "pendiente",
-  "iniciado": "2026-07-23T11:13:39.588051",
-  "mensaje": "Enforce single quote per product/supplier/presentation combination on manual creations"
+  "iniciado": "2026-07-24T08:57:30.152281",
+  "mensaje": "Pass selected tipo_documento instead of hardcoded COMPRA when generating entry voucher"
 }

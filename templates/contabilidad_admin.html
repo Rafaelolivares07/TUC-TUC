@@ -59,6 +59,7 @@
       <button onclick="cambiarTab('puc')"    id="tab-puc"    class="tab-btn tab-active">📋 PUC</button>
       <button onclick="cambiarTab('tipos')"  id="tab-tipos"  class="tab-btn">📄 Tipos Doc</button>
       <button onclick="cambiarTab('params')" id="tab-params" class="tab-btn">⚙️ Parametrización</button>
+      <button onclick="cambiarTab('pago_metodos')" id="tab-pago_metodos" class="tab-btn">💳 Métodos de Pago</button>
       <button onclick="cambiarTab('grupos')" id="tab-grupos" class="tab-btn">🗂️ Grupos Inv.</button>
       <button onclick="cambiarTab('manual')" id="tab-manual" class="tab-btn">✏️ Comprobante</button>
       <button onclick="cambiarTab('comps')"  id="tab-comps"  class="tab-btn">📚 Comprobantes</button>
@@ -374,6 +375,27 @@
           </tr></thead>
           <tbody id="comps-body"></tbody>
         </table>
+    </div>
+
+    <!-- TAB: MÉTODOS DE PAGO -->
+    <div id="panel-pago_metodos" class="p-5 hidden">
+      <div class="mb-4">
+        <h2 class="text-lg font-bold text-gray-800">Cuentas Contables por Método de Pago</h2>
+        <p class="text-sm text-gray-500">Asigne las cuentas de recaudo (ventas/débito) y pago (compras/crédito) para cada uno de los métodos de pago configurados en su negocio.</p>
+      </div>
+      <div class="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100">
+              <th class="px-4 py-3 text-left">Método de Pago</th>
+              <th class="px-4 py-3 text-left">Cuenta de Recaudo (Débito en Ventas)</th>
+              <th class="px-4 py-3 text-left">Cuenta de Pago (Crédito en Compras)</th>
+            </tr>
+          </thead>
+          <tbody id="pago_metodos-body" class="divide-y divide-gray-100">
+            <!-- Dinámico -->
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -456,7 +478,7 @@
 
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
-const TABS = ['puc','tipos','params','grupos','progs','manual','comps'];
+const TABS = ['puc','tipos','params','pago_metodos','grupos','progs','manual','comps'];
 let tiposDocs = [];
 let variablesModulo = [];
 let paramActivo = null;
@@ -469,13 +491,14 @@ function cambiarTab(t) {
     document.getElementById(`panel-${x}`).classList.toggle('hidden', x !== t);
     document.getElementById(`tab-${x}`).classList.toggle('tab-active', x === t);
   });
-  if (t === 'puc')    buscarPUC();
-  if (t === 'tipos')   cargarTiposDocs();
-  if (t === 'params')  { cargarTiposDocs(); cargarParametros(); }
-  if (t === 'grupos')  { cargarGrupos(); cargarConfigContable(); }
-  if (t === 'progs')   { progCargarTipos(); progCargarLista(); }
-  if (t === 'comps')   cargarComprobantes();
-  if (t === 'manual') { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
+  if (t === 'puc')          buscarPUC();
+  if (t === 'pago_metodos') cargarPagoMetodos();
+  if (t === 'tipos')        cargarTiposDocs();
+  if (t === 'params')       { cargarTiposDocs(); cargarParametros(); }
+  if (t === 'grupos')       { cargarGrupos(); cargarConfigContable(); }
+  if (t === 'progs')        { progCargarTipos(); progCargarLista(); }
+  if (t === 'comps')        cargarComprobantes();
+  if (t === 'manual')       { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
 }
 
 function toast(msg, ok=true) {
@@ -1291,6 +1314,108 @@ async function guardarConfigContable() {
 
 // Fecha hoy por defecto
 document.getElementById('man-fecha').value = new Date().toISOString().slice(0,10);
+
+let metodosConfigurados = [];
+let genTimers = {};
+
+function acPUCGenerico(input, callback) {
+  const listEl = input.nextElementSibling;
+  const timerKey = input.id || Math.random().toString();
+  clearTimeout(genTimers[timerKey]);
+  genTimers[timerKey] = setTimeout(async () => {
+    const q = input.value.trim();
+    if (q.length < 2) { listEl.classList.add('hidden'); return; }
+    const cuentas = await fetchPUC(q);
+    renderAC(listEl, cuentas, c => {
+      input.value = `${c.codigo} — ${c.nombre}`;
+      callback(c.id, c.codigo, c.nombre);
+      listEl.classList.add('hidden');
+    });
+  }, 280);
+}
+
+async function cargarPagoMetodos() {
+  const tbody = document.getElementById('pago_metodos-body');
+  tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-4 text-center text-gray-400">Cargando métodos de pago...</td></tr>';
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`);
+    const d = await r.json();
+    if (!d.ok) {
+      tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-red-500">${d.error}</td></tr>`;
+      return;
+    }
+    
+    metodosConfigurados = d.metodos || [];
+    tbody.innerHTML = '';
+    if (metodosConfigurados.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-4 text-center text-gray-400">No se encontraron métodos de pago habilitados. Habilítelos primero en la configuración del negocio.</td></tr>';
+      return;
+    }
+    
+    metodosConfigurados.forEach((m, idx) => {
+      const recText = m.recaudo_codigo ? `${m.recaudo_codigo} — ${m.recaudo_nombre}` : '';
+      const pagText = m.pago_codigo ? `${m.pago_codigo} — ${m.pago_nombre}` : '';
+      
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-gray-50';
+      tr.innerHTML = `
+        <td class="px-4 py-3 font-semibold text-gray-700">${m.nombre} <span class="text-xs text-gray-400 font-mono">(${m.codigo})</span></td>
+        <td class="px-4 py-3 relative">
+          <div class="relative">
+            <input type="text" placeholder="Buscar cuenta recaudo..." 
+                   class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                   value="${recText}"
+                   oninput="acPUCGenerico(this, (id, cod, nom) => guardarRelacionMetodoPago(${idx}, id, 'recaudo'))">
+            <div class="ac-drop hidden"></div>
+          </div>
+        </td>
+        <td class="px-4 py-3 relative">
+          <div class="relative">
+            <input type="text" placeholder="Buscar cuenta pago..." 
+                   class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                   value="${pagText}"
+                   oninput="acPUCGenerico(this, (id, cod, nom) => guardarRelacionMetodoPago(${idx}, id, 'pago'))">
+            <div class="ac-drop hidden"></div>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
+  }
+}
+
+async function guardarRelacionMetodoPago(idx, cuenta_id, tipo) {
+  try {
+    const m = metodosConfigurados[idx];
+    if (!m) return;
+    
+    if (tipo === 'recaudo') {
+      m.cuenta_recaudo_id = cuenta_id;
+    } else {
+      m.cuenta_pago_id = cuenta_id;
+    }
+    
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        metodo_codigo: m.codigo,
+        cuenta_recaudo_id: m.cuenta_recaudo_id,
+        cuenta_pago_id: m.cuenta_pago_id
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Cuenta contable guardada');
+    } else {
+      toast(d.error, false);
+    }
+  } catch(e) {
+    toast('Error de red al guardar cuenta', false);
+  }
+}
 
 // Cargar el PUC de inmediato al iniciar
 buscarPUC();

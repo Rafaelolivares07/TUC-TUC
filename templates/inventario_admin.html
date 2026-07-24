@@ -364,6 +364,12 @@
         <div id="entrada-proveedor-list" class="ac-list hidden"></div>
         <input type="hidden" id="entrada-proveedor-id">
       </div>
+      <div>
+        <label>Método de Pago</label>
+        <select id="entrada-metodo-pago">
+          <!-- Cargado dinámicamente -->
+        </select>
+      </div>
       <div class="sm:col-span-2">
         <label>Notas (opcional)</label>
         <input id="entrada-notas" type="text" placeholder="">
@@ -1702,6 +1708,7 @@ async function registrarEntrada() {
   const fecha_documento = document.getElementById('entrada-fecha-doc').value || null;
   const proveedor_nombre = document.getElementById('entrada-proveedor').value.trim() || null;
   const proveedor_id = document.getElementById('entrada-proveedor-id').value || null;
+  const metodo_pago = document.getElementById('entrada-metodo-pago').value || 'efectivo';
 
   if (proveedor_nombre && !proveedor_id) {
     toast('El proveedor no está registrado ni seleccionado. Por favor haz clic en "Crear proveedor" o selecciona uno de la lista.', false);
@@ -1751,7 +1758,8 @@ async function registrarEntrada() {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       lineas, motivo, notas, tipo_documento, numero_documento,
-      fecha_documento, proveedor_nombre, proveedor_id, iva: ivaAcumulado
+      fecha_documento, proveedor_nombre, proveedor_id, iva: ivaAcumulado,
+      metodo_pago
     })
   });
   const d = await r.json();

@@ -209,6 +209,62 @@ def _asegurar_tablas(conn):
         )
     """)
     conn.commit()
+
+    # Sembrar método de pago 'credito' en metodos_pago_catalogo si no existe
+    exists_credito = conn.execute("SELECT 1 FROM metodos_pago_catalogo WHERE codigo='credito'").fetchone()
+    if not exists_credito:
+        conn.execute("""
+            INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, activo, orden)
+            VALUES ('Crédito / Cuenta por cobrar o pagar', 'credito', '', TRUE, 9)
+        """)
+        conn.commit()
+
+    # Crear tabla de asignación de cuentas por método de pago
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS parametros_metodos_pago_negocio (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL REFERENCES terceros(id),
+            metodo_codigo VARCHAR(50) NOT NULL,
+            cuenta_recaudo_id INTEGER REFERENCES cuentas_puc(id),
+            cuenta_pago_id INTEGER REFERENCES cuentas_puc(id),
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(negocio_id, metodo_codigo)
+        )
+    """)
+    conn.commit()
+
+    # Crear tabla de saldos por documento
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS saldo_por_documentos (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL REFERENCES terceros(id),
+            cuenta_id INTEGER NOT NULL REFERENCES cuentas_puc(id),
+            tercero_id INTEGER NOT NULL REFERENCES terceros(id),
+            tipo_documento VARCHAR(50) NOT NULL,
+            numero_documento VARCHAR(50) NOT NULL,
+            monto_original NUMERIC(15,2) NOT NULL,
+            saldo NUMERIC(15,2) NOT NULL,
+            usuario_id INTEGER REFERENCES usuarios(id),
+            fecha_hora TIMESTAMP NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_saldo_doc_unico ON saldo_por_documentos(negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento)")
+    conn.commit()
+
+    # Alteraciones de columnas
+    for sql in [
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(50) DEFAULT NULL",
+        "ALTER TABLE parametros_lineas_contables ADD COLUMN IF NOT EXISTS cuenta_dinamica VARCHAR(50) DEFAULT NULL"
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+
     _seed_variables(conn)
     _tablas_listas = True
 
@@ -506,14 +562,16 @@ def ejecutar_programaciones_job(app):
 
 def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
                                   registrado_por=None, fecha=None, descripcion_override=None,
-                                  origen_tipo=None, origen_id=None):
+                                  origen_tipo=None, origen_id=None,
+                                  metodo_pago=None, tercero_id=None,
+                                  tipo_documento_fisico=None, documento_numero_fisico=None):
     """
     Motor parametrizable best-effort.
     Retorna comprobante_id (int) o None si no hay parametrización activa.
     conn: abierta, el llamador hace commit/rollback.
     """
     tipo_doc = conn.execute(
-        "SELECT id, nombre, consecutivo, numero_inicio FROM tipos_documento_negocio "
+        "SELECT id, nombre, consecutivo, numero_inicio, tipo_movimiento FROM tipos_documento_negocio "
         "WHERE negocio_id=%s AND codigo=%s",
         (negocio_id, tipo_doc_codigo)
     ).fetchone()
@@ -528,19 +586,46 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
     if not param:
         return None
 
-    lineas = conn.execute("""
+    lineas_raw = conn.execute("""
         SELECT l.cuenta_puc_id, l.tipo_mov, l.origen,
                l.valor_fijo, l.formula, l.orden,
                c.codigo AS cuenta_codigo, c.nombre AS cuenta_nombre,
-               v.codigo AS var_codigo
+               v.codigo AS var_codigo, l.cuenta_dinamica
         FROM parametros_lineas_contables l
         JOIN cuentas_puc c ON c.id = l.cuenta_puc_id
         LEFT JOIN modulo_variables_contables v ON v.id = l.variable_id
         WHERE l.parametro_id = %s AND l.activo = TRUE
         ORDER BY l.orden
     """, (param['id'],)).fetchall()
-    if not lineas:
-        return None
+
+    # Resolver cuentas dinámicas en líneas de plantilla
+    lineas = []
+    for l in lineas_raw:
+        row = dict(l)
+        if row.get('cuenta_dinamica'):
+            cuenta_res = None
+            if row['cuenta_dinamica'] == 'metodo_pago_pago' and metodo_pago:
+                pm = conn.execute(
+                    "SELECT cuenta_pago_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
+                    (negocio_id, metodo_pago)
+                ).fetchone()
+                if pm and pm['cuenta_pago_id']:
+                    cuenta_res = pm['cuenta_pago_id']
+            elif row['cuenta_dinamica'] == 'metodo_pago_recaudo' and metodo_pago:
+                pm = conn.execute(
+                    "SELECT cuenta_recaudo_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
+                    (negocio_id, metodo_pago)
+                ).fetchone()
+                if pm and pm['cuenta_recaudo_id']:
+                    cuenta_res = pm['cuenta_recaudo_id']
+            
+            if cuenta_res:
+                c_puc = conn.execute("SELECT codigo, nombre FROM cuentas_puc WHERE id = %s", (cuenta_res,)).fetchone()
+                if c_puc:
+                    row['cuenta_puc_id'] = cuenta_res
+                    row['cuenta_codigo'] = c_puc['codigo']
+                    row['cuenta_nombre'] = c_puc['nombre']
+        lineas.append(row)
 
     pos_amounts = {}
     mov_list = []
@@ -571,6 +656,44 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
                 'monto':         abs(monto),
             })
 
+    # Inyección automática de contrapartida de método de pago
+    if metodo_pago:
+        cuenta_metodo = None
+        tipo_mov_contra = 'C'
+        tipo_mov_negocio = tipo_doc.get('tipo_movimiento')
+        
+        if tipo_mov_negocio == 'entrada':
+            row_metodo = conn.execute(
+                "SELECT cuenta_pago_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
+                (negocio_id, metodo_pago)
+            ).fetchone()
+            if row_metodo and row_metodo['cuenta_pago_id']:
+                cuenta_metodo = row_metodo['cuenta_pago_id']
+                tipo_mov_contra = 'C'
+        elif tipo_mov_negocio == 'venta':
+            row_metodo = conn.execute(
+                "SELECT cuenta_recaudo_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
+                (negocio_id, metodo_pago)
+            ).fetchone()
+            if row_metodo and row_metodo['cuenta_recaudo_id']:
+                cuenta_metodo = row_metodo['cuenta_recaudo_id']
+                tipo_mov_contra = 'D'
+                
+        if cuenta_metodo:
+            c_puc = conn.execute("SELECT codigo, nombre FROM cuentas_puc WHERE id = %s", (cuenta_metodo,)).fetchone()
+            if c_puc:
+                monto_contra = float(variables.get('total_compra') or variables.get('total_venta') or 0.0)
+                if monto_contra > 0:
+                    # Evitar duplicar si ya se parametrizó explícitamente (mejor remover de la lista anterior)
+                    mov_list = [m for m in mov_list if m['cuenta_puc_id'] != cuenta_metodo]
+                    mov_list.append({
+                        'cuenta_puc_id': cuenta_metodo,
+                        'cuenta_codigo': c_puc['codigo'],
+                        'concepto':      c_puc['nombre'],
+                        'tipo_mov':      tipo_mov_contra,
+                        'monto':         monto_contra,
+                    })
+
     if not mov_list:
         return None
 
@@ -597,6 +720,73 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
           total_deb, total_cred, registrado_por, origen_tipo, origen_id)).fetchone()['id']
 
     for m in mov_list:
+        # Validación y control de saldos por documento
+        c_doc = conn.execute("SELECT maneja_documentos, naturaleza FROM cuentas_puc WHERE id = %s", (m['cuenta_puc_id'],)).fetchone()
+        if c_doc and c_doc['maneja_documentos']:
+            t_id = tercero_id
+            t_doc = tipo_documento_fisico or tipo_doc_codigo
+            d_num = documento_numero_fisico or str(num_doc)
+            
+            if not t_id:
+                raise ValueError("Se requiere seleccionar un tercero para registrar movimientos en una cuenta que maneja documentos.")
+            
+            es_debito = (m['tipo_mov'] == 'D')
+            es_naturaleza_debito = (c_doc['naturaleza'] == 'debito')
+            es_incremento = (es_debito == es_naturaleza_debito)
+            
+            if es_incremento:
+                # Nacimiento / Aumento
+                existente = conn.execute("""
+                    SELECT id, saldo FROM saldo_por_documentos
+                    WHERE negocio_id = %s AND tercero_id = %s AND cuenta_id = %s
+                      AND tipo_documento = %s AND numero_documento = %s
+                """, (negocio_id, t_id, m['cuenta_puc_id'], t_doc, d_num)).fetchone()
+                
+                if existente:
+                    raise ValueError(
+                        f"El documento {t_doc} {d_num} ya existe registrado para este tercero en saldos por documento. "
+                        f"No se permite duplicar el documento, incrementar su valor original, "
+                        f"ni volver a crear uno nuevo con un saldo diferente."
+                    )
+                
+                conn.execute("""
+                    INSERT INTO saldo_por_documentos
+                    (negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento,
+                     monto_original, saldo, usuario_id, fecha_hora)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                """, (negocio_id, t_id, m['cuenta_puc_id'], t_doc, d_num,
+                      m['monto'], m['monto'], registrado_por))
+            else:
+                # Reducción / Abono
+                existente = conn.execute("""
+                    SELECT id, saldo FROM saldo_por_documentos
+                    WHERE negocio_id = %s AND tercero_id = %s AND cuenta_id = %s
+                      AND tipo_documento = %s AND numero_documento = %s
+                """, (negocio_id, t_id, m['cuenta_puc_id'], t_doc, d_num)).fetchone()
+                
+                if not existente:
+                    raise ValueError(
+                        f"El documento {t_doc} {d_num} no existe en saldos por documento. "
+                        f"No se puede abonar a un documento inexistente."
+                    )
+                
+                saldo_actual = float(existente['saldo'])
+                monto_abono = float(m['monto'])
+                
+                if monto_abono > saldo_actual:
+                    raise ValueError(
+                        f"El abono pretendido de ${monto_abono:.2f} supera el saldo pendiente actual del documento "
+                        f"{t_doc} {d_num} (Saldo actual: ${saldo_actual:.2f}). Por favor, ajuste el valor del abono "
+                        f"para que sea menor o igual al saldo pendiente."
+                    )
+                
+                nuevo_saldo = saldo_actual - monto_abono
+                conn.execute("""
+                    UPDATE saldo_por_documentos 
+                    SET saldo = %s, updated_at = NOW()
+                    WHERE id = %s
+                """, (nuevo_saldo, existente['id']))
+
         conn.execute("""
             INSERT INTO movimientos_contables
                 (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
@@ -1788,6 +1978,100 @@ def api_contabilidad_config(negocio_id):
             return jsonify({'ok': True})
             
         return jsonify({'ok': True, 'config': dict(row)})
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/config-metodos', methods=['GET', 'POST'])
+def api_contabilidad_config_metodos(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        _asegurar_tablas(conn)
+        
+        if request.method == 'POST':
+            data = request.get_json() or {}
+            metodo_codigo = (data.get('metodo_codigo') or '').strip()
+            cuenta_recaudo_id = data.get('cuenta_recaudo_id')
+            cuenta_pago_id = data.get('cuenta_pago_id')
+            
+            if not metodo_codigo:
+                return jsonify({'ok': False, 'error': 'Código de método requerido'}), 400
+                
+            recaudo_id = int(cuenta_recaudo_id) if cuenta_recaudo_id else None
+            pago_id = int(cuenta_pago_id) if cuenta_pago_id else None
+            
+            conn.execute("""
+                INSERT INTO parametros_metodos_pago_negocio 
+                (negocio_id, metodo_codigo, cuenta_recaudo_id, cuenta_pago_id)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (negocio_id, metodo_codigo) 
+                DO UPDATE SET 
+                    cuenta_recaudo_id = EXCLUDED.cuenta_recaudo_id,
+                    cuenta_pago_id = EXCLUDED.cuenta_pago_id
+            """, (negocio_id, metodo_codigo, recaudo_id, pago_id))
+            conn.commit()
+            return jsonify({'ok': True})
+            
+        # GET: list active payment methods
+        cfg = conn.execute("SELECT metodos_pago FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        activos = []
+        if cfg and cfg['metodos_pago']:
+            activos = cfg['metodos_pago']
+            if isinstance(activos, str):
+                import json
+                try: activos = json.loads(activos)
+                except Exception: activos = []
+        
+        if not isinstance(activos, list):
+            activos = []
+            
+        if 'credito' not in activos:
+            activos.append('credito')
+            
+        catalogo = []
+        if activos:
+            placeholders = ', '.join(['%s'] * len(activos))
+            catalogo = conn.execute(f"""
+                SELECT nombre, codigo 
+                FROM metodos_pago_catalogo 
+                WHERE codigo IN ({placeholders}) AND activo = TRUE
+                ORDER BY orden, nombre
+            """, tuple(activos)).fetchall()
+        
+        mappings = conn.execute("""
+            SELECT pm.metodo_codigo, 
+                   pm.cuenta_recaudo_id, cr.codigo AS recaudo_codigo, cr.nombre AS recaudo_nombre,
+                   pm.cuenta_pago_id, cp.codigo AS pago_codigo, cp.nombre AS pago_nombre
+            FROM parametros_metodos_pago_negocio pm
+            LEFT JOIN cuentas_puc cr ON cr.id = pm.cuenta_recaudo_id
+            LEFT JOIN cuentas_puc cp ON cp.id = pm.cuenta_pago_id
+            WHERE pm.negocio_id = %s
+        """, (negocio_id,)).fetchall()
+        
+        mapping_dict = {m['metodo_codigo']: dict(m) for m in mappings}
+        
+        result = []
+        for c in catalogo:
+            m = mapping_dict.get(c['codigo'], {})
+            result.append({
+                'codigo': c['codigo'],
+                'nombre': c['nombre'],
+                'cuenta_recaudo_id': m.get('cuenta_recaudo_id'),
+                'recaudo_codigo': m.get('recaudo_codigo'),
+                'recaudo_nombre': m.get('recaudo_nombre'),
+                'cuenta_pago_id': m.get('cuenta_pago_id'),
+                'pago_codigo': m.get('pago_codigo'),
+                'pago_nombre': m.get('pago_nombre'),
+            })
+            
+        return jsonify({'ok': True, 'metodos': result})
     except Exception as e:
         try: conn.rollback()
         except Exception: pass

@@ -112,6 +112,7 @@ def _crear_tablas(conn):
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
         "ALTER TABLE comprobantes_contables ADD COLUMN IF NOT EXISTS origen_tipo VARCHAR(50)",
         "ALTER TABLE comprobantes_contables ADD COLUMN IF NOT EXISTS origen_id VARCHAR(100)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(50) DEFAULT NULL",
         "ALTER TABLE movimientos_inventario ALTER COLUMN valor_unitario TYPE NUMERIC(16,6)",
         "ALTER TABLE movimientos_inventario ALTER COLUMN costo_und TYPE NUMERIC(16,6)",
         "ALTER TABLE saldos_inventario ALTER COLUMN costo_und TYPE NUMERIC(16,6)",
@@ -311,7 +312,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                  documento_fecha=None, proveedor_id=None,
                  proveedor_nombre=None, iva_total=None,
                  documento_total=None, iva_pct=None, iva_valor=None,
-                 producto_padre_id=None, presentacion_id=None):
+                 producto_padre_id=None, presentacion_id=None,
+                 metodo_pago=None):
     """Movimiento directo sobre un producto, sin pasar por tarjeta estándar."""
     signo  = Decimal('1') if tipo == 'entrada' else Decimal('-1')
     cantidad = Decimal(str(cantidad))
@@ -345,8 +347,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
              valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo,
              tipo_documento, documento_numero, documento_fecha, proveedor_id,
              proveedor_nombre, iva_total, documento_total, iva_pct, iva_valor,
-             producto_padre_id, presentacion_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             producto_padre_id, presentacion_id, metodo_pago)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         negocio_id, producto_id,
         nombre_prod['nombre'] if nombre_prod else '',
@@ -363,7 +365,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         float(documento_total) if documento_total is not None else None,
         float(iva_pct) if iva_pct is not None else 0.0,
         float(iva_valor) if iva_valor is not None else 0.0,
-        producto_padre_id, presentacion_id
+        producto_padre_id, presentacion_id, metodo_pago
     ))
 
     if saldo:
@@ -402,7 +404,7 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      documento_fecha=None, proveedor_id=None,
                      proveedor_nombre=None, iva_total=None,
                      documento_total=None, iva_pct=None, iva_valor=None,
-                     presentacion_id=None):
+                     presentacion_id=None, metodo_pago=None):
     """Aplica entrada o salida según tarjeta estándar. Sin tarjeta → 1:1 sobre sí mismo."""
     componentes = conn.execute(
         "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
@@ -423,7 +425,7 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      documento_numero, documento_fecha, proveedor_id,
                      proveedor_nombre, iva_total, documento_total,
                      iva_pct, iva_valor, producto_padre_id=padre_id,
-                     presentacion_id=pres_id)
+                     presentacion_id=pres_id, metodo_pago=metodo_pago)
 
 
 def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
@@ -433,6 +435,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     notas = _txt(data.get('notes') or data.get('notas'))
     if not lineas:
         return {'ok': False, 'error': 'Debe agregar al menos una linea'}, 400
+
+    metodo_pago = (_txt(data.get('metodo_pago')) or 'efectivo').lower()
 
     tipo_documento = (_txt(data.get('tipo_documento')) or 'otro').upper()
     documento_numero = (_txt(data.get('documento_numero') or data.get('numero_documento')) or '').upper()
@@ -629,7 +633,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             documento_total=documento_total,
             iva_pct=ln['iva_pct'],
             iva_valor=ln['iva_valor'],
-            presentacion_id=ln['presentacion_id']
+            presentacion_id=ln['presentacion_id'],
+            metodo_pago=metodo_pago
         )
 
         # Feed/update quote (cotizacion) from this entry if it's a purchase and has a price
@@ -677,9 +682,13 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                                'total_compra': float(documento_total)},
                               registrado_por=usuario_id,
                               origen_tipo='inventario_entrada',
-                              origen_id=f"{tipo_documento}:{documento_numero}")
+                              origen_id=f"{tipo_documento}:{documento_numero}",
+                              metodo_pago=metodo_pago,
+                              tercero_id=proveedor_id,
+                              tipo_documento_fisico=tipo_documento,
+                              documento_numero_fisico=documento_numero)
         except Exception as _e:
-            print(f'[cont] compra negocio={negocio_id}: {_e}')
+            raise _e
 
     return {
         'ok': True,

@@ -656,6 +656,38 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
                 'monto':         abs(monto),
             })
 
+    # Inyección automática de líneas de inventario (14x) por cada producto si contab_entradas_categoria está habilitado
+    cfg_contab = conn.execute("SELECT contab_entradas_categoria FROM config_contabilidad_negocio WHERE negocio_id = %s", (negocio_id,)).fetchone()
+    if cfg_contab and cfg_contab['contab_entradas_categoria'] and tipo_doc.get('tipo_movimiento') == 'entrada' and tipo_documento_fisico and documento_numero_fisico:
+        # Buscar los items reales ingresados para esta entrada en movimientos_inventario
+        items_mov = conn.execute("""
+            SELECT m.producto_id, m.cantidad, m.valor_unitario, m.valor_total, p.categoria, p.nombre AS producto_nombre
+            FROM movimientos_inventario m
+            JOIN productos p ON p.id = m.producto_id
+            WHERE m.negocio_id = %s AND m.tipo_documento = %s AND m.documento_numero = %s
+        """, (negocio_id, tipo_documento_fisico, documento_numero_fisico)).fetchall()
+        
+        template_cuenta_ids = {m['cuenta_puc_id'] for m in mov_list}
+        
+        for item in items_mov:
+            if item['categoria']:
+                gi = conn.execute("""
+                    SELECT gi.cuenta_inve_id, c.codigo AS cod_inve, c.nombre AS nom_inve
+                    FROM grupos_inventario gi
+                    JOIN cuentas_puc c ON c.id = gi.cuenta_inve_id
+                    WHERE gi.negocio_id = %s AND gi.nombre = %s
+                """, (negocio_id, item['categoria'])).fetchone()
+                
+                if gi and gi['cuenta_inve_id']:
+                    if gi['cuenta_inve_id'] not in template_cuenta_ids:
+                        mov_list.append({
+                            'cuenta_puc_id': gi['cuenta_inve_id'],
+                            'cuenta_codigo': gi['cod_inve'],
+                            'concepto':      f"Inv: {item['producto_nombre']}",
+                            'tipo_mov':      'D', # Débito en compras/entradas
+                            'monto':         float(item['valor_total']),
+                        })
+
     # Inyección automática de contrapartida de método de pago
     if metodo_pago:
         cuenta_metodo = None

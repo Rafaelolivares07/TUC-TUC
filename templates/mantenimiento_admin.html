@@ -573,7 +573,11 @@
       const tbodyCont = document.getElementById('aud-tbody-contabilidad');
       if (d.contabilidad) {
         cardCont.classList.remove('hidden');
-        document.getElementById('aud-badge-cc-numero').textContent = `${d.contabilidad.numero_comprobante} (Doc: ${d.contabilidad.documento_fisico || '—'})`;
+        if (d.contabilidad.numero_comprobante.includes(d.contabilidad.documento_fisico)) {
+          document.getElementById('aud-badge-cc-numero').textContent = d.contabilidad.numero_comprobante;
+        } else {
+          document.getElementById('aud-badge-cc-numero').textContent = `${d.contabilidad.numero_comprobante} (Doc: ${d.contabilidad.documento_fisico || '—'})`;
+        }
         
         const badgeSaldo = document.getElementById('aud-badge-cc-saldo');
         if (d.saldo_pendiente !== undefined && d.saldo_pendiente !== null) {

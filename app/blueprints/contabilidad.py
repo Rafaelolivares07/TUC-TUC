@@ -734,13 +734,22 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
     desc       = descripcion_override or param['descripcion_asiento'] or tipo_doc_codigo
     fecha_uso  = fecha or _date.today()
 
-    # Consecutivo: incrementa atomicamente respetando numero_inicio
-    num_doc = max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1))
-    conn.execute(
-        "UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s",
-        (num_doc, tipo_doc['id'])
-    )
-    numero = f"{tipo_doc_codigo}-{num_doc:04d}"
+    # Consecutivo: para documentos externos (tipo_movimiento == 'entrada') usamos el número físico.
+    # Para internos (venta, notas, etc.), generamos consecutivo secuencial.
+    tipo_mov_negocio = tipo_doc.get('tipo_movimiento')
+    if tipo_mov_negocio == 'entrada' and documento_numero_fisico:
+        numero = f"{tipo_doc_codigo}-{documento_numero_fisico}"
+        try:
+            num_doc = int(documento_numero_fisico)
+        except ValueError:
+            num_doc = None
+    else:
+        num_doc = max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1))
+        conn.execute(
+            "UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s",
+            (num_doc, tipo_doc['id'])
+        )
+        numero = f"{tipo_doc_codigo}-{num_doc:04d}"
 
     comp_id = conn.execute("""
         INSERT INTO comprobantes_contables

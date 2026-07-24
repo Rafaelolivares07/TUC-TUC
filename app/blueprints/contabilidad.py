@@ -878,24 +878,71 @@ def api_puc():
         conn = get_db_connection()
         _asegurar_tablas(conn)
         where, params = ["activo = TRUE"], []
-        if modo == 'codigo' and q:
-            where.append("codigo LIKE %s"); params.append(f'{q}%')
-        elif modo == 'nombre' and q:
-            where.append("nombre ILIKE %s"); params.append(f'%{q}%')
-            where.append("acepta_movimiento = TRUE")
-        else:
-            if q:
+        if q:
+            if modo == 'codigo':
+                where.append("codigo LIKE %s")
+                params.append(f'{q}%')
+            elif modo == 'nombre':
+                where.append("nombre ILIKE %s")
+                params.append(f'%{q}%')
+            else:
                 where.append("(codigo ILIKE %s OR nombre ILIKE %s)")
                 params += [f'%{q}%', f'%{q}%']
-            if solo_mov == '1':
-                where.append("acepta_movimiento = TRUE")
+        
+        if solo_mov == '1':
+            where.append("acepta_movimiento = TRUE")
+            
         rows = conn.execute(
-            f"SELECT id, codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento "
-            f"FROM cuentas_puc WHERE {' AND '.join(where)} ORDER BY codigo LIMIT 200",
+            f"SELECT id, codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos "
+            f"FROM cuentas_puc WHERE {' AND '.join(where)} ORDER BY codigo LIMIT 1500",
             params
         ).fetchall()
         conn.close()
         return jsonify({'ok': True, 'cuentas': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/puc/<int:cuenta_id>', methods=['PATCH'])
+def api_puc_editar(cuenta_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        fields = []
+        params = []
+        if 'nombre' in data:
+            fields.append("nombre = %s")
+            params.append(data['nombre'].strip())
+        if 'naturaleza' in data:
+            fields.append("naturaleza = %s")
+            params.append(data['naturaleza'])
+        if 'acepta_movimiento' in data:
+            fields.append("acepta_movimiento = %s")
+            params.append(bool(data['acepta_movimiento']))
+        if 'maneja_terceros' in data:
+            fields.append("maneja_terceros = %s")
+            params.append(bool(data['maneja_terceros']))
+        if 'maneja_documentos' in data:
+            fields.append("maneja_documentos = %s")
+            params.append(bool(data['maneja_documentos']))
+        if 'activo' in data:
+            fields.append("activo = %s")
+            params.append(bool(data['activo']))
+            
+        if not fields:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No hay campos para actualizar'}), 400
+            
+        params.append(cuenta_id)
+        conn.execute(f"UPDATE cuentas_puc SET {', '.join(fields)} WHERE id = %s", params)
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
     except Exception as e:
         try: conn.close()
         except Exception: pass

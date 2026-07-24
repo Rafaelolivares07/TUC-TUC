@@ -76,16 +76,20 @@
         <button onclick="abrirModalPUC()"
                 class="bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-lg">+ Nueva cuenta</button>
       </div>
-      <p id="puc-hint" class="text-center text-gray-400 py-6 text-sm">Escribe para buscar cuentas del PUC</p>
-      <div class="overflow-x-auto">
+      <p id="puc-hint" class="text-center text-gray-400 py-6 text-sm hidden">Cargando cuentas...</p>
+      <div class="overflow-x-auto max-h-[600px] overflow-y-auto mt-4 border border-gray-200 rounded-xl shadow-sm">
         <table class="w-full text-sm">
-          <thead><tr class="bg-gray-50 text-gray-500 text-xs uppercase">
-            <th class="px-3 py-2 text-left">Código</th>
-            <th class="px-3 py-2 text-left">Nombre</th>
-            <th class="px-3 py-2 text-center">Niv.</th>
-            <th class="px-3 py-2 text-center">Naturaleza</th>
-            <th class="px-3 py-2 text-center">Mov.</th>
-          </tr></thead>
+          <thead class="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0 z-10">
+            <tr>
+              <th class="px-3 py-2 text-left bg-gray-50">Código</th>
+              <th class="px-3 py-2 text-left bg-gray-50">Nombre</th>
+              <th class="px-3 py-2 text-center bg-gray-50">Niv.</th>
+              <th class="px-3 py-2 text-center bg-gray-50">Naturaleza</th>
+              <th class="px-3 py-2 text-center bg-gray-50">Mov.</th>
+              <th class="px-3 py-2 text-center bg-gray-50">Maneja Terc.</th>
+              <th class="px-3 py-2 text-center bg-gray-50">Maneja Doc.</th>
+            </tr>
+          </thead>
           <tbody id="puc-body"></tbody>
         </table>
       </div>
@@ -465,6 +469,7 @@ function cambiarTab(t) {
     document.getElementById(`panel-${x}`).classList.toggle('hidden', x !== t);
     document.getElementById(`tab-${x}`).classList.toggle('tab-active', x === t);
   });
+  if (t === 'puc')    buscarPUC();
   if (t === 'tipos')   cargarTiposDocs();
   if (t === 'params')  { cargarTiposDocs(); cargarParametros(); }
   if (t === 'grupos')  { cargarGrupos(); cargarConfigContable(); }
@@ -504,20 +509,65 @@ function buscarPUC() {
   clearTimeout(pucTimer);
   pucTimer = setTimeout(async () => {
     const q = document.getElementById('puc-q').value.trim();
-    if (q.length < 2) { document.getElementById('puc-hint').style.display=''; document.getElementById('puc-body').innerHTML=''; return; }
     document.getElementById('puc-hint').style.display='none';
-    const cuentas = await fetchPUC(q, document.getElementById('puc-solo-mov').checked ? '' : '');
-    document.getElementById('puc-body').innerHTML = cuentas.map(c => `
-      <tr class="border-b border-gray-100 hover:bg-blue-50">
-        <td class="px-3 py-2 font-mono text-blue-700">${c.codigo}</td>
-        <td class="px-3 py-2">${c.nombre}</td>
-        <td class="px-3 py-2 text-center text-gray-400">${c.nivel}</td>
-        <td class="px-3 py-2 text-center">
-          <span class="px-2 py-0.5 rounded text-xs ${c.naturaleza==='debito'?'bg-blue-100 text-blue-700':'bg-purple-100 text-purple-700'}">${c.naturaleza}</span>
+    const soloMov = document.getElementById('puc-solo-mov').checked ? '1' : '';
+    const modo = /^\d/.test(q) ? 'codigo' : 'nombre';
+    
+    const resp = await fetch(`/api/contabilidad/puc?q=${encodeURIComponent(q)}&modo=${modo}&solo_movimiento=${soloMov}`);
+    const data = await resp.json();
+    if (!data.ok) return;
+    
+    document.getElementById('puc-body').innerHTML = data.cuentas.map(c => `
+      <tr class="border-b border-gray-100 hover:bg-blue-50/50">
+        <td class="px-3 py-2 font-mono text-blue-700 font-bold">${c.codigo}</td>
+        <td class="px-3 py-2">
+          <input type="text" value="${c.nombre}" 
+                 class="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:bg-white px-1 py-0.5 rounded outline-none text-sm transition-all"
+                 onchange="patchCuentaPUC(${c.id}, {nombre: this.value})">
         </td>
-        <td class="px-3 py-2 text-center">${c.acepta_movimiento?'✅':'—'}</td>
+        <td class="px-3 py-2 text-center text-gray-400 font-semibold">${c.nivel}</td>
+        <td class="px-3 py-2 text-center">
+          <select onchange="patchCuentaPUC(${c.id}, {naturaleza: this.value})"
+                  class="border rounded px-2 py-0.5 text-xs outline-none bg-white font-medium">
+            <option value="debito" ${c.naturaleza==='debito'?'selected':''}>Débito</option>
+            <option value="credito" ${c.naturaleza==='credito'?'selected':''}>Crédito</option>
+          </select>
+        </td>
+        <td class="px-3 py-2 text-center">
+          <input type="checkbox" ${c.acepta_movimiento?'checked':''} 
+                 class="w-4 h-4 accent-blue-600 rounded"
+                 onchange="patchCuentaPUC(${c.id}, {acepta_movimiento: this.checked})">
+        </td>
+        <td class="px-3 py-2 text-center">
+          <input type="checkbox" ${c.maneja_terceros?'checked':''} 
+                 class="w-4 h-4 accent-blue-600 rounded"
+                 onchange="patchCuentaPUC(${c.id}, {maneja_terceros: this.checked})">
+        </td>
+        <td class="px-3 py-2 text-center">
+          <input type="checkbox" ${c.maneja_documentos?'checked':''} 
+                 class="w-4 h-4 accent-blue-600 rounded"
+                 onchange="patchCuentaPUC(${c.id}, {maneja_documentos: this.checked})">
+        </td>
       </tr>`).join('');
   }, 280);
+}
+
+async function patchCuentaPUC(id, payload) {
+  try {
+    const resp = await fetch(`/api/contabilidad/puc/${id}`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      toast(data.error || 'Error al actualizar cuenta', false);
+    } else {
+      toast('Cuenta actualizada');
+    }
+  } catch (err) {
+    toast('Error de red al actualizar cuenta', false);
+  }
 }
 
 function abrirModalPUC() { document.getElementById('modal-puc').classList.remove('hidden'); }
@@ -1241,6 +1291,9 @@ async function guardarConfigContable() {
 
 // Fecha hoy por defecto
 document.getElementById('man-fecha').value = new Date().toISOString().slice(0,10);
+
+// Cargar el PUC de inmediato al iniciar
+buscarPUC();
 </script>
 </body>
 </html>

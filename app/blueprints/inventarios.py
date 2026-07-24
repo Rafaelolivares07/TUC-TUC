@@ -681,6 +681,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                                'iva_compra': float(iva_total),
                                'total_compra': float(documento_total)},
                               registrado_por=usuario_id,
+                              fecha=documento_fecha,
+                              descripcion_override=f"{tipo_documento} N° {documento_numero}",
                               origen_tipo='inventario_entrada',
                               origen_id=f"{tipo_documento}:{documento_numero}",
                               metodo_pago=metodo_pago,

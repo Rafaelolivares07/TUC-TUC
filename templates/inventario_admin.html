@@ -881,6 +881,11 @@ function setupPresentacionAC(idx) {
               if (data.ok) {
                 hid.value = data.presentacion.id;
                 inp.value = data.presentacion.nombre;
+                const equivEl = document.getElementById(`ent-pres-equiv-${idx}`);
+                if (equivEl) {
+                  equivEl.value = data.presentacion.equivalencia || '1.0';
+                }
+                calcularCostoFilaEmpaque(idx, 'equiv');
                 toast(`✅ Creado: ${data.presentacion.nombre} (${data.presentacion.equivalencia})`);
               } else {
                 toast(data.error || 'Error al crear presentación', false);
@@ -894,6 +899,11 @@ function setupPresentacionAC(idx) {
 
           hid.value = el.dataset.id;
           inp.value = el.dataset.nombre;
+          const equivEl = document.getElementById(`ent-pres-equiv-${idx}`);
+          if (equivEl) {
+            equivEl.value = el.dataset.equiv || '1.0';
+          }
+          calcularCostoFilaEmpaque(idx, 'equiv');
         });
       });
       list.classList.remove('hidden');

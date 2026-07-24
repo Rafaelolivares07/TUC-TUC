@@ -671,7 +671,7 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     if _asiento_auto:
         try:
             if documento_total > 0:
-                _asiento_auto(conn, negocio_id, 'COMPRA',
+                _asiento_auto(conn, negocio_id, tipo_documento,
                               {'subtotal_compra': float(subtotal_compra),
                                'iva_compra': float(iva_total),
                                'total_compra': float(documento_total)},

@@ -391,6 +391,7 @@
               <th class="px-4 py-3 text-left">Método de Pago</th>
               <th class="px-4 py-3 text-left">Cuenta de Recaudo (Débito en Ventas)</th>
               <th class="px-4 py-3 text-left">Cuenta de Pago (Crédito en Compras)</th>
+              <th class="px-4 py-3 text-center w-32">Acciones</th>
             </tr>
           </thead>
           <tbody id="pago_metodos-body" class="divide-y divide-gray-100">
@@ -1336,19 +1337,19 @@ function acPUCGenerico(input, callback) {
 
 async function cargarPagoMetodos() {
   const tbody = document.getElementById('pago_metodos-body');
-  tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-4 text-center text-gray-400">Cargando métodos de pago...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400">Cargando métodos de pago...</td></tr>';
   try {
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`);
     const d = await r.json();
     if (!d.ok) {
-      tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-red-500">${d.error}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-center text-red-500">${d.error}</td></tr>`;
       return;
     }
     
     metodosConfigurados = d.metodos || [];
     tbody.innerHTML = '';
     if (metodosConfigurados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-4 text-center text-gray-400">No se encontraron métodos de pago habilitados. Habilítelos primero en la configuración del negocio.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400">No se encontraron métodos de pago habilitados. Habilítelos primero en la configuración del negocio.</td></tr>';
       return;
     }
     
@@ -1359,42 +1360,125 @@ async function cargarPagoMetodos() {
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-gray-50';
       tr.innerHTML = `
-        <td class="px-4 py-3 font-semibold text-gray-700">${m.nombre} <span class="text-xs text-gray-400 font-mono">(${m.codigo})</span></td>
+        <td class="px-4 py-3 font-semibold text-gray-700">
+          ${m.nombre} 
+          <span class="text-xs text-gray-400 font-mono block sm:inline">(${m.codigo})</span>
+        </td>
         <td class="px-4 py-3 relative">
-          <div class="relative">
-            <input type="text" placeholder="Buscar cuenta recaudo..." 
-                   class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+          <div class="relative flex items-center">
+            <input type="text" id="rec-input-${idx}" placeholder="Buscar cuenta recaudo..." 
+                   class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-8"
                    value="${recText}"
-                   oninput="acPUCGenerico(this, (id, cod, nom) => guardarRelacionMetodoPago(${idx}, id, 'recaudo'))">
+                   oninput="buscarPUCInput(this, ${idx}, 'recaudo')">
+            <span id="rec-status-${idx}" class="absolute right-3 text-green-500 hidden" title="Cuenta contable validada y guardada">✅</span>
+            <span id="rec-warn-${idx}" class="absolute right-3 text-orange-500 hidden" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
+            <input type="hidden" id="rec-id-${idx}" value="${m.cuenta_recaudo_id || ''}">
             <div class="ac-drop hidden"></div>
           </div>
         </td>
         <td class="px-4 py-3 relative">
-          <div class="relative">
-            <input type="text" placeholder="Buscar cuenta pago..." 
-                   class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+          <div class="relative flex items-center">
+            <input type="text" id="pag-input-${idx}" placeholder="Buscar cuenta pago..." 
+                   class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-8"
                    value="${pagText}"
-                   oninput="acPUCGenerico(this, (id, cod, nom) => guardarRelacionMetodoPago(${idx}, id, 'pago'))">
+                   oninput="buscarPUCInput(this, ${idx}, 'pago')">
+            <span id="pag-status-${idx}" class="absolute right-3 text-green-500 hidden" title="Cuenta contable validada y guardada">✅</span>
+            <span id="pag-warn-${idx}" class="absolute right-3 text-orange-500 hidden" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
+            <input type="hidden" id="pag-id-${idx}" value="${m.cuenta_pago_id || ''}">
             <div class="ac-drop hidden"></div>
           </div>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <button id="btn-save-${idx}" onclick="guardarFilaMetodo(${idx})"
+                  class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 mx-auto shadow-sm">
+            💾 Guardar
+          </button>
         </td>
       `;
       tbody.appendChild(tr);
+      actualizarIndicadoresFila(idx);
     });
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
   }
 }
 
-async function guardarRelacionMetodoPago(idx, cuenta_id, tipo) {
+function buscarPUCInput(input, idx, tipo) {
+  const container = input.closest('.relative');
+  const listEl = container.querySelector('.ac-drop');
+  const idInput = container.querySelector('input[type="hidden"]');
+  const statusEl = container.querySelector('[id$="-status-' + idx + '"]');
+  const warnEl = container.querySelector('[id$="-warn-' + idx + '"]');
+  
+  idInput.value = '';
+  statusEl.classList.add('hidden');
+  
+  if (input.value.trim() === '') {
+    warnEl.classList.add('hidden');
+  } else {
+    warnEl.classList.remove('hidden');
+  }
+  
+  const timerKey = input.id || Math.random().toString();
+  clearTimeout(genTimers[timerKey]);
+  genTimers[timerKey] = setTimeout(async () => {
+    const q = input.value.trim();
+    if (q.length < 2) { listEl.classList.add('hidden'); return; }
+    const cuentas = await fetchPUC(q);
+    renderAC(listEl, cuentas, c => {
+      input.value = `${c.codigo} — ${c.nombre}`;
+      idInput.value = c.id;
+      statusEl.classList.remove('hidden');
+      warnEl.classList.add('hidden');
+      listEl.classList.add('hidden');
+    });
+  }, 280);
+}
+
+function actualizarIndicadoresFila(idx) {
+  const recId = document.getElementById(`rec-id-${idx}`).value;
+  const pagId = document.getElementById(`pag-id-${idx}`).value;
+  
+  const recStatus = document.getElementById(`rec-status-${idx}`);
+  const recWarn = document.getElementById(`rec-warn-${idx}`);
+  const pagStatus = document.getElementById(`pag-status-${idx}`);
+  const pagWarn = document.getElementById(`pag-warn-${idx}`);
+  
+  if (recId) {
+    recStatus.classList.remove('hidden');
+    recWarn.classList.add('hidden');
+  } else {
+    recStatus.classList.add('hidden');
+    recWarn.classList.add('hidden');
+  }
+  
+  if (pagId) {
+    pagStatus.classList.remove('hidden');
+    pagWarn.classList.add('hidden');
+  } else {
+    pagStatus.classList.add('hidden');
+    pagWarn.classList.add('hidden');
+  }
+}
+
+async function guardarFilaMetodo(idx) {
   try {
     const m = metodosConfigurados[idx];
     if (!m) return;
     
-    if (tipo === 'recaudo') {
-      m.cuenta_recaudo_id = cuenta_id;
-    } else {
-      m.cuenta_pago_id = cuenta_id;
+    const recId = document.getElementById(`rec-id-${idx}`).value || null;
+    const pagId = document.getElementById(`pag-id-${idx}`).value || null;
+    
+    const recInput = document.getElementById(`rec-input-${idx}`).value.trim();
+    const pagInput = document.getElementById(`pag-input-${idx}`).value.trim();
+    
+    if (recInput && !recId) {
+      toast('Debe seleccionar la cuenta de recaudo del buscador interactivo', false);
+      return;
+    }
+    if (pagInput && !pagId) {
+      toast('Debe seleccionar la cuenta de pago del buscador interactivo', false);
+      return;
     }
     
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`, {
@@ -1402,13 +1486,16 @@ async function guardarRelacionMetodoPago(idx, cuenta_id, tipo) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         metodo_codigo: m.codigo,
-        cuenta_recaudo_id: m.cuenta_recaudo_id,
-        cuenta_pago_id: m.cuenta_pago_id
+        cuenta_recaudo_id: recId,
+        cuenta_pago_id: pagId
       })
     });
     const d = await r.json();
     if (d.ok) {
-      toast('Cuenta contable guardada');
+      m.cuenta_recaudo_id = recId;
+      m.cuenta_pago_id = pagId;
+      actualizarIndicadoresFila(idx);
+      toast(`Configuración de "${m.nombre}" guardada`);
     } else {
       toast(d.error, false);
     }

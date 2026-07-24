@@ -1731,11 +1731,16 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
     try:
         # Query unique documents in movimientos_inventario (purchases/entries)
         rows_inv = conn.execute("""
-            SELECT DISTINCT tipo_documento, documento_numero, documento_fecha, SUM(valor_total) AS total
-            FROM movimientos_inventario
-            WHERE negocio_id = %s AND proveedor_id = %s
-            GROUP BY tipo_documento, documento_numero, documento_fecha
-            ORDER BY documento_fecha DESC, documento_numero DESC
+            SELECT mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total,
+                   MIN(sd.saldo) AS saldo_pendiente
+            FROM movimientos_inventario mi
+            LEFT JOIN saldo_por_documentos sd ON sd.negocio_id = mi.negocio_id 
+                                            AND sd.tercero_id = mi.proveedor_id
+                                            AND sd.tipo_documento = mi.tipo_documento
+                                            AND sd.numero_documento = mi.documento_numero
+            WHERE mi.negocio_id = %s AND mi.proveedor_id = %s
+            GROUP BY mi.tipo_documento, mi.documento_numero, mi.documento_fecha
+            ORDER BY mi.documento_fecha DESC, mi.documento_numero DESC
         """, (negocio_id, tercero_id)).fetchall()
         
         documentos = []
@@ -1745,7 +1750,8 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                 'documento_numero': r['documento_numero'],
                 'fecha': r['documento_fecha'].isoformat() if r['documento_fecha'] else None,
                 'origen': 'inventario',
-                'total': float(r['total'] or 0)
+                'total': float(r['total'] or 0),
+                'saldo_pendiente': float(r['saldo_pendiente']) if r['saldo_pendiente'] is not None else None
             })
             
         # Query unique documents in pedidos (sales/orders)
@@ -1914,12 +1920,31 @@ def api_auditar_documento(negocio_id):
                     ]
                 }
         
+        # 4. Query pending balance in saldo_por_documentos
+        t_id = proveedor_id or (items_inventario[0]['proveedor_id'] if items_inventario else None)
+        saldo_row = None
+        if t_id:
+            saldo_row = conn.execute("""
+                SELECT saldo, monto_original FROM saldo_por_documentos
+                WHERE negocio_id = %s AND tercero_id = %s AND tipo_documento = %s AND numero_documento = %s
+            """, (negocio_id, t_id, tipo_doc, num_doc)).fetchone()
+        else:
+            saldo_row = conn.execute("""
+                SELECT saldo, monto_original FROM saldo_por_documentos
+                WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s
+            """, (negocio_id, tipo_doc, num_doc)).fetchone()
+            
+        saldo_pendiente = float(saldo_row['saldo']) if (saldo_row and saldo_row['saldo'] is not None) else None
+        monto_original = float(saldo_row['monto_original']) if (saldo_row and saldo_row['monto_original'] is not None) else None
+        
         return jsonify({
             'ok': True,
             'existe': bool(items_inventario or comprobante or pedido),
             'inventario': items_inventario,
             'contabilidad': comprobante,
-            'ventas': pedido
+            'ventas': pedido,
+            'saldo_pendiente': saldo_pendiente,
+            'monto_original': monto_original
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

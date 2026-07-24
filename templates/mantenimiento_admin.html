@@ -250,12 +250,13 @@
                 <th class="py-2">Número de Documento</th>
                 <th class="py-2">Fecha</th>
                 <th class="py-2 text-right">Monto Total</th>
+                <th class="py-2 text-right">Saldo Pendiente</th>
                 <th class="py-2 text-center">Acción</th>
               </tr>
             </thead>
             <tbody id="aud-tbody-historico">
               <tr>
-                <td colspan="5" class="text-center text-gray-400 py-6">Selecciona un tercero para cargar el historial</td>
+                <td colspan="6" class="text-center text-gray-400 py-6">Selecciona un tercero para cargar el historial</td>
               </tr>
             </tbody>
           </table>
@@ -311,7 +312,10 @@
             </h3>
             <p id="aud-lbl-cc-concepto" class="text-xs text-gray-500 mt-0.5"></p>
           </div>
-          <span id="aud-badge-cc-numero" class="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-0.5 rounded-full"></span>
+          <div class="flex gap-2">
+            <span id="aud-badge-cc-saldo" class="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-0.5 rounded-full hidden"></span>
+            <span id="aud-badge-cc-numero" class="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-0.5 rounded-full"></span>
+          </div>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs border-collapse">
@@ -468,26 +472,40 @@
     if (!docs.length) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" class="text-center text-gray-400 py-6">Sin documentos históricos encontrados para este tercero</td>
+          <td colspan="6" class="text-center text-gray-400 py-6">Sin documentos históricos encontrados para este tercero</td>
         </tr>
       `;
       return;
     }
     
-    tbody.innerHTML = docs.map(doc => `
-      <tr class="border-b hover:bg-gray-50">
-        <td class="py-2.5 font-bold text-gray-700">${doc.tipo_documento.toUpperCase()}</td>
-        <td class="py-2.5 font-mono text-gray-800">${doc.documento_numero}</td>
-        <td class="py-2.5 text-gray-500">${doc.fecha ? new Date(doc.fecha).toLocaleDateString('es-CO') : '—'}</td>
-        <td class="py-2.5 text-right font-semibold text-gray-700">$${doc.total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-        <td class="py-2.5 text-center">
-          <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero}', '${terceroId}')" 
-                  class="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-lg text-xs transition">
-            🔎 Auditar
-          </button>
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = docs.map(doc => {
+      const balanceVal = doc.saldo_pendiente !== undefined && doc.saldo_pendiente !== null ? doc.saldo_pendiente : null;
+      let balanceStr = '—';
+      let balanceClass = 'text-gray-500';
+      if (balanceVal !== null) {
+        balanceStr = '$' + balanceVal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (balanceVal > 0) {
+          balanceClass = 'text-amber-600 font-bold';
+        } else {
+          balanceClass = 'text-green-600 font-semibold';
+        }
+      }
+      return `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="py-2.5 font-bold text-gray-700">${doc.tipo_documento.toUpperCase()}</td>
+          <td class="py-2.5 font-mono text-gray-800">${doc.documento_numero}</td>
+          <td class="py-2.5 text-gray-500">${doc.fecha ? new Date(doc.fecha).toLocaleDateString('es-CO') : '—'}</td>
+          <td class="py-2.5 text-right font-semibold text-gray-700">$${doc.total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+          <td class="py-2.5 text-right ${balanceClass}">${balanceStr}</td>
+          <td class="py-2.5 text-center">
+            <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero}', '${terceroId}')" 
+                    class="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-lg text-xs transition">
+              🔎 Auditar
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 
   function filtrarTablaHistorico() {
@@ -556,6 +574,15 @@
       if (d.contabilidad) {
         cardCont.classList.remove('hidden');
         document.getElementById('aud-badge-cc-numero').textContent = d.contabilidad.numero_comprobante;
+        
+        const badgeSaldo = document.getElementById('aud-badge-cc-saldo');
+        if (d.saldo_pendiente !== undefined && d.saldo_pendiente !== null) {
+          badgeSaldo.textContent = `Saldo Pendiente: $${d.saldo_pendiente.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+          badgeSaldo.classList.remove('hidden');
+        } else {
+          badgeSaldo.classList.add('hidden');
+        }
+        
         document.getElementById('aud-lbl-cc-concepto').textContent = `Fecha: ${d.contabilidad.fecha} | Concepto: ${d.contabilidad.descripcion || '—'}`;
         
         tbodyCont.innerHTML = d.contabilidad.asientos.map(e => `

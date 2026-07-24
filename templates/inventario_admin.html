@@ -1394,7 +1394,7 @@ function agregarLineaEntrada() {
   const div = document.createElement('div');
   div.className = 'grid grid-cols-12 gap-2 items-end';
   div.innerHTML = `
-    <div class="col-span-2 relative">
+    <div class="col-span-3 relative">
       <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off">
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
       <input type="hidden" id="ent-id-${idx}">
@@ -1402,19 +1402,19 @@ function agregarLineaEntrada() {
     <div class="col-span-1">
       <input type="number" id="ent-cant-emp-${idx}" placeholder="Cant. Emp." min="0" step="0.0001" value="0" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
     </div>
-    <div class="col-span-2 relative">
+    <div class="col-span-1 relative">
       <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="Unidad">
       <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
       <input type="hidden" id="ent-pres-id-${idx}" value="${defaultPresentacionId || ''}">
       <input type="hidden" id="ent-pres-equiv-${idx}" value="1.0">
     </div>
-    <div class="col-span-1">
+    <div class="col-span-2">
       <input type="number" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center">
     </div>
     <div class="col-span-1">
       <input type="number" id="ent-costo-emp-${idx}" placeholder="Costo" min="0" step="0.000001" value="" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
     </div>
-    <div class="col-span-2">
+    <div class="col-span-1">
       <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="" oninput="calcularCostoFilaEmpaque(${idx}, 'total')">
     </div>
     <div class="col-span-1">
@@ -1494,7 +1494,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
   const totalL = (parseFloat(cantidad) || 0) * (parseFloat(valorUnitario) || 0);
 
   div.innerHTML = `
-    <div class="col-span-2 relative">
+    <div class="col-span-3 relative">
       <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off" value="${productoNombre.replace(/"/g,'&quot;')}">
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
       <input type="hidden" id="ent-id-${idx}" value="${productoId}">
@@ -1502,19 +1502,19 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
     <div class="col-span-1">
       <input type="number" id="ent-cant-emp-${idx}" placeholder="Cant. Emp." min="0" step="0.0001" value="${cantEmp}" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
     </div>
-    <div class="col-span-2 relative">
+    <div class="col-span-1 relative">
       <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="${(presentacionNombre || 'Unidad').replace(/"/g,'&quot;')}">
       <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
       <input type="hidden" id="ent-pres-id-${idx}" value="${presentacionId || defaultPresentacionId || ''}">
       <input type="hidden" id="ent-pres-equiv-${idx}" value="${equiv}">
     </div>
-    <div class="col-span-1">
+    <div class="col-span-2">
       <input type="number" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center" value="${cantidad}">
     </div>
     <div class="col-span-1">
       <input type="number" id="ent-costo-emp-${idx}" placeholder="Costo" min="0" step="0.000001" value="${costoEmp.toFixed(4)}" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
     </div>
-    <div class="col-span-2">
+    <div class="col-span-1">
       <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="${totalL.toFixed(2)}" oninput="calcularCostoFilaEmpaque(${idx}, 'total')">
     </div>
     <div class="col-span-1">
@@ -1566,6 +1566,7 @@ function calcularCostoFilaEmpaque(idx, target) {
   
   const cantBase = cantEmp * equiv;
   cantBaseInput.value = cantBase > 0 ? cantBase.toFixed(4) : '';
+  cantBaseInput.title = cantBase > 0 ? cantBase.toLocaleString('es-CO') : '';
   
   if (target === 'cant' || target === 'costo_emp' || target === 'equiv') {
     const costoEmp = parseFloat(costoEmpInput.value) || 0;
@@ -1578,8 +1579,10 @@ function calcularCostoFilaEmpaque(idx, target) {
     
     if (costoEmp > 0 && equiv > 0) {
       vuInput.value = (costoEmp / equiv).toFixed(6);
+      vuInput.title = vuInput.value;
     } else {
       vuInput.value = '';
+      vuInput.title = '';
     }
   } else if (target === 'total') {
     const totalVal = parseFloat(totalInput.value) || 0;
@@ -1588,9 +1591,11 @@ function calcularCostoFilaEmpaque(idx, target) {
       costoEmpInput.value = (totalVal / cantEmp).toFixed(4);
       const costoEmp = parseFloat(costoEmpInput.value) || 0;
       vuInput.value = (costoEmp / equiv).toFixed(6);
+      vuInput.title = vuInput.value;
     } else {
       costoEmpInput.value = '';
       vuInput.value = '';
+      vuInput.title = '';
     }
   }
   

@@ -2137,18 +2137,20 @@ async function ejecutarAnulacion(anularTodo) {
   }
 }
 
+let tiposDocEntrada = [];
 async function cargarTiposDocEntrada() {
   try {
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
     const d = await r.json();
     if (d.ok) {
-      const filtrados = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'entrada');
+      tiposDocEntrada = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'entrada');
       const select = document.getElementById('entrada-tipo-doc');
       if (select) {
-        select.innerHTML = filtrados.map(t => `<option value="${t.codigo}" ${t.predeterminado ? 'selected' : ''}>${t.nombre} (${t.codigo})</option>`).join('');
-        if (!filtrados.length) {
+        select.innerHTML = tiposDocEntrada.map(t => `<option value="${t.codigo}" ${t.predeterminado ? 'selected' : ''}>${t.nombre} (${t.codigo})</option>`).join('');
+        if (!tiposDocEntrada.length) {
           select.innerHTML = '<option value="">No hay tipos de doc. de entrada configurados</option>';
         }
+        actualizarVisibilidadNumeroEntrada();
       }
     }
   } catch(e) {
@@ -2187,6 +2189,34 @@ function mostrarConsecutivoProduccion() {
       input.value = nextNum;
     } else {
       input.value = '';
+    }
+  }
+}
+
+function actualizarVisibilidadNumeroEntrada() {
+  const select = document.getElementById('entrada-tipo-doc');
+  const input = document.getElementById('entrada-num-doc');
+  if (!select || !input) return;
+  const code = select.value;
+  const td = tiposDocEntrada.find(t => t.codigo === code);
+  if (td) {
+    if (td.es_interno) {
+      const nextNum = Math.max((td.consecutivo || 0) + 1, (td.numero_inicio || 1));
+      input.value = nextNum;
+      input.readOnly = true;
+      input.disabled = true;
+      input.classList.add('bg-gray-100', 'text-gray-500', 'cursor-not-allowed');
+      input.classList.remove('bg-white');
+    } else {
+      const urlParams = new URLSearchParams(window.location.search);
+      const qNumDoc = urlParams.get('num_doc');
+      if (input.disabled || input.readOnly || input.value === '') {
+        input.value = qNumDoc || '';
+      }
+      input.readOnly = false;
+      input.disabled = false;
+      input.classList.remove('bg-gray-100', 'text-gray-500', 'cursor-not-allowed');
+      input.classList.add('bg-white');
     }
   }
 }
@@ -2251,7 +2281,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  document.getElementById('entrada-tipo-doc').addEventListener('change', verificarDocumentoExistente);
+  document.getElementById('entrada-tipo-doc').addEventListener('change', () => {
+    actualizarVisibilidadNumeroEntrada();
+    verificarDocumentoExistente();
+  });
   document.getElementById('entrada-num-doc').addEventListener('blur', verificarDocumentoExistente);
 
   // Enter en modal producto

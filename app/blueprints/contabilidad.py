@@ -1293,6 +1293,19 @@ def api_tipos_doc_patch(negocio_id, tid):
             conn.execute(
                 "UPDATE tipos_documento_negocio SET activo=%s WHERE id=%s AND negocio_id=%s",
                 (bool(data['activo']), tid, negocio_id))
+        if 'codigo' in data:
+            nuevo_codigo = (data['codigo'] or '').strip().upper()
+            if not nuevo_codigo:
+                return jsonify({'ok': False, 'error': 'El código del documento no puede estar vacío'}), 400
+            exists = conn.execute(
+                "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id=%s AND codigo=%s AND id!=%s",
+                (negocio_id, nuevo_codigo, tid)
+            ).fetchone()
+            if exists:
+                return jsonify({'ok': False, 'error': f'El código {nuevo_codigo} ya está en uso'}), 409
+            conn.execute(
+                "UPDATE tipos_documento_negocio SET codigo=%s WHERE id=%s AND negocio_id=%s",
+                (nuevo_codigo, tid, negocio_id))
         if 'nombre' in data:
             conn.execute(
                 "UPDATE tipos_documento_negocio SET nombre=%s WHERE id=%s AND negocio_id=%s",

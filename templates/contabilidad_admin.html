@@ -625,8 +625,16 @@ async function cargarTiposDocs() {
   tiposDocs = data.tipos;
   document.getElementById('td-body').innerHTML = tiposDocs.map(t => `
     <tr class="border-b border-gray-100">
-      <td class="px-3 py-2 font-mono font-bold text-blue-700">${t.codigo}</td>
-      <td class="px-3 py-2">${t.nombre}</td>
+      <td class="px-3 py-2">
+        <input type="text" value="${t.codigo}"
+               class="border border-gray-200 focus:border-blue-500 rounded px-2 py-0.5 font-mono text-xs w-28 text-blue-700 font-bold bg-white outline-none"
+               onchange="patchTipoDoc(${t.id},{codigo:this.value.trim().toUpperCase()}).then(cargarTiposDocs)">
+      </td>
+      <td class="px-3 py-2">
+        <input type="text" value="${t.nombre}"
+               class="border border-gray-200 focus:border-blue-500 rounded px-2 py-0.5 text-xs w-full bg-white outline-none"
+               onchange="patchTipoDoc(${t.id},{nombre:this.value.trim()}).then(cargarTiposDocs)">
+      </td>
       <td class="px-3 py-2 text-center">
         <input type="number" min="0" value="${t.numero_inicio||1}"
                class="border rounded px-2 py-0.5 text-xs w-20 text-center bg-white"
@@ -710,7 +718,22 @@ async function togglePredeterminado(id, predeterminado) {
 }
 
 async function patchTipoDoc(id, campos) {
-  await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(campos)});
+  try {
+    const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc/${id}`, {
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(campos)
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      toast(data.error || 'Error al actualizar tipo de documento', false);
+    } else {
+      toast('Tipo de documento actualizado');
+    }
+  } catch(e) {
+    console.error(e);
+    toast('Error al actualizar tipo de documento', false);
+  }
 }
 
 // ── TAB: PARAMETRIZACIÓN ──────────────────────────────────────

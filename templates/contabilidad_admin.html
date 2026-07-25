@@ -121,6 +121,10 @@
       </div>
       <div class="flex items-center gap-4 mb-4">
         <label class="flex items-center gap-2 text-sm text-gray-600">
+          <input type="checkbox" id="td-es-interno" class="w-4 h-4 accent-blue-600" checked>
+          Es Interno
+        </label>
+        <label class="flex items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" id="td-predeterminado" class="w-4 h-4 accent-blue-600">
           Predeterminado para su módulo
         </label>
@@ -135,6 +139,7 @@
           <th class="px-3 py-2 text-center">Consecutivo</th>
           <th class="px-3 py-2 text-center">Mueve Inv</th>
           <th class="px-3 py-2 text-center">Tipo Mov</th>
+          <th class="px-3 py-2 text-center">Clase</th>
           <th class="px-3 py-2 text-center">Predeterminado</th>
           <th class="px-3 py-2 text-center">Estado</th>
         </tr></thead>
@@ -645,6 +650,12 @@ async function cargarTiposDocs() {
         </select>
       </td>
       <td class="px-3 py-2 text-center">
+        <button onclick="patchTipoDoc(${t.id},{es_interno:${!t.es_interno}}).then(cargarTiposDocs)"
+                class="px-2 py-0.5 rounded text-[11px] font-bold ${t.es_interno?'bg-blue-100 text-blue-800':'bg-amber-100 text-amber-800'}">
+          ${t.es_interno?'Interno':'Externo'}
+        </button>
+      </td>
+      <td class="px-3 py-2 text-center">
         <button onclick="togglePredeterminado(${t.id},${!t.predeterminado})"
                 class="px-2 py-0.5 rounded text-xs ${t.predeterminado?'bg-blue-100 text-blue-700 font-bold':'bg-gray-100 text-gray-400'}">
           ${t.predeterminado?'Sí':'No'}
@@ -667,12 +678,13 @@ async function crearTipoDoc() {
   const numero_inicio = parseInt(document.getElementById('td-inicio').value) || 1;
   const predeterminado = document.getElementById('td-predeterminado').checked;
   const mueve_inventario = document.getElementById('td-mueve-inventario').checked;
+  const es_interno     = document.getElementById('td-es-interno').checked;
   const tipo_movimiento = document.getElementById('td-tipo-movimiento').value;
   
   if (!codigo || !nombre) return;
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento})
+    body: JSON.stringify({codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno})
   });
   const data = await resp.json();
   if (data.ok) {
@@ -681,6 +693,7 @@ async function crearTipoDoc() {
     document.getElementById('td-inicio').value = '1';
     document.getElementById('td-predeterminado').checked = false;
     document.getElementById('td-mueve-inventario').checked = false;
+    document.getElementById('td-es-interno').checked = true;
     document.getElementById('td-tipo-movimiento').value = '';
     cargarTiposDocs();
   } else toast(data.error, false);

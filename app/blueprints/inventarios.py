@@ -439,13 +439,19 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     metodo_pago = (_txt(data.get('metodo_pago')) or 'efectivo').lower()
 
     tipo_documento = (_txt(data.get('tipo_documento')) or 'otro').upper()
-    documento_numero = (_txt(data.get('documento_numero') or data.get('numero_documento')) or '').upper()
-    if not documento_numero:
-        td = conn.execute("""
-            SELECT id, consecutivo, numero_inicio 
-            FROM tipos_documento_negocio 
-            WHERE negocio_id = %s AND codigo = %s
-        """, (negocio_id, tipo_documento)).fetchone()
+    documento_numero = (_txt(data.get('documento_numero') or data.get('numero_documento')) or '').strip().upper()
+
+    # Check if the document type is internal or external
+    td = conn.execute("""
+        SELECT id, consecutivo, numero_inicio, es_interno 
+        FROM tipos_documento_negocio 
+        WHERE negocio_id = %s AND codigo = %s
+    """, (negocio_id, tipo_documento)).fetchone()
+    
+    es_interno = td['es_interno'] if (td and td['es_interno'] is not None) else True
+
+    if es_interno:
+        # Documento Interno: Generamos consecutivo y actualizamos
         if td:
             num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
             documento_numero = str(num)
@@ -456,6 +462,10 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             """, (num, td['id']))
         else:
             documento_numero = f"ENT-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    else:
+        # Documento Externo: Número es obligatorio
+        if not documento_numero:
+            return {'ok': False, 'error': f'El número de documento es obligatorio para el tipo de documento externo {tipo_documento}.'}, 400
 
     documento_fecha = _fecha_o_none(data.get('documento_fecha') or data.get('fecha_documento'))
     proveedor_id = _int_o_none(data.get('proveedor_id') or data.get('tercero_id'))
@@ -476,50 +486,24 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
         return {'ok': False, 'error': 'Proveedor no encontrado'}, 400
     proveedor_nombre = prov['nombre']
 
-    # Overwrite check: if document already exists, clean up old records first
-    if tipo_documento and documento_numero and proveedor_id:
+    # Validation check: if it is external, check for duplicates and prevent registration
+    if not es_interno and tipo_documento and documento_numero and proveedor_id:
         existing_movs = conn.execute("""
-            SELECT id, producto_id, documento_total, created_at 
-            FROM movimientos_inventario
+            SELECT 1 FROM movimientos_inventario
             WHERE negocio_id = %s AND tipo = 'entrada'
               AND tipo_documento = %s AND documento_numero = %s AND proveedor_id = %s
-        """, (negocio_id, tipo_documento, documento_numero, proveedor_id)).fetchall()
+            LIMIT 1
+        """, (negocio_id, tipo_documento, documento_numero, proveedor_id)).fetchone()
         
-        if existing_movs:
-            mov_ids = [m['id'] for m in existing_movs]
-            prod_ids_to_recost = {m['producto_id'] for m in existing_movs}
-            
-            # Delete accounting vouchers linked to this document
-            origen_id = f"{tipo_documento}:{documento_numero}"
-            origen_tipo = 'inventario_entrada'
-            
-            comp_rows = conn.execute("""
-                SELECT id FROM comprobantes_contables
-                WHERE negocio_id = %s AND origen_tipo = %s AND origen_id = %s
-            """, (negocio_id, origen_tipo, origen_id)).fetchall()
-            
-            for c in comp_rows:
-                conn.execute("DELETE FROM movimientos_contables WHERE comprobante_id = %s", (c['id'],))
-                conn.execute("DELETE FROM comprobantes_contables WHERE id = %s", (c['id'],))
-                
-            if not comp_rows and existing_movs[0]['documento_total'] is not None:
-                fallback_comp = conn.execute("""
-                    SELECT id FROM comprobantes_contables
-                    WHERE negocio_id = %s AND tipo = 'COMPRA'
-                      AND ABS(total_debitos - %s) < 0.05
-                      AND fecha = %s::date
-                """, (negocio_id, float(existing_movs[0]['documento_total']), existing_movs[0]['created_at'].date())).fetchone()
-                if fallback_comp:
-                    conn.execute("DELETE FROM movimientos_contables WHERE comprobante_id = %s", (fallback_comp['id'],))
-                    conn.execute("DELETE FROM comprobantes_contables WHERE id = %s", (fallback_comp['id'],))
-            
-            # Delete old movements
-            placeholders_m = ', '.join(['%s'] * len(mov_ids))
-            conn.execute(f"DELETE FROM movimientos_inventario WHERE id IN ({placeholders_m})", tuple(mov_ids))
-            
-            # Recost old products temporarily
-            for p_id in prod_ids_to_recost:
-                _recostear_producto(conn, negocio_id, p_id)
+        existing_saldo = conn.execute("""
+            SELECT 1 FROM saldo_por_documentos
+            WHERE negocio_id = %s AND tercero_id = %s
+              AND tipo_documento = %s AND numero_documento = %s
+            LIMIT 1
+        """, (negocio_id, proveedor_id, tipo_documento, documento_numero)).fetchone()
+        
+        if existing_movs or existing_saldo:
+            return {'ok': False, 'error': f'El documento {tipo_documento} N° {documento_numero} ya está registrado para este proveedor.'}, 400
 
     # Primer ciclo: validación y cálculo de subtotales e IVA acumulado
     lineas_procesadas = []
@@ -1297,20 +1281,27 @@ def api_produccion_registrar(negocio_id):
             return error
         
         # Consecutivo de producción si aplica
-        if tipo_documento and not documento_numero:
+        if tipo_documento:
             td = conn.execute("""
-                SELECT id, consecutivo, numero_inicio
+                SELECT id, consecutivo, numero_inicio, es_interno
                 FROM tipos_documento_negocio
                 WHERE negocio_id = %s AND codigo = %s
             """, (negocio_id, tipo_documento)).fetchone()
-            if td:
-                num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
-                documento_numero = str(num)
-                conn.execute("""
-                    UPDATE tipos_documento_negocio
-                    SET consecutivo = %s
-                    WHERE id = %s
-                """, (num, td['id']))
+            
+            es_interno = td['es_interno'] if (td and td['es_interno'] is not None) else True
+            
+            if es_interno:
+                if td:
+                    num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
+                    documento_numero = str(num)
+                    conn.execute("""
+                        UPDATE tipos_documento_negocio
+                        SET consecutivo = %s
+                        WHERE id = %s
+                    """, (num, td['id']))
+            else:
+                if not documento_numero:
+                    return jsonify({'ok': False, 'error': f'El número de documento es obligatorio para el tipo de documento externo {tipo_documento}.'}), 400
 
         producto = conn.execute(
             "SELECT nombre FROM productos WHERE id=%s AND negocio_id=%s",

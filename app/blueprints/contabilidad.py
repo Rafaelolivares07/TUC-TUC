@@ -184,6 +184,8 @@ def _asegurar_tablas(conn):
         "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS predeterminado BOOLEAN DEFAULT FALSE",
         "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS mueve_inventario BOOLEAN DEFAULT FALSE",
         "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS tipo_movimiento VARCHAR(20) DEFAULT NULL",
+        "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS es_interno BOOLEAN DEFAULT TRUE",
+        "UPDATE tipos_documento_negocio SET es_interno = FALSE WHERE codigo IN ('FACTURA', 'REMISION')",
         # numero_documento en comprobantes_contables para cruce con inventario
         "ALTER TABLE comprobantes_contables  ADD COLUMN IF NOT EXISTS numero_documento INTEGER",
         "ALTER TABLE comprobantes_contables  ADD COLUMN IF NOT EXISTS origen_tipo   VARCHAR(50)",
@@ -734,10 +736,11 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
     desc       = descripcion_override or param['descripcion_asiento'] or tipo_doc_codigo
     fecha_uso  = fecha or _date.today()
 
-    # Consecutivo: para documentos externos (tipo_movimiento == 'entrada') usamos el número físico.
-    # Para internos (venta, notas, etc.), generamos consecutivo secuencial.
-    tipo_mov_negocio = tipo_doc.get('tipo_movimiento')
-    if tipo_mov_negocio == 'entrada' and documento_numero_fisico:
+    # Consecutivo contable: si ya viene provisto documento_numero_fisico
+    # (resuelto por el llamador), lo usamos directamente sin incrementar el consecutivo.
+    # De lo contrario (para documentos que se registran directo desde contabilidad/ventas rápidas sin número),
+    # generamos e incrementamos el consecutivo secuencial.
+    if documento_numero_fisico:
         numero = f"{tipo_doc_codigo}-{documento_numero_fisico}"
         try:
             num_doc = int(documento_numero_fisico)
@@ -1226,7 +1229,7 @@ def api_tipos_doc_get(negocio_id):
     try:
         conn = get_db_connection()
         rows = conn.execute(
-            "SELECT id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento "
+            "SELECT id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno "
             "FROM tipos_documento_negocio WHERE negocio_id=%s ORDER BY codigo", (negocio_id,)
         ).fetchall()
         conn.close()
@@ -1247,6 +1250,7 @@ def api_tipos_doc_post(negocio_id):
     numero_inicio = int(data.get('numero_inicio') or 1)
     predeterminado = bool(data.get('predeterminado', False))
     mueve_inventario = bool(data.get('mueve_inventario', False))
+    es_interno     = bool(data.get('es_interno', True))
     tipo_movimiento = data.get('tipo_movimiento')
     if tipo_movimiento:
         tipo_movimiento = tipo_movimiento.strip().lower()
@@ -1262,11 +1266,11 @@ def api_tipos_doc_post(negocio_id):
         conn = get_db_connection()
         _asegurar_tablas(conn)
         nuevo = conn.execute("""
-            INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (negocio_id, codigo) DO NOTHING
-            RETURNING id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento
-        """, (negocio_id, codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento)).fetchone()
+            RETURNING id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno
+        """, (negocio_id, codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno)).fetchone()
         conn.commit(); conn.close()
         if not nuevo:
             return jsonify({'ok': False, 'error': f'El código {codigo} ya existe'}), 409
@@ -1305,6 +1309,10 @@ def api_tipos_doc_patch(negocio_id, tid):
             conn.execute(
                 "UPDATE tipos_documento_negocio SET mueve_inventario=%s WHERE id=%s AND negocio_id=%s",
                 (bool(data['mueve_inventario']), tid, negocio_id))
+        if 'es_interno' in data:
+            conn.execute(
+                "UPDATE tipos_documento_negocio SET es_interno=%s WHERE id=%s AND negocio_id=%s",
+                (bool(data['es_interno']), tid, negocio_id))
         if 'tipo_movimiento' in data:
             tipo_mov = data['tipo_movimiento']
             if tipo_mov:

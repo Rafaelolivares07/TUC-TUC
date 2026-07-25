@@ -99,10 +99,9 @@
     <!-- ═══ TAB: TIPOS DOC ═══ -->
     <div id="panel-tipos" class="p-5 hidden">
       <div class="grid grid-cols-1 sm:grid-cols-6 gap-3 mb-4">
-        <input id="td-codigo" type="text" placeholder="Código (ej: VENTA_POS)"
-               class="border rounded-lg px-3 py-2 text-sm">
+        <input id="td-codigo" type="hidden">
         <input id="td-nombre" type="text" placeholder="Nombre descriptivo"
-               class="border rounded-lg px-3 py-2 text-sm sm:col-span-2">
+               class="border rounded-lg px-3 py-2 text-sm sm:col-span-3">
         <input id="td-inicio" type="number" min="0" value="1" placeholder="Núm. inicio"
                class="border rounded-lg px-3 py-2 text-sm">
         
@@ -133,7 +132,6 @@
       </div>
       <table class="w-full text-sm">
         <thead><tr class="bg-gray-50 text-xs uppercase text-gray-500">
-          <th class="px-3 py-2 text-left">Código</th>
           <th class="px-3 py-2 text-left">Nombre</th>
           <th class="px-3 py-2 text-center">Núm. inicio</th>
           <th class="px-3 py-2 text-center">Consecutivo</th>
@@ -626,11 +624,6 @@ async function cargarTiposDocs() {
   document.getElementById('td-body').innerHTML = tiposDocs.map(t => `
     <tr class="border-b border-gray-100">
       <td class="px-3 py-2">
-        <input type="text" value="${t.codigo}"
-               class="border border-gray-200 focus:border-blue-500 rounded px-2 py-0.5 font-mono text-xs w-28 text-blue-700 font-bold bg-white outline-none"
-               onchange="patchTipoDoc(${t.id},{codigo:this.value.trim().toUpperCase()}).then(cargarTiposDocs)">
-      </td>
-      <td class="px-3 py-2">
         <input type="text" value="${t.nombre}"
                class="border border-gray-200 focus:border-blue-500 rounded px-2 py-0.5 text-xs w-full bg-white outline-none"
                onchange="patchTipoDoc(${t.id},{nombre:this.value.trim()}).then(cargarTiposDocs)">
@@ -677,11 +670,10 @@ async function cargarTiposDocs() {
       </td>
     </tr>`).join('');
   const sel = document.getElementById('param-tipo-doc');
-  if (sel) sel.innerHTML = tiposDocs.map(t => `<option value="${t.id}">${t.codigo} — ${t.nombre}</option>`).join('');
+  if (sel) sel.innerHTML = tiposDocs.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('');
 }
 
 async function crearTipoDoc() {
-  const codigo        = document.getElementById('td-codigo').value.trim().toUpperCase();
   const nombre        = document.getElementById('td-nombre').value.trim();
   const numero_inicio = parseInt(document.getElementById('td-inicio').value) || 1;
   const predeterminado = document.getElementById('td-predeterminado').checked;
@@ -689,10 +681,10 @@ async function crearTipoDoc() {
   const es_interno     = document.getElementById('td-es-interno').checked;
   const tipo_movimiento = document.getElementById('td-tipo-movimiento').value;
   
-  if (!codigo || !nombre) return;
+  if (!nombre) return;
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno})
+    body: JSON.stringify({nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno})
   });
   const data = await resp.json();
   if (data.ok) {
@@ -971,7 +963,7 @@ async function cargarTiposConParams() {
   sel.innerHTML = '<option value="">— Selecciona tipo de documento —</option>';
   for (const t of (data.tipos || [])) {
     if (!t.activo) continue;
-    sel.innerHTML += `<option value="${t.id}" data-codigo="${t.codigo}">${t.codigo} — ${t.nombre}</option>`;
+    sel.innerHTML += `<option value="${t.id}" data-codigo="${t.codigo}">${t.nombre}</option>`;
   }
 }
 
@@ -1167,7 +1159,7 @@ async function progCargarTipos() {
   const sel = document.getElementById('prog-tipo');
   const cur = sel.value;
   sel.innerHTML = '<option value="">-- seleccionar --</option>' +
-    data.tipos.map(t => `<option value="${t.id}" data-codigo="${t.codigo}">${t.codigo} — ${t.nombre}</option>`).join('');
+    data.tipos.map(t => `<option value="${t.id}" data-codigo="${t.codigo}">${t.nombre}</option>`).join('');
   if (cur) sel.value = cur;
   sel.onchange = () => progCargarVarsH();
 }

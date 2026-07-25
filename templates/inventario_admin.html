@@ -1716,8 +1716,9 @@ function calcularTotalesEntrada() {
 }
 
 async function registrarEntrada() {
-  const tipo_documento = document.getElementById('entrada-tipo-doc').value || null;
-  const motivo = (tipo_documento || 'compra').toLowerCase();
+  const tipo_doc_id = parseInt(document.getElementById('entrada-tipo-doc').value) || null;
+  const td = tiposDocEntrada.find(t => t.id === tipo_doc_id);
+  const motivo = td ? (td.tipo_movimiento || 'compra') : 'compra';
   const notas  = document.getElementById('entrada-notas').value.trim() || null;
   const numero_documento = document.getElementById('entrada-num-doc').value.trim() || null;
   const fecha_documento = document.getElementById('entrada-fecha-doc').value || null;
@@ -1772,7 +1773,7 @@ async function registrarEntrada() {
   const r = await fetch(`/api/inventario/${NEGOCIO_ID}/entrada`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
-      lineas, motivo, notas, tipo_documento, numero_documento,
+      lineas, motivo, notas, tipo_documento_id: tipo_doc_id, tipo_documento: td ? td.nombre : null, numero_documento,
       fecha_documento, proveedor_nombre, proveedor_id, iva: ivaAcumulado,
       metodo_pago
     })
@@ -1974,7 +1975,9 @@ async function registrarProduccion() {
   const id    = parseInt(idVal);
   const qty   = parseFloat(document.getElementById('prod-cantidad').value);
   const notas = document.getElementById('prod-notas').value.trim() || null;
-  const tipo_documento = document.getElementById('prod-tipo-doc').value || null;
+  const tipo_doc_id = parseInt(document.getElementById('prod-tipo-doc').value) || null;
+  const td = tiposDocProduccion.find(t => t.id === tipo_doc_id);
+  const tipo_documento = td ? td.nombre : null;
   const documento_numero = document.getElementById('prod-num-doc').value || null;
   
   const btn = document.getElementById('prod-btn-registrar');
@@ -1984,7 +1987,7 @@ async function registrarProduccion() {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({producto_id: id, cantidad: qty, notas, tipo_documento, documento_numero})
+      body: JSON.stringify({producto_id: id, cantidad: qty, notas, tipo_documento_id: tipo_doc_id, tipo_documento, documento_numero})
     });
     const d = await r.json();
     if (d.ok) {
@@ -2146,7 +2149,7 @@ async function cargarTiposDocEntrada() {
       tiposDocEntrada = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'entrada');
       const select = document.getElementById('entrada-tipo-doc');
       if (select) {
-        select.innerHTML = tiposDocEntrada.map(t => `<option value="${t.codigo}" ${t.predeterminado ? 'selected' : ''}>${t.nombre} (${t.codigo})</option>`).join('');
+        select.innerHTML = tiposDocEntrada.map(t => `<option value="${t.id}" ${t.predeterminado ? 'selected' : ''}>${t.nombre}</option>`).join('');
         if (!tiposDocEntrada.length) {
           select.innerHTML = '<option value="">No hay tipos de doc. de entrada configurados</option>';
         }
@@ -2167,7 +2170,7 @@ async function cargarTiposDocProduccion() {
       tiposDocProduccion = d.tipos.filter(t => t.activo && t.mueve_inventario && t.tipo_movimiento === 'produccion');
       const select = document.getElementById('prod-tipo-doc');
       if (select) {
-        select.innerHTML = tiposDocProduccion.map(t => `<option value="${t.codigo}" ${t.predeterminado ? 'selected' : ''}>${t.nombre} (${t.codigo})</option>`).join('');
+        select.innerHTML = tiposDocProduccion.map(t => `<option value="${t.id}" ${t.predeterminado ? 'selected' : ''}>${t.nombre}</option>`).join('');
         if (!tiposDocProduccion.length) {
           select.innerHTML = '<option value="">No hay tipos de doc. de producción configurados</option>';
         }
@@ -2180,8 +2183,8 @@ async function cargarTiposDocProduccion() {
 }
 
 function mostrarConsecutivoProduccion() {
-  const code = document.getElementById('prod-tipo-doc').value;
-  const td = tiposDocProduccion.find(t => t.codigo === code);
+  const id = parseInt(document.getElementById('prod-tipo-doc').value);
+  const td = tiposDocProduccion.find(t => t.id === id);
   const input = document.getElementById('prod-num-doc');
   if (input) {
     if (td) {
@@ -2197,8 +2200,8 @@ function actualizarVisibilidadNumeroEntrada() {
   const select = document.getElementById('entrada-tipo-doc');
   const input = document.getElementById('entrada-num-doc');
   if (!select || !input) return;
-  const code = select.value;
-  const td = tiposDocEntrada.find(t => t.codigo === code);
+  const id = parseInt(select.value);
+  const td = tiposDocEntrada.find(t => t.id === id);
   if (td) {
     if (td.es_interno) {
       const nextNum = Math.max((td.consecutivo || 0) + 1, (td.numero_inicio || 1));
@@ -2303,11 +2306,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.history.replaceState({}, document.title, window.location.pathname + '#entradas');
     mostrarTab('entradas');
     const selectEl = document.getElementById('entrada-tipo-doc');
-    const opt = selectEl ? [...selectEl.options].find(o => o.value.toLowerCase() === qTipoDoc.toLowerCase()) : null;
-    if (opt) {
-      selectEl.value = opt.value;
-    } else if (selectEl) {
-      selectEl.value = qTipoDoc;
+    const matchedTd = tiposDocEntrada.find(t => 
+      String(t.id).toLowerCase() === qTipoDoc.toLowerCase() || 
+      t.nombre.toLowerCase() === qTipoDoc.toLowerCase() || 
+      (t.codigo && t.codigo.toLowerCase() === qTipoDoc.toLowerCase())
+    );
+    if (matchedTd && selectEl) {
+      selectEl.value = matchedTd.id;
     }
     document.getElementById('entrada-num-doc').value = qNumDoc;
     if (qProvId) {

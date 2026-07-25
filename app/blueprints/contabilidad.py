@@ -258,7 +258,10 @@ def _asegurar_tablas(conn):
     # Alteraciones de columnas
     for sql in [
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(50) DEFAULT NULL",
-        "ALTER TABLE parametros_lineas_contables ADD COLUMN IF NOT EXISTS cuenta_dinamica VARCHAR(50) DEFAULT NULL"
+        "ALTER TABLE parametros_lineas_contables ADD COLUMN IF NOT EXISTS cuenta_dinamica VARCHAR(50) DEFAULT NULL",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS tipo_documento_id INTEGER REFERENCES tipos_documento_negocio(id)",
+        "ALTER TABLE comprobantes_contables  ADD COLUMN IF NOT EXISTS tipo_documento_id INTEGER REFERENCES tipos_documento_negocio(id)",
+        "ALTER TABLE saldo_por_documentos    ADD COLUMN IF NOT EXISTS tipo_documento_id INTEGER REFERENCES tipos_documento_negocio(id)"
     ]:
         try:
             conn.execute(sql)
@@ -266,6 +269,51 @@ def _asegurar_tablas(conn):
         except Exception:
             try: conn.rollback()
             except Exception: pass
+
+    # Migrar datos históricos para tipo_documento_id si hay registros vacíos
+    try:
+        conn.execute("""
+            UPDATE movimientos_inventario m
+            SET tipo_documento_id = t.id
+            FROM tipos_documento_negocio t
+            WHERE m.tipo_documento_id IS NULL 
+              AND t.negocio_id = m.negocio_id 
+              AND UPPER(t.codigo) = UPPER(m.tipo_documento)
+        """)
+        conn.execute("""
+            UPDATE comprobantes_contables c
+            SET tipo_documento_id = t.id
+            FROM tipos_documento_negocio t
+            WHERE c.tipo_documento_id IS NULL 
+              AND t.negocio_id = c.negocio_id 
+              AND UPPER(t.codigo) = UPPER(c.tipo)
+        """)
+        conn.execute("""
+            UPDATE saldo_por_documentos s
+            SET tipo_documento_id = t.id
+            FROM tipos_documento_negocio t
+            WHERE s.tipo_documento_id IS NULL 
+              AND t.negocio_id = s.negocio_id 
+              AND UPPER(t.codigo) = UPPER(s.tipo_documento)
+        """)
+        conn.commit()
+    except Exception as e:
+        print(f"Error en migración de datos tipo_documento_id: {e}")
+        try: conn.rollback()
+        except: pass
+
+    # Recreación del índice único de saldos por documento
+    try:
+        conn.execute("DROP INDEX IF EXISTS idx_saldo_doc_unico")
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_saldo_doc_unico 
+            ON saldo_por_documentos(negocio_id, tercero_id, cuenta_id, tipo_documento_id, numero_documento)
+        """)
+        conn.commit()
+    except Exception as e:
+        print(f"Error recreando índice idx_saldo_doc_unico: {e}")
+        try: conn.rollback()
+        except: pass
 
     _seed_variables(conn)
     _tablas_listas = True
@@ -560,20 +608,23 @@ def ejecutar_programaciones_job(app):
             except Exception: pass
 
 
-def obtener_siguiente_consecutivo(conn, negocio_id, codigo_documento):
+def obtener_siguiente_consecutivo(conn, negocio_id, tipo_doc_identificador):
     """
     Función centralizada para resolver el consecutivo de un documento.
-    Equivalente a una función en un archivo PRG centralizado.
-    
-    Retorna una tupla: (numero_documento, es_interno)
-    - Si es interno: retorna (consecutivo_incrementado, True)
-    - Si es externo: retorna (None, False)
+    Soporta búsqueda por ID (entero) o por Nombre/Código (cadena fallback).
     """
-    td = conn.execute("""
-        SELECT id, consecutivo, numero_inicio, es_interno
-        FROM tipos_documento_negocio
-        WHERE negocio_id = %s AND codigo = %s
-    """, (negocio_id, codigo_documento)).fetchone()
+    if isinstance(tipo_doc_identificador, int) or (isinstance(tipo_doc_identificador, str) and tipo_doc_identificador.isdigit()):
+        td = conn.execute("""
+            SELECT id, consecutivo, numero_inicio, es_interno
+            FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND id = %s
+        """, (negocio_id, int(tipo_doc_identificador))).fetchone()
+    else:
+        td = conn.execute("""
+            SELECT id, consecutivo, numero_inicio, es_interno
+            FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND (UPPER(nombre) = %s OR UPPER(codigo) = %s)
+        """, (negocio_id, str(tipo_doc_identificador).upper(), str(tipo_doc_identificador).upper())).fetchone()
     
     if not td:
         return None, True
@@ -594,7 +645,7 @@ def obtener_siguiente_consecutivo(conn, negocio_id, codigo_documento):
 
 # ── Motor contable ────────────────────────────────────────────
 
-def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
+def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, variables,
                                   registrado_por=None, fecha=None, descripcion_override=None,
                                   origen_tipo=None, origen_id=None,
                                   metodo_pago=None, tercero_id=None,
@@ -604,13 +655,23 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
     Retorna comprobante_id (int) o None si no hay parametrización activa.
     conn: abierta, el llamador hace commit/rollback.
     """
-    tipo_doc = conn.execute(
-        "SELECT id, nombre, consecutivo, numero_inicio, tipo_movimiento FROM tipos_documento_negocio "
-        "WHERE negocio_id=%s AND codigo=%s",
-        (negocio_id, tipo_doc_codigo)
-    ).fetchone()
+    if isinstance(tipo_doc_identificador, int) or (isinstance(tipo_doc_identificador, str) and tipo_doc_identificador.isdigit()):
+        tipo_doc = conn.execute(
+            "SELECT id, nombre, consecutivo, numero_inicio, tipo_movimiento, codigo FROM tipos_documento_negocio "
+            "WHERE negocio_id=%s AND id=%s",
+            (negocio_id, int(tipo_doc_identificador))
+        ).fetchone()
+    else:
+        tipo_doc = conn.execute(
+            "SELECT id, nombre, consecutivo, numero_inicio, tipo_movimiento, codigo FROM tipos_documento_negocio "
+            "WHERE negocio_id=%s AND (UPPER(nombre)=%s OR UPPER(codigo)=%s)",
+            (negocio_id, str(tipo_doc_identificador).upper(), str(tipo_doc_identificador).upper())
+        ).fetchone()
+
     if not tipo_doc:
         return None
+
+    tipo_doc_codigo = tipo_doc['codigo'] or tipo_doc['nombre'].upper().replace(' ', '_')
 
     param = conn.execute(
         "SELECT id, descripcion_asiento FROM parametros_contables_negocio "
@@ -789,11 +850,11 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
     comp_id = conn.execute("""
         INSERT INTO comprobantes_contables
             (negocio_id, numero_comprobante, numero_documento, tipo, fecha, descripcion,
-             total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Generado automáticamente',%s,%s)
+             total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id, tipo_documento_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Generado automáticamente',%s,%s,%s)
         RETURNING id
     """, (negocio_id, numero, num_doc, tipo_doc_codigo, fecha_uso, desc,
-          total_deb, total_cred, registrado_por, origen_tipo, origen_id)).fetchone()['id']
+          total_deb, total_cred, registrado_por, origen_tipo, origen_id, tipo_doc['id'])).fetchone()['id']
 
     for m in mov_list:
         # Validación y control de saldos por documento
@@ -815,8 +876,8 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
                 existente = conn.execute("""
                     SELECT id, saldo FROM saldo_por_documentos
                     WHERE negocio_id = %s AND tercero_id = %s AND cuenta_id = %s
-                      AND tipo_documento = %s AND numero_documento = %s
-                """, (negocio_id, t_id, m['cuenta_puc_id'], t_doc, d_num)).fetchone()
+                      AND tipo_documento_id = %s AND numero_documento = %s
+                """, (negocio_id, t_id, m['cuenta_puc_id'], tipo_doc['id'], d_num)).fetchone()
                 
                 if existente:
                     raise ValueError(
@@ -828,17 +889,17 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,
                 conn.execute("""
                     INSERT INTO saldo_por_documentos
                     (negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento,
-                     monto_original, saldo, usuario_id, fecha_hora)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                     monto_original, saldo, usuario_id, fecha_hora, tipo_documento_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
                 """, (negocio_id, t_id, m['cuenta_puc_id'], t_doc, d_num,
-                      m['monto'], m['monto'], registrado_por))
+                      m['monto'], m['monto'], registrado_por, tipo_doc['id']))
             else:
                 # Reducción / Abono
                 existente = conn.execute("""
                     SELECT id, saldo FROM saldo_por_documentos
                     WHERE negocio_id = %s AND tercero_id = %s AND cuenta_id = %s
-                      AND tipo_documento = %s AND numero_documento = %s
-                """, (negocio_id, t_id, m['cuenta_puc_id'], t_doc, d_num)).fetchone()
+                      AND tipo_documento_id = %s AND numero_documento = %s
+                """, (negocio_id, t_id, m['cuenta_puc_id'], tipo_doc['id'], d_num)).fetchone()
                 
                 if not existente:
                     raise ValueError(
@@ -977,7 +1038,8 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
 def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_total,
                                  componentes, registrado_por=None, descripcion=None,
                                  origen_tipo=None, origen_id=None,
-                                 tipo_documento=None, documento_numero=None):
+                                 tipo_documento=None, documento_numero=None,
+                                 tipo_documento_id=None):
     """
     Asiento de producción — reclasificación dentro del 14x:
       Débito  cuenta_inve del producto terminado  × costo_total
@@ -1036,6 +1098,16 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
     if not lineas_cred:
         return None
 
+    # Resolve tipo_documento_id if missing but tipo_documento string is provided
+    if not tipo_documento_id and tipo_documento:
+        td_row = conn.execute("""
+            SELECT id FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND (UPPER(nombre) = %s OR UPPER(codigo) = %s)
+            LIMIT 1
+        """, (negocio_id, str(tipo_documento).upper(), str(tipo_documento).upper())).fetchone()
+        if td_row:
+            tipo_documento_id = td_row['id']
+
     fecha_uso = _date.today()
     desc = descripcion or f'Producción: {terminado["nombre"]}'
     if tipo_documento and documento_numero:
@@ -1051,11 +1123,11 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
     comp_id = conn.execute("""
         INSERT INTO comprobantes_contables
             (negocio_id, numero_comprobante, tipo, fecha, descripcion,
-             total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id)
-        VALUES (%s,%s,'PRODUCCION',%s,%s,%s,%s,%s,'Producción automática',%s,%s)
+             total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id, tipo_documento_id)
+        VALUES (%s,%s,'PRODUCCION',%s,%s,%s,%s,%s,'Producción automática',%s,%s,%s)
         RETURNING id
     """, (negocio_id, numero, fecha_uso, desc,
-          monto_total, total_cred, registrado_por, origen_tipo, origen_id)).fetchone()['id']
+          monto_total, total_cred, registrado_por, origen_tipo, origen_id, tipo_documento_id)).fetchone()['id']
 
     conn.execute("""
         INSERT INTO movimientos_contables
@@ -1262,7 +1334,7 @@ def api_tipos_doc_get(negocio_id):
         conn = get_db_connection()
         rows = conn.execute(
             "SELECT id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno "
-            "FROM tipos_documento_negocio WHERE negocio_id=%s ORDER BY codigo", (negocio_id,)
+            "FROM tipos_documento_negocio WHERE negocio_id=%s ORDER BY nombre", (negocio_id,)
         ).fetchall()
         conn.close()
         return jsonify({'ok': True, 'tipos': [dict(r) for r in rows]})
@@ -1277,7 +1349,6 @@ def api_tipos_doc_post(negocio_id):
     if not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     data          = request.get_json() or {}
-    codigo        = (data.get('codigo') or '').strip().upper()
     nombre        = (data.get('nombre') or '').strip()
     numero_inicio = int(data.get('numero_inicio') or 1)
     predeterminado = bool(data.get('predeterminado', False))
@@ -1291,12 +1362,30 @@ def api_tipos_doc_post(negocio_id):
     else:
         tipo_movimiento = None
 
-    if not codigo or not nombre:
-        return jsonify({'ok': False, 'error': 'Código y nombre son requeridos'}), 400
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'El nombre es requerido'}), 400
+    
+    import re
+    # Clean the name to form a slug/code under the hood
+    codigo = re.sub(r'[^A-Z0-9_]', '', nombre.upper().replace(' ', '_'))
+    if not codigo:
+        codigo = 'DOC_NEW'
+
     from ..db import get_db_connection
     try:
         conn = get_db_connection()
         _asegurar_tablas(conn)
+        
+        # Check conflict on code and append sequence if necessary
+        base_codigo = codigo
+        counter = 1
+        while True:
+            exists = conn.execute("SELECT 1 FROM tipos_documento_negocio WHERE negocio_id=%s AND codigo=%s", (negocio_id, codigo)).fetchone()
+            if not exists:
+                break
+            codigo = f"{base_codigo}_{counter}"
+            counter += 1
+
         nuevo = conn.execute("""
             INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
@@ -1305,7 +1394,7 @@ def api_tipos_doc_post(negocio_id):
         """, (negocio_id, codigo, nombre, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno)).fetchone()
         conn.commit(); conn.close()
         if not nuevo:
-            return jsonify({'ok': False, 'error': f'El código {codigo} ya existe'}), 409
+            return jsonify({'ok': False, 'error': f'El tipo de documento ya existe'}), 409
         return jsonify({'ok': True, 'tipo': dict(nuevo)})
     except Exception as e:
         try: conn.rollback(); conn.close()

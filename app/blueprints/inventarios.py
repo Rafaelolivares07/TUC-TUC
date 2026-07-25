@@ -313,7 +313,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                  proveedor_nombre=None, iva_total=None,
                  documento_total=None, iva_pct=None, iva_valor=None,
                  producto_padre_id=None, presentacion_id=None,
-                 metodo_pago=None):
+                 metodo_pago=None, tipo_documento_id=None):
     """Movimiento directo sobre un producto, sin pasar por tarjeta estándar."""
     signo  = Decimal('1') if tipo == 'entrada' else Decimal('-1')
     cantidad = Decimal(str(cantidad))
@@ -347,8 +347,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
              valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo,
              tipo_documento, documento_numero, documento_fecha, proveedor_id,
              proveedor_nombre, iva_total, documento_total, iva_pct, iva_valor,
-             producto_padre_id, presentacion_id, metodo_pago)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         negocio_id, producto_id,
         nombre_prod['nombre'] if nombre_prod else '',
@@ -365,7 +365,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         float(documento_total) if documento_total is not None else None,
         float(iva_pct) if iva_pct is not None else 0.0,
         float(iva_valor) if iva_valor is not None else 0.0,
-        producto_padre_id, presentacion_id, metodo_pago
+        producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id
     ))
 
     if saldo:
@@ -404,7 +404,7 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      documento_fecha=None, proveedor_id=None,
                      proveedor_nombre=None, iva_total=None,
                      documento_total=None, iva_pct=None, iva_valor=None,
-                     presentacion_id=None, metodo_pago=None):
+                     presentacion_id=None, metodo_pago=None, tipo_documento_id=None):
     """Aplica entrada o salida según tarjeta estándar. Sin tarjeta → 1:1 sobre sí mismo."""
     componentes = conn.execute(
         "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
@@ -425,7 +425,8 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      documento_numero, documento_fecha, proveedor_id,
                      proveedor_nombre, iva_total, documento_total,
                      iva_pct, iva_valor, producto_padre_id=padre_id,
-                     presentacion_id=pres_id, metodo_pago=metodo_pago)
+                     presentacion_id=pres_id, metodo_pago=metodo_pago,
+                     tipo_documento_id=tipo_documento_id)
 
 
 def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
@@ -438,12 +439,31 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
 
     metodo_pago = (_txt(data.get('metodo_pago')) or 'efectivo').lower()
 
-    from .contabilidad import obtener_siguiente_consecutivo
+    # Resolve document type ID
+    tipo_doc_id = _int_o_none(data.get('tipo_documento_id') or data.get('tipo_documento'))
+    if not tipo_doc_id:
+        tipo_str = (_txt(data.get('tipo_documento') or data.get('tipo_documento_id')) or 'otro').strip()
+        td_row = conn.execute("""
+            SELECT id FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND (UPPER(nombre) = %s OR UPPER(codigo) = %s)
+            LIMIT 1
+        """, (negocio_id, tipo_str.upper(), tipo_str.upper())).fetchone()
+        if td_row:
+            tipo_doc_id = td_row['id']
 
-    tipo_documento = (_txt(data.get('tipo_documento')) or 'otro').upper()
+    td = None
+    if tipo_doc_id:
+        td = conn.execute("""
+            SELECT id, nombre, es_interno 
+            FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND id = %s
+        """, (negocio_id, tipo_doc_id)).fetchone()
+
+    es_interno = td['es_interno'] if (td and td['es_interno'] is not None) else True
+    tipo_documento = td['nombre'] if td else 'OTRO'
     documento_numero = (_txt(data.get('documento_numero') or data.get('numero_documento')) or '').strip().upper()
 
-    res_num, es_interno = obtener_siguiente_consecutivo(conn, negocio_id, tipo_documento)
+    res_num, es_interno_actual = obtener_siguiente_consecutivo(conn, negocio_id, tipo_doc_id or tipo_documento)
     if es_interno:
         if res_num:
             documento_numero = res_num
@@ -474,20 +494,20 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     proveedor_nombre = prov['nombre']
 
     # Validation check: if it is external, check for duplicates and prevent registration
-    if not es_interno and tipo_documento and documento_numero and proveedor_id:
+    if not es_interno and tipo_doc_id and documento_numero and proveedor_id:
         existing_movs = conn.execute("""
             SELECT 1 FROM movimientos_inventario
             WHERE negocio_id = %s AND tipo = 'entrada'
-              AND tipo_documento = %s AND documento_numero = %s AND proveedor_id = %s
+              AND tipo_documento_id = %s AND documento_numero = %s AND proveedor_id = %s
             LIMIT 1
-        """, (negocio_id, tipo_documento, documento_numero, proveedor_id)).fetchone()
+        """, (negocio_id, tipo_doc_id, documento_numero, proveedor_id)).fetchone()
         
         existing_saldo = conn.execute("""
             SELECT 1 FROM saldo_por_documentos
             WHERE negocio_id = %s AND tercero_id = %s
-              AND tipo_documento = %s AND numero_documento = %s
+              AND tipo_documento_id = %s AND numero_documento = %s
             LIMIT 1
-        """, (negocio_id, proveedor_id, tipo_documento, documento_numero)).fetchone()
+        """, (negocio_id, proveedor_id, tipo_doc_id, documento_numero)).fetchone()
         
         if existing_movs or existing_saldo:
             return {'ok': False, 'error': f'El documento {tipo_documento} N° {documento_numero} ya está registrado para este proveedor.'}, 400
@@ -605,7 +625,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             iva_pct=ln['iva_pct'],
             iva_valor=ln['iva_valor'],
             presentacion_id=ln['presentacion_id'],
-            metodo_pago=metodo_pago
+            metodo_pago=metodo_pago,
+            tipo_documento_id=tipo_doc_id
         )
 
         # Feed/update quote (cotizacion) from this entry if it's a purchase and has a price
@@ -647,7 +668,7 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     if _asiento_auto:
         try:
             if documento_total > 0:
-                _asiento_auto(conn, negocio_id, tipo_documento,
+                _asiento_auto(conn, negocio_id, tipo_doc_id or tipo_documento,
                               {'subtotal_compra': float(subtotal_compra),
                                'iva_compra': float(iva_total),
                                'total_compra': float(documento_total)},
@@ -1267,10 +1288,33 @@ def api_produccion_registrar(negocio_id):
         if error:
             return error
         
+        # Resolve document type ID
+        tipo_doc_id = _int_o_none(data.get('tipo_documento_id') or data.get('tipo_documento'))
+        if not tipo_doc_id and data.get('tipo_documento'):
+            tipo_str = str(data['tipo_documento']).strip()
+            td_row = conn.execute("""
+                SELECT id FROM tipos_documento_negocio
+                WHERE negocio_id = %s AND (UPPER(nombre) = %s OR UPPER(codigo) = %s)
+                LIMIT 1
+            """, (negocio_id, tipo_str.upper(), tipo_str.upper())).fetchone()
+            if td_row:
+                tipo_doc_id = td_row['id']
+
+        td = None
+        if tipo_doc_id:
+            td = conn.execute("""
+                SELECT id, nombre, es_interno 
+                FROM tipos_documento_negocio
+                WHERE negocio_id = %s AND id = %s
+            """, (negocio_id, tipo_doc_id)).fetchone()
+
+        es_interno = td['es_interno'] if (td and td['es_interno'] is not None) else True
+        tipo_documento = td['nombre'] if td else 'PRODUCCION'
+
         # Consecutivo de producción si aplica
-        if tipo_documento:
+        if tipo_doc_id:
             from .contabilidad import obtener_siguiente_consecutivo
-            res_num, es_interno = obtener_siguiente_consecutivo(conn, negocio_id, tipo_documento)
+            res_num, es_interno_actual = obtener_siguiente_consecutivo(conn, negocio_id, tipo_doc_id)
             if es_interno:
                 if res_num:
                     documento_numero = res_num
@@ -1340,14 +1384,16 @@ def api_produccion_registrar(negocio_id):
                          valor_unitario=comp_cost,
                          notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
                          producto_padre_id=producto_id,
-                         tipo_documento=tipo_documento, documento_numero=documento_numero)
+                         tipo_documento=tipo_documento, documento_numero=documento_numero,
+                         tipo_documento_id=tipo_doc_id)
 
         # Entrada del terminado con costo calculado desde componentes
         _mov_directo(conn, negocio_id, producto_id, cantidad,
                      'entrada', 'produccion', session['usuario_id'],
                      valor_unitario=costo_unitario,
                      notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
-                     tipo_documento=tipo_documento, documento_numero=documento_numero)
+                     tipo_documento=tipo_documento, documento_numero=documento_numero,
+                     tipo_documento_id=tipo_doc_id)
 
         # Asiento contable de producción (best-effort, no bloquea)
         if _asiento_produccion:
@@ -1359,7 +1405,8 @@ def api_produccion_registrar(negocio_id):
                     origen_tipo='produccion',
                     origen_id=prod_token,
                     tipo_documento=tipo_documento,
-                    documento_numero=documento_numero
+                    documento_numero=documento_numero,
+                    tipo_documento_id=tipo_doc_id
                 )
             except Exception as _e:
                 print(f'[cont] produccion prod={producto_id}: {_e}')
@@ -2158,6 +2205,16 @@ def api_consultar_documento_existente(negocio_id):
         
     conn = get_db_connection()
     try:
+        tipo_doc_id = _int_o_none(tipo_doc)
+        if not tipo_doc_id and tipo_doc:
+            td_row = conn.execute("""
+                SELECT id FROM tipos_documento_negocio
+                WHERE negocio_id = %s AND (UPPER(nombre) = %s OR UPPER(codigo) = %s)
+                LIMIT 1
+            """, (negocio_id, tipo_doc.upper(), tipo_doc.upper())).fetchone()
+            if td_row:
+                tipo_doc_id = td_row['id']
+
         # Check if there is any movement with this key
         if proveedor_id:
             query = """
@@ -2166,10 +2223,11 @@ SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.i
 FROM movimientos_inventario m
 LEFT JOIN presentaciones p_pres ON p_pres.id = m.presentacion_id
 WHERE m.negocio_id = %s AND m.tipo = 'entrada'
-AND LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) = LOWER(%s) AND m.proveedor_id = %s
+AND (m.tipo_documento_id = %s OR (m.tipo_documento_id IS NULL AND LOWER(m.tipo_documento) = LOWER(%s)))
+AND LOWER(m.documento_numero) = LOWER(%s) AND m.proveedor_id = %s
 ORDER BY m.id
 """
-            params = (negocio_id, tipo_doc, num_doc, proveedor_id)
+            params = (negocio_id, tipo_doc_id, tipo_doc, num_doc, proveedor_id)
         else:
             query = """
 SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.iva_pct, m.notas,
@@ -2177,10 +2235,11 @@ SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.i
 FROM movimientos_inventario m
 LEFT JOIN presentaciones p_pres ON p_pres.id = m.presentacion_id
 WHERE m.negocio_id = %s AND m.tipo = 'entrada'
-AND LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) = LOWER(%s) AND m.proveedor_nombre = %s
+AND (m.tipo_documento_id = %s OR (m.tipo_documento_id IS NULL AND LOWER(m.tipo_documento) = LOWER(%s)))
+AND LOWER(m.documento_numero) = LOWER(%s) AND m.proveedor_nombre = %s
 ORDER BY m.id
 """
-            params = (negocio_id, tipo_doc, num_doc, proveedor_nombre)
+            params = (negocio_id, tipo_doc_id, tipo_doc, num_doc, proveedor_nombre)
             
         rows = conn.execute(query, params).fetchall()
         if not rows:
@@ -2190,9 +2249,10 @@ ORDER BY m.id
         first_row = conn.execute("""
             SELECT notas FROM movimientos_inventario
             WHERE negocio_id = %s AND tipo = 'entrada' 
-              AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s) AND (proveedor_id = %s OR proveedor_nombre = %s)
+              AND (tipo_documento_id = %s OR (tipo_documento_id IS NULL AND LOWER(tipo_documento) = LOWER(%s)))
+              AND LOWER(documento_numero) = LOWER(%s) AND (proveedor_id = %s OR proveedor_nombre = %s)
             LIMIT 1
-        """, (negocio_id, tipo_doc, num_doc, proveedor_id, proveedor_nombre)).fetchone()
+        """, (negocio_id, tipo_doc_id, tipo_doc, num_doc, proveedor_id, proveedor_nombre)).fetchone()
         notes = first_row['notas'] if first_row else ''
             
         return jsonify({

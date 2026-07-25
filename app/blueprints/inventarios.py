@@ -2509,3 +2509,96 @@ def api_ultima_presentacion(negocio_id, producto_id, proveedor_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/produccion/historial')
+def api_produccion_historial(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.valor_total,
+                   m.numero_documento, m.tipo_documento_id, tdn.nombre AS tipo_documento_nombre, 
+                   m.created_at, m.referencia_id AS prod_token, m.notas
+            FROM movimientos_inventario m
+            LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
+            WHERE m.negocio_id = %s AND m.tipo = 'entrada' AND m.referencia_tipo = 'produccion'
+            ORDER BY m.id DESC
+            LIMIT 50
+        """, (negocio_id,)).fetchall()
+        
+        historial = []
+        for r in rows:
+            fecha_str = r['created_at'].strftime('%Y-%m-%d %H:%M') if r['created_at'] else ''
+            historial.append({
+                'id': r['id'],
+                'producto_id': r['producto_id'],
+                'producto_nombre': r['nombre_producto'],
+                'cantidad': float(r['cantidad']),
+                'valor_unitario': float(r['valor_unitario'] or 0),
+                'valor_total': float(r['valor_total'] or 0),
+                'documento_numero': r['numero_documento'],
+                'tipo_documento_id': r['tipo_documento_id'],
+                'tipo_documento_nombre': r['tipo_documento_nombre'] or 'PRODUCCIÓN',
+                'fecha': fecha_str,
+                'prod_token': r['prod_token'],
+                'notas': r['notes'] if 'notes' in r else r['notas']
+            })
+        return jsonify({'ok': True, 'historial': historial})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/produccion/<int:prod_token>/imprimir')
+def api_produccion_imprimir(negocio_id, prod_token):
+    if 'usuario_id' not in session:
+        return redirect(url_for('auth.login'))
+        
+    conn = get_db_connection()
+    try:
+        # 1. Buscar negocio
+        negocio = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (negocio_id,)).fetchone()
+        negocio_nombre = negocio['nombre'] if negocio else 'Mi Negocio'
+        
+        # 2. Buscar terminado
+        terminado = conn.execute("""
+            SELECT m.*, tdn.nombre AS tipo_documento_nombre
+            FROM movimientos_inventario m
+            LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
+            WHERE m.negocio_id = %s AND m.tipo = 'entrada' AND m.referencia_tipo = 'produccion' AND m.referencia_id = %s
+            LIMIT 1
+        """, (negocio_id, prod_token)).fetchone()
+        
+        if not terminado:
+            return "No se encontró el registro de producción especificado.", 404
+            
+        # 3. Buscar componentes
+        componentes = conn.execute("""
+            SELECT m.*
+            FROM movimientos_inventario m
+            WHERE m.negocio_id = %s AND m.tipo = 'salida' AND m.referencia_tipo = 'produccion' AND m.referencia_id = %s
+            ORDER BY m.id ASC
+        """, (negocio_id, prod_token)).fetchall()
+        
+        fecha_doc = terminado['created_at'].strftime('%Y-%m-%d %H:%M') if terminado['created_at'] else ''
+        total_insumos = sum(float(c['valor_total'] or 0) for c in componentes)
+        
+        return render_template(
+            'produccion_print.html',
+            negocio_nombre=negocio_nombre,
+            terminado=terminado,
+            componentes=componentes,
+            fecha_doc=fecha_doc,
+            total_insumos=total_insumos,
+            consecutivo=terminado['numero_documento'] or f"PROD-{prod_token}",
+            tipo_documento_nombre=terminado['tipo_documento_nombre'] or 'PRODUCCIÓN'
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"Error al generar la impresión: {e}", 500
+    finally:
+        conn.close()

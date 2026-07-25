@@ -505,6 +505,30 @@
         Registrar producción
       </button>
     </div>
+
+    <!-- Historial de Producción -->
+    <div class="mt-8 border-t border-gray-150 pt-6">
+      <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">Historial Reciente de Producción</h3>
+      <div class="overflow-x-auto rounded-xl border border-gray-100 shadow-sm bg-white">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100">
+              <th class="px-4 py-3 text-left">Documento</th>
+              <th class="px-4 py-3 text-left">Fecha</th>
+              <th class="px-4 py-3 text-left">Producto Terminado</th>
+              <th class="px-4 py-3 text-right">Cantidad</th>
+              <th class="px-4 py-3 text-right">Costo Total</th>
+              <th class="px-4 py-3 text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="prod-historial-body" class="divide-y divide-gray-100 text-gray-700">
+            <tr>
+              <td colspan="6" class="text-center py-4 text-gray-400 italic">Cargando historial...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- ── TAB STOCK ─────────────────────────────────────────────────── -->
@@ -2175,11 +2199,55 @@ async function cargarTiposDocProduccion() {
           select.innerHTML = '<option value="">No hay tipos de doc. de producción configurados</option>';
         }
         mostrarConsecutivoProduccion();
+        cargarHistorialProduccion();
       }
     }
   } catch(e) {
     console.error('Error al cargar tipos de documento para producción:', e);
   }
+}
+
+async function cargarHistorialProduccion() {
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/historial`);
+    const d = await r.json();
+    const tbody = document.getElementById('prod-historial-body');
+    if (!tbody) return;
+    if (d.ok) {
+      if (!d.historial.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-400 italic">No hay registros de producción recientes.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = d.historial.map(h => `
+        <tr class="hover:bg-gray-50 border-b border-gray-100">
+          <td class="px-4 py-3 font-medium text-gray-900">
+            <span class="font-bold text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">${h.documento_numero || ('PROD-' + h.prod_token)}</span>
+          </td>
+          <td class="px-4 py-3 text-xs text-gray-500">${h.fecha}</td>
+          <td class="px-4 py-3 font-semibold text-gray-800 text-xs">${h.producto_nombre}</td>
+          <td class="px-4 py-3 text-right text-gray-600 font-medium">${h.cantidad.toLocaleString('es-CO')}</td>
+          <td class="px-4 py-3 text-right text-blue-600 font-bold">$${h.valor_total.toLocaleString('es-CO')}</td>
+          <td class="px-4 py-3 text-center">
+            <button onclick="imprimirProduccion(${h.prod_token})" 
+                    class="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 font-bold border border-rose-100 hover:border-rose-300 bg-rose-50/50 hover:bg-rose-50 rounded-lg px-2.5 py-1 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+              Imprimir PDF
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    } else {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-500 italic">Error al cargar historial: ${d.error}</td></tr>`;
+    }
+  } catch(e) {
+    console.error(e);
+    const tbody = document.getElementById('prod-historial-body');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-500 italic">Error de conexión al cargar historial.</td></tr>';
+  }
+}
+
+function imprimirProduccion(token) {
+  window.open(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/imprimir`, '_blank');
 }
 
 function mostrarConsecutivoProduccion() {

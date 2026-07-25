@@ -560,6 +560,38 @@ def ejecutar_programaciones_job(app):
             except Exception: pass
 
 
+def obtener_siguiente_consecutivo(conn, negocio_id, codigo_documento):
+    """
+    Función centralizada para resolver el consecutivo de un documento.
+    Equivalente a una función en un archivo PRG centralizado.
+    
+    Retorna una tupla: (numero_documento, es_interno)
+    - Si es interno: retorna (consecutivo_incrementado, True)
+    - Si es externo: retorna (None, False)
+    """
+    td = conn.execute("""
+        SELECT id, consecutivo, numero_inicio, es_interno
+        FROM tipos_documento_negocio
+        WHERE negocio_id = %s AND codigo = %s
+    """, (negocio_id, codigo_documento)).fetchone()
+    
+    if not td:
+        return None, True
+        
+    es_interno = td['es_interno'] if td['es_interno'] is not None else True
+    
+    if es_interno:
+        num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
+        conn.execute("""
+            UPDATE tipos_documento_negocio
+            SET consecutivo = %s
+            WHERE id = %s
+        """, (num, td['id']))
+        return str(num), True
+    else:
+        return None, False
+
+
 # ── Motor contable ────────────────────────────────────────────
 
 def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_codigo, variables,

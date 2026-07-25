@@ -438,28 +438,15 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
 
     metodo_pago = (_txt(data.get('metodo_pago')) or 'efectivo').lower()
 
+    from .contabilidad import obtener_siguiente_consecutivo
+
     tipo_documento = (_txt(data.get('tipo_documento')) or 'otro').upper()
     documento_numero = (_txt(data.get('documento_numero') or data.get('numero_documento')) or '').strip().upper()
 
-    # Check if the document type is internal or external
-    td = conn.execute("""
-        SELECT id, consecutivo, numero_inicio, es_interno 
-        FROM tipos_documento_negocio 
-        WHERE negocio_id = %s AND codigo = %s
-    """, (negocio_id, tipo_documento)).fetchone()
-    
-    es_interno = td['es_interno'] if (td and td['es_interno'] is not None) else True
-
+    res_num, es_interno = obtener_siguiente_consecutivo(conn, negocio_id, tipo_documento)
     if es_interno:
-        # Documento Interno: Generamos consecutivo y actualizamos
-        if td:
-            num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
-            documento_numero = str(num)
-            conn.execute("""
-                UPDATE tipos_documento_negocio 
-                SET consecutivo = %s 
-                WHERE id = %s
-            """, (num, td['id']))
+        if res_num:
+            documento_numero = res_num
         else:
             documento_numero = f"ENT-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     else:
@@ -1282,23 +1269,11 @@ def api_produccion_registrar(negocio_id):
         
         # Consecutivo de producción si aplica
         if tipo_documento:
-            td = conn.execute("""
-                SELECT id, consecutivo, numero_inicio, es_interno
-                FROM tipos_documento_negocio
-                WHERE negocio_id = %s AND codigo = %s
-            """, (negocio_id, tipo_documento)).fetchone()
-            
-            es_interno = td['es_interno'] if (td and td['es_interno'] is not None) else True
-            
+            from .contabilidad import obtener_siguiente_consecutivo
+            res_num, es_interno = obtener_siguiente_consecutivo(conn, negocio_id, tipo_documento)
             if es_interno:
-                if td:
-                    num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
-                    documento_numero = str(num)
-                    conn.execute("""
-                        UPDATE tipos_documento_negocio
-                        SET consecutivo = %s
-                        WHERE id = %s
-                    """, (num, td['id']))
+                if res_num:
+                    documento_numero = res_num
             else:
                 if not documento_numero:
                     return jsonify({'ok': False, 'error': f'El número de documento es obligatorio para el tipo de documento externo {tipo_documento}.'}), 400

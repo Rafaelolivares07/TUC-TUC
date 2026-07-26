@@ -226,7 +226,6 @@
       <button class="tab-btn" onclick="mostrarTab('tarjetas')">Tarjetas Estándar</button>
       <button class="tab-btn" onclick="mostrarTab('entradas')">Entradas</button>
       <button class="tab-btn" onclick="mostrarTab('produccion')">Producción</button>
-      <button class="tab-btn" onclick="mostrarTab('stock')">Stock</button>
       <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
     </div>
   </div>
@@ -531,30 +530,6 @@
     </div>
   </div>
 
-  <!-- ── TAB STOCK ─────────────────────────────────────────────────── -->
-  <div id="tab-stock" class="hidden bg-white rounded-2xl shadow p-5">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="font-bold text-gray-700">Saldos actuales</h2>
-      <button onclick="cargarStock()" class="text-xs text-rose-500 font-semibold hover:underline">↺ Actualizar</button>
-    </div>
-    <div class="overflow-x-auto">
-      <table>
-        <thead>
-          <tr>
-            <th>Producto</th>
-            <th>Categoría</th>
-            <th class="num">Stock</th>
-            <th class="num">Costo und</th>
-            <th class="num">Valor exist.</th>
-            <th>Actualizado</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-stock">
-          <tr><td colspan="6" class="text-center text-gray-400 py-8">Selecciona esta pestaña para cargar</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 
   <!-- ── TAB KARDEX ────────────────────────────────────────────────── -->
   <div id="tab-kardex" class="hidden bg-white rounded-2xl shadow p-5">
@@ -645,7 +620,7 @@ function toast(msg, ok = true) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'stock', 'kardex'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'kardex'];
 function mostrarTab(t) {
   TABS.forEach(id => {
     const el = document.getElementById(`tab-${id}`);
@@ -654,7 +629,6 @@ function mostrarTab(t) {
   document.querySelectorAll('.tab-btn').forEach((btn, i) => {
     btn.classList.toggle('tab-active', TABS[i] === t);
   });
-  if (t === 'stock') cargarStock();
   if (t === 'tarjetas') cargarTarjetasResumen();
 }
 
@@ -1825,28 +1799,6 @@ async function registrarEntrada() {
   }
 }
 
-// ── Stock ─────────────────────────────────────────────────────────────────────
-async function cargarStock() {
-  const tb = document.getElementById('tabla-stock');
-  tb.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
-  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/stock`);
-  const d = await r.json();
-  if (!d.ok) { toast(d.error, false); return; }
-  if (!d.saldos.length) {
-    tb.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">Sin saldos registrados</td></tr>';
-    return;
-  }
-  tb.innerHTML = d.saldos.map(s => `
-    <tr>
-      <td class="font-semibold">${s.nombre}</td>
-      <td class="text-gray-400 text-xs">${s.categoria || '—'}</td>
-      <td class="num font-bold ${Number(s.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${fmt(s.stock)}</td>
-      <td class="num">${fmtMon(s.costo_und)}</td>
-      <td class="num">${fmtMon(s.valor_existencia)}</td>
-      <td class="text-xs text-gray-400">${s.updated_at ? s.updated_at.slice(0,16).replace('T',' ') : '—'}</td>
-    </tr>
-  `).join('');
-}
 
 // ── Kardex ────────────────────────────────────────────────────────────────────
 function filtrarACKardex() {

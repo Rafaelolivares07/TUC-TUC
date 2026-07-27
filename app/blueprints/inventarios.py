@@ -7,10 +7,13 @@ try:
     from .contabilidad import _ejecutar_asiento_costo_mov as _asiento_costo_mov
     from .contabilidad import _ejecutar_asiento_produccion as _asiento_produccion
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
+    from .contabilidad import obtener_siguiente_consecutivo
 except ImportError:
     _asiento_costo_mov = None
     _asiento_produccion = None
     _asiento_auto = None
+    def obtener_siguiente_consecutivo(*args, **kwargs):
+        return None, True
 
 bp = Blueprint('inventarios', __name__)
 

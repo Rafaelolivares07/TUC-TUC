@@ -194,6 +194,33 @@
     border: 1px dashed #bbb;
   }
 
+  .item.seleccionada {
+    background: #f0f7ff !important;
+    border-left: 3.5px solid #5b8def !important;
+  }
+  .btn-enviar-multi {
+    background: #5b8def;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    font-weight: 600;
+    margin-bottom: 20px;
+    width: 100%;
+    text-align: center;
+    outline: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .btn-enviar-multi:hover { background: #4a7be0; }
+  .btn-enviar-multi:active { transform: scale(0.98); }
+  .btn-activar.active-select {
+    color: #5b8def;
+    transform: scale(1.2);
+  }
+
   .seccion-titulo {
     font-size: .72rem;
     font-weight: 700;
@@ -224,6 +251,8 @@
     <input type="datetime-local" id="inp-fecha">
     <button class="btn-agregar" onclick="agregar()">+ Agregar</button>
   </div>
+
+  <button id="btn-enviar-multi" class="btn-enviar-multi" style="display:none" onclick="enviarSeleccionadas()">🚀 Enviar seleccionadas a Antigravity (<span id="selected-count">0</span>)</button>
 
   <ul class="items" id="lista">
     {% set pendientes = items | selectattr('2', 'equalto', False) | list %}
@@ -380,25 +409,69 @@
     }
   }
 
-  async function activar(id, btn) {
-    btn.disabled = true;
-    btn.textContent = '⏳';
+  let seleccionados = new Set();
+
+  function activar(id, btn) {
+    const li = document.getElementById(`item-${id}`);
+    if (seleccionados.has(id)) {
+      seleccionados.delete(id);
+      li.classList.remove('seleccionada');
+      btn.classList.remove('active-select');
+    } else {
+      seleccionados.add(id);
+      li.classList.add('seleccionada');
+      btn.classList.add('active-select');
+    }
+    actualizarBotonMulti();
+  }
+
+  function actualizarBotonMulti() {
+    const btnMulti = document.getElementById('btn-enviar-multi');
+    const countSpan = document.getElementById('selected-count');
+    const count = seleccionados.size;
+    
+    if (count > 0) {
+      countSpan.textContent = count;
+      btnMulti.style.display = 'block';
+    } else {
+      btnMulti.style.display = 'none';
+    }
+  }
+
+  async function enviarSeleccionadas() {
+    const btnMulti = document.getElementById('btn-enviar-multi');
+    btnMulti.disabled = true;
+    const originalText = btnMulti.innerHTML;
+    btnMulti.innerHTML = '⏳ Enviando tareas a Antigravity...';
+    
+    const ids = Array.from(seleccionados);
     try {
-      const r = await fetch(`/agenda/item/${id}/activar`, {method: 'POST'});
+      const r = await fetch('/agenda/item/activar-multi', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids})
+      });
       const d = await r.json();
       if (d.ok) {
-        btn.textContent = '✅';
-        setTimeout(() => { btn.textContent = '🚀'; btn.disabled = false; }, 2000);
+        btnMulti.innerHTML = '✅ ¡Tareas enviadas!';
+        seleccionados.clear();
+        document.querySelectorAll('.item.seleccionada').forEach(li => li.classList.remove('seleccionada'));
+        document.querySelectorAll('.btn-activar.active-select').forEach(btn => btn.classList.remove('active-select'));
+        setTimeout(() => {
+          btnMulti.style.display = 'none';
+          btnMulti.disabled = false;
+          btnMulti.innerHTML = originalText;
+        }, 2000);
       } else {
-        alert('Error al activar: ' + (d.error || 'Desconocido'));
-        btn.textContent = '🚀';
-        btn.disabled = false;
+        alert('Error al enviar tareas: ' + (d.error || 'Desconocido'));
+        btnMulti.disabled = false;
+        btnMulti.innerHTML = originalText;
       }
     } catch (e) {
       console.error(e);
       alert('Error de red al conectar con el servidor.');
-      btn.textContent = '🚀';
-      btn.disabled = false;
+      btnMulti.disabled = false;
+      btnMulti.innerHTML = originalText;
     }
   }
 </script>

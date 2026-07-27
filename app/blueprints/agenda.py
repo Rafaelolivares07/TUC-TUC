@@ -195,3 +195,36 @@ def activar_item_agenda(item_id):
         conn.commit()
     return jsonify({'ok': True})
 
+
+@bp.route('/agenda/item/activar-multi', methods=['POST'])
+@admin_required
+def activar_multi_agenda():
+    data = request.get_json() or {}
+    ids = data.get('ids')
+    if not ids or not isinstance(ids, list):
+        return jsonify({'ok': False, 'error': 'Lista de IDs inválida'})
+    
+    with get_db_connection() as conn:
+        placeholders = ', '.join(['%s'] * len(ids))
+        cur = conn.execute(
+            f"SELECT id, texto, categoria FROM agenda_items WHERE id IN ({placeholders})",
+            tuple(ids)
+        )
+        rows = cur.fetchall()
+        if not rows:
+            return jsonify({'ok': False, 'error': 'Tareas no encontradas'})
+        
+        # Build consolidated message
+        lines = []
+        for row in rows:
+            lines.append(f"- [Requerimiento #{row['id']}] {row['texto']} ({row['categoria']})")
+        
+        contenido = "Activar tareas agrupadas:\n" + "\n".join(lines)
+        
+        conn.execute(
+            "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
+            (contenido,)
+        )
+        conn.commit()
+    return jsonify({'ok': True})
+

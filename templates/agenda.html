@@ -171,6 +171,29 @@
 
   .btn-borrar:hover { color: #f55; }
 
+  .btn-activar {
+    background: none;
+    border: none;
+    color: #bbb;
+    font-size: 0.95rem;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: transform 0.2s, opacity 0.2s;
+    flex-shrink: 0;
+    margin-right: 6px;
+  }
+  .btn-activar:hover { transform: scale(1.25); color: #5b8def; }
+  .btn-activar:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .item:not(.completado) { cursor: grab; }
+  .item:not(.completado):active { cursor: grabbing; }
+  .item.dragging {
+    opacity: 0.4;
+    background: #fafafa;
+    border: 1px dashed #bbb;
+  }
+
   .seccion-titulo {
     font-size: .72rem;
     font-weight: 700;
@@ -211,7 +234,7 @@
     {% endif %}
 
     {% for item in pendientes %}
-    <li class="item" id="item-{{ item[0] }}">
+    <li class="item" id="item-{{ item[0] }}" draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondragend="dragEnd(event)" data-id="{{ item[0] }}">
       <input type="checkbox" onchange="toggle({{ item[0] }}, this)">
       <div class="item-body">
         <span class="item-texto">{{ item[1] }}</span>
@@ -219,6 +242,7 @@
         <span class="item-fecha" data-ts="{{ item[5].isoformat() }}"></span>
         {% endif %}
       </div>
+      <button class="btn-activar" onclick="activar({{ item[0] }}, this)" title="Activar en Antigravity">🚀</button>
       <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
     </li>
     {% endfor %}
@@ -295,6 +319,87 @@
   async function borrar(id) {
     await fetch(`/agenda/item/${id}`, {method: 'DELETE'});
     document.getElementById(`item-${id}`).remove();
+  }
+
+  let dragSrcEl = null;
+
+  function dragStart(e) {
+    dragSrcEl = e.currentTarget;
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', e.currentTarget.id);
+  }
+
+  function dragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const list = document.getElementById('lista');
+    const draggingEl = document.querySelector('.dragging');
+    const afterElement = getDragAfterElement(list, e.clientY);
+    if (afterElement == null) {
+      const completedHeader = document.querySelector('.seccion-titulo');
+      if (completedHeader) {
+        list.insertBefore(draggingEl, completedHeader);
+      } else {
+        list.appendChild(draggingEl);
+      }
+    } else {
+      list.insertBefore(draggingEl, afterElement);
+    }
+  }
+
+  function dragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    guardarOrden();
+  }
+
+  function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.item:not(.completado):not(.dragging)')];
+    return draggableElements.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      if (offset < 0 && offset > closest.offset) {
+        return { offset: offset, element: child };
+      } else {
+        return closest;
+      }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+  }
+
+  async function guardarOrden() {
+    const pendingElements = [...document.querySelectorAll('.item:not(.completado)')];
+    const ids = pendingElements.map(el => parseInt(el.dataset.id));
+    try {
+      await fetch('/agenda/reordenar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids})
+      });
+    } catch (err) {
+      console.error('Error al guardar el nuevo orden:', err);
+    }
+  }
+
+  async function activar(id, btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    try {
+      const r = await fetch(`/agenda/item/${id}/activar`, {method: 'POST'});
+      const d = await r.json();
+      if (d.ok) {
+        btn.textContent = '✅';
+        setTimeout(() => { btn.textContent = '🚀'; btn.disabled = false; }, 2000);
+      } else {
+        alert('Error al activar: ' + (d.error || 'Desconocido'));
+        btn.textContent = '🚀';
+        btn.disabled = false;
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error de red al conectar con el servidor.');
+      btn.textContent = '🚀';
+      btn.disabled = false;
+    }
   }
 </script>
 </body>

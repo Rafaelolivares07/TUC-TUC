@@ -152,3 +152,46 @@ def merlin_agenda():
         item_id = cur.fetchone()[0]
         conn.commit()
     return jsonify({'ok': True, 'id': item_id})
+
+
+@bp.route('/agenda/reordenar', methods=['POST'])
+@admin_required
+def reordenar_agenda():
+    data = request.get_json() or {}
+    ids = data.get('ids')
+    if not ids or not isinstance(ids, list):
+        return jsonify({'ok': False, 'error': 'Lista de IDs inválida'})
+    
+    with get_db_connection() as conn:
+        for idx, item_id in enumerate(ids):
+            conn.execute(
+                "UPDATE agenda_items SET orden = %s WHERE id = %s",
+                (idx, item_id)
+            )
+        conn.commit()
+    return jsonify({'ok': True})
+
+
+@bp.route('/agenda/item/<int:item_id>/activar', methods=['POST'])
+@admin_required
+def activar_item_agenda(item_id):
+    with get_db_connection() as conn:
+        cur = conn.execute(
+            "SELECT texto, categoria FROM agenda_items WHERE id = %s",
+            (item_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': 'Tarea no encontrada'})
+        
+        texto = row['texto']
+        categoria = row['categoria']
+        contenido = f"[Requerimiento #{item_id}] {texto} ({categoria})"
+        
+        conn.execute(
+            "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
+            (contenido,)
+        )
+        conn.commit()
+    return jsonify({'ok': True})
+

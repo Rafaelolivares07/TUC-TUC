@@ -560,13 +560,18 @@ def activar_claude():
             _enviar_keys()
             sent = True
 
-        # 3. Enumerar ventanas con proceso WindowsTerminal o título con "claude"
+        # 2b. Título conteniendo "Antigravity"
+        if not sent and wshell.AppActivate("Antigravity"):
+            _enviar_keys()
+            sent = True
+
+        # 3. Enumerar ventanas con proceso WindowsTerminal o título con "claude" o "antigravity"
         if not sent:
             import win32process
             def _enum(hwnd, result):
                 if win32gui.IsWindowVisible(hwnd):
                     title = win32gui.GetWindowText(hwnd)
-                    if 'WindowsTerminal' in title or 'claude' in title.lower():
+                    if 'WindowsTerminal' in title or 'claude' in title.lower() or 'antigravity' in title.lower():
                         result.append(hwnd)
             hwnds = []
             win32gui.EnumWindows(_enum, hwnds)
@@ -592,7 +597,7 @@ def activar_claude():
                         h = win32api.OpenProcess(_wc.PROCESS_QUERY_INFORMATION | _wc.PROCESS_VM_READ, False, pid)
                         name = win32process.GetModuleFileNameEx(h, 0)
                         win32api.CloseHandle(h)
-                        if 'WindowsTerminal' in name or 'claude' in name.lower():
+                        if 'WindowsTerminal' in name or 'claude' in name.lower() or 'antigravity' in name.lower():
                             result.append((hwnd, pid))
                     except Exception:
                         pass

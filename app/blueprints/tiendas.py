@@ -3711,11 +3711,11 @@ def api_tienda_tipos_doc_get(slug):
         if not negocio:
             return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
         
-        # Get active document types for the business (tercero_id)
+        # Get active document types for the business (tercero_id) of type 'venta'
         rows = conn.execute(
             "SELECT id, codigo, nombre, predeterminado, mueve_inventario, tipo_movimiento "
             "FROM tipos_documento_negocio "
-            "WHERE negocio_id=%s AND activo=TRUE ORDER BY nombre", 
+            "WHERE negocio_id=%s AND activo=TRUE AND tipo_movimiento='venta' ORDER BY nombre", 
             (negocio['tercero_id'],)
         ).fetchall()
         

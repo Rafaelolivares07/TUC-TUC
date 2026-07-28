@@ -24,16 +24,17 @@ from datetime import datetime
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-load_dotenv()
-
 # ── ffmpeg en PATH para Whisper ───────────────────────────────────────────────
 _FFMPEG_BIN = r"C:\Users\RAFAEL OLIVARES\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin"
 if _FFMPEG_BIN not in os.environ.get('PATH', ''):
     os.environ['PATH'] = os.environ.get('PATH', '') + os.pathsep + _FFMPEG_BIN
 
 # ── Config ────────────────────────────────────────────────────────────────────
-DB_URL         = os.getenv('DATABASE_URL')
 APP_DIR        = Path(r"C:\Users\RAFAEL OLIVARES\Documents\MiAppMedicamentos")
+
+load_dotenv(dotenv_path=APP_DIR / '.env', override=True)
+
+DB_URL         = os.getenv('DATABASE_URL')
 CLAUDE_CMD     = r"C:\Users\RAFAEL OLIVARES\.local\bin\claude.exe"
 TUCTUC_URL     = "https://admin.tuc-tuc.co"
 HB_TOKEN       = "tuctuc-hb-2026"

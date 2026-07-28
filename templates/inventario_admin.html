@@ -206,7 +206,10 @@
         <label class="text-xs font-bold text-indigo-900 block mb-1">Cantidad total de producto obtenido (Rendimiento):</label>
         <div class="flex gap-2 items-center">
           <input id="proc-rendimiento" type="number" min="0.0001" step="any" value="10" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-semibold">
-          <span class="text-xs text-indigo-800 font-medium">unidades</span>
+          <span class="text-xs text-indigo-800 font-medium mr-2">unidades</span>
+          <button type="button" onclick="escalarCantidadesProcedimiento()" class="flex-shrink-0 text-[10px] font-bold bg-indigo-100 hover:bg-indigo-200 text-indigo-800 px-2 py-1 rounded-lg transition-colors border border-indigo-200">
+            🔄 Escalar sugeridos
+          </button>
         </div>
       </div>
 
@@ -1480,14 +1483,24 @@ function clearSelectedComponent() {
 let procLineas = []; // {componente_id, nombre, cantidad_total, costo_und}
 
 function mostrarProcedimiento() {
-  procLineas = [];
-  document.getElementById('proc-rendimiento').value = '10';
+  const rendimiento = parseFloat(document.getElementById('proc-rendimiento').value) || 10;
+  
+  // Pre-cargar los componentes existentes de la tarjeta estándar escalados al rendimiento
+  procLineas = tarjetaLineas.map(ln => ({
+    componente_id: ln.componente_id,
+    nombre: ln.nombre,
+    cantidad_total: ln.cantidad * rendimiento,
+    costo_und: ln.costo_und
+  }));
+  
+  document.getElementById('proc-rendimiento').value = rendimiento;
   document.getElementById('proc-ac-input').value = '';
   document.getElementById('proc-ac-id').value = '';
   document.getElementById('proc-ac-cant').value = '1';
   document.getElementById('proc-ac-input').classList.remove('hidden');
   document.getElementById('proc-selected-chip').classList.add('hidden');
-  document.getElementById('proc-lineas').innerHTML = '<tr><td colspan="3" class="text-center text-gray-400 py-6">Agrega los insumos utilizados en este lote</td></tr>';
+  
+  renderLineasProcedimiento();
   document.getElementById('seccion-procedimiento').classList.remove('hidden');
   
   // Bind autocomplete to procedure input dynamically if not already set
@@ -1500,6 +1513,19 @@ function mostrarProcedimiento() {
       document.getElementById('proc-ac-cant').focus();
     });
   }
+}
+
+function escalarCantidadesProcedimiento() {
+  const rendimiento = parseFloat(document.getElementById('proc-rendimiento').value);
+  if (isNaN(rendimiento) || rendimiento <= 0) return;
+  procLineas = tarjetaLineas.map(ln => ({
+    componente_id: ln.componente_id,
+    nombre: ln.nombre,
+    cantidad_total: ln.cantidad * rendimiento,
+    costo_und: ln.costo_und
+  }));
+  renderLineasProcedimiento();
+  toast('Cantidades escaladas al rendimiento');
 }
 
 function ocultarProcedimiento() {

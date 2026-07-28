@@ -121,6 +121,14 @@
                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
                     <input id="tel-cliente" type="tel" placeholder="Teléfono (opcional)"
                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
+                    
+                    <!-- Tipo de Documento -->
+                    <div class="pt-1">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Tipo de Documento</label>
+                        <select id="tipo-documento" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 font-semibold text-gray-700">
+                            <option value="">-- Sin documento contable --</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Items carrito -->
@@ -285,6 +293,7 @@ async function verificarPin() {
             document.getElementById('pantalla-caja').classList.remove('hidden');
             cargarMetodosPago();
             cargarProductos();
+            cargarTiposDocumento();
         } else {
             document.getElementById('pin-error').textContent = d.error;
             document.getElementById('pin-error').classList.remove('hidden');
@@ -498,10 +507,19 @@ function renderCarrito() {
     }
 
     cont.innerHTML = carrito.map(i => `
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0">
             <div class="flex-1 min-w-0">
                 <p class="text-sm font-semibold text-gray-700 truncate">${i.nombre}</p>
-                <p class="text-xs text-gray-400">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</p>
+                <div class="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
+                    <span>$</span>
+                    <input type="number" value="${i.precio}" min="0" step="any"
+                           oninput="cambiarPrecioUnitario(${i.producto_id}, this.value)"
+                           onblur="renderCarrito()"
+                           class="w-16 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white"
+                           style="height: 20px;">
+                    <span class="text-gray-400">x ${i.cantidad} =</span>
+                    <span id="subtotal-${i.producto_id}" class="font-semibold text-gray-600">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
+                </div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
                 <button onclick="cambiarCantidad(${i.producto_id}, -1)"
@@ -532,6 +550,41 @@ function renderCarrito() {
     publicarPantallaCliente();
 }
 
+function cambiarPrecioUnitario(productoId, nuevoPrecioStr) {
+    let precio = parseFloat(nuevoPrecioStr);
+    if (isNaN(precio) || precio < 0) precio = 0;
+    const item = carrito.find(i => i.producto_id === productoId);
+    if (item) {
+        item.precio = precio;
+        
+        // Update subtotal in the DOM
+        const subtotalEl = document.getElementById(`subtotal-${productoId}`);
+        if (subtotalEl) {
+            subtotalEl.textContent = `$${(precio * item.cantidad).toLocaleString('es-CO')}`;
+        }
+        
+        // Update total and IVA display in the DOM
+        const total = carrito.reduce((s, x) => s + x.precio * x.cantidad, 0);
+        document.getElementById('total-display').textContent = `$${total.toLocaleString('es-CO')}`;
+        
+        const ivaTotal = carrito.reduce((s, x) => {
+            if (!x.iva_pct) return s;
+            return s + (x.precio * x.cantidad * x.iva_pct / (100 + x.iva_pct));
+        }, 0);
+        const ivaEl = document.getElementById('iva-display');
+        if (ivaEl) {
+            if (ivaTotal > 0) {
+                ivaEl.textContent = `IVA incluido: $${Math.round(ivaTotal).toLocaleString('es-CO')}`;
+                ivaEl.classList.remove('hidden');
+            } else {
+                ivaEl.classList.add('hidden');
+            }
+        }
+        validarPagos();
+        publicarPantallaCliente();
+    }
+}
+
 // ── Métodos de pago ───────────────────────────────────────────────────────────
 
 async function cargarMetodosPago() {
@@ -547,6 +600,25 @@ async function cargarMetodosPago() {
     } catch(e) {
         metodosDisponibles = [{nombre: 'Efectivo', codigo: 'efectivo', icono: '💵'}];
         renderMetodosPago();
+    }
+}
+
+let tiposDocumento = [];
+
+async function cargarTiposDocumento() {
+    try {
+        const r = await fetch(`/api/caja/${SLUG}/tipos-doc`);
+        const d = await r.json();
+        if (d.ok && d.tipos) {
+            tiposDocumento = d.tipos;
+            const select = document.getElementById('tipo-documento');
+            if (select) {
+                select.innerHTML = '<option value="">-- Sin documento contable --</option>' + 
+                    tiposDocumento.map(t => `<option value="${t.id}" ${t.predeterminado ? 'selected' : ''}>${t.nombre}</option>`).join('');
+            }
+        }
+    } catch (e) {
+        console.error("Error al cargar tipos de documento:", e);
     }
 }
 
@@ -610,10 +682,15 @@ async function cobrar() {
 
     const nombre = document.getElementById('nombre-cliente').value.trim();
     const telefono = document.getElementById('tel-cliente').value.trim();
+    const tipoDocId = document.getElementById('tipo-documento')?.value || null;
 
     const pagos = getPagos();
     const payload = {
-        items: carrito.map(i => ({producto_id: i.producto_id, cantidad: i.cantidad})),
+        items: carrito.map(i => ({
+            producto_id: i.producto_id,
+            cantidad: i.cantidad,
+            precio_unitario: i.precio
+        })),
         tipo_entrega: 'caja',
         pagos,
         metodo_pago: pagos.length ? pagos[0].codigo : 'efectivo',
@@ -621,7 +698,8 @@ async function cobrar() {
         telefono_cliente: telefono || '',
         id_cajero: cajeroId,
         nombre_cajero: cajeroNombre,
-        id_tercero_cajero: cajeroTerceroId
+        id_tercero_cajero: cajeroTerceroId,
+        tipo_documento_id: tipoDocId ? parseInt(tipoDocId) : null
     };
 
     try {
@@ -647,6 +725,7 @@ async function cobrar() {
                 telefono,
                 cajero: cajeroNombre,
                 pedido_id: d.pedido_id || null,
+                numero_documento: d.numero_documento || null,
                 fecha: new Date().toISOString(),
                 tienda: TIENDA_NOMBRE,
                 items: carrito.map(i => ({...i}))
@@ -722,6 +801,7 @@ function imprimirTicket() {
     document.getElementById('ticket-print').innerHTML = `
         <div class="centro"><strong>${TIENDA_NOMBRE}</strong></div>
         <div class="centro" style="font-size:11px;">${ahora}</div>
+        ${r.numero_documento ? `<div class="centro" style="font-size:12px; font-weight:bold; margin-top:2px;">Doc: ${r.numero_documento}</div>` : `<div class="centro" style="font-size:11px;">Pedido: #${r.pedido_id}</div>`}
         ${r.cajero ? `<div class="centro" style="font-size:11px;">Cajero: ${r.cajero}</div>` : ''}
         ${r.cliente ? `<div class="centro" style="font-size:11px;">Cliente: ${r.cliente}</div>` : ''}
         <div class="sep"></div>

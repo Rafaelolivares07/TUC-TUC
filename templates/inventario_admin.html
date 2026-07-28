@@ -2020,8 +2020,6 @@ async function registrarEntrada() {
     
     // Clear URL parameters to prevent reload loops
     window.history.replaceState({}, document.title, window.location.pathname);
-    // Return to the main products tab
-    mostrarTab('productos');
   } else {
     toast(d.error, false);
   }

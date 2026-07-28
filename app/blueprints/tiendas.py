@@ -69,6 +69,8 @@ def _crear_tablas(conn):
             tienda_id INTEGER,
             restaurante_id INTEGER,
             negocio_id INTEGER,
+            tipo_documento_id INTEGER,
+            numero_documento VARCHAR(50),
             id_cajero VARCHAR(50),
             nombre_cajero VARCHAR(100),
             id_tercero_cajero INTEGER,
@@ -2191,7 +2193,19 @@ def api_tienda_pedido_crear(slug):
             if not producto:
                 continue
             cantidad  = max(1, int(item.get('cantidad', 1)))
-            precio_u  = float(producto['precio'])
+            
+            # Allow custom unit price if passed from POS client
+            precio_unitario_client = item.get('precio_unitario')
+            if precio_unitario_client is not None:
+                try:
+                    precio_u = float(precio_unitario_client)
+                    if precio_u < 0:
+                        precio_u = float(producto['precio'])
+                except (ValueError, TypeError):
+                    precio_u = float(producto['precio'])
+            else:
+                precio_u = float(producto['precio'])
+                
             total    += precio_u * cantidad
             items_validos.append({
                 'producto_id': producto['id'], 'nombre_producto': producto['nombre'],
@@ -2208,19 +2222,38 @@ def api_tienda_pedido_crear(slug):
         if domicilio_estado == 'fuera_cobertura':
             return jsonify({'ok': False, 'error': 'La direccion esta fuera de cobertura de domicilio'}), 400
         total = subtotal_productos + float(valor_domicilio or 0)
+        
+        # Consecutivo de tipo de documento
+        tipo_doc_id = data.get('tipo_documento_id')
+        numero_documento = None
+        if tipo_doc_id:
+            tipo_doc = conn.execute(
+                "SELECT id, codigo, consecutivo, numero_inicio FROM tipos_documento_negocio WHERE id = %s AND negocio_id = %s",
+                (tipo_doc_id, negocio['tercero_id'])
+            ).fetchone()
+            if tipo_doc:
+                num_doc = max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1))
+                conn.execute(
+                    "UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s",
+                    (num_doc, tipo_doc['id'])
+                )
+                numero_documento = f"{tipo_doc['codigo']}-{num_doc:04d}"
+
         conn.execute("""
             INSERT INTO pedidos
                 (tienda_id, restaurante_id, negocio_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente,
                  tipo_entrega, total, notas, metodo_pago, id_cajero, nombre_cajero, id_tercero_cajero,
-                 subtotal_productos, valor_domicilio, domicilio_estado, cliente_lat, cliente_lon)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 subtotal_productos, valor_domicilio, domicilio_estado, cliente_lat, cliente_lon,
+                 tipo_documento_id, numero_documento)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             negocio['id'] if negocio['tipo_negocio'] == 'tienda' else None,
             negocio['id'] if negocio['tipo_negocio'] == 'restaurante' else None,
             negocio['tercero_id'], cliente_id, nombre_cliente or None, telefono_cliente or None,
             direccion_cliente or None, tipo_entrega, total, notas or None, metodo_pago,
             id_cajero, nombre_cajero, id_tercero_cajero, subtotal_productos,
-            float(valor_domicilio or 0), domicilio_estado, cliente_lat, cliente_lon
+            float(valor_domicilio or 0), domicilio_estado, cliente_lat, cliente_lon,
+            tipo_doc_id, numero_documento
         ))
         pedido_id = conn.execute(
             "SELECT currval(pg_get_serial_sequence('pedidos', 'id'))"
@@ -2319,7 +2352,7 @@ def api_tienda_pedido_crear(slug):
             _enviar_telegram_tienda(conn, chat_id, msg)
         else:
             print(f'[telegram tienda] sin chat_id para tienda {slug}')
-        return jsonify({'ok': True, 'pedido_id': pedido_id, 'total': total})
+        return jsonify({'ok': True, 'pedido_id': pedido_id, 'total': total, 'numero_documento': numero_documento})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
@@ -3667,3 +3700,27 @@ def docs_tienda():
 @bp.route('/admin/docs/tienda')
 def admin_docs_tienda():
     return render_template('docs_tienda_admin.html')
+
+
+@bp.route('/api/caja/<slug>/tipos-doc', methods=['GET'])
+@bp.route('/api/tienda/<slug>/tipos-doc', methods=['GET'])
+def api_tienda_tipos_doc_get(slug):
+    conn = get_db_connection()
+    try:
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        
+        # Get active document types for the business (tercero_id)
+        rows = conn.execute(
+            "SELECT id, codigo, nombre, predeterminado, mueve_inventario, tipo_movimiento "
+            "FROM tipos_documento_negocio "
+            "WHERE negocio_id=%s AND activo=TRUE ORDER BY nombre", 
+            (negocio['tercero_id'],)
+        ).fetchall()
+        
+        return jsonify({'ok': True, 'tipos': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()

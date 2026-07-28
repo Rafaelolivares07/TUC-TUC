@@ -87,6 +87,26 @@ def eliminar_item(item_id):
     return jsonify({'ok': True})
 
 
+@bp.route('/agenda/item/<int:item_id>/edit', methods=['POST'])
+@admin_required
+def editar_item(item_id):
+    data = request.get_json() or {}
+    texto = (data.get('texto') or '').strip()
+    categoria = (data.get('categoria') or '').strip()
+    fecha_limite = (data.get('fecha_limite') or '').strip() or None
+    
+    if not texto:
+        return jsonify({'ok': False, 'error': 'El texto de la tarea no puede estar vacío'})
+        
+    with get_db_connection() as conn:
+        conn.execute(
+            "UPDATE agenda_items SET texto = %s, categoria = %s, fecha_limite = %s WHERE id = %s",
+            (texto, categoria, fecha_limite, item_id)
+        )
+        conn.commit()
+    return jsonify({'ok': True})
+
+
 @bp.route('/agenda/merlin', methods=['GET', 'POST'])
 def merlin_agenda():
     token = request.args.get('token') or (request.get_json(silent=True) or {}).get('token')

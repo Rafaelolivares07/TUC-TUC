@@ -171,6 +171,20 @@
 
   .btn-borrar:hover { color: #f55; }
 
+  .btn-editar {
+    background: none;
+    border: none;
+    color: #bbb;
+    font-size: .88rem;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color .2s;
+    flex-shrink: 0;
+    margin-right: 4px;
+  }
+  .btn-editar:hover { color: #5b8def; }
+
   .btn-activar {
     background: none;
     border: none;
@@ -252,6 +266,11 @@
     <button class="btn-agregar" onclick="agregar()">+ Agregar</button>
   </div>
 
+  <!-- Buscador y filtro -->
+  <div style="margin-bottom: 20px;">
+    <input type="text" id="inp-buscar" placeholder="🔍 Buscar y filtrar tareas..." style="width: 100%; border: none; border-bottom: 1.5px solid #ccc; padding: 8px 4px; font-size: .95rem; background: transparent; outline: none; transition: border-color .2s;" oninput="filtrarTareas(this.value)">
+  </div>
+
   <button id="btn-enviar-multi" class="btn-enviar-multi" style="display:none" onclick="enviarSeleccionadas()">🚀 Enviar seleccionadas a Antigravity (<span id="selected-count">0</span>)</button>
 
   <ul class="items" id="lista">
@@ -266,11 +285,12 @@
     <li class="item" id="item-{{ item[0] }}" draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondragend="dragEnd(event)" data-id="{{ item[0] }}">
       <input type="checkbox" onchange="toggle({{ item[0] }}, this)">
       <div class="item-body">
-        <span class="item-texto">{{ item[1] }}</span>
+        <span class="item-texto" onclick="comenzarEdicion({{ item[0] }})">{{ item[1] }}</span>
         {% if item[5] %}
         <span class="item-fecha" data-ts="{{ item[5].isoformat() }}"></span>
         {% endif %}
       </div>
+      <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️</button>
       <button class="btn-activar" onclick="activar({{ item[0] }}, this)" title="Activar en Antigravity">🚀</button>
       <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
     </li>
@@ -282,11 +302,12 @@
     <li class="item completado" id="item-{{ item[0] }}">
       <input type="checkbox" checked onchange="toggle({{ item[0] }}, this)">
       <div class="item-body">
-        <span class="item-texto">{{ item[1] }}</span>
+        <span class="item-texto" onclick="comenzarEdicion({{ item[0] }})">{{ item[1] }}</span>
         {% if item[5] %}
         <span class="item-fecha" data-ts="{{ item[5].isoformat() }}"></span>
         {% endif %}
       </div>
+      <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️</button>
       <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
     </li>
     {% endfor %}
@@ -471,8 +492,85 @@
       console.error(e);
       alert('Error de red al conectar con el servidor.');
       btnMulti.disabled = false;
-      btnMulti.innerHTML = originalText;
     }
+  }
+
+  function comenzarEdicion(id) {
+    const li = document.getElementById(`item-${id}`);
+    if (!li) return;
+    const span = li.querySelector('.item-texto');
+    if (span.querySelector('input')) return; // already editing
+
+    const textoOriginal = span.textContent.trim();
+    span.innerHTML = `<input type="text" class="edit-input" value="${textoOriginal.replace(/"/g, '&quot;')}" style="width: 100%; border: 1.5px solid #ccc; padding: 4px 8px; border-radius: 6px; font-size: .95rem; outline: none; background: #fff; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);" />`;
+    const input = span.querySelector('input');
+    input.focus();
+    input.select();
+
+    // Prevent dragging during edit
+    const wasDraggable = li.getAttribute('draggable');
+    li.setAttribute('draggable', 'false');
+
+    let finished = false;
+    const guardar = async () => {
+      if (finished) return;
+      finished = true;
+      
+      const nuevoTexto = input.value.trim();
+      if (!nuevoTexto) {
+        alert('El texto de la tarea no puede estar vacío');
+        span.textContent = textoOriginal;
+        li.setAttribute('draggable', wasDraggable);
+        return;
+      }
+      if (nuevoTexto === textoOriginal) {
+        span.textContent = textoOriginal;
+        li.setAttribute('draggable', wasDraggable);
+        return;
+      }
+      
+      span.textContent = nuevoTexto; // update optimistic
+      li.setAttribute('draggable', wasDraggable);
+      
+      try {
+        const r = await fetch(`/agenda/item/${id}/edit`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({texto: nuevoTexto})
+        });
+        const d = await r.json();
+        if (!d.ok) {
+          alert(d.error || 'Error al editar');
+          span.textContent = textoOriginal;
+        }
+      } catch (e) {
+        console.error(e);
+        alert('Error de conexión');
+        span.textContent = textoOriginal;
+      }
+    };
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') guardar();
+      if (e.key === 'Escape') {
+        finished = true;
+        span.textContent = textoOriginal;
+        li.setAttribute('draggable', wasDraggable);
+      }
+    });
+    input.addEventListener('blur', guardar);
+  }
+
+  function filtrarTareas(q) {
+    const query = q.toLowerCase().trim();
+    document.querySelectorAll('#lista .item').forEach(li => {
+      const text = li.querySelector('.item-texto')?.textContent.toLowerCase() || '';
+      if (text.includes(query)) {
+        li.style.display = '';
+      } else {
+        li.style.display = 'none';
+      }
+    });
   }
 </script>
 </body>

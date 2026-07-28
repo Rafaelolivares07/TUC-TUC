@@ -128,14 +128,19 @@
 
 <!-- ── OVERLAY MODAL TARJETA ESTÁNDAR ──────────────────────────────── -->
 <div id="overlay-tarjeta" class="overlay hidden" onclick="if(event.target===this)cerrarModalTarjeta()">
-  <div class="modal shadow-2xl border border-gray-100" style="max-width:580px; max-height:88vh; display:flex; flex-direction:column;">
+  <div class="modal shadow-2xl border border-gray-100" style="max-width:580px; max-height:88vh; display:flex; flex-direction:column; position:relative;">
     <!-- Fixed Header -->
     <div class="flex-shrink-0 mb-3 border-b border-gray-100 pb-2">
       <div class="flex items-center justify-between mb-1">
         <h3 class="text-lg font-bold text-gray-800">Tarjeta estándar</h3>
         <span id="tarjeta-items-count" class="text-xs bg-rose-50 text-rose-700 px-2.5 py-0.5 rounded-full font-semibold">0 componentes</span>
       </div>
-      <p id="tarjeta-nombre-prod" class="text-sm text-gray-500"></p>
+      <div class="flex items-center justify-between mt-1 pt-1.5 border-t border-gray-50">
+        <p id="tarjeta-nombre-prod" class="text-sm text-gray-500 font-medium truncate max-w-[320px]"></p>
+        <button type="button" onclick="mostrarProcedimiento()" class="text-[11px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-100 transition-colors flex items-center gap-1">
+          🧪 Calcular desde Lote
+        </button>
+      </div>
       <input type="hidden" id="tarjeta-prod-id">
     </div>
 
@@ -143,7 +148,7 @@
     <div class="flex-shrink-0 bg-blue-50/70 border border-blue-100 rounded-xl p-2.5 mb-3 flex items-start gap-2 text-xs text-blue-800">
       <span class="text-base leading-none">💡</span>
       <div>
-        <span class="font-bold">Modo borrador:</span> Las cantidades ingresadas deben ser <strong>números enteros</strong>. Los cambios en insumos o cantidades se aplicarán permanentemente <strong>únicamente al presionar "Guardar tarjeta"</strong>.
+        <span class="font-bold">Modo borrador:</span> Las cantidades ingresadas pueden ser <strong>números decimales</strong>. Los cambios en insumos o cantidades se aplicarán permanentemente <strong>únicamente al presionar "Guardar tarjeta"</strong>.
       </div>
     </div>
     <div id="tarjeta-lineas" class="flex-1 space-y-2 mb-3 overflow-y-auto custom-scrollbar pr-1 border border-gray-100 rounded-xl p-2 bg-gray-50/50" style="min-height:160px; max-height:60vh;"></div>
@@ -161,10 +166,18 @@
         <input id="tarjeta-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
         <div id="tarjeta-ac-list" class="ac-list hidden"></div>
         <input type="hidden" id="tarjeta-ac-id">
+        <!-- Visual selection chip -->
+        <div id="tarjeta-selected-chip" class="hidden absolute left-0 right-0 bottom-0 top-6 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 text-sm flex items-center justify-between text-emerald-800 font-semibold">
+          <div class="flex items-center gap-1.5 truncate">
+            <span class="text-emerald-500 font-bold">✓</span>
+            <span id="tarjeta-selected-name" class="truncate text-xs">Producto seleccionado</span>
+          </div>
+          <button type="button" onclick="clearSelectedComponent()" class="text-emerald-600 hover:text-emerald-800 font-bold ml-2 focus:outline-none">✕</button>
+        </div>
       </div>
       <div style="width:80px">
         <label class="text-xs font-semibold text-gray-600 mb-1 block">Cant.</label>
-        <input id="tarjeta-ac-cant" type="number" min="1" step="1" value="1" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center">
+        <input id="tarjeta-ac-cant" type="number" min="0.0001" step="any" value="1" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center">
       </div>
       <button onclick="agregarLineaTarjeta()" class="px-3 py-1.5 rounded-lg bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 transition-colors">+</button>
     </div>
@@ -173,6 +186,74 @@
     <div class="flex-shrink-0 flex gap-3 justify-end pt-2 border-t border-gray-100">
       <button onclick="cerrarModalTarjeta()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
       <button onclick="guardarTarjeta()" class="px-5 py-2 rounded-xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 shadow-xs">Guardar tarjeta</button>
+    </div>
+
+    <!-- 🧪 Seccion Lote / Procedimiento (Calculadora Overlay) -->
+    <div id="seccion-procedimiento" class="hidden absolute inset-0 bg-white z-20 rounded-2xl p-4 flex flex-col" style="max-height:88vh;">
+      <div class="flex-shrink-0 flex items-center justify-between border-b border-gray-100 pb-2 mb-3">
+        <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5">
+          <span>🧪 Calcular desde Lote / Procedimiento</span>
+        </h3>
+        <button onclick="ocultarProcedimiento()" class="text-gray-400 hover:text-gray-600 font-bold text-lg leading-none">✕</button>
+      </div>
+      
+      <p class="text-xs text-gray-500 mb-3 leading-relaxed">
+        Ingresa la cantidad total producida y agrega los componentes con sus cantidades totales usadas. El sistema calculará automáticamente la proporción por unidad.
+      </p>
+
+      <!-- Rendimiento input -->
+      <div class="flex-shrink-0 bg-indigo-50/50 border border-indigo-100 rounded-xl p-3 mb-3">
+        <label class="text-xs font-bold text-indigo-900 block mb-1">Cantidad total de producto obtenido (Rendimiento):</label>
+        <div class="flex gap-2 items-center">
+          <input id="proc-rendimiento" type="number" min="0.0001" step="any" value="10" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-semibold">
+          <span class="text-xs text-indigo-800 font-medium">unidades</span>
+        </div>
+      </div>
+
+      <!-- Add component form for procedure -->
+      <div class="flex-shrink-0 flex gap-2 items-end mb-3 bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+        <div class="flex-1 relative">
+          <label class="text-xs font-semibold text-gray-600 mb-1 block">Componente usado</label>
+          <input id="proc-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+          <div id="proc-ac-list" class="ac-list hidden"></div>
+          <input type="hidden" id="proc-ac-id">
+          <!-- Selection chip for procedure -->
+          <div id="proc-selected-chip" class="hidden absolute left-0 right-0 bottom-0 top-6 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 text-sm flex items-center justify-between text-emerald-800 font-semibold">
+            <div class="flex items-center gap-1.5 truncate">
+              <span class="text-emerald-500 font-bold">✓</span>
+              <span id="proc-selected-name" class="truncate text-xs">Componente seleccionado</span>
+            </div>
+            <button type="button" onclick="clearSelectedProcComponent()" class="text-emerald-600 hover:text-emerald-800 font-bold ml-2 focus:outline-none">✕</button>
+          </div>
+        </div>
+        <div style="width:100px">
+          <label class="text-xs font-semibold text-gray-600 mb-1 block">Cant. Total Usada</label>
+          <input id="proc-ac-cant" type="number" min="0.0001" step="any" value="1" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center">
+        </div>
+        <button onclick="agregarLineaProcedimiento()" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 transition-colors">+</button>
+      </div>
+
+      <!-- List of batch components -->
+      <div class="flex-1 overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl bg-gray-50/50 p-2 mb-4" style="min-height:120px;">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-gray-500 border-b border-gray-200 uppercase text-[10px] text-left">
+              <th class="py-1.5 px-2">Insumo</th>
+              <th class="py-1.5 px-2 text-right" style="width:120px;">Cantidad Total</th>
+              <th class="py-1.5 w-8"></th>
+            </tr>
+          </thead>
+          <tbody id="proc-lineas">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Footer of calculator overlay -->
+      <div class="flex-shrink-0 flex gap-3 justify-end pt-2 border-t border-gray-100">
+        <button onclick="ocultarProcedimiento()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Atrás</button>
+        <button onclick="calcularYAplicarProcedimiento()" class="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-xs">Calcular y Cargar Receta</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1191,6 +1272,8 @@ function abrirModalTarjeta(productoId, nombre) {
   document.getElementById('tarjeta-ac-id').value = '';
   document.getElementById('tarjeta-ac-cant').value = '1';
   document.getElementById('tarjeta-ac-list').classList.add('hidden');
+  document.getElementById('tarjeta-ac-input').classList.remove('hidden');
+  document.getElementById('tarjeta-selected-chip').classList.add('hidden');
   document.getElementById('overlay-tarjeta').classList.remove('hidden');
   cargarTarjeta(productoId);
 }
@@ -1204,7 +1287,7 @@ async function cargarTarjeta(productoId) {
   tarjetaLineas = d.componentes.map(c => ({
     componente_id: c.componente_id, 
     nombre: c.nombre, 
-    cantidad: Math.round(parseFloat(c.cantidad) || 1),
+    cantidad: parseFloat(c.cantidad) || 0,
     costo_und: c.costo_und || 0
   }));
   renderLineasTarjeta();
@@ -1223,8 +1306,8 @@ function ordenarComponentesModal(columna) {
 }
 
 function actualizarCantidadComponente(index, valStr) {
-  let val = parseInt(valStr, 10);
-  if (isNaN(val) || val < 1) val = 1;
+  let val = parseFloat(valStr);
+  if (isNaN(val) || val <= 0) val = 0.0001;
   tarjetaLineas[index].cantidad = val;
   
   const costoUnd = parseFloat(tarjetaLineas[index].costo_und || 0);
@@ -1240,7 +1323,7 @@ function recalcularTotalRecetaModal() {
   let totalReceta = 0;
   tarjetaLineas.forEach(ln => {
     const c = parseFloat(ln.costo_und || 0);
-    const q = parseInt(ln.cantidad, 10) || 1;
+    const q = parseFloat(ln.cantidad) || 0;
     totalReceta += (c * q);
   });
   const totalValEl = document.getElementById('tarjeta-total-val');
@@ -1272,14 +1355,14 @@ function renderLineasTarjeta() {
       valB = b.nombre || '';
       return modalSortAsc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
     } else if (modalSortCol === 'cantidad') {
-      valA = parseInt(a.cantidad || 0, 10);
-      valB = parseInt(b.cantidad || 0, 10);
+      valA = parseFloat(a.cantidad || 0);
+      valB = parseFloat(b.cantidad || 0);
     } else if (modalSortCol === 'costo_und') {
       valA = parseFloat(a.costo_und || 0);
       valB = parseFloat(b.costo_und || 0);
     } else if (modalSortCol === 'subtotal') {
-      valA = (parseInt(a.cantidad || 0, 10)) * parseFloat(a.costo_und || 0);
-      valB = (parseInt(b.cantidad || 0, 10)) * parseFloat(b.costo_und || 0);
+      valA = (parseFloat(a.cantidad || 0)) * parseFloat(a.costo_und || 0);
+      valB = (parseFloat(b.cantidad || 0)) * parseFloat(b.costo_und || 0);
     }
     return modalSortAsc ? (valA - valB) : (valB - valA);
   });
@@ -1291,9 +1374,11 @@ function renderLineasTarjeta() {
 
   let rowsHtml = tarjetaLineas.map((ln, i) => {
     const costoUnd = parseFloat(ln.costo_und || 0);
-    const cantidad = Math.round(parseFloat(ln.cantidad || 1));
+    const cantidad = parseFloat(ln.cantidad || 0);
     const subtotal = cantidad * costoUnd;
     totalReceta += subtotal;
+    
+    const qtyFormatted = Number(cantidad.toFixed(4));
     
     return `
       <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
@@ -1301,9 +1386,9 @@ function renderLineasTarjeta() {
           ${ln.nombre}
         </td>
         <td class="py-2 px-1 text-center">
-          <input type="number" value="${cantidad}" min="1" step="1"
+          <input type="number" value="${qtyFormatted}" min="0.0001" step="any"
                  oninput="actualizarCantidadComponente(${i}, this.value)"
-                 onblur="if(!this.value || parseInt(this.value,10)<1) { this.value=1; actualizarCantidadComponente(${i}, 1); }"
+                 onblur="if(!this.value || parseFloat(this.value)<=0) { this.value=1; actualizarCantidadComponente(${i}, 1); }"
                  class="w-20 text-center px-1 py-1 border border-gray-200 rounded-lg text-xs font-mono font-semibold"
                  style="height: 28px;">
         </td>
@@ -1354,8 +1439,8 @@ function renderLineasTarjeta() {
 function agregarLineaTarjeta() {
   const id = parseInt(document.getElementById('tarjeta-ac-id').value);
   const nombre = document.getElementById('tarjeta-ac-input').value.trim();
-  const cant = parseInt(document.getElementById('tarjeta-ac-cant').value, 10) || 1;
-  if (!id || !nombre) { toast('Selecciona un producto del buscador', false); return; }
+  const cant = parseFloat(document.getElementById('tarjeta-ac-cant').value);
+  if (!id || !nombre || isNaN(cant) || cant <= 0) { toast('Selecciona un producto del buscador', false); return; }
   if (tarjetaLineas.find(l => l.componente_id === id)) { toast('Ya está en la tarjeta', false); return; }
   
   const prod = productos.find(p => p.id === id);
@@ -1363,9 +1448,7 @@ function agregarLineaTarjeta() {
   
   tarjetaLineas.push({componente_id: id, nombre, cantidad: cant, costo_und: costo});
   renderLineasTarjeta();
-  document.getElementById('tarjeta-ac-input').value = '';
-  document.getElementById('tarjeta-ac-id').value = '';
-  document.getElementById('tarjeta-ac-cant').value = '1';
+  clearSelectedComponent();
 }
 async function guardarTarjeta() {
   const productoId = document.getElementById('tarjeta-prod-id').value;
@@ -1383,6 +1466,125 @@ async function guardarTarjeta() {
     cargarTarjetasResumen();
   }
   else toast(d.error, false);
+}
+
+// ── Gestión de selección y lote (Calculadora) ──────────────────────────────
+function clearSelectedComponent() {
+  document.getElementById('tarjeta-ac-id').value = '';
+  document.getElementById('tarjeta-ac-input').value = '';
+  document.getElementById('tarjeta-ac-input').classList.remove('hidden');
+  document.getElementById('tarjeta-selected-chip').classList.add('hidden');
+  document.getElementById('tarjeta-ac-input').focus();
+}
+
+let procLineas = []; // {componente_id, nombre, cantidad_total, costo_und}
+
+function mostrarProcedimiento() {
+  procLineas = [];
+  document.getElementById('proc-rendimiento').value = '10';
+  document.getElementById('proc-ac-input').value = '';
+  document.getElementById('proc-ac-id').value = '';
+  document.getElementById('proc-ac-cant').value = '1';
+  document.getElementById('proc-ac-input').classList.remove('hidden');
+  document.getElementById('proc-selected-chip').classList.add('hidden');
+  document.getElementById('proc-lineas').innerHTML = '<tr><td colspan="3" class="text-center text-gray-400 py-6">Agrega los insumos utilizados en este lote</td></tr>';
+  document.getElementById('seccion-procedimiento').classList.remove('hidden');
+  
+  // Bind autocomplete to procedure input dynamically if not already set
+  if (!document.getElementById('proc-ac-input').dataset.bound) {
+    document.getElementById('proc-ac-input').dataset.bound = "true";
+    setupAC('proc-ac-input', 'proc-ac-list', 'proc-ac-id', () => productos, (item) => {
+      document.getElementById('proc-selected-name').textContent = item.nombre;
+      document.getElementById('proc-ac-input').classList.add('hidden');
+      document.getElementById('proc-selected-chip').classList.remove('hidden');
+      document.getElementById('proc-ac-cant').focus();
+    });
+  }
+}
+
+function ocultarProcedimiento() {
+  document.getElementById('seccion-procedimiento').classList.add('hidden');
+}
+
+function clearSelectedProcComponent() {
+  document.getElementById('proc-ac-id').value = '';
+  document.getElementById('proc-ac-input').value = '';
+  document.getElementById('proc-ac-input').classList.remove('hidden');
+  document.getElementById('proc-selected-chip').classList.add('hidden');
+  document.getElementById('proc-ac-input').focus();
+}
+
+function agregarLineaProcedimiento() {
+  const id = parseInt(document.getElementById('proc-ac-id').value);
+  const nombre = document.getElementById('proc-ac-input').value.trim();
+  const cant = parseFloat(document.getElementById('proc-ac-cant').value);
+  
+  if (!id || !nombre || isNaN(cant) || cant <= 0) {
+    toast('Selecciona un producto y define una cantidad válida', false);
+    return;
+  }
+  
+  if (procLineas.find(l => l.componente_id === id)) {
+    toast('Este insumo ya fue agregado', false);
+    return;
+  }
+  
+  const prod = productos.find(p => p.id === id);
+  const costo = prod ? (prod.costo || 0) : 0;
+  
+  procLineas.push({componente_id: id, nombre: nombre, cantidad_total: cant, costo_und: costo});
+  renderLineasProcedimiento();
+  
+  clearSelectedProcComponent();
+  document.getElementById('proc-ac-cant').value = '1';
+}
+
+function renderLineasProcedimiento() {
+  const tbody = document.getElementById('proc-lineas');
+  if (!procLineas.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-400 py-6">Agrega los insumos utilizados en este lote</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = procLineas.map((ln, i) => `
+    <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+      <td class="py-2 px-2 text-left font-semibold text-gray-700 truncate max-w-[180px]">${ln.nombre}</td>
+      <td class="py-2 px-2 text-right font-mono text-xs font-semibold text-gray-800">
+        <input type="number" value="${ln.cantidad_total}" min="0.0001" step="any"
+               oninput="procLineas[${i}].cantidad_total = parseFloat(this.value) || 0"
+               class="w-24 text-right px-1 py-1 border border-gray-200 rounded-lg text-xs font-mono font-semibold"
+               style="height: 28px;">
+      </td>
+      <td class="py-2 px-1 text-center">
+        <button onclick="procLineas.splice(${i},1); renderLineasProcedimiento();"
+                class="text-red-400 hover:text-red-600 font-bold text-base leading-none">✕</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function calcularYAplicarProcedimiento() {
+  const rendimiento = parseFloat(document.getElementById('proc-rendimiento').value);
+  if (isNaN(rendimiento) || rendimiento <= 0) {
+    toast('El rendimiento del lote debe ser mayor a 0', false);
+    return;
+  }
+  if (!procLineas.length) {
+    toast('Agrega al menos un componente usado', false);
+    return;
+  }
+  
+  tarjetaLineas = procLineas.map(ln => ({
+    componente_id: ln.componente_id,
+    nombre: ln.nombre,
+    cantidad: ln.cantidad_total / rendimiento,
+    costo_und: ln.costo_und
+  }));
+  
+  renderLineasTarjeta();
+  recalcularTotalRecetaModal();
+  ocultarProcedimiento();
+  toast('Receta calculada y cargada en el borrador');
 }
 
 // ── Entradas ──────────────────────────────────────────────────────────────────
@@ -2270,7 +2472,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('entrada-fecha-doc').value = new Date().toISOString().slice(0, 10);
 
   // AC tarjeta (usa productos cargados)
-  setupAC('tarjeta-ac-input', 'tarjeta-ac-list', 'tarjeta-ac-id', () => productos, null);
+  setupAC('tarjeta-ac-input', 'tarjeta-ac-list', 'tarjeta-ac-id', () => productos, (item) => {
+    document.getElementById('tarjeta-selected-name').textContent = item.nombre;
+    document.getElementById('tarjeta-ac-input').classList.add('hidden');
+    document.getElementById('tarjeta-selected-chip').classList.remove('hidden');
+    document.getElementById('tarjeta-ac-cant').focus();
+  });
 
   // AC kardex
   setupAC('kardex-ac-input', 'kardex-ac-list', 'kardex-ac-id', () => productos, ({id, nombre}) => {

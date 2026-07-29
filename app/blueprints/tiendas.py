@@ -23,8 +23,11 @@ from .auth import solo_admin
 from .inventarios import _aplicar_tarjeta, _es_ensamble
 try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
+    from .contabilidad import obtener_siguiente_consecutivo
 except ImportError:
     _asiento_auto = None
+    def obtener_siguiente_consecutivo(*args, **kwargs):
+        return None, True
 
 bp = Blueprint('tiendas', __name__)
 
@@ -2223,21 +2226,33 @@ def api_tienda_pedido_crear(slug):
             return jsonify({'ok': False, 'error': 'La direccion esta fuera de cobertura de domicilio'}), 400
         total = subtotal_productos + float(valor_domicilio or 0)
         
-        # Consecutivo de tipo de documento
+        # Consecutivo de tipo de documento usando el motor global
         tipo_doc_id = data.get('tipo_documento_id')
+        if not tipo_doc_id:
+            # Fallback to predeterminado document type of type 'venta'
+            default_doc = conn.execute(
+                "SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND activo = TRUE AND predeterminado = TRUE AND tipo_movimiento = 'venta' LIMIT 1",
+                (negocio['tercero_id'],)
+            ).fetchone()
+            if default_doc:
+                tipo_doc_id = default_doc['id']
+
         numero_documento = None
+        res_num = None
+        tipo_doc_codigo = None
         if tipo_doc_id:
             tipo_doc = conn.execute(
-                "SELECT id, codigo, consecutivo, numero_inicio FROM tipos_documento_negocio WHERE id = %s AND negocio_id = %s",
+                "SELECT id, codigo FROM tipos_documento_negocio WHERE id = %s AND negocio_id = %s",
                 (tipo_doc_id, negocio['tercero_id'])
             ).fetchone()
             if tipo_doc:
-                num_doc = max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1))
-                conn.execute(
-                    "UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s",
-                    (num_doc, tipo_doc['id'])
-                )
-                numero_documento = f"{tipo_doc['codigo']}-{num_doc:04d}"
+                res_num, es_interno = obtener_siguiente_consecutivo(conn, negocio['tercero_id'], tipo_doc['id'])
+                if res_num:
+                    tipo_doc_codigo = tipo_doc['codigo'] or 'DOC'
+                    try:
+                        numero_documento = f"{tipo_doc_codigo}-{int(res_num):04d}"
+                    except (ValueError, TypeError):
+                        numero_documento = f"{tipo_doc_codigo}-{res_num}"
 
         conn.execute("""
             INSERT INTO pedidos
@@ -2301,18 +2316,21 @@ def api_tienda_pedido_crear(slug):
                 INSERT INTO pedido_pagos (pedido_id, metodo_codigo, metodo_nombre, monto)
                 VALUES (%s,%s,%s,%s)
             """, (pedido_id, metodo_pago, metodo_pago, total))
-        if negocio['tercero_id'] and _asiento_auto:
+        if negocio['tercero_id'] and _asiento_auto and tipo_doc_id:
             try:
                 iva_total = sum(
                     it['precio_unitario'] * it['cantidad'] * it['iva_pct'] / 100
                     for it in items_validos
                 )
-                tipo_doc = 'VENTA_POS' if tipo_entrega == 'caja' else 'VENTA_DOM'
-                _asiento_auto(conn, tienda['tercero_id'], tipo_doc,
+                _asiento_auto(conn, negocio['tercero_id'], tipo_doc_id,
                               {'subtotal_venta': total - iva_total,
                                'iva_venta': iva_total,
                                'total_venta': total},
-                              registrado_por=session.get('usuario_id'))
+                              registrado_por=session.get('usuario_id'),
+                              origen_tipo='pedido',
+                              origen_id=pedido_id,
+                              tipo_documento_fisico=tipo_doc_codigo,
+                              documento_numero_fisico=res_num)
             except Exception as _e:
                 print(f'[cont] venta tienda {slug}: {_e}')
         conn.commit()

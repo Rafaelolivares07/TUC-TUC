@@ -2415,11 +2415,18 @@ async function cargarHistorialProduccion() {
           <td class="px-4 py-3 font-semibold text-gray-800 text-xs">${h.producto_nombre}</td>
           <td class="px-4 py-3 text-right text-gray-600 font-medium">${h.cantidad.toLocaleString('es-CO')}</td>
           <td class="px-4 py-3 text-right text-blue-600 font-bold">$${h.valor_total.toLocaleString('es-CO')}</td>
-          <td class="px-4 py-3 text-center">
+          <td class="px-4 py-3 text-center flex items-center justify-center gap-1.5">
             <button onclick="imprimirProduccion(${h.prod_token})" 
-                    class="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 font-bold border border-rose-100 hover:border-rose-300 bg-rose-50/50 hover:bg-rose-50 rounded-lg px-2.5 py-1 transition">
+                    class="inline-flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 font-bold border border-rose-100 hover:border-rose-300 bg-rose-50/50 hover:bg-rose-50 rounded-lg px-2.5 py-1 transition"
+                    title="Imprimir Comprobante">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-              Imprimir PDF
+              Imprimir
+            </button>
+            <button onclick="anularProduccion(${h.prod_token}, '${h.producto_nombre}')" 
+                    class="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-800 font-bold border border-red-100 hover:border-red-300 bg-red-50/50 hover:bg-red-50 rounded-lg px-2.5 py-1 transition"
+                    title="Anular Producción">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              Anular
             </button>
           </td>
         </tr>
@@ -2436,6 +2443,29 @@ async function cargarHistorialProduccion() {
 
 function imprimirProduccion(token) {
   window.open(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/imprimir`, '_blank');
+}
+
+async function anularProduccion(token, nombre) {
+  const confirmed = confirm(`¿Estás seguro de que deseas ANULAR la producción de "${nombre}"?\n\nEsta acción eliminará el registro de producción, devolverá los insumos al inventario, borrará el asiento contable y recalculará los costos promedio ponderados de todos los productos afectados de forma retroactiva.`);
+  if (!confirmed) return;
+  
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/anular`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'}
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Producción anulada con éxito y costos recalculados');
+      cargarHistorialProduccion();
+      cargarProductos();
+    } else {
+      toast(d.error || 'Error al anular producción', false);
+    }
+  } catch (e) {
+    console.error(e);
+    toast('Error de red al anular producción', false);
+  }
 }
 
 function mostrarConsecutivoProduccion() {

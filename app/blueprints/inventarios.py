@@ -1342,7 +1342,15 @@ def api_produccion_registrar(negocio_id):
         
         # Resolve document type ID
         tipo_doc_id = _int_o_none(data.get('tipo_documento_id') or data.get('tipo_documento'))
-        if not tipo_doc_id and data.get('tipo_documento'):
+        if not tipo_doc_id:
+            # Fallback to predeterminado document type of type 'produccion'
+            default_doc = conn.execute(
+                "SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND activo = TRUE AND predeterminado = TRUE AND tipo_movimiento = 'produccion' LIMIT 1",
+                (negocio_id,)
+            ).fetchone()
+            if default_doc:
+                tipo_doc_id = default_doc['id']
+        elif not tipo_doc_id and data.get('tipo_documento'):
             tipo_str = str(data['tipo_documento']).strip()
             td_row = conn.execute("""
                 SELECT id FROM tipos_documento_negocio
@@ -1355,7 +1363,7 @@ def api_produccion_registrar(negocio_id):
         td = None
         if tipo_doc_id:
             td = conn.execute("""
-                SELECT id, nombre, es_interno 
+                SELECT id, nombre, es_interno, codigo 
                 FROM tipos_documento_negocio
                 WHERE negocio_id = %s AND id = %s
             """, (negocio_id, tipo_doc_id)).fetchone()
@@ -1369,7 +1377,11 @@ def api_produccion_registrar(negocio_id):
             res_num, es_interno_actual = obtener_siguiente_consecutivo(conn, negocio_id, tipo_doc_id)
             if es_interno:
                 if res_num:
-                    documento_numero = res_num
+                    tipo_doc_codigo = td['codigo'] if (td and td['codigo']) else 'PROD'
+                    try:
+                        documento_numero = f"{tipo_doc_codigo}-{int(res_num):04d}"
+                    except (ValueError, TypeError):
+                        documento_numero = f"{tipo_doc_codigo}-{res_num}"
             else:
                 if not documento_numero:
                     return jsonify({'ok': False, 'error': f'El número de documento es obligatorio para el tipo de documento externo {tipo_documento}.'}), 400
@@ -2652,5 +2664,61 @@ def api_produccion_imprimir(negocio_id, prod_token):
         import traceback
         traceback.print_exc()
         return f"Error al generar la impresión: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/produccion/<int:prod_token>/anular', methods=['POST'])
+def api_anular_produccion(negocio_id, prod_token):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    conn = get_db_connection()
+    try:
+        # Get all movements for this production to identify products
+        movs = conn.execute("""
+            SELECT id, producto_id
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND referencia_tipo = 'produccion' AND referencia_id = %s
+        """, (negocio_id, str(prod_token))).fetchall()
+        
+        if not movs:
+            # Fallback check if it was stored as integer
+            movs = conn.execute("""
+                SELECT id, producto_id
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND referencia_tipo = 'produccion' AND (referencia_id = %s OR referencia_id = %s)
+            """, (negocio_id, str(prod_token), f"{prod_token}")).fetchall()
+            
+        if not movs:
+            return jsonify({'ok': False, 'error': 'No se encontraron movimientos para esta producción'}), 404
+            
+        prod_ids = list({m['producto_id'] for m in movs})
+        mov_ids = [m['id'] for m in movs]
+        
+        # 1. Delete inventory movements
+        placeholders = ','.join(['%s'] * len(mov_ids))
+        conn.execute(f"DELETE FROM movimientos_inventario WHERE id IN ({placeholders})", tuple(mov_ids))
+        
+        # 2. Delete accounting entry (vouchers)
+        comp_rows = conn.execute("""
+            SELECT id FROM comprobantes_contables
+            WHERE negocio_id = %s AND origen_tipo = 'produccion' AND (origen_id = %s OR origen_id = %s)
+        """, (negocio_id, str(prod_token), f"{prod_token}")).fetchall()
+        comp_ids = [c['id'] for c in comp_rows]
+        if comp_ids:
+            placeholders_cc = ','.join(['%s'] * len(comp_ids))
+            conn.execute(f"DELETE FROM movimientos_contables WHERE comprobante_id IN ({placeholders_cc})", tuple(comp_ids))
+            conn.execute(f"DELETE FROM comprobantes_contables WHERE id IN ({placeholders_cc})", tuple(comp_ids))
+            
+        # 3. Recosteo: Recalculate stock and average cost for all affected products
+        for prod_id in prod_ids:
+            _recostear_producto(conn, negocio_id, prod_id)
+            
+        conn.commit()
+        return jsonify({'ok': True, 'mensaje': 'Producción anulada y costos recalculados correctamente'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

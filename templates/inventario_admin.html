@@ -680,6 +680,7 @@ let entradaLineas = []; // {el: HTMLElement}
 let activeACInputId = null;
 let activeACHiddenId = null;
 let defaultPresentacionId = null;
+let esModificacionDoc = false;
 
 async function fetchDefaultPresentacion() {
   try {
@@ -1873,6 +1874,7 @@ async function verificarDocumentoExistente() {
     const r = await fetch(url);
     const d = await r.json();
     if (d.ok && d.existe) {
+      esModificacionDoc = true;
       toast('Factura/Documento existente cargado para modificar', true);
       if (d.notas) {
         document.getElementById('entrada-notas').value = d.notas;
@@ -1894,6 +1896,8 @@ async function verificarDocumentoExistente() {
         );
       }
       calcularTotalesEntrada();
+    } else {
+      esModificacionDoc = false;
     }
   } catch(e) {
     console.error(e);
@@ -1996,12 +2000,17 @@ async function registrarEntrada() {
 
   if (!lineas.length) { toast('Agrega al menos una línea', false); return; }
 
+  if (esModificacionDoc) {
+    const confirmed = confirm("Este documento ya existe en el sistema. ¿Estás seguro de que deseas guardar los cambios y modificarlo?");
+    if (!confirmed) return;
+  }
+
   const r = await fetch(`/api/inventario/${NEGOCIO_ID}/entrada`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       lineas, motivo, notas, tipo_documento_id: tipo_doc_id, tipo_documento: td ? td.nombre : null, numero_documento,
       fecha_documento, proveedor_nombre, proveedor_id, iva: ivaAcumulado,
-      metodo_pago
+      metodo_pago, es_modificacion: esModificacionDoc
     })
   });
   const d = await r.json();
@@ -2009,6 +2018,7 @@ async function registrarEntrada() {
     toast('Entrada registrada');
     cont.innerHTML = '';
     entradaLineas = [];
+    esModificacionDoc = false;
     document.getElementById('entrada-num-doc').value = '';
     document.getElementById('entrada-notas').value = '';
     document.getElementById('entrada-proveedor').value = '';

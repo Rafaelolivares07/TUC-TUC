@@ -3731,13 +3731,23 @@ def api_tienda_tipos_doc_get(slug):
         
         # Get active document types for the business (tercero_id) of type 'venta'
         rows = conn.execute(
-            "SELECT id, codigo, nombre, predeterminado, mueve_inventario, tipo_movimiento "
+            "SELECT id, codigo, nombre, predeterminado, mueve_inventario, tipo_movimiento, consecutivo, numero_inicio "
             "FROM tipos_documento_negocio "
             "WHERE negocio_id=%s AND activo=TRUE AND tipo_movimiento='venta' ORDER BY nombre", 
             (negocio['tercero_id'],)
         ).fetchall()
         
-        return jsonify({'ok': True, 'tipos': [dict(r) for r in rows]})
+        tipos = []
+        for r in rows:
+            next_num = max((r['consecutivo'] or 0) + 1, (r['numero_inicio'] or 1))
+            codigo_prefix = r['codigo'] or 'DOC'
+            siguiente = f"{codigo_prefix}-{next_num:04d}"
+            
+            t_dict = dict(r)
+            t_dict['siguiente_numero'] = siguiente
+            tipos.append(t_dict)
+            
+        return jsonify({'ok': True, 'tipos': tipos})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

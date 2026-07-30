@@ -465,17 +465,22 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     es_interno = td['es_interno'] if (td and td['es_interno'] is not None) else True
     tipo_documento = td['nombre'] if td else 'OTRO'
     documento_numero = (_txt(data.get('documento_numero') or data.get('numero_documento')) or '').strip().upper()
+    es_modificacion = bool(data.get('es_modificacion', False))
 
-    res_num, es_interno_actual = obtener_siguiente_consecutivo(conn, negocio_id, tipo_doc_id or tipo_documento)
-    if es_interno:
-        if res_num:
-            documento_numero = res_num
+    if not es_modificacion:
+        res_num, es_interno_actual = obtener_siguiente_consecutivo(conn, negocio_id, tipo_doc_id or tipo_documento)
+        if es_interno:
+            if res_num:
+                documento_numero = res_num
+            else:
+                documento_numero = f"ENT-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         else:
-            documento_numero = f"ENT-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+            # Documento Externo: Número es obligatorio
+            if not documento_numero:
+                return {'ok': False, 'error': f'El número de documento es obligatorio para el tipo de documento externo {tipo_documento}.'}, 400
     else:
-        # Documento Externo: Número es obligatorio
         if not documento_numero:
-            return {'ok': False, 'error': f'El número de documento es obligatorio para el tipo de documento externo {tipo_documento}.'}, 400
+            return {'ok': False, 'error': 'El número de documento es requerido para realizar la modificación.'}, 400
 
     documento_fecha = _fecha_o_none(data.get('documento_fecha') or data.get('fecha_documento'))
     proveedor_id = _int_o_none(data.get('proveedor_id') or data.get('tercero_id'))
@@ -499,11 +504,10 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     # Validation check: if it is external, check for duplicates and prevent registration
     if not es_interno and tipo_doc_id and documento_numero and proveedor_id:
         existing_movs = conn.execute("""
-            SELECT 1 FROM movimientos_inventario
+            SELECT id, producto_id FROM movimientos_inventario
             WHERE negocio_id = %s AND tipo = 'entrada'
               AND tipo_documento_id = %s AND documento_numero = %s AND proveedor_id = %s
-            LIMIT 1
-        """, (negocio_id, tipo_doc_id, documento_numero, proveedor_id)).fetchone()
+        """, (negocio_id, tipo_doc_id, documento_numero, proveedor_id)).fetchall()
         
         existing_saldo = conn.execute("""
             SELECT 1 FROM saldo_por_documentos
@@ -513,7 +517,47 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
         """, (negocio_id, proveedor_id, tipo_doc_id, documento_numero)).fetchone()
         
         if existing_movs or existing_saldo:
-            return {'ok': False, 'error': f'El documento {tipo_documento} N° {documento_numero} ya está registrado para este proveedor.'}, 400
+            if es_modificacion:
+                # ── VOID/DELETE PREVIOUS ENTRIES BEFORE REGISTERING ──
+                prod_ids_to_recost = list({m['producto_id'] for m in existing_movs})
+                mov_ids = [m['id'] for m in existing_movs]
+                
+                # 1. Delete inventory movements
+                if mov_ids:
+                    placeholders = ','.join(['%s'] * len(mov_ids))
+                    conn.execute(f"DELETE FROM movimientos_inventario WHERE id IN ({placeholders})", tuple(mov_ids))
+                    
+                # 2. Delete pending balance record
+                conn.execute("""
+                    DELETE FROM saldo_por_documentos
+                    WHERE negocio_id = %s AND tercero_id = %s AND tipo_documento_id = %s AND numero_documento = %s
+                """, (negocio_id, proveedor_id, tipo_doc_id, documento_numero))
+                
+                # 3. Delete cotizaciones
+                conn.execute("""
+                    DELETE FROM cotizaciones_compras
+                    WHERE negocio_id = %s AND tercero_id = %s AND numero_cotizacion = %s AND origen = 'compra'
+                """, (negocio_id, proveedor_id, documento_numero))
+                
+                # 4. Delete accounting vouchers
+                origen_id = f"{tipo_documento}:{documento_numero}"
+                comp_rows = conn.execute("""
+                    SELECT id FROM comprobantes_contables
+                    WHERE negocio_id = %s AND (
+                        (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
+                        OR (numero_comprobante ILIKE %s)
+                    )
+                """, (negocio_id, origen_id, f'%{documento_numero}%')).fetchall()
+                comp_ids = [c['id'] for c in comp_rows]
+                if comp_ids:
+                    placeholders = ','.join(['%s'] * len(comp_ids))
+                    conn.execute(f"DELETE FROM movimientos_contables WHERE comprobante_id IN ({placeholders})", tuple(comp_ids))
+                    conn.execute(f"DELETE FROM comprobantes_contables WHERE id IN ({placeholders})", tuple(comp_ids))
+                
+                # Save products to recostear at the end
+                data['_prod_ids_to_recost'] = prod_ids_to_recost
+            else:
+                return {'ok': False, 'error': f'El documento {tipo_documento} N° {documento_numero} ya está registrado para este proveedor.'}, 400
 
     # Primer ciclo: validación y cálculo de subtotales e IVA acumulado
     lineas_procesadas = []
@@ -686,6 +730,11 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                               documento_numero_fisico=documento_numero)
         except Exception as _e:
             raise _e
+
+    # Recostear any products that were deleted from the previous version of the document
+    old_prod_ids = data.get('_prod_ids_to_recost', [])
+    for p_id in old_prod_ids:
+        _recostear_producto(conn, negocio_id, p_id)
 
     return {
         'ok': True,

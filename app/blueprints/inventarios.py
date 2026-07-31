@@ -850,6 +850,50 @@ def api_inventario_producto_eliminar(producto_id):
                 'error': f'No se puede eliminar el producto porque registra un historial de {total_ventas} venta(s)/pedido(s).'
             }), 400
 
+        # Check 5: Cotizaciones de compras
+        cot_compras_cnt = conn.execute(
+            "SELECT COUNT(*) FROM cotizaciones_compras WHERE item_id = %s",
+            (producto_id,)
+        ).fetchone()[0]
+        if cot_compras_cnt > 0:
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar el producto porque tiene {cot_compras_cnt} cotización(es) de compra registrada(s). Por favor, elimina primero las cotizaciones correspondientes en la pestaña "Compras y agotados" antes de intentar borrar este producto.'
+            }), 400
+
+        # Check 6: Cotizaciones de tienda (ventas/POS)
+        cot_tienda_cnt = conn.execute(
+            "SELECT COUNT(*) FROM cotizacion_items_tienda WHERE producto_id = %s",
+            (producto_id,)
+        ).fetchone()[0]
+        if cot_tienda_cnt > 0:
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar el producto porque está referenciado en {cot_tienda_cnt} cotización(es) de la tienda. Debes eliminar primero dichas cotizaciones de venta.'
+            }), 400
+
+        # Check 7: Fichas solares (módulo Home Solar)
+        ficha_cnt = conn.execute(
+            "SELECT COUNT(*) FROM producto_fichas_solares WHERE producto_id = %s",
+            (producto_id,)
+        ).fetchone()[0]
+        if ficha_cnt > 0:
+            return jsonify({
+                'ok': False,
+                'error': 'No se puede eliminar el producto porque tiene una ficha solar activa vinculada. Elimina la ficha solar primero.'
+            }), 400
+
+        # Check 8: Vinculado como producto obtenido en producción
+        parent_cnt = conn.execute(
+            "SELECT COUNT(*) FROM movimientos_inventario WHERE producto_padre_id = %s",
+            (producto_id,)
+        ).fetchone()[0]
+        if parent_cnt > 0:
+            return jsonify({
+                'ok': False,
+                'error': f'No se puede eliminar el producto porque figura como el producto obtenido en {parent_cnt} producción(es) del historial.'
+            }), 400
+
         # All checks passed! Delete product dependent sub-records and product
         conn.execute("DELETE FROM saldos_inventario WHERE producto_id = %s", (producto_id,))
         conn.execute("DELETE FROM producto_atributos WHERE producto_id = %s", (producto_id,))

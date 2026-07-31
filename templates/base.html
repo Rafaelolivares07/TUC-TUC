@@ -30,6 +30,41 @@
             box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05); /* Sombra suave */
             border-radius: 0.5rem;
         }
+        
+        /* Fallback crítico para ocultar elementos si Tailwind falla */
+        .hidden { display: none !important; }
+
+        /* Soporte nativo para Modo Oscuro en navegadores del cliente */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #111827 !important; /* Fondo gris oscuro */
+                color: #f9fafb !important; /* Texto principal casi blanco */
+            }
+            .full-height-main {
+                background-color: #1f2937 !important; /* Panel central */
+                box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2) !important;
+                border-color: #374151 !important;
+            }
+            .navbar {
+                background-color: #1f2937 !important; /* Barra de navegación oscura */
+                border-bottom: 1px solid #374151 !important;
+            }
+            .text-muted, .text-gray-500 {
+                color: #9ca3af !important; /* Subtítulos gris claro */
+            }
+            .card {
+                background-color: #1f2937 !important;
+                border-color: #374151 !important;
+                color: #f9fafb !important;
+            }
+            .table {
+                color: #f3f4f6 !important;
+            }
+            .table th, .table td {
+                border-color: #374151 !important;
+                color: #e5e7eb !important;
+            }
+        }
     </style>
 
 </head>

@@ -69,6 +69,59 @@
       padding: 4px 10px; font-size: .78rem; font-weight: 600; color: #374151;
     }
     .num { text-align: right; }
+    
+    /* Fallback crítico para ocultar elementos si Tailwind falla */
+    .hidden { display: none !important; }
+
+    /* Soporte nativo para Modo Oscuro en navegadores del cliente */
+    @media (prefers-color-scheme: dark) {
+      body { background: #111827 !important; color: #f9fafb !important; }
+      .bg-white { background-color: #1f2937 !important; }
+      .bg-gray-50 { background-color: #111827 !important; }
+      
+      .text-gray-900 { color: #f9fafb !important; }
+      .text-gray-800 { color: #f3f4f6 !important; }
+      .text-gray-700 { color: #e5e7eb !important; }
+      .text-gray-600 { color: #d1d5db !important; }
+      .text-gray-500 { color: #9ca3af !important; }
+      .text-gray-400 { color: #9ca3af !important; }
+      
+      .tab-btn:not(.tab-active) { color: #9ca3af !important; }
+      .tab-btn:not(.tab-active):hover { background: #374151 !important; color: #f3f4f6 !important; }
+
+      .modal { background: #1f2937 !important; color: #f9fafb !important; border: 1px solid #374151 !important; }
+      .ac-list { background: #1f2937 !important; border-color: #374151 !important; }
+      .ac-item { color: #d1d5db !important; }
+      .ac-item:hover, .ac-item.ac-focus { background: #374151 !important; color: #f43f5e !important; }
+      
+      input, select, textarea {
+          background-color: #111827 !important;
+          color: #f3f4f6 !important;
+          border-color: #374151 !important;
+      }
+      input:focus, select:focus, textarea:focus { border-color: #f43f5e !important; }
+      label { color: #9ca3af !important; }
+
+      th { color: #9ca3af !important; border-bottom: 2px solid #374151 !important; }
+      td { border-bottom: 1px solid #374151 !important; color: #d1d5db !important; }
+      tr:hover td { background: #374151 !important; }
+
+      .pill-chip { background: #374151 !important; color: #f3f4f6 !important; }
+      
+      .bg-indigo-50\/50 { background-color: rgba(99, 102, 241, 0.1) !important; }
+      .border-indigo-100 { border-color: rgba(99, 102, 241, 0.2) !important; }
+      .text-indigo-900 { color: #c7d2fe !important; }
+      .text-indigo-800 { color: #a5b4fc !important; }
+
+      .bg-blue-50\/70 { background-color: rgba(59, 130, 246, 0.1) !important; }
+      .border-blue-100 { border-color: rgba(59, 130, 246, 0.2) !important; }
+      .text-blue-800 { color: #93c5fd !important; }
+      
+      #btn-anular-item { background-color: #7c2d12 !important; color: #ffedd5 !important; }
+      #btn-anular-item:hover { background-color: #9a3412 !important; }
+      .border-gray-200 { border-color: #374151 !important; }
+      .border-gray-100 { border-color: #374151 !important; }
+    }
   </style>
 </head>
 <body class="p-4 sm:p-6 min-h-screen">

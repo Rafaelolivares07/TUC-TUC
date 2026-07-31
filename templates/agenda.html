@@ -139,6 +139,8 @@
     line-height: 1.5;
     cursor: pointer;
     transition: color .2s;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .item-fecha {
@@ -261,7 +263,7 @@
   <p class="subtitulo">Rafael Olivares · TUC TUC</p>
 
   <div class="agregar">
-    <input type="text" id="inp-nuevo" placeholder="Nueva tarea..." maxlength="300">
+    <textarea id="inp-nuevo" placeholder="Nueva tarea..." style="width: 100%; border: none; border-bottom: 1.5px solid #ccc; padding: 8px 4px; font-size: .95rem; color: #333; background: transparent; outline: none; transition: border-color .2s; min-height: 44px; resize: vertical; font-family: inherit; line-height: 1.4;"></textarea>
     <input type="datetime-local" id="inp-fecha">
     <button class="btn-agregar" onclick="agregar()">+ Agregar</button>
   </div>
@@ -317,7 +319,10 @@
 
 <script>
   document.getElementById('inp-nuevo').addEventListener('keydown', e => {
-    if (e.key === 'Enter') agregar();
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      agregar();
+    }
   });
 
   // Renderizar fechas
@@ -499,11 +504,12 @@
     const li = document.getElementById(`item-${id}`);
     if (!li) return;
     const span = li.querySelector('.item-texto');
-    if (span.querySelector('input')) return; // already editing
+    if (span.querySelector('textarea')) return; // already editing
 
     const textoOriginal = span.textContent.trim();
-    span.innerHTML = `<input type="text" class="edit-input" value="${textoOriginal.replace(/"/g, '&quot;')}" style="width: 100%; border: 1.5px solid #ccc; padding: 4px 8px; border-radius: 6px; font-size: .95rem; outline: none; background: #fff; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);" />`;
-    const input = span.querySelector('input');
+    span.innerHTML = `<textarea class="edit-input" style="width: 100%; min-height: 85px; border: 1.5px solid #ccc; padding: 6px 10px; border-radius: 8px; font-size: .95rem; outline: none; background: #fff; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1); resize: vertical; font-family: inherit; margin: 4px 0; display: block; line-height: 1.4;"></textarea>`;
+    const input = span.querySelector('textarea');
+    input.value = textoOriginal;
     input.focus();
     input.select();
 
@@ -551,7 +557,10 @@
     };
 
     input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') guardar();
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        guardar();
+      }
       if (e.key === 'Escape') {
         finished = true;
         span.textContent = textoOriginal;

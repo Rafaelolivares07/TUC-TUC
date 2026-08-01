@@ -824,14 +824,17 @@ def api_inventario_producto_eliminar(producto_id):
             }), 400
 
         # Check 3: Componente en tarjeta estándar de otros productos
-        comp_cnt = conn.execute(
-            "SELECT COUNT(*) FROM tarjeta_estandar WHERE componente_id = %s",
-            (producto_id,)
-        ).fetchone()[0]
-        if comp_cnt > 0:
+        comp_rows = conn.execute("""
+            SELECT DISTINCT p.nombre 
+            FROM tarjeta_estandar te
+            JOIN productos p ON te.producto_id = p.id
+            WHERE te.componente_id = %s
+        """, (producto_id,)).fetchall()
+        if comp_rows:
+            nombres = ", ".join([r['nombre'] for r in comp_rows])
             return jsonify({
                 'ok': False,
-                'error': 'No se puede eliminar el producto porque es componente de la tarjeta estándar de otros productos.'
+                'error': f'No se puede eliminar el producto porque se utiliza como ingrediente en las recetas de: {nombres}. Retíralo de esas recetas antes de borrar el producto.'
             }), 400
 
         # Check 4: Historial de ventas / pedidos

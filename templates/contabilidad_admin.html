@@ -224,6 +224,7 @@
           <th class="px-3 py-2 text-left">Categoría</th>
           <th class="px-3 py-2 text-left">Cuenta Inventario (14x)</th>
           <th class="px-3 py-2 text-left">Cuenta Costo Ventas (6x)</th>
+          <th class="px-3 py-2 text-left">Cuenta Ingresos (41x)</th>
           <th class="px-3 py-2 text-center">Acción</th>
         </tr></thead>
         <tbody id="grupos-body"></tbody>
@@ -873,7 +874,7 @@ function acGrp(tipo, idx) {
     const q = document.getElementById(`gi-${tipo}-q-${idx}`).value.trim();
     const listEl = document.getElementById(`ac-gi-${tipo}-${idx}`);
     if (q.length < 2) { listEl.classList.add('hidden'); return; }
-    const filtro = tipo === 'inve' ? '14' : '6';
+    const filtro = tipo === 'inve' ? '14' : (tipo === 'ingre' ? '4' : '6');
     const cuentas = await fetchPUC(q, filtro);
     renderAC(listEl, cuentas, c => {
       document.getElementById(`gi-${tipo}-q-${idx}`).value = `${c.codigo} — ${c.nombre}`;
@@ -914,23 +915,35 @@ async function cargarGrupos() {
             <input type="hidden" id="gi-cos-id-${i}" value="${g.cuenta_cos_id||''}">
           </div>
         </td>
+        <td class="px-3 py-2">
+          <div class="relative">
+            <input type="text" id="gi-ingre-q-${i}" autocomplete="off"
+                   placeholder="Cuenta 41x (ingresos)..."
+                   value="${g.cod_ingre ? g.cod_ingre+' — '+g.nom_ingre : ''}"
+                   class="border rounded-lg px-2 py-1 text-xs w-full"
+                   oninput="acGrp('ingre',${i})">
+            <div id="ac-gi-ingre-${i}" class="ac-drop hidden"></div>
+            <input type="hidden" id="gi-ingre-id-${i}" value="${g.cuenta_ingre_id||''}">
+          </div>
+        </td>
         <td class="px-3 py-2 text-center whitespace-nowrap">
           <button onclick="guardarGrupo(${i})"
                   class="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-lg">Guardar</button>
           ${g.id ? `<button onclick="eliminarGrupo(${g.id})" class="text-red-400 hover:text-red-600 text-xs ml-1" title="Quitar cuentas">✕</button>` : ''}
         </td>
       </tr>`).join('')
-    : '<tr><td colspan="4" class="text-center text-gray-400 py-4 text-sm">Sin categorías de productos registradas.</td></tr>';
+    : '<tr><td colspan="5" class="text-center text-gray-400 py-4 text-sm">Sin categorías de productos registradas.</td></tr>';
 }
 
 async function guardarGrupo(idx) {
   const nombre = grpData[idx].nombre;
   const cuenta_inve_id = parseInt(document.getElementById(`gi-inve-id-${idx}`).value)||null;
   const cuenta_cos_id  = parseInt(document.getElementById(`gi-cos-id-${idx}`).value)||null;
+  const cuenta_ingre_id = parseInt(document.getElementById(`gi-ingre-id-${idx}`).value)||null;
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-inventario`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({nombre, cuenta_inve_id, cuenta_cos_id})
+    body: JSON.stringify({nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id})
   });
   const data = await resp.json();
   if (data.ok) { toast('Guardado'); cargarGrupos(); }

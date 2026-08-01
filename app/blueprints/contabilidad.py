@@ -131,7 +131,7 @@ def _asegurar_tablas(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_movcont_neg  ON movimientos_contables(negocio_id)")
     conn.commit()
 
-    # grupos_inventario: categoría → cuentas contables (14x inventario + 6x costo ventas)
+    # grupos_inventario: categoría → cuentas contables (14x inventario + 6x costo ventas + 41x ingresos)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS grupos_inventario (
             id             SERIAL PRIMARY KEY,
@@ -139,6 +139,7 @@ def _asegurar_tablas(conn):
             nombre         VARCHAR(100) NOT NULL,
             cuenta_inve_id INTEGER REFERENCES cuentas_puc(id),
             cuenta_cos_id  INTEGER REFERENCES cuentas_puc(id),
+            cuenta_ingre_id INTEGER REFERENCES cuentas_puc(id),
             UNIQUE(negocio_id, nombre)
         )
     """)
@@ -193,6 +194,8 @@ def _asegurar_tablas(conn):
         # tipo_documento y numero_documento en movimientos_inventario
         "ALTER TABLE movimientos_inventario  ADD COLUMN IF NOT EXISTS tipo_documento   VARCHAR(50)",
         "ALTER TABLE movimientos_inventario  ADD COLUMN IF NOT EXISTS numero_documento INTEGER",
+        # cuenta_ingre_id en grupos_inventario
+        "ALTER TABLE grupos_inventario       ADD COLUMN IF NOT EXISTS cuenta_ingre_id INTEGER REFERENCES cuentas_puc(id)",
     ]:
         try:
             conn.execute(sql)
@@ -722,6 +725,45 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                     row['cuenta_nombre'] = c_puc['nombre']
         lineas.append(row)
 
+    # ── NUEVO: Parametrización de ingresos por categoría ──────────────
+    categorized_revenue = 0.0
+    injected_revenue_movs = []
+    
+    if tipo_doc.get('tipo_movimiento') == 'venta' and origen_tipo == 'pedido' and origen_id:
+        try:
+            items_mov = conn.execute("""
+                SELECT pi.producto_id, pi.cantidad, pi.precio_unitario, p.categoria, p.nombre AS producto_nombre
+                FROM pedido_items pi
+                JOIN productos p ON p.id = pi.producto_id
+                WHERE pi.pedido_id = %s
+            """, (int(origen_id),)).fetchall()
+            
+            for item in items_mov:
+                if item['categoria']:
+                    gi = conn.execute("""
+                        SELECT gi.cuenta_ingre_id, c.codigo AS cod_ingre, c.nombre AS nom_ingre
+                        FROM grupos_inventario gi
+                        JOIN cuentas_puc c ON c.id = gi.cuenta_ingre_id
+                        WHERE gi.negocio_id = %s AND gi.nombre = %s
+                    """, (negocio_id, item['categoria'])).fetchone()
+                    
+                    if gi and gi['cuenta_ingre_id']:
+                        subtotal_item = float(item['cantidad'] or 0) * float(item['precio_unitario'] or 0)
+                        if subtotal_item > 0:
+                            categorized_revenue += subtotal_item
+                            injected_revenue_movs.append({
+                                'cuenta_puc_id': gi['cuenta_ingre_id'],
+                                'cuenta_codigo': gi['cod_ingre'],
+                                'concepto':      f"Venta: {item['producto_nombre']}",
+                                'tipo_mov':      'C', # Crédito para ingresos
+                                'monto':         subtotal_item
+                            })
+                            
+            if 'subtotal_venta' in variables:
+                variables['subtotal_venta'] = max(0.0, float(variables['subtotal_venta']) - categorized_revenue)
+        except Exception as e_rev:
+            print(f"[cont] Error calculando ingresos por categoria: {e_rev}")
+
     pos_amounts = {}
     mov_list = []
 
@@ -750,6 +792,9 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                 'tipo_mov':      linea['tipo_mov'],
                 'monto':         abs(monto),
             })
+
+    # Agregar líneas de ingresos categorizados (si existen)
+    mov_list.extend(injected_revenue_movs)
 
     # Inyección automática de líneas de inventario (14x) por cada producto si contab_entradas_categoria está habilitado
     cfg_contab = conn.execute("SELECT contab_entradas_categoria FROM config_contabilidad_negocio WHERE negocio_id = %s", (negocio_id,)).fetchone()
@@ -1908,7 +1953,8 @@ def api_grupos_get(negocio_id):
             SELECT p.categoria AS nombre,
                    g.id,
                    g.cuenta_inve_id, pi.codigo AS cod_inve, pi.nombre AS nom_inve,
-                   g.cuenta_cos_id,  pc.codigo AS cod_cos,  pc.nombre AS nom_cos
+                   g.cuenta_cos_id,  pc.codigo AS cod_cos,  pc.nombre AS nom_cos,
+                   g.cuenta_ingre_id, pg.codigo AS cod_ingre, pg.nombre AS nom_ingre
             FROM (
                 SELECT DISTINCT categoria FROM productos
                 WHERE negocio_id = %s AND categoria IS NOT NULL AND categoria <> ''
@@ -1917,6 +1963,7 @@ def api_grupos_get(negocio_id):
                 ON g.negocio_id = %s AND g.nombre = p.categoria
             LEFT JOIN cuentas_puc pi ON pi.id = g.cuenta_inve_id
             LEFT JOIN cuentas_puc pc ON pc.id = g.cuenta_cos_id
+            LEFT JOIN cuentas_puc pg ON pg.id = g.cuenta_ingre_id
             ORDER BY p.categoria
         """, (negocio_id, negocio_id)).fetchall()
         conn.close()
@@ -1935,6 +1982,7 @@ def api_grupos_post(negocio_id):
     nombre          = (data.get('nombre') or '').strip()
     cuenta_inve_id  = data.get('cuenta_inve_id')
     cuenta_cos_id   = data.get('cuenta_cos_id')
+    cuenta_ingre_id = data.get('cuenta_ingre_id')
     if not nombre:
         return jsonify({'ok': False, 'error': 'Nombre del grupo es requerido'}), 400
     from ..db import get_db_connection
@@ -1942,12 +1990,14 @@ def api_grupos_post(negocio_id):
         conn = get_db_connection()
         _asegurar_tablas(conn)
         row = conn.execute("""
-            INSERT INTO grupos_inventario (negocio_id, nombre, cuenta_inve_id, cuenta_cos_id)
-            VALUES (%s,%s,%s,%s)
+            INSERT INTO grupos_inventario (negocio_id, nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id)
+            VALUES (%s,%s,%s,%s,%s)
             ON CONFLICT (negocio_id, nombre) DO UPDATE
-                SET cuenta_inve_id=EXCLUDED.cuenta_inve_id, cuenta_cos_id=EXCLUDED.cuenta_cos_id
+                SET cuenta_inve_id=EXCLUDED.cuenta_inve_id, 
+                    cuenta_cos_id=EXCLUDED.cuenta_cos_id, 
+                    cuenta_ingre_id=EXCLUDED.cuenta_ingre_id
             RETURNING id
-        """, (negocio_id, nombre, cuenta_inve_id, cuenta_cos_id)).fetchone()
+        """, (negocio_id, nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id)).fetchone()
         conn.commit(); conn.close()
         return jsonify({'ok': True, 'id': row['id']})
     except Exception as e:
@@ -1973,6 +2023,9 @@ def api_grupo_item(negocio_id, gid):
             if 'cuenta_cos_id' in data:
                 conn.execute("UPDATE grupos_inventario SET cuenta_cos_id=%s WHERE id=%s AND negocio_id=%s",
                              (data['cuenta_cos_id'], gid, negocio_id))
+            if 'cuenta_ingre_id' in data:
+                conn.execute("UPDATE grupos_inventario SET cuenta_ingre_id=%s WHERE id=%s AND negocio_id=%s",
+                             (data['cuenta_ingre_id'], gid, negocio_id))
             if 'nombre' in data:
                 conn.execute("UPDATE grupos_inventario SET nombre=%s WHERE id=%s AND negocio_id=%s",
                              (data['nombre'].strip(), gid, negocio_id))

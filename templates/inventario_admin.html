@@ -246,9 +246,14 @@
     </div>
 
     <!-- Fixed Modal Footer -->
-    <div class="flex-shrink-0 flex gap-3 justify-end pt-2 border-t border-gray-100">
-      <button onclick="cerrarModalTarjeta()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
-      <button onclick="guardarTarjeta()" class="px-5 py-2 rounded-xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 shadow-xs">Guardar tarjeta</button>
+    <div class="flex-shrink-0 flex gap-3 justify-between pt-2 border-t border-gray-100">
+      <button id="btn-eliminar-tarjeta" onclick="eliminarTarjetaDesdeModal()" class="px-4 py-2 rounded-xl bg-red-50 text-red-600 border border-red-100 text-sm font-semibold hover:bg-red-100 hover:text-red-700 transition-colors hidden">
+        Eliminar receta
+      </button>
+      <div class="flex gap-3 ml-auto">
+        <button onclick="cerrarModalTarjeta()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+        <button onclick="guardarTarjeta()" class="px-5 py-2 rounded-xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 shadow-xs">Guardar tarjeta</button>
+      </div>
     </div>
 
     <!-- 🧪 Seccion Lote / Procedimiento (Calculadora Overlay) -->
@@ -1345,6 +1350,10 @@ function abrirModalTarjeta(productoId, nombre) {
   document.getElementById('tarjeta-ac-list').classList.add('hidden');
   document.getElementById('tarjeta-ac-input').classList.remove('hidden');
   document.getElementById('tarjeta-selected-chip').classList.add('hidden');
+  
+  const btnEliminar = document.getElementById('btn-eliminar-tarjeta');
+  if (btnEliminar) btnEliminar.classList.add('hidden');
+
   document.getElementById('overlay-tarjeta').classList.remove('hidden');
   cargarTarjeta(productoId);
 }
@@ -1362,6 +1371,15 @@ async function cargarTarjeta(productoId) {
     costo_und: c.costo_und || 0
   }));
   renderLineasTarjeta();
+
+  const btnEliminar = document.getElementById('btn-eliminar-tarjeta');
+  if (btnEliminar) {
+    if (tarjetaLineas.length > 0) {
+      btnEliminar.classList.remove('hidden');
+    } else {
+      btnEliminar.classList.add('hidden');
+    }
+  }
 }
 let modalSortCol = 'nombre';
 let modalSortAsc = true;
@@ -1537,6 +1555,49 @@ async function guardarTarjeta() {
     cargarTarjetasResumen();
   }
   else toast(d.error, false);
+}
+
+// Desde el reporte de Tarjetas Estándar
+async function eliminarTarjetaDirecta(productoId, nombre) {
+  if (!confirm(`¿Estás seguro de eliminar por completo la tarjeta estándar (receta) del producto "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+    return;
+  }
+  await ejecutarEliminacionTarjeta(productoId, false);
+}
+
+// Desde el modal de receta
+async function eliminarTarjetaDesdeModal() {
+  const productoId = document.getElementById('tarjeta-prod-id').value;
+  const nombre = document.getElementById('tarjeta-nombre-prod').textContent;
+  if (!productoId) return;
+
+  if (!confirm(`¿Estás seguro de eliminar por completo la tarjeta estándar (receta) del producto "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+    return;
+  }
+  await ejecutarEliminacionTarjeta(productoId, true);
+}
+
+// Helper común para realizar el fetch DELETE y recargar los reportes
+async function ejecutarEliminacionTarjeta(productoId, cerrarModal) {
+  try {
+    const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Tarjeta estándar eliminada correctamente');
+      if (cerrarModal) {
+        cerrarModalTarjeta();
+      }
+      cargarProductos();
+      if (typeof cargarTarjetasResumen === 'function') {
+        cargarTarjetasResumen();
+      }
+    } else {
+      alert(d.error || 'No se pudo eliminar la tarjeta estándar');
+    }
+  } catch(e) {
+    console.error(e);
+    alert('Error de red al eliminar la tarjeta estándar');
+  }
 }
 
 // ── Gestión de selección y lote (Calculadora) ──────────────────────────────
@@ -2835,11 +2896,20 @@ function renderTarjetasTable() {
         <td class="px-3 py-3 text-right num font-mono ${colorMargen}">$ ${fmt(p.margen_usd)}</td>
         <td class="px-3 py-3 text-right num font-mono ${colorMargen}">${fmt(p.margen_pct)} %</td>
         <td class="px-3 py-3 text-center">
-          <button onclick="abrirModalTarjeta(${p.id}, '${safeNombre}')"
-                  class="px-2.5 py-1 text-xs bg-gray-100 hover:bg-rose-50 hover:text-rose-600 text-gray-700 rounded-lg font-medium transition-all shadow-xs flex items-center justify-center gap-1 mx-auto"
-                  title="Editar tarjeta estándar">
-            ✏️ Tarjeta
-          </button>
+          <div class="flex items-center justify-center gap-1.5 mx-auto">
+            <button onclick="abrirModalTarjeta(${p.id}, '${safeNombre}')"
+                    class="px-2.5 py-1 text-xs bg-gray-100 hover:bg-rose-50 hover:text-rose-600 text-gray-700 rounded-lg font-medium transition-all shadow-xs flex items-center justify-center gap-1"
+                    title="Editar tarjeta estándar">
+              ✏️ Tarjeta
+            </button>
+            ${p.tiene_tarjeta ? `
+              <button onclick="eliminarTarjetaDirecta(${p.id}, '${safeNombre}')"
+                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar tarjeta estándar (receta)">
+                🗑️
+              </button>
+            ` : ''}
+          </div>
         </td>
       </tr>
     `;

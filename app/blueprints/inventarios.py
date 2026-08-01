@@ -1012,6 +1012,29 @@ def api_inventario_tarjeta_guardar(producto_id):
         conn.close()
 
 
+@bp.route('/api/inventario/producto/<int:producto_id>/tarjeta', methods=['DELETE'])
+def api_inventario_tarjeta_eliminar(producto_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        negocio_id = _negocio_id_de_producto(conn, producto_id)
+        if not negocio_id:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        conn.execute("DELETE FROM tarjeta_estandar WHERE producto_id = %s", (producto_id,))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 # ── Entrada de mercancía ───────────────────────────────────────────────────────
 
 @bp.route('/api/inventario/<int:negocio_id>/entrada', methods=['POST'])

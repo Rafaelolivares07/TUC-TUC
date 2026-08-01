@@ -1237,11 +1237,12 @@ async function eliminarProducto(id, nombre) {
       toast('Producto eliminado correctamente');
       cargarProductos();
     } else {
-      toast(d.error || 'No se pudo eliminar el producto', false);
+      // Reemplazado toast por alert para que sea persistente y visible
+      alert(d.error || 'No se pudo eliminar el producto');
     }
   } catch(e) {
     console.error(e);
-    toast('Error de red al eliminar el producto', false);
+    alert('Error de red al eliminar el producto');
   }
 }
 

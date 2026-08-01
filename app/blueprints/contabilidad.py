@@ -1435,6 +1435,10 @@ def api_tipos_doc_patch(negocio_id, tid):
             conn.execute(
                 "UPDATE tipos_documento_negocio SET numero_inicio=%s WHERE id=%s AND negocio_id=%s",
                 (int(data['numero_inicio'] or 1), tid, negocio_id))
+        if 'consecutivo' in data:
+            conn.execute(
+                "UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s AND negocio_id=%s",
+                (int(data['consecutivo'] or 0), tid, negocio_id))
         if 'predeterminado' in data:
             conn.execute(
                 "UPDATE tipos_documento_negocio SET predeterminado=%s WHERE id=%s AND negocio_id=%s",

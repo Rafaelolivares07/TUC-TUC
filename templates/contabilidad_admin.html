@@ -631,9 +631,13 @@ async function cargarTiposDocs() {
       <td class="px-3 py-2 text-center">
         <input type="number" min="0" value="${t.numero_inicio||1}"
                class="border rounded px-2 py-0.5 text-xs w-20 text-center bg-white"
-               onchange="patchTipoDoc(${t.id},{numero_inicio:parseInt(this.value)||1})">
+               onchange="patchTipoDoc(${t.id},{numero_inicio:parseInt(this.value)||1}).then(cargarTiposDocs)">
       </td>
-      <td class="px-3 py-2 text-center font-mono text-gray-500">${t.consecutivo||0}</td>
+      <td class="px-3 py-2 text-center">
+        <input type="number" min="0" value="${t.consecutivo||0}"
+               class="border rounded px-2 py-0.5 text-xs w-20 text-center bg-white font-mono text-gray-700"
+               onchange="patchTipoDoc(${t.id},{consecutivo:parseInt(this.value)||0}).then(cargarTiposDocs)">
+      </td>
       <td class="px-3 py-2 text-center">
         <button onclick="patchTipoDoc(${t.id},{mueve_inventario:${!t.mueve_inventario}}).then(cargarTiposDocs)"
                 class="px-2 py-0.5 rounded text-[11px] font-bold ${t.mueve_inventario?'bg-emerald-100 text-emerald-800':'bg-gray-100 text-gray-400'}">

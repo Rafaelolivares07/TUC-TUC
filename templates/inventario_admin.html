@@ -434,86 +434,102 @@
 
   <!-- ── TAB TARJETAS ESTÁNDAR ───────────────────────────────────── -->
   <div id="tab-tarjetas" class="hidden bg-white rounded-2xl shadow p-5">
-    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
-      <div>
-        <h2 class="font-bold text-gray-700 text-lg">Margen y Tarjetas Estándar</h2>
-        <p class="text-xs text-gray-500 mt-0.5">Analiza el costo de recetas, precios de venta y márgenes de contribución.</p>
-      </div>
-      <div class="w-full sm:w-64">
-        <input id="tarjetas-filtro" type="text" placeholder="Buscar producto o categoría…" oninput="filtrarTarjetas()"
-               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
-      </div>
-    </div>
-    
-    <!-- Informational Legend Banner -->
-    <div class="bg-amber-50/80 border border-amber-200/70 rounded-xl px-3 py-2 mb-4 flex items-center justify-between gap-2 text-xs text-amber-900 shadow-xs">
-      <div class="flex items-center gap-2">
-        <span class="text-sm">ℹ️</span>
-        <span>Las cantidades de componentes se expresan en <strong>números enteros</strong>. Haz clic en <strong>"✏️ Tarjeta"</strong> para modificar cualquier receta y confirma tus cambios presionado <strong>"Guardar tarjeta"</strong>.</span>
+    <!-- Sub-pestañas para alternar vistas -->
+    <div class="flex justify-center mb-6">
+      <div class="inline-flex bg-gray-100 p-1 rounded-xl">
+        <button id="subtab-recetas-btn" onclick="cambiarVistaTarjetas('recetas')" 
+                class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-gray-800 shadow-xs">
+          📋 Vista por Producto (Recetas)
+        </button>
+        <button id="subtab-insumos-btn" onclick="cambiarVistaTarjetas('insumos')" 
+                class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-gray-500 hover:text-gray-800">
+          🔍 Vista por Insumo (¿Dónde se usa?)
+        </button>
       </div>
     </div>
 
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100 select-none">
-            <th class="px-3 py-3 w-8"></th>
-            <th onclick="ordenarTarjetas('nombre')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">
-              Producto <span id="sort-nombre" class="text-gray-400">↕</span>
-            </th>
-            <th onclick="ordenarTarjetas('categoria')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">
-              Categoría <span id="sort-categoria" class="text-gray-400">↕</span>
-            </th>
-            <th onclick="ordenarTarjetas('costo_total')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
-              Costo Total <span id="sort-costo_total" class="text-gray-400">↕</span>
-            </th>
-            <th onclick="ordenarTarjetas('precio')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
-              Precio <span id="sort-precio" class="text-gray-400">↕</span>
-            </th>
-            <th onclick="ordenarTarjetas('margen_usd')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
-              Margen ($) <span id="sort-margen_usd" class="text-gray-400">↕</span>
-            </th>
-            <th onclick="ordenarTarjetas('margen_pct')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
-              Margen (%) <span id="sort-margen_pct" class="text-gray-400">↕</span>
-            </th>
-            <th class="px-3 py-3 text-center w-24">Acción</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-tarjetas-resumen">
-          <tr><td colspan="7" class="text-center text-gray-400 py-8">Cargando…</td></tr>
-        </tbody>
-      </table>
+    <!-- Contenedor: Vista Recetas -->
+    <div id="vista-recetas-container">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+        <div>
+          <h2 class="font-bold text-gray-700 text-lg">Margen y Tarjetas Estándar</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Analiza el costo de recetas, precios de venta y márgenes de contribución.</p>
+        </div>
+        <div class="w-full sm:w-64">
+          <input id="tarjetas-filtro" type="text" placeholder="Buscar producto o categoría…" oninput="filtrarTarjetas()"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
+        </div>
+      </div>
+      
+      <!-- Informational Legend Banner -->
+      <div class="bg-amber-50/80 border border-amber-200/70 rounded-xl px-3 py-2 mb-4 flex items-center justify-between gap-2 text-xs text-amber-900 shadow-xs">
+        <div class="flex items-center gap-2">
+          <span class="text-sm">ℹ️</span>
+          <span>Las cantidades de componentes se expresan en <strong>números enteros</strong>. Haz clic en <strong>"✏️ Tarjeta"</strong> para modificar cualquier receta y confirma tus cambios presionado <strong>"Guardar tarjeta"</strong>.</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100 select-none">
+              <th class="px-3 py-3 w-8"></th>
+              <th onclick="ordenarTarjetas('nombre')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">
+                Producto <span id="sort-nombre" class="text-gray-400">↕</span>
+              </th>
+              <th onclick="ordenarTarjetas('categoria')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">
+                Categoría <span id="sort-categoria" class="text-gray-400">↕</span>
+              </th>
+              <th onclick="ordenarTarjetas('costo_total')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
+                Costo Total <span id="sort-costo_total" class="text-gray-400">↕</span>
+              </th>
+              <th onclick="ordenarTarjetas('precio')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
+                Precio <span id="sort-precio" class="text-gray-400">↕</span>
+              </th>
+              <th onclick="ordenarTarjetas('margen_usd')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
+                Margen ($) <span id="sort-margen_usd" class="text-gray-400">↕</span>
+              </th>
+              <th onclick="ordenarTarjetas('margen_pct')" class="px-3 py-3 text-right cursor-pointer hover:bg-gray-100 transition-colors">
+                Margen (%) <span id="sort-margen_pct" class="text-gray-400">↕</span>
+              </th>
+              <th class="px-3 py-3 text-center w-24">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-tarjetas-resumen">
+            <tr><td colspan="7" class="text-center text-gray-400 py-8">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <!-- Divider -->
-    <hr class="my-8 border-gray-100">
-
-    <!-- ── REPORTE INVERSO: USO DE INSUMOS EN RECETAS ────────────────── -->
-    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
-      <div>
-        <h2 class="font-bold text-gray-700 text-lg">Relación de Insumos y dónde se utilizan</h2>
-        <p class="text-xs text-gray-500 mt-0.5">Consulta qué materias primas e insumos forman parte de las recetas de tus productos finales.</p>
+    <!-- Contenedor: Vista Insumos -->
+    <div id="vista-insumos-container" class="hidden">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+        <div>
+          <h2 class="font-bold text-gray-700 text-lg">Relación de Insumos y dónde se utilizan</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Consulta qué materias primas e insumos forman parte de las recetas de tus productos finales.</p>
+        </div>
+        <div class="w-full sm:w-64">
+          <input id="insumos-filtro" type="text" placeholder="Buscar insumo o categoría…" oninput="filtrarInsumos()"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
+        </div>
       </div>
-      <div class="w-full sm:w-64">
-        <input id="insumos-filtro" type="text" placeholder="Buscar insumo o categoría…" oninput="filtrarInsumos()"
-               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
-      </div>
-    </div>
 
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100 select-none">
-            <th class="px-3 py-3 text-left w-1/3">Insumo / Componente</th>
-            <th class="px-3 py-3 text-left w-1/4">Categoría</th>
-            <th class="px-3 py-3 text-right w-1/6">Costo Unitario</th>
-            <th class="px-3 py-3 text-left w-1/4">Recetas donde se utiliza</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-insumos-resumen">
-          <tr><td colspan="4" class="text-center text-gray-400 py-8">Cargando insumos…</td></tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100 select-none">
+              <th class="px-3 py-3 text-left w-1/3">Insumo / Componente</th>
+              <th class="px-3 py-3 text-left w-1/4">Categoría</th>
+              <th class="px-3 py-3 text-right w-1/6">Costo Unitario</th>
+              <th class="px-3 py-3 text-left w-1/4">Recetas donde se utiliza</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-insumos-resumen">
+            <tr><td colspan="4" class="text-center text-gray-400 py-8">Cargando insumos…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -816,7 +832,10 @@ function mostrarTab(t) {
   document.querySelectorAll('.tab-btn').forEach((btn, i) => {
     btn.classList.toggle('tab-active', TABS[i] === t);
   });
-  if (t === 'tarjetas') cargarTarjetasResumen();
+  if (t === 'tarjetas') {
+    cargarTarjetasResumen();
+    cambiarVistaTarjetas('recetas');
+  }
 }
 
 // ── Formateo ──────────────────────────────────────────────────────────────────
@@ -2814,6 +2833,33 @@ async function cargarTarjetasResumen() {
     if (tbInsumos) {
       tbInsumos.innerHTML = `<tr><td colspan="4" class="text-center text-red-500 font-semibold py-8">Error de red al conectar con la API</td></tr>`;
     }
+  }
+}
+
+function cambiarVistaTarjetas(vista) {
+  const recetasBtn = document.getElementById('subtab-recetas-btn');
+  const insumosBtn = document.getElementById('subtab-insumos-btn');
+  const recetasCont = document.getElementById('vista-recetas-container');
+  const insumosCont = document.getElementById('vista-insumos-container');
+  
+  if (!recetasBtn || !insumosBtn || !recetasCont || !insumosCont) return;
+
+  if (vista === 'recetas') {
+    recetasBtn.classList.add('bg-white', 'text-gray-800', 'shadow-xs');
+    recetasBtn.classList.remove('text-gray-500');
+    insumosBtn.classList.remove('bg-white', 'text-gray-800', 'shadow-xs');
+    insumosBtn.classList.add('text-gray-500');
+    
+    recetasCont.classList.remove('hidden');
+    insumosCont.classList.add('hidden');
+  } else {
+    insumosBtn.classList.add('bg-white', 'text-gray-800', 'shadow-xs');
+    insumosBtn.classList.remove('text-gray-500');
+    recetasBtn.classList.remove('bg-white', 'text-gray-800', 'shadow-xs');
+    recetasBtn.classList.add('text-gray-500');
+    
+    insumosCont.classList.remove('hidden');
+    recetasCont.classList.add('hidden');
   }
 }
 

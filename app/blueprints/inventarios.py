@@ -1905,16 +1905,17 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
             
         # Query unique documents in pedidos (sales/orders)
         rows_ped = conn.execute("""
-            SELECT id, fecha, total, estado
+            SELECT id, numero_documento, fecha, total, estado
             FROM pedidos
-            WHERE id_tercero = %s
+            WHERE cliente_id = %s OR id_tercero = %s
             ORDER BY fecha DESC, id DESC
-        """, (tercero_id,)).fetchall()
+        """, (tercero_id, tercero_id)).fetchall()
         
         for r in rows_ped:
+            doc_num = r['numero_documento'] or str(r['id'])
             documentos.append({
                 'tipo_documento': 'pedido_venta',
-                'documento_numero': str(r['id']),
+                'documento_numero': doc_num,
                 'fecha': r['fecha'].date().isoformat() if r['fecha'] else None,
                 'origen': 'ventas',
                 'total': float(r['total'] or 0),
@@ -1948,13 +1949,36 @@ def api_auditar_documento(negocio_id):
     
     conn = get_db_connection()
     try:
+        # Look up the order in `pedidos` if it exists
+        pedido_row = None
+        try:
+            pedido_id = int(num_doc)
+            pedido_row = conn.execute("SELECT * FROM pedidos WHERE id = %s AND negocio_id = %s", (pedido_id, negocio_id)).fetchone()
+        except ValueError:
+            pass
+
+        if not pedido_row:
+            pedido_row = conn.execute("SELECT * FROM pedidos WHERE UPPER(numero_documento) = UPPER(%s) AND negocio_id = %s", (num_doc, negocio_id)).fetchone()
+
         # 1. Query movimientos_inventario
-        sql_inv = """
-            SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad, valor_unitario, valor_total, iva_pct, created_at, proveedor_id, proveedor_nombre
-            FROM movimientos_inventario
-            WHERE negocio_id = %s AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s)
-        """
-        params_inv = [negocio_id, tipo_doc, num_doc]
+        if pedido_row:
+            sql_inv = """
+                SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad, valor_unitario, valor_total, iva_pct, created_at, proveedor_id, proveedor_nombre
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND (
+                    (referencia_tipo IN ('pedido', 'pedido_restaurante') AND referencia_id = %s)
+                    OR (LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s))
+                )
+            """
+            params_inv = [negocio_id, pedido_row['id'], tipo_doc, num_doc]
+        else:
+            sql_inv = """
+                SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad, valor_unitario, valor_total, iva_pct, created_at, proveedor_id, proveedor_nombre
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s)
+            """
+            params_inv = [negocio_id, tipo_doc, num_doc]
+            
         if proveedor_id:
             sql_inv += " AND proveedor_id = %s"
             params_inv.append(int(proveedor_id))
@@ -1978,16 +2002,19 @@ def api_auditar_documento(negocio_id):
         ]
         
         # 2. Query comprobantes_contables and movimientos_contables
-        origen_id = f"{tipo_doc}:{num_doc}"
+        origen_id_str = f"{tipo_doc}:{num_doc}"
+        pedido_id_str = str(pedido_row['id']) if pedido_row else None
+        
         comp_row = conn.execute("""
             SELECT id, numero_comprobante, tipo, fecha, descripcion, total_debitos, total_creditos, notas
             FROM comprobantes_contables
             WHERE negocio_id = %s AND (
-                (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
+                (origen_tipo = 'pedido' AND origen_id = %s)
+                OR (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
                 OR (numero_comprobante ILIKE %s)
             )
             LIMIT 1
-        """, (negocio_id, origen_id, f'%{num_doc}%')).fetchone()
+        """, (negocio_id, pedido_id_str, origen_id_str, f'%{num_doc}%')).fetchone()
         
         comprobante = None
         if comp_row:
@@ -2007,77 +2034,123 @@ def api_auditar_documento(negocio_id):
                 'total_debitos': float(comp_row['total_debitos'] or 0),
                 'total_creditos': float(comp_row['total_creditos'] or 0),
                 'notas': comp_row['notas'],
-                'documento_fisico': num_doc,
-                'asientos': [
-                    {
-                        'id': e['id'],
-                        'cuenta_id': e['cuenta_id'],
-                        'cuenta': e['cuenta'],
-                        'concepto': e['concepto'],
-                        'tipo': 'D' if e['tipo'] == 'debito' else 'C',
-                        'monto': float(e['monto'] or 0)
-                    } for e in entries
-                ]
+                'documento_fisico': num_doc
             }
+            
+            # If we don't have detailed entries but we have the comprobante list, render seats
+            comprobante['asientos'] = [
+                {
+                    'id': e['id'],
+                    'cuenta_id': e['cuenta_id'],
+                    'cuenta': e['cuenta'],
+                    'concepto': e['concepto'],
+                    'tipo': 'D' if e['tipo'] == 'debito' else 'C',
+                    'monto': float(e['monto'] or 0)
+                } for e in entries
+            ]
         
         # 3. Query sales (pedidos & pedido_items)
         pedido = None
-        pedido_id = None
-        try:
-            pedido_id = int(num_doc)
-        except ValueError:
-            pass
-        
-        if pedido_id:
-            ped_row = conn.execute("""
-                SELECT p.id, p.fecha, p.total, p.metodo_pago, p.estado, p.notas, p.id_tercero
-                FROM pedidos p
-                WHERE p.id = %s
-                LIMIT 1
-            """, (pedido_id,)).fetchone()
+        if pedido_row:
+            p_items = conn.execute("""
+                SELECT pi.id, pi.producto_id, pi.nombre_producto, pi.cantidad, pi.precio_unitario
+                FROM pedido_items pi
+                WHERE pi.pedido_id = %s
+            """, (pedido_row['id'],)).fetchall()
             
-            if ped_row:
-                p_items = conn.execute("""
-                    SELECT pi.id, pi.producto_id, pi.nombre_producto, pi.cantidad, pi.precio_unitario
-                    FROM pedido_items pi
-                    WHERE pi.pedido_id = %s
-                """, (pedido_id,)).fetchall()
+            cliente_nombre = None
+            c_tercero_id = pedido_row['cliente_id'] or pedido_row['id_tercero']
+            if c_tercero_id:
+                cli_row = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (c_tercero_id,)).fetchone()
+                if cli_row:
+                    cliente_nombre = cli_row['nombre']
+            else:
+                cliente_nombre = pedido_row['nombre_cliente']
                 
-                cliente_nombre = None
-                if ped_row['id_tercero']:
-                    cli_row = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (ped_row['id_tercero'],)).fetchone()
-                    if cli_row:
-                        cliente_nombre = cli_row['nombre']
+            pedido = {
+                'id': pedido_row['id'],
+                'fecha': pedido_row['fecha'].isoformat() if pedido_row['fecha'] else None,
+                'total': float(pedido_row['total'] or 0),
+                'metodo_pago': pedido_row['metodo_pago'],
+                'estado': pedido_row['estado'],
+                'notas': pedido_row['notas'],
+                'cliente_nombre': cliente_nombre or 'Cliente en local',
+                'tercero_id': c_tercero_id,
+                'items': [
+                    {
+                        'id': pi['id'],
+                        'producto_id': pi['producto_id'],
+                        'nombre_producto': pi['nombre_producto'],
+                        'cantidad': float(pi['cantidad']),
+                        'precio_unitario': float(pi['precio_unitario'] or 0),
+                        'subtotal': float(pi['cantidad'] * pi['precio_unitario'])
+                    } for pi in p_items
+                ]
+            }
+        else:
+            # Fallback to query by ID if num_doc is numeric
+            pedido_id = None
+            try:
+                pedido_id = int(num_doc)
+            except ValueError:
+                pass
+            
+            if pedido_id:
+                ped_row = conn.execute("""
+                    SELECT p.id, p.fecha, p.total, p.metodo_pago, p.estado, p.notas, p.cliente_id, p.id_tercero, p.nombre_cliente
+                    FROM pedidos p
+                    WHERE p.id = %s AND p.negocio_id = %s
+                    LIMIT 1
+                """, (pedido_id, negocio_id)).fetchone()
+                
+                if ped_row:
+                    p_items = conn.execute("""
+                        SELECT pi.id, pi.producto_id, pi.nombre_producto, pi.cantidad, pi.precio_unitario
+                        FROM pedido_items pi
+                        WHERE pi.pedido_id = %s
+                    """, (pedido_id,)).fetchall()
+                    
+                    cliente_nombre = None
+                    c_tercero_id = ped_row['cliente_id'] or ped_row['id_tercero']
+                    if c_tercero_id:
+                        cli_row = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (c_tercero_id,)).fetchone()
+                        if cli_row:
+                            cliente_nombre = cli_row['nombre']
+                    else:
+                        cliente_nombre = ped_row['nombre_cliente']
                         
-                pedido = {
-                    'id': ped_row['id'],
-                    'fecha': ped_row['fecha'].isoformat() if ped_row['fecha'] else None,
-                    'total': float(ped_row['total'] or 0),
-                    'metodo_pago': ped_row['metodo_pago'],
-                    'estado': ped_row['estado'],
-                    'notas': ped_row['notas'],
-                    'cliente_nombre': cliente_nombre,
-                    'tercero_id': ped_row['id_tercero'],
-                    'items': [
-                        {
-                            'id': pi['id'],
-                            'producto_id': pi['producto_id'],
-                            'nombre_producto': pi['nombre_producto'],
-                            'cantidad': float(pi['cantidad']),
-                            'precio_unitario': float(pi['precio_unitario'] or 0),
-                            'subtotal': float(pi['cantidad'] * pi['precio_unitario'])
-                        } for pi in p_items
-                    ]
-                }
+                    pedido = {
+                        'id': ped_row['id'],
+                        'fecha': ped_row['fecha'].isoformat() if ped_row['fecha'] else None,
+                        'total': float(ped_row['total'] or 0),
+                        'metodo_pago': ped_row['metodo_pago'],
+                        'estado': ped_row['estado'],
+                        'notas': ped_row['notas'],
+                        'cliente_nombre': cliente_nombre or 'Cliente en local',
+                        'tercero_id': c_tercero_id,
+                        'items': [
+                            {
+                                'id': pi['id'],
+                                'producto_id': pi['producto_id'],
+                                'nombre_producto': pi['nombre_producto'],
+                                'cantidad': float(pi['cantidad']),
+                                'precio_unitario': float(pi['precio_unitario'] or 0),
+                                'subtotal': float(pi['cantidad'] * pi['precio_unitario'])
+                            } for pi in p_items
+                        ]
+                    }
         
         # 4. Query pending balance in saldo_por_documentos
-        t_id = proveedor_id or (items_inventario[0]['proveedor_id'] if items_inventario else None)
+        t_id = proveedor_id or (pedido['tercero_id'] if pedido else None) or (items_inventario[0]['proveedor_id'] if items_inventario else None)
         saldo_row = None
         if t_id:
             saldo_row = conn.execute("""
                 SELECT saldo, monto_original FROM saldo_por_documentos
-                WHERE negocio_id = %s AND tercero_id = %s AND tipo_documento = %s AND numero_documento = %s
-            """, (negocio_id, t_id, tipo_doc, num_doc)).fetchone()
+                WHERE negocio_id = %s AND tercero_id = %s AND (
+                    tipo_documento = %s 
+                    OR (tipo_documento_id IS NOT NULL AND tipo_documento_id = %s)
+                ) AND numero_documento = %s
+            """, (negocio_id, t_id, tipo_doc, pedido_row['tipo_documento_id'] if pedido_row else None, num_doc)).fetchone()
         else:
             saldo_row = conn.execute("""
                 SELECT saldo, monto_original FROM saldo_por_documentos
@@ -2122,13 +2195,36 @@ def api_anular_documento(negocio_id):
         deleted_comprobantes = 0
         pedido_anulado = False
         
+        # Look up the order in `pedidos` if it exists
+        pedido_row = None
+        try:
+            pedido_id = int(num_doc)
+            pedido_row = conn.execute("SELECT * FROM pedidos WHERE id = %s AND negocio_id = %s", (pedido_id, negocio_id)).fetchone()
+        except ValueError:
+            pass
+
+        if not pedido_row:
+            pedido_row = conn.execute("SELECT * FROM pedidos WHERE UPPER(numero_documento) = UPPER(%s) AND negocio_id = %s", (num_doc, negocio_id)).fetchone()
+        
         # Get inventory movement IDs to be deleted, and their product IDs (for recosteo!)
-        sql_inv = """
-            SELECT id, producto_id, proveedor_id
-            FROM movimientos_inventario
-            WHERE negocio_id = %s AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s)
-        """
-        params_inv = [negocio_id, tipo_doc, num_doc]
+        if pedido_row:
+            sql_inv = """
+                SELECT id, producto_id, proveedor_id
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND (
+                    (referencia_tipo IN ('pedido', 'pedido_restaurante') AND referencia_id = %s)
+                    OR (LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s))
+                )
+            """
+            params_inv = [negocio_id, pedido_row['id'], tipo_doc, num_doc]
+        else:
+            sql_inv = """
+                SELECT id, producto_id, proveedor_id
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s)
+            """
+            params_inv = [negocio_id, tipo_doc, num_doc]
+            
         if proveedor_id:
             sql_inv += " AND proveedor_id = %s"
             params_inv.append(int(proveedor_id))
@@ -2136,7 +2232,7 @@ def api_anular_documento(negocio_id):
         movs = conn.execute(sql_inv, tuple(params_inv)).fetchall()
         mov_ids = [m['id'] for m in movs]
         prod_ids = list({m['producto_id'] for m in movs})
-        p_id = proveedor_id or (movs[0]['proveedor_id'] if movs else None)
+        p_id = proveedor_id or (pedido_row['cliente_id'] or pedido_row['id_tercero'] if pedido_row else None) or (movs[0]['proveedor_id'] if movs else None)
         
         # Delete inventory movements
         if mov_ids:
@@ -2148,8 +2244,11 @@ def api_anular_documento(negocio_id):
         if p_id:
             conn.execute("""
                 DELETE FROM saldo_por_documentos
-                WHERE negocio_id = %s AND tercero_id = %s AND tipo_documento = %s AND numero_documento = %s
-            """, (negocio_id, p_id, tipo_doc, num_doc))
+                WHERE negocio_id = %s AND tercero_id = %s AND (
+                    tipo_documento = %s
+                    OR (tipo_documento_id IS NOT NULL AND tipo_documento_id = %s)
+                ) AND numero_documento = %s
+            """, (negocio_id, p_id, tipo_doc, pedido_row['tipo_documento_id'] if pedido_row else None, num_doc))
         else:
             conn.execute("""
                 DELETE FROM saldo_por_documentos
@@ -2164,14 +2263,17 @@ def api_anular_documento(negocio_id):
             """, (negocio_id, p_id, num_doc))
         
         # Delete accounting vouchers & entries
-        origen_id = f"{tipo_doc}:{num_doc}"
+        origen_id_str = f"{tipo_doc}:{num_doc}"
+        pedido_id_str = str(pedido_row['id']) if pedido_row else None
+        
         comp_rows = conn.execute("""
             SELECT id FROM comprobantes_contables
             WHERE negocio_id = %s AND (
-                (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
+                (origen_tipo = 'pedido' AND origen_id = %s)
+                OR (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
                 OR (numero_comprobante ILIKE %s)
             )
-        """, (negocio_id, origen_id, f'%{num_doc}%')).fetchall()
+        """, (negocio_id, pedido_id_str, origen_id_str, f'%{num_doc}%')).fetchall()
         comp_ids = [c['id'] for c in comp_rows]
         
         if comp_ids:
@@ -2182,17 +2284,21 @@ def api_anular_documento(negocio_id):
             deleted_comprobantes = cur_cc.rowcount
             
         # Void sales order
-        pedido_id = None
-        try:
-            pedido_id = int(num_doc)
-        except ValueError:
-            pass
-        
-        if pedido_id:
-            ped_row = conn.execute("SELECT id FROM pedidos WHERE id = %s LIMIT 1", (pedido_id,)).fetchone()
-            if ped_row:
-                conn.execute("UPDATE pedidos SET estado = 'anulado' WHERE id = %s", (pedido_id,))
-                pedido_anulado = True
+        if pedido_row:
+            conn.execute("UPDATE pedidos SET estado = 'anulado' WHERE id = %s", (pedido_row['id'],))
+            pedido_anulado = True
+        else:
+            pedido_id = None
+            try:
+                pedido_id = int(num_doc)
+            except ValueError:
+                pass
+            
+            if pedido_id:
+                ped_row = conn.execute("SELECT id FROM pedidos WHERE id = %s AND negocio_id = %s LIMIT 1", (pedido_id, negocio_id)).fetchone()
+                if ped_row:
+                    conn.execute("UPDATE pedidos SET estado = 'anulado' WHERE id = %s", (pedido_id,))
+                    pedido_anulado = True
                 
         # Recosteo: Recalculate stock and average cost for all affected products
         for prod_id in prod_ids:

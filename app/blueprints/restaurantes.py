@@ -1966,6 +1966,7 @@ def api_pedido_crear(slug):
                             motivo='venta',
                             registrado_por=session.get('usuario_id'),
                             referencia_tipo='pedido_restaurante',
+                            referencia_id=pedidos_insertados[-1]
                         )
                         conn.execute("RELEASE SAVEPOINT sp_inv")
                     except Exception as _e:
@@ -2048,6 +2049,7 @@ def api_pedido_crear(slug):
                             motivo='venta',
                             registrado_por=session.get('usuario_id'),
                             referencia_tipo='pedido_restaurante',
+                            referencia_id=pedido_id
                         )
                         conn.execute("RELEASE SAVEPOINT sp_inv")
                     except Exception as _e:

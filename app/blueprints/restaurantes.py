@@ -2063,7 +2063,10 @@ def api_pedido_crear(slug):
                               {'subtotal_venta': precio_total,
                                'iva_venta': 0,
                                'total_venta': precio_total},
-                              registrado_por=session.get('usuario_id'))
+                              registrado_por=session.get('usuario_id'),
+                              origen_tipo='pedido',
+                              origen_id=pedido_id,
+                              tercero_id=cliente_id)
             except Exception as _e:
                 print(f'[cont] venta rest {slug}: {_e}')
         conn.commit()

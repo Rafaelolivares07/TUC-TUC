@@ -1956,6 +1956,80 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/documentos-recientes', methods=['GET'])
+def api_mantenimiento_documentos_recientes(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        # 1. Fetch recent inventory documents
+        rows_inv = conn.execute("""
+            SELECT mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total,
+                   MIN(mi.proveedor_id) AS proveedor_id, MIN(mi.proveedor_nombre) AS proveedor_nombre
+            FROM movimientos_inventario mi
+            WHERE mi.negocio_id = %s AND mi.tipo_documento IS NOT NULL AND mi.tipo_documento <> '' 
+              AND mi.documento_numero IS NOT NULL AND mi.documento_numero <> ''
+            GROUP BY mi.tipo_documento, mi.documento_numero, mi.documento_fecha
+            ORDER BY mi.documento_fecha DESC, mi.documento_numero DESC
+            LIMIT 50
+        """, (negocio_id,)).fetchall()
+        
+        documentos = []
+        for r in rows_inv:
+            documentos.append({
+                'tipo_documento': r['tipo_documento'] or 'otro',
+                'documento_numero': r['documento_numero'],
+                'fecha': r['documento_fecha'].isoformat() if r['documento_fecha'] else None,
+                'origen': 'inventario',
+                'total': float(r['total'] or 0),
+                'tercero_nombre': r['proveedor_nombre'] or '—',
+                'tercero_id': r['proveedor_id']
+            })
+            
+        # 2. Fetch recent orders (sales)
+        # Note: in pedidos, the business is stored in negocio_id as its tercero_id
+        rows_ped = conn.execute("""
+            SELECT p.id, p.numero_documento, p.fecha, p.total, p.cliente_id, p.id_tercero, p.nombre_cliente, p.estado
+            FROM pedidos p
+            WHERE p.negocio_id = %s
+            ORDER BY p.fecha DESC, p.id DESC
+            LIMIT 50
+        """, (negocio_id,)).fetchall()
+        
+        for r in rows_ped:
+            # Resolve customer name
+            c_name = r['nombre_cliente']
+            c_id = r['cliente_id'] or r['id_tercero']
+            if c_id:
+                t_row = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (c_id,)).fetchone()
+                if t_row:
+                    c_name = t_row['nombre']
+                    
+            doc_num = r['numero_documento'] or str(r['id'])
+            documentos.append({
+                'tipo_documento': 'pedido_venta',
+                'documento_numero': doc_num,
+                'fecha': r['fecha'].isoformat() if r['fecha'] else None,
+                'origen': 'ventas',
+                'total': float(r['total'] or 0),
+                'tercero_nombre': c_name or 'Cliente general',
+                'tercero_id': c_id,
+                'estado': r['estado']
+            })
+            
+        # Sort combined list by date descending
+        documentos.sort(key=lambda d: d['fecha'] or '', reverse=True)
+        
+        return jsonify({
+            'ok': True,
+            'documentos': documentos[:50]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/auditar-documento', methods=['GET'])
 def api_auditar_documento(negocio_id):
     if 'usuario_id' not in session:

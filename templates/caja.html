@@ -116,11 +116,16 @@
                 </h2>
 
                 <!-- Cliente (opcional) -->
-                <div class="mb-3 space-y-2">
+                <div class="mb-3 space-y-2 relative">
                     <input id="nombre-cliente" type="text" placeholder="Nombre cliente (opcional)"
+                           autocomplete="off"
                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
+                    <div id="ac-cliente-list" class="absolute left-0 right-0 top-[38px] z-50 bg-white border border-gray-200 rounded-lg shadow-lg hidden max-h-48 overflow-y-auto"></div>
+                    <input type="hidden" id="cliente-id" value="">
+
                     <input id="tel-cliente" type="tel" placeholder="Teléfono (opcional)"
                            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
+                    <div id="cliente-status-badge" class="hidden"></div>
                     
                     <!-- Tipo de Documento -->
                     <div class="pt-1">
@@ -684,6 +689,7 @@ async function cobrar() {
     const nombre = document.getElementById('nombre-cliente').value.trim();
     const telefono = document.getElementById('tel-cliente').value.trim();
     const tipoDocId = document.getElementById('tipo-documento')?.value || null;
+    const clienteId = document.getElementById('cliente-id')?.value || null;
 
     const pagos = getPagos();
     const payload = {
@@ -697,6 +703,7 @@ async function cobrar() {
         metodo_pago: pagos.length ? pagos[0].codigo : 'efectivo',
         nombre_cliente: nombre || 'Venta en caja',
         telefono_cliente: telefono || '',
+        cliente_id: clienteId ? parseInt(clienteId) : null,
         id_cajero: cajeroId,
         nombre_cajero: cajeroNombre,
         id_tercero_cajero: cajeroTerceroId,
@@ -847,6 +854,13 @@ function nuevaVenta() {
     document.getElementById('modal-cliente').classList.add('hidden');
     document.getElementById('nombre-cliente').value = '';
     document.getElementById('tel-cliente').value = '';
+    
+    // Reset autocomplete client fields
+    document.getElementById('cliente-id').value = '';
+    const badge = document.getElementById('cliente-status-badge');
+    badge.className = 'hidden';
+    badge.textContent = '';
+    
     renderCarrito();
     limpiarPagos();
     document.getElementById('btn-cobrar').textContent = 'Cobrar';
@@ -861,6 +875,102 @@ function toast(msg, err = false) {
     t.className = `toast show ${err ? 'toast-err' : 'toast-ok'}`;
     setTimeout(() => t.className = 'toast', 2500);
 }
+
+// ── Autocomplete Cliente ──
+(function() {
+    const inp = document.getElementById('nombre-cliente');
+    const list = document.getElementById('ac-cliente-list');
+    const hiddenId = document.getElementById('cliente-id');
+    const statusBadge = document.getElementById('cliente-status-badge');
+    const telInp = document.getElementById('tel-cliente');
+    
+    let timer = null;
+    
+    inp.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(search, 280);
+    });
+    
+    inp.addEventListener('blur', () => {
+        setTimeout(() => {
+            list.classList.add('hidden');
+            updateStatusBadge();
+        }, 220);
+    });
+
+    async function search() {
+        const q = inp.value.trim();
+        if (q.length < 2) {
+            list.classList.add('hidden');
+            hiddenId.value = '';
+            updateStatusBadge();
+            return;
+        }
+        try {
+            // Search all third parties
+            const r = await fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`);
+            const matches = await r.json();
+            
+            // Render results
+            if (!matches.length) {
+                list.classList.add('hidden');
+                hiddenId.value = '';
+                updateStatusBadge();
+                return;
+            }
+            
+            list.innerHTML = matches.map(p =>
+                `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}" data-telefono="${(p.telefono||'').replace(/"/g,'&quot;')}">
+                    <span class="font-semibold text-gray-800">${p.nombre}</span>
+                    ${p.telefono ? `<span class="text-xs text-gray-400">(${p.telefono})</span>` : ''}
+                 </div>`
+            ).join('');
+            
+            list.querySelectorAll('.ac-item').forEach(el => {
+                el.addEventListener('mousedown', () => {
+                    list.classList.add('hidden');
+                    inp.value = el.dataset.nombre;
+                    hiddenId.value = el.dataset.id;
+                    if (el.dataset.telefono && el.dataset.telefono.trim()) {
+                        telInp.value = el.dataset.telefono.trim();
+                    }
+                    updateStatusBadge();
+                });
+            });
+            list.classList.remove('hidden');
+        } catch (e) {
+            console.error('Error searching client:', e);
+        }
+    }
+    
+    function updateStatusBadge() {
+        const val = inp.value.trim();
+        const genericNames = ['venta en caja', 'mostrador', 'anonimo', 'cliente general', 'cliente en local', 'consumo', ''];
+        if (!val || genericNames.includes(val.toLowerCase())) {
+            statusBadge.className = 'hidden';
+            statusBadge.textContent = '';
+            hiddenId.value = '';
+            return;
+        }
+        
+        if (hiddenId.value) {
+            statusBadge.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded bg-green-100 text-green-800 mt-1 inline-block';
+            statusBadge.textContent = '✓ Cliente registrado';
+        } else {
+            statusBadge.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded bg-amber-100 text-amber-800 mt-1 inline-block';
+            statusBadge.textContent = '+ Creará cliente nuevo en base de datos';
+        }
+    }
+    
+    // Also check on manual key up/typing in case they erase
+    inp.addEventListener('keyup', () => {
+        // If they clear, reset hidden input
+        if (inp.value.trim() === '') {
+            hiddenId.value = '';
+        }
+        updateStatusBadge();
+    });
+})();
 </script>
 </body>
 </html>

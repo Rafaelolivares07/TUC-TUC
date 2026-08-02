@@ -205,21 +205,78 @@
       </button>
     </div>
 
-    <!-- Paso 1: Seleccionar Tercero (Cliente / Proveedor) -->
-    <div class="bg-rose-50/50 p-4 rounded-xl border border-rose-100 mb-6">
-      <label class="block text-xs font-bold text-rose-800 uppercase mb-1">1. Seleccionar Cliente / Proveedor (Tercero)</label>
-      <p class="text-xs text-rose-700/80 mb-3">
-        Busca al tercero para visualizar su historial de transacciones y documentos registrados.
-      </p>
-      <div class="relative">
-        <input id="auditor-tercero" type="text" placeholder="Buscar por nombre..." autocomplete="off" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500 bg-white">
-        <div id="auditor-tercero-list" class="ac-list hidden"></div>
-        <input type="hidden" id="auditor-tercero-id">
+    <!-- Opciones de búsqueda de documento -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      
+      <!-- Opción A: Buscar por Tercero (Cliente / Proveedor) -->
+      <div class="bg-rose-50/50 p-4 rounded-xl border border-rose-100 flex flex-col justify-between">
+        <div>
+          <label class="block text-xs font-bold text-rose-800 uppercase mb-1">A. Buscar por Tercero (Cliente / Proveedor)</label>
+          <p class="text-xs text-rose-700/80 mb-3">
+            Visualiza el historial completo de compras o ventas de un tercero seleccionado.
+          </p>
+        </div>
+        <div class="relative mt-2">
+          <input id="auditor-tercero" type="text" placeholder="Buscar tercero por nombre..." autocomplete="off" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500 bg-white">
+          <div id="auditor-tercero-list" class="ac-list hidden"></div>
+          <input type="hidden" id="auditor-tercero-id">
+        </div>
+        <div id="selected-aud-tercero-badge" class="mt-2 hidden">
+          <span class="inline-flex items-center gap-1 text-xs bg-rose-600 text-white font-bold px-3 py-1 rounded-full">
+            <span>Tercero:</span> <span id="aud-tercero-nombre-lbl"></span>
+          </span>
+        </div>
       </div>
-      <div id="selected-aud-tercero-badge" class="mt-2 hidden">
-        <span class="inline-flex items-center gap-1 text-xs bg-rose-600 text-white font-bold px-3 py-1 rounded-full">
-          <span>Tercero:</span> <span id="aud-tercero-nombre-lbl"></span>
-        </span>
+
+      <!-- Opción B: Buscar Documento Directamente -->
+      <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col justify-between">
+        <div>
+          <label class="block text-xs font-bold text-blue-800 uppercase mb-1">B. Consultar Documento por Número o ID</label>
+          <p class="text-xs text-blue-700/80 mb-3">
+            Ingresa directamente el consecutivo físico, ID de pedido o código de comprobante.
+          </p>
+        </div>
+        <div class="flex gap-2 mt-2">
+          <input id="auditor-directo-num" type="text" placeholder="Ej: FV-0009, VENTA-0004 o ID 6" class="border border-gray-300 rounded-lg px-3 py-2 flex-1 text-sm outline-none focus:border-blue-500 bg-white">
+          <select id="auditor-directo-tipo" class="border border-gray-300 rounded-lg px-2 py-2 text-xs outline-none bg-white">
+            <option value="pedido_venta">Venta / Pedido</option>
+            <option value="entrada">Entrada Inventario</option>
+            <option value="factura_compra">Factura Compra</option>
+            <option value="egreso">Egreso / Comprobante</option>
+          </select>
+          <button onclick="auditarDocumentoDirecto()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition">🔍 Auditar</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Panel: Documentos Recientes -->
+    <div id="auditor-panel-recientes" class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 mb-6">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5">
+          <span>⚡</span> Últimas 50 Transacciones del Sistema
+        </h3>
+        <button onclick="cargarDocumentosRecientes()" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">🔄 Actualizar Lista</button>
+      </div>
+      <div class="overflow-x-auto max-h-72 overflow-y-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b text-gray-400">
+              <th class="py-2">Fecha</th>
+              <th class="py-2">Origen</th>
+              <th class="py-2">Tipo de Doc.</th>
+              <th class="py-2">Número / ID</th>
+              <th class="py-2">Tercero Relacionado</th>
+              <th class="py-2 text-right">Total</th>
+              <th class="py-2 text-center">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="aud-tbody-recientes">
+            <tr>
+              <td colspan="7" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -431,6 +488,13 @@
     document.getElementById('auditor-cargando').classList.add('hidden');
     auditorDocumentosHistorial = [];
     auditorDocumentoSeleccionado = null;
+    
+    // Clear direct search input
+    const directNum = document.getElementById('auditor-directo-num');
+    if (directNum) directNum.value = '';
+    
+    // Load recent documents
+    cargarDocumentosRecientes();
   }
 
   async function cargarDocumentosTercero(terceroId) {
@@ -841,6 +905,77 @@
       items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
       if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
     }
+  }
+
+  async function cargarDocumentosRecientes() {
+    const tbody = document.getElementById('aud-tbody-recientes');
+    if (!tbody) return;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
+      </tr>
+    `;
+    try {
+      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/documentos-recientes`);
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'Error al cargar transacciones');
+      
+      const docs = d.documentos || [];
+      if (!docs.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="text-center text-gray-400 py-6">No se encontraron transacciones recientes en el sistema</td>
+          </tr>
+        `;
+        return;
+      }
+      
+      tbody.innerHTML = docs.map(doc => {
+        let originBadge = '';
+        if (doc.origen === 'ventas') {
+          originBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 uppercase">venta</span>';
+        } else {
+          originBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 uppercase">inventario</span>';
+        }
+        
+        let typeStr = doc.tipo_documento.toUpperCase();
+        if (doc.tipo_documento === 'pedido_venta') typeStr = 'Venta / Pedido';
+        
+        return `
+          <tr class="border-b hover:bg-gray-50">
+            <td class="py-2">${doc.fecha ? new Date(doc.fecha).toLocaleDateString('es-CO', {hour: '2-digit', minute:'2-digit'}) : '—'}</td>
+            <td class="py-2">${originBadge}</td>
+            <td class="py-2 font-bold text-gray-700">${typeStr}</td>
+            <td class="py-2 font-mono text-gray-800">${doc.documento_numero}</td>
+            <td class="py-2 text-gray-600">${doc.tercero_nombre || 'Cliente General'}</td>
+            <td class="py-2 text-right font-semibold text-gray-700">$${doc.total.toLocaleString('es-CO')}</td>
+            <td class="py-2 text-center">
+              <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero}', '${doc.tercero_id || ''}')" 
+                      class="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded text-[10px] transition">
+                🔎 Auditar
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch(e) {
+      console.error(e);
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center text-red-500 py-6">Error: ${e.message}</td>
+        </tr>
+      `;
+    }
+  }
+
+  async function auditarDocumentoDirecto() {
+    const num = document.getElementById('auditor-directo-num').value.trim();
+    const tipo = document.getElementById('auditor-directo-tipo').value;
+    if (!num) {
+      toast('Por favor ingresa un número de documento o ID', false);
+      return;
+    }
+    consultarDocumentoDetalle(tipo, num, '');
   }
 </script>
 </body>

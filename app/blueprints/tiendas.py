@@ -374,6 +374,9 @@ def _crear_tablas(conn):
         "UPDATE metodos_pago_catalogo SET grupo = 'nequi' WHERE codigo = 'nequi' AND grupo IS NULL",
         "UPDATE metodos_pago_catalogo SET activo = FALSE WHERE codigo = 'nequi'",
         """UPDATE config_negocio SET metodos_pago = array_replace(metodos_pago, 'nequi', 'nequi_movil') WHERE 'nequi' = ANY(metodos_pago)""",
+        "CREATE SEQUENCE IF NOT EXISTS pedidos_id_seq",
+        "ALTER TABLE pedidos ALTER COLUMN id SET DEFAULT nextval('pedidos_id_seq')",
+        "ALTER SEQUENCE pedidos_id_seq OWNED BY pedidos.id",
     ]
     for sql in alters:
         try:

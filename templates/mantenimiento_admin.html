@@ -817,7 +817,7 @@
       const q = inp.value.trim();
       if (q.length < 2) { list.classList.add('hidden'); return; }
       try {
-        const r = await fetch(`/api/inventario/proveedores/buscar?q=${encodeURIComponent(q)}`);
+        const r = await fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`);
         const matches = await r.json();
         if (!matches.length) { list.classList.add('hidden'); return; }
         idx = -1;

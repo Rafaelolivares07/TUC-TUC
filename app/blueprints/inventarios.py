@@ -1847,6 +1847,27 @@ def api_buscar_proveedores():
         conn.close()
 
 
+@bp.route('/api/inventario/terceros/buscar')
+def api_buscar_terceros():
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT id, nombre, telefono 
+            FROM terceros 
+            WHERE nombre ILIKE %s 
+            ORDER BY nombre 
+            LIMIT 50
+        """, (f'%{q}%',)).fetchall()
+        return jsonify([{'id': r['id'], 'nombre': r['nombre'], 'telefono': r['telefono']} for r in rows])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/proveedores/crear', methods=['POST'])
 def api_crear_proveedor():
     if 'usuario_id' not in session:

@@ -1867,6 +1867,32 @@ def api_pedido_crear(slug):
         cliente_lon = data.get('cliente_lon')
         conn = get_db_connection()
         _crear_tablas(conn)
+
+        # Resolve or create client in terceros if not provided but name is typed
+        if not cliente_id and nombre_cliente:
+            nombre_clean = nombre_cliente.strip()
+            # Avoid creating third party for generic names
+            generic_names = ('venta en caja', 'mostrador', 'anonimo', 'cliente general', 'cliente en local', 'consumo')
+            if nombre_clean.lower() not in generic_names:
+                telefono_clean = ''.join(filter(str.isdigit, telefono_cliente or ''))
+                row_t = None
+                if telefono_clean and len(telefono_clean) >= 7:
+                    row_t = conn.execute("SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono_clean,)).fetchone()
+                
+                if not row_t:
+                    row_t = conn.execute("SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1", (nombre_clean,)).fetchone()
+                
+                if row_t:
+                    cliente_id = row_t['id']
+                else:
+                    # Create new cliente in terceros
+                    row_ins = conn.execute("""
+                        INSERT INTO terceros (nombre, telefono, tipo_tercero, fecha_creacion)
+                        VALUES (%s, %s, 'cliente', NOW())
+                        RETURNING id
+                    """, (nombre_clean, telefono_clean or None)).fetchone()
+                    cliente_id = row_ins['id']
+
         _asegurar_domicilio_restaurante(conn)
         rest = conn.execute(
             "SELECT id, nombre, tipo_restaurante, dias_pagados, tercero_id, admin_id FROM restaurantes WHERE slug = %s",

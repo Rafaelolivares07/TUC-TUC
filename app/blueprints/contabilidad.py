@@ -828,6 +828,82 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                             'monto':         float(item['valor_total']),
                         })
 
+    # Inyección automática de líneas de costo de venta (61x debit) y baja de inventario (14x credit) por cada producto si contab_costos_categoria está habilitado
+    if tipo_doc.get('tipo_movimiento') == 'venta' and origen_tipo == 'pedido' and origen_id:
+        cfg_costos = conn.execute("SELECT contab_costos_categoria FROM config_contabilidad_negocio WHERE negocio_id = %s", (negocio_id,)).fetchone()
+        if cfg_costos and cfg_costos['contab_costos_categoria']:
+            try:
+                # Query the actual inventory movements generated for this sale (ingredients / discounted products)
+                items_mov = conn.execute("""
+                    SELECT m.producto_id, m.cantidad, m.costo_und, p.categoria, p.nombre AS producto_nombre,
+                           m.producto_padre_id
+                    FROM movimientos_inventario m
+                    JOIN productos p ON p.id = m.producto_id
+                    WHERE m.negocio_id = %s AND m.referencia_id = %s AND m.referencia_tipo IN ('pedido', 'pedido_tienda', 'pedido_restaurante')
+                """, (negocio_id, int(origen_id))).fetchall()
+                
+                debitos_costos = {} # Key: (cuenta_puc_id, cuenta_codigo, concepto) -> total_costo
+                
+                for item in items_mov:
+                    total_costo = float(item['cantidad'] or 0) * float(item['costo_und'] or 0)
+                    if total_costo > 0:
+                        # 1. Crédito en inventario (14x) usando la categoría del ingrediente/componente
+                        if item['categoria']:
+                            gi_ing = conn.execute("""
+                                SELECT gi.cuenta_inve_id, c_inv.codigo AS cod_inve, c_inv.nombre AS nom_inve
+                                FROM grupos_inventario gi
+                                LEFT JOIN cuentas_puc c_inv ON c_inv.id = gi.cuenta_inve_id
+                                WHERE gi.negocio_id = %s AND gi.nombre = %s
+                            """, (negocio_id, item['categoria'])).fetchone()
+                            
+                            if gi_ing and gi_ing['cuenta_inve_id']:
+                                mov_list.append({
+                                    'cuenta_puc_id': gi_ing['cuenta_inve_id'],
+                                    'cuenta_codigo': gi_ing['cod_inve'],
+                                    'concepto':      f"Baja Inv: {item['producto_nombre']}",
+                                    'tipo_mov':      'C',
+                                    'monto':         total_costo,
+                                })
+                        
+                        # 2. Débito en costo de venta (61x) acumulado bajo la categoría del producto vendido (sándwich)
+                        p_padre_id = item['producto_padre_id']
+                        if p_padre_id:
+                            padre = conn.execute("SELECT nombre, categoria FROM productos WHERE id = %s", (p_padre_id,)).fetchone()
+                            if padre:
+                                sold_name = padre['nombre']
+                                sold_cat = padre['categoria']
+                            else:
+                                sold_name = item['producto_nombre']
+                                sold_cat = item['categoria']
+                        else:
+                            sold_name = item['producto_nombre']
+                            sold_cat = item['categoria']
+                            
+                        if sold_cat:
+                            gi_sold = conn.execute("""
+                                SELECT gi.cuenta_cos_id, c_cos.codigo AS cod_costo, c_cos.nombre AS nom_costo
+                                FROM grupos_inventario gi
+                                LEFT JOIN cuentas_puc c_cos ON c_cos.id = gi.cuenta_cos_id
+                                WHERE gi.negocio_id = %s AND gi.nombre = %s
+                            """, (negocio_id, sold_cat)).fetchone()
+                            
+                            if gi_sold and gi_sold['cuenta_cos_id']:
+                                key = (gi_sold['cuenta_cos_id'], gi_sold['cod_costo'], f"Costo Venta: {sold_name}")
+                                debitos_costos[key] = debitos_costos.get(key, 0.0) + total_costo
+                
+                # Agregar los débitos de costo agrupados por producto vendido
+                for (cuenta_puc_id, cuenta_codigo, concepto), monto in debitos_costos.items():
+                    if monto > 0:
+                        mov_list.append({
+                            'cuenta_puc_id': cuenta_puc_id,
+                            'cuenta_codigo': cuenta_codigo,
+                            'concepto':      concepto,
+                            'tipo_mov':      'D',
+                            'monto':         monto,
+                        })
+            except Exception as e_costos:
+                print(f"[cont] Error calculando costo de ventas/inventarios por categoria: {e_costos}")
+
     # Inyección automática de contrapartida de método de pago
     if metodo_pago:
         cuenta_metodo = None

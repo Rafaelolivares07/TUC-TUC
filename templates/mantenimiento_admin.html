@@ -340,9 +340,12 @@
       
       <!-- 📦 Card: Inventario -->
       <div id="aud-card-inventario" class="hidden bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-        <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5 mb-3">
-          <span>📦</span> Movimientos de Inventario (Kardex)
-        </h3>
+        <div class="mb-3">
+          <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5">
+            <span>📦</span> Movimientos de Inventario (Kardex)
+          </h3>
+          <p id="aud-lbl-inv-documento" class="text-xs text-gray-500 mt-0.5"></p>
+        </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs border-collapse">
             <thead>
@@ -440,6 +443,9 @@
         <button id="btn-aud-anular" onclick="anularDocumentoAuditor()" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition">
           Anular todo el documento
         </button>
+        <button id="btn-aud-eliminar" onclick="eliminarDocumentoAuditor()" class="px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl text-sm transition">
+          Eliminar y liberar consecutivo
+        </button>
       </div>
 
     </div>
@@ -495,6 +501,26 @@
     
     // Load recent documents
     cargarDocumentosRecientes();
+    
+    // Set default third party to audit
+    initDefaultAuditorTercero();
+  }
+
+  async function initDefaultAuditorTercero() {
+    try {
+      const r = await fetch(`/api/inventario/terceros/buscar?q=Tercero Ocasional`);
+      const matches = await r.json();
+      const match = matches.find(m => m.nombre.toLowerCase() === 'tercero ocasional');
+      if (match) {
+        document.getElementById('auditor-tercero-id').value = match.id;
+        document.getElementById('auditor-tercero').value = match.nombre;
+        document.getElementById('aud-tercero-nombre-lbl').textContent = match.nombre;
+        document.getElementById('selected-aud-tercero-badge').classList.remove('hidden');
+        cargarDocumentosTercero(match.id);
+      }
+    } catch(e) {
+      console.error('Error setting default auditor client:', e);
+    }
   }
 
   async function cargarDocumentosTercero(terceroId) {
@@ -617,14 +643,19 @@
       const tbodyInv = document.getElementById('aud-tbody-inventario');
       if (d.inventario && d.inventario.length) {
         cardInv.classList.remove('hidden');
+        const invDate = d.inventario[0].created_at ? new Date(d.inventario[0].created_at).toLocaleDateString('es-CO') : '—';
+        document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${tipo}-${numero} | Fecha: ${invDate}`;
         tbodyInv.innerHTML = d.inventario.map(item => `
           <tr class="border-b">
-            <td class="py-2 font-semibold text-gray-700">${item.nombre_producto}</td>
+            <td class="py-2 font-semibold text-gray-700">
+              ${item.nombre_producto}
+              ${item.producto_padre_nombre ? `<span class="text-gray-400 text-[10px] block font-normal">(Origen: ${item.producto_padre_nombre})</span>` : ''}
+            </td>
             <td class="py-2"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.tipo === 'entrada' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${item.tipo}</span></td>
             <td class="py-2 text-gray-500">${item.motivo || '—'}</td>
             <td class="py-2 text-right">${item.cantidad.toLocaleString('es-CO')}</td>
-            <td class="py-2 text-right">$${item.valor_unitario.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-            <td class="py-2 text-right font-bold text-gray-800">$${item.valor_total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+            <td class="py-2 text-right">$${item.valor_unitario !== null && item.valor_unitario !== undefined ? item.valor_unitario.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—'}</td>
+            <td class="py-2 text-right font-bold text-gray-800">$${item.valor_total !== null && item.valor_total !== undefined ? item.valor_total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—'}</td>
           </tr>
         `).join('');
       } else {
@@ -673,11 +704,13 @@
       const tbodyVtas = document.getElementById('aud-tbody-ventas');
       if (d.ventas) {
         cardVtas.classList.remove('hidden');
-        document.getElementById('aud-lbl-venta-cliente').textContent = `Cliente: ${d.ventas.cliente_nombre || 'Mostrador'} | Fecha: ${new Date(d.ventas.fecha).toLocaleDateString('es-CO')} | Pago: ${d.ventas.metodo_pago || '—'}`;
+        const vDate = d.ventas.fecha ? new Date(d.ventas.fecha).toLocaleDateString('es-CO') : '—';
+        document.getElementById('aud-lbl-venta-cliente').textContent = `Cliente: ${d.ventas.cliente_nombre || 'Mostrador'} | Fecha: ${vDate} | Pago: ${d.ventas.metodo_pago || '—'}`;
         
         const badgeEst = document.getElementById('aud-badge-venta-estado');
-        badgeEst.textContent = d.ventas.estado.toUpperCase();
-        if (d.ventas.estado === 'anulado') {
+        const estStr = d.ventas.estado || 'registrado';
+        badgeEst.textContent = estStr.toUpperCase();
+        if (estStr === 'anulado') {
           badgeEst.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-800';
         } else {
           badgeEst.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800';
@@ -741,6 +774,46 @@
     } finally {
       btn.disabled = false;
       btn.textContent = 'Anular todo el documento';
+    }
+  }
+
+  async function eliminarDocumentoAuditor() {
+    if (!auditorDocumentoSeleccionado) return;
+    const { tipo, numero, terceroId } = auditorDocumentoSeleccionado;
+    
+    const confirmed = confirm(`¿ESTÁS ABSOLUTAMENTE SEGURO de que deseas ELIMINAR COMPLETAMENTE el documento "${numero}"?\n\nEsta acción borrará el pedido permanentemente de la base de datos e intentará liberar su número de consecutivo si era el último generado. Los comprobantes y Kardex serán borrados de forma irreversible.`);
+    if (!confirmed) return;
+    
+    const btn = document.getElementById('btn-aud-eliminar');
+    btn.disabled = true;
+    btn.textContent = 'Eliminando transacción...';
+    
+    try {
+      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/anular-documento`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          tipo_documento: tipo,
+          documento_numero: numero,
+          proveedor_id: terceroId,
+          accion: 'eliminar'
+        })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast(d.consecutivo_liberado ? 'Documento eliminado y consecutivo liberado con éxito' : 'Documento eliminado con éxito');
+        document.getElementById('auditor-resultados').classList.add('hidden');
+        document.getElementById('auditor-vacio').classList.remove('hidden');
+        cargarDocumentosTercero(terceroId);
+      } else {
+        toast(d.error || 'Error al eliminar documento', false);
+      }
+    } catch (e) {
+      console.error(e);
+      toast('Error de red al eliminar documento', false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Eliminar y liberar consecutivo';
     }
   }
 

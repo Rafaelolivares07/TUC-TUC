@@ -2123,6 +2123,29 @@ function calcularTotalesEntrada() {
   if (totalEl) totalEl.textContent = `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+async function initDefaultProveedor() {
+  const inp = document.getElementById('entrada-proveedor');
+  if (!inp) return;
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('prov_id') || urlParams.get('prov_nom')) return;
+  
+  try {
+    const r = await fetch(`/api/inventario/terceros/buscar?q=Tercero Ocasional`);
+    const matches = await r.json();
+    const match = matches.find(m => m.nombre.toLowerCase() === 'tercero ocasional');
+    if (match) {
+      document.getElementById('entrada-proveedor-id').value = match.id;
+      document.getElementById('entrada-proveedor').value = match.nombre;
+      const btnCrear = document.getElementById('btn-crear-proveedor');
+      if (btnCrear) btnCrear.classList.add('hidden');
+      const badgeProv = document.getElementById('badge-proveedor-creado');
+      if (badgeProv) badgeProv.classList.add('hidden');
+    }
+  } catch(e) {
+    console.error('Error setting default supplier:', e);
+  }
+}
+
 async function registrarEntrada() {
   const tipo_doc_id = parseInt(document.getElementById('entrada-tipo-doc').value) || null;
   const td = tiposDocEntrada.find(t => t.id === tipo_doc_id);
@@ -2199,8 +2222,7 @@ async function registrarEntrada() {
     esModificacionDoc = false;
     document.getElementById('entrada-num-doc').value = '';
     document.getElementById('entrada-notas').value = '';
-    document.getElementById('entrada-proveedor').value = '';
-    document.getElementById('entrada-proveedor-id').value = '';
+    initDefaultProveedor();
     document.getElementById('btn-crear-proveedor').classList.add('hidden');
     document.getElementById('badge-proveedor-creado').classList.add('hidden');
     calcularTotalesEntrada();
@@ -2740,6 +2762,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('badge-proveedor-creado').classList.add('hidden');
     verificarDocumentoExistente();
   });
+
+  initDefaultProveedor();
 
   document.getElementById('entrada-proveedor').addEventListener('input', (e) => {
     const val = e.target.value.trim();

@@ -2285,7 +2285,7 @@ def api_auditar_documento(negocio_id):
                         'nombre_producto': pi['nombre_producto'],
                         'cantidad': float(pi['cantidad']),
                         'precio_unitario': float(pi['precio_unitario'] or 0),
-                        'subtotal': float(pi['cantidad'] * pi['precio_unitario'])
+                        'subtotal': float(pi['cantidad'] or 0) * float(pi['precio_unitario'] or 0)
                     } for pi in p_items
                 ]
             }
@@ -2337,7 +2337,7 @@ def api_auditar_documento(negocio_id):
                                 'nombre_producto': pi['nombre_producto'],
                                 'cantidad': float(pi['cantidad']),
                                 'precio_unitario': float(pi['precio_unitario'] or 0),
-                                'subtotal': float(pi['cantidad'] * pi['precio_unitario'])
+                                'subtotal': float(pi['cantidad'] or 0) * float(pi['precio_unitario'] or 0)
                             } for pi in p_items
                         ]
                     }

@@ -400,6 +400,97 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
             print(f'[cont] costo_mov prod={producto_id}: {_e}')
 
 
+def _verificar_stock_pedido(conn, negocio_id, items, excluir_componentes=None):
+    """
+    Verifica si hay stock suficiente en bodega 1 para procesar los items del pedido.
+    excluir_componentes: lista de diccionarios/objetos [{'producto_id': ID, 'componente_id': ID}] 
+                         que representa las exclusiones de la opción 4.
+    Retorna: lista de diccionarios con los insumos/productos faltantes.
+    """
+    from decimal import Decimal
+    
+    required_map = {}
+    exclusions_set = {}
+    if excluir_componentes:
+        for exc in excluir_componentes:
+            pid = int(exc.get('producto_id') or 0)
+            cid = int(exc.get('componente_id') or 0)
+            if pid and cid:
+                if pid not in exclusions_set:
+                    exclusions_set[pid] = set()
+                exclusions_set[pid].add(cid)
+
+    for item in items:
+        prod_id = int(item.get('producto_id') or 0)
+        cantidad = Decimal(str(item.get('cantidad') or 1))
+        
+        prod_row = conn.execute("SELECT nombre FROM productos WHERE id = %s AND negocio_id = %s", (prod_id, negocio_id)).fetchone()
+        prod_name = prod_row['nombre'] if prod_row else f"Producto #{prod_id}"
+        
+        componentes = conn.execute(
+            "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
+            (prod_id,)
+        ).fetchall()
+        
+        if not componentes:
+            componentes = [{'componente_id': prod_id, 'cantidad': Decimal('1')}]
+            
+        for comp in componentes:
+            comp_id = comp['componente_id']
+            if prod_id in exclusions_set and comp_id in exclusions_set[prod_id]:
+                continue
+                
+            qty_needed = Decimal(str(comp['cantidad'])) * cantidad
+            
+            if comp_id not in required_map:
+                required_map[comp_id] = {'requerido': Decimal('0'), 'final_products': []}
+            
+            required_map[comp_id]['requerido'] += qty_needed
+            if not any(fp['id'] == prod_id for fp in required_map[comp_id]['final_products']):
+                required_map[comp_id]['final_products'].append({
+                    'id': prod_id,
+                    'nombre': prod_name if comp_id != prod_id else "Venta Directa"
+                })
+
+    shortages = []
+    for comp_id, info in required_map.items():
+        req_qty = info['requerido']
+        if req_qty <= 0:
+            continue
+            
+        saldo = conn.execute(
+            "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1",
+            (negocio_id, comp_id)
+        ).fetchone()
+        
+        stock_disp = Decimal(str(saldo['stock'] if saldo else 0.0))
+        
+        if stock_disp < req_qty:
+            comp_row = conn.execute("SELECT nombre, costo FROM productos WHERE id = %s AND negocio_id = %s", (comp_id, negocio_id)).fetchone()
+            comp_name = comp_row['nombre'] if comp_row else f"Insumo #{comp_id}"
+            
+            last_mov = conn.execute("""
+                SELECT valor_unitario FROM movimientos_inventario 
+                WHERE negocio_id = %s AND producto_id = %s AND tipo = 'entrada' 
+                ORDER BY id DESC LIMIT 1
+            """, (negocio_id, comp_id)).fetchone()
+            
+            last_cost = float(last_mov['valor_unitario'] if last_mov and last_mov['valor_unitario'] is not None else (comp_row['costo'] if comp_row and comp_row['costo'] is not None else 0.0))
+            
+            shortages.append({
+                'producto_id': comp_id,
+                'nombre': comp_name,
+                'requerido': float(req_qty),
+                'disponible': float(stock_disp),
+                'ultimo_costo': last_cost,
+                'es_receta': any(fp['nombre'] != "Venta Directa" for fp in info['final_products']),
+                'final_products': info['final_products'],
+                'producto_final_nombre': ", ".join(fp['nombre'] for fp in info['final_products'])
+            })
+            
+    return shortages
+
+
 def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      registrado_por, valor_unitario=None, notas=None, bodega=1,
                      referencia_id=None, referencia_tipo=None,
@@ -407,7 +498,8 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      documento_fecha=None, proveedor_id=None,
                      proveedor_nombre=None, iva_total=None,
                      documento_total=None, iva_pct=None, iva_valor=None,
-                     presentacion_id=None, metodo_pago=None, tipo_documento_id=None):
+                     presentacion_id=None, metodo_pago=None, tipo_documento_id=None,
+                     excluir_componentes_ids=None):
     """Aplica entrada o salida según tarjeta estándar. Sin tarjeta → 1:1 sobre sí mismo."""
     componentes = conn.execute(
         "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
@@ -418,7 +510,13 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         componentes = [{'componente_id': producto_id, 'cantidad': Decimal('1')}]
 
     cantidad = Decimal(str(cantidad))
+    excluded_set = set(excluir_componentes_ids or [])
+
     for comp in componentes:
+        comp_id = comp['componente_id']
+        if comp_id in excluded_set:
+            continue
+            
         cant_comp = Decimal(str(comp['cantidad'])) * cantidad
         padre_id = producto_id if comp['componente_id'] != producto_id else None
         pres_id = presentacion_id if comp['componente_id'] == producto_id else None
@@ -1926,18 +2024,20 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
             
         # Query unique documents in pedidos (sales/orders)
         rows_ped = conn.execute("""
-            SELECT id, numero_documento, fecha, total, estado
+            SELECT id, numero_documento, fecha, created_at, total, estado
             FROM pedidos
             WHERE cliente_id = %s OR id_tercero = %s
-            ORDER BY fecha DESC, id DESC
+            ORDER BY COALESCE(fecha, created_at) DESC, id DESC
         """, (tercero_id, tercero_id)).fetchall()
         
         for r in rows_ped:
             doc_num = r['numero_documento'] or str(r['id'])
+            # Fallback to created_at if fecha is null
+            f_val = r['fecha'] or r['created_at']
             documentos.append({
                 'tipo_documento': 'pedido_venta',
                 'documento_numero': doc_num,
-                'fecha': r['fecha'].date().isoformat() if r['fecha'] else None,
+                'fecha': f_val.date().isoformat() if f_val else None,
                 'origen': 'ventas',
                 'total': float(r['total'] or 0),
                 'estado': r['estado']
@@ -1989,10 +2089,10 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         # 2. Fetch recent orders (sales)
         # Note: in pedidos, the business is stored in negocio_id as its tercero_id
         rows_ped = conn.execute("""
-            SELECT p.id, p.numero_documento, p.fecha, p.total, p.cliente_id, p.id_tercero, p.nombre_cliente, p.estado
+            SELECT p.id, p.numero_documento, p.fecha, p.created_at, p.total, p.cliente_id, p.id_tercero, p.nombre_cliente, p.estado
             FROM pedidos p
             WHERE p.negocio_id = %s
-            ORDER BY p.fecha DESC, p.id DESC
+            ORDER BY COALESCE(p.fecha, p.created_at) DESC, p.id DESC
             LIMIT 50
         """, (negocio_id,)).fetchall()
         
@@ -2006,10 +2106,11 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     c_name = t_row['nombre']
                     
             doc_num = r['numero_documento'] or str(r['id'])
+            f_val = r['fecha'] or r['created_at']
             documentos.append({
                 'tipo_documento': 'pedido_venta',
                 'documento_numero': doc_num,
-                'fecha': r['fecha'].isoformat() if r['fecha'] else None,
+                'fecha': f_val.isoformat() if f_val else None,
                 'origen': 'ventas',
                 'total': float(r['total'] or 0),
                 'tercero_nombre': c_name or 'Cliente general',
@@ -2058,25 +2159,29 @@ def api_auditar_documento(negocio_id):
         # 1. Query movimientos_inventario
         if pedido_row:
             sql_inv = """
-                SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad, valor_unitario, valor_total, iva_pct, created_at, proveedor_id, proveedor_nombre
-                FROM movimientos_inventario
-                WHERE negocio_id = %s AND (
-                    (referencia_tipo IN ('pedido', 'pedido_restaurante') AND referencia_id = %s)
-                    OR (LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s))
+                SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
+                       m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, 
+                       m.proveedor_id, m.proveedor_nombre, m.producto_padre_id,
+                       p_padre.nombre AS producto_padre_nombre, m.costo_und
+                FROM movimientos_inventario m
+                LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
+                WHERE m.negocio_id = %s AND (
+                    (m.referencia_tipo IN ('pedido', 'pedido_tienda', 'pedido_restaurante') AND m.referencia_id = %s)
+                    OR (LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) = LOWER(%s))
                 )
             """
             params_inv = [negocio_id, pedido_row['id'], tipo_doc, num_doc]
         else:
             sql_inv = """
-                SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad, valor_unitario, valor_total, iva_pct, created_at, proveedor_id, proveedor_nombre
-                FROM movimientos_inventario
-                WHERE negocio_id = %s AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s)
+                SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
+                       m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, 
+                       m.proveedor_id, m.proveedor_nombre, m.producto_padre_id,
+                       p_padre.nombre AS producto_padre_nombre, m.costo_und
+                FROM movimientos_inventario m
+                LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
+                WHERE m.negocio_id = %s AND LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) = LOWER(%s)
             """
             params_inv = [negocio_id, tipo_doc, num_doc]
-            
-        if proveedor_id:
-            sql_inv += " AND proveedor_id = %s"
-            params_inv.append(int(proveedor_id))
         
         rows_inv = conn.execute(sql_inv, tuple(params_inv)).fetchall()
         items_inventario = [
@@ -2087,12 +2192,14 @@ def api_auditar_documento(negocio_id):
                 'tipo': r['tipo'],
                 'motivo': r['motivo'],
                 'cantidad': float(r['cantidad']),
-                'valor_unitario': float(r['valor_unitario'] or 0),
-                'valor_total': float(r['valor_total'] or 0),
+                'valor_unitario': float(r['valor_unitario'] if r['valor_unitario'] is not None else (r['costo_und'] or 0.0)),
+                'valor_total': float(r['valor_total'] if r['valor_total'] is not None else ((r['cantidad'] or 0.0) * (r['costo_und'] or 0.0))),
                 'iva_pct': float(r['iva_pct'] or 0),
                 'created_at': r['created_at'].isoformat() if r['created_at'] else None,
                 'proveedor_id': r['proveedor_id'],
-                'proveedor_nombre': r['proveedor_nombre']
+                'proveedor_nombre': r['proveedor_nombre'],
+                'producto_padre_id': r['producto_padre_id'],
+                'producto_padre_nombre': r['producto_padre_nombre']
             } for r in rows_inv
         ]
         
@@ -2164,10 +2271,10 @@ def api_auditar_documento(negocio_id):
                 
             pedido = {
                 'id': pedido_row['id'],
-                'fecha': pedido_row['fecha'].isoformat() if pedido_row['fecha'] else None,
+                'fecha': pedido_row['fecha'].isoformat() if pedido_row['fecha'] else (pedido_row['created_at'].isoformat() if pedido_row['created_at'] else None),
                 'total': float(pedido_row['total'] or 0),
                 'metodo_pago': pedido_row['metodo_pago'],
-                'estado': pedido_row['estado'],
+                'estado': pedido_row['estado'] or 'registrado',
                 'notas': pedido_row['notas'],
                 'cliente_nombre': cliente_nombre or 'Cliente en local',
                 'tercero_id': c_tercero_id,
@@ -2307,7 +2414,7 @@ def api_anular_documento(negocio_id):
                 SELECT id, producto_id, proveedor_id
                 FROM movimientos_inventario
                 WHERE negocio_id = %s AND (
-                    (referencia_tipo IN ('pedido', 'pedido_restaurante') AND referencia_id = %s)
+                    (referencia_tipo IN ('pedido', 'pedido_tienda', 'pedido_restaurante') AND referencia_id = %s)
                     OR (LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s))
                 )
             """
@@ -2319,10 +2426,6 @@ def api_anular_documento(negocio_id):
                 WHERE negocio_id = %s AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s)
             """
             params_inv = [negocio_id, tipo_doc, num_doc]
-            
-        if proveedor_id:
-            sql_inv += " AND proveedor_id = %s"
-            params_inv.append(int(proveedor_id))
         
         movs = conn.execute(sql_inv, tuple(params_inv)).fetchall()
         mov_ids = [m['id'] for m in movs]
@@ -2378,22 +2481,47 @@ def api_anular_documento(negocio_id):
             cur_cc = conn.execute(f"DELETE FROM comprobantes_contables WHERE id IN ({placeholders})", tuple(comp_ids))
             deleted_comprobantes = cur_cc.rowcount
             
-        # Void sales order
-        if pedido_row:
-            conn.execute("UPDATE pedidos SET estado = 'anulado' WHERE id = %s", (pedido_row['id'],))
-            pedido_anulado = True
-        else:
-            pedido_id = None
+        # Action handler: 'anular' (default) vs 'eliminar'
+        accion = _txt(data.get('accion') or 'anular').lower()
+        pedido_eliminado = False
+        pedido_anulado = False
+        consecutivo_liberado = False
+
+        if not pedido_row:
+            pedido_id_val = None
             try:
-                pedido_id = int(num_doc)
+                pedido_id_val = int(num_doc)
             except ValueError:
                 pass
-            
-            if pedido_id:
-                ped_row = conn.execute("SELECT id FROM pedidos WHERE id = %s AND negocio_id = %s LIMIT 1", (pedido_id, negocio_id)).fetchone()
-                if ped_row:
-                    conn.execute("UPDATE pedidos SET estado = 'anulado' WHERE id = %s", (pedido_id,))
-                    pedido_anulado = True
+            if pedido_id_val:
+                pedido_row = conn.execute("SELECT * FROM pedidos WHERE id = %s AND negocio_id = %s LIMIT 1", (pedido_id_val, negocio_id)).fetchone()
+
+        if pedido_row:
+            if accion == 'eliminar':
+                # Check if it is the latest order to free consecutive
+                if pedido_row['tipo_documento_id']:
+                    latest_row = conn.execute("""
+                        SELECT id FROM pedidos
+                        WHERE negocio_id = %s AND tipo_documento_id = %s
+                        ORDER BY id DESC LIMIT 1
+                    """, (negocio_id, pedido_row['tipo_documento_id'])).fetchone()
+                    
+                    if latest_row and latest_row['id'] == pedido_row['id']:
+                        td_row = conn.execute("SELECT id, consecutivo FROM tipos_documento_negocio WHERE id = %s", (pedido_row['tipo_documento_id'],)).fetchone()
+                        if td_row and td_row['consecutivo'] and td_row['consecutivo'] > 0:
+                            new_con = td_row['consecutivo'] - 1
+                            conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (new_con, td_row['id']))
+                            consecutivo_liberado = True
+                
+                # Delete completely
+                conn.execute("DELETE FROM pedido_items WHERE pedido_id = %s", (pedido_row['id'],))
+                conn.execute("DELETE FROM pedido_pagos WHERE pedido_id = %s", (pedido_row['id'],))
+                conn.execute("DELETE FROM pedidos WHERE id = %s", (pedido_row['id'],))
+                pedido_eliminado = True
+            else:
+                # Void sales order
+                conn.execute("UPDATE pedidos SET estado = 'anulado' WHERE id = %s", (pedido_row['id'],))
+                pedido_anulado = True
                 
         # Recosteo: Recalculate stock and average cost for all affected products
         for prod_id in prod_ids:
@@ -2405,7 +2533,9 @@ def api_anular_documento(negocio_id):
             'deleted_inventario': deleted_inventario,
             'deleted_contables': deleted_contables,
             'deleted_comprobantes': deleted_comprobantes,
-            'pedido_anulado': pedido_anulado
+            'pedido_anulado': pedido_anulado,
+            'pedido_eliminado': pedido_eliminado,
+            'consecutivo_liberado': consecutivo_liberado
         })
     except Exception as e:
         conn.rollback()
@@ -2988,6 +3118,100 @@ def api_anular_produccion(negocio_id, prod_token):
             
         conn.commit()
         return jsonify({'ok': True, 'mensaje': 'Producción anulada y costos recalculados correctamente'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/ajuste-rapido', methods=['POST'])
+def api_tienda_ajuste_rapido(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+        
+    data = request.get_json() or {}
+    adjustments = data.get('adjustments', [])
+    if not adjustments:
+        return jsonify({'ok': False, 'error': 'No se enviaron ajustes'}), 400
+        
+    conn = get_db_connection()
+    try:
+        # 1. Resolve or create document type AJUSTE_INV
+        td = conn.execute("""
+            SELECT id, codigo, consecutivo FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND (UPPER(codigo) = 'AJUSTE_INV' OR UPPER(nombre) = 'AJUSTE DE INVENTARIO')
+            LIMIT 1
+        """, (negocio_id,)).fetchone()
+        
+        if not td:
+            conn.execute("""
+                INSERT INTO tipos_documento_negocio (negocio_id, nombre, codigo, tipo_movimiento, consecutivo, numero_inicio, activo, predeterminado)
+                VALUES (%s, 'Ajuste de Inventario', 'AJUSTE_INV', 'ajuste', 0, 1, TRUE, FALSE)
+            """, (negocio_id,))
+            td = conn.execute("""
+                SELECT id, codigo, consecutivo FROM tipos_documento_negocio
+                WHERE negocio_id = %s AND UPPER(codigo) = 'AJUSTE_INV'
+                LIMIT 1
+            """, (negocio_id,)).fetchone()
+            
+        # 2. Get consecutive number using the standard generator
+        res_num, es_interno = obtener_siguiente_consecutivo(conn, negocio_id, td['id'])
+        if not res_num:
+            res_num = str((td['consecutivo'] or 0) + 1)
+            conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (int(res_num), td['id']))
+            
+        try:
+            doc_num = f"AJUSTE_INV-{int(res_num):04d}"
+        except (ValueError, TypeError):
+            doc_num = f"AJUSTE_INV-{res_num}"
+            
+        # 3. Apply adjustments
+        adjusted_products = []
+        for adj in adjustments:
+            prod_id = int(adj.get('producto_id') or 0)
+            qty_physical = float(adj.get('cantidad_fisica') or 0.0)
+            cost_unit = float(adj.get('costo_unitario') or 0.0)
+            
+            if not prod_id:
+                continue
+                
+            # Get current stock
+            saldo = conn.execute(
+                "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1",
+                (negocio_id, prod_id)
+            ).fetchone()
+            qty_system = float(saldo['stock'] if saldo else 0.0)
+            
+            diff = qty_physical - qty_system
+            if abs(diff) < 0.000001:
+                continue
+                
+            if diff > 0:
+                _mov_directo(conn, negocio_id, prod_id, diff, 'entrada', 'ajuste',
+                             registrado_por=session.get('usuario_id'),
+                             valor_unitario=cost_unit,
+                             bodega=1,
+                             tipo_documento='AJUSTE_INV',
+                             documento_numero=doc_num,
+                             tipo_documento_id=td['id'])
+            else:
+                _mov_directo(conn, negocio_id, prod_id, abs(diff), 'salida', 'ajuste',
+                             registrado_por=session.get('usuario_id'),
+                             valor_unitario=cost_unit,
+                             bodega=1,
+                             tipo_documento='AJUSTE_INV',
+                             documento_numero=doc_num,
+                             tipo_documento_id=td['id'])
+                             
+            adjusted_products.append(prod_id)
+            
+        # 4. Recalculate cost/stock for all affected products
+        for p_id in adjusted_products:
+            _recostear_producto(conn, negocio_id, p_id)
+            
+        conn.commit()
+        return jsonify({'ok': True, 'mensaje': 'Ajuste de inventario realizado con éxito', 'numero_documento': doc_num})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500

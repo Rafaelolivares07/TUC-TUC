@@ -235,6 +235,42 @@
     </div>
 </div>
 
+<!-- Modal: Alerta de Stock Insuficiente -->
+<div id="modal-alerta-stock" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] flex flex-col">
+        <!-- Encabezado -->
+        <div class="flex items-center gap-3 mb-4 text-red-600">
+            <span class="text-3xl">⚠️</span>
+            <div>
+                <h2 class="font-extrabold text-lg text-gray-900 leading-tight">Alerta de Stock Insuficiente</h2>
+                <p class="text-xs text-gray-500 mt-0.5">Algunos componentes no están disponibles en la bodega principal.</p>
+            </div>
+        </div>
+
+        <!-- Contenedor del listado scrollable -->
+        <div id="stock-alerta-items" class="flex-1 overflow-y-auto pr-1 space-y-3 mb-5 border-y py-4"></div>
+
+        <!-- Acciones principales -->
+        <div class="space-y-3">
+            <!-- Opción 2: Ajuste en Caliente -->
+            <button onclick="ejecutarAjusteStockCaja()" id="btn-stock-ajustar" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition">
+                🛠️ Realizar Ajuste Físico y Vender
+            </button>
+
+            <div class="grid grid-cols-2 gap-3">
+                <!-- Opción 1: Cancelar -->
+                <button onclick="cerrarAlertaStock()" class="border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-xl hover:bg-gray-50 text-sm">
+                    ❌ Cancelar Venta
+                </button>
+                <!-- Opción 3: Forzar Negativos -->
+                <button onclick="forzarVentaNegativa()" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 rounded-xl text-sm transition">
+                    ⚠️ Forzar (Permitir Negativos)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 const SLUG = '{{ slug }}';
 const TIENDA_NOMBRE = '{{ tienda.nombre }}';
@@ -254,6 +290,9 @@ let clienteUrl = '';
 let clienteQrGenerado = false;
 // Datos del último recibo (para ticket e imprimir)
 let ultimoRecibo = null;
+let forceNegativeStockFlag = false;
+let listExcluidosTemporal = [];
+let shortagesList = [];
 
 async function iniciarCajaAdmin() {
     autenticado = true;
@@ -707,7 +746,9 @@ async function cobrar() {
         id_cajero: cajeroId,
         nombre_cajero: cajeroNombre,
         id_tercero_cajero: cajeroTerceroId,
-        tipo_documento_id: tipoDocId ? parseInt(tipoDocId) : null
+        tipo_documento_id: tipoDocId ? parseInt(tipoDocId) : null,
+        force_negative_stock: forceNegativeStockFlag,
+        excluir_componentes: listExcluidosTemporal
     };
 
     try {
@@ -718,6 +759,9 @@ async function cobrar() {
         });
         const d = await r.json();
         if (d.ok) {
+            forceNegativeStockFlag = false;
+            listExcluidosTemporal = [];
+            
             const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
             const iva = carrito.reduce((s, i) => {
                 if (!i.iva_pct) return s;
@@ -740,6 +784,12 @@ async function cobrar() {
             };
             publicarPantallaCliente('cobrada', {...ultimoRecibo, telefono: ''});
             mostrarRecibo();
+        } else if (d.error === 'insufficient_stock') {
+            shortagesList = d.shortages;
+            document.getElementById('modal-alerta-stock').classList.remove('hidden');
+            renderShortages(d.shortages);
+            btn.disabled = false;
+            btn.textContent = 'Cobrar';
         } else {
             toast(d.error || 'Error al registrar venta', true);
             btn.disabled = false;
@@ -749,6 +799,129 @@ async function cobrar() {
         toast('Error de conexión', true);
         btn.disabled = false;
         btn.textContent = 'Cobrar';
+    }
+}
+
+function renderShortages(shortages) {
+    const container = document.getElementById('stock-alerta-items');
+    container.innerHTML = shortages.map((s, idx) => {
+        const showExcludeCheckbox = s.es_receta;
+        return `
+            <div class="p-3 bg-gray-50 border rounded-xl space-y-2.5">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="font-bold text-gray-800 text-sm block">${s.nombre}</span>
+                        <span class="text-xs text-gray-400 font-normal">Requerido por: ${s.producto_final_nombre}</span>
+                    </div>
+                    <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-red-100 text-red-800">Sin stock</span>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 text-xs text-gray-600 border-t pt-2">
+                    <div>En sistema: <strong class="text-gray-900">${s.disponible}</strong></div>
+                    <div>Requerido: <strong class="text-gray-900">${s.requerido}</strong></div>
+                </div>
+
+                <div class="bg-white p-3 border rounded-lg space-y-2 mt-2">
+                    <span class="text-xs font-semibold text-gray-700 block">🛠️ Ajuste Físico Rápido</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[10px] text-gray-400 block mb-0.5">Cantidad Física Actual</label>
+                            <input type="number" step="any" id="adj-cant-${idx}" value="${s.requerido}" class="w-full border rounded-lg px-2 py-1 text-xs text-gray-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="text-[10px] text-gray-400 block mb-0.5">Costo Unitario ($)</label>
+                            <input type="number" step="any" id="adj-costo-${idx}" value="${s.ultimo_costo}" class="w-full border rounded-lg px-2 py-1 text-xs text-gray-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </div>
+
+                ${showExcludeCheckbox ? `
+                <div class="flex items-center gap-2 mt-2 pt-1">
+                    <input type="checkbox" id="exclude-chk-${idx}" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" onchange="actualizarExclusionesCaja(${idx}, ${s.producto_id})">
+                    <label for="exclude-chk-${idx}" class="text-xs text-gray-600 cursor-pointer">🚫 Omitir ingrediente en esta preparación</label>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+function actualizarExclusionesCaja(idx, componenteId) {
+    const chk = document.getElementById(`exclude-chk-${idx}`);
+    const shortage = shortagesList[idx];
+    
+    shortage.final_products.forEach(fp => {
+        if (fp.nombre === "Venta Directa") return;
+        const prodId = fp.id;
+        
+        if (chk.checked) {
+            if (!listExcluidosTemporal.some(e => e.producto_id === prodId && e.componente_id === componenteId)) {
+                listExcluidosTemporal.push({
+                    producto_id: prodId,
+                    componente_id: componenteId
+                });
+            }
+        } else {
+            listExcluidosTemporal = listExcluidosTemporal.filter(
+                e => !(e.producto_id === prodId && e.componente_id === componenteId)
+            );
+        }
+    });
+}
+
+function cerrarAlertaStock() {
+    document.getElementById('modal-alerta-stock').classList.add('hidden');
+    forceNegativeStockFlag = false;
+    listExcluidosTemporal = [];
+}
+
+function forzarVentaNegativa() {
+    forceNegativeStockFlag = true;
+    document.getElementById('modal-alerta-stock').classList.add('hidden');
+    cobrar();
+}
+
+async function ejecutarAjusteStockCaja() {
+    const adjustments = [];
+    
+    shortagesList.forEach((s, idx) => {
+        const cantInp = document.getElementById(`adj-cant-${idx}`);
+        const costoInp = document.getElementById(`adj-costo-${idx}`);
+        if (cantInp && costoInp) {
+            adjustments.push({
+                producto_id: s.producto_id,
+                cantidad_fisica: parseFloat(cantInp.value) || 0,
+                costo_unitario: parseFloat(costoInp.value) || 0
+            });
+        }
+    });
+    
+    if (!adjustments.length) return;
+    
+    const btn = document.getElementById('btn-stock-ajustar');
+    btn.disabled = true;
+    btn.textContent = 'Aplicando ajuste...';
+    
+    try {
+        const r = await fetch(`/api/inventario/${TERCERO_ID}/mantenimiento/ajuste-rapido`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ adjustments })
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Ajuste de inventario aplicado con éxito (' + d.numero_documento + ')');
+            document.getElementById('modal-alerta-stock').classList.add('hidden');
+            cobrar();
+        } else {
+            toast('Error al aplicar ajuste: ' + d.error, true);
+        }
+    } catch (e) {
+        console.error(e);
+        toast('Error de red al aplicar ajuste', true);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🛠️ Realizar Ajuste Físico y Vender';
     }
 }
 
@@ -855,16 +1028,37 @@ function nuevaVenta() {
     document.getElementById('nombre-cliente').value = '';
     document.getElementById('tel-cliente').value = '';
     
-    // Reset autocomplete client fields
-    document.getElementById('cliente-id').value = '';
-    const badge = document.getElementById('cliente-status-badge');
-    badge.className = 'hidden';
-    badge.textContent = '';
+    // Reset autocomplete client fields to default "Tercero Ocasional"
+    initDefaultTercero();
     
     renderCarrito();
     limpiarPagos();
     document.getElementById('btn-cobrar').textContent = 'Cobrar';
     cargarProductos(); // recargar stock actualizado
+}
+
+async function initDefaultTercero() {
+    const inp = document.getElementById('nombre-cliente');
+    const hiddenId = document.getElementById('cliente-id');
+    const statusBadge = document.getElementById('cliente-status-badge');
+    const telInp = document.getElementById('tel-cliente');
+    if (!inp) return;
+    try {
+        const r = await fetch(`/api/inventario/terceros/buscar?q=Tercero Ocasional`);
+        const matches = await r.json();
+        const match = matches.find(m => m.nombre.toLowerCase() === 'tercero ocasional');
+        if (match) {
+            inp.value = match.nombre;
+            hiddenId.value = match.id;
+            if (match.telefono) {
+                telInp.value = match.telefono;
+            }
+            statusBadge.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded bg-green-100 text-green-800 mt-1 inline-block';
+            statusBadge.textContent = '✓ Cliente registrado';
+        }
+    } catch(e) {
+        console.error('Error setting default client:', e);
+    }
 }
 
 // ── Toast ────────────────────────────────────────────────────────────────────
@@ -970,7 +1164,9 @@ function toast(msg, err = false) {
         }
         updateStatusBadge();
     });
-})();
-</script>
+    
+    // Set default Tercero Ocasional on startup
+    initDefaultTercero();
+})();</script>
 </body>
 </html>

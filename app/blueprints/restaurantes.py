@@ -15,7 +15,7 @@ from ..visitas_publicas import (
     respuesta_con_visitante,
 )
 from .auth import admin_required
-from .inventarios import _aplicar_tarjeta
+from .inventarios import _aplicar_tarjeta, _verificar_stock_pedido
 try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
 except ImportError:
@@ -1893,6 +1893,21 @@ def api_pedido_crear(slug):
                     """, (nombre_clean, telefono_clean or None)).fetchone()
                     cliente_id = row_ins['id']
 
+        # Fallback to Tercero Ocasional if still no cliente_id is resolved
+        if not cliente_id:
+            row_ocasional = conn.execute("SELECT id FROM terceros WHERE LOWER(nombre) = 'tercero ocasional' LIMIT 1").fetchone()
+            if row_ocasional:
+                cliente_id = row_ocasional['id']
+                nombre_cliente = "Tercero Ocasional"
+            else:
+                row_ins = conn.execute("""
+                    INSERT INTO terceros (nombre, tipo_tercero, fecha_creacion)
+                    VALUES ('Tercero Ocasional', 'cliente', NOW())
+                    RETURNING id
+                """).fetchone()
+                cliente_id = row_ins['id']
+                nombre_cliente = "Tercero Ocasional"
+
         _asegurar_domicilio_restaurante(conn)
         rest = conn.execute(
             "SELECT id, nombre, tipo_restaurante, dias_pagados, tercero_id, admin_id FROM restaurantes WHERE slug = %s",
@@ -1923,6 +1938,41 @@ def api_pedido_crear(slug):
         es_carta = rest['tipo_restaurante'] == 'carta' or (rest['tipo_restaurante'] == 'ambos' and data.get('platos'))
         valor_domicilio = 0.0
         domicilio_estado = 'no_aplica'
+
+        # Stock check
+        stock_check_items = []
+        if es_carta:
+            platos = data.get('platos', [])
+            for p in platos:
+                plato_id = int(p.get('plato_id') or 0)
+                cant = int(p.get('cantidad') or 1)
+                if plato_id:
+                    stock_check_items.append({'producto_id': plato_id, 'cantidad': cant})
+                adiciones = p.get('adiciones') or []
+                if isinstance(adiciones, list):
+                    for ad in adiciones:
+                        ad_id = int(ad.get('producto_id') or ad.get('id') or 0)
+                        ad_cant = int(ad.get('cantidad') or 0)
+                        if ad_id and ad_cant:
+                            stock_check_items.append({'producto_id': ad_id, 'cantidad': ad_cant})
+        else:
+            sopa_id = data.get('sopa_id')
+            proteina_id = data.get('proteina_id')
+            principio_id = data.get('principio_id')
+            if sopa_id:
+                stock_check_items.append({'producto_id': sopa_id, 'cantidad': 1})
+            if proteina_id:
+                stock_check_items.append({'producto_id': proteina_id, 'cantidad': 1})
+            if principio_id:
+                stock_check_items.append({'producto_id': principio_id, 'cantidad': 1})
+
+        force_negative = data.get('force_negative_stock') == True
+        excluir_componentes = data.get('excluir_componentes') or []
+        if not force_negative and rest['tercero_id']:
+            shortages = _verificar_stock_pedido(conn, rest['tercero_id'], stock_check_items, excluir_componentes)
+            if shortages:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'insufficient_stock', 'shortages': shortages}), 400
 
         if es_carta:
             platos = data.get('platos', [])
@@ -1982,6 +2032,11 @@ def api_pedido_crear(slug):
                     "SELECT currval(pg_get_serial_sequence('pedidos','id'))"
                 ).fetchone()[0])
                 if rest['tercero_id']:
+                    excluded_ids = [
+                        int(exc['componente_id']) 
+                        for exc in excluir_componentes 
+                        if int(exc.get('producto_id') or 0) == opcion['id']
+                    ]
                     try:
                         conn.execute("SAVEPOINT sp_inv")
                         _aplicar_tarjeta(
@@ -1992,7 +2047,8 @@ def api_pedido_crear(slug):
                             motivo='venta',
                             registrado_por=session.get('usuario_id'),
                             referencia_tipo='pedido_restaurante',
-                            referencia_id=pedidos_insertados[-1]
+                            referencia_id=pedidos_insertados[-1],
+                            excluir_componentes_ids=excluded_ids
                         )
                         conn.execute("RELEASE SAVEPOINT sp_inv")
                     except Exception as _e:
@@ -2065,6 +2121,11 @@ def api_pedido_crear(slug):
             ).fetchone()[0]
             if rest['tercero_id']:
                 for prod_id in filter(None, [sopa_id, proteina_id, principio_id]):
+                    excluded_ids = [
+                        int(exc['componente_id']) 
+                        for exc in excluir_componentes 
+                        if int(exc.get('producto_id') or 0) == prod_id
+                    ]
                     try:
                         conn.execute("SAVEPOINT sp_inv")
                         _aplicar_tarjeta(
@@ -2075,7 +2136,8 @@ def api_pedido_crear(slug):
                             motivo='venta',
                             registrado_por=session.get('usuario_id'),
                             referencia_tipo='pedido_restaurante',
-                            referencia_id=pedido_id
+                            referencia_id=pedido_id,
+                            excluir_componentes_ids=excluded_ids
                         )
                         conn.execute("RELEASE SAVEPOINT sp_inv")
                     except Exception as _e:
@@ -2092,7 +2154,8 @@ def api_pedido_crear(slug):
                               registrado_por=session.get('usuario_id'),
                               origen_tipo='pedido',
                               origen_id=pedido_id,
-                              tercero_id=cliente_id)
+                              tercero_id=cliente_id,
+                              metodo_pago=metodo_pago)
             except Exception as _e:
                 print(f'[cont] venta rest {slug}: {_e}')
         conn.commit()

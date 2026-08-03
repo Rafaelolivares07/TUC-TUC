@@ -20,7 +20,7 @@ from ..visitas_publicas import (
     respuesta_con_visitante as _respuesta_con_visitante_generica,
 )
 from .auth import solo_admin
-from .inventarios import _aplicar_tarjeta, _es_ensamble
+from .inventarios import _aplicar_tarjeta, _es_ensamble, _verificar_stock_pedido
 try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
     from .contabilidad import obtener_siguiente_consecutivo
@@ -2220,6 +2220,15 @@ def api_tienda_pedido_crear(slug):
             })
         if not items_validos:
             return jsonify({'ok': False, 'error': 'Ningun producto valido en el carrito'}), 400
+            
+        force_negative = data.get('force_negative_stock') == True
+        excluir_componentes = data.get('excluir_componentes') or []
+        if not force_negative:
+            shortages = _verificar_stock_pedido(conn, negocio['tercero_id'], items_validos, excluir_componentes)
+            if shortages:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'insufficient_stock', 'shortages': shortages}), 400
+                
         subtotal_productos = total
         tercero_config_id = negocio['tercero_id'] or admin_id
         valor_domicilio, domicilio_estado = _calcular_domicilio(
@@ -2282,6 +2291,21 @@ def api_tienda_pedido_crear(slug):
                     """, (nombre_clean, telefono_clean or None)).fetchone()
                     cliente_id = row_ins['id']
 
+        # Fallback to Tercero Ocasional if still no cliente_id is resolved
+        if not cliente_id:
+            row_ocasional = conn.execute("SELECT id FROM terceros WHERE LOWER(nombre) = 'tercero ocasional' LIMIT 1").fetchone()
+            if row_ocasional:
+                cliente_id = row_ocasional['id']
+                nombre_cliente = "Tercero Ocasional"
+            else:
+                row_ins = conn.execute("""
+                    INSERT INTO terceros (nombre, tipo_tercero, fecha_creacion)
+                    VALUES ('Tercero Ocasional', 'cliente', NOW())
+                    RETURNING id
+                """).fetchone()
+                cliente_id = row_ins['id']
+                nombre_cliente = "Tercero Ocasional"
+
         conn.execute("""
             INSERT INTO pedidos
                 (tienda_id, restaurante_id, negocio_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente,
@@ -2307,6 +2331,11 @@ def api_tienda_pedido_crear(slug):
                 VALUES (%s,%s,%s,%s,%s)
             """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario']))
             if negocio['tercero_id']:
+                excluded_ids = [
+                    int(exc['componente_id']) 
+                    for exc in excluir_componentes 
+                    if int(exc.get('producto_id') or 0) == it['producto_id']
+                ]
                 try:
                     conn.execute("SAVEPOINT sp_inv_tienda")
                     _aplicar_tarjeta(
@@ -2318,6 +2347,7 @@ def api_tienda_pedido_crear(slug):
                         registrado_por = session.get('usuario_id'),
                         referencia_id  = pedido_id,
                         referencia_tipo= 'pedido_tienda',
+                        excluir_componentes_ids = excluded_ids
                     )
                     conn.execute("RELEASE SAVEPOINT sp_inv_tienda")
                 except Exception as _e:
@@ -2357,6 +2387,8 @@ def api_tienda_pedido_crear(slug):
                               registrado_por=session.get('usuario_id'),
                               origen_tipo='pedido',
                               origen_id=pedido_id,
+                              metodo_pago=metodo_pago,
+                              tercero_id=cliente_id,
                               tipo_documento_fisico=tipo_doc_codigo,
                               documento_numero_fisico=res_num)
             except Exception as _e:

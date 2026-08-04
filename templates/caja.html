@@ -531,6 +531,32 @@ function cambiarCantidad(productoId, delta) {
     renderCarrito();
 }
 
+function establecerCantidad(productoId, valorStr) {
+    let cant = parseFloat(valorStr);
+    if (isNaN(cant) || cant < 0) cant = 0;
+    const existente = carrito.find(i => i.producto_id === productoId);
+    if (existente) {
+        existente.cantidad = cant;
+        // Update subtotal display in real-time
+        const subtotalEl = document.getElementById(`subtotal-${productoId}`);
+        if (subtotalEl) {
+            subtotalEl.textContent = `$${(existente.precio * cant).toLocaleString('es-CO')}`;
+        }
+        // Also update total display
+        const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
+        document.getElementById('total-display').textContent = `$${total.toLocaleString('es-CO')}`;
+    }
+}
+
+function validarYRenderCarrito() {
+    for (let i = carrito.length - 1; i >= 0; i--) {
+        if (carrito[i].cantidad <= 0) {
+            carrito.splice(i, 1);
+        }
+    }
+    renderCarrito();
+}
+
 function vaciarCarrito() {
     carrito = [];
     renderCarrito();
@@ -562,14 +588,18 @@ function renderCarrito() {
                            onblur="renderCarrito()"
                            class="w-16 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white"
                            style="height: 20px;">
-                    <span class="text-gray-400">x ${i.cantidad} =</span>
+                    <span class="text-gray-400">Total:</span>
                     <span id="subtotal-${i.producto_id}" class="font-semibold text-gray-600">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
                 </div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
                 <button onclick="cambiarCantidad(${i.producto_id}, -1)"
                         class="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-red-100 hover:text-red-600 text-lg leading-none">−</button>
-                <span class="w-6 text-center text-sm font-bold">${i.cantidad}</span>
+                <input type="number" value="${i.cantidad}" min="0" step="any"
+                       oninput="establecerCantidad(${i.producto_id}, this.value)"
+                       onblur="validarYRenderCarrito()"
+                       class="w-14 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white text-xs"
+                       style="height: 28px;">
                 <button onclick="cambiarCantidad(${i.producto_id}, 1)"
                         class="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-green-100 hover:text-green-600 text-lg leading-none">+</button>
             </div>

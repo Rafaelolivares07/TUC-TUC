@@ -779,7 +779,11 @@ function renderCarta() {
                             </div>
                             <div class="flex items-center gap-2">
                                 <button onclick="cambiarCantidad(${p.id}, -1)" class="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded-lg font-bold">-</button>
-                                <span id="cant-${p.id}" class="text-white font-bold w-6 text-center">${carrito[p.id]?.cantidad || 0}</span>
+                                <input type="number" id="cant-${p.id}" value="${carrito[p.id]?.cantidad || 0}" min="0" step="any"
+                                       oninput="establecerCantidad(${p.id}, this.value)"
+                                       onblur="validarYRenderCarta(${p.id})"
+                                       class="w-12 text-center border border-gray-600 rounded bg-gray-900 text-white text-xs font-bold font-mono"
+                                       style="height: 32px;">
                                 <button onclick="cambiarCantidad(${p.id}, 1)" class="bg-amber-600 hover:bg-amber-500 text-white w-8 h-8 rounded-lg font-bold">+</button>
                             </div>
                         </div>
@@ -795,6 +799,26 @@ function renderCarta() {
     calcularTotalCarta();
 }
 
+function establecerCantidad(id, valorStr) {
+    let cant = parseFloat(valorStr);
+    if (isNaN(cant) || cant < 0) cant = 0;
+    if (cant === 0) {
+        delete carrito[id];
+    } else {
+        carrito[id] = { cantidad: cant, nota: carrito[id]?.nota || '' };
+    }
+    // Update total card display in real-time
+    calcularTotalCarta();
+}
+
+function validarYRenderCarta(id) {
+    const item = carrito[id];
+    if (item && item.cantidad <= 0) {
+        delete carrito[id];
+    }
+    renderCarta();
+}
+
 function cambiarCantidad(id, delta) {
     const actual = carrito[id] ? carrito[id].cantidad : 0;
     const nueva = actual + delta;
@@ -804,7 +828,10 @@ function cambiarCantidad(id, delta) {
         carrito[id] = { cantidad: nueva, nota: carrito[id]?.nota || '' };
     }
     const span = document.getElementById(`cant-${id}`);
-    if (span) span.textContent = nueva > 0 ? nueva : 0;
+    if (span) {
+        if (span.tagName === 'INPUT') span.value = nueva > 0 ? nueva : 0;
+        else span.textContent = nueva > 0 ? nueva : 0;
+    }
     const inputNota = document.getElementById(`nota-${id}`);
     if (inputNota) {
         if (nueva > 0) inputNota.classList.remove('hidden');

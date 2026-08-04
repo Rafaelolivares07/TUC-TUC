@@ -829,9 +829,11 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
         except Exception as _e:
             raise _e
 
-    # Recostear any products that were deleted from the previous version of the document
-    old_prod_ids = data.get('_prod_ids_to_recost', [])
-    for p_id in old_prod_ids:
+    # Recostear any products that were deleted or registered/modified in this document
+    prods_to_recost = set(data.get('_prod_ids_to_recost', []))
+    for ln in lineas_procesadas:
+        prods_to_recost.add(ln['producto_id'])
+    for p_id in prods_to_recost:
         _recostear_producto(conn, negocio_id, p_id)
 
     return {
@@ -1330,7 +1332,22 @@ def api_inventario_kardex(producto_id):
             WHERE m.producto_id = %s
             ORDER BY m.created_at DESC LIMIT 300
         """, (producto_id,)).fetchall()
-        return jsonify({'ok': True, 'movimientos': [dict(r) for r in rows]})
+        prod_info = conn.execute("""
+            SELECT p.costo, COALESCE(s.stock, 0.0) AS stock
+            FROM productos p
+            LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = 1
+            WHERE p.id = %s
+        """, (producto_id,)).fetchone()
+        
+        costo_actual = float(prod_info['costo']) if prod_info and prod_info['costo'] is not None else 0.0
+        stock_actual = float(prod_info['stock']) if prod_info and prod_info['stock'] is not None else 0.0
+
+        return jsonify({
+            'ok': True, 
+            'movimientos': [dict(r) for r in rows],
+            'costo_actual': costo_actual,
+            'stock_actual': stock_actual
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
@@ -1366,7 +1383,22 @@ def api_tienda_inventario_kardex(slug):
             WHERE m.producto_id = %s AND m.negocio_id = %s
             ORDER BY m.created_at DESC LIMIT 300
         """, (producto_id, negocio_id)).fetchall()
-        return jsonify({'ok': True, 'movimientos': [dict(r) for r in rows]})
+        prod_info = conn.execute("""
+            SELECT p.costo, COALESCE(s.stock, 0.0) AS stock
+            FROM productos p
+            LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = 1
+            WHERE p.id = %s AND p.negocio_id = %s
+        """, (producto_id, negocio_id)).fetchone()
+        
+        costo_actual = float(prod_info['costo']) if prod_info and prod_info['costo'] is not None else 0.0
+        stock_actual = float(prod_info['stock']) if prod_info and prod_info['stock'] is not None else 0.0
+
+        return jsonify({
+            'ok': True, 
+            'movimientos': [dict(r) for r in rows],
+            'costo_actual': costo_actual,
+            'stock_actual': stock_actual
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

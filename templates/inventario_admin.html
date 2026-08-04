@@ -2250,7 +2250,7 @@ async function cargarKardex(productoId) {
   const tb = document.getElementById('tabla-kardex');
   tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
   
-  // Render product summary bar
+  // Render product summary bar (initial fallback from cache)
   const prod = productos.find(p => Number(p.id) === Number(productoId));
   const summaryPanel = document.getElementById('kardex-resumen-producto');
   if (prod && summaryPanel) {
@@ -2265,6 +2265,17 @@ async function cargarKardex(productoId) {
   const r = await fetch(`/api/inventario/producto/${productoId}/kardex`);
   const d = await r.json();
   if (!d.ok) { toast(d.error, false); return; }
+
+  // Update summary bar and local cache with live database values
+  if (summaryPanel && d.stock_actual !== undefined && d.costo_actual !== undefined) {
+    document.getElementById('kp-stock').textContent = fmt(d.stock_actual);
+    document.getElementById('kp-costo-prom').textContent = fmtUnitCost(d.costo_actual);
+    document.getElementById('kp-valor-existencia').textContent = fmtMon(Number(d.costo_actual || 0) * Number(d.stock_actual || 0));
+    if (prod) {
+      prod.stock = d.stock_actual;
+      prod.costo = d.costo_actual;
+    }
+  }
   if (!d.movimientos.length) {
     tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
     return;

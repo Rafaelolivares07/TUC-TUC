@@ -1318,20 +1318,54 @@ def api_tienda_productos(slug):
                 (negocio['id'],)
             ).fetchall()
             media_por_categoria = {c['categoria']: c['imagen'] for c in categorias_media}
+        # Bulk queries to optimize database connections and prevent OS thrashing
+        p_ids = [p['id'] for p in productos]
+        nv_dict = {}
+        nf_dict = {}
+        nd_dict = {}
+        doc_dict = {}
+
+        if p_ids:
+            # 1. Variants count
+            nv_rows = conn.execute(
+                "SELECT producto_id, COUNT(*) as cnt FROM producto_variantes WHERE producto_id IN %s GROUP BY producto_id",
+                (tuple(p_ids),)
+            ).fetchall()
+            nv_dict = {r['producto_id']: r['cnt'] for r in nv_rows}
+
+            # 2. Images count
+            nf_rows = conn.execute(
+                "SELECT producto_id, COUNT(*) as cnt FROM producto_imagenes WHERE producto_id IN %s GROUP BY producto_id",
+                (tuple(p_ids),)
+            ).fetchall()
+            nf_dict = {r['producto_id']: r['cnt'] for r in nf_rows}
+
+            # 3. Documents count
+            nd_rows = conn.execute(
+                "SELECT producto_id, COUNT(*) as cnt FROM producto_documentos WHERE producto_id IN %s GROUP BY producto_id",
+                (tuple(p_ids),)
+            ).fetchall()
+            nd_dict = {r['producto_id']: r['cnt'] for r in nd_rows}
+
+            # 4. First visible document per product
+            doc_rows = conn.execute(
+                "SELECT DISTINCT ON (producto_id) producto_id, id, nombre "
+                "FROM producto_documentos "
+                "WHERE producto_id IN %s AND visible_cliente = TRUE "
+                "ORDER BY producto_id, tipo = 'ficha_tecnica' DESC, orden, id",
+                (tuple(p_ids),)
+            ).fetchall()
+            doc_dict = {r['producto_id']: {'id': r['id'], 'nombre': r['nombre']} for r in doc_rows}
+
         resultado = []
         for p in productos:
-            nv = conn.execute("SELECT COUNT(*) FROM producto_variantes WHERE producto_id = %s", (p['id'],)).fetchone()[0]
-            nf = conn.execute("SELECT COUNT(*) FROM producto_imagenes WHERE producto_id = %s", (p['id'],)).fetchone()[0]
-            doc = conn.execute("""
-                SELECT id, nombre
-                FROM producto_documentos
-                WHERE producto_id = %s AND visible_cliente = TRUE
-                ORDER BY tipo = 'ficha_tecnica' DESC, orden, id
-                LIMIT 1
-            """, (p['id'],)).fetchone()
-            nd = conn.execute("SELECT COUNT(*) FROM producto_documentos WHERE producto_id = %s", (p['id'],)).fetchone()[0]
+            pid = p['id']
+            nv = nv_dict.get(pid, 0)
+            nf = nf_dict.get(pid, 0)
+            nd = nd_dict.get(pid, 0)
+            doc = doc_dict.get(pid)
             resultado.append({
-                'id': p['id'], 'nombre': p['nombre'], 'categoria': p['categoria'] or '',
+                'id': pid, 'nombre': p['nombre'], 'categoria': p['categoria'] or '',
                 'precio': float(p['precio']), 'costo': float(p['costo'] or 0), 'imagen': p['imagen'] or '',
                 'disponible': p['disponible'], 'orden': p['orden'],
                 'descripcion': p['descripcion'] or '',

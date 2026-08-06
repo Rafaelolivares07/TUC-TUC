@@ -1330,7 +1330,7 @@ def api_inventario_kardex(producto_id):
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             WHERE m.producto_id = %s
-            ORDER BY m.created_at DESC LIMIT 300
+            ORDER BY m.created_at DESC, m.id DESC LIMIT 300
         """, (producto_id,)).fetchall()
         prod_info = conn.execute("""
             SELECT p.costo, COALESCE(s.stock, 0.0) AS stock
@@ -1381,7 +1381,7 @@ def api_tienda_inventario_kardex(slug):
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             WHERE m.producto_id = %s AND m.negocio_id = %s
-            ORDER BY m.created_at DESC LIMIT 300
+            ORDER BY m.created_at DESC, m.id DESC LIMIT 300
         """, (producto_id, negocio_id)).fetchall()
         prod_info = conn.execute("""
             SELECT p.costo, COALESCE(s.stock, 0.0) AS stock

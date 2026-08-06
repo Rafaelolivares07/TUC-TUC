@@ -2288,7 +2288,7 @@ def api_tienda_pedido_crear(slug):
         tipo_doc_codigo = None
         if tipo_doc_id:
             tipo_doc = conn.execute(
-                "SELECT id, codigo FROM tipos_documento_negocio WHERE id = %s AND negocio_id = %s",
+                "SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE id = %s AND negocio_id = %s",
                 (tipo_doc_id, negocio['tercero_id'])
             ).fetchone()
             if tipo_doc:
@@ -2381,6 +2381,10 @@ def api_tienda_pedido_crear(slug):
                         registrado_por = session.get('usuario_id'),
                         referencia_id  = pedido_id,
                         referencia_tipo= 'pedido_tienda',
+                        tipo_documento = tipo_doc['nombre'] if (tipo_doc_id and tipo_doc) else 'Venta POS',
+                        documento_numero = numero_documento or str(pedido_id),
+                        proveedor_nombre = nombre_cliente or None,
+                        tipo_documento_id = tipo_doc_id,
                         excluir_componentes_ids = excluded_ids
                     )
                     conn.execute("RELEASE SAVEPOINT sp_inv_tienda")

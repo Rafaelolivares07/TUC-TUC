@@ -2048,6 +2048,9 @@ def api_pedido_crear(slug):
                             registrado_por=session.get('usuario_id'),
                             referencia_tipo='pedido_restaurante',
                             referencia_id=pedidos_insertados[-1],
+                            tipo_documento='Venta Restaurante',
+                            documento_numero=f"PED-{pedidos_insertados[-1]}",
+                            proveedor_nombre=nombre_cliente or None,
                             excluir_componentes_ids=excluded_ids
                         )
                         conn.execute("RELEASE SAVEPOINT sp_inv")
@@ -2137,6 +2140,9 @@ def api_pedido_crear(slug):
                             registrado_por=session.get('usuario_id'),
                             referencia_tipo='pedido_restaurante',
                             referencia_id=pedido_id,
+                            tipo_documento='Venta Restaurante',
+                            documento_numero=f"PED-{pedido_id}",
+                            proveedor_nombre=nombre_cliente or None,
                             excluir_componentes_ids=excluded_ids
                         )
                         conn.execute("RELEASE SAVEPOINT sp_inv")

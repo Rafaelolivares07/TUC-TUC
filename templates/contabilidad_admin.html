@@ -111,11 +111,12 @@
         </label>
         
         <select id="td-tipo-movimiento" class="border rounded-lg px-3 py-2 text-sm bg-white">
-          <option value="">— Tipo Movimiento —</option>
-          <option value="entrada">Entrada</option>
-          <option value="salida">Salida</option>
-          <option value="produccion">Producción</option>
-          <option value="venta">Venta</option>
+          <option value="">— Módulo / Uso —</option>
+          <option value="entrada">Compras / Recepción (Entrada)</option>
+          <option value="salida">Bajas / Consumo Directo (Salida)</option>
+          <option value="produccion">Módulo de Producción (Producción)</option>
+          <option value="venta">Ventas / POS (Venta)</option>
+          <option value="ajuste">Inventario Físico (Ajuste)</option>
         </select>
       </div>
       <div class="flex items-center gap-4 mb-4">
@@ -136,7 +137,7 @@
           <th class="px-3 py-2 text-center">Núm. inicio</th>
           <th class="px-3 py-2 text-center">Consecutivo</th>
           <th class="px-3 py-2 text-center">Mueve Inv</th>
-          <th class="px-3 py-2 text-center">Tipo Mov</th>
+          <th class="px-3 py-2 text-center">Módulo / Uso</th>
           <th class="px-3 py-2 text-center">Clase</th>
           <th class="px-3 py-2 text-center">Predeterminado</th>
           <th class="px-3 py-2 text-center">Estado</th>
@@ -225,6 +226,8 @@
           <th class="px-3 py-2 text-left">Cuenta Inventario (14x)</th>
           <th class="px-3 py-2 text-left">Cuenta Costo Ventas (6x)</th>
           <th class="px-3 py-2 text-left">Cuenta Ingresos (41x)</th>
+          <th class="px-3 py-2 text-left">Ajuste Favor (+)</th>
+          <th class="px-3 py-2 text-left">Ajuste Contra (-)</th>
           <th class="px-3 py-2 text-center">Acción</th>
         </tr></thead>
         <tbody id="grupos-body"></tbody>
@@ -647,12 +650,13 @@ async function cargarTiposDocs() {
       </td>
       <td class="px-3 py-2 text-center">
         <select onchange="patchTipoDoc(${t.id},{tipo_movimiento:this.value}).then(cargarTiposDocs)"
-                class="border rounded px-2 py-0.5 text-xs outline-none bg-white">
+                class="border rounded px-2 py-0.5 text-xs outline-none bg-white font-medium">
           <option value="" ${!t.tipo_movimiento?'selected':''}>—</option>
-          <option value="entrada" ${t.tipo_movimiento==='entrada'?'selected':''}>Entrada</option>
-          <option value="salida" ${t.tipo_movimiento==='salida'?'selected':''}>Salida</option>
+          <option value="entrada" ${t.tipo_movimiento==='entrada'?'selected':''}>Compras / Entrada</option>
+          <option value="salida" ${t.tipo_movimiento==='salida'?'selected':''}>Bajas / Salida</option>
           <option value="produccion" ${t.tipo_movimiento==='produccion'?'selected':''}>Producción</option>
-          <option value="venta" ${t.tipo_movimiento==='venta'?'selected':''}>Venta</option>
+          <option value="venta" ${t.tipo_movimiento==='venta'?'selected':''}>Ventas / POS</option>
+          <option value="ajuste" ${t.tipo_movimiento==='ajuste'?'selected':''}>Inventario Físico</option>
         </select>
       </td>
       <td class="px-3 py-2 text-center">
@@ -874,7 +878,7 @@ function acGrp(tipo, idx) {
     const q = document.getElementById(`gi-${tipo}-q-${idx}`).value.trim();
     const listEl = document.getElementById(`ac-gi-${tipo}-${idx}`);
     if (q.length < 2) { listEl.classList.add('hidden'); return; }
-    const filtro = tipo === 'inve' ? '14' : (tipo === 'ingre' ? '4' : '6');
+    const filtro = tipo === 'inve' ? '14' : (tipo === 'ingre' ? '4' : (tipo === 'cos' ? '6' : ''));
     const cuentas = await fetchPUC(q, filtro);
     renderAC(listEl, cuentas, c => {
       document.getElementById(`gi-${tipo}-q-${idx}`).value = `${c.codigo} — ${c.nombre}`;
@@ -896,7 +900,7 @@ async function cargarGrupos() {
         <td class="px-3 py-2">
           <div class="relative">
             <input type="text" id="gi-inve-q-${i}" autocomplete="off"
-                   placeholder="Cuenta 14x (inventario)..."
+                   placeholder="Cuenta 14x..."
                    value="${g.cod_inve ? g.cod_inve+' — '+g.nom_inve : ''}"
                    class="border rounded-lg px-2 py-1 text-xs w-full"
                    oninput="acGrp('inve',${i})">
@@ -907,7 +911,7 @@ async function cargarGrupos() {
         <td class="px-3 py-2">
           <div class="relative">
             <input type="text" id="gi-cos-q-${i}" autocomplete="off"
-                   placeholder="Cuenta 6x (costo ventas)..."
+                   placeholder="Cuenta 6x..."
                    value="${g.cod_cos ? g.cod_cos+' — '+g.nom_cos : ''}"
                    class="border rounded-lg px-2 py-1 text-xs w-full"
                    oninput="acGrp('cos',${i})">
@@ -918,12 +922,34 @@ async function cargarGrupos() {
         <td class="px-3 py-2">
           <div class="relative">
             <input type="text" id="gi-ingre-q-${i}" autocomplete="off"
-                   placeholder="Cuenta 41x (ingresos)..."
+                   placeholder="Cuenta 41x..."
                    value="${g.cod_ingre ? g.cod_ingre+' — '+g.nom_ingre : ''}"
                    class="border rounded-lg px-2 py-1 text-xs w-full"
                    oninput="acGrp('ingre',${i})">
             <div id="ac-gi-ingre-${i}" class="ac-drop hidden"></div>
             <input type="hidden" id="gi-ingre-id-${i}" value="${g.cuenta_ingre_id||''}">
+          </div>
+        </td>
+        <td class="px-3 py-2">
+          <div class="relative">
+            <input type="text" id="gi-favor-q-${i}" autocomplete="off"
+                   placeholder="Ajuste favor..."
+                   value="${g.cod_ajuste_favor ? g.cod_ajuste_favor+' — '+g.nom_ajuste_favor : ''}"
+                   class="border rounded-lg px-2 py-1 text-xs w-full"
+                   oninput="acGrp('favor',${i})">
+            <div id="ac-gi-favor-${i}" class="ac-drop hidden"></div>
+            <input type="hidden" id="gi-favor-id-${i}" value="${g.cuenta_ajuste_favor_id||''}">
+          </div>
+        </td>
+        <td class="px-3 py-2">
+          <div class="relative">
+            <input type="text" id="gi-contra-q-${i}" autocomplete="off"
+                   placeholder="Ajuste contra..."
+                   value="${g.cod_ajuste_contra ? g.cod_ajuste_contra+' — '+g.nom_ajuste_contra : ''}"
+                   class="border rounded-lg px-2 py-1 text-xs w-full"
+                   oninput="acGrp('contra',${i})">
+            <div id="ac-gi-contra-${i}" class="ac-drop hidden"></div>
+            <input type="hidden" id="gi-contra-id-${i}" value="${g.cuenta_ajuste_contra_id||''}">
           </div>
         </td>
         <td class="px-3 py-2 text-center whitespace-nowrap">
@@ -932,7 +958,7 @@ async function cargarGrupos() {
           ${g.id ? `<button onclick="eliminarGrupo(${g.id})" class="text-red-400 hover:text-red-600 text-xs ml-1" title="Quitar cuentas">✕</button>` : ''}
         </td>
       </tr>`).join('')
-    : '<tr><td colspan="5" class="text-center text-gray-400 py-4 text-sm">Sin categorías de productos registradas.</td></tr>';
+    : '<tr><td colspan="7" class="text-center text-gray-400 py-4 text-sm">Sin categorías de productos registradas.</td></tr>';
 }
 
 async function guardarGrupo(idx) {
@@ -940,10 +966,12 @@ async function guardarGrupo(idx) {
   const cuenta_inve_id = parseInt(document.getElementById(`gi-inve-id-${idx}`).value)||null;
   const cuenta_cos_id  = parseInt(document.getElementById(`gi-cos-id-${idx}`).value)||null;
   const cuenta_ingre_id = parseInt(document.getElementById(`gi-ingre-id-${idx}`).value)||null;
+  const cuenta_ajuste_favor_id = parseInt(document.getElementById(`gi-favor-id-${idx}`).value)||null;
+  const cuenta_ajuste_contra_id = parseInt(document.getElementById(`gi-contra-id-${idx}`).value)||null;
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-inventario`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id})
+    body: JSON.stringify({nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id, cuenta_ajuste_favor_id, cuenta_ajuste_contra_id})
   });
   const data = await resp.json();
   if (data.ok) { toast('Guardado'); cargarGrupos(); }

@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario Físico — {{ negocio_nombre }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="/static/js/tailwind.js"></script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    padding: 12px 24px; border-radius: 12px; color: #fff; font-weight: 600;
+    z-index: 9999; opacity: 0; transition: opacity .3s, transform .3s;
+    pointer-events: none; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, -5px); }
+  .toast-ok { background: #10b981; }
+  .toast-err { background: #ef4444; }
+  .ac-drop {
+    position: absolute; z-index: 50; background: #fff; border: 1px solid #e5e7eb;
+    border-radius: 12px; max-height: 250px; overflow-y: auto;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); width: 100%;
+  }
+  .ac-item { padding: 10px 14px; cursor: pointer; font-size: .85rem; border-bottom: 1px solid #f3f4f6; transition: background .15s; }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:hover { background: #f0fdf4; }
+</style>
+</head>
+<body class="p-4 sm:p-6 min-h-screen">
+<div id="toast" class="toast"></div>
+
+<!-- Modal de Validación Visual -->
+<div id="modal-validacion" class="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 mx-4">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold text-gray-900">Validar Ajuste Físico</h3>
+      <button onclick="cerrarModalValidacion()" class="text-gray-400 hover:text-gray-600">✕</button>
+    </div>
+    
+    <div id="val-badge-container" class="rounded-xl p-4 mb-4 text-center">
+      <span id="val-badge-titulo" class="block text-xs uppercase font-extrabold tracking-wider">Ajuste</span>
+      <span id="val-badge-monto" class="text-2xl font-black">0.0</span>
+    </div>
+
+    <div class="space-y-3 text-sm text-gray-700 mb-6">
+      <div class="flex justify-between border-b border-gray-100 pb-2">
+        <span class="text-gray-500 font-medium">Producto:</span>
+        <span id="val-prod-nombre" class="font-bold text-gray-900"></span>
+      </div>
+      <div class="flex justify-between border-b border-gray-100 pb-2">
+        <span class="text-gray-500 font-medium">Stock en Sistema:</span>
+        <span id="val-stock-sistema" class="font-semibold text-gray-800"></span>
+      </div>
+      <div class="flex justify-between border-b border-gray-100 pb-2">
+        <span class="text-gray-500 font-medium">Cantidad Física Contada:</span>
+        <span id="val-cantidad-fisica" class="font-bold text-gray-900 text-base"></span>
+      </div>
+      <div class="flex justify-between border-b border-gray-100 pb-2">
+        <span class="text-gray-500 font-medium">Diferencia Física:</span>
+        <span id="val-diferencia" class="font-bold"></span>
+      </div>
+      <div class="pt-2">
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Costo Unitario de Ajuste ($)</label>
+        <input type="number" id="val-costo-input" step="0.01" min="0" 
+               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-gray-50 animate-pulse"
+               oninput="actualizarValorTotalAjuste()">
+      </div>
+      <div class="flex justify-between pt-2">
+        <span class="text-gray-500 font-bold">Valor Total del Ajuste:</span>
+        <span id="val-total-ajuste" class="font-extrabold text-gray-900 text-lg"></span>
+      </div>
+      
+      <!-- Advertencias Contables -->
+      <div id="val-contable-warning" class="bg-amber-50 text-amber-800 rounded-xl p-3 border border-amber-100 text-xs hidden">
+        ⚠️ <span id="val-warning-text">No hay cuentas asignadas.</span>
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <button onclick="cerrarModalValidacion()" 
+              class="flex-1 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-bold text-gray-600 transition">
+        Cancelar
+      </button>
+      <button onclick="guardarAjusteConfirmado()" 
+              class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-lg shadow-emerald-600/20 transition">
+        Confirmar y Ajustar
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="max-w-5xl mx-auto">
+
+  <!-- Cabecera -->
+  <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-emerald-500">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div class="flex items-center gap-4">
+        <a href="{{ volver_url or '/admin/inventario/' + (negocio_id|string) }}" class="text-gray-400 hover:text-gray-700 transition">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+        </a>
+        <div>
+          <h1 class="text-2xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
+          <p class="text-sm text-gray-500">Toma de Inventario Físico</p>
+        </div>
+      </div>
+      <div class="flex flex-col items-end">
+        <span class="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest">Documento Activo</span>
+        <span id="doc-consecutivo-badge" class="font-mono text-base font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-1 rounded-xl shadow-xs mt-1">
+          Cargando...
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Formulario de Configuración de Toma -->
+  <div class="bg-white rounded-2xl shadow-md p-5 mb-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo de Documento</label>
+      <select id="select-tipo-doc" onchange="cambiarTipoDocumento()"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all">
+        {% for t in tipos_doc %}
+          <option value="{{ t.id }}" {% if t.predeterminado %}selected{% endif %}>{{ t.nombre }} ({{ t.codigo }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Modalidad de Conteo</label>
+      <select id="select-modalidad" onchange="cambiarModalidad()"
+              class="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all">
+        <option value="libre">Libre (Búsqueda manual o código de barras)</option>
+        <option value="categoria">Por Categoría de Producto</option>
+        <option value="completo">Inventario Completo (Todo el catálogo)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Zona de Conteo Modalidad LIBRE -->
+  <div id="conteo-libre" class="bg-white rounded-2xl shadow-md p-6 mb-5">
+    <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wide mb-4">Ingresar Conteo de Ítem</h2>
+    
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <!-- Buscador -->
+      <div class="sm:col-span-2 relative">
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Buscar Producto o Escanear QR</label>
+        <input type="text" id="libre-search" placeholder="Escribe el nombre o escanea con lector..." autocomplete="off"
+               class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+               oninput="onSearchInput()">
+        <div id="libre-ac-drop" class="ac-drop hidden"></div>
+      </div>
+
+      <!-- Cantidad Física -->
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad Física Contada</label>
+        <div class="flex gap-2">
+          <input type="number" id="libre-cantidad" placeholder="0.0" step="any" disabled
+                 class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-50 transition-all font-semibold"
+                 onkeydown="if(event.key==='Enter') abrirValidacionLibre()">
+          <button onclick="abrirValidacionLibre()" id="libre-btn-add" disabled
+                  class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 text-white font-bold px-4 py-2 rounded-xl transition text-sm flex items-center justify-center">
+            Ajustar
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Detalle rápido del producto seleccionado -->
+    <div id="libre-prod-info" class="mt-4 p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl flex items-center justify-between flex-wrap gap-3 hidden">
+      <div>
+        <span id="info-prod-cat" class="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-extrabold uppercase">Categoría</span>
+        <h4 id="info-prod-nombre" class="font-bold text-gray-800 text-sm mt-1">Nombre del Insumo</h4>
+      </div>
+      <div class="flex gap-6 text-xs text-gray-600">
+        <div>
+          <span class="block text-[10px] font-bold text-gray-400 uppercase">Stock Actual (Sistema)</span>
+          <span id="info-prod-stock" class="font-extrabold text-gray-800 text-sm">0.0</span>
+        </div>
+        <div>
+          <span class="block text-[10px] font-bold text-gray-400 uppercase">Costo Promedio Ponderado</span>
+          <span id="info-prod-costo" class="font-extrabold text-gray-800 text-sm">$0.00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zona de Conteo Categoría / Completo -->
+  <div id="conteo-lista" class="bg-white rounded-2xl shadow-md p-5 mb-5 hidden">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+      <h2 id="conteo-lista-titulo" class="text-sm font-bold text-gray-800 uppercase tracking-wide">Productos del Inventario</h2>
+      <div id="select-cat-container" class="w-64 hidden">
+        <select id="select-categoria-filtro" onchange="cargarTablaPorCategoria()"
+                class="w-full border border-gray-200 rounded-xl px-3 py-1.5 bg-gray-50 text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500">
+          <option value="">-- Seleccionar Categoría --</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="overflow-x-auto max-h-[500px] overflow-y-auto border border-gray-100 rounded-xl">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0 z-10">
+          <tr>
+            <th class="px-4 py-2.5 text-left bg-gray-50">Producto</th>
+            <th class="px-4 py-2.5 text-center bg-gray-50">Stock Sistema</th>
+            <th class="px-4 py-2.5 text-center bg-gray-50">Cantidad Física</th>
+            <th class="px-4 py-2.5 text-center bg-gray-50">Diferencia</th>
+            <th class="px-4 py-2.5 text-center bg-gray-50">Costo Ajuste ($)</th>
+            <th class="px-4 py-2.5 text-right bg-gray-50">Ajuste</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-lista-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Ítems ajustados en caliente -->
+  <div class="bg-white rounded-2xl shadow-md p-5 mb-5">
+    <div class="border-b border-gray-100 pb-3 mb-4 flex items-center justify-between">
+      <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center gap-2">
+        <span>📋 Ítems ajustados en el documento actual</span>
+      </h2>
+      <span id="lbl-items-documento" class="text-xs font-semibold text-gray-400">Ninguno ajustado</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100">
+            <th class="px-3 py-2 text-left">Producto</th>
+            <th class="px-3 py-2 text-left">Categoría</th>
+            <th class="px-3 py-2 text-center">Stock Anterior</th>
+            <th class="px-3 py-2 text-center">Conteo Físico</th>
+            <th class="px-3 py-2 text-center">Diferencia</th>
+            <th class="px-3 py-2 text-right">Costo Unitario</th>
+            <th class="px-3 py-2 text-right">Ajuste Total</th>
+          </tr>
+        </thead>
+        <tbody id="body-items-documento">
+          <tr><td colspan="7" class="text-center text-gray-400 py-6 text-xs">No se han registrado ajustes bajo este consecutivo en esta sesión.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Historial de tomas físicas desplegables -->
+  <div class="bg-white rounded-2xl shadow-md p-5 mb-5">
+    <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wide mb-4 flex items-center gap-2">
+      <span>📚 Historial de Inventarios Físicos Anteriores</span>
+    </h2>
+    <div id="historial-container" class="space-y-3">
+      <p class="text-xs text-gray-400 text-center py-4">Cargando historial...</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const NEGOCIO_ID = {{ negocio_id }};
+let activeDocNumber = "";
+let currentProducts = []; // Caché en memoria de todos los productos
+let selectedProduct = null; // Producto seleccionado en modalidad libre
+let categoriasDisponibles = [];
+
+// Cargar al inicializar la página
+document.addEventListener("DOMContentLoaded", () => {
+  inicializarSesion();
+  cargarProductos();
+  cargarHistorial();
+});
+
+// Inicializar sesión y consecutivo
+async function inicializarSesion() {
+  const tipoDocId = document.getElementById("select-tipo-doc").value;
+  if (!tipoDocId) return;
+  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/siguiente-documento?tipo_doc_id=${tipoDocId}`);
+  const data = await resp.json();
+  if (data.ok) {
+    activeDocNumber = data.documento_numero;
+    document.getElementById("doc-consecutivo-badge").textContent = activeDocNumber;
+    cargarItemsDocumento();
+  }
+}
+
+// Cargar todos los productos en caché local para velocidad instantánea
+async function cargarProductos() {
+  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/productos`);
+  const data = await resp.json();
+  if (data.ok) {
+    currentProducts = data.productos;
+    // Extraer categorías únicas
+    const cats = [...new Set(currentProducts.map(p => p.categoria).filter(Boolean))];
+    categoriasDisponibles = cats;
+    
+    // Rellenar dropdown de categorías
+    const sel = document.getElementById("select-categoria-filtro");
+    sel.innerHTML = '<option value="">-- Seleccionar Categoría --</option>' + 
+      cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+}
+
+// Cambiar tipo de documento
+function cambiarTipoDocumento() {
+  inicializarSesion();
+}
+
+// Cambiar Modalidad
+function cambiarModalidad() {
+  const mod = document.getElementById("select-modalidad").value;
+  document.getElementById("conteo-libre").classList.toggle("hidden", mod !== "libre");
+  document.getElementById("conteo-lista").classList.toggle("hidden", mod === "libre");
+  document.getElementById("select-cat-container").classList.toggle("hidden", mod !== "categoria");
+  
+  if (mod === "libre") {
+    limpiarFormularioLibre();
+  } else if (mod === "completo") {
+    cargarTablaCompleta();
+  } else {
+    document.getElementById("tabla-lista-body").innerHTML = 
+      '<tr><td colspan="6" class="text-center text-gray-400 py-6 text-xs">Selecciona una categoría para listar los productos.</td></tr>';
+  }
+}
+
+// ── FLUX: MODALIDAD LIBRE ──────────────────────────────────────────────────────
+function onSearchInput() {
+  const q = document.getElementById("libre-search").value.trim().toLowerCase();
+  const drop = document.getElementById("libre-ac-drop");
+  if (q.length < 2) {
+    drop.classList.add("hidden");
+    return;
+  }
+  
+  // Buscar localmente
+  const matches = currentProducts.filter(p => 
+    p.nombre.toLowerCase().includes(q) || 
+    (p.codigo_barra && p.codigo_barra.toLowerCase() === q)
+  );
+  
+  if (matches.length > 0) {
+    drop.innerHTML = matches.slice(0, 10).map(p => `
+      <div class="ac-item" onclick="seleccionarProductoLibre(${p.id})">
+        <span class="font-bold text-gray-800">${p.nombre}</span> 
+        <span class="text-xs text-gray-400 ml-1">(${p.categoria || 'Sin cat.'})</span>
+        <span class="float-right text-xs bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded font-mono">Stock: ${p.stock}</span>
+      </div>
+    `).join('');
+    drop.classList.remove("hidden");
+  } else {
+    drop.innerHTML = '<div class="p-3 text-xs text-gray-400 text-center">No se encontraron productos.</div>';
+    drop.classList.remove("hidden");
+  }
+}
+
+function seleccionarProductoLibre(id) {
+  selectedProduct = currentProducts.find(p => p.id === id);
+  document.getElementById("libre-ac-drop").classList.add("hidden");
+  if (!selectedProduct) return;
+  
+  document.getElementById("libre-search").value = selectedProduct.nombre;
+  
+  // Mostrar contenedor de info del producto
+  document.getElementById("libre-prod-info").classList.remove("hidden");
+  document.getElementById("info-prod-cat").textContent = selectedProduct.categoria || "SIN CATEGORÍA";
+  document.getElementById("info-prod-nombre").textContent = selectedProduct.nombre;
+  document.getElementById("info-prod-stock").textContent = selectedProduct.stock;
+  document.getElementById("info-prod-costo").textContent = `$${parseFloat(selectedProduct.costo || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+  
+  // Habilitar campos de conteo
+  const qtyField = document.getElementById("libre-cantidad");
+  qtyField.disabled = false;
+  qtyField.value = "";
+  qtyField.focus();
+  
+  document.getElementById("libre-btn-add").disabled = false;
+}
+
+function limpiarFormularioLibre() {
+  selectedProduct = null;
+  document.getElementById("libre-search").value = "";
+  document.getElementById("libre-cantidad").value = "";
+  document.getElementById("libre-cantidad").disabled = true;
+  document.getElementById("libre-btn-add").disabled = true;
+  document.getElementById("libre-prod-info").classList.add("hidden");
+  document.getElementById("libre-ac-drop").classList.add("hidden");
+  document.getElementById("libre-search").focus();
+}
+
+// Abrir modal de validación visual para modo Libre
+async function abrirValidacionLibre() {
+  if (!selectedProduct) return;
+  const cantStr = document.getElementById("libre-cantidad").value.trim();
+  if (cantStr === "") return;
+  
+  const physicalQty = parseFloat(cantStr);
+  if (isNaN(physicalQty)) return;
+  
+  abrirModalValidacionGenerica(selectedProduct, physicalQty);
+}
+
+// ── FLUX: MODALIDAD CATEGORIA / COMPLETO ────────────────────────────────────────
+function cargarTablaCompleta() {
+  renderTablaLista(currentProducts);
+}
+
+function cargarTablaPorCategoria() {
+  const cat = document.getElementById("select-categoria-filtro").value;
+  if (!cat) {
+    document.getElementById("tabla-lista-body").innerHTML = 
+      '<tr><td colspan="6" class="text-center text-gray-400 py-6 text-xs">Selecciona una categoría válida.</td></tr>';
+    return;
+  }
+  const filtered = currentProducts.filter(p => p.categoria === cat);
+  renderTablaLista(filtered);
+}
+
+function renderTablaLista(list) {
+  const body = document.getElementById("tabla-lista-body");
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-6 text-xs">No hay productos disponibles.</td></tr>';
+    return;
+  }
+  
+  body.innerHTML = list.map(p => {
+    return `
+      <tr class="border-b border-gray-100 hover:bg-gray-50/50">
+        <td class="px-4 py-3">
+          <span class="font-semibold text-gray-800 text-sm block">${p.nombre}</span>
+          <span class="text-[10px] uppercase font-bold text-gray-400">${p.categoria || 'Sin categoría'}</span>
+        </td>
+        <td class="px-4 py-3 text-center font-mono font-bold text-gray-600 text-xs">${p.stock}</td>
+        <td class="px-4 py-3 text-center">
+          <input type="number" id="tbl-qty-${p.id}" placeholder="${p.stock}" step="any"
+                 class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-24 text-center font-semibold outline-none focus:border-emerald-500"
+                 oninput="calcDiffFila(${p.id}, ${p.stock})"
+                 onkeydown="if(event.key==='Enter') abrirValidacionFila(${p.id})">
+        </td>
+        <td class="px-4 py-3 text-center">
+          <span id="tbl-diff-badge-${p.id}" class="text-xs font-bold font-mono text-gray-400">—</span>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <input type="number" id="tbl-cost-${p.id}" value="${p.costo || 0}" step="0.01" min="0"
+                 class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-24 text-center font-semibold outline-none focus:border-emerald-500">
+        </td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="abrirValidacionFila(${p.id})" id="tbl-btn-save-${p.id}" disabled
+                  class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition">
+            Ajustar
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function calcDiffFila(id, sysStock) {
+  const input = document.getElementById(`tbl-qty-${id}`);
+  const btn = document.getElementById(`tbl-btn-save-${id}`);
+  const badge = document.getElementById(`tbl-diff-badge-${id}`);
+  
+  if (input.value.trim() === "") {
+    badge.className = "text-xs font-bold font-mono text-gray-400";
+    badge.textContent = "—";
+    btn.disabled = true;
+    return;
+  }
+  
+  const physVal = parseFloat(input.value);
+  if (isNaN(physVal)) {
+    btn.disabled = true;
+    return;
+  }
+  
+  const diff = physVal - sysStock;
+  btn.disabled = Math.abs(diff) < 0.000001;
+  
+  if (Math.abs(diff) < 0.000001) {
+    badge.className = "text-xs font-bold font-mono text-gray-400";
+    badge.textContent = "0.0";
+  } else if (diff > 0) {
+    badge.className = "text-xs font-extrabold font-mono text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded";
+    badge.textContent = `+${diff.toFixed(2)}`;
+  } else {
+    badge.className = "text-xs font-extrabold font-mono text-red-600 bg-red-50 px-1.5 py-0.5 rounded";
+    badge.textContent = diff.toFixed(2);
+  }
+}
+
+function abrirValidacionFila(id) {
+  const p = currentProducts.find(x => x.id === id);
+  if (!p) return;
+  const input = document.getElementById(`tbl-qty-${id}`);
+  const physVal = parseFloat(input.value);
+  if (isNaN(physVal)) return;
+  
+  // Tomar costo de la celda
+  const costVal = parseFloat(document.getElementById(`tbl-cost-${id}`).value) || 0.0;
+  
+  abrirModalValidacionGenerica(p, physVal, costVal);
+}
+
+// ── LOGICA DE MODAL DE CONFIRMACIÓN COMÚN ──────────────────────────────────────
+let activeAjustePayload = null;
+
+function abrirModalValidacionGenerica(product, physicalQty, overrideCosto = null) {
+  const sysStock = parseFloat(product.stock || 0);
+  const diff = physicalQty - sysStock;
+  const costo = overrideCosto !== null ? overrideCosto : parseFloat(product.costo || 0.0);
+  const total = Math.abs(diff) * costo;
+  
+  activeAjustePayload = {
+    producto_id: product.id,
+    cantidad_fisica: physicalQty,
+    costo_unitario: costo
+  };
+
+  document.getElementById("val-prod-nombre").textContent = product.nombre;
+  document.getElementById("val-stock-sistema").textContent = `${sysStock} unidades`;
+  document.getElementById("val-cantidad-fisica").textContent = `${physicalQty} unidades`;
+  
+  const diffSpan = document.getElementById("val-diferencia");
+  const badgeContainer = document.getElementById("val-badge-container");
+  const badgeTitulo = document.getElementById("val-badge-titulo");
+  const badgeMonto = document.getElementById("val-badge-monto");
+
+  if (diff > 0) {
+    diffSpan.className = "font-bold text-emerald-600";
+    diffSpan.textContent = `+${diff.toFixed(2)} unidades (Sobrante)`;
+    
+    badgeContainer.className = "rounded-xl p-4 mb-4 text-center bg-emerald-50 border border-emerald-100 text-emerald-800";
+    badgeTitulo.textContent = "Aumento en Inventario (Sobrante)";
+    badgeMonto.textContent = `+${diff.toFixed(2)}`;
+  } else {
+    diffSpan.className = "font-bold text-red-600";
+    diffSpan.textContent = `${diff.toFixed(2)} unidades (Faltante)`;
+    
+    badgeContainer.className = "rounded-xl p-4 mb-4 text-center bg-red-50 border border-red-100 text-red-800";
+    badgeTitulo.textContent = "Disminución en Inventario (Faltante)";
+    badgeMonto.textContent = `${diff.toFixed(2)}`;
+  }
+
+  // Cargar costo unitario
+  const costInput = document.getElementById("val-costo-input");
+  costInput.value = costo.toFixed(2);
+  
+  actualizarValorTotalAjuste();
+  
+  // Verificar configuración contable
+  verificarCuentasCategoria(product.categoria, diff > 0);
+
+  // Mostrar modal
+  document.getElementById("modal-validacion").classList.remove("hidden");
+}
+
+function cerrarModalValidacion() {
+  document.getElementById("modal-validacion").classList.add("hidden");
+  activeAjustePayload = null;
+}
+
+function actualizarValorTotalAjuste() {
+  if (!activeAjustePayload) return;
+  const sysStock = parseFloat(currentProducts.find(x => x.id === activeAjustePayload.producto_id).stock || 0);
+  const diff = activeAjustePayload.cantidad_fisica - sysStock;
+  const costInput = document.getElementById("val-costo-input");
+  const cost = parseFloat(costInput.value) || 0.0;
+  
+  activeAjustePayload.costo_unitario = cost;
+  
+  const total = Math.abs(diff) * cost;
+  document.getElementById("val-total-ajuste").textContent = `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+}
+
+// Comprobar la categoría con API grupos para mostrar warnings
+async function verificarCuentasCategoria(catName, esSobrante) {
+  const warningDiv = document.getElementById("val-contable-warning");
+  if (!catName) {
+    warningDiv.classList.remove("hidden");
+    document.getElementById("val-warning-text").textContent = "Este producto no tiene categoría asignada. Se ajustará el inventario físico pero no se creará registro contable.";
+    return;
+  }
+  
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/grupos-inventario`);
+  const data = await resp.json();
+  if (!data.ok) return;
+  
+  const grupo = data.grupos.find(g => g.nombre === catName);
+  if (!grupo) {
+    warningDiv.classList.remove("hidden");
+    document.getElementById("val-warning-text").textContent = `La categoría "${catName}" no está parametrizada en grupos de inventario. Se omitirá el asiento contable.`;
+    return;
+  }
+  
+  if (!grupo.cuenta_inve_id) {
+    warningDiv.classList.remove("hidden");
+    document.getElementById("val-warning-text").textContent = `La categoría "${catName}" no tiene cuenta de inventario (14x) asignada. Se omitirá el asiento contable.`;
+    return;
+  }
+  
+  if (esSobrante && !grupo.cuenta_ajuste_favor_id) {
+    warningDiv.classList.remove("hidden");
+    document.getElementById("val-warning-text").textContent = `La categoría "${catName}" no tiene cuenta de Ajuste a Favor asignada. Se omitirá el asiento contable.`;
+    return;
+  }
+  
+  if (!esSobrante && !grupo.cuenta_ajuste_contra_id) {
+    warningDiv.classList.remove("hidden");
+    document.getElementById("val-warning-text").textContent = `La categoría "${catName}" no tiene cuenta de Ajuste en Contra asignada. Se omitirá el asiento contable.`;
+    return;
+  }
+  
+  warningDiv.classList.add("hidden");
+}
+
+// Guardar ajuste definitivo
+async function guardarAjusteConfirmado() {
+  if (!activeAjustePayload) return;
+  
+  const tipoDocId = document.getElementById("select-tipo-doc").value;
+  const payload = {
+    tipo_documento_id: parseInt(tipoDocId),
+    documento_numero: activeDocNumber,
+    producto_id: activeAjustePayload.producto_id,
+    cantidad_fisica: activeAjustePayload.cantidad_fisica,
+    costo_unitario: activeAjustePayload.costo_unitario,
+    notas: "Ajuste físico en caliente"
+  };
+  
+  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/guardar-item`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(payload)
+  });
+  
+  const data = await resp.json();
+  if (data.ok) {
+    toast(data.mensaje || "Ajuste aplicado correctamente");
+    
+    // Si fue el primer item, actualizamos el número de documento a su formato oficial
+    if (data.consecutivo_actualizado) {
+      activeDocNumber = data.documento_numero;
+      document.getElementById("doc-consecutivo-badge").textContent = activeDocNumber;
+    }
+    
+    cerrarModalValidacion();
+    
+    // Recargar datos
+    await cargarProductos(); // refrescar stock en caché
+    cargarItemsDocumento();
+    cargarHistorial();
+    
+    // Limpiar entradas según la modalidad
+    const mod = document.getElementById("select-modalidad").value;
+    if (mod === "libre") {
+      limpiarFormularioLibre();
+    } else {
+      // Refrescar tabla de lista
+      cambiarModalidad();
+    }
+  } else {
+    toast(data.error || "Error al aplicar el ajuste", false);
+  }
+}
+
+// Cargar ítems ajustados bajo la sesión actual
+async function cargarItemsDocumento() {
+  if (!activeDocNumber) return;
+  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/documento/${activeDocNumber}/items`);
+  const data = await resp.json();
+  const body = document.getElementById("body-items-documento");
+  const lbl = document.getElementById("lbl-items-documento");
+  
+  if (data.ok && data.items.length > 0) {
+    lbl.textContent = `${data.items.length} ítems ajustados`;
+    body.innerHTML = data.items.map(m => {
+      const diff = m.cantidad * (m.tipo === 'entrada' ? 1 : -1);
+      const total = m.valor_total || 0;
+      
+      const badgeDiff = diff > 0 
+        ? `<span class="text-xs font-bold font-mono text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">+${diff.toFixed(2)}</span>`
+        : `<span class="text-xs font-bold font-mono text-red-600 bg-red-50 px-1.5 py-0.5 rounded">${diff.toFixed(2)}</span>`;
+        
+      return `
+        <tr class="border-b border-gray-100 hover:bg-gray-50/50">
+          <td class="px-3 py-2 font-semibold text-gray-800">${m.nombre_producto}</td>
+          <td class="px-3 py-2 text-xs text-gray-400 uppercase font-bold">${m.categoria || 'Sin cat.'}</td>
+          <td class="px-3 py-2 text-center font-mono text-xs text-gray-500">${m.stock_anterior}</td>
+          <td class="px-3 py-2 text-center font-mono text-xs font-bold text-gray-900">${m.stock_nuevo}</td>
+          <td class="px-3 py-2 text-center">${badgeDiff}</td>
+          <td class="px-3 py-2 text-right font-mono font-medium text-xs">$${parseFloat(m.costo_und || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</td>
+          <td class="px-3 py-2 text-right font-mono font-bold text-xs">$${parseFloat(total).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</td>
+        </tr>
+      `;
+    }).join('');
+  } else {
+    lbl.textContent = "Ninguno ajustado";
+    body.innerHTML = `<tr><td colspan="7" class="text-center text-gray-400 py-6 text-xs">No se han registrado ajustes bajo este consecutivo en esta sesión.</td></tr>`;
+  }
+}
+
+// Cargar historial de inventarios
+async function cargarHistorial() {
+  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/historial`);
+  const data = await resp.json();
+  const container = document.getElementById("historial-container");
+  
+  if (data.ok && data.historial.length > 0) {
+    container.innerHTML = data.historial.map((h, i) => {
+      // No listar el documento activo actual si aún no está cerrado
+      if (h.documento_numero === activeDocNumber) return '';
+      
+      const fechaObj = new Date(h.fecha);
+      const fechaStr = fechaObj.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      
+      return `
+        <div class="border border-gray-100 rounded-2xl bg-white shadow-xs overflow-hidden">
+          <!-- Acordeón Header -->
+          <button onclick="toggleHistorialDetalle('${h.documento_numero}')"
+                  class="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50/50 transition text-left">
+            <div>
+              <span class="font-mono font-extrabold text-sm text-emerald-800">${h.documento_numero}</span>
+              <span class="text-xs text-gray-400 ml-3">${fechaStr}</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span class="text-xs text-gray-500 font-bold bg-emerald-50 px-2 py-0.5 rounded">${h.total_items} ítems</span>
+              <span class="text-xs font-extrabold text-gray-800">Ajuste Contable: $${parseFloat(h.total_debitos || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+              <span id="hist-icon-${h.documento_numero}" class="text-gray-400 font-bold transition transform">▼</span>
+            </div>
+          </button>
+          
+          <!-- Acordeón Body -->
+          <div id="hist-body-${h.documento_numero}" class="hidden border-t border-gray-50 bg-gray-50/30 p-5 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- Tabla de Items Kardex -->
+              <div>
+                <h4 class="text-xs font-bold text-gray-600 uppercase mb-2">Movimientos de Inventario (Kardex)</h4>
+                <div class="overflow-x-auto bg-white rounded-xl border border-gray-100 shadow-xs max-h-60 overflow-y-auto">
+                  <table class="w-full text-xs">
+                    <thead class="bg-gray-50 text-gray-400">
+                      <tr>
+                        <th class="px-2 py-1.5 text-left">Insumo</th>
+                        <th class="px-2 py-1.5 text-center">Tipo</th>
+                        <th class="px-2 py-1.5 text-center">Cant.</th>
+                        <th class="px-2 py-1.5 text-right">Costo</th>
+                      </tr>
+                    </thead>
+                    <tbody id="hist-kardex-body-${h.documento_numero}">
+                      <tr><td colspan="4" class="text-center py-4 text-gray-400">Cargando detalles...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              <!-- Tabla de Asiento Contable Detallado -->
+              <div>
+                <h4 class="text-xs font-bold text-gray-600 uppercase mb-2">Asiento Contable Detallado (Por Producto)</h4>
+                <div class="overflow-x-auto bg-white rounded-xl border border-gray-100 shadow-xs max-h-60 overflow-y-auto">
+                  <table class="w-full text-xs">
+                    <thead class="bg-gray-50 text-gray-400">
+                      <tr>
+                        <th class="px-2 py-1.5 text-left">Cuenta</th>
+                        <th class="px-2 py-1.5 text-left">Concepto / Producto</th>
+                        <th class="px-2 py-1.5 text-center">T</th>
+                        <th class="px-2 py-1.5 text-right">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody id="hist-contable-body-${h.documento_numero}">
+                      <tr><td colspan="4" class="text-center py-4 text-gray-400">Cargando detalles...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).filter(Boolean).join('');
+  } else {
+    container.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">No se registran inventarios físicos anteriores.</p>';
+  }
+}
+
+// Mostrar/Ocultar detalles e historial
+async function toggleHistorialDetalle(docNum) {
+  const body = document.getElementById(`hist-body-${docNum}`);
+  const icon = document.getElementById(`hist-icon-${docNum}`);
+  if (!body || !icon) return;
+  
+  const isHidden = body.classList.contains("hidden");
+  
+  // Cerrar todos los demás para orden
+  document.querySelectorAll("[id^='hist-body-']").forEach(b => b.classList.add("hidden"));
+  document.querySelectorAll("[id^='hist-icon-']").forEach(i => i.classList.remove("rotate-180"));
+  
+  if (isHidden) {
+    body.classList.remove("hidden");
+    icon.classList.add("rotate-180");
+    
+    // Cargar detalles desde el API
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/documento/${docNum}/detalles`);
+    const data = await resp.json();
+    
+    if (data.ok) {
+      // Cargar tabla Kardex
+      const kBody = document.getElementById(`hist-kardex-body-${docNum}`);
+      kBody.innerHTML = data.items.map(m => `
+        <tr class="border-b border-gray-100 hover:bg-gray-50/50">
+          <td class="px-2 py-1.5 font-medium text-gray-800">${m.nombre_producto} <span class="text-[9px] text-gray-400 block">${m.categoria||''}</span></td>
+          <td class="px-2 py-1.5 text-center">
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${m.tipo==='entrada'?'bg-emerald-100 text-emerald-800':'bg-red-100 text-red-800'}">
+              ${m.tipo==='entrada'?'Sob':'Fal'}
+            </span>
+          </td>
+          <td class="px-2 py-1.5 text-center font-mono font-bold">${m.cantidad}</td>
+          <td class="px-2 py-1.5 text-right font-mono">$${parseFloat(m.costo_und||0).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</td>
+        </tr>
+      `).join('');
+      
+      // Cargar tabla Asiento Contable
+      const cBody = document.getElementById(`hist-contable-body-${docNum}`);
+      if (data.asiento.length > 0) {
+        cBody.innerHTML = data.asiento.map(a => `
+          <tr class="border-b border-gray-100 hover:bg-gray-50/50">
+            <td class="px-2 py-1.5 font-mono text-gray-600 font-bold">${a.cuenta}</td>
+            <td class="px-2 py-1.5">
+              <span class="font-medium text-gray-700 block">${a.cuenta_nombre}</span>
+              <span class="text-[9px] text-gray-400 block">Concepto: ${a.concepto}</span>
+            </td>
+            <td class="px-2 py-1.5 text-center">
+              <span class="font-bold text-xs ${a.tipo==='D'?'text-blue-600':'text-purple-600'}">${a.tipo}</span>
+            </td>
+            <td class="px-2 py-1.5 text-right font-mono">$${parseFloat(a.monto||0).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</td>
+          </tr>
+        `).join('');
+      } else {
+        cBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-400 text-xs">Este documento no generó movimientos contables (sin parametrización).</td></tr>';
+      }
+    } else {
+      toast("Error al cargar detalles del historial", false);
+    }
+  } else {
+    body.classList.add("hidden");
+    icon.classList.remove("rotate-180");
+  }
+}
+
+// Toast
+function toast(msg, ok=true) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = `toast ${ok ? 'toast-ok' : 'toast-err'} show`;
+  setTimeout(() => el.classList.remove("show"), 3000);
+}
+</script>
+</body>
+</html>

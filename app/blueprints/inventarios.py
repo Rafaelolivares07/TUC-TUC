@@ -3249,3 +3249,335 @@ def api_tienda_ajuste_rapido(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+# ── NUEVOS ENDPOINTS: INVENTARIO FISICO Y CONTABILIZACION INDIVIDUAL ───────────────────
+
+@bp.route('/admin/inventario-fisico/<int:negocio_id>')
+def admin_inventario_fisico(negocio_id):
+    if 'usuario_id' not in session:
+        return redirect(url_for('auth.admin_login'))
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto:
+            return "Negocio no encontrado", 404
+        if not _puede_gestionar_negocio(contexto):
+            return "No autorizado para este negocio", 403
+            
+        # Obtener los tipos de documento activos de tipo 'ajuste'
+        tipos_doc = conn.execute("""
+            SELECT id, nombre, codigo, predeterminado
+            FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND activo = TRUE AND tipo_movimiento = 'ajuste'
+            ORDER BY nombre
+        """, (negocio_id,)).fetchall()
+        
+        # Si no existe ninguno, creamos uno predeterminado 'AJUSTE_INV'
+        if not tipos_doc:
+            td = conn.execute("""
+                SELECT id, nombre, codigo, predeterminado
+                FROM tipos_documento_negocio
+                WHERE negocio_id = %s AND (UPPER(codigo) = 'AJUSTE_INV' OR UPPER(nombre) = 'AJUSTE DE INVENTARIO')
+                LIMIT 1
+            """, (negocio_id,)).fetchone()
+            
+            if not td:
+                conn.execute("""
+                    INSERT INTO tipos_documento_negocio (negocio_id, nombre, codigo, tipo_movimiento, consecutivo, numero_inicio, activo, predeterminado)
+                    VALUES (%s, 'Ajuste de Inventario', 'AJUSTE_INV', 'ajuste', 0, 1, TRUE, TRUE)
+                """, (negocio_id,))
+                conn.commit()
+                td = conn.execute("""
+                    SELECT id, nombre, codigo, predeterminado
+                    FROM tipos_documento_negocio
+                    WHERE negocio_id = %s AND UPPER(codigo) = 'AJUSTE_INV'
+                    LIMIT 1
+                """, (negocio_id,)).fetchone()
+            tipos_doc = [td]
+            
+        return render_template('inventario_fisico.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=contexto['negocio_nombre'],
+                               volver_url=url_for('inventarios.admin_inventario', negocio_id=negocio_id),
+                               volver_label='Inventario',
+                               tipos_doc=[dict(t) for t in tipos_doc])
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/ajuste-fisico/siguiente-documento')
+def api_ajuste_siguiente_documento(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    tipo_doc_id = request.args.get('tipo_doc_id')
+    if not tipo_doc_id:
+        return jsonify({'ok': False, 'error': 'tipo_doc_id es requerido'}), 400
+    conn = get_db_connection()
+    try:
+        td = conn.execute("""
+            SELECT id, codigo, consecutivo, numero_inicio
+            FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND id = %s
+        """, (negocio_id, int(tipo_doc_id))).fetchone()
+        
+        if not td:
+            return jsonify({'ok': False, 'error': 'Tipo de documento no encontrado'}), 404
+            
+        next_num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
+        tipo_code = td['codigo'] or 'AJUSTE_INV'
+        doc_num = f"{tipo_code}-{next_num:04d}"
+        
+        return jsonify({'ok': True, 'documento_numero': doc_num, 'consecutivo': next_num})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/ajuste-fisico/guardar-item', methods=['POST'])
+def api_ajuste_guardar_item(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        
+    data = request.get_json() or {}
+    tipo_documento_id = data.get('tipo_documento_id')
+    documento_numero = data.get('documento_numero')
+    producto_id = data.get('producto_id')
+    cantidad_fisica = data.get('cantidad_fisica')
+    costo_unitario = data.get('costo_unitario')
+    notas = data.get('notas') or ''
+    
+    if not tipo_documento_id or not documento_numero or not producto_id or cantidad_fisica is None or costo_unitario is None:
+        return jsonify({'ok': False, 'error': 'Todos los campos son requeridos'}), 400
+        
+    conn = get_db_connection()
+    try:
+        # 1. Obtener producto y stock actual
+        prod = conn.execute("SELECT nombre, categoria FROM productos WHERE id=%s AND negocio_id=%s", (producto_id, negocio_id)).fetchone()
+        if not prod:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+            
+        saldo = conn.execute("SELECT stock FROM saldos_inventario WHERE negocio_id=%s AND producto_id=%s AND bodega=1", (negocio_id, producto_id)).fetchone()
+        stock_sistema = float(saldo['stock'] if saldo else 0.0)
+        diff = float(cantidad_fisica) - stock_sistema
+        
+        if abs(diff) < 0.000001:
+            return jsonify({'ok': True, 'mensaje': 'Sin diferencias, no requiere ajuste', 'consecutivo_actualizado': False})
+            
+        # 2. Verificar si existe el comprobante de esta sesión
+        comp = conn.execute("""
+            SELECT id, numero_comprobante FROM comprobantes_contables 
+            WHERE negocio_id=%s AND numero_comprobante=%s
+        """, (negocio_id, documento_numero)).fetchone()
+        
+        doc_num_final = documento_numero
+        comp_id = None
+        consecutivo_actualizado = False
+        
+        tipo_doc = conn.execute("SELECT id, codigo, consecutivo, numero_inicio FROM tipos_documento_negocio WHERE id=%s AND negocio_id=%s", (tipo_documento_id, negocio_id)).fetchone()
+        if not tipo_doc:
+            return jsonify({'ok': False, 'error': 'Tipo de documento no válido'}), 400
+            
+        tipo_code = tipo_doc['codigo'] or 'AJUSTE_INV'
+        
+        if comp:
+            comp_id = comp['id']
+        else:
+            # Es el primer item: consumimos el consecutivo en la base de datos de manera atómica
+            res_num, _ = obtener_siguiente_consecutivo(conn, negocio_id, tipo_documento_id)
+            if not res_num:
+                res_num = str(max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1)))
+                conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (int(res_num), tipo_documento_id))
+            
+            doc_num_final = f"{tipo_code}-{int(res_num):04d}"
+            
+            desc_asiento = f"Ajuste físico de inventario - {doc_num_final}"
+            comp_id = conn.execute("""
+                INSERT INTO comprobantes_contables
+                    (negocio_id, numero_comprobante, numero_documento, tipo, fecha, descripcion,
+                     total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id, tipo_documento_id)
+                VALUES (%s, %s, %s, %s, CURRENT_DATE, %s, 0, 0, %s, 'Ajuste físico por ítem', 'ajuste_inventario', %s, %s)
+                RETURNING id
+            """, (negocio_id, doc_num_final, int(res_num), tipo_code, desc_asiento, session.get('usuario_id'), doc_num_final, tipo_documento_id)).fetchone()['id']
+            consecutivo_actualizado = True
+            
+        # 3. Registrar el movimiento en movimientos_inventario (Kardex)
+        tipo_mov = 'entrada' if diff > 0 else 'salida'
+        _mov_directo(conn, negocio_id, producto_id, abs(diff), tipo_mov, 'ajuste',
+                     registrado_por=session.get('usuario_id'),
+                     valor_unitario=float(costo_unitario),
+                     notas=notas,
+                     bodega=1,
+                     tipo_documento=tipo_code,
+                     documento_numero=doc_num_final,
+                     tipo_documento_id=tipo_documento_id)
+                     
+        # 4. Recostear el producto
+        _recostear_producto(conn, negocio_id, producto_id)
+        
+        # 5. Integración contable individualizada por producto
+        warnings = []
+        if prod['categoria']:
+            gi = conn.execute("""
+                SELECT cuenta_inve_id, cuenta_ajuste_favor_id, cuenta_ajuste_contra_id
+                FROM grupos_inventario
+                WHERE negocio_id = %s AND nombre = %s
+            """, (negocio_id, prod['categoria'])).fetchone()
+            
+            if gi:
+                cuenta_inve = gi['cuenta_inve_id']
+                cuenta_favor = gi['cuenta_ajuste_favor_id']
+                cuenta_contra = gi['cuenta_ajuste_contra_id']
+                
+                monto_ajuste = abs(diff) * float(costo_unitario)
+                
+                db_cuenta_id = None
+                cr_cuenta_id = None
+                
+                if diff > 0: # Sobrante (Ingreso / Ajuste en favor)
+                    if cuenta_inve and cuenta_favor:
+                        db_cuenta_id = cuenta_inve
+                        cr_cuenta_id = cuenta_favor
+                        concepto = f"Ajuste Físico (+): Insumo {prod['nombre']}"
+                    else:
+                        warnings.append("Falta configurar la cuenta de Inventario o de Ajuste a Favor para la categoría.")
+                else: # Faltante (Gasto / Ajuste en contra)
+                    if cuenta_contra and cuenta_inve:
+                        db_cuenta_id = cuenta_contra
+                        cr_cuenta_id = cuenta_inve
+                        concepto = f"Ajuste Físico (-): Insumo {prod['nombre']}"
+                    else:
+                        warnings.append("Falta configurar la cuenta de Inventario o de Ajuste en Contra para la categoría.")
+                        
+                if db_cuenta_id and cr_cuenta_id:
+                    # Resolver códigos de cuenta
+                    db_cod = conn.execute("SELECT codigo FROM cuentas_puc WHERE id=%s", (db_cuenta_id,)).fetchone()['codigo']
+                    cr_cod = conn.execute("SELECT codigo FROM cuentas_puc WHERE id=%s", (cr_cuenta_id,)).fetchone()['codigo']
+                    
+                    # Insertar Débito
+                    conn.execute("""
+                        INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id)
+                        VALUES (%s, %s, %s, %s, %s, 'D', %s, %s, %s)
+                    """, (negocio_id, comp_id, db_cuenta_id, db_cod, concepto, monto_ajuste, session.get('usuario_id'), producto_id))
+                    
+                    # Insertar Crédito
+                    conn.execute("""
+                        INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id)
+                        VALUES (%s, %s, %s, %s, %s, 'C', %s, %s, %s)
+                    """, (negocio_id, comp_id, cr_cuenta_id, cr_cod, concepto, monto_ajuste, session.get('usuario_id'), producto_id))
+                    
+                    # Recalcular totales del comprobante
+                    totals = conn.execute("""
+                        SELECT SUM(CASE WHEN tipo='D' THEN monto ELSE 0 END) AS deb,
+                               SUM(CASE WHEN tipo='C' THEN monto ELSE 0 END) AS cred
+                        FROM movimientos_contables WHERE comprobante_id = %s
+                    """, (comp_id,)).fetchone()
+                    
+                    conn.execute("""
+                        UPDATE comprobantes_contables
+                        SET total_debitos = %s, total_creditos = %s
+                        WHERE id = %s
+                    """, (float(totals['deb'] or 0.0), float(totals['cred'] or 0.0), comp_id))
+            else:
+                warnings.append("La categoría del producto no está configurada en Grupos de Inventario.")
+        else:
+            warnings.append("El producto no pertenece a ninguna categoría.")
+            
+        conn.commit()
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Ajuste registrado y contabilizado con éxito',
+            'documento_numero': doc_num_final,
+            'consecutivo_actualizado': consecutivo_actualizado,
+            'warnings': warnings
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/ajuste-fisico/documento/<documento_numero>/items')
+def api_ajuste_documento_items(negocio_id, documento_numero):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.tipo, m.costo_und, m.valor_total,
+                   m.stock_anterior, m.stock_nuevo, m.created_at, p.categoria
+            FROM movimientos_inventario m
+            JOIN productos p ON p.id = m.producto_id
+            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo = 'ajuste'
+            ORDER BY m.id DESC
+        """, (negocio_id, documento_numero)).fetchall()
+        return jsonify({'ok': True, 'items': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/ajuste-fisico/historial')
+def api_ajuste_historial(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    conn = get_db_connection()
+    try:
+        # Agrupar documentos de ajuste físico por número
+        rows = conn.execute("""
+            SELECT m.documento_numero, MAX(m.created_at) AS fecha, c.id AS comprobante_id,
+                   COALESCE(c.total_debitos, 0) AS total_debitos, COUNT(DISTINCT m.producto_id) AS total_items
+            FROM movimientos_inventario m
+            LEFT JOIN comprobantes_contables c ON c.numero_comprobante = m.documento_numero AND c.negocio_id = m.negocio_id
+            WHERE m.negocio_id = %s AND m.motivo = 'ajuste'
+            GROUP BY m.documento_numero, c.id, c.total_debitos
+            ORDER BY fecha DESC
+        """, (negocio_id,)).fetchall()
+        return jsonify({'ok': True, 'historial': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/ajuste-fisico/documento/<documento_numero>/detalles')
+def api_ajuste_documento_detalles(negocio_id, documento_numero):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    conn = get_db_connection()
+    try:
+        # Obtener los items del Kardex
+        items = conn.execute("""
+            SELECT m.producto_id, m.nombre_producto, m.cantidad, m.tipo, m.costo_und, m.valor_total,
+                   m.stock_anterior, m.stock_nuevo, p.categoria
+            FROM movimientos_inventario m
+            JOIN productos p ON p.id = m.producto_id
+            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo = 'ajuste'
+            ORDER BY m.id
+        """, (negocio_id, documento_numero)).fetchall()
+        
+        # Obtener el asiento contable individualizado
+        asiento = conn.execute("""
+            SELECT mc.cuenta, c.nombre AS cuenta_nombre, mc.concepto, mc.tipo, mc.monto, p.nombre AS producto_nombre
+            FROM movimientos_contables mc
+            JOIN cuentas_puc c ON c.id = mc.cuenta_id
+            LEFT JOIN productos p ON p.id = mc.producto_id
+            JOIN comprobantes_contables cc ON cc.id = mc.comprobante_id
+            WHERE mc.negocio_id = %s AND cc.numero_comprobante = %s
+            ORDER BY mc.id
+        """, (negocio_id, documento_numero)).fetchall()
+        
+        return jsonify({
+            'ok': True,
+            'items': [dict(i) for i in items],
+            'asiento': [dict(a) for a in asiento]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()

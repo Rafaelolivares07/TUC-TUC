@@ -196,6 +196,11 @@ def _asegurar_tablas(conn):
         "ALTER TABLE movimientos_inventario  ADD COLUMN IF NOT EXISTS numero_documento INTEGER",
         # cuenta_ingre_id en grupos_inventario
         "ALTER TABLE grupos_inventario       ADD COLUMN IF NOT EXISTS cuenta_ingre_id INTEGER REFERENCES cuentas_puc(id)",
+        # cuenta_ajuste_favor_id y cuenta_ajuste_contra_id en grupos_inventario
+        "ALTER TABLE grupos_inventario       ADD COLUMN IF NOT EXISTS cuenta_ajuste_favor_id INTEGER REFERENCES cuentas_puc(id)",
+        "ALTER TABLE grupos_inventario       ADD COLUMN IF NOT EXISTS cuenta_ajuste_contra_id INTEGER REFERENCES cuentas_puc(id)",
+        # producto_id en movimientos_contables
+        "ALTER TABLE movimientos_contables   ADD COLUMN IF NOT EXISTS producto_id INTEGER REFERENCES productos(id) ON DELETE SET NULL",
     ]:
         try:
             conn.execute(sql)
@@ -1478,7 +1483,7 @@ def api_tipos_doc_post(negocio_id):
     tipo_movimiento = data.get('tipo_movimiento')
     if tipo_movimiento:
         tipo_movimiento = tipo_movimiento.strip().lower()
-        if tipo_movimiento not in ('entrada', 'salida', 'produccion', 'venta'):
+        if tipo_movimiento not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste'):
             tipo_movimiento = None
     else:
         tipo_movimiento = None
@@ -1576,7 +1581,7 @@ def api_tipos_doc_patch(negocio_id, tid):
             tipo_mov = data['tipo_movimiento']
             if tipo_mov:
                 tipo_mov = tipo_mov.strip().lower()
-                if tipo_mov not in ('entrada', 'salida', 'produccion', 'venta'):
+                if tipo_mov not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste'):
                     tipo_mov = None
             else:
                 tipo_mov = None
@@ -2030,7 +2035,9 @@ def api_grupos_get(negocio_id):
                    g.id,
                    g.cuenta_inve_id, pi.codigo AS cod_inve, pi.nombre AS nom_inve,
                    g.cuenta_cos_id,  pc.codigo AS cod_cos,  pc.nombre AS nom_cos,
-                   g.cuenta_ingre_id, pg.codigo AS cod_ingre, pg.nombre AS nom_ingre
+                   g.cuenta_ingre_id, pg.codigo AS cod_ingre, pg.nombre AS nom_ingre,
+                   g.cuenta_ajuste_favor_id, pf.codigo AS cod_ajuste_favor, pf.nombre AS nom_ajuste_favor,
+                   g.cuenta_ajuste_contra_id, pa.codigo AS cod_ajuste_contra, pa.nombre AS nom_ajuste_contra
             FROM (
                 SELECT DISTINCT categoria FROM productos
                 WHERE negocio_id = %s AND categoria IS NOT NULL AND categoria <> ''
@@ -2040,6 +2047,8 @@ def api_grupos_get(negocio_id):
             LEFT JOIN cuentas_puc pi ON pi.id = g.cuenta_inve_id
             LEFT JOIN cuentas_puc pc ON pc.id = g.cuenta_cos_id
             LEFT JOIN cuentas_puc pg ON pg.id = g.cuenta_ingre_id
+            LEFT JOIN cuentas_puc pf ON pf.id = g.cuenta_ajuste_favor_id
+            LEFT JOIN cuentas_puc pa ON pa.id = g.cuenta_ajuste_contra_id
             ORDER BY p.categoria
         """, (negocio_id, negocio_id)).fetchall()
         conn.close()
@@ -2059,6 +2068,8 @@ def api_grupos_post(negocio_id):
     cuenta_inve_id  = data.get('cuenta_inve_id')
     cuenta_cos_id   = data.get('cuenta_cos_id')
     cuenta_ingre_id = data.get('cuenta_ingre_id')
+    cuenta_ajuste_favor_id = data.get('cuenta_ajuste_favor_id')
+    cuenta_ajuste_contra_id = data.get('cuenta_ajuste_contra_id')
     if not nombre:
         return jsonify({'ok': False, 'error': 'Nombre del grupo es requerido'}), 400
     from ..db import get_db_connection
@@ -2066,14 +2077,16 @@ def api_grupos_post(negocio_id):
         conn = get_db_connection()
         _asegurar_tablas(conn)
         row = conn.execute("""
-            INSERT INTO grupos_inventario (negocio_id, nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id)
-            VALUES (%s,%s,%s,%s,%s)
+            INSERT INTO grupos_inventario (negocio_id, nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id, cuenta_ajuste_favor_id, cuenta_ajuste_contra_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (negocio_id, nombre) DO UPDATE
                 SET cuenta_inve_id=EXCLUDED.cuenta_inve_id, 
                     cuenta_cos_id=EXCLUDED.cuenta_cos_id, 
-                    cuenta_ingre_id=EXCLUDED.cuenta_ingre_id
+                    cuenta_ingre_id=EXCLUDED.cuenta_ingre_id,
+                    cuenta_ajuste_favor_id=EXCLUDED.cuenta_ajuste_favor_id,
+                    cuenta_ajuste_contra_id=EXCLUDED.cuenta_ajuste_contra_id
             RETURNING id
-        """, (negocio_id, nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id)).fetchone()
+        """, (negocio_id, nombre, cuenta_inve_id, cuenta_cos_id, cuenta_ingre_id, cuenta_ajuste_favor_id, cuenta_ajuste_contra_id)).fetchone()
         conn.commit(); conn.close()
         return jsonify({'ok': True, 'id': row['id']})
     except Exception as e:
@@ -2102,6 +2115,12 @@ def api_grupo_item(negocio_id, gid):
             if 'cuenta_ingre_id' in data:
                 conn.execute("UPDATE grupos_inventario SET cuenta_ingre_id=%s WHERE id=%s AND negocio_id=%s",
                              (data['cuenta_ingre_id'], gid, negocio_id))
+            if 'cuenta_ajuste_favor_id' in data:
+                conn.execute("UPDATE grupos_inventario SET cuenta_ajuste_favor_id=%s WHERE id=%s AND negocio_id=%s",
+                             (data['cuenta_ajuste_favor_id'], gid, negocio_id))
+            if 'cuenta_ajuste_contra_id' in data:
+                conn.execute("UPDATE grupos_inventario SET cuenta_ajuste_contra_id=%s WHERE id=%s AND negocio_id=%s",
+                             (data['cuenta_ajuste_contra_id'], gid, negocio_id))
             if 'nombre' in data:
                 conn.execute("UPDATE grupos_inventario SET nombre=%s WHERE id=%s AND negocio_id=%s",
                              (data['nombre'].strip(), gid, negocio_id))

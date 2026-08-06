@@ -3581,3 +3581,159 @@ def api_ajuste_documento_detalles(negocio_id, documento_numero):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/modificar-documento', methods=['POST'])
+def api_mantenimiento_modificar_documento(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+        
+    data = request.get_json() or {}
+    tipo_documento = data.get('tipo_documento')
+    documento_numero = data.get('documento_numero')
+    nueva_fecha = data.get('nueva_fecha')
+    nuevo_tercero_id = data.get('nuevo_tercero_id')
+    
+    if not tipo_documento or not documento_numero:
+        return jsonify({'ok': False, 'error': 'tipo_documento y documento_numero son requeridos'}), 400
+        
+    if not nueva_fecha and nuevo_tercero_id is None:
+        return jsonify({'ok': False, 'error': 'Se requiere al menos un atributo a modificar (nueva_fecha o nuevo_tercero_id)'}), 400
+        
+    conn = get_db_connection()
+    try:
+        # 1. Resolver tercero si nuevo_tercero_id es provisto
+        tercero_nombre = None
+        if nuevo_tercero_id is not None:
+            tercero = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (int(nuevo_tercero_id),)).fetchone()
+            if not tercero:
+                return jsonify({'ok': False, 'error': f'Tercero con ID {nuevo_tercero_id} no encontrado'}), 404
+            tercero_nombre = tercero['nombre']
+            
+        # 2. Buscar si existe pedido relacionado
+        pedido_row = None
+        try:
+            pedido_id = int(documento_numero)
+            pedido_row = conn.execute("SELECT id FROM pedidos WHERE id = %s AND negocio_id = %s", (pedido_id, negocio_id)).fetchone()
+        except ValueError:
+            pass
+            
+        if not pedido_row:
+            pedido_row = conn.execute("SELECT id FROM pedidos WHERE UPPER(numero_documento) = UPPER(%s) AND negocio_id = %s", (documento_numero, negocio_id)).fetchone()
+            
+        # 3. Determinar cláusula WHERE para movimientos_inventario
+        if pedido_row:
+            where_inv = """
+                negocio_id = %s AND (
+                    (referencia_tipo IN ('pedido', 'pedido_tienda', 'pedido_restaurante') AND referencia_id = %s)
+                    OR (LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s))
+                )
+            """
+            params_inv = [negocio_id, pedido_row['id'], tipo_documento, documento_numero]
+        else:
+            where_inv = "negocio_id = %s AND LOWER(tipo_documento) = LOWER(%s) AND LOWER(documento_numero) = LOWER(%s)"
+            params_inv = [negocio_id, tipo_documento, documento_numero]
+            
+        # 4. Obtener productos afectados ANTES de cualquier modificación para poder recostearlos
+        productos_afectados = [r['producto_id'] for r in conn.execute(f"SELECT DISTINCT producto_id FROM movimientos_inventario WHERE {where_inv}", tuple(params_inv)).fetchall()]
+        
+        # 5. Aplicar modificaciones en movimientos_inventario (Kardex)
+        if nueva_fecha:
+            conn.execute(f"""
+                UPDATE movimientos_inventario
+                SET documento_fecha = %s,
+                    created_at = %s::date + (created_at::time)
+                WHERE {where_inv}
+            """, [nueva_fecha, nueva_fecha] + params_inv)
+            
+        if nuevo_tercero_id is not None:
+            conn.execute(f"""
+                UPDATE movimientos_inventario
+                SET proveedor_id = %s,
+                    proveedor_nombre = %s
+                WHERE {where_inv}
+            """, [int(nuevo_tercero_id), tercero_nombre] + params_inv)
+            
+        # 6. Aplicar modificaciones en comprobantes_contables
+        origen_id_str = f"{tipo_documento}:{documento_numero}"
+        pedido_id_str = str(pedido_row['id']) if pedido_row else None
+        
+        where_comp = """
+            negocio_id = %s AND (
+                (origen_tipo = 'pedido' AND origen_id = %s)
+                OR (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
+                OR (numero_comprobante ILIKE %s)
+            )
+        """
+        params_comp = [negocio_id, pedido_id_str, origen_id_str, f'%{documento_numero}%']
+        
+        if nueva_fecha:
+            conn.execute(f"""
+                UPDATE comprobantes_contables
+                SET fecha = %s
+                WHERE {where_comp}
+            """, [nueva_fecha] + params_comp)
+            
+        # 7. Aplicar modificaciones en pedidos (ventas)
+        if pedido_row:
+            if nueva_fecha:
+                conn.execute("""
+                    UPDATE pedidos
+                    SET fecha = %s
+                    WHERE id = %s AND negocio_id = %s
+                """, (nueva_fecha, pedido_row['id'], negocio_id))
+            if nuevo_tercero_id is not None:
+                update_fields = ["id_tercero = %s"]
+                update_params = [int(nuevo_tercero_id)]
+                
+                # Obtener columnas de tabla pedidos de manera segura
+                ped_cols = [c['column_name'] for c in conn.execute("""
+                    SELECT column_name FROM information_schema.columns 
+                    WHERE table_name = 'pedidos'
+                """).fetchall()]
+                
+                if 'cliente_id' in ped_cols:
+                    update_fields.append("cliente_id = %s")
+                    update_params.append(int(nuevo_tercero_id))
+                if 'nombre_cliente' in ped_cols:
+                    update_fields.append("nombre_cliente = %s")
+                    update_params.append(tercero_nombre)
+                    
+                query_ped = f"UPDATE pedidos SET {', '.join(update_fields)} WHERE id = %s AND negocio_id = %s"
+                conn.execute(query_ped, tuple(update_params + [pedido_row['id'], negocio_id]))
+                
+        # 8. Aplicar modificaciones en saldo_por_documentos
+        where_saldo = """
+            negocio_id = %s AND (
+                (tipo_documento = %s AND numero_documento = %s)
+                OR (tipo_documento_id IS NOT NULL AND numero_documento = %s)
+            )
+        """
+        params_saldo = [negocio_id, tipo_documento, documento_numero, documento_numero]
+        
+        if nueva_fecha:
+            conn.execute(f"""
+                UPDATE saldo_por_documentos
+                SET fecha_hora = %s::date + (fecha_hora::time),
+                    created_at = %s::date + (created_at::time)
+                WHERE {where_saldo}
+            """, [nueva_fecha, nueva_fecha] + params_saldo)
+            
+        if nuevo_tercero_id is not None:
+            conn.execute(f"""
+                UPDATE saldo_por_documentos
+                SET tercero_id = %s
+                WHERE {where_saldo}
+            """, [int(nuevo_tercero_id)] + params_saldo)
+            
+        # 9. Recosteo retroactivo de todos los productos afectados
+        for p_id in productos_afectados:
+            _recostear_producto(conn, negocio_id, p_id)
+            
+        conn.commit()
+        return jsonify({'ok': True, 'mensaje': 'Documento modificado y propagado con éxito en todo el sistema.'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()

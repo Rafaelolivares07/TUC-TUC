@@ -335,9 +335,37 @@
       </p>
     </div>
 
-    <!-- Resultados -->
     <div id="auditor-resultados" class="hidden space-y-6">
       
+      <!-- ✏️ Card: Modificar Cabecera de Documento -->
+      <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+        <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5 mb-3">
+          <span>✏️</span> Modificar Cabecera del Documento (Fecha / Tercero)
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Modificar Fecha -->
+          <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nueva Fecha</label>
+            <input type="date" id="aud-edit-fecha" 
+                   class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition-all">
+          </div>
+          <!-- Modificar Tercero -->
+          <div class="relative">
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nuevo Tercero (Cliente / Proveedor)</label>
+            <input type="text" id="aud-edit-tercero" placeholder="Buscar nuevo cliente o proveedor..." autocomplete="off"
+                   class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition-all">
+            <div id="aud-edit-tercero-list" class="ac-drop hidden"></div>
+            <input type="hidden" id="aud-edit-tercero-id">
+          </div>
+        </div>
+        <div class="flex justify-end mt-4">
+          <button id="btn-aud-guardar-cambios" onclick="guardarCambiosAuditoriaDocumento()"
+                  class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition disabled:bg-gray-100 disabled:text-gray-400">
+            Guardar Cambios de Cabecera
+          </button>
+        </div>
+      </div>
+
       <!-- 📦 Card: Inventario -->
       <div id="aud-card-inventario" class="hidden bg-white border border-gray-200 rounded-xl shadow-sm p-4">
         <div class="mb-3">
@@ -638,6 +666,20 @@
       
       auditorDocumentoSeleccionado = { tipo, numero, terceroId: provId, terceroNombre: provNombre };
       
+      // Obtener y poblar la fecha del documento
+      let docFecha = '';
+      if (d.contabilidad && d.contabilidad.fecha) {
+        docFecha = d.contabilidad.fecha.split('T')[0];
+      } else if (d.inventario && d.inventario.length > 0 && d.inventario[0].created_at) {
+        docFecha = d.inventario[0].created_at.split('T')[0];
+      } else if (d.ventas && d.ventas.fecha) {
+        docFecha = d.ventas.fecha.split('T')[0];
+      }
+      
+      document.getElementById('aud-edit-fecha').value = docFecha;
+      document.getElementById('aud-edit-tercero-id').value = provId || '';
+      document.getElementById('aud-edit-tercero').value = provNombre || '';
+      
       // Render Inventario
       const cardInv = document.getElementById('aud-card-inventario');
       const tbodyInv = document.getElementById('aud-tbody-inventario');
@@ -829,6 +871,51 @@
     }
   }
 
+  async function guardarCambiosAuditoriaDocumento() {
+    if (!auditorDocumentoSeleccionado) return;
+    const { tipo, numero, terceroId } = auditorDocumentoSeleccionado;
+    
+    const nuevaFecha = document.getElementById('aud-edit-fecha').value;
+    const nuevoTerceroId = parseInt(document.getElementById('aud-edit-tercero-id').value) || null;
+    
+    if (!nuevaFecha && !nuevoTerceroId) {
+      toast('Debe especificar al menos un campo a modificar (fecha o tercero)', false);
+      return;
+    }
+    
+    const btn = document.getElementById('btn-aud-guardar-cambios');
+    btn.disabled = true;
+    btn.textContent = 'Guardando cambios...';
+    
+    try {
+      const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/modificar-documento`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          tipo_documento: tipo,
+          documento_numero: numero,
+          nueva_fecha: nuevaFecha || null,
+          nuevo_tercero_id: nuevoTerceroId
+        })
+      });
+      
+      const data = await resp.json();
+      if (data.ok) {
+        toast(data.mensaje || 'Documento modificado y propagado con éxito');
+        // Volver a consultar detalles del documento para reflejar los cambios
+        await consultarDocumentoDetalle(tipo, numero, nuevoTerceroId || terceroId);
+      } else {
+        toast(data.error || 'Error al guardar modificaciones del documento', false);
+      }
+    } catch (e) {
+      console.error(e);
+      toast('Error de red al guardar modificaciones', false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Guardar Cambios de Cabecera';
+    }
+  }
+
   function resetUnificarForm() {
     document.getElementById('ac-principal').value = '';
     document.getElementById('ac-principal-id').value = '';
@@ -871,6 +958,11 @@
     document.getElementById('aud-tercero-nombre-lbl').textContent = nombre;
     document.getElementById('selected-aud-tercero-badge').classList.remove('hidden');
     cargarDocumentosTercero(id);
+  });
+
+  setupRemoteAC('aud-edit-tercero', 'aud-edit-tercero-list', ({id, nombre}) => {
+    document.getElementById('aud-edit-tercero-id').value = id;
+    document.getElementById('aud-edit-tercero').value = nombre;
   });
 
   function renderSobrantes() {

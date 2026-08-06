@@ -2362,12 +2362,22 @@ def api_tienda_pedido_crear(slug):
         for it in items_validos:
             # Query the unit cost of the product right now
             costo_row = conn.execute("""
-                SELECT COALESCE(s.costo_und, p.costo, 0) AS costo_und 
-                FROM productos p 
-                LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
-                WHERE p.id = %s
-            """, (negocio['tercero_id'], it['producto_id'])).fetchone()
-            costo_u = float(costo_row['costo_und']) if costo_row else 0.0
+                SELECT COALESCE(
+                    -- 1. Recipe product: sum of standard recipe components cost
+                    (SELECT SUM(t.cantidad * COALESCE(s.costo_und, p_comp.costo, 0))
+                     FROM tarjeta_estandar t
+                     JOIN productos p_comp ON p_comp.id = t.componente_id
+                     LEFT JOIN saldos_inventario s ON s.producto_id = t.componente_id AND s.negocio_id = %s AND s.bodega = 1
+                     WHERE t.producto_id = %s
+                     HAVING COUNT(*) > 0),
+                    -- 2. Simple product
+                    (SELECT COALESCE(s.costo_und, p.costo, 0)
+                     FROM productos p
+                     LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
+                     WHERE p.id = %s)
+                ) AS costo_real
+            """, (negocio['tercero_id'], it['producto_id'], negocio['tercero_id'], it['producto_id'])).fetchone()
+            costo_u = float(costo_row['costo_real']) if (costo_row and costo_row['costo_real'] is not None) else 0.0
 
             conn.execute("""
                 INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, costo_unitario)

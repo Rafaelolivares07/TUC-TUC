@@ -2360,10 +2360,19 @@ def api_tienda_pedido_crear(slug):
             "SELECT currval(pg_get_serial_sequence('pedidos', 'id'))"
         ).fetchone()[0]
         for it in items_validos:
+            # Query the unit cost of the product right now
+            costo_row = conn.execute("""
+                SELECT COALESCE(s.costo_und, p.costo, 0) AS costo_und 
+                FROM productos p 
+                LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
+                WHERE p.id = %s
+            """, (negocio['tercero_id'], it['producto_id'])).fetchone()
+            costo_u = float(costo_row['costo_und']) if costo_row else 0.0
+
             conn.execute("""
-                INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario)
-                VALUES (%s,%s,%s,%s,%s)
-            """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario']))
+                INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, costo_unitario)
+                VALUES (%s,%s,%s,%s,%s,%s)
+            """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario'], costo_u))
             if negocio['tercero_id']:
                 excluded_ids = [
                     int(exc['componente_id']) 

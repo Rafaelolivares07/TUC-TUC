@@ -3737,3 +3737,65 @@ def api_mantenimiento_modificar_documento(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+@bp.route('/api/inventario/<int:negocio_id>/reporte-ventas-costos')
+def api_reporte_ventas_costos(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    desde = request.args.get('desde')
+    hasta = request.args.get('hasta')
+    if not desde or not hasta:
+        return jsonify({'ok': False, 'error': 'Debe especificar las fechas desde y hasta'}), 400
+        
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT 
+                pi.producto_id,
+                p.nombre AS nombre_producto,
+                SUM(pi.cantidad) AS cantidad_vendida,
+                SUM(pi.cantidad * pi.precio_unitario) AS total_ventas_pesos,
+                SUM(pi.cantidad * pi.costo_unitario) AS total_costo_pesos
+            FROM pedido_items pi
+            JOIN pedidos ped ON ped.id = pi.pedido_id
+            JOIN productos p ON p.id = pi.producto_id
+            WHERE ped.negocio_id = %s 
+              AND (ped.estado IS NULL OR ped.estado != 'anulado')
+              AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date 
+              AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
+            GROUP BY pi.producto_id, p.nombre
+            ORDER BY total_ventas_pesos DESC
+        """, (negocio_id, desde, hasta)).fetchall()
+        
+        datos = []
+        for r in rows:
+            cant = float(r['cantidad_vendida'])
+            ventas_tot = float(r['total_ventas_pesos'])
+            costos_tot = float(r['total_costo_pesos'])
+            
+            px_prom = ventas_tot / cant if cant > 0 else 0.0
+            cx_prom = costos_tot / cant if cant > 0 else 0.0
+            
+            margen_unitario = px_prom - cx_prom
+            margen_total = ventas_tot - costos_tot
+            margen_porcentual = (margen_total / ventas_tot * 100.0) if ventas_tot > 0 else 0.0
+            
+            datos.append({
+                'producto_id': r['producto_id'],
+                'nombre_producto': r['nombre_producto'],
+                'cantidad': cant,
+                'precio_unitario': px_prom,
+                'costo_unitario': cx_prom,
+                'total_venta': ventas_tot,
+                'total_costo': costos_tot,
+                'margen_unitario': margen_unitario,
+                'margen_total': margen_total,
+                'margen_porcentual': margen_porcentual
+            })
+            
+        return jsonify({'ok': True, 'reporte': datos})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()

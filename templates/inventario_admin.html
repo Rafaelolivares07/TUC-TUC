@@ -383,6 +383,7 @@
       <button class="tab-btn" onclick="mostrarTab('entradas')">Entradas</button>
       <button class="tab-btn" onclick="mostrarTab('produccion')">Producción</button>
       <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
+      <button class="tab-btn" onclick="mostrarTab('ventas_costos')">Ventas/Costos</button>
     </div>
   </div>
 
@@ -789,6 +790,73 @@
     </div>
   </div>
 
+  <!-- ── TAB VENTAS/COSTOS ────────────────────────────────────────── -->
+  <div id="tab-ventas_costos" class="hidden bg-white rounded-2xl shadow p-5">
+    <div class="border-b border-gray-150 pb-4 mb-4 flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <h2 class="text-lg font-bold text-gray-800">Margen de Contribución por Producto</h2>
+        <p class="text-xs text-gray-400 font-medium">Visualiza las ventas, costos unitarios reales del momento y el margen por cada producto.</p>
+      </div>
+      <div class="flex items-end gap-3 flex-wrap text-xs">
+        <div class="flex flex-col">
+          <label class="text-[10px] font-bold text-gray-400 uppercase mb-1">Desde</label>
+          <input type="date" id="vc-desde" class="border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-gray-700">
+        </div>
+        <div class="flex flex-col">
+          <label class="text-[10px] font-bold text-gray-400 uppercase mb-1">Hasta</label>
+          <input type="date" id="vc-hasta" class="border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500 font-semibold text-gray-700">
+        </div>
+        <button id="btn-consultar-vc" onclick="consultarVentasCostos()" class="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+          Filtrar
+        </button>
+      </div>
+    </div>
+
+    <!-- KPI SUMMARY CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+      <div class="bg-emerald-50/50 border border-emerald-100 p-4 rounded-2xl">
+        <span class="block text-emerald-600 font-bold uppercase tracking-wider text-[9px] mb-1">Ventas Totales</span>
+        <span id="vc-kpi-ventas" class="text-xl font-black text-emerald-800 font-mono">$0</span>
+      </div>
+      <div class="bg-rose-50/50 border border-rose-100 p-4 rounded-2xl">
+        <span class="block text-rose-600 font-bold uppercase tracking-wider text-[9px] mb-1">Costo de Ventas</span>
+        <span id="vc-kpi-costos" class="text-xl font-black text-rose-800 font-mono">$0</span>
+      </div>
+      <div class="bg-indigo-50/50 border border-indigo-100 p-4 rounded-2xl">
+        <span class="block text-indigo-600 font-bold uppercase tracking-wider text-[9px] mb-1">Margen de Utilidad</span>
+        <span id="vc-kpi-margen" class="text-xl font-black text-indigo-800 font-mono">$0</span>
+      </div>
+      <div class="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl">
+        <span class="block text-amber-600 font-bold uppercase tracking-wider text-[9px] mb-1">Margen Pct Promedio</span>
+        <span id="vc-kpi-pct" class="text-xl font-black text-amber-800 font-mono">0%</span>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table>
+        <thead>
+          <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-150 select-none">
+            <th onclick="ordenarVC('nombre_producto')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors">Producto <span id="sort-vc-nombre" class="text-gray-400">↕</span></th>
+            <th onclick="ordenarVC('cantidad')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Cant. Vendida <span id="sort-vc-cantidad" class="text-gray-400">↕</span></th>
+            <th onclick="ordenarVC('precio_unitario')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Precio Prom. Venta <span id="sort-vc-precio" class="text-gray-400">↕</span></th>
+            <th onclick="ordenarVC('costo_unitario')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Costo Prom. Unitario <span id="sort-vc-costo" class="text-gray-400">↕</span></th>
+            <th onclick="ordenarVC('total_venta')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Venta Total <span id="sort-vc-tventa" class="text-gray-400">↕</span></th>
+            <th onclick="ordenarVC('total_costo')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Costo Total <span id="sort-vc-tcosto" class="text-gray-400">↕</span></th>
+            <th onclick="ordenarVC('margen_unitario')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Margen Unit. <span id="sort-vc-munit" class="text-gray-400">↕</span></th>
+            <th onclick="ordenarVC('margen_total')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">Margen Total <span id="sort-vc-mtot" class="text-gray-400">↕</span></th>
+            <th onclick="ordenarVC('margen_porcentual')" class="px-3 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors">% Margen <span id="sort-vc-mpct" class="text-gray-400">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="tabla-ventas-costos" class="divide-y divide-gray-100">
+          <tr><td colspan="9" class="text-center text-gray-400 py-8">Selecciona un rango de fechas y presiona "Filtrar"</td></tr>
+        </tbody>
+        <tfoot id="tabla-ventas-costos-foot" class="bg-gray-50/50 font-bold border-t border-gray-200">
+          <!-- Totales se pintarán aquí -->
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
 </div><!-- /max-w-5xl -->
 
 <script>
@@ -824,7 +892,7 @@ function toast(msg, ok = true) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'kardex'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'kardex', 'ventas_costos'];
 function mostrarTab(t) {
   TABS.forEach(id => {
     const el = document.getElementById(`tab-${id}`);
@@ -836,6 +904,10 @@ function mostrarTab(t) {
   if (t === 'tarjetas') {
     cargarTarjetasResumen();
     cambiarVistaTarjetas('recetas');
+  }
+  if (t === 'ventas_costos') {
+    inicializarFechasVC();
+    consultarVentasCostos();
   }
 }
 
@@ -3230,6 +3302,169 @@ function updateThemeButton() {
 
 // Inicializar el emoji correcto del botón tras cargar el DOM
 document.addEventListener('DOMContentLoaded', updateThemeButton);
+
+// ── Ventas y Costos ──
+let datosVC = [];
+let sortColVC = 'total_venta';
+let sortAscVC = false;
+
+function inicializarFechasVC() {
+  const desdeInp = document.getElementById('vc-desde');
+  const hastaInp = document.getElementById('vc-hasta');
+  if (desdeInp && !desdeInp.value) {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    desdeInp.value = `${y}-${m}-01`;
+  }
+  if (hastaInp && !hastaInp.value) {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    hastaInp.value = `${y}-${m}-${day}`;
+  }
+}
+
+async function consultarVentasCostos() {
+  const desde = document.getElementById('vc-desde').value;
+  const hasta = document.getElementById('vc-hasta').value;
+  if (!desde || !hasta) return;
+  
+  const btn = document.getElementById('btn-consultar-vc');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Cargando...';
+  }
+  
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos?desde=${desde}&hasta=${hasta}`);
+    const d = await r.json();
+    if (d.ok) {
+      datosVC = d.reporte || [];
+      datosVC.sort((a, b) => b.total_venta - a.total_venta);
+      renderTablaVC();
+    } else {
+      toast(d.error || 'Error al cargar reporte', false);
+    }
+  } catch(e) {
+    console.error(e);
+    toast('Error de conexión', false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Filtrar';
+    }
+  }
+}
+
+function renderTablaVC() {
+  const tbody = document.getElementById('tabla-ventas-costos');
+  const tfoot = document.getElementById('tabla-ventas-costos-foot');
+  if (!tbody) return;
+  
+  if (!datosVC.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-gray-400 py-8">No se encontraron ventas en este rango de fechas.</td></tr>`;
+    tfoot.innerHTML = '';
+    
+    document.getElementById('vc-kpi-ventas').textContent = '$0';
+    document.getElementById('vc-kpi-costos').textContent = '$0';
+    document.getElementById('vc-kpi-margen').textContent = '$0';
+    document.getElementById('vc-kpi-pct').textContent = '0%';
+    return;
+  }
+  
+  let totalCant = 0;
+  let totalVentas = 0;
+  let totalCostos = 0;
+  
+  tbody.innerHTML = datosVC.map(r => {
+    totalCant += r.cantidad;
+    totalVentas += r.total_venta;
+    totalCostos += r.total_costo;
+    
+    const pctCls = r.margen_porcentual >= 30 ? 'text-emerald-600' : (r.margen_porcentual >= 15 ? 'text-amber-600' : 'text-rose-600');
+    
+    return `
+      <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs">
+        <td class="px-3 py-2.5 font-semibold text-gray-800">${r.nombre_producto}</td>
+        <td class="px-3 py-2.5 text-right num text-gray-600">${fmt(r.cantidad)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-gray-500">${fmtMon(r.precio_unitario)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-gray-500">${fmtMon(r.costo_unitario)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono font-semibold text-emerald-700">${fmtMon(r.total_venta)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-rose-700">${fmtMon(r.total_costo)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono ${r.margen_unitario >= 0 ? 'text-gray-700' : 'text-rose-600'}">${fmtMon(r.margen_unitario)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono font-semibold ${r.margen_total >= 0 ? 'text-indigo-700' : 'text-rose-600'}">${fmtMon(r.margen_total)}</td>
+        <td class="px-3 py-2.5 text-right num font-bold ${pctCls}">${fmt(r.margen_porcentual)}%</td>
+      </tr>
+    `;
+  }).join('');
+  
+  const margenTotalGeneral = totalVentas - totalCostos;
+  const pctMargenGeneral = totalVentas > 0 ? (margenTotalGeneral / totalVentas * 100.0) : 0.0;
+  
+  document.getElementById('vc-kpi-ventas').textContent = fmtMon(totalVentas);
+  document.getElementById('vc-kpi-costos').textContent = fmtMon(totalCostos);
+  document.getElementById('vc-kpi-margen').textContent = fmtMon(margenTotalGeneral);
+  document.getElementById('vc-kpi-pct').textContent = fmt(pctMargenGeneral) + '%';
+  
+  const promPrecioPonderado = totalCant > 0 ? (totalVentas / totalCant) : 0.0;
+  const promCostoPonderado = totalCant > 0 ? (totalCostos / totalCant) : 0.0;
+  const promMargenPonderado = promPrecioPonderado - promCostoPonderado;
+  
+  const pctGeneralCls = pctMargenGeneral >= 30 ? 'text-emerald-600' : (pctMargenGeneral >= 15 ? 'text-amber-600' : 'text-rose-600');
+  
+  tfoot.innerHTML = `
+    <tr class="bg-gray-100/80 text-xs text-gray-800">
+      <td class="px-3 py-3 text-left font-extrabold">TOTAL / PROMEDIOS PONDERADOS</td>
+      <td class="px-3 py-3 text-right num font-extrabold">${fmt(totalCant)}</td>
+      <td class="px-3 py-3 text-right num font-mono font-extrabold text-gray-600">${fmtMon(promPrecioPonderado)}</td>
+      <td class="px-3 py-3 text-right num font-mono font-extrabold text-gray-600">${fmtMon(promCostoPonderado)}</td>
+      <td class="px-3 py-3 text-right num font-mono font-extrabold text-emerald-800">${fmtMon(totalVentas)}</td>
+      <td class="px-3 py-3 text-right num font-mono font-extrabold text-rose-800">${fmtMon(totalCostos)}</td>
+      <td class="px-3 py-3 text-right num font-mono font-extrabold ${promMargenPonderado >= 0 ? 'text-gray-800' : 'text-rose-700'}">${fmtMon(promMargenPonderado)}</td>
+      <td class="px-3 py-3 text-right num font-mono font-extrabold ${margenTotalGeneral >= 0 ? 'text-indigo-800' : 'text-rose-700'}">${fmtMon(margenTotalGeneral)}</td>
+      <td class="px-3 py-3 text-right num font-extrabold ${pctGeneralCls}">${fmt(pctMargenGeneral)}%</td>
+    </tr>
+  `;
+}
+
+function ordenarVC(col) {
+  if (sortColVC === col) {
+    sortAscVC = !sortAscVC;
+  } else {
+    sortColVC = col;
+    sortAscVC = true;
+  }
+  
+  const indicators = {
+    'nombre_producto': 'sort-vc-nombre',
+    'cantidad': 'sort-vc-cantidad',
+    'precio_unitario': 'sort-vc-precio',
+    'costo_unitario': 'sort-vc-costo',
+    'total_venta': 'sort-vc-tventa',
+    'total_costo': 'sort-vc-tcosto',
+    'margen_unitario': 'sort-vc-munit',
+    'margen_total': 'sort-vc-mtot',
+    'margen_porcentual': 'sort-vc-mpct'
+  };
+  
+  Object.keys(indicators).forEach(c => {
+    const el = document.getElementById(indicators[c]);
+    if (el) el.textContent = c === col ? (sortAscVC ? '▲' : '▼') : '↕';
+  });
+  
+  datosVC.sort((a, b) => {
+    let va = a[col];
+    let vb = b[col];
+    if (typeof va === 'string') {
+      return sortAscVC ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+    return sortAscVC ? (va - vb) : (vb - va);
+  });
+  
+  renderTablaVC();
+}
 </script>
 </body>
 </html>

@@ -2031,6 +2031,51 @@ def api_pedido_crear(slug):
                 pedidos_insertados.append(conn.execute(
                     "SELECT currval(pg_get_serial_sequence('pedidos','id'))"
                 ).fetchone()[0])
+                pedido_id_actual = pedidos_insertados[-1]
+                
+                # Consultar costo unitario de plato_id
+                costo_row = conn.execute("""
+                    SELECT COALESCE(s.costo_und, p.costo, 0) AS costo_und 
+                    FROM productos p 
+                    LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
+                    WHERE p.id = %s
+                """, (rest['tercero_id'], opcion['id'])).fetchone()
+                costo_u = float(costo_row['costo_und']) if costo_row else 0.0
+
+                # Insertar plato en pedido_items
+                conn.execute("""
+                    INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, costo_unitario)
+                    VALUES (%s,%s,%s,%s,%s,%s)
+                """, (pedido_id_actual, opcion['id'], opcion['nombre'], cant, float(opcion['precio']), costo_u))
+
+                # Insertar adiciones en pedido_items
+                if isinstance(adiciones, list):
+                    for ad in adiciones:
+                        try:
+                            ad_id = int(ad.get('producto_id') or ad.get('id') or 0)
+                            ad_cant = int(ad.get('cantidad') or 0)
+                        except (TypeError, ValueError):
+                            continue
+                        if ad_id <= 0 or ad_cant <= 0:
+                            continue
+                        adicion = conn.execute("""
+                            SELECT id, nombre, precio FROM productos 
+                            WHERE id=%s AND negocio_id=%s AND disponible=TRUE AND precio > 0
+                        """, (ad_id, rest['tercero_id'])).fetchone()
+                        if adicion:
+                            costo_ad_row = conn.execute("""
+                                SELECT COALESCE(s.costo_und, p.costo, 0) AS costo_und 
+                                FROM productos p 
+                                LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
+                                WHERE p.id = %s
+                            """, (rest['tercero_id'], adicion['id'])).fetchone()
+                            costo_ad_u = float(costo_ad_row['costo_und']) if costo_ad_row else 0.0
+                            
+                            conn.execute("""
+                                INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, costo_unitario)
+                                VALUES (%s,%s,%s,%s,%s,%s)
+                            """, (pedido_id_actual, adicion['id'], adicion['nombre'], ad_cant, float(adicion['precio']), costo_ad_u))
+
                 if rest['tercero_id']:
                     excluded_ids = [
                         int(exc['componente_id']) 
@@ -2122,6 +2167,37 @@ def api_pedido_crear(slug):
             pedido_id = conn.execute(
                 "SELECT currval(pg_get_serial_sequence('pedidos','id'))"
             ).fetchone()[0]
+
+            # Insertar componentes del menú del día en pedido_items
+            componentes_menu = []
+            for label, p_id in [('Sopa', sopa_id), ('Proteina', proteina_id), ('Principio', principio_id)]:
+                if p_id:
+                    prod_info = conn.execute("SELECT nombre FROM productos WHERE id = %s", (p_id,)).fetchone()
+                    nombre_c = prod_info['nombre'] if prod_info else label
+                    
+                    # Consultar costo unitario
+                    c_row = conn.execute("""
+                        SELECT COALESCE(s.costo_und, p.costo, 0) AS costo_und 
+                        FROM productos p 
+                        LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
+                        WHERE p.id = %s
+                    """, (rest['tercero_id'], p_id)).fetchone()
+                    costo_c = float(c_row['costo_und']) if c_row else 0.0
+                    
+                    componentes_menu.append({
+                        'id': p_id,
+                        'nombre': nombre_c,
+                        'costo': costo_c
+                    })
+            
+            # Asignar precio_total al primer componente, y 0.0 a los demás
+            for idx, c_item in enumerate(componentes_menu):
+                p_unit = float(precio_total) if idx == 0 else 0.0
+                conn.execute("""
+                    INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, costo_unitario)
+                    VALUES (%s,%s,%s,%s,%s,%s)
+                """, (pedido_id, c_item['id'], c_item['nombre'], 1, p_unit, c_item['costo']))
+
             if rest['tercero_id']:
                 for prod_id in filter(None, [sopa_id, proteina_id, principio_id]):
                     excluded_ids = [

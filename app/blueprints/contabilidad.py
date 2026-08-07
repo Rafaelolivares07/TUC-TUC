@@ -651,6 +651,32 @@ def obtener_siguiente_consecutivo(conn, negocio_id, tipo_doc_identificador):
         return None, False
 
 
+def _verificar_periodo_cerrado(conn, negocio_id, fecha):
+    """
+    Verifica si el periodo correspondiente a 'fecha' (formato YYYY-MM-DD, date o datetime)
+    está cerrado para el negocio. Lanza un Exception si lo está.
+    """
+    if not fecha:
+        return
+    # Convertir fecha a string YYYY-MM
+    if hasattr(fecha, 'strftime'):
+        periodo = fecha.strftime('%Y-%m')
+    else:
+        # Asumiendo string YYYY-MM-DD o similar
+        parts = str(fecha).split('-')
+        if len(parts) >= 2:
+            periodo = f"{parts[0]}-{parts[1]}"
+        else:
+            return
+            
+    res = conn.execute("""
+        SELECT 1 FROM cierres_periodos 
+        WHERE negocio_id = %s AND periodo = %s
+    """, (negocio_id, periodo)).fetchone()
+    if res:
+        raise Exception(f"El periodo contable {periodo} esta cerrado y no admite modificaciones.")
+
+
 # ── Motor contable ────────────────────────────────────────────
 
 def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, variables,
@@ -954,6 +980,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
     total_cred = sum(m['monto'] for m in mov_list if m['tipo_mov'] == 'C')
     desc       = descripcion_override or param['descripcion_asiento'] or tipo_doc_codigo
     fecha_uso  = fecha or _date.today()
+    _verificar_periodo_cerrado(conn, negocio_id, fecha_uso)
 
     # Consecutivo contable: si ya viene provisto documento_numero_fisico
     # (resuelto por el llamador), lo usamos directamente sin incrementar el consecutivo.
@@ -1128,6 +1155,7 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
         return None
 
     fecha_uso = _date.today()
+    _verificar_periodo_cerrado(conn, negocio_id, fecha_uso)
     desc = descripcion or f'Costo venta: {producto["nombre"]}'
     cnt = conn.execute(
         "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id=%s AND tipo='COSTO_VENTA'",
@@ -1236,6 +1264,7 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
             tipo_documento_id = td_row['id']
 
     fecha_uso = _date.today()
+    _verificar_periodo_cerrado(conn, negocio_id, fecha_uso)
     desc = descripcion or f'Producción: {terminado["nombre"]}'
     if tipo_documento and documento_numero:
         numero = f"{tipo_documento}-{documento_numero}"
@@ -1931,6 +1960,7 @@ def api_comprobante_post(negocio_id):
     uid = session['usuario_id']
     try:
         conn = get_db_connection()
+        _verificar_periodo_cerrado(conn, negocio_id, fecha)
         _asegurar_tablas(conn)
         num_doc      = None
         numero_comp  = None
@@ -2762,3 +2792,402 @@ def api_reporte_movimientos(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+# ── API: Balance de Comprobación ──────────────────────────────
+
+@bp.route('/api/contabilidad/<int:negocio_id>/balance-comprobacion', methods=['GET'])
+def api_balance_comprobacion(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    desde = request.args.get('desde')
+    hasta = request.args.get('hasta')
+    
+    # Si no se proveen fechas, usar el mes actual
+    if not desde or not hasta:
+        today = _date.today()
+        desde = today.strftime('%Y-%m-01')
+        import calendar
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        hasta = today.strftime(f'%Y-%m-{last_day:02d}')
+        
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        
+        # 1. Obtener todas las cuentas del PUC para mapear nombres y jerarquías
+        puc_rows = conn.execute("""
+            SELECT id, codigo, nombre, nivel, naturaleza, codigo_padre
+            FROM cuentas_puc
+            WHERE creada_por_negocio_id IS NULL OR creada_por_negocio_id = %s
+        """, (negocio_id,)).fetchall()
+        puc_map = {r['codigo']: dict(r) for r in puc_rows}
+        
+        # 2. Consultar saldos y movimientos acumulados para cuentas con movimiento
+        mov_rows = conn.execute("""
+            SELECT 
+                c.id as cuenta_id, 
+                c.codigo, 
+                c.nombre, 
+                c.naturaleza,
+                COALESCE(SUM(CASE WHEN cc.fecha < %s AND m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS deb_ant,
+                COALESCE(SUM(CASE WHEN cc.fecha < %s AND m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS cred_ant,
+                COALESCE(SUM(CASE WHEN cc.fecha >= %s AND cc.fecha <= %s AND m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS deb_per,
+                COALESCE(SUM(CASE WHEN cc.fecha >= %s AND cc.fecha <= %s AND m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS cred_per
+            FROM cuentas_puc c
+            LEFT JOIN movimientos_contables m ON m.cuenta_id = c.id AND m.negocio_id = %s
+            LEFT JOIN comprobantes_contables cc ON m.comprobante_id = cc.id
+            WHERE c.acepta_movimiento = TRUE
+            GROUP BY c.id, c.codigo, c.nombre, c.naturaleza
+        """, (desde, desde, desde, hasta, desde, hasta, negocio_id)).fetchall()
+        
+        # 3. Inicializar el árbol de resultados con las cuentas de nivel 1 y 2
+        result_map = {}
+        for code, r in puc_map.items():
+            if r['nivel'] in (1, 2):
+                result_map[code] = {
+                    'id': r['id'],
+                    'codigo': r['codigo'],
+                    'nombre': r['nombre'],
+                    'nivel': r['nivel'],
+                    'naturaleza': r['naturaleza'],
+                    'deb_ant': 0.0,
+                    'cred_ant': 0.0,
+                    'deb_per': 0.0,
+                    'cred_per': 0.0,
+                }
+                
+        # 4. Procesar cuentas con movimientos y acumular hacia arriba
+        for r in mov_rows:
+            deb_ant = float(r['deb_ant'])
+            cred_ant = float(r['cred_ant'])
+            deb_per = float(r['deb_per'])
+            cred_per = float(r['cred_per'])
+            
+            # Si no hay movimientos ni saldo, no la agregamos
+            if deb_ant == 0.0 and cred_ant == 0.0 and deb_per == 0.0 and cred_per == 0.0:
+                continue
+                
+            code = r['codigo']
+            result_map[code] = {
+                'id': r['cuenta_id'],
+                'codigo': r['codigo'],
+                'nombre': r['nombre'],
+                'nivel': puc_map.get(code, {}).get('nivel', 4),
+                'naturaleza': r['naturaleza'],
+                'deb_ant': deb_ant,
+                'cred_ant': cred_ant,
+                'deb_per': deb_per,
+                'cred_per': cred_per,
+            }
+            
+            # Acumular hacia arriba en los padres
+            curr_code = code
+            while curr_code:
+                parent_info = puc_map.get(curr_code)
+                if not parent_info:
+                    break
+                parent_code = parent_info['codigo_padre']
+                if not parent_code:
+                    break
+                
+                # Si el padre no está en result_map, agregarlo
+                if parent_code not in result_map:
+                    p_info = puc_map.get(parent_code)
+                    if p_info:
+                        result_map[parent_code] = {
+                            'id': p_info['id'],
+                            'codigo': p_info['codigo'],
+                            'nombre': p_info['nombre'],
+                            'nivel': p_info['nivel'],
+                            'naturaleza': p_info['naturaleza'],
+                            'deb_ant': 0.0,
+                            'cred_ant': 0.0,
+                            'deb_per': 0.0,
+                            'cred_per': 0.0,
+                        }
+                
+                if parent_code in result_map:
+                    result_map[parent_code]['deb_ant'] += deb_ant
+                    result_map[parent_code]['cred_ant'] += cred_ant
+                    result_map[parent_code]['deb_per'] += deb_per
+                    result_map[parent_code]['cred_per'] += cred_per
+                
+                curr_code = parent_code
+                
+        # 5. Formatear y calcular saldos finales para la respuesta
+        cuentas_list = []
+        for code, r in result_map.items():
+            nat = r['naturaleza']
+            deb_ant = r['deb_ant']
+            cred_ant = r['cred_ant']
+            deb_per = r['deb_per']
+            cred_per = r['cred_per']
+            
+            if nat == 'debito':
+                saldo_anterior = deb_ant - cred_ant
+                saldo_final = saldo_anterior + deb_per - cred_per
+            else:
+                saldo_anterior = cred_ant - deb_ant
+                saldo_final = saldo_anterior + cred_per - deb_per
+                
+            cuentas_list.append({
+                'id': r['id'],
+                'codigo': r['codigo'],
+                'nombre': r['nombre'],
+                'nivel': r['nivel'],
+                'naturaleza': nat,
+                'saldo_anterior': saldo_anterior,
+                'debito': deb_per,
+                'credito': cred_per,
+                'saldo_final': saldo_final
+            })
+            
+        # Ordenar por código contable
+        cuentas_list.sort(key=lambda x: x['codigo'])
+        
+        # Verificar si el periodo correspondiente a "hasta" está cerrado
+        target_period = hasta[:7]
+        closed_row = conn.execute("""
+            SELECT 1 FROM cierres_periodos WHERE negocio_id = %s AND periodo = %s
+        """, (negocio_id, target_period)).fetchone()
+        
+        # Listar todos los periodos cerrados para mostrar en UI
+        cierres_rows = conn.execute("""
+            SELECT periodo FROM cierres_periodos WHERE negocio_id = %s ORDER BY periodo DESC
+        """, (negocio_id,)).fetchall()
+        periodos_cerrados = [c['periodo'] for c in cierres_rows]
+        
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'cuentas': cuentas_list,
+            'periodo_cerrado': bool(closed_row),
+            'periodos_cerrados': periodos_cerrados
+        })
+        
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Ejecutar Cierre de Periodo ───────────────────────────
+
+@bp.route('/api/contabilidad/<int:negocio_id>/cierre-periodo', methods=['POST'])
+def api_cierre_periodo(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    periodo = data.get('periodo')
+    if not periodo or not re.match(r'^\d{4}-\d{2}$', periodo):
+        return jsonify({'ok': False, 'error': 'Periodo inválido o no especificado'}), 400
+        
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        
+        # 1. Validar que el periodo no esté ya cerrado
+        already_closed = conn.execute("""
+            SELECT 1 FROM cierres_periodos WHERE negocio_id = %s AND periodo = %s
+        """, (negocio_id, periodo)).fetchone()
+        if already_closed:
+            conn.close()
+            return jsonify({'ok': False, 'error': f"El periodo {periodo} ya se encuentra cerrado."}), 400
+            
+        # 2. Validar orden cronológico de los cierres
+        earliest_row = conn.execute("""
+            SELECT MIN(fecha) as first_date FROM comprobantes_contables WHERE negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        
+        if earliest_row and earliest_row['first_date']:
+            first_date = earliest_row['first_date']
+            target_yr, target_mo = map(int, periodo.split('-'))
+            curr_yr = first_date.year
+            curr_mo = first_date.month
+            
+            months_to_check = []
+            while (curr_yr < target_yr) or (curr_yr == target_yr and curr_mo < target_mo):
+                months_to_check.append(f"{curr_yr:04d}-{curr_mo:02d}")
+                if curr_mo == 12:
+                    curr_mo = 1
+                    curr_yr += 1
+                else:
+                    curr_mo += 1
+                    
+            if months_to_check:
+                placeholders = ', '.join(['%s'] * len(months_to_check))
+                closed_rows = conn.execute(f"""
+                    SELECT periodo FROM cierres_periodos
+                    WHERE negocio_id = %s AND periodo IN ({placeholders})
+                """, [negocio_id] + months_to_check).fetchall()
+                closed_set = {r['periodo'] for r in closed_rows}
+                missing = [m for m in months_to_check if m not in closed_set]
+                if missing:
+                    conn.close()
+                    return jsonify({
+                        'ok': False,
+                        'error': f"No se puede cerrar {periodo} sin haber cerrado los periodos anteriores: {', '.join(missing)}"
+                    }), 400
+                    
+        # 3. Buscar o crear el tipo de documento para cierres
+        td = conn.execute("""
+            SELECT id, codigo, consecutivo, numero_inicio FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND tipo_movimiento = 'cierre' LIMIT 1
+        """, (negocio_id,)).fetchone()
+        
+        if not td:
+            td = conn.execute("""
+                INSERT INTO tipos_documento_negocio 
+                    (negocio_id, codigo, nombre, consecutivo, numero_inicio, tipo_movimiento, es_interno)
+                VALUES (%s, 'CI', 'Cierre Contable', 0, 1, 'cierre', TRUE)
+                RETURNING id, codigo, consecutivo, numero_inicio
+            """, (negocio_id,)).fetchone()
+            
+        # 4. Obtener la cuenta de resultados parametrizada
+        param = conn.execute("""
+            SELECT id FROM parametros_contables_negocio
+            WHERE negocio_id = %s AND tipo_doc_id = %s LIMIT 1
+        """, (negocio_id, td['id'])).fetchone()
+        
+        if not param:
+            param = conn.execute("""
+                INSERT INTO parametros_contables_negocio (negocio_id, tipo_doc_id, descripcion_asiento)
+                VALUES (%s, %s, 'Asiento de cierre contable') RETURNING id
+            """, (negocio_id, td['id'])).fetchone()
+            
+        linea_dest = conn.execute("""
+            SELECT l.cuenta_puc_id, c.codigo as cuenta_codigo 
+            FROM parametros_lineas_contables l
+            JOIN modulo_variables_contables v ON v.id = l.variable_id
+            JOIN cuentas_puc c ON c.id = l.cuenta_puc_id
+            WHERE l.parametro_id = %s AND v.modulo = 'CIERRE' AND v.codigo = 'RESULTADO_PERIODO'
+            LIMIT 1
+        """, (param['id'],)).fetchone()
+        
+        if not linea_dest:
+            conn.close()
+            return jsonify({
+                'ok': False,
+                'error': "Debes configurar la cuenta de patrimonio para la variable 'RESULTADO_PERIODO' en la pestaña de Parametrización para el documento de cierre (CI)."
+            }), 400
+            
+        # 5. Calcular saldos finales de las cuentas 4, 5, 6 y 7
+        import calendar
+        yr, mo = map(int, periodo.split('-'))
+        last_day = calendar.monthrange(yr, mo)[1]
+        fecha_fin = f"{periodo}-{last_day:02d}"
+        
+        saldos_rows = conn.execute("""
+            SELECT 
+                c.id as cuenta_id, 
+                c.codigo, 
+                c.naturaleza,
+                COALESCE(SUM(CASE WHEN m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS deb_total,
+                COALESCE(SUM(CASE WHEN m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS cred_total
+            FROM cuentas_puc c
+            JOIN movimientos_contables m ON m.cuenta_id = c.id AND m.negocio_id = %s
+            JOIN comprobantes_contables cc ON m.comprobante_id = cc.id
+            WHERE (c.codigo LIKE '4%' OR c.codigo LIKE '5%' OR c.codigo LIKE '6%' OR c.codigo LIKE '7%')
+              AND cc.fecha <= %s
+            GROUP BY c.id, c.codigo, c.naturaleza
+        """, (negocio_id, fecha_fin)).fetchall()
+        
+        # 6. Generar líneas de cierre para cuentas con saldo
+        lineas_cierre = []
+        total_debitos_cierre = 0.0
+        total_creditos_cierre = 0.0
+        
+        for r in saldos_rows:
+            deb = float(r['deb_total'])
+            cred = float(r['cred_total'])
+            
+            if r['naturaleza'] == 'debito':
+                balance = deb - cred
+            else:
+                balance = cred - deb
+                
+            if balance == 0.0:
+                continue
+                
+            # Si tiene saldo débito, se acredita. Si tiene saldo crédito, se debita
+            if r['naturaleza'] == 'debito':
+                tipo_mov_cierre = 'credito'
+                total_creditos_cierre += balance
+            else:
+                tipo_mov_cierre = 'debito'
+                total_debitos_cierre += balance
+                
+            lineas_cierre.append({
+                'cuenta_id': r['cuenta_id'],
+                'cuenta_codigo': r['codigo'],
+                'tipo': tipo_mov_cierre,
+                'monto': balance
+            })
+            
+        if not lineas_cierre:
+            conn.close()
+            return jsonify({'ok': False, 'error': f"No existen saldos para cerrar en el periodo {periodo}."}), 400
+            
+        # 7. Agregar línea balanceadora a la cuenta de resultados
+        diff = total_creditos_cierre - total_debitos_cierre
+        if diff > 0:
+            # Requiere un débito para balancear
+            lineas_cierre.append({
+                'cuenta_id': linea_dest['cuenta_puc_id'],
+                'cuenta_codigo': linea_dest['cuenta_codigo'],
+                'tipo': 'debito',
+                'monto': diff
+            })
+            total_debitos_cierre += diff
+        elif diff < 0:
+            # Requiere un crédito para balancear
+            lineas_cierre.append({
+                'cuenta_id': linea_dest['cuenta_puc_id'],
+                'cuenta_codigo': linea_dest['cuenta_codigo'],
+                'tipo': 'credito',
+                'monto': -diff
+            })
+            total_creditos_cierre += -diff
+            
+        # 8. Guardar comprobante y movimientos contables
+        num_doc = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
+        numero = f"{td['codigo']}-{num_doc:04d}"
+        
+        conn.execute("""
+            UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s
+        """, (num_doc, td['id']))
+        
+        comp_id = conn.execute("""
+            INSERT INTO comprobantes_contables
+                (negocio_id, numero_comprobante, numero_documento, tipo, fecha, descripcion,
+                 total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id, tipo_documento_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Cierre de periodo contable',%s,%s,%s)
+            RETURNING id
+        """, (negocio_id, numero, num_doc, td['codigo'], fecha_fin, f"Cierre contable resultados periodo {periodo}",
+              total_debitos_cierre, total_creditos_cierre, session['usuario_id'], 'cierre', periodo, td['id'])).fetchone()['id']
+              
+        for l in lineas_cierre:
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (negocio_id, comp_id, l['cuenta_id'], l['cuenta_codigo'],
+                  f"Cierre de periodo {periodo}", l['tipo'], l['monto'], session['usuario_id']))
+                  
+        # Registrar en la tabla cierres_periodos
+        conn.execute("""
+            INSERT INTO cierres_periodos (negocio_id, periodo, comprobante_id)
+            VALUES (%s, %s, %s)
+        """, (negocio_id, periodo, comp_id))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'comprobante_id': comp_id, 'periodo': periodo})
+        
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500

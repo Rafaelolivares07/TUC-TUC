@@ -8,12 +8,15 @@ try:
     from .contabilidad import _ejecutar_asiento_produccion as _asiento_produccion
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
     from .contabilidad import obtener_siguiente_consecutivo
+    from .contabilidad import _verificar_periodo_cerrado
 except ImportError:
     _asiento_costo_mov = None
     _asiento_produccion = None
     _asiento_auto = None
     def obtener_siguiente_consecutivo(*args, **kwargs):
         return None, True
+    def _verificar_periodo_cerrado(*args, **kwargs):
+        pass
 
 bp = Blueprint('inventarios', __name__)
 
@@ -3369,6 +3372,9 @@ def api_ajuste_guardar_item(negocio_id):
         if abs(diff) < 0.000001:
             return jsonify({'ok': True, 'mensaje': 'Sin diferencias, no requiere ajuste', 'consecutivo_actualizado': False})
             
+        # Verificar si el periodo está cerrado
+        _verificar_periodo_cerrado(conn, negocio_id, date.today())
+
         # 2. Verificar si existe el comprobante de esta sesión
         comp = conn.execute("""
             SELECT id, numero_comprobante FROM comprobantes_contables 

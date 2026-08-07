@@ -65,6 +65,7 @@
       <button onclick="cambiarTab('comps')"  id="tab-comps"  class="tab-btn">📚 Comprobantes</button>
       <button onclick="cambiarTab('progs')"  id="tab-progs"  class="tab-btn">⏱️ Programaciones</button>
       <button onclick="cambiarTab('consulta')" id="tab-consulta" class="tab-btn">🔍 Consulta Mov.</button>
+      <button onclick="cambiarTab('balance')" id="tab-balance" class="tab-btn">⚖️ Balance y Cierre</button>
     </div>
 
     <!-- ═══ TAB: PUC ═══ -->
@@ -118,6 +119,7 @@
           <option value="produccion">Módulo de Producción (Producción)</option>
           <option value="venta">Ventas / POS (Venta)</option>
           <option value="ajuste">Inventario Físico (Ajuste)</option>
+          <option value="cierre">Cierre de Periodo (Cierre)</option>
         </select>
       </div>
       <div class="flex items-center gap-4 mb-4">
@@ -478,6 +480,74 @@
       </div>
     </div>
 
+    <!-- ═══ TAB: BALANCE Y CIERRE ═══ -->
+    <div id="panel-balance" class="p-5 hidden">
+      <!-- Sección: Filtros y Acciones del Balance -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 items-end">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Desde</label>
+          <input id="bal-desde" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Hasta</label>
+          <input id="bal-hasta" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div>
+          <button onclick="cargarBalanceComprobacion()"
+                  class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition shadow-md w-full flex items-center justify-center gap-2">
+            <span>📊</span> Generar Balance
+          </button>
+        </div>
+        <div class="border-l border-gray-200 pl-4">
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Periodo a Cerrar</label>
+          <div class="flex gap-2">
+            <input id="cierre-periodo-val" type="month" class="border rounded-lg px-2 py-1.5 text-sm w-full">
+            <button onclick="ejecutarCierrePeriodo()"
+                    class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-1.5 rounded-lg text-xs transition shadow-md shrink-0">
+              🔒 Cerrar Periodo
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección de Información / Estado de Cierres -->
+      <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6 flex flex-col md:flex-row justify-between gap-4">
+        <div>
+          <h4 class="text-xs font-bold text-gray-700 uppercase mb-1">Estado del Periodo Consultada</h4>
+          <div id="bal-periodo-estado" class="text-sm font-semibold text-gray-500">—</div>
+        </div>
+        <div>
+          <h4 class="text-xs font-bold text-gray-700 uppercase mb-1">Periodos Cerrados</h4>
+          <div id="bal-periodos-cerrados" class="flex flex-wrap gap-1.5 mt-1">
+            <span class="text-xs text-gray-400 font-medium">Ninguno</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla del Balance de Comprobación -->
+      <div class="overflow-x-auto border border-gray-100 rounded-xl">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-800 text-white text-xs font-bold uppercase">
+              <th class="px-4 py-3">Código</th>
+              <th class="px-4 py-3">Cuenta</th>
+              <th class="px-4 py-3 text-right">Saldo Anterior</th>
+              <th class="px-4 py-3 text-right">Débitos</th>
+              <th class="px-4 py-3 text-right">Créditos</th>
+              <th class="px-4 py-3 text-right">Saldo Final</th>
+            </tr>
+          </thead>
+          <tbody id="bal-tbody" class="divide-y divide-gray-100">
+            <tr>
+              <td colspan="6" class="text-center py-12 text-gray-400 text-sm">
+                Haz clic en "Generar Balance" para cargar los saldos.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
 <!-- Modal: nueva cuenta PUC -->
@@ -556,7 +626,7 @@
 
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
-const TABS = ['puc','tipos','params','pago_metodos','grupos','progs','manual','comps', 'consulta'];
+const TABS = ['puc','tipos','params','pago_metodos','grupos','progs','manual','comps', 'consulta', 'balance'];
 let tiposDocs = [];
 let variablesModulo = [];
 let paramActivo = null;
@@ -572,10 +642,10 @@ function cambiarTab(t) {
     if (btn) btn.classList.toggle('tab-active', x === t);
   });
 
-  // Dynamic width control for Consulta tab
+  // Dynamic width control for Consulta / Balance tabs
   const container = document.getElementById('main-container');
   if (container) {
-    if (t === 'consulta') {
+    if (t === 'consulta' || t === 'balance') {
       container.classList.remove('max-w-5xl');
       container.classList.add('w-full', 'max-w-none', 'px-4');
     } else {
@@ -593,6 +663,7 @@ function cambiarTab(t) {
   if (t === 'comps')        cargarComprobantes();
   if (t === 'manual')       { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
   if (t === 'consulta')     inicializarFechasConsulta();
+  if (t === 'balance')      inicializarBalanceTab();
 }
 
 function toast(msg, ok=true) {
@@ -743,6 +814,7 @@ async function cargarTiposDocs() {
           <option value="produccion" ${t.tipo_movimiento==='produccion'?'selected':''}>Producción</option>
           <option value="venta" ${t.tipo_movimiento==='venta'?'selected':''}>Ventas / POS</option>
           <option value="ajuste" ${t.tipo_movimiento==='ajuste'?'selected':''}>Inventario Físico</option>
+          <option value="cierre" ${t.tipo_movimiento==='cierre'?'selected':''}>Cierre de Periodo</option>
         </select>
       </td>
       <td class="px-3 py-2 text-center">
@@ -1904,6 +1976,173 @@ async function consultarMovimientos() {
   } catch (err) {
     loadingDiv.classList.add('hidden');
     toast('Error en la comunicación con el servidor: ' + err.message, false);
+  }
+}
+
+// ── Balance de Comprobación y Cierre de Periodo ───────────────
+
+function inicializarBalanceTab() {
+  const desdeInput = document.getElementById('bal-desde');
+  const hastaInput = document.getElementById('bal-hasta');
+  const monthInput = document.getElementById('cierre-periodo-val');
+  
+  const today = new Date();
+  const yr = today.getFullYear();
+  const mo = today.getMonth() + 1; // 1-based month
+  
+  if (!desdeInput.value) {
+    desdeInput.value = `${yr}-${String(mo).padStart(2, '0')}-01`;
+  }
+  if (!hastaInput.value) {
+    const lastDay = new Date(yr, mo, 0).getDate();
+    hastaInput.value = `${yr}-${String(mo).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  }
+  if (!monthInput.value) {
+    monthInput.value = `${yr}-${String(mo).padStart(2, '0')}`;
+  }
+  
+  cargarBalanceComprobacion();
+}
+
+async function cargarBalanceComprobacion() {
+  const desde = document.getElementById('bal-desde').value;
+  const hasta = document.getElementById('bal-hasta').value;
+  const tbody = document.getElementById('bal-tbody');
+  const estadoDiv = document.getElementById('bal-periodo-estado');
+  const cierresDiv = document.getElementById('bal-periodos-cerrados');
+  
+  if (!desde || !hasta) {
+    toast('Por favor especifica las fechas desde y hasta', false);
+    return;
+  }
+  
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="6" class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent mb-2"></div>
+        <p class="text-xs text-gray-500 font-medium">Generando balance de comprobación...</p>
+      </td>
+    </tr>
+  `;
+  
+  try {
+    const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/balance-comprobacion?desde=${desde}&hasta=${hasta}`);
+    const data = await res.json();
+    if (!data.ok) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-red-600 font-semibold text-xs">Error: ${data.error}</td></tr>`;
+      return;
+    }
+    
+    // Renderizado de las cuentas
+    if (!data.cuentas || data.cuentas.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-gray-400 text-xs">No hay cuentas con saldos o movimientos en este rango.</td></tr>`;
+    } else {
+      tbody.innerHTML = data.cuentas.map(c => {
+        if (c.nivel === 1) {
+          return `
+            <tr class="bg-slate-100 font-extrabold text-xs text-slate-800 uppercase border-t border-b border-slate-200">
+              <td class="px-4 py-2 font-mono">${c.codigo}</td>
+              <td class="px-4 py-2">${c.nombre}</td>
+              <td class="px-4 py-2 text-right font-mono">${formatMoni(c.saldo_anterior)}</td>
+              <td class="px-4 py-2 text-right font-mono">${formatMoni(c.debito)}</td>
+              <td class="px-4 py-2 text-right font-mono">${formatMoni(c.credito)}</td>
+              <td class="px-4 py-2 text-right font-mono">${formatMoni(c.saldo_final)}</td>
+            </tr>
+          `;
+        } else if (c.nivel === 2) {
+          return `
+            <tr class="bg-slate-50 font-bold text-xs text-slate-700">
+              <td class="px-4 py-1.5 pl-6 font-mono">${c.codigo}</td>
+              <td class="px-4 py-1.5">${c.nombre}</td>
+              <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.saldo_anterior)}</td>
+              <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.debito)}</td>
+              <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.credito)}</td>
+              <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.saldo_final)}</td>
+            </tr>
+          `;
+        } else if (c.nivel === 3) {
+          return `
+            <tr class="text-xs text-slate-600 font-semibold hover:bg-slate-50/50">
+              <td class="px-4 py-1.5 pl-10 font-mono">${c.codigo}</td>
+              <td class="px-4 py-1.5">${c.nombre}</td>
+              <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoni(c.saldo_anterior)}</td>
+              <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoni(c.debito)}</td>
+              <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoni(c.credito)}</td>
+              <td class="px-4 py-1.5 text-right font-mono text-slate-700 font-bold">${formatMoni(c.saldo_final)}</td>
+            </tr>
+          `;
+        } else {
+          return `
+            <tr class="text-xs text-gray-500 hover:bg-slate-50/50">
+              <td class="px-4 py-1 pl-14 font-mono text-[11px]">${c.codigo}</td>
+              <td class="px-4 py-1 italic">${c.nombre}</td>
+              <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.saldo_anterior)}</td>
+              <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.debito)}</td>
+              <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.credito)}</td>
+              <td class="px-4 py-1 text-right font-mono text-[11px] ${c.saldo_final !== 0 ? 'text-gray-700 font-semibold' : ''}">${formatMoni(c.saldo_final)}</td>
+            </tr>
+          `;
+        }
+      }).join('');
+    }
+    
+    // Estado del periodo
+    if (data.periodo_cerrado) {
+      estadoDiv.innerHTML = `
+        <span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-max">
+          🔒 Cerrado (Bloqueado)
+        </span>
+      `;
+    } else {
+      estadoDiv.innerHTML = `
+        <span class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-max">
+          🔓 Abierto (Modificable)
+        </span>
+      `;
+    }
+    
+    // Lista de periodos cerrados
+    if (data.periodos_cerrados && data.periodos_cerrados.length > 0) {
+      cierresDiv.innerHTML = data.periodos_cerrados.map(p => `
+        <span class="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-lg text-xs font-mono font-semibold">
+          ${p}
+        </span>
+      `).join('');
+    } else {
+      cierresDiv.innerHTML = `<span class="text-xs text-gray-400 font-medium">Ninguno</span>`;
+    }
+    
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-red-600 font-semibold text-xs">Error en comunicación: ${err.message}</td></tr>`;
+  }
+}
+
+async function ejecutarCierrePeriodo() {
+  const periodo = document.getElementById('cierre-periodo-val').value;
+  if (!periodo) {
+    toast('Por favor selecciona el periodo a cerrar (Año-Mes)', false);
+    return;
+  }
+  
+  if (!confirm(`¿Estás seguro de que deseas realizar el cierre contable del periodo ${periodo}?\n\nEsta acción:\n1. Bloqueará todas las modificaciones contables del periodo y anteriores.\n2. Saldará las cuentas de ingresos, gastos y costos (clases 4, 5, 6, 7) a cero.\n3. Trasladará la diferencia a la cuenta de resultado de periodo configurada.`)) {
+    return;
+  }
+  
+  try {
+    const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/cierre-periodo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ periodo })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast(`¡Periodo ${periodo} cerrado exitosamente!`, true);
+      cargarBalanceComprobacion();
+    } else {
+      alert(`No se pudo realizar el cierre:\n\n${data.error}`);
+    }
+  } catch (err) {
+    toast(`Error al ejecutar el cierre: ${err.message}`, false);
   }
 }
 

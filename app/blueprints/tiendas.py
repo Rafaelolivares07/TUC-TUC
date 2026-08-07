@@ -2404,7 +2404,8 @@ def api_tienda_pedido_crear(slug):
                         documento_numero = numero_documento or str(pedido_id),
                         proveedor_nombre = nombre_cliente or None,
                         tipo_documento_id = tipo_doc_id,
-                        excluir_componentes_ids = excluded_ids
+                        excluir_componentes_ids = excluded_ids,
+                        proveedor_id   = cliente_id
                     )
                     conn.execute("RELEASE SAVEPOINT sp_inv_tienda")
                 except Exception as _e:

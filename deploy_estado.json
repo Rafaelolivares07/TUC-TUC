@@ -1,6 +1,6 @@
 {
-  "commit": "95d2c63",
+  "commit": "b03d520",
   "estado": "pendiente",
-  "iniciado": "2026-07-24T08:57:30.152281",
-  "mensaje": "Pass selected tipo_documento instead of hardcoded COMPRA when generating entry voucher"
+  "iniciado": "2026-08-06T14:14:24.307963",
+  "mensaje": "fix: recipe component-based cost calculations during checkout"
 }

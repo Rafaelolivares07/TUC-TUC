@@ -395,7 +395,9 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         try:
             _asiento_costo_mov(conn, negocio_id, producto_id,
                                float(cantidad), float(costo_ant),
-                               registrado_por=registrado_por)
+                               registrado_por=registrado_por,
+                               producto_padre_id=producto_padre_id,
+                               tercero_id=proveedor_id)
         except Exception as _e:
             print(f'[cont] costo_mov prod={producto_id}: {_e}')
 

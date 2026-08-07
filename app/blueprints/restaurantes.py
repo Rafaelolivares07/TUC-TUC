@@ -2249,7 +2249,8 @@ def api_pedido_crear(slug):
                             tipo_documento='Venta Restaurante',
                             documento_numero=f"PED-{pedido_id}",
                             proveedor_nombre=nombre_cliente or None,
-                            excluir_componentes_ids=excluded_ids
+                            excluir_componentes_ids=excluded_ids,
+                            proveedor_id=cliente_id
                         )
                         conn.execute("RELEASE SAVEPOINT sp_inv")
                     except Exception as _e:

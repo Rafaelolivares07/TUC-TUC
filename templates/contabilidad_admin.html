@@ -36,7 +36,7 @@
 <body class="p-4 sm:p-6 min-h-screen">
 <div id="toast" class="toast"></div>
 
-<div class="max-w-5xl mx-auto">
+<div id="main-container" class="max-w-5xl mx-auto transition-all duration-300">
 
   <!-- Header -->
   <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-blue-600">
@@ -64,6 +64,7 @@
       <button onclick="cambiarTab('manual')" id="tab-manual" class="tab-btn">✏️ Comprobante</button>
       <button onclick="cambiarTab('comps')"  id="tab-comps"  class="tab-btn">📚 Comprobantes</button>
       <button onclick="cambiarTab('progs')"  id="tab-progs"  class="tab-btn">⏱️ Programaciones</button>
+      <button onclick="cambiarTab('consulta')" id="tab-consulta" class="tab-btn">🔍 Consulta Mov.</button>
     </div>
 
     <!-- ═══ TAB: PUC ═══ -->
@@ -408,6 +409,75 @@
       </div>
     </div>
 
+    <!-- ═══ TAB: CONSULTA MOVIMIENTOS ═══ -->
+    <div id="panel-consulta" class="p-5 hidden">
+      <!-- Filtros de Consulta -->
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-5 items-end">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha Desde</label>
+          <input id="cons-desde" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha Hasta</label>
+          <input id="cons-hasta" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div class="relative">
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Cuenta PUC</label>
+          <div class="flex items-center relative">
+            <input id="cons-cuenta-txt" type="text" placeholder="Todas las cuentas..."
+                   class="border rounded-lg pl-3 pr-8 py-2 text-sm w-full"
+                   oninput="onInputConsCuenta(this)"
+                   onfocus="onFocusConsCuenta(this)">
+            <button onclick="clearConsCuenta()" class="absolute right-2 text-gray-400 hover:text-gray-600 focus:outline-none text-lg">
+              &times;
+            </button>
+          </div>
+          <input type="hidden" id="cons-cuenta-id">
+          <div id="cons-cuenta-ac" class="ac-drop hidden"></div>
+        </div>
+        <div class="relative">
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tercero</label>
+          <div class="flex items-center relative">
+            <input id="cons-tercero-txt" type="text" placeholder="Todos los terceros..."
+                   class="border rounded-lg pl-3 pr-8 py-2 text-sm w-full"
+                   oninput="onInputConsTercero(this)"
+                   onfocus="onFocusConsTercero(this)">
+            <button onclick="clearConsTercero()" class="absolute right-2 text-gray-400 hover:text-gray-600 focus:outline-none text-lg">
+              &times;
+            </button>
+          </div>
+          <input type="hidden" id="cons-tercero-id">
+          <div id="cons-tercero-ac" class="ac-drop hidden"></div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Agrupación</label>
+          <select id="cons-agrupar" class="border rounded-lg px-3 py-2 text-sm w-full">
+            <option value="sin_agrupar">Cronológico (sin agrupar)</option>
+            <option value="cuenta">Agrupado por Cuenta PUC</option>
+            <option value="tercero">Agrupado por Tercero</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="flex justify-end gap-3 mb-6">
+        <button onclick="consultarMovimientos()"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition shadow-md flex items-center gap-2">
+          <span>🔍</span> Consultar Movimientos
+        </button>
+      </div>
+
+      <!-- Spinner / Loader -->
+      <div id="cons-loading" class="hidden text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent mb-3"></div>
+        <p class="text-sm text-gray-500 font-medium">Buscando movimientos en los libros contables...</p>
+      </div>
+
+      <!-- Contenedor de Resultados (Bloques) -->
+      <div id="cons-resultados" class="space-y-6">
+        <!-- Los bloques se renderizarán dinámicamente aquí -->
+      </div>
+    </div>
+
   </div>
 
 <!-- Modal: nueva cuenta PUC -->
@@ -486,7 +556,7 @@
 
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
-const TABS = ['puc','tipos','params','pago_metodos','grupos','progs','manual','comps'];
+const TABS = ['puc','tipos','params','pago_metodos','grupos','progs','manual','comps', 'consulta'];
 let tiposDocs = [];
 let variablesModulo = [];
 let paramActivo = null;
@@ -496,9 +566,24 @@ let acTimers = {};
 // ── Tabs ──────────────────────────────────────────────────────
 function cambiarTab(t) {
   TABS.forEach(x => {
-    document.getElementById(`panel-${x}`).classList.toggle('hidden', x !== t);
-    document.getElementById(`tab-${x}`).classList.toggle('tab-active', x === t);
+    const el = document.getElementById(`panel-${x}`);
+    if (el) el.classList.toggle('hidden', x !== t);
+    const btn = document.getElementById(`tab-${x}`);
+    if (btn) btn.classList.toggle('tab-active', x === t);
   });
+
+  // Dynamic width control for Consulta tab
+  const container = document.getElementById('main-container');
+  if (container) {
+    if (t === 'consulta') {
+      container.classList.remove('max-w-5xl');
+      container.classList.add('w-full', 'max-w-none', 'px-4');
+    } else {
+      container.classList.remove('w-full', 'max-w-none', 'px-4');
+      container.classList.add('max-w-5xl');
+    }
+  }
+
   if (t === 'puc')          buscarPUC();
   if (t === 'pago_metodos') cargarPagoMetodos();
   if (t === 'tipos')        cargarTiposDocs();
@@ -507,6 +592,7 @@ function cambiarTab(t) {
   if (t === 'progs')        { progCargarTipos(); progCargarLista(); }
   if (t === 'comps')        cargarComprobantes();
   if (t === 'manual')       { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
+  if (t === 'consulta')     inicializarFechasConsulta();
 }
 
 function toast(msg, ok=true) {
@@ -1574,6 +1660,250 @@ async function guardarFilaMetodo(idx) {
     }
   } catch(e) {
     toast('Error de red al guardar cuenta', false);
+  }
+}
+
+// ── TAB: CONSULTA ─────────────────────────────────────────────
+let consCuentaTimer = null;
+async function onInputConsCuenta(el) {
+  const q = el.value.trim();
+  const acBox = document.getElementById('cons-cuenta-ac');
+  if (!q) {
+    document.getElementById('cons-cuenta-id').value = '';
+    acBox.classList.add('hidden');
+    return;
+  }
+  clearTimeout(consCuentaTimer);
+  consCuentaTimer = setTimeout(async () => {
+    const cuentas = await fetchPUC(q);
+    acBox.innerHTML = cuentas.slice(0, 10).map(c =>
+      `<div class="ac-item" data-id="${c.id}" data-codigo="${c.codigo}" data-nombre="${c.nombre}"><span class="font-mono text-blue-600">${c.codigo}</span> ${c.nombre}</div>`
+    ).join('');
+    acBox.querySelectorAll('.ac-item').forEach(item => {
+      item.onclick = () => {
+        el.value = `${item.dataset.codigo} - ${item.dataset.nombre}`;
+        document.getElementById('cons-cuenta-id').value = item.dataset.id;
+        acBox.classList.add('hidden');
+      };
+    });
+    acBox.classList.toggle('hidden', !cuentas.length);
+  }, 300);
+}
+
+function onFocusConsCuenta(el) {
+  if (el.value.trim()) {
+    onInputConsCuenta(el);
+  }
+}
+
+function clearConsCuenta() {
+  const el = document.getElementById('cons-cuenta-txt');
+  el.value = '';
+  document.getElementById('cons-cuenta-id').value = '';
+  document.getElementById('cons-cuenta-ac').classList.add('hidden');
+}
+
+let consTerceroTimer = null;
+async function onInputConsTercero(el) {
+  const q = el.value.trim();
+  const acBox = document.getElementById('cons-tercero-ac');
+  if (q.length < 2) {
+    if (!q) {
+      document.getElementById('cons-tercero-id').value = '';
+    }
+    acBox.classList.add('hidden');
+    return;
+  }
+  clearTimeout(consTerceroTimer);
+  consTerceroTimer = setTimeout(async () => {
+    const resp = await fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`);
+    const terceros = await resp.json();
+    acBox.innerHTML = terceros.slice(0, 10).map(t =>
+      `<div class="ac-item" data-id="${t.id}" data-nombre="${t.nombre}">${t.nombre}</div>`
+    ).join('');
+    acBox.querySelectorAll('.ac-item').forEach(item => {
+      item.onclick = () => {
+        el.value = item.dataset.nombre;
+        document.getElementById('cons-tercero-id').value = item.dataset.id;
+        acBox.classList.add('hidden');
+      };
+    });
+    acBox.classList.toggle('hidden', !terceros.length);
+  }, 300);
+}
+
+function onFocusConsTercero(el) {
+  if (el.value.trim()) {
+    onInputConsTercero(el);
+  }
+}
+
+function clearConsTercero() {
+  const el = document.getElementById('cons-tercero-txt');
+  el.value = '';
+  document.getElementById('cons-tercero-id').value = '';
+  document.getElementById('cons-tercero-ac').classList.add('hidden');
+}
+
+// Click outside to close autocompletes
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#cons-cuenta-txt') && !e.target.closest('#cons-cuenta-ac')) {
+    const el = document.getElementById('cons-cuenta-ac');
+    if (el) el.classList.add('hidden');
+  }
+  if (!e.target.closest('#cons-tercero-txt') && !e.target.closest('#cons-tercero-ac')) {
+    const el = document.getElementById('cons-tercero-ac');
+    if (el) el.classList.add('hidden');
+  }
+});
+
+function formatMoni(val) {
+  const num = parseFloat(val || 0);
+  return '$' + num.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function inicializarFechasConsulta() {
+  const dInput = document.getElementById('cons-desde');
+  const hInput = document.getElementById('cons-hasta');
+  if (dInput && hInput && (!dInput.value || !hInput.value)) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    
+    hInput.value = `${yyyy}-${mm}-${dd}`;
+    dInput.value = `${yyyy}-${mm}-01`; // primer dia del mes
+  }
+}
+
+async function consultarMovimientos() {
+  const desde = document.getElementById('cons-desde').value;
+  const hasta = document.getElementById('cons-hasta').value;
+  const cuentaId = document.getElementById('cons-cuenta-id').value;
+  const terceroId = document.getElementById('cons-tercero-id').value;
+  const agrupar = document.getElementById('cons-agrupar').value;
+
+  if (!desde || !hasta) {
+    toast('Fechas desde y hasta son requeridas', false);
+    return;
+  }
+
+  const resultsDiv = document.getElementById('cons-resultados');
+  const loadingDiv = document.getElementById('cons-loading');
+
+  resultsDiv.innerHTML = '';
+  loadingDiv.classList.remove('hidden');
+
+  try {
+    const url = `/api/contabilidad/${NEGOCIO_ID}/reporte-movimientos?desde=${desde}&hasta=${hasta}&cuenta_id=${cuentaId}&tercero_id=${terceroId}&agrupar=${agrupar}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    loadingDiv.classList.add('hidden');
+
+    if (!data.ok) {
+      toast(data.error || 'Error al consultar movimientos', false);
+      return;
+    }
+
+    if (!data.blocks || data.blocks.length === 0) {
+      resultsDiv.innerHTML = `
+        <div class="bg-gray-50 text-center py-12 rounded-2xl border border-dashed border-gray-200">
+          <p class="text-gray-400 text-sm">No se encontraron movimientos para el criterio de búsqueda seleccionado.</p>
+        </div>
+      `;
+      return;
+    }
+
+    resultsDiv.innerHTML = data.blocks.map(b => {
+      const lineasHtml = b.lineas.map(l => {
+        const cuentaTd = (agrupar !== 'cuenta') 
+          ? `<td class="px-3 py-2.5 text-xs text-gray-700 font-mono text-left"><span class="font-bold text-blue-700">${l.cuenta_codigo || ''}</span> <span class="text-gray-400">${l.cuenta_nombre || ''}</span></td>`
+          : '';
+        
+        const terceroTd = (agrupar !== 'tercero')
+          ? `<td class="px-3 py-2.5 text-xs text-gray-700 text-left">${l.tercero_nombre || 'Tercero Ocasional'}</td>`
+          : '';
+
+        return `
+          <tr class="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
+            <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap text-left">${l.fecha || ''}</td>
+            <td class="px-3 py-2.5 text-xs text-gray-800 font-medium whitespace-nowrap text-left">${l.numero_comprobante || ''} <span class="text-gray-400 text-[10px] uppercase font-bold">(${l.tipo_comprobante || ''})</span></td>
+            ${cuentaTd}
+            ${terceroTd}
+            <td class="px-3 py-2.5 text-xs text-gray-600 text-left">${l.concepto || ''}</td>
+            <td class="px-3 py-2.5 text-xs text-right font-mono text-emerald-700">${l.debito > 0 ? formatMoni(l.debito) : '—'}</td>
+            <td class="px-3 py-2.5 text-xs text-right font-mono text-rose-700">${l.credito > 0 ? formatMoni(l.credito) : '—'}</td>
+            <td class="px-3 py-2.5 text-xs text-right font-mono font-semibold text-gray-800">${formatMoni(l.saldo)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const thCuenta = (agrupar !== 'cuenta') ? '<th class="px-3 py-2.5 text-left">Cuenta PUC</th>' : '';
+      const thTercero = (agrupar !== 'tercero') ? '<th class="px-3 py-2.5 text-left">Tercero</th>' : '';
+
+      return `
+        <div class="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden transition hover:shadow-lg">
+          <!-- Encabezado del Bloque -->
+          <div class="bg-gradient-to-r from-gray-50 to-gray-100/50 px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h3 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                <span>📁</span> ${b.title}
+              </h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 font-semibold uppercase">Saldo Anterior:</span>
+              <span class="bg-blue-50 text-blue-800 text-xs font-bold px-3 py-1.5 rounded-full font-mono">
+                ${formatMoni(b.saldo_anterior)}
+              </span>
+            </div>
+          </div>
+
+          <!-- Tabla de Movimientos -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-gray-50/50 border-b border-gray-100 text-xs uppercase text-gray-400 font-bold">
+                  <th class="px-3 py-2.5 text-left w-24">Fecha</th>
+                  <th class="px-3 py-2.5 text-left w-36">Comprobante</th>
+                  ${thCuenta}
+                  ${thTercero}
+                  <th class="px-3 py-2.5 text-left">Concepto</th>
+                  <th class="px-3 py-2.5 text-right w-28">Débito</th>
+                  <th class="px-3 py-2.5 text-right w-28">Crédito</th>
+                  <th class="px-3 py-2.5 text-right w-32">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${lineasHtml || `<tr><td colspan="10" class="px-3 py-6 text-center text-gray-400 text-xs">Sin movimientos en el periodo seleccionado</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pie del Bloque con Totales -->
+          <div class="bg-gray-50/50 px-5 py-3 border-t border-gray-100 flex flex-wrap justify-between items-center gap-4 text-sm font-semibold">
+            <div class="flex gap-4">
+              <div class="text-xs text-gray-500">
+                Total Débitos: <span class="font-mono font-bold text-emerald-700">${formatMoni(b.total_debitos)}</span>
+              </div>
+              <div class="text-xs text-gray-500">
+                Total Créditos: <span class="font-mono font-bold text-rose-700">${formatMoni(b.total_creditos)}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+              <span class="text-gray-600 font-bold uppercase text-xs">Saldo Final:</span>
+              <span class="${b.saldo_final >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'} text-sm font-extrabold px-4 py-2 rounded-xl font-mono shadow-sm">
+                ${formatMoni(b.saldo_final)}
+              </span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (err) {
+    loadingDiv.classList.add('hidden');
+    toast('Error en la comunicación con el servidor: ' + err.message, false);
   }
 }
 

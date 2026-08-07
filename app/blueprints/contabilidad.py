@@ -1052,11 +1052,11 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
 
         conn.execute("""
             INSERT INTO movimientos_contables
-                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (negocio_id, comp_id, m['cuenta_puc_id'], m['cuenta_codigo'],
               m['concepto'], 'debito' if m['tipo_mov'] == 'D' else 'credito',
-              m['monto'], registrado_por))
+              m['monto'], registrado_por, tercero_id))
 
     return comp_id
 
@@ -1076,7 +1076,8 @@ def _tipo_doc_para_modulo(conn, negocio_id, modulo):
 
 
 def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_und,
-                                 registrado_por=None, descripcion=None, producto_padre_id=None):
+                                 registrado_por=None, descripcion=None, producto_padre_id=None,
+                                 tercero_id=None):
     """
     Genera asiento COGS para una salida de inventario por venta:
       Débito  cuenta_cos  (6x) — costo de ventas
@@ -1145,18 +1146,18 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
     # Débito costo de ventas (6x) - from sold product category
     conn.execute("""
         INSERT INTO movimientos_contables
-            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
-        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s)
+            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id)
+        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s,%s)
     """, (negocio_id, comp_id, grupo_costo['cuenta_cos_id'], grupo_costo['cod_cos'], grupo_costo['nom_cos'],
-          monto, registrado_por))
+          monto, registrado_por, tercero_id))
 
     # Crédito inventario (14x) - from component/ingredient category
     conn.execute("""
         INSERT INTO movimientos_contables
-            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
-        VALUES (%s,%s,%s,%s,%s,'credito',%s,%s)
+            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id)
+        VALUES (%s,%s,%s,%s,%s,'credito',%s,%s,%s)
     """, (negocio_id, comp_id, grupo_inve['cuenta_inve_id'], grupo_inve['cod_inve'], grupo_inve['nom_inve'],
-          monto, registrado_por))
+          monto, registrado_por, tercero_id))
 
     return comp_id
 
@@ -1962,12 +1963,13 @@ def api_comprobante_post(negocio_id):
             credito = float(l.get('credito') or 0)
             monto   = debito if debito > 0 else credito
             tipo_m  = 'debito' if debito > 0 else 'credito'
+            tercero_l_id = l.get('tercero_id') or None
             conn.execute("""
                 INSERT INTO movimientos_contables
-                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (negocio_id, comp_id, l.get('cuenta_id'), l.get('cuenta_codigo',''),
-                  (l.get('concepto') or '').strip() or None, tipo_m, monto, uid))
+                  (l.get('concepto') or '').strip() or None, tipo_m, monto, uid, tercero_l_id))
         conn.commit(); conn.close()
         return jsonify({'ok': True, 'comprobante_id': comp_id})
     except Exception as e:
@@ -2407,6 +2409,353 @@ def api_contabilidad_config_metodos(negocio_id):
             })
             
         return jsonify({'ok': True, 'metodos': result})
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/reporte-movimientos')
+def api_reporte_movimientos(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+
+    desde = request.args.get('desde')
+    hasta = request.args.get('hasta')
+    cuenta_id = request.args.get('cuenta_id')
+    tercero_id = request.args.get('tercero_id')
+    agrupar = request.args.get('agrupar', 'sin_agrupar') # 'sin_agrupar', 'cuenta', 'tercero'
+
+    if not desde or not hasta:
+        return jsonify({'ok': False, 'error': 'Fechas desde y hasta son requeridas'}), 400
+
+    try:
+        cuenta_id = int(cuenta_id) if cuenta_id else None
+        tercero_id = int(tercero_id) if tercero_id else None
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'IDs invalidos'}), 400
+
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        where_anterior = ["c.negocio_id = %s", "c.fecha < %s"]
+        params_anterior = [negocio_id, desde]
+
+        where_periodo = ["c.negocio_id = %s", "c.fecha >= %s", "c.fecha <= %s"]
+        params_periodo = [negocio_id, desde, hasta]
+
+        if cuenta_id:
+            where_anterior.append("m.cuenta_id = %s")
+            params_anterior.append(cuenta_id)
+            where_periodo.append("m.cuenta_id = %s")
+            params_periodo.append(cuenta_id)
+
+        if tercero_id:
+            where_anterior.append("m.tercero_id = %s")
+            params_anterior.append(tercero_id)
+            where_periodo.append("m.tercero_id = %s")
+            params_periodo.append(tercero_id)
+
+        if cuenta_id and tercero_id:
+            agrupar = 'sin_agrupar'
+
+        blocks = []
+
+        if agrupar == 'sin_agrupar':
+            sa_row = conn.execute(f"""
+                SELECT 
+                    COALESCE(SUM(CASE WHEN m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS total_debitos,
+                    COALESCE(SUM(CASE WHEN m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS total_credits
+                FROM movimientos_contables m
+                JOIN comprobantes_contables c ON c.id = m.comprobante_id
+                WHERE {" AND ".join(where_anterior)}
+            """, params_anterior).fetchone()
+
+            saldo_anterior = float(sa_row['total_debitos'] - sa_row['total_credits'])
+
+            movs = conn.execute(f"""
+                SELECT 
+                    m.id,
+                    c.fecha,
+                    c.numero_comprobante,
+                    c.tipo AS tipo_comprobante,
+                    m.cuenta_id,
+                    p.codigo AS cuenta_codigo,
+                    p.nombre AS cuenta_nombre,
+                    m.tercero_id,
+                    t.nombre AS tercero_nombre,
+                    m.concepto,
+                    m.tipo AS tipo_mov,
+                    m.monto
+                FROM movimientos_contables m
+                JOIN comprobantes_contables c ON c.id = m.comprobante_id
+                LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
+                LEFT JOIN terceros t ON t.id = m.tercero_id
+                WHERE {" AND ".join(where_periodo)}
+                ORDER BY c.fecha, c.numero_comprobante, m.id
+            """, params_periodo).fetchall()
+
+            lineas = []
+            saldo_acc = saldo_anterior
+            total_deb = 0.0
+            total_cred = 0.0
+
+            for r in movs:
+                monto = float(r['monto'])
+                es_deb = (r['tipo_mov'] == 'debito')
+                if es_deb:
+                    deb_val = monto
+                    cred_val = 0.0
+                    saldo_acc += deb_val
+                    total_deb += deb_val
+                else:
+                    deb_val = 0.0
+                    cred_val = monto
+                    saldo_acc -= cred_val
+                    total_cred += cred_val
+
+                lineas.append({
+                    'id': r['id'],
+                    'fecha': r['fecha'].strftime('%Y-%m-%d') if r['fecha'] else '',
+                    'numero_comprobante': r['numero_comprobante'],
+                    'tipo_comprobante': r['tipo_comprobante'],
+                    'cuenta_id': r['cuenta_id'],
+                    'cuenta_codigo': r['cuenta_codigo'],
+                    'cuenta_nombre': r['cuenta_nombre'],
+                    'tercero_id': r['tercero_id'],
+                    'tercero_nombre': r['tercero_nombre'] or 'Tercero Ocasional',
+                    'concepto': r['concepto'],
+                    'debito': deb_val,
+                    'credito': cred_val,
+                    'saldo': saldo_acc
+                })
+
+            blocks.append({
+                'title': 'Movimientos Contables - Consulta Cronológica',
+                'saldo_anterior': saldo_anterior,
+                'lineas': lineas,
+                'total_debitos': total_deb,
+                'total_creditos': total_cred,
+                'saldo_final': saldo_anterior + total_deb - total_cred
+            })
+
+        elif agrupar == 'cuenta':
+            sa_rows = conn.execute(f"""
+                SELECT 
+                    m.cuenta_id,
+                    p.codigo AS cuenta_codigo,
+                    p.nombre AS cuenta_nombre,
+                    COALESCE(SUM(CASE WHEN m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS total_debitos,
+                    COALESCE(SUM(CASE WHEN m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS total_credits
+                FROM movimientos_contables m
+                JOIN comprobantes_contables c ON c.id = m.comprobante_id
+                JOIN cuentas_puc p ON p.id = m.cuenta_id
+                WHERE {" AND ".join(where_anterior)}
+                GROUP BY m.cuenta_id, p.codigo, p.nombre
+            """, params_anterior).fetchall()
+
+            saldos_ant_map = {}
+            cuenta_meta = {}
+            for r in sa_rows:
+                cid = r['cuenta_id']
+                saldos_ant_map[cid] = float(r['total_debitos'] - r['total_credits'])
+                cuenta_meta[cid] = {'codigo': r['cuenta_codigo'], 'nombre': r['cuenta_nombre']}
+
+            movs = conn.execute(f"""
+                SELECT 
+                    m.id,
+                    c.fecha,
+                    c.numero_comprobante,
+                    c.tipo AS tipo_comprobante,
+                    m.cuenta_id,
+                    p.codigo AS cuenta_codigo,
+                    p.nombre AS cuenta_nombre,
+                    m.tercero_id,
+                    t.nombre AS tercero_nombre,
+                    m.concepto,
+                    m.tipo AS tipo_mov,
+                    m.monto
+                FROM movimientos_contables m
+                JOIN comprobantes_contables c ON c.id = m.comprobante_id
+                JOIN cuentas_puc p ON p.id = m.cuenta_id
+                LEFT JOIN terceros t ON t.id = m.tercero_id
+                WHERE {" AND ".join(where_periodo)}
+                ORDER BY p.codigo, c.fecha, c.numero_comprobante, m.id
+            """, params_periodo).fetchall()
+
+            movs_por_cuenta = {}
+            for r in movs:
+                cid = r['cuenta_id']
+                if cid not in movs_por_cuenta:
+                    movs_por_cuenta[cid] = []
+                movs_por_cuenta[cid].append(r)
+                if cid not in cuenta_meta:
+                    cuenta_meta[cid] = {'codigo': r['cuenta_codigo'], 'nombre': r['cuenta_nombre']}
+
+            todos_cuenta_ids = set(saldos_ant_map.keys()) | set(movs_por_cuenta.keys())
+            for cid in sorted(todos_cuenta_ids, key=lambda x: cuenta_meta[x]['codigo']):
+                meta = cuenta_meta[cid]
+                saldo_ant = saldos_ant_map.get(cid, 0.0)
+                m_list = movs_por_cuenta.get(cid, [])
+
+                if saldo_ant == 0.0 and not m_list:
+                    continue
+
+                lineas = []
+                saldo_acc = saldo_ant
+                total_deb = 0.0
+                total_cred = 0.0
+
+                for r in m_list:
+                    monto = float(r['monto'])
+                    es_deb = (r['tipo_mov'] == 'debito')
+                    if es_deb:
+                        deb_val = monto
+                        cred_val = 0.0
+                        saldo_acc += deb_val
+                        total_deb += deb_val
+                    else:
+                        deb_val = 0.0
+                        cred_val = monto
+                        saldo_acc -= cred_val
+                        total_cred += cred_val
+
+                    lineas.append({
+                        'id': r['id'],
+                        'fecha': r['fecha'].strftime('%Y-%m-%d') if r['fecha'] else '',
+                        'numero_comprobante': r['numero_comprobante'],
+                        'tipo_comprobante': r['tipo_comprobante'],
+                        'tercero_id': r['tercero_id'],
+                        'tercero_nombre': r['tercero_nombre'] or 'Tercero Ocasional',
+                        'concepto': r['concepto'],
+                        'debito': deb_val,
+                        'credito': cred_val,
+                        'saldo': saldo_acc
+                    })
+
+                blocks.append({
+                    'title': f"{meta['codigo']} - {meta['nombre']}",
+                    'cuenta_id': cid,
+                    'cuenta_codigo': meta['codigo'],
+                    'cuenta_nombre': meta['nombre'],
+                    'saldo_anterior': saldo_ant,
+                    'lineas': lineas,
+                    'total_debitos': total_deb,
+                    'total_creditos': total_cred,
+                    'saldo_final': saldo_ant + total_deb - total_cred
+                })
+
+        elif agrupar == 'tercero':
+            sa_rows = conn.execute(f"""
+                SELECT 
+                    m.tercero_id,
+                    t.nombre AS tercero_nombre,
+                    COALESCE(SUM(CASE WHEN m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS total_debitos,
+                    COALESCE(SUM(CASE WHEN m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS total_credits
+                FROM movimientos_contables m
+                JOIN comprobantes_contables c ON c.id = m.comprobante_id
+                LEFT JOIN terceros t ON t.id = m.tercero_id
+                WHERE {" AND ".join(where_anterior)}
+                GROUP BY m.tercero_id, t.nombre
+            """, params_anterior).fetchall()
+
+            saldos_ant_map = {}
+            tercero_meta = {}
+            for r in sa_rows:
+                tid = r['tercero_id']
+                saldos_ant_map[tid] = float(r['total_debitos'] - r['total_credits'])
+                tercero_meta[tid] = r['tercero_nombre'] or 'Tercero Ocasional'
+
+            movs = conn.execute(f"""
+                SELECT 
+                    m.id,
+                    c.fecha,
+                    c.numero_comprobante,
+                    c.tipo AS tipo_comprobante,
+                    m.cuenta_id,
+                    p.codigo AS cuenta_codigo,
+                    p.nombre AS cuenta_nombre,
+                    m.tercero_id,
+                    t.nombre AS tercero_nombre,
+                    m.concepto,
+                    m.tipo AS tipo_mov,
+                    m.monto
+                FROM movimientos_contables m
+                JOIN comprobantes_contables c ON c.id = m.comprobante_id
+                LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
+                LEFT JOIN terceros t ON t.id = m.tercero_id
+                WHERE {" AND ".join(where_periodo)}
+                ORDER BY COALESCE(t.nombre, 'Tercero Ocasional'), c.fecha, c.numero_comprobante, m.id
+            """, params_periodo).fetchall()
+
+            movs_por_tercero = {}
+            for r in movs:
+                tid = r['tercero_id']
+                if tid not in movs_por_tercero:
+                    movs_por_tercero[tid] = []
+                movs_por_tercero[tid].append(r)
+                if tid not in tercero_meta:
+                    tercero_meta[tid] = r['tercero_nombre'] or 'Tercero Ocasional'
+
+            todos_tercero_ids = set(saldos_ant_map.keys()) | set(movs_por_tercero.keys())
+            sorted_tids = sorted(todos_tercero_ids, key=lambda x: tercero_meta.get(x, 'Tercero Ocasional'))
+
+            for tid in sorted_tids:
+                name = tercero_meta.get(tid, 'Tercero Ocasional')
+                saldo_ant = saldos_ant_map.get(tid, 0.0)
+                m_list = movs_por_tercero.get(tid, [])
+
+                if saldo_ant == 0.0 and not m_list:
+                    continue
+
+                lineas = []
+                saldo_acc = saldo_ant
+                total_deb = 0.0
+                total_cred = 0.0
+
+                for r in m_list:
+                    monto = float(r['monto'])
+                    es_deb = (r['tipo_mov'] == 'debito')
+                    if es_deb:
+                        deb_val = monto
+                        cred_val = 0.0
+                        saldo_acc += deb_val
+                        total_deb += deb_val
+                    else:
+                        deb_val = 0.0
+                        cred_val = monto
+                        saldo_acc -= cred_val
+                        total_cred += cred_val
+
+                    lineas.append({
+                        'id': r['id'],
+                        'fecha': r['fecha'].strftime('%Y-%m-%d') if r['fecha'] else '',
+                        'numero_comprobante': r['numero_comprobante'],
+                        'tipo_comprobante': r['tipo_comprobante'],
+                        'cuenta_id': r['cuenta_id'],
+                        'cuenta_codigo': r['cuenta_codigo'],
+                        'cuenta_nombre': r['cuenta_nombre'],
+                        'concepto': r['concepto'],
+                        'debito': deb_val,
+                        'credito': cred_val,
+                        'saldo': saldo_acc
+                    })
+
+                blocks.append({
+                    'title': f"Tercero: {name}",
+                    'tercero_id': tid,
+                    'tercero_nombre': name,
+                    'saldo_anterior': saldo_ant,
+                    'lineas': lineas,
+                    'total_debitos': total_deb,
+                    'total_creditos': total_cred,
+                    'saldo_final': saldo_ant + total_deb - total_cred
+                })
+
+        return jsonify({'ok': True, 'blocks': blocks})
+
     except Exception as e:
         try: conn.rollback()
         except Exception: pass

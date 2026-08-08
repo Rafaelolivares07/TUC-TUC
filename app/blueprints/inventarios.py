@@ -2196,6 +2196,18 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         conn.close()
 
 
+def normalizar_numero(num_str):
+    if not num_str:
+        return ""
+    num_str = num_str.strip().upper()
+    if '-' in num_str:
+        parts = num_str.split('-')
+        suffix = parts[-1].strip()
+        if suffix:
+            return suffix
+    return num_str
+
+
 def resolver_variantes_numero(num_str):
     if not num_str:
         return []
@@ -3987,49 +3999,81 @@ def api_conciliar_cuentas_14(negocio_id):
             GROUP BY cc.numero_comprobante, cc.tipo_documento_id, tdn.nombre
         """, (negocio_id,)).fetchall()
 
-        kardex_map = {r['documento_numero'].strip().upper(): dict(r) for r in kardex_rows}
-        contab_map = {r['numero_comprobante'].strip().upper(): dict(r) for r in contab_rows}
+        # Agrupar mapas usando números normalizados
+        kardex_map = {}
+        for r in kardex_rows:
+            num_orig = r['documento_numero']
+            num_norm = normalizar_numero(num_orig)
+            if num_norm not in kardex_map:
+                kardex_map[num_norm] = []
+            kardex_map[num_norm].append({
+                'documento_numero': num_orig,
+                'tipo_documento_id': r['tipo_documento_id'],
+                'tipo_documento_nombre': r['tipo_documento_nombre'],
+                'total_kardex': float(r['total_kardex']),
+                'fecha': r['fecha']
+            })
+
+        contab_map = {}
+        for r in contab_rows:
+            num_orig = r['numero_comprobante']
+            num_norm = normalizar_numero(num_orig)
+            if num_norm not in contab_map:
+                contab_map[num_norm] = []
+            contab_map[num_norm].append({
+                'numero_comprobante': num_orig,
+                'tipo_documento_id': r['tipo_documento_id'],
+                'tipo_documento_nombre': r['tipo_documento_nombre'],
+                'total_contab': float(r['total_contab']),
+                'fecha': r['fecha']
+            })
 
         discrepancias_a = []  # Kardex sin Contabilidad
         discrepancias_b = []  # Contabilidad sin Kardex
         discrepancias_c = []  # Diferencias de monto
 
         # Comparar Kardex contra Contabilidad
-        for num, k_data in kardex_map.items():
-            val_k = float(k_data['total_kardex'])
-            if abs(val_k) < 0.01:
+        for norm_num, k_list in kardex_map.items():
+            total_k = sum(item['total_kardex'] for item in k_list)
+            if abs(total_k) < 0.01:
                 continue
-            if num not in contab_map:
-                discrepancias_a.append({
-                    'documento': k_data['documento_numero'],
-                    'tipo_documento': k_data['tipo_documento_nombre'] or 'Desconocido',
-                    'valor_kardex': val_k,
-                    'fecha': k_data['fecha'].isoformat() if k_data['fecha'] else None
-                })
+            if norm_num not in contab_map:
+                for item in k_list:
+                    discrepancias_a.append({
+                        'documento': item['documento_numero'],
+                        'tipo_documento': item['tipo_documento_nombre'] or 'Desconocido',
+                        'valor_kardex': item['total_kardex'],
+                        'fecha': item['fecha'].isoformat() if item['fecha'] else None
+                    })
             else:
-                val_c = float(contab_map[num]['total_contab'])
-                if abs(val_k - val_c) > 0.01:
+                total_c = sum(item['total_contab'] for item in contab_map[norm_num])
+                if abs(total_k - total_c) > 0.01:
                     discrepancias_c.append({
-                        'documento': k_data['documento_numero'],
-                        'tipo_documento': k_data['tipo_documento_nombre'] or 'Desconocido',
-                        'valor_kardex': val_k,
-                        'valor_contabilidad': val_c,
-                        'diferencia': val_k - val_c,
-                        'fecha': k_data['fecha'].isoformat() if k_data['fecha'] else None
+                        'documento': k_list[0]['documento_numero'],
+                        'tipo_documento': k_list[0]['tipo_documento_nombre'] or 'Desconocido',
+                        'valor_kardex': total_k,
+                        'valor_contabilidad': total_c,
+                        'diferencia': total_k - total_c,
+                        'fecha': k_list[0]['fecha'].isoformat() if k_list[0]['fecha'] else None
                     })
 
         # Comparar Contabilidad contra Kardex
-        for num, c_data in contab_map.items():
-            val_c = float(c_data['total_contab'])
-            if abs(val_c) < 0.01:
+        for norm_num, c_list in contab_map.items():
+            total_c = sum(item['total_contab'] for item in c_list)
+            if abs(total_c) < 0.01:
                 continue
-            if num not in kardex_map:
-                discrepancias_b.append({
-                    'documento': c_data['numero_comprobante'],
-                    'tipo_documento': c_data['tipo_documento_nombre'] or 'Desconocido',
-                    'valor_contabilidad': val_c,
-                    'fecha': c_data['fecha'].isoformat() if c_data['fecha'] else None
-                })
+            if norm_num not in kardex_map:
+                for item in c_list:
+                    discrepancias_b.append({
+                        'documento': item['numero_comprobante'],
+                        'tipo_documento': item['tipo_documento_nombre'] or 'Desconocido',
+                        'valor_contabilidad': item['total_contab'],
+                        'fecha': item['fecha'].isoformat() if item['fecha'] else None
+                    })
+
+        # Sort helper key
+        def get_fecha(x):
+            return x['fecha'] or ''
 
         reporte = {
             'ok': True,
@@ -4038,12 +4082,12 @@ def api_conciliar_cuentas_14(negocio_id):
                 'total_contabilidad': total_contab,
                 'diferencia': total_kardex - total_contab
             },
-            'kardex_sin_contabilidad': sorted(discrepancias_a, key=lambda x: x['fecha'] or '', reverse=True),
-            'contabilidad_sin_kardex': sorted(discrepancias_b, key=lambda x: x['fecha'] or '', reverse=True),
-            'diferencias_valor': sorted(discrepancias_c, key=lambda x: x['fecha'] or '', reverse=True)
+            'kardex_sin_contabilidad': sorted(discrepancias_a, key=get_fecha, reverse=True),
+            'contabilidad_sin_kardex': sorted(discrepancias_b, key=get_fecha, reverse=True),
+            'diferencias_valor': sorted(discrepancias_c, key=get_fecha, reverse=True)
         }
 
-        # Guardar en archivo local del servidor para auditorías de soporte
+        # Guardar en archivo local del servidor para soporte
         import json
         import os
         report_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'reconciliation_report.json')

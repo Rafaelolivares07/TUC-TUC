@@ -2185,7 +2185,28 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     'tipo_documento': td_name,
                     'documento_numero': doc_num,
                     'fecha': date_str,
-                    'origen': 'ventas'@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/auditar-documento', methods=['GET'])
+                    'origen': 'ventas',
+                    'total': float(r['total'] or 0),
+                    'tercero_nombre': c_name or 'Cliente general',
+                    'tercero_id': c_id,
+                    'estado': r['estado']
+                }
+            
+        # Convertir diccionario consolidado a lista y ordenar por fecha descendente
+        documentos = list(consolidated.values())
+        documentos.sort(key=lambda d: d['fecha'] or '', reverse=True)
+        
+        return jsonify({
+            'ok': True,
+            'documentos': documentos[:50]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/auditar-documento', methods=['GET'])
 def api_auditar_documento(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401

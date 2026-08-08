@@ -2102,6 +2102,14 @@ def api_pedido_crear(slug):
                         for exc in excluir_componentes 
                         if int(exc.get('producto_id') or 0) == opcion['id']
                     ]
+                    # Resolver tipo_documento_id de venta
+                    row_td = conn.execute(
+                        "SELECT id, nombre FROM tipos_documento_negocio WHERE negocio_id = %s AND activo = TRUE AND tipo_movimiento = 'venta' ORDER BY predeterminado DESC, id LIMIT 1",
+                        (rest['tercero_id'],)
+                    ).fetchone()
+                    td_id = row_td['id'] if row_td else None
+                    td_name = row_td['nombre'] if row_td else 'Venta Restaurante'
+                    
                     try:
                         conn.execute("SAVEPOINT sp_inv")
                         _aplicar_tarjeta(
@@ -2113,10 +2121,11 @@ def api_pedido_crear(slug):
                             registrado_por=session.get('usuario_id'),
                             referencia_tipo='pedido_restaurante',
                             referencia_id=pedidos_insertados[-1],
-                            tipo_documento='Venta Restaurante',
+                            tipo_documento=td_name,
                             documento_numero=f"PED-{pedidos_insertados[-1]}",
                             proveedor_nombre=nombre_cliente or None,
-                            excluir_componentes_ids=excluded_ids
+                            excluir_componentes_ids=excluded_ids,
+                            tipo_documento_id=td_id
                         )
                         conn.execute("RELEASE SAVEPOINT sp_inv")
                     except Exception as _e:
@@ -2235,6 +2244,14 @@ def api_pedido_crear(slug):
                         for exc in excluir_componentes 
                         if int(exc.get('producto_id') or 0) == prod_id
                     ]
+                    # Resolver tipo_documento_id de venta
+                    row_td = conn.execute(
+                        "SELECT id, nombre FROM tipos_documento_negocio WHERE negocio_id = %s AND activo = TRUE AND tipo_movimiento = 'venta' ORDER BY predeterminado DESC, id LIMIT 1",
+                        (rest['tercero_id'],)
+                    ).fetchone()
+                    td_id = row_td['id'] if row_td else None
+                    td_name = row_td['nombre'] if row_td else 'Venta Restaurante'
+                    
                     try:
                         conn.execute("SAVEPOINT sp_inv")
                         _aplicar_tarjeta(
@@ -2246,11 +2263,12 @@ def api_pedido_crear(slug):
                             registrado_por=session.get('usuario_id'),
                             referencia_tipo='pedido_restaurante',
                             referencia_id=pedido_id,
-                            tipo_documento='Venta Restaurante',
+                            tipo_documento=td_name,
                             documento_numero=f"PED-{pedido_id}",
                             proveedor_nombre=nombre_cliente or None,
                             excluir_componentes_ids=excluded_ids,
-                            proveedor_id=cliente_id
+                            proveedor_id=cliente_id,
+                            tipo_documento_id=td_id
                         )
                         conn.execute("RELEASE SAVEPOINT sp_inv")
                     except Exception as _e:

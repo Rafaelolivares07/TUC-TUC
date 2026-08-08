@@ -2282,6 +2282,14 @@ def api_tienda_pedido_crear(slug):
             ).fetchone()
             if default_doc:
                 tipo_doc_id = default_doc['id']
+            else:
+                # Fallback to first active document of type 'venta'
+                any_doc = conn.execute(
+                    "SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND activo = TRUE AND tipo_movimiento = 'venta' ORDER BY id LIMIT 1",
+                    (negocio['tercero_id'],)
+                ).fetchone()
+                if any_doc:
+                    tipo_doc_id = any_doc['id']
 
         numero_documento = None
         res_num = None

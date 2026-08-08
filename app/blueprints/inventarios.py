@@ -3936,3 +3936,125 @@ def api_reporte_ventas_costos(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/conciliar-cuentas-14')
+def api_conciliar_cuentas_14(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    conn = get_db_connection()
+    try:
+        # 1. Total Inventario en Contabilidad (Cuentas 14)
+        c_bal_row = conn.execute("""
+            SELECT SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE -mc.monto END) AS balance
+            FROM movimientos_contables mc
+            JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+            WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%'
+        """, (negocio_id,)).fetchone()
+        total_contab = float(c_bal_row['balance'] or 0)
+
+        # 2. Total Inventario en Kardex (Saldos actuales)
+        k_bal_row = conn.execute("""
+            SELECT SUM(valor_existencia) AS total
+            FROM saldos_inventario
+            WHERE negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        total_kardex = float(k_bal_row['total'] or 0)
+
+        # 3. Movimientos detallados agrupados por documento en Kardex
+        kardex_rows = conn.execute("""
+            SELECT m.documento_numero, m.tipo_documento_id, tdn.nombre AS tipo_documento_nombre,
+                   SUM(CASE WHEN m.tipo = 'entrada' THEN COALESCE(m.valor_total, m.cantidad * m.costo_und, 0) 
+                            ELSE -COALESCE(m.valor_total, m.cantidad * m.costo_und, 0) END) AS total_kardex,
+                   MAX(m.created_at) as fecha
+            FROM movimientos_inventario m
+            LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
+            WHERE m.negocio_id = %s AND m.documento_numero IS NOT NULL
+            GROUP BY m.documento_numero, m.tipo_documento_id, tdn.nombre
+        """, (negocio_id,)).fetchall()
+
+        # 4. Movimientos detallados agrupados por comprobante en Contabilidad (Cuentas 14)
+        contab_rows = conn.execute("""
+            SELECT cc.numero_comprobante, cc.tipo_documento_id, tdn.nombre AS tipo_documento_nombre,
+                   SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE -mc.monto END) AS total_contab,
+                   MAX(cc.fecha) as fecha
+            FROM movimientos_contables mc
+            JOIN comprobantes_contables cc ON cc.id = mc.comprobante_id
+            JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+            LEFT JOIN tipos_documento_negocio tdn ON tdn.id = cc.tipo_documento_id
+            WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%'
+            GROUP BY cc.numero_comprobante, cc.tipo_documento_id, tdn.nombre
+        """, (negocio_id,)).fetchall()
+
+        kardex_map = {r['documento_numero'].strip().upper(): dict(r) for r in kardex_rows}
+        contab_map = {r['numero_comprobante'].strip().upper(): dict(r) for r in contab_rows}
+
+        discrepancias_a = []  # Kardex sin Contabilidad
+        discrepancias_b = []  # Contabilidad sin Kardex
+        discrepancias_c = []  # Diferencias de monto
+
+        # Comparar Kardex contra Contabilidad
+        for num, k_data in kardex_map.items():
+            val_k = float(k_data['total_kardex'])
+            if abs(val_k) < 0.01:
+                continue
+            if num not in contab_map:
+                discrepancias_a.append({
+                    'documento': k_data['documento_numero'],
+                    'tipo_documento': k_data['tipo_documento_nombre'] or 'Desconocido',
+                    'valor_kardex': val_k,
+                    'fecha': k_data['fecha'].isoformat() if k_data['fecha'] else None
+                })
+            else:
+                val_c = float(contab_map[num]['total_contab'])
+                if abs(val_k - val_c) > 0.01:
+                    discrepancias_c.append({
+                        'documento': k_data['documento_numero'],
+                        'tipo_documento': k_data['tipo_documento_nombre'] or 'Desconocido',
+                        'valor_kardex': val_k,
+                        'valor_contabilidad': val_c,
+                        'diferencia': val_k - val_c,
+                        'fecha': k_data['fecha'].isoformat() if k_data['fecha'] else None
+                    })
+
+        # Comparar Contabilidad contra Kardex
+        for num, c_data in contab_map.items():
+            val_c = float(c_data['total_contab'])
+            if abs(val_c) < 0.01:
+                continue
+            if num not in kardex_map:
+                discrepancias_b.append({
+                    'documento': c_data['numero_comprobante'],
+                    'tipo_documento': c_data['tipo_documento_nombre'] or 'Desconocido',
+                    'valor_contabilidad': val_c,
+                    'fecha': c_data['fecha'].isoformat() if c_data['fecha'] else None
+                })
+
+        reporte = {
+            'ok': True,
+            'totales': {
+                'total_kardex': total_kardex,
+                'total_contabilidad': total_contab,
+                'diferencia': total_kardex - total_contab
+            },
+            'kardex_sin_contabilidad': sorted(discrepancias_a, key=lambda x: x['fecha'] or '', reverse=True),
+            'contabilidad_sin_kardex': sorted(discrepancias_b, key=lambda x: x['fecha'] or '', reverse=True),
+            'diferencias_valor': sorted(discrepancias_c, key=lambda x: x['fecha'] or '', reverse=True)
+        }
+
+        # Guardar en archivo local del servidor para auditorías de soporte
+        import json
+        import os
+        report_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'reconciliation_report.json')
+        try:
+            with open(report_path, 'w', encoding='utf-8') as f:
+                json.dump(reporte, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+        return jsonify(reporte)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()

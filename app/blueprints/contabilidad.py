@@ -1104,7 +1104,7 @@ def _tipo_doc_para_modulo(conn, negocio_id, modulo):
 
 def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_und,
                                  registrado_por=None, descripcion=None, producto_padre_id=None,
-                                 tercero_id=None):
+                                 tercero_id=None, fecha=None):
     """
     Genera asiento COGS para una salida de inventario por venta:
       Débito  cuenta_cos  (6x) — costo de ventas
@@ -1154,7 +1154,7 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
     if monto <= 0:
         return None
 
-    fecha_uso = _date.today()
+    fecha_uso = fecha or _date.today()
     _verificar_periodo_cerrado(conn, negocio_id, fecha_uso)
     desc = descripcion or f'Costo venta: {producto["nombre"]}'
     cnt = conn.execute(

@@ -1981,6 +1981,13 @@ async function consultarMovimientos() {
 
 // ── Balance de Comprobación y Cierre de Periodo ───────────────
 
+function verMovimientosDeCuenta(cuentaId, cuentaCodigo, cuentaNombre) {
+  const desde = document.getElementById('bal-desde').value;
+  const hasta = document.getElementById('bal-hasta').value;
+  const url = `/admin/contabilidad/${NEGOCIO_ID}?tab=consulta&desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&cuenta_id=${cuentaId}&cuenta_codigo=${encodeURIComponent(cuentaCodigo)}&cuenta_nombre=${encodeURIComponent(cuentaNombre)}`;
+  window.open(url, '_blank');
+}
+
 function inicializarBalanceTab() {
   const desdeInput = document.getElementById('bal-desde');
   const hastaInput = document.getElementById('bal-hasta');
@@ -2074,7 +2081,12 @@ async function cargarBalanceComprobacion() {
         } else {
           return `
             <tr class="text-xs text-gray-500 hover:bg-slate-50/50">
-              <td class="px-4 py-1 pl-14 font-mono text-[11px]">${c.codigo}</td>
+              <td class="px-4 py-1 pl-14 font-mono text-[11px]">
+                <button onclick="verMovimientosDeCuenta(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 font-bold focus:outline-none mr-1" title="Ver movimientos">
+                  🔗
+                </button>
+                ${c.codigo}
+              </td>
               <td class="px-4 py-1 italic">${c.nombre}</td>
               <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.saldo_anterior)}</td>
               <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.debito)}</td>
@@ -2146,8 +2158,30 @@ async function ejecutarCierrePeriodo() {
   }
 }
 
-// Cargar el PUC de inmediato al iniciar
-buscarPUC();
+// Cargar el PUC de inmediato al iniciar o redirigir según query parameters
+const urlParams = new URLSearchParams(window.location.search);
+const activeTab = urlParams.get('tab');
+if (activeTab === 'consulta') {
+  const desde = urlParams.get('desde');
+  const hasta = urlParams.get('hasta');
+  const cuentaId = urlParams.get('cuenta_id');
+  const cuentaCodigo = urlParams.get('cuenta_codigo');
+  const cuentaNombre = urlParams.get('cuenta_nombre');
+  
+  cambiarTab('consulta');
+  
+  if (desde) document.getElementById('cons-desde').value = desde;
+  if (hasta) document.getElementById('cons-hasta').value = hasta;
+  if (cuentaId) {
+    document.getElementById('cons-cuenta-id').value = cuentaId;
+    document.getElementById('cons-cuenta-txt').value = `${cuentaCodigo} - ${cuentaNombre}`;
+  }
+  
+  // Ejecutar consulta automáticamente
+  setTimeout(consultarMovimientos, 150);
+} else {
+  buscarPUC();
+}
 </script>
 </body>
 </html>

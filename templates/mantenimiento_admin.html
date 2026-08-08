@@ -1142,6 +1142,21 @@
     }
     consultarDocumentoDetalle(tipo, num, '');
   }
+
+  // Soporte de deep-linking para auditoría directa desde URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const tool = urlParams.get('tool');
+  if (tool === 'auditor-documentos') {
+    abrirHerramienta('auditor-documentos');
+    const tipo = urlParams.get('tipo_documento');
+    const numero = urlParams.get('documento_numero');
+    const terceroId = urlParams.get('tercero_id') || '';
+    if (tipo && numero) {
+      setTimeout(() => {
+        consultarDocumentoDetalle(tipo, numero, terceroId);
+      }, 300);
+    }
+  }
 </script>
 </body>
 </html>

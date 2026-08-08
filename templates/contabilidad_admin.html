@@ -1900,7 +1900,15 @@ async function consultarMovimientos() {
         return `
           <tr class="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">
             <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap text-left">${l.fecha || ''}</td>
-            <td class="px-3 py-2.5 text-xs text-gray-800 font-medium whitespace-nowrap text-left">${l.numero_comprobante || ''} <span class="text-gray-400 text-[10px] uppercase font-bold">(${l.tipo_comprobante || ''})</span></td>
+            <td class="px-3 py-2.5 text-xs text-gray-800 font-medium whitespace-nowrap text-left">
+              <a href="/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(l.tipo_comprobante || '')}&documento_numero=${encodeURIComponent(l.numero_comprobante || '')}&tercero_id=${l.tercero_id || ''}" 
+                 target="_blank" 
+                 class="text-blue-600 hover:text-blue-800 hover:underline font-bold inline-flex items-center gap-0.5" 
+                 title="Auditar documento">
+                🔍 ${l.numero_comprobante || ''}
+              </a>
+              <span class="text-gray-400 text-[10px] uppercase font-bold ml-1">(${l.tipo_comprobante || ''})</span>
+            </td>
             ${cuentaTd}
             ${terceroTd}
             <td class="px-3 py-2.5 text-xs text-gray-600 text-left">${l.concepto || ''}</td>

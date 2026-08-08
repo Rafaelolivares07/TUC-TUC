@@ -2599,7 +2599,7 @@ def api_reporte_movimientos(negocio_id):
                     m.id,
                     c.fecha,
                     c.numero_comprobante,
-                    c.tipo AS tipo_comprobante,
+                    COALESCE(tdn.nombre, c.tipo) AS tipo_comprobante,
                     m.cuenta_id,
                     p.codigo AS cuenta_codigo,
                     p.nombre AS cuenta_nombre,
@@ -2610,6 +2610,7 @@ def api_reporte_movimientos(negocio_id):
                     m.monto
                 FROM movimientos_contables m
                 JOIN comprobantes_contables c ON c.id = m.comprobante_id
+                LEFT JOIN tipos_documento_negocio tdn ON tdn.id = c.tipo_documento_id
                 JOIN cuentas_puc p ON p.id = m.cuenta_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
                 WHERE {" AND ".join(where_periodo)}
@@ -2704,7 +2705,7 @@ def api_reporte_movimientos(negocio_id):
                     m.id,
                     c.fecha,
                     c.numero_comprobante,
-                    c.tipo AS tipo_comprobante,
+                    COALESCE(tdn.nombre, c.tipo) AS tipo_comprobante,
                     m.cuenta_id,
                     p.codigo AS cuenta_codigo,
                     p.nombre AS cuenta_nombre,
@@ -2715,6 +2716,7 @@ def api_reporte_movimientos(negocio_id):
                     m.monto
                 FROM movimientos_contables m
                 JOIN comprobantes_contables c ON c.id = m.comprobante_id
+                LEFT JOIN tipos_documento_negocio tdn ON tdn.id = c.tipo_documento_id
                 LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
                 WHERE {" AND ".join(where_periodo)}

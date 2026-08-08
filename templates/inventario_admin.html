@@ -2116,7 +2116,12 @@ async function verificarDocumentoExistente() {
   const provId = document.getElementById('entrada-proveedor-id').value;
   const provNombre = document.getElementById('entrada-proveedor').value.trim();
   
-  if (!tipo || !num || (!provId && !provNombre)) {
+  const select = document.getElementById('entrada-tipo-doc');
+  const id = parseInt(select.value);
+  const td = tiposDocEntrada.find(t => t.id === id);
+  const requiresProvider = td ? !td.es_interno : true;
+  
+  if (!tipo || !num || (requiresProvider && !provId && !provNombre)) {
     return;
   }
   
@@ -2883,11 +2888,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.history.replaceState({}, document.title, window.location.pathname + '#entradas');
     mostrarTab('entradas');
     const selectEl = document.getElementById('entrada-tipo-doc');
-    const matchedTd = tiposDocEntrada.find(t => 
-      String(t.id).toLowerCase() === qTipoDoc.toLowerCase() || 
-      t.nombre.toLowerCase() === qTipoDoc.toLowerCase() || 
-      (t.codigo && t.codigo.toLowerCase() === qTipoDoc.toLowerCase())
-    );
+    const matchedTd = tiposDocEntrada.find(t => {
+      const q = qTipoDoc.toLowerCase();
+      const code = (t.codigo || '').toLowerCase();
+      const name = (t.nombre || '').toLowerCase();
+      
+      // Mapeo inteligente para tipos heredados (legacy)
+      if (q === 'factura' && (code === 'factura proveedor' || name.includes('proveedor'))) {
+        return true;
+      }
+      if (q === 'ajuste' && (code === 'ajuste entrada' || name.includes('ajuste'))) {
+        return true;
+      }
+      
+      return String(t.id).toLowerCase() === q || 
+             name === q || 
+             code === q ||
+             name.includes(q) ||
+             q.includes(name) ||
+             (code && code.includes(q)) ||
+             (code && q.includes(code));
+    });
     if (matchedTd && selectEl) {
       selectEl.value = matchedTd.id;
     }

@@ -2304,7 +2304,7 @@ def api_tienda_pedido_crear(slug):
                 if res_num:
                     tipo_doc_codigo = tipo_doc['codigo'] or 'DOC'
                     try:
-                        numero_documento = f"{tipo_doc_codigo}-{int(res_num):04d}"
+                        numero_documento = f"{tipo_doc_codigo}-{int(res_num)}"
                     except (ValueError, TypeError):
                         numero_documento = f"{tipo_doc_codigo}-{res_num}"
 
@@ -3867,7 +3867,7 @@ def api_tienda_tipos_doc_get(slug):
         for r in rows:
             next_num = max((r['consecutivo'] or 0) + 1, (r['numero_inicio'] or 1))
             codigo_prefix = r['codigo'] or 'DOC'
-            siguiente = f"{codigo_prefix}-{next_num:04d}"
+            siguiente = f"{codigo_prefix}-{next_num}"
             
             t_dict = dict(r)
             t_dict['siguiente_numero'] = siguiente

@@ -998,7 +998,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
             "UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s",
             (num_doc, tipo_doc['id'])
         )
-        numero = f"{tipo_doc_codigo}-{num_doc:04d}"
+        numero = f"{tipo_doc_codigo}-{num_doc}"
 
     comp_id = conn.execute("""
         INSERT INTO comprobantes_contables
@@ -1161,7 +1161,7 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
         "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id=%s AND tipo='COSTO_VENTA'",
         (negocio_id,)
     ).fetchone()['n']
-    numero = f"AUTO-COSTO_VENTA-{(cnt or 0) + 1:04d}"
+    numero = f"AUTO-COSTO_VENTA-{(cnt or 0) + 1}"
 
     comp_id = conn.execute("""
         INSERT INTO comprobantes_contables
@@ -1273,7 +1273,7 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
             "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id=%s AND tipo='PRODUCCION'",
             (negocio_id,)
         ).fetchone()['n']
-        numero = f"AUTO-PRODUCCION-{(cnt or 0) + 1:04d}"
+        numero = f"AUTO-PRODUCCION-{(cnt or 0) + 1}"
     total_cred = sum(l['monto'] for l in lineas_cred)
 
     comp_id = conn.execute("""
@@ -1977,7 +1977,7 @@ def api_comprobante_post(negocio_id):
                     "UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s",
                     (num_doc, td['id'])
                 )
-                numero_comp = f"{td['codigo']}-{num_doc:04d}"
+                numero_comp = f"{td['codigo']}-{num_doc}"
         if not tipo_comp:
             conn.close()
             return jsonify({'ok': False, 'error': 'Tipo de comprobante requerido'}), 400
@@ -3157,7 +3157,7 @@ def api_cierre_periodo(negocio_id):
             
         # 8. Guardar comprobante y movimientos contables
         num_doc = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
-        numero = f"{td['codigo']}-{num_doc:04d}"
+        numero = f"{td['codigo']}-{num_doc}"
         
         conn.execute("""
             UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s

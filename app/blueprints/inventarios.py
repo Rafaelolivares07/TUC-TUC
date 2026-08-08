@@ -1575,7 +1575,7 @@ def api_produccion_registrar(negocio_id):
                 if res_num:
                     tipo_doc_codigo = td['codigo'] if (td and td['codigo']) else 'PROD'
                     try:
-                        documento_numero = f"{tipo_doc_codigo}-{int(res_num):04d}"
+                        documento_numero = f"{tipo_doc_codigo}-{int(res_num)}"
                     except (ValueError, TypeError):
                         documento_numero = f"{tipo_doc_codigo}-{res_num}"
             else:
@@ -2196,6 +2196,24 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         conn.close()
 
 
+def resolver_variantes_numero(num_str):
+    if not num_str:
+        return []
+    variantes = [num_str]
+    if '-' in num_str:
+        parts = num_str.split('-')
+        prefix = '-'.join(parts[:-1])
+        suffix = parts[-1]
+        try:
+            val_num = int(suffix)
+            v_unpadded = f"{prefix}-{val_num}"
+            if v_unpadded not in variantes:
+                variantes.append(v_unpadded)
+        except ValueError:
+            pass
+    return variantes
+
+
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/auditar-documento', methods=['GET'])
 def api_auditar_documento(negocio_id):
     if 'usuario_id' not in session:
@@ -2224,6 +2242,8 @@ def api_auditar_documento(negocio_id):
 
         # Look up the order in `pedidos` if it exists
         pedido_row = None
+        num_variants = resolver_variantes_numero(num_doc)
+        
         try:
             pedido_id = int(num_doc)
             pedido_row = conn.execute("SELECT * FROM pedidos WHERE id = %s AND negocio_id = %s", (pedido_id, negocio_id)).fetchone()
@@ -2231,7 +2251,7 @@ def api_auditar_documento(negocio_id):
             pass
 
         if not pedido_row:
-            pedido_row = conn.execute("SELECT * FROM pedidos WHERE UPPER(numero_documento) = UPPER(%s) AND negocio_id = %s", (num_doc, negocio_id)).fetchone()
+            pedido_row = conn.execute("SELECT * FROM pedidos WHERE UPPER(numero_documento) IN %s AND negocio_id = %s", (tuple(v.upper() for v in num_variants), negocio_id)).fetchone()
 
         if pedido_row and not tipo_documento_id:
             tipo_documento_id = pedido_row['tipo_doc_id']
@@ -2245,9 +2265,9 @@ def api_auditar_documento(negocio_id):
                        p_padre.nombre AS producto_padre_nombre, m.costo_und
                 FROM movimientos_inventario m
                 LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
-                WHERE m.negocio_id = %s AND m.tipo_documento_id = %s AND m.documento_numero = %s
+                WHERE m.negocio_id = %s AND m.tipo_documento_id = %s AND m.documento_numero IN %s
             """
-            params_inv = [negocio_id, tipo_documento_id, num_doc]
+            params_inv = [negocio_id, tipo_documento_id, tuple(num_variants)]
         else:
             # Fallback legacy
             if pedido_row:
@@ -2260,10 +2280,10 @@ def api_auditar_documento(negocio_id):
                     LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
                     WHERE m.negocio_id = %s AND (
                         (m.referencia_tipo IN ('pedido', 'pedido_tienda', 'pedido_restaurante') AND m.referencia_id = %s)
-                        OR (LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) = LOWER(%s))
+                        OR (LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) IN %s)
                     )
                 """
-                params_inv = [negocio_id, pedido_row['id'], tipo_doc, num_doc]
+                params_inv = [negocio_id, pedido_row['id'], tipo_doc, tuple(v.lower() for v in num_variants)]
             else:
                 sql_inv = """
                     SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
@@ -2272,9 +2292,9 @@ def api_auditar_documento(negocio_id):
                            p_padre.nombre AS producto_padre_nombre, m.costo_und
                     FROM movimientos_inventario m
                     LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
-                    WHERE m.negocio_id = %s AND LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) = LOWER(%s)
+                    WHERE m.negocio_id = %s AND LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) IN %s
                 """
-                params_inv = [negocio_id, tipo_doc, num_doc]
+                params_inv = [negocio_id, tipo_doc, tuple(v.lower() for v in num_variants)]
         
         rows_inv = conn.execute(sql_inv, tuple(params_inv)).fetchall()
         items_inventario = [
@@ -2301,9 +2321,9 @@ def api_auditar_documento(negocio_id):
             comp_row = conn.execute("""
                 SELECT id, numero_comprobante, tipo, fecha, descripcion, total_debitos, total_creditos, notas
                 FROM comprobantes_contables
-                WHERE negocio_id = %s AND tipo_documento_id = %s AND numero_comprobante = %s
+                WHERE negocio_id = %s AND tipo_documento_id = %s AND (numero_comprobante IN %s OR origen_id IN %s)
                 LIMIT 1
-            """, (negocio_id, tipo_documento_id, num_doc)).fetchone()
+            """, (negocio_id, tipo_documento_id, tuple(num_variants), tuple(num_variants))).fetchone()
         else:
             # Fallback legacy
             origen_id_str = f"{tipo_doc}:{num_doc}"
@@ -2313,11 +2333,11 @@ def api_auditar_documento(negocio_id):
                 FROM comprobantes_contables
                 WHERE negocio_id = %s AND (
                     (origen_tipo = 'pedido' AND origen_id = %s)
-                    OR (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
-                    OR (numero_comprobante ILIKE %s)
+                    OR (origen_tipo IS NOT NULL AND LOWER(origen_id) IN %s)
+                    OR (numero_comprobante IN %s)
                 )
                 LIMIT 1
-            """, (negocio_id, pedido_id_str, origen_id_str, f'%{num_doc}%')).fetchone()
+            """, (negocio_id, pedido_id_str, tuple(v.lower() for v in num_variants), tuple(num_variants))).fetchone()
             
         comprobante = None
         if comp_row:
@@ -2781,45 +2801,59 @@ def api_consultar_documento_existente(negocio_id):
             if td_row:
                 tipo_doc_id = td_row['id']
 
+        # Alternativas de tipos de documentos heredados (legacy)
+        tipo_names = [tipo_doc.lower()]
+        if tipo_doc_id == 1:
+            tipo_names.extend(['factura de proveedor', 'factura proveedor', 'factura'])
+        elif tipo_doc_id == 3:
+            tipo_names.extend(['ajuste de inventario', 'ajuste entrada', 'ajuste'])
+
+        # Resolver todas las variantes posibles del número de documento
+        num_variants = resolver_variantes_numero(num_doc)
+
         # Check if there is any movement with this key
+        query_base = """
+SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.iva_pct, m.notas,
+       m.presentacion_id, p_pres.nombre AS presentacion_nombre, p_pres.equivalencia AS presentacion_equivalencia
+FROM movimientos_inventario m
+LEFT JOIN presentaciones p_pres ON p_pres.id = m.presentacion_id
+WHERE m.negocio_id = %s AND m.tipo = 'entrada'
+AND (m.tipo_documento_id = %s OR (m.tipo_documento_id IS NULL AND LOWER(m.tipo_documento) IN %s))
+AND LOWER(m.documento_numero) IN %s
+"""
+        params = [negocio_id, tipo_doc_id, tuple(tipo_names), tuple(v.lower() for v in num_variants)]
+
         if proveedor_id:
-            query = """
-SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.iva_pct, m.notas,
-       m.presentacion_id, p_pres.nombre AS presentacion_nombre, p_pres.equivalencia AS presentacion_equivalencia
-FROM movimientos_inventario m
-LEFT JOIN presentaciones p_pres ON p_pres.id = m.presentacion_id
-WHERE m.negocio_id = %s AND m.tipo = 'entrada'
-AND (m.tipo_documento_id = %s OR (m.tipo_documento_id IS NULL AND LOWER(m.tipo_documento) = LOWER(%s)))
-AND LOWER(m.documento_numero) = LOWER(%s) AND m.proveedor_id = %s
-ORDER BY m.id
-"""
-            params = (negocio_id, tipo_doc_id, tipo_doc, num_doc, proveedor_id)
-        else:
-            query = """
-SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.iva_pct, m.notas,
-       m.presentacion_id, p_pres.nombre AS presentacion_nombre, p_pres.equivalencia AS presentacion_equivalencia
-FROM movimientos_inventario m
-LEFT JOIN presentaciones p_pres ON p_pres.id = m.presentacion_id
-WHERE m.negocio_id = %s AND m.tipo = 'entrada'
-AND (m.tipo_documento_id = %s OR (m.tipo_documento_id IS NULL AND LOWER(m.tipo_documento) = LOWER(%s)))
-AND LOWER(m.documento_numero) = LOWER(%s) AND m.proveedor_nombre = %s
-ORDER BY m.id
-"""
-            params = (negocio_id, tipo_doc_id, tipo_doc, num_doc, proveedor_nombre)
-            
-        rows = conn.execute(query, params).fetchall()
+            query_base += " AND m.proveedor_id = %s"
+            params.append(proveedor_id)
+        elif proveedor_nombre:
+            query_base += " AND LOWER(m.proveedor_nombre) = LOWER(%s)"
+            params.append(proveedor_nombre)
+
+        query = query_base + " ORDER BY m.id"
+        rows = conn.execute(query, tuple(params)).fetchall()
         if not rows:
             return jsonify({'ok': True, 'existe': False})
             
         # Get notes from first movement
-        first_row = conn.execute("""
-            SELECT notas FROM movimientos_inventario
-            WHERE negocio_id = %s AND tipo = 'entrada' 
-              AND (tipo_documento_id = %s OR (tipo_documento_id IS NULL AND LOWER(tipo_documento) = LOWER(%s)))
-              AND LOWER(documento_numero) = LOWER(%s) AND (proveedor_id = %s OR proveedor_nombre = %s)
-            LIMIT 1
-        """, (negocio_id, tipo_doc_id, tipo_doc, num_doc, proveedor_id, proveedor_nombre)).fetchone()
-        notes = first_row['notas'] if first_row else ''
+        notes_query = """
+SELECT notas FROM movimientos_inventario
+WHERE negocio_id = %s AND tipo = 'entrada' 
+AND (tipo_documento_id = %s OR (tipo_documento_id IS NULL AND LOWER(tipo_documento) IN %s))
+AND LOWER(documento_numero) IN %s
+"""
+        notes_params = [negocio_id, tipo_doc_id, tuple(tipo_names), tuple(v.lower() for v in num_variants)]
+        
+        if proveedor_id:
+            notes_query += " AND proveedor_id = %s"
+            notes_params.append(proveedor_id)
+        elif proveedor_nombre:
+            notes_query += " AND LOWER(proveedor_nombre) = LOWER(%s)"
+            notes_params.append(proveedor_nombre)
+            
+        notes_query += " LIMIT 1"
+        first_row = conn.execute(notes_query, tuple(notes_params)).fetchone()
+        notes = first_row['notas'] if (first_row and 'notas' in first_row) else ''
             
         return jsonify({
             'ok': True,
@@ -3263,7 +3297,7 @@ def api_tienda_ajuste_rapido(negocio_id):
             conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (int(res_num), td['id']))
             
         try:
-            doc_num = f"AJUSTE_INV-{int(res_num):04d}"
+            doc_num = f"AJUSTE_INV-{int(res_num)}"
         except (ValueError, TypeError):
             doc_num = f"AJUSTE_INV-{res_num}"
             
@@ -3397,7 +3431,7 @@ def api_ajuste_siguiente_documento(negocio_id):
             
         next_num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
         tipo_code = td['codigo'] or 'AJUSTE_INV'
-        doc_num = f"{tipo_code}-{next_num:04d}"
+        doc_num = f"{tipo_code}-{next_num}"
         
         return jsonify({'ok': True, 'documento_numero': doc_num, 'consecutivo': next_num})
     except Exception as e:
@@ -3464,7 +3498,7 @@ def api_ajuste_guardar_item(negocio_id):
                 res_num = str(max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1)))
                 conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (int(res_num), tipo_documento_id))
             
-            doc_num_final = f"{tipo_code}-{int(res_num):04d}"
+            doc_num_final = f"{tipo_code}-{int(res_num)}"
             
             desc_asiento = f"Ajuste físico de inventario - {doc_num_final}"
             comp_id = conn.execute("""

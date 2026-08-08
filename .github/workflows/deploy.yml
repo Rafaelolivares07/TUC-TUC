@@ -1,26 +1,22 @@
-name: Deploy a producción
+name: Deploy TucTuc V2 to AWS
 
 on:
   push:
-    branches: [v2]
-    paths-ignore:
-      - 'android-nav/**'
-      - 'remote-assist/**'
-      - 'docs/**'
-      - '*.md'
+    branches:
+      - v2
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy en AWS
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 18.217.231.167
           username: ubuntu
-          key: ${{ secrets.SSH_DEPLOY_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
           script: |
             cd /home/ubuntu/tuctucv2
             git pull origin v2
             sudo systemctl restart tuctuc
-            sudo systemctl is-active tuctuc

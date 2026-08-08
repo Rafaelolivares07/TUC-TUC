@@ -393,17 +393,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         UPDATE productos SET costo=%s WHERE id=%s AND negocio_id=%s
     """, (float(costo_nuevo), producto_id, negocio_id))
 
-    # Asiento COGS automático en salidas por venta (best-effort, no bloquea)
-    if tipo == 'salida' and motivo == 'venta' and _asiento_costo_mov:
-        try:
-            _asiento_costo_mov(conn, negocio_id, producto_id,
-                               float(cantidad), float(costo_ant),
-                               registrado_por=registrado_por,
-                               producto_padre_id=producto_padre_id,
-                               tercero_id=proveedor_id,
-                               fecha=documento_fecha)
-        except Exception as _e:
-            print(f'[cont] costo_mov prod={producto_id}: {_e}')
+
 
 
 def _verificar_stock_pedido(conn, negocio_id, items, excluir_componentes=None):

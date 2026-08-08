@@ -2154,7 +2154,7 @@ async function cargarBalanceComprobacion() {
       `;
     }
 
-    // Calcular Utilidad / Pérdida del Periodo (Clase 4 - Clase 5 - Clase 6 - Clase 7)
+    // Calcular Utilidad / Pérdida del Periodo (Movimientos netos de Clase 4 - Clase 5 - Clase 6 - Clase 7)
     let ingresos = 0.0;
     let gastos = 0.0;
     let costosVenta = 0.0;
@@ -2163,11 +2163,18 @@ async function cargarBalanceComprobacion() {
     if (data.cuentas && data.cuentas.length > 0) {
       data.cuentas.forEach(c => {
         if (c.nivel === 1) {
-          const sFinal = parseFloat(c.saldo_final || 0.0);
-          if (c.codigo === '4') ingresos = sFinal;
-          else if (c.codigo === '5') gastos = sFinal;
-          else if (c.codigo === '6') costosVenta = sFinal;
-          else if (c.codigo === '7') costosProduccion = sFinal;
+          const deb_per = parseFloat(c.debito || 0.0);
+          const cred_per = parseFloat(c.credito || 0.0);
+          
+          if (c.codigo === '4') {
+            ingresos = cred_per - deb_per;
+          } else if (c.codigo === '5') {
+            gastos = deb_per - cred_per;
+          } else if (c.codigo === '6') {
+            costosVenta = deb_per - cred_per;
+          } else if (c.codigo === '7') {
+            costosProduccion = deb_per - cred_per;
+          }
         }
       });
     }

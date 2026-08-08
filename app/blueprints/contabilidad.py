@@ -2496,8 +2496,8 @@ def api_reporte_movimientos(negocio_id):
         if agrupar == 'sin_agrupar':
             sa_row = conn.execute(f"""
                 SELECT 
-                    COALESCE(SUM(CASE WHEN m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS total_debitos,
-                    COALESCE(SUM(CASE WHEN m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS total_credits
+                    COALESCE(SUM(CASE WHEN m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS total_debitos,
+                    COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS total_credits
                 FROM movimientos_contables m
                 JOIN comprobantes_contables c ON c.id = m.comprobante_id
                 WHERE {" AND ".join(where_anterior)}
@@ -2578,8 +2578,8 @@ def api_reporte_movimientos(negocio_id):
                     m.cuenta_id,
                     p.codigo AS cuenta_codigo,
                     p.nombre AS cuenta_nombre,
-                    COALESCE(SUM(CASE WHEN m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS total_debitos,
-                    COALESCE(SUM(CASE WHEN m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS total_credits
+                    COALESCE(SUM(CASE WHEN m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS total_debitos,
+                    COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS total_credits
                 FROM movimientos_contables m
                 JOIN comprobantes_contables c ON c.id = m.comprobante_id
                 JOIN cuentas_puc p ON p.id = m.cuenta_id
@@ -2684,8 +2684,8 @@ def api_reporte_movimientos(negocio_id):
                 SELECT 
                     m.tercero_id,
                     t.nombre AS tercero_nombre,
-                    COALESCE(SUM(CASE WHEN m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS total_debitos,
-                    COALESCE(SUM(CASE WHEN m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS total_credits
+                    COALESCE(SUM(CASE WHEN m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS total_debitos,
+                    COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS total_credits
                 FROM movimientos_contables m
                 JOIN comprobantes_contables c ON c.id = m.comprobante_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
@@ -2834,10 +2834,10 @@ def api_balance_comprobacion(negocio_id):
                 c.codigo, 
                 c.nombre, 
                 c.naturaleza,
-                COALESCE(SUM(CASE WHEN cc.fecha < %s AND m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS deb_ant,
-                COALESCE(SUM(CASE WHEN cc.fecha < %s AND m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS cred_ant,
-                COALESCE(SUM(CASE WHEN cc.fecha >= %s AND cc.fecha <= %s AND m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS deb_per,
-                COALESCE(SUM(CASE WHEN cc.fecha >= %s AND cc.fecha <= %s AND m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS cred_per
+                COALESCE(SUM(CASE WHEN cc.fecha < %s AND m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS deb_ant,
+                COALESCE(SUM(CASE WHEN cc.fecha < %s AND m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS cred_ant,
+                COALESCE(SUM(CASE WHEN cc.fecha >= %s AND cc.fecha <= %s AND m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS deb_per,
+                COALESCE(SUM(CASE WHEN cc.fecha >= %s AND cc.fecha <= %s AND m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS cred_per
             FROM cuentas_puc c
             LEFT JOIN movimientos_contables m ON m.cuenta_id = c.id AND m.negocio_id = %s
             LEFT JOIN comprobantes_contables cc ON m.comprobante_id = cc.id
@@ -3088,8 +3088,8 @@ def api_cierre_periodo(negocio_id):
                 c.id as cuenta_id, 
                 c.codigo, 
                 c.naturaleza,
-                COALESCE(SUM(CASE WHEN m.tipo = 'debito' THEN m.monto ELSE 0 END), 0) AS deb_total,
-                COALESCE(SUM(CASE WHEN m.tipo = 'credito' THEN m.monto ELSE 0 END), 0) AS cred_total
+                COALESCE(SUM(CASE WHEN m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS deb_total,
+                COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS cred_total
             FROM cuentas_puc c
             JOIN movimientos_contables m ON m.cuenta_id = c.id AND m.negocio_id = %s
             JOIN comprobantes_contables cc ON m.comprobante_id = cc.id

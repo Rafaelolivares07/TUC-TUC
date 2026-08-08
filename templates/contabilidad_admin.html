@@ -483,30 +483,31 @@
     <!-- ═══ TAB: BALANCE Y CIERRE ═══ -->
     <div id="panel-balance" class="p-5 hidden">
       <!-- Sección: Filtros y Acciones del Balance -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 items-end">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-6 items-end">
         <div>
-          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Desde</label>
-          <input id="bal-desde" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Periodo Contable</label>
+          <input id="bal-periodo-select" type="month" class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Hasta</label>
-          <input id="bal-hasta" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
+          <label class="block text-xs font-semibold text-gray-400 uppercase mb-1.5">Fecha Inicial (Fija)</label>
+          <input id="bal-desde" type="date" readonly class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full bg-slate-50 text-slate-500 cursor-not-allowed">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-400 uppercase mb-1.5">Fecha Final (Fija)</label>
+          <input id="bal-hasta" type="date" readonly class="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full bg-slate-50 text-slate-500 cursor-not-allowed">
         </div>
         <div>
           <button onclick="cargarBalanceComprobacion()"
-                  class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition shadow-md w-full flex items-center justify-center gap-2">
-            <span>📊</span> Generar Balance
+                  class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-lg text-xs md:text-sm transition shadow-md w-full flex items-center justify-center gap-1.5">
+            <span>🔄</span> Actualizar Balance
           </button>
         </div>
-        <div class="border-l border-gray-200 pl-4">
-          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Periodo a Cerrar</label>
-          <div class="flex gap-2">
-            <input id="cierre-periodo-val" type="month" class="border rounded-lg px-2 py-1.5 text-sm w-full">
-            <button onclick="ejecutarCierrePeriodo()"
-                    class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-1.5 rounded-lg text-xs transition shadow-md shrink-0">
-              🔒 Cerrar Periodo
-            </button>
-          </div>
+        <div>
+          <input id="cierre-periodo-val" type="hidden">
+          <button onclick="ejecutarCierrePeriodo()"
+                  class="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 rounded-lg text-xs md:text-sm transition shadow-md w-full flex items-center justify-center gap-1.5 whitespace-nowrap">
+            <span>🔒</span> Cerrar Periodo
+          </button>
         </div>
       </div>
 
@@ -515,6 +516,10 @@
         <div>
           <h4 class="text-xs font-bold text-gray-700 uppercase mb-1">Estado del Periodo Consultada</h4>
           <div id="bal-periodo-estado" class="text-sm font-semibold text-gray-500">—</div>
+        </div>
+        <div>
+          <h4 class="text-xs font-bold text-gray-700 uppercase mb-1">Resultado del Periodo (Utilidad / Pérdida)</h4>
+          <div id="bal-utilidad-periodo" class="text-sm font-bold text-slate-700">—</div>
         </div>
         <div>
           <h4 class="text-xs font-bold text-gray-700 uppercase mb-1">Periodos Cerrados</h4>
@@ -1997,6 +2002,7 @@ function verMovimientosDeCuenta(cuentaId, cuentaCodigo, cuentaNombre) {
 }
 
 function inicializarBalanceTab() {
+  const periodSelect = document.getElementById('bal-periodo-select');
   const desdeInput = document.getElementById('bal-desde');
   const hastaInput = document.getElementById('bal-hasta');
   const monthInput = document.getElementById('cierre-periodo-val');
@@ -2004,16 +2010,43 @@ function inicializarBalanceTab() {
   const today = new Date();
   const yr = today.getFullYear();
   const mo = today.getMonth() + 1; // 1-based month
+  const monthStr = `${yr}-${String(mo).padStart(2, '0')}`;
   
-  if (!desdeInput.value) {
-    desdeInput.value = `${yr}-${String(mo).padStart(2, '0')}-01`;
+  if (periodSelect && !periodSelect.value) {
+    periodSelect.value = monthStr;
   }
-  if (!hastaInput.value) {
-    const lastDay = new Date(yr, mo, 0).getDate();
-    hastaInput.value = `${yr}-${String(mo).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  
+  // Registrar el listener de cambio para sincronizar fechas si no se ha hecho
+  if (periodSelect && !periodSelect.dataset.listenerAttached) {
+    periodSelect.dataset.listenerAttached = 'true';
+    periodSelect.addEventListener('change', function() {
+      const val = this.value;
+      if (!val) return;
+      const parts = val.split('-');
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      
+      desdeInput.value = `${parts[0]}-${parts[1]}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      hastaInput.value = `${parts[0]}-${parts[1]}-${String(lastDay).padStart(2, '0')}`;
+      monthInput.value = val;
+      
+      cargarBalanceComprobacion();
+    });
   }
-  if (!monthInput.value) {
-    monthInput.value = `${yr}-${String(mo).padStart(2, '0')}`;
+  
+  // Sincronizar fechas inicialmente
+  if (periodSelect) {
+    const val = periodSelect.value;
+    if (val) {
+      const parts = val.split('-');
+      const year = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      desdeInput.value = `${parts[0]}-${parts[1]}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      hastaInput.value = `${parts[0]}-${parts[1]}-${String(lastDay).padStart(2, '0')}`;
+      monthInput.value = val;
+    }
   }
   
   cargarBalanceComprobacion();
@@ -2119,6 +2152,36 @@ async function cargarBalanceComprobacion() {
           🔓 Abierto (Modificable)
         </span>
       `;
+    }
+
+    // Calcular Utilidad / Pérdida del Periodo (Clase 4 - Clase 5 - Clase 6 - Clase 7)
+    let ingresos = 0.0;
+    let gastos = 0.0;
+    let costosVenta = 0.0;
+    let costosProduccion = 0.0;
+    
+    if (data.cuentas && data.cuentas.length > 0) {
+      data.cuentas.forEach(c => {
+        if (c.nivel === 1) {
+          const sFinal = parseFloat(c.saldo_final || 0.0);
+          if (c.codigo === '4') ingresos = sFinal;
+          else if (c.codigo === '5') gastos = sFinal;
+          else if (c.codigo === '6') costosVenta = sFinal;
+          else if (c.codigo === '7') costosProduccion = sFinal;
+        }
+      });
+    }
+    
+    const utilidad = ingresos - gastos - costosVenta - costosProduccion;
+    const utilidadDiv = document.getElementById('bal-utilidad-periodo');
+    if (utilidadDiv) {
+      if (utilidad > 0) {
+        utilidadDiv.innerHTML = `<span class="text-emerald-600 font-bold font-mono">+$${formatMoni(utilidad)} (Utilidad)</span>`;
+      } else if (utilidad < 0) {
+        utilidadDiv.innerHTML = `<span class="text-red-600 font-bold font-mono">-$${formatMoni(Math.abs(utilidad))} (Pérdida)</span>`;
+      } else {
+        utilidadDiv.innerHTML = `<span class="text-slate-500 font-bold font-mono">$0.00</span>`;
+      }
     }
     
     // Lista de periodos cerrados

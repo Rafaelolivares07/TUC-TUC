@@ -2145,7 +2145,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         # Note: in pedidos, the business is stored in negocio_id as its tercero_id
         # Seleccionamos tipo_doc_id para consolidación
         rows_ped = conn.execute("""
-            SELECT p.id, p.tipo_doc_id, p.numero_documento, p.fecha, p.created_at, p.total, p.cliente_id, p.id_tercero, p.nombre_cliente, p.estado
+            SELECT p.id, p.tipo_documento_id, p.numero_documento, p.fecha, p.created_at, p.total, p.cliente_id, p.id_tercero, p.nombre_cliente, p.estado
             FROM pedidos p
             WHERE p.negocio_id = %s
             ORDER BY COALESCE(p.fecha, p.created_at) DESC, p.id DESC
@@ -2162,7 +2162,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     c_name = t_row['nombre']
                     
             doc_num = r['numero_documento'] or str(r['id'])
-            td_id = r['tipo_doc_id']
+            td_id = r['tipo_documento_id']
             td_name = 'pedido_venta'
             if td_id and td_id in types_map:
                 td_name = types_map[td_id]
@@ -3696,12 +3696,12 @@ def api_mantenimiento_modificar_documento(negocio_id):
         pedido_row = None
         try:
             pedido_id = int(documento_numero)
-            pedido_row = conn.execute("SELECT id, tipo_doc_id FROM pedidos WHERE id = %s AND negocio_id = %s", (pedido_id, negocio_id)).fetchone()
+            pedido_row = conn.execute("SELECT id, tipo_documento_id FROM pedidos WHERE id = %s AND negocio_id = %s", (pedido_id, negocio_id)).fetchone()
         except ValueError:
             pass
             
         if not pedido_row:
-            pedido_row = conn.execute("SELECT id, tipo_doc_id FROM pedidos WHERE UPPER(numero_documento) = UPPER(%s) AND negocio_id = %s", (documento_numero, negocio_id)).fetchone()
+            pedido_row = conn.execute("SELECT id, tipo_documento_id FROM pedidos WHERE UPPER(numero_documento) = UPPER(%s) AND negocio_id = %s", (documento_numero, negocio_id)).fetchone()
 
         # 3. Resolver tipo_documento_id de forma robusta
         tipo_documento_id = None
@@ -3716,7 +3716,7 @@ def api_mantenimiento_modificar_documento(negocio_id):
                 tipo_documento_id = row_td['id']
 
         if pedido_row and not tipo_documento_id:
-            tipo_documento_id = pedido_row['tipo_doc_id']
+            tipo_documento_id = pedido_row['tipo_documento_id']
             
         # 4. Determinar cláusula WHERE para movimientos_inventario
         if tipo_documento_id:

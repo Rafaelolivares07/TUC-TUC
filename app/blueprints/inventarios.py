@@ -3133,7 +3133,7 @@ def api_produccion_historial(negocio_id):
     try:
         rows = conn.execute("""
             SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.valor_total,
-                   m.numero_documento, m.tipo_documento_id, tdn.nombre AS tipo_documento_nombre, 
+                   m.documento_numero, m.tipo_documento_id, tdn.nombre AS tipo_documento_nombre, 
                    m.created_at, m.referencia_id AS prod_token, m.notas
             FROM movimientos_inventario m
             LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
@@ -3152,7 +3152,7 @@ def api_produccion_historial(negocio_id):
                 'cantidad': float(r['cantidad']),
                 'valor_unitario': float(r['valor_unitario'] or 0),
                 'valor_total': float(r['valor_total'] or 0),
-                'documento_numero': r['numero_documento'],
+                'documento_numero': r['documento_numero'],
                 'tipo_documento_id': r['tipo_documento_id'],
                 'tipo_documento_nombre': r['tipo_documento_nombre'] or 'PRODUCCIÓN',
                 'fecha': fecha_str,
@@ -3207,7 +3207,7 @@ def api_produccion_imprimir(negocio_id, prod_token):
             componentes=componentes,
             fecha_doc=fecha_doc,
             total_insumos=total_insumos,
-            consecutivo=terminado['numero_documento'] or f"PROD-{prod_token}",
+            consecutivo=terminado['documento_numero'] or f"PROD-{prod_token}",
             tipo_documento_nombre=terminado['tipo_documento_nombre'] or 'PRODUCCIÓN'
         )
     except Exception as e:

@@ -2362,6 +2362,27 @@ def api_auditar_documento(negocio_id):
         pedido_row = None
         num_variants = resolver_variantes_numero(num_doc)
         
+        # Extraer consecutivos puros y generar variantes con prefijo para enlace retrocompatible
+        if '-' in num_doc:
+            parts = num_doc.split('-')
+            if len(parts) >= 2:
+                variant_1 = f"{parts[-2].strip()}-{parts[-1].strip()}"
+                variant_2 = parts[-1].strip()
+                if variant_1 not in num_variants:
+                    num_variants.append(variant_1)
+                if variant_2 not in num_variants:
+                    num_variants.append(variant_2)
+                    
+        if tipo_documento_id:
+            td_row = conn.execute("SELECT nombre, codigo FROM tipos_documento_negocio WHERE id = %s", (tipo_documento_id,)).fetchone()
+            if td_row:
+                v_long = f"{td_row['nombre']}-{num_doc}"
+                if v_long not in num_variants:
+                    num_variants.append(v_long)
+                v_long_code = f"{td_row['codigo']}-{num_doc}"
+                if v_long_code not in num_variants:
+                    num_variants.append(v_long_code)
+        
         try:
             pedido_id = int(num_doc)
             pedido_row = conn.execute("SELECT * FROM pedidos WHERE id = %s AND negocio_id = %s", (pedido_id, negocio_id)).fetchone()

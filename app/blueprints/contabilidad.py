@@ -1266,8 +1266,8 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
     fecha_uso = _date.today()
     _verificar_periodo_cerrado(conn, negocio_id, fecha_uso)
     desc = descripcion or f'Producción: {terminado["nombre"]}'
-    if tipo_documento and documento_numero:
-        numero = f"{tipo_documento}-{documento_numero}"
+    if documento_numero:
+        numero = documento_numero
     else:
         cnt = conn.execute(
             "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id=%s AND tipo='PRODUCCION'",

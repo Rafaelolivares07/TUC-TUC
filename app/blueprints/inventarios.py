@@ -2118,7 +2118,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             sql_inv += " AND (mi.documento_numero ILIKE %s OR mi.proveedor_nombre ILIKE %s)"
             params_inv.extend([f'%{q}%', f'%{q}%'])
         
-        if tipo:
+        if tipo and tipo != 'todos':
             if tipo != 'pedido_venta':
                 try:
                     tipo_id = int(tipo)
@@ -2182,7 +2182,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             sql_ped += " AND (p.numero_documento ILIKE %s OR p.nombre_cliente ILIKE %s)"
             params_ped.extend([f'%{q}%', f'%{q}%'])
             
-        if tipo:
+        if tipo and tipo != 'todos':
             if tipo == 'pedido_venta':
                 sql_ped += " AND (p.tipo_documento_id IS NULL OR p.tipo_documento_id IN (SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'venta'))"
                 params_ped.append(negocio_id)

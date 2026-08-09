@@ -1645,6 +1645,7 @@ def api_produccion_registrar(negocio_id):
                          notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
                          producto_padre_id=producto_id,
                          tipo_documento=tipo_documento, documento_numero=documento_numero,
+                         documento_fecha=date.today(),
                          tipo_documento_id=tipo_doc_id)
 
         # Entrada del terminado con costo calculado desde componentes
@@ -1653,6 +1654,7 @@ def api_produccion_registrar(negocio_id):
                      valor_unitario=costo_unitario,
                      notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
                      tipo_documento=tipo_documento, documento_numero=documento_numero,
+                     documento_fecha=date.today(),
                      tipo_documento_id=tipo_doc_id)
 
         # Asiento contable de producción (best-effort, no bloquea)

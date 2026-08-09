@@ -2994,6 +2994,21 @@ async function ejecutarConciliacionInventario() {
   }
 }
 
+async function cargarMetodosPagoEntrada() {
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`);
+    const d = await r.json();
+    if (d.ok) {
+      const select = document.getElementById('entrada-metodo-pago');
+      if (select) {
+        select.innerHTML = d.metodos.map(m => `<option value="${m.codigo}">${m.nombre}</option>`).join('');
+      }
+    }
+  } catch(e) {
+    console.error('Error al cargar métodos de pago para entradas:', e);
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   await fetchDefaultPresentacion();

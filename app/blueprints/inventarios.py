@@ -2313,23 +2313,53 @@ def normalizar_numero(num_str):
             return suffix
     return num_str
 
-
 def resolver_variantes_numero(num_str):
     if not num_str:
         return []
     variantes = [num_str]
+    # Normalizar quitando espacios alrededor del string
+    num_str_clean = num_str.strip()
+    if num_str_clean not in variantes:
+        variantes.append(num_str_clean)
+        
     if '-' in num_str:
         parts = num_str.split('-')
-        prefix = '-'.join(parts[:-1])
-        suffix = parts[-1]
+        prefix = '-'.join(parts[:-1]).strip()
+        suffix = parts[-1].strip()
+        
+        # Agregar el sufijo limpio por sí solo (ej: '956' de 'FACTURA PROVEEDOR-956')
+        if suffix and suffix not in variantes:
+            variantes.append(suffix)
+            
+        # También el sufijo anterior (antepenúltima parte si aplica, ej: 'PRODUCCION-4' de 'REPORTE-PRODUCCION-4')
+        if len(parts) >= 3:
+            v_mid = f"{parts[-2].strip()}-{parts[-1].strip()}"
+            if v_mid not in variantes:
+                variantes.append(v_mid)
+                
         try:
             val_num = int(suffix)
             v_unpadded = f"{prefix}-{val_num}"
             if v_unpadded not in variantes:
                 variantes.append(v_unpadded)
+            # Agregar también el consecutivo numérico puro como string
+            v_num_str = str(val_num)
+            if v_num_str not in variantes:
+                variantes.append(v_num_str)
         except ValueError:
             pass
-    return variantes
+            
+    # Variantes en minúsculas y mayúsculas
+    all_variants = []
+    for v in variantes:
+        v_upper = v.upper()
+        v_lower = v.lower()
+        if v_upper not in all_variants:
+            all_variants.append(v_upper)
+        if v_lower not in all_variants:
+            all_variants.append(v_lower)
+            
+    return all_variants
 
 
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/auditar-documento', methods=['GET'])

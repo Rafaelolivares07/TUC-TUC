@@ -2090,6 +2090,14 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
 def api_mantenimiento_documentos_recientes(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    page = _int_o_none(request.args.get('page')) or 1
+    limit = _int_o_none(request.args.get('limit')) or 50
+    q = request.args.get('q', '').strip()
+    tipo = request.args.get('tipo', '').strip()
+    desde = request.args.get('desde', '').strip()
+    hasta = request.args.get('hasta', '').strip()
+    
     conn = get_db_connection()
     try:
         # Obtener mapeo de tipos de documentos del negocio
@@ -2097,17 +2105,46 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         types_map = {r['id']: r['nombre'] for r in types_rows}
 
         # 1. Fetch recent inventory documents
-        # Agregamos tipo_documento_id para agrupación exacta
-        rows_inv = conn.execute("""
+        sql_inv = """
             SELECT mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total,
                    MIN(mi.proveedor_id) AS proveedor_id, MIN(mi.proveedor_nombre) AS proveedor_nombre
             FROM movimientos_inventario mi
             WHERE mi.negocio_id = %s AND mi.tipo_documento IS NOT NULL AND mi.tipo_documento <> '' 
               AND mi.documento_numero IS NOT NULL AND mi.documento_numero <> ''
+        """
+        params_inv = [negocio_id]
+        
+        if q:
+            sql_inv += " AND (mi.documento_numero ILIKE %s OR mi.proveedor_nombre ILIKE %s)"
+            params_inv.extend([f'%{q}%', f'%{q}%'])
+        
+        if tipo:
+            if tipo != 'pedido_venta':
+                try:
+                    tipo_id = int(tipo)
+                    sql_inv += " AND mi.tipo_documento_id = %s"
+                    params_inv.append(tipo_id)
+                except ValueError:
+                    sql_inv += " AND LOWER(mi.tipo_documento) = LOWER(%s)"
+                    params_inv.append(tipo)
+            else:
+                # Si filtran por 'pedido_venta', no hay registros en movimientos_inventario con ese tipo directo
+                sql_inv += " AND 1=0"
+                
+        if desde:
+            sql_inv += " AND mi.documento_fecha >= %s"
+            params_inv.append(desde)
+        if hasta:
+            sql_inv += " AND mi.documento_fecha <= %s"
+            params_inv.append(hasta)
+            
+        sql_inv += """
             GROUP BY mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha
             ORDER BY mi.documento_fecha DESC, mi.documento_numero DESC
-            LIMIT 50
-        """, (negocio_id,)).fetchall()
+            LIMIT 1000
+        """
+        
+        rows_inv = conn.execute(sql_inv, tuple(params_inv)).fetchall()
         
         consolidated = {}
         
@@ -2134,15 +2171,43 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             }
             
         # 2. Fetch recent orders (sales)
-        # Note: in pedidos, the business is stored in negocio_id as its tercero_id
-        # Seleccionamos tipo_doc_id para consolidación
-        rows_ped = conn.execute("""
+        sql_ped = """
             SELECT p.id, p.tipo_documento_id, p.numero_documento, p.fecha, p.created_at, p.total, p.cliente_id, p.id_tercero, p.nombre_cliente, p.estado
             FROM pedidos p
             WHERE p.negocio_id = %s
+        """
+        params_ped = [negocio_id]
+        
+        if q:
+            sql_ped += " AND (p.numero_documento ILIKE %s OR p.nombre_cliente ILIKE %s)"
+            params_ped.extend([f'%{q}%', f'%{q}%'])
+            
+        if tipo:
+            if tipo == 'pedido_venta':
+                sql_ped += " AND (p.tipo_documento_id IS NULL OR p.tipo_documento_id IN (SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'venta'))"
+                params_ped.append(negocio_id)
+            else:
+                try:
+                    tipo_id = int(tipo)
+                    sql_ped += " AND p.tipo_documento_id = %s"
+                    params_ped.append(tipo_id)
+                except ValueError:
+                    sql_ped += " AND p.tipo_documento_id IN (SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND LOWER(nombre) = LOWER(%s))"
+                    params_ped.extend([negocio_id, tipo])
+                    
+        if desde:
+            sql_ped += " AND COALESCE(p.fecha, p.created_at::date) >= %s"
+            params_ped.append(desde)
+        if hasta:
+            sql_ped += " AND COALESCE(p.fecha, p.created_at::date) <= %s"
+            params_ped.append(hasta)
+            
+        sql_ped += """
             ORDER BY COALESCE(p.fecha, p.created_at) DESC, p.id DESC
-            LIMIT 50
-        """, (negocio_id,)).fetchall()
+            LIMIT 1000
+        """
+        
+        rows_ped = conn.execute(sql_ped, tuple(params_ped)).fetchall()
         
         for r in rows_ped:
             # Resolve customer name
@@ -2161,7 +2226,8 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 
             key = (td_id, doc_num) if td_id else (td_name, doc_num)
             f_val = r['fecha'] or r['created_at']
-            date_str = f_val.isoformat() if f_val else None
+            # Normalizar fecha a YYYY-MM-DD para consistencia en consolidado
+            date_str = f_val.strftime('%Y-%m-%d') if f_val else None
             
             # Consolidación: si ya existe el documento por inventario, unificar
             if key in consolidated:
@@ -2188,10 +2254,48 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         documentos = list(consolidated.values())
         documentos.sort(key=lambda d: d['fecha'] or '', reverse=True)
         
+        # Calcular paginación
+        total_registros = len(documentos)
+        total_paginas = (total_registros + limit - 1) // limit if total_registros > 0 else 1
+        
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        paginados = documentos[start_idx:end_idx]
+        
         return jsonify({
             'ok': True,
-            'documentos': documentos[:50]
+            'documentos': paginados,
+            'pagina_actual': page,
+            'total_paginas': total_paginas,
+            'total_registros': total_registros
         })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/tipos-documentos', methods=['GET'])
+def api_mantenimiento_tipos_documentos(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT id, nombre, codigo, tipo_movimiento
+            FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY nombre
+        """, (negocio_id,)).fetchall()
+        
+        tipos = [{
+            'id': r['id'],
+            'nombre': r['nombre'],
+            'codigo': r['codigo'],
+            'tipo_movimiento': r['tipo_movimiento']
+        } for r in rows]
+        
+        return jsonify({'ok': True, 'tipos': tipos})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

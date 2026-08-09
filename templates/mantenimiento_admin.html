@@ -254,10 +254,38 @@
     <div id="auditor-panel-recientes" class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 mb-6">
       <div class="flex justify-between items-center mb-3">
         <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5">
-          <span>⚡</span> Últimas 50 Transacciones del Sistema
+          <span>⚡</span> Buscador e Historial General de Transacciones
         </h3>
         <button onclick="cargarDocumentosRecientes()" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">🔄 Actualizar Lista</button>
       </div>
+
+      <!-- Filtros de Búsqueda -->
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
+        <div>
+          <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Buscar</label>
+          <input id="aud-filtro-recientes-q" type="text" placeholder="No. doc o tercero..." onkeydown="if(event.key === 'Enter') aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Tipo de Documento</label>
+          <select id="aud-filtro-recientes-tipo" onchange="aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
+            <option value="todos">Todos los tipos</option>
+            <option value="pedido_venta">Venta / Pedido</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Desde</label>
+          <input id="aud-filtro-recientes-desde" type="date" onchange="aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
+        </div>
+        <div class="flex items-end gap-1.5">
+          <div class="flex-1">
+            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Hasta</label>
+            <input id="aud-filtro-recientes-hasta" type="date" onchange="aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
+          </div>
+          <button onclick="aplicarFiltrosAuditoria()" class="bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs px-3 py-2.5 rounded-lg shadow-xs transition" title="Filtrar">🔍</button>
+          <button onclick="limpiarFiltrosAuditoria()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold text-xs px-2.5 py-2.5 rounded-lg transition" title="Limpiar Filtros">🧹</button>
+        </div>
+      </div>
+
       <div class="overflow-x-auto max-h-72 overflow-y-auto">
         <table class="w-full text-left text-xs border-collapse">
           <thead>
@@ -277,6 +305,26 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Paginación -->
+      <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-150 flex-wrap gap-2 text-xs">
+        <span class="text-gray-500 font-semibold">
+          Total: <span id="aud-total-recientes" class="font-bold text-gray-800">0</span> registros
+        </span>
+        <div class="flex items-center gap-3">
+          <button id="btn-aud-recientes-prev" onclick="audPaginaAnterior()" disabled
+                  class="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
+            ← Anterior
+          </button>
+          <span class="text-gray-500">
+            Página <span id="aud-pag-actual" class="font-bold text-gray-800">1</span> de <span id="aud-pag-total" class="font-bold text-gray-800">1</span>
+          </span>
+          <button id="btn-aud-recientes-next" onclick="audPaginaSiguiente()" disabled
+                  class="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
+            Siguiente →
+          </button>
+        </div>
       </div>
     </div>
 
@@ -526,6 +574,19 @@
     // Clear direct search input
     const directNum = document.getElementById('auditor-directo-num');
     if (directNum) directNum.value = '';
+    
+    // Resetear filtros
+    audFiltros = { page: 1, q: '', tipo: 'todos', desde: '', hasta: '' };
+    const qInp = document.getElementById('aud-filtro-recientes-q');
+    if (qInp) qInp.value = '';
+    const tipoSel = document.getElementById('aud-filtro-recientes-tipo');
+    if (tipoSel) tipoSel.value = 'todos';
+    const desdeInp = document.getElementById('aud-filtro-recientes-desde');
+    if (desdeInp) desdeInp.value = '';
+    const hastaInp = document.getElementById('aud-filtro-recientes-hasta');
+    if (hastaInp) hastaInp.value = '';
+
+    cargarTiposDocumentosFiltro();
     
     // Load recent documents
     cargarDocumentosRecientes();
@@ -1072,6 +1133,30 @@
     }
   }
 
+  // Filtros y paginación para buscador de auditoría
+  let audFiltros = { page: 1, q: '', tipo: 'todos', desde: '', hasta: '' };
+  let audTotalPages = 1;
+
+  async function cargarTiposDocumentosFiltro() {
+    try {
+      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/tipos-documentos`);
+      const d = await r.json();
+      if (d.ok) {
+        const select = document.getElementById('aud-filtro-recientes-tipo');
+        if (!select) return;
+        select.innerHTML = `
+          <option value="todos">Todos los tipos</option>
+          <option value="pedido_venta">Venta / Pedido</option>
+        `;
+        (d.tipos || []).forEach(t => {
+          select.innerHTML += `<option value="${t.id}">${t.nombre} (${t.codigo})</option>`;
+        });
+      }
+    } catch(e) {
+      console.error('Error al cargar tipos de documentos para filtros:', e);
+    }
+  }
+
   async function cargarDocumentosRecientes() {
     const tbody = document.getElementById('aud-tbody-recientes');
     if (!tbody) return;
@@ -1081,15 +1166,34 @@
       </tr>
     `;
     try {
-      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/documentos-recientes`);
+      const queryParams = new URLSearchParams({
+        page: audFiltros.page,
+        q: audFiltros.q,
+        tipo: audFiltros.tipo,
+        desde: audFiltros.desde,
+        hasta: audFiltros.hasta
+      });
+      const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/documentos-recientes?${queryParams.toString()}`);
       const d = await r.json();
       if (!d.ok) throw new Error(d.error || 'Error al cargar transacciones');
       
       const docs = d.documentos || [];
+      
+      // Actualizar UI de paginación
+      audTotalPages = d.total_paginas || 1;
+      document.getElementById('aud-total-recientes').textContent = d.total_registros || 0;
+      document.getElementById('aud-pag-actual').textContent = d.pagina_actual || 1;
+      document.getElementById('aud-pag-total').textContent = audTotalPages;
+      
+      const prevBtn = document.getElementById('btn-aud-recientes-prev');
+      const nextBtn = document.getElementById('btn-aud-recientes-next');
+      if (prevBtn) prevBtn.disabled = (d.pagina_actual <= 1);
+      if (nextBtn) nextBtn.disabled = (d.pagina_actual >= audTotalPages);
+
       if (!docs.length) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="7" class="text-center text-gray-400 py-6">No se encontraron transacciones recientes en el sistema</td>
+            <td colspan="7" class="text-center text-gray-400 py-6">No se encontraron transacciones que coincidan con la búsqueda</td>
           </tr>
         `;
         return;
@@ -1099,6 +1203,8 @@
         let originBadge = '';
         if (doc.origen === 'ventas') {
           originBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 uppercase">venta</span>';
+        } else if (doc.origen === 'ambos') {
+          originBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 uppercase">venta/inv</span>';
         } else {
           originBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 uppercase">inventario</span>';
         }
@@ -1106,9 +1212,14 @@
         let typeStr = doc.tipo_documento.toUpperCase();
         if (doc.tipo_documento === 'pedido_venta') typeStr = 'Venta / Pedido';
         
+        let dateFormatted = doc.fecha || '—';
+        if (dateFormatted !== '—' && dateFormatted.includes('T')) {
+          dateFormatted = dateFormatted.split('T')[0];
+        }
+        
         return `
           <tr class="border-b hover:bg-gray-50">
-            <td class="py-2">${doc.fecha ? new Date(doc.fecha).toLocaleDateString('es-CO', {hour: '2-digit', minute:'2-digit'}) : '—'}</td>
+            <td class="py-2">${dateFormatted}</td>
             <td class="py-2">${originBadge}</td>
             <td class="py-2 font-bold text-gray-700">${typeStr}</td>
             <td class="py-2 font-mono text-gray-800">${doc.documento_numero}</td>
@@ -1130,6 +1241,39 @@
           <td colspan="7" class="text-center text-red-500 py-6">Error: ${e.message}</td>
         </tr>
       `;
+    }
+  }
+
+  function aplicarFiltrosAuditoria() {
+    audFiltros.page = 1;
+    audFiltros.q = document.getElementById('aud-filtro-recientes-q').value.trim();
+    audFiltros.tipo = document.getElementById('aud-filtro-recientes-tipo').value;
+    audFiltros.desde = document.getElementById('aud-filtro-recientes-desde').value;
+    audFiltros.hasta = document.getElementById('aud-filtro-recientes-hasta').value;
+    cargarDocumentosRecientes();
+  }
+
+  function limpiarFiltrosAuditoria() {
+    document.getElementById('aud-filtro-recientes-q').value = '';
+    document.getElementById('aud-filtro-recientes-tipo').value = 'todos';
+    document.getElementById('aud-filtro-recientes-desde').value = '';
+    document.getElementById('aud-filtro-recientes-hasta').value = '';
+    
+    audFiltros = { page: 1, q: '', tipo: 'todos', desde: '', hasta: '' };
+    cargarDocumentosRecientes();
+  }
+
+  function audPaginaAnterior() {
+    if (audFiltros.page > 1) {
+      audFiltros.page--;
+      cargarDocumentosRecientes();
+    }
+  }
+
+  function audPaginaSiguiente() {
+    if (audFiltros.page < audTotalPages) {
+      audFiltros.page++;
+      cargarDocumentosRecientes();
     }
   }
 

@@ -2535,7 +2535,7 @@ def api_reporte_movimientos(negocio_id):
 
             for r in movs:
                 monto = float(r['monto'])
-                es_deb = (r['tipo_mov'] == 'debito')
+                es_deb = r['tipo_mov'] in ('debito', 'D')
                 if es_deb:
                     deb_val = monto
                     cred_val = 0.0
@@ -2642,7 +2642,7 @@ def api_reporte_movimientos(negocio_id):
 
                 for r in m_list:
                     monto = float(r['monto'])
-                    es_deb = (r['tipo_mov'] == 'debito')
+                    es_deb = r['tipo_mov'] in ('debito', 'D')
                     if es_deb:
                         deb_val = monto
                         cred_val = 0.0
@@ -2750,7 +2750,7 @@ def api_reporte_movimientos(negocio_id):
 
                 for r in m_list:
                     monto = float(r['monto'])
-                    es_deb = (r['tipo_mov'] == 'debito')
+                    es_deb = r['tipo_mov'] in ('debito', 'D')
                     if es_deb:
                         deb_val = monto
                         cred_val = 0.0

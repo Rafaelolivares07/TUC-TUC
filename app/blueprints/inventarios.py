@@ -3004,9 +3004,9 @@ AND LOWER(m.documento_numero) IN %s
         if not rows:
             return jsonify({'ok': True, 'existe': False})
             
-        # Get notes from first movement
+        # Get notes and date from first movement
         notes_query = """
-SELECT notas FROM movimientos_inventario
+SELECT notas, documento_fecha, created_at FROM movimientos_inventario
 WHERE negocio_id = %s AND tipo = 'entrada' 
 AND (tipo_documento_id = %s OR (tipo_documento_id IS NULL AND LOWER(tipo_documento) IN %s))
 AND LOWER(documento_numero) IN %s
@@ -3023,11 +3023,19 @@ AND LOWER(documento_numero) IN %s
         notes_query += " LIMIT 1"
         first_row = conn.execute(notes_query, tuple(notes_params)).fetchone()
         notes = first_row['notas'] if (first_row and 'notas' in first_row) else ''
+        
+        doc_date = None
+        if first_row:
+            if first_row['documento_fecha']:
+                doc_date = first_row['documento_fecha'].isoformat()
+            elif first_row['created_at']:
+                doc_date = first_row['created_at'].strftime('%Y-%m-%d')
             
         return jsonify({
             'ok': True,
             'existe': True,
             'notas': notes,
+            'fecha': doc_date,
             'items': [{
                 'producto_id': r['producto_id'],
                 'nombre_producto': r['nombre_producto'],

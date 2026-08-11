@@ -2168,6 +2168,9 @@ async function verificarDocumentoExistente() {
       if (d.notas) {
         document.getElementById('entrada-notas').value = d.notas;
       }
+      if (d.fecha) {
+        document.getElementById('entrada-fecha-doc').value = d.fecha;
+      }
       const cont = document.getElementById('entrada-lineas');
       cont.innerHTML = '';
       entradaLineas = [];

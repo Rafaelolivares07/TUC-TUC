@@ -731,8 +731,9 @@
       let docFecha = '';
       if (d.contabilidad && d.contabilidad.fecha) {
         docFecha = d.contabilidad.fecha.split('T')[0];
-      } else if (d.inventario && d.inventario.length > 0 && d.inventario[0].created_at) {
-        docFecha = d.inventario[0].created_at.split('T')[0];
+      } else if (d.inventario && d.inventario.length > 0) {
+        const item = d.inventario[0];
+        docFecha = (item.documento_fecha || (item.created_at ? item.created_at.split('T')[0] : ''));
       } else if (d.ventas && d.ventas.fecha) {
         docFecha = d.ventas.fecha.split('T')[0];
       }
@@ -746,7 +747,9 @@
       const tbodyInv = document.getElementById('aud-tbody-inventario');
       if (d.inventario && d.inventario.length) {
         cardInv.classList.remove('hidden');
-        const invDate = d.inventario[0].created_at ? new Date(d.inventario[0].created_at).toLocaleDateString('es-CO') : '—';
+        const item = d.inventario[0];
+        const dateRaw = item.documento_fecha || (item.created_at ? item.created_at.split('T')[0] : null);
+        const invDate = dateRaw ? new Date(dateRaw + 'T00:00:00').toLocaleDateString('es-CO') : '—';
         document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${tipo}-${numero} | Fecha: ${invDate}`;
         tbodyInv.innerHTML = d.inventario.map(item => `
           <tr class="border-b">

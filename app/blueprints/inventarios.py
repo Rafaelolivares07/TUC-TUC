@@ -2442,7 +2442,7 @@ def api_auditar_documento(negocio_id):
         if tipo_documento_id:
             sql_inv = """
                 SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
-                       m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, 
+                       m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, m.documento_fecha,
                        m.proveedor_id, m.proveedor_nombre, m.producto_padre_id,
                        p_padre.nombre AS producto_padre_nombre, m.costo_und
                 FROM movimientos_inventario m
@@ -2455,7 +2455,7 @@ def api_auditar_documento(negocio_id):
             if pedido_row:
                 sql_inv = """
                     SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
-                           m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, 
+                           m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, m.documento_fecha,
                            m.proveedor_id, m.proveedor_nombre, m.producto_padre_id,
                            p_padre.nombre AS producto_padre_nombre, m.costo_und
                     FROM movimientos_inventario m
@@ -2469,7 +2469,7 @@ def api_auditar_documento(negocio_id):
             else:
                 sql_inv = """
                     SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
-                           m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, 
+                           m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, m.documento_fecha,
                            m.proveedor_id, m.proveedor_nombre, m.producto_padre_id,
                            p_padre.nombre AS producto_padre_nombre, m.costo_und
                     FROM movimientos_inventario m
@@ -2491,6 +2491,7 @@ def api_auditar_documento(negocio_id):
                 'valor_total': float(r['valor_total'] if r['valor_total'] is not None else (float(r['cantidad'] or 0) * float(r['costo_und'] or 0))),
                 'iva_pct': float(r['iva_pct'] or 0),
                 'created_at': r['created_at'].isoformat() if r['created_at'] else None,
+                'documento_fecha': r['documento_fecha'].isoformat() if r['documento_fecha'] else None,
                 'proveedor_id': r['proveedor_id'],
                 'proveedor_nombre': r['proveedor_nombre'],
                 'producto_padre_id': r['producto_padre_id'],

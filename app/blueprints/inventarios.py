@@ -1333,13 +1333,13 @@ def api_inventario_kardex(producto_id):
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
                    m.documento_numero, m.documento_fecha, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
-                   TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') AS fecha,
+                   COALESCE(TO_CHAR(m.documento_fecha, 'DD/MM/YY') || ' ' || TO_CHAR(m.created_at, 'HH24:MI'), TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI')) AS fecha,
                    p_padre.nombre AS producto_padre_nombre
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             WHERE m.producto_id = %s
-            ORDER BY m.created_at DESC, m.id DESC LIMIT 300
+            ORDER BY COALESCE(m.documento_fecha, m.created_at::date) DESC, m.created_at DESC, m.id DESC LIMIT 300
         """, (producto_id,)).fetchall()
         prod_info = conn.execute("""
             SELECT p.costo, COALESCE(s.stock, 0.0) AS stock
@@ -1384,13 +1384,13 @@ def api_tienda_inventario_kardex(slug):
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
                    m.documento_numero, m.documento_fecha, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
-                   TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI') AS fecha,
+                   COALESCE(TO_CHAR(m.documento_fecha, 'DD/MM/YY') || ' ' || TO_CHAR(m.created_at, 'HH24:MI'), TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI')) AS fecha,
                    p_padre.nombre AS producto_padre_nombre
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             WHERE m.producto_id = %s AND m.negocio_id = %s
-            ORDER BY m.created_at DESC, m.id DESC LIMIT 300
+            ORDER BY COALESCE(m.documento_fecha, m.created_at::date) DESC, m.created_at DESC, m.id DESC LIMIT 300
         """, (producto_id, negocio_id)).fetchall()
         prod_info = conn.execute("""
             SELECT p.costo, COALESCE(s.stock, 0.0) AS stock
@@ -1710,7 +1710,7 @@ def _recostear_producto(conn, negocio_id, producto_id):
         SELECT id, tipo, cantidad, valor_unitario
         FROM movimientos_inventario
         WHERE negocio_id = %s AND producto_id = %s
-        ORDER BY created_at ASC, id ASC
+        ORDER BY COALESCE(documento_fecha, created_at::date) ASC, tipo ASC, created_at ASC, id ASC
     """, (negocio_id, producto_id)).fetchall()
 
     stock = Decimal('0')

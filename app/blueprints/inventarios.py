@@ -594,21 +594,26 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     if not prov:
         return {'ok': False, 'error': 'Proveedor no encontrado'}, 400
     proveedor_nombre = prov['nombre']
-
     # Validation check: if it is external, check for duplicates and prevent registration
     if not es_interno and tipo_doc_id and documento_numero and proveedor_id:
+        num_variants = resolver_variantes_numero(documento_numero)
+        
         existing_movs = conn.execute("""
             SELECT id, producto_id FROM movimientos_inventario
-            WHERE negocio_id = %s AND tipo = 'entrada'
-              AND tipo_documento_id = %s AND documento_numero = %s AND proveedor_id = %s
-        """, (negocio_id, tipo_doc_id, documento_numero, proveedor_id)).fetchall()
+            WHERE negocio_id = %s AND tipo = 'entrada' AND (
+                (tipo_documento_id = %s AND documento_numero = %s AND proveedor_id = %s)
+                OR (documento_numero IN %s)
+            )
+        """, (negocio_id, tipo_doc_id, documento_numero, proveedor_id, tuple(num_variants))).fetchall()
         
         existing_saldo = conn.execute("""
             SELECT 1 FROM saldo_por_documentos
-            WHERE negocio_id = %s AND tercero_id = %s
-              AND tipo_documento_id = %s AND numero_documento = %s
+            WHERE negocio_id = %s AND (
+                (tercero_id = %s AND tipo_documento_id = %s AND numero_documento = %s)
+                OR (numero_documento IN %s)
+            )
             LIMIT 1
-        """, (negocio_id, proveedor_id, tipo_doc_id, documento_numero)).fetchone()
+        """, (negocio_id, proveedor_id, tipo_doc_id, documento_numero, tuple(num_variants))).fetchone()
         
         if existing_movs or existing_saldo:
             if es_modificacion:
@@ -624,24 +629,33 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                 # 2. Delete pending balance record
                 conn.execute("""
                     DELETE FROM saldo_por_documentos
-                    WHERE negocio_id = %s AND tercero_id = %s AND tipo_documento_id = %s AND numero_documento = %s
-                """, (negocio_id, proveedor_id, tipo_doc_id, documento_numero))
+                    WHERE negocio_id = %s AND (
+                        numero_documento IN %s
+                        OR (tercero_id = %s AND numero_documento IN %s)
+                    )
+                """, (negocio_id, tuple(num_variants), proveedor_id, tuple(num_variants)))
                 
                 # 3. Delete cotizaciones
                 conn.execute("""
                     DELETE FROM cotizaciones_compras
-                    WHERE negocio_id = %s AND tercero_id = %s AND numero_cotizacion = %s AND origen = 'compra'
-                """, (negocio_id, proveedor_id, documento_numero))
+                    WHERE negocio_id = %s AND (numero_cotizacion IN %s OR (tercero_id = %s AND numero_cotizacion = %s)) AND origen = 'compra'
+                """, (negocio_id, tuple(num_variants), proveedor_id, documento_numero))
                 
                 # 4. Delete accounting vouchers
-                origen_id = f"{tipo_documento}:{documento_numero}"
+                origen_ids = [f"{tipo_documento}:{v}" for v in num_variants]
+                if tipo_doc_id == 1:
+                    for name in ['Factura de Proveedor', 'Factura Proveedor', 'Factura', 'FACTURA']:
+                        for v in num_variants:
+                            origen_ids.append(f"{name}:{v}")
+                
                 comp_rows = conn.execute("""
                     SELECT id FROM comprobantes_contables
                     WHERE negocio_id = %s AND (
-                        (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
-                        OR (numero_comprobante ILIKE %s)
+                        (origen_tipo IS NOT NULL AND LOWER(origen_id) IN %s)
+                        OR (numero_comprobante IN %s)
                     )
-                """, (negocio_id, origen_id, f'%{documento_numero}%')).fetchall()
+                """, (negocio_id, tuple(o.lower() for o in origen_ids), tuple(num_variants))).fetchall()
+                
                 comp_ids = [c['id'] for c in comp_rows]
                 if comp_ids:
                     placeholders = ','.join(['%s'] * len(comp_ids))
@@ -652,7 +666,6 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                 data['_prod_ids_to_recost'] = prod_ids_to_recost
             else:
                 return {'ok': False, 'error': f'El documento {tipo_documento} N° {documento_numero} ya está registrado para este proveedor.'}, 400
-
     # Primer ciclo: validación y cálculo de subtotales e IVA acumulado
     lineas_procesadas = []
     for ln in lineas:
@@ -2916,12 +2929,14 @@ def api_unificar_terceros(negocio_id):
             return jsonify({'ok': False, 'error': 'Uno o más terceros sobrantes no existen'}), 400
             
         # Start transaction to merge
-        # 1. Update movimientos_inventario
+        principal_nombre = p_row['nombre']
+        
+        # 1. Update movimientos_inventario (both ID and name)
         conn.execute(f"""
             UPDATE movimientos_inventario 
-            SET proveedor_id = %s 
+            SET proveedor_id = %s, proveedor_nombre = %s
             WHERE proveedor_id IN ({placeholders})
-        """, (principal_id,) + tuple(sobrantes_ids))
+        """, (principal_id, principal_nombre) + tuple(sobrantes_ids))
         
         # 2. Update cotizaciones
         conn.execute(f"""
@@ -2930,7 +2945,51 @@ def api_unificar_terceros(negocio_id):
             WHERE tercero_id IN ({placeholders})
         """, (principal_id,) + tuple(sobrantes_ids))
         
-        # 3. Delete duplicates from terceros
+        # 3. Update movimientos_contables
+        conn.execute(f"""
+            UPDATE movimientos_contables 
+            SET tercero_id = %s 
+            WHERE tercero_id IN ({placeholders})
+        """, (principal_id,) + tuple(sobrantes_ids))
+        
+        # 4. Update pedidos (clients, cajeros, names)
+        conn.execute(f"""
+            UPDATE pedidos 
+            SET cliente_id = CASE WHEN cliente_id IN ({placeholders}) THEN %s ELSE cliente_id END,
+                id_tercero = CASE WHEN id_tercero IN ({placeholders}) THEN %s ELSE id_tercero END,
+                nombre_cliente = CASE WHEN (cliente_id IN ({placeholders}) OR id_tercero IN ({placeholders})) THEN %s ELSE nombre_cliente END
+        """, tuple(sobrantes_ids) + (principal_id,) + tuple(sobrantes_ids) + (principal_id,) + tuple(sobrantes_ids) + tuple(sobrantes_ids) + (principal_nombre,))
+        
+        # 5. Update saldo_por_documentos
+        conn.execute(f"""
+            UPDATE saldo_por_documentos 
+            SET tercero_id = %s 
+            WHERE tercero_id IN ({placeholders})
+        """, (principal_id,) + tuple(sobrantes_ids))
+        
+        # 6. Update contactos
+        conn.execute(f"""
+            UPDATE contactos 
+            SET tercero_id = %s 
+            WHERE tercero_id IN ({placeholders})
+        """, (principal_id,) + tuple(sobrantes_ids))
+        
+        # 7. Update terceros_direcciones
+        conn.execute(f"""
+            UPDATE terceros_direcciones 
+            SET tercero_id = %s 
+            WHERE tercero_id IN ({placeholders})
+        """, (principal_id,) + tuple(sobrantes_ids))
+
+        # 8. Update other tables that might refer to third parties
+        for tbl in ['colaboradores_entrega', 'config_negocio', 'restaurantes', 'tiendas', 'tienda_cajeros', 'rockola_biblioteca', 'rockola_cola', 'solicitudes_transporte']:
+            conn.execute(f"""
+                UPDATE {tbl} 
+                SET tercero_id = %s 
+                WHERE tercero_id IN ({placeholders})
+            """, (principal_id,) + tuple(sobrantes_ids))
+            
+        # 9. Delete duplicates from terceros
         conn.execute(f"""
             DELETE FROM terceros 
             WHERE id IN ({placeholders})

@@ -344,6 +344,9 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         costo_nuevo   = costo_ant if stock_nuevo > 0 else Decimal('0')
         val_exi_nuevo = stock_nuevo * costo_nuevo if stock_nuevo > 0 else Decimal('0')
 
+    # Guardar costo de valoración del movimiento (evitando costo cero cuando cae a stock 0)
+    costo_registro = costo_nuevo if (tipo == 'entrada' or stock_nuevo > 0) else costo_ant
+
     nombre_prod = conn.execute("SELECT nombre FROM productos WHERE id=%s", (producto_id,)).fetchone()
 
     conn.execute("""
@@ -363,7 +366,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         registrado_por, notas,
         float(valor_unitario) if valor_unitario else None,
         float(cantidad * Decimal(str(valor_unitario))) if valor_unitario else None,
-        float(costo_nuevo),
+        float(costo_registro),
         referencia_id, referencia_tipo,
         tipo_documento, documento_numero, documento_fecha, proveedor_id,
         proveedor_nombre,
@@ -1710,7 +1713,7 @@ def _recostear_producto(conn, negocio_id, producto_id):
         SELECT id, tipo, cantidad, valor_unitario
         FROM movimientos_inventario
         WHERE negocio_id = %s AND producto_id = %s
-        ORDER BY COALESCE(documento_fecha, created_at::date) ASC, tipo ASC, created_at ASC, id ASC
+        ORDER BY COALESCE(documento_fecha, created_at::date) ASC, created_at ASC, id ASC
     """, (negocio_id, producto_id)).fetchall()
 
     stock = Decimal('0')

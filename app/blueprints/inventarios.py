@@ -2567,12 +2567,6 @@ def api_auditar_documento(negocio_id):
             LIMIT 1
         """, (negocio_id, tuple(doc_codes), tuple(doc_codes))).fetchone()
 
-        if not pedido_row:
-            try:
-                pedido_id = int(num_doc)
-                pedido_row = conn.execute("SELECT * FROM pedidos WHERE id = %s AND negocio_id = %s", (pedido_id, negocio_id)).fetchone()
-            except ValueError:
-                pass
 
         if pedido_row and not tipo_documento_id:
             tipo_documento_id = pedido_row['tipo_documento_id']
@@ -2760,58 +2754,7 @@ def api_auditar_documento(negocio_id):
                     } for pi in p_items
                 ]
             }
-        else:
-            # Fallback to query by ID if num_doc is numeric
-            pedido_id = None
-            try:
-                pedido_id = int(num_doc)
-            except ValueError:
-                pass
-            
-            if pedido_id:
-                ped_row = conn.execute("""
-                    SELECT p.id, p.fecha, p.total, p.metodo_pago, p.estado, p.notas, p.cliente_id, p.id_tercero, p.nombre_cliente
-                    FROM pedidos p
-                    WHERE p.id = %s AND p.negocio_id = %s
-                    LIMIT 1
-                """, (pedido_id, negocio_id)).fetchone()
-                
-                if ped_row:
-                    p_items = conn.execute("""
-                        SELECT pi.id, pi.producto_id, pi.nombre_producto, pi.cantidad, pi.precio_unitario
-                        FROM pedido_items pi
-                        WHERE pi.pedido_id = %s
-                    """, (pedido_id,)).fetchall()
-                    
-                    cliente_nombre = None
-                    c_tercero_id = ped_row['cliente_id'] or ped_row['id_tercero']
-                    if c_tercero_id:
-                        cli_row = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (c_tercero_id,)).fetchone()
-                        if cli_row:
-                            cliente_nombre = cli_row['nombre']
-                    else:
-                        cliente_nombre = ped_row['nombre_cliente']
-                        
-                    pedido = {
-                        'id': ped_row['id'],
-                        'fecha': ped_row['fecha'].isoformat() if ped_row['fecha'] else None,
-                        'total': float(ped_row['total'] or 0),
-                        'metodo_pago': ped_row['metodo_pago'],
-                        'estado': ped_row['estado'],
-                        'notas': ped_row['notas'],
-                        'cliente_nombre': cliente_nombre or 'Cliente en local',
-                        'tercero_id': c_tercero_id,
-                        'items': [
-                            {
-                                'id': pi['id'],
-                                'producto_id': pi['producto_id'],
-                                'nombre_producto': pi['nombre_producto'],
-                                'cantidad': float(pi['cantidad']),
-                                'precio_unitario': float(pi['precio_unitario'] or 0),
-                                'subtotal': float(pi['cantidad'] or 0) * float(pi['precio_unitario'] or 0)
-                            } for pi in p_items
-                        ]
-                    }
+
         
         # 4. Query pending balance in saldo_por_documentos
         t_id = proveedor_id or (pedido['tercero_id'] if pedido else None) or (items_inventario[0]['proveedor_id'] if items_inventario else None)

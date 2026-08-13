@@ -715,19 +715,52 @@
       const d = await r.json();
       if (!d.ok) throw new Error(d.error || 'Error al cargar detalles del documento');
       
-      // Habilitar o deshabilitar botón de eliminar (liberar consecutivo)
+      // Habilitar o deshabilitar botón de eliminar (liberar consecutivo) y actualizar descripciones según si es interno/externo
+      const btnAnular = document.getElementById('btn-aud-anular');
       const btnEliminar = document.getElementById('btn-aud-eliminar');
-      if (btnEliminar) {
-        if (d.es_ultimo_consecutivo) {
+      
+      if (d.es_interno) {
+        // Documento interno (controlamos consecutividad)
+        if (btnAnular) {
+          btnAnular.innerHTML = `
+            <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
+            <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL CONSECUTIVO COMO ANULADO</span>
+          `;
+        }
+        if (btnEliminar) {
+          btnEliminar.innerHTML = `
+            <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
+            <span class="text-[10px] text-orange-100 font-normal mt-0.5">DEJA INCLUSO DISPONIBLE EL CONSECUTIVO PARA SER REUTILIZADO</span>
+          `;
+          if (d.es_ultimo_consecutivo) {
+            btnEliminar.disabled = false;
+            btnEliminar.classList.remove('opacity-40', 'cursor-not-allowed');
+            btnEliminar.classList.add('bg-orange-600', 'hover:bg-orange-700');
+            btnEliminar.title = '';
+          } else {
+            btnEliminar.disabled = true;
+            btnEliminar.classList.add('opacity-40', 'cursor-not-allowed');
+            btnEliminar.classList.remove('bg-orange-600', 'hover:bg-orange-700');
+            btnEliminar.title = 'No se puede liberar el consecutivo porque existen documentos posteriores de este tipo.';
+          }
+        }
+      } else {
+        // Documento externo (no controlamos consecutividad)
+        if (btnAnular) {
+          btnAnular.innerHTML = `
+            <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
+            <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL REGISTRO HISTÓRICO COMO ANULADO</span>
+          `;
+        }
+        if (btnEliminar) {
+          btnEliminar.innerHTML = `
+            <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
+            <span class="text-[10px] text-orange-100 font-normal mt-0.5">BORRA FÍSICAMENTE EL REGISTRO DE LA BASE DE DATOS</span>
+          `;
           btnEliminar.disabled = false;
           btnEliminar.classList.remove('opacity-40', 'cursor-not-allowed');
           btnEliminar.classList.add('bg-orange-600', 'hover:bg-orange-700');
           btnEliminar.title = '';
-        } else {
-          btnEliminar.disabled = true;
-          btnEliminar.classList.add('opacity-40', 'cursor-not-allowed');
-          btnEliminar.classList.remove('bg-orange-600', 'hover:bg-orange-700');
-          btnEliminar.title = 'No se puede liberar el consecutivo porque existen documentos posteriores de este tipo.';
         }
       }
       

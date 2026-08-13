@@ -2517,6 +2517,15 @@ def api_auditar_documento(negocio_id):
                 SELECT id, codigo, nombre, consecutivo, es_interno FROM tipos_documento_negocio 
                 WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))
             """, (negocio_id, tipo_doc, tipo_doc)).fetchone()
+            
+            # Fallback for placeholder sales types (like 'pedido_venta', 'ventas', 'pedido')
+            if not row_td and tipo_doc.lower() in ('pedido_venta', 'ventas', 'pedido'):
+                row_td = conn.execute("""
+                    SELECT id, codigo, nombre, consecutivo, es_interno FROM tipos_documento_negocio 
+                    WHERE negocio_id = %s AND tipo_movimiento = 'venta' AND activo = TRUE
+                    ORDER BY predeterminado DESC, id LIMIT 1
+                """, (negocio_id,)).fetchone()
+                
             if row_td:
                 tipo_documento_id = row_td['id']
                 tipo_doc_codigo = row_td['codigo']
@@ -2840,10 +2849,17 @@ def api_anular_documento(negocio_id):
         
         # Resolve type code
         row_td = conn.execute("""
-            SELECT id, codigo, nombre FROM tipos_documento_negocio 
+            SELECT id, codigo, nombre, consecutivo, es_interno FROM tipos_documento_negocio 
             WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))
         """, (negocio_id, tipo_doc, tipo_doc)).fetchone()
         
+        if not row_td and tipo_doc.lower() in ('pedido_venta', 'ventas', 'pedido'):
+            row_td = conn.execute("""
+                SELECT id, codigo, nombre, consecutivo, es_interno FROM tipos_documento_negocio 
+                WHERE negocio_id = %s AND tipo_movimiento = 'venta' AND activo = TRUE
+                ORDER BY predeterminado DESC, id LIMIT 1
+            """, (negocio_id,)).fetchone()
+            
         tipo_code = row_td['codigo'] if row_td else None
         
         # Build list of possible string representations of the invoice/consecutive

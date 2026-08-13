@@ -269,7 +269,14 @@ def _asegurar_tablas(conn):
         "ALTER TABLE parametros_lineas_contables ADD COLUMN IF NOT EXISTS cuenta_dinamica VARCHAR(50) DEFAULT NULL",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS tipo_documento_id INTEGER REFERENCES tipos_documento_negocio(id)",
         "ALTER TABLE comprobantes_contables  ADD COLUMN IF NOT EXISTS tipo_documento_id INTEGER REFERENCES tipos_documento_negocio(id)",
-        "ALTER TABLE saldo_por_documentos    ADD COLUMN IF NOT EXISTS tipo_documento_id INTEGER REFERENCES tipos_documento_negocio(id)"
+        "ALTER TABLE saldo_por_documentos    ADD COLUMN IF NOT EXISTS tipo_documento_id INTEGER REFERENCES tipos_documento_negocio(id)",
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS tipo_documento_id INTEGER REFERENCES tipos_documento_negocio(id)",
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS numero_documento VARCHAR(50)",
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS fecha DATE DEFAULT CURRENT_DATE",
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS tipo_documento VARCHAR(50)",
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS origen_tipo VARCHAR(50)",
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS origen_id VARCHAR(100)",
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS descripcion_general VARCHAR(500)"
     ]:
         try:
             conn.execute(sql)
@@ -1032,14 +1039,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
         )
         numero = f"{tipo_doc_codigo}-{num_doc}"
 
-    comp_id = conn.execute("""
-        INSERT INTO comprobantes_contables
-            (negocio_id, numero_comprobante, numero_documento, tipo, fecha, descripcion,
-             total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id, tipo_documento_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Generado automáticamente',%s,%s,%s)
-        RETURNING id
-    """, (negocio_id, numero, num_doc, tipo_doc_codigo, fecha_uso, desc,
-          total_deb, total_cred, registrado_por, origen_tipo, origen_id, tipo_doc['id'])).fetchone()['id']
+    comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
 
     for m in mov_list:
         # Validación y control de saldos por documento
@@ -1111,11 +1111,13 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
 
         conn.execute("""
             INSERT INTO movimientos_contables
-                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                 tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (negocio_id, comp_id, m['cuenta_puc_id'], m['cuenta_codigo'],
               m['concepto'], 'debito' if m['tipo_mov'] == 'D' else 'credito',
-              m['monto'], registrado_por, tercero_id))
+              m['monto'], registrado_por, tercero_id,
+              tipo_doc['id'], str(num_doc), fecha_uso, tipo_doc_codigo, origen_tipo, origen_id, desc))
 
     return comp_id
 
@@ -1195,29 +1197,30 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
     ).fetchone()['n']
     numero = f"AUTO-COSTO_VENTA-{(cnt or 0) + 1}"
 
-    comp_id = conn.execute("""
-        INSERT INTO comprobantes_contables
-            (negocio_id, numero_comprobante, tipo, fecha, descripcion,
-             total_debitos, total_creditos, registrado_por, notas)
-        VALUES (%s,%s,'COSTO_VENTA',%s,%s,%s,%s,%s,'Costo de venta automático')
-        RETURNING id
-    """, (negocio_id, numero, fecha_uso, desc, monto, monto, registrado_por)).fetchone()['id']
+    comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+    
+    tipo_doc_id = None
+    td_row = conn.execute("SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND codigo = 'COSTO_VENTA'", (negocio_id,)).fetchone()
+    if td_row:
+        tipo_doc_id = td_row['id']
 
     # Débito costo de ventas (6x) - from sold product category
     conn.execute("""
         INSERT INTO movimientos_contables
-            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id)
-        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s,%s)
+            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+             tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
+        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s,%s,%s,%s,%s,'COSTO_VENTA','costo_venta',NULL,%s)
     """, (negocio_id, comp_id, grupo_costo['cuenta_cos_id'], grupo_costo['cod_cos'], grupo_costo['nom_cos'],
-          monto, registrado_por, tercero_id))
+          monto, registrado_por, tercero_id, tipo_doc_id, str((cnt or 0) + 1), fecha_uso, desc))
 
     # Crédito inventario (14x) - from component/ingredient category
     conn.execute("""
         INSERT INTO movimientos_contables
-            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id)
-        VALUES (%s,%s,%s,%s,%s,'credito',%s,%s,%s)
+            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+             tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
+        VALUES (%s,%s,%s,%s,%s,'credito',%s,%s,%s,%s,%s,%s,'COSTO_VENTA','costo_venta',NULL,%s)
     """, (negocio_id, comp_id, grupo_inve['cuenta_inve_id'], grupo_inve['cod_inve'], grupo_inve['nom_inve'],
-          monto, registrado_por, tercero_id))
+          monto, registrado_por, tercero_id, tipo_doc_id, str((cnt or 0) + 1), fecha_uso, desc))
 
     return comp_id
 
@@ -1308,29 +1311,28 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
         numero = f"AUTO-PRODUCCION-{(cnt or 0) + 1}"
     total_cred = sum(l['monto'] for l in lineas_cred)
 
-    comp_id = conn.execute("""
-        INSERT INTO comprobantes_contables
-            (negocio_id, numero_comprobante, tipo, fecha, descripcion,
-             total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id, tipo_documento_id)
-        VALUES (%s,%s,'PRODUCCION',%s,%s,%s,%s,%s,'Producción automática',%s,%s,%s)
-        RETURNING id
-    """, (negocio_id, numero, fecha_uso, desc,
-          monto_total, total_cred, registrado_por, origen_tipo, origen_id, tipo_documento_id)).fetchone()['id']
+    comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
 
+    # Débito producto terminado
     conn.execute("""
         INSERT INTO movimientos_contables
-            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
-        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s)
+            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por,
+             tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
+        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s,%s,%s,%s,'PRODUCCION',%s,%s,%s)
     """, (negocio_id, comp_id, grp_term['cuenta_inve_id'], grp_term['cod'],
-          terminado['nombre'], monto_total, registrado_por))
+          terminado['nombre'], monto_total, registrado_por,
+          tipo_documento_id, str(numero), fecha_uso, origen_tipo, origen_id, desc))
 
     for l in lineas_cred:
+        # Crédito componentes
         conn.execute("""
             INSERT INTO movimientos_contables
-                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
-            VALUES (%s,%s,%s,%s,%s,'credito',%s,%s)
+                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por,
+                 tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
+            VALUES (%s,%s,%s,%s,%s,'credito',%s,%s,%s,%s,%s,'PRODUCCION',%s,%s,%s)
         """, (negocio_id, comp_id, l['cuenta_id'], l['cod'],
-              l['nom_prod'], l['monto'], registrado_por))
+              l['nom_prod'], l['monto'], registrado_por,
+              tipo_documento_id, str(numero), fecha_uso, origen_tipo, origen_id, desc))
 
     return comp_id
 
@@ -2013,13 +2015,20 @@ def api_comprobante_post(negocio_id):
         if not tipo_comp:
             conn.close()
             return jsonify({'ok': False, 'error': 'Tipo de comprobante requerido'}), 400
-        comp_id = conn.execute("""
-            INSERT INTO comprobantes_contables
-                (negocio_id, numero_comprobante, numero_documento, tipo, fecha, descripcion,
-                 total_debitos, total_creditos, registrado_por, notas)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-        """, (negocio_id, numero_comp, num_doc, tipo_comp, fecha, descripcion,
-              total_deb, total_cred, uid, notas)).fetchone()['id']
+        comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+        
+        # If no type ID is provided, try to resolve it from the type string code
+        if not tipo_doc_id and tipo_comp:
+            td_row = conn.execute("SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))", (negocio_id, tipo_comp, tipo_comp)).fetchone()
+            if td_row:
+                tipo_doc_id = td_row['id']
+                
+        # If numero_comp is not set, fallback to a clean string
+        if not numero_comp:
+            numero_comp = tipo_comp or 'COMPROBANTE'
+            
+        doc_num_str = str(num_doc) if num_doc else numero_comp
+
         for l in lineas:
             debito  = float(l.get('debito')  or 0)
             credito = float(l.get('credito') or 0)
@@ -2028,10 +2037,12 @@ def api_comprobante_post(negocio_id):
             tercero_l_id = l.get('tercero_id') or None
             conn.execute("""
                 INSERT INTO movimientos_contables
-                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                     tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (negocio_id, comp_id, l.get('cuenta_id'), l.get('cuenta_codigo',''),
-                  (l.get('concepto') or '').strip() or None, tipo_m, monto, uid, tercero_l_id))
+                  (l.get('concepto') or '').strip() or None, tipo_m, monto, uid, tercero_l_id,
+                  tipo_doc_id, doc_num_str, fecha, tipo_comp, descripcion))
         conn.commit(); conn.close()
         return jsonify({'ok': True, 'comprobante_id': comp_id})
     except Exception as e:
@@ -2502,10 +2513,10 @@ def api_reporte_movimientos(negocio_id):
     from ..db import get_db_connection
     conn = get_db_connection()
     try:
-        where_anterior = ["c.negocio_id = %s", "c.fecha < %s"]
+        where_anterior = ["m.negocio_id = %s", "m.fecha < %s"]
         params_anterior = [negocio_id, desde]
 
-        where_periodo = ["c.negocio_id = %s", "c.fecha >= %s", "c.fecha <= %s"]
+        where_periodo = ["m.negocio_id = %s", "m.fecha >= %s", "m.fecha <= %s"]
         params_periodo = [negocio_id, desde, hasta]
 
         if cuenta_id:
@@ -2531,7 +2542,6 @@ def api_reporte_movimientos(negocio_id):
                     COALESCE(SUM(CASE WHEN m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS total_debitos,
                     COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS total_credits
                 FROM movimientos_contables m
-                JOIN comprobantes_contables c ON c.id = m.comprobante_id
                 WHERE {" AND ".join(where_anterior)}
             """, params_anterior).fetchone()
 
@@ -2540,9 +2550,9 @@ def api_reporte_movimientos(negocio_id):
             movs = conn.execute(f"""
                 SELECT 
                     m.id,
-                    c.fecha,
-                    c.numero_comprobante,
-                    COALESCE(tdn.nombre, c.tipo) AS tipo_comprobante,
+                    m.fecha,
+                    CASE WHEN m.tipo_documento IS NOT NULL AND m.tipo_documento <> '' AND POSITION('-' IN m.numero_documento) = 0 THEN m.tipo_documento || '-' || m.numero_documento ELSE m.numero_documento END AS numero_comprobante,
+                    COALESCE(tdn.nombre, m.tipo_documento) AS tipo_comprobante,
                     m.cuenta_id,
                     p.codigo AS cuenta_codigo,
                     p.nombre AS cuenta_nombre,
@@ -2552,12 +2562,11 @@ def api_reporte_movimientos(negocio_id):
                     m.tipo AS tipo_mov,
                     m.monto
                 FROM movimientos_contables m
-                JOIN comprobantes_contables c ON c.id = m.comprobante_id
-                LEFT JOIN tipos_documento_negocio tdn ON tdn.id = c.tipo_documento_id
+                LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
                 LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
                 WHERE {" AND ".join(where_periodo)}
-                ORDER BY c.fecha, c.numero_comprobante, m.id
+                ORDER BY m.fecha, m.numero_documento, m.id
             """, params_periodo).fetchall()
 
             lineas = []
@@ -2613,7 +2622,6 @@ def api_reporte_movimientos(negocio_id):
                     COALESCE(SUM(CASE WHEN m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS total_debitos,
                     COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS total_credits
                 FROM movimientos_contables m
-                JOIN comprobantes_contables c ON c.id = m.comprobante_id
                 JOIN cuentas_puc p ON p.id = m.cuenta_id
                 WHERE {" AND ".join(where_anterior)}
                 GROUP BY m.cuenta_id, p.codigo, p.nombre
@@ -2629,9 +2637,9 @@ def api_reporte_movimientos(negocio_id):
             movs = conn.execute(f"""
                 SELECT 
                     m.id,
-                    c.fecha,
-                    c.numero_comprobante,
-                    COALESCE(tdn.nombre, c.tipo) AS tipo_comprobante,
+                    m.fecha,
+                    CASE WHEN m.tipo_documento IS NOT NULL AND m.tipo_documento <> '' AND POSITION('-' IN m.numero_documento) = 0 THEN m.tipo_documento || '-' || m.numero_documento ELSE m.numero_documento END AS numero_comprobante,
+                    COALESCE(tdn.nombre, m.tipo_documento) AS tipo_comprobante,
                     m.cuenta_id,
                     p.codigo AS cuenta_codigo,
                     p.nombre AS cuenta_nombre,
@@ -2641,12 +2649,11 @@ def api_reporte_movimientos(negocio_id):
                     m.tipo AS tipo_mov,
                     m.monto
                 FROM movimientos_contables m
-                JOIN comprobantes_contables c ON c.id = m.comprobante_id
-                LEFT JOIN tipos_documento_negocio tdn ON tdn.id = c.tipo_documento_id
+                LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
                 JOIN cuentas_puc p ON p.id = m.cuenta_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
                 WHERE {" AND ".join(where_periodo)}
-                ORDER BY p.codigo, c.fecha, c.numero_comprobante, m.id
+                ORDER BY p.codigo, m.fecha, m.numero_documento, m.id
             """, params_periodo).fetchall()
 
             movs_por_cuenta = {}
@@ -2719,7 +2726,6 @@ def api_reporte_movimientos(negocio_id):
                     COALESCE(SUM(CASE WHEN m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS total_debitos,
                     COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS total_credits
                 FROM movimientos_contables m
-                JOIN comprobantes_contables c ON c.id = m.comprobante_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
                 WHERE {" AND ".join(where_anterior)}
                 GROUP BY m.tercero_id, t.nombre
@@ -2735,9 +2741,9 @@ def api_reporte_movimientos(negocio_id):
             movs = conn.execute(f"""
                 SELECT 
                     m.id,
-                    c.fecha,
-                    c.numero_comprobante,
-                    COALESCE(tdn.nombre, c.tipo) AS tipo_comprobante,
+                    m.fecha,
+                    CASE WHEN m.tipo_documento IS NOT NULL AND m.tipo_documento <> '' AND POSITION('-' IN m.numero_documento) = 0 THEN m.tipo_documento || '-' || m.numero_documento ELSE m.numero_documento END AS numero_comprobante,
+                    COALESCE(tdn.nombre, m.tipo_documento) AS tipo_comprobante,
                     m.cuenta_id,
                     p.codigo AS cuenta_codigo,
                     p.nombre AS cuenta_nombre,
@@ -2747,12 +2753,11 @@ def api_reporte_movimientos(negocio_id):
                     m.tipo AS tipo_mov,
                     m.monto
                 FROM movimientos_contables m
-                JOIN comprobantes_contables c ON c.id = m.comprobante_id
-                LEFT JOIN tipos_documento_negocio tdn ON tdn.id = c.tipo_documento_id
+                LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
                 LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
                 WHERE {" AND ".join(where_periodo)}
-                ORDER BY COALESCE(t.nombre, 'Tercero Ocasional'), c.fecha, c.numero_comprobante, m.id
+                ORDER BY COALESCE(t.nombre, 'Tercero Ocasional'), m.fecha, m.numero_documento, m.id
             """, params_periodo).fetchall()
 
             movs_por_tercero = {}
@@ -2866,13 +2871,12 @@ def api_balance_comprobacion(negocio_id):
                 c.codigo, 
                 c.nombre, 
                 c.naturaleza,
-                COALESCE(SUM(CASE WHEN cc.fecha < %s AND m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS deb_ant,
-                COALESCE(SUM(CASE WHEN cc.fecha < %s AND m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS cred_ant,
-                COALESCE(SUM(CASE WHEN cc.fecha >= %s AND cc.fecha <= %s AND m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS deb_per,
-                COALESCE(SUM(CASE WHEN cc.fecha >= %s AND cc.fecha <= %s AND m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS cred_per
+                COALESCE(SUM(CASE WHEN m.fecha < %s AND m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS deb_ant,
+                COALESCE(SUM(CASE WHEN m.fecha < %s AND m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS cred_ant,
+                COALESCE(SUM(CASE WHEN m.fecha >= %s AND m.fecha <= %s AND m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS deb_per,
+                COALESCE(SUM(CASE WHEN m.fecha >= %s AND m.fecha <= %s AND m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS cred_per
             FROM cuentas_puc c
             LEFT JOIN movimientos_contables m ON m.cuenta_id = c.id AND m.negocio_id = %s
-            LEFT JOIN comprobantes_contables cc ON m.comprobante_id = cc.id
             WHERE c.acepta_movimiento = TRUE
             GROUP BY c.id, c.codigo, c.nombre, c.naturaleza
         """, (desde, desde, desde, hasta, desde, hasta, negocio_id)).fetchall()
@@ -3034,7 +3038,7 @@ def api_cierre_periodo(negocio_id):
             
         # 2. Validar orden cronológico de los cierres
         earliest_row = conn.execute("""
-            SELECT MIN(fecha) as first_date FROM comprobantes_contables WHERE negocio_id = %s
+            SELECT MIN(fecha) as first_date FROM movimientos_contables WHERE negocio_id = %s
         """, (negocio_id,)).fetchone()
         
         if earliest_row and earliest_row['first_date']:
@@ -3124,9 +3128,8 @@ def api_cierre_periodo(negocio_id):
                 COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS cred_total
             FROM cuentas_puc c
             JOIN movimientos_contables m ON m.cuenta_id = c.id AND m.negocio_id = %s
-            JOIN comprobantes_contables cc ON m.comprobante_id = cc.id
             WHERE (c.codigo LIKE '4%' OR c.codigo LIKE '5%' OR c.codigo LIKE '6%' OR c.codigo LIKE '7%')
-              AND cc.fecha <= %s
+              AND m.fecha <= %s
             GROUP BY c.id, c.codigo, c.naturaleza
         """, (negocio_id, fecha_fin)).fetchall()
         
@@ -3195,22 +3198,17 @@ def api_cierre_periodo(negocio_id):
             UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s
         """, (num_doc, td['id']))
         
-        comp_id = conn.execute("""
-            INSERT INTO comprobantes_contables
-                (negocio_id, numero_comprobante, numero_documento, tipo, fecha, descripcion,
-                 total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id, tipo_documento_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'Cierre de periodo contable',%s,%s,%s)
-            RETURNING id
-        """, (negocio_id, numero, num_doc, td['codigo'], fecha_fin, f"Cierre contable resultados periodo {periodo}",
-              total_debitos_cierre, total_creditos_cierre, session['usuario_id'], 'cierre', periodo, td['id'])).fetchone()['id']
+        comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
               
         for l in lineas_cierre:
             conn.execute("""
                 INSERT INTO movimientos_contables
-                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por,
+                     tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (negocio_id, comp_id, l['cuenta_id'], l['cuenta_codigo'],
-                  f"Cierre de periodo {periodo}", l['tipo'], l['monto'], session['usuario_id']))
+                  f"Cierre de periodo {periodo}", l['tipo'], l['monto'], session['usuario_id'],
+                  td['id'], str(num_doc), fecha_fin, td['codigo'], 'cierre', periodo, f"Cierre contable resultados periodo {periodo}"))
                   
         # Registrar en la tabla cierres_periodos
         conn.execute("""

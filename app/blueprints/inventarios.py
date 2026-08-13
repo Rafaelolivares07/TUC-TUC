@@ -116,8 +116,6 @@ def _crear_tablas(conn):
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS iva_valor NUMERIC(14,2) DEFAULT 0",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS recargo DECIMAL(10,2) DEFAULT 0",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS catalogo_id INTEGER",
-        "ALTER TABLE comprobantes_contables ADD COLUMN IF NOT EXISTS origen_tipo VARCHAR(50)",
-        "ALTER TABLE comprobantes_contables ADD COLUMN IF NOT EXISTS origen_id VARCHAR(100)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(50) DEFAULT NULL",
         "ALTER TABLE movimientos_inventario ALTER COLUMN valor_unitario TYPE NUMERIC(16,6)",
         "ALTER TABLE movimientos_inventario ALTER COLUMN costo_und TYPE NUMERIC(16,6)",
@@ -651,19 +649,15 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                         for v in num_variants:
                             origen_ids.append(f"{name}:{v}")
                 
-                comp_rows = conn.execute("""
-                    SELECT id FROM comprobantes_contables
+                # Delete directly from movimientos_contables using flat metadata
+                conn.execute("""
+                    DELETE FROM movimientos_contables
                     WHERE negocio_id = %s AND (
                         (origen_tipo IS NOT NULL AND LOWER(origen_id) IN %s)
-                        OR (numero_comprobante IN %s)
+                        OR (numero_documento IN %s)
+                        OR (tipo_documento_id = %s AND numero_documento IN %s)
                     )
-                """, (negocio_id, tuple(o.lower() for o in origen_ids), tuple(num_variants))).fetchall()
-                
-                comp_ids = [c['id'] for c in comp_rows]
-                if comp_ids:
-                    placeholders = ','.join(['%s'] * len(comp_ids))
-                    conn.execute(f"DELETE FROM movimientos_contables WHERE comprobante_id IN ({placeholders})", tuple(comp_ids))
-                    conn.execute(f"DELETE FROM comprobantes_contables WHERE id IN ({placeholders})", tuple(comp_ids))
+                """, (negocio_id, tuple(o.lower() for o in origen_ids), tuple(num_variants), tipo_doc_id, tuple(num_variants)))
                 
                 # Save products to recostear at the end
                 data['_prod_ids_to_recost'] = prod_ids_to_recost
@@ -1825,25 +1819,38 @@ def api_documento_previsualizar(negocio_id):
         comprobante = None
         if origen_id and origen_tipo:
             comp_row = conn.execute("""
-                SELECT id, numero_comprobante, tipo, total_debitos, descripcion, fecha
-                FROM comprobantes_contables
+                SELECT comprobante_id AS id, 
+                       CASE WHEN tipo_documento IS NOT NULL AND tipo_documento <> '' AND POSITION('-' IN numero_documento) = 0 THEN tipo_documento || '-' || numero_documento ELSE numero_documento END AS numero_comprobante,
+                       tipo_documento AS tipo, 
+                       SUM(CASE WHEN tipo = 'debito' THEN monto ELSE 0 END) AS total_debitos, 
+                       MAX(descripcion_general) AS descripcion, 
+                       fecha
+                FROM movimientos_contables
                 WHERE negocio_id = %s AND origen_tipo = %s AND origen_id = %s
+                GROUP BY comprobante_id, numero_documento, tipo_documento, fecha
                 LIMIT 1
             """, (negocio_id, origen_tipo, origen_id)).fetchone()
             if comp_row:
                 comprobante = dict(comp_row)
+                comprobante['total_debitos'] = float(comprobante['total_debitos'])
 
         if not comprobante and mov['tipo_documento'] and mov['documento_numero']:
             comp_row = conn.execute("""
-                SELECT id, numero_comprobante, tipo, total_debitos, descripcion, fecha
-                FROM comprobantes_contables
-                WHERE negocio_id = %s AND tipo = 'COMPRA'
-                  AND ABS(total_debitos - %s) < 0.05
-                  AND fecha = %s::date
+                SELECT comprobante_id AS id, 
+                       CASE WHEN tipo_documento IS NOT NULL AND tipo_documento <> '' AND POSITION('-' IN numero_documento) = 0 THEN tipo_documento || '-' || numero_documento ELSE numero_documento END AS numero_comprobante,
+                       tipo_documento AS tipo, 
+                       SUM(CASE WHEN tipo = 'debito' THEN monto ELSE 0 END) AS total_debitos, 
+                       MAX(descripcion_general) AS descripcion, 
+                       fecha
+                FROM movimientos_contables
+                WHERE negocio_id = %s AND tipo_documento = 'COMPRA' AND fecha = %s::date
+                GROUP BY comprobante_id, numero_documento, tipo_documento, fecha
+                HAVING ABS(SUM(CASE WHEN tipo = 'debito' THEN monto ELSE 0 END) - %s) < 0.05
                 LIMIT 1
-            """, (negocio_id, float(mov['documento_total'] or 0), mov['created_at'].date())).fetchone()
+            """, (negocio_id, mov['created_at'].date(), float(mov['documento_total'] or 0))).fetchone()
             if comp_row:
                 comprobante = dict(comp_row)
+                comprobante['total_debitos'] = float(comprobante['total_debitos'])
 
         return jsonify({
             'ok': True,
@@ -1921,7 +1928,7 @@ def api_documento_anular(negocio_id):
 
             if origen_id and origen_tipo:
                 comp_row = conn.execute("""
-                    SELECT id FROM comprobantes_contables
+                    SELECT DISTINCT comprobante_id AS id FROM movimientos_contables
                     WHERE negocio_id = %s AND origen_tipo = %s AND origen_id = %s
                 """, (negocio_id, origen_tipo, origen_id)).fetchone()
                 if comp_row:
@@ -1929,11 +1936,12 @@ def api_documento_anular(negocio_id):
 
             if not comprobantes_a_borrar and mov['tipo_documento'] and mov['documento_numero']:
                 comp_row = conn.execute("""
-                    SELECT id FROM comprobantes_contables
-                    WHERE negocio_id = %s AND tipo = 'COMPRA'
-                      AND ABS(total_debitos - %s) < 0.05
-                      AND fecha = %s::date
-                """, (negocio_id, float(mov['documento_total'] or 0), mov['created_at'].date())).fetchone()
+                    SELECT comprobante_id AS id
+                    FROM movimientos_contables
+                    WHERE negocio_id = %s AND tipo_documento = 'COMPRA' AND fecha = %s::date
+                    GROUP BY comprobante_id
+                    HAVING ABS(SUM(CASE WHEN tipo = 'debito' THEN monto ELSE 0 END) - %s) < 0.05
+                """, (negocio_id, mov['created_at'].date(), float(mov['documento_total'] or 0))).fetchone()
                 if comp_row:
                     comprobantes_a_borrar.append(comp_row['id'])
 
@@ -1943,7 +1951,6 @@ def api_documento_anular(negocio_id):
 
         for comp_id in comprobantes_a_borrar:
             conn.execute("DELETE FROM movimientos_contables WHERE comprobante_id = %s", (comp_id,))
-            conn.execute("DELETE FROM comprobantes_contables WHERE id = %s", (comp_id,))
 
         for mov_id in movimientos_a_borrar:
             conn.execute("DELETE FROM movimientos_inventario WHERE id = %s", (mov_id,))
@@ -2617,40 +2624,62 @@ def api_auditar_documento(negocio_id):
         # 2. Query comprobantes_contables and movimientos_contables
         if tipo_documento_id:
             comp_row = conn.execute("""
-                SELECT id, numero_comprobante, tipo, fecha, descripcion, total_debitos, total_creditos, notas
-                FROM comprobantes_contables
-                WHERE negocio_id = %s AND tipo_documento_id = %s AND (numero_comprobante IN %s OR origen_id IN %s)
+                SELECT comprobante_id AS id, 
+                       CASE WHEN tipo_documento IS NOT NULL AND tipo_documento <> '' AND POSITION('-' IN numero_documento) = 0 THEN tipo_documento || '-' || numero_documento ELSE numero_documento END AS numero_comprobante,
+                       tipo_documento AS tipo, 
+                       fecha, 
+                       MAX(descripcion_general) AS descripcion, 
+                       SUM(CASE WHEN tipo = 'debito' THEN monto ELSE 0 END) AS total_debitos, 
+                       SUM(CASE WHEN tipo = 'credito' THEN monto ELSE 0 END) AS total_creditos,
+                       '' AS notas
+                FROM movimientos_contables
+                WHERE negocio_id = %s AND tipo_documento_id = %s AND (numero_documento IN %s OR origen_id IN %s)
+                GROUP BY comprobante_id, numero_documento, tipo_documento, fecha
                 LIMIT 1
             """, (negocio_id, tipo_documento_id, tuple(num_variants), tuple(num_variants))).fetchone()
             
             # Fallback if no row found with tipo_documento_id (e.g. manually uploaded vouchers where tipo_documento_id is null)
-            # We strictly filter by tipo or tipo_documento_id to avoid matching wrong documents with the same numeric suffix (like FACTURA_DE_VENTA-1 instead of GASTO_DE_ENTREGAS-1)
             if not comp_row:
                 comp_row = conn.execute("""
-                    SELECT id, numero_comprobante, tipo, fecha, descripcion, total_debitos, total_creditos, notas
-                    FROM comprobantes_contables
+                    SELECT comprobante_id AS id, 
+                           CASE WHEN tipo_documento IS NOT NULL AND tipo_documento <> '' AND POSITION('-' IN numero_documento) = 0 THEN tipo_documento || '-' || numero_documento ELSE numero_documento END AS numero_comprobante,
+                           tipo_documento AS tipo, 
+                           fecha, 
+                           MAX(descripcion_general) AS descripcion, 
+                           SUM(CASE WHEN tipo = 'debito' THEN monto ELSE 0 END) AS total_debitos, 
+                           SUM(CASE WHEN tipo = 'credito' THEN monto ELSE 0 END) AS total_creditos,
+                           '' AS notas
+                    FROM movimientos_contables
                     WHERE negocio_id = %s 
-                      AND (tipo_documento_id = %s OR LOWER(tipo) = LOWER(%s))
+                      AND (tipo_documento_id = %s OR LOWER(tipo_documento) = LOWER(%s))
                       AND (
-                        numero_comprobante IN %s 
+                        numero_documento IN %s 
                         OR origen_id IN %s 
                         OR numero_documento = %s
                       )
+                    GROUP BY comprobante_id, numero_documento, tipo_documento, fecha
                     LIMIT 1
                 """, (negocio_id, tipo_documento_id, tipo_doc, tuple(num_variants), tuple(num_variants), num_doc)).fetchone()
 
         else:
             # Fallback legacy
-            origen_id_str = f"{tipo_doc}:{num_doc}"
             pedido_id_str = str(pedido_row['id']) if pedido_row else None
             comp_row = conn.execute("""
-                SELECT id, numero_comprobante, tipo, fecha, descripcion, total_debitos, total_creditos, notas
-                FROM comprobantes_contables
+                SELECT comprobante_id AS id, 
+                       CASE WHEN tipo_documento IS NOT NULL AND tipo_documento <> '' AND POSITION('-' IN numero_documento) = 0 THEN tipo_documento || '-' || numero_documento ELSE numero_documento END AS numero_comprobante,
+                       tipo_documento AS tipo, 
+                       fecha, 
+                       MAX(descripcion_general) AS descripcion, 
+                       SUM(CASE WHEN tipo = 'debito' THEN monto ELSE 0 END) AS total_debitos, 
+                       SUM(CASE WHEN tipo = 'credito' THEN monto ELSE 0 END) AS total_creditos,
+                       '' AS notas
+                FROM movimientos_contables
                 WHERE negocio_id = %s AND (
                     (origen_tipo = 'pedido' AND origen_id = %s)
                     OR (origen_tipo IS NOT NULL AND LOWER(origen_id) IN %s)
-                    OR (numero_comprobante IN %s)
+                    OR (numero_documento IN %s)
                 )
+                GROUP BY comprobante_id, numero_documento, tipo_documento, fecha
                 LIMIT 1
             """, (negocio_id, pedido_id_str, tuple(v.lower() for v in num_variants), tuple(num_variants))).fetchone()
             

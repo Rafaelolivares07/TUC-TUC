@@ -2524,18 +2524,21 @@ def api_auditar_documento(negocio_id):
             """, (negocio_id, tipo_documento_id, tuple(num_variants), tuple(num_variants))).fetchone()
             
             # Fallback if no row found with tipo_documento_id (e.g. manually uploaded vouchers where tipo_documento_id is null)
+            # We strictly filter by tipo or tipo_documento_id to avoid matching wrong documents with the same numeric suffix (like FACTURA_DE_VENTA-1 instead of GASTO_DE_ENTREGAS-1)
             if not comp_row:
                 comp_row = conn.execute("""
                     SELECT id, numero_comprobante, tipo, fecha, descripcion, total_debitos, total_creditos, notas
                     FROM comprobantes_contables
-                    WHERE negocio_id = %s AND (
+                    WHERE negocio_id = %s 
+                      AND (tipo_documento_id = %s OR LOWER(tipo) = LOWER(%s))
+                      AND (
                         numero_comprobante IN %s 
                         OR origen_id IN %s 
                         OR numero_documento = %s
-                        OR (LOWER(tipo) = LOWER(%s) AND numero_documento = %s)
-                    )
+                      )
                     LIMIT 1
-                """, (negocio_id, tuple(num_variants), tuple(num_variants), num_doc, tipo_doc, num_doc)).fetchone()
+                """, (negocio_id, tipo_documento_id, tipo_doc, tuple(num_variants), tuple(num_variants), num_doc)).fetchone()
+
         else:
             # Fallback legacy
             origen_id_str = f"{tipo_doc}:{num_doc}"

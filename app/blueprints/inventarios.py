@@ -2543,14 +2543,36 @@ def api_auditar_documento(negocio_id):
                 if v_long_code not in num_variants:
                     num_variants.append(v_long_code)
         
-        try:
-            pedido_id = int(num_doc)
-            pedido_row = conn.execute("SELECT * FROM pedidos WHERE id = %s AND negocio_id = %s", (pedido_id, negocio_id)).fetchone()
-        except ValueError:
-            pass
+        # Build list of possible string representations of the invoice/consecutive
+        doc_codes = list(num_variants)
+        if tipo_doc_codigo:
+            for v in num_variants:
+                doc_codes.append(f"{tipo_doc_codigo}-{v}")
+                doc_codes.append(f"{tipo_doc_codigo.upper()}-{v}")
+                doc_codes.append(f"{tipo_doc_codigo.lower()}-{v}")
+        if tipo_doc_nombre:
+            for v in num_variants:
+                doc_codes.append(f"{tipo_doc_nombre}-{v}")
+                doc_codes.append(f"{tipo_doc_nombre.upper()}-{v}")
+                doc_codes.append(f"{tipo_doc_nombre.lower()}-{v}")
+        doc_codes = list(set([d.lower() for d in doc_codes]))
+
+        pedido_row = conn.execute("""
+            SELECT * FROM pedidos
+            WHERE negocio_id = %s 
+              AND (
+                LOWER(numero_documento) IN %s
+                OR (numero_documento IS NOT NULL AND LOWER(numero_documento) IN %s)
+              )
+            LIMIT 1
+        """, (negocio_id, tuple(doc_codes), tuple(doc_codes))).fetchone()
 
         if not pedido_row:
-            pedido_row = conn.execute("SELECT * FROM pedidos WHERE UPPER(numero_documento) IN %s AND negocio_id = %s", (tuple(v.upper() for v in num_variants), negocio_id)).fetchone()
+            try:
+                pedido_id = int(num_doc)
+                pedido_row = conn.execute("SELECT * FROM pedidos WHERE id = %s AND negocio_id = %s", (pedido_id, negocio_id)).fetchone()
+            except ValueError:
+                pass
 
         if pedido_row and not tipo_documento_id:
             tipo_documento_id = pedido_row['tipo_documento_id']

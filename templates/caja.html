@@ -292,6 +292,7 @@ let clienteQrGenerado = false;
 let ultimoRecibo = null;
 let forceNegativeStockFlag = false;
 let listExcluidosTemporal = [];
+let listAdjustmentsTemporal = [];
 let shortagesList = [];
 
 async function iniciarCajaAdmin() {
@@ -778,7 +779,8 @@ async function cobrar() {
         id_tercero_cajero: cajeroTerceroId,
         tipo_documento_id: tipoDocId ? parseInt(tipoDocId) : null,
         force_negative_stock: forceNegativeStockFlag,
-        excluir_componentes: listExcluidosTemporal
+        excluir_componentes: listExcluidosTemporal,
+        adjustments: listAdjustmentsTemporal
     };
 
     try {
@@ -791,6 +793,7 @@ async function cobrar() {
         if (d.ok) {
             forceNegativeStockFlag = false;
             listExcluidosTemporal = [];
+            listAdjustmentsTemporal = [];
             
             const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
             const iva = carrito.reduce((s, i) => {
@@ -991,31 +994,10 @@ async function ejecutarAjusteStockCaja() {
     
     if (!adjustments.length) return;
     
-    const btn = document.getElementById('btn-stock-ajustar');
-    btn.disabled = true;
-    btn.textContent = 'Aplicando ajuste...';
-    
-    try {
-        const r = await fetch(`/api/inventario/${TERCERO_ID}/mantenimiento/ajuste-rapido`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ adjustments })
-        });
-        const d = await r.json();
-        if (d.ok) {
-            toast('Ajuste de inventario aplicado con éxito (' + d.numero_documento + ')');
-            document.getElementById('modal-alerta-stock').classList.add('hidden');
-            cobrar();
-        } else {
-            toast('Error al aplicar ajuste: ' + d.error, true);
-        }
-    } catch (e) {
-        console.error(e);
-        toast('Error de red al aplicar ajuste', true);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '🛠️ Realizar Ajuste Físico y Vender';
-    }
+    // Guardar ajustes temporales para enviarlos en el cobro en una sola transacción
+    listAdjustmentsTemporal = adjustments;
+    document.getElementById('modal-alerta-stock').classList.add('hidden');
+    cobrar();
 }
 
 function mostrarRecibo() {

@@ -867,7 +867,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                 # Query the actual inventory movements generated for this sale (ingredients / discounted products)
                 items_mov = conn.execute("""
                     SELECT m.producto_id, m.cantidad, m.costo_und, p.categoria, p.nombre AS producto_nombre,
-                           m.producto_padre_id
+                           m.producto_padre_id, m.tipo, m.motivo, m.valor_unitario
                     FROM movimientos_inventario m
                     JOIN productos p ON p.id = m.producto_id
                     WHERE m.negocio_id = %s AND m.referencia_id = %s AND m.referencia_tipo IN ('pedido', 'pedido_tienda', 'pedido_restaurante')
@@ -876,6 +876,38 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                 debitos_costos = {} # Key: (cuenta_puc_id, cuenta_codigo, concepto) -> total_costo
                 
                 for item in items_mov:
+                    # Inyección automática de asientos para ajustes en caliente vinculados a la factura
+                    if item['motivo'] == 'ajuste':
+                        total_adj = float(item['cantidad'] or 0) * float(item['valor_unitario'] or 0)
+                        if total_adj > 0 and item['categoria']:
+                            gi_adj = conn.execute("""
+                                SELECT gi.cuenta_inve_id, gi.cuenta_ajuste_favor_id,
+                                       c_inv.codigo AS cod_inve, c_inv.nombre AS nom_inve,
+                                       c_fav.codigo AS cod_fav, c_fav.nombre AS nom_fav
+                                FROM grupos_inventario gi
+                                LEFT JOIN cuentas_puc c_inv ON c_inv.id = gi.cuenta_inve_id
+                                LEFT JOIN cuentas_puc c_fav ON c_fav.id = gi.cuenta_ajuste_favor_id
+                                WHERE gi.negocio_id = %s AND gi.nombre = %s
+                            """, (negocio_id, item['categoria'])).fetchone()
+                            if gi_adj and gi_adj['cuenta_inve_id'] and gi_adj['cuenta_ajuste_favor_id']:
+                                # Débito en Inventario (14x)
+                                mov_list.append({
+                                    'cuenta_puc_id': gi_adj['cuenta_inve_id'],
+                                    'cuenta_codigo': gi_adj['cod_inve'],
+                                    'concepto':      f"Inv: {item['producto_nombre']}",
+                                    'tipo_mov':      'D',
+                                    'monto':         total_adj,
+                                })
+                                # Crédito en Ingreso por Ajuste (41x)
+                                mov_list.append({
+                                    'cuenta_puc_id': gi_adj['cuenta_ajuste_favor_id'],
+                                    'cuenta_codigo': gi_adj['cod_fav'],
+                                    'concepto':      f"Ajuste Físico (+): Insumo {item['producto_nombre']}",
+                                    'tipo_mov':      'C',
+                                    'monto':         total_adj,
+                                })
+                        continue
+
                     total_costo = float(item['cantidad'] or 0) * float(item['costo_und'] or 0)
                     if total_costo > 0:
                         # 1. Crédito en inventario (14x) usando la categoría del ingrediente/componente

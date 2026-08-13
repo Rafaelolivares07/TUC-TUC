@@ -1966,13 +1966,46 @@ def api_pedido_crear(slug):
             if principio_id:
                 stock_check_items.append({'producto_id': principio_id, 'cantidad': 1})
 
-        force_negative = data.get('force_negative_stock') == True
-        excluir_componentes = data.get('excluir_componentes') or []
-        if not force_negative and rest['tercero_id']:
-            shortages = _verificar_stock_pedido(conn, rest['tercero_id'], stock_check_items, excluir_componentes)
-            if shortages:
-                conn.close()
-                return jsonify({'ok': False, 'error': 'insufficient_stock', 'shortages': shortages}), 400
+            # Procesar ajustes en caliente antes de validar el stock
+            adjustments = data.get('adjustments') or []
+            applied_adjustments = False
+            if adjustments and rest['tercero_id']:
+                for adj in adjustments:
+                    prod_id = int(adj.get('producto_id') or 0)
+                    qty_physical = float(adj.get('cantidad_fisica') or 0.0)
+                    cost_unit = float(adj.get('costo_unitario') or 0.0)
+                    if not prod_id:
+                        continue
+                    
+                    saldo = conn.execute(
+                        "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1",
+                        (rest['tercero_id'], prod_id)
+                    ).fetchone()
+                    qty_system = float(saldo['stock'] if saldo else 0.0)
+                    diff = qty_physical - qty_system
+                    if abs(diff) < 0.000001:
+                        continue
+                    
+                    _mov_directo(
+                        conn, rest['tercero_id'], prod_id, abs(diff), 'entrada' if diff > 0 else 'salida', 'ajuste',
+                        registrado_por=session.get('usuario_id'),
+                        valor_unitario=cost_unit,
+                        bodega=1,
+                        tipo_documento='PED_AJUSTE',
+                        documento_numero='AJUSTE_TMP',
+                        referencia_tipo='pedido_restaurante'
+                    )
+                    
+                    _recostear_producto(conn, rest['tercero_id'], prod_id)
+                    applied_adjustments = True
+
+            force_negative = data.get('force_negative_stock') == True
+            excluir_componentes = data.get('excluir_componentes') or []
+            if not force_negative and rest['tercero_id']:
+                shortages = _verificar_stock_pedido(conn, rest['tercero_id'], stock_check_items, excluir_componentes)
+                if shortages:
+                    conn.close()
+                    return jsonify({'ok': False, 'error': 'insufficient_stock', 'shortages': shortages}), 400
 
         if es_carta:
             platos = data.get('platos', [])
@@ -2275,6 +2308,20 @@ def api_pedido_crear(slug):
                         print(f'[inv] salida menu {prod_id}: {_e}')
                         try: conn.execute("ROLLBACK TO SAVEPOINT sp_inv")
                         except: pass
+            # Enlazar los ajustes aplicados al ID del pedido y actualizar el número de documento
+            if applied_adjustments:
+                row_td_link = conn.execute(
+                    "SELECT nombre FROM tipos_documento_negocio WHERE negocio_id = %s AND activo = TRUE AND tipo_movimiento = 'venta' ORDER BY predeterminado DESC, id LIMIT 1",
+                    (rest['tercero_id'],)
+                ).fetchone()
+                td_name_link = row_td_link['nombre'] if row_td_link else 'Venta Restaurante'
+                conn.execute("""
+                    UPDATE movimientos_inventario
+                    SET referencia_id = %s,
+                        tipo_documento = %s,
+                        documento_numero = %s
+                    WHERE negocio_id = %s AND documento_numero = 'AJUSTE_TMP' AND motivo = 'ajuste' AND referencia_id IS NULL
+                """, (pedido_id, td_name_link, f"PED-{pedido_id}", rest['tercero_id']))
 
         if rest['tercero_id'] and _asiento_auto:
             try:

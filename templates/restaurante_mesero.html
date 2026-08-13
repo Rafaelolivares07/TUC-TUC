@@ -231,6 +231,7 @@ const BASE = `/api/restaurante/${SLUG}`;
 const TIENE_PIN = {{ 'true' if tiene_pin else 'false' }};
 let forceNegativeStockFlag = false;
 let listExcluidosTemporal = [];
+let listAdjustmentsTemporal = [];
 let shortagesList = [];
 let pendingCheckoutFn = null;
 
@@ -543,13 +544,15 @@ async function enviarPedido() {
                 principio_id: principioSeleccionado,
                 notas: document.getElementById('input-notas').value.trim(),
                 force_negative_stock: forceNegativeStockFlag,
-                excluir_componentes: listExcluidosTemporal
+                excluir_componentes: listExcluidosTemporal,
+                adjustments: listAdjustmentsTemporal
             })
         });
         const data = await r.json();
         if (data.ok) {
             forceNegativeStockFlag = false;
             listExcluidosTemporal = [];
+            listAdjustmentsTemporal = [];
             toast('Pedido enviado a cocina');
             mostrarPaso('mesa');
             cargarPedidos();
@@ -876,13 +879,15 @@ async function enviarPedidoCarta() {
                 mesa_nombre: mesaSeleccionada,
                 platos,
                 force_negative_stock: forceNegativeStockFlag,
-                excluir_componentes: listExcluidosTemporal
+                excluir_componentes: listExcluidosTemporal,
+                adjustments: listAdjustmentsTemporal
             })
         });
         const data = await r.json();
         if (data.ok) {
             forceNegativeStockFlag = false;
             listExcluidosTemporal = [];
+            listAdjustmentsTemporal = [];
             toast('Pedido enviado a cocina');
             carrito = {};
             mostrarPaso('mesa');
@@ -1117,31 +1122,10 @@ async function ejecutarAjusteStockCaja() {
     
     if (!adjustments.length) return;
     
-    const btn = document.getElementById('btn-stock-ajustar');
-    btn.disabled = true;
-    btn.textContent = 'Aplicando ajuste...';
-    
-    try {
-        const r = await fetch(`/api/inventario/${TERCERO_ID}/mantenimiento/ajuste-rapido`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ adjustments })
-        });
-        const d = await r.json();
-        if (d.ok) {
-            toast('Ajuste de inventario aplicado con éxito (' + d.numero_documento + ')');
-            document.getElementById('modal-alerta-stock').classList.add('hidden');
-            if (pendingCheckoutFn) pendingCheckoutFn();
-        } else {
-            toast('Error al aplicar ajuste: ' + d.error, false);
-        }
-    } catch (e) {
-        console.error(e);
-        toast('Error de red al aplicar ajuste', false);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '🛠️ Realizar Ajuste Físico y Vender';
-    }
+    // Guardar ajustes temporales para enviarlos en el cobro en una sola transacción
+    listAdjustmentsTemporal = adjustments;
+    document.getElementById('modal-alerta-stock').classList.add('hidden');
+    if (pendingCheckoutFn) pendingCheckoutFn();
 }
 </script>
 

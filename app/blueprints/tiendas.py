@@ -2255,24 +2255,7 @@ def api_tienda_pedido_crear(slug):
         if not items_validos:
             return jsonify({'ok': False, 'error': 'Ningun producto valido en el carrito'}), 400
             
-        force_negative = data.get('force_negative_stock') == True
-        excluir_componentes = data.get('excluir_componentes') or []
-        if not force_negative:
-            shortages = _verificar_stock_pedido(conn, negocio['tercero_id'], items_validos, excluir_componentes)
-            if shortages:
-                conn.close()
-                return jsonify({'ok': False, 'error': 'insufficient_stock', 'shortages': shortages}), 400
-                
-        subtotal_productos = total
-        tercero_config_id = negocio['tercero_id'] or admin_id
-        valor_domicilio, domicilio_estado = _calcular_domicilio(
-            conn, tercero_config_id, tipo_entrega, cliente_lat, cliente_lon
-        )
-        if domicilio_estado == 'fuera_cobertura':
-            return jsonify({'ok': False, 'error': 'La direccion esta fuera de cobertura de domicilio'}), 400
-        total = subtotal_productos + float(valor_domicilio or 0)
-        
-        # Consecutivo de tipo de documento usando el motor global
+        # Consecutivo de tipo de documento usando el motor global (resuelto antes del chequeo de stock para vincular ajustes)
         tipo_doc_id = data.get('tipo_documento_id')
         if not tipo_doc_id:
             # Fallback to predeterminado document type of type 'venta'
@@ -2307,6 +2290,62 @@ def api_tienda_pedido_crear(slug):
                         numero_documento = f"{tipo_doc_codigo}-{int(res_num)}"
                     except (ValueError, TypeError):
                         numero_documento = f"{tipo_doc_codigo}-{res_num}"
+
+        # Procesar ajustes en caliente antes de validar el stock
+        adjustments = data.get('adjustments') or []
+        applied_adjustments = False
+        if adjustments:
+            for adj in adjustments:
+                prod_id = int(adj.get('producto_id') or 0)
+                qty_physical = float(adj.get('cantidad_fisica') or 0.0)
+                cost_unit = float(adj.get('costo_unitario') or 0.0)
+                if not prod_id:
+                    continue
+                
+                # Obtener stock en base de datos
+                saldo = conn.execute(
+                    "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1",
+                    (negocio['tercero_id'], prod_id)
+                ).fetchone()
+                qty_system = float(saldo['stock'] if saldo else 0.0)
+                diff = qty_physical - qty_system
+                if abs(diff) < 0.000001:
+                    continue
+                
+                # Registrar el movimiento de ajuste con los datos de la factura
+                _mov_directo(
+                    conn, negocio['tercero_id'], prod_id, abs(diff), 'entrada' if diff > 0 else 'salida', 'ajuste',
+                    registrado_por=session.get('usuario_id'),
+                    valor_unitario=cost_unit,
+                    bodega=1,
+                    tipo_documento=tipo_doc_codigo or 'Factura de Venta',
+                    documento_numero=numero_documento,
+                    tipo_documento_id=tipo_doc_id,
+                    referencia_tipo='pedido_tienda'
+                )
+                
+                # Recostear inmediatamente para actualizar el costo promedio en el balance antes de la venta
+                _recostear_producto(conn, negocio['tercero_id'], prod_id)
+                applied_adjustments = True
+
+        force_negative = data.get('force_negative_stock') == True
+        excluir_componentes = data.get('excluir_componentes') or []
+        if not force_negative:
+            shortages = _verificar_stock_pedido(conn, negocio['tercero_id'], items_validos, excluir_componentes)
+            if shortages:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'insufficient_stock', 'shortages': shortages}), 400
+                
+        subtotal_productos = total
+        tercero_config_id = negocio['tercero_id'] or admin_id
+        valor_domicilio, domicilio_estado = _calcular_domicilio(
+            conn, tercero_config_id, tipo_entrega, cliente_lat, cliente_lon
+        )
+        if domicilio_estado == 'fuera_cobertura':
+            return jsonify({'ok': False, 'error': 'La direccion esta fuera de cobertura de domicilio'}), 400
+        total = subtotal_productos + float(valor_domicilio or 0)
+        
+        # Consecutivo ya resuelto al inicio del flujo
 
         # Resolve or create client in terceros if not provided but name is typed
         if not cliente_id and nombre_cliente:
@@ -2367,6 +2406,15 @@ def api_tienda_pedido_crear(slug):
         pedido_id = conn.execute(
             "SELECT currval(pg_get_serial_sequence('pedidos', 'id'))"
         ).fetchone()[0]
+        
+        # Enlazar los ajustes aplicados al ID del pedido
+        if applied_adjustments:
+            conn.execute("""
+                UPDATE movimientos_inventario
+                SET referencia_id = %s
+                WHERE negocio_id = %s AND documento_numero = %s AND motivo = 'ajuste' AND referencia_id IS NULL
+            """, (pedido_id, negocio['tercero_id'], numero_documento))
+
         for it in items_validos:
             # Query the unit cost of the product right now
             costo_row = conn.execute("""

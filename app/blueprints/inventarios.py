@@ -2553,7 +2553,7 @@ def api_auditar_documento(negocio_id):
             pedido_row = conn.execute("SELECT * FROM pedidos WHERE UPPER(numero_documento) IN %s AND negocio_id = %s", (tuple(v.upper() for v in num_variants), negocio_id)).fetchone()
 
         if pedido_row and not tipo_documento_id:
-            tipo_documento_id = pedido_row['tipo_doc_id']
+            tipo_documento_id = pedido_row['tipo_documento_id']
 
         # 1. Query movimientos_inventario
         if tipo_documento_id:

@@ -2269,7 +2269,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         # 3. Fetch recent accounting documents from movimientos_contables and comprobantes_contables
         sql_cont = """
             SELECT cc.tipo_documento_id, COALESCE(cc.tipo, 'comprobante') AS tipo_documento, 
-                   COALESCE(cc.numero_documento, cc.numero_comprobante) AS documento_numero,
+                   COALESCE(cc.numero_documento::text, cc.numero_comprobante) AS documento_numero,
                    cc.fecha AS documento_fecha,
                    SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE 0 END) AS total,
                    MIN(mc.tercero_id) AS proveedor_id
@@ -2282,7 +2282,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         if q:
             sql_cont += """ AND (
                 cc.numero_comprobante ILIKE %s 
-                OR cc.numero_documento ILIKE %s 
+                OR cc.numero_documento::text ILIKE %s 
                 OR mc.concepto ILIKE %s 
                 OR mc.tercero_id IN (SELECT id FROM terceros WHERE nombre ILIKE %s)
             )"""

@@ -2482,6 +2482,18 @@ def api_auditar_documento(negocio_id):
                 params_inv = [negocio_id, tipo_doc, tuple(v.lower() for v in num_variants)]
         
         rows_inv = conn.execute(sql_inv, tuple(params_inv)).fetchall()
+        if not rows_inv and tipo_documento_id:
+            # Fallback legacy if no rows found with tipo_documento_id
+            sql_inv_fallback = """
+                SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
+                       m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, m.documento_fecha,
+                       m.proveedor_id, m.proveedor_nombre, m.producto_padre_id,
+                       p_padre.nombre AS producto_padre_nombre, m.costo_und
+                FROM movimientos_inventario m
+                LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
+                WHERE m.negocio_id = %s AND LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) IN %s
+            """
+            rows_inv = conn.execute(sql_inv_fallback, (negocio_id, tipo_doc, tuple(v.lower() for v in num_variants))).fetchall()
         items_inventario = [
             {
                 'id': r['id'],
@@ -2510,6 +2522,20 @@ def api_auditar_documento(negocio_id):
                 WHERE negocio_id = %s AND tipo_documento_id = %s AND (numero_comprobante IN %s OR origen_id IN %s)
                 LIMIT 1
             """, (negocio_id, tipo_documento_id, tuple(num_variants), tuple(num_variants))).fetchone()
+            
+            # Fallback if no row found with tipo_documento_id (e.g. manually uploaded vouchers where tipo_documento_id is null)
+            if not comp_row:
+                comp_row = conn.execute("""
+                    SELECT id, numero_comprobante, tipo, fecha, descripcion, total_debitos, total_creditos, notas
+                    FROM comprobantes_contables
+                    WHERE negocio_id = %s AND (
+                        numero_comprobante IN %s 
+                        OR origen_id IN %s 
+                        OR numero_documento = %s
+                        OR (LOWER(tipo) = LOWER(%s) AND numero_documento = %s)
+                    )
+                    LIMIT 1
+                """, (negocio_id, tuple(num_variants), tuple(num_variants), num_doc, tipo_doc, num_doc)).fetchone()
         else:
             # Fallback legacy
             origen_id_str = f"{tipo_doc}:{num_doc}"

@@ -2675,13 +2675,12 @@ def api_auditar_documento(negocio_id):
               )
               AND (
                 numero_documento IN %s 
-                OR origen_id IN %s 
                 OR numero_documento = %s
                 OR (origen_tipo = 'pedido' AND origen_id = %s)
               )
             GROUP BY comprobante_id, numero_documento, tipo_documento, fecha
             LIMIT 1
-        """, (negocio_id, tipo_documento_id, tuple(tipo_variants), tuple(num_variants), tuple(num_variants), num_doc, pedido_id_str)).fetchone()
+        """, (negocio_id, tipo_documento_id, tuple(tipo_variants), tuple(num_variants), num_doc, pedido_id_str)).fetchone()
             
         comprobante = None
         if comp_row:
@@ -2916,11 +2915,9 @@ def api_anular_documento(negocio_id):
             WHERE negocio_id = %s AND (
                 (origen_tipo = 'pedido' AND origen_id = %s)
                 OR (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
-                OR (origen_tipo IS NOT NULL AND LOWER(origen_id) IN %s)
                 OR (LOWER(numero_documento) IN %s)
-                OR (comprobante_id = %s)
             )
-        """, (negocio_id, pedido_id_str, origen_id_str, tuple(doc_codes), tuple(doc_codes), (int(num_doc) if num_doc.isdigit() else None)))
+        """, (negocio_id, pedido_id_str, origen_id_str, tuple(doc_codes)))
         deleted_contables = cur_mc.rowcount
         deleted_comprobantes = 0
             

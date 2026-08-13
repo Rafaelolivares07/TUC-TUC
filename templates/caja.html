@@ -129,8 +129,11 @@
                     
                     <!-- Tipo de Documento -->
                     <div class="pt-1">
-                        <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Tipo de Documento</label>
-                        <select id="tipo-documento" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 font-semibold text-gray-700">
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Tipo de Documento</label>
+                            <span id="consecutivo-documento-lbl" class="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full hidden"></span>
+                        </div>
+                        <select id="tipo-documento" onchange="actualizarConsecutivoDisplay()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 font-semibold text-gray-700">
                             <option value="">-- Sin documento contable --</option>
                         </select>
                     </div>
@@ -681,6 +684,28 @@ async function cargarMetodosPago() {
 
 let tiposDocumento = [];
 
+function actualizarConsecutivoDisplay() {
+    const select = document.getElementById('tipo-documento');
+    const lbl = document.getElementById('consecutivo-documento-lbl');
+    if (!select || !lbl) return;
+    
+    const val = select.value;
+    if (!val) {
+        lbl.classList.add('hidden');
+        lbl.textContent = '';
+        return;
+    }
+    
+    const selectedDoc = tiposDocumento.find(t => t.id == val);
+    if (selectedDoc && selectedDoc.siguiente_numero) {
+        lbl.textContent = `Sgte: ${selectedDoc.siguiente_numero}`;
+        lbl.classList.remove('hidden');
+    } else {
+        lbl.classList.add('hidden');
+        lbl.textContent = '';
+    }
+}
+
 async function cargarTiposDocumento() {
     try {
         const r = await fetch(`/api/caja/${SLUG}/tipos-doc`);
@@ -691,6 +716,7 @@ async function cargarTiposDocumento() {
             if (select) {
                 select.innerHTML = '<option value="">-- Sin documento contable --</option>' + 
                     tiposDocumento.map(t => `<option value="${t.id}" ${t.predeterminado ? 'selected' : ''}>${t.nombre}</option>`).join('');
+                actualizarConsecutivoDisplay();
             }
         }
     } catch (e) {

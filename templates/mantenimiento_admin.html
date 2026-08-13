@@ -291,7 +291,6 @@
           <thead>
             <tr class="border-b text-gray-400">
               <th class="py-2">Fecha</th>
-              <th class="py-2">Origen</th>
               <th class="py-2">Tipo de Doc.</th>
               <th class="py-2">Número / ID</th>
               <th class="py-2">Tercero Relacionado</th>
@@ -301,7 +300,7 @@
           </thead>
           <tbody id="aud-tbody-recientes">
             <tr>
-              <td colspan="7" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
+              <td colspan="6" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
             </tr>
           </tbody>
         </table>
@@ -1196,22 +1195,13 @@
       if (!docs.length) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="7" class="text-center text-gray-400 py-6">No se encontraron transacciones que coincidan con la búsqueda</td>
+            <td colspan="6" class="text-center text-gray-400 py-6">No se encontraron transacciones que coincidan con la búsqueda</td>
           </tr>
         `;
         return;
       }
       
       tbody.innerHTML = docs.map(doc => {
-        let originBadge = '';
-        if (doc.origen === 'ventas') {
-          originBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-800 uppercase">venta</span>';
-        } else if (doc.origen === 'ambos') {
-          originBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 uppercase">venta/inv</span>';
-        } else {
-          originBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 uppercase">inventario</span>';
-        }
-        
         let typeStr = doc.tipo_documento.toUpperCase();
         if (doc.tipo_documento === 'pedido_venta') typeStr = 'Venta / Pedido';
         
@@ -1223,7 +1213,6 @@
         return `
           <tr class="border-b hover:bg-gray-50">
             <td class="py-2">${dateFormatted}</td>
-            <td class="py-2">${originBadge}</td>
             <td class="py-2 font-bold text-gray-700">${typeStr}</td>
             <td class="py-2 font-mono text-gray-800">${doc.documento_numero}</td>
             <td class="py-2 text-gray-600">${doc.tercero_nombre || 'Cliente General'}</td>
@@ -1241,7 +1230,7 @@
       console.error(e);
       tbody.innerHTML = `
         <tr>
-          <td colspan="7" class="text-center text-red-500 py-6">Error: ${e.message}</td>
+          <td colspan="6" class="text-center text-red-500 py-6">Error: ${e.message}</td>
         </tr>
       `;
     }

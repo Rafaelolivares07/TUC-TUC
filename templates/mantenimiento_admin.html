@@ -515,11 +515,13 @@
         <button id="btn-aud-modificar" onclick="modificarDocumentoAuditor()" class="px-5 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
           ✏️ Ir a Modificar
         </button>
-        <button id="btn-aud-anular" onclick="anularDocumentoAuditor()" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition">
-          Anular Documento (Dejar como Anulado)
+        <button id="btn-aud-anular" onclick="anularDocumentoAuditor()" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition text-center flex flex-col items-center justify-center leading-tight">
+          <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
+          <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL CONSECUTIVO COMO ANULADO</span>
         </button>
-        <button id="btn-aud-eliminar" onclick="eliminarDocumentoAuditor()" class="px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl text-sm transition">
-          Eliminar Completamente (Liberar Consecutivo)
+        <button id="btn-aud-eliminar" onclick="eliminarDocumentoAuditor()" class="px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl transition text-center flex flex-col items-center justify-center leading-tight">
+          <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
+          <span class="text-[10px] text-orange-100 font-normal mt-0.5">DEJA INCLUSO DISPONIBLE EL CONSECUTIVO PARA SER REUTILIZADO</span>
         </button>
       </div>
 
@@ -854,7 +856,7 @@
     
     const btn = document.getElementById('btn-aud-anular');
     btn.disabled = true;
-    btn.textContent = 'Anulando transacción...';
+    btn.innerHTML = '<span class="text-[13px] uppercase">Anulando transacción...</span>';
     
     try {
       const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/anular-documento`, {
@@ -878,7 +880,10 @@
       toast('Error de red al anular documento', false);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Anular Documento (Dejar como Anulado)';
+      btn.innerHTML = `
+        <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
+        <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL CONSECUTIVO COMO ANULADO</span>
+      `;
     }
   }
 
@@ -891,7 +896,7 @@
     
     const btn = document.getElementById('btn-aud-eliminar');
     btn.disabled = true;
-    btn.textContent = 'Eliminando transacción...';
+    btn.innerHTML = '<span class="text-[13px] uppercase">Eliminando transacción...</span>';
     
     try {
       const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/anular-documento`, {
@@ -918,7 +923,10 @@
       toast('Error de red al eliminar documento', false);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Eliminar Completamente (Liberar Consecutivo)';
+      btn.innerHTML = `
+        <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
+        <span class="text-[10px] text-orange-100 font-normal mt-0.5">DEJA INCLUSO DISPONIBLE EL CONSECUTIVO PARA SER REUTILIZADO</span>
+      `;
     }
   }
 

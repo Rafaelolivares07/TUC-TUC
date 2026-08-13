@@ -2926,34 +2926,34 @@ def api_anular_documento(negocio_id):
         pedido_eliminado = False
         pedido_anulado = False
         consecutivo_liberado = False
-
-        if not pedido_row:
-            pedido_id_val = None
-            try:
-                pedido_id_val = int(num_doc)
-            except ValueError:
-                pass
-            if pedido_id_val:
-                pedido_row = conn.execute("SELECT * FROM pedidos WHERE id = %s AND negocio_id = %s LIMIT 1", (pedido_id_val, negocio_id)).fetchone()
-
+        
+        # Unified consecutive release logic (runs for both orders and flat documents)
+        if row_td and accion == 'eliminar':
+            # Extract pure numeric consecutive from the document string
+            def extraer_consecutivo_num(n_str):
+                if not n_str:
+                    return None
+                n_str = str(n_str).strip()
+                if '-' in n_str:
+                    n_str = n_str.split('-')[-1].strip()
+                try:
+                    return int(n_str)
+                except ValueError:
+                    return None
+            
+            doc_num_int = extraer_consecutivo_num(num_doc)
+            if doc_num_int is not None:
+                # Retrieve current sequence value for this document type
+                td_curr = conn.execute("SELECT id, consecutivo FROM tipos_documento_negocio WHERE id = %s", (row_td['id'],)).fetchone()
+                # Rollback sequence ONLY if it is exactly the one being deleted (no newer documents exist)
+                if td_curr and td_curr['consecutivo'] == doc_num_int:
+                    new_con = max(0, td_curr['consecutivo'] - 1)
+                    conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (new_con, td_curr['id']))
+                    consecutivo_liberado = True
+                    
         if pedido_row:
             if accion == 'eliminar':
-                # Check if it is the latest order to free consecutive
-                if pedido_row['tipo_documento_id']:
-                    latest_row = conn.execute("""
-                        SELECT id FROM pedidos
-                        WHERE negocio_id = %s AND tipo_documento_id = %s
-                        ORDER BY id DESC LIMIT 1
-                    """, (negocio_id, pedido_row['tipo_documento_id'])).fetchone()
-                    
-                    if latest_row and latest_row['id'] == pedido_row['id']:
-                        td_row = conn.execute("SELECT id, consecutivo FROM tipos_documento_negocio WHERE id = %s", (pedido_row['tipo_documento_id'],)).fetchone()
-                        if td_row and td_row['consecutivo'] and td_row['consecutivo'] > 0:
-                            new_con = td_row['consecutivo'] - 1
-                            conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (new_con, td_row['id']))
-                            consecutivo_liberado = True
-                
-                # Delete completely
+                # Delete completely from orders tables
                 conn.execute("DELETE FROM pedido_items WHERE pedido_id = %s", (pedido_row['id'],))
                 conn.execute("DELETE FROM pedido_pagos WHERE pedido_id = %s", (pedido_row['id'],))
                 conn.execute("DELETE FROM pedidos WHERE id = %s", (pedido_row['id'],))

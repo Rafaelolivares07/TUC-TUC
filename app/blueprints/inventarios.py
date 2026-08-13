@@ -2266,6 +2266,106 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     'estado': r['estado']
                 }
             
+        # 3. Fetch recent accounting documents from movimientos_contables and comprobantes_contables
+        sql_cont = """
+            SELECT cc.tipo_documento_id, COALESCE(cc.tipo, 'comprobante') AS tipo_documento, 
+                   COALESCE(cc.numero_documento, cc.numero_comprobante) AS documento_numero,
+                   cc.fecha AS documento_fecha,
+                   SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE 0 END) AS total,
+                   MIN(mc.tercero_id) AS proveedor_id
+            FROM movimientos_contables mc
+            JOIN comprobantes_contables cc ON cc.id = mc.comprobante_id
+            WHERE mc.negocio_id = %s
+        """
+        params_cont = [negocio_id]
+        
+        if q:
+            sql_cont += """ AND (
+                cc.numero_comprobante ILIKE %s 
+                OR cc.numero_documento ILIKE %s 
+                OR mc.concepto ILIKE %s 
+                OR mc.tercero_id IN (SELECT id FROM terceros WHERE nombre ILIKE %s)
+            )"""
+            params_cont.extend([f'%{q}%', f'%{q}%', f'%{q}%', f'%{q}%'])
+            
+        if tipo and tipo != 'todos':
+            if tipo == 'pedido_venta':
+                sql_cont += " AND LOWER(cc.tipo) IN ('factura', 'factura_de_venta', 'venta')"
+            else:
+                try:
+                    tipo_id = int(tipo)
+                    sql_cont += " AND (cc.tipo_documento_id = %s OR cc.tipo IN (SELECT codigo FROM tipos_documento_negocio WHERE id = %s))"
+                    params_cont.extend([tipo_id, tipo_id])
+                except ValueError:
+                    sql_cont += " AND (LOWER(cc.tipo) = LOWER(%s) OR cc.tipo_documento_id IN (SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND LOWER(codigo) = LOWER(%s)))"
+                    params_cont.extend([tipo, negocio_id, tipo])
+                    
+        if desde:
+            sql_cont += " AND cc.fecha >= %s"
+            params_cont.append(desde)
+        if hasta:
+            sql_cont += " AND cc.fecha <= %s"
+            params_cont.append(hasta)
+            
+        sql_cont += """
+            GROUP BY cc.tipo_documento_id, cc.tipo, cc.numero_documento, cc.numero_comprobante, cc.fecha
+            ORDER BY cc.fecha DESC, cc.numero_documento DESC
+            LIMIT 1000
+        """
+        
+        rows_cont = conn.execute(sql_cont, tuple(params_cont)).fetchall()
+        
+        for r in rows_cont:
+            td_id = r['tipo_documento_id']
+            # Resolve tipo_documento_id if None using the type string
+            if not td_id and r['tipo_documento']:
+                td_row = conn.execute("SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))", (negocio_id, r['tipo_documento'].lower(), r['tipo_documento'].lower())).fetchone()
+                if td_row:
+                    td_id = td_row['id']
+                    
+            doc_num = r['documento_numero']
+            pure_num = doc_num
+            if doc_num and '-' in doc_num:
+                parts = doc_num.split('-')
+                if parts[-1].strip().isdigit():
+                    pure_num = parts[-1].strip()
+                    
+            td_name = r['tipo_documento']
+            if td_id and td_id in types_map:
+                td_name = types_map[td_id]
+                
+            key = (td_id, pure_num) if td_id else (td_name.lower(), pure_num)
+            
+            p_id = r['proveedor_id']
+            p_name = '—'
+            if p_id:
+                t_row = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (p_id,)).fetchone()
+                if t_row:
+                    p_name = t_row['nombre']
+            
+            date_str = r['documento_fecha'].isoformat() if r['documento_fecha'] else None
+            
+            # Consolidate
+            if key in consolidated:
+                if consolidated[key]['origen'] in ('inventario', 'ventas'):
+                    consolidated[key]['origen'] = 'ambos'
+                if not consolidated[key]['tercero_id'] and p_id:
+                    consolidated[key]['tercero_id'] = p_id
+                    consolidated[key]['tercero_nombre'] = p_name or 'Cliente/Proveedor general'
+                if r['total'] and float(r['total']) > consolidated[key]['total']:
+                    consolidated[key]['total'] = float(r['total'])
+            else:
+                consolidated[key] = {
+                    'tipo_documento_id': td_id,
+                    'tipo_documento': td_name,
+                    'documento_numero': pure_num,
+                    'fecha': date_str,
+                    'origen': 'contabilidad',
+                    'total': float(r['total'] or 0),
+                    'tercero_nombre': p_name or '—',
+                    'tercero_id': p_id
+                }
+            
         # Convertir diccionario consolidado a lista y ordenar por fecha descendente
         documentos = list(consolidated.values())
         documentos.sort(key=lambda d: d['fecha'] or '', reverse=True)

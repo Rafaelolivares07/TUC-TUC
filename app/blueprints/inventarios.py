@@ -2502,21 +2502,24 @@ def api_auditar_documento(negocio_id):
         tipo_documento_id = None
         tipo_doc_codigo = None
         tipo_doc_nombre = None
+        current_consecutivo = None
         try:
             tipo_documento_id = int(tipo_doc)
-            td_row = conn.execute("SELECT codigo, nombre FROM tipos_documento_negocio WHERE id = %s", (tipo_documento_id,)).fetchone()
+            td_row = conn.execute("SELECT id, codigo, nombre, consecutivo FROM tipos_documento_negocio WHERE id = %s", (tipo_documento_id,)).fetchone()
             if td_row:
                 tipo_doc_codigo = td_row['codigo']
                 tipo_doc_nombre = td_row['nombre']
+                current_consecutivo = td_row['consecutivo']
         except ValueError:
             row_td = conn.execute("""
-                SELECT id, codigo, nombre FROM tipos_documento_negocio 
+                SELECT id, codigo, nombre, consecutivo FROM tipos_documento_negocio 
                 WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))
             """, (negocio_id, tipo_doc, tipo_doc)).fetchone()
             if row_td:
                 tipo_documento_id = row_td['id']
                 tipo_doc_codigo = row_td['codigo']
                 tipo_doc_nombre = row_td['nombre']
+                current_consecutivo = row_td['consecutivo']
 
         # Look up the order in `pedidos` if it exists
         pedido_row = None
@@ -2775,6 +2778,23 @@ def api_auditar_documento(negocio_id):
         saldo_pendiente = float(saldo_row['saldo']) if (saldo_row and saldo_row['saldo'] is not None) else None
         monto_original = float(saldo_row['monto_original']) if (saldo_row and saldo_row['monto_original'] is not None) else None
         
+        # Determine if it is the latest consecutive document of this type
+        es_ultimo_consecutivo = False
+        if current_consecutivo is not None:
+            def extraer_consecutivo_num(n_str):
+                if not n_str:
+                    return None
+                n_str = str(n_str).strip()
+                if '-' in n_str:
+                    n_str = n_str.split('-')[-1].strip()
+                try:
+                    return int(n_str)
+                except ValueError:
+                    return None
+            doc_num_int = extraer_consecutivo_num(num_doc)
+            if doc_num_int is not None and current_consecutivo == doc_num_int:
+                es_ultimo_consecutivo = True
+                
         return jsonify({
             'ok': True,
             'existe': bool(items_inventario or comprobante or pedido),
@@ -2782,7 +2802,8 @@ def api_auditar_documento(negocio_id):
             'contabilidad': comprobante,
             'ventas': pedido,
             'saldo_pendiente': saldo_pendiente,
-            'monto_original': monto_original
+            'monto_original': monto_original,
+            'es_ultimo_consecutivo': es_ultimo_consecutivo
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

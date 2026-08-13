@@ -715,6 +715,22 @@
       const d = await r.json();
       if (!d.ok) throw new Error(d.error || 'Error al cargar detalles del documento');
       
+      // Habilitar o deshabilitar botón de eliminar (liberar consecutivo)
+      const btnEliminar = document.getElementById('btn-aud-eliminar');
+      if (btnEliminar) {
+        if (d.es_ultimo_consecutivo) {
+          btnEliminar.disabled = false;
+          btnEliminar.classList.remove('opacity-40', 'cursor-not-allowed');
+          btnEliminar.classList.add('bg-orange-600', 'hover:bg-orange-700');
+          btnEliminar.title = '';
+        } else {
+          btnEliminar.disabled = true;
+          btnEliminar.classList.add('opacity-40', 'cursor-not-allowed');
+          btnEliminar.classList.remove('bg-orange-600', 'hover:bg-orange-700');
+          btnEliminar.title = 'No se puede liberar el consecutivo porque existen documentos posteriores de este tipo.';
+        }
+      }
+      
       // Store selected doc state for delete/edit actions
       let provId = terceroId;
       let provNombre = '';

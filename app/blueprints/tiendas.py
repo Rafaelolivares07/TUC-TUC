@@ -2138,6 +2138,47 @@ def api_tienda_promo_invitar(slug):
         conn.close()
 
 
+@bp.route('/api/caja/<slug>/registrar-cliente-pos', methods=['POST'])
+@bp.route('/api/tienda/<slug>/caja/registrar-cliente-pos', methods=['POST'])
+def api_caja_registrar_cliente_pos(slug):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    nombre = data.get('nombre', '').strip()
+    telefono = ''.join(filter(str.isdigit, data.get('telefono', '')))
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    conn = get_db_connection()
+    try:
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        row_t = None
+        if telefono and len(telefono) >= 7:
+            row_t = conn.execute("SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)).fetchone()
+        if not row_t:
+            row_t = conn.execute("SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1", (nombre,)).fetchone()
+        if row_t:
+            cliente_id = row_t['id']
+            if telefono:
+                conn.execute("UPDATE terceros SET telefono = %s WHERE id = %s", (telefono, cliente_id))
+        else:
+            row_ins = conn.execute("""
+                INSERT INTO terceros (nombre, telefono, tipo_tercero, fecha_creacion)
+                VALUES (%s, %s, 'cliente', NOW())
+                RETURNING id
+            """, (nombre, telefono or None)).fetchone()
+            cliente_id = row_ins['id']
+        conn.commit()
+        return jsonify({'ok': True, 'cliente_id': cliente_id})
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/tienda/<slug>/registrar-cliente', methods=['POST'])
 def api_tienda_registrar_cliente(slug):
     data      = request.get_json() or {}
@@ -2348,6 +2389,7 @@ def api_tienda_pedido_crear(slug):
         # Consecutivo ya resuelto al inicio del flujo
 
         # Resolve or create client in terceros if not provided but name is typed
+        crear_cliente_flag = data.get('crear_cliente', True)
         if not cliente_id and nombre_cliente:
             nombre_clean = nombre_cliente.strip()
             # Avoid creating third party for generic names
@@ -2363,7 +2405,7 @@ def api_tienda_pedido_crear(slug):
                 
                 if row_t:
                     cliente_id = row_t['id']
-                else:
+                elif crear_cliente_flag:
                     # Create new cliente in terceros
                     row_ins = conn.execute("""
                         INSERT INTO terceros (nombre, telefono, tipo_tercero, fecha_creacion)
@@ -2377,7 +2419,8 @@ def api_tienda_pedido_crear(slug):
             row_ocasional = conn.execute("SELECT id FROM terceros WHERE LOWER(nombre) = 'tercero ocasional' LIMIT 1").fetchone()
             if row_ocasional:
                 cliente_id = row_ocasional['id']
-                nombre_cliente = "Tercero Ocasional"
+                if not nombre_cliente:
+                    nombre_cliente = "Tercero Ocasional"
             else:
                 row_ins = conn.execute("""
                     INSERT INTO terceros (nombre, tipo_tercero, fecha_creacion)
@@ -2385,7 +2428,8 @@ def api_tienda_pedido_crear(slug):
                     RETURNING id
                 """).fetchone()
                 cliente_id = row_ins['id']
-                nombre_cliente = "Tercero Ocasional"
+                if not nombre_cliente:
+                    nombre_cliente = "Tercero Ocasional"
 
         conn.execute("""
             INSERT INTO pedidos

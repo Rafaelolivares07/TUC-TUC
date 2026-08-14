@@ -786,6 +786,8 @@ async function cobrar() {
     const telefono = document.getElementById('tel-cliente').value.trim();
     const tipoDocId = document.getElementById('tipo-documento')?.value || null;
     const clienteId = document.getElementById('cliente-id')?.value || null;
+    const chkCrear = document.getElementById('chk-crear-cliente');
+    const crearCliente = chkCrear ? chkCrear.checked : true;
 
     const pagos = getPagos();
     const payload = {
@@ -800,6 +802,7 @@ async function cobrar() {
         nombre_cliente: nombre || 'Venta en caja',
         telefono_cliente: telefono || '',
         cliente_id: clienteId ? parseInt(clienteId) : null,
+        crear_cliente: crearCliente,
         id_cajero: cajeroId,
         nombre_cajero: cajeroNombre,
         id_tercero_cajero: cajeroTerceroId,
@@ -1181,6 +1184,11 @@ function toast(msg, err = false) {
     
     let timer = null;
     
+    // Auto-select text on click/focus to avoid manual deletion of Tercero Ocasional
+    inp.addEventListener('focus', () => {
+        inp.select();
+    });
+    
     inp.addEventListener('input', () => {
         clearTimeout(timer);
         timer = setTimeout(search, 280);
@@ -1243,7 +1251,7 @@ function toast(msg, err = false) {
         const genericNames = ['venta en caja', 'mostrador', 'anonimo', 'cliente general', 'cliente en local', 'consumo', ''];
         if (!val || genericNames.includes(val.toLowerCase())) {
             statusBadge.className = 'hidden';
-            statusBadge.textContent = '';
+            statusBadge.innerHTML = '';
             hiddenId.value = '';
             return;
         }
@@ -1252,10 +1260,49 @@ function toast(msg, err = false) {
             statusBadge.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded bg-green-100 text-green-800 mt-1 inline-block';
             statusBadge.textContent = '✓ Cliente registrado';
         } else {
-            statusBadge.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded bg-amber-100 text-amber-800 mt-1 inline-block';
-            statusBadge.textContent = '+ Creará cliente nuevo en base de datos';
+            statusBadge.className = 'block w-full mt-1';
+            statusBadge.innerHTML = `
+              <div class="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] w-full">
+                  <div class="flex items-center gap-1.5">
+                      <input type="checkbox" id="chk-crear-cliente" checked class="rounded text-amber-600 focus:ring-amber-500 cursor-pointer">
+                      <label for="chk-crear-cliente" class="text-amber-800 font-semibold cursor-pointer select-none">
+                          Guardar en base de datos al cobrar
+                      </label>
+                  </div>
+                  <button type="button" onclick="crearClientePOS()" class="text-amber-700 hover:text-amber-900 font-bold underline transition-colors cursor-pointer focus:outline-none">
+                      Guardar ya
+                  </button>
+              </div>
+            `;
         }
     }
+    
+    // Quick register client to the database in background from POS
+    window.crearClientePOS = async function() {
+        const nombre = inp.value.trim();
+        const telefono = telInp.value.trim();
+        if (!nombre) {
+            toast('El nombre es requerido', true);
+            return;
+        }
+        try {
+            const resp = await fetch(`/api/caja/${SLUG}/registrar-cliente-pos`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ nombre, telefono })
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                hiddenId.value = data.cliente_id;
+                updateStatusBadge();
+                toast('Cliente registrado en base de datos');
+            } else {
+                toast(data.error || 'Error al registrar cliente', true);
+            }
+        } catch (e) {
+            toast('Error de red al registrar cliente', true);
+        }
+    };
     
     // Also check on manual key up/typing in case they erase
     inp.addEventListener('keyup', () => {

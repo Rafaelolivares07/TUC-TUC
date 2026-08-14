@@ -3263,11 +3263,11 @@ function renderInsumosTable() {
     });
 
     html += `
-      <tr class="hover:bg-gray-50 transition-colors border-b border-gray-300">
-        <td class="px-3 py-3 font-semibold text-gray-800">${ins.nombre}</td>
-        <td class="px-3 py-3 text-gray-500">${ins.categoria}</td>
-        <td class="px-3 py-3 text-right num font-mono text-gray-700">$ ${fmt(ins.costo_und)}</td>
-        <td class="px-3 py-3 text-left">
+      <tr class="hover:bg-gray-100 transition-colors border-b-2 border-gray-400 even:bg-gray-50/50">
+        <td class="px-3 py-4 font-semibold text-gray-800">${ins.nombre}</td>
+        <td class="px-3 py-4 text-gray-500">${ins.categoria}</td>
+        <td class="px-3 py-4 text-right num font-mono text-gray-700">$ ${fmt(ins.costo_und)}</td>
+        <td class="px-3 py-4 text-left">
           <div class="flex flex-wrap pt-1">
             ${recetasHtml}
           </div>

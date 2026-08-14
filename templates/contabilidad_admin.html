@@ -1325,8 +1325,16 @@ async function guardarComprobante() {
       debito, credito
     });
   }
-  if (!tipo && !tipo_doc_id) { toast('Selecciona un tipo de documento', false); return; }
+  const deb  = Array.from(document.querySelectorAll('.man-deb')).reduce((a,e)  => a + parseFloat(e.value||0), 0);
+  const cred = Array.from(document.querySelectorAll('.man-cred')).reduce((a,e) => a + parseFloat(e.value||0), 0);
+  const diff = deb - cred;
+  
+  if (!tipo && !tipo_doc_id) { toast('Ingresa o selecciona el tipo de documento', false); return; }
   if (!lineas.length) { toast('Agrega al menos una línea con monto', false); return; }
+  if (Math.abs(diff) > 0.01) {
+    const confirmed = confirm(`El comprobante está descuadrado.\n\nTotal Débitos: $${deb.toLocaleString('es-CO')}\nTotal Créditos: $${cred.toLocaleString('es-CO')}\nDiferencia: $${Math.abs(diff).toLocaleString('es-CO')}\n\n¿Deseas guardarlo descuadrado de todas formas?`);
+    if (!confirmed) return;
+  }
   const body = {tipo, fecha, descripcion, lineas};
   if (tipo_doc_id) body.tipo_doc_id = tipo_doc_id;
   if (editComprobanteId) body.comprobante_id = editComprobanteId;

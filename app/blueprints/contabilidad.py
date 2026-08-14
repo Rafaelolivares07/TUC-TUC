@@ -2075,7 +2075,8 @@ def api_comprobante_lineas(negocio_id, comp_id):
         lineas = conn.execute("""
             SELECT m.id, m.tipo, m.cuenta, m.concepto, m.monto, m.cuenta_id,
                    p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre,
-                   m.fecha, m.descripcion_general, m.tercero_id
+                   m.fecha, m.descripcion_general, m.tercero_id,
+                   m.tipo_documento, m.tipo_documento_id
             FROM movimientos_contables m
             LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
             WHERE m.comprobante_id=%s AND m.negocio_id=%s ORDER BY m.id

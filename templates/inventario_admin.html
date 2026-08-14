@@ -543,7 +543,7 @@
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100 select-none">
+            <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-300 select-none">
               <th class="px-3 py-3 text-left w-1/3">Insumo / Componente</th>
               <th class="px-3 py-3 text-left w-1/4">Categoría</th>
               <th class="px-3 py-3 text-right w-1/6">Costo Unitario</th>
@@ -3256,14 +3256,14 @@ function renderInsumosTable() {
     let recetasHtml = '';
     ins.recetas.forEach(rec => {
       recetasHtml += `
-        <span class="inline-flex items-center bg-rose-50 text-rose-700 text-xs font-semibold px-2 py-1 rounded-lg border border-rose-100 mr-2 mb-2">
+        <span class="inline-flex items-center bg-rose-50 text-rose-700 text-xs font-semibold px-2 py-1 rounded-lg border border-rose-200 mr-2 mb-2">
           ${rec.nombre} (${fmt(rec.cantidad)})
         </span>
       `;
     });
 
     html += `
-      <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100">
+      <tr class="hover:bg-gray-50 transition-colors border-b border-gray-300">
         <td class="px-3 py-3 font-semibold text-gray-800">${ins.nombre}</td>
         <td class="px-3 py-3 text-gray-500">${ins.categoria}</td>
         <td class="px-3 py-3 text-right num font-mono text-gray-700">$ ${fmt(ins.costo_und)}</td>

@@ -2015,7 +2015,21 @@ def api_comprobante_post(negocio_id):
         if not tipo_comp:
             conn.close()
             return jsonify({'ok': False, 'error': 'Tipo de comprobante requerido'}), 400
-        comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+        edit_comp_id = data.get('comprobante_id')
+        if edit_comp_id:
+            comp_id = int(edit_comp_id)
+            # Find the existing voucher's first row to preserve its consecutive if not updated
+            old_row = conn.execute("SELECT numero_documento, tipo_documento, tipo_documento_id FROM movimientos_contables WHERE negocio_id = %s AND comprobante_id = %s LIMIT 1", (negocio_id, comp_id)).fetchone()
+            if old_row:
+                if not tipo_doc_id:
+                    tipo_doc_id = old_row['tipo_documento_id']
+                if not tipo_comp:
+                    tipo_comp = old_row['tipo_documento']
+                if not num_doc:
+                    num_doc = old_row['numero_documento']
+            conn.execute("DELETE FROM movimientos_contables WHERE negocio_id = %s AND comprobante_id = %s", (negocio_id, comp_id))
+        else:
+            comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
         
         # If no type ID is provided, try to resolve it from the type string code
         if not tipo_doc_id and tipo_comp:
@@ -2060,13 +2074,21 @@ def api_comprobante_lineas(negocio_id, comp_id):
         conn = get_db_connection()
         lineas = conn.execute("""
             SELECT m.id, m.tipo, m.cuenta, m.concepto, m.monto, m.cuenta_id,
-                   p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre
+                   p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre,
+                   m.fecha, m.descripcion_general, m.tercero_id
             FROM movimientos_contables m
             LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
             WHERE m.comprobante_id=%s AND m.negocio_id=%s ORDER BY m.id
         """, (comp_id, negocio_id)).fetchall()
         conn.close()
-        return jsonify({'ok': True, 'lineas': [dict(l) for l in lineas]})
+        
+        res = []
+        for l in lineas:
+            d = dict(l)
+            if d.get('fecha'):
+                d['fecha'] = d['fecha'].isoformat() if hasattr(d['fecha'], 'isoformat') else str(d['fecha'])
+            res.append(d)
+        return jsonify({'ok': True, 'lineas': res})
     except Exception as e:
         try: conn.close()
         except Exception: pass

@@ -2504,24 +2504,26 @@ def api_auditar_documento(negocio_id):
         tipo_doc_nombre = None
         current_consecutivo = None
         es_interno = False
+        tipo_movimiento = None
         try:
             tipo_documento_id = int(tipo_doc)
-            td_row = conn.execute("SELECT id, codigo, nombre, consecutivo, es_interno FROM tipos_documento_negocio WHERE id = %s", (tipo_documento_id,)).fetchone()
+            td_row = conn.execute("SELECT id, codigo, nombre, consecutivo, es_interno, tipo_movimiento FROM tipos_documento_negocio WHERE id = %s", (tipo_documento_id,)).fetchone()
             if td_row:
                 tipo_doc_codigo = td_row['codigo']
                 tipo_doc_nombre = td_row['nombre']
                 current_consecutivo = td_row['consecutivo']
                 es_interno = bool(td_row['es_interno'])
+                tipo_movimiento = td_row['tipo_movimiento']
         except ValueError:
             row_td = conn.execute("""
-                SELECT id, codigo, nombre, consecutivo, es_interno FROM tipos_documento_negocio 
+                SELECT id, codigo, nombre, consecutivo, es_interno, tipo_movimiento FROM tipos_documento_negocio 
                 WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))
             """, (negocio_id, tipo_doc, tipo_doc)).fetchone()
             
             # Fallback for placeholder sales types (like 'pedido_venta', 'ventas', 'pedido')
             if not row_td and tipo_doc.lower() in ('pedido_venta', 'ventas', 'pedido'):
                 row_td = conn.execute("""
-                    SELECT id, codigo, nombre, consecutivo, es_interno FROM tipos_documento_negocio 
+                    SELECT id, codigo, nombre, consecutivo, es_interno, tipo_movimiento FROM tipos_documento_negocio 
                     WHERE negocio_id = %s AND tipo_movimiento = 'venta' AND activo = TRUE
                     ORDER BY predeterminado DESC, id LIMIT 1
                 """, (negocio_id,)).fetchone()
@@ -2532,6 +2534,7 @@ def api_auditar_documento(negocio_id):
                 tipo_doc_nombre = row_td['nombre']
                 current_consecutivo = row_td['consecutivo']
                 es_interno = bool(row_td['es_interno'])
+                tipo_movimiento = row_td['tipo_movimiento']
 
         # Look up the order in `pedidos` if it exists
         pedido_row = None
@@ -2816,7 +2819,8 @@ def api_auditar_documento(negocio_id):
             'saldo_pendiente': saldo_pendiente,
             'monto_original': monto_original,
             'es_ultimo_consecutivo': es_ultimo_consecutivo,
-            'es_interno': es_interno
+            'es_interno': es_interno,
+            'tipo_movimiento': tipo_movimiento
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

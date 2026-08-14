@@ -1150,6 +1150,7 @@ async function eliminarGrupo(id) {
 // ── TAB: COMPROBANTE MANUAL ───────────────────────────────────
 let manTimers = {};
 let modoComprobante = 'libre';
+let editComprobanteId = null;
 
 function setModoComp(modo) {
   modoComprobante = modo;
@@ -1249,7 +1250,7 @@ function addLineaManual(prefill = null) {
     div.querySelector('.man-cta-q').value   = `${prefill.cuenta_codigo} — ${prefill.cuenta_nombre}`;
     div.querySelector('.man-cta-id').value  = prefill.cuenta_puc_id || '';
     div.querySelector('.man-cta-cod').value = prefill.cuenta_codigo || '';
-    div.querySelector('.man-concepto').value = prefill.cuenta_nombre || '';
+    div.querySelector('.man-concepto').value = prefill.concepto !== undefined && prefill.concepto !== null ? prefill.concepto : (prefill.cuenta_nombre || '');
     if (prefill.monto > 0) {
       if (prefill.tipo_mov === 'D') div.querySelector('.man-deb').value  = prefill.monto.toFixed(2);
       else                          div.querySelector('.man-cred').value = prefill.monto.toFixed(2);
@@ -1312,18 +1313,72 @@ async function guardarComprobante() {
   if (!lineas.length) { toast('Agrega al menos una línea con monto', false); return; }
   const body = {tipo, fecha, descripcion, lineas};
   if (tipo_doc_id) body.tipo_doc_id = tipo_doc_id;
+  if (editComprobanteId) body.comprobante_id = editComprobanteId;
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante`, {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
   });
   const data = await resp.json();
   if (data.ok) {
     toast('Comprobante guardado');
+    editComprobanteId = null;
+    const tabBtn = document.getElementById('tab-manual');
+    if (tabBtn) tabBtn.innerHTML = '✏️ Comprobante';
     document.getElementById('man-lineas').innerHTML = '';
     addLineaManual();
     if (esParam) { document.getElementById('param-tipodoc').value=''; document.getElementById('param-vars').innerHTML=''; document.getElementById('man-desc-p').value=''; }
     else { document.getElementById('man-tipo').value=''; document.getElementById('man-desc').value=''; }
     calcBalance();
   } else toast(data.error, false);
+}
+
+async function cargarComprobanteParaEdicion(compId) {
+  try {
+    const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante/${compId}/lineas`);
+    const data = await resp.json();
+    if (!data.ok) {
+      toast(data.error || 'Error al cargar comprobante', false);
+      return;
+    }
+    
+    editComprobanteId = compId;
+    const tabBtn = document.getElementById('tab-manual');
+    if (tabBtn) tabBtn.innerHTML = '✏️ Editar Comp. #' + compId;
+    
+    // Set to manual libre mode
+    setModoComp('libre');
+    document.getElementById('man-lineas').innerHTML = '';
+    
+    if (data.lineas && data.lineas.length > 0) {
+      const first = data.lineas[0];
+      if (first.fecha) {
+        document.getElementById('man-fecha').value = first.fecha.split('T')[0];
+      }
+      if (first.descripcion_general) {
+        document.getElementById('man-desc').value = first.descripcion_general;
+      }
+      if (first.tipo_documento) {
+        document.getElementById('man-tipo').value = first.tipo_documento;
+      }
+      
+      for (const l of data.lineas) {
+        addLineaManual({
+          cuenta_codigo: l.cuenta_codigo || l.cuenta,
+          cuenta_nombre: l.cuenta_nombre || '',
+          cuenta_puc_id: l.cuenta_id,
+          concepto: l.concepto || '',
+          monto: parseFloat(l.monto),
+          tipo_mov: l.tipo === 'debito' ? 'D' : 'C'
+        });
+      }
+    } else {
+      addLineaManual();
+    }
+    calcBalance();
+    toast('Comprobante #' + compId + ' cargado para edición.');
+  } catch (e) {
+    console.error(e);
+    toast('Error de red al cargar comprobante', false);
+  }
 }
 
 // ── TAB: COMPROBANTES ─────────────────────────────────────────
@@ -2257,6 +2312,12 @@ if (activeTab === 'consulta') {
   
   // Ejecutar consulta automáticamente
   setTimeout(consultarMovimientos, 150);
+} else if (activeTab === 'manual') {
+  cambiarTab('manual');
+  const loadCompId = urlParams.get('comprobante_id');
+  if (loadCompId) {
+    setTimeout(() => cargarComprobanteParaEdicion(loadCompId), 150);
+  }
 } else {
   buscarPUC();
 }

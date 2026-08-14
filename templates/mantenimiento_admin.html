@@ -775,7 +775,29 @@
         provNombre = d.ventas.cliente_nombre || '';
       }
       
-      auditorDocumentoSeleccionado = { tipo, numero, terceroId: provId, terceroNombre: provNombre };
+      auditorDocumentoSeleccionado = { 
+        tipo, 
+        numero, 
+        terceroId: provId, 
+        terceroNombre: provNombre,
+        tipo_movimiento: d.tipo_movimiento,
+        has_inventario: (d.inventario && d.inventario.length > 0),
+        comprobante_id: (d.contabilidad ? d.contabilidad.id : null)
+      };
+
+      // Configurar estado del botón de modificar
+      const btnModificar = document.getElementById('btn-aud-modificar');
+      if (btnModificar) {
+        if (d.tipo_movimiento === 'venta' || tipo.toLowerCase() === 'pedido_venta' || tipo.toLowerCase() === 'ventas') {
+          btnModificar.disabled = true;
+          btnModificar.classList.add('opacity-40', 'cursor-not-allowed');
+          btnModificar.title = 'Las facturas de venta no se pueden modificar directamente desde aquí.';
+        } else {
+          btnModificar.disabled = false;
+          btnModificar.classList.remove('opacity-40', 'cursor-not-allowed');
+          btnModificar.title = '';
+        }
+      }
       
       // Obtener y poblar la fecha del documento
       let docFecha = '';
@@ -981,13 +1003,22 @@
 
   function modificarDocumentoAuditor() {
     if (!auditorDocumentoSeleccionado) return;
-    const { tipo, numero, terceroId, terceroNombre } = auditorDocumentoSeleccionado;
+    const { tipo, numero, terceroId, terceroNombre, tipo_movimiento, has_inventario, comprobante_id } = auditorDocumentoSeleccionado;
     
     const tipoLower = (tipo || '').toLowerCase();
-    if (tipoLower !== 'pedido_venta' && tipoLower !== 'ventas') {
+    if (tipo_movimiento === 'venta' || tipoLower === 'pedido_venta' || tipoLower === 'ventas') {
+      toast('Las facturas de venta no se pueden modificar directamente desde aquí.', false);
+      return;
+    }
+    
+    if (has_inventario) {
       window.location.href = `/admin/inventario/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipo)}&num_doc=${encodeURIComponent(numero)}&prov_id=${encodeURIComponent(terceroId || '')}&prov_nom=${encodeURIComponent(terceroNombre || '')}#entradas`;
     } else {
-      toast('Modificación directa no disponible para este tipo de documento a través de este atajo.', false);
+      let extra = '';
+      if (comprobante_id) {
+        extra = `&comprobante_id=${comprobante_id}`;
+      }
+      window.location.href = `/admin/contabilidad/${NEGOCIO_ID}?tab=manual&tipo_doc=${encodeURIComponent(tipo)}&num_doc=${encodeURIComponent(numero)}${extra}`;
     }
   }
 

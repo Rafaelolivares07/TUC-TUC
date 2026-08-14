@@ -3391,7 +3391,7 @@ function renderTarjetasTable() {
     const safeNombre = p.nombre.replace(/"/g, '&quot;');
 
     html += `
-      <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100">
+      <tr class="hover:bg-gray-50 transition-colors border-b border-gray-300">
         <td class="px-3 py-3 text-center">${caretIcon}</td>
         <td class="px-3 py-3 font-semibold text-gray-800 flex items-center">
           ${p.nombre} ${badgeTarjeta}
@@ -3447,11 +3447,11 @@ function renderTarjetasTable() {
       const getCompSortClass = col => (st.col === col ? 'text-rose-500 font-bold' : 'text-gray-400');
 
       html += `
-        <tr class="bg-rose-50/10 border-b border-gray-100">
+        <tr class="bg-rose-50/10 border-b-2 border-gray-400">
           <td></td>
-          <td colspan="7" class="px-4 py-3">
-            <div class="bg-white rounded-xl border border-rose-100/60 p-3.5 shadow-xs max-w-4xl">
-              <div class="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
+          <td colspan="7" class="px-4 py-3.5">
+            <div class="bg-white rounded-xl border border-rose-300 p-3.5 shadow-sm max-w-4xl">
+              <div class="flex items-center justify-between mb-3 border-b border-gray-300 pb-2">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">Detalle de Componentes</span>
                   <span class="text-[11px] bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full font-semibold">${p.componentes.length} item${p.componentes.length === 1 ? '' : 's'}</span>
@@ -3465,10 +3465,10 @@ function renderTarjetasTable() {
                 </div>
               </div>
               
-              <div class="max-h-[600px] overflow-y-auto custom-scrollbar border border-gray-100 rounded-lg bg-gray-50/30">
+              <div class="max-h-[600px] overflow-y-auto custom-scrollbar border border-gray-300 rounded-lg bg-gray-50/30">
                 <table class="w-full text-xs">
                   <thead class="sticky top-0 bg-white shadow-xs z-10 select-none">
-                    <tr class="text-gray-500 border-b border-gray-200">
+                    <tr class="text-gray-600 border-b-2 border-gray-300">
                       <th onclick="ordenarComponentesReporte(${p.id}, 'nombre')" class="text-left py-1.5 px-2 font-semibold cursor-pointer hover:bg-gray-100 transition-colors">
                         Insumo / Materia Prima <span class="${getCompSortClass('nombre')}">${getCompSortIcon('nombre')}</span>
                       </th>
@@ -3485,7 +3485,7 @@ function renderTarjetasTable() {
                   </thead>
                   <tbody>
                     ${compList.map(c => `
-                      <tr class="border-b border-gray-100 last:border-0 hover:bg-white transition-colors">
+                      <tr class="border-b border-gray-200 last:border-0 hover:bg-white transition-colors">
                         <td class="py-1.5 px-2 text-left font-medium text-gray-700">${c.nombre}</td>
                         <td class="py-1.5 px-2 text-right num text-gray-600 font-mono">${Math.round(parseFloat(c.cantidad) || 0)}</td>
                         <td class="py-1.5 px-2 text-right num font-mono text-gray-500">$ ${fmt(c.costo_und)}</td>

@@ -4,11 +4,13 @@ import unicodedata
 import secrets
 from datetime import datetime, timedelta
 
-from flask import Blueprint, jsonify, render_template_string, request, session
+from flask import Blueprint, current_app, jsonify, redirect, render_template_string, request, session, url_for
 
 from ..db import get_db_connection
 
 bp = Blueprint('vendedor', __name__)
+
+_COOKIE_DISPOSITIVO = 'tuctuc_device'
 
 
 def _slug(nombre):
@@ -78,6 +80,17 @@ def _asegurar_tablas(conn):
         """CREATE TABLE IF NOT EXISTS terceros_telefonos (
             id SERIAL PRIMARY KEY, tercero_id INTEGER NOT NULL REFERENCES terceros(id) ON DELETE CASCADE,
             telefono VARCHAR(50) NOT NULL, created_at TIMESTAMP DEFAULT NOW())""",
+        """CREATE TABLE IF NOT EXISTS terceros_dispositivos (
+            dispositivo_id VARCHAR(64) PRIMARY KEY,
+            tercero_id INTEGER NOT NULL REFERENCES terceros(id) ON DELETE CASCADE,
+            last_seen TIMESTAMP DEFAULT NOW())""",
+        """CREATE TABLE IF NOT EXISTS vendedor_invitaciones (
+            token VARCHAR(64) PRIMARY KEY,
+            tercero_id INTEGER NOT NULL,
+            negocio_id INTEGER NOT NULL,
+            invitador_id INTEGER NOT NULL,
+            usado BOOLEAN DEFAULT FALSE,
+            creado_en TIMESTAMP DEFAULT NOW())""",
     ]:
         try:
             conn.execute(sql)
@@ -100,6 +113,71 @@ def _asegurar_tablas(conn):
     conn.commit()
 
 
+def _get_device_id():
+    dev = request.cookies.get(_COOKIE_DISPOSITIVO, '')
+    if len(dev) < 8:
+        dev = uuid.uuid4().hex
+    return dev
+
+
+def _set_device_cookie(resp, dev):
+    resp.set_cookie(_COOKIE_DISPOSITIVO, dev, max_age=365 * 24 * 3600,
+                    httponly=True, samesite='Lax')
+
+
+def _vincular_dispositivo(conn, dev, tercero_id):
+    conn.execute("""
+        INSERT INTO terceros_dispositivos (dispositivo_id, tercero_id, last_seen)
+        VALUES (%s, %s, NOW())
+        ON CONFLICT (dispositivo_id) DO UPDATE
+        SET tercero_id = EXCLUDED.tercero_id, last_seen = NOW()
+    """, (dev, tercero_id))
+
+
+def _enviar_telegram_vendedor(chat_id, texto):
+    try:
+        import requests
+        token = current_app.config.get('TELEGRAM_BOT_TOKEN')
+        if not token or not chat_id:
+            return False
+        r = requests.post(
+            f'https://api.telegram.org/bot{token}/sendMessage',
+            json={'chat_id': chat_id, 'text': texto}, timeout=8)
+        return r.ok
+    except Exception:
+        return False
+
+
+@bp.before_request
+def _reconocer_dispositivo():
+    if session.get('usuario_id'):
+        return
+    dev = request.cookies.get(_COOKIE_DISPOSITIVO, '')
+    if len(dev) < 8:
+        return
+    try:
+        conn = get_db_connection()
+        row = conn.execute("""
+            SELECT d.tercero_id, t.nombre
+            FROM terceros_dispositivos d JOIN terceros t ON t.id = d.tercero_id
+            WHERE d.dispositivo_id = %s AND d.last_seen >= NOW() - INTERVAL '90 days'
+            LIMIT 1
+        """, (dev,)).fetchone()
+        if row:
+            conn.execute("UPDATE terceros_dispositivos SET last_seen = NOW() WHERE dispositivo_id = %s", (dev,))
+            conn.commit()
+            session['usuario_id'] = row['tercero_id']
+            session['chat_tercero_id'] = row['tercero_id']
+            session['nombre'] = row['nombre'] or ''
+            session['rol'] = 'Vendedor'
+            session['dispositivo_id'] = dev
+            session.permanent = True
+        conn.close()
+    except Exception:
+        try: conn.close()
+        except: pass
+
+
 # ── API ───────────────────────────────────────────────────────────────────────
 
 @bp.route('/api/vendedor/identificar', methods=['POST'])
@@ -111,32 +189,178 @@ def api_vendedor_identificar():
         return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
     if len(telefono) < 10:
         return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 dígitos'}), 400
+    dev = _get_device_id()
     try:
         conn = get_db_connection()
-        t = conn.execute("SELECT id, nombre FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)).fetchone()
+        t = conn.execute("SELECT id, nombre, telefono, telegram_chat_id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)).fetchone()
         if t:
-            conn.execute("UPDATE terceros SET nombre=%s WHERE id=%s", (nombre, t['id']))
-            tid, nom = t['id'], t['nombre']
+            tid = t['id']
+            ligado = conn.execute(
+                "SELECT 1 FROM terceros_dispositivos WHERE dispositivo_id = %s AND tercero_id = %s",
+                (dev, tid)).fetchone()
+            if not ligado and t['telegram_chat_id']:
+                codigo = data.get('token_codigo', '').strip()
+                if not codigo:
+                    cod = str(secrets.randbelow(900000) + 100000)
+                    session['login_token'] = cod
+                    session['login_tel'] = telefono
+                    session['login_exp'] = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+                    session.modified = True
+                    _enviar_telegram_vendedor(t['telegram_chat_id'],
+                                              f"Código de acceso TUC TUC: {cod}")
+                    conn.close()
+                    return jsonify({'ok': True, 'necesita_token': True, 'telefono': telefono})
+                if (session.get('login_token') != codigo or
+                        session.get('login_tel') != telefono or
+                        session.get('login_exp', '') < datetime.utcnow().isoformat()):
+                    conn.close()
+                    return jsonify({'ok': False, 'error': 'Código inválido o vencido'}), 400
+                session.pop('login_token', None); session.pop('login_tel', None); session.pop('login_exp', None)
+            conn.execute("UPDATE terceros SET nombre=%s WHERE id=%s", (nombre, tid))
+            nom = t['nombre']
         else:
             cur = conn.execute("INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id", (nombre, telefono))
             tid = cur.fetchone()[0]
             nom = nombre
         _asegurar_tablas(conn)
+        _vincular_dispositivo(conn, dev, tid)
         _migrar_contactos_alias_vendedor(conn, nombre, tid)
         conn.commit()
         conn.close()
-        
+
         # Guardar en sesión para permitir acceso a la captura de ventas sin rol admin
         session['usuario_id'] = tid
         session['chat_tercero_id'] = tid
         session['nombre'] = nom
         session['rol'] = 'Vendedor'
-        
-        return jsonify({'ok': True, 'tercero_id': tid, 'nombre': nom, 'telefono': telefono})
+        session['dispositivo_id'] = dev
+        session.permanent = True
+        session.modified = True
+
+        resp = jsonify({'ok': True, 'tercero_id': tid, 'nombre': nom, 'telefono': telefono})
+        _set_device_cookie(resp, dev)
+        return resp
     except Exception as e:
         try: conn.close()
         except: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/vendedor/invitar', methods=['POST'])
+def api_vendedor_invitar():
+    uid = session.get('usuario_id')
+    if not uid:
+        return jsonify({'ok': False, 'error': 'Debes estar identificado para invitar'}), 401
+    data       = request.get_json()
+    negocio_id = data.get('negocio_id')
+    tercero_id = data.get('tercero_id')
+    nombre     = (data.get('nombre') or '').strip()
+    telefono   = ''.join(filter(str.isdigit, data.get('telefono') or ''))
+    rol        = session.get('rol', '')
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+
+        # Resolver negocio por slug (paneles admin) si no viene negocio_id
+        if not negocio_id and data.get('negocio_slug'):
+            slug = (data.get('negocio_slug') or '').strip()
+            if data.get('tipo_negocio') == 'tienda':
+                r = conn.execute("SELECT tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
+                negocio_id = r['tercero_id'] if r else None
+            else:
+                r = conn.execute("SELECT tercero_id, admin_id FROM restaurantes WHERE slug = %s", (slug,)).fetchone()
+                negocio_id = (r['tercero_id'] or r['admin_id']) if r else None
+
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Negocio requerido'}), 400
+
+        # Solo vendedores deben estar vinculados al negocio; admins ya controlan el panel
+        if rol != 'Administrador' and rol != 'ClienteVFP':
+            vinculo = conn.execute(
+                "SELECT 1 FROM vendedor_negocios WHERE vendedor_id = %s AND negocio_id = %s AND activo = TRUE",
+                (uid, negocio_id)).fetchone()
+            if not vinculo:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'No estás vinculado a ese negocio'}), 403
+
+        if tercero_id:
+            t = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id = %s", (tercero_id,)).fetchone()
+            if not t:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'El tercero no existe'}), 404
+            tid, nombre, telefono = t['id'], t['nombre'] or '', t['telefono'] or ''
+        else:
+            if not nombre or len(telefono) < 10:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Nombre y celular (mín. 10 dígitos) requeridos'}), 400
+            existente = conn.execute("SELECT id FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)).fetchone()
+            if existente:
+                tid = existente['id']
+                conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre, tid))
+            else:
+                cur = conn.execute("INSERT INTO terceros (nombre, telefono) VALUES (%s, %s) RETURNING id", (nombre, telefono))
+                tid = cur.fetchone()['id']
+
+        conn.execute("""
+            INSERT INTO vendedor_negocios (vendedor_id, negocio_id, activo)
+            VALUES (%s, %s, TRUE)
+            ON CONFLICT (vendedor_id, negocio_id) DO UPDATE SET activo = TRUE
+        """, (tid, negocio_id))
+
+        token = secrets.token_urlsafe(24)
+        conn.execute(
+            "INSERT INTO vendedor_invitaciones (token, tercero_id, negocio_id, invitador_id) VALUES (%s, %s, %s, %s)",
+            (token, tid, negocio_id, uid))
+        conn.commit()
+        conn.close()
+        enlace = request.host_url.rstrip('/') + '/vendedor?invite=' + token
+        return jsonify({'ok': True, 'enlace': enlace, 'tercero_id': tid,
+                        'nombre': nombre, 'telefono': telefono})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def _procesar_invitacion(token):
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT * FROM vendedor_invitaciones WHERE token = %s AND usado = FALSE",
+            (token,)).fetchone()
+        if not row:
+            conn.close()
+            return False
+        conn.execute("UPDATE vendedor_invitaciones SET usado = TRUE WHERE token = %s", (token,))
+        conn.execute("""
+            INSERT INTO vendedor_negocios (vendedor_id, negocio_id, activo)
+            VALUES (%s, %s, TRUE)
+            ON CONFLICT (vendedor_id, negocio_id) DO UPDATE SET activo = TRUE
+        """, (row['tercero_id'], row['negocio_id']))
+        conn.commit()
+        t = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id = %s", (row['tercero_id'],)).fetchone()
+        conn.close()
+        if not t:
+            return False
+        session.clear()
+        session['usuario_id'] = t['id']
+        session['chat_tercero_id'] = t['id']
+        session['nombre'] = t['nombre'] or ''
+        session['rol'] = 'Vendedor'
+        session.permanent = True
+        dev = _get_device_id()
+        session['dispositivo_id'] = dev
+        try:
+            conn2 = get_db_connection()
+            _vincular_dispositivo(conn2, dev, t['id'])
+            conn2.commit(); conn2.close()
+        except Exception:
+            try: conn2.close()
+            except: pass
+        return True
+    except Exception:
+        return False
 
 
 @bp.route('/api/vendedor/citas', methods=['GET'])
@@ -718,44 +942,36 @@ def api_vendedor_mis_negocios():
     try:
         conn = get_db_connection()
         _asegurar_tablas(conn)
-        
-        # Verificar si el vendedor es administrador (usuario plenipotenciario)
-        is_admin = conn.execute("SELECT 1 FROM terceros WHERE id = %s AND tipo_tercero = 'admin'", (vendedor_id,)).fetchone()
-        
-        if is_admin:
-            # Los administradores ven todos los negocios y tiendas activos de forma automática
-            rest_rows = conn.execute("SELECT tercero_id AS id, nombre, 'tercero' AS tipo FROM restaurantes WHERE activo = TRUE AND tercero_id IS NOT NULL").fetchall()
-            tienda_rows = conn.execute("SELECT tercero_id AS id, nombre, 'tienda' AS tipo FROM tiendas WHERE activo = TRUE AND tercero_id IS NOT NULL").fetchall()
-            negocios = [dict(r) for r in rest_rows] + [dict(r) for r in tienda_rows]
-        else:
-            # Vendedores normales ven solo los negocios vinculados explícitamente
-            rows = conn.execute("""
-                SELECT vn.negocio_id AS id, t.nombre, 'tercero' AS tipo
-                FROM vendedor_negocios vn JOIN terceros t ON t.id = vn.negocio_id
-                WHERE vn.vendedor_id = %s AND vn.activo = TRUE ORDER BY vn.created_at ASC
+
+        # Solo negocios vinculados explícitamente al vendedor
+        negocios = []
+        rows = conn.execute("""
+            SELECT vn.negocio_id AS id, t.nombre, 'tercero' AS tipo
+            FROM vendedor_negocios vn JOIN terceros t ON t.id = vn.negocio_id
+            WHERE vn.vendedor_id = %s AND vn.activo = TRUE ORDER BY vn.created_at ASC
+        """, (vendedor_id,)).fetchall()
+        negocios = [dict(r) for r in rows]
+        try:
+            tienda_rows = conn.execute("""
+                SELECT tv.tienda_id, ti.nombre, ti.tercero_id, ti.admin_id
+                FROM tienda_vendedores tv JOIN tiendas ti ON ti.id = tv.tienda_id
+                WHERE tv.vendedor_id = %s AND tv.activo = TRUE ORDER BY tv.created_at ASC
             """, (vendedor_id,)).fetchall()
-            negocios = [dict(r) for r in rows]
-            try:
-                tienda_rows = conn.execute("""
-                    SELECT tv.tienda_id, ti.nombre, ti.tercero_id, ti.admin_id
-                    FROM tienda_vendedores tv JOIN tiendas ti ON ti.id = tv.tienda_id
-                    WHERE tv.vendedor_id = %s AND tv.activo = TRUE ORDER BY tv.created_at ASC
-                """, (vendedor_id,)).fetchall()
-                for row in tienda_rows:
-                    d = dict(row)
-                    tid = d['tercero_id']
-                    if not tid or tid == d['admin_id']:
-                        existing = conn.execute("SELECT id FROM terceros WHERE nombre = %s AND telefono IS NULL LIMIT 1", (d['nombre'],)).fetchone()
-                        if existing:
-                            tid = existing['id']
-                        else:
-                            new_t = conn.execute("INSERT INTO terceros (nombre) VALUES (%s) RETURNING id", (d['nombre'],)).fetchone()
-                            tid = new_t['id']
-                        conn.execute("UPDATE tiendas SET tercero_id = %s WHERE id = %s", (tid, d['tienda_id']))
-                    negocios.append({'id': tid, 'nombre': d['nombre'], 'tipo': 'tienda'})
-                conn.commit()
-            except Exception:
-                pass
+            for row in tienda_rows:
+                d = dict(row)
+                tid = d['tercero_id']
+                if not tid or tid == d['admin_id']:
+                    existing = conn.execute("SELECT id FROM terceros WHERE nombre = %s AND telefono IS NULL LIMIT 1", (d['nombre'],)).fetchone()
+                    if existing:
+                        tid = existing['id']
+                    else:
+                        new_t = conn.execute("INSERT INTO terceros (nombre) VALUES (%s) RETURNING id", (d['nombre'],)).fetchone()
+                        tid = new_t['id']
+                    conn.execute("UPDATE tiendas SET tercero_id = %s WHERE id = %s", (tid, d['tienda_id']))
+                negocios.append({'id': tid, 'nombre': d['nombre'], 'tipo': 'tienda'})
+            conn.commit()
+        except Exception:
+            pass
         
         conn.close()
         vistos = set()
@@ -1178,6 +1394,15 @@ def api_vendedor_pedido_toggle_cartera(pedido_id):
 
 @bp.route('/vendedor')
 def vendedor_dashboard():
+    # Invitación prelogueada (el invitador ya creó el tercero)
+    invite = request.args.get('invite', '').strip()
+    if invite:
+        if _procesar_invitacion(invite):
+            resp = redirect(url_for('vendedor.vendedor_dashboard'))
+            _set_device_cookie(resp, session.get('dispositivo_id'))
+            return resp
+        return redirect(url_for('vendedor.vendedor_dashboard'))
+
     # Soporte para login directo por parámetro tel en la URL
     tel_param = request.args.get('tel', '').strip()
     if tel_param:
@@ -1256,6 +1481,15 @@ _HTML = r"""<!DOCTYPE html>
               class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-700 text-white text-sm font-bold py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-2 transition active:scale-95">
         <span>🛒</span>
         <span>Tomar Pedidos (Captura de Ventas)</span>
+      </button>
+    </div>
+
+    <!-- Botón para invitar vendedores -->
+    <div>
+      <button onclick="abrirModalInvitacion()"
+              class="w-full bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-600 text-white text-sm font-bold py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-2 transition active:scale-95">
+        <span>➕</span>
+        <span>Invitar vendedor</span>
       </button>
     </div>
   </div>
@@ -1506,9 +1740,52 @@ _HTML = r"""<!DOCTYPE html>
       <input id="inp-nombre-v" type="text" placeholder="Nombre completo" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
       <input id="inp-tel-v" type="tel" placeholder="Celular (ej: 3001234567)" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" onkeydown="if(event.key==='Enter') confirmarIdentidad()">
     </div>
+    <div id="zona-token" class="hidden space-y-2">
+      <p class="text-xs text-gray-500 text-center" id="txt-token-aviso">Te enviamos un código a tu Telegram. Escríbelo:</p>
+      <input id="inp-token-v" type="text" inputmode="numeric" maxlength="6" placeholder="000000" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-center tracking-[0.5em] font-bold focus:outline-none focus:border-indigo-400" onkeydown="if(event.key==='Enter') confirmarIdentidad()">
+    </div>
     <p id="txt-id-error" class="text-xs text-red-500 hidden text-center"></p>
     <button onclick="confirmarIdentidad()" class="w-full bg-indigo-600 text-white rounded-xl py-2.5 font-bold text-sm hover:bg-indigo-700 transition">Entrar</button>
     <button id="btn-cancelar-modal" onclick="cerrarModalCodigo()" class="hidden w-full text-gray-400 text-xs py-1 hover:text-gray-600 transition">Cancelar</button>
+  </div>
+</div>
+
+<!-- MODAL INVITAR VENDEDOR -->
+<div id="modal-invitar" class="fixed inset-0 bg-black/60 z-50 hidden flex items-end justify-center">
+  <div class="bg-white rounded-t-3xl w-full max-w-lg p-5 pb-8 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between">
+      <h2 class="font-extrabold text-gray-800 text-base">Invitar vendedor</h2>
+      <button onclick="cerrarModalInvitacion()" class="text-gray-400 text-2xl leading-none">&times;</button>
+    </div>
+    <div>
+      <p class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Para el negocio</p>
+      <p class="text-sm font-bold text-indigo-700" id="txt-inv-negocio">—</p>
+    </div>
+    <div class="relative">
+      <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">¿Ya existe como tercero?</label>
+      <input id="inv-buscar" type="search" placeholder="Buscar por nombre o teléfono..." autocomplete="off" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+    </div>
+    <div class="grid grid-cols-1 gap-3">
+      <div class="relative">
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Nombre</label>
+        <input id="inv-nombre" type="text" placeholder="Nombre completo" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+        <input type="hidden" id="inv-tercero-id">
+      </div>
+      <div>
+        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Celular</label>
+        <input id="inv-tel" type="tel" placeholder="3001234567" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400">
+      </div>
+    </div>
+    <p id="txt-inv-error" class="text-xs text-red-500 hidden text-center"></p>
+    <button onclick="generarEnlaceInvitacion()" class="w-full bg-indigo-600 text-white rounded-xl py-3 font-bold text-sm hover:bg-indigo-700 transition active:scale-95">Generar enlace</button>
+    <div id="zona-inv-resultado" class="hidden space-y-2 bg-green-50 border border-green-200 rounded-xl p-3">
+      <p class="text-xs font-bold text-green-800">Enlace de invitación (1 solo uso):</p>
+      <input id="inv-enlace" type="text" readonly onclick="this.select()" class="w-full text-xs bg-white border border-green-200 rounded-lg px-2 py-2">
+      <div class="flex gap-2">
+        <button onclick="copiarEnlaceInv()" class="flex-1 bg-green-600 text-white text-xs font-bold py-2 rounded-lg hover:bg-green-700 transition">Copiar</button>
+        <button onclick="enviarEnlaceInv()" class="flex-1 bg-green-700 text-white text-xs font-bold py-2 rounded-lg hover:bg-green-800 transition">Enviar por WhatsApp</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1558,14 +1835,24 @@ function irACapturaVentas() {
 async function confirmarIdentidad() {
   const nombre = document.getElementById('inp-nombre-v').value.trim();
   const telefono = document.getElementById('inp-tel-v').value.trim();
+  const token = document.getElementById('inp-token-v').value.trim();
   const err = document.getElementById('txt-id-error');
+  const zona = document.getElementById('zona-token');
   if (!nombre || telefono.replace(/\D/g,'').length < 10) {
     err.textContent = 'Completá nombre y celular (mín. 10 dígitos).'; err.classList.remove('hidden'); return;
   }
   try {
-    const r = await fetch('/api/vendedor/identificar', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nombre, telefono})});
+    const payload = {nombre, telefono};
+    if (token) payload.token_codigo = token;
+    const r = await fetch('/api/vendedor/identificar', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
     const d = await r.json();
     if (!d.ok) { err.textContent = d.error; err.classList.remove('hidden'); return; }
+    if (d.necesita_token) {
+      zona.classList.remove('hidden');
+      err.textContent = ''; err.classList.add('hidden');
+      document.getElementById('inp-token-v').focus();
+      return;
+    }
     localStorage.removeItem('vd_negocio_id');
     localStorage.setItem('vd_tel', d.telefono);
     localStorage.setItem('vd_nombre', d.nombre);
@@ -1573,6 +1860,59 @@ async function confirmarIdentidad() {
     document.getElementById('txt-vendedor-nombre').textContent = 'Hola, ' + d.nombre.split(' ')[0];
     cargarNegocios(); cargarCitas(); cargarContactos();
   } catch { err.textContent = 'Error de red.'; err.classList.remove('hidden'); }
+}
+
+function abrirModalInvitacion() {
+  document.getElementById('inv-nombre').value = '';
+  document.getElementById('inv-tel').value = '';
+  document.getElementById('inv-buscar').value = '';
+  document.getElementById('inv-tercero-id').value = '';
+  document.getElementById('txt-inv-error').classList.add('hidden');
+  document.getElementById('zona-inv-resultado').classList.add('hidden');
+  document.getElementById('txt-inv-negocio').textContent = _negocioActivo && _negocioActivo.nombre ? _negocioActivo.nombre : '—';
+  document.getElementById('modal-invitar').classList.remove('hidden');
+}
+
+function cerrarModalInvitacion() { document.getElementById('modal-invitar').classList.add('hidden'); }
+
+async function generarEnlaceInvitacion() {
+  const nombre = document.getElementById('inv-nombre').value.trim();
+  const telefono = document.getElementById('inv-tel').value.trim();
+  const tercero_id = document.getElementById('inv-tercero-id').value || null;
+  const err = document.getElementById('txt-inv-error');
+  if (!_negocioActivo || !_negocioActivo.id) { err.textContent = 'Seleccioná un negocio primero.'; err.classList.remove('hidden'); return; }
+  if (!tercero_id && (!nombre || telefono.replace(/\D/g,'').length < 10)) {
+    err.textContent = 'Completá nombre y celular (mín. 10 dígitos) o seleccioná un tercero.'; err.classList.remove('hidden'); return;
+  }
+  try {
+    const r = await fetch('/api/vendedor/invitar', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({tercero_id, nombre, telefono, negocio_id: _negocioActivo.id})});
+    const d = await r.json();
+    if (!d.ok) { err.textContent = d.error; err.classList.remove('hidden'); return; }
+    document.getElementById('inv-enlace').value = d.enlace;
+    document.getElementById('zona-inv-resultado').classList.remove('hidden');
+    err.classList.add('hidden');
+  } catch { err.textContent = 'Error de red.'; err.classList.remove('hidden'); }
+}
+
+function copiarEnlaceInv() {
+  const i = document.getElementById('inv-enlace');
+  i.select(); i.setSelectionRange(0, 99999);
+  try { document.execCommand('copy'); } catch {}
+}
+
+function enviarEnlaceInv() {
+  const url = document.getElementById('inv-enlace').value;
+  const tel = document.getElementById('inv-tel').value.replace(/\D/g,'');
+  window.open('https://wa.me/' + (tel || '') + '?text=' + encodeURIComponent('Te invité como vendedor de TUC TUC 🚗\n' + url), '_blank');
+}
+
+function montarInvAC() {
+  const inp = document.getElementById('inv-buscar');
+  montarAC(inp, fetchTerceros, (t) => {
+    document.getElementById('inv-nombre').value = t.nombre || '';
+    document.getElementById('inv-tel').value = t.telefono || '';
+    document.getElementById('inv-tercero-id').value = t.id || '';
+  });
 }
 
 function cambiarCodigo() {
@@ -1724,6 +2064,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('cita-fecha') && (document.getElementById('cita-fecha').min = new Date().toISOString().slice(0,10));
   montarAC(document.getElementById('cita-nombre-due'), fetchTerceros, item => { document.getElementById('cita-nombre-due').value=item.nombre; if(!document.getElementById('cita-telefono').value.trim()&&item.telefono) document.getElementById('cita-telefono').value=item.telefono; });
   montarAC(document.getElementById('cita-nombre-neg'), fetchNegocios, item => { document.getElementById('cita-nombre-neg').value=item.nombre; });
+  montarInvAC();
   document.getElementById('cita-telefono').addEventListener('blur', async () => {
     const tel = document.getElementById('cita-telefono').value.replace(/\D/g,'');
     const badge = document.getElementById('badge-tercero');

@@ -55,6 +55,45 @@ async function agregarVendedor() {
     } catch(e) { toast('Error de conexion', true); }
 }
 
+async function generarEnlaceVendedorAdmin() {
+    const tel = document.getElementById('vd-tel').value.trim().replace(/\D/g,'');
+    const nombre = document.getElementById('vd-nombre').value.trim();
+    if (tel.length < 10 && !nombre) { toast('Escribe telefono o nombre del vendedor', true); return; }
+    const tipoNeg = window.location.pathname.includes('tienda') ? 'tienda' : 'restaurante';
+    const slug = (typeof window.VENDEDORES_SLUG !== 'undefined') ? window.VENDEDORES_SLUG : '';
+    if (!slug) { toast('Negocio no identificado', true); return; }
+    try {
+        const r = await fetch('/api/vendedor/invitar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nombre, telefono: tel, negocio_slug: slug, tipo_negocio: tipoNeg })
+        });
+        const d = await r.json();
+        if (!d.ok) { toast(d.error || 'Error al generar enlace', true); return; }
+        document.getElementById('vd-enlace').value = d.enlace;
+        document.getElementById('vd-enlace-zona').classList.remove('hidden');
+        if (d.nombre && d.telefono) {
+            document.getElementById('vd-tel').value = d.telefono;
+            document.getElementById('vd-nombre').value = d.nombre;
+        }
+        toast('Enlace generado');
+    } catch(e) { toast('Error de conexion', true); }
+}
+
+function copiarVdEnlace() {
+    const i = document.getElementById('vd-enlace');
+    i.select(); i.setSelectionRange(0, 99999);
+    try { document.execCommand('copy'); } catch {}
+}
+
+function enviarVdEnlace() {
+    const url = document.getElementById('vd-enlace').value;
+    const tel = document.getElementById('vd-tel').value.replace(/\D/g,'');
+    const waTel = tel.length === 10 ? '57' + tel : tel;
+    if (!waTel) { toast('Sin telefono para WhatsApp', true); return; }
+    window.open('https://wa.me/' + waTel + '?text=' + encodeURIComponent('Te invité como vendedor de TUC TUC 🚗\n' + url), '_blank');
+}
+
 async function eliminarVendedor(id) {
     if (!confirm('Quitar a este vendedor del negocio?')) return;
     try {

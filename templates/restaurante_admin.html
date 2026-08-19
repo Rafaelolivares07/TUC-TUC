@@ -812,6 +812,7 @@ const TIPO_REST = '{{ restaurante.tipo_restaurante if restaurante else "menu_dia
 const BASE = SLUG ? `/api/restaurante/${SLUG}` : '';
 window.VENDEDORES_API_BASE = BASE + '/vendedores';
 window.VENDEDORES_NEGOCIO_NOMBRE = {{ (restaurante.nombre if restaurante else '') | tojson }};
+window.VENDEDORES_SLUG = SLUG;
 const CLIENTE_URL = '{{ cliente_url if cliente_url is defined else "" }}' || window.location.origin;
 
 // ===== TOAST =====

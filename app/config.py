@@ -8,7 +8,7 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
     DATABASE_URL = os.environ.get('DATABASE_URL')
     SESSION_PERMANENT = True
-    PERMANENT_SESSION_LIFETIME = timedelta(days=30)
+    PERMANENT_SESSION_LIFETIME = timedelta(days=90)
     SESSION_COOKIE_DOMAIN = os.environ.get('SESSION_COOKIE_DOMAIN')  # .tuc-tuc.co en producción
     MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500MB — rockola multi-archivo
 

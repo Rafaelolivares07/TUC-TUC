@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Captura de Ventas — {{ negocio_nombre }}</title>
+  <script src="/static/js/tailwind.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    html {
+      font-size: 125%; /* 25% font scale */
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .text-9px {
+      font-size: 0.5625rem;
+    }
+    .text-10px {
+      font-size: 0.625rem;
+    }
+    .text-12px {
+      font-size: 0.75rem;
+    }
+    .ac-drop {
+      position: absolute;
+      z-index: 50;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+      width: 100%;
+    }
+    .ac-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: .85rem;
+      border-bottom: 1px solid #f3f4f6;
+      transition: background .15s;
+    }
+    .ac-item:last-child {
+      border-bottom: none;
+    }
+    .ac-item:hover, .ac-item.ac-focus {
+      background: #f0fdf4;
+    }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      z-index: 100;
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-12">
+
+  <!-- Cabecera -->
+  <header class="bg-indigo-900 text-white px-4 py-4 sticky top-0 z-30 shadow-md">
+    <div class="max-w-md mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🚗</span>
+        <div>
+          <h1 class="text-sm font-bold tracking-tight uppercase">{{ negocio_nombre }}</h1>
+          <p class="text-10px text-indigo-200">Preventa Vendedor: <span class="font-bold">{{ vendedor_nombre }}</span></p>
+        </div>
+      </div>
+      <a href="/vendedor" class="bg-indigo-800 text-indigo-100 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
+        Inicio
+      </a>
+    </div>
+  </header>
+
+  <!-- Contenedor Principal (Máximo tamaño móvil) -->
+  <main class="max-w-md mx-auto px-4 py-4">
+
+    <!-- PANTALLA 1: HISTORIAL DE PEDIDOS -->
+    <div id="vista-historial" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-gray-500">Pedidos Recientes</h2>
+        <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-10px font-mono font-bold" id="total-pedidos-count">0</span>
+      </div>
+
+      <!-- Resumen de Cartera y Pedidos -->
+      <div class="grid grid-cols-2 gap-3 bg-white p-3.5 rounded-2xl border border-gray-100 shadow-sm">
+        <div class="space-y-0.5 text-center border-r border-gray-100">
+          <span class="block text-9px font-bold text-rose-500 uppercase tracking-wider">Cartera Pendiente</span>
+          <span class="text-sm font-extrabold font-mono text-rose-700" id="cartera-pendiente-total">$0</span>
+        </div>
+        <div class="space-y-0.5 text-center">
+          <span class="block text-9px font-bold text-emerald-500 uppercase tracking-wider">Cobrado Preventa</span>
+          <span class="text-sm font-extrabold font-mono text-emerald-700" id="cartera-cobrado-total">$0</span>
+        </div>
+      </div>
+
+      <!-- Selector de Vista: Mis Pedidos vs Todos -->
+      <div class="flex bg-gray-100 p-1 rounded-xl gap-1">
+        <button type="button" onclick="cambiarFiltroHistorial('mis')" id="btn-historial-mis"
+                class="w-1/2 text-center py-1.5 text-xs font-bold rounded-lg bg-white text-indigo-900 shadow-sm transition-all">
+          Mis Pedidos
+        </button>
+        <button type="button" onclick="cambiarFiltroHistorial('todos')" id="btn-historial-todos"
+                class="w-1/2 text-center py-1.5 text-xs font-bold rounded-lg text-gray-500 hover:text-gray-700 transition-all">
+          Todos los Vendedores
+        </button>
+      </div>
+
+      <!-- Lista de pedidos -->
+      <div id="lista-pedidos-container" class="space-y-3">
+        <!-- Render dinámico -->
+        <div class="text-center py-8 text-gray-400 text-xs">Cargando pedidos...</div>
+      </div>
+
+      <!-- Botón Flotante para Nuevo Pedido -->
+      <div class="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-20">
+        <button onclick="cambiarAVista('formulario')" class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95">
+          <span class="text-lg">➕</span>
+          <span>Nuevo Pedido</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- PANTALLA 2: FORMULARIO DE CAPTURA -->
+    <div id="vista-formulario" class="hidden space-y-4 pb-20">
+      
+      <!-- Barra superior del formulario -->
+      <div class="flex items-center justify-between border-b border-gray-200 pb-3">
+        <button onclick="cambiarAVista('historial')" class="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1 py-1">
+          <span>←</span> Regresar
+        </button>
+        <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wide">Crear Pedido</h2>
+        <div class="w-12"></div>
+      </div>
+
+      <!-- Sección 1: Datos de Cliente -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3 border border-gray-100">
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">1. Datos del Cliente</h3>
+        
+        <!-- Buscador de clientes propios -->
+        <div class="relative">
+          <label class="block text-10px font-bold text-gray-500 uppercase mb-1">Buscar Cliente Asignado</label>
+          <input type="text" id="buscar-cliente" placeholder="Escribe para buscar..." autocomplete="off" onfocus="this.select()"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all">
+          <div id="buscar-cliente-list" class="ac-drop hidden"></div>
+        </div>
+
+        <hr class="border-gray-100 my-2">
+
+        <!-- Campo Nombre (Requerido) -->
+        <div>
+          <label class="block text-10px font-bold text-gray-500 uppercase mb-1">Nombre del Cliente *</label>
+          <input type="text" id="cliente-nombre" placeholder="Nombre completo" required
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-emerald-500 transition-all">
+        </div>
+
+        <!-- Campo Teléfono (Opcional) -->
+        <div>
+          <label class="block text-10px font-bold text-gray-500 uppercase mb-1">Teléfono (Opcional)</label>
+          <input type="tel" id="cliente-telefono" placeholder="Número de celular/fijo"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all">
+        </div>
+      </div>
+
+      <!-- Sección 2: Adición de Productos -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3 border border-gray-100">
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">2. Agregar Productos</h3>
+
+        <!-- Categorías Pills -->
+        <div class="space-y-1">
+          <label class="block text-10px font-bold text-gray-500 uppercase tracking-wider">Filtrar por Categoría</label>
+          <div id="categorias-pills-container" class="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none" style="scrollbar-width: none; -ms-overflow-style: none;">
+            <button type="button" onclick="seleccionarCategoriaFiltro('Todos')" id="pill-cat-Todos"
+                    class="bg-indigo-900 text-white border border-indigo-900 rounded-full px-3.5 py-1 text-xs font-bold shrink-0 transition-all">
+              Todos
+            </button>
+          </div>
+        </div>
+
+        <!-- Buscador de Producto -->
+        <div class="relative">
+          <label class="block text-10px font-bold text-gray-500 uppercase mb-1">Buscar Producto</label>
+          <input type="text" id="buscar-producto" placeholder="Buscar por nombre..." autocomplete="off" onfocus="this.select()"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all">
+          <div id="buscar-producto-list" class="ac-drop hidden"></div>
+        </div>
+
+        <!-- Ficha de Selección de Producto Activo -->
+        <div id="producto-seleccionado-card" class="hidden bg-emerald-50 rounded-xl p-3 border border-emerald-100 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-xs text-emerald-900" id="prod-sel-nombre">Producto</span>
+            <span class="text-9px bg-emerald-100 text-emerald-800 font-mono font-bold px-1.5 py-0.5 rounded" id="prod-sel-stock">Stock: 0</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Cantidad con botones táctiles gigantes -->
+            <div>
+              <label class="block text-9px font-bold text-emerald-700 uppercase mb-1">Cantidad</label>
+              <div class="flex items-center border border-emerald-200 rounded-xl bg-white overflow-hidden">
+                <button type="button" onclick="ajustarCantidad(-1)" class="w-10 py-2 font-bold text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100 transition-all">-</button>
+                <input type="number" id="prod-sel-cantidad" value="1" min="1" step="any" onfocus="this.select()"
+                       class="w-full text-center border-none py-2 text-xs font-bold outline-none text-emerald-900 bg-white">
+                <button type="button" onclick="ajustarCantidad(1)" class="w-10 py-2 font-bold text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100 transition-all">+</button>
+              </div>
+            </div>
+
+            <!-- Precio Unitario (Editable) -->
+            <div>
+              <label class="block text-9px font-bold text-emerald-700 uppercase mb-1">Precio Unitario</label>
+              <div class="relative rounded-xl border border-emerald-200 bg-white overflow-hidden flex items-center px-2">
+                <span class="text-emerald-500 text-xs font-bold">$</span>
+                <input type="number" id="prod-sel-precio" value="0" min="0" onfocus="this.select()"
+                       class="w-full border-none py-2 px-1 text-xs font-bold outline-none text-emerald-900 font-mono text-right bg-white">
+              </div>
+            </div>
+          </div>
+
+          <!-- Botón de Agregar -->
+          <button type="button" onclick="agregarItemAlCarrito()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded-lg text-xs transition-all">
+            Agregar al Pedido
+          </button>
+        </div>
+      </div>
+
+      <!-- Sección 3: Carrito de Líneas -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3 border border-gray-100">
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">3. Detalle del Pedido</h3>
+
+        <div class="divide-y divide-gray-100 max-h-60 overflow-y-auto" id="carrito-items-list">
+          <!-- Render dinámico del carrito -->
+          <div class="text-center py-6 text-gray-400 text-xs">Aún no hay productos en el pedido.</div>
+        </div>
+
+        <div class="flex items-center justify-between border-t border-gray-150 pt-3">
+          <span class="text-xs font-bold text-gray-600">Total a Pagar:</span>
+          <span class="text-base font-bold font-mono text-indigo-900" id="carrito-total-val">$0</span>
+        </div>
+      </div>
+
+      <!-- Sección 4: Notas y Confirmación -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3 border border-gray-100">
+        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">4. Notas Adicionales</h3>
+        <textarea id="pedido-notas" rows="2" placeholder="Instrucciones especiales de entrega..."
+                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-emerald-500 transition-all"></textarea>
+      </div>
+
+      <!-- Botón de Guardar Definitivo -->
+      <div class="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-20">
+        <button onclick="guardarPedidoVendedor()" class="w-full bg-indigo-900 hover:bg-indigo-950 active:bg-indigo-950 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95">
+          <span class="text-base">💾</span>
+          <span id="btn-guardar-text">Guardar Pedido</span>
+        </button>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="toast bg-gray-900 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border border-gray-800">
+    <span id="toast-icon">✓</span>
+    <span id="toast-text">Mensaje</span>
+  </div>
+
+  <script>
+    const NEGOCIO_ID = parseInt("{{ negocio_id }}");
+    const VENDEDOR_TERCERO_ID = parseInt("{{ vendedor_tercero_id }}") || null;
+    let currentProducts = [];
+    let carrito = [];
+    let selectedProduct = null;
+    let activeCategoryFiltro = null;
+    let editingPedidoId = null;
+    let activeFiltroHistorial = 'mis';
+    let cachePedidosRecientes = [];
+
+    window.seleccionarCategoriaFiltro = function(cat) {
+      if (activeCategoryFiltro === cat) {
+        activeCategoryFiltro = null;
+      } else {
+        activeCategoryFiltro = cat;
+      }
+      
+      const container = document.getElementById('categorias-pills-container');
+      container.querySelectorAll('button').forEach(btn => {
+        const isMe = btn.id === `pill-cat-${activeCategoryFiltro}`;
+        btn.className = isMe 
+          ? "bg-indigo-900 text-white border border-indigo-900 rounded-full px-3.5 py-1 text-xs font-bold shrink-0 transition-all shadow-sm"
+          : "bg-gray-50 text-gray-600 border border-gray-200 rounded-full px-3.5 py-1 text-xs font-semibold shrink-0 hover:bg-gray-100 transition-all";
+      });
+      
+      const pInput = document.getElementById('buscar-producto');
+      pInput.focus();
+      pInput.dispatchEvent(new Event('input'));
+    };
+
+    // Carga inicial
+    document.addEventListener("DOMContentLoaded", async () => {
+      const tel = localStorage.getItem('vd_tel') || '';
+      const nombre = localStorage.getItem('vd_nombre') || '';
+      
+      if (!tel) {
+        window.location.href = '/vendedor';
+        return;
+      }
+      
+      try {
+        const resp = await fetch('/api/vendedor/identificar', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ nombre, telefono: tel })
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+          window.location.href = '/vendedor';
+          return;
+        }
+      } catch (e) {
+        console.error("Error al sincronizar sesión", e);
+      }
+
+      cargarPedidosRecientes();
+      cargarCatalogoProductos();
+
+      // Configurar autocomplete de clientes propios
+      setupRemoteAC('buscar-cliente', 'buscar-cliente-list', '/api/vendedor/buscar-mis-clientes', (item) => {
+        document.getElementById('cliente-nombre').value = item.nombre;
+        document.getElementById('cliente-telefono').value = item.telefono || '';
+        document.getElementById('buscar-cliente').value = '';
+      });
+
+      // Configurar autocomplete local de productos
+      setupLocalAC('buscar-producto', 'buscar-producto-list', () => currentProducts, (prod) => {
+        seleccionarProducto(prod);
+      });
+    });
+
+    // Cambiar de vista (Historial vs Formulario)
+    function cambiarAVista(vista) {
+      if (vista === 'formulario') {
+        document.getElementById('vista-historial').classList.add('hidden');
+        document.getElementById('vista-formulario').classList.remove('hidden');
+        if (!editingPedidoId) {
+          resetFormulario();
+        }
+      } else {
+        document.getElementById('vista-formulario').classList.add('hidden');
+        document.getElementById('vista-historial').classList.remove('hidden');
+        cargarPedidosRecientes();
+      }
+    }
+
+    // Resetear formulario
+    function resetFormulario() {
+      document.getElementById('cliente-nombre').value = '';
+      document.getElementById('cliente-telefono').value = '';
+      document.getElementById('buscar-cliente').value = '';
+      document.getElementById('buscar-producto').value = '';
+      document.getElementById('pedido-notas').value = '';
+      document.getElementById('producto-seleccionado-card').classList.add('hidden');
+      selectedProduct = null;
+      carrito = [];
+      renderCarrito();
+      
+      editingPedidoId = null;
+      const btnText = document.getElementById('btn-guardar-text');
+      if (btnText) btnText.textContent = 'Guardar Pedido';
+    }
+
+    // Cargar pedidos recientes del vendedor
+    async function cargarPedidosRecientes() {
+      try {
+        const resp = await fetch(`/api/vendedor/${NEGOCIO_ID}/pedidos-recientes`);
+        const data = await resp.json();
+        if (data.ok) {
+          cachePedidosRecientes = data.pedidos || [];
+          renderPedidosHistorial();
+        }
+      } catch (err) {
+        console.error("Error al cargar pedidos", err);
+        const container = document.getElementById('lista-pedidos-container');
+        if (container) {
+          container.innerHTML = `<div class="text-center py-6 text-red-500 text-xs">Error al cargar pedidos del servidor.</div>`;
+        }
+      }
+    }
+
+    // Filtrar y renderizar el historial de pedidos en pantalla
+    function renderPedidosHistorial() {
+      const container = document.getElementById('lista-pedidos-container');
+      if (!container) return;
+
+      // 1. Filtrar lista de pedidos
+      let pedidosFiltrados = [];
+      if (activeFiltroHistorial === 'mis') {
+        pedidosFiltrados = cachePedidosRecientes.filter(p => p.id_tercero_cajero === VENDEDOR_TERCERO_ID);
+      } else {
+        pedidosFiltrados = cachePedidosRecientes;
+      }
+
+      document.getElementById('total-pedidos-count').textContent = pedidosFiltrados.length;
+
+      // 2. Calcular Cartera (solo basado en los pedidos actualmente filtrados)
+      let carteraPendiente = 0;
+      let carteraCobrado = 0;
+      pedidosFiltrados.forEach(p => {
+        const val = parseFloat(p.total || 0);
+        if (p.cartera_estado === 'pendiente') {
+          carteraPendiente += val;
+        } else {
+          carteraCobrado += val;
+        }
+      });
+      document.getElementById('cartera-pendiente-total').textContent = `$${carteraPendiente.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`;
+      document.getElementById('cartera-cobrado-total').textContent = `$${carteraCobrado.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`;
+
+      if (pedidosFiltrados.length === 0) {
+        container.innerHTML = `<div class="text-center py-10 bg-white rounded-2xl border border-gray-150 p-5 text-gray-400 text-xs">
+          No hay pedidos registrados en esta sección el día de hoy.
+        </div>`;
+        return;
+      }
+
+      container.innerHTML = pedidosFiltrados.map(p => {
+        const fechaHora = new Date(p.fecha).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+        const esPendiente = p.estado === 'premontado';
+        const esMio = p.id_tercero_cajero === VENDEDOR_TERCERO_ID;
+
+        // Píldora de pago de cartera
+        const esPagado = p.cartera_estado === 'pagado';
+        let pagoBadge = '';
+        if (esMio) {
+          pagoBadge = esPagado
+            ? `<button type="button" onclick="toggleCarteraPedido(${p.id})" class="inline-flex items-center gap-1 text-9px bg-emerald-50 text-emerald-700 font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-250 transition-all hover:bg-emerald-100">🟢 Cobrado</button>`
+            : `<button type="button" onclick="toggleCarteraPedido(${p.id})" class="inline-flex items-center gap-1 text-9px bg-rose-50 text-rose-700 font-extrabold px-2.5 py-0.5 rounded-full border border-rose-250 transition-all hover:bg-rose-100">🔴 Por Cobrar</button>`;
+        } else {
+          pagoBadge = esPagado
+            ? `<span class="inline-flex items-center gap-1 text-9px bg-emerald-50 text-emerald-600 font-bold px-2.5 py-0.5 rounded-full border border-emerald-100">🟢 Cobrado</span>`
+            : `<span class="inline-flex items-center gap-1 text-9px bg-rose-50 text-rose-600 font-bold px-2.5 py-0.5 rounded-full border border-rose-100">🔴 Por Cobrar</span>`;
+        }
+
+        const itemsList = p.items || [];
+        const itemsHtml = (itemsList.length > 0)
+          ? itemsList.map((it, idx) => {
+              const pu = parseFloat(it.precio_unitario || 0);
+              const sub = (it.cantidad || 0) * pu;
+              const puFmt = pu.toLocaleString('es-CO', { maximumFractionDigits: 0 });
+              const subFmt = sub.toLocaleString('es-CO', { maximumFractionDigits: 0 });
+              const sep = idx > 0 ? ' border-t border-dashed border-gray-300 pt-1.5' : '';
+              return `
+                <div class="flex items-center justify-between gap-2 ${sep}">
+                  <div class="min-w-0">
+                    <span class="block font-bold text-gray-800">${it.nombre_producto}</span>
+                    <span class="text-10px text-gray-500 font-mono">${it.cantidad} × $${puFmt}</span>
+                  </div>
+                  <span class="font-bold font-mono text-indigo-900 shrink-0">$${subFmt}</span>
+                </div>`;
+            }).join('')
+          : '<span class="text-gray-400 italic font-normal">Sin productos</span>';
+
+        return `
+          <div class="bg-white border border-gray-150 rounded-2xl p-4 shadow-sm space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="space-y-0.5 flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-xs text-gray-800">${p.nombre_cliente}</span>
+                  ${p.telefono_cliente ? `<span class="text-9px text-gray-400 font-semibold font-mono">(${p.telefono_cliente})</span>` : ''}
+                </div>
+                <div class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-9px text-gray-400">
+                  <span class="font-mono font-bold text-indigo-900 bg-indigo-50 px-1 rounded">#${p.id}</span>
+                  <span>•</span>
+                  <span>${fechaHora}</span>
+                  ${p.notes ? `<span>•</span> <span class="italic truncate max-w-[120px]">"${p.notas}"</span>` : ''}
+                </div>
+                <!-- Productos del pedido -->
+                <div class="text-12px text-gray-700 font-semibold bg-gray-50 rounded-xl px-2.5 py-1.5 mt-1.5 border border-gray-100/70 space-y-1.5">
+                  ${itemsHtml}
+                </div>
+                <!-- Mostrar nombre del vendedor si no es mío -->
+                ${!esMio ? `
+                  <div class="text-9px text-indigo-900 font-semibold mt-1">
+                    👤 Vendedor: ${p.vendedor_nombre}
+                  </div>
+                ` : ''}
+              </div>
+              <div class="text-right">
+                <div class="font-mono font-bold text-xs text-indigo-900">$${p.total.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</div>
+              </div>
+            </div>
+            
+            <div class="flex items-center justify-between border-t border-gray-100 pt-2.5">
+              <div class="flex items-center gap-1.5">
+                <span class="inline-block text-9px font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                  esPendiente ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-indigo-600'
+                }">
+                  ${esPendiente ? '🟠 Caja: Pendiente' : '🟢 Caja: Entregado'}
+                </span>
+                ${pagoBadge}
+              </div>
+              
+              ${(esPendiente && esMio) ? `
+                <div class="flex items-center gap-2">
+                  <button onclick="cargarPedidoParaEditar(${p.id})" class="text-10px text-indigo-700 hover:text-indigo-900 font-bold bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-all">
+                    ✏️ Editar
+                  </button>
+                  <button onclick="eliminarPedidoVendedor(${p.id})" class="text-10px text-rose-700 hover:text-rose-900 font-bold bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded-lg transition-all">
+                    🗑️ Eliminar
+                  </button>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Cambiar de filtro (Mis Pedidos vs Todos los Vendedores)
+    window.cambiarFiltroHistorial = function(filtro) {
+      activeFiltroHistorial = filtro;
+      
+      const btnMis = document.getElementById('btn-historial-mis');
+      const btnTodos = document.getElementById('btn-historial-todos');
+      
+      if (filtro === 'mis') {
+        btnMis.className = "w-1/2 text-center py-1.5 text-xs font-bold rounded-lg bg-white text-indigo-900 shadow-sm transition-all";
+        btnTodos.className = "w-1/2 text-center py-1.5 text-xs font-bold rounded-lg text-gray-500 hover:text-gray-700 transition-all";
+      } else {
+        btnMis.className = "w-1/2 text-center py-1.5 text-xs font-bold rounded-lg text-gray-500 hover:text-gray-700 transition-all";
+        btnTodos.className = "w-1/2 text-center py-1.5 text-xs font-bold rounded-lg bg-white text-indigo-900 shadow-sm transition-all";
+      }
+      
+      renderPedidosHistorial();
+    }
+
+    // Cargar catálogo de productos
+    async function cargarCatalogoProductos() {
+      try {
+        const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/productos?solo_venta=1`);
+        const data = await resp.json();
+        
+        const rawProducts = data.productos || [];
+        
+        // Solo productos con precio de venta (>0) y disponibles
+        currentProducts = rawProducts.filter(p => p.precio > 0 && p.disponible);
+        
+        // Renderizar píldoras de categorías reales
+        const cats = [...new Set(currentProducts.map(p => p.categoria).filter(Boolean))];
+        const container = document.getElementById('categorias-pills-container');
+        if (container) {
+          container.innerHTML = cats.map(c => {
+            return `<button type="button" id="pill-cat-${c}" onclick="seleccionarCategoriaFiltro('${c}')" 
+                            class="bg-gray-50 text-gray-600 border border-gray-200 rounded-full px-3.5 py-1 text-xs font-semibold shrink-0 hover:bg-gray-100 transition-all">
+                      ${c}
+                    </button>`;
+          }).join('');
+        }
+      } catch (err) {
+        console.error("Error al cargar catálogo de productos", err);
+      }
+    }
+
+    // Seleccionar producto en el buscador
+    function seleccionarProducto(prod) {
+      selectedProduct = prod;
+      document.getElementById('prod-sel-nombre').textContent = prod.nombre;
+      document.getElementById('prod-sel-stock').textContent = `Stock: ${prod.stock}`;
+      document.getElementById('prod-sel-cantidad').value = 1;
+      document.getElementById('prod-sel-precio').value = prod.precio_sugerido || prod.precio || 0;
+      document.getElementById('buscar-producto').value = '';
+      document.getElementById('producto-seleccionado-card').classList.remove('hidden');
+      document.getElementById('prod-sel-cantidad').focus();
+    }
+
+    // Ajustar cantidad mediante botones + y -
+    function ajustarCantidad(val) {
+      const input = document.getElementById('prod-sel-cantidad');
+      let currentVal = parseFloat(input.value) || 0;
+      input.value = Math.max(1, currentVal + val);
+    }
+
+    // Agregar producto al carrito local
+    function agregarItemAlCarrito() {
+      if (!selectedProduct) return;
+      const qtyInput = document.getElementById('prod-sel-cantidad');
+      const priceInput = document.getElementById('prod-sel-precio');
+      
+      const qty = parseFloat(qtyInput.value) || 1;
+      const price = parseFloat(priceInput.value) || 0;
+      
+      if (qty <= 0) {
+        toast("Ingresa una cantidad válida mayor a 0", false);
+        return;
+      }
+
+      // Añadir al carrito
+      carrito.push({
+        producto_id: selectedProduct.id,
+        nombre: selectedProduct.nombre,
+        cantidad: qty,
+        precio_unitario: price
+      });
+
+      // Ocultar card de seleccion y limpiar
+      document.getElementById('producto-seleccionado-card').classList.add('hidden');
+      selectedProduct = null;
+      document.getElementById('buscar-producto').value = '';
+
+      renderCarrito();
+      toast("Producto agregado al pedido");
+      document.getElementById('buscar-producto').focus();
+    }
+
+    // Eliminar item de carrito local
+    function eliminarItemCarrito(index) {
+      carrito.splice(index, 1);
+      renderCarrito();
+      toast("Producto removido del pedido", false);
+    }
+
+    // Renderizar carrito
+    function renderCarrito() {
+      const container = document.getElementById('carrito-items-list');
+      if (carrito.length === 0) {
+        container.innerHTML = `<div class="text-center py-6 text-gray-400 text-xs">Aún no hay productos en el pedido.</div>`;
+        document.getElementById('carrito-total-val').textContent = '$0';
+        return;
+      }
+      
+      let total = 0;
+      container.innerHTML = carrito.map((item, idx) => {
+        const sub = item.cantidad * item.precio_unitario;
+        total += sub;
+        return `
+          <div class="py-2.5 flex items-center justify-between gap-3 text-xs">
+            <div class="space-y-0.5">
+              <span class="font-bold text-gray-800 block">${item.nombre}</span>
+              <span class="text-10px text-gray-400 font-mono">${item.cantidad} × $${item.precio_unitario.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="font-bold font-mono text-gray-700">$${sub.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</span>
+              <button onclick="eliminarItemCarrito(${idx})" class="text-red-500 hover:text-red-700 p-1 text-sm">🗑️</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      document.getElementById('carrito-total-val').textContent = `$${total.toLocaleString('es-CO', { maximumFractionDigits: 0 })}`;
+    }
+
+    // Guardar el pedido definitivo en el servidor
+    async function guardarPedidoVendedor() {
+      const nombre = document.getElementById('cliente-nombre').value.trim();
+      const telefono = document.getElementById('cliente-telefono').value.trim();
+      const notas = document.getElementById('pedido-notas').value.trim();
+
+      if (!nombre) {
+        toast("Por favor ingresa el nombre del cliente", false);
+        document.getElementById('cliente-nombre').focus();
+        return;
+      }
+      if (carrito.length === 0) {
+        toast("Por favor agrega al menos un producto al pedido", false);
+        document.getElementById('buscar-producto').focus();
+        return;
+      }
+
+      const payload = {
+        nombre_cliente: nombre,
+        telefono_cliente: telefono,
+        notas: notas,
+        items: carrito
+      };
+
+      try {
+        const resp = await fetch(`/api/vendedor/${NEGOCIO_ID}/pedido`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          toast(`¡Pedido guardado con éxito! #${data.pedido_id}`);
+          setTimeout(() => {
+            cambiarAVista('historial');
+          }, 800);
+        } else {
+          toast(data.error || "Error al guardar el pedido", false);
+        }
+      } catch (err) {
+        toast("Error de conexión al guardar el pedido", false);
+      }
+    }
+
+    // Toast Notification helper
+    function toast(msg, ok = true) {
+      const el = document.getElementById("toast");
+      const text = document.getElementById("toast-text");
+      const icon = document.getElementById("toast-icon");
+      
+      text.textContent = msg;
+      icon.textContent = ok ? '✓' : '⚠️';
+      el.className = `toast ${ok ? 'bg-emerald-900 border-emerald-800' : 'bg-rose-900 border-rose-800'} text-white text-xs font-bold px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border show`;
+      
+      setTimeout(() => el.classList.remove("show"), 2500);
+    }
+
+    // Autocomplete Remoto con teclado
+    function setupRemoteAC(inputId, listId, searchUrl, onSelect) {
+      const inp = document.getElementById(inputId);
+      const list = document.getElementById(listId);
+      if (!inp || !list) return;
+      let idx = -1, timer = null;
+
+      inp.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => search(), 280);
+      });
+      
+      inp.addEventListener('focus', () => {
+        search();
+      });
+
+      inp.addEventListener('keydown', e => {
+        const items = list.querySelectorAll('.ac-item');
+        if (e.key === 'ArrowDown') {
+          if (list.classList.contains('hidden')) {
+            search();
+          } else {
+            idx = Math.min(idx + 1, items.length - 1);
+            highlight(items);
+          }
+          e.preventDefault();
+        }
+        else if (e.key === 'ArrowUp') {
+          idx = Math.max(idx - 1, 0);
+          highlight(items);
+          e.preventDefault();
+        }
+        else if (e.key === 'Enter') {
+          if (idx >= 0 && items[idx]) {
+            items[idx].dispatchEvent(new Event('mousedown'));
+            e.preventDefault();
+          }
+        }
+        else if (e.key === 'Escape') {
+          list.classList.add('hidden');
+          inp.focus();
+          e.preventDefault();
+        }
+      });
+      inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+      async function search() {
+        const q = inp.value.trim();
+        try {
+          const r = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}`);
+          const matches = await r.json();
+          if (!matches.length) { list.classList.add('hidden'); return; }
+          idx = -1;
+          list.innerHTML = matches.map(p =>
+            `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}" data-telefono="${p.telefono || ''}">
+              <span class="font-semibold text-gray-800">${p.nombre}</span>
+              ${p.telefono ? `<span class="text-gray-400 text-xs font-mono ml-1">(${p.telefono})</span>` : ''}
+             </div>`
+          ).join('');
+          list.querySelectorAll('.ac-item').forEach(el => {
+            el.addEventListener('mousedown', (e) => {
+              e.preventDefault();
+              list.classList.add('hidden');
+              if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre, telefono: el.dataset.telefono});
+            });
+          });
+          list.classList.remove('hidden');
+        } catch(e) {
+          console.error(e);
+        }
+      }
+      function highlight(items) {
+        items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+        if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+      }
+    }
+
+    // Autocomplete Local con teclado
+    function setupLocalAC(inputId, listId, dataFn, onSelect) {
+      const inp = document.getElementById(inputId);
+      const list = document.getElementById(listId);
+      if (!inp || !list) return;
+      let idx = -1, timer = null;
+
+      const normalizeStr = str => {
+        if (!str) return '';
+        try {
+          return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        } catch (e) {
+          return str.toString().toLowerCase().trim();
+        }
+      };
+
+      inp.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => render(), 150);
+      });
+      
+      inp.addEventListener('focus', () => {
+        render();
+      });
+
+      inp.addEventListener('keydown', e => {
+        const items = list.querySelectorAll('.ac-item');
+        if (e.key === 'ArrowDown') {
+          if (list.classList.contains('hidden')) {
+            render();
+          } else {
+            idx = Math.min(idx + 1, items.length - 1);
+            highlight(items);
+          }
+          e.preventDefault();
+        }
+        else if (e.key === 'ArrowUp') {
+          idx = Math.max(idx - 1, 0);
+          highlight(items);
+          e.preventDefault();
+        }
+        else if (e.key === 'Enter') {
+          if (idx >= 0 && items[idx]) {
+            items[idx].dispatchEvent(new Event('mousedown'));
+            e.preventDefault();
+          }
+        }
+        else if (e.key === 'Escape') {
+          list.classList.add('hidden');
+          inp.focus();
+          e.preventDefault();
+        }
+      });
+
+      inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+      function render() {
+        const rawQ = inp.value;
+        const qNorm = normalizeStr(rawQ);
+        
+        // Si no se ha digitado nada y no se ha seleccionado categoría, se oculta la lista
+        if (qNorm.length < 2 && activeCategoryFiltro === null) {
+          list.classList.add('hidden');
+          return;
+        }
+        
+        const itemsList = typeof dataFn === 'function' ? dataFn() : (dataFn || []);
+        if (!itemsList || !itemsList.length) {
+          list.classList.add('hidden');
+          return;
+        }
+
+        const matches = itemsList.filter(p => {
+          if (!p || !p.nombre) return false;
+          
+          // 1. Filtrar por categoría activa
+          if (activeCategoryFiltro !== null && p.categoria !== activeCategoryFiltro) {
+            return false;
+          }
+          
+          // 2. Filtrar por texto si el usuario digitó al menos 2 letras
+          if (qNorm.length >= 2) {
+            const nameNorm = normalizeStr(p.nombre);
+            const codeNorm = normalizeStr(p.codigo_barra);
+            return nameNorm.includes(qNorm) || (codeNorm && codeNorm === qNorm);
+          }
+          
+          return true; // Pasa si no ha escrito nada pero está dentro de la categoría
+        }).slice(0, 15);
+
+        idx = -1;
+        
+        if (matches.length > 0) {
+          let itemsHtml = matches.map(p => `
+            <div class="ac-item p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-50 flex items-center justify-between" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}" data-precio="${p.precio_sugerido || p.precio || 0}" data-stock="${p.stock}">
+              <div>
+                <span class="font-bold text-gray-800">${p.nombre}</span> 
+                <span class="text-xs text-gray-400 ml-1">(${p.categoria || 'Sin cat.'})</span>
+              </div>
+              <span class="text-xs bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded font-mono">Stock: ${p.stock}</span>
+            </div>
+          `).join('');
+          
+          // Botón de cerrar al final de la lista
+          itemsHtml += `
+            <div class="p-2 bg-gray-50 border-t border-gray-100 text-center">
+              <button type="button" onclick="document.activeElement.blur()" class="w-full text-indigo-700 hover:text-indigo-900 font-extrabold text-xs py-1 transition-all">
+                ✕ Cerrar buscador
+              </button>
+            </div>
+          `;
+          
+          list.innerHTML = itemsHtml;
+          
+          list.querySelectorAll('.ac-item').forEach(el => {
+            el.addEventListener('mousedown', (e) => {
+              e.preventDefault();
+              list.classList.add('hidden');
+              
+              // Limpiar y quitar foco para ocultar teclado y lista
+              inp.value = '';
+              inp.blur();
+              
+              if (onSelect) onSelect({
+                id: +el.dataset.id, 
+                nombre: el.dataset.nombre, 
+                precio_sugerido: parseFloat(el.dataset.precio),
+                stock: parseFloat(el.dataset.stock)
+              });
+            });
+          });
+          list.classList.remove('hidden');
+        } else {
+          list.innerHTML = `
+            <div class="p-3 text-xs text-gray-400 text-center">No se encontraron productos.</div>
+            <div class="p-2 bg-gray-50 border-t border-gray-100 text-center">
+              <button type="button" onclick="document.activeElement.blur()" class="w-full text-indigo-700 hover:text-indigo-900 font-extrabold text-xs py-1 transition-all">
+                ✕ Cerrar buscador
+              </button>
+            </div>
+          `;
+          list.classList.remove('hidden');
+        }
+      }
+
+      function highlight(items) {
+        items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+        if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+      }
+    }
+
+    // Funciones para Editar, Eliminar y Cartera
+    async function cargarPedidoParaEditar(pedidoId) {
+      try {
+        const resp = await fetch(`/api/vendedor/pedido/${pedidoId}`);
+        const data = await resp.json();
+        if (data.ok) {
+          editingPedidoId = pedidoId;
+          
+          document.getElementById('cliente-nombre').value = data.nombre_cliente;
+          document.getElementById('cliente-telefono').value = data.telefono_cliente;
+          if (document.getElementById('pedido-notas')) {
+            document.getElementById('pedido-notas').value = data.notas;
+          }
+          
+          carrito = data.items.map(it => ({
+            id: it.producto_id,
+            producto_id: it.producto_id,
+            nombre: it.nombre_producto,
+            cantidad: it.cantidad,
+            precio_unitario: it.precio_unitario,
+            stock: it.stock
+          }));
+          
+          renderCarrito();
+          
+          const btnText = document.getElementById('btn-guardar-text');
+          if (btnText) btnText.textContent = 'Guardar Cambios';
+          
+          // Cambiar a vista formulario sin resetear
+          document.getElementById('vista-historial').classList.add('hidden');
+          document.getElementById('vista-formulario').classList.remove('hidden');
+          
+          toast("Pedido cargado para editar");
+        } else {
+          toast(data.error || "Error al cargar pedido", false);
+        }
+      } catch (err) {
+        toast("Error de conexión al cargar pedido", false);
+      }
+    }
+
+    async function eliminarPedidoVendedor(pedidoId) {
+      if (!confirm("¿Estás seguro de que deseas eliminar por completo este pedido?")) {
+        return;
+      }
+      try {
+        const resp = await fetch(`/api/vendedor/pedido/${pedidoId}/eliminar`, {
+          method: 'POST'
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          toast("Pedido eliminado correctamente");
+          cargarPedidosRecientes();
+        } else {
+          toast(data.error || "Error al eliminar el pedido", false);
+        }
+      } catch (err) {
+        toast("Error de conexión al eliminar", false);
+      }
+    }
+
+    async function toggleCarteraPedido(pedidoId) {
+      try {
+        const resp = await fetch(`/api/vendedor/pedido/${pedidoId}/toggle-cartera`, {
+          method: 'POST'
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          toast(`Pago actualizado: ${data.nuevo_estado === 'pagado' ? 'Cobrado' : 'Por Cobrar'}`);
+          cargarPedidosRecientes();
+        } else {
+          toast(data.error || "Error al cambiar estado de pago", false);
+        }
+      } catch (err) {
+        toast("Error de conexión al cambiar pago", false);
+      }
+    }
+  </script>
+</body>
+</html>

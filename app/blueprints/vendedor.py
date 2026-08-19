@@ -75,6 +75,9 @@ def _asegurar_tablas(conn):
             id SERIAL PRIMARY KEY, negocio_id INTEGER, tercero_id INTEGER,
             nombre VARCHAR(200), telefono VARCHAR(20), chat_token TEXT,
             created_at TIMESTAMP DEFAULT NOW())""",
+        """CREATE TABLE IF NOT EXISTS terceros_telefonos (
+            id SERIAL PRIMARY KEY, tercero_id INTEGER NOT NULL REFERENCES terceros(id) ON DELETE CASCADE,
+            telefono VARCHAR(50) NOT NULL, created_at TIMESTAMP DEFAULT NOW())""",
     ]:
         try:
             conn.execute(sql)
@@ -88,6 +91,7 @@ def _asegurar_tablas(conn):
         "ALTER TABLE citas_vendedor ADD COLUMN IF NOT EXISTS negocio_id INTEGER",
         "ALTER TABLE contactos ADD COLUMN IF NOT EXISTS chat_token TEXT",
         "ALTER TABLE contactos ADD COLUMN IF NOT EXISTS tercero_id INTEGER",
+        "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS cartera_estado VARCHAR(20) DEFAULT 'pendiente'",
     ]:
         try:
             conn.execute(sql)
@@ -121,6 +125,13 @@ def api_vendedor_identificar():
         _migrar_contactos_alias_vendedor(conn, nombre, tid)
         conn.commit()
         conn.close()
+        
+        # Guardar en sesión para permitir acceso a la captura de ventas sin rol admin
+        session['usuario_id'] = tid
+        session['chat_tercero_id'] = tid
+        session['nombre'] = nom
+        session['rol'] = 'Vendedor'
+        
         return jsonify({'ok': True, 'tercero_id': tid, 'nombre': nom, 'telefono': telefono})
     except Exception as e:
         try: conn.close()
@@ -707,33 +718,45 @@ def api_vendedor_mis_negocios():
     try:
         conn = get_db_connection()
         _asegurar_tablas(conn)
-        rows = conn.execute("""
-            SELECT vn.negocio_id AS id, t.nombre, 'tercero' AS tipo
-            FROM vendedor_negocios vn JOIN terceros t ON t.id = vn.negocio_id
-            WHERE vn.vendedor_id = %s AND vn.activo = TRUE ORDER BY vn.created_at ASC
-        """, (vendedor_id,)).fetchall()
-        negocios = [dict(r) for r in rows]
-        try:
-            tienda_rows = conn.execute("""
-                SELECT tv.tienda_id, ti.nombre, ti.tercero_id, ti.admin_id
-                FROM tienda_vendedores tv JOIN tiendas ti ON ti.id = tv.tienda_id
-                WHERE tv.vendedor_id = %s AND tv.activo = TRUE ORDER BY tv.created_at ASC
+        
+        # Verificar si el vendedor es administrador (usuario plenipotenciario)
+        is_admin = conn.execute("SELECT 1 FROM terceros WHERE id = %s AND tipo_tercero = 'admin'", (vendedor_id,)).fetchone()
+        
+        if is_admin:
+            # Los administradores ven todos los negocios y tiendas activos de forma automática
+            rest_rows = conn.execute("SELECT tercero_id AS id, nombre, 'tercero' AS tipo FROM restaurantes WHERE activo = TRUE AND tercero_id IS NOT NULL").fetchall()
+            tienda_rows = conn.execute("SELECT tercero_id AS id, nombre, 'tienda' AS tipo FROM tiendas WHERE activo = TRUE AND tercero_id IS NOT NULL").fetchall()
+            negocios = [dict(r) for r in rest_rows] + [dict(r) for r in tienda_rows]
+        else:
+            # Vendedores normales ven solo los negocios vinculados explícitamente
+            rows = conn.execute("""
+                SELECT vn.negocio_id AS id, t.nombre, 'tercero' AS tipo
+                FROM vendedor_negocios vn JOIN terceros t ON t.id = vn.negocio_id
+                WHERE vn.vendedor_id = %s AND vn.activo = TRUE ORDER BY vn.created_at ASC
             """, (vendedor_id,)).fetchall()
-            for row in tienda_rows:
-                d = dict(row)
-                tid = d['tercero_id']
-                if not tid or tid == d['admin_id']:
-                    existing = conn.execute("SELECT id FROM terceros WHERE nombre = %s AND telefono IS NULL LIMIT 1", (d['nombre'],)).fetchone()
-                    if existing:
-                        tid = existing['id']
-                    else:
-                        new_t = conn.execute("INSERT INTO terceros (nombre) VALUES (%s) RETURNING id", (d['nombre'],)).fetchone()
-                        tid = new_t['id']
-                    conn.execute("UPDATE tiendas SET tercero_id = %s WHERE id = %s", (tid, d['tienda_id']))
-                negocios.append({'id': tid, 'nombre': d['nombre'], 'tipo': 'tienda'})
-            conn.commit()
-        except Exception:
-            pass
+            negocios = [dict(r) for r in rows]
+            try:
+                tienda_rows = conn.execute("""
+                    SELECT tv.tienda_id, ti.nombre, ti.tercero_id, ti.admin_id
+                    FROM tienda_vendedores tv JOIN tiendas ti ON ti.id = tv.tienda_id
+                    WHERE tv.vendedor_id = %s AND tv.activo = TRUE ORDER BY tv.created_at ASC
+                """, (vendedor_id,)).fetchall()
+                for row in tienda_rows:
+                    d = dict(row)
+                    tid = d['tercero_id']
+                    if not tid or tid == d['admin_id']:
+                        existing = conn.execute("SELECT id FROM terceros WHERE nombre = %s AND telefono IS NULL LIMIT 1", (d['nombre'],)).fetchone()
+                        if existing:
+                            tid = existing['id']
+                        else:
+                            new_t = conn.execute("INSERT INTO terceros (nombre) VALUES (%s) RETURNING id", (d['nombre'],)).fetchone()
+                            tid = new_t['id']
+                        conn.execute("UPDATE tiendas SET tercero_id = %s WHERE id = %s", (tid, d['tienda_id']))
+                    negocios.append({'id': tid, 'nombre': d['nombre'], 'tipo': 'tienda'})
+                conn.commit()
+            except Exception:
+                pass
+        
         conn.close()
         vistos = set()
         unicos = []
@@ -748,16 +771,436 @@ def api_vendedor_mis_negocios():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+def _obtener_negocio_id_y_nombre(conn, ref):
+    try:
+        nid = int(ref)
+        # Buscar por ID de fila en tiendas
+        t = conn.execute("SELECT tercero_id, nombre FROM tiendas WHERE id = %s", (nid,)).fetchone()
+        if t: return t['tercero_id'], t['nombre']
+        
+        # Buscar por ID de fila en restaurantes
+        r = conn.execute("SELECT tercero_id, nombre FROM restaurantes WHERE id = %s", (nid,)).fetchone()
+        if r: return r['tercero_id'], r['nombre']
+        
+        # Buscar por tercero_id en tiendas
+        t = conn.execute("SELECT tercero_id, nombre FROM tiendas WHERE tercero_id = %s", (nid,)).fetchone()
+        if t: return t['tercero_id'], t['nombre']
+        
+        # Buscar por tercero_id en restaurantes
+        r = conn.execute("SELECT tercero_id, nombre FROM restaurantes WHERE tercero_id = %s", (nid,)).fetchone()
+        if r: return r['tercero_id'], r['nombre']
+    except ValueError:
+        pass
+    
+    t = conn.execute("SELECT tercero_id, nombre FROM tiendas WHERE slug = %s AND activo = TRUE", (ref,)).fetchone()
+    if t: return t['tercero_id'], t['nombre']
+    
+    r = conn.execute("SELECT tercero_id, nombre FROM restaurantes WHERE slug = %s AND activo = TRUE", (ref,)).fetchone()
+    if r: return r['tercero_id'], r['nombre']
+    
+    return None, None
+
+
+@bp.route('/vendedor/captura-ventas/<negocio_ref>')
+def vendedor_captura_ventas(negocio_ref):
+    from flask import render_template
+    
+    # Soporte para login directo por parámetro tel en la URL
+    tel_param = request.args.get('tel', '').strip()
+    if tel_param:
+        clean_tel = ''.join(filter(str.isdigit, tel_param))
+        if len(clean_tel) >= 10:
+            try:
+                conn = get_db_connection()
+                t = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE telefono = %s LIMIT 1", (clean_tel,)).fetchone()
+                if t:
+                    session['usuario_id'] = t['id']
+                    session['chat_tercero_id'] = t['id']
+                    session['nombre'] = t['nombre']
+                    session['rol'] = 'Vendedor'
+                conn.close()
+            except Exception:
+                pass
+
+    conn = get_db_connection()
+    negocio_id, negocio_nombre = _obtener_negocio_id_y_nombre(conn, negocio_ref)
+    conn.close()
+    
+    if not negocio_id:
+        return "Negocio no encontrado", 404
+    
+    return render_template('vendedor_pedido.html',
+                           negocio_id=negocio_id,
+                           negocio_nombre=negocio_nombre,
+                           vendedor_nombre=session.get('nombre', ''),
+                           vendedor_tercero_id=session.get('chat_tercero_id', ''))
+
+
+@bp.route('/api/vendedor/buscar-mis-clientes')
+def api_vendedor_buscar_mis_clientes():
+    q = request.args.get('q', '').strip()
+    vendedor_id = session.get('chat_tercero_id')
+    if not vendedor_id:
+        return jsonify([])
+    
+    q_digits = ''.join(filter(str.isdigit, q))
+    try:
+        conn = get_db_connection()
+        if len(q) >= 2:
+            if q_digits:
+                rows = conn.execute("""
+                    SELECT id, nombre, telefono 
+                    FROM contactos 
+                    WHERE tercero_id = %s 
+                      AND (nombre ILIKE %s OR REGEXP_REPLACE(COALESCE(telefono, ''), '[^0-9]', '', 'g') ILIKE %s)
+                    ORDER BY nombre 
+                    LIMIT 15
+                """, (vendedor_id, '%' + q + '%', '%' + q_digits + '%')).fetchall()
+            else:
+                rows = conn.execute("""
+                    SELECT id, nombre, telefono 
+                    FROM contactos 
+                    WHERE tercero_id = %s 
+                      AND nombre ILIKE %s 
+                    ORDER BY nombre 
+                    LIMIT 15
+                """, (vendedor_id, '%' + q + '%')).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT id, nombre, telefono 
+                FROM contactos 
+                WHERE tercero_id = %s 
+                ORDER BY nombre 
+                LIMIT 15
+            """, (vendedor_id,)).fetchall()
+        conn.close()
+        return jsonify([{'id': r['id'], 'nombre': r['nombre'] or '', 'telefono': r['telefono'] or ''} for r in rows])
+    except Exception:
+        try: conn.close()
+        except: pass
+        return jsonify([])
+
+
+@bp.route('/api/vendedor/<int:negocio_id>/pedido', methods=['POST'])
+def api_vendedor_pedido_guardar(negocio_id):
+    vendedor_id = session.get('chat_tercero_id')
+    if not vendedor_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
+    
+    data = request.get_json() or {}
+    pedido_id = data.get('pedido_id') # Opcional, para modificar
+    nombre_cliente = (data.get('nombre_cliente') or '').strip()
+    telefono_cliente = (data.get('telefono_cliente') or '').strip()
+    notas = (data.get('notas') or '').strip()
+    items = data.get('items', [])
+    
+    if not nombre_cliente:
+        return jsonify({'ok': False, 'error': 'Nombre de cliente es requerido'}), 400
+    if not items:
+        return jsonify({'ok': False, 'error': 'El pedido no tiene productos'}), 400
+        
+    try:
+        conn = get_db_connection()
+        # 1. Verificar si el contacto ya existe en contactos para el vendedor
+        contact_row = None
+        if telefono_cliente:
+            contact_row = conn.execute("""
+                SELECT id FROM contactos 
+                WHERE tercero_id = %s AND (nombre = %s OR telefono = %s)
+                LIMIT 1
+            """, (vendedor_id, nombre_cliente, telefono_cliente)).fetchone()
+        else:
+            contact_row = conn.execute("""
+                SELECT id FROM contactos 
+                WHERE tercero_id = %s AND nombre = %s
+                LIMIT 1
+            """, (vendedor_id, nombre_cliente)).fetchone()
+            
+        if not contact_row:
+            conn.execute("""
+                INSERT INTO contactos (negocio_id, tercero_id, nombre, telefono) 
+                VALUES (%s, %s, %s, %s)
+            """, (negocio_id, vendedor_id, nombre_cliente, telefono_cliente or None))
+            
+        # 2. Buscar si tiene tercero_id asociado en terceros por telefono/nombre. Si no existe, crearlo!
+        cliente_tercero_id = None
+        if telefono_cliente:
+            t_row = conn.execute("""
+                SELECT id FROM terceros 
+                WHERE telefono = %s LIMIT 1
+            """, (telefono_cliente,)).fetchone()
+            if t_row:
+                cliente_tercero_id = t_row['id']
+        if not cliente_tercero_id:
+            t_row = conn.execute("""
+                SELECT id FROM terceros 
+                WHERE nombre = %s LIMIT 1
+            """, (nombre_cliente,)).fetchone()
+            if t_row:
+                cliente_tercero_id = t_row['id']
+                
+        # Auto-crear como tercero en la tabla terceros si no existe para que aparezca en el POS
+        if not cliente_tercero_id:
+            cur_new = conn.execute("""
+                INSERT INTO terceros (nombre, telefono, tipo_tercero) 
+                VALUES (%s, %s, 'cliente') 
+                RETURNING id
+            """, (nombre_cliente, telefono_cliente or None))
+            cliente_tercero_id = cur_new.fetchone()[0]
+                 
+        # 3. Calcular total
+        total = 0.0
+        for item in items:
+            total += float(item.get('cantidad', 0)) * float(item.get('precio_unitario', 0))
+            
+        # 4. Insertar o actualizar en pedidos
+        if pedido_id:
+            # Verificar si existe y pertenece al vendedor y está pendiente
+            ped = conn.execute("SELECT id, estado FROM pedidos WHERE id = %s AND id_tercero_cajero = %s", (pedido_id, vendedor_id)).fetchone()
+            if not ped:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Pedido no encontrado'}), 404
+            if ped['estado'] != 'premontado':
+                conn.close()
+                return jsonify({'ok': False, 'error': 'No se puede modificar un pedido que ya fue cobrado/entregado'}), 400
+                
+            conn.execute("""
+                UPDATE pedidos 
+                SET cliente_id = %s, nombre_cliente = %s, telefono_cliente = %s, 
+                    total = %s, notas = %s, subtotal_productos = %s, fecha = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """, (cliente_tercero_id, nombre_cliente, telefono_cliente or None, total, notas or None, total, pedido_id))
+            
+            # Eliminar items antiguos
+            conn.execute("DELETE FROM pedido_items WHERE pedido_id = %s", (pedido_id,))
+        else:
+            # Insertar pedido nuevo
+            cur_ped = conn.execute("""
+                INSERT INTO pedidos (
+                    negocio_id, cliente_id, nombre_cliente, telefono_cliente, 
+                    estado, id_tercero_cajero, total, fecha, notas, subtotal_productos, tipo
+                ) VALUES (%s, %s, %s, %s, 'premontado', %s, %s, CURRENT_TIMESTAMP, %s, %s, 'pedido_vendedor') 
+                RETURNING id
+            """, (negocio_id, cliente_tercero_id, nombre_cliente, telefono_cliente or None, vendedor_id, total, notas or None, total)).fetchone()
+            pedido_id = cur_ped['id']
+            
+        # 5. Insertar en pedido_items
+        for item in items:
+            prod_id = item.get('producto_id')
+            qty = float(item.get('cantidad', 0))
+            price = float(item.get('precio_unitario', 0))
+            
+            p_row = conn.execute("SELECT nombre FROM productos WHERE id = %s", (prod_id,)).fetchone()
+            prod_name = p_row['nombre'] if p_row else 'Producto desconocido'
+            
+            conn.execute("""
+                INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario) 
+                VALUES (%s, %s, %s, %s, %s)
+            """, (pedido_id, prod_id, prod_name, qty, price))
+            
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'pedido_id': pedido_id, 'documento_numero': f"PEDIDO-{pedido_id}"})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/vendedor/<int:negocio_id>/pedidos-recientes')
+def api_vendedor_pedidos_recientes(negocio_id):
+    vendedor_id = session.get('chat_tercero_id')
+    if not vendedor_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
+        
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT p.id, p.nombre_cliente, p.telefono_cliente, p.total, p.estado, p.fecha::text, p.notas,
+                   COALESCE(p.cartera_estado, 'pendiente') AS cartera_estado,
+                   p.id_tercero_cajero, t.nombre AS vendedor_nombre
+            FROM pedidos p
+            LEFT JOIN terceros t ON t.id = p.id_tercero_cajero
+            WHERE p.negocio_id = %s AND p.tipo = 'pedido_vendedor'
+            ORDER BY p.id DESC
+            LIMIT 100
+        """, (negocio_id,)).fetchall()
+        
+        pedidos_list = []
+        for r in rows:
+            pedidos_list.append({
+                'id': r['id'],
+                'nombre_cliente': r['nombre_cliente'] or '',
+                'telefono_cliente': r['telefono_cliente'] or '',
+                'total': float(r['total'] or 0),
+                'estado': r['estado'],
+                'fecha': r['fecha'],
+                'notas': r['notas'] or '',
+                'cartera_estado': r['cartera_estado'],
+                'id_tercero_cajero': r['id_tercero_cajero'],
+                'vendedor_nombre': r['vendedor_nombre'] or 'Vendedor',
+                'items': []
+            })
+            
+        if pedidos_list:
+            pedido_ids = [p['id'] for p in pedidos_list]
+            # Use tuple of list to support SQL IN operator
+            items_rows = conn.execute("""
+                SELECT pedido_id, cantidad, nombre_producto, precio_unitario
+                FROM pedido_items 
+                WHERE pedido_id IN %s
+            """, (tuple(pedido_ids),)).fetchall()
+            
+            items_by_pedido = {}
+            for it in items_rows:
+                pid = it['pedido_id']
+                if pid not in items_by_pedido:
+                    items_by_pedido[pid] = []
+                items_by_pedido[pid].append({
+                    'cantidad': float(it['cantidad']),
+                    'nombre_producto': it['nombre_producto'],
+                    'precio_unitario': float(it['precio_unitario'] or 0)
+                })
+                
+            for p in pedidos_list:
+                p['items'] = items_by_pedido.get(p['id'], [])
+                
+        conn.close()
+        return jsonify({'ok': True, 'pedidos': pedidos_list})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/vendedor/pedido/<int:pedido_id>')
+def api_vendedor_pedido_detalle(pedido_id):
+    vendedor_id = session.get('chat_tercero_id')
+    if not vendedor_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
+    
+    try:
+        conn = get_db_connection()
+        ped = conn.execute("""
+            SELECT id, nombre_cliente, telefono_cliente, total, notas, estado
+            FROM pedidos 
+            WHERE id = %s AND id_tercero_cajero = %s
+        """, (pedido_id, vendedor_id)).fetchone()
+        
+        if not ped:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Pedido no encontrado'}), 404
+            
+        items_rows = conn.execute("""
+            SELECT pi.producto_id, pi.nombre_producto, pi.cantidad, pi.precio_unitario, COALESCE(p.stock, 0) AS stock
+            FROM pedido_items pi
+            LEFT JOIN (
+                SELECT producto_id, COALESCE(stock, 0) AS stock 
+                FROM saldos_inventario 
+                WHERE bodega = 1
+            ) p ON p.producto_id = pi.producto_id
+            WHERE pi.pedido_id = %s
+        """, (pedido_id,)).fetchall()
+        
+        items = []
+        for it in items_rows:
+            items.append({
+                'producto_id': it['producto_id'],
+                'nombre_producto': it['nombre_producto'],
+                'cantidad': float(it['cantidad']),
+                'precio_unitario': float(it['precio_unitario']),
+                'stock': float(it['stock'] or 0)
+            })
+            
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'id': ped['id'],
+            'nombre_cliente': ped['nombre_cliente'] or '',
+            'telefono_cliente': ped['telefono_cliente'] or '',
+            'total': float(ped['total']),
+            'notas': ped['notas'] or '',
+            'estado': ped['estado'],
+            'items': items
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/vendedor/pedido/<int:pedido_id>/eliminar', methods=['POST'])
+def api_vendedor_pedido_eliminar(pedido_id):
+    vendedor_id = session.get('chat_tercero_id')
+    if not vendedor_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
+    
+    try:
+        conn = get_db_connection()
+        ped = conn.execute("SELECT id, estado FROM pedidos WHERE id = %s AND id_tercero_cajero = %s", (pedido_id, vendedor_id)).fetchone()
+        if not ped:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Pedido no encontrado'}), 404
+        if ped['estado'] != 'premontado':
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No se puede eliminar un pedido ya cobrado/entregado'}), 400
+            
+        conn.execute("DELETE FROM pedido_items WHERE pedido_id = %s", (pedido_id,))
+        conn.execute("DELETE FROM pedidos WHERE id = %s", (pedido_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/vendedor/pedido/<int:pedido_id>/toggle-cartera', methods=['POST'])
+def api_vendedor_pedido_toggle_cartera(pedido_id):
+    vendedor_id = session.get('chat_tercero_id')
+    if not vendedor_id:
+        return jsonify({'ok': False, 'error': 'sin_sesion'}), 401
+    
+    try:
+        conn = get_db_connection()
+        ped = conn.execute("SELECT id, cartera_estado FROM pedidos WHERE id = %s AND id_tercero_cajero = %s", (pedido_id, vendedor_id)).fetchone()
+        if not ped:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Pedido no encontrado'}), 404
+        
+        nuevo_estado = 'pagado' if ped['cartera_estado'] == 'pendiente' else 'pendiente'
+        conn.execute("UPDATE pedidos SET cartera_estado = %s WHERE id = %s", (nuevo_estado, pedido_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'nuevo_estado': nuevo_estado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @bp.route('/vendedor')
 def vendedor_dashboard():
+    # Soporte para login directo por parámetro tel en la URL
+    tel_param = request.args.get('tel', '').strip()
+    if tel_param:
+        clean_tel = ''.join(filter(str.isdigit, tel_param))
+        if len(clean_tel) >= 10:
+            try:
+                conn = get_db_connection()
+                t = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE telefono = %s LIMIT 1", (clean_tel,)).fetchone()
+                if t:
+                    session['usuario_id'] = t['id']
+                    session['chat_tercero_id'] = t['id']
+                    session['nombre'] = t['nombre']
+                    session['rol'] = 'Vendedor'
+                conn.close()
+            except Exception:
+                pass
+
     uid = session.get('usuario_id')
     vendedor_pre = {'nombre': '', 'telefono': ''}
     if uid:
         try:
             conn = get_db_connection()
-            t = conn.execute("SELECT nombre, telefono FROM terceros WHERE id=%s", (uid,)).fetchone()
+            t = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id=%s", (uid,)).fetchone()
             if t:
                 vendedor_pre = {'nombre': t['nombre'] or '', 'telefono': t['telefono'] or ''}
             else:
@@ -771,6 +1214,7 @@ def vendedor_dashboard():
             conn.close()
         except Exception:
             pass
+            
     return render_template_string(_HTML,
         vd_nombre=vendedor_pre['nombre'],
         vd_telefono=vendedor_pre['telefono'])
@@ -780,7 +1224,7 @@ _HTML = r"""<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Vendedor TUC TUC</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="/static/js/tailwind.js"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
@@ -795,7 +1239,7 @@ _HTML = r"""<!DOCTYPE html>
     </div>
     <button onclick="cambiarCodigo()" class="text-indigo-200 text-xs underline">Cerrar sesión</button>
   </div>
-  <div class="max-w-2xl mx-auto mt-3" id="bloque-negocio" style="display:none">
+  <div class="max-w-2xl mx-auto mt-3 space-y-2" id="bloque-negocio" style="display:none">
     <div class="bg-indigo-800 rounded-xl px-3 py-2 flex items-center gap-2">
       <span class="text-indigo-300 text-xs font-bold uppercase tracking-wide">Vendiendo para:</span>
       <div class="relative flex-1">
@@ -804,6 +1248,15 @@ _HTML = r"""<!DOCTYPE html>
                 class="w-full text-sm font-bold cursor-pointer focus:outline-none pr-4 rounded"></select>
         <span class="pointer-events-none absolute right-0 top-0 text-indigo-300 text-xs">▾</span>
       </div>
+    </div>
+    
+    <!-- Botón para ir a Tomar Pedidos -->
+    <div>
+      <button onclick="irACapturaVentas()" 
+              class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-700 text-white text-sm font-bold py-3 px-4 rounded-xl shadow-md flex items-center justify-center gap-2 transition active:scale-95">
+        <span>🛒</span>
+        <span>Tomar Pedidos (Captura de Ventas)</span>
+      </button>
     </div>
   </div>
 </div>
@@ -1092,6 +1545,14 @@ function cambiarNegocioActivo() {
   localStorage.setItem('vd_negocio_id', _negocioActivo.id);
   const sec = document.getElementById('sec-historial-general');
   if (sec && !sec.classList.contains('hidden')) cargarHistorialGeneral();
+}
+
+function irACapturaVentas() {
+  if (!_negocioActivo || !_negocioActivo.id) {
+    alert('Por favor, selecciona un negocio primero.');
+    return;
+  }
+  window.location.href = '/vendedor/captura-ventas/' + _negocioActivo.id;
 }
 
 async function confirmarIdentidad() {

@@ -4556,7 +4556,7 @@ def api_reporte_ventas_costos_pdf(negocio_id):
         datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta)
         conn.close()
         pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos)
-        resp = Response(pdf.output(), mimetype='application/pdf')
+        resp = Response(bytes(pdf.output()), mimetype='application/pdf')
         resp.headers['Content-Disposition'] = 'inline; filename=reporte_ventas_costos.pdf'
         return resp
     except Exception as e:

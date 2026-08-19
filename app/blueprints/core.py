@@ -850,14 +850,275 @@ def api_admin_db_estructura(nombre):
             conn.close()
             return jsonify({'ok': False, 'error': f'Tabla "{nombre}" no encontrada'}), 404
         count = conn.execute(f'SELECT COUNT(*) as total FROM "{nombre}"').fetchone()
+        
+        # Obtener claves primarias
+        pk_rows = conn.execute("""
+            SELECT a.attname
+            FROM pg_index i
+            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+            WHERE i.indrelid = %s::regclass AND i.indisprimary
+        """, (nombre,)).fetchall()
+        primary_key = [r['attname'] for r in pk_rows]
+        
         conn.close()
         return jsonify({
             'ok': True,
             'columnas': [dict(c) for c in columnas],
             'total': count['total'] if count else 0,
+            'primary_key': primary_key
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/admin/db/tabla/<nombre>/registros')
+@admin_required
+def api_admin_db_registros(nombre):
+    try:
+        pagina = int(request.args.get('pagina', 1))
+        limite = int(request.args.get('limite', 50))
+        orden = request.args.get('orden', '').strip()
+        direccion = request.args.get('direccion', 'asc').strip()
+        filtro_columna = request.args.get('filtro_columna', '').strip()
+        filtro_valor = request.args.get('filtro_valor', '').strip()
+        
+        offset = (pagina - 1) * limite
+        
+        conn = get_db_connection()
+        # Verificar que la tabla exista
+        exists = conn.execute("SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=%s", (nombre,)).fetchone()
+        if not exists:
+            conn.close()
+            return jsonify({'ok': False, 'error': f'Tabla "{nombre}" no existe'}), 404
+            
+        if filtro_columna:
+            col_exists = conn.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=%s AND column_name=%s", (nombre, filtro_columna)).fetchone()
+            if not col_exists:
+                conn.close()
+                return jsonify({'ok': False, 'error': f'Columna de filtro "{filtro_columna}" inválida'}), 400
+                
+        if orden:
+            col_exists = conn.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=%s AND column_name=%s", (nombre, orden)).fetchone()
+            if not col_exists:
+                orden = ''
+                
+        query_base = f'FROM "{nombre}"'
+        params = []
+        if filtro_columna and filtro_valor:
+            col_type = conn.execute("SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name=%s AND column_name=%s", (nombre, filtro_columna)).fetchone()
+            if col_type and col_type['data_type'] in ('integer', 'bigint', 'numeric', 'double precision', 'real', 'smallint'):
+                try:
+                    val_num = float(filtro_valor)
+                    query_base += f' WHERE "{filtro_columna}" = %s'
+                    params.append(val_num)
+                except ValueError:
+                    query_base += f' WHERE CAST("{filtro_columna}" AS TEXT) ILIKE %s'
+                    params.append(f'%{filtro_valor}%')
+            elif col_type and col_type['data_type'] == 'boolean':
+                val_bool = filtro_valor.lower() in ('true', '1', 'yes', 's', 'sí', 'si')
+                query_base += f' WHERE "{filtro_columna}" = %s'
+                params.append(val_bool)
+            else:
+                query_base += f' WHERE CAST("{filtro_columna}" AS TEXT) ILIKE %s'
+                params.append(f'%{filtro_valor}%')
+                
+        count_row = conn.execute(f"SELECT COUNT(*) as total {query_base}", tuple(params)).fetchone()
+        total_registros = count_row['total'] if count_row else 0
+        total_paginas = (total_registros + limite - 1) // limite if total_registros > 0 else 1
+        
+        order_sql = ''
+        if orden:
+            dir_sql = 'DESC' if direccion.lower() == 'desc' else 'ASC'
+            order_sql = f' ORDER BY "{orden}" {dir_sql}'
+        else:
+            first_col = conn.execute("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=%s ORDER BY ordinal_position LIMIT 1", (nombre,)).fetchone()
+            if first_col:
+                order_sql = f' ORDER BY "{first_col["column_name"]}" ASC'
+                
+        sql = f'SELECT * {query_base}{order_sql} LIMIT %s OFFSET %s'
+        rows = conn.execute(sql, tuple(params) + (limite, offset)).fetchall()
+        
+        registros = []
+        for r in rows:
+            row_dict = {}
+            for k, v in dict(r).items():
+                if isinstance(v, datetime):
+                    row_dict[k] = v.isoformat()
+                elif hasattr(v, 'to_eng_string'):  # Decimal
+                    row_dict[k] = float(v)
+                else:
+                    row_dict[k] = v
+            registros.append(row_dict)
+            
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'registros': registros,
+            'total_paginas': total_paginas
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/admin/db/tabla/<nombre>/actualizar', methods=['POST'])
+@admin_required
+def api_admin_db_actualizar(nombre):
+    data = request.get_json() or {}
+    pk_val = data.get('id')
+    campo = data.get('campo')
+    valor = data.get('valor')
+    pk_col = data.get('pk_column', 'id')
+    
+    if not pk_val or not campo:
+        return jsonify({'ok': False, 'error': 'id y campo requeridos'}), 400
+        
+    conn = get_db_connection()
+    try:
+        exists = conn.execute("SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=%s", (nombre,)).fetchone()
+        if not exists:
+            conn.close()
+            return jsonify({'ok': False, 'error': f'Tabla "{nombre}" no existe'}), 404
+            
+        col_exists = conn.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=%s AND column_name=%s", (nombre, campo)).fetchone()
+        pk_exists = conn.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=%s AND column_name=%s", (nombre, pk_col)).fetchone()
+        if not col_exists or not pk_exists:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Columna o PK inválida'}), 400
+            
+        prev_row = conn.execute(f'SELECT "{campo}" FROM "{nombre}" WHERE "{pk_col}" = %s', (pk_val,)).fetchone()
+        valor_anterior = prev_row[campo] if prev_row else None
+        
+        conn.execute(f'UPDATE "{nombre}" SET "{campo}" = %s WHERE "{pk_col}" = %s', (valor, pk_val))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'valor_anterior': valor_anterior})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/admin/db/tabla/<nombre>/insertar', methods=['POST'])
+@admin_required
+def api_admin_db_insertar(nombre):
+    data = request.get_json() or {}
+    campos = data.get('campos', {})
+    if not campos:
+        return jsonify({'ok': False, 'error': 'No se enviaron datos para insertar'}), 400
+        
+    conn = get_db_connection()
+    try:
+        exists = conn.execute("SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=%s", (nombre,)).fetchone()
+        if not exists:
+            conn.close()
+            return jsonify({'ok': False, 'error': f'Tabla "{nombre}" no existe'}), 404
+            
+        columns_list = []
+        values_placeholders = []
+        params = []
+        for col, val in campos.items():
+            col_exists = conn.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=%s AND column_name=%s", (nombre, col)).fetchone()
+            if not col_exists:
+                conn.close()
+                return jsonify({'ok': False, 'error': f'Columna "{col}" no existe'}), 400
+            columns_list.append(f'"{col}"')
+            values_placeholders.append('%s')
+            params.append(val)
+            
+        sql = f'INSERT INTO "{nombre}" ({", ".join(columns_list)}) VALUES ({", ".join(values_placeholders)})'
+        conn.execute(sql, tuple(params))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/admin/db/tabla/<nombre>/eliminar', methods=['POST'])
+@admin_required
+def api_admin_db_eliminar(nombre):
+    data = request.get_json() or {}
+    ids = data.get('ids', [])
+    pk_col = data.get('pk_column', 'id')
+    if not ids:
+        return jsonify({'ok': False, 'error': 'No se especificaron IDs para eliminar'}), 400
+        
+    conn = get_db_connection()
+    try:
+        exists = conn.execute("SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=%s", (nombre,)).fetchone()
+        if not exists:
+            conn.close()
+            return jsonify({'ok': False, 'error': f'Tabla "{nombre}" no existe'}), 404
+            
+        pk_exists = conn.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=%s AND column_name=%s", (nombre, pk_col)).fetchone()
+        if not pk_exists:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'PK inválida'}), 400
+            
+        placeholders = ', '.join(['%s'] * len(ids))
+        sql = f'DELETE FROM "{nombre}" WHERE "{pk_col}" IN ({placeholders})'
+        conn.execute(sql, tuple(ids))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/admin/db/tabla/<nombre>/exportar')
+@admin_required
+def api_admin_db_exportar(nombre):
+    filtro_columna = request.args.get('filtro_columna', '').strip()
+    filtro_valor = request.args.get('filtro_valor', '').strip()
+    
+    conn = get_db_connection()
+    try:
+        exists = conn.execute("SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=%s", (nombre,)).fetchone()
+        if not exists:
+            conn.close()
+            return "Tabla no existe", 404
+            
+        query_base = f'FROM "{nombre}"'
+        params = []
+        if filtro_columna and filtro_valor:
+            col_exists = conn.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=%s AND column_name=%s", (nombre, filtro_columna)).fetchone()
+            if col_exists:
+                query_base += f' WHERE CAST("{filtro_columna}" AS TEXT) ILIKE %s'
+                params.append(f'%{filtro_valor}%')
+                
+        sql = f'SELECT * {query_base}'
+        rows = conn.execute(sql, tuple(params)).fetchall()
+        
+        if not rows:
+            conn.close()
+            return "Sin registros", 400
+            
+        cols = [d[0] for d in conn.execute(f'SELECT * FROM "{nombre}" LIMIT 0').description]
+        
+        import csv
+        from io import StringIO
+        from flask import make_response
+        
+        si = StringIO()
+        cw = csv.writer(si)
+        cw.writerow(cols)
+        for r in rows:
+            cw.writerow([dict(r)[col] for col in cols])
+            
+        response = make_response(si.getvalue())
+        response.headers['Content-Disposition'] = f'attachment; filename=export_{nombre}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        response.headers['Content-Type'] = 'text/csv'
+        
+        conn.close()
+        return response
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return str(e), 500
 
 
 # ── Deploy webhook ────────────────────────────────────────────────────────────

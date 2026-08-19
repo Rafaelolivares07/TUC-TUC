@@ -25,7 +25,7 @@
   }
   .ac-item { padding: 10px 14px; cursor: pointer; font-size: .85rem; border-bottom: 1px solid #f3f4f6; transition: background .15s; }
   .ac-item:last-child { border-bottom: none; }
-  .ac-item:hover { background: #f0fdf4; }
+  .ac-item:hover, .ac-item.ac-focus { background: #f0fdf4; }
 </style>
 </head>
 <body class="p-4 sm:p-6 min-h-screen">
@@ -117,7 +117,7 @@
   </div>
 
   <!-- Formulario de Configuración de Toma -->
-  <div class="bg-white rounded-2xl shadow-md p-5 mb-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="bg-white rounded-2xl shadow-md p-5 mb-5 grid grid-cols-1 md:grid-cols-3 gap-4">
     <div>
       <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo de Documento</label>
       <select id="select-tipo-doc" onchange="cambiarTipoDocumento()"
@@ -136,6 +136,14 @@
         <option value="completo">Inventario Completo (Todo el catálogo)</option>
       </select>
     </div>
+    <div class="relative">
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Responsable (Tercero)</label>
+      <input id="entrada-responsable" type="text" placeholder="Buscar responsable..." autocomplete="off" onfocus="this.select()"
+             class="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
+             value="{{ session.get('nombre', '') }}">
+      <div id="entrada-responsable-list" class="ac-drop hidden absolute left-0 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg"></div>
+      <input type="hidden" id="entrada-responsable-id" value="{{ session.get('chat_tercero_id', '') }}">
+    </div>
   </div>
 
   <!-- Zona de Conteo Modalidad LIBRE -->
@@ -146,9 +154,8 @@
       <!-- Buscador -->
       <div class="sm:col-span-2 relative">
         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Buscar Producto o Escanear QR</label>
-        <input type="text" id="libre-search" placeholder="Escribe el nombre o escanea con lector..." autocomplete="off"
-               class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
-               oninput="onSearchInput()">
+        <input type="text" id="libre-search" placeholder="Escribe el nombre o escanea con lector..." autocomplete="off" onfocus="this.select()"
+               class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all">
         <div id="libre-ac-drop" class="ac-drop hidden"></div>
       </div>
 
@@ -267,6 +274,12 @@ document.addEventListener("DOMContentLoaded", () => {
   inicializarSesion();
   cargarProductos();
   cargarHistorial();
+
+  // Inicializar autocompletes
+  setupRemoteAC('entrada-responsable', 'entrada-responsable-list', 'entrada-responsable-id', '/api/inventario/proveedores/buscar');
+  setupLocalAC('libre-search', 'libre-ac-drop', () => currentProducts, (prod) => {
+    seleccionarProductoLibre(prod.id);
+  });
 });
 
 // Inicializar sesión y consecutivo
@@ -615,13 +628,17 @@ async function guardarAjusteConfirmado() {
   if (!activeAjustePayload) return;
   
   const tipoDocId = document.getElementById("select-tipo-doc").value;
+  const terceroId = document.getElementById("entrada-responsable-id").value;
+  const terceroNombre = document.getElementById("entrada-responsable").value.trim();
   const payload = {
     tipo_documento_id: parseInt(tipoDocId),
     documento_numero: activeDocNumber,
     producto_id: activeAjustePayload.producto_id,
     cantidad_fisica: activeAjustePayload.cantidad_fisica,
     costo_unitario: activeAjustePayload.costo_unitario,
-    notas: "Ajuste físico en caliente"
+    notas: "Ajuste físico en caliente",
+    tercero_id: parseInt(terceroId) || null,
+    tercero_nombre: terceroNombre || null
   };
   
   const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/guardar-item`, {
@@ -839,6 +856,196 @@ async function toggleHistorialDetalle(docNum) {
   } else {
     body.classList.add("hidden");
     icon.classList.remove("rotate-180");
+  }
+}
+
+function setupRemoteAC(inputId, listId, hiddenId, searchUrl, onSelect) {
+  const inp = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  const hid = document.getElementById(hiddenId);
+  if (!inp || !list) return;
+  let idx = -1, timer = null;
+
+  inp.addEventListener('input', () => {
+    clearTimeout(timer);
+    hid.value = ''; // Limpiar ID al escribir
+    timer = setTimeout(() => search(), 280);
+  });
+  
+  inp.addEventListener('focus', () => {
+    if (inp.value.trim().length >= 2) {
+      search();
+    }
+  });
+
+  inp.addEventListener('keydown', e => {
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      if (list.classList.contains('hidden')) {
+        search();
+      } else {
+        idx = Math.min(idx + 1, items.length - 1);
+        highlightAC(items);
+      }
+      e.preventDefault();
+    }
+    else if (e.key === 'ArrowUp') {
+      idx = Math.max(idx - 1, 0);
+      highlightAC(items);
+      e.preventDefault();
+    }
+    else if (e.key === 'Enter') {
+      if (idx >= 0 && items[idx]) {
+        items[idx].dispatchEvent(new Event('mousedown'));
+        e.preventDefault();
+      }
+    }
+    else if (e.key === 'Escape') {
+      list.classList.add('hidden');
+      inp.focus();
+      e.preventDefault();
+    }
+  });
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+  async function search() {
+    const q = inp.value.trim();
+    if (q.length < 2) { list.classList.add('hidden'); return; }
+    try {
+      const r = await fetch(`${searchUrl}?q=${encodeURIComponent(q)}`);
+      const matches = await r.json();
+      if (!matches.length) { list.classList.add('hidden'); return; }
+      idx = -1;
+      list.innerHTML = matches.map(p =>
+        `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
+          ${p.nombre}${p.telefono ? ` <span class="text-gray-400">(${p.telefono})</span>` : ''}
+         </div>`
+      ).join('');
+      list.querySelectorAll('.ac-item').forEach(el => {
+        el.addEventListener('mousedown', () => {
+          hid.value = el.dataset.id;
+          inp.value = el.dataset.nombre;
+          list.classList.add('hidden');
+          if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+        });
+      });
+      list.classList.remove('hidden');
+    } catch(e) {
+      console.error(e);
+    }
+  }
+  function highlightAC(items) {
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+  }
+}
+
+function setupLocalAC(inputId, listId, dataFn, onSelect) {
+  const inp = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  if (!inp || !list) return;
+  let idx = -1, timer = null;
+
+  const normalizeStr = str => {
+    if (!str) return '';
+    try {
+      return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    } catch (e) {
+      return str.toString().toLowerCase().trim();
+    }
+  };
+
+  inp.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => render(), 150);
+  });
+  
+  inp.addEventListener('focus', () => {
+    if (inp.value.trim().length >= 1) {
+      render();
+    }
+  });
+
+  inp.addEventListener('keydown', e => {
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      if (list.classList.contains('hidden')) {
+        render();
+      } else {
+        idx = Math.min(idx + 1, items.length - 1);
+        highlight(items);
+      }
+      e.preventDefault();
+    }
+    else if (e.key === 'ArrowUp') {
+      idx = Math.max(idx - 1, 0);
+      highlight(items);
+      e.preventDefault();
+    }
+    else if (e.key === 'Enter') {
+      if (idx >= 0 && items[idx]) {
+        items[idx].dispatchEvent(new Event('mousedown'));
+        e.preventDefault();
+      }
+    }
+    else if (e.key === 'Escape') {
+      list.classList.add('hidden');
+      inp.focus();
+      e.preventDefault();
+    }
+  });
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+  function render() {
+    const rawQ = inp.value;
+    const qNorm = normalizeStr(rawQ);
+    if (qNorm.length < 2) { list.classList.add('hidden'); return; }
+    
+    const itemsList = typeof dataFn === 'function' ? dataFn() : (dataFn || []);
+    if (!itemsList || !itemsList.length) {
+      list.classList.add('hidden');
+      return;
+    }
+
+    const matches = itemsList.filter(p => {
+      if (!p || !p.nombre) return false;
+      const nameNorm = normalizeStr(p.nombre);
+      const codeNorm = normalizeStr(p.codigo_barra);
+      return nameNorm.includes(qNorm) || (codeNorm && codeNorm === qNorm);
+    }).slice(0, 15);
+
+    idx = -1;
+    
+    if (matches.length > 0) {
+      list.innerHTML = matches.map(p => `
+        <div class="ac-item p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-50 flex items-center justify-between" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
+          <div>
+            <span class="font-bold text-gray-800">${p.nombre}</span> 
+            <span class="text-xs text-gray-400 ml-1">(${p.categoria || 'Sin cat.'})</span>
+          </div>
+          <span class="text-xs bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded font-mono">Stock: ${p.stock}</span>
+        </div>
+      `).join('');
+      
+      list.querySelectorAll('.ac-item').forEach(el => {
+        el.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          inp.value = el.dataset.nombre;
+          list.classList.add('hidden');
+          if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+        });
+      });
+      list.classList.remove('hidden');
+    } else {
+      list.innerHTML = '<div class="p-3 text-xs text-gray-400 text-center">No se encontraron productos.</div>';
+      list.classList.remove('hidden');
+    }
+  }
+
+  function highlight(items) {
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
   }
 }
 

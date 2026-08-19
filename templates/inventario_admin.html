@@ -116,8 +116,6 @@
     body.dark .border-blue-100 { border-color: rgba(59, 130, 246, 0.2) !important; }
     body.dark .text-blue-800 { color: #93c5fd !important; }
     
-    body.dark #btn-anular-item { background-color: #7c2d12 !important; color: #ffedd5 !important; }
-    body.dark #btn-anular-item:hover { background-color: #9a3412 !important; }
     body.dark .border-gray-200 { border-color: #374151 !important; }
     body.dark .border-gray-100 { border-color: #374151 !important; }
 
@@ -148,9 +146,10 @@
         <label>Nombre *</label>
         <input id="mp-nombre" type="text" placeholder="Nombre del producto">
       </div>
-      <div>
+      <div class="relative">
         <label>Categoría *</label>
-        <input id="mp-categoria" type="text" placeholder="Ej: bebida, proteina…">
+        <input id="mp-categoria" type="text" placeholder="Ej: bebida, proteina…" autocomplete="off" class="w-full">
+        <div id="mp-categoria-list" class="ac-list hidden"></div>
       </div>
       <div>
         <label>Código de barras</label>
@@ -329,33 +328,6 @@
   </div>
 </div>
 
-<!-- ── OVERLAY MODAL ANULACIÓN ────────────────────────────────────── -->
-<div id="overlay-anulacion" class="overlay hidden" onclick="if(event.target===this)cerrarModalAnulacion()">
-  <div class="modal" style="max-width:520px">
-    <h3 class="text-lg font-bold mb-2">Confirmar Anulación</h3>
-    <p class="text-sm text-gray-500 mb-4">¿Cómo deseas procesar la eliminación de esta transacción?</p>
-    
-    <div id="anulacion-detalles" class="space-y-4 mb-6 text-sm">
-      <!-- Se llenará vía JS -->
-    </div>
-
-    <div class="flex flex-col sm:flex-row gap-3 justify-end">
-      <button onclick="cerrarModalAnulacion()" 
-              class="px-4 py-2 rounded-xl border text-sm font-semibold text-gray-600 hover:bg-gray-50 order-last sm:order-none">
-        Cancelar
-      </button>
-      <button id="btn-anular-item" onclick="ejecutarAnulacion(false)" 
-              class="px-4 py-2 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold text-sm">
-        Eliminar solo este ítem
-      </button>
-      <button id="btn-anular-doc" onclick="ejecutarAnulacion(true)" 
-              class="px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm font-bold">
-        Anular todo el documento
-      </button>
-    </div>
-  </div>
-</div>
-
 <!-- ── HEADER ───────────────────────────────────────────────────────── -->
 <div class="max-w-5xl mx-auto">
   <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-rose-500">
@@ -383,6 +355,7 @@
       <button class="tab-btn" onclick="mostrarTab('entradas')">Entradas</button>
       <button class="tab-btn" onclick="mostrarTab('produccion')">Producción</button>
       <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
+      <button class="tab-btn" onclick="mostrarTab('ensambles')">Ensambles</button>
       <button class="tab-btn" onclick="mostrarTab('ventas_costos')">Ventas/Costos</button>
     </div>
   </div>
@@ -586,7 +559,7 @@
             ✅ ¡Creado!
           </span>
         </label>
-        <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor" autocomplete="off">
+        <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor" autocomplete="off" onfocus="this.select()">
         <div id="entrada-proveedor-list" class="ac-list hidden"></div>
         <input type="hidden" id="entrada-proveedor-id">
       </div>
@@ -648,7 +621,7 @@
     <h2 class="font-bold text-gray-700 mb-4">Registrar producción</h2>
     
     <!-- Selección de Documento de Producción -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4" style="max-width:500px">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4" style="max-width:750px">
       <div>
         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo doc. producción</label>
         <select id="prod-tipo-doc" onchange="mostrarConsecutivoProduccion()" class="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none">
@@ -658,6 +631,12 @@
       <div>
         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">No. documento</label>
         <input id="prod-num-doc" type="text" readonly placeholder="Auto-consecutivo" class="w-full border rounded-xl px-3 py-2 text-sm bg-gray-50 text-gray-500 outline-none">
+      </div>
+      <div class="relative">
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Responsable (Tercero)</label>
+        <input id="prod-responsable" type="text" placeholder="Buscar responsable..." autocomplete="off" onfocus="this.select()" class="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none" value="{{ session.get('nombre', '') }}">
+        <div id="prod-responsable-list" class="ac-list hidden absolute left-0 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg"></div>
+        <input type="hidden" id="prod-responsable-id" value="{{ session.get('chat_tercero_id', '') }}">
       </div>
     </div>
 
@@ -786,30 +765,90 @@
       </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto overflow-y-auto max-h-[600px] border border-gray-150 rounded-xl custom-scrollbar">
       <table class="w-full text-xs">
         <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
           <tr class="text-gray-500 uppercase text-[10px]">
-            <th rowspan="2" class="px-3 py-2 text-left">Fecha</th>
-            <th colspan="3" class="px-3 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100/50">CANTIDADES</th>
-            <th colspan="2" class="px-3 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100/50">COSTOS UNITARIOS</th>
-            <th rowspan="2" class="px-3 py-2 text-right num">Total Línea</th>
-            <th rowspan="2" class="px-3 py-2 text-left">Documento / Proveedor / Origen</th>
-            <th rowspan="2" class="px-3 py-2 text-left">Notas</th>
-            <th rowspan="2" class="px-3 py-2 text-center"></th>
+            <th rowspan="2" class="px-3 py-2 text-left bg-gray-50">Fecha</th>
+            <th colspan="3" class="px-3 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100">CANTIDADES</th>
+            <th colspan="2" class="px-3 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100">COSTOS UNITARIOS</th>
+            <th rowspan="2" class="px-3 py-2 text-right num bg-gray-50">Total Línea</th>
+            <th rowspan="2" class="px-3 py-2 text-left bg-gray-50">Documento / Proveedor / Origen</th>
+            <th rowspan="2" class="px-3 py-2 text-left bg-gray-50">Notas</th>
           </tr>
           <tr class="text-gray-500 uppercase text-[10px]">
-            <th class="px-3 py-1.5 text-right num font-semibold bg-emerald-50/30 text-emerald-800 border-r border-gray-100">Entradas</th>
-            <th class="px-3 py-1.5 text-right num font-semibold bg-rose-50/30 text-rose-800 border-r border-gray-100">Salidas</th>
-            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-100/30 text-gray-800">Saldo</th>
-            <th class="px-3 py-1.5 text-right num font-semibold bg-blue-50/30 text-blue-800 border-r border-gray-100" title="Costo unitario del movimiento">Costo Trans.</th>
-            <th class="px-3 py-1.5 text-right num font-semibold bg-purple-50/30 text-purple-800" title="Costo promedio ponderado resultante">Costo Prom.</th>
+            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-50 text-emerald-800 border-r border-gray-100">
+              Entradas
+              <span id="kardex-sum-entradas" class="block text-xs font-mono font-bold text-emerald-600 mt-0.5" title="Total entradas en consulta">0</span>
+            </th>
+            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-50 text-rose-800 border-r border-gray-100">
+              Salidas
+              <span id="kardex-sum-salidas" class="block text-xs font-mono font-bold text-rose-600 mt-0.5" title="Total salidas en consulta">0</span>
+            </th>
+            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-50 text-gray-800">Saldo</th>
+            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-50 text-blue-800 border-r border-gray-100" title="Costo unitario del movimiento">Costo Trans.</th>
+            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-50 text-purple-800" title="Costo promedio ponderado resultante">Costo Prom.</th>
           </tr>
         </thead>
         <tbody id="tabla-kardex" class="divide-y divide-gray-100">
           <tr><td colspan="10" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- ── TAB ENSAMBLES ────────────────────────────────────────── -->
+  <div id="tab-ensambles" class="hidden bg-white rounded-2xl shadow p-5">
+    <div class="border-b border-gray-150 pb-4 mb-4 flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <h2 class="text-lg font-bold text-gray-800">Movimientos por Ensambles (Códigos Padres)</h2>
+        <p class="text-xs text-gray-400 font-medium">Reconciliación entre salidas físicas de insumos (Kardex) y costos de ventas financieros (Asientos).</p>
+      </div>
+      <div class="flex items-end gap-3 flex-wrap text-xs">
+        <div class="flex flex-col relative w-64">
+          <label class="text-[10px] font-bold text-gray-400 uppercase mb-1">Producto Padre</label>
+          <input id="ensambles-ac-input" type="text" placeholder="Buscar producto padre..." autocomplete="off"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
+          <div id="ensambles-ac-list" class="absolute left-0 right-0 top-[60px] z-50 bg-white border border-gray-200 rounded-lg shadow-lg hidden max-h-48 overflow-y-auto"></div>
+          <input type="hidden" id="ensambles-padre-id" value="">
+        </div>
+        <div class="flex flex-col">
+          <label class="text-[10px] font-bold text-gray-400 uppercase mb-1">Desde</label>
+          <input id="ensambles-fecha-ini" type="date" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
+        </div>
+        <div class="flex flex-col">
+          <label class="text-[10px] font-bold text-gray-400 uppercase mb-1">Hasta</label>
+          <input id="ensambles-fecha-fin" type="date" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
+        </div>
+        <button onclick="cargarReporteEnsambles()" class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition-all shadow-xs flex items-center gap-1">
+          🔍 Generar Reporte
+        </button>
+      </div>
+    </div>
+
+    <!-- Panel de Consolidados/Resumen del Periodo -->
+    <div id="ensambles-resumen-periodo" class="hidden mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-gray-50 rounded-xl p-4 border border-gray-200/60 shadow-2xs">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Transacciones</span>
+        <span id="ensambles-res-transacciones" class="text-xl font-bold text-gray-700 block mt-1">0</span>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-4 border border-gray-200/60 shadow-2xs">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Costo de Ventas Contabilizado (61*)</span>
+        <span id="ensambles-res-contabilizado" class="text-xl font-bold text-blue-700 block mt-1">$ 0</span>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-4 border border-gray-200/60 shadow-2xs">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Costo Consumo Insumos (Kardex)</span>
+        <span id="ensambles-res-kardex" class="text-xl font-bold text-amber-700 block mt-1">$ 0</span>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-4 border border-gray-200/60 shadow-2xs" id="ensambles-res-diferencia-card">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Diferencia Acumulada</span>
+        <span id="ensambles-res-diferencia" class="text-xl font-bold block mt-1">$ 0</span>
+      </div>
+    </div>
+
+    <!-- Resultados del Reporte -->
+    <div id="ensambles-report-content" class="space-y-6">
+      <div class="text-center text-gray-400 py-12">Selecciona un producto padre y rango de fechas para generar el reporte</div>
     </div>
   </div>
 
@@ -915,7 +954,7 @@ function toast(msg, ok = true) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'kardex', 'ventas_costos'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'kardex', 'ensambles', 'ventas_costos'];
 function mostrarTab(t) {
   TABS.forEach(id => {
     const el = document.getElementById(`tab-${id}`);
@@ -927,6 +966,9 @@ function mostrarTab(t) {
   if (t === 'tarjetas') {
     cargarTarjetasResumen();
     cambiarVistaTarjetas('recetas');
+  }
+  if (t === 'ensambles') {
+    inicializarFechasEnsambles();
   }
   if (t === 'ventas_costos') {
     inicializarFechasVC();
@@ -978,10 +1020,31 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
 
   inp.addEventListener('keydown', e => {
     const items = list.querySelectorAll('.ac-item');
-    if (e.key === 'ArrowDown') { idx = Math.min(idx + 1, items.length - 1); highlightAC(items); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { idx = Math.max(idx - 1, 0); highlightAC(items); e.preventDefault(); }
-    else if (e.key === 'Enter' && idx >= 0) { items[idx]?.click(); e.preventDefault(); }
-    else if (e.key === 'Escape') { list.classList.add('hidden'); }
+    if (e.key === 'ArrowDown') {
+      if (list.classList.contains('hidden')) {
+        renderAC();
+      } else {
+        idx = Math.min(idx + 1, items.length - 1);
+        highlightAC(items);
+      }
+      e.preventDefault();
+    }
+    else if (e.key === 'ArrowUp') {
+      idx = Math.max(idx - 1, 0);
+      highlightAC(items);
+      e.preventDefault();
+    }
+    else if (e.key === 'Enter') {
+      if (idx >= 0 && items[idx]) {
+        items[idx].dispatchEvent(new Event('mousedown'));
+        e.preventDefault();
+      }
+    }
+    else if (e.key === 'Escape') {
+      list.classList.add('hidden');
+      inp.focus();
+      e.preventDefault();
+    }
   });
 
   inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
@@ -1044,6 +1107,109 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
   }
 }
 
+// Autocomplete específico para categorías
+function setupCategoriasAC(inputId, listId) {
+  const inp = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  if (!inp || !list) return;
+  let idx = -1, timer = null;
+
+  const normalizeStr = str => {
+    if (!str) return '';
+    try {
+      return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    } catch (e) {
+      return str.toString().toLowerCase().trim();
+    }
+  };
+
+  inp.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => render(), 150);
+  });
+
+  inp.addEventListener('focus', () => {
+    render();
+  });
+
+  inp.addEventListener('keydown', e => {
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      if (list.classList.contains('hidden')) {
+        render();
+      } else {
+        idx = Math.min(idx + 1, items.length - 1);
+        highlight(items);
+      }
+      e.preventDefault();
+    }
+    else if (e.key === 'ArrowUp') {
+      idx = Math.max(idx - 1, 0);
+      highlight(items);
+      e.preventDefault();
+    }
+    else if (e.key === 'Enter') {
+      if (idx >= 0 && items[idx]) {
+        items[idx].dispatchEvent(new Event('mousedown'));
+        e.preventDefault();
+      }
+    }
+    else if (e.key === 'Escape') {
+      list.classList.add('hidden');
+      inp.focus();
+      e.preventDefault();
+    }
+  });
+
+  inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
+
+  function render() {
+    const rawQ = inp.value;
+    const qNorm = normalizeStr(rawQ);
+    
+    // Obtenemos categorías únicas de la variable global "productos"
+    const itemsList = [...new Set((productos || []).map(p => p.categoria).filter(Boolean))].sort();
+    
+    if (!itemsList.length) {
+      list.classList.add('hidden');
+      return;
+    }
+
+    const matches = itemsList.filter(c => {
+      if (!c) return false;
+      const cNorm = normalizeStr(c);
+      return cNorm.includes(qNorm);
+    }).slice(0, 10);
+
+    idx = -1;
+    
+    if (matches.length > 0) {
+      list.innerHTML = matches.map(c => `
+        <div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-val="${c.replace(/"/g,'&quot;')}">
+          <span class="font-semibold text-gray-800">${c}</span>
+        </div>
+      `).join('');
+      
+      list.querySelectorAll('.ac-item').forEach(el => {
+        el.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          inp.value = el.dataset.val;
+          list.classList.add('hidden');
+          inp.dispatchEvent(new Event('input'));
+        });
+      });
+      list.classList.remove('hidden');
+    } else {
+      list.classList.add('hidden');
+    }
+  }
+
+  function highlight(items) {
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === idx));
+    if (idx >= 0) items[idx].scrollIntoView({block: 'nearest'});
+  }
+}
+
 function abrirModalCrearDesdeAC(inputId, hiddenId, nombre) {
   activeACInputId = inputId;
   activeACHiddenId = hiddenId;
@@ -1055,6 +1221,7 @@ function setupRemoteAC(inputId, listId, hiddenId, searchUrl, onSelect) {
   const inp = document.getElementById(inputId);
   const list = document.getElementById(listId);
   const hid = document.getElementById(hiddenId);
+  if (!inp || !list) return;
   let idx = -1, timer = null;
 
   inp.addEventListener('input', () => {
@@ -1062,12 +1229,40 @@ function setupRemoteAC(inputId, listId, hiddenId, searchUrl, onSelect) {
     hid.value = ''; // Limpiar ID al escribir
     timer = setTimeout(() => search(), 280);
   });
+  
+  inp.addEventListener('focus', () => {
+    if (inp.value.trim().length >= 2) {
+      search();
+    }
+  });
+
   inp.addEventListener('keydown', e => {
     const items = list.querySelectorAll('.ac-item');
-    if (e.key === 'ArrowDown') { idx = Math.min(idx + 1, items.length - 1); highlightAC(items); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { idx = Math.max(idx - 1, 0); highlightAC(items); e.preventDefault(); }
-    else if (e.key === 'Enter' && idx >= 0) { items[idx]?.click(); e.preventDefault(); }
-    else if (e.key === 'Escape') { list.classList.add('hidden'); }
+    if (e.key === 'ArrowDown') {
+      if (list.classList.contains('hidden')) {
+        search();
+      } else {
+        idx = Math.min(idx + 1, items.length - 1);
+        highlightAC(items);
+      }
+      e.preventDefault();
+    }
+    else if (e.key === 'ArrowUp') {
+      idx = Math.max(idx - 1, 0);
+      highlightAC(items);
+      e.preventDefault();
+    }
+    else if (e.key === 'Enter') {
+      if (idx >= 0 && items[idx]) {
+        items[idx].dispatchEvent(new Event('mousedown'));
+        e.preventDefault();
+      }
+    }
+    else if (e.key === 'Escape') {
+      list.classList.add('hidden');
+      inp.focus();
+      e.preventDefault();
+    }
   });
   inp.addEventListener('blur', () => setTimeout(() => list.classList.add('hidden'), 220));
 
@@ -1698,7 +1893,12 @@ function agregarLineaTarjeta() {
 async function guardarTarjeta() {
   const productoId = document.getElementById('tarjeta-prod-id').value;
   const lineas = tarjetaLineas.map(l => ({componente_id: l.componente_id, cantidad: l.cantidad}));
-  if (!lineas.length) { toast('Agrega al menos un componente', false); return; }
+  if (!lineas.length) {
+    if (confirm('Al guardar la tarjeta sin componentes, se eliminará la receta por completo y el producto volverá a ser Directo (sin receta). ¿Deseas continuar?')) {
+      await ejecutarEliminacionTarjeta(productoId, true);
+    }
+    return;
+  }
   const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({lineas})
@@ -2362,7 +2562,13 @@ function verKardex(id, nombre) {
 }
 async function cargarKardex(productoId) {
   const tb = document.getElementById('tabla-kardex');
-  tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+  tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+  
+  // Reset sum elements
+  const sumEntradasEl = document.getElementById('kardex-sum-entradas');
+  const sumSalidasEl = document.getElementById('kardex-sum-salidas');
+  if (sumEntradasEl) sumEntradasEl.textContent = '0';
+  if (sumSalidasEl) sumSalidasEl.textContent = '0';
   
   // Render product summary bar (initial fallback from cache)
   const prod = productos.find(p => Number(p.id) === Number(productoId));
@@ -2391,9 +2597,23 @@ async function cargarKardex(productoId) {
     }
   }
   if (!d.movimientos.length) {
-    tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
     return;
   }
+  
+  // Calculate sum totals
+  let totalEntradas = 0;
+  let totalSalidas = 0;
+  d.movimientos.forEach(m => {
+    if (m.tipo === 'entrada') {
+      totalEntradas += Number(m.cantidad || 0);
+    } else if (m.tipo === 'salida') {
+      totalSalidas += Number(m.cantidad || 0);
+    }
+  });
+  if (sumEntradasEl) sumEntradasEl.textContent = fmt(totalEntradas);
+  if (sumSalidasEl) sumSalidasEl.textContent = fmt(totalSalidas);
+  
   tb.innerHTML = d.movimientos.map(m => {
     const transCostVal = m.valor_unitario;
     const avgCostVal = m.costo_und;
@@ -2410,7 +2630,18 @@ async function cargarKardex(productoId) {
 
     let docOrProveedorInfo = '';
     if (m.tipo_documento || m.documento_numero) {
-      docOrProveedorInfo += `<div class="font-semibold text-gray-700">${m.tipo_documento || ''} ${m.documento_numero || ''}</div>`;
+      const docType = m.tipo_documento || '';
+      const docNum = m.documento_numero || '';
+      const tId = m.proveedor_id || '';
+      
+      const linkUrl = `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docType)}&documento_numero=${encodeURIComponent(docNum)}&tercero_id=${encodeURIComponent(tId)}`;
+      
+      docOrProveedorInfo += `
+        <div class="font-semibold text-gray-700 flex items-center gap-1.5">
+          <span>${docType} ${docNum}</span>
+          ${docNum ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-[13px] inline-flex items-center">🔗</a>` : ''}
+        </div>
+      `;
     }
     if (m.proveedor_nombre) {
       docOrProveedorInfo += `<div class="text-gray-400 text-[10px]">${m.proveedor_nombre}</div>`;
@@ -2436,10 +2667,6 @@ async function cargarKardex(productoId) {
         <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-800">${fmtMon(lineTotal)}</td>
         <td class="px-3 py-2.5 text-xs text-gray-600">${docOrProveedorInfo}</td>
         <td class="px-3 py-2.5 text-xs text-gray-400 max-w-[140px] truncate" title="${m.notes || m.notas || ''}">${m.notes || m.notas || ''}</td>
-        <td class="px-3 py-2.5 text-center">
-          <button onclick="confirmarAnulacion(${m.id})" title="Anular/Eliminar"
-                  class="text-red-500 hover:text-red-700 font-bold text-xs p-1">🗑️</button>
-        </td>
       </tr>
     `;
   }).join('');
@@ -2516,6 +2743,8 @@ async function registrarProduccion() {
   const td = tiposDocProduccion.find(t => t.id === tipo_doc_id);
   const tipo_documento = td ? td.nombre : null;
   const documento_numero = document.getElementById('prod-num-doc').value || null;
+  const tercero_id = parseInt(document.getElementById('prod-responsable-id').value) || null;
+  const tercero_nombre = document.getElementById('prod-responsable').value.trim() || null;
   
   const btn = document.getElementById('prod-btn-registrar');
   if (btn) btn.disabled = true;
@@ -2524,7 +2753,16 @@ async function registrarProduccion() {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({producto_id: id, cantidad: qty, notas, tipo_documento_id: tipo_doc_id, tipo_documento, documento_numero})
+      body: JSON.stringify({
+        producto_id: id,
+        cantidad: qty,
+        notas,
+        tipo_documento_id: tipo_doc_id,
+        tipo_documento,
+        documento_numero,
+        tercero_id,
+        tercero_nombre
+      })
     });
     const d = await r.json();
     if (d.ok) {
@@ -2533,6 +2771,8 @@ async function registrarProduccion() {
       document.getElementById('prod-ac-id').value = '';
       document.getElementById('prod-cantidad').value = '1';
       document.getElementById('prod-notas').value = '';
+      document.getElementById('prod-responsable').value = '{{ session.get("nombre", "") }}';
+      document.getElementById('prod-responsable-id').value = '{{ session.get("chat_tercero_id", "") }}';
       limpiarPreview();
       cargarProductos();
       cargarTiposDocProduccion();
@@ -2544,136 +2784,6 @@ async function registrarProduccion() {
     console.error(e);
     toast('Error de red al registrar producción', false);
     if (btn) btn.disabled = false;
-  }
-}
-
-// ── Anulación de Documentos ──────────────────────────────────────────────────
-let anulacionMovId = null;
-
-function cerrarModalAnulacion() {
-  document.getElementById('overlay-anulacion').classList.add('hidden');
-  anulacionMovId = null;
-}
-
-async function confirmarAnulacion(movimientoId) {
-  anulacionMovId = movimientoId;
-  const cont = document.getElementById('anulacion-detalles');
-  cont.innerHTML = '<div class="text-center py-4 text-gray-500">Cargando detalles de anulación…</div>';
-  
-  // Deshabilitar botones mientras carga
-  document.getElementById('btn-anular-item').disabled = true;
-  document.getElementById('btn-anular-doc').disabled = true;
-  document.getElementById('overlay-anulacion').classList.remove('hidden');
-
-  try {
-    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/previsualizar?movimiento_id=${movimientoId}`);
-    const d = await r.json();
-    if (!d.ok) {
-      cont.innerHTML = `<div class="text-red-500 font-semibold p-2">Error: ${d.error}</div>`;
-      return;
-    }
-
-    const item = d.item_seleccionado;
-    let html = `
-      <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
-        <span class="font-bold text-gray-700">Ítem seleccionado:</span>
-        <div class="mt-1">
-          <span class="badge ${item.tipo === 'entrada' ? 'badge-entrada' : 'badge-salida'}">${item.tipo}</span>
-          <strong>${item.nombre_producto}</strong> - ${item.cantidad} unidades
-        </div>
-        ${item.tipo_documento ? `<div class="text-xs text-gray-400 mt-1">Doc: ${item.tipo_documento} ${item.documento_numero || ''}</div>` : ''}
-      </div>
-    `;
-
-    if (d.otros_items && d.otros_items.length > 0) {
-      html += `
-        <div class="border border-orange-100 rounded-xl p-3 bg-orange-50/50">
-          <span class="font-bold text-orange-850" style="color: #c2410c;">Otros ítems en el mismo documento (${d.otros_items.length}):</span>
-          <ul class="list-disc pl-5 mt-1 space-y-0.5 text-xs text-orange-700">
-            ${d.otros_items.map(o => `<li><strong>${o.nombre_producto}</strong> (${o.tipo}: ${o.cantidad} und)</li>`).join('')}
-          </ul>
-        </div>
-      `;
-    }
-
-    if (d.comprobante) {
-      html += `
-        <div class="border border-red-100 rounded-xl p-3 bg-red-50/50">
-          <span class="font-bold text-red-850" style="color: #b91c1c;">Asiento contable asociado:</span>
-          <div class="text-xs text-red-700 mt-1">
-            <strong>${d.comprobante.numero_comprobante}</strong> - ${d.comprobante.descripcion || ''} 
-            (Débitos: $${parseFloat(d.comprobante.total_debitos).toLocaleString()})
-          </div>
-          <p class="text-[10px] text-red-500 mt-1">Se eliminará físicamente este comprobante de la contabilidad.</p>
-        </div>
-      `;
-    } else {
-      html += `
-        <div class="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded-xl p-3">
-          No se detectaron comprobantes contables vinculados a este documento.
-        </div>
-      `;
-    }
-
-    cont.innerHTML = html;
-    
-    // Habilitar botones
-    document.getElementById('btn-anular-item').disabled = false;
-    document.getElementById('btn-anular-doc').disabled = false;
-    
-    // Mostrar siempre ambos botones para evitar confusión
-    document.getElementById('btn-anular-doc').classList.remove('hidden');
-
-  } catch (err) {
-    cont.innerHTML = `<div class="text-red-500 font-semibold p-2">Error de conexión: ${err.message}</div>`;
-  }
-}
-
-async function ejecutarAnulacion(anularTodo) {
-  if (!anulacionMovId) return;
-  
-  if (!confirm(`¿Estás seguro de que deseas ${anularTodo ? 'anular todo el documento (incluyendo contabilidad e inventarios vinculados)' : 'eliminar solo este ítem del inventario'}? esta acción no se puede deshacer.`)) {
-    return;
-  }
-
-  // Deshabilitar botones de acción durante el guardado
-  document.getElementById('btn-anular-item').disabled = true;
-  document.getElementById('btn-anular-doc').disabled = true;
-
-  try {
-    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/anular`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        movimiento_id: anulacionMovId,
-        anular_todo: anularTodo
-      })
-    });
-    
-    const d = await r.json();
-    if (!d.ok) {
-      toast(d.error, false);
-      document.getElementById('btn-anular-item').disabled = false;
-      document.getElementById('btn-anular-doc').disabled = false;
-      return;
-    }
-
-    toast(`Anulación exitosa. ${d.movimientos_borrados} movimientos borrados y ${d.comprobantes_borrados} asientos contables eliminados.`);
-    cerrarModalAnulacion();
-    
-    // Recargar productos (para actualizar stock en la tabla principal)
-    cargarProductos();
-    
-    // Si la pestaña Kardex está activa y hay un producto seleccionado, recargar el Kardex
-    const selectId = document.getElementById('kardex-ac-id').value;
-    if (selectId) {
-      cargarKardex(selectId);
-    }
-    
-  } catch (err) {
-    toast(`Error de red: ${err.message}`, false);
-    document.getElementById('btn-anular-item').disabled = false;
-    document.getElementById('btn-anular-doc').disabled = false;
   }
 }
 
@@ -3022,6 +3132,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   abrirTarjetaInicialDesdeUrl();
   document.getElementById('entrada-fecha-doc').value = new Date().toISOString().slice(0, 10);
 
+  // AC categorías del modal de producto
+  setupCategoriasAC('mp-categoria', 'mp-categoria-list');
+
   // AC tarjeta (usa productos cargados)
   setupAC('tarjeta-ac-input', 'tarjeta-ac-list', 'tarjeta-ac-id', () => productos, (item) => {
     document.getElementById('tarjeta-selected-name').textContent = item.nombre;
@@ -3043,12 +3156,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   // AC producción (limpia preview al cambiar producto)
   setupAC('prod-ac-input', 'prod-ac-list', 'prod-ac-id', () => productos, () => limpiarPreview());
 
+  // AC ensambles
+  setupAC('ensambles-ac-input', 'ensambles-ac-list', 'ensambles-padre-id', () => productos, () => {});
+  document.getElementById('ensambles-ac-input').addEventListener('input', (e) => {
+    if (!e.target.value.trim()) {
+      document.getElementById('ensambles-padre-id').value = '';
+    }
+  });
+
   // AC proveedor
   setupRemoteAC('entrada-proveedor', 'entrada-proveedor-list', 'entrada-proveedor-id', '/api/inventario/proveedores/buscar', () => {
     document.getElementById('btn-crear-proveedor').classList.add('hidden');
     document.getElementById('badge-proveedor-creado').classList.add('hidden');
     verificarDocumentoExistente();
   });
+
+  // AC Responsable Producción
+  setupRemoteAC('prod-responsable', 'prod-responsable-list', 'prod-responsable-id', '/api/inventario/proveedores/buscar');
 
   initDefaultProveedor();
 
@@ -3683,6 +3807,207 @@ function ordenarVC(col) {
   });
   
   renderTablaVC();
+}
+
+
+// ── Ensambles (Códigos Padres) ──
+function inicializarFechasEnsambles() {
+  const desdeInp = document.getElementById('ensambles-fecha-ini');
+  const hastaInp = document.getElementById('ensambles-fecha-fin');
+  if (desdeInp && !desdeInp.value) {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    desdeInp.value = `${y}-${m}-01`;
+  }
+  if (hastaInp && !hastaInp.value) {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    hastaInp.value = `${y}-${m}-${day}`;
+  }
+}
+
+async function cargarReporteEnsambles() {
+  const parentId = document.getElementById('ensambles-padre-id').value;
+  const ini = document.getElementById('ensambles-fecha-ini').value;
+  const fin = document.getElementById('ensambles-fecha-fin').value;
+  
+  if (!parentId) {
+    toast('Selecciona un producto padre', false);
+    return;
+  }
+  if (!ini || !fin) {
+    toast('Selecciona las fechas de inicio y fin', false);
+    return;
+  }
+  
+  const content = document.getElementById('ensambles-report-content');
+  content.innerHTML = `<div class="text-center text-gray-500 py-12 flex flex-col items-center justify-center gap-2">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
+    <span>Consultando base de datos y cargando movimientos contables...</span>
+  </div>`;
+  
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reporte-ensambles?producto_padre_id=${parentId}&fecha_desde=${ini}&fecha_hasta=${fin}`);
+    const d = await r.json();
+    if (!d.ok) {
+      content.innerHTML = `<div class="text-center text-red-500 font-semibold py-12">${d.error || 'Error al cargar reporte'}</div>`;
+      return;
+    }
+    
+    const movements = d.movements || [];
+    const cogsMap = d.cogs_map || {};
+    
+    if (!movements.length) {
+      content.innerHTML = `<div class="text-center text-gray-400 py-12">No se encontraron movimientos para el producto seleccionado en este rango de fechas.</div>`;
+      document.getElementById('ensambles-resumen-periodo').classList.add('hidden');
+      return;
+    }
+    
+    // Group movements by document
+    const docMap = {};
+    
+    movements.forEach(m => {
+      if (!docMap[m.documento_numero]) {
+        docMap[m.documento_numero] = {
+          doc_num: m.documento_numero,
+          tipo: m.tipo_documento || 'FACTURA_DE_VENTA',
+          fecha: m.fecha,
+          itemsCost: 0,
+          cogsCost: cogsMap[m.documento_numero] || 0.0,
+          components: []
+        };
+      }
+      docMap[m.documento_numero].itemsCost += m.costo_total;
+      docMap[m.documento_numero].components.push(m);
+    });
+    
+    const docsList = Object.values(docMap);
+    const totalTrans = docsList.length;
+    const totalContab = docsList.reduce((sum, doc) => sum + doc.cogsCost, 0);
+    const totalKardex = movements.reduce((sum, m) => sum + m.costo_total, 0);
+    const diffGeneral = totalContab - totalKardex;
+    
+    document.getElementById('ensambles-res-transacciones').textContent = totalTrans;
+    document.getElementById('ensambles-res-contabilizado').textContent = fmtMon(totalContab);
+    document.getElementById('ensambles-res-kardex').textContent = fmtMon(totalKardex);
+    
+    const diffEl = document.getElementById('ensambles-res-diferencia');
+    const diffCard = document.getElementById('ensambles-res-diferencia-card');
+    diffEl.textContent = fmtMon(diffGeneral);
+    if (Math.abs(diffGeneral) <= 0.01) {
+      diffEl.className = 'text-xl font-bold text-green-700 block mt-1';
+      diffCard.className = 'bg-green-50 rounded-xl p-4 border border-green-200 shadow-2xs';
+    } else {
+      diffEl.className = 'text-xl font-bold text-red-600 block mt-1';
+      diffCard.className = 'bg-red-50 rounded-xl p-4 border border-red-200 shadow-2xs animate-pulse';
+    }
+    document.getElementById('ensambles-resumen-periodo').classList.remove('hidden');
+    
+    let html = '';
+    
+    // Sort documents by date desc, then number desc
+    docsList.sort((a,b) => b.fecha.localeCompare(a.fecha) || b.doc_num.localeCompare(a.doc_num));
+    
+    docsList.forEach(doc => {
+      const diff = doc.cogsCost - doc.itemsCost;
+      const isReconciled = Math.abs(diff) <= 0.01;
+      
+      const cardBorderCls = isReconciled 
+        ? 'border-gray-200 bg-white' 
+        : 'border-rose-300 bg-rose-50/10';
+        
+      const diffCls = isReconciled 
+        ? 'text-green-700 font-bold' 
+        : 'text-rose-600 font-bold';
+        
+      const pQty = d.parent_qty_map[doc.doc_num] || 0.0;
+      const unitCogs = pQty > 0 ? (doc.cogsCost / pQty) : 0.0;
+      const unitItems = pQty > 0 ? (doc.itemsCost / pQty) : 0.0;
+      const unitDiff = unitCogs - unitItems;
+        
+      html += `
+        <div class="border rounded-2xl p-4 shadow-2xs ${cardBorderCls} transition-all duration-200 hover:shadow-xs">
+          <!-- Cabecera de la Tarjeta -->
+          <div class="flex justify-between items-center border-b border-gray-100 pb-3 mb-3 flex-wrap gap-2">
+            <div>
+              <span class="text-sm font-extrabold text-gray-800 block">${doc.doc_num} (${fmt(pQty)} unidades)</span>
+              <span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">${doc.tipo.replace(/_/g, ' ')}</span>
+            </div>
+            <div class="text-right">
+              <span class="text-xs font-bold text-gray-500 block">${doc.fecha ? doc.fecha.slice(0, 10) : '—'}</span>
+              <span class="text-[10px] text-gray-400 font-medium">Fecha</span>
+            </div>
+          </div>
+          
+          <!-- Detalle de Cantidades y Costos del Código Padre -->
+          <div class="bg-gray-50/60 rounded-xl p-3 border border-gray-150/70 mb-4">
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-xs font-extrabold text-gray-700">Producto Padre: ${d.producto_padre.nombre}</span>
+              <span class="bg-rose-100 text-rose-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">Cantidad Vendida/Producida: ${fmt(pQty)}</span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[10px]">
+              <div class="bg-blue-50/30 rounded-lg p-2 border border-blue-100/50">
+                <span class="text-blue-500 font-bold uppercase tracking-wider block">Costo Contabilizado (61*)</span>
+                <span class="text-xs font-extrabold text-blue-700 block mt-0.5">${fmtMon(doc.cogsCost)}</span>
+                <span class="text-[9px] text-blue-600 font-medium block mt-0.5">Unitario: ${fmtMon(unitCogs)}</span>
+              </div>
+              <div class="bg-amber-50/30 rounded-lg p-2 border border-amber-100/50">
+                <span class="text-amber-500 font-bold uppercase tracking-wider block">Costo Insumos (Kardex)</span>
+                <span class="text-xs font-extrabold text-amber-700 block mt-0.5">${fmtMon(doc.itemsCost)}</span>
+                <span class="text-[9px] text-amber-600 font-medium block mt-0.5">Unitario: ${fmtMon(unitItems)}</span>
+              </div>
+              <div class="${isReconciled ? 'bg-green-50/30 border-green-100/50' : 'bg-rose-50/30 border-rose-100/50'} rounded-lg p-2 border">
+                <span class="${isReconciled ? 'text-green-500' : 'text-rose-500'} font-bold uppercase tracking-wider block">Diferencia / Descuadre</span>
+                <span class="text-xs font-extrabold ${diffCls} block mt-0.5">${fmtMon(diff)} ${isReconciled ? '✓' : '⚠️'}</span>
+                <span class="text-[9px] ${isReconciled ? 'text-green-600' : 'text-rose-500'} font-medium block mt-0.5">Unitario: ${fmtMon(unitDiff)}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Tabla de Componentes de esta Factura -->
+          <div class="overflow-x-auto rounded-xl border border-gray-100 bg-white">
+            <table class="w-full text-xs text-left text-gray-600">
+              <thead class="bg-gray-50 text-[10px] text-gray-500 uppercase border-b border-gray-100">
+                <tr>
+                  <th class="px-3 py-2 font-bold text-gray-700">Componente / Insumo</th>
+                  <th class="px-3 py-2 text-right font-bold text-gray-700">Cantidad</th>
+                  <th class="px-3 py-2 text-right font-bold text-gray-700">Costo Unitario</th>
+                  <th class="px-3 py-2 text-right font-bold text-gray-700">Costo Total</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 font-mono">
+                ${doc.components.map(c => `
+                  <tr class="hover:bg-gray-50/50">
+                    <td class="px-3 py-2 text-gray-800 font-sans font-semibold">${c.nombre_producto}</td>
+                    <td class="px-3 py-2 text-right text-gray-600">${fmt(c.cantidad)}</td>
+                    <td class="px-3 py-2 text-right text-gray-500">${fmtMon(c.costo_unitario)}</td>
+                    <td class="px-3 py-2 text-right text-gray-800 font-semibold">${fmtMon(c.costo_total)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+              <tfoot class="bg-gray-50/80 font-bold border-t border-gray-150">
+                <tr class="text-[11px] text-gray-800">
+                  <td class="px-3 py-2 text-left font-extrabold">COSTO TOTAL DE INSUMOS (KARDEX)</td>
+                  <td class="px-3 py-2"></td>
+                  <td class="px-3 py-2 text-right num text-gray-700 font-extrabold">Costo Unitario: ${fmtUnitCost(unitItems)}</td>
+                  <td class="px-3 py-2 text-right num text-rose-700 font-extrabold">Costo Total: ${fmtMon(doc.itemsCost)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      `;
+    });
+    
+    content.innerHTML = html;
+  } catch (e) {
+    console.error(e);
+    content.innerHTML = `<div class="text-center text-red-500 font-semibold py-12">Error de red al conectar con el servidor</div>`;
+  }
 }
 </script>
 </body>

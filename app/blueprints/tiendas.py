@@ -20,7 +20,7 @@ from ..visitas_publicas import (
     respuesta_con_visitante as _respuesta_con_visitante_generica,
 )
 from .auth import solo_admin
-from .inventarios import _aplicar_tarjeta, _es_ensamble, _verificar_stock_pedido
+from .inventarios import _aplicar_tarjeta, _es_ensamble, _verificar_stock_pedido, _mov_directo, _recostear_producto
 try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
     from .contabilidad import obtener_siguiente_consecutivo
@@ -2230,6 +2230,7 @@ def api_tienda_pedido_crear(slug):
     id_cajero        = data.get('id_cajero')
     nombre_cajero    = data.get('nombre_cajero', '').strip() or None
     id_tercero_cajero = data.get('id_tercero_cajero')
+    pedido_premontado_id = data.get('pedido_premontado_id')
     if not items:
         return jsonify({'ok': False, 'error': 'El carrito esta vacio'}), 400
     if not nombre_cliente and tipo_entrega != 'caja':
@@ -2551,6 +2552,14 @@ def api_tienda_pedido_crear(slug):
                               documento_numero_fisico=res_num)
             except Exception as _e:
                 print(f'[cont] venta tienda {slug}: {_e}')
+        
+        if pedido_premontado_id and numero_documento:
+            conn.execute("""
+                UPDATE pedidos 
+                SET estado = 'entregado', id_cajero = %s, numero_documento = %s
+                WHERE id = %s
+            """, (session.get('usuario_id'), numero_documento, pedido_premontado_id))
+
         conn.commit()
         # Notificación Telegram
         chat_id = tienda['telegram_chat_id']
@@ -2656,6 +2665,58 @@ def api_tienda_pedidos(slug):
                 'items': [{'nombre': i['nombre_producto'], 'cantidad': i['cantidad'], 'precio': float(i['precio_unitario'])} for i in items]
             })
         return jsonify({'ok': True, 'pedidos': resultado})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/caja/<slug>/pedidos-premontados')
+def api_caja_pedidos_premontados(slug):
+    conn = get_db_connection()
+    try:
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+        
+        rows = conn.execute("""
+            SELECT p.id, p.nombre_cliente, p.telefono_cliente, p.total, p.notas, p.fecha::text,
+                   t.nombre AS vendedor_nombre
+            FROM pedidos p
+            LEFT JOIN terceros t ON t.id = p.id_tercero_cajero
+            WHERE p.negocio_id = %s AND p.estado = 'premontado'
+            ORDER BY p.id DESC
+        """, (negocio['tercero_id'],)).fetchall()
+        
+        pedidos = []
+        for r in rows:
+            items_rows = conn.execute("""
+                SELECT producto_id, nombre_producto, cantidad, precio_unitario
+                FROM pedido_items
+                WHERE pedido_id = %s
+            """, (r['id'],)).fetchall()
+            
+            items = []
+            for it in items_rows:
+                items.append({
+                    'producto_id': it['producto_id'],
+                    'nombre_producto': it['nombre_producto'],
+                    'cantidad': float(it['cantidad']),
+                    'precio_unitario': float(it['precio_unitario'])
+                })
+                
+            pedidos.append({
+                'id': r['id'],
+                'nombre_cliente': r['nombre_cliente'] or '',
+                'telefono_cliente': r['telefono_cliente'] or '',
+                'total': float(r['total']),
+                'notas': r['notas'] or '',
+                'fecha': r['fecha'],
+                'vendedor_nombre': r['vendedor_nombre'] or 'Vendedor',
+                'items': items
+            })
+            
+        return jsonify({'ok': True, 'pedidos': pedidos})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

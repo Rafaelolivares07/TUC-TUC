@@ -1035,7 +1035,10 @@ def api_inventario_productos(negocio_id):
         _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
-        rows = conn.execute("""
+        solo_venta = request.args.get('solo_venta') == '1'
+        extra_where = " AND p.disponible = TRUE AND p.precio > 0" if solo_venta else ""
+
+        rows = conn.execute(f"""
             SELECT p.id, p.nombre, p.categoria, p.precio,
                    COALESCE(s.costo_und, p.costo) AS costo,
                    p.codigo_barra, p.iva_pct, p.disponible, p.orden,
@@ -1043,7 +1046,7 @@ def api_inventario_productos(negocio_id):
             FROM productos p
             LEFT JOIN saldos_inventario s ON s.producto_id = p.id
                 AND s.negocio_id = p.negocio_id AND s.bodega = 1
-            WHERE p.negocio_id = %s
+            WHERE p.negocio_id = %s{extra_where}
             ORDER BY p.categoria, p.orden, p.nombre
         """, (negocio_id,)).fetchall()
         return jsonify({'ok': True, 'productos': [dict(r) for r in rows]})
@@ -1553,6 +1556,8 @@ def api_produccion_registrar(negocio_id):
     notas       = data.get('notas') or None
     tipo_documento = (data.get('tipo_documento') or '').strip().upper() or None
     documento_numero = (data.get('documento_numero') or '').strip().upper() or None
+    tercero_id  = _int_o_none(data.get('tercero_id'))
+    tercero_nombre = data.get('tercero_nombre') or None
 
     if not producto_id or cantidad <= 0:
         return jsonify({'ok': False, 'error': 'producto_id y cantidad requeridos'}), 400
@@ -1673,7 +1678,9 @@ def api_produccion_registrar(negocio_id):
                          producto_padre_id=producto_id,
                          tipo_documento=tipo_documento, documento_numero=documento_numero,
                          documento_fecha=date.today(),
-                         tipo_documento_id=tipo_doc_id)
+                         tipo_documento_id=tipo_doc_id,
+                         proveedor_id=tercero_id,
+                         proveedor_nombre=tercero_nombre)
 
         # Entrada del terminado con costo calculado desde componentes
         _mov_directo(conn, negocio_id, producto_id, cantidad,
@@ -1682,7 +1689,9 @@ def api_produccion_registrar(negocio_id):
                      notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
                      tipo_documento=tipo_documento, documento_numero=documento_numero,
                      documento_fecha=date.today(),
-                     tipo_documento_id=tipo_doc_id)
+                     tipo_documento_id=tipo_doc_id,
+                     proveedor_id=tercero_id,
+                     proveedor_nombre=tercero_nombre)
 
         # Asiento contable de producción (best-effort, no bloquea)
         if _asiento_produccion:
@@ -1695,7 +1704,8 @@ def api_produccion_registrar(negocio_id):
                     origen_id=prod_token,
                     tipo_documento=tipo_documento,
                     documento_numero=documento_numero,
-                    tipo_documento_id=tipo_doc_id
+                    tipo_documento_id=tipo_doc_id,
+                    tercero_id=tercero_id
                 )
             except Exception as _e:
                 print(f'[cont] produccion prod={producto_id}: {_e}')
@@ -2191,13 +2201,20 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         for r in rows_inv:
             td_id = r['tipo_documento_id']
             doc_num = r['documento_numero']
+            
+            pure_num = doc_num
+            if doc_num and '-' in doc_num:
+                parts = doc_num.split('-')
+                if parts[-1].strip().isdigit():
+                    pure_num = parts[-1].strip()
+                    
             td_name = r['tipo_documento'] or 'otro'
             
             # Resolver nombre dinámico desde tipos_documento_negocio
             if td_id and td_id in types_map:
                 td_name = types_map[td_id]
                 
-            key = (td_id, doc_num) if td_id else (td_name, doc_num)
+            key = (td_id, pure_num) if td_id else (td_name.lower(), pure_num)
             
             consolidated[key] = {
                 'tipo_documento_id': td_id,
@@ -2259,12 +2276,19 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     c_name = t_row['nombre']
                     
             doc_num = r['numero_documento'] or str(r['id'])
+            
+            pure_num = doc_num
+            if doc_num and '-' in doc_num:
+                parts = doc_num.split('-')
+                if parts[-1].strip().isdigit():
+                    pure_num = parts[-1].strip()
+                    
             td_id = r['tipo_documento_id']
             td_name = 'pedido_venta'
             if td_id and td_id in types_map:
                 td_name = types_map[td_id]
                 
-            key = (td_id, doc_num) if td_id else (td_name, doc_num)
+            key = (td_id, pure_num) if td_id else (td_name.lower(), pure_num)
             f_val = r['fecha'] or r['created_at']
             # Normalizar fecha a YYYY-MM-DD para consistencia en consolidado
             date_str = f_val.strftime('%Y-%m-%d') if f_val else None
@@ -2277,6 +2301,9 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     consolidated[key]['tercero_nombre'] = c_name or 'Cliente general'
                 if r['total'] and float(r['total']) > consolidated[key]['total']:
                     consolidated[key]['total'] = float(r['total'])
+                # Prefer showing original prefix code if existing display name is shorter
+                if doc_num and len(doc_num) > len(consolidated[key]['documento_numero']):
+                    consolidated[key]['documento_numero'] = doc_num
             else:
                 consolidated[key] = {
                     'tipo_documento_id': td_id,
@@ -2375,7 +2402,8 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 if not consolidated[key]['tercero_id'] and p_id:
                     consolidated[key]['tercero_id'] = p_id
                     consolidated[key]['tercero_nombre'] = p_name or 'Cliente/Proveedor general'
-                if r['total'] and float(r['total']) > consolidated[key]['total']:
+                # Only use accounting totals if the document wasn't already found in sales/inventory (to avoid COGS/debit sum inflation)
+                if consolidated[key]['origen'] == 'contabilidad' and r['total'] and float(r['total']) > consolidated[key]['total']:
                     consolidated[key]['total'] = float(r['total'])
             else:
                 consolidated[key] = {
@@ -3117,18 +3145,43 @@ def api_unificar_terceros(negocio_id):
             return jsonify({'ok': False, 'error': 'El tercero principal no puede estar en la lista de sobrantes'}), 400
             
         # Verify principal exists
-        p_row = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (principal_id,)).fetchone()
+        p_row = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE id = %s", (principal_id,)).fetchone()
         if not p_row:
+            conn.close()
             return jsonify({'ok': False, 'error': 'El tercero principal no existe'}), 400
             
         # Verify sobrantes exist
         placeholders = ', '.join(['%s'] * len(sobrantes_ids))
-        s_rows = conn.execute(f"SELECT id, nombre FROM terceros WHERE id IN ({placeholders})", tuple(sobrantes_ids)).fetchall()
+        s_rows = conn.execute(f"SELECT id, nombre, telefono, tipo_tercero FROM terceros WHERE id IN ({placeholders})", tuple(sobrantes_ids)).fetchall()
         if len(s_rows) != len(sobrantes_ids):
+            conn.close()
             return jsonify({'ok': False, 'error': 'Uno o más terceros sobrantes no existen'}), 400
+            
+        # Validaciones de seguridad para no eliminar terceros administradores/plenipotenciarios
+        for s in s_rows:
+            if s['tipo_tercero'] == 'admin':
+                conn.close()
+                return jsonify({
+                    'ok': False, 
+                    'error': f"Seguridad: No se permite eliminar al tercero '{s['nombre']}' porque es de tipo 'admin' (usuario plenipotenciario/activo del sistema). Establézcalo como el Tercero Principal si desea unificar sus duplicados."
+                }), 400
             
         # Start transaction to merge
         principal_nombre = p_row['nombre']
+        
+        # Obtener el teléfono definido por el usuario o conservar el del principal
+        telefono_definido = data.get('telefono_definido')
+        if telefono_definido:
+            conn.execute("UPDATE terceros SET telefono = %s WHERE id = %s", (telefono_definido, principal_id))
+            principal_telefono = telefono_definido
+        else:
+            principal_telefono = p_row['telefono']
+            # Fallback automático si no se definió y el principal no lo tiene
+            if not principal_telefono:
+                phone_row = conn.execute(f"SELECT telefono FROM terceros WHERE id IN ({placeholders}) AND telefono IS NOT NULL AND telefono != '' LIMIT 1", tuple(sobrantes_ids)).fetchone()
+                if phone_row:
+                    conn.execute("UPDATE terceros SET telefono = %s WHERE id = %s", (phone_row['telefono'], principal_id))
+                    principal_telefono = phone_row['telefono']
         
         # 1. Update movimientos_inventario (both ID and name)
         conn.execute(f"""
@@ -3156,8 +3209,12 @@ def api_unificar_terceros(negocio_id):
             UPDATE pedidos 
             SET cliente_id = CASE WHEN cliente_id IN ({placeholders}) THEN %s ELSE cliente_id END,
                 id_tercero = CASE WHEN id_tercero IN ({placeholders}) THEN %s ELSE id_tercero END,
+                id_tercero_cajero = CASE WHEN id_tercero_cajero IN ({placeholders}) THEN %s ELSE id_tercero_cajero END,
                 nombre_cliente = CASE WHEN (cliente_id IN ({placeholders}) OR id_tercero IN ({placeholders})) THEN %s ELSE nombre_cliente END
-        """, tuple(sobrantes_ids) + (principal_id,) + tuple(sobrantes_ids) + (principal_id,) + tuple(sobrantes_ids) + tuple(sobrantes_ids) + (principal_nombre,))
+        """, tuple(sobrantes_ids) + (principal_id,) + 
+             tuple(sobrantes_ids) + (principal_id,) + 
+             tuple(sobrantes_ids) + (principal_id,) + 
+             tuple(sobrantes_ids) + tuple(sobrantes_ids) + (principal_nombre,))
         
         # 5. Update saldo_por_documentos
         conn.execute(f"""
@@ -3187,6 +3244,30 @@ def api_unificar_terceros(negocio_id):
                 SET tercero_id = %s 
                 WHERE tercero_id IN ({placeholders})
             """, (principal_id,) + tuple(sobrantes_ids))
+            
+        # 8b. Unificar y registrar todos los teléfonos únicos en terceros_telefonos
+        # Mapear los registros de terceros_telefonos de los sobrantes hacia el principal
+        conn.execute(f"""
+            UPDATE terceros_telefonos 
+            SET tercero_id = %s 
+            WHERE tercero_id IN ({placeholders})
+        """, (principal_id,) + tuple(sobrantes_ids))
+        
+        # Registrar números alternativos únicos detectados
+        todos_los_telefonos = set()
+        if principal_telefono:
+            todos_los_telefonos.add(principal_telefono.strip())
+        if p_row.get('telefono'):
+            todos_los_telefonos.add(p_row['telefono'].strip())
+        for s in s_rows:
+            if s.get('telefono'):
+                todos_los_telefonos.add(s['telefono'].strip())
+                
+        for tel in todos_los_telefonos:
+            if tel:
+                existe = conn.execute("SELECT 1 FROM terceros_telefonos WHERE tercero_id = %s AND telefono = %s", (principal_id, tel)).fetchone()
+                if not existe:
+                    conn.execute("INSERT INTO terceros_telefonos (tercero_id, telefono) VALUES (%s, %s)", (principal_id, tel))
             
         # 9. Delete duplicates from terceros
         conn.execute(f"""
@@ -3882,6 +3963,8 @@ def api_ajuste_guardar_item(negocio_id):
     cantidad_fisica = data.get('cantidad_fisica')
     costo_unitario = data.get('costo_unitario')
     notas = data.get('notas') or ''
+    tercero_id = _int_o_none(data.get('tercero_id'))
+    tercero_nombre = data.get('tercero_nombre') or None
     
     if not tipo_documento_id or not documento_numero or not producto_id or cantidad_fisica is None or costo_unitario is None:
         return jsonify({'ok': False, 'error': 'Todos los campos son requeridos'}), 400
@@ -3943,7 +4026,9 @@ def api_ajuste_guardar_item(negocio_id):
                      bodega=1,
                      tipo_documento=tipo_code,
                      documento_numero=doc_num_final,
-                     tipo_documento_id=tipo_documento_id)
+                     tipo_documento_id=tipo_documento_id,
+                     proveedor_id=tercero_id,
+                     proveedor_nombre=tercero_nombre)
                      
         # 4. Recostear el producto
         _recostear_producto(conn, negocio_id, producto_id)
@@ -3990,18 +4075,18 @@ def api_ajuste_guardar_item(negocio_id):
                     # Insertar Débito
                     conn.execute("""
                         INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
-                                                           tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
-                        VALUES (%s, %s, %s, %s, %s, 'D', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'ajuste_inventario', %s, %s)
+                                                           tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
+                        VALUES (%s, %s, %s, %s, %s, 'D', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'ajuste_inventario', %s, %s, %s)
                     """, (negocio_id, comp_id, db_cuenta_id, db_cod, concepto, monto_ajuste, session.get('usuario_id'), producto_id,
-                          tipo_documento_id, doc_num_final, tipo_code, doc_num_final, desc_asiento))
+                          tipo_documento_id, doc_num_final, tipo_code, doc_num_final, desc_asiento, tercero_id))
                     
                     # Insertar Crédito
                     conn.execute("""
                         INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
-                                                           tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
-                        VALUES (%s, %s, %s, %s, %s, 'C', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'ajuste_inventario', %s, %s)
+                                                           tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
+                        VALUES (%s, %s, %s, %s, %s, 'C', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'ajuste_inventario', %s, %s, %s)
                     """, (negocio_id, comp_id, cr_cuenta_id, cr_cod, concepto, monto_ajuste, session.get('usuario_id'), producto_id,
-                          tipo_documento_id, doc_num_final, tipo_code, doc_num_final, desc_asiento))
+                          tipo_documento_id, doc_num_final, tipo_code, doc_num_final, desc_asiento, tercero_id))
             else:
                 warnings.append("La categoría del producto no está configurada en Grupos de Inventario.")
         else:
@@ -4520,3 +4605,140 @@ def api_conciliar_cuentas_14(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/reporte-ensambles')
+def api_reporte_ensambles(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    prod_padre_id = _int_o_none(request.args.get('producto_padre_id'))
+    fecha_desde = request.args.get('fecha_desde', '').strip()
+    fecha_hasta = request.args.get('fecha_hasta', '').strip()
+    
+    if not prod_padre_id or not fecha_desde or not fecha_hasta:
+        return jsonify({'ok': False, 'error': 'Filtros incompletos (producto padre y fechas requeridos)'}), 400
+        
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto or not _puede_gestionar_negocio(contexto):
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+            
+        # Get parent product info
+        padre = conn.execute("SELECT id, nombre, categoria FROM productos WHERE id = %s AND negocio_id = %s", (prod_padre_id, negocio_id)).fetchone()
+        if not padre:
+            return jsonify({'ok': False, 'error': 'Producto padre no encontrado'}), 404
+            
+        # Query output movements in movimientos_inventario associated with the parent product
+        movements = conn.execute("""
+            SELECT 
+                m.id, 
+                m.producto_id, 
+                m.nombre_producto, 
+                m.documento_numero, 
+                COALESCE(m.documento_fecha, m.created_at::date) AS fecha, 
+                m.cantidad, 
+                m.costo_und AS costo_unitario, 
+                COALESCE(m.valor_total, m.cantidad * m.costo_und, 0.0) AS costo_total,
+                m.tipo_documento
+            FROM movimientos_inventario m
+            WHERE m.negocio_id = %s
+              AND m.producto_padre_id = %s
+              AND m.tipo = 'salida'
+              AND COALESCE(m.documento_fecha, m.created_at::date) >= %s
+              AND COALESCE(m.documento_fecha, m.created_at::date) <= %s
+            ORDER BY m.nombre_producto, fecha, m.documento_numero, m.id
+        """, (negocio_id, prod_padre_id, fecha_desde, fecha_hasta)).fetchall()
+        
+        # Unique documents inside movements to pull their accounting COGS cost
+        docs = list(set([ (m['documento_numero'], m['tipo_documento'] or 'FACTURA_DE_VENTA') for m in movements if m['documento_numero'] ]))
+        
+        # Build accounting COGS map & parent quantities map
+        cogs_map = {}
+        parent_qty_map = {}
+        for doc_num, doc_type in docs:
+            consecutive = doc_num
+            if '-' in doc_num:
+                consecutive = doc_num.split('-')[-1].strip()
+                
+            # Query sum of COGS entries in movimientos_contables with normalized document type check
+            cogs_row = conn.execute("""
+                SELECT SUM(monto) AS total_cogs
+                FROM movimientos_contables
+                WHERE negocio_id = %s
+                  AND (numero_documento = %s OR numero_documento = %s)
+                  AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
+                  AND LEFT(cuenta, 2) = '61'
+                  AND (
+                      UPPER(concepto) = 'COSTO VENTA: ' || UPPER(%s)
+                      OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
+                      OR producto_id = %s
+                  )
+            """, (negocio_id, consecutive, doc_num, doc_type, padre['nombre'], padre['nombre'], prod_padre_id)).fetchone()
+            
+            total_cogs = float(cogs_row['total_cogs']) if (cogs_row and cogs_row['total_cogs'] is not None) else 0.0
+            cogs_map[doc_num] = total_cogs
+            
+            # Find parent product quantity for this document (Kardex output details or Pedido items)
+            ref_row = conn.execute("""
+                SELECT DISTINCT referencia_tipo, referencia_id 
+                FROM movimientos_inventario 
+                WHERE negocio_id = %s AND producto_padre_id = %s AND documento_numero = %s
+                LIMIT 1
+            """, (negocio_id, prod_padre_id, doc_num)).fetchone()
+            
+            ref_type = ref_row['referencia_tipo'] if ref_row else None
+            ref_id = ref_row['referencia_id'] if ref_row else None
+            ref_id_int = _int_o_none(ref_id)
+            
+            qty = 0.0
+            if ref_type == 'produccion':
+                qty_row = conn.execute("""
+                    SELECT SUM(cantidad) FROM movimientos_inventario
+                    WHERE negocio_id = %s AND producto_id = %s AND tipo = 'entrada'
+                      AND referencia_tipo = 'produccion' AND (documento_numero = %s OR referencia_id = %s)
+                """, (negocio_id, prod_padre_id, doc_num, ref_id)).fetchone()
+                qty = float(qty_row[0]) if (qty_row and qty_row[0] is not None) else 0.0
+            else:
+                qty_row = conn.execute("""
+                    SELECT SUM(pi.cantidad) 
+                    FROM pedido_items pi
+                    JOIN pedidos p ON p.id = pi.pedido_id
+                    WHERE p.negocio_id = %s AND pi.producto_id = %s
+                      AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
+                """, (negocio_id, prod_padre_id, consecutive, doc_num, ref_id_int)).fetchone()
+                qty = float(qty_row[0]) if (qty_row and qty_row[0] is not None) else 0.0
+                
+            parent_qty_map[doc_num] = qty
+            
+        res_movements = []
+        for m in movements:
+            res_movements.append({
+                'id': m['id'],
+                'producto_id': m['producto_id'],
+                'nombre_producto': m['nombre_producto'],
+                'documento_numero': m['documento_numero'],
+                'tipo_documento': m['tipo_documento'] or 'FACTURA_DE_VENTA',
+                'fecha': m['fecha'].isoformat() if m['fecha'] else '',
+                'cantidad': float(m['cantidad']),
+                'costo_unitario': float(m['costo_unitario'] or 0.0),
+                'costo_total': float(m['costo_total'] or 0.0)
+            })
+            
+        return jsonify({
+            'ok': True,
+            'producto_padre': {
+                'id': padre['id'],
+                'nombre': padre['nombre'],
+                'categoria': padre['categoria']
+            },
+            'movements': res_movements,
+            'cogs_map': cogs_map,
+            'parent_qty_map': parent_qty_map
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+

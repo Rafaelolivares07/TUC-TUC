@@ -368,6 +368,7 @@
       const li = document.getElementById(`item-${id}`);
       li.classList.toggle('completado', d.completado);
       cb.checked = d.completado;
+      location.reload();
     }
   }
 

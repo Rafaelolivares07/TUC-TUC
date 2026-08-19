@@ -171,7 +171,18 @@
         </div>
       </div>
 
-      <!-- Paso 3: Confirmación y Envío -->
+      <!-- Paso 3: Selección de Teléfono Principal -->
+      <div id="seccion-telefonos-seleccion" class="hidden bg-rose-50/30 p-4 rounded-xl border border-rose-100/50">
+        <h3 class="font-bold text-sm text-rose-900 mb-1">3. Definir Teléfono Principal (El celular con el que se identificará)</h3>
+        <p class="text-xs text-rose-700/80 mb-3">
+          Se han detectado teléfonos en los terceros seleccionados. Selecciona cuál de ellos deseas conservar como el teléfono de inicio de sesión principal del tercero unificado:
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-1" id="telefonos-radio-options">
+          <!-- Se llena dinámicamente -->
+        </div>
+      </div>
+
+      <!-- Paso 4: Confirmación y Envío -->
       <div class="p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-xs flex gap-3">
         <span class="text-lg">⚠️</span>
         <div>
@@ -1067,40 +1078,47 @@
     }
   }
 
+  let principal_selec = null;
+
   function resetUnificarForm() {
     document.getElementById('ac-principal').value = '';
     document.getElementById('ac-principal-id').value = '';
     document.getElementById('selected-principal-badge').classList.add('hidden');
     document.getElementById('ac-sobrante').value = '';
     sobrantes = [];
+    principal_selec = null;
     renderSobrantes();
+    actualizarOpcionesTelefonos();
   }
 
   // Configuración de autocompletados
-  setupRemoteAC('ac-principal', 'ac-principal-list', ({id, nombre}) => {
-    document.getElementById('ac-principal-id').value = id;
-    document.getElementById('ac-principal').value = nombre;
-    document.getElementById('principal-nombre-lbl').textContent = nombre;
+  setupRemoteAC('ac-principal', 'ac-principal-list', (p) => {
+    document.getElementById('ac-principal-id').value = p.id;
+    document.getElementById('ac-principal').value = p.nombre;
+    document.getElementById('principal-nombre-lbl').textContent = p.nombre;
     document.getElementById('selected-principal-badge').classList.remove('hidden');
     
     // Si estaba en sobrantes, removerlo
-    sobrantes = sobrantes.filter(s => s.id !== id);
+    sobrantes = sobrantes.filter(s => s.id !== p.id);
     renderSobrantes();
+    principal_selec = p;
+    actualizarOpcionesTelefonos();
   });
 
-  setupRemoteAC('ac-sobrante', 'ac-sobrante-list', ({id, nombre}) => {
+  setupRemoteAC('ac-sobrante', 'ac-sobrante-list', (p) => {
     document.getElementById('ac-sobrante').value = '';
     const principalId = +document.getElementById('ac-principal-id').value;
-    if (id === principalId) {
+    if (p.id === principalId) {
       toast('El sobrante no puede ser el mismo tercero principal', false);
       return;
     }
-    if (sobrantes.some(s => s.id === id)) {
+    if (sobrantes.some(s => s.id === p.id)) {
       toast('Este tercero ya ha sido agregado', false);
       return;
     }
-    sobrantes.push({id, nombre});
+    sobrantes.push(p);
     renderSobrantes();
+    actualizarOpcionesTelefonos();
   });
 
   setupRemoteAC('auditor-tercero', 'auditor-tercero-list', ({id, nombre}) => {
@@ -1124,7 +1142,7 @@
     }
     container.innerHTML = sobrantes.map(s => `
       <div class="flex items-center justify-between bg-white border border-gray-150 rounded-lg px-3 py-1.5 text-sm shadow-sm">
-        <span class="font-semibold text-gray-700">${s.nombre} <span class="text-xs text-gray-400">(ID: ${s.id})</span></span>
+        <span class="font-semibold text-gray-700">${s.nombre} <span class="text-xs text-gray-400">(ID: ${s.id})${s.telefono ? ` · Tel: ${s.telefono}` : ''}</span></span>
         <button onclick="removerSobrante(${s.id})" class="text-red-500 hover:text-red-700 font-bold px-2 py-0.5 text-sm">&times;</button>
       </div>
     `).join('');
@@ -1133,6 +1151,66 @@
   function removerSobrante(id) {
     sobrantes = sobrantes.filter(s => s.id !== id);
     renderSobrantes();
+    actualizarOpcionesTelefonos();
+  }
+
+  function actualizarOpcionesTelefonos() {
+    const container = document.getElementById('seccion-telefonos-seleccion');
+    const radioContainer = document.getElementById('telefonos-radio-options');
+    if (!container || !radioContainer) return;
+    
+    // Recopilar todos los teléfonos de principal y sobrantes
+    const phones = [];
+    if (principal_selec && principal_selec.telefono) {
+      phones.push({ tel: principal_selec.telefono, owner: principal_selec.nombre + ' (Principal)' });
+    }
+    sobrantes.forEach(s => {
+      if (s.telefono) {
+        phones.push({ tel: s.telefono, owner: s.nombre + ' (Sobrante)' });
+      }
+    });
+    
+    // Eliminar duplicados
+    const uniquePhones = [];
+    const seen = new Set();
+    phones.forEach(p => {
+      const clean = p.tel.trim();
+      if (clean && !seen.has(clean)) {
+        seen.add(clean);
+        uniquePhones.push(p);
+      }
+    });
+    
+    if (uniquePhones.length === 0) {
+      container.classList.add('hidden');
+      return;
+    }
+    
+    container.classList.remove('hidden');
+    
+    // Renderizar opciones de radio
+    let html = uniquePhones.map((p, idx) => `
+      <label class="flex items-start gap-2.5 p-2.5 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer border border-gray-200 transition-all text-xs font-semibold text-gray-700">
+        <input type="radio" name="telefono_unificado" value="${p.tel}" ${idx === 0 ? 'checked' : ''} class="mt-0.5 text-rose-600 focus:ring-rose-500">
+        <div class="leading-none">
+          <span class="font-mono text-gray-900 text-sm block mb-0.5">${p.tel}</span>
+          <span class="text-[10px] text-gray-400 font-normal">Pertenece a: ${p.owner}</span>
+        </div>
+      </label>
+    `).join('');
+    
+    // Opción para ingresar otro número personalizado
+    html += `
+      <label class="flex items-start gap-2.5 p-2.5 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer border border-gray-200 transition-all text-xs font-semibold text-gray-700">
+        <input type="radio" name="telefono_unificado" value="otro" id="radio-tel-otro" class="mt-0.5 text-rose-600 focus:ring-rose-500">
+        <div class="leading-none flex-1">
+          <span class="block mb-1 text-[11px] text-gray-600">Otro número personalizado:</span>
+          <input type="text" id="tel-otro-val" placeholder="Escribe el celular aquí..." class="border border-gray-300 rounded px-2 py-1 text-xs w-full outline-none focus:border-rose-500" onfocus="document.getElementById('radio-tel-otro').checked = true">
+        </div>
+      </label>
+    `;
+    
+    radioContainer.innerHTML = html;
   }
 
   async function confirmarFusion() {
@@ -1141,8 +1219,26 @@
     if (!principalId) return toast('Debe seleccionar el tercero principal', false);
     if (!sobrantes.length) return toast('Debe agregar al menos un tercero sobrante', false);
 
+    // Obtener teléfono unificado seleccionado
+    const radioSelected = document.querySelector('input[name="telefono_unificado"]:checked');
+    let telefonoDefinido = null;
+    if (radioSelected) {
+      if (radioSelected.value === 'otro') {
+        telefonoDefinido = document.getElementById('tel-otro-val').value.trim();
+        if (telefonoDefinido && telefonoDefinido.replace(/\D/g,'').length < 10) {
+          return toast('El número de celular personalizado debe tener al menos 10 dígitos', false);
+        }
+      } else {
+        telefonoDefinido = radioSelected.value;
+      }
+    }
+
     const nombresSobrantes = sobrantes.map(s => `"${s.nombre}"`).join(', ');
-    const confirmed = confirm(`¿Estás seguro de que deseas fusionar los terceros ${nombresSobrantes} en "${principalNombre}"?\n\nEsta acción modificará todos sus registros históricos y eliminará las cuentas duplicadas.`);
+    const msgConfirm = `¿Estás seguro de que deseas fusionar los terceros ${nombresSobrantes} en "${principalNombre}"?` + 
+                       (telefonoDefinido ? `\n\nEl número principal de contacto quedará como: ${telefonoDefinido}` : '') + 
+                       `\n\nEsta acción modificará todos sus registros históricos y eliminará las cuentas duplicadas.`;
+                       
+    const confirmed = confirm(msgConfirm);
     if (!confirmed) return;
 
     const btn = document.getElementById('btn-unificar');
@@ -1155,7 +1251,8 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           principal_id: principalId,
-          sobrantes_ids: sobrantes.map(s => s.id)
+          sobrantes_ids: sobrantes.map(s => s.id),
+          telefono_definido: telefonoDefinido
         })
       });
       const d = await r.json();
@@ -1202,14 +1299,14 @@
         if (!matches.length) { list.classList.add('hidden'); return; }
         idx = -1;
         list.innerHTML = matches.map(p =>
-          `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}">
+          `<div class="ac-item text-left px-3 py-2 hover:bg-gray-100 cursor-pointer" data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}" data-telefono="${p.telefono || ''}">
             ${p.nombre}${p.telefono ? ` <span class="text-gray-400">(${p.telefono})</span>` : ''}
            </div>`
         ).join('');
         list.querySelectorAll('.ac-item').forEach(el => {
           el.addEventListener('mousedown', () => {
             list.classList.add('hidden');
-            if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre});
+            if (onSelect) onSelect({id: +el.dataset.id, nombre: el.dataset.nombre, telefono: el.dataset.telefono});
           });
         });
         list.classList.remove('hidden');

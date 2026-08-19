@@ -110,9 +110,15 @@
         <!-- ── Panel derecho: carrito ── -->
         <div class="mt-4 md:mt-0">
             <div class="bg-white rounded-2xl shadow p-4 sticky top-3">
-                <h2 class="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                    🛒 Carrito
-                    <span id="carrito-count" class="bg-blue-600 text-white text-xs font-bold rounded-full px-2 py-0.5">0</span>
+                <h2 class="font-bold text-gray-700 mb-3 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        🛒 Carrito
+                        <span id="carrito-count" class="bg-blue-100 text-blue-800 text-xs font-bold rounded-full px-2 py-0.5">0</span>
+                    </div>
+                    <button type="button" onclick="abrirModalImportarPedido()" 
+                            class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 border border-blue-100">
+                        📥 Importar
+                    </button>
                 </h2>
 
                 <!-- Cliente (opcional) -->
@@ -176,6 +182,36 @@
                     Vaciar carrito
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Importar Pedido ──────────────────────────────────────── -->
+<div id="modal-importar-pedido" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onclick="cerrarModalImportarPedido()">
+    <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 flex flex-col max-h-[85vh]" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between border-b border-gray-150 pb-3 mb-4">
+            <h2 class="font-bold text-base text-gray-800 flex items-center gap-2">
+                <span>📥</span> Importar Pedido de Vendedor
+            </h2>
+            <button onclick="cerrarModalImportarPedido()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+        
+        <!-- Buscador -->
+        <div class="mb-4">
+            <input type="text" id="buscar-pedido-importar" oninput="filtrarPedidosImportar()" 
+                   placeholder="Buscar por cliente o vendedor..."
+                   class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
+        </div>
+        
+        <!-- Listado -->
+        <div class="overflow-y-auto flex-1 divide-y divide-gray-100 pr-1" id="lista-pedidos-importar">
+            <div class="text-center py-6 text-gray-400 text-xs">Cargando pedidos...</div>
+        </div>
+        
+        <div class="flex justify-end pt-3 border-t border-gray-150 mt-4">
+            <button onclick="cerrarModalImportarPedido()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl text-xs font-bold transition-all">
+                Cerrar
+            </button>
         </div>
     </div>
 </div>
@@ -281,6 +317,7 @@ const TERCERO_ID = {{ tienda.tercero_id | tojson }};
 const MODO_ADMIN = {{ (modo_admin|default(false)) | tojson }};
 let productos = [];
 let carrito = [];
+let activePedidoPremontadoId = null;
 let categoriaActiva = '';
 let metodosDisponibles = [];  // [{id, nombre, codigo}]
 let autenticado = false;
@@ -449,7 +486,7 @@ async function publicarPantallaCliente(estado = 'activa', recibo = null) {
 
 async function cargarProductos() {
     try {
-        const r = await fetch(`/api/caja/${SLUG}/productos`);
+        const r = await fetch(`/api/caja/${SLUG}/productos?_=${Date.now()}`);
         const d = await r.json();
         if (d.ok) {
             productos = d.productos.filter(p => p.disponible);
@@ -517,32 +554,34 @@ function renderProductos(lista) {
 function agregarAlCarrito(productoId) {
     const prod = productos.find(p => p.id === productoId);
     if (!prod) return;
-    const existente = carrito.find(i => i.producto_id === productoId);
+    // Merge only if same product ID and same price
+    const existente = carrito.find(i => i.producto_id === productoId && i.precio === prod.precio);
     if (existente) {
         existente.cantidad++;
     } else {
-        carrito.push({producto_id: prod.id, nombre: prod.nombre, precio: prod.precio, cantidad: 1, iva_pct: prod.iva_pct || 0});
+        const rowId = 'row-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+        carrito.push({row_id: rowId, producto_id: prod.id, nombre: prod.nombre, precio: prod.precio, cantidad: 1, iva_pct: prod.iva_pct || 0});
     }
     renderCarrito();
     toast(`${prod.nombre} agregado`);
 }
 
-function cambiarCantidad(productoId, delta) {
-    const idx = carrito.findIndex(i => i.producto_id === productoId);
+function cambiarCantidad(rowId, delta) {
+    const idx = carrito.findIndex(i => i.row_id === rowId);
     if (idx === -1) return;
     carrito[idx].cantidad += delta;
     if (carrito[idx].cantidad <= 0) carrito.splice(idx, 1);
     renderCarrito();
 }
 
-function establecerCantidad(productoId, valorStr) {
+function establecerCantidad(rowId, valorStr) {
     let cant = parseFloat(valorStr);
     if (isNaN(cant) || cant < 0) cant = 0;
-    const existente = carrito.find(i => i.producto_id === productoId);
+    const existente = carrito.find(i => i.row_id === rowId);
     if (existente) {
         existente.cantidad = cant;
         // Update subtotal display in real-time
-        const subtotalEl = document.getElementById(`subtotal-${productoId}`);
+        const subtotalEl = document.getElementById(`subtotal-${rowId}`);
         if (subtotalEl) {
             subtotalEl.textContent = `$${(existente.precio * cant).toLocaleString('es-CO')}`;
         }
@@ -588,23 +627,23 @@ function renderCarrito() {
                 <div class="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
                     <span>$</span>
                     <input type="number" value="${i.precio}" min="0" step="any"
-                           oninput="cambiarPrecioUnitario(${i.producto_id}, this.value)"
+                           oninput="cambiarPrecioUnitario('${i.row_id}', this.value)"
                            onblur="renderCarrito()"
                            class="w-16 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white"
                            style="height: 20px;">
                     <span class="text-gray-400">Total:</span>
-                    <span id="subtotal-${i.producto_id}" class="font-semibold text-gray-600">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
+                    <span id="subtotal-${i.row_id}" class="font-semibold text-gray-600">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
                 </div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
-                <button onclick="cambiarCantidad(${i.producto_id}, -1)"
+                <button onclick="cambiarCantidad('${i.row_id}', -1)"
                         class="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-red-100 hover:text-red-600 text-lg leading-none">−</button>
                 <input type="number" value="${i.cantidad}" min="0" step="any"
-                       oninput="establecerCantidad(${i.producto_id}, this.value)"
+                       oninput="establecerCantidad('${i.row_id}', this.value)"
                        onblur="validarYRenderCarrito()"
                        class="w-14 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white text-xs"
                        style="height: 28px;">
-                <button onclick="cambiarCantidad(${i.producto_id}, 1)"
+                <button onclick="cambiarCantidad('${i.row_id}', 1)"
                         class="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-green-100 hover:text-green-600 text-lg leading-none">+</button>
             </div>
         </div>
@@ -629,15 +668,15 @@ function renderCarrito() {
     publicarPantallaCliente();
 }
 
-function cambiarPrecioUnitario(productoId, nuevoPrecioStr) {
+function cambiarPrecioUnitario(rowId, nuevoPrecioStr) {
     let precio = parseFloat(nuevoPrecioStr);
     if (isNaN(precio) || precio < 0) precio = 0;
-    const item = carrito.find(i => i.producto_id === productoId);
+    const item = carrito.find(i => i.row_id === rowId);
     if (item) {
         item.precio = precio;
         
         // Update subtotal in the DOM
-        const subtotalEl = document.getElementById(`subtotal-${productoId}`);
+        const subtotalEl = document.getElementById(`subtotal-${rowId}`);
         if (subtotalEl) {
             subtotalEl.textContent = `$${(precio * item.cantidad).toLocaleString('es-CO')}`;
         }
@@ -708,7 +747,7 @@ function actualizarConsecutivoDisplay() {
 
 async function cargarTiposDocumento() {
     try {
-        const r = await fetch(`/api/caja/${SLUG}/tipos-doc`);
+        const r = await fetch(`/api/caja/${SLUG}/tipos-doc?_=${Date.now()}`);
         const d = await r.json();
         if (d.ok && d.tipos) {
             tiposDocumento = d.tipos;
@@ -809,7 +848,8 @@ async function cobrar() {
         tipo_documento_id: tipoDocId ? parseInt(tipoDocId) : null,
         force_negative_stock: forceNegativeStockFlag,
         excluir_componentes: listExcluidosTemporal,
-        adjustments: listAdjustmentsTemporal
+        adjustments: listAdjustmentsTemporal,
+        pedido_premontado_id: activePedidoPremontadoId || null
     };
 
     try {
@@ -820,6 +860,7 @@ async function cobrar() {
         });
         const d = await r.json();
         if (d.ok) {
+            activePedidoPremontadoId = null;
             forceNegativeStockFlag = false;
             listExcluidosTemporal = [];
             listAdjustmentsTemporal = [];
@@ -1139,6 +1180,7 @@ function nuevaVenta() {
     limpiarPagos();
     document.getElementById('btn-cobrar').textContent = 'Cobrar';
     cargarProductos(); // recargar stock actualizado
+    cargarTiposDocumento(); // recargar consecutivo actualizado
 }
 
 async function initDefaultTercero() {
@@ -1315,6 +1357,119 @@ function toast(msg, err = false) {
     
     // Set default Tercero Ocasional on startup
     initDefaultTercero();
+
+    let pedidosPremontadosCache = [];
+
+    window.abrirModalImportarPedido = async function() {
+        document.getElementById('modal-importar-pedido').classList.remove('hidden');
+        const listDiv = document.getElementById('lista-pedidos-importar');
+        listDiv.innerHTML = '<div class="text-center py-6 text-gray-400 text-xs">Cargando pedidos...</div>';
+        document.getElementById('buscar-pedido-importar').value = '';
+        
+        try {
+            const resp = await fetch(`/api/caja/${SLUG}/pedidos-premontados`);
+            const data = await resp.json();
+            if (data.ok) {
+                pedidosPremontadosCache = data.pedidos || [];
+                renderPedidosImportar(pedidosPremontadosCache);
+            } else {
+                listDiv.innerHTML = `<div class="text-center py-6 text-red-500 text-xs">Error: ${data.error || 'No se pudieron cargar los pedidos'}</div>`;
+            }
+        } catch (e) {
+            listDiv.innerHTML = '<div class="text-center py-6 text-red-500 text-xs">Error de red al cargar pedidos</div>';
+        }
+    };
+
+    window.cerrarModalImportarPedido = function() {
+        document.getElementById('modal-importar-pedido').classList.add('hidden');
+    };
+
+    function renderPedidosImportar(lista) {
+        const listDiv = document.getElementById('lista-pedidos-importar');
+        if (lista.length === 0) {
+            listDiv.innerHTML = '<div class="text-center py-6 text-gray-400 text-xs">No hay pedidos pre-montados pendientes.</div>';
+            return;
+        }
+        
+        listDiv.innerHTML = lista.map(p => {
+            const itemsTxt = p.items.map(it => `${it.cantidad}x ${it.nombre_producto}`).join(', ');
+            return `
+                <div class="py-3 flex items-center justify-between gap-3 text-xs hover:bg-gray-50 px-2 rounded-xl transition-all cursor-pointer border-b border-gray-50" onclick="importarPedidoACaja(${p.id})">
+                    <div class="space-y-0.5 flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-gray-800">${p.nombre_cliente}</span>
+                            ${p.telefono_cliente ? `<span class="text-[10px] text-gray-400 font-mono">(${p.telefono_cliente})</span>` : ''}
+                        </div>
+                        <div class="text-[10px] text-gray-400 truncate">
+                            Vendedor: <span class="font-bold text-gray-600">${p.vendedor_nombre}</span> • Items: ${itemsTxt}
+                        </div>
+                        ${p.notas ? `<div class="text-[9px] text-amber-600 italic truncate mt-0.5">"${p.notas}"</div>` : ''}
+                    </div>
+                    <div class="text-right flex flex-col items-end gap-1">
+                        <span class="font-bold font-mono text-blue-700 text-xs">$${p.total.toLocaleString('es-CO', { maximumFractionDigits: 0 })}</span>
+                        <span class="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider">Premontado</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    window.filtrarPedidosImportar = function() {
+        const q = document.getElementById('buscar-pedido-importar').value.toLowerCase().trim();
+        if (!q) {
+            renderPedidosImportar(pedidosPremontadosCache);
+            return;
+        }
+        const filtrados = pedidosPremontadosCache.filter(p => 
+            p.nombre_cliente.toLowerCase().includes(q) || 
+            p.vendedor_nombre.toLowerCase().includes(q) || 
+            (p.telefono_cliente && p.telefono_cliente.includes(q))
+        );
+        renderPedidosImportar(filtrados);
+    };
+
+    window.importarPedidoACaja = function(pedidoId) {
+        const ped = pedidosPremontadosCache.find(p => p.id === pedidoId);
+        if (!ped) return;
+        
+        if (carrito.length > 0 && !confirm('Se descartará tu carrito actual para importar este pedido. ¿Proceder?')) {
+            return;
+        }
+        
+        carrito = [];
+        
+        document.getElementById('nombre-cliente').value = ped.nombre_cliente;
+        document.getElementById('tel-cliente').value = ped.telefono_cliente || '';
+        document.getElementById('cliente-id').value = '';
+        
+        document.getElementById('nombre-cliente').dispatchEvent(new Event('input'));
+        
+        ped.items.forEach(it => {
+            const pCatalog = productos.find(p => p.id === it.producto_id);
+            const stockVal = pCatalog ? pCatalog.stock : 999;
+            const ivaVal = pCatalog ? pCatalog.iva_pct : 0;
+            const catVal = pCatalog ? pCatalog.categoria : '';
+            const codeVal = pCatalog ? pCatalog.codigo_barra : '';
+            
+            carrito.push({
+                producto_id: it.producto_id,
+                row_id: 'row_' + it.producto_id + '_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+                nombre: it.nombre_producto,
+                cantidad: it.cantidad,
+                precio: it.precio_unitario,
+                stock: stockVal,
+                iva_pct: ivaVal,
+                categoria: catVal,
+                codigo_barra: codeVal
+            });
+        });
+        
+        activePedidoPremontadoId = ped.id;
+        
+        renderCarrito();
+        cerrarModalImportarPedido();
+        toast(`Pedido #${ped.id} importado con éxito`);
+    };
 })();</script>
 </body>
 </html>

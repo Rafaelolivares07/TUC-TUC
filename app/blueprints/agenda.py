@@ -19,11 +19,17 @@ def _asegurar_tabla():
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        conn.commit()
         try:
             conn.execute("ALTER TABLE agenda_items ADD COLUMN fecha_limite TIMESTAMP")
+            conn.commit()
         except Exception:
-            pass
-        conn.commit()
+            conn.rollback()
+        try:
+            conn.execute("ALTER TABLE agenda_items ADD COLUMN completado_en TIMESTAMP")
+            conn.commit()
+        except Exception:
+            conn.rollback()
 
 
 @bp.route('/agenda')
@@ -32,12 +38,17 @@ def agenda():
     _asegurar_tabla()
     with get_db_connection() as conn:
         cur = conn.execute("""
-            SELECT id, texto, completado, categoria, orden, fecha_limite
+            SELECT id, texto, completado, categoria, orden, fecha_limite, completado_en
             FROM agenda_items
             ORDER BY completado ASC,
-                     CASE WHEN fecha_limite IS NOT NULL THEN 0 ELSE 1 END ASC,
-                     fecha_limite ASC NULLS LAST,
-                     orden ASC, id ASC
+                     CASE WHEN completado = FALSE THEN
+                         (CASE WHEN fecha_limite IS NOT NULL THEN 0 ELSE 1 END)
+                     ELSE 2 END ASC,
+                     CASE WHEN completado = FALSE THEN fecha_limite ELSE NULL END ASC NULLS LAST,
+                     CASE WHEN completado = FALSE THEN orden ELSE NULL END ASC,
+                     CASE WHEN completado = FALSE THEN id ELSE NULL END ASC,
+                     completado_en DESC NULLS LAST,
+                     id DESC
         """)
         items = cur.fetchall()
     return render_template('agenda.html', items=items)
@@ -67,15 +78,23 @@ def agregar_item():
 @admin_required
 def toggle_item(item_id):
     with get_db_connection() as conn:
-        cur = conn.execute(
-            "UPDATE agenda_items SET completado = NOT completado WHERE id = %s RETURNING completado",
-            (item_id,)
-        )
-        row = cur.fetchone()
+        row = conn.execute("SELECT completado FROM agenda_items WHERE id = %s", (item_id,)).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': 'No encontrado'})
+        
+        nuevo_estado = not row['completado']
+        if nuevo_estado:
+            conn.execute(
+                "UPDATE agenda_items SET completado = TRUE, completado_en = CURRENT_TIMESTAMP WHERE id = %s",
+                (item_id,)
+            )
+        else:
+            conn.execute(
+                "UPDATE agenda_items SET completado = FALSE, completado_en = NULL WHERE id = %s",
+                (item_id,)
+            )
         conn.commit()
-    if not row:
-        return jsonify({'ok': False, 'error': 'No encontrado'})
-    return jsonify({'ok': True, 'completado': row['completado']})
+    return jsonify({'ok': True, 'completado': nuevo_estado})
 
 
 @bp.route('/agenda/item/<int:item_id>', methods=['DELETE'])
@@ -116,11 +135,17 @@ def merlin_agenda():
     if request.method == 'GET':
         with get_db_connection() as conn:
             cur = conn.execute("""
-                SELECT id, texto, completado, fecha_limite
+                SELECT id, texto, completado, fecha_limite, completado_en
                 FROM agenda_items
                 ORDER BY completado ASC,
-                         CASE WHEN fecha_limite IS NOT NULL THEN 0 ELSE 1 END ASC,
-                         fecha_limite ASC NULLS LAST, id ASC
+                         CASE WHEN completado = FALSE THEN
+                             (CASE WHEN fecha_limite IS NOT NULL THEN 0 ELSE 1 END)
+                         ELSE 2 END ASC,
+                         CASE WHEN completado = FALSE THEN fecha_limite ELSE NULL END ASC NULLS LAST,
+                         CASE WHEN completado = FALSE THEN orden ELSE NULL END ASC,
+                         CASE WHEN completado = FALSE THEN id ELSE NULL END ASC,
+                         completado_en DESC NULLS LAST,
+                         id DESC
             """)
             rows = cur.fetchall()
         items = [{'id': r[0], 'texto': r[1], 'completado': r[2],
@@ -139,13 +164,22 @@ def merlin_agenda():
 
         completado = accion == 'completar'
         with get_db_connection() as conn:
-            cur = conn.execute(
-                """UPDATE agenda_items
-                   SET completado = %s
-                   WHERE id = %s
-                   RETURNING id, completado""",
-                (completado, item_id)
-            )
+            if completado:
+                cur = conn.execute(
+                    """UPDATE agenda_items
+                       SET completado = TRUE, completado_en = CURRENT_TIMESTAMP
+                       WHERE id = %s
+                       RETURNING id, completado""",
+                    (item_id,)
+                )
+            else:
+                cur = conn.execute(
+                    """UPDATE agenda_items
+                       SET completado = FALSE, completado_en = NULL
+                       WHERE id = %s
+                       RETURNING id, completado""",
+                    (item_id,)
+                )
             row = cur.fetchone()
             conn.commit()
         if not row:

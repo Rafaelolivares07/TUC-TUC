@@ -109,24 +109,22 @@
       </div>
       <div class="flex flex-col items-end">
         <span class="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest">Documento Activo</span>
-        <span id="doc-consecutivo-badge" class="font-mono text-base font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-1 rounded-xl shadow-xs mt-1">
-          Cargando...
-        </span>
+        <div class="flex gap-2 mt-1">
+          <select id="select-tipo-doc" onchange="cambiarTipoDocumento()"
+                  class="w-64 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all">
+            {% for t in tipos_doc %}
+              <option value="{{ t.id }}" {% if t.predeterminado %}selected{% endif %}>{{ t.nombre }}</option>
+            {% endfor %}
+          </select>
+          <input id="doc-consecutivo-input" type="text" readonly value="Cargando..."
+                 class="w-24 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-mono font-extrabold text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-center">
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Formulario de Configuración de Toma -->
-  <div class="bg-white rounded-2xl shadow-md p-5 mb-5 grid grid-cols-1 md:grid-cols-3 gap-4">
-    <div>
-      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo de Documento</label>
-      <select id="select-tipo-doc" onchange="cambiarTipoDocumento()"
-              class="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all">
-        {% for t in tipos_doc %}
-          <option value="{{ t.id }}" {% if t.predeterminado %}selected{% endif %}>{{ t.nombre }}</option>
-        {% endfor %}
-      </select>
-    </div>
+  <div class="bg-white rounded-2xl shadow-md p-5 mb-5 grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
       <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Modalidad de Conteo</label>
       <select id="select-modalidad" onchange="cambiarModalidad()"
@@ -296,7 +294,7 @@ async function inicializarSesion() {
   const data = await resp.json();
   if (data.ok) {
     activeDocNumber = data.documento_numero;
-    document.getElementById("doc-consecutivo-badge").textContent = numDocLimpio(activeDocNumber);
+    document.getElementById("doc-consecutivo-input").value = numDocLimpio(activeDocNumber);
     cargarItemsDocumento();
   }
 }
@@ -660,7 +658,7 @@ async function guardarAjusteConfirmado() {
     // Si fue el primer item, actualizamos el número de documento a su formato oficial
     if (data.consecutivo_actualizado) {
       activeDocNumber = data.documento_numero;
-      document.getElementById("doc-consecutivo-badge").textContent = numDocLimpio(activeDocNumber);
+      document.getElementById("doc-consecutivo-input").value = numDocLimpio(activeDocNumber);
     }
     
     cerrarModalValidacion();

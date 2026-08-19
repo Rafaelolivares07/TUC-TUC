@@ -305,7 +305,9 @@
               <th class="py-2">Tipo de Doc.</th>
               <th class="py-2">Número / ID</th>
               <th class="py-2">Tercero Relacionado</th>
-              <th class="py-2 text-right">Total</th>
+              <th class="py-2 text-right">Total Contable</th>
+              <th class="py-2 text-right">Total Inventario</th>
+              <th class="py-2 text-right">Total Pedidos</th>
               <th class="py-2 text-center">Acción</th>
             </tr>
           </thead>
@@ -1349,7 +1351,7 @@
     if (!tbody) return;
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
+        <td colspan="8" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
       </tr>
     `;
     try {
@@ -1380,7 +1382,7 @@
       if (!docs.length) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="6" class="text-center text-gray-400 py-6">No se encontraron transacciones que coincidan con la búsqueda</td>
+            <td colspan="8" class="text-center text-gray-400 py-6">No se encontraron transacciones que coincidan con la búsqueda</td>
           </tr>
         `;
         return;
@@ -1401,7 +1403,9 @@
             <td class="py-2 font-bold text-gray-700">${typeStr}</td>
             <td class="py-2 font-mono text-gray-800">${doc.documento_numero}</td>
             <td class="py-2 text-gray-600">${doc.tercero_nombre || 'Cliente General'}</td>
-            <td class="py-2 text-right font-semibold text-gray-700">$${doc.total.toLocaleString('es-CO')}</td>
+            <td class="py-2 text-right font-semibold text-gray-700">${doc.total_contable != null ? '$' + doc.total_contable.toLocaleString('es-CO') : '—'}</td>
+            <td class="py-2 text-right font-semibold text-gray-700">${doc.total_inventario != null ? '$' + doc.total_inventario.toLocaleString('es-CO') : '—'}</td>
+            <td class="py-2 text-right font-semibold text-gray-700">${doc.total_pedidos != null ? '$' + doc.total_pedidos.toLocaleString('es-CO') : '—'}</td>
             <td class="py-2 text-center">
               <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero}', '${doc.tercero_id || ''}')" 
                       class="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded text-[10px] transition">
@@ -1415,7 +1419,7 @@
       console.error(e);
       tbody.innerHTML = `
         <tr>
-          <td colspan="6" class="text-center text-red-500 py-6">Error: ${e.message}</td>
+          <td colspan="8" class="text-center text-red-500 py-6">Error: ${e.message}</td>
         </tr>
       `;
     }

@@ -2161,7 +2161,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
 
         # 1. Fetch recent inventory documents
         sql_inv = """
-            SELECT mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total,
+            SELECT mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total_inventario,
                    MIN(mi.proveedor_id) AS proveedor_id, MIN(mi.proveedor_nombre) AS proveedor_nombre
             FROM movimientos_inventario mi
             WHERE mi.negocio_id = %s AND mi.tipo_documento IS NOT NULL AND mi.tipo_documento <> '' 
@@ -2227,7 +2227,9 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 'documento_numero': doc_num,
                 'fecha': r['documento_fecha'].isoformat() if r['documento_fecha'] else None,
                 'origen': 'inventario',
-                'total': float(r['total'] or 0),
+                'total_inventario': float(r['total_inventario'] or 0),
+                'total_contable': None,
+                'total_pedidos': None,
                 'tercero_nombre': r['proveedor_nombre'] or '—',
                 'tercero_id': r['proveedor_id']
             }
@@ -2304,8 +2306,8 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 if not consolidated[key]['tercero_id'] and c_id:
                     consolidated[key]['tercero_id'] = c_id
                     consolidated[key]['tercero_nombre'] = c_name or 'Cliente general'
-                if r['total'] and float(r['total']) > consolidated[key]['total']:
-                    consolidated[key]['total'] = float(r['total'])
+                if r['total'] and float(r['total']) > (consolidated[key]['total_pedidos'] or 0):
+                    consolidated[key]['total_pedidos'] = float(r['total'])
                 # Prefer showing original prefix code if existing display name is shorter
                 if doc_num and len(doc_num) > len(consolidated[key]['documento_numero']):
                     consolidated[key]['documento_numero'] = doc_num
@@ -2316,19 +2318,20 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     'documento_numero': doc_num,
                     'fecha': date_str,
                     'origen': 'ventas',
-                    'total': float(r['total'] or 0),
+                    'total_inventario': None,
+                    'total_contable': None,
+                    'total_pedidos': float(r['total'] or 0),
                     'tercero_nombre': c_name or 'Cliente general',
                     'tercero_id': c_id,
                     'estado': r['estado']
                 }
             
-        # 3. Fetch recent accounting documents from movimientos_contables directly
+        # 3. Fetch accounting totals for the source documents.
         sql_cont = """
-            SELECT mc.tipo_documento_id, COALESCE(mc.tipo_documento, 'comprobante') AS tipo_documento, 
-                   COALESCE(mc.numero_documento, mc.comprobante_id::text) AS documento_numero,
-                   mc.fecha AS documento_fecha,
-                   SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE 0 END) AS total,
-                   MIN(mc.tercero_id) AS proveedor_id
+            SELECT mc.tipo_documento_id, mc.numero_documento AS documento_numero,
+                   SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE 0 END) AS total_contable,
+                   MIN(mc.tercero_id) AS proveedor_id,
+                   MIN(mc.fecha) AS documento_fecha
             FROM movimientos_contables mc
             WHERE mc.negocio_id = %s
         """
@@ -2363,8 +2366,8 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             params_cont.append(hasta)
             
         sql_cont += """
-            GROUP BY mc.tipo_documento_id, mc.tipo_documento, mc.numero_documento, mc.comprobante_id, mc.fecha
-            ORDER BY mc.fecha DESC, mc.numero_documento DESC
+            GROUP BY mc.tipo_documento_id, mc.numero_documento
+            ORDER BY MIN(mc.fecha) DESC, mc.numero_documento DESC
             LIMIT 1000
         """
         
@@ -2372,12 +2375,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         
         for r in rows_cont:
             td_id = r['tipo_documento_id']
-            # Resolve tipo_documento_id if None using the type string
-            if not td_id and r['tipo_documento']:
-                td_row = conn.execute("SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))", (negocio_id, r['tipo_documento'].lower(), r['tipo_documento'].lower())).fetchone()
-                if td_row:
-                    td_id = td_row['id']
-                    
+            
             doc_num = r['documento_numero']
             pure_num = doc_num
             if doc_num and '-' in doc_num:
@@ -2385,11 +2383,9 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 if parts[-1].strip().isdigit():
                     pure_num = parts[-1].strip()
                     
-            td_name = r['tipo_documento']
-            if td_id and td_id in types_map:
-                td_name = types_map[td_id]
+            td_name = types_map.get(td_id) if td_id else 'comprobante'
                 
-            key = (td_id, pure_num) if td_id else (td_name.lower(), pure_num)
+            key = (td_id, pure_num) if td_id else ('comprobante', pure_num)
             
             p_id = r['proveedor_id']
             p_name = '—'
@@ -2407,17 +2403,18 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 if not consolidated[key]['tercero_id'] and p_id:
                     consolidated[key]['tercero_id'] = p_id
                     consolidated[key]['tercero_nombre'] = p_name or 'Cliente/Proveedor general'
-                # Only use accounting totals if the document wasn't already found in sales/inventory (to avoid COGS/debit sum inflation)
-                if consolidated[key]['origen'] == 'contabilidad' and r['total'] and float(r['total']) > consolidated[key]['total']:
-                    consolidated[key]['total'] = float(r['total'])
+                # El total contable se completa desde el asiento, sin reemplazar inventario/pedidos
+                consolidated[key]['total_contable'] = float(r['total_contable'] or 0)
             else:
                 consolidated[key] = {
                     'tipo_documento_id': td_id,
                     'tipo_documento': td_name,
-                    'documento_numero': pure_num,
+                    'documento_numero': doc_num,
                     'fecha': date_str,
                     'origen': 'contabilidad',
-                    'total': float(r['total'] or 0),
+                    'total_inventario': None,
+                    'total_contable': float(r['total_contable'] or 0),
+                    'total_pedidos': None,
                     'tercero_nombre': p_name or '—',
                     'tercero_id': p_id
                 }

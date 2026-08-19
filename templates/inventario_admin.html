@@ -340,7 +340,6 @@
         <button id="theme-toggle" onclick="toggleTheme()" class="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors text-xs flex items-center justify-center font-bold text-gray-600" style="width: 32px; height: 32px;" title="Cambiar Tema">
           🌙
         </button>
-        <a href="/admin/inventario-fisico/{{ negocio_id }}" class="text-sm text-gray-400 hover:text-emerald-600 font-semibold">Inventario Físico</a>
         <a href="/admin/compras/{{ negocio_id }}" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">Compras y agotados</a>
         <a href="{{ volver_url or '/admin' }}" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">← {{ volver_label or 'Admin' }}</a>
       </div>
@@ -357,6 +356,7 @@
       <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
       <button class="tab-btn" onclick="mostrarTab('ensambles')">Ensambles</button>
       <button class="tab-btn" onclick="mostrarTab('ventas_costos')">Ventas/Costos</button>
+      <a href="/admin/inventario-fisico/{{ negocio_id }}" class="tab-btn">📋 Inv. Físico</a>
     </div>
   </div>
 

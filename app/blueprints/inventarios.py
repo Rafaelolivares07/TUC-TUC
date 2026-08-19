@@ -4202,7 +4202,151 @@ def api_ajuste_documento_detalles(negocio_id, documento_numero):
         conn.close()
 
 
-@bp.route('/api/inventario/<int:negocio_id>/mantenimiento/modificar-documento', methods=['POST'])
+def _pdf_tabla(pdf, col_w, headers, filas, aligns=None, wrap_col=0, alto_linea=5.5):
+    pdf.set_font('Helvetica', 'B', 7.5)
+    pdf.set_fill_color(230, 230, 230)
+    for i, h in enumerate(headers):
+        pdf.cell(col_w[i], 6, h, border=1, align='C', fill=True)
+    pdf.ln()
+    pdf.set_font('Helvetica', '', 7.5)
+    for fila in filas:
+        txt = fila[wrap_col]
+        lineas = pdf.multi_cell(col_w[wrap_col], alto_linea, txt, split_only=True)
+        alto_fila = max(len(lineas) * alto_linea, alto_linea)
+        if pdf.get_y() + alto_fila > pdf.page_break_trigger:
+            pdf.add_page()
+            pdf.set_font('Helvetica', 'B', 7.5)
+            pdf.set_fill_color(230, 230, 230)
+            for i, h in enumerate(headers):
+                pdf.cell(col_w[i], 6, h, border=1, align='C', fill=True)
+            pdf.ln()
+            pdf.set_font('Helvetica', '', 7.5)
+        x0 = pdf.get_x()
+        y0 = pdf.get_y()
+        x_cur = x0
+        for i, val in enumerate(fila):
+            if i == wrap_col:
+                pdf.set_xy(x_cur, y0)
+                pdf.multi_cell(col_w[i], alto_linea, val, border=1, align='L')
+            else:
+                pdf.set_xy(x_cur, y0)
+                pdf.cell(col_w[i], alto_fila, val, border=1, align=(aligns[i] if aligns else 'C'))
+            x_cur += col_w[i]
+        pdf.set_xy(pdf.l_margin, y0 + alto_fila)
+
+
+def _pdf_documento_ajuste(nombre_negocio, doc_num, fecha_str, items, asiento):
+    pdf = FPDF(format='letter', unit='mm')
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+
+    pdf.set_font('Helvetica', 'B', 14)
+    pdf.cell(0, 8, 'TUC TUC - Inventario Físico', ln=1, align='C')
+    pdf.set_font('Helvetica', 'B', 11)
+    pdf.cell(0, 7, _pdf_sanitize(nombre_negocio), ln=1, align='C')
+    pdf.set_font('Helvetica', '', 9)
+    pdf.cell(0, 5, f'Documento: {_pdf_sanitize(doc_num)}', ln=1, align='C')
+    if fecha_str:
+        pdf.cell(0, 5, f'Fecha: {_pdf_sanitize(fecha_str)}', ln=1, align='C')
+
+    sobr_cant = sum(float(it['cantidad'] or 0) for it in items if it['tipo'] == 'entrada')
+    sobr_valor = sum(float(it['valor_total'] or 0) for it in items if it['tipo'] == 'entrada')
+    falt_cant = sum(abs(float(it['cantidad'] or 0)) for it in items if it['tipo'] != 'entrada')
+    falt_valor = sum(float(it['valor_total'] or 0) for it in items if it['tipo'] != 'entrada')
+
+    pdf.ln(2)
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.cell(0, 6, f"Total ítems: {len(items)}    Sobrantes: {_pdf_money(sobr_cant)} und / ${_pdf_money(sobr_valor)}    Faltantes: {_pdf_money(falt_cant)} und / ${_pdf_money(falt_valor)}", ln=1)
+    pdf.ln(2)
+
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.cell(0, 6, 'Movimientos de Inventario (Kardex)', ln=1)
+    kardex = []
+    for it in items:
+        nombre = _pdf_sanitize(it['nombre_producto'])[:70]
+        if it.get('categoria'):
+            nombre += ' - ' + _pdf_sanitize(it['categoria'])
+        kardex.append([
+            nombre,
+            'Sobrante' if it['tipo'] == 'entrada' else 'Faltante',
+            _pdf_money(it['cantidad']),
+            _pdf_money(it['costo_und']),
+            _pdf_money(it['valor_total']),
+        ])
+    _pdf_tabla(pdf, [62, 16, 16, 22, 24],
+               ['Insumo', 'Tipo', 'Cant.', 'Costo Und', 'Valor'],
+               kardex, aligns=['L', 'C', 'C', 'R', 'R'])
+
+    pdf.ln(3)
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.cell(0, 6, 'Asiento Contable Detallado', ln=1)
+    if asiento:
+        filas_asiento = []
+        for a in asiento:
+            nombre_cuenta = _pdf_sanitize(a['cuenta_nombre'])
+            if a.get('concepto'):
+                nombre_cuenta += '\nConcepto: ' + _pdf_sanitize(a['concepto'])
+            filas_asiento.append([
+                _pdf_sanitize(a['cuenta']),
+                nombre_cuenta,
+                _pdf_sanitize(a['tipo']),
+                _pdf_money(a['monto']),
+            ])
+        _pdf_tabla(pdf, [22, 82, 14, 30],
+                   ['Cuenta', 'Nombre / Concepto', 'T', 'Monto'],
+                   filas_asiento, aligns=['C', 'L', 'C', 'R'], wrap_col=1)
+        total_d = sum(float(a['monto'] or 0) for a in asiento if a['tipo'] == 'D')
+        total_c = sum(float(a['monto'] or 0) for a in asiento if a['tipo'] == 'C')
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.cell(0, 6, f'Débitos totales: ${_pdf_money(total_d)}    Créditos totales: ${_pdf_money(total_c)}', ln=1)
+    else:
+        pdf.set_font('Helvetica', 'I', 8)
+        pdf.cell(0, 6, 'Este documento no generó movimientos contables (sin parametrización).', ln=1)
+
+    return pdf
+
+
+@bp.route('/api/inventario/<int:negocio_id>/ajuste-fisico/documento/<documento_numero>/pdf')
+def api_ajuste_documento_pdf(negocio_id, documento_numero):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    if FPDF is None:
+        return jsonify({'ok': False, 'error': 'PDF no disponible (falta fpdf2)'}), 500
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        nombre_negocio = (contexto.get('nombre') or 'Negocio') if contexto else 'Negocio'
+        fecha_row = conn.execute("""
+            SELECT MAX(created_at) AS fecha FROM movimientos_inventario
+            WHERE negocio_id = %s AND documento_numero = %s AND motivo = 'ajuste'
+        """, (negocio_id, documento_numero)).fetchone()
+        fecha_str = fecha_row['fecha'].strftime('%Y-%m-%d %H:%M') if fecha_row and fecha_row['fecha'] else ''
+        items = conn.execute("""
+            SELECT m.producto_id, m.nombre_producto, m.cantidad, m.tipo, m.costo_und, m.valor_total,
+                   m.stock_anterior, m.stock_nuevo, p.categoria
+            FROM movimientos_inventario m
+            JOIN productos p ON p.id = m.producto_id
+            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo = 'ajuste'
+            ORDER BY m.id
+        """, (negocio_id, documento_numero)).fetchall()
+        asiento = conn.execute("""
+            SELECT mc.cuenta, c.nombre AS cuenta_nombre, mc.concepto, mc.tipo, mc.monto, p.nombre AS producto_nombre
+            FROM movimientos_contables mc
+            JOIN cuentas_puc c ON c.id = mc.cuenta_id
+            LEFT JOIN productos p ON p.id = mc.producto_id
+            WHERE mc.negocio_id = %s AND mc.numero_documento = %s
+            ORDER BY mc.id
+        """, (negocio_id, documento_numero)).fetchall()
+        pdf = _pdf_documento_ajuste(
+            nombre_negocio, documento_numero, fecha_str,
+            [dict(i) for i in items], [dict(a) for a in asiento])
+        resp = Response(bytes(pdf.output()), mimetype='application/pdf')
+        resp.headers['Content-Disposition'] = f"inline; filename=ajuste_fisico_{documento_numero}.pdf"
+        return resp
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 def api_mantenimiento_modificar_documento(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401

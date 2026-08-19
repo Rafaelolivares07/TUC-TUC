@@ -730,18 +730,25 @@ async function cargarHistorial() {
       return `
         <div class="border border-gray-100 rounded-2xl bg-white shadow-xs overflow-hidden">
           <!-- Acordeón Header -->
-          <button onclick="toggleHistorialDetalle('${h.documento_numero}')"
-                  class="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50/50 transition text-left">
-            <div>
-              <span class="font-mono font-extrabold text-sm text-emerald-800">${h.documento_numero}</span>
-              <span class="text-xs text-gray-400 ml-3">${fechaStr}</span>
-            </div>
-            <div class="flex items-center gap-4">
-              <span class="text-xs text-gray-500 font-bold bg-emerald-50 px-2 py-0.5 rounded">${h.total_items} ítems</span>
-              <span class="text-xs font-extrabold text-gray-800">Ajuste Contable: $${parseFloat(h.total_debitos || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
-              <span id="hist-icon-${h.documento_numero}" class="text-gray-400 font-bold transition transform">▼</span>
-            </div>
-          </button>
+          <div class="flex items-center w-full">
+            <button onclick="toggleHistorialDetalle('${h.documento_numero}')"
+                    class="flex-1 flex items-center justify-between px-5 py-3 hover:bg-gray-50/50 transition text-left">
+              <div>
+                <span class="font-mono font-extrabold text-sm text-emerald-800">${h.documento_numero}</span>
+                <span class="text-xs text-gray-400 ml-3">${fechaStr}</span>
+              </div>
+              <div class="flex items-center gap-4">
+                <span class="text-xs text-gray-500 font-bold bg-emerald-50 px-2 py-0.5 rounded">${h.total_items} ítems</span>
+                <span class="text-xs font-extrabold text-gray-800">Ajuste Contable: $${parseFloat(h.total_debitos || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>
+                <span id="hist-icon-${h.documento_numero}" class="text-gray-400 font-bold transition transform">▼</span>
+              </div>
+            </button>
+            <button onclick="generarPdfAjuste('${h.documento_numero}')"
+                    title="Descargar PDF de este inventario físico"
+                    class="shrink-0 px-4 py-3 text-xs font-bold text-white bg-gray-800 hover:bg-gray-900 transition-colors border-l border-gray-100">
+              PDF
+            </button>
+          </div>
           
           <!-- Acordeón Body -->
           <div id="hist-body-${h.documento_numero}" class="hidden border-t border-gray-50 bg-gray-50/30 p-5 space-y-4">
@@ -793,6 +800,10 @@ async function cargarHistorial() {
   } else {
     container.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">No se registran inventarios físicos anteriores.</p>';
   }
+}
+
+function generarPdfAjuste(docNum) {
+  window.open(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/documento/${docNum}/pdf`, '_blank');
 }
 
 // Mostrar/Ocultar detalles e historial

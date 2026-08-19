@@ -4079,6 +4079,7 @@ def api_ajuste_guardar_item(negocio_id):
                      bodega=1,
                      tipo_documento=tipo_code,
                      documento_numero=doc_num_final,
+                     documento_fecha=date.today(),
                      tipo_documento_id=tipo_documento_id,
                      proveedor_id=tercero_id,
                      proveedor_nombre=tercero_nombre)

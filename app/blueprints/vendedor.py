@@ -949,17 +949,13 @@ def api_vendedor_mis_negocios():
             "SELECT 1 FROM terceros WHERE id = %s AND tipo_tercero = 'admin'",
             (vendedor_id,)).fetchone()
         if es_admin:
-            # Admins ven sus propios negocios (donde son el tercero/admin del negocio), no todos
-            rows_rest = conn.execute("""
-                SELECT tercero_id AS id, nombre, 'tercero' AS tipo
-                FROM restaurantes
-                WHERE activo = TRUE AND (tercero_id = %s OR admin_id = %s)
-            """, (vendedor_id, vendedor_id)).fetchall()
-            rows_tie = conn.execute("""
-                SELECT tercero_id AS id, nombre, 'tienda' AS tipo
-                FROM tiendas
-                WHERE activo = TRUE AND (tercero_id = %s OR admin_id = %s)
-            """, (vendedor_id, vendedor_id)).fetchall()
+            # Superadmin ve todos los negocios activos del sistema
+            rows_rest = conn.execute(
+                "SELECT tercero_id AS id, nombre, 'tercero' AS tipo FROM restaurantes WHERE activo = TRUE AND tercero_id IS NOT NULL"
+            ).fetchall()
+            rows_tie = conn.execute(
+                "SELECT tercero_id AS id, nombre, 'tienda' AS tipo FROM tiendas WHERE activo = TRUE AND tercero_id IS NOT NULL"
+            ).fetchall()
             negocios.extend([dict(r) for r in rows_rest] + [dict(r) for r in rows_tie])
         rows = conn.execute("""
             SELECT vn.negocio_id AS id, t.nombre, 'tercero' AS tipo

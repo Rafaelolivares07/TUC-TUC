@@ -44,10 +44,13 @@ def _crear_tablas(conn):
             created_at  TIMESTAMP DEFAULT NOW()
         )""",
         """CREATE TABLE IF NOT EXISTS tarjeta_estandar (
-            id           SERIAL PRIMARY KEY,
-            producto_id  INTEGER NOT NULL REFERENCES productos(id),
-            componente_id INTEGER NOT NULL REFERENCES productos(id),
-            cantidad     NUMERIC(12,4) NOT NULL DEFAULT 1,
+            id             SERIAL PRIMARY KEY,
+            producto_id    INTEGER NOT NULL REFERENCES productos(id),
+            componente_id  INTEGER NOT NULL REFERENCES productos(id),
+            cantidad       NUMERIC(12,4) NOT NULL DEFAULT 1,
+            creado_en      TIMESTAMP DEFAULT NOW(),
+            actualizado_en TIMESTAMP DEFAULT NOW(),
+            tercero_id     INTEGER REFERENCES terceros(id),
             UNIQUE(producto_id, componente_id)
         )""",
         """CREATE TABLE IF NOT EXISTS saldos_inventario (
@@ -100,6 +103,9 @@ def _crear_tablas(conn):
     alters = [
         "CREATE INDEX IF NOT EXISTS idx_productos_negocio ON productos(negocio_id)",
         "CREATE INDEX IF NOT EXISTS idx_tarjeta_producto ON tarjeta_estandar(producto_id)",
+        "ALTER TABLE tarjeta_estandar ADD COLUMN IF NOT EXISTS creado_en TIMESTAMP DEFAULT NOW()",
+        "ALTER TABLE tarjeta_estandar ADD COLUMN IF NOT EXISTS actualizado_en TIMESTAMP DEFAULT NOW()",
+        "ALTER TABLE tarjeta_estandar ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "CREATE INDEX IF NOT EXISTS idx_saldos_negocio_producto ON saldos_inventario(negocio_id, producto_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_presentaciones_unique ON presentaciones(LOWER(nombre), equivalencia)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS presentacion_id INTEGER REFERENCES presentaciones(id)",
@@ -1105,13 +1111,24 @@ def api_inventario_tarjeta_guardar(producto_id):
         _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
-        conn.execute("DELETE FROM tarjeta_estandar WHERE producto_id = %s", (producto_id,))
+        usuario_tercero_id = session.get('chat_tercero_id') or session['usuario_id']
+        linea_ids = []
         for ln in lineas:
+            cid = int(ln['componente_id'])
+            linea_ids.append(cid)
             conn.execute("""
-                INSERT INTO tarjeta_estandar (producto_id, componente_id, cantidad)
-                VALUES (%s,%s,%s)
-                ON CONFLICT (producto_id, componente_id) DO UPDATE SET cantidad = EXCLUDED.cantidad
-            """, (producto_id, int(ln['componente_id']), float(ln['cantidad'])))
+                INSERT INTO tarjeta_estandar (producto_id, componente_id, cantidad, tercero_id, creado_en, actualizado_en)
+                VALUES (%s,%s,%s,%s, NOW(), NOW())
+                ON CONFLICT (producto_id, componente_id) DO UPDATE
+                    SET cantidad = EXCLUDED.cantidad,
+                        actualizado_en = NOW(),
+                        tercero_id = EXCLUDED.tercero_id
+            """, (producto_id, cid, float(ln['cantidad']), usuario_tercero_id))
+        if linea_ids:
+            conn.execute("""
+                DELETE FROM tarjeta_estandar
+                WHERE producto_id = %s AND componente_id NOT IN %s
+            """, (producto_id, tuple(linea_ids)))
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:

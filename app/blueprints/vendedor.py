@@ -246,6 +246,25 @@ def api_vendedor_identificar():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/vendedor/logout', methods=['POST'])
+def api_vendedor_logout():
+    dev = request.cookies.get(_COOKIE_DISPOSITIVO, '')
+    try:
+        if len(dev) >= 8:
+            conn = get_db_connection()
+            conn.execute("DELETE FROM terceros_dispositivos WHERE dispositivo_id = %s", (dev,))
+            conn.commit()
+            conn.close()
+    except Exception:
+        try: conn.close()
+        except: pass
+    session.clear()
+    resp = jsonify({'ok': True})
+    if len(dev) >= 8:
+        resp.delete_cookie(_COOKIE_DISPOSITIVO)
+    return resp
+
+
 @bp.route('/api/vendedor/invitar', methods=['POST'])
 def api_vendedor_invitar():
     uid = session.get('usuario_id')
@@ -1927,9 +1946,13 @@ function montarInvAC() {
   });
 }
 
-function cambiarCodigo() {
+async function cambiarCodigo() {
+  try { await fetch('/api/vendedor/logout', {method:'POST'}); } catch {}
+  localStorage.removeItem('vd_tel'); localStorage.removeItem('vd_nombre'); localStorage.removeItem('vd_negocio_id');
   document.getElementById('inp-nombre-v').value = '';
   document.getElementById('inp-tel-v').value = '';
+  document.getElementById('inp-token-v').value = '';
+  document.getElementById('zona-token').classList.add('hidden');
   document.getElementById('txt-id-error').classList.add('hidden');
   document.getElementById('btn-cancelar-modal').classList.remove('hidden');
   document.getElementById('modal-codigo').classList.remove('hidden');

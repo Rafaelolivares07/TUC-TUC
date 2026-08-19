@@ -2082,9 +2082,14 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
+        # Mapeo de tipos de documentos del negocio
+        types_rows = conn.execute("SELECT id, nombre, codigo FROM tipos_documento_negocio WHERE negocio_id = %s", (negocio_id,)).fetchall()
+        types_map = {r['id']: r['nombre'] for r in types_rows}
+        types_code = {r['id']: r['codigo'] for r in types_rows}
+
         # Query unique documents in movimientos_inventario (purchases/entries)
         rows_inv = conn.execute("""
-            SELECT mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total,
+            SELECT mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total,
                    MIN(sd.saldo) AS saldo_pendiente
             FROM movimientos_inventario mi
             LEFT JOIN saldo_por_documentos sd ON sd.negocio_id = mi.negocio_id 
@@ -2092,26 +2097,34 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
                                             AND sd.tipo_documento = mi.tipo_documento
                                             AND sd.numero_documento = mi.documento_numero
             WHERE mi.negocio_id = %s AND mi.proveedor_id = %s
-            GROUP BY mi.tipo_documento, mi.documento_numero, mi.documento_fecha
+            GROUP BY mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha
             ORDER BY mi.documento_fecha DESC, mi.documento_numero DESC
         """, (negocio_id, tercero_id)).fetchall()
         
         documentos = []
         for r in rows_inv:
+            td_id = r['tipo_documento_id']
+            td_name = r['tipo_documento'] or 'otro'
+            if td_id and td_id in types_map:
+                td_name = types_map[td_id]
+            doc_num = r['documento_numero']
             documentos.append({
-                'tipo_documento': r['tipo_documento'] or 'otro',
-                'documento_numero': r['documento_numero'],
+                'tipo_documento_id': td_id,
+                'tipo_documento': td_name,
+                'documento_numero': _num_documento_limpio(doc_num, td_id, types_code),
+                'documento_numero_completo': doc_num,
                 'fecha': r['documento_fecha'].isoformat() if r['documento_fecha'] else None,
                 'origen': 'inventario',
                 'total': float(r['total'] or 0),
                 'saldo_pendiente': float(r['saldo_pendiente']) if r['saldo_pendiente'] is not None else None
             })
             
-        # Query unique documents in pedidos (sales/orders)
+        # Query documents in pedidos (sales/orders) — solo ventas facturadas (con tipo de documento)
         rows_ped = conn.execute("""
-            SELECT id, numero_documento, fecha, created_at, total, estado
+            SELECT id, tipo_documento_id, numero_documento, fecha, created_at, total, estado
             FROM pedidos
-            WHERE cliente_id = %s OR id_tercero = %s
+            WHERE (cliente_id = %s OR id_tercero = %s)
+              AND tipo_documento_id IS NOT NULL
             ORDER BY COALESCE(fecha, created_at) DESC, id DESC
         """, (tercero_id, tercero_id)).fetchall()
         
@@ -2119,9 +2132,13 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
             doc_num = r['numero_documento'] or str(r['id'])
             # Fallback to created_at if fecha is null
             f_val = r['fecha'] or r['created_at']
+            td_id = r['tipo_documento_id']
+            td_name = types_map.get(td_id) if td_id else 'pedido_venta'
             documentos.append({
-                'tipo_documento': 'pedido_venta',
-                'documento_numero': doc_num,
+                'tipo_documento_id': td_id,
+                'tipo_documento': td_name,
+                'documento_numero': _num_documento_limpio(doc_num, td_id, types_code),
+                'documento_numero_completo': doc_num,
                 'fecha': f_val.date().isoformat() if f_val else None,
                 'origen': 'ventas',
                 'total': float(r['total'] or 0),
@@ -2141,6 +2158,17 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         conn.close()
 
 
+def _num_documento_limpio(num_str, tipo_doc_id, types_code):
+    """Devuelve el número de documento sin el prefijo del código del tipo (ej. 'PRODUCCION-8' -> '8')."""
+    if not num_str:
+        return num_str
+    s = str(num_str).strip()
+    cod = types_code.get(tipo_doc_id)
+    if cod and s.upper().startswith(str(cod).upper() + '-'):
+        return s[len(str(cod)) + 1:].strip()
+    return s
+
+
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/documentos-recientes', methods=['GET'])
 def api_mantenimiento_documentos_recientes(negocio_id):
     if 'usuario_id' not in session:
@@ -2158,6 +2186,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         # Obtener mapeo de tipos de documentos del negocio
         types_rows = conn.execute("SELECT id, nombre, codigo FROM tipos_documento_negocio WHERE negocio_id = %s", (negocio_id,)).fetchall()
         types_map = {r['id']: r['nombre'] for r in types_rows}
+        types_code = {r['id']: r['codigo'] for r in types_rows}
 
         # 1. Fetch recent inventory documents
         sql_inv = """
@@ -2224,7 +2253,8 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             consolidated[key] = {
                 'tipo_documento_id': td_id,
                 'tipo_documento': td_name,
-                'documento_numero': doc_num,
+                'documento_numero': _num_documento_limpio(doc_num, td_id, types_code),
+                'documento_numero_completo': doc_num,
                 'fecha': r['documento_fecha'].isoformat() if r['documento_fecha'] else None,
                 'origen': 'inventario',
                 'total_inventario': float(r['total_inventario'] or 0),
@@ -2234,11 +2264,11 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 'tercero_id': r['proveedor_id']
             }
             
-        # 2. Fetch recent orders (sales)
+        # 2. Fetch recent orders (sales) — solo pedidos convertidos en venta facturada (con tipo de documento)
         sql_ped = """
             SELECT p.id, p.tipo_documento_id, p.numero_documento, p.fecha, p.created_at, p.total, p.cliente_id, p.id_tercero, p.nombre_cliente, p.estado
             FROM pedidos p
-            WHERE p.negocio_id = %s
+            WHERE p.negocio_id = %s AND p.tipo_documento_id IS NOT NULL
         """
         params_ped = [negocio_id]
         
@@ -2248,7 +2278,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             
         if tipo and tipo != 'todos':
             if tipo == 'pedido_venta':
-                sql_ped += " AND (p.tipo_documento_id IS NULL OR p.tipo_documento_id IN (SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'venta'))"
+                sql_ped += " AND p.tipo_documento_id IN (SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'venta')"
                 params_ped.append(negocio_id)
             else:
                 try:
@@ -2309,13 +2339,14 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 if r['total'] and float(r['total']) > (consolidated[key]['total_pedidos'] or 0):
                     consolidated[key]['total_pedidos'] = float(r['total'])
                 # Prefer showing original prefix code if existing display name is shorter
-                if doc_num and len(doc_num) > len(consolidated[key]['documento_numero']):
-                    consolidated[key]['documento_numero'] = doc_num
+                if doc_num and len(doc_num) > len(consolidated[key].get('documento_numero_completo') or ''):
+                    consolidated[key]['documento_numero_completo'] = doc_num
             else:
                 consolidated[key] = {
                     'tipo_documento_id': td_id,
                     'tipo_documento': td_name,
-                    'documento_numero': doc_num,
+                    'documento_numero': _num_documento_limpio(doc_num, td_id, types_code),
+                    'documento_numero_completo': doc_num,
                     'fecha': date_str,
                     'origen': 'ventas',
                     'total_inventario': None,
@@ -2409,7 +2440,8 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 consolidated[key] = {
                     'tipo_documento_id': td_id,
                     'tipo_documento': td_name,
-                    'documento_numero': doc_num,
+                    'documento_numero': _num_documento_limpio(doc_num, td_id, types_code),
+                    'documento_numero_completo': doc_num,
                     'fecha': date_str,
                     'origen': 'contabilidad',
                     'total_inventario': None,

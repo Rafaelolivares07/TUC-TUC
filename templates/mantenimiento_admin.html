@@ -250,10 +250,7 @@
         <div class="flex gap-2 mt-2">
           <input id="auditor-directo-num" type="text" placeholder="Ej: FV-0009, VENTA-0004 o ID 6" class="border border-gray-300 rounded-lg px-3 py-2 flex-1 text-sm outline-none focus:border-blue-500 bg-white">
           <select id="auditor-directo-tipo" class="border border-gray-300 rounded-lg px-2 py-2 text-xs outline-none bg-white">
-            <option value="pedido_venta">Venta / Pedido</option>
-            <option value="entrada">Entrada Inventario</option>
-            <option value="factura_compra">Factura Compra</option>
-            <option value="egreso">Egreso / Comprobante</option>
+            <option value="">Tipo de documento</option>
           </select>
           <button onclick="auditarDocumentoDirecto()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition">🔍 Auditar</button>
         </div>
@@ -691,7 +688,7 @@
           <td class="py-2.5 text-right font-semibold text-gray-700">$${doc.total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
           <td class="py-2.5 text-right ${balanceClass}">${balanceStr}</td>
           <td class="py-2.5 text-center">
-            <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero}', '${terceroId}')" 
+            <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero_completo || doc.documento_numero}', '${terceroId}')" 
                     class="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-lg text-xs transition">
               🔎 Auditar
             </button>
@@ -1333,13 +1330,17 @@
       if (d.ok) {
         const select = document.getElementById('aud-filtro-recientes-tipo');
         if (!select) return;
-        select.innerHTML = `
-          <option value="todos">Todos los tipos</option>
-          <option value="pedido_venta">Venta / Pedido</option>
-        `;
+        select.innerHTML = `<option value="todos">Todos los tipos</option>`;
         (d.tipos || []).forEach(t => {
-          select.innerHTML += `<option value="${t.id}">${t.nombre} (${t.codigo})</option>`;
+          select.innerHTML += `<option value="${t.id}">${t.nombre}</option>`;
         });
+        const selectDirecto = document.getElementById('auditor-directo-tipo');
+        if (selectDirecto) {
+          selectDirecto.innerHTML = '<option value="">Tipo de documento</option>';
+          (d.tipos || []).forEach(t => {
+            selectDirecto.innerHTML += `<option value="${t.id}">${t.nombre}</option>`;
+          });
+        }
       }
     } catch(e) {
       console.error('Error al cargar tipos de documentos para filtros:', e);
@@ -1407,7 +1408,7 @@
             <td class="py-2 text-right font-semibold text-gray-700">${doc.total_inventario != null ? '$' + doc.total_inventario.toLocaleString('es-CO') : '—'}</td>
             <td class="py-2 text-right font-semibold text-gray-700">${doc.total_pedidos != null ? '$' + doc.total_pedidos.toLocaleString('es-CO') : '—'}</td>
             <td class="py-2 text-center">
-              <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero}', '${doc.tercero_id || ''}')" 
+              <button onclick="consultarDocumentoDetalle('${doc.tipo_documento}', '${doc.documento_numero_completo || doc.documento_numero}', '${doc.tercero_id || ''}')" 
                       class="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded text-[10px] transition">
                 🔎 Auditar
               </button>

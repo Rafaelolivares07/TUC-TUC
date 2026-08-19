@@ -358,15 +358,30 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
 
     nombre_prod = conn.execute("SELECT nombre FROM productos WHERE id=%s", (producto_id,)).fetchone()
 
+    # Número de documento puro (sin el prefijo del código del tipo).
+    # Estándar: tipo_documento_id + numero_documento (alfanumérico) identifica el documento en
+    # movimientos_inventario y movimientos_contables. Nada de concatenaciones.
+    num_puro = documento_numero
+    if documento_numero:
+        cod_row = None
+        if tipo_documento_id:
+            cod_row = conn.execute("SELECT codigo FROM tipos_documento_negocio WHERE id=%s", (tipo_documento_id,)).fetchone()
+        cod = (cod_row['codigo'] if cod_row and cod_row['codigo'] else tipo_documento) or ''
+        s = str(documento_numero).strip()
+        if cod and s.upper().startswith(str(cod).strip().upper() + '-'):
+            num_puro = s[len(str(cod).strip()) + 1:].strip()
+        elif tipo_documento_id and s.upper().startswith('AJUSTE_INV-'):
+            num_puro = s[len('AJUSTE_INV'):].lstrip('-').strip()
+
     conn.execute("""
         INSERT INTO movimientos_inventario
             (negocio_id, producto_id, nombre_producto, tipo, motivo,
              cantidad, stock_anterior, stock_nuevo, registrado_por, notas,
              valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo,
-             tipo_documento, documento_numero, documento_fecha, proveedor_id,
+             tipo_documento, documento_numero, numero_documento, documento_fecha, proveedor_id,
              proveedor_nombre, iva_total, documento_total, iva_pct, iva_valor,
              producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         negocio_id, producto_id,
         nombre_prod['nombre'] if nombre_prod else '',
@@ -377,7 +392,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         float(cantidad * Decimal(str(valor_unitario))) if valor_unitario else None,
         float(costo_registro),
         referencia_id, referencia_tipo,
-        tipo_documento, documento_numero, documento_fecha, proveedor_id,
+        tipo_documento, num_puro, num_puro, documento_fecha, proveedor_id,
         proveedor_nombre,
         float(iva_total) if iva_total is not None else None,
         float(documento_total) if documento_total is not None else None,
@@ -1610,11 +1625,10 @@ def api_produccion_registrar(negocio_id):
             res_num, es_interno_actual = obtener_siguiente_consecutivo(conn, negocio_id, tipo_doc_id)
             if es_interno:
                 if res_num:
-                    tipo_doc_codigo = td['codigo'] if (td and td['codigo']) else 'PROD'
                     try:
-                        documento_numero = f"{tipo_doc_codigo}-{int(res_num)}"
+                        documento_numero = str(int(res_num))
                     except (ValueError, TypeError):
-                        documento_numero = f"{tipo_doc_codigo}-{res_num}"
+                        documento_numero = str(res_num)
             else:
                 if not documento_numero:
                     return jsonify({'ok': False, 'error': f'El número de documento es obligatorio para el tipo de documento externo {tipo_documento}.'}), 400
@@ -3861,9 +3875,9 @@ def api_tienda_ajuste_rapido(negocio_id):
             conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (int(res_num), td['id']))
             
         try:
-            doc_num = f"AJUSTE_INV-{int(res_num)}"
+            doc_num = str(int(res_num))
         except (ValueError, TypeError):
-            doc_num = f"AJUSTE_INV-{res_num}"
+            doc_num = str(res_num)
             
         # 3. Apply adjustments
         adjusted_products = []
@@ -3994,8 +4008,7 @@ def api_ajuste_siguiente_documento(negocio_id):
             return jsonify({'ok': False, 'error': 'Tipo de documento no encontrado'}), 404
             
         next_num = max((td['consecutivo'] or 0) + 1, (td['numero_inicio'] or 1))
-        tipo_code = td['codigo'] or 'AJUSTE_INV'
-        doc_num = f"{tipo_code}-{next_num}"
+        doc_num = str(next_num)
         
         return jsonify({'ok': True, 'documento_numero': doc_num, 'consecutivo': next_num})
     except Exception as e:
@@ -4012,6 +4025,15 @@ def api_ajuste_guardar_item(negocio_id):
     data = request.get_json() or {}
     tipo_documento_id = data.get('tipo_documento_id')
     documento_numero = data.get('documento_numero')
+    # Normalizar a número puro (estándar: tipo_documento_id + numero_documento, sin concatenaciones)
+    if documento_numero:
+        s_doc = str(documento_numero).strip()
+        td_raw = conn.execute("SELECT codigo FROM tipos_documento_negocio WHERE id=%s AND negocio_id=%s", (tipo_documento_id, negocio_id)).fetchone() if tipo_documento_id else None
+        cod_t = (td_raw['codigo'] if td_raw and td_raw['codigo'] else 'AJUSTE_INV') or ''
+        if s_doc.upper().startswith(str(cod_t).strip().upper() + '-'):
+            documento_numero = s_doc[len(str(cod_t).strip()) + 1:].strip()
+        elif s_doc.upper().startswith('AJUSTE_INV-'):
+            documento_numero = s_doc[len('AJUSTE_INV'):].lstrip('-').strip()
     producto_id = data.get('producto_id')
     cantidad_fisica = data.get('cantidad_fisica')
     costo_unitario = data.get('costo_unitario')
@@ -4065,7 +4087,7 @@ def api_ajuste_guardar_item(negocio_id):
                 res_num = str(max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1)))
                 conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (int(res_num), tipo_documento_id))
             
-            doc_num_final = f"{tipo_code}-{int(res_num)}"
+            doc_num_final = str(int(res_num))
             desc_asiento = f"Ajuste físico de inventario - {doc_num_final}"
             comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
             consecutivo_actualizado = True

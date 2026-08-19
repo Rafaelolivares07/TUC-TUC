@@ -3636,8 +3636,19 @@ def api_ultima_presentacion(negocio_id, producto_id, proveedor_id):
 def api_produccion_historial(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    try:
+        pagina = max(1, int(request.args.get('pagina', 1)))
+    except (TypeError, ValueError):
+        pagina = 1
+    por_pagina = 50
+    offset = (pagina - 1) * por_pagina
     conn = get_db_connection()
     try:
+        total_row = conn.execute("""
+            SELECT COUNT(*) AS total FROM movimientos_inventario
+            WHERE negocio_id = %s AND tipo = 'entrada' AND referencia_tipo = 'produccion'
+        """, (negocio_id,)).fetchone()
+        total = total_row['total'] if total_row else 0
         rows = conn.execute("""
             SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.valor_total,
                    m.documento_numero, m.tipo_documento_id, tdn.nombre AS tipo_documento_nombre, 
@@ -3646,9 +3657,9 @@ def api_produccion_historial(negocio_id):
             LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
             WHERE m.negocio_id = %s AND m.tipo = 'entrada' AND m.referencia_tipo = 'produccion'
             ORDER BY m.id DESC
-            LIMIT 50
-        """, (negocio_id,)).fetchall()
-        
+            LIMIT %s OFFSET %s
+        """, (negocio_id, por_pagina, offset)).fetchall()
+
         historial = []
         for r in rows:
             fecha_str = r['created_at'].strftime('%Y-%m-%d %H:%M') if r['created_at'] else ''
@@ -3666,7 +3677,15 @@ def api_produccion_historial(negocio_id):
                 'prod_token': r['prod_token'],
                 'notas': r['notes'] if 'notes' in r else r['notas']
             })
-        return jsonify({'ok': True, 'historial': historial})
+        total_paginas = (total + por_pagina - 1) // por_pagina if total else 1
+        return jsonify({
+            'ok': True,
+            'historial': historial,
+            'pagina': pagina,
+            'por_pagina': por_pagina,
+            'total': total,
+            'total_paginas': max(1, total_paginas)
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

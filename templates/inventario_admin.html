@@ -733,6 +733,14 @@
           </tbody>
         </table>
       </div>
+      <div class="flex items-center justify-between gap-3 mt-3">
+        <span id="prod-hist-total" class="text-xs text-gray-500 font-semibold"></span>
+        <div class="flex items-center gap-2">
+          <button id="btn-prod-prev" onclick="cargarHistorialProduccion(histProdPagina - 1)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:pointer-events-none">← Anterior</button>
+          <span id="prod-hist-pagina" class="text-xs font-bold text-gray-700"></span>
+          <button id="btn-prod-next" onclick="cargarHistorialProduccion(histProdPagina + 1)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:pointer-events-none">Siguiente →</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2833,18 +2841,47 @@ async function cargarTiposDocProduccion() {
   }
 }
 
-async function cargarHistorialProduccion() {
+let histProdPagina = 1;
+let histProdTotalPaginas = 1;
+
+async function cargarHistorialProduccion(pagina = 1) {
+  histProdPagina = Math.max(1, pagina);
+  const tbody = document.getElementById('prod-historial-body');
+  if (!tbody) return;
   try {
-    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/historial`);
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/historial?pagina=${histProdPagina}`);
     const d = await r.json();
-    const tbody = document.getElementById('prod-historial-body');
-    if (!tbody) return;
     if (d.ok) {
+      histProdTotalPaginas = d.total_paginas || 1;
+      actualizarPaginadorHistProd(d.total || 0);
       if (!d.historial.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-400 italic">No hay registros de producción recientes.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-gray-400 italic">No hay registros de producción.</td></tr>';
         return;
       }
-      tbody.innerHTML = d.historial.map(h => `
+      renderHistorialProduccion(d.historial);
+    } else {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-500 italic">Error al cargar historial: ${d.error}</td></tr>`;
+    }
+  } catch(e) {
+    console.error(e);
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-500 italic">Error de conexión al cargar historial.</td></tr>';
+  }
+}
+
+function actualizarPaginadorHistProd(total) {
+  const tPagina = document.getElementById('prod-hist-pagina');
+  const tTotal = document.getElementById('prod-hist-total');
+  const prev = document.getElementById('btn-prod-prev');
+  const next = document.getElementById('btn-prod-next');
+  if (tPagina) tPagina.textContent = `Página ${histProdPagina} de ${histProdTotalPaginas}`;
+  if (tTotal) tTotal.textContent = `${total.toLocaleString('es-CO')} registros`;
+  if (prev) prev.disabled = histProdPagina <= 1;
+  if (next) next.disabled = histProdPagina >= histProdTotalPaginas;
+}
+
+function renderHistorialProduccion(historial) {
+  const tbody = document.getElementById('prod-historial-body');
+  tbody.innerHTML = historial.map(h => `
         <tr class="hover:bg-gray-50 border-b border-gray-100">
           <td class="px-4 py-3 font-medium text-gray-900">
             <span class="font-bold text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">${h.documento_numero || ('PROD-' + h.prod_token)}</span>
@@ -2869,14 +2906,6 @@ async function cargarHistorialProduccion() {
           </td>
         </tr>
       `).join('');
-    } else {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-500 italic">Error al cargar historial: ${d.error}</td></tr>`;
-    }
-  } catch(e) {
-    console.error(e);
-    const tbody = document.getElementById('prod-historial-body');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-500 italic">Error de conexión al cargar historial.</td></tr>';
-  }
 }
 
 function imprimirProduccion(token) {

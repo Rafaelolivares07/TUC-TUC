@@ -14,7 +14,7 @@ jobs:
         with:
           host: 18.217.231.167
           username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          key: ${{ secrets.SSH_DEPLOY_KEY }}
           port: 22
           script: |
             cd /home/ubuntu/tuctucv2

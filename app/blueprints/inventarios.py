@@ -4507,9 +4507,11 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos):
     pdf.ln()
 
     pdf.set_font('Helvetica', '', 7.5)
+    alto_linea = 5.5
     for d in datos:
+        nombre = _pdf_sanitize(d['nombre_producto'])[:80]
         fila = [
-            _pdf_sanitize(d['nombre_producto'])[:46],
+            nombre,
             f"{d['cantidad']:.0f}",
             _pdf_money(d['precio_unitario']),
             _pdf_money(d['costo_unitario']),
@@ -4518,10 +4520,17 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos):
             _pdf_money(d['margen_total']),
             f"{d['margen_porcentual']:.1f}",
         ]
-        for i, val in enumerate(fila):
-            align = 'C' if i > 0 else 'L'
-            pdf.cell(col_w[i], 5.5, val, border=1, align=align)
-        pdf.ln()
+        lineas = pdf.multi_cell(col_w[0], alto_linea, nombre, split_only=True)
+        alto_fila = max(len(lineas) * alto_linea, alto_linea)
+        if pdf.get_y() + alto_fila > pdf.page_break_trigger:
+            pdf.add_page()
+        x_fila = pdf.get_x()
+        y_fila = pdf.get_y()
+        pdf.multi_cell(col_w[0], alto_linea, nombre, border=1, align='L')
+        pdf.set_xy(x_fila + col_w[0], y_fila)
+        for i in range(1, len(fila)):
+            pdf.cell(col_w[i], alto_fila, fila[i], border=1, align='C')
+        pdf.set_xy(pdf.l_margin, y_fila + alto_fila)
 
     pdf.set_font('Helvetica', 'B', 7.5)
     pdf.set_fill_color(235, 245, 235)

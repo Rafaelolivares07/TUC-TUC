@@ -871,6 +871,9 @@
         <button id="btn-consultar-vc" onclick="consultarVentasCostos()" class="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
           Filtrar
         </button>
+        <button onclick="generarPdfVentasCostos()" class="px-5 py-2.5 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-xl transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-800">
+          PDF
+        </button>
       </div>
     </div>
 
@@ -3699,6 +3702,13 @@ async function consultarVentasCostos() {
       btn.textContent = 'Filtrar';
     }
   }
+}
+
+function generarPdfVentasCostos() {
+  const desde = document.getElementById('vc-desde').value;
+  const hasta = document.getElementById('vc-hasta').value;
+  if (!desde || !hasta) { toast('Selecciona el rango de fechas primero', true); return; }
+  window.open(`/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/pdf?desde=${desde}&hasta=${hasta}`, '_blank');
 }
 
 function renderTablaVC() {

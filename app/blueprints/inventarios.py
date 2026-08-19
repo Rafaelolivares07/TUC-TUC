@@ -1,7 +1,12 @@
-from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, jsonify, redirect, render_template, request, session, url_for
 from ..db import get_db_connection
 from decimal import Decimal
 from datetime import date
+
+try:
+    from fpdf import FPDF
+except ImportError:
+    FPDF = None
 
 try:
     from .contabilidad import _ejecutar_asiento_costo_mov as _asiento_costo_mov
@@ -4402,55 +4407,162 @@ def api_reporte_ventas_costos(negocio_id):
         
     conn = get_db_connection()
     try:
-        rows = conn.execute("""
-            SELECT 
-                pi.producto_id,
-                p.nombre AS nombre_producto,
-                SUM(pi.cantidad) AS cantidad_vendida,
-                SUM(pi.cantidad * pi.precio_unitario) AS total_ventas_pesos,
-                SUM(pi.cantidad * pi.costo_unitario) AS total_costo_pesos
-            FROM pedido_items pi
-            JOIN pedidos ped ON ped.id = pi.pedido_id
-            JOIN productos p ON p.id = pi.producto_id
-            WHERE ped.negocio_id = %s 
-              AND (ped.estado IS NULL OR ped.estado != 'anulado')
-              AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date 
-              AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
-            GROUP BY pi.producto_id, p.nombre
-            ORDER BY total_ventas_pesos DESC
-        """, (negocio_id, desde, hasta)).fetchall()
-        
-        datos = []
-        for r in rows:
-            cant = float(r['cantidad_vendida'])
-            ventas_tot = float(r['total_ventas_pesos'])
-            costos_tot = float(r['total_costo_pesos'])
-            
-            px_prom = ventas_tot / cant if cant > 0 else 0.0
-            cx_prom = costos_tot / cant if cant > 0 else 0.0
-            
-            margen_unitario = px_prom - cx_prom
-            margen_total = ventas_tot - costos_tot
-            margen_porcentual = (margen_total / ventas_tot * 100.0) if ventas_tot > 0 else 0.0
-            
-            datos.append({
-                'producto_id': r['producto_id'],
-                'nombre_producto': r['nombre_producto'],
-                'cantidad': cant,
-                'precio_unitario': px_prom,
-                'costo_unitario': cx_prom,
-                'total_venta': ventas_tot,
-                'total_costo': costos_tot,
-                'margen_unitario': margen_unitario,
-                'margen_total': margen_total,
-                'margen_porcentual': margen_porcentual
-            })
-            
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta)
         return jsonify({'ok': True, 'reporte': datos})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta):
+    rows = conn.execute("""
+        SELECT 
+            pi.producto_id,
+            p.nombre AS nombre_producto,
+            SUM(pi.cantidad) AS cantidad_vendida,
+            SUM(pi.cantidad * pi.precio_unitario) AS total_ventas_pesos,
+            SUM(pi.cantidad * pi.costo_unitario) AS total_costo_pesos
+        FROM pedido_items pi
+        JOIN pedidos ped ON ped.id = pi.pedido_id
+        JOIN productos p ON p.id = pi.producto_id
+        WHERE ped.negocio_id = %s 
+          AND (ped.estado IS NULL OR ped.estado != 'anulado')
+          AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date 
+          AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
+        GROUP BY pi.producto_id, p.nombre
+        ORDER BY total_ventas_pesos DESC
+    """, (negocio_id, desde, hasta)).fetchall()
+
+    datos = []
+    for r in rows:
+        cant = float(r['cantidad_vendida'])
+        ventas_tot = float(r['total_ventas_pesos'])
+        costos_tot = float(r['total_costo_pesos'])
+
+        px_prom = ventas_tot / cant if cant > 0 else 0.0
+        cx_prom = costos_tot / cant if cant > 0 else 0.0
+
+        margen_unitario = px_prom - cx_prom
+        margen_total = ventas_tot - costos_tot
+        margen_porcentual = (margen_total / ventas_tot * 100.0) if ventas_tot > 0 else 0.0
+
+        datos.append({
+            'producto_id': r['producto_id'],
+            'nombre_producto': r['nombre_producto'],
+            'cantidad': cant,
+            'precio_unitario': px_prom,
+            'costo_unitario': cx_prom,
+            'total_venta': ventas_tot,
+            'total_costo': costos_tot,
+            'margen_unitario': margen_unitario,
+            'margen_total': margen_total,
+            'margen_porcentual': margen_porcentual
+        })
+    return datos
+
+
+def _pdf_sanitize(txt):
+    out = []
+    for ch in str(txt):
+        out.append(ch if ord(ch) <= 255 else '?')
+    return ''.join(out)
+
+
+def _pdf_money(valor):
+    try:
+        return f'{float(valor):,.0f}'
+    except Exception:
+        return '0'
+
+
+def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos):
+    pdf = FPDF(format='letter', unit='mm')
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+
+    pdf.set_font('Helvetica', 'B', 14)
+    pdf.cell(0, 8, 'TUC TUC - Informe Ventas y Costos', ln=1, align='C')
+    pdf.set_font('Helvetica', 'B', 11)
+    pdf.cell(0, 7, _pdf_sanitize(nombre_negocio), ln=1, align='C')
+    pdf.set_font('Helvetica', '', 9)
+    pdf.cell(0, 5, f'Rango: {desde} al {hasta}', ln=1, align='C')
+
+    total_ventas = sum(d['total_venta'] for d in datos)
+    total_costos = sum(d['total_costo'] for d in datos)
+    total_margen = total_ventas - total_costos
+    pct = (total_margen / total_ventas * 100.0) if total_ventas else 0.0
+
+    pdf.ln(2)
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.cell(0, 6, f"Ventas: ${_pdf_money(total_ventas)}   Costos: ${_pdf_money(total_costos)}   Margen: ${_pdf_money(total_margen)} ({pct:.1f}%)", ln=1)
+    pdf.ln(2)
+
+    col_w = [56, 14, 20, 20, 24, 24, 24, 14]
+    headers = ['Producto', 'Cant', 'P.Unit', 'C.Unit', 'Total Venta', 'Total Costo', 'Margen', '%']
+    pdf.set_font('Helvetica', 'B', 7.5)
+    pdf.set_fill_color(230, 230, 230)
+    for i, h in enumerate(headers):
+        pdf.cell(col_w[i], 6, h, border=1, align='C', fill=True)
+    pdf.ln()
+
+    pdf.set_font('Helvetica', '', 7.5)
+    for d in datos:
+        fila = [
+            _pdf_sanitize(d['nombre_producto'])[:46],
+            f"{d['cantidad']:.0f}",
+            _pdf_money(d['precio_unitario']),
+            _pdf_money(d['costo_unitario']),
+            _pdf_money(d['total_venta']),
+            _pdf_money(d['total_costo']),
+            _pdf_money(d['margen_total']),
+            f"{d['margen_porcentual']:.1f}",
+        ]
+        for i, val in enumerate(fila):
+            align = 'C' if i > 0 else 'L'
+            pdf.cell(col_w[i], 5.5, val, border=1, align=align)
+        pdf.ln()
+
+    pdf.set_font('Helvetica', 'B', 7.5)
+    pdf.set_fill_color(235, 245, 235)
+    total_cant = sum(d['cantidad'] for d in datos)
+    foot = ['TOTALES', f"{total_cant:.0f}", '', '',
+            _pdf_money(total_ventas), _pdf_money(total_costos),
+            _pdf_money(total_margen), f"{pct:.1f}"]
+    for i, val in enumerate(foot):
+        align = 'C' if i > 0 else 'L'
+        pdf.cell(col_w[i], 6, val, border=1, align=align, fill=True)
+    pdf.ln()
+
+    return pdf
+
+
+@bp.route('/api/inventario/<int:negocio_id>/reporte-ventas-costos/pdf')
+def api_reporte_ventas_costos_pdf(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    if FPDF is None:
+        return jsonify({'ok': False, 'error': 'PDF no disponible (falta fpdf2)'}), 500
+
+    desde = request.args.get('desde')
+    hasta = request.args.get('hasta')
+    if not desde or not hasta:
+        return jsonify({'ok': False, 'error': 'Debe especificar las fechas desde y hasta'}), 400
+
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        nombre_negocio = (contexto.get('nombre') or 'Negocio') if contexto else 'Negocio'
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta)
+        conn.close()
+        pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos)
+        resp = Response(pdf.output(), mimetype='application/pdf')
+        resp.headers['Content-Disposition'] = 'inline; filename=reporte_ventas_costos.pdf'
+        return resp
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/conciliar-cuentas-14')

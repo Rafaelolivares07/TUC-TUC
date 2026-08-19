@@ -59,3 +59,4 @@ flask-socketio==5.6.1
 gevent==24.11.1
 gevent-websocket==0.10.1
 yt-dlp==2026.6.9
+fpdf2==2.8.2

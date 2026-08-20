@@ -1340,6 +1340,11 @@
           (d.tipos || []).forEach(t => {
             selectDirecto.innerHTML += `<option value="${t.id}">${t.nombre}</option>`;
           });
+          const urlParams = new URLSearchParams(window.location.search);
+          const deepTipo = urlParams.get('tipo_documento');
+          if (deepTipo) {
+            selectDirecto.value = deepTipo;
+          }
         }
       }
     } catch(e) {
@@ -1478,8 +1483,16 @@
     const numero = urlParams.get('documento_numero');
     const terceroId = urlParams.get('tercero_id') || '';
     if (tipo && numero) {
-      setTimeout(() => {
-        consultarDocumentoDetalle(tipo, numero, terceroId);
+      const inputNum = document.getElementById('auditor-directo-num');
+      if (inputNum) inputNum.value = numero;
+      
+      setTimeout(async () => {
+        await consultarDocumentoDetalle(tipo, numero, terceroId);
+        if (urlParams.get('scroll') === 'bottom') {
+          setTimeout(() => {
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+          }, 300);
+        }
       }, 300);
     }
   }

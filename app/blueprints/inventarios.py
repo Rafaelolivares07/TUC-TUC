@@ -328,7 +328,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                  proveedor_nombre=None, iva_total=None,
                  documento_total=None, iva_pct=None, iva_valor=None,
                  producto_padre_id=None, presentacion_id=None,
-                 metodo_pago=None, tipo_documento_id=None):
+                 metodo_pago=None, tipo_documento_id=None, valor_total=None):
     """Movimiento directo sobre un producto, sin pasar por tarjeta estándar."""
     signo  = Decimal('1') if tipo == 'entrada' else Decimal('-1')
     cantidad = Decimal(str(cantidad))
@@ -347,6 +347,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
 
     if tipo == 'entrada' and valor_unitario is not None:
         vu = Decimal(str(valor_unitario))
+        if valor_total is not None and valor_total > 0:
+            vu = Decimal(str(valor_total)) / cantidad if cantidad > 0 else vu
         costo_nuevo   = (val_exi_ant + cantidad * vu) / stock_nuevo if stock_nuevo > 0 else vu
         val_exi_nuevo = stock_nuevo * costo_nuevo if stock_nuevo > 0 else Decimal('0')
     else:
@@ -389,7 +391,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         float(cantidad), float(stock_ant), float(stock_nuevo),
         registrado_por, notas,
         float(valor_unitario) if valor_unitario else None,
-        float(cantidad * Decimal(str(valor_unitario))) if valor_unitario else None,
+        float(valor_total) if valor_total is not None else (float(cantidad * Decimal(str(valor_unitario))) if valor_unitario else None),
         float(costo_registro),
         referencia_id, referencia_tipo,
         tipo_documento, num_puro, num_puro, documento_fecha, proveedor_id,
@@ -522,7 +524,7 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      proveedor_nombre=None, iva_total=None,
                      documento_total=None, iva_pct=None, iva_valor=None,
                      presentacion_id=None, metodo_pago=None, tipo_documento_id=None,
-                     excluir_componentes_ids=None):
+                     excluir_componentes_ids=None, valor_total=None):
     """Aplica entrada o salida según tarjeta estándar. Sin tarjeta → 1:1 sobre sí mismo."""
     componentes = conn.execute(
         "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
@@ -550,7 +552,7 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      proveedor_nombre, iva_total, documento_total,
                      iva_pct, iva_valor, producto_padre_id=padre_id,
                      presentacion_id=pres_id, metodo_pago=metodo_pago,
-                     tipo_documento_id=tipo_documento_id)
+                     tipo_documento_id=tipo_documento_id, valor_total=valor_total)
 
 
 def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
@@ -758,9 +760,13 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
 
         cant = _dec(ln.get('cantidad'))
         vu = _dec(ln.get('valor_unitario'))
+        vt = _dec(ln.get('valor_total')) if ln.get('valor_total') is not None else None
         iva_pct = _dec(ln.get('iva_pct') or '0')
 
-        line_subtotal = cant * vu
+        if vt is not None and vt > 0:
+            line_subtotal = vt
+        else:
+            line_subtotal = cant * vu
         line_iva_val = line_subtotal * (iva_pct / Decimal('100'))
 
         subtotal_compra += line_subtotal
@@ -770,6 +776,7 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             'producto_id': prod_id,
             'cantidad': cant,
             'valor_unitario': vu,
+            'valor_total': line_subtotal,
             'iva_pct': iva_pct,
             'iva_valor': line_iva_val,
             'presentacion_id': pres_id,
@@ -803,7 +810,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             iva_valor=ln['iva_valor'],
             presentacion_id=ln['presentacion_id'],
             metodo_pago=metodo_pago,
-            tipo_documento_id=tipo_doc_id
+            tipo_documento_id=tipo_doc_id,
+            valor_total=ln['valor_total']
         )
 
         # Feed/update quote (cotizacion) from this entry if it's a purchase and has a price

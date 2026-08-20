@@ -294,8 +294,13 @@ def api_vendedor_invitar():
             conn.close()
             return jsonify({'ok': False, 'error': 'Negocio requerido'}), 400
 
-        # Solo vendedores deben estar vinculados al negocio; admins ya controlan el panel
-        if rol != 'Administrador' and rol != 'ClienteVFP':
+        # Solo vendedores deben estar vinculados al negocio; admins ya controlan el panel.
+        # Un tercero tipo 'admin' (como el dueño de la plataforma) puede invitar a cualquier
+        # negocio, igual que en api_vendedor_mis_negocios donde ve todos los negocios.
+        es_admin_tercero = conn.execute(
+            "SELECT 1 FROM terceros WHERE id = %s AND tipo_tercero = 'admin'",
+            (uid,)).fetchone()
+        if rol != 'Administrador' and rol != 'ClienteVFP' and not es_admin_tercero:
             vinculo = conn.execute(
                 "SELECT 1 FROM vendedor_negocios WHERE vendedor_id = %s AND negocio_id = %s AND activo = TRUE",
                 (uid, negocio_id)).fetchone()

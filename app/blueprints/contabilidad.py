@@ -277,7 +277,10 @@ def _asegurar_tablas(conn):
         "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS origen_tipo VARCHAR(50)",
         "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS origen_id VARCHAR(100)",
         "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS descripcion_general VARCHAR(500)",
-        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)"
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
+        "ALTER TABLE saldo_por_documentos ADD COLUMN IF NOT EXISTS notas TEXT DEFAULT NULL",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS cuenta_recaudo_saldos_id INTEGER REFERENCES cuentas_puc(id)",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS cuenta_pago_saldos_id INTEGER REFERENCES cuentas_puc(id)"
     ]:
         try:
             conn.execute(sql)
@@ -1516,6 +1519,43 @@ def api_puc_nueva():
 
 # ── API: Tipos de documento ───────────────────────────────────
 
+def _asegurar_tipos_doc_saldos(conn, negocio_id):
+    """Garantiza la existencia de tipos de documento por defecto para cobros y pagos."""
+    # 1. Verificar si existe algún tipo de documento para COBRO (Recaudos)
+    exists_cobro = conn.execute(
+        "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'cobro' AND activo = TRUE LIMIT 1",
+        (negocio_id,)
+    ).fetchone()
+    if not exists_cobro:
+        try:
+            conn.execute("""
+                INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, consecutivo, predeterminado, mueve_inventario, tipo_movimiento, es_interno, activo)
+                VALUES (%s, 'RECIBO_DE_CAJA', 'RECIBO DE CAJA', 1, 0, TRUE, FALSE, 'cobro', TRUE, TRUE)
+                ON CONFLICT (negocio_id, codigo) DO NOTHING
+            """, (negocio_id,))
+            conn.commit()
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+
+    # 2. Verificar si existe algún tipo de documento para PAGO (Egresos)
+    exists_pago = conn.execute(
+        "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'pago' AND activo = TRUE LIMIT 1",
+        (negocio_id,)
+    ).fetchone()
+    if not exists_pago:
+        try:
+            conn.execute("""
+                INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, consecutivo, predeterminado, mueve_inventario, tipo_movimiento, es_interno, activo)
+                VALUES (%s, 'COMP_EGRESO', 'COMPROBANTE DE EGRESO', 1, 0, TRUE, FALSE, 'pago', TRUE, TRUE)
+                ON CONFLICT (negocio_id, codigo) DO NOTHING
+            """, (negocio_id,))
+            conn.commit()
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+
+
 @bp.route('/api/contabilidad/<int:negocio_id>/tipos-doc', methods=['GET'])
 def api_tipos_doc_get(negocio_id):
     if not session.get('usuario_id'):
@@ -1523,6 +1563,7 @@ def api_tipos_doc_get(negocio_id):
     from ..db import get_db_connection
     try:
         conn = get_db_connection()
+        _asegurar_tipos_doc_saldos(conn, negocio_id)
         rows = conn.execute(
             "SELECT id, codigo, nombre, activo, consecutivo, numero_inicio, predeterminado, mueve_inventario, tipo_movimiento, es_interno "
             "FROM tipos_documento_negocio WHERE negocio_id=%s ORDER BY nombre", (negocio_id,)
@@ -1548,10 +1589,11 @@ def api_tipos_doc_post(negocio_id):
     tipo_movimiento = data.get('tipo_movimiento')
     if tipo_movimiento:
         tipo_movimiento = tipo_movimiento.strip().lower()
-        if tipo_movimiento not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste'):
+        if tipo_movimiento not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste', 'cierre', 'cobro', 'pago'):
             tipo_movimiento = None
     else:
         tipo_movimiento = None
+
 
     if not nombre:
         return jsonify({'ok': False, 'error': 'El nombre es requerido'}), 400
@@ -1646,7 +1688,7 @@ def api_tipos_doc_patch(negocio_id, tid):
             tipo_mov = data['tipo_movimiento']
             if tipo_mov:
                 tipo_mov = tipo_mov.strip().lower()
-                if tipo_mov not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste'):
+                if tipo_mov not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste', 'cierre', 'cobro', 'pago'):
                     tipo_mov = None
             else:
                 tipo_mov = None
@@ -1946,6 +1988,75 @@ def api_param_linea_delete(negocio_id, pid, lid):
 
 # ── API: Comprobantes ─────────────────────────────────────────
 
+def _diagnosticar_causa_descuadre(conn, negocio_id, tipo_doc, num_doc):
+    """Rastrea si el documento descuadrado tiene método de pago sin cuenta contable.
+    Compra (inventario_entrada) → cuenta_pago_id; Venta (pedido) → cuenta_recaudo_id."""
+    try:
+        orig = conn.execute("""
+            SELECT origen_tipo, origen_id FROM movimientos_contables
+            WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s
+            LIMIT 1
+        """, (negocio_id, tipo_doc, num_doc)).fetchone()
+        if not orig:
+            return None
+
+        if orig['origen_tipo'] == 'inventario_entrada':
+            # Compras: método de pago queda en movimientos_inventario
+            movs = conn.execute("""
+                SELECT DISTINCT metodo_pago FROM movimientos_inventario
+                WHERE negocio_id = %s AND tipo_documento_id = (
+                    SELECT id FROM tipos_documento_negocio
+                    WHERE negocio_id = %s AND codigo = %s LIMIT 1
+                ) AND numero_documento = %s AND tipo = 'entrada'
+                  AND metodo_pago IS NOT NULL
+                LIMIT 5
+            """, (negocio_id, negocio_id, tipo_doc, num_doc)).fetchall()
+            metodos = [m['metodo_pago'] for m in movs]
+            sin_cuenta = []
+            for cod in metodos:
+                pm = conn.execute(
+                    "SELECT cuenta_pago_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
+                    (negocio_id, cod)).fetchone()
+                if not pm or not pm['cuenta_pago_id']:
+                    sin_cuenta.append(cod)
+            if sin_cuenta:
+                return {
+                    'tipo': 'metodo_sin_cuenta',
+                    'mensaje': f"El método de pago '{', '.join(sin_cuenta)}' de la compra no tiene cuenta contable asignada, por lo que el asiento quedó sin su contrapartida.",
+                    'metodos': sin_cuenta
+                }
+
+        elif orig['origen_tipo'] == 'pedido' and orig['origen_id']:
+            # Ventas: método de pago en pedidos/pedido_pagos
+            try:
+                ped_id = int(orig['origen_id'])
+            except (TypeError, ValueError):
+                return None
+            row = conn.execute("""
+                SELECT DISTINCT metodo_pago FROM pedidos WHERE id = %s AND negocio_id = %s
+                UNION
+                SELECT DISTINCT metodo_codigo FROM pedido_pagos WHERE pedido_id = %s
+                LIMIT 5
+            """, (ped_id, negocio_id, ped_id)).fetchall()
+            metodos = [m['metodo_pago'] for m in row if m['metodo_pago']]
+            sin_cuenta = []
+            for cod in metodos:
+                pm = conn.execute(
+                    "SELECT cuenta_recaudo_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
+                    (negocio_id, cod)).fetchone()
+                if not pm or not pm['cuenta_recaudo_id']:
+                    sin_cuenta.append(cod)
+            if sin_cuenta:
+                return {
+                    'tipo': 'metodo_sin_cuenta',
+                    'mensaje': f"El método de pago '{', '.join(sin_cuenta)}' de la venta no tiene cuenta contable asignada, por lo que el asiento quedó sin su contrapartida.",
+                    'metodos': sin_cuenta
+                }
+    except Exception:
+        return None
+    return None
+
+
 @bp.route('/api/contabilidad/<int:negocio_id>/comprobantes', methods=['GET'])
 def api_comprobantes_get(negocio_id):
     if not session.get('usuario_id'):
@@ -1956,20 +2067,124 @@ def api_comprobantes_get(negocio_id):
         fecha_desde = request.args.get('desde')
         fecha_hasta = request.args.get('hasta')
         tipo_f      = request.args.get('tipo', '')
-        where = ["c.negocio_id = %s"]; params = [negocio_id]
-        if fecha_desde: where.append("c.fecha >= %s"); params.append(fecha_desde)
-        if fecha_hasta: where.append("c.fecha <= %s"); params.append(fecha_hasta)
-        if tipo_f:      where.append("c.tipo = %s");  params.append(tipo_f.upper())
+        solo_descuadrados = request.args.get('solo_descuadrados', 'false') == 'true'
+        
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+            limit = max(1, int(request.args.get('limit', 50)))
+        except ValueError:
+            page = 1
+            limit = 50
+        offset = (page - 1) * limit
+
+        where = ["mc.negocio_id = %s"]
+        params = [negocio_id]
+        if fecha_desde:
+            where.append("mc.fecha >= %s")
+            params.append(fecha_desde)
+        if fecha_hasta:
+            where.append("mc.fecha <= %s")
+            params.append(fecha_hasta)
+        if tipo_f:
+            where.append("(LOWER(mc.tipo_documento) LIKE %s OR LOWER(td.nombre) LIKE %s)")
+            params.append(f"%{tipo_f.lower()}%")
+            params.append(f"%{tipo_f.lower()}%")
+            
+        where_clause = " AND ".join(where)
+        having_clause = ""
+        if solo_descuadrados:
+            having_clause = "HAVING ABS(SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE 0.0 END) - SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0.0 END)) > 0.01"
+            
+        # Summary totals query (query-wide, ignoring page limit)
+        summary = conn.execute(f"""
+            WITH doc_groups AS (
+                SELECT 
+                    SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE 0.0 END) AS deb,
+                    SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0.0 END) AS cred
+                FROM movimientos_contables mc
+                LEFT JOIN tipos_documento_negocio td ON td.id = mc.tipo_documento_id
+                WHERE {where_clause}
+                GROUP BY mc.tipo_documento, mc.numero_documento
+            )
+            SELECT 
+                COALESCE(SUM(deb), 0.0) AS total_deb,
+                COALESCE(SUM(cred), 0.0) AS total_cred,
+                COUNT(CASE WHEN ABS(deb - cred) > 0.01 THEN 1 END) AS count_descuadrados
+            FROM doc_groups
+        """, tuple(params)).fetchone()
+        
+        total_deb_gral = float(summary['total_deb']) if summary else 0.0
+        total_cred_gral = float(summary['total_cred']) if summary else 0.0
+        count_descuadrados_gral = int(summary['count_descuadrados']) if summary else 0
+        
+        # Total count of distinct document groups under active filters
+        count_row = conn.execute(f"""
+            SELECT COUNT(*) 
+            FROM (
+                SELECT 1 
+                FROM movimientos_contables mc
+                LEFT JOIN tipos_documento_negocio td ON td.id = mc.tipo_documento_id
+                WHERE {where_clause}
+                GROUP BY mc.tipo_documento, mc.numero_documento
+                {having_clause}
+            ) AS temp
+        """, tuple(params)).fetchone()
+        total_count = count_row[0] if count_row else 0
+        
+        # Paginated rows
+        order_clause = "ORDER BY MAX(mc.fecha) DESC, mc.numero_documento DESC"
+        if solo_descuadrados:
+            order_clause = "ORDER BY ABS(SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE 0.0 END) - SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0.0 END)) DESC, MAX(mc.fecha) DESC"
+
+        query_params = params + [limit, offset]
         rows = conn.execute(f"""
-            SELECT c.id, c.numero_comprobante, c.tipo, c.fecha,
-                   c.descripcion, c.total_debitos, c.total_creditos, c.notas, c.created_at,
-                   (SELECT COUNT(*) FROM movimientos_contables m WHERE m.comprobante_id = c.id) AS num_lineas
-            FROM comprobantes_contables c
-            WHERE {' AND '.join(where)}
-            ORDER BY c.fecha DESC, c.id DESC LIMIT 200
-        """, params).fetchall()
+            SELECT 
+                mc.tipo_documento,
+                COALESCE(mc.tipo_documento_id, 0) AS tipo_documento_id,
+                mc.numero_documento,
+                COALESCE(td.nombre, mc.tipo_documento) AS tipo,
+                MAX(mc.fecha) AS fecha,
+                MAX(mc.descripcion_general) AS descripcion,
+                SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE 0.0 END) AS total_debitos,
+                SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0.0 END) AS total_creditos,
+                ABS(SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE 0.0 END) - SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0.0 END)) AS diferencia,
+                COUNT(*) AS num_lineas,
+                CASE 
+                    WHEN td.codigo IS NOT NULL AND mc.numero_documento IS NOT NULL 
+                    THEN td.codigo || '-' || mc.numero_documento 
+                    ELSE COALESCE(mc.tipo_documento, '') || '-' || COALESCE(mc.numero_documento, '')
+                END AS numero_comprobante
+            FROM movimientos_contables mc
+            LEFT JOIN tipos_documento_negocio td ON td.id = mc.tipo_documento_id
+            WHERE {where_clause}
+            GROUP BY mc.tipo_documento, mc.tipo_documento_id, mc.numero_documento, td.nombre, td.codigo
+            {having_clause}
+            {order_clause}
+            LIMIT %s OFFSET %s
+        """, tuple(query_params)).fetchall()
+        
+        comprobantes = []
+        for r in rows:
+            d = dict(r)
+            if d.get('fecha'):
+                d['fecha'] = d['fecha'].strftime('%Y-%m-%d') if hasattr(d['fecha'], 'strftime') else str(d['fecha'])
+            if float(d.get('diferencia') or 0) > 0.01:
+                d['causa'] = _diagnosticar_causa_descuadre(
+                    conn, negocio_id, d['tipo_documento'], str(d['numero_documento']))
+            comprobantes.append(d)
+            
         conn.close()
-        return jsonify({'ok': True, 'comprobantes': [dict(r) for r in rows]})
+        return jsonify({
+            'ok': True, 
+            'comprobantes': comprobantes,
+            'total': total_count,
+            'page': page,
+            'limit': limit,
+            'pages': (total_count + limit - 1) // limit,
+            'total_debitos_gral': total_deb_gral,
+            'total_creditos_gral': total_cred_gral,
+            'count_descuadrados_gral': count_descuadrados_gral
+        })
     except Exception as e:
         try: conn.close()
         except Exception: pass
@@ -2066,10 +2281,10 @@ def api_comprobante_post(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-@bp.route('/api/contabilidad/<int:negocio_id>/comprobante/<int:comp_id>/lineas', methods=['GET'])
-def api_comprobante_lineas(negocio_id, comp_id):
+@bp.route('/api/contabilidad/<int:negocio_id>/documento/<tipo_doc>/<numero_documento>/lineas', methods=['GET'])
+def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
     if not session.get('usuario_id'):
-        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        return jsonify({'ok': False, 'error': 'No authorized'}), 403
     from ..db import get_db_connection
     try:
         conn = get_db_connection()
@@ -2077,11 +2292,12 @@ def api_comprobante_lineas(negocio_id, comp_id):
             SELECT m.id, m.tipo, m.cuenta, m.concepto, m.monto, m.cuenta_id,
                    p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre,
                    m.fecha, m.descripcion_general, m.tercero_id,
-                   m.tipo_documento, m.tipo_documento_id
+                   m.tipo_documento, m.tipo_documento_id, m.comprobante_id
             FROM movimientos_contables m
             LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
-            WHERE m.comprobante_id=%s AND m.negocio_id=%s ORDER BY m.id
-        """, (comp_id, negocio_id)).fetchall()
+            WHERE m.tipo_documento = %s AND m.numero_documento = %s AND m.negocio_id = %s
+            ORDER BY m.id
+        """, (tipo_doc, numero_documento, negocio_id)).fetchall()
         conn.close()
         
         res = []
@@ -2434,22 +2650,28 @@ def api_contabilidad_config_metodos(negocio_id):
             metodo_codigo = (data.get('metodo_codigo') or '').strip()
             cuenta_recaudo_id = data.get('cuenta_recaudo_id')
             cuenta_pago_id = data.get('cuenta_pago_id')
+            cuenta_recaudo_saldos_id = data.get('cuenta_recaudo_saldos_id')
+            cuenta_pago_saldos_id = data.get('cuenta_pago_saldos_id')
             
             if not metodo_codigo:
                 return jsonify({'ok': False, 'error': 'Código de método requerido'}), 400
                 
             recaudo_id = int(cuenta_recaudo_id) if cuenta_recaudo_id else None
             pago_id = int(cuenta_pago_id) if cuenta_pago_id else None
+            recaudo_saldos_id = int(cuenta_recaudo_saldos_id) if cuenta_recaudo_saldos_id else None
+            pago_saldos_id = int(cuenta_pago_saldos_id) if cuenta_pago_saldos_id else None
             
             conn.execute("""
                 INSERT INTO parametros_metodos_pago_negocio 
-                (negocio_id, metodo_codigo, cuenta_recaudo_id, cuenta_pago_id)
-                VALUES (%s, %s, %s, %s)
+                (negocio_id, metodo_codigo, cuenta_recaudo_id, cuenta_pago_id, cuenta_recaudo_saldos_id, cuenta_pago_saldos_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (negocio_id, metodo_codigo) 
                 DO UPDATE SET 
                     cuenta_recaudo_id = EXCLUDED.cuenta_recaudo_id,
-                    cuenta_pago_id = EXCLUDED.cuenta_pago_id
-            """, (negocio_id, metodo_codigo, recaudo_id, pago_id))
+                    cuenta_pago_id = EXCLUDED.cuenta_pago_id,
+                    cuenta_recaudo_saldos_id = EXCLUDED.cuenta_recaudo_saldos_id,
+                    cuenta_pago_saldos_id = EXCLUDED.cuenta_pago_saldos_id
+            """, (negocio_id, metodo_codigo, recaudo_id, pago_id, recaudo_saldos_id, pago_saldos_id))
             conn.commit()
             return jsonify({'ok': True})
             
@@ -2482,10 +2704,14 @@ def api_contabilidad_config_metodos(negocio_id):
         mappings = conn.execute("""
             SELECT pm.metodo_codigo, 
                    pm.cuenta_recaudo_id, cr.codigo AS recaudo_codigo, cr.nombre AS recaudo_nombre,
-                   pm.cuenta_pago_id, cp.codigo AS pago_codigo, cp.nombre AS pago_nombre
+                   pm.cuenta_pago_id, cp.codigo AS pago_codigo, cp.nombre AS pago_nombre,
+                   pm.cuenta_recaudo_saldos_id, crs.codigo AS recaudo_saldos_codigo, crs.nombre AS recaudo_saldos_nombre,
+                   pm.cuenta_pago_saldos_id, cps.codigo AS pago_saldos_codigo, cps.nombre AS pago_saldos_nombre
             FROM parametros_metodos_pago_negocio pm
             LEFT JOIN cuentas_puc cr ON cr.id = pm.cuenta_recaudo_id
             LEFT JOIN cuentas_puc cp ON cp.id = pm.cuenta_pago_id
+            LEFT JOIN cuentas_puc crs ON crs.id = pm.cuenta_recaudo_saldos_id
+            LEFT JOIN cuentas_puc cps ON cps.id = pm.cuenta_pago_saldos_id
             WHERE pm.negocio_id = %s
         """, (negocio_id,)).fetchall()
         
@@ -2503,6 +2729,12 @@ def api_contabilidad_config_metodos(negocio_id):
                 'cuenta_pago_id': m.get('cuenta_pago_id'),
                 'pago_codigo': m.get('pago_codigo'),
                 'pago_nombre': m.get('pago_nombre'),
+                'cuenta_recaudo_saldos_id': m.get('cuenta_recaudo_saldos_id'),
+                'recaudo_saldos_codigo': m.get('recaudo_saldos_codigo'),
+                'recaudo_saldos_nombre': m.get('recaudo_saldos_nombre'),
+                'cuenta_pago_saldos_id': m.get('cuenta_pago_saldos_id'),
+                'pago_saldos_codigo': m.get('pago_saldos_codigo'),
+                'pago_saldos_nombre': m.get('pago_saldos_nombre'),
             })
             
         return jsonify({'ok': True, 'metodos': result})
@@ -3248,3 +3480,629 @@ def api_cierre_periodo(negocio_id):
         try: conn.rollback(); conn.close()
         except Exception: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Reporte de Saldos por Documento ───────────────────────
+
+@bp.route('/api/saldos/<int:negocio_id>/reporte', methods=['GET'])
+def api_saldos_reporte(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    
+    tercero_id = request.args.get('tercero_id')
+    cuenta_id = request.args.get('cuenta_id')
+    
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tipos_doc_saldos(conn, negocio_id)
+        
+        query = """
+            SELECT 
+                s.id,
+                s.tercero_id,
+                t.nombre AS tercero_nombre,
+                s.cuenta_id,
+                c.codigo AS cuenta_codigo,
+                c.nombre AS cuenta_nombre,
+                c.naturaleza AS cuenta_naturaleza,
+                s.tipo_documento_id,
+                COALESCE(td.nombre, s.tipo_documento) AS tipo_documento_nombre,
+                s.numero_documento,
+                s.monto_original,
+                s.saldo,
+                s.fecha_hora
+            FROM saldo_por_documentos s
+            JOIN terceros t ON t.id = s.tercero_id
+            JOIN cuentas_puc c ON c.id = s.cuenta_id
+            LEFT JOIN tipos_documento_negocio td ON td.id = s.tipo_documento_id
+            WHERE s.negocio_id = %s AND s.saldo > 0
+        """
+        params = [negocio_id]
+        
+        if tercero_id:
+            query += " AND s.tercero_id = %s"
+            params.append(int(tercero_id))
+        if cuenta_id:
+            query += " AND s.cuenta_id = %s"
+            params.append(int(cuenta_id))
+            
+        query += " ORDER BY s.fecha_hora DESC"
+        
+        rows = conn.execute(query, tuple(params)).fetchall()
+        conn.close()
+        
+        return jsonify({
+            'ok': True,
+            'saldos': [dict(r) for r in rows]
+        })
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Saldar Documentos a Cero (Ajuste / Castigo) ──────────
+
+@bp.route('/api/saldos/<int:negocio_id>/saldar-cero', methods=['POST'])
+def api_saldos_saldar_cero(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    ids = data.get('ids')
+    motivo = data.get('motivo', '').strip()
+    if not ids or not isinstance(ids, list):
+        return jsonify({'ok': False, 'error': 'Lista de IDs requerida'}), 400
+    if not motivo:
+        return jsonify({'ok': False, 'error': 'El motivo del saldado es requerido'}), 400
+    
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        for sid in ids:
+            conn.execute("""
+                UPDATE saldo_por_documentos
+                SET saldo = 0.0, notas = %s, updated_at = NOW()
+                WHERE id = %s AND negocio_id = %s
+            """, (motivo, int(sid), negocio_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'mensaje': 'Documentos saldados a cero con éxito'})
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Detalle de Ítems de un Documento de Saldo ────────────
+
+@bp.route('/api/saldos/<int:negocio_id>/documento-detalle', methods=['GET'])
+def api_saldos_documento_detalle(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    
+    tipo_documento_id = request.args.get('tipo_documento_id')
+    numero_documento = request.args.get('numero_documento', '').strip()
+    cuenta_naturaleza = request.args.get('cuenta_naturaleza', '').strip()
+    
+    if not tipo_documento_id or not numero_documento:
+        return jsonify({'ok': False, 'error': 'tipo_documento_id y numero_documento requeridos'}), 400
+        
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        tipo_documento_id = int(tipo_documento_id)
+        
+        td = conn.execute("SELECT codigo, nombre FROM tipos_documento_negocio WHERE id = %s", (tipo_documento_id,)).fetchone()
+        
+        items = []
+        
+        if cuenta_naturaleza == 'debito':
+            # Cobrar / Receivables: Buscar primero en pedidos
+            doc_codes = [numero_documento.lower()]
+            if td:
+                doc_codes.extend([
+                    f"{td['codigo'].lower()}-{numero_documento.lower()}",
+                    f"{td['nombre'].lower()}-{numero_documento.lower()}"
+                ])
+            
+            pedido_row = conn.execute("""
+                SELECT id FROM pedidos
+                WHERE negocio_id = %s AND (
+                    LOWER(numero_documento) IN %s
+                    OR (numero_documento IS NOT NULL AND LOWER(numero_documento) IN %s)
+                )
+                LIMIT 1
+            """, (negocio_id, tuple(doc_codes), tuple(doc_codes))).fetchone()
+            
+            if pedido_row:
+                p_items = conn.execute("""
+                    SELECT nombre_producto, cantidad, precio_unitario, (cantidad * precio_unitario) AS valor_total
+                    FROM pedido_items
+                    WHERE pedido_id = %s
+                """, (pedido_row['id'],)).fetchall()
+                items = [dict(pi) for pi in p_items]
+                
+        if not items:
+            # Pagar / Payables (o fallback de cobrar): Buscar en movimientos_inventario
+            num_variants = [numero_documento.lower()]
+            if '-' in numero_documento:
+                parts = numero_documento.split('-')
+                num_variants.extend([p.strip().lower() for p in parts])
+            
+            rows_inv = conn.execute("""
+                SELECT nombre_producto, cantidad, valor_unitario, valor_total, tipo AS motivo
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND tipo_documento_id = %s AND LOWER(documento_numero) IN %s
+            """, (negocio_id, tipo_documento_id, tuple(num_variants))).fetchall()
+            items = [dict(r) for r in rows_inv]
+            
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'items': items
+        })
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Preparar Transacción de Cobro/Pago ───────────────────
+
+@bp.route('/api/saldos/<int:negocio_id>/preparar', methods=['GET'])
+def api_saldos_preparar(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    
+    tipo_movimiento = request.args.get('tipo', '').strip()
+    if tipo_movimiento not in ('cobro', 'pago'):
+        return jsonify({'ok': False, 'error': "Parámetro 'tipo' debe ser 'cobro' o 'pago'"}), 400
+        
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tipos_doc_saldos(conn, negocio_id)
+        
+        # 1. Obtener Métodos de Pago Activos y sus cuentas mapeadas
+        cfg = conn.execute("SELECT metodos_pago FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        activos = []
+        if cfg and cfg['metodos_pago']:
+            activos = cfg['metodos_pago']
+            if isinstance(activos, str):
+                import json
+                try: activos = json.loads(activos)
+                except Exception: activos = []
+        if not isinstance(activos, list):
+            activos = []
+        if 'credito' not in activos:
+            activos.append('credito')
+            
+        catalogo = []
+        if activos:
+            placeholders = ', '.join(['%s'] * len(activos))
+            catalogo = conn.execute(f"""
+                SELECT nombre, codigo 
+                FROM metodos_pago_catalogo 
+                WHERE codigo IN ({placeholders}) AND activo = TRUE
+                ORDER BY orden, nombre
+            """, tuple(activos)).fetchall()
+            
+        mappings = conn.execute("""
+            SELECT pm.metodo_codigo,
+                   pm.cuenta_recaudo_saldos_id, crs.codigo AS recaudo_saldos_codigo, crs.nombre AS recaudo_saldos_nombre,
+                   pm.cuenta_pago_saldos_id, cps.codigo AS pago_saldos_codigo, cps.nombre AS pago_saldos_nombre
+            FROM parametros_metodos_pago_negocio pm
+            LEFT JOIN cuentas_puc crs ON crs.id = pm.cuenta_recaudo_saldos_id
+            LEFT JOIN cuentas_puc cps ON cps.id = pm.cuenta_pago_saldos_id
+            WHERE pm.negocio_id = %s
+        """, (negocio_id,)).fetchall()
+        
+        mapping_dict = {m['metodo_codigo']: dict(m) for m in mappings}
+        
+        metodos = []
+        for c in catalogo:
+            m = mapping_dict.get(c['codigo'], {})
+            
+            if tipo_movimiento == 'cobro':
+                cuenta_id = m.get('cuenta_recaudo_saldos_id')
+                cuenta_codigo = m.get('recaudo_saldos_codigo')
+                cuenta_nombre = m.get('recaudo_saldos_nombre')
+            else:
+                cuenta_id = m.get('cuenta_pago_saldos_id')
+                cuenta_codigo = m.get('pago_saldos_codigo')
+                cuenta_nombre = m.get('pago_saldos_nombre')
+                
+            metodos.append({
+                'codigo': c['codigo'],
+                'nombre': c['nombre'],
+                'cuenta_id': cuenta_id,
+                'cuenta_codigo': cuenta_codigo,
+                'cuenta_nombre': cuenta_nombre
+            })
+            
+        # 2. Buscar Tipo Documento Activo
+        doc_row = conn.execute("""
+            SELECT id, nombre, codigo, COALESCE(consecutivo, 0) AS consecutivo, numero_inicio
+            FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND tipo_movimiento = %s AND activo = TRUE
+            ORDER BY predeterminado DESC, id ASC
+            LIMIT 1
+        """, (negocio_id, tipo_movimiento)).fetchone()
+        
+        doc_info = None
+        if doc_row:
+            next_num = max((doc_row['consecutivo'] or 0) + 1, (doc_row['numero_inicio'] or 1))
+            doc_info = {
+                'id': doc_row['id'],
+                'nombre': doc_row['nombre'],
+                'codigo': doc_row['codigo'],
+                'siguiente_numero': next_num
+            }
+            
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'metodos': metodos,
+            'documento': doc_info
+        })
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── API: Procesar Asentamiento de Recaudo/Egreso ─────────────
+
+@bp.route('/api/saldos/<int:negocio_id>/procesar', methods=['POST'])
+def api_saldos_procesar(negocio_id):
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        
+    data = request.get_json() or {}
+    tercero_id = data.get('tercero_id')
+    metodo_pago = data.get('metodo_pago') # string code e.g. 'efectivo'
+    tipo_movimiento = data.get('tipo_movimiento') # 'cobro' or 'pago'
+    tipo_documento_id = data.get('tipo_documento_id')
+    abonos = data.get('abonos', []) # list of dicts: [{'id': X, 'monto': Y}]
+    
+    if not tercero_id or not metodo_pago or not tipo_movimiento or not tipo_documento_id or not abonos:
+        return jsonify({'ok': False, 'error': 'Todos los campos (tercero_id, metodo_pago, tipo_movimiento, tipo_documento_id, abonos) son obligatorios'}), 400
+        
+    if tipo_movimiento not in ('cobro', 'pago'):
+        return jsonify({'ok': False, 'error': "tipo_movimiento inválido. Debe ser 'cobro' o 'pago'"}), 400
+        
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        # Buscar cuenta de contrapartida según el método de pago seleccionado
+        mapping = conn.execute("""
+            SELECT pm.cuenta_recaudo_saldos_id, pm.cuenta_pago_saldos_id,
+                   cr.codigo AS recaudo_codigo, cr.nombre AS recaudo_nombre,
+                   cp.codigo AS pago_codigo, cp.nombre AS pago_nombre
+            FROM parametros_metodos_pago_negocio pm
+            LEFT JOIN cuentas_puc cr ON cr.id = pm.cuenta_recaudo_saldos_id
+            LEFT JOIN cuentas_puc cp ON cp.id = pm.cuenta_pago_saldos_id
+            WHERE pm.negocio_id = %s AND pm.metodo_codigo = %s
+        """, (negocio_id, metodo_pago)).fetchone()
+        
+        if not mapping:
+            return jsonify({'ok': False, 'error': f"El método de pago '{metodo_pago}' no está configurado para este negocio en Métodos de Pago"}), 400
+            
+        if tipo_movimiento == 'cobro':
+            cuenta_financiera_id = mapping['cuenta_recaudo_saldos_id']
+            fin_puc_codigo = mapping['recaudo_codigo']
+            fin_puc_nombre = mapping['recaudo_nombre']
+        else:
+            cuenta_financiera_id = mapping['cuenta_pago_saldos_id']
+            fin_puc_codigo = mapping['pago_codigo']
+            fin_puc_nombre = mapping['pago_nombre']
+            
+        if not cuenta_financiera_id:
+            return jsonify({'ok': False, 'error': f"El método de pago '{metodo_pago}' no tiene una cuenta de {'recaudo' if tipo_movimiento == 'cobro' else 'pago'} de saldos configurada en contabilidad"}), 400
+            
+        # Verificar tercero
+        tercero = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (tercero_id,)).fetchone()
+        if not tercero:
+            return jsonify({'ok': False, 'error': 'El tercero seleccionado no existe'}), 400
+            
+        # Bloquear y actualizar consecutivo atómico del tipo de documento
+        td_row = conn.execute("""
+            SELECT codigo, nombre, consecutivo, numero_inicio
+            FROM tipos_documento_negocio
+            WHERE id = %s AND negocio_id = %s AND activo = TRUE
+            FOR UPDATE
+        """, (tipo_documento_id, negocio_id)).fetchone()
+        if not td_row:
+            return jsonify({'ok': False, 'error': 'El tipo de documento seleccionado no existe o no está activo'}), 400
+            
+        next_consecutivo = max((td_row['consecutivo'] or 0) + 1, (td_row['numero_inicio'] or 1))
+        documento_numero = str(next_consecutivo)
+        
+        conn.execute("""
+            UPDATE tipos_documento_negocio
+            SET consecutivo = %s
+            WHERE id = %s
+        """, (next_consecutivo, tipo_documento_id))
+        
+        total_monto = 0.0
+        movs_to_create = []
+        
+        for ab in abonos:
+            ab_id = ab.get('id')
+            ab_monto = float(ab.get('monto', 0.0))
+            if ab_monto <= 0:
+                continue
+                
+            s_row = conn.execute("""
+                SELECT s.id, s.saldo, s.cuenta_id, c.codigo AS cuenta_codigo, c.nombre AS cuenta_nombre, 
+                       td.nombre AS tipo_documento_nombre, s.numero_documento
+                FROM saldo_por_documentos s
+                JOIN cuentas_puc c ON c.id = s.cuenta_id
+                JOIN tipos_documento_negocio td ON td.id = s.tipo_documento_id
+                WHERE s.id = %s AND s.negocio_id = %s AND s.tercero_id = %s
+                FOR UPDATE
+            """, (ab_id, negocio_id, tercero_id)).fetchone()
+            
+            if not s_row:
+                conn.rollback()
+                return jsonify({'ok': False, 'error': f'El saldo con ID {ab_id} no pertenece a este negocio/tercero'}), 400
+                
+            saldo_pendiente = float(s_row['saldo'])
+            if ab_monto > saldo_pendiente:
+                conn.rollback()
+                return jsonify({'ok': False, 'error': f"El abono de {ab_monto} supera el saldo de {saldo_pendiente} para {s_row['tipo_documento_nombre']} No. {s_row['numero_documento']}"}), 400
+                
+            nuevo_saldo = saldo_pendiente - ab_monto
+            conn.execute("""
+                UPDATE saldo_por_documentos
+                SET saldo = %s, updated_at = NOW()
+                WHERE id = %s
+            """, (nuevo_saldo, ab_id))
+            
+            total_monto += ab_monto
+            
+            movs_to_create.append({
+                'cuenta_id': s_row['cuenta_id'],
+                'cuenta_codigo': s_row['cuenta_codigo'],
+                'concepto': f"Abono a {s_row['tipo_documento_nombre']} No. {s_row['numero_documento']}",
+                'tipo': 'credito' if tipo_movimiento == 'cobro' else 'debito',
+                'monto': ab_monto,
+                'origen_tipo': 'saldo_documento',
+                'origen_id': str(s_row['id'])
+            })
+            
+        if total_monto <= 0:
+            conn.rollback()
+            return jsonify({'ok': False, 'error': 'El monto total a procesar debe ser mayor a cero'}), 400
+            
+        movs_to_create.append({
+            'cuenta_id': cuenta_financiera_id,
+            'cuenta_codigo': fin_puc_codigo,
+            'concepto': fin_puc_nombre,
+            'tipo': 'debito' if tipo_movimiento == 'cobro' else 'credito',
+            'monto': total_monto,
+            'origen_tipo': 'saldo_documento_pago',
+            'origen_id': str(cuenta_financiera_id)
+        })
+        
+        comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+        desc_voucher = f"{'Recaudo' if tipo_movimiento == 'cobro' else 'Egreso'} - {tercero['nombre']}"
+        
+        conn.execute("""
+            INSERT INTO comprobantes_contables
+            (id, negocio_id, tipo, fecha, descripcion, total_debitos, total_creditos, creado_por)
+            VALUES (%s, %s, %s, CURRENT_DATE, %s, %s, %s, %s)
+        """, (comp_id, negocio_id, td_row['codigo'], desc_voucher, total_monto, total_monto, usuario_id))
+        
+        for m in movs_to_create:
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                 tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s)
+            """, (negocio_id, comp_id, m['cuenta_id'], m['cuenta_codigo'], m['concepto'], m['tipo'], m['monto'],
+                  usuario_id, tercero_id, tipo_documento_id, documento_numero, td_row['codigo'], m['origen_tipo'], m['origen_id'], desc_voucher))
+                  
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'mensaje': f"{'Recaudo' if tipo_movimiento == 'cobro' else 'Egreso'} procesado con éxito como {td_row['nombre']} No. {documento_numero}",
+            'tipo_documento': str(td_row['codigo']),
+            'numero_documento': str(documento_numero)
+        })
+    except Exception as e:
+        conn.rollback()
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── UI: Dashboard de Saldos por Documento ─────────────────────
+
+@bp.route('/admin/saldos-documentos/<int:negocio_id>')
+def admin_saldos_documentos(negocio_id):
+    if not session.get('usuario_id'):
+        return __import__('flask').redirect('/login')
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        _asegurar_tipos_doc_saldos(conn, negocio_id)
+        negocio = conn.execute(
+            "SELECT nombre FROM terceros WHERE id=%s AND tipo_tercero='negocio'",
+            (negocio_id,)
+        ).fetchone()
+        conn.close()
+        if not negocio:
+            return "Negocio no encontrado", 404
+        return render_template('saldos_documentos.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=negocio['nombre'])
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return f"Error: {e}", 500
+
+
+# ── API: Generar PDF de Comprobante (Recaudo/Egreso) ──────────
+
+def _pdf_sanitize(txt):
+    if not txt:
+        return ""
+    replacements = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+        'ñ': 'n', 'Ñ': 'N', 'ü': 'u', 'Ü': 'U',
+        'í': 'i', 'ï': 'i', 'ö': 'o', 'ä': 'a'
+    }
+    res = str(txt)
+    for k, v in replacements.items():
+        res = res.replace(k, v)
+    return res.encode('latin1', 'replace').decode('latin1')
+
+def _pdf_money(valor):
+    try:
+        val = float(valor or 0)
+        return f"${val:,.2f}"
+    except Exception:
+        return "$0.00"
+
+@bp.route('/api/contabilidad/<int:negocio_id>/documento/<tipo_doc>/<numero_documento>/pdf')
+def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
+    if not session.get('usuario_id'):
+        return "No autorizado", 403
+        
+    try:
+        from fpdf import FPDF
+        from flask import Response
+    except ImportError:
+        return "PDF no disponible (falta fpdf o flask)", 500
+        
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        negocio = conn.execute("SELECT nombre, telefono, direccion FROM terceros WHERE id = %s", (negocio_id,)).fetchone()
+        
+        movs = conn.execute("""
+            SELECT mc.id, mc.cuenta, mc.concepto, mc.tipo, mc.monto, mc.tercero_id, t.nombre AS tercero_nombre,
+                   mc.numero_documento, mc.tipo_documento, mc.origen_tipo, mc.origen_id, mc.fecha, mc.descripcion_general, mc.comprobante_id
+            FROM movimientos_contables mc
+            LEFT JOIN terceros t ON t.id = mc.tercero_id
+            WHERE mc.tipo_documento = %s AND mc.numero_documento = %s AND mc.negocio_id = %s
+            ORDER BY mc.tipo DESC, mc.id ASC
+        """, (tipo_doc, numero_documento, negocio_id)).fetchall()
+        
+        conn.close()
+        
+        if not movs:
+            return "No hay movimientos registrados para este documento", 400
+            
+        tercero_nombre = "Varios / Ocasional"
+        for m in movs:
+            if m['tercero_nombre']:
+                tercero_nombre = m['tercero_nombre']
+                break
+                
+        tipo_code = str(movs[0]['tipo_documento'] or '').upper()
+        doc_name = "COMPROBANTE CONTABLE"
+        if "RECIBO" in tipo_code or "CAJA" in tipo_code or "COBRO" in tipo_code:
+            doc_name = "RECIBO DE CAJA"
+        elif "EGRESO" in tipo_code or "PAGO" in tipo_code:
+            doc_name = "COMPROBANTE DE EGRESO"
+            
+        doc_num = movs[0]['numero_documento'] or str(movs[0]['comprobante_id'])
+        fecha_str = movs[0]['fecha'].strftime('%d/%m/%Y') if movs[0]['fecha'] else ""
+        descripcion_general = movs[0]['descripcion_general'] or ""
+        
+        pdf = FPDF(format='letter', unit='mm')
+        pdf.set_auto_page_break(auto=True, margin=14)
+        pdf.add_page()
+        
+        pdf.set_font('Helvetica', 'B', 14)
+        pdf.cell(0, 7, _pdf_sanitize(negocio['nombre']), ln=1, align='C')
+        pdf.set_font('Helvetica', '', 9)
+        pdf.cell(0, 4, f"Tel: {_pdf_sanitize(negocio['telefono'] or '')}", ln=1, align='C')
+        pdf.cell(0, 4, f"Direccion: {_pdf_sanitize(negocio['direccion'] or '')}", ln=1, align='C')
+        pdf.ln(5)
+        
+        pdf.set_fill_color(240, 240, 240)
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.cell(0, 8, f"{doc_name} No. {doc_num}", border=1, ln=1, align='C', fill=True)
+        pdf.ln(4)
+        
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.cell(30, 5, 'Fecha:', ln=0)
+        pdf.set_font('Helvetica', '', 9)
+        pdf.cell(60, 5, _pdf_sanitize(fecha_str), ln=0)
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.cell(35, 5, 'Concepto general:', ln=0)
+        pdf.set_font('Helvetica', '', 9)
+        pdf.cell(0, 5, _pdf_sanitize(descripcion_general), ln=1)
+        
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.cell(30, 5, 'Tercero:', ln=0)
+        pdf.set_font('Helvetica', '', 9)
+        pdf.cell(0, 5, _pdf_sanitize(tercero_nombre), ln=1)
+        
+        pdf.ln(6)
+        
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.cell(0, 5, 'Detalle Contable del Comprobante', ln=1)
+        
+        headers = ['Cuenta', 'Detalle / Concepto', 'Debito', 'Credito']
+        col_w = [25, 100, 30, 30]
+        
+        pdf.set_font('Helvetica', 'B', 8.5)
+        pdf.set_fill_color(225, 235, 245)
+        for i, h in enumerate(headers):
+            pdf.cell(col_w[i], 6, h, border=1, align='C', fill=True)
+        pdf.ln()
+        
+        pdf.set_font('Helvetica', '', 8)
+        total_d = 0.0
+        total_c = 0.0
+        for m in movs:
+            monto_d = float(m['monto']) if m['tipo'] in ('debito', 'D') else 0.0
+            monto_c = float(m['monto']) if m['tipo'] in ('credito', 'C') else 0.0
+            total_d += monto_d
+            total_c += monto_c
+            
+            pdf.cell(col_w[0], 5.5, _pdf_sanitize(m['cuenta']), border=1, align='C')
+            pdf.cell(col_w[1], 5.5, _pdf_sanitize(m['concepto']), border=1, align='L')
+            pdf.cell(col_w[2], 5.5, _pdf_money(monto_d) if monto_d > 0 else "", border=1, align='R')
+            pdf.cell(col_w[3], 5.5, _pdf_money(monto_c) if monto_c > 0 else "", border=1, align='R')
+            pdf.ln()
+            
+        pdf.set_font('Helvetica', 'B', 8.5)
+        pdf.cell(col_w[0] + col_w[1], 6, 'TOTALES', border=1, align='R')
+        pdf.cell(col_w[2], 6, _pdf_money(total_d), border=1, align='R')
+        pdf.cell(col_w[3], 6, _pdf_money(total_c), border=1, align='R')
+        pdf.ln(12)
+        
+        pdf.set_font('Helvetica', '', 8)
+        pdf.cell(90, 4, '________________________________________', ln=0, align='C')
+        pdf.cell(90, 4, '________________________________________', ln=1, align='C')
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.cell(90, 4, 'Registrado / Elaborado por', ln=0, align='C')
+        pdf.cell(90, 4, 'Recibi conforme (Firma del Tercero)', ln=1, align='C')
+        
+        pdf.ln(8)
+        pdf.set_font('Helvetica', 'I', 7)
+        pdf.set_text_color(170, 170, 170)
+        pdf.cell(0, 4, 'Generado con TUC TUC Contabilidad', ln=1, align='C')
+        
+        resp = Response(bytes(pdf.output()), mimetype='application/pdf')
+        resp.headers['Content-Disposition'] = f"inline; filename=documento_{tipo_doc}_{numero_documento}.pdf"
+        return resp
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return f"Error generando PDF: {e}", 500
+
+

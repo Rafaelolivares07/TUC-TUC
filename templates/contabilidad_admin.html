@@ -67,6 +67,7 @@
       <button onclick="cambiarTab('consulta')" id="tab-consulta" class="tab-btn">🔍 Consulta Mov.</button>
       <button onclick="cambiarTab('balance')" id="tab-balance" class="tab-btn">⚖️ Balance y Cierre</button>
       <a href="/admin/inventario-fisico/{{ negocio_id }}" class="tab-btn">📋 Inv. Físico</a>
+      <a href="/admin/saldos-documentos/{{ negocio_id }}" class="tab-btn">💵 Saldos x Doc</a>
     </div>
 
     <!-- ═══ TAB: PUC ═══ -->
@@ -121,6 +122,8 @@
           <option value="venta">Ventas / POS (Venta)</option>
           <option value="ajuste">Inventario Físico (Ajuste)</option>
           <option value="cierre">Cierre de Periodo (Cierre)</option>
+          <option value="cobro">Recaudos / Cobros</option>
+          <option value="pago">Pagos / Egresos</option>
         </select>
       </div>
       <div class="flex items-center gap-4 mb-4">
@@ -373,19 +376,56 @@
         <button onclick="cargarComprobantes()"
                 class="bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-lg">Buscar</button>
       </div>
+
+      <!-- Summary Indicators Banner -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div class="bg-gray-50 border border-gray-150 rounded-xl p-3 flex flex-col">
+          <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Débitos (Filtro)</span>
+          <span id="comp-tot-debitos" class="text-base font-mono font-bold text-green-700">$0.00</span>
+        </div>
+        <div class="bg-gray-50 border border-gray-150 rounded-xl p-3 flex flex-col">
+          <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Créditos (Filtro)</span>
+          <span id="comp-tot-creditos" class="text-base font-mono font-bold text-blue-700">$0.00</span>
+        </div>
+        <div onclick="toggleFiltroDescuadrados()" 
+             class="bg-red-50/50 border border-red-250 hover:bg-red-50 hover:border-red-400 transition cursor-pointer rounded-xl p-3 flex flex-col relative select-none"
+             title="Haz clic aquí para filtrar y ver solo comprobantes descuadrados">
+          <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">
+            ⚠️ Documentos Descuadrados
+          </span>
+          <div class="flex items-baseline gap-2">
+            <span id="comp-count-descuadrados" class="text-base font-bold text-red-700">0</span>
+            <span id="comp-descuadrados-badge" class="text-[10px] text-red-650 font-bold hidden">(Filtrando Descuadrados)</span>
+          </div>
+          <span class="absolute bottom-1 right-2 text-[9px] text-gray-400 italic">Clic para filtrar</span>
+        </div>
+      </div>
+
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead><tr class="bg-gray-50 text-xs uppercase text-gray-500">
-            <th class="px-3 py-2 text-left">Número</th>
             <th class="px-3 py-2 text-left">Tipo</th>
+            <th class="px-3 py-2 text-left">Número</th>
             <th class="px-3 py-2 text-left">Fecha</th>
             <th class="px-3 py-2 text-left">Descripción</th>
             <th class="px-3 py-2 text-right">Débitos</th>
             <th class="px-3 py-2 text-right">Créditos</th>
             <th class="px-3 py-2 text-center">Líneas</th>
+            <th class="px-3 py-2 text-center w-20">PDF</th>
           </tr></thead>
           <tbody id="comps-body"></tbody>
         </table>
+      </div>
+      
+      <!-- Pagination Row -->
+      <div class="flex flex-col sm:flex-row justify-between items-center mt-4 gap-2 text-xs text-gray-500 border-t border-gray-100 pt-3">
+        <div>
+          Mostrando <span id="comp-count-start" class="font-bold text-gray-750">0</span> a <span id="comp-count-end" class="font-bold text-gray-750">0</span> de <span id="comp-count-total" class="font-bold text-gray-750">0</span> documentos
+        </div>
+        <div class="flex gap-2">
+          <button id="comp-btn-prev" onclick="cambiarPaginaComp(-1)" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50" disabled>◀️ Anterior</button>
+          <button id="comp-btn-next" onclick="cambiarPaginaComp(1)" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-3 py-1.5 rounded-lg transition disabled:opacity-50" disabled>Siguiente ▶️</button>
+        </div>
       </div>
     </div>
 
@@ -398,11 +438,13 @@
       <div class="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
         <table class="w-full text-sm">
           <thead>
-            <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100">
+            <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-100">
               <th class="px-4 py-3 text-left">Método de Pago</th>
               <th class="px-4 py-3 text-left">Cuenta de Recaudo (Débito en Ventas)</th>
               <th class="px-4 py-3 text-left">Cuenta de Pago (Crédito en Compras)</th>
-              <th class="px-4 py-3 text-center w-32">Acciones</th>
+              <th class="px-4 py-3 text-left">Cuenta Recaudo (Saldos)</th>
+              <th class="px-4 py-3 text-left">Cuenta Pago (Saldos)</th>
+              <th class="px-4 py-3 text-center w-28">Acciones</th>
             </tr>
           </thead>
           <tbody id="pago_metodos-body" class="divide-y divide-gray-100">
@@ -666,7 +708,7 @@ function cambiarTab(t) {
   if (t === 'params')       { cargarTiposDocs(); cargarParametros(); }
   if (t === 'grupos')       { cargarGrupos(); cargarConfigContable(); }
   if (t === 'progs')        { progCargarTipos(); progCargarLista(); }
-  if (t === 'comps')        cargarComprobantes();
+  if (t === 'comps')        { currentCompPage = 1; compSoloDescuadrados = false; cargarComprobantes(); }
   if (t === 'manual')       { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
   if (t === 'consulta')     inicializarFechasConsulta();
   if (t === 'balance')      inicializarBalanceTab();
@@ -821,6 +863,8 @@ async function cargarTiposDocs() {
           <option value="venta" ${t.tipo_movimiento==='venta'?'selected':''}>Ventas / POS</option>
           <option value="ajuste" ${t.tipo_movimiento==='ajuste'?'selected':''}>Inventario Físico</option>
           <option value="cierre" ${t.tipo_movimiento==='cierre'?'selected':''}>Cierre de Periodo</option>
+          <option value="cobro" ${t.tipo_movimiento==='cobro'?'selected':''}>Recaudos / Cobros</option>
+          <option value="pago" ${t.tipo_movimiento==='pago'?'selected':''}>Pagos / Egresos</option>
         </select>
       </td>
       <td class="px-3 py-2 text-center">
@@ -1356,25 +1400,27 @@ async function guardarComprobante() {
   } else toast(data.error, false);
 }
 
-async function cargarComprobanteParaEdicion(compId) {
+async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
   try {
-    const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante/${compId}/lineas`);
+    const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${numDoc}/lineas`);
     const data = await resp.json();
     if (!data.ok) {
       toast(data.error || 'Error al cargar comprobante', false);
       return;
     }
     
-    editComprobanteId = compId;
-    const tabBtn = document.getElementById('tab-manual');
-    if (tabBtn) tabBtn.innerHTML = '✏️ Editar Comp. #' + compId;
-    
-    // Set to manual libre mode
-    setModoComp('libre');
-    document.getElementById('man-lineas').innerHTML = '';
-    
     if (data.lineas && data.lineas.length > 0) {
       const first = data.lineas[0];
+      editComprobanteId = first.comprobante_id;
+      
+      const tabBtn = document.getElementById('tab-manual');
+      if (tabBtn) tabBtn.innerHTML = '✏️ Editar Doc. #' + numDoc;
+      
+      // Set to manual libre mode
+      cambiarTab('manual');
+      setModoComp('libre');
+      document.getElementById('man-lineas').innerHTML = '';
+      
       if (first.fecha) {
         document.getElementById('man-fecha').value = first.fecha.split('T')[0];
       }
@@ -1395,11 +1441,11 @@ async function cargarComprobanteParaEdicion(compId) {
           tipo_mov: l.tipo === 'debito' ? 'D' : 'C'
         });
       }
+      calcBalance();
+      toast('Documento #' + numDoc + ' cargado para edición.');
     } else {
-      addLineaManual();
+      toast('El documento no tiene líneas contables', false);
     }
-    calcBalance();
-    toast('Comprobante #' + compId + ' cargado para edición.');
   } catch (e) {
     console.error(e);
     toast('Error de red al cargar comprobante', false);
@@ -1407,34 +1453,178 @@ async function cargarComprobanteParaEdicion(compId) {
 }
 
 // ── TAB: COMPROBANTES ─────────────────────────────────────────
+let currentCompPage = 1;
+const compPageLimit = 50;
+let compSoloDescuadrados = false;
+
+function toggleFiltroDescuadrados() {
+  compSoloDescuadrados = !compSoloDescuadrados;
+  currentCompPage = 1;
+  cargarComprobantes();
+}
+
 async function cargarComprobantes() {
   const desde = document.getElementById('comp-desde').value;
   const hasta = document.getElementById('comp-hasta').value;
   const tipo  = document.getElementById('comp-tipo-f').value.trim();
-  let qs = `?`;
+  
+  let qs = `?page=${currentCompPage}&limit=${compPageLimit}&solo_descuadrados=${compSoloDescuadrados}&`;
   if (desde) qs += `desde=${desde}&`;
   if (hasta) qs += `hasta=${hasta}&`;
   if (tipo)  qs += `tipo=${encodeURIComponent(tipo)}&`;
+  
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobantes${qs}`);
   const data = await resp.json();
   if (!data.ok) return;
-  document.getElementById('comps-body').innerHTML = data.comprobantes.map(c => `
-    <tr class="border-b border-gray-100 hover:bg-blue-50 cursor-pointer" onclick="verLineas(${c.id})">
-      <td class="px-3 py-2 font-mono text-xs">${c.numero_comprobante||c.id}</td>
-      <td class="px-3 py-2 text-xs">${c.tipo}</td>
-      <td class="px-3 py-2 text-xs">${c.fecha}</td>
-      <td class="px-3 py-2 text-xs truncate max-w-[180px]">${c.descripcion||''}</td>
-      <td class="px-3 py-2 text-right text-xs">${parseFloat(c.total_debitos).toLocaleString()}</td>
-      <td class="px-3 py-2 text-right text-xs">${parseFloat(c.total_creditos).toLocaleString()}</td>
-      <td class="px-3 py-2 text-center text-xs">${c.num_lineas}</td>
-    </tr>`).join('') || '<tr><td colspan="7" class="text-center text-gray-400 py-4 text-sm">Sin comprobantes.</td></tr>';
+  
+  // Render Summary Cards
+  document.getElementById('comp-tot-debitos').textContent = '$' + parseFloat(data.total_debitos_gral || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('comp-tot-creditos').textContent = '$' + parseFloat(data.total_creditos_gral || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('comp-count-descuadrados').textContent = data.count_descuadrados_gral || 0;
+  document.getElementById('comp-descuadrados-badge').classList.toggle('hidden', !compSoloDescuadrados);
+  
+  // Render Rows
+  const tbody = document.getElementById('comps-body');
+  if (!data.comprobantes || data.comprobantes.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-4 text-sm">Sin comprobantes.</td></tr>';
+    actualizarPaginacionUI(0, 0, 0);
+    return;
+  }
+  
+  tbody.innerHTML = data.comprobantes.map(c => {
+    const diffVal = parseFloat(c.diferencia || 0);
+    const isDescuadrado = diffVal > 0.01;
+    const rowClass = isDescuadrado 
+      ? 'bg-red-50/20 hover:bg-red-50/40 border-l-2 border-l-red-500 font-semibold' 
+      : 'hover:bg-blue-50/50';
+    const diffBadge = isDescuadrado 
+      ? `<div class="text-[9px] text-red-650 font-bold mt-0.5 flex items-center gap-0.5">⚠️ Descuadrado ($${diffVal.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})})</div>`
+      : '';
+    const causaBadge = isDescuadrado && c.causa
+      ? `<div class="text-[9px] text-amber-700 font-semibold mt-0.5 leading-tight flex items-start gap-0.5" title="${c.causa.mensaje || ''}">🔎 Posible causa: ${c.causa.mensaje || ''}</div>`
+      : '';
+      
+    return `
+    <tr class="border-b border-gray-100 cursor-pointer transition-all ${rowClass}" onclick="toggleDetalleComprobante(this, '${c.tipo_documento}', '${c.numero_documento}')">
+      <td class="px-3 py-2.5 text-gray-800 text-xs">
+        <div class="font-bold">${c.tipo}</div>
+        ${diffBadge}
+        ${causaBadge}
+      </td>
+      <td class="px-3 py-2.5 font-mono text-xs text-gray-600">
+        <div class="flex items-center gap-1.5">
+          <span>${c.numero_documento}</span>
+          <a href="/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(c.tipo_documento)}&documento_numero=${encodeURIComponent(c.numero_documento)}" 
+             target="_blank" 
+             rel="noopener noreferrer" 
+             title="Auditar documento en pestaña nueva" 
+             class="text-blue-500 hover:text-blue-750 transition font-bold text-[12px] inline-flex items-center"
+             onclick="event.stopPropagation()">
+             🔍
+          </a>
+        </div>
+      </td>
+      <td class="px-3 py-2.5 text-xs text-gray-500 font-mono">${c.fecha}</td>
+      <td class="px-3 py-2.5 text-xs text-gray-600 truncate max-w-[200px]" title="${c.descripcion||''}">${c.descripcion||''}</td>
+      <td class="px-3 py-2.5 text-right font-mono text-xs text-green-700 font-medium">$${parseFloat(c.total_debitos).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+      <td class="px-3 py-2.5 text-right font-mono text-xs text-blue-700 font-medium">$${parseFloat(c.total_creditos).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+      <td class="px-3 py-2.5 text-center text-xs font-bold text-gray-500">${c.num_lineas}</td>
+      <td class="px-3 py-2.5 text-center text-xs" onclick="event.stopPropagation()">
+        <div class="flex gap-1.5 justify-center items-center">
+          <button onclick="imprimirComprobante('${c.tipo_documento}', '${c.numero_documento}')" class="text-blue-600 hover:text-blue-800 font-bold px-1.5 py-0.5 rounded hover:bg-blue-50/50 transition" title="Imprimir PDF">
+            📄 PDF
+          </button>
+          <button onclick="cargarDocumentoParaEdicion('${c.tipo_documento}', '${c.numero_documento}')" class="text-amber-650 hover:text-amber-800 font-bold px-1.5 py-0.5 rounded hover:bg-amber-50/50 transition" title="Editar / Ajustar Comprobante">
+            ✏️ Editar
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+    
+  // Update Pagination Indicators
+  const start = (currentCompPage - 1) * compPageLimit + 1;
+  const end = Math.min(currentCompPage * compPageLimit, data.total);
+  actualizarPaginacionUI(start, end, data.total);
+  
+  // Update buttons state
+  document.getElementById('comp-btn-prev').disabled = (currentCompPage <= 1);
+  document.getElementById('comp-btn-next').disabled = (currentCompPage >= data.pages);
 }
 
-async function verLineas(compId) {
-  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante/${compId}/lineas`);
-  const data = await resp.json();
-  if (!data.ok) return;
-  alert(data.lineas.map(l => `${l.tipo.toUpperCase().padEnd(7)} ${l.cuenta||''} ${l.cuenta_nombre||''}\n         $${parseFloat(l.monto).toLocaleString()}`).join('\n'));
+function actualizarPaginacionUI(start, end, total) {
+  document.getElementById('comp-count-start').textContent = start;
+  document.getElementById('comp-count-end').textContent = end;
+  document.getElementById('comp-count-total').textContent = total;
+}
+
+function cambiarPaginaComp(dir) {
+  currentCompPage += dir;
+  cargarComprobantes();
+}
+
+function imprimirComprobante(tipoDoc, numDoc) {
+  window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${numDoc}/pdf`, '_blank');
+}
+
+async function toggleDetalleComprobante(row, tipoDoc, numDoc) {
+  const nextRow = row.nextElementSibling;
+  
+  // If already rendered, toggle visibility
+  if (nextRow && nextRow.classList.contains('comp-detail-row')) {
+    nextRow.classList.toggle('hidden');
+    return;
+  }
+  
+  // Render and fetch detail lines
+  try {
+    const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${numDoc}/lineas`);
+    const data = await resp.json();
+    if (!data.ok) {
+      toast(data.error || 'Error al obtener las líneas del documento', false);
+      return;
+    }
+    
+    // Create detailed table subrow
+    const detailTr = document.createElement('tr');
+    detailTr.className = 'comp-detail-row bg-gray-50/70 border-b border-gray-100';
+    
+    let rowsHtml = data.lineas.map(l => `
+      <tr class="hover:bg-gray-100/80 transition border-b border-gray-100/50">
+        <td class="px-3 py-1.5 font-mono text-[11px] text-gray-500">${l.cuenta}</td>
+        <td class="px-3 py-1.5 text-[11px] text-gray-700">${l.cuenta_nombre || ''}</td>
+        <td class="px-3 py-1.5 text-[11px] text-gray-600">${l.concepto || ''}</td>
+        <td class="px-3 py-1.5 text-right font-mono text-[11px] text-green-700 font-medium">${l.tipo === 'debito' ? '$' + parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2}) : ''}</td>
+        <td class="px-3 py-1.5 text-right font-mono text-[11px] text-blue-700 font-medium">${l.tipo === 'credito' ? '$' + parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2}) : ''}</td>
+      </tr>
+    `).join('');
+    
+    detailTr.innerHTML = `
+      <td colspan="8" class="p-3">
+        <div class="border border-gray-150 rounded-xl overflow-hidden bg-white shadow-inner max-w-4xl ml-4">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-gray-100 text-gray-600 font-semibold border-b border-gray-200">
+                <th class="px-3 py-2 w-28">Cuenta PUC</th>
+                <th class="px-3 py-2 w-48">Nombre Cuenta</th>
+                <th class="px-3 py-2">Detalle / Concepto</th>
+                <th class="px-3 py-2 text-right w-32">Débito</th>
+                <th class="px-3 py-2 text-right w-32">Crédito</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </div>
+      </td>
+    `;
+    
+    row.after(detailTr);
+  } catch (err) {
+    console.error(err);
+    toast('Error de conexión al cargar líneas', false);
+  }
 }
 
 // ── TAB: PROGRAMACIONES ────────────────────────────────────────
@@ -1665,48 +1855,74 @@ async function cargarPagoMetodos() {
     metodosConfigurados = d.metodos || [];
     tbody.innerHTML = '';
     if (metodosConfigurados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400">No se encontraron métodos de pago habilitados. Habilítelos primero en la configuración del negocio.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-4 text-center text-gray-400">No se encontraron métodos de pago habilitados. Habilítelos primero en la configuración del negocio.</td></tr>';
       return;
     }
     
     metodosConfigurados.forEach((m, idx) => {
       const recText = m.recaudo_codigo ? `${m.recaudo_codigo} — ${m.recaudo_nombre}` : '';
       const pagText = m.pago_codigo ? `${m.pago_codigo} — ${m.pago_nombre}` : '';
+      const recSaldosText = m.recaudo_saldos_codigo ? `${m.recaudo_saldos_codigo} — ${m.recaudo_saldos_nombre}` : '';
+      const pagSaldosText = m.pago_saldos_codigo ? `${m.pago_saldos_codigo} — ${m.pago_saldos_nombre}` : '';
       
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-gray-50';
       tr.innerHTML = `
-        <td class="px-4 py-3 font-semibold text-gray-700">
+        <td class="px-4 py-3 font-semibold text-gray-700 text-xs">
           ${m.nombre} 
-          <span class="text-xs text-gray-400 font-mono block sm:inline">(${m.codigo})</span>
+          <span class="text-[10px] text-gray-400 font-mono block">(${m.codigo})</span>
         </td>
-        <td class="px-4 py-3 relative">
+        <td class="px-2 py-3 relative">
           <div class="relative flex items-center">
-            <input type="text" id="rec-input-${idx}" placeholder="Buscar cuenta recaudo..." 
-                   class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-8"
+            <input type="text" id="rec-input-${idx}" placeholder="Buscar cuenta..." 
+                   class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
                    value="${recText}"
                    oninput="buscarPUCInput(this, ${idx}, 'recaudo')">
-            <span id="rec-status-${idx}" class="absolute right-3 text-green-500 hidden" title="Cuenta contable validada y guardada">✅</span>
-            <span id="rec-warn-${idx}" class="absolute right-3 text-orange-500 hidden" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
+            <span id="rec-status-${idx}" class="absolute right-2 text-green-500 hidden text-[11px]" title="Cuenta contable validada y guardada">✅</span>
+            <span id="rec-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
             <input type="hidden" id="rec-id-${idx}" value="${m.cuenta_recaudo_id || ''}">
             <div class="ac-drop hidden"></div>
           </div>
         </td>
-        <td class="px-4 py-3 relative">
+        <td class="px-2 py-3 relative">
           <div class="relative flex items-center">
-            <input type="text" id="pag-input-${idx}" placeholder="Buscar cuenta pago..." 
-                   class="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-8"
+            <input type="text" id="pag-input-${idx}" placeholder="Buscar cuenta..." 
+                   class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
                    value="${pagText}"
                    oninput="buscarPUCInput(this, ${idx}, 'pago')">
-            <span id="pag-status-${idx}" class="absolute right-3 text-green-500 hidden" title="Cuenta contable validada y guardada">✅</span>
-            <span id="pag-warn-${idx}" class="absolute right-3 text-orange-500 hidden" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
+            <span id="pag-status-${idx}" class="absolute right-2 text-green-500 hidden text-[11px]" title="Cuenta contable validada y guardada">✅</span>
+            <span id="pag-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
             <input type="hidden" id="pag-id-${idx}" value="${m.cuenta_pago_id || ''}">
+            <div class="ac-drop hidden"></div>
+          </div>
+        </td>
+        <td class="px-2 py-3 relative">
+          <div class="relative flex items-center">
+            <input type="text" id="rec-saldos-input-${idx}" placeholder="Buscar cuenta..." 
+                   class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
+                   value="${recSaldosText}"
+                   oninput="buscarPUCInput(this, ${idx}, 'recaudo-saldos')">
+            <span id="rec-saldos-status-${idx}" class="absolute right-2 text-green-500 hidden text-[11px]" title="Cuenta contable validada y guardada">✅</span>
+            <span id="rec-saldos-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
+            <input type="hidden" id="rec-saldos-id-${idx}" value="${m.cuenta_recaudo_saldos_id || ''}">
+            <div class="ac-drop hidden"></div>
+          </div>
+        </td>
+        <td class="px-2 py-3 relative">
+          <div class="relative flex items-center">
+            <input type="text" id="pag-saldos-input-${idx}" placeholder="Buscar cuenta..." 
+                   class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
+                   value="${pagSaldosText}"
+                   oninput="buscarPUCInput(this, ${idx}, 'pago-saldos')">
+            <span id="pag-saldos-status-${idx}" class="absolute right-2 text-green-500 hidden text-[11px]" title="Cuenta contable validada y guardada">✅</span>
+            <span id="pag-saldos-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
+            <input type="hidden" id="pag-saldos-id-${idx}" value="${m.cuenta_pago_saldos_id || ''}">
             <div class="ac-drop hidden"></div>
           </div>
         </td>
         <td class="px-4 py-3 text-center">
           <button id="btn-save-${idx}" onclick="guardarFilaMetodo(${idx})"
-                  class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1 mx-auto shadow-sm">
+                  class="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 mx-auto shadow-sm">
             💾 Guardar
           </button>
         </td>
@@ -1715,7 +1931,7 @@ async function cargarPagoMetodos() {
       actualizarIndicadoresFila(idx);
     });
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
   }
 }
 
@@ -1754,11 +1970,18 @@ function buscarPUCInput(input, idx, tipo) {
 function actualizarIndicadoresFila(idx) {
   const recId = document.getElementById(`rec-id-${idx}`).value;
   const pagId = document.getElementById(`pag-id-${idx}`).value;
+  const recSaldosId = document.getElementById(`rec-saldos-id-${idx}`).value;
+  const pagSaldosId = document.getElementById(`pag-saldos-id-${idx}`).value;
   
   const recStatus = document.getElementById(`rec-status-${idx}`);
   const recWarn = document.getElementById(`rec-warn-${idx}`);
   const pagStatus = document.getElementById(`pag-status-${idx}`);
   const pagWarn = document.getElementById(`pag-warn-${idx}`);
+  
+  const recSaldosStatus = document.getElementById(`rec-saldos-status-${idx}`);
+  const recSaldosWarn = document.getElementById(`rec-saldos-warn-${idx}`);
+  const pagSaldosStatus = document.getElementById(`pag-saldos-status-${idx}`);
+  const pagSaldosWarn = document.getElementById(`pag-saldos-warn-${idx}`);
   
   if (recId) {
     recStatus.classList.remove('hidden');
@@ -1775,6 +1998,22 @@ function actualizarIndicadoresFila(idx) {
     pagStatus.classList.add('hidden');
     pagWarn.classList.add('hidden');
   }
+
+  if (recSaldosId) {
+    recSaldosStatus.classList.remove('hidden');
+    recSaldosWarn.classList.add('hidden');
+  } else {
+    recSaldosStatus.classList.add('hidden');
+    recSaldosWarn.classList.add('hidden');
+  }
+
+  if (pagSaldosId) {
+    pagSaldosStatus.classList.remove('hidden');
+    pagSaldosWarn.classList.add('hidden');
+  } else {
+    pagSaldosStatus.classList.add('hidden');
+    pagSaldosWarn.classList.add('hidden');
+  }
 }
 
 async function guardarFilaMetodo(idx) {
@@ -1784,9 +2023,13 @@ async function guardarFilaMetodo(idx) {
     
     const recId = document.getElementById(`rec-id-${idx}`).value || null;
     const pagId = document.getElementById(`pag-id-${idx}`).value || null;
+    const recSaldosId = document.getElementById(`rec-saldos-id-${idx}`).value || null;
+    const pagSaldosId = document.getElementById(`pag-saldos-id-${idx}`).value || null;
     
     const recInput = document.getElementById(`rec-input-${idx}`).value.trim();
     const pagInput = document.getElementById(`pag-input-${idx}`).value.trim();
+    const recSaldosInput = document.getElementById(`rec-saldos-input-${idx}`).value.trim();
+    const pagSaldosInput = document.getElementById(`pag-saldos-input-${idx}`).value.trim();
     
     if (recInput && !recId) {
       toast('Debe seleccionar la cuenta de recaudo del buscador interactivo', false);
@@ -1796,6 +2039,14 @@ async function guardarFilaMetodo(idx) {
       toast('Debe seleccionar la cuenta de pago del buscador interactivo', false);
       return;
     }
+    if (recSaldosInput && !recSaldosId) {
+      toast('Debe seleccionar la cuenta de recaudo de saldos del buscador interactivo', false);
+      return;
+    }
+    if (pagSaldosInput && !pagSaldosId) {
+      toast('Debe seleccionar la cuenta de pago de saldos del buscador interactivo', false);
+      return;
+    }
     
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`, {
       method: 'POST',
@@ -1803,13 +2054,17 @@ async function guardarFilaMetodo(idx) {
       body: JSON.stringify({
         metodo_codigo: m.codigo,
         cuenta_recaudo_id: recId,
-        cuenta_pago_id: pagId
+        cuenta_pago_id: pagId,
+        cuenta_recaudo_saldos_id: recSaldosId,
+        cuenta_pago_saldos_id: pagSaldosId
       })
     });
     const d = await r.json();
     if (d.ok) {
       m.cuenta_recaudo_id = recId;
       m.cuenta_pago_id = pagId;
+      m.cuenta_recaudo_saldos_id = recSaldosId;
+      m.cuenta_pago_saldos_id = pagSaldosId;
       actualizarIndicadoresFila(idx);
       toast(`Configuración de "${m.nombre}" guardada`);
     } else {

@@ -941,6 +941,7 @@ let activeACInputId = null;
 let activeACHiddenId = null;
 let defaultPresentacionId = null;
 let esModificacionDoc = false;
+let metodosPagoEntrada = [];
 
 async function fetchDefaultPresentacion() {
   try {
@@ -2543,6 +2544,7 @@ async function registrarEntrada() {
   const d = await r.json();
   if (d.ok) {
     toast('Entrada registrada');
+    avisarMetodosSinCuentaEntrada(metodo_pago);
     cont.innerHTML = '';
     entradaLineas = [];
     esModificacionDoc = false;
@@ -3145,13 +3147,27 @@ async function cargarMetodosPagoEntrada() {
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`);
     const d = await r.json();
     if (d.ok) {
+      metodosPagoEntrada = d.metodos || [];
       const select = document.getElementById('entrada-metodo-pago');
       if (select) {
-        select.innerHTML = d.metodos.map(m => `<option value="${m.codigo}">${m.nombre}</option>`).join('');
+        const alguienConCuenta = metodosPagoEntrada.some(m => m.cuenta_pago_id);
+        select.innerHTML = metodosPagoEntrada.map(m => {
+          const sinCuenta = alguienConCuenta && !m.cuenta_pago_id;
+          return `<option value="${m.codigo}"${sinCuenta ? ' style="color:#b45309"' : ''}>${m.nombre}${sinCuenta ? ' ⚠️ Sin cuenta contable' : ''}</option>`;
+        }).join('');
       }
     }
   } catch(e) {
     console.error('Error al cargar métodos de pago para entradas:', e);
+  }
+}
+
+function avisarMetodosSinCuentaEntrada(metodoCodigo) {
+  const alguienConCuenta = metodosPagoEntrada.some(m => m.cuenta_pago_id);
+  if (!alguienConCuenta) return;
+  const m = metodosPagoEntrada.find(x => x.codigo === metodoCodigo);
+  if (m && !m.cuenta_pago_id) {
+    toast(`El método de pago "${m.nombre}" no tiene cuenta contable asignada. La compra se registró sin su contrapartida contable.`, false);
   }
 }
 

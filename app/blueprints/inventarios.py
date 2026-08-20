@@ -2821,7 +2821,7 @@ def api_auditar_documento(negocio_id):
                     'cuenta_id': e['cuenta_id'],
                     'cuenta': e['cuenta'],
                     'concepto': e['concepto'],
-                    'tipo': 'D' if e['tipo'] == 'debito' else 'C',
+                    'tipo': 'D' if str(e['tipo']).strip().lower() in ('debito', 'd') else 'C',
                     'monto': float(e['monto'] or 0)
                 } for e in entries
             ]

@@ -4311,10 +4311,10 @@ def _pdf_documento_ajuste(nombre_negocio, doc_num, fecha_str, items, asiento):
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
 
-    pdf.set_font('Helvetica', 'B', 14)
-    pdf.cell(0, 8, 'TUC TUC - Inventario Físico', ln=1, align='C')
+    pdf.set_font('Helvetica', 'B', 15)
+    pdf.cell(0, 9, _pdf_sanitize(nombre_negocio), ln=1, align='C')
     pdf.set_font('Helvetica', 'B', 11)
-    pdf.cell(0, 7, _pdf_sanitize(nombre_negocio), ln=1, align='C')
+    pdf.cell(0, 6, 'Inventario Físico', ln=1, align='C')
     pdf.set_font('Helvetica', '', 9)
     pdf.cell(0, 5, f'Documento: {_pdf_sanitize(doc_num)}', ln=1, align='C')
     if fecha_str:
@@ -4374,6 +4374,8 @@ def _pdf_documento_ajuste(nombre_negocio, doc_num, fecha_str, items, asiento):
         pdf.set_font('Helvetica', 'I', 8)
         pdf.cell(0, 6, 'Este documento no generó movimientos contables (sin parametrización).', ln=1)
 
+    _pdf_firma_tuctuc(pdf)
+
     return pdf
 
 
@@ -4386,7 +4388,7 @@ def api_ajuste_documento_pdf(negocio_id, documento_numero):
     conn = get_db_connection()
     try:
         contexto = _contexto_negocio(conn, negocio_id)
-        nombre_negocio = (contexto.get('nombre') or 'Negocio') if contexto else 'Negocio'
+        nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
         fecha_row = conn.execute("""
             SELECT MAX(created_at) AS fecha FROM movimientos_inventario
             WHERE negocio_id = %s AND documento_numero = %s AND motivo = 'ajuste'
@@ -4691,15 +4693,24 @@ def _pdf_money(valor):
         return '0'
 
 
+def _pdf_firma_tuctuc(pdf):
+    """Firma de la herramienta al final del reporte — pequeña y discreta."""
+    pdf.ln(6)
+    pdf.set_font('Helvetica', '', 7)
+    pdf.set_text_color(170, 170, 170)
+    pdf.cell(0, 4, 'Generado con TUC TUC', ln=1, align='C')
+    pdf.set_text_color(0, 0, 0)
+
+
 def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos):
     pdf = FPDF(format='letter', unit='mm')
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
 
-    pdf.set_font('Helvetica', 'B', 14)
-    pdf.cell(0, 8, 'TUC TUC - Informe Ventas y Costos', ln=1, align='C')
+    pdf.set_font('Helvetica', 'B', 15)
+    pdf.cell(0, 9, _pdf_sanitize(nombre_negocio), ln=1, align='C')
     pdf.set_font('Helvetica', 'B', 11)
-    pdf.cell(0, 7, _pdf_sanitize(nombre_negocio), ln=1, align='C')
+    pdf.cell(0, 6, 'Informe de Ventas y Costos', ln=1, align='C')
     pdf.set_font('Helvetica', '', 9)
     pdf.cell(0, 5, f'Rango: {desde} al {hasta}', ln=1, align='C')
 
@@ -4758,6 +4769,8 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos):
         pdf.cell(col_w[i], 6, val, border=1, align=align, fill=True)
     pdf.ln()
 
+    _pdf_firma_tuctuc(pdf)
+
     return pdf
 
 
@@ -4776,7 +4789,7 @@ def api_reporte_ventas_costos_pdf(negocio_id):
     conn = get_db_connection()
     try:
         contexto = _contexto_negocio(conn, negocio_id)
-        nombre_negocio = (contexto.get('nombre') or 'Negocio') if contexto else 'Negocio'
+        nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
         datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta)
         conn.close()
         pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos)

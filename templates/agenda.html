@@ -252,6 +252,83 @@
     padding: 24px 0;
     text-align: center;
   }
+
+  /* Imágenes adjuntas */
+  .item-imgs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .item-imgs .thumb {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e5e5e5;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .item-imgs .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .item-imgs .thumb .x {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: rgba(0,0,0,.6);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+  }
+
+  .item-imgs .thumb:hover .x { display: block; }
+
+  .btn-img {
+    background: none;
+    border: 1px dashed #ccc;
+    color: #aaa;
+    font-size: .85rem;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 6px;
+    line-height: 1.5;
+    transition: border-color .2s, color .2s;
+    flex-shrink: 0;
+    margin-right: 4px;
+  }
+  .btn-img:hover { border-color: #5b8def; color: #5b8def; }
+
+  /* Visor a pantalla completa */
+  .visor {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.92);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    cursor: zoom-out;
+  }
+  .visor img {
+    max-width: 92vw;
+    max-height: 92vh;
+    border-radius: 4px;
+    box-shadow: 0 4px 30px rgba(0,0,0,.5);
+  }
 </style>
 </head>
 <body>
@@ -291,7 +368,17 @@
         {% if item[5] %}
         <span class="item-fecha" data-ts="{{ item[5].isoformat() }}"></span>
         {% endif %}
+        <div class="item-imgs" id="imgs-{{ item[0] }}">
+          {% for img in imagenes.get(item[0], []) %}
+          <div class="thumb">
+            <img src="{{ img['url'] }}" onclick="verImagen(this)" alt="">
+            <button class="x" onclick="borrarImagen({{ img['id'] }}, {{ item[0] }})">×</button>
+          </div>
+          {% endfor %}
+        </div>
       </div>
+      <input type="file" accept="image/*" id="file-{{ item[0] }}" style="display:none" onchange="subirImagen({{ item[0] }}, this)">
+      <button class="btn-img" onclick="document.getElementById('file-{{ item[0] }}').click()" title="Adjuntar imagen">📎</button>
       <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️</button>
       <button class="btn-activar" onclick="activar({{ item[0] }}, this)" title="Activar en Antigravity">🚀</button>
       <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
@@ -308,6 +395,14 @@
         {% if item[5] %}
         <span class="item-fecha" data-ts="{{ item[5].isoformat() }}"></span>
         {% endif %}
+        <div class="item-imgs" id="imgs-{{ item[0] }}">
+          {% for img in imagenes.get(item[0], []) %}
+          <div class="thumb">
+            <img src="{{ img['url'] }}" onclick="verImagen(this)" alt="">
+            <button class="x" onclick="borrarImagen({{ img['id'] }}, {{ item[0] }})">×</button>
+          </div>
+          {% endfor %}
+        </div>
       </div>
       <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️</button>
       <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
@@ -315,6 +410,10 @@
     {% endfor %}
     {% endif %}
   </ul>
+</div>
+
+<div class="visor" id="visor" onclick="cerrarVisor()">
+  <img id="visor-img" src="" alt="">
 </div>
 
 <script>
@@ -581,6 +680,62 @@
         li.style.display = 'none';
       }
     });
+  }
+
+  async function subirImagen(id, input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert('La imagen supera 10 MB');
+      input.value = '';
+      return;
+    }
+    const fd = new FormData();
+    fd.append('imagen', file);
+    const btn = document.querySelector(`#file-${id}`).previousElementSibling;
+    const original = btn.innerHTML;
+    btn.innerHTML = '⏳';
+    try {
+      const r = await fetch(`/agenda/item/${id}/imagen`, {method: 'POST', body: fd});
+      const d = await r.json();
+      if (d.ok) {
+        const cont = document.getElementById(`imgs-${id}`);
+        const div = document.createElement('div');
+        div.className = 'thumb';
+        div.innerHTML = `<img src="${d.url}" onclick="verImagen(this)" alt=""><button class="x" onclick="borrarImagen(${d.id || 0}, ${id})">×</button>`;
+        cont.appendChild(div);
+      } else {
+        alert('Error al subir imagen: ' + (d.error || 'Desconocido'));
+      }
+    } catch (e) {
+      alert('Error de red al subir la imagen');
+    }
+    btn.innerHTML = original;
+    input.value = '';
+  }
+
+  async function borrarImagen(imgId, itemId) {
+    if (!confirm('¿Eliminar esta imagen?')) return;
+    const r = await fetch(`/agenda/imagen/${imgId}`, {method: 'DELETE'});
+    const d = await r.json();
+    if (d.ok) {
+      const cont = document.getElementById(`imgs-${itemId}`);
+      if (cont) cont.innerHTML = '';
+      location.reload();
+    } else {
+      alert('Error: ' + (d.error || 'No se pudo eliminar'));
+    }
+  }
+
+  function verImagen(img) {
+    const visor = document.getElementById('visor');
+    const grande = document.getElementById('visor-img');
+    grande.src = img.src;
+    visor.style.display = 'flex';
+  }
+
+  function cerrarVisor() {
+    document.getElementById('visor').style.display = 'none';
   }
 </script>
 </body>

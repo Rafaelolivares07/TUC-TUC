@@ -4,6 +4,15 @@ from flask import Blueprint, render_template, request, jsonify
 from ..db import get_db_connection
 from .auth import admin_required
 
+import cloudinary
+import cloudinary.uploader
+
+cloudinary.config(
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+    api_key=os.getenv('CLOUDINARY_API_KEY'),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET')
+)
+
 bp = Blueprint('agenda', __name__)
 
 
@@ -30,6 +39,19 @@ def _asegurar_tabla():
             conn.commit()
         except Exception:
             conn.rollback()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS agenda_item_imagenes (
+                id SERIAL PRIMARY KEY,
+                item_id INTEGER NOT NULL REFERENCES agenda_items(id) ON DELETE CASCADE,
+                url TEXT NOT NULL,
+                creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_agenda_item_imagenes_item
+            ON agenda_item_imagenes (item_id)
+        """)
+        conn.commit()
 
 
 @bp.route('/agenda')
@@ -51,7 +73,13 @@ def agenda():
                      id DESC
         """)
         items = cur.fetchall()
-    return render_template('agenda.html', items=items)
+        cur2 = conn.execute("""
+            SELECT item_id, id, url FROM agenda_item_imagenes ORDER BY id
+        """)
+        imagenes = {}
+        for r in cur2.fetchall():
+            imagenes.setdefault(r[0], []).append({'id': r[1], 'url': r[2]})
+    return render_template('agenda.html', items=items, imagenes=imagenes)
 
 
 @bp.route('/agenda/item', methods=['POST'])
@@ -103,6 +131,49 @@ def eliminar_item(item_id):
     with get_db_connection() as conn:
         conn.execute("DELETE FROM agenda_items WHERE id = %s", (item_id,))
         conn.commit()
+    return jsonify({'ok': True})
+
+
+@bp.route('/agenda/item/<int:item_id>/imagen', methods=['POST'])
+@admin_required
+def subir_imagen_item(item_id):
+    _asegurar_tabla()
+    if 'imagen' not in request.files:
+        return jsonify({'ok': False, 'error': 'No se recibió archivo'}), 400
+    try:
+        result = cloudinary.uploader.upload(
+            request.files['imagen'],
+            resource_type='image',
+            folder='tuctuc_agenda'
+        )
+        url = result['secure_url']
+        with get_db_connection() as conn:
+            cur = conn.execute(
+                "INSERT INTO agenda_item_imagenes (item_id, url) VALUES (%s, %s) RETURNING id",
+                (item_id, url)
+            )
+            img_id = cur.fetchone()[0]
+            conn.commit()
+        return jsonify({'ok': True, 'url': url, 'id': img_id})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/agenda/imagen/<int:img_id>', methods=['DELETE'])
+@admin_required
+def eliminar_imagen_item(img_id):
+    with get_db_connection() as conn:
+        cur = conn.execute("SELECT url FROM agenda_item_imagenes WHERE id = %s", (img_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': 'Imagen no encontrada'})
+        conn.execute("DELETE FROM agenda_item_imagenes WHERE id = %s", (img_id,))
+        conn.commit()
+    try:
+        public_id = row['url'].split('/')[-1].rsplit('.', 1)[0]
+        cloudinary.uploader.destroy(f'tuctuc_agenda/{public_id}')
+    except Exception:
+        pass
     return jsonify({'ok': True})
 
 
@@ -237,11 +308,19 @@ def activar_item_agenda(item_id):
         row = cur.fetchone()
         if not row:
             return jsonify({'ok': False, 'error': 'Tarea no encontrada'})
-        
+
         texto = row['texto']
         categoria = row['categoria']
         contenido = f"[Requerimiento #{item_id}] {texto} ({categoria})"
-        
+
+        cur2 = conn.execute(
+            "SELECT url FROM agenda_item_imagenes WHERE item_id = %s ORDER BY id",
+            (item_id,)
+        )
+        urls = [r[0] for r in cur2.fetchall()]
+        if urls:
+            contenido += "\nIMAGENES_REFERENCIA:\n" + "\n".join(urls)
+
         conn.execute(
             "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
             (contenido,)
@@ -267,14 +346,25 @@ def activar_multi_agenda():
         rows = cur.fetchall()
         if not rows:
             return jsonify({'ok': False, 'error': 'Tareas no encontradas'})
-        
+
         # Build consolidated message
         lines = []
         for row in rows:
             lines.append(f"- [Requerimiento #{row['id']}] {row['texto']} ({row['categoria']})")
-        
+
         contenido = "Activar tareas agrupadas:\n" + "\n".join(lines)
-        
+
+        placeholders2 = ', '.join(['%s'] * len(ids))
+        cur2 = conn.execute(
+            f"SELECT item_id, url FROM agenda_item_imagenes WHERE item_id IN ({placeholders2}) ORDER BY item_id, id",
+            tuple(ids)
+        )
+        imgs = cur2.fetchall()
+        if imgs:
+            contenido += "\nIMAGENES_REFERENCIA:"
+            for r in imgs:
+                contenido += f"\n- {r[0]}: {r[1]}"
+
         conn.execute(
             "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
             (contenido,)

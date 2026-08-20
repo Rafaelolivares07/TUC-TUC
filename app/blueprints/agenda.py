@@ -1,19 +1,35 @@
 import os
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, send_from_directory, url_for, redirect
 from ..db import get_db_connection
 from .auth import admin_required
 
-import cloudinary
-import cloudinary.uploader
-
-cloudinary.config(
-    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
-    api_key=os.getenv('CLOUDINARY_API_KEY'),
-    api_secret=os.getenv('CLOUDINARY_API_SECRET')
-)
-
 bp = Blueprint('agenda', __name__)
+
+_AGENDA_IMG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agenda_imagenes')
+os.makedirs(_AGENDA_IMG_DIR, exist_ok=True)
+
+_OCR_BIN = None
+for _candidate in ('/usr/bin/tesseract', r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
+    if os.path.exists(_candidate):
+        _OCR_BIN = _candidate
+        break
+
+
+def _ocr_imagen(ruta):
+    """Extrae texto de una imagen con tesseract local (servidor o PC)."""
+    if not _OCR_BIN:
+        return None
+    import subprocess
+    try:
+        r = subprocess.run(
+            [_OCR_BIN, ruta, 'stdout', '-l', 'spa+eng', '--psm', '6'],
+            capture_output=True, timeout=60
+        )
+        texto = r.stdout.decode('utf-8', 'replace').strip()
+        return texto or None
+    except Exception:
+        return None
 
 
 def _asegurar_tabla():
@@ -44,6 +60,8 @@ def _asegurar_tabla():
                 id SERIAL PRIMARY KEY,
                 item_id INTEGER NOT NULL REFERENCES agenda_items(id) ON DELETE CASCADE,
                 url TEXT NOT NULL,
+                ruta TEXT DEFAULT '',
+                ocr_texto TEXT DEFAULT '',
                 creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -51,6 +69,16 @@ def _asegurar_tabla():
             CREATE INDEX IF NOT EXISTS idx_agenda_item_imagenes_item
             ON agenda_item_imagenes (item_id)
         """)
+        try:
+            conn.execute("ALTER TABLE agenda_item_imagenes ADD COLUMN ruta TEXT DEFAULT ''")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        try:
+            conn.execute("ALTER TABLE agenda_item_imagenes ADD COLUMN ocr_texto TEXT DEFAULT ''")
+            conn.commit()
+        except Exception:
+            conn.rollback()
         conn.commit()
 
 
@@ -74,11 +102,17 @@ def agenda():
         """)
         items = cur.fetchall()
         cur2 = conn.execute("""
-            SELECT item_id, id, url FROM agenda_item_imagenes ORDER BY id
+            SELECT item_id, id, url, ruta, ocr_texto FROM agenda_item_imagenes ORDER BY id
         """)
         imagenes = {}
         for r in cur2.fetchall():
-            imagenes.setdefault(r[0], []).append({'id': r[1], 'url': r[2]})
+            url = r['url']
+            if r['ruta']:
+                url = url_for('agenda.servir_imagen_item', img_id=r['id'])
+            imagenes.setdefault(r[0], []).append({
+                'id': r[1], 'url': url,
+                'ocr_texto': r['ocr_texto'] or ''
+            })
     return render_template('agenda.html', items=items, imagenes=imagenes)
 
 
@@ -141,39 +175,71 @@ def subir_imagen_item(item_id):
     if 'imagen' not in request.files:
         return jsonify({'ok': False, 'error': 'No se recibió archivo'}), 400
     try:
-        result = cloudinary.uploader.upload(
-            request.files['imagen'],
-            resource_type='image',
-            folder='tuctuc_agenda'
-        )
-        url = result['secure_url']
+        file = request.files['imagen']
+        ext = os.path.splitext(file.filename or '')[-1].lower() or '.png'
+        if ext not in ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'):
+            ext = '.png'
+        nombre = f'item{item_id}_{os.urandom(6).hex()}{ext}'
+        ruta = os.path.join(_AGENDA_IMG_DIR, nombre)
+        file.save(ruta)
+
+        ocr_texto = _ocr_imagen(ruta) or ''
+
         with get_db_connection() as conn:
             cur = conn.execute(
-                "INSERT INTO agenda_item_imagenes (item_id, url) VALUES (%s, %s) RETURNING id",
-                (item_id, url)
+                "INSERT INTO agenda_item_imagenes (item_id, url, ruta, ocr_texto) VALUES (%s, '', %s, %s) RETURNING id",
+                (item_id, ruta, ocr_texto)
             )
             img_id = cur.fetchone()[0]
             conn.commit()
-        return jsonify({'ok': True, 'url': url, 'id': img_id})
+        return jsonify({
+            'ok': True,
+            'id': img_id,
+            'url': url_for('agenda.servir_imagen_item', img_id=img_id),
+            'ocr_texto': ocr_texto
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/agenda/imagen/<int:img_id>/archivo')
+@admin_required
+def servir_imagen_item(img_id):
+    with get_db_connection() as conn:
+        cur = conn.execute("SELECT ruta, url FROM agenda_item_imagenes WHERE id = %s", (img_id,))
+        row = cur.fetchone()
+    if not row:
+        return 'Not found', 404
+    if row['ruta'] and os.path.exists(row['ruta']):
+        return send_from_directory(os.path.dirname(row['ruta']), os.path.basename(row['ruta']))
+    if row['url']:
+        return redirect(row['url'])
+    return 'Not found', 404
 
 
 @bp.route('/agenda/imagen/<int:img_id>', methods=['DELETE'])
 @admin_required
 def eliminar_imagen_item(img_id):
     with get_db_connection() as conn:
-        cur = conn.execute("SELECT url FROM agenda_item_imagenes WHERE id = %s", (img_id,))
+        cur = conn.execute("SELECT ruta, url FROM agenda_item_imagenes WHERE id = %s", (img_id,))
         row = cur.fetchone()
         if not row:
             return jsonify({'ok': False, 'error': 'Imagen no encontrada'})
         conn.execute("DELETE FROM agenda_item_imagenes WHERE id = %s", (img_id,))
         conn.commit()
-    try:
-        public_id = row['url'].split('/')[-1].rsplit('.', 1)[0]
-        cloudinary.uploader.destroy(f'tuctuc_agenda/{public_id}')
-    except Exception:
-        pass
+    ruta_local = row['ruta']
+    if ruta_local and os.path.exists(ruta_local):
+        try:
+            os.remove(ruta_local)
+        except Exception:
+            pass
+    if not ruta_local and row['url'] and 'cloudinary.com' in row['url']:
+        try:
+            public_id = row['url'].split('/')[-1].rsplit('.', 1)[0]
+            import cloudinary.uploader
+            cloudinary.uploader.destroy(f'tuctuc_agenda/{public_id}')
+        except Exception:
+            pass
     return jsonify({'ok': True})
 
 
@@ -314,12 +380,17 @@ def activar_item_agenda(item_id):
         contenido = f"[Requerimiento #{item_id}] {texto} ({categoria})"
 
         cur2 = conn.execute(
-            "SELECT url FROM agenda_item_imagenes WHERE item_id = %s ORDER BY id",
+            "SELECT id, url, ruta, ocr_texto FROM agenda_item_imagenes WHERE item_id = %s ORDER BY id",
             (item_id,)
         )
-        urls = [r[0] for r in cur2.fetchall()]
-        if urls:
-            contenido += "\nIMAGENES_REFERENCIA:\n" + "\n".join(urls)
+        imgs = cur2.fetchall()
+        if imgs:
+            contenido += "\nIMAGENES_REFERENCIA:"
+            for r in imgs:
+                u = url_for('agenda.servir_imagen_item', img_id=r['id']) if r['ruta'] else r['url']
+                contenido += f"\n- {u}"
+                if r['ocr_texto']:
+                    contenido += f"\n  [OCR: {r['ocr_texto'][:1500]}]"
 
         conn.execute(
             "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
@@ -356,14 +427,17 @@ def activar_multi_agenda():
 
         placeholders2 = ', '.join(['%s'] * len(ids))
         cur2 = conn.execute(
-            f"SELECT item_id, url FROM agenda_item_imagenes WHERE item_id IN ({placeholders2}) ORDER BY item_id, id",
+            f"SELECT item_id, id, url, ruta, ocr_texto FROM agenda_item_imagenes WHERE item_id IN ({placeholders2}) ORDER BY item_id, id",
             tuple(ids)
         )
         imgs = cur2.fetchall()
         if imgs:
             contenido += "\nIMAGENES_REFERENCIA:"
             for r in imgs:
-                contenido += f"\n- {r[0]}: {r[1]}"
+                u = url_for('agenda.servir_imagen_item', img_id=r['id']) if r['ruta'] else r['url']
+                contenido += f"\n- {r['item_id']}: {u}"
+                if r['ocr_texto']:
+                    contenido += f"\n  [OCR: {r['ocr_texto'][:1500]}]"
 
         conn.execute(
             "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",

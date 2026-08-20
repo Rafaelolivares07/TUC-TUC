@@ -736,6 +736,17 @@ def api_config_publica(tercero_id):
         except Exception:
             catalogo_dict = {'efectivo': {'nombre': 'Efectivo', 'codigo': 'efectivo', 'icono': '💵'}}
         metodos = [catalogo_dict[c] for c in config['metodos_pago'] if c in catalogo_dict]
+        metodos_params = {}
+        try:
+            metodos_params = {r['metodo_codigo']: r for r in conn.execute(
+                "SELECT metodo_codigo, cuenta_recaudo_id, cuenta_pago_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s",
+                (tercero_id,)
+            ).fetchall()}
+        except Exception:
+            metodos_params = {}
+        for m in metodos:
+            mp = metodos_params.get(m['codigo'])
+            m['tiene_cuenta_contable'] = bool(mp and mp['cuenta_recaudo_id'])
         metodos_info = config.get('metodos_info', {})
         # No exponer imágenes QR completas en la respuesta pública — sólo indicar si existe
         info_publica = {}

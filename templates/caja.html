@@ -765,15 +765,20 @@ async function cargarTiposDocumento() {
 
 function renderMetodosPago() {
     const cont = document.getElementById('metodos-pago-inputs');
-    cont.innerHTML = metodosDisponibles.map(m => `
+    const alguienConCuenta = metodosDisponibles.some(m => m.tiene_cuenta_contable);
+    cont.innerHTML = metodosDisponibles.map(m => {
+        const sinCuenta = alguienConCuenta && !m.tiene_cuenta_contable;
+        return `
         <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-600 w-28 flex-shrink-0">${m.nombre}</span>
+            <span class="text-xs text-gray-600 w-28 flex-shrink-0">${m.nombre}
+                ${sinCuenta ? `<small class="block text-[10px] text-amber-600 font-semibold leading-tight">Sin cuenta contable</small>` : ''}
+            </span>
             <input type="number" min="0" step="100" value="0" placeholder="$0"
                    id="mp-${m.codigo}"
-                   class="border rounded-lg px-2 py-1 text-sm w-full text-right"
+                   class="border rounded-lg px-2 py-1 text-sm w-full text-right ${sinCuenta ? 'border-amber-400' : ''}"
                    oninput="validarPagos()">
         </div>
-    `).join('');
+    `}).join('');
 }
 
 function getPagos() {
@@ -887,6 +892,7 @@ async function cobrar() {
             };
             publicarPantallaCliente('cobrada', {...ultimoRecibo, telefono: ''});
             mostrarRecibo();
+            avisarMetodosSinCuenta(pagos);
         } else if (d.error === 'insufficient_stock') {
             shortagesList = d.shortages;
             document.getElementById('modal-alerta-stock').classList.remove('hidden');
@@ -902,6 +908,19 @@ async function cobrar() {
         toast('Error de conexión', true);
         btn.disabled = false;
         btn.textContent = 'Cobrar';
+    }
+}
+
+function avisarMetodosSinCuenta(pagos) {
+    const alguienConCuenta = metodosDisponibles.some(m => m.tiene_cuenta_contable);
+    if (!alguienConCuenta) return;
+    const usadosSinCuenta = pagos.filter(p => {
+        const m = metodosDisponibles.find(x => x.codigo === p.codigo);
+        return !(m && m.tiene_cuenta_contable);
+    });
+    if (usadosSinCuenta.length) {
+        const nombres = usadosSinCuenta.map(p => p.nombre).join(', ');
+        setTimeout(() => toast(`El pago con ${nombres} no tiene cuenta contable asignada. La venta no generó su contrapartida contable.`, true), 600);
     }
 }
 

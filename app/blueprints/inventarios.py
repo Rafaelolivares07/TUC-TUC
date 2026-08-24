@@ -5365,7 +5365,7 @@ def api_ensambles_sugerencias(negocio_id):
         ventas = conn.execute("""
             SELECT pi.producto_id,
                    COALESCE(pi.nombre_producto, p.nombre) AS nombre_producto,
-                   COALESCE(ped.fecha, ped.created_at::date) AS fecha,
+                   COALESCE(ped.fecha::date, ped.created_at::date) AS fecha,
                    SUM(pi.cantidad) AS cantidad
             FROM pedido_items pi
             JOIN pedidos ped ON ped.id = pi.pedido_id
@@ -5376,8 +5376,8 @@ def api_ensambles_sugerencias(negocio_id):
               AND ped.numero_documento IS NOT NULL
               AND TRIM(ped.numero_documento) <> ''
               AND (ped.estado IS NULL OR LOWER(ped.estado) NOT IN ('anulado', 'cancelado'))
-              AND COALESCE(ped.fecha, ped.created_at::date) BETWEEN %s::date AND %s::date
-            GROUP BY pi.producto_id, COALESCE(pi.nombre_producto, p.nombre), COALESCE(ped.fecha, ped.created_at::date)
+              AND COALESCE(ped.fecha::date, ped.created_at::date) BETWEEN %s::date AND %s::date
+            GROUP BY pi.producto_id, COALESCE(pi.nombre_producto, p.nombre), COALESCE(ped.fecha::date, ped.created_at::date)
             ORDER BY pi.producto_id, fecha
         """, (negocio_id, fecha_desde, fecha_hasta)).fetchall()
 

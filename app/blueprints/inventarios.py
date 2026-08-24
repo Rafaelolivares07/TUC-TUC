@@ -5326,6 +5326,7 @@ def api_produccion_sugerencias(negocio_id):
 def api_ensambles_sugerencias(negocio_id):
     """Proyecta ventas facturadas y traduce el resultado a necesidades de ensamble."""
     import datetime
+    import math
 
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
@@ -5452,7 +5453,7 @@ def api_ensambles_sugerencias(negocio_id):
                     break
             cantidad_base = promedios_semana[fecha_proxima.weekday()] or demanda_dia_venta
             cantidad_recomendada = max(0.0, cantidad_base * (1 + growth) * (1 + seguridad / 100.0))
-            cantidad_recomendada = round(cantidad_recomendada, 2)
+            cantidad_recomendada = math.ceil(cantidad_recomendada)
 
             detalle = []
             for componente in componentes_por_producto.get(p_id, []):

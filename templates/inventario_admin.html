@@ -4902,7 +4902,7 @@ async function cargarSugerenciasEnsambles() {
 function actualizarCantidadEnsamble(productoId, valor) {
   const producto = datosEnsambles.find(p => p.producto_id === productoId);
   if (!producto) return;
-  producto.cantidad_final = Math.max(0, Number(valor) || 0);
+  producto.cantidad_final = Math.max(0, Math.round(Number(valor) || 0));
   const ajuste = producto.cantidad_final - Number(producto.cantidad_recomendada || 0);
   const ajusteEl = document.getElementById(`ensamble-ajuste-${productoId}`);
   if (ajusteEl) ajusteEl.textContent = `Ajuste: ${ajuste >= 0 ? '+' : ''}${fmt(ajuste)}`;

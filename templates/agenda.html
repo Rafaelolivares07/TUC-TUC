@@ -112,7 +112,7 @@
     gap: 12px;
     padding: 10px 0;
     border-bottom: 1px solid #f0f0f0;
-    transition: opacity .2s;
+    transition: opacity .2s, transform .35s, background .25s, border-color .25s;
   }
 
   .item:last-child { border-bottom: none; }
@@ -152,12 +152,50 @@
   .item-fecha.vence-hoy { color: #e07b00; font-weight: 600; }
   .item-fecha.vencido   { color: #d04040; font-weight: 600; }
 
-  .item.completado .item-texto {
-    text-decoration: line-through;
-    color: #bbb;
+  .item.completado {
+    margin-top: 8px;
+    padding: 13px 12px;
+    border: 1px solid #dcefe3;
+    border-left: 4px solid #78b892;
+    border-radius: 10px;
+    background: #fbfefc;
   }
 
-  .item.completado { opacity: .7; }
+  .item.completado .item-texto { color: #66756c; }
+  .item.completado .item-fecha { color: #8aa596; }
+  .item.completando { animation: completarItem .5s ease both; }
+  @keyframes completarItem {
+    0% { opacity: 1; transform: translateX(0); background: #effcf3; }
+    45% { opacity: .85; transform: translateX(12px); background: #e4f8ea; }
+    100% { opacity: .35; transform: translateX(-8px); }
+  }
+
+  .item-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    padding: 2px;
+    border: 1px solid #f0f0f0;
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  .item-actions button { margin: 0; }
+
+  .estado-completado {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-right: 4px;
+    border-radius: 50%;
+    background: #dff3e5;
+    color: #43835b;
+    font-size: .78rem;
+    font-weight: 700;
+  }
 
   .btn-borrar {
     background: none;
@@ -243,8 +281,13 @@
     letter-spacing: 1px;
     text-transform: uppercase;
     color: #bbb;
-    margin: 24px 0 4px;
+    margin: 34px 0 10px;
+    padding: 12px 0 8px;
+    border-top: 2px solid #dcefe3;
+    color: #6b9278;
   }
+
+  .seccion-titulo::before { content: '✓ '; color: #4f9b68; }
 
   .empty {
     color: #ccc;
@@ -377,11 +420,13 @@
           {% endfor %}
         </div>
       </div>
-      <input type="file" accept="image/*" id="file-{{ item[0] }}" style="display:none" onchange="subirImagen({{ item[0] }}, this)">
-      <button class="btn-img" onclick="document.getElementById('file-{{ item[0] }}').click()" title="Adjuntar imagen">📎</button>
-      <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️</button>
-      <button class="btn-activar" onclick="activar({{ item[0] }}, this)" title="Activar en Antigravity">🚀</button>
-      <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
+      <div class="item-actions" aria-label="Acciones de la tarea">
+        <input type="file" accept="image/*" id="file-{{ item[0] }}" style="display:none" onchange="subirImagen({{ item[0] }}, this)">
+        <button class="btn-img" onclick="document.getElementById('file-{{ item[0] }}').click()" title="Adjuntar imagen">📎</button>
+        <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️</button>
+        <button class="btn-activar" onclick="activar({{ item[0] }}, this)" title="Activar en Antigravity">🚀</button>
+        <button class="btn-borrar" onclick="borrar({{ item[0] }})" title="Eliminar tarea">×</button>
+      </div>
     </li>
     {% endfor %}
 
@@ -390,6 +435,7 @@
     {% for item in completados %}
     <li class="item completado" id="item-{{ item[0] }}">
       <input type="checkbox" checked onchange="toggle({{ item[0] }}, this)">
+      <span class="estado-completado" aria-label="Completada">✓</span>
       <div class="item-body">
         <span class="item-texto" onclick="comenzarEdicion({{ item[0] }})">{{ item[1] }}</span>
         {% if item[5] %}
@@ -404,8 +450,10 @@
           {% endfor %}
         </div>
       </div>
-      <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️</button>
-      <button class="btn-borrar" onclick="borrar({{ item[0] }})">×</button>
+      <div class="item-actions" aria-label="Acciones de la tarea completada">
+        <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️</button>
+        <button class="btn-borrar" onclick="borrar({{ item[0] }})" title="Eliminar tarea">×</button>
+      </div>
     </li>
     {% endfor %}
     {% endif %}
@@ -467,7 +515,12 @@
       const li = document.getElementById(`item-${id}`);
       li.classList.toggle('completado', d.completado);
       cb.checked = d.completado;
-      location.reload();
+      if (d.completado) {
+        li.classList.add('completando');
+        setTimeout(() => location.reload(), 480);
+      } else {
+        location.reload();
+      }
     }
   }
 

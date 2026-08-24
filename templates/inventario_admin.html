@@ -413,6 +413,7 @@
       <button class="tab-btn" onclick="mostrarTab('compras_sugerencias')">🛒 Compras Sugeridas</button>
       <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
       <button class="tab-btn" onclick="mostrarTab('ensambles')">Ensambles</button>
+      <button class="tab-btn" onclick="mostrarTab('ensambles_historicos')">Ensambles Históricos</button>
       <button class="tab-btn" onclick="mostrarTab('ventas_costos')">Ventas/Costos</button>
       <button class="tab-btn" onclick="mostrarTab('gastos')">Gastos</button>
       <a href="/admin/inventario-fisico/{{ negocio_id }}" class="tab-btn">📋 Inv. Físico</a>
@@ -1024,11 +1025,42 @@
     </div>
   </div>
 
-  <!-- ── TAB ENSAMBLES ────────────────────────────────────────── -->
+  <!-- ── TAB ENSAMBLES PREDICTIVOS ─────────────────────────────── -->
   <div id="tab-ensambles" class="hidden bg-white rounded-2xl shadow p-5">
     <div class="border-b border-gray-150 pb-4 mb-4 flex items-center justify-between flex-wrap gap-4">
       <div>
-        <h2 class="text-lg font-bold text-gray-800">Movimientos por Ensambles (Códigos Padres)</h2>
+        <h2 class="text-lg font-bold text-gray-800">Ensambles sugeridos</h2>
+        <p class="text-xs text-gray-400 font-medium">Proyección de ventas facturadas para definir cantidades de armado y empaque.</p>
+      </div>
+      <button onclick="cargarSugerenciasEnsambles()" class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition-all shadow-xs">↻ Recalcular</button>
+    </div>
+    <details class="mb-5 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+      <summary class="cursor-pointer text-sm font-bold text-slate-700">⚙ Variables de la proyección</summary>
+      <p class="text-xs text-slate-500 mt-2 mb-3">Se cuentan únicamente facturas de venta no anuladas. La cantidad final puede ajustarse por eventos o jornadas especiales.</p>
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+        <label>Historial (días)<input id="cfg-ensambles-historial" type="number" value="60" min="7" max="365" class="border rounded-lg px-2 py-1 w-full mt-1"></label>
+        <label>Ventana reciente<input id="cfg-ensambles-recientes" type="number" value="14" min="3" max="90" class="border rounded-lg px-2 py-1 w-full mt-1"></label>
+        <label>Frecuencia defecto<input id="cfg-ensambles-defecto" type="number" value="7" min="1" max="90" class="border rounded-lg px-2 py-1 w-full mt-1"></label>
+        <label>Crecimiento máximo %<input id="cfg-ensambles-max-growth" type="number" value="100" min="0" max="500" class="border rounded-lg px-2 py-1 w-full mt-1"></label>
+        <label>Decrecimiento máximo %<input id="cfg-ensambles-min-growth" type="number" value="-50" min="-100" max="0" class="border rounded-lg px-2 py-1 w-full mt-1"></label>
+        <label>Seguridad %<input id="cfg-ensambles-seguridad" type="number" value="0" min="0" max="100" class="border rounded-lg px-2 py-1 w-full mt-1"></label>
+      </div>
+    </details>
+    <div id="ensambles-config-resumen" class="hidden mb-4 text-xs text-slate-500 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3"></div>
+    <div id="ensambles-sugerencias-list" class="space-y-3">
+      <div class="text-center text-gray-400 py-12">Cargando proyección de ventas...</div>
+    </div>
+    <details class="mt-6 bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4">
+      <summary class="cursor-pointer text-sm font-bold text-emerald-800">📦 Materias primas totales requeridas</summary>
+      <div id="ensambles-materias-primas" class="mt-3 overflow-x-auto"></div>
+    </details>
+  </div>
+
+  <!-- ── TAB ENSAMBLES HISTÓRICOS ─────────────────────────────── -->
+  <div id="tab-ensambles_historicos" class="hidden bg-white rounded-2xl shadow p-5">
+    <div class="border-b border-gray-150 pb-4 mb-4 flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <h2 class="text-lg font-bold text-gray-800">Ensambles Históricos</h2>
         <p class="text-xs text-gray-400 font-medium">Reconciliación entre salidas físicas de insumos (Kardex) y costos de ventas financieros (Asientos).</p>
       </div>
       <div class="flex items-end gap-3 flex-wrap text-xs">
@@ -1190,7 +1222,7 @@ function toast(msg, ok = true) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'kardex', 'ensambles', 'ventas_costos', 'gastos'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'kardex', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'gastos'];
 function mostrarTab(t) {
   TABS.forEach(id => {
     const el = document.getElementById(`tab-${id}`);
@@ -1212,6 +1244,9 @@ function mostrarTab(t) {
     cambiarVistaTarjetas('recetas');
   }
   if (t === 'ensambles') {
+    cargarSugerenciasEnsambles();
+  }
+  if (t === 'ensambles_historicos') {
     inicializarFechasEnsambles();
   }
   if (t === 'ventas_costos') {
@@ -4830,7 +4865,96 @@ function ordenarVC(col) {
 }
 
 
-// ── Ensambles (Códigos Padres) ──
+// ── Ensambles predictivos ──
+let datosEnsambles = [];
+let materiasEnsambles = [];
+
+function escEns(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function cargarSugerenciasEnsambles() {
+  const lista = document.getElementById('ensambles-sugerencias-list');
+  if (!lista) return;
+  lista.innerHTML = '<div class="text-center text-gray-400 py-12">Calculando ventas facturadas y necesidades de ensamble...</div>';
+  const params = new URLSearchParams({
+    dias_historial: document.getElementById('cfg-ensambles-historial')?.value || 60,
+    dias_recientes: document.getElementById('cfg-ensambles-recientes')?.value || 14,
+    dias_defecto: document.getElementById('cfg-ensambles-defecto')?.value || 7,
+    max_growth: document.getElementById('cfg-ensambles-max-growth')?.value || 100,
+    min_growth: document.getElementById('cfg-ensambles-min-growth')?.value || -50,
+    seguridad: document.getElementById('cfg-ensambles-seguridad')?.value || 0
+  });
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/ensambles/sugerencias?${params}`);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'No se pudo calcular la proyección');
+    datosEnsambles = d.sugerencias || [];
+    materiasEnsambles = d.materias_primas || [];
+    document.getElementById('ensambles-config-resumen').textContent = `${d.configuracion.descripcion_periodo}. Días de la semana contemplados según las ventas reales de cada producto.`;
+    document.getElementById('ensambles-config-resumen').classList.remove('hidden');
+    renderEnsambles();
+  } catch (e) {
+    lista.innerHTML = `<div class="text-center text-red-500 font-semibold py-12">${escEns(e.message)}</div>`;
+  }
+}
+
+function actualizarCantidadEnsamble(productoId, valor) {
+  const producto = datosEnsambles.find(p => p.producto_id === productoId);
+  if (!producto) return;
+  producto.cantidad_final = Math.max(0, Number(valor) || 0);
+  const ajuste = producto.cantidad_final - Number(producto.cantidad_recomendada || 0);
+  const ajusteEl = document.getElementById(`ensamble-ajuste-${productoId}`);
+  if (ajusteEl) ajusteEl.textContent = `Ajuste: ${ajuste >= 0 ? '+' : ''}${fmt(ajuste)}`;
+  renderDetalleEnsambles(producto);
+  renderMateriasEnsambles();
+}
+
+function renderEnsambles() {
+  const lista = document.getElementById('ensambles-sugerencias-list');
+  if (!datosEnsambles.length) {
+    lista.innerHTML = '<div class="text-center text-gray-400 py-12">No hay ventas facturadas de productos con tarjeta estándar en el período.</div>';
+    renderMateriasEnsambles();
+    return;
+  }
+  lista.innerHTML = datosEnsambles.map(p => `
+    <details class="border border-gray-200 rounded-2xl bg-white shadow-2xs" data-ensamble-id="${p.producto_id}">
+      <summary class="cursor-pointer list-none p-4 flex items-center justify-between gap-3 flex-wrap">
+        <div class="min-w-[190px]"><span class="font-extrabold text-gray-800">${escEns(p.producto_nombre)}</span><span class="block text-[10px] text-gray-400 mt-1">Próxima venta: ${escEns(p.dia_proxima_venta)} ${escEns(p.proxima_venta)}</span></div>
+        <div class="text-xs text-gray-500">Cada ${fmt(p.frecuencia_dias)} días<span class="block text-[10px]">Última: ${escEns(p.ultima_venta)}</span></div>
+        <div class="text-xs text-gray-500">Recomendado<strong class="block text-base text-rose-700">${fmt(p.cantidad_recomendada)}</strong><span id="ensamble-ajuste-${p.producto_id}" class="block text-[10px] text-slate-400">Ajuste: +0</span></div>
+        <label class="text-xs font-bold text-gray-700" onclick="event.stopPropagation()">Final a ensamblar<input type="number" min="0" step="1" value="${p.cantidad_final}" onchange="actualizarCantidadEnsamble(${p.producto_id}, this.value)" class="block w-28 border border-rose-200 rounded-lg px-2 py-1 mt-1 text-right font-extrabold text-rose-700"></label>
+      </summary>
+      <div id="ensamble-detalle-${p.producto_id}" class="border-t border-gray-100 p-4 bg-slate-50/50">${htmlDetalleEnsambles(p)}</div>
+    </details>`).join('');
+  renderMateriasEnsambles();
+}
+
+function htmlDetalleEnsambles(p) {
+  const qty = Number(p.cantidad_final) || 0;
+  return `<div class="text-xs text-gray-500 mb-2">${fmt(p.ventas_total)} unidades vendidas en ${fmt(p.dias_con_venta)} días de venta. Semanas contempladas: ${p.dias_semana_contemplados.map(escEns).join(', ') || 'sin datos'}.</div>
+    <div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="text-gray-400 uppercase border-b"><th class="text-left py-2">Materia prima</th><th class="text-right py-2">Por unidad</th><th class="text-right py-2">Necesaria</th><th class="text-right py-2">Stock</th><th class="text-right py-2">Diferencia</th></tr></thead><tbody>${p.componentes.map(c => { const req = Number(c.cantidad_por_unidad) * qty; const dif = Number(c.stock_actual) - req; return `<tr class="border-b border-gray-100"><td class="py-2">${escEns(c.componente_nombre)}</td><td class="text-right">${fmt(c.cantidad_por_unidad)}</td><td class="text-right font-bold">${fmt(req)}</td><td class="text-right">${fmt(c.stock_actual)}</td><td class="text-right font-bold ${dif < 0 ? 'text-red-600' : 'text-green-700'}">${fmt(dif)}</td></tr>`; }).join('')}</tbody></table></div>`;
+}
+
+function renderDetalleEnsambles(p) {
+  const detalle = document.getElementById(`ensamble-detalle-${p.producto_id}`);
+  if (detalle) detalle.innerHTML = htmlDetalleEnsambles(p);
+}
+
+function renderMateriasEnsambles() {
+  const el = document.getElementById('ensambles-materias-primas');
+  if (!el) return;
+  const total = {};
+  datosEnsambles.forEach(p => (p.componentes || []).forEach(c => {
+    const req = Number(c.cantidad_por_unidad) * (Number(p.cantidad_final) || 0);
+    if (!total[c.componente_id]) total[c.componente_id] = {nombre: c.componente_nombre, requerida: 0, stock: Number(c.stock_actual) || 0};
+    total[c.componente_id].requerida += req;
+  }));
+  const filas = Object.values(total).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  el.innerHTML = `<table class="w-full text-xs"><thead><tr class="text-gray-400 uppercase border-b"><th class="text-left py-2">Materia prima</th><th class="text-right py-2">Necesidad total</th><th class="text-right py-2">Stock</th><th class="text-right py-2">Diferencia</th></tr></thead><tbody>${filas.map(c => { const dif = c.stock - c.requerida; return `<tr class="border-b border-emerald-100"><td class="py-2">${escEns(c.nombre)}</td><td class="text-right font-bold">${fmt(c.requerida)}</td><td class="text-right">${fmt(c.stock)}</td><td class="text-right font-bold ${dif < 0 ? 'text-red-600' : 'text-green-700'}">${fmt(dif)}</td></tr>`; }).join('')}</tbody></table>`;
+}
+
+// ── Ensambles históricos (Códigos Padres) ──
 function inicializarFechasEnsambles() {
   const desdeInp = document.getElementById('ensambles-fecha-ini');
   const hastaInp = document.getElementById('ensambles-fecha-fin');

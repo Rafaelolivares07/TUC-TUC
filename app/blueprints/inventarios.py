@@ -5322,6 +5322,204 @@ def api_produccion_sugerencias(negocio_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/ensambles/sugerencias')
+def api_ensambles_sugerencias(negocio_id):
+    """Proyecta ventas facturadas y traduce el resultado a necesidades de ensamble."""
+    import datetime
+
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    def _param_int(nombre, defecto, minimo, maximo):
+        try:
+            return max(minimo, min(maximo, int(request.args.get(nombre, defecto))))
+        except (ValueError, TypeError):
+            return defecto
+
+    dias_historial = _param_int('dias_historial', 60, 7, 365)
+    dias_recientes = _param_int('dias_recientes', 14, 3, 90)
+    dias_defecto = _param_int('dias_defecto', 7, 1, 90)
+    max_growth = _param_int('max_growth', 100, 0, 500)
+    min_growth = _param_int('min_growth', -50, -100, 0)
+    seguridad = _param_int('seguridad', 0, 0, 100)
+
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto or not _puede_gestionar_negocio(contexto):
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+
+        hoy = datetime.date.today()
+        fecha_desde = hoy - datetime.timedelta(days=dias_historial - 1)
+        fecha_hasta = hoy
+        dias_semana = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
+
+        productos = conn.execute("""
+            SELECT DISTINCT p.id, p.nombre
+            FROM productos p
+            JOIN tarjeta_estandar te ON te.producto_id = p.id
+            WHERE p.negocio_id = %s AND p.disponible = TRUE
+            ORDER BY p.nombre
+        """, (negocio_id,)).fetchall()
+
+        ventas = conn.execute("""
+            SELECT pi.producto_id,
+                   COALESCE(pi.nombre_producto, p.nombre) AS nombre_producto,
+                   COALESCE(ped.fecha, ped.created_at::date) AS fecha,
+                   SUM(pi.cantidad) AS cantidad
+            FROM pedido_items pi
+            JOIN pedidos ped ON ped.id = pi.pedido_id
+            JOIN productos p ON p.id = pi.producto_id
+            JOIN tipos_documento_negocio td ON td.id = ped.tipo_documento_id
+            WHERE ped.negocio_id = %s
+              AND td.tipo_movimiento = 'venta'
+              AND ped.numero_documento IS NOT NULL
+              AND TRIM(ped.numero_documento) <> ''
+              AND (ped.estado IS NULL OR LOWER(ped.estado) NOT IN ('anulado', 'cancelado'))
+              AND COALESCE(ped.fecha, ped.created_at::date) BETWEEN %s::date AND %s::date
+            GROUP BY pi.producto_id, COALESCE(pi.nombre_producto, p.nombre), COALESCE(ped.fecha, ped.created_at::date)
+            ORDER BY pi.producto_id, fecha
+        """, (negocio_id, fecha_desde, fecha_hasta)).fetchall()
+
+        ventas_por_producto = {}
+        for venta in ventas:
+            ventas_por_producto.setdefault(venta['producto_id'], []).append({
+                'fecha': venta['fecha'],
+                'cantidad': float(venta['cantidad'] or 0)
+            })
+
+        componentes = conn.execute("""
+            SELECT te.producto_id, te.componente_id, te.cantidad,
+                   cp.nombre AS componente_nombre,
+                   COALESCE(si.stock, 0) AS stock_actual
+            FROM tarjeta_estandar te
+            JOIN productos cp ON cp.id = te.componente_id
+            JOIN productos padre ON padre.id = te.producto_id
+            LEFT JOIN saldos_inventario si
+              ON si.producto_id = te.componente_id
+             AND si.negocio_id = %s AND si.bodega = 1
+            WHERE padre.negocio_id = %s
+            ORDER BY te.producto_id, cp.nombre
+        """, (negocio_id, negocio_id)).fetchall()
+
+        componentes_por_producto = {}
+        for componente in componentes:
+            componentes_por_producto.setdefault(componente['producto_id'], []).append(componente)
+
+        sugerencias = []
+        consolidado = {}
+        for producto in productos:
+            p_id = producto['id']
+            registros = ventas_por_producto.get(p_id, [])
+            if not registros:
+                continue
+
+            por_fecha = {r['fecha']: r['cantidad'] for r in registros}
+            fechas_venta = sorted(por_fecha)
+            total_vendido = sum(por_fecha.values())
+            dias_venta = len(fechas_venta)
+            frecuencia = dias_defecto
+            if len(fechas_venta) > 1:
+                diferencias = [(fechas_venta[i] - fechas_venta[i - 1]).days for i in range(1, len(fechas_venta))]
+                frecuencia = max(1, round(sum(diferencias) / len(diferencias)))
+
+            dias_por_semana = {i: 0.0 for i in range(7)}
+            ocurrencias_por_semana = {i: 0 for i in range(7)}
+            for i in range(dias_historial):
+                dia = fecha_desde + datetime.timedelta(days=i)
+                ocurrencias_por_semana[dia.weekday()] += 1
+                dias_por_semana[dia.weekday()] += por_fecha.get(dia, 0.0)
+
+            promedios_semana = {
+                dia: (dias_por_semana[dia] / ocurrencias_por_semana[dia])
+                for dia in range(7)
+            }
+            contemplados = [dias_semana[dia] for dia in range(7) if dias_por_semana[dia] > 0]
+            demanda_dia_venta = total_vendido / dias_venta if dias_venta else 0.0
+
+            reciente_desde = hoy - datetime.timedelta(days=dias_recientes - 1)
+            anterior_desde = reciente_desde - datetime.timedelta(days=dias_recientes)
+            reciente = sum(c for f, c in por_fecha.items() if f >= reciente_desde)
+            anterior = sum(c for f, c in por_fecha.items() if anterior_desde <= f < reciente_desde)
+            growth = ((reciente - anterior) / anterior) if anterior > 0 else 0.0
+            growth = max(min_growth / 100.0, min(max_growth / 100.0, growth))
+
+            fecha_proxima = hoy + datetime.timedelta(days=1)
+            for offset in range(1, 15):
+                candidata = hoy + datetime.timedelta(days=offset)
+                if promedios_semana[candidata.weekday()] > 0:
+                    fecha_proxima = candidata
+                    break
+            cantidad_base = promedios_semana[fecha_proxima.weekday()] or demanda_dia_venta
+            cantidad_recomendada = max(0.0, cantidad_base * (1 + growth) * (1 + seguridad / 100.0))
+            cantidad_recomendada = round(cantidad_recomendada, 2)
+
+            detalle = []
+            for componente in componentes_por_producto.get(p_id, []):
+                por_unidad = float(componente['cantidad'] or 0)
+                requerida = round(por_unidad * cantidad_recomendada, 4)
+                stock = float(componente['stock_actual'] or 0)
+                diferencia = round(stock - requerida, 4)
+                detalle.append({
+                    'componente_id': componente['componente_id'],
+                    'componente_nombre': componente['componente_nombre'],
+                    'cantidad_por_unidad': por_unidad,
+                    'cantidad_requerida': requerida,
+                    'stock_actual': stock,
+                    'diferencia': diferencia
+                })
+                resumen = consolidado.setdefault(componente['componente_id'], {
+                    'componente_id': componente['componente_id'],
+                    'componente_nombre': componente['componente_nombre'],
+                    'stock_actual': stock,
+                    'cantidad_requerida': 0.0
+                })
+                resumen['cantidad_requerida'] += requerida
+
+            sugerencias.append({
+                'producto_id': p_id,
+                'producto_nombre': producto['nombre'],
+                'ultima_venta': fechas_venta[-1].isoformat(),
+                'proxima_venta': fecha_proxima.isoformat(),
+                'dia_proxima_venta': dias_semana[fecha_proxima.weekday()],
+                'dias_semana_contemplados': contemplados,
+                'ventas_total': round(total_vendido, 2),
+                'dias_con_venta': dias_venta,
+                'frecuencia_dias': frecuencia,
+                'demanda_por_dia_venta': round(demanda_dia_venta, 2),
+                'growth_rate_pct': round(growth * 100, 1),
+                'cantidad_recomendada': cantidad_recomendada,
+                'cantidad_final': cantidad_recomendada,
+                'componentes': detalle
+            })
+
+        for resumen in consolidado.values():
+            resumen['cantidad_requerida'] = round(resumen['cantidad_requerida'], 4)
+            resumen['diferencia'] = round(resumen['stock_actual'] - resumen['cantidad_requerida'], 4)
+
+        sugerencias.sort(key=lambda item: (item['proxima_venta'], item['producto_nombre']))
+        return jsonify({
+            'ok': True,
+            'configuracion': {
+                'fecha_desde': fecha_desde.isoformat(),
+                'fecha_hasta': fecha_hasta.isoformat(),
+                'dias_historial': dias_historial,
+                'dias_recientes': dias_recientes,
+                'dias_defecto': dias_defecto,
+                'max_growth': max_growth,
+                'min_growth': min_growth,
+                'seguridad': seguridad,
+                'descripcion_periodo': f"Ventas facturadas del {fecha_desde.strftime('%d/%m/%Y')} al {fecha_hasta.strftime('%d/%m/%Y')}"
+            },
+            'sugerencias': sugerencias,
+            'materias_primas': sorted(consolidado.values(), key=lambda item: item['componente_nombre'])
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 def _calcular_demanda_y_ciclo(conn, negocio_id, producto_id, current_stock,
                               dias_historial, dias_defecto, growth_window, max_growth, min_growth):
     import datetime

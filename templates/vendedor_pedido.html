@@ -1019,5 +1019,26 @@
       }
     }
   </script>
+
+  <!-- Botón flotante para regresar a Mi Menú (Tailwind) -->
+  <script>
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('origin') === 'menu') {
+        const btn = document.createElement('div');
+        btn.style.position = 'fixed';
+        btn.style.bottom = '24px';
+        btn.style.right = '24px';
+        btn.style.zIndex = '99999';
+        btn.innerHTML = `
+          <a href="/admin/mi-menu" class="flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-bold px-4 py-2.5 rounded-full text-xs shadow-xl border border-gray-700 no-underline transition-all">
+            <span class="text-yellow-400">🏠</span>
+            <span class="text-[11px] text-white">Regresar a Mi Menú</span>
+          </a>
+        `;
+        document.body.appendChild(btn);
+      }
+    })();
+  </script>
 </body>
 </html>

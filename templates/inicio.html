@@ -1,1 +1,151 @@
-que ponemos aqui?
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TUC TUC — Inicio</title>
+  <script src="/static/js/tailwind.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f3f4f6;
+    }
+  </style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+
+  <div class="max-w-3xl mx-auto">
+    <!-- Cabecera / Negocio Activo & Carrusel Trigger -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-150 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div class="flex items-center gap-3">
+        <!-- Logo con Selector (Si tiene múltiples negocios, abre el selector) -->
+        <div class="relative group" style="cursor: pointer;" onclick="toggleSelectorNegocios()">
+          {% if negocio_activo %}
+            {% if negocio_activo.logo_url %}
+              <img src="{{ negocio_activo.logo_url }}" class="rounded-2xl border border-gray-200 shadow-sm" style="height: 52px; width: 52px; object-fit: cover;">
+            {% else %}
+              <div class="rounded-2xl border border-gray-200 bg-indigo-600 text-white text-center d-flex items-center justify-content-center fw-bold shadow-sm" style="height: 52px; width: 52px; font-size: 20px; line-height: 52px;">
+                {{ negocio_activo.nombre[:2].upper() }}
+              </div>
+            {% endif %}
+          {% endif %}
+          {% if session_negocios | length > 1 %}
+            <div class="absolute -bottom-1 -right-1 bg-white border border-gray-150 rounded-full w-5 h-5 flex items-center justify-center text-gray-500 shadow-sm">
+              <i class="bi bi-chevron-down" style="font-size: 9px;"></i>
+            </div>
+          {% endif %}
+        </div>
+        
+        <div>
+          <h1 class="text-lg font-extrabold text-gray-900 tracking-tight flex items-center gap-1.5">
+            {{ negocio_activo.nombre if negocio_activo else 'TUC TUC' }}
+          </h1>
+          <p class="text-xs text-gray-400 font-medium">¡Hola, {{ nombre }}! Este es tu menú de herramientas autorizadas.</p>
+        </div>
+      </div>
+
+      <!-- Cerrar Sesión -->
+      <a href="/logout" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 no-underline">
+        <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+      </a>
+    </div>
+
+    <!-- Carrusel / Selector Flotante de Negocios (Tailwind In-place) -->
+    {% if session_negocios | length > 1 %}
+    <div id="selector-negocios" class="hidden bg-white rounded-2xl p-4 shadow-md border border-gray-150 mb-6">
+      <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5">Cambiar de Negocio</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {% for neg in session_negocios %}
+          <div onclick="switchActiveNegocio({{ neg.id }})" 
+               class="flex items-center gap-2.5 p-2 rounded-xl border border-gray-100 hover:bg-gray-50 cursor-pointer transition {% if neg.id == negocio_activo.id %}bg-indigo-50 border-indigo-200 font-bold text-indigo-700{% endif %}">
+            {% if neg.logo_url %}
+              <img src="{{ neg.logo_url }}" class="rounded-lg border border-gray-200" style="height: 32px; width: 32px; object-fit: cover;">
+            {% else %}
+              <div class="rounded-lg bg-gray-200 text-gray-600 text-center font-bold text-xs flex items-center justify-center" style="height: 32px; width: 32px;">
+                {{ neg.nombre[:2].upper() }}
+              </div>
+            {% endif %}
+            <span class="text-xs text-gray-700 truncate">{{ neg.nombre }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Buscador Reactivo -->
+    {% if pantallas_autorizadas %}
+    <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-150 mb-6 flex items-center gap-2">
+      <div class="text-gray-400 ps-1.5">
+        <i class="bi bi-search"></i>
+      </div>
+      <input type="text" id="filtro-menu" placeholder="Buscar herramienta..." oninput="filtrarHerramientas()"
+             class="w-full text-xs font-medium text-gray-700 placeholder-gray-400 bg-transparent outline-none">
+    </div>
+    {% endif %}
+
+    <!-- Grilla de Accesos Autorizados -->
+    {% if pantallas_autorizadas %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="grilla-herramientas">
+      {% for pant in pantallas_autorizadas %}
+        <div class="card-herramienta bg-white rounded-2xl p-5 shadow-sm border border-gray-150 hover:shadow transition flex items-center gap-4">
+          <div class="bg-indigo-50 text-indigo-600 rounded-xl p-3 w-12 h-12 flex items-center justify-center text-xl shrink-0">
+            {{ pant.icono or '🖥️' }}
+          </div>
+          <div class="flex-grow min-w-0">
+            <h2 class="text-sm font-bold text-gray-800 truncate txt-nombre">{{ pant.nombre }}</h2>
+            <p class="text-[10px] text-gray-400 mt-0.5">Acceso verificado</p>
+          </div>
+          <a href="{{ pant.resolved_url }}" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition no-underline">
+            Entrar
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-150 text-center">
+      <span class="text-4xl">🔒</span>
+      <h2 class="text-sm font-bold text-gray-800 mt-3">Sin Accesos Configurados</h2>
+      <p class="text-xs text-gray-400 mt-1 max-w-sm mx-auto">No tienes pantallas autorizadas para este negocio. Por favor, solicita a tu administrador que te asigne permisos.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <script>
+    function toggleSelectorNegocios() {
+      const el = document.getElementById('selector-negocios');
+      if (el) el.classList.toggle('hidden');
+    }
+
+    function switchActiveNegocio(negocioId) {
+      fetch('/api/session/switch-negocio/' + negocioId, {
+        method: 'POST'
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          window.location.reload();
+        } else {
+          alert('Error al cambiar de negocio: ' + (data.error || 'Desconocido'));
+        }
+      })
+      .catch(err => console.error(err));
+    }
+
+    function filtrarHerramientas() {
+      const q = document.getElementById('filtro-menu').value.trim().toLowerCase();
+      const cards = document.querySelectorAll('.card-herramienta');
+      
+      cards.forEach(card => {
+        const nombre = card.querySelector('.txt-nombre').textContent.toLowerCase();
+        if (nombre.includes(q)) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

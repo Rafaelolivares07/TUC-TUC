@@ -73,9 +73,27 @@
         <!-- Navbar mejorado con color de fondo y sombra -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
             <div class="container">
-                <a class="navbar-brand fw-bold" href="/">
-                    <i class="bi bi-truck me-2"></i>TUC TUC
-                </a>
+                <div class="d-flex align-items-center">
+                    <a class="navbar-brand fw-bold" href="/">
+                        <i class="bi bi-truck me-2"></i>TUC TUC
+                    </a>
+                    
+                    {% if negocio_activo %}
+                    <!-- Selector de Negocio en la Barra -->
+                    <div class="d-flex align-items-center ms-3 bg-white bg-opacity-10 rounded-pill px-2.5 py-1 border border-white border-opacity-10 text-white" style="cursor: pointer; padding-left: 10px; padding-right: 12px;" data-bs-toggle="modal" data-bs-target="#modalSwitchNegocio" title="Cambiar Negocio">
+                      {% if negocio_activo.logo_url %}
+                        <img src="{{ negocio_activo.logo_url }}" class="rounded-circle border border-light" style="height: 28px; width: 28px; object-fit: cover;">
+                      {% else %}
+                        <div class="rounded-circle border border-light bg-light text-primary text-center d-flex align-items-center justify-content-center fw-bold" style="height: 28px; width: 28px; font-size: 11px;">
+                          {{ negocio_activo.nombre[:2].upper() }}
+                        </div>
+                      {% endif %}
+                      <span class="ms-2 text-truncate d-none d-sm-inline fw-semibold text-white" style="max-width: 140px; font-size: 13px;">
+                        {{ negocio_activo.nombre }} <i class="bi bi-chevron-down ms-1 text-white-50" style="font-size: 9px;"></i>
+                      </span>
+                    </div>
+                    {% endif %}
+                </div>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
@@ -87,6 +105,12 @@
                                 <a class="nav-link" href="/inicio">
                                     <i class="bi bi-grid-fill me-1"></i>
                                     Dashboard
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link text-warning fw-bold" href="/admin/mi-menu">
+                                    <i class="bi bi-star-fill me-1 text-warning"></i>
+                                    Mi Menú
                                 </a>
                             </li>
                             <li class="nav-item">
@@ -153,5 +177,105 @@
     <!-- 5. Bloque para Scripts Específicos (como los de la factura o inicio) -->
     {% block scripts %}{% endblock %}
 
+    <!-- Modal Selector de Negocios -->
+    {% if negocio_activo %}
+    <div class="modal fade" id="modalSwitchNegocio" tabindex="-1" aria-labelledby="modalSwitchNegocioLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content shadow border-0" style="border-radius: 0.75rem;">
+          <div class="modal-header py-2.5 px-3 bg-light" style="border-top-left-radius: 0.75rem; border-top-right-radius: 0.75rem;">
+            <h6 class="modal-title fw-bold text-dark mb-0" id="modalSwitchNegocioLabel">Cambiar Negocio</h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="font-size: 0.75rem;"></button>
+          </div>
+          <div class="modal-body p-2">
+            <div class="list-group list-group-flush" id="business-switch-list">
+              {% for neg in session_negocios %}
+                <div class="list-group-item d-flex align-items-center justify-content-between p-2 rounded-2 border-0 mb-1 {% if neg.id == negocio_activo.id %}bg-primary bg-opacity-10 fw-bold text-primary{% else %}hover-bg-light{% endif %}" style="transition: all 0.2s; cursor: pointer;">
+                  <div class="d-flex align-items-center flex-grow-1" onclick="switchActiveNegocio({{ neg.id }})">
+                    {% if neg.logo_url %}
+                      <img src="{{ neg.logo_url }}" class="rounded-circle border {% if neg.id == negocio_activo.id %}border-primary{% else %}border-secondary{% endif %} me-2" style="height: 32px; width: 32px; object-fit: cover;">
+                    {% else %}
+                      <div class="rounded-circle border {% if neg.id == negocio_activo.id %}border-primary bg-primary text-white{% else %}border-secondary bg-secondary text-white{% endif %} text-center d-flex align-items-center justify-content-center fw-bold me-2" style="height: 32px; width: 32px; font-size: 12px;">
+                        {{ neg.nombre[:2].upper() }}
+                      </div>
+                    {% endif %}
+                    <span class="text-truncate text-dark" style="max-width: 140px; font-size: 13.5px;">{{ neg.nombre }}</span>
+                  </div>
+                  
+                  <!-- Subida de Logo (Solo si es Admin o si es el dueño) -->
+                  {% if 'rol' in session and (session['rol'] in ('Administrador', 'ClienteVFP') or neg.id == negocio_activo.id) %}
+                    <label class="btn btn-sm btn-link text-secondary py-0 px-1 border-0 ms-1 mb-0" title="Subir Logotipo" style="cursor: pointer;">
+                      <i class="bi bi-camera" style="font-size: 14px;"></i>
+                      <input type="file" class="d-none" accept="image/*" onchange="uploadBusinessLogo(event, {{ neg.id }})">
+                    </label>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Scripts para el Cambio de Negocio y Subida de Logo -->
+    <script>
+      function switchActiveNegocio(negocioId) {
+        fetch('/api/session/switch-negocio/' + negocioId, {
+          method: 'POST'
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            window.location.reload();
+          } else {
+            alert('Error al cambiar de negocio: ' + (data.error || 'Desconocido'));
+          }
+        })
+        .catch(err => console.error(err));
+      }
+
+      function uploadBusinessLogo(event, negocioId) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const formData = new FormData();
+        formData.append('logo', file);
+        
+        fetch('/api/negocio/' + negocioId + '/logo', {
+          method: 'POST',
+          body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            window.location.reload();
+          } else {
+            alert('Error al subir logotipo: ' + (data.error || 'Desconocido'));
+          }
+        })
+        .catch(err => console.error(err));
+      }
+    </script>
+
+    <!-- Botón flotante para regresar a Mi Menú (Bootstrap/JS) -->
+    <script>
+      (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('origin') === 'menu') {
+          const btn = document.createElement('div');
+          btn.style.position = 'fixed';
+          btn.style.bottom = '24px';
+          btn.style.right = '24px';
+          btn.style.zIndex = '99999';
+          btn.innerHTML = `
+            <a href="/admin/mi-menu" class="btn btn-dark shadow-lg rounded-pill px-4 py-2.5 border border-secondary d-flex align-items-center gap-2 text-decoration-none">
+              <i class="bi bi-house-door-fill text-warning"></i>
+              <span class="fw-bold text-white text-xs" style="font-size: 11px;">Regresar a Mi Menú</span>
+            </a>
+          `;
+          document.body.appendChild(btn);
+        }
+      })();
+    </script>
 </body>
 </html>

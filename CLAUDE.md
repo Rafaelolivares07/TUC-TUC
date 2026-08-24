@@ -2,9 +2,11 @@
 
 ## AL INICIO DE CADA SESIÓN — leer obligatorio
 Antes de responder cualquier cosa, leer estos archivos:
-1. `C:\Users\RAFAEL OLIVARES\Documents\docs\_sesion\reglas_trabajo.md`
-2. `C:\Users\RAFAEL OLIVARES\Documents\docs\_sesion\estado_activo.md`
-3. `C:\Users\RAFAEL OLIVARES\Documents\docs\tuctuc\convenios_desarrollo.md`
+1. `C:\Users\RAFAEL OLIVARES\Documents\docs\_sesion\INDICE_CENTRAL.md`
+2. `C:\Users\RAFAEL OLIVARES\Documents\docs\_sesion\reglas_trabajo.md`
+3. `C:\Users\RAFAEL OLIVARES\Documents\docs\_sesion\estado_activo.md`
+4. `C:\Users\RAFAEL OLIVARES\Documents\docs\desarrollo\tuctuc\convenios_desarrollo.md`
+
 
 ## PROTOCOLO DE INTERRUPCIÓN MÍNIMA (EVITAR PROMPTS)
 - **Evitar consola**: Preferir el uso de herramientas directas de lectura/escritura de archivos (`view_file`, `replace_file_content`, `write_to_file`, `list_dir`) ya que se ejecutan de forma silenciosa.

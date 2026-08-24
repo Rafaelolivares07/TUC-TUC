@@ -141,13 +141,13 @@
                 <a href="https://admin.tuc-tuc.co/admin/mantenimiento/{{ restaurante.tercero_id }}" class="tab-btn flex items-center gap-1">
                     🛠️ Mantenimiento
                 </a>
-                <a href="https://admin.tuc-tuc.co/admin/compras/{{ restaurante.tercero_id }}" class="tab-btn flex items-center gap-1">
-                    Compras y agotados
-                </a>
                 {% endif %}
                 {% if restaurante.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/negocio/{{ restaurante.tercero_id }}/config" class="tab-btn flex items-center gap-1">⚙️ Configuración</a>{% endif %}
                 <a href="https://admin.tuc-tuc.co/admin/contactos" class="tab-btn flex items-center gap-1">
                     👥 Contactos
+                </a>
+                <a href="/admin/mi-menu" class="tab-btn flex items-center gap-1 text-warning font-bold no-underline">
+                    ⭐ Mi Menú
                 </a>
             </div>
             <button class="hidden md:flex absolute right-0 top-0 bottom-0 z-10 px-2 bg-white/90 items-center text-gray-400 hover:text-gray-700 text-2xl font-light select-none" onclick="scrollNavTabs(200)">&#8250;</button>

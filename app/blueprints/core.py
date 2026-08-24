@@ -1140,3 +1140,578 @@ def api_webhook_render_deploy():
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── PORTAL DE ACCESOS DIRECTOS PERSONALIZADO (MI MENU) ───────────────────────
+
+@bp.route('/admin/mi-menu')
+def admin_mi_menu():
+    if 'rol' not in session or session['rol'] not in ('Administrador', 'ClienteVFP', 'Restaurante', 'Tienda', 'Vendedor'):
+        return redirect(url_for('auth.admin_login'))
+        
+    referer = request.referrer
+    if referer and '/admin/mi-menu' not in referer and ('/admin/' in referer or '/contabilidad/' in referer or '/vendedor/' in referer or '/mi-restaurante/' in referer or '/mi-tienda/' in referer):
+        session['last_dashboard_url'] = referer
+    
+    dashboard_url = session.get('last_dashboard_url')
+    if not dashboard_url:
+        rol = session.get('rol')
+        if rol == 'Vendedor':
+            dashboard_url = '/vendedor'
+        else:
+            dashboard_url = '/admin/area'
+            
+    nombre_display = session.get('nombre', session.get('nombre_usuario', 'Usuario'))
+    return render_template('mi_menu.html', 
+                           nombre=nombre_display, 
+                           dashboard_url=dashboard_url)
+
+
+@bp.route('/api/mi-menu/items', methods=['GET'])
+def api_mi_menu_items():
+    if 'rol' not in session or session['rol'] not in ('Administrador', 'ClienteVFP', 'Restaurante', 'Tienda', 'Vendedor'):
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    from ..db import get_db_connection
+    uid = session.get('usuario_id')
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT id, nombre, url, COALESCE(orden, 0) AS orden 
+            FROM menu_shortcuts_usuario 
+            WHERE usuario_id = %s 
+            ORDER BY orden ASC, id ASC
+        """, (uid,)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'items': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/mi-menu/item', methods=['POST'])
+def api_mi_menu_item_save():
+    if 'rol' not in session or session['rol'] not in ('Administrador', 'ClienteVFP', 'Restaurante', 'Tienda', 'Vendedor'):
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    from ..db import get_db_connection
+    uid = session.get('usuario_id')
+    data = request.get_json() or {}
+    item_id = data.get('id')
+    nombre = (data.get('nombre') or '').strip()
+    url = (data.get('url') or '').strip()
+    orden = int(data.get('orden') or 0)
+    
+    if not nombre or not url:
+        return jsonify({'ok': False, 'error': 'El nombre y la URL son requeridos.'}), 400
+        
+    try:
+        conn = get_db_connection()
+        if item_id:
+            # Update existing shortcut, verifying ownership
+            conn.execute("""
+                UPDATE menu_shortcuts_usuario 
+                SET nombre = %s, url = %s, orden = %s 
+                WHERE id = %s AND usuario_id = %s
+            """, (nombre, url, orden, int(item_id), uid))
+        else:
+            # Insert new shortcut
+            conn.execute("""
+                INSERT INTO menu_shortcuts_usuario (usuario_id, nombre, url, orden)
+                VALUES (%s, %s, %s, %s)
+            """, (uid, nombre, url, orden))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/negocio/<int:negocio_id>/logo', methods=['POST'])
+def api_negocio_logo_upload(negocio_id):
+    if 'rol' not in session or session['rol'] not in ('Administrador', 'ClienteVFP', 'Restaurante', 'Tienda', 'Vendedor'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 401
+    
+    uid = session.get('usuario_id')
+    role = session.get('rol')
+    tercero_id = session.get('chat_tercero_id')
+    
+    # Si no es administrador global, verificar si está vinculado al negocio
+    if role not in ('Administrador', 'ClienteVFP'):
+        if not tercero_id:
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        from ..db import get_db_connection
+        conn = get_db_connection()
+        link = conn.execute(
+            "SELECT 1 FROM terceros_negocios WHERE tercero_id = %s AND negocio_id = %s AND activo = TRUE",
+            (tercero_id, negocio_id)
+        ).fetchone()
+        conn.close()
+        if not link:
+            return jsonify({'ok': False, 'error': 'No tienes permisos en este negocio'}), 403
+            
+    if 'logo' not in request.files:
+        return jsonify({'ok': False, 'error': 'No se envió ninguna imagen'}), 400
+        
+    file = request.files['logo']
+    if file.filename == '':
+        return jsonify({'ok': False, 'error': 'Archivo vacío'}), 400
+        
+    # Validar formato
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ('.png', '.jpg', '.jpeg', '.webp', '.gif'):
+        return jsonify({'ok': False, 'error': 'Formato no permitido (solo imágenes)'}), 400
+        
+    try:
+        from PIL import Image
+        from flask import current_app
+        logos_dir = os.path.join(current_app.root_path, 'static', 'logos')
+        os.makedirs(logos_dir, exist_ok=True)
+        
+        filepath = os.path.join(logos_dir, f"{negocio_id}.png")
+        img = Image.open(file.stream)
+        img.save(filepath, format="PNG")
+        
+        return jsonify({'ok': True, 'logo_url': f"/static/logos/{negocio_id}.png"})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f"Error al procesar la imagen: {str(e)}"}), 500
+
+
+
+@bp.route('/api/mi-menu/item/<int:item_id>', methods=['DELETE'])
+def api_mi_menu_item_delete(item_id):
+    if 'rol' not in session or session['rol'] not in ('Administrador', 'ClienteVFP', 'Restaurante', 'Tienda', 'Vendedor'):
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    from ..db import get_db_connection
+    uid = session.get('usuario_id')
+    try:
+        conn = get_db_connection()
+        conn.execute("DELETE FROM menu_shortcuts_usuario WHERE id = %s AND usuario_id = %s", (item_id, uid))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.app_context_processor
+def inject_negocios_context():
+    if 'usuario_id' not in session:
+        return {'session_negocios': [], 'negocio_activo': None}
+    
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        role = session.get('rol')
+        tercero_id = session.get('chat_tercero_id')
+        
+        negocios = []
+        if role in ('Administrador', 'ClienteVFP'):
+            # El superadmin ve todos los negocios en el sistema
+            rows = conn.execute("""
+                SELECT id, nombre FROM terceros 
+                WHERE tipo_tercero = 'negocio' 
+                ORDER BY id
+            """).fetchall()
+            negocios = [dict(r) for r in rows]
+        else:
+            # Los demás usuarios ven solo los negocios vinculados en terceros_negocios
+            if tercero_id:
+                rows = conn.execute("""
+                    SELECT t.id, t.nombre 
+                    FROM terceros_negocios tn
+                    JOIN terceros t ON t.id = tn.negocio_id
+                    WHERE tn.tercero_id = %s AND tn.activo = TRUE
+                    ORDER BY t.id
+                """, (tercero_id,)).fetchall()
+                negocios = [dict(r) for r in rows]
+                
+        # Para cada negocio, verificar si existe su archivo de logo
+        import os
+        from flask import current_app
+        logos_dir = os.path.join(current_app.root_path, 'static', 'logos')
+        for neg in negocios:
+            filename = f"{neg['id']}.png"
+            if os.path.exists(os.path.join(logos_dir, filename)):
+                neg['logo_url'] = f"/static/logos/{filename}"
+            else:
+                neg['logo_url'] = None
+                
+        # Determinar negocio activo
+        active_id = session.get('active_negocio_id')
+        active_neg = None
+        if active_id:
+            active_neg = next((n for n in negocios if n['id'] == active_id), None)
+            
+        if not active_neg and negocios:
+            active_neg = negocios[0]
+            session['active_negocio_id'] = active_neg['id']
+            
+        return {
+            'session_negocios': negocios,
+            'negocio_activo': active_neg
+        }
+    except Exception:
+        return {'session_negocios': [], 'negocio_activo': None}
+    finally:
+        try: conn.close()
+        except: pass
+
+
+@bp.route('/api/session/switch-negocio/<int:negocio_id>', methods=['POST'])
+def api_session_switch_negocio(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+        
+    role = session.get('rol')
+    tercero_id = session.get('chat_tercero_id')
+    
+    # Validar que el usuario tenga acceso al negocio
+    if role not in ('Administrador', 'ClienteVFP'):
+        if not tercero_id:
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        from ..db import get_db_connection
+        conn = get_db_connection()
+        link = conn.execute(
+            "SELECT 1 FROM terceros_negocios WHERE tercero_id = %s AND negocio_id = %s AND activo = TRUE",
+            (tercero_id, negocio_id)
+        ).fetchone()
+        conn.close()
+        if not link:
+            return jsonify({'ok': False, 'error': 'No tienes permisos en este negocio'}), 403
+            
+    session['active_negocio_id'] = negocio_id
+    session.modified = True
+    return jsonify({'ok': True})
+
+
+@bp.route('/admin/permisos')
+def core_gestion_permisos():
+    if 'rol' not in session or session['rol'] not in ('Administrador', 'ClienteVFP', 'Restaurante', 'Tienda', 'Vendedor'):
+        return redirect(url_for('auth.admin_login'))
+        
+    role = session.get('rol')
+    tercero_id = session.get('chat_tercero_id')
+    active_negocio_id = session.get('active_negocio_id')
+    
+    # Si no es administrador global, validar que tenga el permiso 'gestion_permisos' para el negocio activo
+    if role not in ('Administrador', 'ClienteVFP'):
+        if not active_negocio_id or not tercero_id:
+            abort(403)
+        from ..db import get_db_connection
+        conn = get_db_connection()
+        has_perm = conn.execute("""
+            SELECT 1 FROM permisos_terceros pt
+            JOIN pantallas p ON p.id = pt.pantalla_id
+            WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave = 'gestion_permisos'
+        """, (tercero_id, active_negocio_id)).fetchone()
+        conn.close()
+        if not has_perm:
+            abort(403)
+            
+    # Obtener las pantallas que este usuario tiene derecho a asignar
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    if role in ('Administrador', 'ClienteVFP'):
+        pantallas = conn.execute("SELECT id, nombre, clave, icono FROM pantallas ORDER BY id").fetchall()
+    else:
+        pantallas = conn.execute("""
+            SELECT p.id, p.nombre, p.clave, p.icono 
+            FROM permisos_terceros pt
+            JOIN pantallas p ON p.id = pt.pantalla_id
+            WHERE pt.tercero_id = %s AND pt.negocio_id = %s
+            ORDER BY p.id
+        """, (tercero_id, active_negocio_id)).fetchall()
+    conn.close()
+    
+    return render_template('gestion_permisos.html', 
+                           pantallas_disponibles=[dict(p) for p in pantallas])
+
+
+@bp.route('/api/permisos/buscar-terceros')
+def api_permisos_buscar_terceros():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify({'results': []})
+        
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    rows = conn.execute("""
+        SELECT id, nombre, telefono 
+        FROM terceros 
+        WHERE (nombre ILIKE %s OR telefono ILIKE %s) 
+          AND (tipo_tercero IS NULL OR tipo_tercero != 'negocio')
+        LIMIT 15
+    """, (f"%{q}%", f"%{q}%")).fetchall()
+    conn.close()
+    
+    return jsonify({'results': [dict(r) for r in rows]})
+
+
+@bp.route('/api/permisos/tercero/<int:tercero_id>/negocio/<int:negocio_id>')
+def api_permisos_obtener(tercero_id, negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+        
+    role = session.get('rol')
+    caller_tercero_id = session.get('chat_tercero_id')
+    if role not in ('Administrador', 'ClienteVFP'):
+        if not caller_tercero_id:
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        from ..db import get_db_connection
+        conn = get_db_connection()
+        link = conn.execute(
+            "SELECT 1 FROM terceros_negocios WHERE tercero_id = %s AND negocio_id = %s AND activo = TRUE",
+            (caller_tercero_id, negocio_id)
+        ).fetchone()
+        conn.close()
+        if not link:
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+            
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    rows = conn.execute("""
+        SELECT pantalla_id FROM permisos_terceros 
+        WHERE tercero_id = %s AND negocio_id = %s
+    """, (tercero_id, negocio_id)).fetchall()
+    conn.close()
+    
+    return jsonify({
+        'ok': True,
+        'pantallas_autorizadas': [r['pantalla_id'] for r in rows]
+    })
+
+
+@bp.route('/api/permisos/guardar', methods=['POST'])
+def api_permisos_guardar():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+        
+    data = request.get_json()
+    target_tercero_id = data.get('tercero_id')
+    negocio_id = data.get('negocio_id')
+    pantallas_deseadas = data.get('pantallas', [])
+    
+    if not target_tercero_id or not negocio_id:
+        return jsonify({'ok': False, 'error': 'Datos faltantes'}), 400
+        
+    role = session.get('rol')
+    caller_tercero_id = session.get('chat_tercero_id')
+    
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        if role not in ('Administrador', 'ClienteVFP'):
+            if not caller_tercero_id:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+                
+            # 1. Validar que el delegador tiene acceso al negocio y al permiso 'gestion_permisos'
+            link = conn.execute(
+                "SELECT 1 FROM terceros_negocios WHERE tercero_id = %s AND negocio_id = %s AND activo = TRUE",
+                (caller_tercero_id, negocio_id)
+            ).fetchone()
+            if not link:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'No autorizado en este negocio'}), 403
+                
+            has_perm = conn.execute("""
+                SELECT 1 FROM permisos_terceros pt
+                JOIN pantallas p ON p.id = pt.pantalla_id
+                WHERE pt.tercero_id = %s AND pt.negocio_id = %s AND p.clave = 'gestion_permisos'
+            """, (caller_tercero_id, negocio_id)).fetchone()
+            if not has_perm:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'No tienes permisos de gestión de accesos'}), 403
+                
+            # 2. Validar que el delegador no esté asignando pantallas que él mismo no posee
+            mis_pantallas = conn.execute("""
+                SELECT pantalla_id FROM permisos_terceros 
+                WHERE tercero_id = %s AND negocio_id = %s
+            """, (caller_tercero_id, negocio_id)).fetchall()
+            mis_pantallas_ids = {r['pantalla_id'] for r in mis_pantallas}
+            
+            for p_id in pantallas_deseadas:
+                if p_id not in mis_pantallas_ids:
+                    conn.close()
+                    return jsonify({'ok': False, 'error': f'No puedes otorgar la pantalla {p_id} porque no la posees'}), 403
+                    
+        # 3. Guardar permisos
+        # Asegurar vinculación en terceros_negocios
+        conn.execute("""
+            INSERT INTO terceros_negocios (tercero_id, negocio_id, activo)
+            VALUES (%s, %s, TRUE)
+            ON CONFLICT (tercero_id, negocio_id) DO UPDATE SET activo = TRUE
+        """, (target_tercero_id, negocio_id))
+        
+        # Borrar permisos anteriores para este negocio
+        if role in ('Administrador', 'ClienteVFP'):
+            conn.execute("""
+                DELETE FROM permisos_terceros 
+                WHERE tercero_id = %s AND negocio_id = %s
+            """, (target_tercero_id, negocio_id))
+        else:
+            # El delegador de negocio solo borra los permisos que él mismo posee
+            mis_pantallas = conn.execute("""
+                SELECT pantalla_id FROM permisos_terceros 
+                WHERE tercero_id = %s AND negocio_id = %s
+            """, (caller_tercero_id, negocio_id)).fetchall()
+            mis_pantallas_ids = {r['pantalla_id'] for r in mis_pantallas}
+            
+            conn.execute("""
+                DELETE FROM permisos_terceros 
+                WHERE tercero_id = %s AND negocio_id = %s AND pantalla_id IN %s
+            """, (target_tercero_id, negocio_id, tuple(mis_pantallas_ids) if mis_pantallas_ids else (-1,)))
+            
+        # Insertar nuevos
+        for p_id in pantallas_deseadas:
+            conn.execute("""
+                INSERT INTO permisos_terceros (tercero_id, negocio_id, pantalla_id, otorgado_por)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (tercero_id, negocio_id, pantalla_id) DO NOTHING
+            """, (target_tercero_id, negocio_id, p_id, caller_tercero_id or target_tercero_id))
+            
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.before_app_request
+def check_dynamic_permissions():
+    if 'usuario_id' not in session:
+        return
+        
+    endpoint = request.endpoint
+    if not endpoint:
+        return
+        
+    # Verificar si este endpoint corresponde a una pantalla registrada
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    pantalla = conn.execute(
+        "SELECT id, clave, nombre FROM pantallas WHERE endpoint = %s LIMIT 1",
+        (endpoint,)
+    ).fetchone()
+    conn.close()
+    
+    if not pantalla:
+        return
+        
+    # 1. Superadmin bypass completo
+    role = session.get('rol')
+    if role in ('Administrador', 'ClienteVFP'):
+        return
+        
+    tercero_id = session.get('chat_tercero_id')
+    negocio_id = session.get('active_negocio_id')
+    
+    if not tercero_id or not negocio_id:
+        abort(403)
+        
+    # 2. Consultar si tiene el permiso asignado
+    conn = get_db_connection()
+    permiso = conn.execute("""
+        SELECT 1 FROM permisos_terceros 
+        WHERE tercero_id = %s AND negocio_id = %s AND pantalla_id = %s
+    """, (tercero_id, negocio_id, pantalla['id'])).fetchone()
+    conn.close()
+    
+    if permiso:
+        return
+        
+    # 3. Periodo de gracia para usuarios existentes (Tercero ID <= 107)
+    if tercero_id <= 107:
+        return
+        
+    abort(403)
+
+
+def _resolver_url_pantalla(endpoint, negocio_id, slug):
+    from flask import url_for
+    try:
+        if 'negocio_id' in endpoint or endpoint in ('inventarios.admin_inventario', 'contabilidad.admin_contabilidad'):
+            return url_for(endpoint, negocio_id=negocio_id)
+        elif 'slug' in endpoint or endpoint in ('tiendas.admin_caja',):
+            return url_for(endpoint, slug=slug) if slug else '#'
+        else:
+            return url_for(endpoint)
+    except Exception:
+        return '#'
+
+
+@bp.route('/inicio')
+def colaborador_inicio():
+    if 'usuario_id' not in session:
+        return redirect(url_for('auth.admin_login'))
+        
+    role = session.get('rol')
+    tercero_id = session.get('chat_tercero_id')
+    active_id = session.get('active_negocio_id')
+    nombre = session.get('nombre', '')
+    
+    # Obtener el slug del negocio activo (buscando en restaurantes y tiendas)
+    slug = None
+    if active_id:
+        from ..db import get_db_connection
+        conn = get_db_connection()
+        r = conn.execute("SELECT slug FROM restaurantes WHERE tercero_id = %s LIMIT 1", (active_id,)).fetchone()
+        if r:
+            slug = r['slug']
+        else:
+            t = conn.execute("SELECT slug FROM tiendas WHERE tercero_id = %s LIMIT 1", (active_id,)).fetchone()
+            if t:
+                slug = t['slug']
+        conn.close()
+        
+    # Obtener pantallas autorizadas
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    if role in ('Administrador', 'ClienteVFP'):
+        # El superadmin ve todas las pantallas
+        rows = conn.execute("SELECT id, nombre, clave, endpoint, icono FROM pantallas ORDER BY id").fetchall()
+    else:
+        # Los colaboradores ven solo sus pantallas permitidas para el negocio activo
+        if tercero_id and active_id:
+            rows = conn.execute("""
+                SELECT p.id, p.nombre, p.clave, p.endpoint, p.icono 
+                FROM permisos_terceros pt
+                JOIN pantallas p ON p.id = pt.pantalla_id
+                WHERE pt.tercero_id = %s AND pt.negocio_id = %s
+                ORDER BY p.id
+            """, (tercero_id, active_id)).fetchall()
+        else:
+            rows = []
+    conn.close()
+    
+    pantallas_autorizadas = []
+    for r in rows:
+        d = dict(r)
+        d['resolved_url'] = _resolver_url_pantalla(d['endpoint'], active_id, slug)
+        pantallas_autorizadas.append(d)
+        
+    return render_template('inicio.html', 
+                           nombre=nombre,
+                           pantallas_autorizadas=pantallas_autorizadas)
+
+
+@bp.route('/admin/pantallas-catalogo')
+def core_pantallas_catalogo():
+    if 'rol' not in session or session['rol'] not in ('Administrador', 'ClienteVFP'):
+        abort(403)
+        
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    rows = conn.execute("SELECT id, nombre, clave, endpoint, icono FROM pantallas ORDER BY id").fetchall()
+    conn.close()
+    
+    return render_template('pantallas_catalogo.html', 
+                           pantallas=[dict(r) for r in rows])

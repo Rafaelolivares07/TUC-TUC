@@ -60,6 +60,7 @@
       <button onclick="cambiarTab('tipos')"  id="tab-tipos"  class="tab-btn">📄 Tipos Doc</button>
       <button onclick="cambiarTab('params')" id="tab-params" class="tab-btn">⚙️ Parametrización</button>
       <button onclick="cambiarTab('pago_metodos')" id="tab-pago_metodos" class="tab-btn">💳 Métodos de Pago</button>
+      <button onclick="cambiarTab('gastos')" id="tab-gastos" class="tab-btn">💰 Gastos</button>
       <button onclick="cambiarTab('grupos')" id="tab-grupos" class="tab-btn">🗂️ Grupos Inv.</button>
       <button onclick="cambiarTab('manual')" id="tab-manual" class="tab-btn">✏️ Comprobante</button>
       <button onclick="cambiarTab('comps')"  id="tab-comps"  class="tab-btn">📚 Comprobantes</button>
@@ -124,6 +125,7 @@
           <option value="cierre">Cierre de Periodo (Cierre)</option>
           <option value="cobro">Recaudos / Cobros</option>
           <option value="pago">Pagos / Egresos</option>
+          <option value="gasto">Relación de Gastos (Gastos)</option>
         </select>
       </div>
       <div class="flex items-center gap-4 mb-4">
@@ -401,18 +403,21 @@
         </div>
       </div>
 
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead><tr class="bg-gray-50 text-xs uppercase text-gray-500">
-            <th class="px-3 py-2 text-left">Tipo</th>
-            <th class="px-3 py-2 text-left">Número</th>
-            <th class="px-3 py-2 text-left">Fecha</th>
-            <th class="px-3 py-2 text-left">Descripción</th>
-            <th class="px-3 py-2 text-right">Débitos</th>
-            <th class="px-3 py-2 text-right">Créditos</th>
-            <th class="px-3 py-2 text-center">Líneas</th>
-            <th class="px-3 py-2 text-center w-20">PDF</th>
-          </tr></thead>
+      <div class="overflow-auto custom-scrollbar border border-gray-150 rounded-xl" style="max-height: 62vh;">
+        <table class="w-full text-sm border-collapse bg-white">
+          <thead>
+            <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 sticky top-0 z-10 shadow-xs border-b border-gray-150">
+              <th onclick="ordenarComprobantes('tipo')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Tipo <span id="sort-icon-tipo">↕</span></th>
+              <th onclick="ordenarComprobantes('numero')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Número <span id="sort-icon-numero">↕</span></th>
+              <th onclick="ordenarComprobantes('fecha')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Fecha <span id="sort-icon-fecha">↕</span></th>
+              <th onclick="ordenarComprobantes('tercero')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Tercero <span id="sort-icon-tercero">↕</span></th>
+              <th onclick="ordenarComprobantes('fecha_grabacion')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Fecha Registro <span id="sort-icon-fecha_grabacion">↕</span></th>
+              <th onclick="ordenarComprobantes('total_debitos')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-right">Débitos <span id="sort-icon-total_debitos">↕</span></th>
+              <th onclick="ordenarComprobantes('total_creditos')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-right">Créditos <span id="sort-icon-total_creditos">↕</span></th>
+              <th onclick="ordenarComprobantes('num_lineas')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-center">Líneas <span id="sort-icon-num_lineas">↕</span></th>
+              <th class="px-3 py-2 text-center w-28 bg-gray-50 sticky top-0">Acciones</th>
+            </tr>
+          </thead>
           <tbody id="comps-body"></tbody>
         </table>
       </div>
@@ -444,6 +449,7 @@
               <th class="px-4 py-3 text-left">Cuenta de Pago (Crédito en Compras)</th>
               <th class="px-4 py-3 text-left">Cuenta Recaudo (Saldos)</th>
               <th class="px-4 py-3 text-left">Cuenta Pago (Saldos)</th>
+              <th class="px-4 py-3 text-left">Cuenta Gastos (Egresos Gastos)</th>
               <th class="px-4 py-3 text-center w-28">Acciones</th>
             </tr>
           </thead>
@@ -452,6 +458,11 @@
           </tbody>
         </table>
       </div>
+    </div>
+
+    <!-- TAB: GASTOS -->
+    <div id="panel-gastos" class="p-5 hidden">
+      {% include "gastos_pane.html" %}
     </div>
 
     <!-- ═══ TAB: CONSULTA MOVIMIENTOS ═══ -->
@@ -674,7 +685,7 @@
 
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
-const TABS = ['puc','tipos','params','pago_metodos','grupos','progs','manual','comps', 'consulta', 'balance'];
+const TABS = ['puc','tipos','params','pago_metodos','gastos','grupos','progs','manual','comps', 'consulta', 'balance'];
 let tiposDocs = [];
 let variablesModulo = [];
 let paramActivo = null;
@@ -689,6 +700,14 @@ function cambiarTab(t) {
     const btn = document.getElementById(`tab-${x}`);
     if (btn) btn.classList.toggle('tab-active', x === t);
   });
+
+  if (history.replaceState) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', t);
+    history.replaceState(null, '', url.pathname + url.search);
+  }
+  const cleanTabName = t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ');
+  document.title = `${cleanTabName} — Contabilidad`;
 
   // Dynamic width control for Consulta / Balance tabs
   const container = document.getElementById('main-container');
@@ -1438,7 +1457,7 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
           cuenta_puc_id: l.cuenta_id,
           concepto: l.concepto || '',
           monto: parseFloat(l.monto),
-          tipo_mov: l.tipo === 'debito' ? 'D' : 'C'
+          tipo_mov: (l.tipo === 'debito' || l.tipo === 'D') ? 'D' : 'C'
         });
       }
       calcBalance();
@@ -1456,9 +1475,22 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
 let currentCompPage = 1;
 const compPageLimit = 50;
 let compSoloDescuadrados = false;
+let compSortCol = 'fecha';
+let compSortDir = 'desc';
 
 function toggleFiltroDescuadrados() {
   compSoloDescuadrados = !compSoloDescuadrados;
+  currentCompPage = 1;
+  cargarComprobantes();
+}
+
+function ordenarComprobantes(col) {
+  if (compSortCol === col) {
+    compSortDir = compSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    compSortCol = col;
+    compSortDir = 'desc';
+  }
   currentCompPage = 1;
   cargarComprobantes();
 }
@@ -1468,7 +1500,7 @@ async function cargarComprobantes() {
   const hasta = document.getElementById('comp-hasta').value;
   const tipo  = document.getElementById('comp-tipo-f').value.trim();
   
-  let qs = `?page=${currentCompPage}&limit=${compPageLimit}&solo_descuadrados=${compSoloDescuadrados}&`;
+  let qs = `?page=${currentCompPage}&limit=${compPageLimit}&solo_descuadrados=${compSoloDescuadrados}&sort_col=${compSortCol}&sort_dir=${compSortDir}&`;
   if (desde) qs += `desde=${desde}&`;
   if (hasta) qs += `hasta=${hasta}&`;
   if (tipo)  qs += `tipo=${encodeURIComponent(tipo)}&`;
@@ -1486,7 +1518,7 @@ async function cargarComprobantes() {
   // Render Rows
   const tbody = document.getElementById('comps-body');
   if (!data.comprobantes || data.comprobantes.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-4 text-sm">Sin comprobantes.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4 text-sm">Sin comprobantes.</td></tr>';
     actualizarPaginacionUI(0, 0, 0);
     return;
   }
@@ -1525,7 +1557,8 @@ async function cargarComprobantes() {
         </div>
       </td>
       <td class="px-3 py-2.5 text-xs text-gray-500 font-mono">${c.fecha}</td>
-      <td class="px-3 py-2.5 text-xs text-gray-600 truncate max-w-[200px]" title="${c.descripcion||''}">${c.descripcion||''}</td>
+      <td class="px-3 py-2.5 text-xs text-gray-600 truncate max-w-[200px]" title="${c.tercero || ''}">${c.tercero || '—'}</td>
+      <td class="px-3 py-2.5 text-xs text-gray-500 font-mono">${c.fecha_grabacion || '—'}</td>
       <td class="px-3 py-2.5 text-right font-mono text-xs text-green-700 font-medium">$${parseFloat(c.total_debitos).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
       <td class="px-3 py-2.5 text-right font-mono text-xs text-blue-700 font-medium">$${parseFloat(c.total_creditos).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
       <td class="px-3 py-2.5 text-center text-xs font-bold text-gray-500">${c.num_lineas}</td>
@@ -1550,6 +1583,21 @@ async function cargarComprobantes() {
   // Update buttons state
   document.getElementById('comp-btn-prev').disabled = (currentCompPage <= 1);
   document.getElementById('comp-btn-next').disabled = (currentCompPage >= data.pages);
+
+  // Update sort icons in headers
+  const cols = ['tipo', 'numero', 'fecha', 'tercero', 'fecha_grabacion', 'total_debitos', 'total_creditos', 'num_lineas'];
+  cols.forEach(c => {
+    const el = document.getElementById(`sort-icon-${c}`);
+    if (el) {
+      if (compSortCol === c) {
+        el.textContent = compSortDir === 'asc' ? ' ▲' : ' ▼';
+        el.className = 'text-indigo-600 font-bold';
+      } else {
+        el.textContent = ' ↕';
+        el.className = 'text-gray-300';
+      }
+    }
+  });
 }
 
 function actualizarPaginacionUI(start, end, total) {
@@ -1593,15 +1641,120 @@ async function toggleDetalleComprobante(row, tipoDoc, numDoc) {
       <tr class="hover:bg-gray-100/80 transition border-b border-gray-100/50">
         <td class="px-3 py-1.5 font-mono text-[11px] text-gray-500">${l.cuenta}</td>
         <td class="px-3 py-1.5 text-[11px] text-gray-700">${l.cuenta_nombre || ''}</td>
-        <td class="px-3 py-1.5 text-[11px] text-gray-600">${l.concepto || ''}</td>
-        <td class="px-3 py-1.5 text-right font-mono text-[11px] text-green-700 font-medium">${l.tipo === 'debito' ? '$' + parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2}) : ''}</td>
-        <td class="px-3 py-1.5 text-right font-mono text-[11px] text-blue-700 font-medium">${l.tipo === 'credito' ? '$' + parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2}) : ''}</td>
+        <td class="px-3 py-1.5 text-[11px] text-gray-650">${l.concepto || ''}</td>
+        <td class="px-3 py-1.5 text-right font-mono text-[11px] text-green-700 font-medium">${(l.tipo === 'debito' || l.tipo === 'D') ? '$' + parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2}) : ''}</td>
+        <td class="px-3 py-1.5 text-right font-mono text-[11px] text-blue-700 font-medium">${(l.tipo === 'credito' || l.tipo === 'C') ? '$' + parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2}) : ''}</td>
       </tr>
     `).join('');
     
+    let rowMovsHtml = '';
+    if (data.movimientos_inventario && data.movimientos_inventario.length > 0) {
+      let movsLines = data.movimientos_inventario.map(m => `
+        <tr class="hover:bg-gray-100/80 transition border-b border-gray-100/50">
+          <td class="px-3 py-1.5 text-[11px] text-gray-700 font-semibold">${m.nombre_producto}</td>
+          <td class="px-3 py-1.5 text-[11px] text-center">
+            <span class="badge" style="${m.tipo === 'entrada' ? 'background:#d1fae5;color:#065f46' : 'background:#fee2e2;color:#991b1b'}">
+              ${m.tipo}
+            </span>
+          </td>
+          <td class="px-3 py-1.5 text-[11px] text-gray-650">${m.motivo || ''}</td>
+          <td class="px-3 py-1.5 text-right font-mono text-[11px]">${parseFloat(m.cantidad).toLocaleString('es-CO')}</td>
+          <td class="px-3 py-1.5 text-right font-mono text-[11px]">$${parseFloat(m.valor_unitario).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+          <td class="px-3 py-1.5 text-right font-mono text-[11px] font-bold text-gray-800">$${parseFloat(m.valor_total).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+          <td class="px-3 py-1.5 text-[11px] text-gray-500 max-w-[150px] truncate" title="${m.notas || ''}">${m.notas || ''}</td>
+        </tr>
+      `).join('');
+      
+      rowMovsHtml = `
+        <div class="border border-gray-150 rounded-xl overflow-hidden bg-white shadow-inner max-w-4xl ml-4 mt-3">
+          <div class="bg-gray-50 px-3 py-1.5 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+            📦 Movimientos de Inventario Asociados
+          </div>
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-gray-100 text-gray-600 font-semibold border-b border-gray-200">
+                <th class="px-3 py-2">Producto</th>
+                <th class="px-3 py-2 text-center w-24">Tipo</th>
+                <th class="px-3 py-2 w-28">Motivo</th>
+                <th class="px-3 py-2 text-right w-24">Cantidad</th>
+                <th class="px-3 py-2 text-right w-32">Valor Unit.</th>
+                <th class="px-3 py-2 text-right w-32">Valor Total</th>
+                <th class="px-3 py-2 w-48">Notas</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              ${movsLines}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    
+    let rowPedidoHtml = '';
+    if (data.pedido) {
+      let itemsLines = (data.pedido_items || []).map(it => `
+        <tr class="hover:bg-gray-100/80 transition border-b border-gray-100/50">
+          <td class="px-3 py-1.5 text-[11px] text-gray-700 font-semibold">${it.nombre_producto}</td>
+          <td class="px-3 py-1.5 text-right font-mono text-[11px]">${it.cantidad}</td>
+          <td class="px-3 py-1.5 text-right font-mono text-[11px]">$${parseFloat(it.precio_unitario).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+          <td class="px-3 py-1.5 text-right font-mono text-[11px] font-bold text-gray-800">$${(parseFloat(it.precio_unitario) * it.cantidad).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+        </tr>
+      `).join('');
+
+      rowPedidoHtml = `
+        <div class="border border-gray-150 rounded-xl overflow-hidden bg-white shadow-inner max-w-4xl ml-4 mt-3">
+          <div class="bg-gray-50 px-3 py-1.5 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider flex justify-between items-center">
+            <span>🧾 Registro de Facturación Asociado</span>
+            <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:9px">Total: $${parseFloat(data.pedido.total).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+          </div>
+          
+          <div class="p-3 bg-gray-50/30 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs border-b border-gray-150">
+            <div>
+              <span class="text-gray-400 font-semibold uppercase text-[9px] block">Cliente</span>
+              <span class="font-bold text-gray-800">${data.pedido.nombre_cliente || 'Cliente General'}</span>
+              ${data.pedido.telefono_cliente ? `<span class="text-gray-500 text-[10px] block">📞 ${data.pedido.telefono_cliente}</span>` : ''}
+            </div>
+            <div>
+              <span class="text-gray-400 font-semibold uppercase text-[9px] block">Cajero / Registro</span>
+              <span class="font-medium text-gray-700">${data.pedido.nombre_cajero || 'POS/Caja'}</span>
+              <span class="text-gray-500 text-[10px] block">📅 ${data.pedido.created_at || ''}</span>
+            </div>
+            <div>
+              <span class="text-gray-400 font-semibold uppercase text-[9px] block">Método / Entrega</span>
+              <span class="font-medium text-gray-700 uppercase">${data.pedido.metodo_pago || '—'}</span>
+              <span class="text-gray-500 text-[10px] block">${data.pedido.tipo_entrega || ''}</span>
+            </div>
+            <div>
+              <span class="text-gray-400 font-semibold uppercase text-[9px] block">Estado</span>
+              <span class="inline-block px-2 py-0.5 rounded-full font-bold text-[10px] uppercase" style="${data.pedido.estado === 'entregado' ? 'background:#d1fae5;color:#065f46' : 'background:#fee2e2;color:#991b1b'}">
+                ${data.pedido.estado || '—'}
+              </span>
+            </div>
+          </div>
+
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-gray-100 text-gray-600 font-semibold border-b border-gray-200">
+                <th class="px-3 py-2">Producto</th>
+                <th class="px-3 py-2 text-right w-24">Cant.</th>
+                <th class="px-3 py-2 text-right w-32">Precio Unit.</th>
+                <th class="px-3 py-2 text-right w-32">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              ${itemsLines}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    
     detailTr.innerHTML = `
-      <td colspan="8" class="p-3">
+      <td colspan="9" class="p-3">
         <div class="border border-gray-150 rounded-xl overflow-hidden bg-white shadow-inner max-w-4xl ml-4">
+          <div class="bg-gray-50 px-3 py-1.5 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+            📒 Asientos Contables
+          </div>
           <table class="w-full text-left text-xs border-collapse">
             <thead>
               <tr class="bg-gray-100 text-gray-600 font-semibold border-b border-gray-200">
@@ -1617,6 +1770,8 @@ async function toggleDetalleComprobante(row, tipoDoc, numDoc) {
             </tbody>
           </table>
         </div>
+        ${rowMovsHtml}
+        ${rowPedidoHtml}
       </td>
     `;
     
@@ -1843,19 +1998,19 @@ function acPUCGenerico(input, callback) {
 
 async function cargarPagoMetodos() {
   const tbody = document.getElementById('pago_metodos-body');
-  tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400">Cargando métodos de pago...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-gray-400">Cargando métodos de pago...</td></tr>';
   try {
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`);
     const d = await r.json();
     if (!d.ok) {
-      tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 text-center text-red-500">${d.error}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-center text-red-500">${d.error}</td></tr>`;
       return;
     }
     
     metodosConfigurados = d.metodos || [];
     tbody.innerHTML = '';
     if (metodosConfigurados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-4 text-center text-gray-400">No se encontraron métodos de pago habilitados. Habilítelos primero en la configuración del negocio.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-gray-400">No se encontraron métodos de pago habilitados. Habilítelos primero en la configuración del negocio.</td></tr>';
       return;
     }
     
@@ -1864,6 +2019,7 @@ async function cargarPagoMetodos() {
       const pagText = m.pago_codigo ? `${m.pago_codigo} — ${m.pago_nombre}` : '';
       const recSaldosText = m.recaudo_saldos_codigo ? `${m.recaudo_saldos_codigo} — ${m.recaudo_saldos_nombre}` : '';
       const pagSaldosText = m.pago_saldos_codigo ? `${m.pago_saldos_codigo} — ${m.pago_saldos_nombre}` : '';
+      const gasText = m.cuenta_gastos_codigo ? `${m.cuenta_gastos_codigo} — ${m.cuenta_gastos_nombre}` : '';
       
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-gray-50';
@@ -1920,6 +2076,18 @@ async function cargarPagoMetodos() {
             <div class="ac-drop hidden"></div>
           </div>
         </td>
+        <td class="px-2 py-3 relative">
+          <div class="relative flex items-center">
+            <input type="text" id="gas-input-${idx}" placeholder="Buscar cuenta..." 
+                   class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
+                   value="${gasText}"
+                   oninput="buscarPUCInput(this, ${idx}, 'gastos')">
+            <span id="gas-status-${idx}" class="absolute right-2 text-green-500 hidden text-[11px]" title="Cuenta contable validada y guardada">✅</span>
+            <span id="gas-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
+            <input type="hidden" id="gas-id-${idx}" value="${m.cuenta_gastos_id || ''}">
+            <div class="ac-drop hidden"></div>
+          </div>
+        </td>
         <td class="px-4 py-3 text-center">
           <button id="btn-save-${idx}" onclick="guardarFilaMetodo(${idx})"
                   class="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 mx-auto shadow-sm">
@@ -1931,7 +2099,7 @@ async function cargarPagoMetodos() {
       actualizarIndicadoresFila(idx);
     });
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
   }
 }
 
@@ -1972,6 +2140,7 @@ function actualizarIndicadoresFila(idx) {
   const pagId = document.getElementById(`pag-id-${idx}`).value;
   const recSaldosId = document.getElementById(`rec-saldos-id-${idx}`).value;
   const pagSaldosId = document.getElementById(`pag-saldos-id-${idx}`).value;
+  const gasId = document.getElementById(`gas-id-${idx}`).value;
   
   const recStatus = document.getElementById(`rec-status-${idx}`);
   const recWarn = document.getElementById(`rec-warn-${idx}`);
@@ -1982,6 +2151,9 @@ function actualizarIndicadoresFila(idx) {
   const recSaldosWarn = document.getElementById(`rec-saldos-warn-${idx}`);
   const pagSaldosStatus = document.getElementById(`pag-saldos-status-${idx}`);
   const pagSaldosWarn = document.getElementById(`pag-saldos-warn-${idx}`);
+
+  const gasStatus = document.getElementById(`gas-status-${idx}`);
+  const gasWarn = document.getElementById(`gas-warn-${idx}`);
   
   if (recId) {
     recStatus.classList.remove('hidden');
@@ -2014,6 +2186,14 @@ function actualizarIndicadoresFila(idx) {
     pagSaldosStatus.classList.add('hidden');
     pagSaldosWarn.classList.add('hidden');
   }
+
+  if (gasId) {
+    gasStatus.classList.remove('hidden');
+    gasWarn.classList.add('hidden');
+  } else {
+    gasStatus.classList.add('hidden');
+    gasWarn.classList.add('hidden');
+  }
 }
 
 async function guardarFilaMetodo(idx) {
@@ -2025,11 +2205,13 @@ async function guardarFilaMetodo(idx) {
     const pagId = document.getElementById(`pag-id-${idx}`).value || null;
     const recSaldosId = document.getElementById(`rec-saldos-id-${idx}`).value || null;
     const pagSaldosId = document.getElementById(`pag-saldos-id-${idx}`).value || null;
+    const gasId = document.getElementById(`gas-id-${idx}`).value || null;
     
     const recInput = document.getElementById(`rec-input-${idx}`).value.trim();
     const pagInput = document.getElementById(`pag-input-${idx}`).value.trim();
     const recSaldosInput = document.getElementById(`rec-saldos-input-${idx}`).value.trim();
     const pagSaldosInput = document.getElementById(`pag-saldos-input-${idx}`).value.trim();
+    const gasInput = document.getElementById(`gas-input-${idx}`).value.trim();
     
     if (recInput && !recId) {
       toast('Debe seleccionar la cuenta de recaudo del buscador interactivo', false);
@@ -2047,6 +2229,10 @@ async function guardarFilaMetodo(idx) {
       toast('Debe seleccionar la cuenta de pago de saldos del buscador interactivo', false);
       return;
     }
+    if (gasInput && !gasId) {
+      toast('Debe seleccionar la cuenta de gastos del buscador interactivo', false);
+      return;
+    }
     
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`, {
       method: 'POST',
@@ -2056,7 +2242,8 @@ async function guardarFilaMetodo(idx) {
         cuenta_recaudo_id: recId,
         cuenta_pago_id: pagId,
         cuenta_recaudo_saldos_id: recSaldosId,
-        cuenta_pago_saldos_id: pagSaldosId
+        cuenta_pago_saldos_id: pagSaldosId,
+        cuenta_gastos_id: gasId
       })
     });
     const d = await r.json();
@@ -2065,6 +2252,7 @@ async function guardarFilaMetodo(idx) {
       m.cuenta_pago_id = pagId;
       m.cuenta_recaudo_saldos_id = recSaldosId;
       m.cuenta_pago_saldos_id = pagSaldosId;
+      m.cuenta_gastos_id = gasId;
       actualizarIndicadoresFila(idx);
       toast(`Configuración de "${m.nombre}" guardada`);
     } else {
@@ -2574,33 +2762,52 @@ async function ejecutarCierrePeriodo() {
 // Cargar el PUC de inmediato al iniciar o redirigir según query parameters
 const urlParams = new URLSearchParams(window.location.search);
 const activeTab = urlParams.get('tab');
-if (activeTab === 'consulta') {
-  const desde = urlParams.get('desde');
-  const hasta = urlParams.get('hasta');
-  const cuentaId = urlParams.get('cuenta_id');
-  const cuentaCodigo = urlParams.get('cuenta_codigo');
-  const cuentaNombre = urlParams.get('cuenta_nombre');
-  
-  cambiarTab('consulta');
-  
-  if (desde) document.getElementById('cons-desde').value = desde;
-  if (hasta) document.getElementById('cons-hasta').value = hasta;
-  if (cuentaId) {
-    document.getElementById('cons-cuenta-id').value = cuentaId;
-    document.getElementById('cons-cuenta-txt').value = `${cuentaCodigo} - ${cuentaNombre}`;
-  }
-  
-  // Ejecutar consulta automáticamente
-  setTimeout(consultarMovimientos, 150);
-} else if (activeTab === 'manual') {
-  cambiarTab('manual');
-  const loadCompId = urlParams.get('comprobante_id');
-  if (loadCompId) {
-    setTimeout(() => cargarComprobanteParaEdicion(loadCompId), 150);
+if (activeTab && TABS.includes(activeTab)) {
+  cambiarTab(activeTab);
+  if (activeTab === 'consulta') {
+    const desde = urlParams.get('desde');
+    const hasta = urlParams.get('hasta');
+    const cuentaId = urlParams.get('cuenta_id');
+    const cuentaCodigo = urlParams.get('cuenta_codigo');
+    const cuentaNombre = urlParams.get('cuenta_nombre');
+    
+    if (desde) document.getElementById('cons-desde').value = desde;
+    if (hasta) document.getElementById('cons-hasta').value = hasta;
+    if (cuentaId) {
+      document.getElementById('cons-cuenta-id').value = cuentaId;
+      document.getElementById('cons-cuenta-txt').value = `${cuentaCodigo} - ${cuentaNombre}`;
+    }
+    
+    // Ejecutar consulta automáticamente
+    setTimeout(consultarMovimientos, 150);
+  } else if (activeTab === 'manual') {
+    const loadCompId = urlParams.get('comprobante_id');
+    if (loadCompId) {
+      setTimeout(() => cargarComprobanteParaEdicion(loadCompId), 150);
+    }
   }
 } else {
   buscarPUC();
 }
 </script>
+    <!-- Botón flotante para regresar a Mi Menú (Tailwind) -->
+    <script>
+      (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('origin') === 'menu') {
+          const btn = document.createElement('div');
+          btn.style.position = 'fixed';
+          btn.style.bottom = '24px';
+          btn.style.right = '24px';
+          btn.style.zIndex = '99999';
+          btn.innerHTML = `
+            <a href="/admin/mi-menu" class="bg-gray-900 hover:bg-gray-800 text-white font-bold px-4 py-2.5 rounded-full text-xs transition shadow-lg border border-gray-700 flex items-center gap-1.5 no-underline">
+              🏠 <span style="font-size: 11px;">Regresar a Mi Menú</span>
+            </a>
+          `;
+          document.body.appendChild(btn);
+        }
+      })();
+    </script>
 </body>
 </html>

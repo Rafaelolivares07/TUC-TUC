@@ -109,8 +109,7 @@
                 <button onclick="cambiarTab('visitantes')" id="tab-visitantes" class="tab-btn">👁️ Visitantes</button>
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/inventario/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📦 Inventario</a>{% else %}<button onclick="cambiarTab('inventario')" id="tab-inventario" class="tab-btn">📦 Inventario</button>{% endif %}
                 {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/mantenimiento/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">🛠️ Mantenimiento</a>{% endif %}
-                {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/compras/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">Compras y agotados</a>
-                {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/inventario-fisico/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📋 Inventario Físico</a>{% endif %}{% endif %}
+                {% if tienda.tercero_id %}<a href="https://admin.tuc-tuc.co/admin/inventario-fisico/{{ tienda.tercero_id }}" class="tab-btn flex items-center gap-1">📋 Inventario Físico</a>{% endif %}
                 <button onclick="cambiarTab('personalizar')" id="tab-personalizar" class="tab-btn">🎨 Diseño</button>
                 <button onclick="cambiarTab('acceso')" id="tab-acceso" class="tab-btn">🔑 Acceso</button>
                 <button onclick="cambiarTab('ubicacion')" id="tab-ubicacion" class="tab-btn">📍 Ubicación</button>
@@ -119,6 +118,9 @@
                 <a href="https://admin.tuc-tuc.co/admin/contactos" class="tab-btn flex items-center gap-1">👥 Contactos</a>
                 <button onclick="cambiarTab('vendedores')" id="tab-vendedores" class="tab-btn">🤝 Vendedores</button>
                 <button onclick="cambiarTab('soporte')" id="tab-soporte" class="tab-btn">🖥️ Soporte</button>
+                <a href="/admin/mi-menu" class="tab-btn flex items-center gap-1 text-warning font-bold no-underline">
+                    ⭐ Mi Menú
+                </a>
             </div>
             <button class="hidden md:flex absolute right-0 top-0 bottom-0 z-10 px-2 bg-white/90 items-center text-gray-400 hover:text-gray-700 text-2xl font-light select-none" onclick="scrollNavTabs(200)">&#8250;</button>
         </div>

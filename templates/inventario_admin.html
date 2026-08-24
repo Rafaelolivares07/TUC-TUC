@@ -328,6 +328,64 @@
   </div>
 </div>
 
+<!-- Modal Ajuste Permanente de Receta -->
+<div id="overlay-ajuste-receta" class="overlay hidden" onclick="if(event.target===this)cerrarAjusteReceta()">
+  <div class="modal shadow-2xl border border-gray-100" style="max-width:600px; max-height:85vh; display:flex; flex-direction:column; position:relative; background:white;">
+    <!-- Header -->
+    <div class="flex-shrink-0 mb-3 border-b border-gray-100 pb-2 flex justify-between items-center">
+      <h3 class="text-sm font-bold text-gray-800">Ajustar Proporciones de Receta Estándar</h3>
+      <button onclick="cerrarAjusteReceta()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+    </div>
+
+    <!-- Warnings / Info -->
+    <div class="flex-shrink-0 bg-yellow-50 border border-yellow-100 rounded-xl p-3 mb-4 text-[11px] text-yellow-800">
+      <span class="font-bold block mb-1">⚠️ Ajuste de Proporciones:</span>
+      Se recalcularán las cantidades de la receta estándar para <strong>1 unidad</strong> de producto terminado, dividiendo la cantidad real consumida por la cantidad total producida (<strong><span id="ajuste-cant-producir"></span> unidades</strong>).
+    </div>
+
+    <!-- Comparison List -->
+    <div class="flex-1 overflow-y-auto mb-4 border border-gray-100 rounded-xl p-3 bg-gray-50/50">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="text-gray-500 uppercase font-bold text-[9px] border-b border-gray-200 text-left">
+            <th class="py-2">Componente</th>
+            <th class="py-2 text-right">Cant. Actual (1u)</th>
+            <th class="py-2 text-right text-indigo-600">Cant. Nueva (1u)</th>
+            <th class="py-2 text-right">Diferencia</th>
+          </tr>
+        </thead>
+        <tbody id="ajuste-comparativa-body" class="divide-y divide-gray-100"></tbody>
+      </table>
+    </div>
+
+    <!-- Cost impact box -->
+    <div id="ajuste-impacto-costo" class="flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-gray-50 border-gray-150">
+      <div class="flex justify-between font-bold text-gray-700">
+        <span>Costo Receta Actual (1 u):</span>
+        <span id="ajuste-costo-actual" class="font-mono text-gray-800"></span>
+      </div>
+      <div class="flex justify-between font-bold text-indigo-600">
+        <span>Costo Receta Nuevo (1 u):</span>
+        <span id="ajuste-costo-nuevo" class="font-mono"></span>
+      </div>
+      <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-200/80">
+        <span class="font-bold text-gray-700">Impacto estimado en costo:</span>
+        <span id="ajuste-costo-impacto-pct" class="px-2.5 py-1 rounded-lg text-xs font-extrabold font-mono"></span>
+      </div>
+    </div>
+
+    <!-- Footer Buttons -->
+    <div class="flex-shrink-0 flex gap-3 justify-end pt-2 border-t border-gray-100">
+      <button onclick="cerrarAjusteReceta()" class="px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-xs font-semibold text-gray-600 transition">
+        Cancelar
+      </button>
+      <button onclick="confirmarAjusteReceta()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition">
+        Confirmar y Guardar Receta
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ── HEADER ───────────────────────────────────────────────────────── -->
 <div class="max-w-5xl mx-auto">
   <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-rose-500">
@@ -340,7 +398,6 @@
         <button id="theme-toggle" onclick="toggleTheme()" class="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors text-xs flex items-center justify-center font-bold text-gray-600" style="width: 32px; height: 32px;" title="Cambiar Tema">
           🌙
         </button>
-        <a href="/admin/compras/{{ negocio_id }}" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">Compras y agotados</a>
         <a href="{{ volver_url or '/admin' }}" class="text-sm text-gray-400 hover:text-rose-500 font-semibold">← {{ volver_label or 'Admin' }}</a>
       </div>
     </div>
@@ -353,9 +410,11 @@
       <button class="tab-btn" onclick="mostrarTab('tarjetas')">Tarjetas Estándar</button>
       <button class="tab-btn" onclick="mostrarTab('entradas')">Entradas</button>
       <button class="tab-btn" onclick="mostrarTab('produccion')">Producción</button>
+      <button class="tab-btn" onclick="mostrarTab('compras_sugerencias')">🛒 Compras Sugeridas</button>
       <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
       <button class="tab-btn" onclick="mostrarTab('ensambles')">Ensambles</button>
       <button class="tab-btn" onclick="mostrarTab('ventas_costos')">Ventas/Costos</button>
+      <button class="tab-btn" onclick="mostrarTab('gastos')">Gastos</button>
       <a href="/admin/inventario-fisico/{{ negocio_id }}" class="tab-btn">📋 Inv. Físico</a>
     </div>
   </div>
@@ -618,6 +677,82 @@
 
   <!-- ── TAB PRODUCCIÓN ───────────────────────────────────────────── -->
   <div id="tab-produccion" class="hidden bg-white rounded-2xl shadow p-5">
+    <!-- Sección de Sugerencias de Producción -->
+    <div id="seccion-sugerencias-produccion" class="mb-6 bg-slate-50 border border-slate-200 rounded-2xl p-5">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <h3 class="font-bold text-slate-800 text-xs flex items-center gap-1.5 mb-0">
+          <span>💡</span> Pronóstico de Producción (Consumo y frecuencia)
+        </h3>
+        
+        <!-- Detalles de Ajuste Colapsables -->
+        <details class="text-[11px] text-indigo-600 hover:text-indigo-800 cursor-pointer font-bold outline-none">
+          <summary class="list-none flex items-center gap-1">
+            <i class="bi bi-gear-fill"></i> Ajustar parámetros de cálculo
+          </summary>
+          <div class="mt-3 p-4 bg-white border border-gray-150 rounded-xl cursor-default text-gray-700 font-normal space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📅 Historial analizado (días)</label>
+                <input type="number" id="cfg-dias-historial" value="30" min="1" max="90" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Días de movimientos hacia atrás para calcular promedios y quiebres.</p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">🔁 Ciclo por defecto (días)</label>
+                <input type="number" id="cfg-dias-defecto" value="7" min="1" max="30" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Días de abastecimiento asignados si el producto es nuevo y sin histórico.</p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📈 Ventana de tendencia (días)</label>
+                <input type="number" id="cfg-growth-window" value="7" min="1" max="15" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Días de comparación semanal para establecer porcentaje de crecimiento.</p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">🚀 Crecimiento Máximo (%)</label>
+                <input type="number" id="cfg-max-growth" value="100" min="0" max="500" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Límite tope de incremento proyectado para evitar excesos de stock.</p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📉 Decrecimiento Mínimo (%)</label>
+                <input type="number" id="cfg-min-growth" value="-50" min="-100" max="0" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Límite tope de decrecimiento proyectado (ej. -50% es reducir a la mitad).</p>
+              </div>
+              <div class="flex items-end">
+                <button type="button" onclick="cargarSugerenciasProduccion()"
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-3 rounded-lg transition">
+                  Recalcular Pronóstico
+                </button>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+        <div class="overflow-y-auto max-h-60 custom-scrollbar">
+          <table class="w-full text-xs text-gray-700 align-middle">
+            <thead class="bg-gray-50 text-[10px] uppercase text-gray-500 font-bold sticky top-0 z-10 border-b border-gray-200">
+              <tr>
+                <th class="px-3 py-2 text-left bg-gray-50">Producto</th>
+                <th class="px-3 py-2 text-right bg-gray-50">Stock</th>
+                <th class="px-3 py-2 text-right bg-gray-50">Consumo Diario</th>
+                <th class="px-3 py-2 text-center bg-gray-50">Ciclo (Frecuencia)</th>
+                <th class="px-3 py-2 text-center bg-gray-50">Tendencia</th>
+                <th class="px-3 py-2 text-center bg-gray-50">Próxima Producción</th>
+                <th class="px-3 py-2 text-right bg-gray-50">Sugerido</th>
+                <th class="px-3 py-2 text-center bg-gray-50">Insumos</th>
+                <th class="px-3 py-2 text-center bg-gray-50">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="sugerencias-tabla-body">
+              <tr>
+                <td colspan="9" class="px-3 py-4 text-center text-gray-400 italic">Analizando consumos e inventarios...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <h2 class="font-bold text-gray-700 mb-4">Registrar producción</h2>
     
     <!-- Selección de Documento de Producción -->
@@ -703,12 +838,17 @@
       </div>
 
       <div id="prod-alerta" class="hidden mt-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold font-normal"></div>
-    </div>
-    <div class="flex justify-end">
-      <button id="prod-btn-registrar" onclick="registrarProduccion()" disabled
-              class="px-6 py-2.5 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed">
-        Registrar producción
-      </button>
+
+      <div class="flex justify-between items-center mt-5 pt-4 border-t border-gray-150">
+        <button id="prod-btn-receta" onclick="abrirAjusteReceta()"
+                class="px-4 py-2 border border-indigo-200 text-indigo-600 font-bold rounded-xl hover:bg-indigo-50 text-xs transition">
+          🔄 Ajustar Receta Estándar (Permanente)
+        </button>
+        <button id="prod-btn-registrar" onclick="registrarProduccion()" disabled
+                class="px-5 py-2.5 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed text-xs transition">
+          Registrar producción
+        </button>
+      </div>
     </div>
 
     <!-- Historial de Producción -->
@@ -740,6 +880,85 @@
           <span id="prod-hist-pagina" class="text-xs font-bold text-gray-700"></span>
           <button id="btn-prod-next" onclick="cargarHistorialProduccion(histProdPagina + 1)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:pointer-events-none">Siguiente →</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── TAB COMPRAS SUGERIDAS (ETAPA 5) ────────────────────────────── -->
+  <div id="tab-compras_sugerencias" class="hidden bg-white rounded-2xl shadow p-5">
+    
+    <!-- Sección de Sugerencias de Compras -->
+    <div id="seccion-sugerencias-compras" class="mb-6 bg-slate-50 border border-slate-200 rounded-2xl p-5">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <h3 class="font-bold text-slate-800 text-xs flex items-center gap-1.5 mb-0">
+          <span>💡</span> Sugerencias de Compra por Proveedor
+        </h3>
+        
+        <!-- Detalles de Ajuste Colapsables -->
+        <details class="text-[11px] text-indigo-600 hover:text-indigo-800 cursor-pointer font-bold outline-none">
+          <summary class="list-none flex items-center gap-1">
+            <i class="bi bi-gear-fill"></i> Ajustar parámetros de cálculo
+          </summary>
+          <div class="mt-3 p-4 bg-white border border-gray-150 rounded-xl cursor-default text-gray-700 font-normal space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📅 Historial analizado (días)</label>
+                <input type="number" id="cfg-compras-dias-historial" value="30" min="1" max="90" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Días de movimientos para consumo promedio.</p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">🔁 Frecuencia compra defecto (días)</label>
+                <input type="number" id="cfg-compras-dias-defecto" value="7" min="1" max="30" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Días del ciclo de compra si no hay historial.</p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📈 Ventana de tendencia (días)</label>
+                <input type="number" id="cfg-compras-growth-window" value="7" min="1" max="15" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Comparación de consumo para porcentaje de crecimiento.</p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">🚀 Crecimiento Máximo (%)</label>
+                <input type="number" id="cfg-compras-max-growth" value="100" min="0" max="500" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Límite de crecimiento para evitar sobrecompra.</p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📉 Decrecimiento Mínimo (%)</label>
+                <input type="number" id="cfg-compras-min-growth" value="-50" min="-100" max="0" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Límite de decrecimiento del consumo proyectado.</p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">🛡️ Stock Máximo Global (días)</label>
+                <input type="number" id="cfg-compras-stock-max" value="15" min="1" max="180" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Días máximos de almacenamiento si el producto no tiene límite individual.</p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">🚛 Entrega Proveedor (días)</label>
+                <input type="number" id="cfg-compras-dias-entrega" value="2" min="0" max="30" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
+                <p class="text-[9px] text-slate-400 mt-1">Tiempo de entrega (Lead Time) estimado del proveedor.</p>
+              </div>
+              <div class="flex items-end sm:col-span-2">
+                <button type="button" onclick="cargarSugerenciasCompras()"
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-3 rounded-lg transition">
+                  Recalcular Sugerencias de Compra
+                </button>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- Buscador de Proveedor/Producto y Gran Total -->
+      <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
+        <input type="text" id="filtro-compras-proveedor" placeholder="Buscar proveedor o producto..." oninput="filtrarCompras()"
+               class="text-xs border border-gray-200 rounded-xl px-3 py-2 w-full sm:max-w-xs focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white">
+        <div id="compras-gran-total-banner" class="hidden px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-extrabold shadow-sm">
+          💰 Total Proyectado de Compras: <span id="compras-gran-total-val" class="font-black text-sm text-emerald-700"></span>
+        </div>
+      </div>
+
+      <div class="space-y-3" id="compras-proveedores-list">
+        <p class="text-xs text-slate-400 italic">Analizando cotizaciones y consumos...</p>
       </div>
     </div>
   </div>
@@ -930,6 +1149,11 @@
     </div>
   </div>
 
+  <!-- ── TAB GASTOS ────────────────────────────────────────────────── -->
+  <div id="tab-gastos" class="hidden bg-white rounded-2xl shadow p-5">
+    {% include 'gastos_pane.html' %}
+  </div>
+
 </div><!-- /max-w-5xl -->
 
 <script>
@@ -966,7 +1190,7 @@ function toast(msg, ok = true) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'kardex', 'ensambles', 'ventas_costos'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'kardex', 'ensambles', 'ventas_costos', 'gastos'];
 function mostrarTab(t) {
   TABS.forEach(id => {
     const el = document.getElementById(`tab-${id}`);
@@ -975,6 +1199,14 @@ function mostrarTab(t) {
   document.querySelectorAll('.tab-btn').forEach((btn, i) => {
     btn.classList.toggle('tab-active', TABS[i] === t);
   });
+
+  if (history.replaceState) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', t);
+    history.replaceState(null, '', url.pathname + url.search);
+  }
+  const cleanTabName = t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ');
+  document.title = `${cleanTabName} — Inventario`;
   if (t === 'tarjetas') {
     cargarTarjetasResumen();
     cambiarVistaTarjetas('recetas');
@@ -985,6 +1217,15 @@ function mostrarTab(t) {
   if (t === 'ventas_costos') {
     inicializarFechasVC();
     consultarVentasCostos();
+  }
+  if (t === 'produccion') {
+    cargarSugerenciasProduccion();
+  }
+  if (t === 'compras_sugerencias') {
+    cargarSugerenciasCompras();
+  }
+  if (t === 'gastos') {
+    inicializarModuloGastos();
   }
 }
 
@@ -2686,13 +2927,557 @@ async function cargarKardex(productoId) {
   }).join('');
 }
 
+async function cargarSugerenciasProduccion() {
+  const el = document.getElementById('sugerencias-tabla-body');
+  if (!el) return;
+  
+  el.innerHTML = '<tr><td colspan="9" class="px-3 py-4 text-center text-slate-400 italic">Analizando consumos e inventarios...</td></tr>';
+  
+  // Extraer valores de configuración si existen en el DOM
+  const diasHistorial = document.getElementById('cfg-dias-historial')?.value || '30';
+  const diasDefecto = document.getElementById('cfg-dias-defecto')?.value || '7';
+  const growthWindow = document.getElementById('cfg-growth-window')?.value || '7';
+  const maxGrowth = document.getElementById('cfg-max-growth')?.value || '100';
+  const minGrowth = document.getElementById('cfg-min-growth')?.value || '-50';
+  
+  const queryParams = `?dias_historial=${diasHistorial}&dias_defecto=${diasDefecto}&growth_window=${growthWindow}&max_growth=${maxGrowth}&min_growth=${minGrowth}`;
+  
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencias` + queryParams);
+    const d = await r.json();
+    
+    if (!d.ok) {
+      el.innerHTML = `<tr><td colspan="9" class="px-3 py-4 text-center text-red-500 font-bold">Error: ${d.error}</td></tr>`;
+      return;
+    }
+    
+    if (!d.sugerencias || d.sugerencias.length === 0) {
+      el.innerHTML = `
+        <tr>
+          <td colspan="9" class="px-3 py-4 text-center text-slate-500 font-medium">
+            ✅ Todos los productos producidos están al día y no tienen consumos o inconsistencias.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+    
+    el.innerHTML = d.sugerencias.map(s => {
+      const classFactible = s.factible 
+        ? 'bg-emerald-50 border-emerald-100 text-emerald-800' 
+        : 'bg-amber-50 border-amber-100 text-amber-800';
+      const labelFactible = s.factible 
+        ? '✓ OK' 
+        : '✗ Incompleto';
+        
+      const growthLabel = s.growth_rate_pct > 0 
+        ? `<span class="text-emerald-600 font-bold">↑ ${s.growth_rate_pct}%</span>`
+        : s.growth_rate_pct < 0 
+          ? `<span class="text-red-500 font-bold">↓ ${Math.abs(s.growth_rate_pct)}%</span>`
+          : '<span class="text-slate-400">0%</span>';
+
+      // Estilo y texto de la fecha de producción
+      let fechaBadge = '';
+      if (s.fecha_probable === 'Inmediato') {
+        fechaBadge = '<span class="text-red-600 font-extrabold uppercase bg-red-50 border border-red-200 px-2 py-0.5 rounded-lg text-[10px]">Urgente</span>';
+      } else if (s.fecha_probable === 'Sin consumo') {
+        fechaBadge = '<span class="text-slate-400 font-semibold bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-[10px]">N/A</span>';
+      } else {
+        fechaBadge = `<span class="text-indigo-600 font-bold bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg text-[10px]">${s.fecha_probable}</span>`;
+      }
+
+      return `
+        <tr class="hover:bg-slate-50 border-b border-gray-100 transition-colors">
+          <td class="px-3 py-2 font-bold text-slate-800 text-left">${s.producto_nombre}</td>
+          <td class="px-3 py-2 text-right font-semibold ${s.stock_actual < 0 ? 'text-red-500 font-bold' : 'text-slate-700'}">${fmt(s.stock_actual)}</td>
+          <td class="px-3 py-2 text-right num text-slate-600">${fmt(s.demanda_diaria)}</td>
+          <td class="px-3 py-2 text-center text-slate-600">${s.frecuencia_dias} días</td>
+          <td class="px-3 py-2 text-center">${growthLabel}</td>
+          <td class="px-3 py-2 text-center">${fechaBadge}</td>
+          <td class="px-3 py-2 text-right font-bold text-slate-700">${fmt(s.cantidad_sugerida)}</td>
+          <td class="px-3 py-2 text-center">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${classFactible}">
+              ${labelFactible}
+            </span>
+          </td>
+          <td class="px-3 py-2 text-center">
+            <button onclick="seleccionarSugerencia(${s.producto_id}, '${s.producto_nombre.replace(/'/g, "\\'")}', ${s.cantidad_sugerida})"
+                    class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold rounded-lg transition text-[10px]">
+              Producir
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+    el.innerHTML = '<tr><td colspan="9" class="px-3 py-4 text-center text-red-500 font-bold">Error de conexión al cargar sugerencias.</td></tr>';
+  }
+}
+
+async function cargarSugerenciasCompras() {
+  const el = document.getElementById('compras-proveedores-list');
+  if (!el) return;
+  
+  el.innerHTML = '<p class="text-xs text-slate-400 italic text-center py-4">Analizando cotizaciones y consumos...</p>';
+  
+  const diasHistorial = document.getElementById('cfg-compras-dias-historial')?.value || '30';
+  const diasDefecto = document.getElementById('cfg-compras-dias-defecto')?.value || '7';
+  const growthWindow = document.getElementById('cfg-compras-growth-window')?.value || '7';
+  const maxGrowth = document.getElementById('cfg-compras-max-growth')?.value || '100';
+  const minGrowth = document.getElementById('cfg-compras-min-growth')?.value || '-50';
+  const stockMax = document.getElementById('cfg-compras-stock-max')?.value || '15';
+  const diasEntrega = document.getElementById('cfg-compras-dias-entrega')?.value || '2';
+  
+  const queryParams = `?dias_historial=${diasHistorial}&dias_defecto=${diasDefecto}&growth_window=${growthWindow}&max_growth=${maxGrowth}&min_growth=${minGrowth}&dias_stock_max_global=${stockMax}&dias_entrega_global=${diasEntrega}`;
+  
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/compras/sugerencias` + queryParams);
+    const d = await r.json();
+    
+    if (!d.ok) {
+      document.getElementById('compras-gran-total-banner')?.classList.add('hidden');
+      el.innerHTML = `<p class="text-xs text-red-500 font-bold text-center py-4">Error: ${d.error}</p>`;
+      return;
+    }
+    
+    if (!d.proveedores || d.proveedores.length === 0) {
+      document.getElementById('compras-gran-total-banner')?.classList.add('hidden');
+      el.innerHTML = `
+        <div class="bg-white rounded-xl p-4 border border-slate-100 text-center">
+          <p class="text-xs text-slate-500 font-medium">✅ No se requieren compras de insumos para este ciclo logístico.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Calcular Gran Total Consolidado
+    let grandTotal = 0;
+    d.proveedores.forEach(p => {
+      grandTotal += parseFloat(p.total_compras || 0);
+    });
+    
+    const bannerEl = document.getElementById('compras-gran-total-banner');
+    const valEl = document.getElementById('compras-gran-total-val');
+    if (bannerEl && valEl) {
+      valEl.textContent = fmtMon(grandTotal);
+      bannerEl.classList.remove('hidden');
+    }
+    
+    window.COMPRAS_DATA = d.proveedores;
+    renderizarComprasTabla(d.proveedores);
+    
+  } catch (err) {
+    console.error(err);
+    document.getElementById('compras-gran-total-banner')?.classList.add('hidden');
+    el.innerHTML = '<p class="text-xs text-red-500 font-bold text-center py-4">Error de conexión al cargar sugerencias.</p>';
+  }
+}
+
+function renderizarComprasTabla(proveedores) {
+  const el = document.getElementById('compras-proveedores-list');
+  if (!el) return;
+  
+  if (proveedores.length === 0) {
+    el.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">No hay resultados que coincidan con la búsqueda.</p>';
+    return;
+  }
+  
+  el.innerHTML = proveedores.map((p, pIdx) => {
+    const totalFormateado = fmtMon(p.total_compras);
+    let deadlineBadge = '';
+    
+    if (p.fecha_limite === 'Inmediato') {
+      deadlineBadge = '<span class="px-2 py-0.5 rounded-lg bg-red-50 border border-red-200 text-red-600 font-black uppercase text-[9px]">Urgente (Inmediato)</span>';
+    } else {
+      deadlineBadge = `<span class="px-2 py-0.5 rounded-lg bg-indigo-50 border border-indigo-150 text-indigo-600 font-bold text-[9px]">${p.fecha_limite}</span>`;
+    }
+    
+    const rowsHtml = p.productos.map(prod => {
+      let ahorroHtml = '';
+      if (prod.oportunidad_ahorro) {
+        ahorroHtml = `
+          <div class="mt-1.5 p-2 bg-amber-50 border border-amber-100 rounded-lg text-[9.5px] text-amber-800 flex flex-col gap-0.5 font-normal font-sans">
+            <span class="font-bold">💡 Oportunidad de ahorro:</span>
+            <span>Si aumentas el límite a <b>${prod.oportunidad_ahorro.dias_necesarios} días</b> de stock, puedes comprar <b>${prod.oportunidad_ahorro.descripcion_presentacion}</b> a un costo unitario de <b>$${prod.oportunidad_ahorro.costo_unitario}</b> con el proveedor <b>${prod.oportunidad_ahorro.proveedor_nombre}</b>.</span>
+          </div>
+        `;
+      }
+
+      const maxStockVal = prod.dias_max_stock !== null ? prod.dias_max_stock : '';
+      const inputId = `max-stock-prod-${prod.producto_id}`;
+
+      // Formato editable inteligente del pedido sugerido (Empaques)
+      const stepVal = prod.unidades_presentacion <= 1.0001 ? '0.01' : '1';
+      const initialQty = prod.unidades_presentacion <= 1.0001 ? prod.cantidad_sugerida_unidades : prod.paquetes_sugeridos;
+      const qtyVal = prod.cantidad_sugerida_usuario !== undefined ? prod.cantidad_sugerida_usuario : initialQty;
+      const unitsVal = prod.cantidad_sugerida_usuario !== undefined ? 
+            (prod.unidades_presentacion <= 1.0001 ? prod.cantidad_sugerida_usuario : prod.cantidad_sugerida_usuario * prod.unidades_presentacion) : 
+            prod.cantidad_sugerida_unidades;
+
+      const sugeridoHtml = `
+        <div class="flex flex-col items-center justify-center gap-0.5">
+          <input type="number" id="compras-qty-${prod.producto_id}" value="${qtyVal}" min="0" step="${stepVal}" 
+                 oninput="recalcularTotalProveedor(${pIdx})"
+                 class="border rounded px-1.5 py-0.5 text-center font-bold text-slate-700 outline-none w-16 text-xs bg-white">
+          <span class="text-[9.5px] text-slate-500 font-bold" id="compras-qty-equiv-lbl-${prod.producto_id}">
+            ${prod.presentacion_nombre} (${fmt(unitsVal)} und)
+          </span>
+        </div>
+      `;
+
+      // Costo Empaque / Presentación editable
+      const initialCostoEmp = prod.precio_presentacion !== undefined ? prod.precio_presentacion : (prod.costo_unitario * prod.unidades_presentacion);
+      const costoEmp = prod.costo_empaque_usuario !== undefined ? prod.costo_empaque_usuario : initialCostoEmp;
+      const costoEmpHtml = `
+        <div class="flex items-center gap-1 justify-end">
+          <span class="text-slate-400 text-xs">$</span>
+          <input type="number" id="compras-costo-emp-${prod.producto_id}" value="${costoEmp}" min="0" step="0.01" 
+                 oninput="recalcularTotalProveedor(${pIdx})"
+                 class="border rounded px-1.5 py-0.5 text-right font-bold text-slate-700 outline-none w-20 text-xs bg-white">
+        </div>
+      `;
+
+      const isChecked = prod.checked !== false ? 'checked' : '';
+
+      return `
+        <tr class="hover:bg-slate-50 border-b border-gray-100 transition-colors">
+          <td class="px-3 py-2.5 text-center w-10">
+            <input type="checkbox" id="compras-check-${prod.producto_id}" ${isChecked} onchange="recalcularTotalProveedor(${pIdx})"
+                   class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500 border-gray-300">
+          </td>
+          <td class="px-3 py-2.5 font-semibold text-slate-800 text-left">
+            <div>${prod.producto_nombre}</div>
+            <div class="text-[10px] text-slate-400 font-normal mt-0.5">Presentación: ${prod.presentacion_nombre} x ${fmt(prod.unidades_presentacion)} und</div>
+            ${ahorroHtml}
+          </td>
+          <td class="px-3 py-2.5 text-right font-medium ${prod.stock_actual < 0 ? 'text-red-500 font-bold' : 'text-slate-700'}">${fmt(prod.stock_actual)}</td>
+          <td class="px-3 py-2.5 text-right text-slate-600">${fmt(prod.demanda_diaria)}</td>
+          <td class="px-3 py-2.5 text-center">
+            <div class="flex flex-col gap-1 items-center justify-center">
+              <input type="number" id="${inputId}" value="${maxStockVal}" placeholder="Global: ${prod.dias_max_stock_aplicado}" min="1" max="180" 
+                     class="border rounded px-1.5 py-0.5 text-center font-bold text-slate-700 outline-none w-14 text-[10px]">
+              <button onclick="guardarMaxStockProducto(${prod.producto_id}, '${inputId}')"
+                      class="text-[9px] text-indigo-500 hover:text-indigo-700 hover:underline font-bold transition">
+                Guardar
+              </button>
+            </div>
+          </td>
+          <td class="px-3 py-2.5 text-center font-semibold text-slate-700">${prod.fecha_limite === 'Inmediato' ? '<span class="text-red-600 font-bold">Inmediato</span>' : prod.fecha_limite}</td>
+          <td class="px-3 py-2.5 text-center">
+            ${sugeridoHtml}
+          </td>
+          <td class="px-3 py-2.5 text-right">
+            ${costoEmpHtml}
+          </td>
+          <td class="px-3 py-2.5 text-right font-bold text-slate-800" id="compras-subtotal-cell-${prod.producto_id}">${fmtMon(prod.total_costo)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+        <button onclick="toggleAcordeonProveedor(${pIdx})"
+                class="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition text-slate-800 text-xs font-bold focus:outline-none">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="font-extrabold text-slate-800 text-sm">${p.proveedor_nombre}</span>
+            <span class="text-slate-400">|</span>
+            <span class="text-slate-500 font-normal">📞 ${p.proveedor_telefono || 'Sin teléfono'}</span>
+            <span class="text-slate-400">|</span>
+            <span class="text-rose-500 font-extrabold" id="compras-supplier-total-lbl-${pIdx}">Total: ${totalFormateado}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="font-normal text-slate-500 text-[10px]">Fecha límite:</span>
+            ${deadlineBadge}
+            <i id="compras-flecha-${pIdx}" class="bi bi-chevron-down text-slate-500 transition-transform duration-200"></i>
+          </div>
+        </button>
+        
+        <div id="compras-detalle-${pIdx}" class="hidden border-t border-slate-150 p-4 bg-white overflow-x-auto">
+          <div class="flex justify-between items-center mb-3 bg-slate-50 p-3 rounded-xl border border-slate-150">
+            <span class="text-slate-500 text-[11px] font-semibold">Selecciona los insumos comprados y define la cantidad y costo de empaque finales. Al hacer clic en Registrar Entrada se transferirán a la pestaña de Entradas.</span>
+            <button onclick="hacerEntradaProveedor(${pIdx})"
+                    class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm">
+              📥 Registrar Entrada (FAC)
+            </button>
+          </div>
+          <table class="w-full text-xs text-gray-700 align-middle">
+            <thead class="bg-slate-50 text-[10px] uppercase text-gray-500 font-bold border-b border-gray-200">
+              <tr>
+                <th class="px-3 py-2 text-center w-10"></th>
+                <th class="px-3 py-2 text-left">Producto / Presentación</th>
+                <th class="px-3 py-2 text-right">Stock</th>
+                <th class="px-3 py-2 text-right">Consumo Diario</th>
+                <th class="px-3 py-2 text-center">Stock Máx (Días)</th>
+                <th class="px-3 py-2 text-center">Límite Compra</th>
+                <th class="px-3 py-2 text-center">Pedido Sugerido</th>
+                <th class="px-3 py-2 text-right">Costo Empaque</th>
+                <th class="px-3 py-2 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleAcordeonProveedor(pIdx) {
+  const panel = document.getElementById(`compras-detalle-${pIdx}`);
+  const icon = document.getElementById(`compras-flecha-${pIdx}`);
+  if (!panel) return;
+  
+  if (panel.classList.contains('hidden')) {
+    panel.classList.remove('hidden');
+    icon.style.transform = 'rotate(180deg)';
+  } else {
+    panel.classList.add('hidden');
+    icon.style.transform = 'rotate(0deg)';
+  }
+}
+
+async function guardarMaxStockProducto(productoId, inputId) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  
+  const val = inp.value.trim();
+  
+  try {
+    const r = await fetch(`/api/producto/${productoId}/update-max-stock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dias_max_stock: val })
+    });
+    const d = await r.json();
+    
+    if (!d.ok) {
+      alert(`Error al guardar: ${d.error}`);
+      return;
+    }
+    
+    inp.classList.add('border-emerald-500', 'bg-emerald-50');
+    setTimeout(() => {
+      inp.classList.remove('border-emerald-500', 'bg-emerald-50');
+    }, 1500);
+    
+    cargarSugerenciasCompras();
+    
+  } catch (err) {
+    console.error(err);
+    alert('Error de conexión al guardar los días máximos de stock.');
+  }
+}
+
+function filtrarCompras() {
+  const query = document.getElementById('filtro-compras-proveedor')?.value.toLowerCase().trim() || '';
+  if (!window.COMPRAS_DATA) return;
+  
+  let filtrados = [];
+  if (query === '') {
+    filtrados = window.COMPRAS_DATA;
+  } else {
+    filtrados = window.COMPRAS_DATA.map(p => {
+      const matchProveedor = p.proveedor_nombre.toLowerCase().includes(query);
+      const productosCoincidentes = p.productos.filter(prod => prod.producto_nombre.toLowerCase().includes(query));
+      
+      if (matchProveedor) {
+        return p;
+      } else if (productosCoincidentes.length > 0) {
+        return { ...p, productos: productosCoincidentes };
+      }
+      return null;
+    }).filter(p => p !== null);
+  }
+
+  let grandTotal = 0;
+  filtrados.forEach(p => {
+    let supplierTotal = 0;
+    p.productos.forEach(prod => {
+      supplierTotal += parseFloat(prod.total_costo || 0);
+    });
+    grandTotal += supplierTotal;
+  });
+
+  const bannerEl = document.getElementById('compras-gran-total-banner');
+  const valEl = document.getElementById('compras-gran-total-val');
+  if (bannerEl && valEl) {
+    valEl.textContent = fmtMon(grandTotal);
+    if (filtrados.length > 0) {
+      bannerEl.classList.remove('hidden');
+    } else {
+      bannerEl.classList.add('hidden');
+    }
+  }
+
+  renderizarComprasTabla(filtrados);
+}
+
+function recalcularTotalProveedor(pIdx) {
+  const p = window.COMPRAS_DATA[pIdx];
+  if (!p) return;
+
+  let supplierTotal = 0;
+  
+  p.productos.forEach(prod => {
+    const isChecked = document.getElementById(`compras-check-${prod.producto_id}`)?.checked;
+    const qtyInput = document.getElementById(`compras-qty-${prod.producto_id}`);
+    const qty = qtyInput ? (parseFloat(qtyInput.value) || 0) : 0;
+    const costEmpInput = document.getElementById(`compras-costo-emp-${prod.producto_id}`);
+    const costEmp = costEmpInput ? (parseFloat(costEmpInput.value) || 0) : 0;
+    
+    prod.checked = isChecked;
+    prod.cantidad_sugerida_usuario = qty;
+    prod.costo_empaque_usuario = costEmp;
+    
+    let lineTotal = 0;
+    let units = 0;
+    if (prod.unidades_presentacion <= 1.0001) {
+      units = qty;
+      lineTotal = qty * costEmp;
+      prod.costo_unitario = costEmp; 
+    } else {
+      units = qty * prod.unidades_presentacion;
+      lineTotal = qty * costEmp; 
+      prod.costo_unitario = costEmp / prod.unidades_presentacion; 
+    }
+    
+    const lbl = document.getElementById(`compras-qty-equiv-lbl-${prod.producto_id}`);
+    if (lbl) {
+      lbl.textContent = `${prod.presentacion_nombre} (${fmt(units)} und)`;
+    }
+    
+    prod.cantidad_sugerida_unidades = units;
+    prod.total_costo = lineTotal;
+    
+    const cell = document.getElementById(`compras-subtotal-cell-${prod.producto_id}`);
+    if (cell) {
+      cell.textContent = fmtMon(lineTotal);
+    }
+    
+    if (isChecked) {
+      supplierTotal += lineTotal;
+    }
+  });
+  
+  p.total_compras = supplierTotal;
+  
+  let grandTotal = 0;
+  const query = document.getElementById('filtro-compras-proveedor')?.value.toLowerCase().trim() || '';
+  
+  window.COMPRAS_DATA.forEach(prov => {
+    const matchProveedor = prov.proveedor_nombre.toLowerCase().includes(query);
+    const hasMatchingProducts = prov.productos.some(prod => prod.producto_nombre.toLowerCase().includes(query));
+    
+    if (query === '' || matchProveedor || hasMatchingProducts) {
+      let provSum = 0;
+      prov.productos.forEach(prod => {
+        const matchesProduct = prod.producto_nombre.toLowerCase().includes(query);
+        if (query === '' || matchProveedor || matchesProduct) {
+          if (prod.checked !== false) {
+            provSum += parseFloat(prod.total_costo || 0);
+          }
+        }
+      });
+      grandTotal += provSum;
+    }
+  });
+  
+  const valEl = document.getElementById('compras-gran-total-val');
+  if (valEl) {
+    valEl.textContent = fmtMon(grandTotal);
+  }
+  
+  const supLbl = document.getElementById(`compras-supplier-total-lbl-${pIdx}`);
+  if (supLbl) {
+    supLbl.textContent = `Total: ${fmtMon(supplierTotal)}`;
+  }
+}
+
+function hacerEntradaProveedor(pIdx) {
+  const p = window.COMPRAS_DATA[pIdx];
+  if (!p) return;
+  
+  recalcularTotalProveedor(pIdx);
+  
+  const checkedProds = p.productos.filter(prod => prod.checked !== false && prod.cantidad_sugerida_unidades > 0);
+  
+  if (checkedProds.length === 0) {
+    alert("Por favor, seleccione al menos un producto con cantidad mayor a cero para hacer la entrada.");
+    return;
+  }
+  
+  if (!confirm(`¿Desea transferir ${checkedProds.length} ítems de ${p.proveedor_nombre} a la pestaña de Entradas?`)) {
+    return;
+  }
+  
+  document.getElementById('entrada-lineas').innerHTML = '';
+  entradaLineas = [];
+  
+  document.getElementById('entrada-proveedor-id').value = p.proveedor_id || '';
+  document.getElementById('entrada-proveedor').value = p.proveedor_nombre;
+  
+  const btnCrear = document.getElementById('btn-crear-proveedor');
+  if (btnCrear) btnCrear.classList.add('hidden');
+  const badgeProv = document.getElementById('badge-proveedor-creado');
+  if (badgeProv) badgeProv.classList.add('hidden');
+  
+  checkedProds.forEach(prod => {
+    agregarLineaEntradaConDatos(
+      prod.producto_id,
+      prod.producto_nombre,
+      prod.cantidad_sugerida_unidades,
+      prod.costo_unitario,
+      prod.iva_pct || 0,
+      prod.presentacion_id,
+      prod.presentacion_nombre,
+      prod.unidades_presentacion
+    );
+  });
+  
+  calcularTotalesEntrada();
+  mostrarTab('entradas');
+  
+  setTimeout(() => {
+    const el = document.getElementById('tab-entradas');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, 150);
+  
+  toast(`Cargados ${checkedProds.length} ítems en la pestaña de Entradas.`);
+}
+
+function seleccionarSugerencia(productoId, productoNombre, cantidad) {
+  // 1. Cargar datos en el formulario
+  document.getElementById('prod-ac-input').value = productoNombre;
+  document.getElementById('prod-ac-id').value = productoId;
+  document.getElementById('prod-cantidad').value = cantidad;
+  
+  // 2. Ejecutar vista previa
+  previsualizarProduccion();
+  
+  // 3. Scroll suave centrado
+  setTimeout(() => {
+    const el = document.getElementById('prod-preview');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, 150);
+}
+
+
 // ── Producción ────────────────────────────────────────────────────────────────
 let prodPuedeRegistrar = false;
+let activePreviewData = null;
 
 function limpiarPreview() {
   document.getElementById('prod-preview').classList.add('hidden');
   document.getElementById('prod-btn-registrar').disabled = true;
   prodPuedeRegistrar = false;
+  activePreviewData = null;
 }
 
 async function previsualizarProduccion() {
@@ -2705,39 +3490,103 @@ async function previsualizarProduccion() {
   const d = await r.json();
   if (!d.ok) { toast(d.error, false); return; }
 
+  // Almacenar datos de previsualización en la variable global
+  activePreviewData = d;
+
   document.getElementById('prod-preview-titulo').textContent =
     `Para producir ${qty} × ${d.producto} se consumirá:`;
 
+  renderTablaPrevisualizacion();
+  document.getElementById('prod-preview').classList.remove('hidden');
+}
+
+function renderTablaPrevisualizacion() {
+  if (!activePreviewData) return;
+  const qty = activePreviewData.cantidad;
   const tb = document.getElementById('prod-preview-tabla');
-  tb.innerHTML = d.lineas.map(l => `
-    <tr>
-      <td class="px-3 py-2 text-left font-semibold">${l.nombre}</td>
-      <td class="px-3 py-2 text-right num ${l.suficiente ? 'text-green-600' : 'text-red-500 font-bold'}">${fmt(l.stock_actual)}</td>
-      <td class="px-3 py-2 text-right num">${fmt(l.a_consumir)}</td>
-      <td class="px-3 py-2 text-right num font-mono">${fmt(l.costo_und)}</td>
-      <td class="px-3 py-2 text-right num font-mono font-semibold">${fmt(l.costo_total)}</td>
-      <td class="px-3 py-2 text-center">
-        ${l.suficiente
-          ? '<span class="badge" style="background:#d1fae5;color:#065f46">✓ OK</span>'
-          : '<span class="badge" style="background:#fee2e2;color:#991b1b">✗ Insuficiente</span>'}
-      </td>
-    </tr>
-  `).join('');
+  tb.innerHTML = activePreviewData.lineas.map(l => {
+    const suf = l.stock_actual >= l.a_consumir;
+    return `
+      <tr id="prod-preview-row-${l.id}">
+        <td class="px-3 py-2 text-left font-semibold">${l.nombre}</td>
+        <td id="prod-stock-${l.id}" class="px-3 py-2 text-right num ${suf ? 'text-green-600' : 'text-red-500 font-bold'}">${fmt(l.stock_actual)}</td>
+        <td class="px-3 py-2 text-right">
+          <input type="number" step="any" min="0" value="${l.a_consumir}"
+                 oninput="actualizarConsumoPrevisualizacion(${l.id}, this.value)"
+                 class="w-24 text-right border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-rose-500">
+        </td>
+        <td class="px-3 py-2 text-right num font-mono">${fmt(l.costo_und)}</td>
+        <td id="prod-subtotal-${l.id}" class="px-3 py-2 text-right num font-mono font-semibold">${fmt(l.costo_total)}</td>
+        <td id="prod-badge-${l.id}" class="px-3 py-2 text-center">
+          ${suf
+            ? '<span class="badge" style="background:#d1fae5;color:#065f46">✓ OK</span>'
+            : '<span class="badge" style="background:#fee2e2;color:#991b1b">✗ Insuficiente</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('');
 
-  document.getElementById('prod-resumen-total').textContent = '$ ' + fmt(d.costo_total_produccion);
-  document.getElementById('prod-resumen-unitario').textContent = '$ ' + fmt(d.costo_unitario_produccion);
+  actualizarTotalesPrevisualizacion();
+}
 
+function actualizarConsumoPrevisualizacion(componenteId, valStr) {
+  if (!activePreviewData) return;
+  const val = parseFloat(valStr) || 0;
+  
+  const l = activePreviewData.lineas.find(line => line.id === componenteId);
+  if (!l) return;
+  
+  l.a_consumir = val;
+  l.costo_total = val * l.costo_und;
+  l.suficiente = l.stock_actual >= l.a_consumir;
+  
+  // Actualizar fila in-place
+  const subEl = document.getElementById(`prod-subtotal-${componenteId}`);
+  if (subEl) subEl.textContent = fmt(l.costo_total);
+  
+  const stockEl = document.getElementById(`prod-stock-${componenteId}`);
+  if (stockEl) {
+    stockEl.className = `px-3 py-2 text-right num ${l.suficiente ? 'text-green-600' : 'text-red-500 font-bold'}`;
+  }
+  
+  const badgeEl = document.getElementById(`prod-badge-${componenteId}`);
+  if (badgeEl) {
+    badgeEl.innerHTML = l.suficiente
+      ? '<span class="badge" style="background:#d1fae5;color:#065f46">✓ OK</span>'
+      : '<span class="badge" style="background:#fee2e2;color:#991b1b">✗ Insuficiente</span>';
+  }
+  
+  actualizarTotalesPrevisualizacion();
+}
+
+function actualizarTotalesPrevisualizacion() {
+  if (!activePreviewData) return;
+  
+  let costoTotal = 0;
+  activePreviewData.lineas.forEach(l => {
+    costoTotal += l.costo_total;
+  });
+  
+  activePreviewData.costo_total_produccion = costoTotal;
+  const qty = activePreviewData.cantidad;
+  activePreviewData.costo_unitario_produccion = qty > 0 ? (costoTotal / qty) : 0;
+  
+  document.getElementById('prod-resumen-total').textContent = '$ ' + fmt(activePreviewData.costo_total_produccion);
+  document.getElementById('prod-resumen-unitario').textContent = '$ ' + fmt(activePreviewData.costo_unitario_produccion);
+  
+  // Validar si todos son suficientes
+  activePreviewData.puede_producir = activePreviewData.lineas.every(l => l.suficiente);
+  
   const alerta = document.getElementById('prod-alerta');
-  if (!d.puede_producir) {
+  if (!activePreviewData.puede_producir) {
     alerta.textContent = 'Stock insuficiente en uno o más componentes. No se puede registrar la producción.';
     alerta.classList.remove('hidden');
   } else {
     alerta.classList.add('hidden');
   }
-
-  document.getElementById('prod-preview').classList.remove('hidden');
-  prodPuedeRegistrar = d.puede_producir;
-  document.getElementById('prod-btn-registrar').disabled = !d.puede_producir;
+  
+  prodPuedeRegistrar = activePreviewData.puede_producir;
+  document.getElementById('prod-btn-registrar').disabled = !prodPuedeRegistrar;
 }
 
 async function registrarProduccion() {
@@ -2746,7 +3595,7 @@ async function registrarProduccion() {
     toast('Selecciona un producto a producir de la lista', false);
     return;
   }
-  if (!prodPuedeRegistrar) {
+  if (!prodPuedeRegistrar || !activePreviewData) {
     toast('No se puede registrar. Primero genera la vista previa y asegúrate de contar con stock suficiente de componentes.', false);
     return;
   }
@@ -2763,6 +3612,12 @@ async function registrarProduccion() {
   const btn = document.getElementById('prod-btn-registrar');
   if (btn) btn.disabled = true;
 
+  // Extraer componentes reales consumidos
+  const componentes = activePreviewData.lineas.map(l => ({
+    componente_id: l.id,
+    cantidad: l.a_consumir
+  }));
+
   try {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion`, {
       method: 'POST',
@@ -2775,7 +3630,8 @@ async function registrarProduccion() {
         tipo_documento,
         documento_numero,
         tercero_id,
-        tercero_nombre
+        tercero_nombre,
+        componentes
       })
     });
     const d = await r.json();
@@ -2798,6 +3654,107 @@ async function registrarProduccion() {
     console.error(e);
     toast('Error de red al registrar producción', false);
     if (btn) btn.disabled = false;
+  }
+}
+
+// Lógica de ajuste de receta estándar (permanente)
+function abrirAjusteReceta() {
+  if (!activePreviewData) {
+    toast('Debe cargar la vista previa de producción antes de ajustar la receta', false);
+    return;
+  }
+  
+  const qty = activePreviewData.cantidad;
+  document.getElementById('ajuste-cant-producir').textContent = fmt(qty);
+  
+  let costoActualUnitario = 0;
+  let costoNuevoUnitario = 0;
+  
+  const tb = document.getElementById('ajuste-comparativa-body');
+  tb.innerHTML = activePreviewData.lineas.map(l => {
+    const cantActual = l.cant_tarjeta;
+    const cantNueva = l.a_consumir / qty;
+    const dif = cantNueva - cantActual;
+    
+    costoActualUnitario += cantActual * l.costo_und;
+    costoNuevoUnitario += cantNueva * l.costo_und;
+    
+    let diffClass = 'text-gray-500';
+    let diffSign = '';
+    if (dif > 0) {
+      diffClass = 'text-red-600 font-bold';
+      diffSign = '+';
+    } else if (dif < 0) {
+      diffClass = 'text-emerald-600 font-bold';
+    }
+    
+    return `
+      <tr>
+        <td class="py-2 text-left font-semibold text-gray-800">${l.nombre}</td>
+        <td class="py-2 text-right font-mono">${fmt(cantActual)}</td>
+        <td class="py-2 text-right font-mono text-indigo-600 font-bold">${fmt(cantNueva)}</td>
+        <td class="py-2 text-right font-mono ${diffClass}">${diffSign}${fmt(dif)}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  // Actualizar caja de costo e impacto
+  document.getElementById('ajuste-costo-actual').textContent = '$ ' + fmt(costoActualUnitario);
+  document.getElementById('ajuste-costo-nuevo').textContent = '$ ' + fmt(costoNuevoUnitario);
+  
+  const diffCosto = costoNuevoUnitario - costoActualUnitario;
+  const pctImpacto = costoActualUnitario > 0 ? ((diffCosto / costoActualUnitario) * 100) : 0;
+  
+  const pctEl = document.getElementById('ajuste-costo-impacto-pct');
+  const impactBox = document.getElementById('ajuste-impacto-costo');
+  
+  if (diffCosto > 0.01) {
+    pctEl.textContent = `Aumento de +${pctImpacto.toFixed(2)}%`;
+    pctEl.className = 'px-2.5 py-1 rounded-lg text-xs font-extrabold font-mono bg-red-100 text-red-800 border border-red-255';
+    impactBox.className = 'flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-red-50/50 border-red-100';
+  } else if (diffCosto < -0.01) {
+    pctEl.textContent = `Disminución de ${pctImpacto.toFixed(2)}%`;
+    pctEl.className = 'px-2.5 py-1 rounded-lg text-xs font-extrabold font-mono bg-emerald-100 text-emerald-800 border border-emerald-255';
+    impactBox.className = 'flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-emerald-50/50 border-emerald-100';
+  } else {
+    pctEl.textContent = 'Sin cambio (0.00%)';
+    pctEl.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold font-mono bg-gray-100 text-gray-800 border border-gray-250';
+    impactBox.className = 'flex-shrink-0 p-4 rounded-xl mb-4 border flex flex-col gap-1.5 text-xs bg-gray-50 border-gray-150';
+  }
+  
+  document.getElementById('overlay-ajuste-receta').classList.remove('hidden');
+}
+
+function cerrarAjusteReceta() {
+  document.getElementById('overlay-ajuste-receta').classList.add('hidden');
+}
+
+async function confirmarAjusteReceta() {
+  if (!activePreviewData) return;
+  const qty = activePreviewData.cantidad;
+  const componentes = activePreviewData.lineas.map(l => ({
+    componente_id: l.id,
+    cantidad_unidad: l.a_consumir / qty
+  }));
+  
+  try {
+    const r = await fetch(`/api/inventario/producto/${activePreviewData.producto_id}/tarjeta/update-proportions`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ componentes })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('✅ ¡Receta estándar actualizada permanentemente!');
+      cerrarAjusteReceta();
+      // Volver a previsualizar para cargar los nuevos estándar de receta
+      await previsualizarProduccion();
+    } else {
+      toast(d.error || 'Error al actualizar receta', false);
+    }
+  } catch(e) {
+    console.error(e);
+    toast('Error de red al actualizar receta', false);
   }
 }
 
@@ -3173,6 +4130,13 @@ function avisarMetodosSinCuentaEntrada(metodoCodigo) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  // Cargar pestaña inicial desde URL (ejecución instantánea para UX)
+  const initUrlParams = new URLSearchParams(window.location.search);
+  const activeTab = initUrlParams.get('tab');
+  if (activeTab && TABS.includes(activeTab)) {
+    mostrarTab(activeTab);
+  }
+
   await fetchDefaultPresentacion();
   await cargarProductos();
   await cargarTiposDocEntrada();
@@ -4066,5 +5030,24 @@ async function cargarReporteEnsambles() {
   }
 }
 </script>
+    <!-- Botón flotante para regresar a Mi Menú (Tailwind) -->
+    <script>
+      (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('origin') === 'menu') {
+          const btn = document.createElement('div');
+          btn.style.position = 'fixed';
+          btn.style.bottom = '24px';
+          btn.style.right = '24px';
+          btn.style.zIndex = '99999';
+          btn.innerHTML = `
+            <a href="/admin/mi-menu" class="bg-gray-900 hover:bg-gray-800 text-white font-bold px-4 py-2.5 rounded-full text-xs transition shadow-lg border border-gray-700 flex items-center gap-1.5 no-underline">
+              🏠 <span style="font-size: 11px;">Regresar a Mi Menú</span>
+            </a>
+          `;
+          document.body.appendChild(btn);
+        }
+      })();
+    </script>
 </body>
 </html>

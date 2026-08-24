@@ -189,6 +189,20 @@ def api_vendedor_identificar():
         return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
     if len(telefono) < 10:
         return jsonify({'ok': False, 'error': 'Celular debe tener al menos 10 dígitos'}), 400
+
+    # Si el usuario ya está logueado como Admin/Restaurante/Tienda, evitamos sobreescribir su sesión
+    if session.get('rol') in ('Administrador', 'ClienteVFP', 'Restaurante', 'Tienda'):
+        try:
+            conn = get_db_connection()
+            t = conn.execute("SELECT id, nombre FROM terceros WHERE telefono = %s LIMIT 1", (telefono,)).fetchone()
+            conn.close()
+            tid = t['id'] if t else None
+            return jsonify({'ok': True, 'tercero_id': tid, 'nombre': nombre, 'telefono': telefono})
+        except Exception as e:
+            try: conn.close()
+            except: pass
+            return jsonify({'ok': False, 'error': str(e)}), 500
+
     dev = _get_device_id()
     try:
         conn = get_db_connection()
@@ -1060,19 +1074,20 @@ def vendedor_captura_ventas(negocio_ref):
     # Soporte para login directo por parámetro tel en la URL
     tel_param = request.args.get('tel', '').strip()
     if tel_param:
-        clean_tel = ''.join(filter(str.isdigit, tel_param))
-        if len(clean_tel) >= 10:
-            try:
-                conn = get_db_connection()
-                t = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE telefono = %s LIMIT 1", (clean_tel,)).fetchone()
-                if t:
-                    session['usuario_id'] = t['id']
-                    session['chat_tercero_id'] = t['id']
-                    session['nombre'] = t['nombre']
-                    session['rol'] = 'Vendedor'
-                conn.close()
-            except Exception:
-                pass
+        if session.get('rol') not in ('Administrador', 'ClienteVFP', 'Restaurante', 'Tienda'):
+            clean_tel = ''.join(filter(str.isdigit, tel_param))
+            if len(clean_tel) >= 10:
+                try:
+                    conn = get_db_connection()
+                    t = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE telefono = %s LIMIT 1", (clean_tel,)).fetchone()
+                    if t:
+                        session['usuario_id'] = t['id']
+                        session['chat_tercero_id'] = t['id']
+                        session['nombre'] = t['nombre']
+                        session['rol'] = 'Vendedor'
+                    conn.close()
+                except Exception:
+                    pass
 
     conn = get_db_connection()
     negocio_id, negocio_nombre = _obtener_negocio_id_y_nombre(conn, negocio_ref)
@@ -1442,19 +1457,20 @@ def vendedor_dashboard():
     # Soporte para login directo por parámetro tel en la URL
     tel_param = request.args.get('tel', '').strip()
     if tel_param:
-        clean_tel = ''.join(filter(str.isdigit, tel_param))
-        if len(clean_tel) >= 10:
-            try:
-                conn = get_db_connection()
-                t = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE telefono = %s LIMIT 1", (clean_tel,)).fetchone()
-                if t:
-                    session['usuario_id'] = t['id']
-                    session['chat_tercero_id'] = t['id']
-                    session['nombre'] = t['nombre']
-                    session['rol'] = 'Vendedor'
-                conn.close()
-            except Exception:
-                pass
+        if session.get('rol') not in ('Administrador', 'ClienteVFP', 'Restaurante', 'Tienda'):
+            clean_tel = ''.join(filter(str.isdigit, tel_param))
+            if len(clean_tel) >= 10:
+                try:
+                    conn = get_db_connection()
+                    t = conn.execute("SELECT id, nombre, telefono FROM terceros WHERE telefono = %s LIMIT 1", (clean_tel,)).fetchone()
+                    if t:
+                        session['usuario_id'] = t['id']
+                        session['chat_tercero_id'] = t['id']
+                        session['nombre'] = t['nombre']
+                        session['rol'] = 'Vendedor'
+                    conn.close()
+                except Exception:
+                    pass
 
     uid = session.get('usuario_id')
     vendedor_pre = {'nombre': '', 'telefono': ''}
@@ -2286,5 +2302,25 @@ async function importarContactPicker() {
   if(!('contacts' in navigator&&'ContactsManager' in window)){alert('Solo disponible en Chrome para Android.');return;}
   try{const sel=await navigator.contacts.select(['name','tel'],{multiple:true}); await _subirContactos(sel.map(c=>({nombre:(c.name||[])[0]||'',telefono:(c.tel||[])[0]||''})).filter(c=>c.nombre||c.telefono));}catch(e){if(e.name!=='AbortError')alert('Error: '+e.message);}
 }
+</script>
+<!-- Botón flotante para regresar a Mi Menú (Tailwind) -->
+<script>
+  (function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('origin') === 'menu') {
+      const btn = document.createElement('div');
+      btn.style.position = 'fixed';
+      btn.style.bottom = '24px';
+      btn.style.right = '24px';
+      btn.style.zIndex = '99999';
+      btn.innerHTML = `
+        <a href="/admin/mi-menu" class="flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-bold px-4 py-2.5 rounded-full text-xs shadow-xl border border-gray-700 no-underline transition-all">
+          <span class="text-yellow-400">🏠</span>
+          <span class="text-[11px] text-white">Regresar a Mi Menú</span>
+        </a>
+      `;
+      document.body.appendChild(btn);
+    }
+  })();
 </script>
 </body></html>"""

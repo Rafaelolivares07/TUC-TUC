@@ -1192,6 +1192,50 @@ def api_inventario_tarjeta_eliminar(producto_id):
         conn.close()
 
 
+@bp.route('/api/inventario/producto/<int:producto_id>/tarjeta/update-proportions', methods=['POST'])
+def api_inventario_tarjeta_update_proportions(producto_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    lineas = data.get('componentes', [])
+    if not lineas:
+        return jsonify({'ok': False, 'error': 'Debe agregar al menos un componente'}), 400
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        negocio_id = _negocio_id_de_producto(conn, producto_id)
+        if not negocio_id:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        usuario_tercero_id = session.get('chat_tercero_id') or session['usuario_id']
+        linea_ids = []
+        for ln in lineas:
+            cid = int(ln['componente_id'])
+            linea_ids.append(cid)
+            conn.execute("""
+                INSERT INTO tarjeta_estandar (producto_id, componente_id, cantidad, tercero_id, creado_en, actualizado_en)
+                VALUES (%s,%s,%s,%s, NOW(), NOW())
+                ON CONFLICT (producto_id, componente_id) DO UPDATE
+                    SET cantidad = EXCLUDED.cantidad,
+                        actualizado_en = NOW(),
+                        tercero_id = EXCLUDED.tercero_id
+            """, (producto_id, cid, float(ln['cantidad_unidad']), usuario_tercero_id))
+        if linea_ids:
+            conn.execute("""
+                DELETE FROM tarjeta_estandar
+                WHERE producto_id = %s AND componente_id NOT IN %s
+            """, (producto_id, tuple(linea_ids)))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 # ── Entrada de mercancía ───────────────────────────────────────────────────────
 
 @bp.route('/api/inventario/<int:negocio_id>/entrada', methods=['POST'])
@@ -1551,6 +1595,7 @@ def api_produccion_preview(negocio_id):
             lineas.append({
                 'id':           c['id'],
                 'nombre':       c['nombre'],
+                'cant_tarjeta':  float(c['cant_tarjeta']),
                 'a_consumir':   float(a_consumir),
                 'stock_actual': float(stock_actual),
                 'costo_und':    float(costo_und),
@@ -1561,6 +1606,7 @@ def api_produccion_preview(negocio_id):
         costo_unitario_produccion = costo_total_produccion / qty if qty > 0 else Decimal('0')
         return jsonify({
             'ok': True,
+            'producto_id': producto_id,
             'producto': producto['nombre'],
             'cantidad': cantidad,
             'puede_producir': puede_producir,
@@ -1647,19 +1693,37 @@ def api_produccion_registrar(negocio_id):
         ).fetchone()
         if not producto:
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
-        componentes = conn.execute(
-            "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id=%s",
-            (producto_id,)
-        ).fetchall()
-        if not componentes:
-            return jsonify({'ok': False, 'error': 'Sin tarjeta estándar'}), 400
+        # Cargar componentes
+        componentes_override = data.get('componentes')
+        if componentes_override:
+            # Viene override de componentes en la petición
+            componentes_datos = []
+            for c in componentes_override:
+                componentes_datos.append({
+                    'componente_id': int(c['componente_id']),
+                    'cantidad_total': Decimal(str(c['cantidad']))
+                })
+        else:
+            # Por defecto, leer de la tarjeta estándar y multiplicar por la cantidad producida
+            componentes_db = conn.execute(
+                "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id=%s",
+                (producto_id,)
+            ).fetchall()
+            if not componentes_db:
+                return jsonify({'ok': False, 'error': 'Sin tarjeta estándar'}), 400
+            componentes_datos = []
+            for c in componentes_db:
+                componentes_datos.append({
+                    'componente_id': c['componente_id'],
+                    'cantidad_total': Decimal(str(c['cantidad'])) * cantidad
+                })
 
         # Verificar stock suficiente y leer costos ANTES de aplicar salidas
         faltantes    = []
         costo_total  = Decimal('0')
         comps_cont   = []
-        for c in componentes:
-            a_consumir = Decimal(str(c['cantidad'])) * cantidad
+        for c in componentes_datos:
+            a_consumir = c['cantidad_total']
             saldo = conn.execute("""
                 SELECT COALESCE(s.stock, 0) AS stock,
                        COALESCE(s.costo_und, p.costo, 0) AS costo_und
@@ -1695,8 +1759,8 @@ def api_produccion_registrar(negocio_id):
         prod_token = int(time.time())
 
         # Salida de cada componente
-        for i, c in enumerate(componentes):
-            cant_comp = Decimal(str(c['cantidad'])) * cantidad
+        for i, c in enumerate(componentes_datos):
+            cant_comp = c['cantidad_total']
             comp_cost = comps_cont[i]['costo_und']
             _mov_directo(conn, negocio_id, c['componente_id'], cant_comp,
                          'salida', 'produccion', session['usuario_id'],
@@ -2181,13 +2245,20 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
 
 
 def _num_documento_limpio(num_str, tipo_doc_id, types_code):
-    """Devuelve el número de documento sin el prefijo del código del tipo (ej. 'PRODUCCION-8' -> '8')."""
+    """Devuelve el número de documento sin el prefijo del código del tipo y sin ceros a la izquierda si es numérico."""
     if not num_str:
         return num_str
     s = str(num_str).strip()
     cod = types_code.get(tipo_doc_id)
     if cod and s.upper().startswith(str(cod).upper() + '-'):
-        return s[len(str(cod)) + 1:].strip()
+        s = s[len(str(cod)) + 1:].strip()
+    if '-' in s:
+        parts = s.split('-')
+        suffix = parts[-1].strip()
+        if suffix.isdigit():
+            return str(int(suffix))
+    elif s.isdigit():
+        return str(int(s))
     return s
 
 
@@ -2258,15 +2329,9 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             td_id = r['tipo_documento_id']
             doc_num = r['documento_numero']
             
-            pure_num = doc_num
-            if doc_num and '-' in doc_num:
-                parts = doc_num.split('-')
-                if parts[-1].strip().isdigit():
-                    pure_num = parts[-1].strip()
-                    
-            td_name = r['tipo_documento'] or 'otro'
+            pure_num = _num_documento_limpio(doc_num, td_id, types_code)
             
-            # Resolver nombre dinámico desde tipos_documento_negocio
+            td_name = r['tipo_documento'] or 'otro'
             if td_id and td_id in types_map:
                 td_name = types_map[td_id]
                 
@@ -2336,13 +2401,9 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     
             doc_num = r['numero_documento'] or str(r['id'])
             
-            pure_num = doc_num
-            if doc_num and '-' in doc_num:
-                parts = doc_num.split('-')
-                if parts[-1].strip().isdigit():
-                    pure_num = parts[-1].strip()
-                    
             td_id = r['tipo_documento_id']
+            pure_num = _num_documento_limpio(doc_num, td_id, types_code)
+            
             td_name = 'pedido_venta'
             if td_id and td_id in types_map:
                 td_name = types_map[td_id]
@@ -2382,7 +2443,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         # 3. Fetch accounting totals for the source documents.
         sql_cont = """
             SELECT mc.tipo_documento_id, mc.numero_documento AS documento_numero,
-                   SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE 0 END) AS total_contable,
+                   SUM(CASE WHEN mc.tipo IN ('debito', 'D', 'deb') THEN mc.monto ELSE 0 END) AS total_contable,
                    MIN(mc.tercero_id) AS proveedor_id,
                    MIN(mc.fecha) AS documento_fecha
             FROM movimientos_contables mc
@@ -2430,12 +2491,8 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             td_id = r['tipo_documento_id']
             
             doc_num = r['documento_numero']
-            pure_num = doc_num
-            if doc_num and '-' in doc_num:
-                parts = doc_num.split('-')
-                if parts[-1].strip().isdigit():
-                    pure_num = parts[-1].strip()
-                    
+            pure_num = _num_documento_limpio(doc_num, td_id, types_code)
+            
             td_name = types_map.get(td_id) if td_id else 'comprobante'
                 
             key = (td_id, pure_num) if td_id else ('comprobante', pure_num)
@@ -2545,6 +2602,14 @@ def resolver_variantes_numero(num_str):
     if num_str_clean not in variantes:
         variantes.append(num_str_clean)
         
+    # Si es puramente numérico, agregar variantes con ceros a la izquierda
+    if num_str_clean.isdigit():
+        val_num = int(num_str_clean)
+        for length in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
+            v_padded = f"{val_num:0{length}d}"
+            if v_padded not in variantes:
+                variantes.append(v_padded)
+                
     if '-' in num_str:
         parts = num_str.split('-')
         prefix = '-'.join(parts[:-1]).strip()
@@ -2569,6 +2634,15 @@ def resolver_variantes_numero(num_str):
             v_num_str = str(val_num)
             if v_num_str not in variantes:
                 variantes.append(v_num_str)
+                
+            # Agregar variantes con ceros a la izquierda para el sufijo y el prefijo-sufijo
+            for length in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
+                v_padded_suffix = f"{val_num:0{length}d}"
+                v_padded = f"{prefix}-{v_padded_suffix}"
+                if v_padded not in variantes:
+                    variantes.append(v_padded)
+                if v_padded_suffix not in variantes:
+                    variantes.append(v_padded_suffix)
         except ValueError:
             pass
             
@@ -4160,7 +4234,7 @@ def api_ajuste_guardar_item(negocio_id):
                     conn.execute("""
                         INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
                                                            tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
-                        VALUES (%s, %s, %s, %s, %s, 'D', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'ajuste_inventario', %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'ajuste_inventario', %s, %s, %s)
                     """, (negocio_id, comp_id, db_cuenta_id, db_cod, concepto, monto_ajuste, session.get('usuario_id'), producto_id,
                           tipo_documento_id, doc_num_final, tipo_code, doc_num_final, desc_asiento, tercero_id))
                     
@@ -4168,7 +4242,7 @@ def api_ajuste_guardar_item(negocio_id):
                     conn.execute("""
                         INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
                                                            tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
-                        VALUES (%s, %s, %s, %s, %s, 'C', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'ajuste_inventario', %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, 'credito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'ajuste_inventario', %s, %s, %s)
                     """, (negocio_id, comp_id, cr_cuenta_id, cr_cod, concepto, monto_ajuste, session.get('usuario_id'), producto_id,
                           tipo_documento_id, doc_num_final, tipo_code, doc_num_final, desc_asiento, tercero_id))
             else:
@@ -4374,8 +4448,8 @@ def _pdf_documento_ajuste(nombre_negocio, doc_num, fecha_str, items, asiento):
         _pdf_tabla(pdf, [22, 82, 14, 30],
                    ['Cuenta', 'Nombre / Concepto', 'T', 'Monto'],
                    filas_asiento, aligns=['C', 'L', 'C', 'R'], wrap_col=1)
-        total_d = sum(float(a['monto'] or 0) for a in asiento if a['tipo'] == 'D')
-        total_c = sum(float(a['monto'] or 0) for a in asiento if a['tipo'] == 'C')
+        total_d = sum(float(a['monto'] or 0) for a in asiento if a['tipo'] in ('D', 'debito'))
+        total_c = sum(float(a['monto'] or 0) for a in asiento if a['tipo'] in ('C', 'credito'))
         pdf.set_font('Helvetica', 'B', 8)
         pdf.cell(0, 6, f'Débitos totales: ${_pdf_money(total_d)}    Créditos totales: ${_pdf_money(total_c)}', ln=1)
     else:
@@ -5093,6 +5167,515 @@ def api_reporte_ensambles(negocio_id):
             'movements': res_movements,
             'cogs_map': cogs_map,
             'parent_qty_map': parent_qty_map
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/produccion/sugerencias')
+def api_produccion_sugerencias(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+        
+    try:
+        dias_historial = int(request.args.get('dias_historial', 30))
+        dias_defecto = int(request.args.get('dias_defecto', 7))
+        growth_window = int(request.args.get('growth_window', 7))
+        max_growth = float(request.args.get('max_growth', 100.0)) / 100.0
+        min_growth = float(request.args.get('min_growth', -50.0)) / 100.0
+    except (ValueError, TypeError):
+        dias_historial = 30
+        dias_defecto = 7
+        growth_window = 7
+        max_growth = 1.0
+        min_growth = -0.5
+        
+    conn = get_db_connection()
+    try:
+        # 1. Buscar todos los productos con receta estándar en este negocio
+        produced_products = conn.execute("""
+            SELECT DISTINCT p.id, p.nombre, COALESCE(s.stock, 0) AS stock_actual
+            FROM tarjeta_estandar t
+            JOIN productos p ON p.id = t.producto_id
+            LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
+            WHERE p.negocio_id = %s AND p.disponible = TRUE
+            ORDER BY p.nombre
+        """, (negocio_id, negocio_id)).fetchall()
+        
+        sugerencias = []
+        for prod in produced_products:
+            p_id = prod['id']
+            p_nombre = prod['nombre']
+            stock_actual = float(prod['stock_actual'])
+            
+            # --- VALIDACIÓN DE INCONSISTENCIAS ---
+            has_prod_entries = conn.execute("""
+                SELECT 1 FROM movimientos_inventario 
+                WHERE negocio_id = %s AND producto_id = %s AND tipo = 'entrada' AND referencia_tipo = 'produccion'
+                LIMIT 1
+            """, (negocio_id, p_id)).fetchone()
+            
+            has_exits = conn.execute("""
+                SELECT 1 FROM movimientos_inventario 
+                WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida'
+                LIMIT 1
+            """, (negocio_id, p_id)).fetchone()
+            
+            if has_exits and not has_prod_entries:
+                continue
+            
+            # Calcular demanda, ciclo (frecuencia) y crecimiento
+            ddp, frecuencia, growth_rate = _calcular_demanda_y_ciclo(
+                conn, negocio_id, p_id, stock_actual,
+                dias_historial, dias_defecto, growth_window, max_growth, min_growth
+            )
+            
+            if ddp < 0.0001:
+                # Excluir productos con consumo cero
+                continue
+            
+            # Demanda diaria proyectada
+            demanda_proyectada = ddp * (1.0 + growth_rate)
+            
+            # 1. Calcular días de cobertura
+            if stock_actual <= 0.0001:
+                cobertura_dias = 0.0
+            elif demanda_proyectada < 0.0001:
+                cobertura_dias = 9999.0
+            else:
+                cobertura_dias = stock_actual / demanda_proyectada
+                
+            # 2. Calcular fecha probable
+            import datetime
+            if cobertura_dias == 0.0:
+                fecha_probable = "Inmediato"
+            elif cobertura_dias == 9999.0:
+                fecha_probable = "Sin consumo"
+            else:
+                dias_red = int(round(cobertura_dias))
+                fecha_probable = (datetime.date.today() + datetime.timedelta(days=dias_red)).strftime('%d-%b-%Y')
+                
+            # 3. Calcular cantidad recomendada (para cubrir el ciclo completo)
+            cantidad_sugerida = (demanda_proyectada * frecuencia) - stock_actual
+            if cantidad_sugerida < 0.0001:
+                cantidad_sugerida = demanda_proyectada * frecuencia
+                
+            if cantidad_sugerida < 0.0001:
+                cantidad_sugerida = 0.0
+                
+            # Validar disponibilidad de materias primas/ingredientes
+            componentes = conn.execute("""
+                SELECT t.componente_id, t.cantidad, p.nombre, COALESCE(s.stock, 0) AS stock_ingrediente
+                FROM tarjeta_estandar t
+                JOIN productos p ON p.id = t.componente_id
+                LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
+                WHERE t.producto_id = %s
+            """, (negocio_id, p_id)).fetchall()
+            
+            factible = True
+            max_produccion_posible = 999999.0
+            
+            for comp in componentes:
+                qty_por_unidad = float(comp['cantidad'])
+                stock_ingrediente = float(comp['stock_ingrediente'])
+                
+                qty_requerida = qty_por_unidad * cantidad_sugerida
+                if stock_ingrediente < qty_requerida:
+                    factible = False
+                    
+                if qty_por_unidad > 0:
+                    posible = stock_ingrediente / qty_por_unidad
+                    if posible < max_produccion_posible:
+                        max_produccion_posible = posible
+                        
+            if max_produccion_posible == 999999.0:
+                max_produccion_posible = 0.0
+                
+            cantidad_factible = cantidad_sugerida if factible else max_produccion_posible
+            
+            sugerencias.append({
+                'producto_id': p_id,
+                'producto_nombre': p_nombre,
+                'stock_actual': stock_actual,
+                'demanda_diaria': round(ddp, 3),
+                'frecuencia_dias': int(frecuencia),
+                'growth_rate_pct': round(growth_rate * 100, 1),
+                'cobertura_dias': round(cobertura_dias, 1),
+                'fecha_probable': fecha_probable,
+                'cantidad_sugerida': round(cantidad_sugerida, 2),
+                'factible': factible,
+                'cantidad_factible': round(cantidad_factible, 2)
+            })
+            
+        # Ordenar por cobertura
+        sugerencias.sort(key=lambda x: x['cobertura_dias'])
+        
+        return jsonify({
+            'ok': True,
+            'sugerencias': sugerencias
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+def _calcular_demanda_y_ciclo(conn, negocio_id, producto_id, current_stock,
+                              dias_historial, dias_defecto, growth_window, max_growth, min_growth):
+    import datetime
+    
+    # 1. Obtener todos los movimientos de los últimos X días
+    limite_fecha = datetime.datetime.now() - datetime.timedelta(days=dias_historial)
+    movs = conn.execute("""
+        SELECT tipo, cantidad, created_at 
+        FROM movimientos_inventario
+        WHERE negocio_id = %s AND producto_id = %s AND created_at >= %s
+        ORDER BY created_at DESC
+    """, (negocio_id, producto_id, limite_fecha)).fetchall()
+    
+    # 2. Reconstruir stock diario hacia atrás
+    stock_temp = float(current_stock)
+    movs_por_dia = {}
+    total_salidas = 0.0
+    for m in movs:
+        dia_str = m['created_at'].strftime('%Y-%m-%d')
+        if dia_str not in movs_por_dia:
+            movs_por_dia[dia_str] = []
+        movs_por_dia[dia_str].append(m)
+        if m['tipo'] == 'salida':
+            total_salidas += float(m['cantidad'])
+            
+    # Calcular stock al final de cada uno de los últimos X días
+    hoy = datetime.date.today()
+    dias_con_stock = 0
+    for i in range(dias_historial):
+        dia = hoy - datetime.timedelta(days=i)
+        dia_str = dia.strftime('%Y-%m-%d')
+        
+        if stock_temp > 0.0001:
+            dias_con_stock += 1
+            
+        if dia_str in movs_por_dia:
+            for m in movs_por_dia[dia_str]:
+                if m['tipo'] == 'entrada':
+                    stock_temp -= float(m['cantidad'])
+                elif m['tipo'] == 'salida':
+                    stock_temp += float(m['cantidad'])
+                    
+    # Demanda diaria promedio
+    dias_div = max(1, dias_con_stock)
+    ddp = total_salidas / dias_div
+    
+    # 3. Frecuencia de producción
+    prod_dates = conn.execute("""
+        SELECT DISTINCT DATE(created_at) AS fecha
+        FROM movimientos_inventario
+        WHERE negocio_id = %s AND producto_id = %s AND tipo = 'entrada' AND referencia_tipo = 'produccion'
+        ORDER BY fecha DESC
+        LIMIT 10
+    """, (negocio_id, producto_id)).fetchall()
+    
+    if len(prod_dates) >= 2:
+        diffs = []
+        for j in range(len(prod_dates) - 1):
+            d1 = prod_dates[j]['fecha']
+            d2 = prod_dates[j+1]['fecha']
+            diffs.append((d1 - d2).days)
+        frecuencia = sum(diffs) / len(diffs)
+    else:
+        frecuencia = float(dias_defecto)
+        
+    frecuencia = max(1.0, round(frecuencia))
+    
+    # 4. Calcular tasa de crecimiento real
+    limite_w1 = datetime.datetime.now() - datetime.timedelta(days=growth_window)
+    limite_w2 = datetime.datetime.now() - datetime.timedelta(days=growth_window * 2)
+    
+    w1_salidas = conn.execute("""
+        SELECT COALESCE(SUM(cantidad), 0) AS total 
+        FROM movimientos_inventario
+        WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida' AND created_at >= %s
+    """, (negocio_id, producto_id, limite_w1)).fetchone()['total']
+    
+    w2_salidas = conn.execute("""
+        SELECT COALESCE(SUM(cantidad), 0) AS total 
+        FROM movimientos_inventario
+        WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida' AND created_at >= %s AND created_at < %s
+    """, (negocio_id, producto_id, limite_w2, limite_w1)).fetchone()['total']
+    
+    w1_val = float(w1_salidas)
+    w2_val = float(w2_salidas)
+    
+    if w2_val > 0.0001:
+        growth_rate = (w1_val - w2_val) / w2_val
+    else:
+        growth_rate = 0.0
+        
+    growth_rate = max(min_growth, min(max_growth, growth_rate))
+    
+    return ddp, frecuencia, growth_rate
+
+
+@bp.route('/api/producto/<int:producto_id>/update-max-stock', methods=['POST'])
+def api_update_product_max_stock(producto_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    data = request.get_json() or {}
+    val = data.get('dias_max_stock')
+    
+    if val is not None and val != '':
+        try:
+            val = int(val)
+            if val < 0:
+                return jsonify({'ok': False, 'error': 'El valor debe ser un número entero no negativo'}), 400
+        except (ValueError, TypeError):
+            val = None
+    else:
+        val = None
+
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE productos SET dias_max_stock = %s WHERE id = %s", (val, producto_id))
+        return jsonify({'ok': True, 'mensaje': 'Días máximos de stock actualizados correctamente'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/compras/sugerencias')
+def api_compras_sugerencias(negocio_id):
+    import datetime
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+        
+    try:
+        dias_historial = int(request.args.get('dias_historial', 30))
+        dias_defecto = int(request.args.get('dias_defecto', 7))
+        growth_window = int(request.args.get('growth_window', 7))
+        max_growth = float(request.args.get('max_growth', 100.0)) / 100.0
+        min_growth = float(request.args.get('min_growth', -50.0)) / 100.0
+        dias_stock_max_global = int(request.args.get('dias_stock_max_global', 15))
+        dias_entrega_global = int(request.args.get('dias_entrega_global', 2))
+    except (ValueError, TypeError):
+        dias_historial = 30
+        dias_defecto = 7
+        growth_window = 7
+        max_growth = 1.0
+        min_growth = -0.5
+        dias_stock_max_global = 15
+        dias_entrega_global = 2
+        
+    conn = get_db_connection()
+    try:
+        # 1. Obtener todos los productos comprados (sin receta)
+        purchased_products = conn.execute("""
+            SELECT p.id, p.nombre, COALESCE(p.costo, 0) AS costo, p.dias_max_stock, COALESCE(s.stock, 0) AS stock_actual,
+                   COALESCE(p.iva_pct, 0) AS iva_pct
+            FROM productos p
+            LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
+            WHERE p.negocio_id = %s AND p.disponible = TRUE
+              AND p.id NOT IN (SELECT DISTINCT producto_id FROM tarjeta_estandar)
+            ORDER BY p.nombre
+        """, (negocio_id, negocio_id)).fetchall()
+        
+        proveedores_map = {}
+        
+        for prod in purchased_products:
+            p_id = prod['id']
+            p_nombre = prod['nombre']
+            p_costo = float(prod['costo'])
+            p_dias_max_stock = prod['dias_max_stock']
+            stock_actual = float(prod['stock_actual'])
+            
+            # Calcular demanda, ciclo y tendencia
+            ddp, frecuencia, growth_rate = _calcular_demanda_y_ciclo(
+                conn, negocio_id, p_id, stock_actual,
+                dias_historial, dias_defecto, growth_window, max_growth, min_growth
+            )
+            
+            if ddp < 0.0001:
+                # Omitir productos sin consumo
+                continue
+                
+            demanda_proyectada = ddp * (1.0 + growth_rate)
+            
+            # Obtener cotizaciones activas para este producto
+            quotes = conn.execute("""
+                SELECT c.id, c.tercero_id, t.nombre AS proveedor_nombre, t.telefono AS proveedor_telefono,
+                       COALESCE(c.unidades_item, 1) AS unidades_item, COALESCE(c.precio, 0) AS precio,
+                       COALESCE(c.descripcion_presentacion, 'Unidad') AS descripcion_presentacion,
+                       c.presentacion_id
+                FROM cotizaciones_compras c
+                JOIN terceros t ON t.id = c.tercero_id
+                WHERE c.negocio_id = %s AND c.item_id = %s
+                  AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
+                ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC
+            """, (negocio_id, p_id)).fetchall()
+            
+            # Obtener el último proveedor histórico como respaldo
+            last_purchase = conn.execute("""
+                SELECT m.proveedor_id, m.proveedor_nombre, t.telefono AS proveedor_telefono
+                FROM movimientos_inventario m
+                LEFT JOIN terceros t ON t.id = m.proveedor_id
+                WHERE m.negocio_id = %s AND m.producto_id = %s AND m.tipo = 'entrada' AND m.proveedor_id IS NOT NULL
+                ORDER BY m.id DESC LIMIT 1
+            """, (negocio_id, p_id)).fetchone()
+            
+            # Determinar días máximos de stock para este producto
+            dias_max = p_dias_max_stock if p_dias_max_stock is not None else dias_stock_max_global
+            max_comprar = demanda_proyectada * dias_max
+            
+            # Clasificar cotizaciones entre elegibles y descartadas
+            eligible_quotes = []
+            discarded_quotes = []
+            
+            for q in quotes:
+                unidades = float(q['unidades_item'])
+                if unidades <= max_comprar or max_comprar <= 0.0001:
+                    eligible_quotes.append(q)
+                else:
+                    discarded_quotes.append(q)
+                    
+            # Seleccionar la cotización y proveedor correspondientes
+            selected_quote = None
+            oportunidad_ahorro = None
+            
+            if eligible_quotes:
+                selected_quote = eligible_quotes[0]
+            elif discarded_quotes:
+                mejor_descartada = discarded_quotes[0]
+                unidades_desc = float(mejor_descartada['unidades_item'])
+                precio_desc = float(mejor_descartada['precio'])
+                
+                # Calcular cuántos días de stock se requieren para desbloquearla
+                dias_necesarios = int(round(unidades_desc / demanda_proyectada)) if demanda_proyectada > 0 else 999
+                costo_unitario_desc = precio_desc / unidades_desc
+                
+                oportunidad_ahorro = {
+                    'proveedor_nombre': mejor_descartada['proveedor_nombre'],
+                    'descripcion_presentacion': mejor_descartada['descripcion_presentacion'],
+                    'unidades_item': unidades_desc,
+                    'costo_unitario': round(costo_unitario_desc, 2),
+                    'dias_necesarios': dias_necesarios
+                }
+                
+            # Establecer proveedor y costo unitario sugeridos
+            prov_id = 0
+            prov_nombre = "Sin Proveedor Registrado"
+            prov_telefono = ""
+            costo_unitario = p_costo
+            presentacion_nombre = "Unidad"
+            unidades_presentacion = 1.0
+            precio_presentacion = p_costo
+            
+            if selected_quote:
+                prov_id = selected_quote['tercero_id']
+                prov_nombre = selected_quote['proveedor_nombre']
+                prov_telefono = selected_quote['proveedor_telefono'] or ""
+                unidades_presentacion = float(selected_quote['unidades_item'])
+                precio_presentacion = float(selected_quote['precio'])
+                costo_unitario = precio_presentacion / unidades_presentacion
+                presentacion_nombre = selected_quote['descripcion_presentacion']
+            elif last_purchase:
+                prov_id = last_purchase['proveedor_id']
+                prov_nombre = last_purchase['proveedor_nombre']
+                prov_telefono = last_purchase['proveedor_telefono'] or ""
+                
+            # Calcular cantidad a comprar
+            cantidad_comprar_neta = (demanda_proyectada * (frecuencia + dias_entrega_global)) - stock_actual
+            if cantidad_comprar_neta < 0.0001:
+                cantidad_comprar = demanda_proyectada * frecuencia
+            else:
+                cantidad_comprar = cantidad_comprar_neta
+                
+            if cantidad_comprar < 0.0001:
+                cantidad_comprar = 0.0
+                
+            # Convertir cantidad sugerida a paquetes
+            import math
+            paquetes = math.ceil(cantidad_comprar / unidades_presentacion) if unidades_presentacion > 0 else 0
+            cantidad_comprar_unidades = paquetes * unidades_presentacion
+            total_costo = paquetes * precio_presentacion
+            
+            # Cobertura y fecha límite
+            if stock_actual <= 0.0001:
+                cobertura_dias = 0.0
+            elif demanda_proyectada < 0.0001:
+                cobertura_dias = 9999.0
+            else:
+                cobertura_dias = stock_actual / demanda_proyectada
+                
+            dias_para_reorden = cobertura_dias - dias_entrega_global
+            
+            if dias_para_reorden <= 0.0001:
+                fecha_limite = "Inmediato"
+            elif dias_para_reorden == 9999.0:
+                fecha_limite = "Sin consumo"
+            else:
+                dias_red = int(round(dias_para_reorden))
+                fecha_limite = (datetime.date.today() + datetime.timedelta(days=dias_red)).strftime('%d-%b-%Y')
+                
+            if prov_id not in proveedores_map:
+                proveedores_map[prov_id] = {
+                    'proveedor_id': prov_id,
+                    'proveedor_nombre': prov_nombre,
+                    'proveedor_telefono': prov_telefono,
+                    'total_compras': 0.0,
+                    'fecha_limite': 'Sin límite',
+                    'fecha_limite_comparable': 99999.0,
+                    'productos': []
+                }
+                
+            item_data = {
+                'producto_id': p_id,
+                'producto_nombre': p_nombre,
+                'stock_actual': round(stock_actual, 2),
+                'demanda_diaria': round(ddp, 3),
+                'frecuencia_dias': int(frecuencia),
+                'growth_rate_pct': round(growth_rate * 100, 1),
+                'dias_max_stock': p_dias_max_stock,
+                'dias_max_stock_aplicado': dias_max,
+                'cobertura_dias': round(cobertura_dias, 1),
+                'fecha_limite': fecha_limite,
+                'cantidad_sugerida_unidades': round(cantidad_comprar_unidades, 2),
+                'presentacion_nombre': presentacion_nombre,
+                'unidades_presentacion': unidades_presentacion,
+                'paquetes_sugeridos': paquetes,
+                'costo_unitario': round(costo_unitario, 2),
+                'precio_presentacion': round(precio_presentacion, 2),
+                'total_costo': round(total_costo, 2),
+                'oportunidad_ahorro': oportunidad_ahorro,
+                'iva_pct': float(prod['iva_pct'] or 0.0),
+                'presentacion_id': selected_quote['presentacion_id'] if (selected_quote and selected_quote['presentacion_id']) else None
+            }
+            
+            proveedores_map[prov_id]['productos'].append(item_data)
+            proveedores_map[prov_id]['total_compras'] += total_costo
+            
+            if fecha_limite == 'Inmediato':
+                proveedores_map[prov_id]['fecha_limite'] = 'Inmediato'
+                proveedores_map[prov_id]['fecha_limite_comparable'] = -1.0
+            elif fecha_limite != 'Sin consumo':
+                dias_num = dias_para_reorden
+                if dias_num < proveedores_map[prov_id]['fecha_limite_comparable']:
+                    proveedores_map[prov_id]['fecha_limite_comparable'] = dias_num
+                    proveedores_map[prov_id]['fecha_limite'] = fecha_limite
+                    
+        proveedores_lista = list(proveedores_map.values())
+        
+        for p in proveedores_lista:
+            p['total_compras'] = round(p['total_compras'], 2)
+            p['productos'].sort(key=lambda x: x['cobertura_dias'])
+            
+        proveedores_lista.sort(key=lambda x: x['fecha_limite_comparable'])
+        
+        return jsonify({
+            'ok': True,
+            'proveedores': proveedores_lista
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

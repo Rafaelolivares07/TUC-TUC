@@ -25,6 +25,23 @@
     }
     .tab-btn.tab-active { background: #e11d48; color: #fff; }
     .tab-btn:not(.tab-active):hover { background: #f3f4f6; color: #374151; }
+    .recosteo-producto { min-height: 64px; align-items: flex-start; }
+    .recosteo-detalle { flex: 1 1 300px; min-width: 220px; }
+    .recosteo-alertas {
+      flex: 0 1 280px;
+      min-width: 180px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 4px;
+    }
+    .recosteo-alerta { white-space: normal; line-height: 1.2; }
+    @media (max-width: 640px) {
+      .recosteo-producto { flex-wrap: wrap; }
+      .recosteo-detalle { min-width: 0; }
+      .recosteo-alertas { min-width: 0; width: 100%; justify-content: flex-start; padding-left: 28px; }
+    }
     .toast {
       position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
       padding: 12px 24px; border-radius: 8px; color: white; font-weight: 600;
@@ -1365,13 +1382,16 @@ function renderizarListaRecosteo(productos) {
     if (p.negativos_intermedios?.length) alertas.push(`${p.negativos_intermedios.length} negativo(s) histórico(s)`);
     if (p.inconsistencias_movimientos?.length) alertas.push('Cadena inconsistente');
     if (p.saldo_inconsistente) alertas.push('Saldo final no coincide');
-    return `<label class="recosteo-producto flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer" data-nombre="${(p.producto_nombre || '').toLowerCase()}">
-      <input type="checkbox" class="recosteo-check" value="${p.producto_id}">
-      <span class="flex-1 min-w-0">
-        <span class="block text-sm font-bold text-gray-700 truncate">${p.producto_nombre}</span>
+    const alertasHtml = alertas.length
+      ? alertas.map(alerta => `<span class="recosteo-alerta inline-flex rounded-md bg-red-50 px-2 py-1 text-red-600">${alerta}</span>`).join('')
+      : '<span class="recosteo-alerta inline-flex rounded-md bg-emerald-50 px-2 py-1 text-emerald-600">Sin alertas</span>';
+    return `<label class="recosteo-producto flex gap-3 p-3 hover:bg-gray-50 cursor-pointer" data-nombre="${(p.producto_nombre || '').toLowerCase()}">
+      <input type="checkbox" class="recosteo-check mt-1 flex-shrink-0" value="${p.producto_id}">
+      <span class="recosteo-detalle">
+        <span class="block text-sm font-bold text-gray-700 break-words">${p.producto_nombre}</span>
         <span class="block text-[11px] text-gray-400">Stock final: ${fmt(p.stock_final)} · Costo: ${fmtMon(p.costo_reconstruido)} · Movimientos: ${p.movimientos}</span>
       </span>
-      <span class="text-right text-[10px] font-bold ${alertas.length ? 'text-red-600' : 'text-emerald-600'}">${alertas.length ? alertas.join(' · ') : 'Sin alertas'}</span>
+      <span class="recosteo-alertas text-right text-[10px] font-bold">${alertasHtml}</span>
     </label>`;
   }).join('');
 }

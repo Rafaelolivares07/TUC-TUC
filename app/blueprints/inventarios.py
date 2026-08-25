@@ -1441,7 +1441,8 @@ def api_inventario_kardex(producto_id):
             ORDER BY COALESCE(m.documento_fecha, m.created_at::date) DESC, m.created_at DESC, m.id DESC LIMIT 300
         """, (producto_id,)).fetchall()
         prod_info = conn.execute("""
-            SELECT p.costo, COALESCE(s.stock, 0.0) AS stock
+            SELECT p.costo, COALESCE(s.stock, 0.0) AS stock,
+                   COALESCE(s.valor_existencia, 0.0) AS valor_existencia
             FROM productos p
             LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = 1
             WHERE p.id = %s
@@ -1456,6 +1457,7 @@ def api_inventario_kardex(producto_id):
         
         costo_actual = float(prod_info['costo']) if prod_info and prod_info['costo'] is not None else 0.0
         stock_actual = float(prod_info['stock']) if prod_info and prod_info['stock'] is not None else 0.0
+        valor_existencia = float(prod_info['valor_existencia']) if prod_info else 0.0
         auditoria = _auditar_producto_recosteo(conn, negocio_id, producto_id)
 
         return jsonify({
@@ -1463,6 +1465,7 @@ def api_inventario_kardex(producto_id):
             'movimientos': [dict(r) for r in rows],
             'costo_actual': costo_actual,
             'stock_actual': stock_actual,
+            'valor_existencia': valor_existencia,
             'totales': {
                 'entradas': float(totales['entradas'] or 0),
                 'salidas': float(totales['salidas'] or 0)
@@ -1986,6 +1989,11 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id):
         'movimientos': len(movimientos),
         'stock_final': float(stock),
         'costo_reconstruido': float(costo_und),
+        'stock_almacenado': float(saldo['stock']) if saldo else None,
+        'costo_almacenado': float(saldo['costo_und']) if saldo else None,
+        'valor_almacenado': float(saldo['valor_existencia']) if saldo else None,
+        'valor_reconstruido': float(valor_existencia),
+        'diferencia_valor': float((saldo['valor_existencia'] - valor_existencia) if saldo else 0),
         'stock_inconsistente': stock_inconsistente,
         'costo_inconsistente': costo_inconsistente,
         'valor_inconsistente': valor_inconsistente,

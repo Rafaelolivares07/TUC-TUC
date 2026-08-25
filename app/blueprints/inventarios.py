@@ -1993,7 +1993,9 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id):
         'negativo_final': stock < 0,
         'negativos_intermedios': negativos,
         'inconsistencias_movimientos': inconsistencias,
-        'problemas': bool(stock < 0 or negativos or inconsistencias or saldo_inconsistente)
+        'problemas': bool(stock < 0 or negativos or inconsistencias
+                          or stock_inconsistente or costo_inconsistente
+                          or valor_inconsistente)
     }
 
 

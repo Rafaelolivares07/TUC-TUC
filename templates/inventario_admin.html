@@ -2864,6 +2864,15 @@ async function validarFechaEntrada(fecha) {
   return null;
 }
 
+function validarFechaCompraSugerida(input) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  if (input.value > hoy) {
+    alert(`No se puede usar la fecha ${input.value}: es futura. Selecciona hoy o una fecha anterior.`);
+    input.value = '';
+    input.focus();
+  }
+}
+
 
 // ── Kardex ────────────────────────────────────────────────────────────────────
 function filtrarACKardex() {
@@ -3263,7 +3272,7 @@ function renderizarComprasTabla(proveedores) {
               </label>
               <label class="flex flex-col gap-1 text-[10px] font-bold text-slate-500">
                 Fecha
-                <input type="date" id="compras-fecha-${pIdx}" max="${new Date().toISOString().split('T')[0]}" aria-label="Fecha del documento" class="border rounded px-2 py-1 text-sm font-medium w-32 outline-none bg-white">
+                <input type="date" id="compras-fecha-${pIdx}" max="${new Date().toISOString().split('T')[0]}" onchange="validarFechaCompraSugerida(this)" aria-label="Fecha del documento" class="border rounded px-2 py-1 text-sm font-medium w-32 outline-none bg-white">
               </label>
             <button onclick="hacerEntradaProveedor(${pIdx})"
                     class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm">
@@ -3470,6 +3479,14 @@ async function hacerEntradaProveedor(pIdx) {
   const p = window.COMPRAS_DATA[pIdx];
   if (!p) return;
 
+  const fechaInput = document.getElementById(`compras-fecha-${pIdx}`);
+  const hoy = new Date().toISOString().slice(0, 10);
+  if (fechaInput?.value && fechaInput.value > hoy) {
+    alert(`No se puede registrar la compra: la fecha ${fechaInput.value} es futura. Selecciona hoy o una fecha anterior.`);
+    fechaInput.focus();
+    return;
+  }
+
   const nuevaPestana = window.open('about:blank', '_blank');
   if (!nuevaPestana) {
     alert('Permite las ventanas emergentes para abrir la entrada en una nueva pestaña.');
@@ -3487,8 +3504,7 @@ async function hacerEntradaProveedor(pIdx) {
   }
 
   const docInput = document.getElementById(`compras-doc-${pIdx}`);
-  const fechaInput = document.getElementById(`compras-fecha-${pIdx}`);
-  const fechaDocumento = fechaInput?.value || new Date().toISOString().slice(0, 10);
+  const fechaDocumento = fechaInput?.value || hoy;
   const errorFecha = await validarFechaEntrada(fechaDocumento);
   if (errorFecha) {
     alert(errorFecha);

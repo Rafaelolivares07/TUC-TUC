@@ -439,6 +439,7 @@
       <button class="tab-btn" onclick="mostrarTab('ensambles_historicos')">Ensambles Históricos</button>
       <button class="tab-btn" onclick="mostrarTab('ventas_costos')">Ventas/Costos</button>
       <button class="tab-btn" onclick="mostrarTab('gastos')">Gastos</button>
+      <button class="tab-btn" onclick="mostrarTab('recosteo')">Recosteo / Auditoría</button>
       <a href="/admin/inventario-fisico/{{ negocio_id }}" class="tab-btn">📋 Inv. Físico</a>
     </div>
   </div>
@@ -1209,6 +1210,33 @@
     {% include 'gastos_pane.html' %}
   </div>
 
+  <!-- ── TAB RECOSTEO Y AUDITORÍA ──────────────────────────────────── -->
+  <div id="tab-recosteo" class="hidden bg-white rounded-2xl shadow p-5">
+    <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+      <div>
+        <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Integridad de inventario</p>
+        <h2 class="text-lg font-extrabold text-gray-800">Auditoría y recosteo</h2>
+        <p class="text-xs text-gray-500 mt-1">Primero audita; después recostea los productos seleccionados.</p>
+      </div>
+      <button type="button" onclick="cargarAuditoriaRecosteo()" class="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50">
+        ↻ Auditar ahora
+      </button>
+    </div>
+    <div id="recosteo-resumen" class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4"></div>
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      <input id="recosteo-buscar" type="search" placeholder="Buscar producto..." oninput="filtrarAuditoriaRecosteo(this.value)" class="flex-1 min-w-[220px] border rounded-xl px-3 py-2 text-sm">
+      <button type="button" onclick="ejecutarRecosteoSeleccionados()" class="px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700">Recostear seleccionados</button>
+      <button type="button" onclick="ejecutarRecosteoTodos()" class="px-3 py-2 rounded-xl bg-rose-500 text-white text-xs font-bold hover:bg-rose-600">Recostear todos</button>
+    </div>
+    <div class="flex items-center gap-2 mb-2 text-xs text-gray-500">
+      <input id="recosteo-seleccionar-todos" type="checkbox" onchange="seleccionarTodosRecosteo(this.checked)">
+      <label for="recosteo-seleccionar-todos">Seleccionar todos los resultados</label>
+    </div>
+    <div id="recosteo-lista" class="border border-gray-100 rounded-xl divide-y divide-gray-100 overflow-hidden">
+      <p class="text-sm text-gray-400 text-center py-8">Cargando auditoría...</p>
+    </div>
+  </div>
+
 </div><!-- /max-w-5xl -->
 
 <script>
@@ -1245,7 +1273,7 @@ function toast(msg, ok = true) {
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'kardex', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'gastos'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'kardex', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'gastos', 'recosteo'];
 function mostrarTab(t) {
   TABS.forEach(id => {
     const el = document.getElementById(`tab-${id}`);
@@ -1284,6 +1312,108 @@ function mostrarTab(t) {
   }
   if (t === 'gastos') {
     inicializarModuloGastos();
+  }
+  if (t === 'recosteo') {
+    cargarAuditoriaRecosteo();
+  }
+}
+
+let auditoriaRecosteo = [];
+
+async function cargarAuditoriaRecosteo() {
+  const lista = document.getElementById('recosteo-lista');
+  if (lista) lista.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">Analizando movimientos...</p>';
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/auditoria`);
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No fue posible auditar el inventario.');
+    auditoriaRecosteo = d.productos || [];
+    renderizarResumenRecosteo(d);
+    renderizarListaRecosteo(auditoriaRecosteo);
+  } catch (error) {
+    if (lista) lista.innerHTML = `<p class="text-sm text-red-500 text-center py-8">${error.message}</p>`;
+  }
+}
+
+function renderizarResumenRecosteo(data) {
+  const r = data.resumen || {};
+  const tarjetas = [
+    ['Revisados', data.productos_revisados || 0, 'bg-gray-50 text-gray-700'],
+    ['Negativos finales', r.negativos_finales || 0, 'bg-red-50 text-red-700'],
+    ['Negativos históricos', r.negativos_intermedios || 0, 'bg-amber-50 text-amber-700'],
+    ['Cadena inconsistente', r.cadenas_inconsistentes || 0, 'bg-purple-50 text-purple-700'],
+    ['Saldos inconsistentes', r.saldos_inconsistentes || 0, 'bg-blue-50 text-blue-700']
+  ];
+  const el = document.getElementById('recosteo-resumen');
+  if (el) el.innerHTML = tarjetas.map(([label, value, clase]) => `
+    <div class="rounded-xl border border-gray-100 p-3 ${clase}">
+      <div class="text-[10px] font-bold uppercase">${label}</div>
+      <div class="text-xl font-extrabold mt-1">${value}</div>
+    </div>`).join('');
+}
+
+function renderizarListaRecosteo(productos) {
+  const el = document.getElementById('recosteo-lista');
+  if (!el) return;
+  if (!productos.length) {
+    el.innerHTML = '<p class="text-sm text-emerald-600 text-center py-8 font-semibold">No hay productos con movimientos para auditar.</p>';
+    return;
+  }
+  el.innerHTML = productos.map(p => {
+    const alertas = [];
+    if (p.negativo_final) alertas.push('Saldo final negativo');
+    if (p.negativos_intermedios?.length) alertas.push(`${p.negativos_intermedios.length} negativo(s) histórico(s)`);
+    if (p.inconsistencias_movimientos?.length) alertas.push('Cadena inconsistente');
+    if (p.saldo_inconsistente) alertas.push('Saldo final no coincide');
+    return `<label class="recosteo-producto flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer" data-nombre="${(p.producto_nombre || '').toLowerCase()}">
+      <input type="checkbox" class="recosteo-check" value="${p.producto_id}">
+      <span class="flex-1 min-w-0">
+        <span class="block text-sm font-bold text-gray-700 truncate">${p.producto_nombre}</span>
+        <span class="block text-[11px] text-gray-400">Stock final: ${fmt(p.stock_final)} · Costo: ${fmtMon(p.costo_reconstruido)} · Movimientos: ${p.movimientos}</span>
+      </span>
+      <span class="text-right text-[10px] font-bold ${alertas.length ? 'text-red-600' : 'text-emerald-600'}">${alertas.length ? alertas.join(' · ') : 'Sin alertas'}</span>
+    </label>`;
+  }).join('');
+}
+
+function filtrarAuditoriaRecosteo(texto) {
+  const query = texto.toLowerCase().trim();
+  document.querySelectorAll('.recosteo-producto').forEach(el => {
+    el.classList.toggle('hidden', query && !el.dataset.nombre.includes(query));
+  });
+}
+
+function seleccionarTodosRecosteo(marcado) {
+  document.querySelectorAll('.recosteo-producto:not(.hidden) .recosteo-check').forEach(input => {
+    input.checked = marcado;
+  });
+}
+
+async function ejecutarRecosteoSeleccionados() {
+  const ids = [...document.querySelectorAll('.recosteo-check:checked')].map(input => Number(input.value));
+  if (!ids.length) {
+    toast('Selecciona al menos un producto para recostear.', false);
+    return;
+  }
+  await ejecutarRecosteo({ producto_ids: ids }, `${ids.length} producto(s)`);
+}
+
+async function ejecutarRecosteoTodos() {
+  if (!confirm('¿Deseas recostear todos los productos con movimientos?')) return;
+  await ejecutarRecosteo({ todos: true }, 'todos los productos');
+}
+
+async function ejecutarRecosteo(payload, descripcion) {
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/ejecutar`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No fue posible ejecutar el recosteo.');
+    toast(`Recosteo ejecutado para ${descripcion}.`);
+    await cargarAuditoriaRecosteo();
+  } catch (error) {
+    toast(error.message, false);
   }
 }
 

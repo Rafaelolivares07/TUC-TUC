@@ -1892,6 +1892,189 @@ def _recostear_producto(conn, negocio_id, producto_id):
     """, (float(costo_und), producto_id, negocio_id))
 
 
+def _auditar_producto_recosteo(conn, negocio_id, producto_id):
+    """Reconstruye un producto sin modificarlo y devuelve sus inconsistencias."""
+    producto = conn.execute(
+        "SELECT id, nombre FROM productos WHERE id = %s AND negocio_id = %s",
+        (producto_id, negocio_id)
+    ).fetchone()
+    if not producto:
+        return None
+
+    movimientos = conn.execute("""
+        SELECT id, tipo, cantidad, valor_unitario, stock_anterior,
+               stock_nuevo, costo_und, documento_fecha, created_at
+        FROM movimientos_inventario
+        WHERE negocio_id = %s AND producto_id = %s
+        ORDER BY COALESCE(documento_fecha, created_at::date) ASC,
+                 created_at ASC, id ASC
+    """, (negocio_id, producto_id)).fetchall()
+
+    stock = Decimal('0')
+    valor_existencia = Decimal('0')
+    costo_und = Decimal('0')
+    negativos = []
+    inconsistencias = []
+
+    def diferente(a, b):
+        return abs(Decimal(str(a or 0)) - Decimal(str(b or 0))) > Decimal('0.0001')
+
+    for mov in movimientos:
+        cantidad = Decimal(str(mov['cantidad'] or 0))
+        signo = Decimal('1') if mov['tipo'] == 'entrada' else Decimal('-1')
+        stock_anterior = stock
+        stock_nuevo = stock_anterior + cantidad * signo
+
+        if mov['tipo'] == 'entrada' and mov['valor_unitario'] is not None:
+            valor_unitario = Decimal(str(mov['valor_unitario']))
+            costo_und = ((valor_existencia + cantidad * valor_unitario) / stock_nuevo
+                         if stock_nuevo > 0 else valor_unitario)
+            valor_existencia = (stock_nuevo * costo_und
+                                if stock_nuevo > 0 else Decimal('0'))
+        else:
+            valor_existencia = (stock_nuevo * costo_und
+                                if stock_nuevo > 0 else Decimal('0'))
+
+        fecha = mov['documento_fecha'] or mov['created_at']
+        fecha_texto = fecha.isoformat() if hasattr(fecha, 'isoformat') else str(fecha or '')
+        if stock_nuevo < 0:
+            negativos.append({
+                'movimiento_id': mov['id'],
+                'fecha': fecha_texto,
+                'tipo': mov['tipo'],
+                'stock': float(stock_nuevo)
+            })
+
+        if (diferente(mov['stock_anterior'], stock_anterior)
+                or diferente(mov['stock_nuevo'], stock_nuevo)):
+            inconsistencias.append({
+                'movimiento_id': mov['id'],
+                'fecha': fecha_texto,
+                'guardado_anterior': float(mov['stock_anterior'] or 0),
+                'calculado_anterior': float(stock_anterior),
+                'guardado_nuevo': float(mov['stock_nuevo'] or 0),
+                'calculado_nuevo': float(stock_nuevo)
+            })
+
+        stock = stock_nuevo
+
+    saldo = conn.execute("""
+        SELECT stock, costo_und, valor_existencia
+        FROM saldos_inventario
+        WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
+    """, (negocio_id, producto_id)).fetchone()
+    saldo_inconsistente = bool(
+        saldo and (diferente(saldo['stock'], stock)
+                   or diferente(saldo['costo_und'], costo_und)
+                   or diferente(saldo['valor_existencia'], valor_existencia))
+    )
+
+    return {
+        'producto_id': producto_id,
+        'producto_nombre': producto['nombre'],
+        'movimientos': len(movimientos),
+        'stock_final': float(stock),
+        'costo_reconstruido': float(costo_und),
+        'saldo_inconsistente': saldo_inconsistente,
+        'negativo_final': stock < 0,
+        'negativos_intermedios': negativos,
+        'inconsistencias_movimientos': inconsistencias,
+        'problemas': bool(stock < 0 or negativos or inconsistencias or saldo_inconsistente)
+    }
+
+
+@bp.route('/api/inventario/<int:negocio_id>/recosteo/auditoria', methods=['GET'])
+def api_auditoria_recosteo(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        ids_raw = request.args.get('producto_ids', '').strip()
+        if ids_raw:
+            producto_ids = sorted({int(x) for x in ids_raw.split(',') if x.strip()})
+        else:
+            rows = conn.execute("""
+                SELECT DISTINCT producto_id
+                FROM movimientos_inventario
+                WHERE negocio_id = %s
+                ORDER BY producto_id
+            """, (negocio_id,)).fetchall()
+            producto_ids = [r['producto_id'] for r in rows]
+
+        productos_auditados = []
+        for producto_id in producto_ids:
+            resultado = _auditar_producto_recosteo(conn, negocio_id, producto_id)
+            if resultado:
+                productos_auditados.append(resultado)
+
+        return jsonify({
+            'ok': True,
+            'productos_revisados': len(productos_auditados),
+            'productos': productos_auditados,
+            'resumen': {
+                'negativos_finales': sum(1 for p in productos_auditados if p['negativo_final']),
+                'negativos_intermedios': sum(1 for p in productos_auditados if p['negativos_intermedios']),
+                'cadenas_inconsistentes': sum(1 for p in productos_auditados if p['inconsistencias_movimientos']),
+                'saldos_inconsistentes': sum(1 for p in productos_auditados if p['saldo_inconsistente'])
+            }
+        })
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'Lista de productos inválida'}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/recosteo/ejecutar', methods=['POST'])
+def api_ejecutar_recosteo(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json() or {}
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        producto_ids = data.get('producto_ids')
+        if data.get('todos') or not producto_ids:
+            rows = conn.execute("""
+                SELECT DISTINCT producto_id
+                FROM movimientos_inventario
+                WHERE negocio_id = %s
+            """, (negocio_id,)).fetchall()
+            producto_ids = [r['producto_id'] for r in rows]
+        producto_ids = sorted({int(x) for x in producto_ids})
+
+        for producto_id in producto_ids:
+            if not conn.execute(
+                "SELECT 1 FROM productos WHERE id = %s AND negocio_id = %s",
+                (producto_id, negocio_id)
+            ).fetchone():
+                return jsonify({'ok': False, 'error': f'Producto no pertenece al negocio: {producto_id}'}), 400
+            _recostear_producto(conn, negocio_id, producto_id)
+
+        conn.commit()
+        return jsonify({
+            'ok': True,
+            'productos_recosteados': len(producto_ids),
+            'auditoria': 'Ejecute la auditoría nuevamente para verificar resultados.'
+        })
+    except (TypeError, ValueError):
+        conn.rollback()
+        return jsonify({'ok': False, 'error': 'Lista de productos inválida'}), 400
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/documento/previsualizar')
 def api_documento_previsualizar(negocio_id):
     if 'usuario_id' not in session:

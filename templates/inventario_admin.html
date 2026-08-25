@@ -624,7 +624,6 @@
         <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor" autocomplete="off" onfocus="this.select()">
         <div id="entrada-proveedor-list" class="ac-list hidden"></div>
         <input type="hidden" id="entrada-proveedor-id">
-        <input id="entrada-documento" type="text" placeholder="Doc. proveedor" class="w-full border rounded px-3 py-2 text-sm mt-1">
       </div>
       <div>
         <label>Método de Pago</label>
@@ -2762,6 +2761,13 @@ async function registrarEntrada() {
   const proveedor_id = document.getElementById('entrada-proveedor-id').value || null;
   const metodo_pago = document.getElementById('entrada-metodo-pago').value || 'efectivo';
 
+  const errorFecha = await validarFechaEntrada(fecha_documento);
+  if (errorFecha) {
+    toast(errorFecha, false);
+    document.getElementById('entrada-fecha-doc').focus();
+    return;
+  }
+
   if (proveedor_nombre && !proveedor_id) {
     toast('El proveedor no está registrado ni seleccionado. Por favor haz clic en "Crear proveedor" o selecciona uno de la lista.', false);
     return;
@@ -2840,6 +2846,22 @@ async function registrarEntrada() {
   } else {
     toast(d.error, false);
   }
+}
+
+async function validarFechaEntrada(fecha) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const fechaEfectiva = fecha || hoy;
+  if (fechaEfectiva > hoy) return 'La fecha del documento no puede ser futura.';
+
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/balance-comprobacion?desde=${fechaEfectiva}&hasta=${fechaEfectiva}`);
+    const d = await r.json();
+    if (!r.ok || !d.ok) return d.error || 'No fue posible validar el período contable.';
+    if (d.periodo_cerrado) return `El período ${fechaEfectiva.slice(0, 7)} está cerrado y no admite esta compra.`;
+  } catch (error) {
+    return 'No fue posible validar el período contable.';
+  }
+  return null;
 }
 
 
@@ -3444,9 +3466,15 @@ function recalcularTotalProveedor(pIdx) {
   }
 }
 
-function hacerEntradaProveedor(pIdx) {
+async function hacerEntradaProveedor(pIdx) {
   const p = window.COMPRAS_DATA[pIdx];
   if (!p) return;
+
+  const nuevaPestana = window.open('about:blank', '_blank');
+  if (!nuevaPestana) {
+    alert('Permite las ventanas emergentes para abrir la entrada en una nueva pestaña.');
+    return;
+  }
   
   recalcularTotalProveedor(pIdx);
   
@@ -3454,60 +3482,33 @@ function hacerEntradaProveedor(pIdx) {
   
   if (checkedProds.length === 0) {
     alert("Por favor, seleccione al menos un producto con cantidad mayor a cero para hacer la entrada.");
+    nuevaPestana.close();
     return;
   }
-  
-  if (!confirm(`¿Desea transferir ${checkedProds.length} ítems de ${p.proveedor_nombre} a la pestaña de Entradas?`)) {
-    return;
-  }
-  
-  document.getElementById('entrada-lineas').innerHTML = '';
-  entradaLineas = [];
-  
-  document.getElementById('entrada-proveedor-id').value = p.proveedor_id || '';
-  document.getElementById('entrada-proveedor').value = p.proveedor_nombre;
-  
-  // Nuevos campos: documento y fecha del proveedor
+
   const docInput = document.getElementById(`compras-doc-${pIdx}`);
   const fechaInput = document.getElementById(`compras-fecha-${pIdx}`);
-  const hoy = new Date().toISOString().slice(0, 10);
-  if (fechaInput && fechaInput.value && fechaInput.value > hoy) {
-    alert('La fecha del documento no puede ser futura.');
-    fechaInput.focus();
+  const fechaDocumento = fechaInput?.value || new Date().toISOString().slice(0, 10);
+  const errorFecha = await validarFechaEntrada(fechaDocumento);
+  if (errorFecha) {
+    alert(errorFecha);
+    fechaInput?.focus();
+    nuevaPestana.close();
     return;
   }
-  if (docInput) document.getElementById('entrada-documento').value = docInput.value.trim() || '';
-  if (fechaInput) document.getElementById('entrada-fecha-doc').value = fechaInput.value || '';
-  
-  const btnCrear = document.getElementById('btn-crear-proveedor');
-  if (btnCrear) btnCrear.classList.add('hidden');
-  const badgeProv = document.getElementById('badge-proveedor-creado');
-  if (badgeProv) badgeProv.classList.add('hidden');
-  
-  checkedProds.forEach(prod => {
-    agregarLineaEntradaConDatos(
-      prod.producto_id,
-      prod.producto_nombre,
-      prod.cantidad_sugerida_unidades,
-      prod.costo_unitario,
-      prod.iva_pct || 0,
-      prod.presentacion_id,
-      prod.presentacion_nombre,
-      prod.unidades_presentacion
-    );
-  });
-  
-  calcularTotalesEntrada();
-  mostrarTab('entradas');
-  
-  setTimeout(() => {
-    const el = document.getElementById('tab-entradas');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, 150);
-  
-  toast(`Cargados ${checkedProds.length} ítems en la pestaña de Entradas.`);
+
+  if (!confirm(`¿Desea transferir ${checkedProds.length} ítems de ${p.proveedor_nombre} a una nueva pestaña de Entradas?`)) {
+    nuevaPestana.close();
+    return;
+  }
+
+  sessionStorage.setItem('entrada_desde_compras', JSON.stringify({
+    proveedor: p,
+    productos: checkedProds,
+    documento: docInput?.value.trim() || '',
+    fecha: fechaDocumento
+  }));
+  nuevaPestana.location.href = `${window.location.pathname}?tab=entradas&desde_compras=1`;
 }
 
 function seleccionarSugerencia(productoId, productoNombre, cantidad) {
@@ -4248,6 +4249,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupRemoteAC('prod-responsable', 'prod-responsable-list', 'prod-responsable-id', '/api/inventario/proveedores/buscar');
 
   initDefaultProveedor();
+  cargarEntradaDesdeComprasPendiente();
 
   document.getElementById('entrada-proveedor').addEventListener('input', (e) => {
     const val = e.target.value.trim();

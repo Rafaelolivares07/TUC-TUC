@@ -6101,12 +6101,8 @@ def api_compras_sugerencias(negocio_id):
             # Calcular cantidad a comprar
             cantidad_comprar_neta = (demanda_proyectada * (frecuencia + dias_entrega_global)) - stock_actual
             if cantidad_comprar_neta < 0.0001:
-                cantidad_comprar = demanda_proyectada * frecuencia
-            else:
-                cantidad_comprar = cantidad_comprar_neta
-                
-            if cantidad_comprar < 0.0001:
-                cantidad_comprar = 0.0
+                continue
+            cantidad_comprar = cantidad_comprar_neta
                 
             # Convertir cantidad sugerida a paquetes
             import math

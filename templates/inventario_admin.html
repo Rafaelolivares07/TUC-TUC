@@ -1036,6 +1036,8 @@
       </div>
     </div>
 
+    <div id="kardex-auditoria" class="hidden mb-3 rounded-xl border p-3 text-xs"></div>
+
     <div class="overflow-x-auto overflow-y-auto max-h-[600px] border border-gray-150 rounded-xl custom-scrollbar">
       <table class="w-full text-xs">
         <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
@@ -3082,6 +3084,7 @@ async function cargarKardex(productoId) {
   const r = await fetch(`/api/inventario/producto/${productoId}/kardex`);
   const d = await r.json();
   if (!d.ok) { toast(d.error, false); return; }
+  renderizarAuditoriaKardex(d.auditoria);
 
   // Update summary bar and local cache with live database values
   if (summaryPanel && d.stock_actual !== undefined && d.costo_actual !== undefined) {
@@ -3111,6 +3114,8 @@ async function cargarKardex(productoId) {
   if (sumEntradasEl) sumEntradasEl.textContent = fmt(totalEntradas);
   if (sumSalidasEl) sumSalidasEl.textContent = fmt(totalSalidas);
   
+  const movimientosNegativos = new Set((d.auditoria?.negativos_intermedios || []).map(x => Number(x.movimiento_id)));
+  const movimientosInconsistentes = new Set((d.auditoria?.inconsistencias_movimientos || []).map(x => Number(x.movimiento_id)));
   tb.innerHTML = d.movimientos.map(m => {
     const transCostVal = m.valor_unitario;
     const avgCostVal = m.costo_und;
@@ -3153,8 +3158,9 @@ async function cargarKardex(productoId) {
       `;
     }
 
+    const alertaMovimiento = movimientosNegativos.has(Number(m.id)) || movimientosInconsistentes.has(Number(m.id));
     return `
-      <tr class="hover:bg-gray-50/50 transition-colors">
+      <tr class="hover:bg-gray-50/50 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''}" title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
         <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">${m.fecha}</td>
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
@@ -3167,6 +3173,18 @@ async function cargarKardex(productoId) {
       </tr>
     `;
   }).join('');
+}
+
+function renderizarAuditoriaKardex(auditoria) {
+  const el = document.getElementById('kardex-auditoria');
+  if (!el || !auditoria) return;
+  const alertas = [];
+  if (auditoria.negativo_final) alertas.push('<span class="rounded-md bg-red-100 px-2 py-1 text-red-700 font-bold">Saldo final negativo</span>');
+  if (auditoria.negativos_intermedios?.length) alertas.push(`<span class="rounded-md bg-amber-100 px-2 py-1 text-amber-700 font-bold">${auditoria.negativos_intermedios.length} saldo(s) negativo(s) histórico(s)</span>`);
+  if (auditoria.inconsistencias_movimientos?.length) alertas.push(`<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700 font-bold">${auditoria.inconsistencias_movimientos.length} cadena(s) inconsistente(s)</span>`);
+  if (auditoria.saldo_inconsistente) alertas.push('<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700 font-bold">Saldo final no coincide</span>');
+  el.className = `mb-3 rounded-xl border p-3 text-xs ${alertas.length ? 'border-amber-200 bg-amber-50/40' : 'border-emerald-200 bg-emerald-50/40'}`;
+  el.innerHTML = `<div class="flex flex-wrap items-center gap-2"><strong>Auditoría del producto</strong>${alertas.length ? alertas.join('') : '<span class="rounded-md bg-emerald-100 px-2 py-1 text-emerald-700 font-bold">Sin inconsistencias detectadas</span>'}</div>`;
 }
 
 async function cargarSugerenciasProduccion() {

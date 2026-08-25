@@ -1449,12 +1449,14 @@ def api_inventario_kardex(producto_id):
         
         costo_actual = float(prod_info['costo']) if prod_info and prod_info['costo'] is not None else 0.0
         stock_actual = float(prod_info['stock']) if prod_info and prod_info['stock'] is not None else 0.0
+        auditoria = _auditar_producto_recosteo(conn, negocio_id, producto_id)
 
         return jsonify({
             'ok': True, 
             'movimientos': [dict(r) for r in rows],
             'costo_actual': costo_actual,
-            'stock_actual': stock_actual
+            'stock_actual': stock_actual,
+            'auditoria': auditoria
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

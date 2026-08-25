@@ -1070,6 +1070,28 @@
     </div>
   </div>
 
+  <div id="modal-fecha-documento" class="hidden fixed inset-0 z-50 bg-black/40 items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-5">
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <p class="text-xs text-gray-400 font-semibold uppercase">Corrección documental</p>
+          <h3 class="text-lg font-extrabold text-gray-800">Cambiar fecha del documento</h3>
+          <p id="fecha-doc-identidad" class="text-xs text-gray-500 mt-1"></p>
+        </div>
+        <button type="button" onclick="cerrarModalFechaDocumento()" class="text-gray-400 hover:text-gray-700 text-xl">×</button>
+      </div>
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <label>Fecha nueva<input id="fecha-doc-nueva" type="date" class="mt-1"></label>
+        <label>Hora nueva<input id="hora-doc-nueva" type="time" class="mt-1"></label>
+      </div>
+      <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">El cambio se aplicará a todos los movimientos del documento y luego se recostearán todos sus productos.</p>
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="cerrarModalFechaDocumento()" class="px-3 py-2 border rounded-xl text-xs font-bold text-gray-600">Cancelar</button>
+        <button type="button" onclick="guardarFechaDocumento()" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold">Aplicar y recostear</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ── TAB ENSAMBLES PREDICTIVOS ─────────────────────────────── -->
   <div id="tab-ensambles" class="hidden bg-white rounded-2xl shadow p-5">
     <div class="border-b border-gray-150 pb-4 mb-4 flex items-center justify-between flex-wrap gap-4">
@@ -3188,9 +3210,13 @@ async function cargarKardex(productoId) {
     }
 
     const alertaMovimiento = movimientosNegativos.has(Number(m.id)) || movimientosInconsistentes.has(Number(m.id));
+    const fechaKardex = m.documento_fecha || '';
+    const fechaCelda = m.tipo_documento_id && m.documento_numero
+      ? `<button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${m.hora_documento || ''}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline" title="Cambiar fecha y recostear documento">${m.fecha}</button>`
+      : m.fecha;
     return `
       <tr id="kardex-mov-${m.id}" class="hover:bg-gray-50/50 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''}" title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
-        <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">${m.fecha}</td>
+        <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">${fechaCelda}</td>
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
         <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${fmt(m.stock_nuevo)}</td>
@@ -3202,6 +3228,53 @@ async function cargarKardex(productoId) {
       </tr>
     `;
   }).join('');
+}
+
+function abrirModalFechaDocumento(tipoDocumentoId, numeroCodificado, fechaActual, horaActual, tipoCodificado) {
+  const modal = document.getElementById('modal-fecha-documento');
+  const fecha = (fechaActual || '').slice(0, 10);
+  document.getElementById('fecha-doc-identidad').textContent = `${decodeURIComponent(tipoCodificado)}-${decodeURIComponent(numeroCodificado)}`;
+  document.getElementById('fecha-doc-nueva').value = fecha;
+  document.getElementById('fecha-doc-nueva').max = new Date().toISOString().slice(0, 10);
+  document.getElementById('hora-doc-nueva').value = horaActual || '00:00';
+  modal.dataset.tipoDocumentoId = tipoDocumentoId;
+  modal.dataset.documentoNumero = decodeURIComponent(numeroCodificado);
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function cerrarModalFechaDocumento() {
+  const modal = document.getElementById('modal-fecha-documento');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+async function guardarFechaDocumento() {
+  const modal = document.getElementById('modal-fecha-documento');
+  const fecha = document.getElementById('fecha-doc-nueva').value;
+  const hora = document.getElementById('hora-doc-nueva').value;
+  const hoy = new Date().toISOString().slice(0, 10);
+  if (!fecha) { toast('Selecciona una fecha.', false); return; }
+  if (fecha > hoy) { toast('La fecha no puede ser futura.', false); return; }
+  if (!confirm('Se actualizará el documento completo y se recostearán todos sus productos. ¿Continuar?')) return;
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/cambiar-fecha`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        tipo_documento_id: Number(modal.dataset.tipoDocumentoId),
+        documento_numero: modal.dataset.documentoNumero,
+        nueva_fecha: fecha,
+        nueva_hora: hora || null
+      })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo cambiar la fecha.');
+    cerrarModalFechaDocumento();
+    toast(`Documento actualizado. Productos recosteados: ${d.productos_recosteados}.`);
+    await cargarKardex(kardexProductoActual);
+  } catch (error) {
+    toast(error.message, false);
+  }
 }
 
 function renderizarAuditoriaKardex(auditoria, productoId) {

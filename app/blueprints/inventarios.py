@@ -1430,9 +1430,10 @@ def api_inventario_kardex(producto_id):
         rows = conn.execute("""
             SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
-                   m.documento_numero, m.documento_fecha, m.proveedor_id,
+                   m.documento_numero, m.documento_fecha, m.tipo_documento_id, m.proveedor_id,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
                    COALESCE(TO_CHAR(m.documento_fecha, 'DD/MM/YY') || ' ' || TO_CHAR(m.created_at, 'HH24:MI'), TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI')) AS fecha,
+                   TO_CHAR(m.created_at, 'HH24:MI') AS hora_documento,
                    p_padre.nombre AS producto_padre_nombre
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
@@ -2098,6 +2099,86 @@ def api_ejecutar_recosteo(negocio_id):
     except (TypeError, ValueError):
         conn.rollback()
         return jsonify({'ok': False, 'error': 'Lista de productos inválida'}), 400
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/documento/cambiar-fecha', methods=['POST'])
+def api_cambiar_fecha_documento_inventario(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json() or {}
+    tipo_documento_id = _int_o_none(data.get('tipo_documento_id'))
+    documento_numero = (_txt(data.get('documento_numero')) or '').strip()
+    nueva_fecha_raw = (_txt(data.get('nueva_fecha')) or '').strip()
+    nueva_hora = (_txt(data.get('nueva_hora')) or '').strip() or None
+    if not tipo_documento_id or not documento_numero or not nueva_fecha_raw:
+        return jsonify({'ok': False, 'error': 'Tipo de documento, número y nueva fecha son requeridos'}), 400
+
+    try:
+        from datetime import datetime, time
+        nueva_fecha = date.fromisoformat(nueva_fecha_raw[:10])
+        hora = time.fromisoformat(nueva_hora) if nueva_hora else None
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'Fecha u hora inválida'}), 400
+
+    if nueva_fecha > date.today():
+        return jsonify({'ok': False, 'error': 'La fecha del documento no puede ser futura'}), 400
+
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        rows = conn.execute("""
+            SELECT id, producto_id, documento_fecha, created_at
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND tipo_documento_id = %s AND documento_numero = %s
+        """, (negocio_id, tipo_documento_id, documento_numero)).fetchall()
+        if not rows:
+            return jsonify({'ok': False, 'error': 'No se encontraron movimientos para ese documento'}), 404
+
+        fecha_anterior = min((r['documento_fecha'] or r['created_at'].date()) for r in rows)
+        try:
+            _verificar_periodo_cerrado(conn, negocio_id, fecha_anterior)
+            _verificar_periodo_cerrado(conn, negocio_id, nueva_fecha)
+        except Exception as exc:
+            return jsonify({'ok': False, 'error': str(exc)}), 400
+
+        hora_uso = hora or rows[0]['created_at'].time()
+        fecha_hora = datetime.combine(nueva_fecha, hora_uso)
+        params = (nueva_fecha, fecha_hora, negocio_id, tipo_documento_id, documento_numero)
+        conn.execute("""
+            UPDATE movimientos_inventario
+            SET documento_fecha = %s, created_at = %s
+            WHERE negocio_id = %s AND tipo_documento_id = %s AND documento_numero = %s
+        """, params)
+        conn.execute("""
+            UPDATE movimientos_contables
+            SET fecha = %s, created_at = %s
+            WHERE negocio_id = %s AND tipo_documento_id = %s AND numero_documento = %s
+        """, params)
+        conn.execute("""
+            UPDATE saldo_por_documentos
+            SET fecha_hora = %s, created_at = %s
+            WHERE negocio_id = %s AND tipo_documento_id = %s AND numero_documento = %s
+        """, (fecha_hora, fecha_hora, negocio_id, tipo_documento_id, documento_numero))
+
+        producto_ids = sorted({r['producto_id'] for r in rows})
+        for producto_id in producto_ids:
+            _recostear_producto(conn, negocio_id, producto_id)
+        conn.commit()
+        return jsonify({
+            'ok': True,
+            'productos_recosteados': len(producto_ids),
+            'movimientos_actualizados': len(rows),
+            'fecha': nueva_fecha.isoformat(),
+            'hora': hora_uso.strftime('%H:%M')
+        })
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500

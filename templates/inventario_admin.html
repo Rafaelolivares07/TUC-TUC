@@ -2422,7 +2422,7 @@ function agregarLineaEntrada() {
       <input type="hidden" id="ent-id-${idx}">
     </div>
     <div class="col-span-1">
-      <input type="number" id="ent-cant-emp-${idx}" placeholder="Cant. Emp." min="0" step="0.0001" value="0" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
+       <input type="text" inputmode="decimal" id="ent-cant-emp-${idx}" placeholder="Cant. Emp." value="0" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
     </div>
     <div class="col-span-1 relative">
       <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="Unidad">
@@ -2431,16 +2431,16 @@ function agregarLineaEntrada() {
       <input type="hidden" id="ent-pres-equiv-${idx}" value="1.0">
     </div>
     <div class="col-span-2">
-      <input type="number" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center">
+       <input type="text" inputmode="decimal" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center" onfocus="this.select()">
     </div>
     <div class="col-span-1">
-      <input type="number" id="ent-costo-emp-${idx}" placeholder="Costo" min="0" step="0.000001" value="" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
+       <input type="text" inputmode="decimal" id="ent-costo-emp-${idx}" placeholder="Costo" value="" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
     </div>
     <div class="col-span-1">
-      <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="" oninput="calcularCostoFilaEmpaque(${idx}, 'total')">
+       <input type="text" inputmode="decimal" id="ent-total-${idx}" placeholder="Total L." value="" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'total')">
     </div>
     <div class="col-span-1">
-      <input type="number" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right">
+       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right" onfocus="this.select()">
     </div>
     <div class="col-span-1">
       <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full">
@@ -2522,7 +2522,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
       <input type="hidden" id="ent-id-${idx}" value="${productoId}">
     </div>
     <div class="col-span-1">
-      <input type="number" id="ent-cant-emp-${idx}" placeholder="Cant. Emp." min="0" step="0.0001" value="${cantEmp}" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
+       <input type="text" inputmode="decimal" id="ent-cant-emp-${idx}" placeholder="Cant. Emp." value="${cantEmp}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
     </div>
     <div class="col-span-1 relative">
       <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="${(presentacionNombre || 'Unidad').replace(/"/g,'&quot;')}">
@@ -2531,16 +2531,16 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
       <input type="hidden" id="ent-pres-equiv-${idx}" value="${equiv}">
     </div>
     <div class="col-span-2">
-      <input type="number" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center" value="${cantidad}">
+       <input type="text" inputmode="decimal" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center" value="${cantidad}" onfocus="this.select()">
     </div>
     <div class="col-span-1">
-      <input type="number" id="ent-costo-emp-${idx}" placeholder="Costo" min="0" step="0.000001" value="${costoEmp.toFixed(4)}" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
+       <input type="text" inputmode="decimal" id="ent-costo-emp-${idx}" placeholder="Costo" value="${costoEmp.toFixed(4)}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
     </div>
     <div class="col-span-1">
-      <input type="number" id="ent-total-${idx}" placeholder="Total L." min="0" step="0.01" value="${totalL.toFixed(2)}" oninput="calcularCostoFilaEmpaque(${idx}, 'total')">
+       <input type="text" inputmode="decimal" id="ent-total-${idx}" placeholder="Total L." value="${totalL.toFixed(2)}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'total')">
     </div>
     <div class="col-span-1">
-      <input type="number" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right" value="${valorUnitario}">
+       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right" value="${valorUnitario}" onfocus="this.select()">
     </div>
     <div class="col-span-1">
       <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full">

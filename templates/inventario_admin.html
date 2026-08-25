@@ -3600,10 +3600,10 @@ function renderizarComprasTabla(proveedores) {
                 Fecha
                 <input type="date" id="compras-fecha-${pIdx}" max="${new Date().toISOString().split('T')[0]}" onchange="validarFechaCompraSugerida(this)" aria-label="Fecha del documento" class="border rounded px-2 py-1 text-sm font-medium w-32 outline-none bg-white">
               </label>
-            <button type="button" onclick="hacerEntradaProveedor(${pIdx})"
+            <a href="${window.location.pathname}?tab=entradas&desde_compras=1" target="_blank" onclick="return hacerEntradaProveedor(${pIdx})"
                     class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm">
               📥 Registrar Entrada (FAC)
-            </button>
+            </a>
             </div>
           </div>
           <table class="w-full text-xs text-gray-700 align-middle">
@@ -3857,7 +3857,7 @@ function cargarEntradaDesdeComprasPendiente() {
 
 function hacerEntradaProveedor(pIdx) {
   const p = window.COMPRAS_DATA[pIdx];
-  if (!p) return;
+  if (!p) return false;
 
   const fechaInput = document.getElementById(`compras-fecha-${pIdx}`);
   const hoy = new Date().toISOString().slice(0, 10);
@@ -3889,11 +3889,7 @@ function hacerEntradaProveedor(pIdx) {
     documento: docInput?.value.trim() || '',
     fecha: fechaDocumento
   }));
-  const nuevaPestana = window.open(`${window.location.pathname}?tab=entradas&desde_compras=1`, '_blank');
-  if (!nuevaPestana) {
-    sessionStorage.removeItem('entrada_desde_compras');
-    alert('Permite las ventanas emergentes para abrir la entrada en una nueva pestaña.');
-  }
+  return true;
 }
 
 function editarCantidadCostoCompra(pIdx, productoId) {

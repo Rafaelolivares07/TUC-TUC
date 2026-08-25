@@ -3475,6 +3475,51 @@ function recalcularTotalProveedor(pIdx) {
   }
 }
 
+function cargarEntradaDesdeComprasPendiente() {
+  const raw = sessionStorage.getItem('entrada_desde_compras');
+  if (!raw) return;
+  sessionStorage.removeItem('entrada_desde_compras');
+
+  let transferencia;
+  try {
+    transferencia = JSON.parse(raw);
+  } catch (error) {
+    console.error('No se pudo leer la entrada pendiente de Compras Sugeridas:', error);
+    return;
+  }
+
+  const p = transferencia.proveedor;
+  const productos = transferencia.productos || [];
+  if (!p || !productos.length) return;
+
+  document.getElementById('entrada-lineas').innerHTML = '';
+  entradaLineas = [];
+  document.getElementById('entrada-proveedor-id').value = p.proveedor_id || '';
+  document.getElementById('entrada-proveedor').value = p.proveedor_nombre || '';
+  document.getElementById('entrada-num-doc').value = transferencia.documento || '';
+  document.getElementById('entrada-fecha-doc').value = transferencia.fecha || '';
+
+  document.getElementById('btn-crear-proveedor')?.classList.add('hidden');
+  document.getElementById('badge-proveedor-creado')?.classList.add('hidden');
+
+  productos.forEach(prod => {
+    agregarLineaEntradaConDatos(
+      prod.producto_id,
+      prod.producto_nombre,
+      prod.cantidad_sugerida_unidades,
+      prod.costo_unitario,
+      prod.iva_pct || 0,
+      prod.presentacion_id,
+      prod.presentacion_nombre,
+      prod.unidades_presentacion
+    );
+  });
+
+  calcularTotalesEntrada();
+  mostrarTab('entradas');
+  toast(`Cargados ${productos.length} ítems en la pestaña de Entradas.`);
+}
+
 function hacerEntradaProveedor(pIdx) {
   const p = window.COMPRAS_DATA[pIdx];
   if (!p) return;
@@ -4253,7 +4298,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // AC Responsable Producción
   setupRemoteAC('prod-responsable', 'prod-responsable-list', 'prod-responsable-id', '/api/inventario/proveedores/buscar');
 
-  initDefaultProveedor();
+  await initDefaultProveedor();
   cargarEntradaDesdeComprasPendiente();
 
   document.getElementById('entrada-proveedor').addEventListener('input', (e) => {

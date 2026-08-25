@@ -57,7 +57,12 @@
     input:focus, select:focus, textarea:focus { border-color: #e11d48; }
     #tab-entradas input:not([type="hidden"]),
     #tab-entradas select,
-    #tab-entradas textarea { font-size: .6875rem; }
+    #tab-entradas textarea {
+      font-size: .6875rem;
+      padding-top: 5px;
+      padding-bottom: 5px;
+    }
+    #tab-entradas label { margin-bottom: 0; }
     label { font-size: .75rem; font-weight: 600; color: #6b7280; margin-bottom: 2px; display: block; }
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; font-size: .72rem; font-weight: 700; color: #9ca3af;
@@ -598,23 +603,35 @@
 
   <!-- ── TAB ENTRADAS ──────────────────────────────────────────────── -->
   <div id="tab-entradas" class="hidden bg-white rounded-2xl shadow p-5">
-    <h2 class="font-bold text-gray-700 mb-4">Registrar entrada de mercancía</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-      <div>
+    <h2 class="font-bold text-gray-700 mb-3">Registrar entrada de mercancía</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-12 gap-x-3 gap-y-2 mb-3">
+      <div class="sm:col-span-2">
         <label>Tipo doc.</label>
         <select id="entrada-tipo-doc">
           <option value="">Cargando tipos...</option>
         </select>
       </div>
-      <div>
+      <div class="sm:col-span-2">
         <label>No. documento</label>
-        <input id="entrada-num-doc" type="text" placeholder="FAC-0234">
+        <input id="entrada-num-doc" type="text" placeholder="FAC-0234" class="sm:w-2/5">
       </div>
-      <div>
+      <div class="sm:col-span-2">
         <label>Fecha documento</label>
-        <input id="entrada-fecha-doc" type="date">
+        <input id="entrada-fecha-doc" type="date" class="sm:w-2/5">
       </div>
-      <div class="sm:col-span-2 relative">
+      <div class="sm:col-span-2">
+        <label>Método de Pago</label>
+        <select id="entrada-metodo-pago">
+          <!-- Cargado dinámicamente -->
+        </select>
+      </div>
+      <div class="sm:col-span-4 flex items-end">
+        <button type="button" onclick="registrarEntrada()"
+                class="w-full py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600">
+          Registrar entrada
+        </button>
+      </div>
+      <div class="sm:col-span-6 relative">
         <label class="flex justify-between items-center">
           <span>Proveedor</span>
           <button type="button" id="btn-crear-proveedor" onclick="crearProveedorNuevo()" class="hidden text-xs text-rose-500 hover:text-rose-700 font-bold bg-transparent border-0 p-0 cursor-pointer">
@@ -628,13 +645,7 @@
         <div id="entrada-proveedor-list" class="ac-list hidden"></div>
         <input type="hidden" id="entrada-proveedor-id">
       </div>
-      <div>
-        <label>Método de Pago</label>
-        <select id="entrada-metodo-pago">
-          <!-- Cargado dinámicamente -->
-        </select>
-      </div>
-      <div class="sm:col-span-2">
+      <div class="sm:col-span-6">
         <label>Notas (opcional)</label>
         <input id="entrada-notas" type="text" placeholder="">
       </div>
@@ -652,7 +663,7 @@
         <span class="col-span-1 text-xs font-bold text-gray-400 uppercase text-center">IVA %</span>
         <span class="col-span-1"></span>
       </div>
-      <div id="entrada-lineas" class="space-y-2"></div>
+      <div id="entrada-lineas" class="space-y-1"></div>
     </div>
 
     <button onclick="agregarLineaEntrada()"
@@ -673,12 +684,6 @@
       </div>
     </div>
 
-    <div class="flex justify-end">
-      <button onclick="registrarEntrada()"
-              class="px-6 py-2.5 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600">
-        Registrar entrada
-      </button>
-    </div>
   </div>
 
   <!-- ── TAB PRODUCCIÓN ───────────────────────────────────────────── -->
@@ -2396,7 +2401,7 @@ function agregarLineaEntrada() {
   const cont = document.getElementById('entrada-lineas');
   const idx = entradaLineas.length;
   const div = document.createElement('div');
-  div.className = 'grid grid-cols-12 gap-2 items-end';
+  div.className = 'grid grid-cols-12 gap-1 items-end';
   div.innerHTML = `
     <div class="col-span-3 relative">
       <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off">
@@ -2490,7 +2495,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
   const cont = document.getElementById('entrada-lineas');
   const idx = entradaLineas.length;
   const div = document.createElement('div');
-  div.className = 'grid grid-cols-12 gap-2 items-end';
+  div.className = 'grid grid-cols-12 gap-1 items-end';
   
   const equiv = parseFloat(presentacionEquivalencia) || 1.0;
   const cantEmp = (parseFloat(cantidad) || 0) / equiv;

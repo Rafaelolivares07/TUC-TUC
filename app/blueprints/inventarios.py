@@ -2046,7 +2046,10 @@ def api_auditoria_recosteo(negocio_id):
                 'negativos_finales': sum(1 for p in productos_auditados if p['negativo_final']),
                 'negativos_intermedios': sum(1 for p in productos_auditados if p['negativos_intermedios']),
                 'cadenas_inconsistentes': sum(1 for p in productos_auditados if p['inconsistencias_movimientos']),
-                'saldos_inconsistentes': sum(1 for p in productos_auditados if p['saldo_inconsistente'])
+                'saldos_inconsistentes': sum(1 for p in productos_auditados if p['saldo_inconsistente']),
+                'stocks_inconsistentes': sum(1 for p in productos_auditados if p['stock_inconsistente']),
+                'costos_inconsistentes': sum(1 for p in productos_auditados if p['costo_inconsistente']),
+                'valores_inconsistentes': sum(1 for p in productos_auditados if p['valor_inconsistente'])
             }
         })
     except ValueError:

@@ -1253,6 +1253,7 @@
       <input id="recosteo-seleccionar-todos" type="checkbox" onchange="seleccionarTodosRecosteo(this.checked)">
       <label for="recosteo-seleccionar-todos">Seleccionar todos los resultados</label>
     </div>
+    <p class="text-[10px] text-gray-400 mb-2">En cada producto: valor guardado / valor reconstruido.</p>
     <div id="recosteo-lista" class="border border-gray-100 rounded-xl divide-y divide-gray-100 overflow-hidden">
       <p class="text-sm text-gray-400 text-center py-8">Cargando auditoría...</p>
     </div>
@@ -1363,7 +1364,9 @@ function renderizarResumenRecosteo(data) {
     ['Negativos finales', r.negativos_finales || 0, 'bg-red-50 text-red-700'],
     ['Negativos históricos', r.negativos_intermedios || 0, 'bg-amber-50 text-amber-700'],
     ['Cadena inconsistente', r.cadenas_inconsistentes || 0, 'bg-purple-50 text-purple-700'],
-    ['Saldos inconsistentes', r.saldos_inconsistentes || 0, 'bg-blue-50 text-blue-700']
+    ['Stock no coincide', r.stocks_inconsistentes || 0, 'bg-blue-50 text-blue-700'],
+    ['Costo no coincide', r.costos_inconsistentes || 0, 'bg-indigo-50 text-indigo-700'],
+    ['Valor no coincide', r.valores_inconsistentes || 0, 'bg-cyan-50 text-cyan-700']
   ];
   const el = document.getElementById('recosteo-resumen');
   if (el) el.innerHTML = tarjetas.map(([label, value, clase]) => `
@@ -1395,7 +1398,8 @@ function renderizarListaRecosteo(productos) {
       <input type="checkbox" class="recosteo-check mt-1 flex-shrink-0" value="${p.producto_id}">
       <span class="recosteo-detalle">
         <span class="block text-sm font-bold text-gray-700 break-words">${p.producto_nombre}</span>
-        <span class="block text-[11px] text-gray-400">Stock final: ${fmt(p.stock_final)} · Costo: ${fmtMon(p.costo_reconstruido)} · Movimientos: ${p.movimientos}</span>
+        <span class="block text-[11px] text-gray-500 mt-1">Stock: ${fmt(p.stock_almacenado)} / ${fmt(p.stock_final)} · Costo: ${fmtUnitCost(p.costo_almacenado)} / ${fmtUnitCost(p.costo_reconstruido)}</span>
+        <span class="block text-[11px] text-gray-500">Valor: ${fmtMonExact(p.valor_almacenado)} / ${fmtMonExact(p.valor_reconstruido)} · Diferencia: ${fmtMonExact(p.diferencia_valor)} · Movimientos: ${p.movimientos}</span>
       </span>
       <span class="recosteo-alertas text-right text-[10px] font-bold">${alertasHtml}</span>
     </label>`;

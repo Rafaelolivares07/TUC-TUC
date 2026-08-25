@@ -1605,6 +1605,10 @@ def check_dynamic_permissions():
     
     if not pantalla:
         return
+
+    # Excepción temporal: Inventario permanece accesible mientras se define su autorización.
+    if endpoint in ('inventarios.admin_inventario', 'inventarios.admin_inventario_fisico'):
+        return
         
     # 1. Superadmin bypass completo
     role = session.get('rol')

@@ -1446,6 +1446,13 @@ def api_inventario_kardex(producto_id):
             LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = 1
             WHERE p.id = %s
         """, (producto_id,)).fetchone()
+        totales = conn.execute("""
+            SELECT
+                COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE 0 END), 0) AS entradas,
+                COALESCE(SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE 0 END), 0) AS salidas
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s
+        """, (negocio_id, producto_id)).fetchone()
         
         costo_actual = float(prod_info['costo']) if prod_info and prod_info['costo'] is not None else 0.0
         stock_actual = float(prod_info['stock']) if prod_info and prod_info['stock'] is not None else 0.0
@@ -1456,6 +1463,10 @@ def api_inventario_kardex(producto_id):
             'movimientos': [dict(r) for r in rows],
             'costo_actual': costo_actual,
             'stock_actual': stock_actual,
+            'totales': {
+                'entradas': float(totales['entradas'] or 0),
+                'salidas': float(totales['salidas'] or 0)
+            },
             'auditoria': auditoria
         })
     except Exception as e:
@@ -1965,11 +1976,9 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id):
         FROM saldos_inventario
         WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
     """, (negocio_id, producto_id)).fetchone()
-    saldo_inconsistente = bool(
-        saldo and (diferente(saldo['stock'], stock)
-                   or diferente(saldo['costo_und'], costo_und)
-                   or diferente(saldo['valor_existencia'], valor_existencia))
-    )
+    stock_inconsistente = bool(saldo and diferente(saldo['stock'], stock))
+    costo_inconsistente = bool(saldo and diferente(saldo['costo_und'], costo_und))
+    valor_inconsistente = bool(saldo and diferente(saldo['valor_existencia'], valor_existencia))
 
     return {
         'producto_id': producto_id,
@@ -1977,7 +1986,10 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id):
         'movimientos': len(movimientos),
         'stock_final': float(stock),
         'costo_reconstruido': float(costo_und),
-        'saldo_inconsistente': saldo_inconsistente,
+        'stock_inconsistente': stock_inconsistente,
+        'costo_inconsistente': costo_inconsistente,
+        'valor_inconsistente': valor_inconsistente,
+        'saldo_inconsistente': stock_inconsistente or costo_inconsistente or valor_inconsistente,
         'negativo_final': stock < 0,
         'negativos_intermedios': negativos,
         'inconsistencias_movimientos': inconsistencias,

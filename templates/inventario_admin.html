@@ -1385,7 +1385,9 @@ function renderizarListaRecosteo(productos) {
     if (p.negativo_final) alertas.push('Saldo final negativo');
     if (p.negativos_intermedios?.length) alertas.push(`${p.negativos_intermedios.length} negativo(s) histórico(s)`);
     if (p.inconsistencias_movimientos?.length) alertas.push('Cadena inconsistente');
-    if (p.saldo_inconsistente) alertas.push('Saldo final no coincide');
+    if (p.stock_inconsistente) alertas.push('Stock no coincide');
+    if (p.costo_inconsistente) alertas.push('Costo no coincide');
+    if (p.valor_inconsistente) alertas.push('Valor no coincide');
     const alertasHtml = alertas.length
       ? alertas.map(alerta => `<span class="recosteo-alerta inline-flex rounded-md bg-red-50 px-2 py-1 text-red-600">${alerta}</span>`).join('')
       : '<span class="recosteo-alerta inline-flex rounded-md bg-emerald-50 px-2 py-1 text-emerald-600">Sin alertas</span>';
@@ -3103,16 +3105,9 @@ async function cargarKardex(productoId) {
     return;
   }
   
-  // Calculate sum totals
-  let totalEntradas = 0;
-  let totalSalidas = 0;
-  d.movimientos.forEach(m => {
-    if (m.tipo === 'entrada') {
-      totalEntradas += Number(m.cantidad || 0);
-    } else if (m.tipo === 'salida') {
-      totalSalidas += Number(m.cantidad || 0);
-    }
-  });
+  // Totales del historial completo, no solo de los 300 movimientos visibles.
+  const totalEntradas = Number(d.totales?.entradas || 0);
+  const totalSalidas = Number(d.totales?.salidas || 0);
   if (sumEntradasEl) sumEntradasEl.textContent = fmt(totalEntradas);
   if (sumSalidasEl) sumSalidasEl.textContent = fmt(totalSalidas);
   
@@ -3184,11 +3179,15 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
   if (auditoria.negativo_final) alertas.push('<span class="rounded-md bg-red-100 px-2 py-1 text-red-700 font-bold">Saldo final negativo</span>');
   if (auditoria.negativos_intermedios?.length) alertas.push(`<span class="rounded-md bg-amber-100 px-2 py-1 text-amber-700 font-bold">${auditoria.negativos_intermedios.length} saldo(s) negativo(s) histórico(s)</span>`);
   if (auditoria.inconsistencias_movimientos?.length) alertas.push(`<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700 font-bold">${auditoria.inconsistencias_movimientos.length} cadena(s) inconsistente(s)</span>`);
-  if (auditoria.saldo_inconsistente) alertas.push('<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700 font-bold">Saldo final no coincide</span>');
+  if (auditoria.stock_inconsistente) alertas.push('<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700 font-bold">Stock final no coincide</span>');
+  if (auditoria.costo_inconsistente) alertas.push('<span class="rounded-md bg-indigo-100 px-2 py-1 text-indigo-700 font-bold">Costo no coincide</span>');
+  if (auditoria.valor_inconsistente) alertas.push('<span class="rounded-md bg-cyan-100 px-2 py-1 text-cyan-700 font-bold">Valor no coincide</span>');
   const detalle = [
     ...(auditoria.negativos_intermedios || []).map(x => `Movimiento #${x.movimiento_id}: stock negativo (${fmt(x.stock)})`),
     ...(auditoria.inconsistencias_movimientos || []).map(x => `Movimiento #${x.movimiento_id}: stock guardado ${fmt(x.guardado_nuevo)} / calculado ${fmt(x.calculado_nuevo)}`),
-    ...(auditoria.saldo_inconsistente ? ['El saldo final no coincide con la reconstrucción'] : [])
+    ...(auditoria.stock_inconsistente ? ['El stock final no coincide con la reconstrucción'] : []),
+    ...(auditoria.costo_inconsistente ? ['El costo unitario del saldo no coincide con el costo reconstruido'] : []),
+    ...(auditoria.valor_inconsistente ? ['El valor de existencia no coincide con la reconstrucción'] : [])
   ];
   const acciones = alertas.length ? `
     <button type="button" onclick="repararDesdeKardex(${productoId})" class="ml-auto rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700">Reparar saldos y costos</button>` : '';

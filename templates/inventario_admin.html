@@ -3228,18 +3228,26 @@ function renderizarComprasTabla(proveedores) {
             <span class="font-normal text-slate-500 text-[10px]">Fecha límite:</span>
             ${deadlineBadge}
             <i id="compras-flecha-${pIdx}" class="bi bi-chevron-down text-slate-500 transition-transform duration-200"></i>
-            <input type="text" id="compras-doc-${pIdx}" placeholder="Doc." class="border rounded px-2 py-1 text-sm font-medium w-24 outline-none" maxlength="50">
-            <input type="date" id="compras-fecha-${pIdx}" max="${new Date().toISOString().split('T')[0]}" class="border rounded px-2 py-1 text-sm font-medium w-32 outline-none">
           </div>
         </button>
         
         <div id="compras-detalle-${pIdx}" class="hidden border-t border-slate-150 p-4 bg-white overflow-x-auto">
-          <div class="flex justify-between items-center mb-3 bg-slate-50 p-3 rounded-xl border border-slate-150">
-            <span class="text-slate-500 text-[11px] font-semibold">Selecciona los insumos comprados y define la cantidad y costo de empaque finales. Al hacer clic en Registrar Entrada se transferirán a la pestaña de Entradas.</span>
+          <div class="flex flex-wrap justify-between items-center gap-3 mb-3 bg-slate-50 p-3 rounded-xl border border-slate-150">
+            <span class="text-slate-500 text-[11px] font-semibold flex-1 min-w-[220px]">Selecciona los insumos comprados y define la cantidad y costo de empaque finales. Al hacer clic en Registrar Entrada se transferirán a la pestaña de Entradas.</span>
+            <div class="flex items-end justify-end gap-2 flex-wrap shrink-0">
+              <label class="flex flex-col gap-1 text-[10px] font-bold text-slate-500">
+                Documento
+                <input type="text" id="compras-doc-${pIdx}" placeholder="Alfanumérico" aria-label="Documento del proveedor" class="border rounded px-2 py-1 text-sm font-medium w-28 outline-none bg-white" maxlength="50">
+              </label>
+              <label class="flex flex-col gap-1 text-[10px] font-bold text-slate-500">
+                Fecha
+                <input type="date" id="compras-fecha-${pIdx}" max="${new Date().toISOString().split('T')[0]}" aria-label="Fecha del documento" class="border rounded px-2 py-1 text-sm font-medium w-32 outline-none bg-white">
+              </label>
             <button onclick="hacerEntradaProveedor(${pIdx})"
                     class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm">
               📥 Registrar Entrada (FAC)
             </button>
+            </div>
           </div>
           <table class="w-full text-xs text-gray-700 align-middle">
             <thead class="bg-slate-50 text-[10px] uppercase text-gray-500 font-bold border-b border-gray-200">

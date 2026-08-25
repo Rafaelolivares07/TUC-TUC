@@ -3506,8 +3506,8 @@ function renderizarComprasTabla(proveedores) {
 
       const sugeridoHtml = `
         <div class="flex flex-col items-center justify-center gap-0.5">
-          <input type="number" id="compras-qty-${prod.producto_id}" value="${qtyVal}" min="0" step="${stepVal}" 
-                 oninput="recalcularTotalProveedor(${pIdx})"
+           <input type="number" id="compras-qty-${prod.producto_id}" value="${qtyVal}" min="0" step="${stepVal}"
+                  oninput="editarCantidadCostoCompra(${pIdx}, ${prod.producto_id})"
                  class="border rounded px-1.5 py-0.5 text-center font-bold text-slate-700 outline-none w-16 text-xs bg-white">
           <span class="text-[9.5px] text-slate-500 font-bold" id="compras-qty-equiv-lbl-${prod.producto_id}">
             ${prod.presentacion_nombre} (${fmt(unitsVal)} und)
@@ -3521,13 +3521,19 @@ function renderizarComprasTabla(proveedores) {
       const costoEmpHtml = `
         <div class="flex items-center gap-1 justify-end">
           <span class="text-slate-400 text-xs">$</span>
-          <input type="number" id="compras-costo-emp-${prod.producto_id}" value="${costoEmp}" min="0" step="0.01" 
-                 oninput="recalcularTotalProveedor(${pIdx})"
+           <input type="number" id="compras-costo-emp-${prod.producto_id}" value="${costoEmp}" min="0" step="0.01"
+                  oninput="editarCantidadCostoCompra(${pIdx}, ${prod.producto_id})"
                  class="border rounded px-1.5 py-0.5 text-right font-bold text-slate-700 outline-none w-20 text-xs bg-white">
         </div>
       `;
 
-      const isChecked = prod.checked !== false ? 'checked' : '';
+       const subtotalHtml = `
+         <input type="text" inputmode="decimal" id="compras-subtotal-${prod.producto_id}" value="${prod.total_costo || 0}"
+                oninput="editarSubtotalCompra(${pIdx}, ${prod.producto_id})" onfocus="this.select()"
+                class="border rounded px-1.5 py-0.5 text-right font-bold text-slate-800 outline-none w-24 text-xs bg-white">
+       `;
+
+       const isChecked = prod.checked !== false ? 'checked' : '';
 
       return `
         <tr class="hover:bg-slate-50 border-b border-gray-100 transition-colors">
@@ -3559,7 +3565,7 @@ function renderizarComprasTabla(proveedores) {
           <td class="px-3 py-2.5 text-right">
             ${costoEmpHtml}
           </td>
-          <td class="px-3 py-2.5 text-right font-bold text-slate-800" id="compras-subtotal-cell-${prod.producto_id}">${fmtMon(prod.total_costo)}</td>
+           <td class="px-3 py-2.5 text-right" id="compras-subtotal-cell-${prod.producto_id}">${subtotalHtml}</td>
         </tr>
       `;
     }).join('');
@@ -3725,15 +3731,20 @@ function recalcularTotalProveedor(pIdx) {
     const qtyInput = document.getElementById(`compras-qty-${prod.producto_id}`);
     const qty = qtyInput ? (parseFloat(qtyInput.value) || 0) : 0;
     const costEmpInput = document.getElementById(`compras-costo-emp-${prod.producto_id}`);
-    const costEmp = costEmpInput ? (parseFloat(costEmpInput.value) || 0) : 0;
+    let costEmp = costEmpInput ? (parseFloat(costEmpInput.value) || 0) : 0;
+    const subtotalInput = document.getElementById(`compras-subtotal-${prod.producto_id}`);
     
     prod.checked = isChecked;
     prod.cantidad_sugerida_usuario = qty;
-    prod.costo_empaque_usuario = costEmp;
     
     let lineTotal = 0;
     let units = 0;
-    if (prod.unidades_presentacion <= 1.0001) {
+    if (prod.subtotal_manual && subtotalInput) {
+      units = prod.unidades_presentacion <= 1.0001 ? qty : qty * prod.unidades_presentacion;
+      lineTotal = parseFloat(subtotalInput.value) || 0;
+      costEmp = qty > 0 ? lineTotal / qty : 0;
+      if (costEmpInput) costEmpInput.value = costEmp.toFixed(4);
+    } else if (prod.unidades_presentacion <= 1.0001) {
       units = qty;
       lineTotal = qty * costEmp;
       prod.costo_unitario = costEmp; 
@@ -3741,6 +3752,12 @@ function recalcularTotalProveedor(pIdx) {
       units = qty * prod.unidades_presentacion;
       lineTotal = qty * costEmp; 
       prod.costo_unitario = costEmp / prod.unidades_presentacion; 
+    }
+    prod.costo_empaque_usuario = costEmp;
+    if (prod.subtotal_manual) {
+      prod.costo_unitario = prod.unidades_presentacion <= 1.0001
+        ? costEmp
+        : costEmp / prod.unidades_presentacion;
     }
     
     const lbl = document.getElementById(`compras-qty-equiv-lbl-${prod.producto_id}`);
@@ -3752,9 +3769,7 @@ function recalcularTotalProveedor(pIdx) {
     prod.total_costo = lineTotal;
     
     const cell = document.getElementById(`compras-subtotal-cell-${prod.producto_id}`);
-    if (cell) {
-      cell.textContent = fmtMon(lineTotal);
-    }
+    if (subtotalInput && !prod.subtotal_manual) subtotalInput.value = lineTotal.toFixed(2);
     
     if (isChecked) {
       supplierTotal += lineTotal;
@@ -3879,6 +3894,20 @@ function hacerEntradaProveedor(pIdx) {
     sessionStorage.removeItem('entrada_desde_compras');
     alert('Permite las ventanas emergentes para abrir la entrada en una nueva pestaña.');
   }
+}
+
+function editarCantidadCostoCompra(pIdx, productoId) {
+  const p = window.COMPRAS_DATA[pIdx];
+  const prod = p?.productos.find(item => Number(item.producto_id) === Number(productoId));
+  if (prod) prod.subtotal_manual = false;
+  recalcularTotalProveedor(pIdx);
+}
+
+function editarSubtotalCompra(pIdx, productoId) {
+  const p = window.COMPRAS_DATA[pIdx];
+  const prod = p?.productos.find(item => Number(item.producto_id) === Number(productoId));
+  if (prod) prod.subtotal_manual = true;
+  recalcularTotalProveedor(pIdx);
 }
 
 function seleccionarSugerencia(productoId, productoNombre, cantidad) {

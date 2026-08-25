@@ -3475,7 +3475,7 @@ function recalcularTotalProveedor(pIdx) {
   }
 }
 
-async function hacerEntradaProveedor(pIdx) {
+function hacerEntradaProveedor(pIdx) {
   const p = window.COMPRAS_DATA[pIdx];
   if (!p) return;
 
@@ -3505,13 +3505,6 @@ async function hacerEntradaProveedor(pIdx) {
 
   const docInput = document.getElementById(`compras-doc-${pIdx}`);
   const fechaDocumento = fechaInput?.value || hoy;
-  const errorFecha = await validarFechaEntrada(fechaDocumento);
-  if (errorFecha) {
-    alert(errorFecha);
-    fechaInput?.focus();
-    nuevaPestana.close();
-    return;
-  }
 
   if (!confirm(`¿Desea transferir ${checkedProds.length} ítems de ${p.proveedor_nombre} a una nueva pestaña de Entradas?`)) {
     nuevaPestana.close();

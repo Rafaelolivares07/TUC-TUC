@@ -624,6 +624,7 @@
         <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor" autocomplete="off" onfocus="this.select()">
         <div id="entrada-proveedor-list" class="ac-list hidden"></div>
         <input type="hidden" id="entrada-proveedor-id">
+        <input id="entrada-documento" type="text" placeholder="Doc. proveedor" class="w-full border rounded px-3 py-2 text-sm mt-1">
       </div>
       <div>
         <label>Método de Pago</label>
@@ -3227,6 +3228,8 @@ function renderizarComprasTabla(proveedores) {
             <span class="font-normal text-slate-500 text-[10px]">Fecha límite:</span>
             ${deadlineBadge}
             <i id="compras-flecha-${pIdx}" class="bi bi-chevron-down text-slate-500 transition-transform duration-200"></i>
+            <input type="text" id="compras-doc-${pIdx}" placeholder="Doc." class="border rounded px-2 py-1 text-sm font-medium w-24 outline-none" maxlength="50">
+            <input type="date" id="compras-fecha-${pIdx}" max="${new Date().toISOString().split('T')[0]}" class="border rounded px-2 py-1 text-sm font-medium w-32 outline-none">
           </div>
         </button>
         
@@ -3455,6 +3458,12 @@ function hacerEntradaProveedor(pIdx) {
   
   document.getElementById('entrada-proveedor-id').value = p.proveedor_id || '';
   document.getElementById('entrada-proveedor').value = p.proveedor_nombre;
+  
+  // Nuevos campos: documento y fecha del proveedor
+  const docInput = document.getElementById(`compras-doc-${pIdx}`);
+  const fechaInput = document.getElementById(`compras-fecha-${pIdx}`);
+  if (docInput) document.getElementById('entrada-documento').value = docInput.value.trim() || '';
+  if (fechaInput) document.getElementById('entrada-fecha-doc').value = fechaInput.value || '';
   
   const btnCrear = document.getElementById('btn-crear-proveedor');
   if (btnCrear) btnCrear.classList.add('hidden');

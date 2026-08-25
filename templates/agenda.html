@@ -173,8 +173,10 @@
   .item-actions {
     display: flex;
     align-items: center;
+    align-self: flex-start;
     gap: 2px;
-    flex-shrink: 0;
+    flex-wrap: wrap;
+    width: 100%;
     padding: 2px;
     border: 1px solid #f0f0f0;
     border-radius: 8px;
@@ -182,6 +184,11 @@
   }
 
   .item-actions button { margin: 0; }
+  .item-actions .accion-label {
+    font-size: .68rem;
+    font-weight: 600;
+    margin-left: 2px;
+  }
 
   .estado-completado {
     display: inline-flex;
@@ -407,6 +414,13 @@
     <li class="item" id="item-{{ item[0] }}" draggable="true" ondragstart="dragStart(event)" ondragover="dragOver(event)" ondragend="dragEnd(event)" data-id="{{ item[0] }}">
       <input type="checkbox" onchange="toggle({{ item[0] }}, this)">
       <div class="item-body">
+        <div class="item-actions" aria-label="Acciones de la tarea">
+          <input type="file" accept="image/*" id="file-{{ item[0] }}" style="display:none" onchange="subirImagen({{ item[0] }}, this)">
+          <button class="btn-img" onclick="document.getElementById('file-{{ item[0] }}').click()" title="Adjuntar imagen">📎<span class="accion-label">Adjuntar</span></button>
+          <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️<span class="accion-label">Editar</span></button>
+          <button class="btn-activar" onclick="activar({{ item[0] }}, this)" title="Activar en Antigravity">🚀<span class="accion-label">Activar</span></button>
+          <button class="btn-borrar" onclick="borrar({{ item[0] }})" title="Eliminar tarea">×<span class="accion-label">Eliminar</span></button>
+        </div>
         <span class="item-texto" onclick="comenzarEdicion({{ item[0] }})">{{ item[1] }}</span>
         {% if item[5] %}
         <span class="item-fecha" data-ts="{{ item[5].isoformat() }}"></span>
@@ -419,13 +433,6 @@
           </div>
           {% endfor %}
         </div>
-      </div>
-      <div class="item-actions" aria-label="Acciones de la tarea">
-        <input type="file" accept="image/*" id="file-{{ item[0] }}" style="display:none" onchange="subirImagen({{ item[0] }}, this)">
-        <button class="btn-img" onclick="document.getElementById('file-{{ item[0] }}').click()" title="Adjuntar imagen">📎</button>
-        <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️</button>
-        <button class="btn-activar" onclick="activar({{ item[0] }}, this)" title="Activar en Antigravity">🚀</button>
-        <button class="btn-borrar" onclick="borrar({{ item[0] }})" title="Eliminar tarea">×</button>
       </div>
     </li>
     {% endfor %}
@@ -437,6 +444,10 @@
       <input type="checkbox" checked onchange="toggle({{ item[0] }}, this)">
       <span class="estado-completado" aria-label="Completada">✓</span>
       <div class="item-body">
+        <div class="item-actions" aria-label="Acciones de la tarea completada">
+          <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️<span class="accion-label">Editar</span></button>
+          <button class="btn-borrar" onclick="borrar({{ item[0] }})" title="Eliminar tarea">×<span class="accion-label">Eliminar</span></button>
+        </div>
         <span class="item-texto" onclick="comenzarEdicion({{ item[0] }})">{{ item[1] }}</span>
         {% if item[5] %}
         <span class="item-fecha" data-ts="{{ item[5].isoformat() }}"></span>
@@ -449,10 +460,6 @@
           </div>
           {% endfor %}
         </div>
-      </div>
-      <div class="item-actions" aria-label="Acciones de la tarea completada">
-        <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️</button>
-        <button class="btn-borrar" onclick="borrar({{ item[0] }})" title="Eliminar tarea">×</button>
       </div>
     </li>
     {% endfor %}

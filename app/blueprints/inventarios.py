@@ -605,7 +605,17 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
         if not documento_numero:
             return {'ok': False, 'error': 'El número de documento es requerido para realizar la modificación.'}, 400
 
-    documento_fecha = _fecha_o_none(data.get('documento_fecha') or data.get('fecha_documento'))
+    fecha_recibida = data.get('documento_fecha') or data.get('fecha_documento')
+    documento_fecha = _fecha_o_none(fecha_recibida)
+    if fecha_recibida and not documento_fecha:
+        return {'ok': False, 'error': 'La fecha del documento no es válida.'}, 400
+    if documento_fecha and documento_fecha > date.today():
+        return {'ok': False, 'error': 'La fecha del documento no puede ser futura.'}, 400
+    if documento_fecha:
+        try:
+            _verificar_periodo_cerrado(conn, negocio_id, documento_fecha)
+        except Exception as exc:
+            return {'ok': False, 'error': str(exc)}, 400
     proveedor_id = _int_o_none(data.get('proveedor_id') or data.get('tercero_id'))
     proveedor_nombre = _txt(data.get('proveedor_nombre'))
     subtotal_compra = Decimal('0')

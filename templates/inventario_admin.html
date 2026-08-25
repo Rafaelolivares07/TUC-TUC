@@ -3470,6 +3470,12 @@ function hacerEntradaProveedor(pIdx) {
   // Nuevos campos: documento y fecha del proveedor
   const docInput = document.getElementById(`compras-doc-${pIdx}`);
   const fechaInput = document.getElementById(`compras-fecha-${pIdx}`);
+  const hoy = new Date().toISOString().slice(0, 10);
+  if (fechaInput && fechaInput.value && fechaInput.value > hoy) {
+    alert('La fecha del documento no puede ser futura.');
+    fechaInput.focus();
+    return;
+  }
   if (docInput) document.getElementById('entrada-documento').value = docInput.value.trim() || '';
   if (fechaInput) document.getElementById('entrada-fecha-doc').value = fechaInput.value || '';
   

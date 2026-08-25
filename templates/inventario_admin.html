@@ -1394,6 +1394,14 @@ function renderizarListaRecosteo(productos) {
     const alertasHtml = alertas.length
       ? alertas.map(alerta => `<span class="recosteo-alerta inline-flex rounded-md bg-red-50 px-2 py-1 text-red-600">${alerta}</span>`).join('')
       : '<span class="recosteo-alerta inline-flex rounded-md bg-emerald-50 px-2 py-1 text-emerald-600">Sin alertas</span>';
+    const movimientoAlerta = p.negativos_intermedios?.[0]?.movimiento_id || p.inconsistencias_movimientos?.[0]?.movimiento_id || '';
+    const recomendacion = p.negativo_final
+      ? 'Requiere entrada o ajuste físico'
+      : p.negativos_intermedios?.length
+        ? 'Revisar fecha o cantidad'
+        : p.inconsistencias_movimientos?.length
+          ? 'Recosteo recomendado'
+          : 'Revisar valoración';
     return `<label class="recosteo-producto flex gap-3 p-3 hover:bg-gray-50 cursor-pointer" data-nombre="${(p.producto_nombre || '').toLowerCase()}">
       <input type="checkbox" class="recosteo-check mt-1 flex-shrink-0" value="${p.producto_id}">
       <span class="recosteo-detalle">
@@ -1401,7 +1409,7 @@ function renderizarListaRecosteo(productos) {
         <span class="block text-[11px] text-gray-500 mt-1">Stock: ${fmt(p.stock_almacenado)} / ${fmt(p.stock_final)} · Costo: ${fmtUnitCost(p.costo_almacenado)} / ${fmtUnitCost(p.costo_reconstruido)}</span>
         <span class="block text-[11px] text-gray-500">Valor: ${fmtMonExact(p.valor_almacenado)} / ${fmtMonExact(p.valor_reconstruido)} · Diferencia: ${fmtMonExact(p.diferencia_valor)} · Movimientos: ${p.movimientos}</span>
       </span>
-      <span class="recosteo-alertas text-right text-[10px] font-bold">${alertasHtml}</span>
+      <span class="recosteo-alertas text-right text-[10px] font-bold">${alertasHtml}<span class="recosteo-alerta text-gray-500 font-medium">${recomendacion}</span>${alertas.length ? `<button type="button" onclick="irKardexDesdeAuditoria(event, ${p.producto_id}, ${movimientoAlerta || 'null'})" class="recosteo-alerta rounded-md bg-gray-800 px-2 py-1 text-white hover:bg-gray-700">Ver Kardex</button>` : ''}</span>
     </label>`;
   }).join('');
 }
@@ -1417,6 +1425,17 @@ function seleccionarTodosRecosteo(marcado) {
   document.querySelectorAll('.recosteo-producto:not(.hidden) .recosteo-check').forEach(input => {
     input.checked = marcado;
   });
+}
+
+function irKardexDesdeAuditoria(evento, productoId, movimientoId) {
+  evento.preventDefault();
+  evento.stopPropagation();
+  const url = new URL(window.location.href);
+  url.searchParams.set('tab', 'kardex');
+  url.searchParams.set('producto_id', productoId);
+  if (movimientoId) url.searchParams.set('movimiento_id', movimientoId);
+  history.pushState(null, '', url.pathname + url.search);
+  verKardex(productoId, '', movimientoId);
 }
 
 async function ejecutarRecosteoSeleccionados() {
@@ -3060,11 +3079,19 @@ function validarFechaCompraSugerida(input) {
 function filtrarACKardex() {
   // Handled by setupAC with 280ms debounce
 }
-function verKardex(id, nombre) {
+function verKardex(id, nombre, movimientoId = null) {
   mostrarTab('kardex');
-  document.getElementById('kardex-ac-input').value = nombre;
+  const producto = productos.find(p => Number(p.id) === Number(id));
+  document.getElementById('kardex-ac-input').value = nombre || producto?.nombre || '';
   document.getElementById('kardex-ac-id').value = id;
-  cargarKardex(id);
+  cargarKardex(id).then(() => {
+    if (!movimientoId) return;
+    const fila = document.getElementById(`kardex-mov-${movimientoId}`);
+    if (fila) {
+      fila.classList.add('ring-2', 'ring-amber-400');
+      fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
 }
 let kardexProductoActual = null;
 async function cargarKardex(productoId) {
@@ -3162,7 +3189,7 @@ async function cargarKardex(productoId) {
 
     const alertaMovimiento = movimientosNegativos.has(Number(m.id)) || movimientosInconsistentes.has(Number(m.id));
     return `
-      <tr class="hover:bg-gray-50/50 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''}" title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
+      <tr id="kardex-mov-${m.id}" class="hover:bg-gray-50/50 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''}" title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
         <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">${m.fecha}</td>
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>

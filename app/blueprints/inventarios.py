@@ -826,7 +826,7 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
 
         # Feed/update quote (cotizacion) from this entry if it's a purchase and has a price
         if motivo == 'compra' and proveedor_id and ln['valor_unitario'] and float(ln['valor_unitario']) > 0:
-            from datetime import timedelta, date
+            from datetime import timedelta
             vu = float(ln['valor_unitario'])
             f_cot = documento_fecha or date.today()
             f_vence = f_cot + timedelta(days=180)

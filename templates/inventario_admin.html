@@ -63,6 +63,19 @@
       padding-bottom: 5px;
     }
     #tab-entradas label { margin-bottom: 0; }
+    #tab-entradas #entrada-tipo-doc,
+    #tab-entradas #entrada-num-doc,
+    #tab-entradas #entrada-fecha-doc { width: 80%; }
+    #tab-entradas input[id^="ent-ac-"],
+    #tab-entradas input[id^="ent-pres-"] { text-align: left; padding-left: 16px; }
+    #tab-entradas input[id^="ent-cant-"],
+    #tab-entradas input[id^="ent-costo-"],
+    #tab-entradas input[id^="ent-total-"],
+    #tab-entradas input[id^="ent-vu-"],
+    #tab-entradas select[id^="ent-iva-pct-"] {
+      text-align: right;
+      padding-right: 12px;
+    }
     label { font-size: .75rem; font-weight: 600; color: #6b7280; margin-bottom: 2px; display: block; }
     table { width: 100%; border-collapse: collapse; }
     th { text-align: left; font-size: .72rem; font-weight: 700; color: #9ca3af;
@@ -613,11 +626,11 @@
       </div>
       <div class="sm:col-span-2">
         <label>No. documento</label>
-        <input id="entrada-num-doc" type="text" placeholder="FAC-0234" class="sm:w-2/5">
+        <input id="entrada-num-doc" type="text" placeholder="FAC-0234">
       </div>
       <div class="sm:col-span-2">
         <label>Fecha documento</label>
-        <input id="entrada-fecha-doc" type="date" class="sm:w-2/5">
+        <input id="entrada-fecha-doc" type="date">
       </div>
       <div class="sm:col-span-2">
         <label>Método de Pago</label>

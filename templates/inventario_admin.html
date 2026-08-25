@@ -3274,7 +3274,7 @@ function renderizarComprasTabla(proveedores) {
                 Fecha
                 <input type="date" id="compras-fecha-${pIdx}" max="${new Date().toISOString().split('T')[0]}" onchange="validarFechaCompraSugerida(this)" aria-label="Fecha del documento" class="border rounded px-2 py-1 text-sm font-medium w-32 outline-none bg-white">
               </label>
-            <button onclick="hacerEntradaProveedor(${pIdx})"
+            <button type="button" onclick="hacerEntradaProveedor(${pIdx})"
                     class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm">
               📥 Registrar Entrada (FAC)
             </button>
@@ -3487,19 +3487,12 @@ function hacerEntradaProveedor(pIdx) {
     return;
   }
 
-  const nuevaPestana = window.open('about:blank', '_blank');
-  if (!nuevaPestana) {
-    alert('Permite las ventanas emergentes para abrir la entrada en una nueva pestaña.');
-    return;
-  }
-  
   recalcularTotalProveedor(pIdx);
   
   const checkedProds = p.productos.filter(prod => prod.checked !== false && prod.cantidad_sugerida_unidades > 0);
   
   if (checkedProds.length === 0) {
     alert("Por favor, seleccione al menos un producto con cantidad mayor a cero para hacer la entrada.");
-    nuevaPestana.close();
     return;
   }
 
@@ -3507,7 +3500,6 @@ function hacerEntradaProveedor(pIdx) {
   const fechaDocumento = fechaInput?.value || hoy;
 
   if (!confirm(`¿Desea transferir ${checkedProds.length} ítems de ${p.proveedor_nombre} a una nueva pestaña de Entradas?`)) {
-    nuevaPestana.close();
     return;
   }
 
@@ -3517,7 +3509,11 @@ function hacerEntradaProveedor(pIdx) {
     documento: docInput?.value.trim() || '',
     fecha: fechaDocumento
   }));
-  nuevaPestana.location.href = `${window.location.pathname}?tab=entradas&desde_compras=1`;
+  const nuevaPestana = window.open(`${window.location.pathname}?tab=entradas&desde_compras=1`, '_blank');
+  if (!nuevaPestana) {
+    sessionStorage.removeItem('entrada_desde_compras');
+    alert('Permite las ventanas emergentes para abrir la entrada en una nueva pestaña.');
+  }
 }
 
 function seleccionarSugerencia(productoId, productoNombre, cantidad) {

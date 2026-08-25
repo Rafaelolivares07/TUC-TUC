@@ -1983,7 +1983,7 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id):
     costo_inconsistente = bool(saldo and diferente(saldo['costo_und'], costo_und))
     valor_inconsistente = bool(
         saldo and abs(Decimal(str(saldo['valor_existencia'] or 0)) - valor_existencia)
-        >= Decimal('0.01')
+        >= Decimal('1')
     )
 
     return {

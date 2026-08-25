@@ -2113,10 +2113,11 @@ def api_cambiar_fecha_documento_inventario(negocio_id):
 
     data = request.get_json() or {}
     tipo_documento_id = _int_o_none(data.get('tipo_documento_id'))
+    tipo_documento = (_txt(data.get('tipo_documento')) or '').strip()
     documento_numero = (_txt(data.get('documento_numero')) or '').strip()
     nueva_fecha_raw = (_txt(data.get('nueva_fecha')) or '').strip()
     nueva_hora = (_txt(data.get('nueva_hora')) or '').strip() or None
-    if not tipo_documento_id or not documento_numero or not nueva_fecha_raw:
+    if (not tipo_documento_id and not tipo_documento) or not documento_numero or not nueva_fecha_raw:
         return jsonify({'ok': False, 'error': 'Tipo de documento, número y nueva fecha son requeridos'}), 400
 
     try:
@@ -2134,6 +2135,15 @@ def api_cambiar_fecha_documento_inventario(negocio_id):
         _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
+        if not tipo_documento_id:
+            tipo_row = conn.execute("""
+                SELECT id FROM tipos_documento_negocio
+                WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))
+                LIMIT 1
+            """, (negocio_id, tipo_documento, tipo_documento)).fetchone()
+            if not tipo_row:
+                return jsonify({'ok': False, 'error': 'No se pudo identificar el tipo de documento'}), 400
+            tipo_documento_id = tipo_row['id']
         rows = conn.execute("""
             SELECT id, producto_id, documento_fecha, created_at
             FROM movimientos_inventario

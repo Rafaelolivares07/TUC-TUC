@@ -3211,7 +3211,7 @@ async function cargarKardex(productoId) {
 
     const alertaMovimiento = movimientosNegativos.has(Number(m.id)) || movimientosInconsistentes.has(Number(m.id));
     const fechaKardex = m.documento_fecha || '';
-    const fechaCelda = m.tipo_documento_id && m.documento_numero
+    const fechaCelda = (m.tipo_documento_id || m.tipo_documento) && m.documento_numero
       ? `<button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${m.hora_documento || ''}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline" title="Cambiar fecha y recostear documento">${m.fecha}</button>`
       : m.fecha;
     return `
@@ -3238,6 +3238,7 @@ function abrirModalFechaDocumento(tipoDocumentoId, numeroCodificado, fechaActual
   document.getElementById('fecha-doc-nueva').max = new Date().toISOString().slice(0, 10);
   document.getElementById('hora-doc-nueva').value = horaActual || '00:00';
   modal.dataset.tipoDocumentoId = tipoDocumentoId;
+  modal.dataset.tipoDocumento = decodeURIComponent(tipoCodificado);
   modal.dataset.documentoNumero = decodeURIComponent(numeroCodificado);
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -3261,7 +3262,8 @@ async function guardarFechaDocumento() {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/cambiar-fecha`, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        tipo_documento_id: Number(modal.dataset.tipoDocumentoId),
+        tipo_documento_id: Number(modal.dataset.tipoDocumentoId) || null,
+        tipo_documento: modal.dataset.tipoDocumento || null,
         documento_numero: modal.dataset.documentoNumero,
         nueva_fecha: fecha,
         nueva_hora: hora || null

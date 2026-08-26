@@ -4421,15 +4421,6 @@ def api_ajuste_guardar_item(negocio_id):
     data = request.get_json() or {}
     tipo_documento_id = data.get('tipo_documento_id')
     documento_numero = data.get('documento_numero')
-    # Normalizar a número puro (estándar: tipo_documento_id + numero_documento, sin concatenaciones)
-    if documento_numero:
-        s_doc = str(documento_numero).strip()
-        td_raw = conn.execute("SELECT codigo FROM tipos_documento_negocio WHERE id=%s AND negocio_id=%s", (tipo_documento_id, negocio_id)).fetchone() if tipo_documento_id else None
-        cod_t = (td_raw['codigo'] if td_raw and td_raw['codigo'] else 'AJUSTE_INV') or ''
-        if s_doc.upper().startswith(str(cod_t).strip().upper() + '-'):
-            documento_numero = s_doc[len(str(cod_t).strip()) + 1:].strip()
-        elif s_doc.upper().startswith('AJUSTE_INV-'):
-            documento_numero = s_doc[len('AJUSTE_INV'):].lstrip('-').strip()
     producto_id = data.get('producto_id')
     cantidad_fisica = data.get('cantidad_fisica')
     costo_unitario = data.get('costo_unitario')
@@ -4442,6 +4433,15 @@ def api_ajuste_guardar_item(negocio_id):
         
     conn = get_db_connection()
     try:
+        # Normalizar documento_numero contra codigo del tipo doc
+        td_raw = conn.execute("SELECT codigo FROM tipos_documento_negocio WHERE id=%s AND negocio_id=%s", (tipo_documento_id, negocio_id)).fetchone() if tipo_documento_id else None
+        cod_t = (td_raw['codigo'] if td_raw and td_raw['codigo'] else 'AJUSTE_INV') or ''
+        s_doc = str(documento_numero).strip()
+        if s_doc.upper().startswith(str(cod_t).strip().upper() + '-'):
+            documento_numero = s_doc[len(str(cod_t).strip()) + 1:].strip()
+        elif s_doc.upper().startswith('AJUSTE_INV-'):
+            documento_numero = s_doc[len('AJUSTE_INV'):].lstrip('-').strip()
+    
         # 1. Obtener producto y stock actual
         prod = conn.execute("SELECT nombre, categoria FROM productos WHERE id=%s AND negocio_id=%s", (producto_id, negocio_id)).fetchone()
         if not prod:

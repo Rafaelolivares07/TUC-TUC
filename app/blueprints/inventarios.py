@@ -836,12 +836,19 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             pres_equiv = float(ln['presentacion_equivalencia'])
             precio_cot = vu * pres_equiv
             
-            # Check if a quote exists for this product, provider, and presentation
-            cot_row = conn.execute("""
-                SELECT id FROM cotizaciones_compras
-                WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s AND presentacion_id = %s
-                LIMIT 1
-            """, (negocio_id, proveedor_id, ln['producto_id'], pres_id)).fetchone()
+            # Check if a quote exists for this product (by name), provider, and presentation
+            prod_name_row = conn.execute("SELECT nombre FROM productos WHERE id = %s", (ln['producto_id'],)).fetchone()
+            prod_nombre = prod_name_row['nombre'] if prod_name_row else None
+            if prod_nombre:
+                cot_row = conn.execute("""
+                    SELECT c.id FROM cotizaciones_compras c
+                    JOIN productos p ON p.id = c.item_id
+                    WHERE LOWER(p.nombre) = LOWER(%s) AND c.tercero_id = %s
+                      AND c.presentacion_id = %s
+                    LIMIT 1
+                """, (prod_nombre, proveedor_id, pres_id)).fetchone()
+            else:
+                cot_row = None
             
             if cot_row:
                 conn.execute("""
@@ -4285,6 +4292,55 @@ def api_cotizaciones_resumen(negocio_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/cotizaciones/buscar-por-nombre')
+def api_cotizaciones_buscar_por_nombre(negocio_id):
+    """Busca cotización por nombre de producto (global), nombre de proveedor y nombre de presentación."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    producto_nombre = (request.args.get('producto') or '').strip()
+    proveedor_nombre = (request.args.get('proveedor') or '').strip()
+    presentacion_nombre = (request.args.get('presentacion') or '').strip()
+    if not producto_nombre or not proveedor_nombre:
+        return jsonify({'ok': True, 'cotizacion': None})
+    conn = get_db_connection()
+    try:
+        row = conn.execute("""
+            SELECT c.id, c.precio, c.presentacion_id, pr.nombre AS presentacion_nombre,
+                   pr.equivalencia, c.unidades_item, c.descripcion_presentacion
+            FROM cotizaciones_compras c
+            JOIN productos p ON p.id = c.item_id
+            JOIN terceros t ON t.id = c.tercero_id
+            LEFT JOIN presentaciones pr ON pr.id = c.presentacion_id
+            WHERE LOWER(p.nombre) = LOWER(%s)
+              AND LOWER(t.nombre) = LOWER(%s)
+              AND c.fecha_vencimiento >= CURRENT_DATE
+        """, (producto_nombre, proveedor_nombre)).fetchone()
+
+        if row and presentacion_nombre:
+            row2 = conn.execute("""
+                SELECT c.id, c.precio, c.presentacion_id, pr.nombre AS presentacion_nombre,
+                       pr.equivalencia, c.unidades_item, c.descripcion_presentacion
+                FROM cotizaciones_compras c
+                JOIN productos p ON p.id = c.item_id
+                JOIN terceros t ON t.id = c.tercero_id
+                LEFT JOIN presentaciones pr ON pr.id = c.presentacion_id
+                WHERE LOWER(p.nombre) = LOWER(%s)
+                  AND LOWER(t.nombre) = LOWER(%s)
+                  AND LOWER(COALESCE(pr.nombre, '')) = LOWER(%s)
+                  AND c.fecha_vencimiento >= CURRENT_DATE
+                ORDER BY c.precio ASC
+                LIMIT 1
+            """, (producto_nombre, proveedor_nombre, presentacion_nombre)).fetchone()
+            if row2:
+                row = row2
+
+        return jsonify({'ok': True, 'cotizacion': dict(row) if row else None})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/parametros-compras')
 def api_parametros_compras(negocio_id):
     if 'usuario_id' not in session:
@@ -4752,11 +4808,12 @@ def api_ajuste_guardar_item(negocio_id):
             precio_cot = float(costo_unitario)
             
             cot_row = conn.execute("""
-                SELECT id FROM cotizaciones_compras
-                WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s 
-                  AND (presentacion_id = %s OR (presentacion_id IS NULL AND %s IS NULL))
+                SELECT c.id FROM cotizaciones_compras c
+                JOIN productos p ON p.id = c.item_id
+                WHERE LOWER(p.nombre) = LOWER(%s) AND c.tercero_id = %s
+                  AND c.presentacion_id = %s
                 LIMIT 1
-            """, (negocio_id, tercero_id, producto_id, pres_id_default, pres_id_default)).fetchone()
+            """, (prod['nombre'], tercero_id, pres_id_default)).fetchone()
             
             if cot_row:
                 conn.execute("""

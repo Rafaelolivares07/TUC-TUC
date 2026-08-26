@@ -4107,15 +4107,15 @@ def api_cotizaciones_listar(negocio_id):
                    c.presentacion_id, pr.nombre AS presentacion_nombre, pr.equivalencia,
                    c.unidades_item, c.precio, c.descripcion_presentacion,
                    c.fecha_cotizacion, c.fecha_vencimiento, c.origen,
-                   c.validada_proveedor, c.observaciones, c.created_at,
+                   c.validada_proveedor, c.observaciones, c.created_at, c.negocio_id,
                    CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN TRUE ELSE FALSE END AS vigente
             FROM cotizaciones_compras c
             JOIN terceros t ON t.id = c.tercero_id
             JOIN productos p ON p.id = c.item_id
             LEFT JOIN presentaciones pr ON pr.id = c.presentacion_id
-            WHERE c.negocio_id = %s
+            WHERE 1=1
         """
-        params = [negocio_id]
+        params = []
         if buscar:
             query += " AND (p.nombre ILIKE %s OR t.nombre ILIKE %s OR pr.nombre ILIKE %s)"
             like = f"%{buscar}%"
@@ -4273,11 +4273,11 @@ def api_cotizaciones_resumen(negocio_id):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     conn = get_db_connection()
     try:
-        total = conn.execute("SELECT COUNT(*) AS n FROM cotizaciones_compras WHERE negocio_id = %s", (negocio_id,)).fetchone()['n']
-        vigentes = conn.execute("SELECT COUNT(*) AS n FROM cotizaciones_compras WHERE negocio_id = %s AND fecha_vencimiento >= CURRENT_DATE", (negocio_id,)).fetchone()['n']
+        total = conn.execute("SELECT COUNT(*) AS n FROM cotizaciones_compras").fetchone()['n']
+        vigentes = conn.execute("SELECT COUNT(*) AS n FROM cotizaciones_compras WHERE fecha_vencimiento >= CURRENT_DATE").fetchone()['n']
         vencidas = total - vigentes
-        productos = conn.execute("SELECT COUNT(DISTINCT item_id) AS n FROM cotizaciones_compras WHERE negocio_id = %s", (negocio_id,)).fetchone()['n']
-        proveedores = conn.execute("SELECT COUNT(DISTINCT tercero_id) AS n FROM cotizaciones_compras WHERE negocio_id = %s", (negocio_id,)).fetchone()['n']
+        productos = conn.execute("SELECT COUNT(DISTINCT item_id) AS n FROM cotizaciones_compras").fetchone()['n']
+        proveedores = conn.execute("SELECT COUNT(DISTINCT tercero_id) AS n FROM cotizaciones_compras").fetchone()['n']
         return jsonify({'ok': True, 'total': total, 'vigentes': vigentes, 'vencidas': vencidas, 'productos': productos, 'proveedores': proveedores})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

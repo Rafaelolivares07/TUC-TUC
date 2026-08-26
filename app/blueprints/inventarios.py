@@ -5836,7 +5836,8 @@ def api_ensambles_sugerencias(negocio_id):
 
 
 def _calcular_demanda_y_ciclo(conn, negocio_id, producto_id, current_stock,
-                              dias_historial, dias_defecto, growth_window, max_growth, min_growth):
+                              dias_historial, dias_defecto, growth_window, max_growth, min_growth,
+                              usar_dias_con_stock=True):
     import datetime
     
     # 1. Obtener todos los movimientos de los últimos X días
@@ -5878,7 +5879,7 @@ def _calcular_demanda_y_ciclo(conn, negocio_id, producto_id, current_stock,
                     stock_temp += float(m['cantidad'])
                     
     # Demanda diaria promedio
-    dias_div = max(1, dias_con_stock)
+    dias_div = max(1, dias_con_stock if usar_dias_con_stock else dias_historial)
     ddp = total_salidas / dias_div
     
     # 3. Frecuencia de producción
@@ -6013,6 +6014,7 @@ def api_compras_sugerencias(negocio_id):
         min_growth = float(request.args.get('min_growth', -50.0)) / 100.0
         dias_stock_max_global = int(request.args.get('dias_stock_max_global', 15))
         dias_entrega_global = int(request.args.get('dias_entrega_global', 2))
+        usar_dias_con_stock_param = request.args.get('usar_dias_con_stock')
     except (ValueError, TypeError):
         dias_historial = 30
         dias_defecto = 7
@@ -6021,6 +6023,7 @@ def api_compras_sugerencias(negocio_id):
         min_growth = -0.5
         dias_stock_max_global = 15
         dias_entrega_global = 2
+        usar_dias_con_stock_param = None
         
     conn = get_db_connection()
     try:
@@ -6038,6 +6041,17 @@ def api_compras_sugerencias(negocio_id):
         """, (negocio_id,)).fetchone()
         if param_entrega and param_entrega[0]:
             dias_entrega_global = int(param_entrega[0])
+
+        param_dias_stock = conn.execute("""
+            SELECT valor_booleano FROM parametros_sistema 
+            WHERE nombre = 'inventario_usar_dias_con_stock' AND negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        if usar_dias_con_stock_param is not None:
+            usar_dias_con_stock = usar_dias_con_stock_param.lower() == 'true'
+        elif param_dias_stock and param_dias_stock[0]:
+            usar_dias_con_stock = param_dias_stock[0].lower() == 'true'
+        else:
+            usar_dias_con_stock = True
 
         # 1. Obtener todos los productos comprados (sin receta)
         purchased_products = conn.execute("""
@@ -6062,7 +6076,8 @@ def api_compras_sugerencias(negocio_id):
             # Calcular demanda, ciclo y tendencia
             ddp, frecuencia, growth_rate = _calcular_demanda_y_ciclo(
                 conn, negocio_id, p_id, stock_actual,
-                dias_historial, dias_defecto, growth_window, max_growth, min_growth
+                dias_historial, dias_defecto, growth_window, max_growth, min_growth,
+                usar_dias_con_stock=usar_dias_con_stock
             )
             
             if ddp < 0.0001:
@@ -6244,7 +6259,8 @@ def api_compras_sugerencias(negocio_id):
             'proveedores': proveedores_lista,
             'parametros': {
                 'dias_stock_max_global': dias_stock_max_global,
-                'dias_entrega_global': dias_entrega_global
+                'dias_entrega_global': dias_entrega_global,
+                'usar_dias_con_stock': usar_dias_con_stock
             }
         })
     except Exception as e:

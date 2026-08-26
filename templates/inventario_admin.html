@@ -1459,85 +1459,143 @@
         
 
         <!-- Detalles de Ajuste Colapsables -->
-
         <details class="text-[11px] text-indigo-600 hover:text-indigo-800 cursor-pointer font-bold outline-none">
-
           <summary class="list-none flex items-center gap-1">
-
             <i class="bi bi-gear-fill"></i> Ajustar parámetros de cálculo
-
           </summary>
 
-          <div class="mt-3 p-4 bg-white border border-gray-150 rounded-xl cursor-default text-gray-700 font-normal space-y-4">
+          <div class="mt-3 p-3 bg-white border border-gray-150 rounded-xl cursor-default text-gray-700 font-normal space-y-3">
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-
-              <div>
-
-                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📅 Historial analizado (días)</label>
-
-                <input type="number" id="cfg-dias-historial" value="30" min="1" max="90" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
-
-                <p class="text-[9px] text-slate-400 mt-1">Días de movimientos hacia atrás para calcular promedios y quiebres.</p>
-
+            <!-- FORMULA VISUAL -->
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[10px] font-mono text-slate-700 space-y-1">
+              <div class="font-bold text-[11px] text-slate-800 mb-1.5 flex items-center gap-1">
+                <span>&#x1F4D0;</span> Fórmula de Compra Sugerida
               </div>
-
-              <div>
-
-                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">🔁 Ciclo por defecto (días)</label>
-
-                <input type="number" id="cfg-dias-defecto" value="7" min="1" max="30" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
-
-                <p class="text-[9px] text-slate-400 mt-1">Días de abastecimiento asignados si el producto es nuevo y sin histórico.</p>
-
+              <div><span class="text-indigo-600 font-bold">Demanda Proyectada</span> = DDP × (1 + Crecimiento)</div>
+              <div><span class="text-indigo-600 font-bold">DDP</span> = Total Salidas ÷ <span id="formula-dias-label" class="font-bold">Días con stock</span></div>
+              <div><span class="text-indigo-600 font-bold">Stock Objetivo</span> = Demanda Proyectada × Stock Máx (días)</div>
+              <div><span class="text-indigo-600 font-bold">Cantidad</span> = Stock Objetivo − Stock Actual</div>
+              <div><span class="text-indigo-600 font-bold">Cobertura</span> = Stock Actual ÷ Demanda Proyectada</div>
+              <div><span class="text-indigo-600 font-bold">Fecha Pedido</span> = Cobertura − Entrega Proveedor</div>
+              <div class="flex flex-wrap gap-3 mt-2 pt-2 border-t border-slate-200">
+                <details class="cursor-pointer text-indigo-500 hover:text-indigo-700">
+                  <summary class="font-bold">¿Qué es DDP?</summary>
+                  <p class="mt-1 pl-2 border-l-2 border-indigo-200 text-slate-500 font-sans normal-case text-[10px] leading-relaxed">
+                    <b>Demanda Diaria Promedio.</b> Es el promedio de unidades que se venden o consumen por día. Se calcula dividiendo el total de salidas entre los días analizados. Es la base para todo el cálculo de compras.
+                  </p>
+                </details>
+                <details class="cursor-pointer text-indigo-500 hover:text-indigo-700">
+                  <summary class="font-bold">¿Qué es Crecimiento?</summary>
+                  <p class="mt-1 pl-2 border-l-2 border-indigo-200 text-slate-500 font-sans normal-case text-[10px] leading-relaxed">
+                    <b>Tasa de crecimiento reciente.</b> Compara el consumo de los últimos 7 días contra los 7 días anteriores. Si subió 20%, el crecimiento es +20%. Si bajó 10%, es −10%. Se usa para ajustar la demanda hacia el futuro.
+                  </p>
+                </details>
+                <details class="cursor-pointer text-indigo-500 hover:text-indigo-700">
+                  <summary class="font-bold">¿Qué es Stock Máx?</summary>
+                  <p class="mt-1 pl-2 border-l-2 border-indigo-200 text-slate-500 font-sans normal-case text-[10px] leading-relaxed">
+                    <b>Cobertura máxima deseada.</b> Cuántos días de inventario queremos mantener. Si es 8 días y la demanda es 50/día, el stock objetivo es 400 unidades. También filtra las presentaciones de proveedor que no caben en esa cobertura.
+                  </p>
+                </details>
+                <details class="cursor-pointer text-indigo-500 hover:text-indigo-700">
+                  <summary class="font-bold">¿Qué es Entrega?</summary>
+                  <p class="mt-1 pl-2 border-l-2 border-indigo-200 text-slate-500 font-sans normal-case text-[10px] leading-relaxed">
+                    <b>Tiempo de entrega del proveedor.</b> Días que tarda en llegar el pedido. Se resta de la cobertura para calcular cuándo debemos pedir. Si tenemos 8 días de stock y el proveedor tarda 2, debemos pedir cuando queden 2 días.
+                  </p>
+                </details>
               </div>
-
-              <div>
-
-                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📈 Ventana de tendencia (días)</label>
-
-                <input type="number" id="cfg-growth-window" value="7" min="1" max="15" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
-
-                <p class="text-[9px] text-slate-400 mt-1">Días de comparación semanal para establecer porcentaje de crecimiento.</p>
-
-              </div>
-
-              <div>
-
-                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">🚀 Crecimiento Máximo (%)</label>
-
-                <input type="number" id="cfg-max-growth" value="100" min="0" max="500" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
-
-                <p class="text-[9px] text-slate-400 mt-1">Límite tope de incremento proyectado para evitar excesos de stock.</p>
-
-              </div>
-
-              <div>
-
-                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">📉 Decrecimiento Mínimo (%)</label>
-
-                <input type="number" id="cfg-min-growth" value="-50" min="-100" max="0" class="border rounded-lg px-2 py-1 text-xs w-full outline-none">
-
-                <p class="text-[9px] text-slate-400 mt-1">Límite tope de decrecimiento proyectado (ej. -50% es reducir a la mitad).</p>
-
-              </div>
-
-              <div class="flex items-end">
-
-                <button type="button" onclick="cargarSugerenciasProduccion()"
-
-                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-3 rounded-lg transition">
-
-                  Recalcular Pronóstico
-
-                </button>
-
-              </div>
-
             </div>
 
-          </div>
+            <!-- PARAMETROS NUMERICOS -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Historial (días)</label>
+                <input type="number" id="cfg-compras-dias-historial" value="30" min="1" max="90" class="border rounded px-1.5 py-0.5 text-xs w-full outline-none">
+                <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
+                  <summary>¿Qué es?</summary>
+                  <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Días hacia atrás que analiza el sistema para calcular el consumo promedio. Más días = más precisión pero incluye tendencias antiguas. Recomendado: 30.</p>
+                </details>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Frecuencia defecto (días)</label>
+                <input type="number" id="cfg-compras-dias-defecto" value="7" min="1" max="30" class="border rounded px-1.5 py-0.5 text-xs w-full outline-none">
+                <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
+                  <summary>¿Qué es?</summary>
+                  <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Ciclo de compra por defecto cuando no hay historial de producción. Si el producto nunca se ha fabricado, se asume que se compra cada 7 días.</p>
+                </details>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Stock Máximo Global (días) <span class="text-indigo-500" title="Guardado en BD">&#x1f4be;</span></label>
+                <div class="flex items-center gap-1">
+                  <input type="number" id="cfg-compras-stock-max" value="15" min="1" max="180" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none">
+                  <button type="button" onclick="guardarParametroNegocio('inventario_stock_max_dias', 'cfg-compras-stock-max')" class="text-indigo-500 hover:text-indigo-700 text-xs font-bold transition" title="Guardar en BD">&#x1f4be;</button>
+                </div>
+                <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
+                  <summary>¿Qué es?</summary>
+                  <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Cuántos días de inventario queremos mantener como máximo. Se usa como objetivo de cobertura y para filtrar presentaciones de proveedor demasiado grandes.</p>
+                </details>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Entrega Proveedor (días) <span class="text-indigo-500" title="Guardado en BD">&#x1f4be;</span></label>
+                <div class="flex items-center gap-1">
+                  <input type="number" id="cfg-compras-dias-entrega" value="2" min="0" max="30" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none">
+                  <button type="button" onclick="guardarParametroNegocio('inventario_dias_entrega', 'cfg-compras-dias-entrega')" class="text-indigo-500 hover:text-indigo-700 text-xs font-bold transition" title="Guardar en BD">&#x1f4be;</button>
+                </div>
+                <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
+                  <summary>¿Qué es?</summary>
+                  <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Días que tarda el proveedor en entregar. Se resta de la cobertura actual para saber cuándo hacer el pedido. Si tengo 8 días y tarda 2, pedir cuando queden 2.</p>
+                </details>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Ventana tendencia (días)</label>
+                <input type="number" id="cfg-compras-growth-window" value="7" min="1" max="15" class="border rounded px-1.5 py-0.5 text-xs w-full outline-none">
+                <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
+                  <summary>¿Qué es?</summary>
+                  <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Período para comparar consumo reciente vs anterior. Con 7 días compara la última semana contra la anterior para detectar tendencia.</p>
+                </details>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Crecimiento Máximo (%)</label>
+                <input type="number" id="cfg-compras-max-growth" value="100" min="0" max="500" class="border rounded px-1.5 py-0.5 text-xs w-full outline-none">
+                <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
+                  <summary>¿Qué es?</summary>
+                  <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Tope máximo de crecimiento permitido. Si el consumo subió 300% pero el tope es 100%, se usa 100%. Evita sobrecompra por picos atípicos.</p>
+                </details>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Decrecimiento Mínimo (%)</label>
+                <input type="number" id="cfg-compras-min-growth" value="-50" min="-100" max="0" class="border rounded px-1.5 py-0.5 text-xs w-full outline-none">
+                <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
+                  <summary>¿Qué es?</summary>
+                  <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Tope mínimo de decrecimiento. Si el consumo bajó 80% pero el tope es −50%, se usa −50%. Evita ignorar productos con demanda residual.</p>
+                </details>
+              </div>
+            </div>
 
+            <!-- TOGGLE: DIAS CON STOCK -->
+            <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+              <div class="flex items-center gap-3">
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="cfg-compras-usar-dias-con-stock" class="sr-only peer" checked onchange="document.getElementById('formula-dias-label').textContent = this.checked ? 'Días con stock' : 'Todos los días del período'">
+                  <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+                <div>
+                  <span class="text-[11px] font-bold text-indigo-800">Solo contar días con stock</span>
+                  <span class="text-[9px] text-indigo-500 ml-1">(Guardado en BD &#x1f4be;)</span>
+                </div>
+              </div>
+              <div class="mt-2 text-[10px] text-slate-600 space-y-1 pl-12">
+                <div><span class="font-bold text-indigo-700">ON:</span> La demanda diaria se calcula dividiendo las salidas solo entre los días en que hubo stock disponible. Más preciso si hubo quiebres de stock. Resultado: demanda más agresiva, sugiere comprar más pronto.</div>
+                <div><span class="font-bold text-slate-500">OFF:</span> La demanda diaria se calcula dividiendo las salidas entre <b>todos</b> los días del período, incluyendo días sin stock. Más conservador. Resultado: demanda más baja, sugiere comprar menos o más tarde.</div>
+              </div>
+            </div>
+
+            <!-- BOTON RECALCULAR -->
+            <button type="button" onclick="guardarYRecalcularCompras()"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-3 rounded-lg transition">
+              Recalcular Sugerencias de Compra
+            </button>
+
+          </div>
         </details>
 
       </div>
@@ -6819,11 +6877,18 @@ async function cargarSugerenciasProduccion() {
 
 
 async function guardarYRecalcularCompras() {
-  // Guardar ambos parametros en BD antes de recalcular
+  // Guardar parametros en BD antes de recalcular
+  const toggleChecked = document.getElementById('cfg-compras-usar-dias-con-stock')?.checked;
   await Promise.all([
     guardarParametroNegocio('inventario_stock_max_dias', 'cfg-compras-stock-max'),
-    guardarParametroNegocio('inventario_dias_entrega', 'cfg-compras-dias-entrega')
+    guardarParametroNegocio('inventario_dias_entrega', 'cfg-compras-dias-entrega'),
+    guardarParametroNegocio('inventario_usar_dias_con_stock', null, toggleChecked ? 'true' : 'false')
   ]);
+  // Actualizar label de la formula
+  const formulaLabel = document.getElementById('formula-dias-label');
+  if (formulaLabel) {
+    formulaLabel.textContent = toggleChecked ? 'Días con stock' : 'Todos los días del período';
+  }
   cargarSugerenciasCompras();
 }
 
@@ -6852,10 +6917,11 @@ async function cargarSugerenciasCompras() {
   const stockMax = document.getElementById('cfg-compras-stock-max')?.value || '15';
 
   const diasEntrega = document.getElementById('cfg-compras-dias-entrega')?.value || '2';
+  const usarDiasConStock = document.getElementById('cfg-compras-usar-dias-con-stock')?.checked ? 'true' : 'false';
 
   
 
-  const queryParams = `?dias_historial=${diasHistorial}&dias_defecto=${diasDefecto}&growth_window=${growthWindow}&max_growth=${maxGrowth}&min_growth=${minGrowth}&dias_stock_max_global=${stockMax}&dias_entrega_global=${diasEntrega}`;
+  const queryParams = `?dias_historial=${diasHistorial}&dias_defecto=${diasDefecto}&growth_window=${growthWindow}&max_growth=${maxGrowth}&min_growth=${minGrowth}&dias_stock_max_global=${stockMax}&dias_entrega_global=${diasEntrega}&usar_dias_con_stock=${usarDiasConStock}`;
 
   
 
@@ -6881,11 +6947,19 @@ async function cargarSugerenciasCompras() {
     if (d.parametros) {
       const stockMaxInput = document.getElementById('cfg-compras-stock-max');
       const diasEntregaInput = document.getElementById('cfg-compras-dias-entrega');
+      const toggleInput = document.getElementById('cfg-compras-usar-dias-con-stock');
+      const formulaLabel = document.getElementById('formula-dias-label');
       if (stockMaxInput && d.parametros.dias_stock_max_global !== undefined) {
         stockMaxInput.value = d.parametros.dias_stock_max_global;
       }
       if (diasEntregaInput && d.parametros.dias_entrega_global !== undefined) {
         diasEntregaInput.value = d.parametros.dias_entrega_global;
+      }
+      if (toggleInput && d.parametros.usar_dias_con_stock !== undefined) {
+        toggleInput.checked = d.parametros.usar_dias_con_stock;
+        if (formulaLabel) {
+          formulaLabel.textContent = d.parametros.usar_dias_con_stock ? 'Días con stock' : 'Todos los días del período';
+        }
       }
     }
 
@@ -7398,12 +7472,16 @@ async function guardarMaxStockProducto(productoId, inputId) {
 
 
 
-async function guardarParametroNegocio(nombre, inputId) {
-  const inp = document.getElementById(inputId);
-  if (!inp) return;
-  
-  const val = inp.value.trim();
-  if (val === '') return;
+async function guardarParametroNegocio(nombre, inputId, overrideVal) {
+  let val;
+  if (overrideVal !== undefined) {
+    val = overrideVal;
+  } else {
+    const inp = document.getElementById(inputId);
+    if (!inp) return;
+    val = inp.value.trim();
+    if (val === '') return;
+  }
   
   try {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/parametro`, {

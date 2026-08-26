@@ -3566,7 +3566,7 @@ function renderizarComprasTabla(proveedores) {
               </button>
             </div>
           </td>
-          <td class="px-3 py-2.5 text-center font-semibold text-slate-700">${prod.fecha_limite === 'Inmediato' ? '<span class="text-red-600 font-bold">Inmediato</span>' : prod.fecha_limite}</td>
+          <td class="px-3 py-2.5 text-center font-semibold text-slate-700" id="compras-fecha-limite-${prod.producto_id}">${prod.fecha_limite === 'Inmediato' ? '<span class="text-red-600 font-bold">Inmediato</span>' : prod.fecha_limite}</td>
           <td class="px-3 py-2.5 text-center">
             ${sugeridoHtml}
           </td>
@@ -3710,15 +3710,37 @@ function recalcularLineaMaxStock(pIdx, productoId, inputId) {
   const paquetes = Math.ceil(cantidadComprarNeta / unidadesPresentacion);
   const cantidadComprarUnidades = paquetes * unidadesPresentacion;
   
-  // Actualizar el input de Pedido Sugerido en el DOM
-  const qtyInput = document.getElementById(`compras-qty-${productoId}`);
-  if (qtyInput) {
-    qtyInput.value = unidadesPresentacion <= 1.0001 ? cantidadComprarUnidades : paquetes;
-  }
-  
-  // Invocar recalcularTotalProveedor para actualizar el subtotal, unidades equivalentes y totales
-  recalcularTotalProveedor(pIdx);
-}
+  // Actualizar el input de Pedido Sugerido en el DOM
+  const qtyInput = document.getElementById(`compras-qty-${productoId}`);
+  if (qtyInput) {
+    qtyInput.value = unidadesPresentacion <= 1.0001 ? cantidadComprarUnidades : paquetes;
+  }
+  
+  // Recalcular fecha límite
+  const diasEntrega = prod.dias_entrega_global || 2;
+  const stockActual = prod.stock_actual;
+  let coberturaDias = 0;
+  if (stockActual > 0.0001 && prod.demanda_proyectada > 0.0001) {
+    coberturaDias = stockActual / prod.demanda_proyectada;
+  }
+  const diasParaReorden = coberturaDias - diasEntrega;
+  
+  const fechaCell = document.getElementById(`compras-fecha-limite-${productoId}`);
+  if (fechaCell) {
+    if (diasParaReorden <= 0.0001) {
+      fechaCell.innerHTML = '<span class="text-red-600 font-bold">Inmediato</span>';
+    } else {
+      const diasRed = Math.round(diasParaReorden);
+      const f = new Date();
+      f.setDate(f.getDate() + diasRed);
+      const meses = ['Jan','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      fechaCell.textContent = `${String(f.getDate()).padStart(2,'0')}-${meses[f.getMonth()]}-${f.getFullYear()}`;
+    }
+  }
+  
+  // Invocar recalcularTotalProveedor para actualizar el subtotal, unidades equivalentes y totales
+  recalcularTotalProveedor(pIdx);
+}
 
 function filtrarCompras() {
   const query = document.getElementById('filtro-compras-proveedor')?.value.toLowerCase().trim() || '';

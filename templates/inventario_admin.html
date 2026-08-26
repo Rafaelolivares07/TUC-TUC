@@ -7422,10 +7422,11 @@ async function guardarMaxStockProducto(productoId, inputId) {
 
 async function guardarParametroNegocio(nombre, inputId, overrideVal) {
   let val;
+  let inp = null;
   if (overrideVal !== undefined) {
     val = overrideVal;
   } else {
-    const inp = document.getElementById(inputId);
+    inp = document.getElementById(inputId);
     if (!inp) return;
     val = inp.value.trim();
     if (val === '') return;
@@ -7440,8 +7441,10 @@ async function guardarParametroNegocio(nombre, inputId, overrideVal) {
     const d = await r.json();
     
     if (d.ok) {
-      inp.classList.add('border-emerald-500', 'bg-emerald-50');
-      setTimeout(() => inp.classList.remove('border-emerald-500', 'bg-emerald-50'), 1500);
+      if (inp) {
+        inp.classList.add('border-emerald-500', 'bg-emerald-50');
+        setTimeout(() => inp.classList.remove('border-emerald-500', 'bg-emerald-50'), 1500);
+      }
     } else {
       alert('Error al guardar: ' + d.error);
     }

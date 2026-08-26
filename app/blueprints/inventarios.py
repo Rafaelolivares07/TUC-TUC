@@ -4285,6 +4285,26 @@ def api_cotizaciones_resumen(negocio_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/parametros-compras')
+def api_parametros_compras(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    conn = get_db_connection()
+    try:
+        params = {'dias_stock_max_global': 15, 'dias_entrega_global': 2, 'usar_dias_con_stock': True}
+        row = conn.execute("SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inventario_stock_max_dias' AND negocio_id = %s", (negocio_id,)).fetchone()
+        if row and row[0]: params['dias_stock_max_global'] = int(row[0])
+        row = conn.execute("SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inventario_dias_entrega' AND negocio_id = %s", (negocio_id,)).fetchone()
+        if row and row[0]: params['dias_entrega_global'] = int(row[0])
+        row = conn.execute("SELECT valor_booleano FROM parametros_sistema WHERE nombre = 'inventario_usar_dias_con_stock' AND negocio_id = %s", (negocio_id,)).fetchone()
+        if row and row[0]: params['usar_dias_con_stock'] = str(row[0]).lower() == 'true'
+        return jsonify({'ok': True, 'parametros': params})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/produccion/historial')
 def api_produccion_historial(negocio_id):
     if 'usuario_id' not in session:

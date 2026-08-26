@@ -6963,6 +6963,26 @@ async function cargarSugerenciasCompras() {
 
   
 
+  // 1. Cargar parametros desde BD y restaurar inputs ANTES de leer el DOM
+  try {
+    const pResp = await fetch(`/api/inventario/${NEGOCIO_ID}/parametros-compras`);
+    const pData = await pResp.json();
+    if (pData.ok && pData.parametros) {
+      const p = pData.parametros;
+      const stockMaxInput = document.getElementById('cfg-compras-stock-max');
+      const diasEntregaInput = document.getElementById('cfg-compras-dias-entrega');
+      const toggleInput = document.getElementById('cfg-compras-usar-dias-con-stock');
+      const formulaLabel = document.getElementById('formula-dias-label');
+      if (stockMaxInput && p.dias_stock_max_global !== undefined) stockMaxInput.value = p.dias_stock_max_global;
+      if (diasEntregaInput && p.dias_entrega_global !== undefined) diasEntregaInput.value = p.dias_entrega_global;
+      if (toggleInput) {
+        toggleInput.checked = !!p.usar_dias_con_stock;
+        if (formulaLabel) formulaLabel.textContent = p.usar_dias_con_stock ? 'Días con stock' : 'Todos los días del período';
+      }
+    }
+  } catch(e) { /* continue with DOM defaults */ }
+
+  // 2. Ahora leer del DOM (que ya tiene los valores correctos de BD)
   const diasHistorial = document.getElementById('cfg-compras-dias-historial')?.value || '30';
 
   const diasDefecto = document.getElementById('cfg-compras-dias-defecto')?.value || '7';

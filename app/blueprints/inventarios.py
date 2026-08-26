@@ -4476,6 +4476,7 @@ def api_ajuste_guardar_item(negocio_id):
         
         if comp:
             comp_id = comp['id']
+            desc_asiento = f"Ajuste físico de inventario - {documento_numero}"
         else:
             # Es el primer item: consumimos el consecutivo en la base de datos de manera atómica
             res_num, _ = obtener_siguiente_consecutivo(conn, negocio_id, tipo_documento_id)

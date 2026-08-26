@@ -5976,21 +5976,37 @@ def api_guardar_parametro_negocio(negocio_id):
     conn = get_db_connection()
     try:
         existing = conn.execute("""
-            SELECT id FROM parametros_sistema 
+            SELECT id, tipo FROM parametros_sistema 
             WHERE nombre = %s AND negocio_id = %s
         """, (nombre, negocio_id)).fetchone()
         
-        if existing:
-            conn.execute("""
-                UPDATE parametros_sistema 
-                SET valor_texto = %s, fecha_actualizacion = NOW()
-                WHERE nombre = %s AND negocio_id = %s
-            """, (str(valor), nombre, negocio_id))
+        es_booleano = (existing and existing[1] == 'booleano') or str(valor).lower() in ('true', 'false')
+        
+        if es_booleano:
+            valor_bool = str(valor).lower() == 'true'
+            if existing:
+                conn.execute("""
+                    UPDATE parametros_sistema 
+                    SET valor_booleano = %s, valor_texto = NULL, fecha_actualizacion = NOW()
+                    WHERE nombre = %s AND negocio_id = %s
+                """, (str(valor_bool), nombre, negocio_id))
+            else:
+                conn.execute("""
+                    INSERT INTO parametros_sistema (nombre, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
+                    VALUES (%s, %s, 'booleano', NULL, %s, NOW())
+                """, (nombre, str(valor_bool), negocio_id))
         else:
-            conn.execute("""
-                INSERT INTO parametros_sistema (nombre, valor_texto, tipo, descripcion, negocio_id, fecha_actualizacion)
-                VALUES (%s, %s, 'numerico', NULL, %s, NOW())
-            """, (nombre, str(valor), negocio_id))
+            if existing:
+                conn.execute("""
+                    UPDATE parametros_sistema 
+                    SET valor_texto = %s, fecha_actualizacion = NOW()
+                    WHERE nombre = %s AND negocio_id = %s
+                """, (str(valor), nombre, negocio_id))
+            else:
+                conn.execute("""
+                    INSERT INTO parametros_sistema (nombre, valor_texto, tipo, descripcion, negocio_id, fecha_actualizacion)
+                    VALUES (%s, %s, 'numerico', NULL, %s, NOW())
+                """, (nombre, str(valor), negocio_id))
         
         conn.commit()
         return jsonify({'ok': True, 'mensaje': 'Parametro guardado'})

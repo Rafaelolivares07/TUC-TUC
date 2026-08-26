@@ -176,6 +176,12 @@
 
     #tab-entradas input[id^="ent-pres-"] { text-align: left; padding-left: 16px; }
 
+    #tab-entradas input[id^="ent-cant-emp-"] { max-width: 70%; }
+
+    #tab-entradas select[id^="ent-iva-pct-"] { max-width: 60%; font-size: 11px; }
+
+    #tab-entradas .grid-cols-12 > div:last-child { white-space: nowrap; }
+
     #tab-entradas input[id^="ent-cant-"],
 
     #tab-entradas input[id^="ent-costo-"],
@@ -1373,23 +1379,23 @@
 
     <div class="mb-3">
 
-      <div class="grid grid-cols-12 gap-2 mb-1 px-1">
+      <div class="grid grid-cols-12 gap-1 mb-1 px-1">
 
-        <span class="col-span-3 text-xs font-bold text-gray-400 uppercase">Producto</span>
+        <span class="col-span-2 text-[10px] font-bold text-gray-400 uppercase text-center">Producto</span>
 
-        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase text-center">Cant. Emp.</span>
+        <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">Cant.Emp</span>
 
-        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase text-center">Empaque</span>
+        <span class="col-span-3 text-[10px] font-bold text-gray-400 uppercase text-center">Presentación / Empaque</span>
 
-        <span class="col-span-2 text-xs font-bold text-gray-400 uppercase text-center">Cant. Base</span>
+        <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">Base</span>
 
-        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase text-right">Cost. Emp.</span>
+        <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">$ Emp.</span>
 
-        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase text-right">Total Línea</span>
+        <span class="col-span-2 text-[10px] font-bold text-gray-400 uppercase text-center">Total Línea</span>
 
-        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase text-right">Cost. Base</span>
+        <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">Cost.Base</span>
 
-        <span class="col-span-1 text-xs font-bold text-gray-400 uppercase text-center">IVA %</span>
+        <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">IVA</span>
 
         <span class="col-span-1"></span>
 
@@ -5435,7 +5441,7 @@ function agregarLineaEntrada() {
 
     </div>
 
-    <div class="col-span-1 flex justify-center">
+    <div class="col-span-1 flex justify-center whitespace-nowrap">
 
       <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
 
@@ -5635,7 +5641,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
     </div>
 
-    <div class="col-span-1 flex justify-center">
+    <div class="col-span-1 flex justify-center whitespace-nowrap">
 
       <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
 
@@ -5792,7 +5798,6 @@ async function buscarCotizacionParaLinea(idx) {
     const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones?q=`);
     const data = await resp.json();
     if (!data.ok) return;
-    // Buscar cotización que coincida con producto + proveedor + presentación
     const match = data.cotizaciones.find(c =>
       String(c.item_id) === String(prodId) &&
       String(c.tercero_id) === String(provId) &&
@@ -5800,10 +5805,11 @@ async function buscarCotizacionParaLinea(idx) {
     );
     if (match && match.precio > 0) {
       const costoEmpInput = document.getElementById(`ent-costo-emp-${idx}`);
-      if (costoEmpInput && (!costoEmpInput.value || parseFloat(costoEmpInput.value) === 0)) {
+      if (costoEmpInput) {
         costoEmpInput.value = match.precio.toFixed(4);
+        // Recalcular la línea completa con el costo de cotización
         calcularCostoFilaEmpaque(idx, 'costo_emp');
-        toast(`Cotización encontrada: $${match.precio.toLocaleString('es-CO')} / ${match.presentacion_nombre || 'presentación'}`);
+        toast(`Cotización: $${match.precio.toLocaleString('es-CO')} / ${match.presentacion_nombre || 'presentación'}`);
       }
     }
   } catch(e) { /* ignore */ }

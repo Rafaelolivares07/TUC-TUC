@@ -5960,6 +5960,45 @@ def api_update_product_max_stock(producto_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/parametro', methods=['POST'])
+def api_guardar_parametro_negocio(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    data = request.get_json() or {}
+    nombre = data.get('nombre', '').strip()
+    valor = data.get('valor', '')
+    
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'Falta nombre del parametro'}), 400
+    
+    conn = get_db_connection()
+    try:
+        existing = conn.execute("""
+            SELECT id FROM parametros_sistema 
+            WHERE nombre = %s AND negocio_id = %s
+        """, (nombre, negocio_id)).fetchone()
+        
+        if existing:
+            conn.execute("""
+                UPDATE parametros_sistema 
+                SET valor_texto = %s, fecha_actualizacion = NOW()
+                WHERE nombre = %s AND negocio_id = %s
+            """, (str(valor), nombre, negocio_id))
+        else:
+            conn.execute("""
+                INSERT INTO parametros_sistema (nombre, valor_texto, tipo, descripcion, negocio_id, fecha_actualizacion)
+                VALUES (%s, %s, 'numerico', NULL, %s, NOW())
+            """, (nombre, str(valor), negocio_id))
+        
+        conn.commit()
+        return jsonify({'ok': True, 'mensaje': 'Parametro guardado'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/compras/sugerencias')
 def api_compras_sugerencias(negocio_id):
     import datetime
@@ -5985,6 +6024,21 @@ def api_compras_sugerencias(negocio_id):
         
     conn = get_db_connection()
     try:
+        # Leer parametros globales desde BD por negocio
+        param_row = conn.execute("""
+            SELECT valor_texto FROM parametros_sistema 
+            WHERE nombre = 'inventario_stock_max_dias' AND negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        if param_row and param_row[0]:
+            dias_stock_max_global = int(param_row[0])
+        
+        param_entrega = conn.execute("""
+            SELECT valor_texto FROM parametros_sistema 
+            WHERE nombre = 'inventario_dias_entrega' AND negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        if param_entrega and param_entrega[0]:
+            dias_entrega_global = int(param_entrega[0])
+
         # 1. Obtener todos los productos comprados (sin receta)
         purchased_products = conn.execute("""
             SELECT p.id, p.nombre, COALESCE(p.costo, 0) AS costo, p.dias_max_stock, COALESCE(s.stock, 0) AS stock_actual,
@@ -6187,7 +6241,11 @@ def api_compras_sugerencias(negocio_id):
         
         return jsonify({
             'ok': True,
-            'proveedores': proveedores_lista
+            'proveedores': proveedores_lista,
+            'parametros': {
+                'dias_stock_max_global': dias_stock_max_global,
+                'dias_entrega_global': dias_entrega_global
+            }
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

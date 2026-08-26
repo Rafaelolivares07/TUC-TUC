@@ -3718,7 +3718,6 @@ function recalcularLineaMaxStock(pIdx, productoId, inputId) {
   
   // Recalcular fecha límite
   const diasEntrega = prod.dias_entrega_global || 2;
-  const stockActual = prod.stock_actual;
   let coberturaDias = 0;
   if (stockActual > 0.0001 && prod.demanda_proyectada > 0.0001) {
     coberturaDias = stockActual / prod.demanda_proyectada;

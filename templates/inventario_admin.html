@@ -5790,17 +5790,19 @@ function calcularCostoFilaEmpaque(idx, target) {
 }
 
 async function buscarCotizacionParaLinea(idx) {
-  const prodName = document.getElementById(`ent-name-${idx}`)?.value?.trim();
-  const presName = document.getElementById(`ent-pres-${idx}`)?.value?.trim();
-  const provName = document.getElementById('entrada-proveedor')?.value?.trim();
-  if (!prodName || !provName) return;
+  const prodId = document.getElementById(`ent-id-${idx}`)?.value;
+  const presId = document.getElementById(`ent-pres-id-${idx}`)?.value;
+  const provId = document.getElementById('entrada-proveedor-id')?.value;
+  if (!prodId || !provId) return;
   try {
-    const params = new URLSearchParams({producto: prodName, proveedor: provName});
-    if (presName) params.set('presentacion', presName);
-    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones/buscar-por-nombre?${params}`);
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones?q=`);
     const data = await resp.json();
-    if (!data.ok || !data.cotizacion) return;
-    const match = data.cotizacion;
+    if (!data.ok) return;
+    const match = data.cotizaciones.find(c =>
+      String(c.item_id) === String(prodId) &&
+      String(c.tercero_id) === String(provId) &&
+      (!presId || String(c.presentacion_id) === String(presId))
+    );
     if (match && match.precio > 0) {
       const costoEmpInput = document.getElementById(`ent-costo-emp-${idx}`);
       if (costoEmpInput) {

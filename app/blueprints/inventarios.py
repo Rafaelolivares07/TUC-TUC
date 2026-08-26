@@ -6100,7 +6100,7 @@ def api_compras_sugerencias(negocio_id):
                 prov_telefono = last_purchase['proveedor_telefono'] or ""
                 
             # Calcular cantidad a comprar
-            cantidad_comprar_neta = (demanda_proyectada * (frecuencia + dias_entrega_global)) - stock_actual
+            cantidad_comprar_neta = max_comprar - stock_actual
             if cantidad_comprar_neta < 0.0001:
                 continue
             cantidad_comprar = cantidad_comprar_neta

@@ -1458,32 +1458,7 @@
 
         
 
-        <!-- Detalles de Ajuste Colapsables -->
-        <details class="text-[11px] text-indigo-600 hover:text-indigo-800 cursor-pointer font-bold outline-none">
-          <summary class="list-none flex items-center gap-1">
-            <i class="bi bi-gear-fill"></i> Ajustar parámetros de cálculo
-          </summary>
-
-          <div class="mt-3 p-3 bg-white border border-gray-150 rounded-xl cursor-default text-gray-700 font-normal space-y-3">
-
-            <!-- FORMULA VISUAL -->
-            <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[10px] font-mono text-slate-700 space-y-1">
-              <div class="font-bold text-[11px] text-slate-800 mb-1.5 flex items-center gap-1">
-                <span>&#x1F4D0;</span> Fórmula de Compra Sugerida
-              </div>
-              <div><span class="text-indigo-600 font-bold">Demanda Proyectada</span> = DDP × (1 + Crecimiento)</div>
-              <div><span class="text-indigo-600 font-bold">DDP</span> = Total Salidas ÷ <span id="formula-dias-label" class="font-bold">Días con stock</span></div>
-              <div><span class="text-indigo-600 font-bold">Stock Objetivo</span> = Demanda Proyectada × Stock Máx (días)</div>
-              <div><span class="text-indigo-600 font-bold">Cantidad</span> = Stock Objetivo − Stock Actual</div>
-              <div><span class="text-indigo-600 font-bold">Cobertura</span> = Stock Actual ÷ Demanda Proyectada</div>
-              <div><span class="text-indigo-600 font-bold">Fecha Pedido</span> = Cobertura − Entrega Proveedor</div>
-              <div class="flex flex-wrap gap-3 mt-2 pt-2 border-t border-slate-200">
-                <details class="cursor-pointer text-indigo-500 hover:text-indigo-700">
-                  <summary class="font-bold">¿Qué es DDP?</summary>
-                  <p class="mt-1 pl-2 border-l-2 border-indigo-200 text-slate-500 font-sans normal-case text-[10px] leading-relaxed">
-                    <b>Demanda Diaria Promedio.</b> Es el promedio de unidades que se venden o consumen por día. Se calcula dividiendo el total de salidas entre los días analizados. Es la base para todo el cálculo de compras.
-                  </p>
-                </details>
+        
                 <details class="cursor-pointer text-indigo-500 hover:text-indigo-700">
                   <summary class="font-bold">¿Qué es Crecimiento?</summary>
                   <p class="mt-1 pl-2 border-l-2 border-indigo-200 text-slate-500 font-sans normal-case text-[10px] leading-relaxed">
@@ -1936,11 +1911,36 @@
 
         </h3>
 
-        
-
         <!-- Detalles de Ajuste Colapsables -->
+        <details class="text-[11px] text-indigo-600 hover:text-indigo-800 cursor-pointer font-bold outline-none">
+          <summary class="list-none flex items-center gap-1">
+            <i class="bi bi-gear-fill"></i> Ajustar parámetros de cálculo
+          </summary>
+
+          <div class="mt-3 p-3 bg-white border border-gray-150 rounded-xl cursor-default text-gray-700 font-normal space-y-3">
+
+            <!-- FORMULA VISUAL -->
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[10px] font-mono text-slate-700 space-y-1">
+              <div class="font-bold text-[11px] text-slate-800 mb-1.5 flex items-center gap-1">
+                <span>&#x1F4D0;</span> Fórmula de Compra Sugerida
+              </div>
+              <div><span class="text-indigo-600 font-bold">Demanda Proyectada</span> = DDP × (1 + Crecimiento)</div>
+              <div><span class="text-indigo-600 font-bold">DDP</span> = Total Salidas ÷ <span id="formula-dias-label" class="font-bold">Días con stock</span></div>
+              <div><span class="text-indigo-600 font-bold">Stock Objetivo</span> = Demanda Proyectada × Stock Máx (días)</div>
+              <div><span class="text-indigo-600 font-bold">Cantidad</span> = Stock Objetivo − Stock Actual</div>
+              <div><span class="text-indigo-600 font-bold">Cobertura</span> = Stock Actual ÷ Demanda Proyectada</div>
+              <div><span class="text-indigo-600 font-bold">Fecha Pedido</span> = Cobertura − Entrega Proveedor</div>
+              <div class="flex flex-wrap gap-3 mt-2 pt-2 border-t border-slate-200">
+                <details class="cursor-pointer text-indigo-500 hover:text-indigo-700">
+                  <summary class="font-bold">¿Qué es DDP?</summary>
+                  <p class="mt-1 pl-2 border-l-2 border-indigo-200 text-slate-500 font-sans normal-case text-[10px] leading-relaxed">
+                    <b>Demanda Diaria Promedio.</b> Es el promedio de unidades que se venden o consumen por día. Se calcula dividiendo el total de salidas entre los días analizados. Es la base para todo el cálculo de compras.
+                  </p>
+                </details>
 
         
+
+                
 
       </div>
 

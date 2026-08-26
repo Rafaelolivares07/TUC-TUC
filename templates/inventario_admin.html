@@ -3558,8 +3558,9 @@ function renderizarComprasTabla(proveedores) {
           </td>
           <td class="px-3 py-2.5 text-center">
             <div class="flex flex-col gap-1 items-center justify-center">
-              <input type="number" id="${inputId}" value="${maxStockVal}" placeholder="Global: ${prod.dias_max_stock_aplicado}" min="1" max="180" oninput="recalcularLineaMaxStock(${pIdx}, ${prod.producto_id}, '${inputId}')"
-                     class="border rounded px-1.5 py-0.5 text-center font-bold text-slate-700 outline-none w-14 text-[10px]">
+              <input type="number" id="${inputId}" value="${maxStockVal}" placeholder="${prod.dias_max_stock_aplicado}" min="1" max="180" oninput="recalcularLineaMaxStock(${pIdx}, ${prod.producto_id}, '${inputId}')"
+                     class="border rounded px-1.5 py-0.5 text-center font-bold text-slate-700 outline-none w-14 text-[10px]">
+              <div class="text-[8px] text-slate-400 font-normal leading-tight">Global: ${prod.dias_max_stock_aplicado} días</div>
               <button onclick="guardarMaxStockProducto(${prod.producto_id}, '${inputId}')"
                       class="text-[9px] text-indigo-500 hover:text-indigo-700 hover:underline font-bold transition">
                 Guardar

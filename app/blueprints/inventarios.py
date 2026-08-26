@@ -1,7 +1,7 @@
 from flask import Blueprint, Response, jsonify, redirect, render_template, request, session, url_for
 from ..db import get_db_connection
 from decimal import Decimal
-from datetime import date
+from datetime import date, timedelta
 
 try:
     from fpdf import FPDF
@@ -2430,6 +2430,27 @@ def api_buscar_proveedores():
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/productos/buscar')
+def api_buscar_productos_inventario(negocio_id):
+    q = request.args.get('q', '').strip()
+    if len(q) < 2:
+        return jsonify({'ok': True, 'productos': []})
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT id, nombre, COALESCE(costo, 0) AS costo, COALESCE(precio, 0) AS precio
+            FROM productos
+            WHERE negocio_id = %s AND disponible = TRUE AND nombre ILIKE %s
+            ORDER BY nombre
+            LIMIT 50
+        """, (negocio_id, f'%{q}%')).fetchall()
+        return jsonify({'ok': True, 'productos': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/terceros/buscar')
 def api_buscar_terceros():
     q = request.args.get('q', '').strip()
@@ -4071,6 +4092,199 @@ def api_ultima_presentacion(negocio_id, producto_id, proveedor_id):
         conn.close()
 
 
+# ── COTIZACIONES DE COMPRA POR PRESENTACIÓN ───────────────────────────────────
+
+@bp.route('/api/inventario/<int:negocio_id>/cotizaciones')
+def api_cotizaciones_listar(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    conn = get_db_connection()
+    try:
+        buscar = (request.args.get('q') or '').strip()
+        query = """
+            SELECT c.id, c.numero_cotizacion, c.tercero_id, t.nombre AS proveedor_nombre,
+                   t.telefono AS proveedor_telefono, c.item_id, p.nombre AS producto_nombre,
+                   c.presentacion_id, pr.nombre AS presentacion_nombre, pr.equivalencia,
+                   c.unidades_item, c.precio, c.descripcion_presentacion,
+                   c.fecha_cotizacion, c.fecha_vencimiento, c.origen,
+                   c.validada_proveedor, c.observaciones, c.created_at,
+                   CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN TRUE ELSE FALSE END AS vigente
+            FROM cotizaciones_compras c
+            JOIN terceros t ON t.id = c.tercero_id
+            JOIN productos p ON p.id = c.item_id
+            LEFT JOIN presentaciones pr ON pr.id = c.presentacion_id
+            WHERE c.negocio_id = %s
+        """
+        params = [negocio_id]
+        if buscar:
+            query += " AND (p.nombre ILIKE %s OR t.nombre ILIKE %s OR pr.nombre ILIKE %s)"
+            like = f"%{buscar}%"
+            params.extend([like, like, like])
+        query += " ORDER BY p.nombre, t.nombre, c.precio ASC"
+        rows = conn.execute(query, params).fetchall()
+        return jsonify({'ok': True, 'cotizaciones': [dict(r) for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/cotizaciones', methods=['POST'])
+def api_cotizaciones_crear(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    tercero_id = _int_o_none(data.get('tercero_id'))
+    item_id = _int_o_none(data.get('item_id'))
+    presentacion_id = _int_o_none(data.get('presentacion_id'))
+    precio = data.get('precio')
+    unidades_item = data.get('unidades_item', 1)
+    descripcion = (data.get('descripcion_presentacion') or '').strip()
+    observaciones = (data.get('observaciones') or '').strip()
+    fecha_vencimiento = data.get('fecha_vencimiento')
+    
+    if not tercero_id or not item_id or precio is None:
+        return jsonify({'ok': False, 'error': 'Proveedor, producto y precio son requeridos'}), 400
+    
+    conn = get_db_connection()
+    try:
+        # Resolver presentación
+        if not presentacion_id and descripcion:
+            pres = conn.execute("SELECT id FROM presentaciones WHERE LOWER(nombre) = LOWER(%s) LIMIT 1", (descripcion,)).fetchone()
+            if pres:
+                presentacion_id = pres['id']
+        
+        # Calcular unidades_item desde presentación
+        if presentacion_id and (not unidades_item or float(unidades_item) <= 1):
+            pr = conn.execute("SELECT equivalencia FROM presentaciones WHERE id = %s", (presentacion_id,)).fetchone()
+            if pr:
+                unidades_item = float(pr['equivalencia'])
+                if not descripcion:
+                    pr_name = conn.execute("SELECT nombre FROM presentaciones WHERE id = %s", (presentacion_id,)).fetchone()
+                    descripcion = pr_name['nombre'] if pr_name else ''
+        
+        # Verificar duplicado
+        existing = conn.execute("""
+            SELECT id FROM cotizaciones_compras
+            WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s 
+              AND (presentacion_id = %s OR (presentacion_id IS NULL AND %s IS NULL))
+        """, (negocio_id, tercero_id, item_id, presentacion_id, presentacion_id)).fetchone()
+        
+        f_vence = fecha_vencimiento or (date.today() + timedelta(days=180))
+        
+        if existing:
+            conn.execute("""
+                UPDATE cotizaciones_compras
+                SET precio = %s, unidades_item = %s, descripcion_presentacion = %s,
+                    observaciones = %s, fecha_vencimiento = %s, updated_at = NOW()
+                WHERE id = %s
+            """, (float(precio), float(unidades_item), descripcion, observaciones, f_vence, existing['id']))
+            cot_id = existing['id']
+        else:
+            row = conn.execute("""
+                INSERT INTO cotizaciones_compras
+                    (negocio_id, tercero_id, item_id, presentacion_id, precio,
+                     unidades_item, descripcion_presentacion, observaciones,
+                     fecha_cotizacion, fecha_vencimiento, origen, validada_proveedor, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'manual', TRUE, NOW())
+                RETURNING id
+            """, (negocio_id, tercero_id, item_id, presentacion_id, float(precio),
+                  float(unidades_item), descripcion, observaciones, f_vence)).fetchone()
+            cot_id = row['id']
+        
+        conn.commit()
+        return jsonify({'ok': True, 'id': cot_id, 'mensaje': 'Cotización guardada'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/cotizaciones/<int:cot_id>', methods=['PUT'])
+def api_cotizaciones_actualizar(negocio_id, cot_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    conn = get_db_connection()
+    try:
+        existing = conn.execute("SELECT id FROM cotizaciones_compras WHERE id = %s AND negocio_id = %s", (cot_id, negocio_id)).fetchone()
+        if not existing:
+            return jsonify({'ok': False, 'error': 'Cotización no encontrada'}), 404
+        
+        updates = []
+        params = []
+        if 'precio' in data:
+            updates.append("precio = %s")
+            params.append(float(data['precio']))
+        if 'unidades_item' in data:
+            updates.append("unidades_item = %s")
+            params.append(float(data['unidades_item']))
+        if 'descripcion_presentacion' in data:
+            updates.append("descripcion_presentacion = %s")
+            params.append(data['descripcion_presentacion'])
+        if 'observaciones' in data:
+            updates.append("observaciones = %s")
+            params.append(data['observaciones'])
+        if 'fecha_vencimiento' in data:
+            updates.append("fecha_vencimiento = %s")
+            params.append(data['fecha_vencimiento'])
+        if 'presentacion_id' in data:
+            updates.append("presentacion_id = %s")
+            params.append(_int_o_none(data['presentacion_id']))
+        if 'validada_proveedor' in data:
+            updates.append("validada_proveedor = %s")
+            params.append(data['validada_proveedor'])
+        
+        if not updates:
+            return jsonify({'ok': False, 'error': 'Nada que actualizar'}), 400
+        
+        updates.append("updated_at = NOW()")
+        params.extend([cot_id, negocio_id])
+        conn.execute(f"UPDATE cotizaciones_compras SET {', '.join(updates)} WHERE id = %s AND negocio_id = %s", params)
+        conn.commit()
+        return jsonify({'ok': True, 'mensaje': 'Cotización actualizada'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/cotizaciones/<int:cot_id>', methods=['DELETE'])
+def api_cotizaciones_eliminar(negocio_id, cot_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM cotizaciones_compras WHERE id = %s AND negocio_id = %s", (cot_id, negocio_id))
+        conn.commit()
+        return jsonify({'ok': True, 'mensaje': 'Cotización eliminada'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/cotizaciones/resumen')
+def api_cotizaciones_resumen(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    conn = get_db_connection()
+    try:
+        total = conn.execute("SELECT COUNT(*) AS n FROM cotizaciones_compras WHERE negocio_id = %s", (negocio_id,)).fetchone()['n']
+        vigentes = conn.execute("SELECT COUNT(*) AS n FROM cotizaciones_compras WHERE negocio_id = %s AND fecha_vencimiento >= CURRENT_DATE", (negocio_id,)).fetchone()['n']
+        vencidas = total - vigentes
+        productos = conn.execute("SELECT COUNT(DISTINCT item_id) AS n FROM cotizaciones_compras WHERE negocio_id = %s", (negocio_id,)).fetchone()['n']
+        proveedores = conn.execute("SELECT COUNT(DISTINCT tercero_id) AS n FROM cotizaciones_compras WHERE negocio_id = %s", (negocio_id,)).fetchone()['n']
+        return jsonify({'ok': True, 'total': total, 'vigentes': vigentes, 'vencidas': vencidas, 'productos': productos, 'proveedores': proveedores})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/produccion/historial')
 def api_produccion_historial(negocio_id):
     if 'usuario_id' not in session:
@@ -4506,7 +4720,42 @@ def api_ajuste_guardar_item(negocio_id):
         # 4. Recostear el producto
         _recostear_producto(conn, negocio_id, producto_id)
         
-        # 5. Integración contable individualizada por producto
+        # 5. Auto-guardar cotización de compra si hay proveedor y costo
+        cotizacion_creada = False
+        if tercero_id and costo_unitario and float(costo_unitario) > 0 and diff > 0:
+            from datetime import timedelta
+            f_cot = date.today()
+            f_vence = f_cot + timedelta(days=180)
+            # Buscar presentación "Unidad" por defecto
+            pres_unidad = conn.execute("SELECT id FROM presentaciones WHERE LOWER(nombre) = 'unidad' LIMIT 1").fetchone()
+            pres_id_default = pres_unidad['id'] if pres_unidad else None
+            precio_cot = float(costo_unitario)
+            
+            cot_row = conn.execute("""
+                SELECT id FROM cotizaciones_compras
+                WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s 
+                  AND (presentacion_id = %s OR (presentacion_id IS NULL AND %s IS NULL))
+                LIMIT 1
+            """, (negocio_id, tercero_id, producto_id, pres_id_default, pres_id_default)).fetchone()
+            
+            if cot_row:
+                conn.execute("""
+                    UPDATE cotizaciones_compras
+                    SET precio = %s, fecha_cotizacion = %s, fecha_vencimiento = %s,
+                        validada_proveedor = TRUE, updated_at = NOW()
+                    WHERE id = %s
+                """, (precio_cot, f_cot, f_vence, cot_row['id']))
+            else:
+                conn.execute("""
+                    INSERT INTO cotizaciones_compras
+                        (negocio_id, tercero_id, item_id, fecha_cotizacion, fecha_vencimiento,
+                         descripcion_presentacion, unidades_item, precio, origen,
+                         validada_proveedor, updated_at, presentacion_id)
+                    VALUES (%s, %s, %s, %s, %s, 'Unidad', 1, %s, 'ajuste_fisico', TRUE, NOW(), %s)
+                """, (negocio_id, tercero_id, producto_id, f_cot, f_vence, precio_cot, pres_id_default))
+            cotizacion_creada = True
+        
+        # 6. Integración contable individualizada por producto
         warnings = []
         if prod['categoria']:
             gi = conn.execute("""
@@ -4571,6 +4820,7 @@ def api_ajuste_guardar_item(negocio_id):
             'mensaje': 'Ajuste registrado y contabilizado con éxito',
             'documento_numero': doc_num_final,
             'consecutivo_actualizado': consecutivo_actualizado,
+            'cotizacion_creada': cotizacion_creada,
             'warnings': warnings
         })
     except Exception as e:

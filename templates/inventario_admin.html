@@ -907,6 +907,7 @@
       <button class="tab-btn" onclick="mostrarTab('produccion')">Producción</button>
 
       <button class="tab-btn" onclick="mostrarTab('compras_sugerencias')">🛒 Compras Sugeridas</button>
+      <button class="tab-btn" onclick="mostrarTab('cotizaciones')">📋 Cotizaciones</button>
 
       <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
 
@@ -2034,6 +2035,110 @@
 
 
 
+  <!-- ── TAB COTIZACIONES ──────────────────────────────────────────── -->
+
+  <div id="tab-cotizaciones" class="hidden bg-white rounded-2xl shadow p-5">
+
+    <!-- Resumen -->
+    <div id="cotz-resumen" class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5"></div>
+
+    <!-- Formulario nueva cotización -->
+    <details class="mb-5 border border-slate-200 rounded-xl">
+      <summary class="cursor-pointer px-4 py-2.5 bg-slate-50 rounded-t-xl text-xs font-bold text-slate-700 flex items-center gap-2">
+        <i class="bi bi-plus-circle"></i> Nueva Cotización
+      </summary>
+      <div class="p-4 space-y-3 bg-white rounded-b-xl">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <!-- Proveedor -->
+          <div class="relative">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Proveedor</label>
+            <input id="cotz-proveedor-search" type="text" placeholder="Buscar proveedor..." autocomplete="off"
+                   class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400"
+                   oninput="filtrarTercerosCotz(this.value)">
+            <div id="cotz-proveedor-ac" class="ac-list hidden"></div>
+            <input type="hidden" id="cotz-proveedor-id">
+          </div>
+          <!-- Producto -->
+          <div class="relative">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Producto</label>
+            <input id="cotz-producto-search" type="text" placeholder="Buscar producto..." autocomplete="off"
+                   class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400"
+                   oninput="filtrarProductosCotz(this.value)">
+            <div id="cotz-producto-ac" class="ac-list hidden"></div>
+            <input type="hidden" id="cotz-producto-id">
+          </div>
+          <!-- Presentación -->
+          <div class="relative">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Presentación</label>
+            <input id="cotz-presentacion-search" type="text" placeholder="Ej: Tarro, Caja..." autocomplete="off"
+                   class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400"
+                   oninput="filtrarPresentacionesCotz(this.value)">
+            <div id="cotz-presentacion-ac" class="ac-list hidden"></div>
+            <input type="hidden" id="cotz-presentacion-id">
+            <input type="hidden" id="cotz-presentacion-equiv">
+          </div>
+          <!-- Precio -->
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Precio presentación ($)</label>
+            <input id="cotz-precio" type="number" step="0.01" min="0" placeholder="0"
+                   class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400">
+          </div>
+          <!-- Unidades por presentación -->
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Unidades por presentación</label>
+            <input id="cotz-unidades" type="number" step="0.01" min="1" value="1" placeholder="1"
+                   class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400">
+          </div>
+          <!-- Vencimiento -->
+          <div>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Vence</label>
+            <input id="cotz-vencimiento" type="date"
+                   class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400">
+          </div>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Observaciones</label>
+          <input id="cotz-observaciones" type="text" placeholder="Opcional..."
+                 class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400">
+        </div>
+        <div class="flex gap-2">
+          <button onclick="guardarCotizacion()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition">
+            Guardar Cotización
+          </button>
+          <button onclick="limpiarFormCotz()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-lg transition">
+            Limpiar
+          </button>
+        </div>
+      </div>
+    </details>
+
+    <!-- Filtro y lista -->
+    <div class="flex items-center gap-3 mb-4">
+      <input type="text" id="cotz-filtro" placeholder="Buscar por producto, proveedor o presentación..."
+             oninput="cargarCotizaciones()" class="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-400">
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-slate-200 text-slate-500 uppercase text-[10px]">
+            <th class="text-left px-3 py-2 font-bold">Producto</th>
+            <th class="text-left px-3 py-2 font-bold">Proveedor</th>
+            <th class="text-left px-3 py-2 font-bold">Presentación</th>
+            <th class="text-center px-3 py-2 font-bold">Unid./Pres.</th>
+            <th class="text-right px-3 py-2 font-bold">Precio</th>
+            <th class="text-right px-3 py-2 font-bold">P. Unitario</th>
+            <th class="text-center px-3 py-2 font-bold">Estado</th>
+            <th class="text-center px-3 py-2 font-bold">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="cotz-body">
+          <tr><td colspan="8" class="text-center text-slate-400 py-8">Cargando cotizaciones...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- ── TAB KARDEX ────────────────────────────────────────────────── -->
 
   <div id="tab-kardex" class="hidden bg-white rounded-2xl shadow p-5">
@@ -2652,7 +2757,7 @@ function toast(msg, ok = true) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'kardex', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'gastos', 'recosteo'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'cotizaciones', 'kardex', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'gastos', 'recosteo'];
 
 function mostrarTab(t) {
 
@@ -2724,6 +2829,10 @@ function mostrarTab(t) {
 
     cargarSugerenciasCompras();
 
+  }
+
+  if (t === 'cotizaciones') {
+    cargarCotizaciones();
   }
 
   if (t === 'gastos') {
@@ -7537,6 +7646,246 @@ function recalcularLineaMaxStock(pIdx, productoId, inputId) {
   
   // Invocar recalcularTotalProveedor para actualizar el subtotal, unidades equivalentes y totales
   recalcularTotalProveedor(pIdx);
+}
+
+
+// ── COTIZACIONES DE COMPRA ─────────────────────────────────────────────────────
+
+let COTZ_DATA = [];
+
+async function cargarCotizaciones() {
+  const filtro = (document.getElementById('cotz-filtro')?.value || '').trim();
+  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones?q=${encodeURIComponent(filtro)}`);
+  const data = await resp.json();
+  if (!data.ok) return;
+  COTZ_DATA = data.cotizaciones;
+  renderCotizaciones();
+  cargarResumenCotz();
+}
+
+function renderCotizaciones() {
+  const body = document.getElementById('cotz-body');
+  if (!body) return;
+  if (!COTZ_DATA.length) {
+    body.innerHTML = '<tr><td colspan="8" class="text-center text-slate-400 py-8 text-xs">No hay cotizaciones registradas</td></tr>';
+    return;
+  }
+  body.innerHTML = COTZ_DATA.map(c => {
+    const precioUnit = c.unidades_item > 0 ? (c.precio / c.unidades_item) : c.precio;
+    const vigente = c.vigente;
+    const badge = vigente
+      ? '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Vigente</span>'
+      : '<span class="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Vencida</span>';
+    return `<tr class="border-b border-slate-100 hover:bg-slate-50/50">
+      <td class="px-3 py-2 font-semibold text-slate-800">${c.producto_nombre}</td>
+      <td class="px-3 py-2 text-slate-600">${c.proveedor_nombre}</td>
+      <td class="px-3 py-2 text-slate-600">${c.presentacion_nombre || c.descripcion_presentacion || 'Unidad'}</td>
+      <td class="px-3 py-2 text-center font-mono">${c.unidades_item}</td>
+      <td class="px-3 py-2 text-right font-mono font-bold">$${parseFloat(c.precio).toLocaleString('es-CO', {minimumFractionDigits:2})}</td>
+      <td class="px-3 py-2 text-right font-mono text-indigo-600 font-bold">$${precioUnit.toLocaleString('es-CO', {minimumFractionDigits:2})}</td>
+      <td class="px-3 py-2 text-center">${badge}</td>
+      <td class="px-3 py-2 text-center">
+        <button onclick="editarCotizacion(${c.id})" class="text-indigo-500 hover:text-indigo-700 text-xs font-bold mr-2" title="Editar">✏️</button>
+        <button onclick="eliminarCotizacion(${c.id}, '${c.producto_nombre}')" class="text-red-400 hover:text-red-600 text-xs font-bold" title="Eliminar">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function cargarResumenCotz() {
+  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones/resumen`);
+  const data = await resp.json();
+  if (!data.ok) return;
+  const el = document.getElementById('cotz-resumen');
+  el.innerHTML = `
+    <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center">
+      <div class="text-[10px] font-bold text-indigo-400 uppercase">Total</div>
+      <div class="text-lg font-extrabold text-indigo-700">${data.total}</div>
+    </div>
+    <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
+      <div class="text-[10px] font-bold text-emerald-400 uppercase">Vigentes</div>
+      <div class="text-lg font-extrabold text-emerald-700">${data.vigentes}</div>
+    </div>
+    <div class="bg-red-50 border border-red-100 rounded-xl p-3 text-center">
+      <div class="text-[10px] font-bold text-red-400 uppercase">Vencidas</div>
+      <div class="text-lg font-extrabold text-red-600">${data.vencidas}</div>
+    </div>
+    <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center">
+      <div class="text-[10px] font-bold text-amber-400 uppercase">Productos</div>
+      <div class="text-lg font-extrabold text-amber-700">${data.productos}</div>
+    </div>
+    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+      <div class="text-[10px] font-bold text-slate-400 uppercase">Proveedores</div>
+      <div class="text-lg font-extrabold text-slate-700">${data.proveedores}</div>
+    </div>
+  `;
+}
+
+// Autocomplete proveedores
+let cotz_prov_timeout = null;
+function filtrarTercerosCotz(q) {
+  clearTimeout(cotz_prov_timeout);
+  const ac = document.getElementById('cotz-proveedor-ac');
+  if (q.length < 2) { ac.classList.add('hidden'); return; }
+  cotz_prov_timeout = setTimeout(async () => {
+    const resp = await fetch(`/api/inventario/proveedores/buscar?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    const provs = Array.isArray(data) ? data : (data.proveedores || []);
+    if (!provs.length) { ac.classList.add('hidden'); return; }
+    ac.innerHTML = provs.map(p =>
+      `<div class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs" onclick="seleccionarProvCotz(${p.id}, '${(p.nombre||'').replace(/'/g,"\\'")}')">${p.nombre}</div>`
+    ).join('');
+    ac.classList.remove('hidden');
+  }, 200);
+}
+
+function seleccionarProvCotz(id, nombre) {
+  document.getElementById('cotz-proveedor-id').value = id;
+  document.getElementById('cotz-proveedor-search').value = nombre;
+  document.getElementById('cotz-proveedor-ac').classList.add('hidden');
+}
+
+// Autocomplete productos
+let cotz_prod_timeout = null;
+function filtrarProductosCotz(q) {
+  clearTimeout(cotz_prod_timeout);
+  const ac = document.getElementById('cotz-producto-ac');
+  if (q.length < 2) { ac.classList.add('hidden'); return; }
+  cotz_prod_timeout = setTimeout(async () => {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/productos/buscar?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    if (!data.ok || !data.productos.length) { ac.classList.add('hidden'); return; }
+    ac.innerHTML = data.productos.map(p =>
+      `<div class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs" onclick="seleccionarProdCotz(${p.id}, '${(p.nombre||'').replace(/'/g,"\\'")}')">${p.nombre}</div>`
+    ).join('');
+    ac.classList.remove('hidden');
+  }, 200);
+}
+
+function seleccionarProdCotz(id, nombre) {
+  document.getElementById('cotz-producto-id').value = id;
+  document.getElementById('cotz-producto-search').value = nombre;
+  document.getElementById('cotz-producto-ac').classList.add('hidden');
+}
+
+// Autocomplete presentaciones
+let cotz_pres_timeout = null;
+function filtrarPresentacionesCotz(q) {
+  clearTimeout(cotz_pres_timeout);
+  const ac = document.getElementById('cotz-presentacion-ac');
+  if (q.length < 1) { ac.classList.add('hidden'); return; }
+  cotz_pres_timeout = setTimeout(async () => {
+    const resp = await fetch(`/api/inventario/presentaciones/buscar?q=${encodeURIComponent(q)}`);
+    const data = await resp.json();
+    if (!data.ok || !data.presentaciones.length) { ac.classList.add('hidden'); return; }
+    ac.innerHTML = data.presentaciones.map(p =>
+      `<div class="px-3 py-2 hover:bg-indigo-50 cursor-pointer text-xs" onclick="seleccionarPresCotz(${p.id}, '${(p.nombre||'').replace(/'/g,"\\'")}', ${p.equivalencia})">${p.nombre} x${p.equivalencia}</div>`
+    ).join('');
+    ac.classList.remove('hidden');
+  }, 200);
+}
+
+function seleccionarPresCotz(id, nombre, equiv) {
+  document.getElementById('cotz-presentacion-id').value = id;
+  document.getElementById('cotz-presentacion-search').value = nombre;
+  document.getElementById('cotz-presentacion-equiv').value = equiv;
+  document.getElementById('cotz-unidades').value = equiv;
+  document.getElementById('cotz-presentacion-ac').classList.add('hidden');
+}
+
+async function guardarCotizacion(id) {
+  const provId = document.getElementById('cotz-proveedor-id').value;
+  const prodId = document.getElementById('cotz-producto-id').value;
+  const presId = document.getElementById('cotz-presentacion-id').value;
+  const precio = document.getElementById('cotz-precio').value;
+  const unidades = document.getElementById('cotz-unidades').value;
+  const vencimiento = document.getElementById('cotz-vencimiento').value;
+  const obs = document.getElementById('cotz-observaciones').value;
+  const presNombre = document.getElementById('cotz-presentacion-search').value;
+
+  if (!provId || !prodId || !precio) {
+    toast('Proveedor, producto y precio son requeridos', false);
+    return;
+  }
+
+  const body = {
+    tercero_id: parseInt(provId),
+    item_id: parseInt(prodId),
+    presentacion_id: presId ? parseInt(presId) : null,
+    precio: parseFloat(precio),
+    unidades_item: parseFloat(unidades) || 1,
+    descripcion_presentacion: presNombre || 'Unidad',
+    observaciones: obs,
+    fecha_vencimiento: vencimiento || null
+  };
+
+  const url = id
+    ? `/api/inventario/${NEGOCIO_ID}/cotizaciones/${id}`
+    : `/api/inventario/${NEGOCIO_ID}/cotizaciones`;
+  const method = id ? 'PUT' : 'POST';
+
+  const resp = await fetch(url, {
+    method,
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+  const data = await resp.json();
+  if (data.ok) {
+    toast(data.mensaje || 'Cotización guardada');
+    limpiarFormCotz();
+    cargarCotizaciones();
+  } else {
+    toast(data.error || 'Error al guardar', false);
+  }
+}
+
+async function editarCotizacion(id) {
+  const c = COTZ_DATA.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('cotz-proveedor-id').value = c.tercero_id;
+  document.getElementById('cotz-proveedor-search').value = c.proveedor_nombre;
+  document.getElementById('cotz-producto-id').value = c.item_id;
+  document.getElementById('cotz-producto-search').value = c.producto_nombre;
+  document.getElementById('cotz-presentacion-id').value = c.presentacion_id || '';
+  document.getElementById('cotz-presentacion-search').value = c.presentacion_nombre || '';
+  document.getElementById('cotz-precio').value = c.precio;
+  document.getElementById('cotz-unidades').value = c.unidades_item;
+  document.getElementById('cotz-vencimiento').value = c.fecha_vencimiento ? c.fecha_vencimiento.split('T')[0] : '';
+  document.getElementById('cotz-observaciones').value = c.observaciones || '';
+  // Change save button to update mode
+  const btn = document.querySelector('[onclick="guardarCotizacion()"]');
+  if (btn) {
+    btn.textContent = 'Actualizar Cotización';
+    btn.setAttribute('onclick', `guardarCotizacion(${id})`);
+  }
+}
+
+function limpiarFormCotz() {
+  ['cotz-proveedor-id','cotz-producto-id','cotz-presentacion-id','cotz-presentacion-equiv'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['cotz-proveedor-search','cotz-producto-search','cotz-presentacion-search','cotz-precio','cotz-observaciones'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const u = document.getElementById('cotz-unidades'); if (u) u.value = '1';
+  const v = document.getElementById('cotz-vencimiento'); if (v) v.value = '';
+  const btn = document.querySelector('[onclick^="guardarCotizacion"]');
+  if (btn) {
+    btn.textContent = 'Guardar Cotización';
+    btn.setAttribute('onclick', 'guardarCotizacion()');
+  }
+}
+
+async function eliminarCotizacion(id, nombre) {
+  if (!confirm(`¿Eliminar la cotización de "${nombre}"?`)) return;
+  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones/${id}`, { method: 'DELETE' });
+  const data = await resp.json();
+  if (data.ok) {
+    toast('Cotización eliminada');
+    cargarCotizaciones();
+  } else {
+    toast(data.error || 'Error al eliminar', false);
+  }
 }
 
 

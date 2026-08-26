@@ -6373,7 +6373,7 @@ def api_compras_sugerencias(negocio_id):
                 
             demanda_proyectada = ddp * (1.0 + growth_rate)
             
-            # Obtener cotizaciones activas para este producto
+            # Obtener cotizaciones activas para este producto (globales)
             quotes = conn.execute("""
                 SELECT c.id, c.tercero_id, t.nombre AS proveedor_nombre, t.telefono AS proveedor_telefono,
                        COALESCE(c.unidades_item, 1) AS unidades_item, COALESCE(c.precio, 0) AS precio,
@@ -6381,10 +6381,10 @@ def api_compras_sugerencias(negocio_id):
                        c.presentacion_id
                 FROM cotizaciones_compras c
                 JOIN terceros t ON t.id = c.tercero_id
-                WHERE c.negocio_id = %s AND c.item_id = %s
+                WHERE c.item_id = %s
                   AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
                 ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC
-            """, (negocio_id, p_id)).fetchall()
+            """, (p_id,)).fetchall()
             
             # Obtener el último proveedor histórico como respaldo
             last_purchase = conn.execute("""

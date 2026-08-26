@@ -1379,13 +1379,13 @@
 
     <div class="mb-3">
 
-      <div class="grid grid-cols-12 gap-1 mb-1 px-1">
+      <div class="grid grid-cols-12 gap-0.5 mb-0.5 px-0.5">
 
         <span class="col-span-2 text-[10px] font-bold text-gray-400 uppercase text-center">Producto</span>
 
         <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">Cant.Emp</span>
 
-        <span class="col-span-3 text-[10px] font-bold text-gray-400 uppercase text-center">Presentación / Empaque</span>
+        <span class="col-span-2 text-[10px] font-bold text-gray-400 uppercase text-center">Presentación</span>
 
         <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">Base</span>
 
@@ -1401,7 +1401,7 @@
 
       </div>
 
-      <div id="entrada-lineas" class="space-y-1"></div>
+      <div id="entrada-lineas" class="space-y-0.5"></div>
 
     </div>
 
@@ -5370,8 +5370,9 @@ function agregarLineaEntrada() {
   const idx = entradaLineas.length;
 
   const div = document.createElement('div');
+  div.className = 'grid grid-cols-12 gap-0.5 items-end';
 
-  div.className = 'grid grid-cols-12 gap-1 items-end';
+
 
   div.innerHTML = `
 
@@ -5387,13 +5388,13 @@ function agregarLineaEntrada() {
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-cant-emp-${idx}" placeholder="Cant. Emp." value="0" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
+       <input type="text" inputmode="decimal" id="ent-cant-emp-${idx}" placeholder="Cant.Emp" value="0" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
 
     </div>
 
-    <div class="col-span-3 relative">
+    <div class="col-span-2 relative">
 
-      <input type="text" id="ent-pres-${idx}" placeholder="Presentación / Empaque" autocomplete="off" value="Unidad">
+      <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="Unidad">
 
       <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
 
@@ -5423,7 +5424,7 @@ function agregarLineaEntrada() {
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right text-[11px]" onfocus="this.select()">
+       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost.Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right text-[11px]" onfocus="this.select()">
 
     </div>
 
@@ -5441,7 +5442,7 @@ function agregarLineaEntrada() {
 
     </div>
 
-    <div class="col-span-1 flex justify-center whitespace-nowrap">
+    <div class="col-span-1 flex justify-center">
 
       <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
 
@@ -5450,7 +5451,6 @@ function agregarLineaEntrada() {
     </div>
 
   `;
-
   cont.appendChild(div);
 
   entradaLineas.push(div);
@@ -5559,7 +5559,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
   const div = document.createElement('div');
 
-  div.className = 'grid grid-cols-12 gap-1 items-end';
+  div.className = 'grid grid-cols-12 gap-0.5 items-end';
 
   
 
@@ -5587,13 +5587,13 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-cant-emp-${idx}" placeholder="Cant. Emp." value="${cantEmp}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
+       <input type="text" inputmode="decimal" id="ent-cant-emp-${idx}" placeholder="Cant.Emp" value="${cantEmp}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'cant')">
 
     </div>
 
-    <div class="col-span-3 relative">
+    <div class="col-span-2 relative">
 
-      <input type="text" id="ent-pres-${idx}" placeholder="Presentación / Empaque" autocomplete="off" value="${(presentacionNombre || 'Unidad').replace(/"/g,'&quot;')}">
+      <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="${(presentacionNombre || 'Unidad').replace(/"/g,'&quot;')}">
 
       <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
 
@@ -5623,7 +5623,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right text-[11px]" value="${valorUnitario}" onfocus="this.select()">
+       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost.Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right text-[11px]" value="${valorUnitario}" onfocus="this.select()">
 
     </div>
 

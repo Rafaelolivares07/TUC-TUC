@@ -5952,6 +5952,7 @@ def api_update_product_max_stock(producto_id):
     conn = get_db_connection()
     try:
         conn.execute("UPDATE productos SET dias_max_stock = %s WHERE id = %s", (val, producto_id))
+        conn.commit()
         return jsonify({'ok': True, 'mensaje': 'Días máximos de stock actualizados correctamente'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

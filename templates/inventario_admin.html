@@ -3917,6 +3917,9 @@ function setupPresentacionAC(idx) {
 
                 toast(`✅ Creado: ${data.presentacion.nombre} (${data.presentacion.equivalencia})`);
 
+                // Auto-buscar cotización para este producto + proveedor + presentación
+                buscarCotizacionParaLinea(idx);
+
               } else {
 
                 toast(data.error || 'Error al crear presentación', false);
@@ -3950,6 +3953,9 @@ function setupPresentacionAC(idx) {
           }
 
           calcularCostoFilaEmpaque(idx, 'equiv');
+
+          // Auto-buscar cotización para este producto + proveedor + presentación
+          buscarCotizacionParaLinea(idx);
 
         });
 
@@ -5363,7 +5369,7 @@ function agregarLineaEntrada() {
 
   div.innerHTML = `
 
-    <div class="col-span-3 relative">
+    <div class="col-span-2 relative">
 
       <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off">
 
@@ -5379,9 +5385,9 @@ function agregarLineaEntrada() {
 
     </div>
 
-    <div class="col-span-1 relative">
+    <div class="col-span-3 relative">
 
-      <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="Unidad">
+      <input type="text" id="ent-pres-${idx}" placeholder="Presentación / Empaque" autocomplete="off" value="Unidad">
 
       <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
 
@@ -5391,33 +5397,33 @@ function agregarLineaEntrada() {
 
     </div>
 
+    <div class="col-span-1">
+
+       <input type="text" inputmode="decimal" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center text-[11px]" onfocus="this.select()">
+
+    </div>
+
+    <div class="col-span-1">
+
+       <input type="text" inputmode="decimal" id="ent-costo-emp-${idx}" placeholder="$ Emp." value="" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
+
+    </div>
+
     <div class="col-span-2">
 
-       <input type="text" inputmode="decimal" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center" onfocus="this.select()">
+       <input type="text" inputmode="decimal" id="ent-total-${idx}" placeholder="Total Línea" value="" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'total')" class="font-bold">
 
     </div>
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-costo-emp-${idx}" placeholder="Costo" value="" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
+       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right text-[11px]" onfocus="this.select()">
 
     </div>
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-total-${idx}" placeholder="Total L." value="" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'total')">
-
-    </div>
-
-    <div class="col-span-1">
-
-       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right" onfocus="this.select()">
-
-    </div>
-
-    <div class="col-span-1">
-
-      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full">
+      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full text-[11px]">
 
         <option value="0" selected>0%</option>
 
@@ -5563,7 +5569,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
   div.innerHTML = `
 
-    <div class="col-span-3 relative">
+    <div class="col-span-2 relative">
 
       <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off" value="${productoNombre.replace(/"/g,'&quot;')}">
 
@@ -5579,9 +5585,9 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
     </div>
 
-    <div class="col-span-1 relative">
+    <div class="col-span-3 relative">
 
-      <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="${(presentacionNombre || 'Unidad').replace(/"/g,'&quot;')}">
+      <input type="text" id="ent-pres-${idx}" placeholder="Presentación / Empaque" autocomplete="off" value="${(presentacionNombre || 'Unidad').replace(/"/g,'&quot;')}">
 
       <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
 
@@ -5591,33 +5597,33 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
     </div>
 
+    <div class="col-span-1">
+
+       <input type="text" inputmode="decimal" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center text-[11px]" value="${cantidad}" onfocus="this.select()">
+
+    </div>
+
+    <div class="col-span-1">
+
+       <input type="text" inputmode="decimal" id="ent-costo-emp-${idx}" placeholder="$ Emp." value="${costoEmp.toFixed(4)}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
+
+    </div>
+
     <div class="col-span-2">
 
-       <input type="text" inputmode="decimal" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center" value="${cantidad}" onfocus="this.select()">
+       <input type="text" inputmode="decimal" id="ent-total-${idx}" placeholder="Total Línea" value="${totalL.toFixed(2)}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'total')" class="font-bold">
 
     </div>
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-costo-emp-${idx}" placeholder="Costo" value="${costoEmp.toFixed(4)}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'costo_emp')">
+       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right text-[11px]" value="${valorUnitario}" onfocus="this.select()">
 
     </div>
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-total-${idx}" placeholder="Total L." value="${totalL.toFixed(2)}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'total')">
-
-    </div>
-
-    <div class="col-span-1">
-
-       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost. Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right" value="${valorUnitario}" onfocus="this.select()">
-
-    </div>
-
-    <div class="col-span-1">
-
-      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full">
+      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full text-[11px]">
 
         <option value="0" ${ivaPct === 0 ? 'selected' : ''}>0%</option>
 
@@ -5775,6 +5781,32 @@ function calcularCostoFilaEmpaque(idx, target) {
 
   calcularTotalesEntrada();
 
+}
+
+async function buscarCotizacionParaLinea(idx) {
+  const prodId = document.getElementById(`ent-id-${idx}`)?.value;
+  const presId = document.getElementById(`ent-pres-id-${idx}`)?.value;
+  const provId = document.getElementById('entrada-proveedor-id')?.value;
+  if (!prodId || !presId || !provId) return;
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones?q=`);
+    const data = await resp.json();
+    if (!data.ok) return;
+    // Buscar cotización que coincida con producto + proveedor + presentación
+    const match = data.cotizaciones.find(c =>
+      String(c.item_id) === String(prodId) &&
+      String(c.tercero_id) === String(provId) &&
+      String(c.presentacion_id) === String(presId)
+    );
+    if (match && match.precio > 0) {
+      const costoEmpInput = document.getElementById(`ent-costo-emp-${idx}`);
+      if (costoEmpInput && (!costoEmpInput.value || parseFloat(costoEmpInput.value) === 0)) {
+        costoEmpInput.value = match.precio.toFixed(4);
+        calcularCostoFilaEmpaque(idx, 'costo_emp');
+        toast(`Cotización encontrada: $${match.precio.toLocaleString('es-CO')} / ${match.presentacion_nombre || 'presentación'}`);
+      }
+    }
+  } catch(e) { /* ignore */ }
 }
 
 

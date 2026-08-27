@@ -69,7 +69,7 @@
         <button onclick="clearGasConcepto()" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
         <input type="hidden" id="gas-concept-id">
         <input type="hidden" id="gas-concept-tercero">
-        <div id="gas-concept-ac" class="ac-drop hidden"></div>
+        <div id="gas-concept-ac" class="ac-drop"></div>
       </div>
       
       <!-- Tercero / Proveedor (Condicional) -->
@@ -81,7 +81,7 @@
                oninput="onTerceroInput()" onfocus="onTerceroInput()" onkeydown="navTerceroAC(event)">
         <button onclick="clearGasTercero()" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
         <input type="hidden" id="gas-tercero-id">
-        <div id="gas-tercero-ac" class="ac-drop hidden"></div>
+        <div id="gas-tercero-ac" class="ac-drop"></div>
       </div>
       
       <!-- Monto -->
@@ -327,12 +327,12 @@
         document.getElementById('gas-concept-id').value = '';
         document.getElementById('gas-concept-tercero').value = '';
       }
-      list.classList.add('hidden');
+      hideACDrop(list);
       return;
     }
 
     if (!gasConceptos.length) {
-      list.classList.add('hidden');
+      hideACDrop(list);
       return;
     }
 
@@ -342,7 +342,7 @@
     });
 
     if (!matches.length) {
-      list.classList.add('hidden');
+      hideACDrop(list);
       return;
     }
 
@@ -355,16 +355,14 @@
     ).join('');
 
     list.querySelectorAll('.ac-item').forEach(el => {
-      el.addEventListener('mousedown', () => {
-        selectConcepto(el);
-      });
+      el.addEventListener('mousedown', e => { e.preventDefault(); selectConcepto(el); });
     });
-    list.classList.remove('hidden');
+    positionACDrop(inp, list);
   }
 
   function navConceptAC(e) {
     const list = document.getElementById('gas-concept-ac');
-    if (list.classList.contains('hidden')) {
+    if (list.style.display === 'none' || list.style.display === '') {
       if (e.key === 'ArrowDown') { renderConceptAC(); e.preventDefault(); }
       else if (e.key === 'Escape') { document.getElementById('gas-tipo-doc').focus(); e.preventDefault(); }
       return;
@@ -386,10 +384,10 @@
       }
       e.preventDefault();
     } else if (e.key === 'Escape') {
-      list.classList.add('hidden');
+      hideACDrop(list);
       e.preventDefault();
     } else if (e.key === 'Tab') {
-      list.classList.add('hidden');
+      hideACDrop(list);
     }
   }
 
@@ -404,7 +402,7 @@
     inp.value = el.querySelector('.font-semibold').textContent;
     document.getElementById('gas-concept-id').value = el.dataset.id;
     document.getElementById('gas-concept-tercero').value = el.dataset.tercero;
-    list.classList.add('hidden');
+    hideACDrop(list);
     onConceptChange();
     if (el.dataset.tercero === 'true') {
       document.getElementById('gas-tercero-txt').focus();
@@ -417,7 +415,7 @@
     document.getElementById('gas-concept-txt').value = '';
     document.getElementById('gas-concept-id').value = '';
     document.getElementById('gas-concept-tercero').value = '';
-    document.getElementById('gas-concept-ac').classList.add('hidden');
+    hideACDrop(document.getElementById('gas-concept-ac'));
     onConceptChange();
   }
 
@@ -442,6 +440,18 @@
     }
   }
 
+  function positionACDrop(inputEl, dropEl) {
+    const r = inputEl.getBoundingClientRect();
+    dropEl.style.left = r.left + 'px';
+    dropEl.style.top = (r.bottom + 2) + 'px';
+    dropEl.style.width = r.width + 'px';
+    dropEl.style.display = 'block';
+  }
+
+  function hideACDrop(dropEl) {
+    dropEl.style.display = 'none';
+  }
+
   // Autocomplete de Tercero / Proveedor
   function onTerceroInput() {
     clearTimeout(gasTerceroTimer);
@@ -454,13 +464,13 @@
     const q = inp.value.trim();
     if (q.length < 2) {
       if (!q) document.getElementById('gas-tercero-id').value = '';
-      list.classList.add('hidden');
+      hideACDrop(list);
       return;
     }
     fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`)
       .then(r => r.json())
       .then(terceros => {
-        if (!terceros.length) { list.classList.add('hidden'); return; }
+        if (!terceros.length) { hideACDrop(list); return; }
         gasTerceroIdx = -1;
         list.innerHTML = terceros.slice(0, 10).map(t =>
           `<div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs"
@@ -469,26 +479,26 @@
         list.querySelectorAll('.ac-item').forEach(el => {
           el.addEventListener('mousedown', e => { e.preventDefault(); selectTercero(el); });
         });
-        list.classList.remove('hidden');
+        positionACDrop(inp, list);
       });
   }
 
   function selectTercero(el) {
     document.getElementById('gas-tercero-txt').value = el.dataset.nombre;
     document.getElementById('gas-tercero-id').value = el.dataset.id;
-    document.getElementById('gas-tercero-ac').classList.add('hidden');
+    hideACDrop(document.getElementById('gas-tercero-ac'));
     document.getElementById('gas-monto').focus();
   }
 
   function clearGasTercero() {
     document.getElementById('gas-tercero-txt').value = '';
     document.getElementById('gas-tercero-id').value = '';
-    document.getElementById('gas-tercero-ac').classList.add('hidden');
+    hideACDrop(document.getElementById('gas-tercero-ac'));
   }
 
   function navTerceroAC(e) {
     const list = document.getElementById('gas-tercero-ac');
-    if (list.classList.contains('hidden')) {
+    if (list.style.display === 'none' || list.style.display === '') {
       if (e.key === 'ArrowDown') { onTerceroInput(); e.preventDefault(); }
       else if (e.key === 'Escape') { document.getElementById('gas-concept-txt').focus(); e.preventDefault(); }
       return;
@@ -512,10 +522,10 @@
       }
       e.preventDefault();
     } else if (e.key === 'Escape') {
-      list.classList.add('hidden');
+      hideACDrop(list);
       e.preventDefault();
     } else if (e.key === 'Tab') {
-      list.classList.add('hidden');
+      hideACDrop(list);
     }
   }
 
@@ -742,4 +752,13 @@
     }
     window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${numDoc}/pdf`, '_blank');
   }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#gas-concept-txt') && !e.target.closest('#gas-concept-ac')) {
+      hideACDrop(document.getElementById('gas-concept-ac'));
+    }
+    if (!e.target.closest('#gas-tercero-txt') && !e.target.closest('#gas-tercero-ac')) {
+      hideACDrop(document.getElementById('gas-tercero-ac'));
+    }
+  });
 </script>

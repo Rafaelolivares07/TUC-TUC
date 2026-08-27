@@ -164,6 +164,10 @@
 
 </div>
 
+<!-- Dropdowns como hermanos del form, se mueven al body con JS -->
+<div id="gas-concept-ac" class="ac-drop"></div>
+<div id="gas-tercero-ac" class="ac-drop"></div>
+
 <script>
   let gasRelacionFecha = null;
   let gasTerceroTimer = null;
@@ -174,15 +178,14 @@
   let gasTerceroIdx = -1;
 
   // Crear dropdowns fuera de cualquier contenedor
-  const gasConceptAC = document.createElement('div');
-  gasConceptAC.id = 'gas-concept-ac';
-  gasConceptAC.className = 'ac-drop';
-  document.body.appendChild(gasConceptAC);
-
-  const gasTerceroAC = document.createElement('div');
-  gasTerceroAC.id = 'gas-tercero-ac';
-  gasTerceroAC.className = 'ac-drop';
-  document.body.appendChild(gasTerceroAC);
+  const gasConceptAC = document.getElementById('gas-concept-ac');
+  const gasTerceroAC = document.getElementById('gas-tercero-ac');
+  if (gasConceptAC && gasConceptAC.parentElement !== document.body) {
+    document.body.appendChild(gasConceptAC);
+  }
+  if (gasTerceroAC && gasTerceroAC.parentElement !== document.body) {
+    document.body.appendChild(gasTerceroAC);
+  }
 
   // Inicialización del panel de Gastos
   async function inicializarModuloGastos() {

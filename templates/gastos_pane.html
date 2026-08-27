@@ -75,16 +75,11 @@
       <!-- Tercero / Proveedor (Condicional) -->
       <div class="md:col-span-4 relative" id="gas-tercero-container">
         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tercero / Proveedor <span class="text-rose-500">*</span></label>
-        <div class="flex items-center relative">
-          <input id="gas-tercero-txt" type="text" placeholder="Buscar proveedor..."
-                 class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
-                 oninput="onInputGasTercero(this)"
-                 onfocus="onInputGasTercero(this)"
-                 onkeydown="navTerceroAC(event)">
-          <button onclick="clearGasTercero()" class="absolute right-2 text-gray-400 hover:text-gray-600 focus:outline-none text-lg">
-            &times;
-          </button>
-        </div>
+        <input id="gas-tercero-txt" type="text" placeholder="Escriba para buscar..."
+               autocomplete="off"
+               class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+               oninput="onTerceroInput()" onfocus="onTerceroInput()" onkeydown="navTerceroAC(event)">
+        <button onclick="clearGasTercero()" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
         <input type="hidden" id="gas-tercero-id">
         <div id="gas-tercero-ac" class="ac-drop hidden"></div>
       </div>
@@ -447,36 +442,42 @@
     }
   }
 
-  // Autocomplete interactivo para Terceros
-  function onInputGasTercero(input) {
-    const q = input.value.trim();
-    const acBox = document.getElementById('gas-tercero-ac');
+  // Autocomplete de Tercero / Proveedor
+  function onTerceroInput() {
+    clearTimeout(gasTerceroTimer);
+    gasTerceroTimer = setTimeout(() => renderTerceroAC(), 280);
+  }
+
+  function renderTerceroAC() {
+    const inp = document.getElementById('gas-tercero-txt');
+    const list = document.getElementById('gas-tercero-ac');
+    const q = inp.value.trim();
     if (q.length < 2) {
-      if (!q) {
-        document.getElementById('gas-tercero-id').value = '';
-      }
-      acBox.classList.add('hidden');
+      if (!q) document.getElementById('gas-tercero-id').value = '';
+      list.classList.add('hidden');
       return;
     }
-    clearTimeout(gasTerceroTimer);
-    gasTerceroTimer = setTimeout(async () => {
-      const resp = await fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`);
-      const terceros = await resp.json();
-      gasTerceroIdx = -1;
-      acBox.innerHTML = terceros.slice(0, 10).map(t =>
-        `<div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs" data-id="${t.id}" data-nombre="${t.nombre}">${t.nombre}</div>`
-      ).join('');
-      
-      acBox.querySelectorAll('.ac-item').forEach(item => {
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault();
-          input.value = item.dataset.nombre;
-          document.getElementById('gas-tercero-id').value = item.dataset.id;
-          acBox.classList.add('hidden');
+    fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`)
+      .then(r => r.json())
+      .then(terceros => {
+        if (!terceros.length) { list.classList.add('hidden'); return; }
+        gasTerceroIdx = -1;
+        list.innerHTML = terceros.slice(0, 10).map(t =>
+          `<div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs"
+                data-id="${t.id}" data-nombre="${t.nombre.replace(/"/g,'&quot;')}">${t.nombre}</div>`
+        ).join('');
+        list.querySelectorAll('.ac-item').forEach(el => {
+          el.addEventListener('mousedown', e => { e.preventDefault(); selectTercero(el); });
         });
+        list.classList.remove('hidden');
       });
-      acBox.classList.toggle('hidden', !terceros.length);
-    }, 280);
+  }
+
+  function selectTercero(el) {
+    document.getElementById('gas-tercero-txt').value = el.dataset.nombre;
+    document.getElementById('gas-tercero-id').value = el.dataset.id;
+    document.getElementById('gas-tercero-ac').classList.add('hidden');
+    document.getElementById('gas-monto').focus();
   }
 
   function clearGasTercero() {
@@ -488,7 +489,7 @@
   function navTerceroAC(e) {
     const list = document.getElementById('gas-tercero-ac');
     if (list.classList.contains('hidden')) {
-      if (e.key === 'ArrowDown') { onInputGasTercero(document.getElementById('gas-tercero-txt')); e.preventDefault(); }
+      if (e.key === 'ArrowDown') { onTerceroInput(); e.preventDefault(); }
       else if (e.key === 'Escape') { document.getElementById('gas-concept-txt').focus(); e.preventDefault(); }
       return;
     }
@@ -505,9 +506,9 @@
       e.preventDefault();
     } else if (e.key === 'Enter') {
       if (gasTerceroIdx >= 0 && items[gasTerceroIdx]) {
-        items[gasTerceroIdx].dispatchEvent(new Event('mousedown'));
+        selectTercero(items[gasTerceroIdx]);
       } else if (items.length > 0) {
-        items[0].dispatchEvent(new Event('mousedown'));
+        selectTercero(items[0]);
       }
       e.preventDefault();
     } else if (e.key === 'Escape') {

@@ -468,11 +468,12 @@
       ).join('');
       
       acBox.querySelectorAll('.ac-item').forEach(item => {
-        item.onclick = () => {
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault();
           input.value = item.dataset.nombre;
           document.getElementById('gas-tercero-id').value = item.dataset.id;
           acBox.classList.add('hidden');
-        };
+        });
       });
       acBox.classList.toggle('hidden', !terceros.length);
     }, 280);

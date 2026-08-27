@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 from flask import Blueprint, render_template, request, jsonify, send_from_directory, url_for, redirect
 from ..db import get_db_connection
@@ -14,6 +15,21 @@ for _candidate in ('/usr/bin/tesseract', r'C:\Program Files\Tesseract-OCR\tesser
     if os.path.exists(_candidate):
         _OCR_BIN = _candidate
         break
+
+
+def _escribir_bridge_chat(mensaje):
+    """Escribe mensaje en bridge_chat.md para que el Telegram bridge lo reenvíe."""
+    try:
+        bridge_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            'bridge_chat.md'
+        )
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        bloque = f"\n### [{ts}] 👤 Rafael (Agenda) para ASISTENTES:\n{mensaje}\n\n"
+        with open(bridge_path, 'a', encoding='utf-8') as f:
+            f.write(bloque)
+    except Exception:
+        pass
 
 
 def _ocr_imagen(ruta):
@@ -410,7 +426,14 @@ def activar_item_agenda(item_id):
             "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
             (contenido,)
         )
+        conn.execute(
+            "UPDATE agenda_items SET enviado_a = 'ASISTENTES' WHERE id = %s",
+            (item_id,)
+        )
         conn.commit()
+
+        _escribir_bridge_chat(contenido)
+
     return jsonify({'ok': True})
 
 
@@ -457,6 +480,14 @@ def activar_multi_agenda():
             "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
             (contenido,)
         )
+        placeholders3 = ', '.join(['%s'] * len(ids))
+        conn.execute(
+            f"UPDATE agenda_items SET enviado_a = 'ASISTENTES' WHERE id IN ({placeholders3})",
+            tuple(ids)
+        )
         conn.commit()
+
+        _escribir_bridge_chat(contenido)
+
     return jsonify({'ok': True})
 

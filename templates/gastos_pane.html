@@ -407,7 +407,11 @@
     document.getElementById('gas-concept-tercero').value = el.dataset.tercero;
     list.classList.add('hidden');
     onConceptChange();
-    document.getElementById('gas-monto').focus();
+    if (el.dataset.tercero === 'true') {
+      document.getElementById('gas-tercero-txt').focus();
+    } else {
+      document.getElementById('gas-monto').focus();
+    }
   }
 
   function clearGasConcepto() {

@@ -87,7 +87,7 @@
       <!-- Monto -->
       <div class="md:col-span-2">
         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Valor / Monto</label>
-        <input id="gas-monto" type="number" step="0.01" min="0.01" placeholder="0.00"
+        <input id="gas-monto" type="text" inputmode="decimal" placeholder="0.00"
                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono"
                onfocus="this.select()" onkeydown="navMonto(event)">
       </div>
@@ -574,7 +574,8 @@
     const fecha = document.getElementById('gas-fecha').value;
     const cuenta_puc_id = document.getElementById('gas-concept-id').value;
     const conceptoText = document.getElementById('gas-concept-txt').value.trim();
-    const monto = parseFloat(document.getElementById('gas-monto').value || 0);
+    const montoRaw = document.getElementById('gas-monto').value.replace(/[$\s.]/g, '').replace(',', '.');
+    const monto = parseFloat(montoRaw || 0);
     const nota = document.getElementById('gas-nota').value.trim();
     const tercero_id = document.getElementById('gas-tercero-id').value || null;
     

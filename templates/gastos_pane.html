@@ -94,7 +94,7 @@
         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Valor / Monto</label>
         <input id="gas-monto" type="number" step="0.01" min="0.01" placeholder="0.00"
                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono"
-               onfocus="this.select()" onkeydown="if(event.key==='ArrowUp'||event.key==='ArrowDown')event.preventDefault()">
+               onfocus="this.select()" onkeydown="navMonto(event)">
       </div>
       
       <!-- Botón Agregar -->
@@ -371,6 +371,7 @@
     const list = document.getElementById('gas-concept-ac');
     if (list.classList.contains('hidden')) {
       if (e.key === 'ArrowDown') { renderConceptAC(); e.preventDefault(); }
+      else if (e.key === 'Escape') { document.getElementById('gas-tipo-doc').focus(); e.preventDefault(); }
       return;
     }
     const items = list.querySelectorAll('.ac-item');
@@ -385,8 +386,10 @@
     } else if (e.key === 'Enter') {
       if (gasConceptoIdx >= 0 && items[gasConceptoIdx]) {
         selectConcepto(items[gasConceptoIdx]);
-        e.preventDefault();
+      } else if (items.length > 0) {
+        selectConcepto(items[0]);
       }
+      e.preventDefault();
     } else if (e.key === 'Escape') {
       list.classList.add('hidden');
       e.preventDefault();
@@ -485,6 +488,7 @@
     const list = document.getElementById('gas-tercero-ac');
     if (list.classList.contains('hidden')) {
       if (e.key === 'ArrowDown') { onInputGasTercero(document.getElementById('gas-tercero-txt')); e.preventDefault(); }
+      else if (e.key === 'Escape') { document.getElementById('gas-concept-txt').focus(); e.preventDefault(); }
       return;
     }
     const items = list.querySelectorAll('.ac-item');
@@ -501,8 +505,10 @@
     } else if (e.key === 'Enter') {
       if (gasTerceroIdx >= 0 && items[gasTerceroIdx]) {
         items[gasTerceroIdx].dispatchEvent(new Event('mousedown'));
-        e.preventDefault();
+      } else if (items.length > 0) {
+        items[0].dispatchEvent(new Event('mousedown'));
       }
+      e.preventDefault();
     } else if (e.key === 'Escape') {
       list.classList.add('hidden');
       e.preventDefault();
@@ -511,7 +517,18 @@
     }
   }
 
-  // Modifica la fecha de todos los registros de la relación
+  function navMonto(e) {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); }
+    else if (e.key === 'Escape') {
+      const terceroContainer = document.getElementById('gas-tercero-container');
+      if (!terceroContainer.classList.contains('hidden')) {
+        document.getElementById('gas-tercero-txt').focus();
+      } else {
+        document.getElementById('gas-concept-txt').focus();
+      }
+      e.preventDefault();
+    }
+  }
   async function actualizarFechaRelacion() {
     const tipoDoc = document.getElementById('gas-tipo-doc').value;
     const numDoc = document.getElementById('gas-num-doc').value;

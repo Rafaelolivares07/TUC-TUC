@@ -1,0 +1,719 @@
+<!-- ═══ COMPONENTE GASTOS (OPERATIVO) ═══ -->
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 max-w-5xl mx-auto my-4">
+  
+  <!-- Cabecera de la Relación -->
+  <div class="border-b border-gray-100 pb-5 mb-5">
+    <div class="flex items-center gap-2.5 mb-2">
+      <div class="p-2 bg-rose-50 text-rose-600 rounded-xl">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-lg font-bold text-gray-800">Relación Mensual de Gastos</h2>
+        <p class="text-xs text-gray-500">Registre y agrupe los gastos del mes de manera operativa para su posterior cierre y contabilización automática.</p>
+      </div>
+    </div>
+    
+    <!-- Filtros/Cabecera de Ajuste -->
+    <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 mt-4 items-end">
+      <div class="sm:col-span-3">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tipología de Documento</label>
+        <select id="gas-tipo-doc" onchange="cargarRelacionGastoActiva()"
+                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none">
+          <!-- Dinámico -->
+        </select>
+      </div>
+      
+      <div class="sm:col-span-2">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Consecutivo Activo</label>
+        <input id="gas-num-doc" type="text" readonly
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-gray-50 font-mono text-gray-600 focus:outline-none">
+      </div>
+      
+      <div class="sm:col-span-3">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha de la Relación</label>
+        <input id="gas-fecha" type="date" onchange="actualizarFechaRelacion()"
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none">
+      </div>
+      
+      <div class="sm:col-span-2 flex flex-col justify-end bg-rose-50/50 rounded-xl p-3 border border-rose-100/50 text-right h-[54px]">
+        <span class="text-[9px] text-rose-700 font-bold uppercase tracking-wider">Total Gastos</span>
+        <span class="text-base font-mono font-bold text-rose-800" id="gas-total-gastos">$0.00</span>
+      </div>
+
+      <div class="sm:col-span-2">
+        <button onclick="imprimirPdfRelacion()" id="gas-btn-pdf"
+                class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2 rounded-xl text-sm w-full transition shadow-sm flex items-center justify-center gap-1.5 h-[38px] border border-gray-200">
+          🖨️ Relación Abierta
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Formulario de Línea de Gasto -->
+  <div id="gas-form-container" class="bg-gray-50/50 rounded-2xl p-5 border border-gray-100 mb-6">
+    <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
+      <span>✏️</span> Registrar Nuevo Ítem de Gasto
+    </h3>
+    
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+      
+      <!-- Concepto -->
+      <div class="md:col-span-4 relative">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Concepto / Cuenta</label>
+        <input id="gas-concept-txt" type="text" placeholder="Escriba para buscar..."
+               autocomplete="off"
+               class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+               oninput="onConceptInput()" onfocus="onConceptInput()" onkeydown="navConceptAC(event)">
+        <button onclick="clearGasConcepto()" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
+        <input type="hidden" id="gas-concept-id">
+        <input type="hidden" id="gas-concept-tercero">
+        <div id="gas-concept-ac" class="ac-drop hidden"></div>
+      </div>
+      
+      <!-- Tercero / Proveedor (Condicional) -->
+      <div class="md:col-span-4 relative" id="gas-tercero-container">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tercero / Proveedor <span class="text-rose-500">*</span></label>
+        <div class="flex items-center relative">
+          <input id="gas-tercero-txt" type="text" placeholder="Buscar proveedor..."
+                 class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+                 oninput="onInputGasTercero(this)"
+                 onfocus="onInputGasTercero(this)"
+                 onkeydown="navTerceroAC(event)">
+          <button onclick="clearGasTercero()" class="absolute right-2 text-gray-400 hover:text-gray-600 focus:outline-none text-lg">
+            &times;
+          </button>
+        </div>
+        <input type="hidden" id="gas-tercero-id">
+        <div id="gas-tercero-ac" class="ac-drop hidden"></div>
+      </div>
+      
+      <!-- Monto -->
+      <div class="md:col-span-2">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Valor / Monto</label>
+        <input id="gas-monto" type="number" step="0.01" min="0.01" placeholder="0.00"
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono">
+      </div>
+      
+      <!-- Botón Agregar -->
+      <div class="md:col-span-2">
+        <button onclick="agregarLineaGasto()"
+                class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-sm w-full transition shadow-sm flex items-center justify-center gap-1">
+          ➕ Agregar
+        </button>
+      </div>
+
+      <!-- Nota / Observación -->
+      <div class="md:col-span-12 mt-1">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Observación o Detalle adicional</label>
+        <input id="gas-nota" type="text" placeholder="Ej. Pago de arriendo local agosto o transporte de entregas"
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none">
+      </div>
+      
+    </div>
+  </div>
+
+  <!-- Detalle / Grilla de Gastos Agregados -->
+  <div class="mb-6">
+    <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
+      <span>📋</span> Detalle de la Relación Actual
+    </h3>
+    <div class="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-100">
+            <th class="px-4 py-3 text-left">Concepto</th>
+            <th class="px-4 py-3 text-left">Tercero</th>
+            <th class="px-4 py-3 text-right">Monto</th>
+            <th class="px-4 py-3 text-center w-24">Acción</th>
+          </tr>
+        </thead>
+        <tbody id="gas-lineas-body" class="divide-y divide-gray-100">
+          <!-- Dinámico -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Panel de Cierre de la Relación -->
+  <div id="gas-cierre-container" class="border-t border-gray-100 pt-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto" id="gas-metodo-pago-container">
+      <div class="w-full sm:w-64">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Método de Pago para el Cierre</label>
+        <select id="gas-metodo-pago"
+                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none">
+          <!-- Dinámico -->
+        </select>
+      </div>
+    </div>
+    
+    <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto justify-end">
+      <!-- Botón visible antes del cierre -->
+      <button onclick="cerrarRelacionGasto()" id="gas-btn-cerrar-rel"
+              class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition shadow-md flex items-center justify-center gap-1.5 h-[40px]">
+        💾 Registrar Pago y Cerrar Relación
+      </button>
+
+      <!-- Botones visibles únicamente después del cierre exitoso -->
+      <button onclick="imprimirPdfRelacionCerrada()" id="gas-btn-pdf-cerrado"
+              class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-6 py-2.5 rounded-xl text-sm transition border border-emerald-200 hidden items-center justify-center gap-1.5 h-[40px]">
+        🖨️ Imprimir Relación Cerrada
+      </button>
+      
+      <button onclick="irASiguienteRelacion()" id="gas-btn-siguiente"
+              class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition shadow-md hidden items-center justify-center gap-1.5 h-[40px]">
+        Continuar ➡️
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let gasRelacionFecha = null;
+  let gasTerceroTimer = null;
+  let gasDocumentos = [];
+  let gasConceptos = [];
+  let gasConceptoIdx = -1;
+  let gasConceptoTimer = null;
+  let gasTerceroIdx = -1;
+
+  // Inicialización del panel de Gastos
+  async function inicializarModuloGastos() {
+    await cargarGastosDocumentos();
+  }
+
+  // Carga las tipologías de documentos asignadas al módulo de Gastos
+  async function cargarGastosDocumentos() {
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/documentos`);
+      const d = await r.json();
+      if (!d.ok) {
+        toast(d.error || 'Error al obtener documentos de gastos', false);
+        return;
+      }
+      
+      gasDocumentos = d.documentos || [];
+      const sel = document.getElementById('gas-tipo-doc');
+      
+      if (gasDocumentos.length === 0) {
+        sel.innerHTML = '<option value="">— No hay tipologías de Gastos creadas —</option>';
+        return;
+      }
+      
+      sel.innerHTML = gasDocumentos.map(doc => {
+        const lbl = `${doc.nombre} (${doc.codigo}) — ${doc.status === 'abierto' ? 'ABIERTO (# ' + doc.numero_documento + ')' : 'NUEVO'}`;
+        return `<option value="${doc.codigo}" ${doc.predeterminado ? 'selected' : ''}>${lbl}</option>`;
+      }).join('');
+      
+      cargarRelacionGastoActiva();
+    } catch(e) {
+      console.error(e);
+      toast('Error al conectar con la API de documentos', false);
+    }
+  }
+
+  // Carga los detalles (líneas y fecha) de la relación seleccionada
+  async function cargarRelacionGastoActiva() {
+    const sel = document.getElementById('gas-tipo-doc');
+    const codigo = sel.value;
+    if (!codigo) return;
+    
+    const doc = gasDocumentos.find(d => d.codigo === codigo);
+    if (!doc) return;
+    
+    document.getElementById('gas-num-doc').value = doc.numero_documento;
+    
+    const inputFecha = document.getElementById('gas-fecha');
+    
+    if (doc.status === 'abierto') {
+      inputFecha.value = doc.fecha;
+      gasRelacionFecha = doc.fecha;
+    } else {
+      // Si es nueva, pre-rellenar con la fecha de hoy
+      const hoy = new Date().toISOString().split('T')[0];
+      inputFecha.value = hoy;
+      gasRelacionFecha = hoy;
+    }
+    
+    // Obtener las líneas y cuentas del documento
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/relacion/${codigo}/${doc.numero_documento}/lineas`);
+      const d = await r.json();
+      if (!d.ok) {
+        toast(d.error || 'Error al obtener líneas del gasto', false);
+        return;
+      }
+      
+      // Guardar conceptos en variable local para autocomplete
+      gasConceptos = (d.conceptos || []).map(c => ({
+        cuenta_puc_id: c.cuenta_puc_id,
+        cuenta_nombre: c.cuenta_nombre,
+        maneja_terceros: c.maneja_terceros === true || c.maneja_terceros === 'true'
+      }));
+      clearGasConcepto();
+      
+      // Renderizar Líneas
+      const tbody = document.getElementById('gas-lineas-body');
+      tbody.innerHTML = '';
+      
+      if (!d.lineas || d.lineas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400 text-xs">No hay gastos agregados en esta relación.</td></tr>';
+        document.getElementById('gas-total-gastos').textContent = '$0.00';
+      } else {
+        let total = 0.0;
+        d.lineas.forEach(l => {
+          total += parseFloat(l.monto);
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-gray-50';
+          tr.innerHTML = `
+            <td class="px-4 py-2.5 text-xs font-semibold text-gray-700">
+              <div>${l.concepto}</div>
+              <span class="text-[9px] text-gray-400 font-mono">${l.cuenta}</span>
+            </td>
+            <td class="px-4 py-2.5 text-xs text-gray-600">${l.tercero_nombre || 'N/A'}</td>
+            <td class="px-4 py-2.5 text-right font-mono text-xs text-rose-700 font-bold">$${parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+            <td class="px-4 py-2.5 text-center">
+              <button onclick="eliminarLineaGasto(${l.id})" class="text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2 py-1 rounded transition text-xs">
+                ❌
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+        document.getElementById('gas-total-gastos').textContent = '$' + total.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+      }
+      
+      // Cargar métodos de pago válidos para gastos
+      await cargarMetodosPagoGastos();
+    } catch(e) {
+      console.error(e);
+      toast('Error al consultar datos de la relación', false);
+    }
+  }
+
+  // Carga los métodos de pago con cuenta_gastos_id asociada
+  async function cargarMetodosPagoGastos() {
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`);
+      const d = await r.json();
+      if (!d.ok) return;
+      
+      const filtrados = (d.metodos || []).filter(m => m.cuenta_gastos_id);
+      const sel = document.getElementById('gas-metodo-pago');
+      if (filtrados.length === 0) {
+        sel.innerHTML = '<option value="">— Ningún método tiene cuenta de gastos —</option>';
+      } else {
+        sel.innerHTML = filtrados.map(m => 
+          `<option value="${m.codigo}">${m.nombre} (${m.codigo})</option>`
+        ).join('');
+      }
+    } catch(e) {
+      console.error(e);
+    }
+  }
+
+  // Autocomplete de Concepto / Cuenta
+  function onConceptInput() {
+    clearTimeout(gasConceptoTimer);
+    gasConceptoTimer = setTimeout(() => renderConceptAC(), 100);
+  }
+
+  function renderConceptAC() {
+    const inp = document.getElementById('gas-concept-txt');
+    const list = document.getElementById('gas-concept-ac');
+    const rawQ = inp.value.trim().toLowerCase();
+    const qNorm = normalizeStr(rawQ);
+
+    if (qNorm.length < 1) {
+      if (rawQ.length === 0) {
+        document.getElementById('gas-concept-id').value = '';
+        document.getElementById('gas-concept-tercero').value = '';
+      }
+      list.classList.add('hidden');
+      return;
+    }
+
+    if (!gasConceptos.length) {
+      list.classList.add('hidden');
+      return;
+    }
+
+    const matches = gasConceptos.filter(c => {
+      if (!c.cuenta_nombre) return false;
+      return normalizeStr(c.cuenta_nombre).includes(qNorm);
+    });
+
+    if (!matches.length) {
+      list.classList.add('hidden');
+      return;
+    }
+
+    gasConceptoIdx = -1;
+    list.innerHTML = matches.map((c, i) =>
+      `<div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs" data-i="${i}"
+            data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}">
+        <span class="font-semibold text-gray-700">${c.cuenta_nombre}</span>
+      </div>`
+    ).join('');
+
+    list.querySelectorAll('.ac-item').forEach(el => {
+      el.addEventListener('mousedown', () => {
+        selectConcepto(el);
+      });
+    });
+    list.classList.remove('hidden');
+  }
+
+  function navConceptAC(e) {
+    const list = document.getElementById('gas-concept-ac');
+    if (list.classList.contains('hidden')) {
+      if (e.key === 'ArrowDown') { renderConceptAC(); e.preventDefault(); }
+      return;
+    }
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      gasConceptoIdx = Math.min(gasConceptoIdx + 1, items.length - 1);
+      highlightConceptAC(items);
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      gasConceptoIdx = Math.max(gasConceptoIdx - 1, 0);
+      highlightConceptAC(items);
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      if (gasConceptoIdx >= 0 && items[gasConceptoIdx]) {
+        selectConcepto(items[gasConceptoIdx]);
+        e.preventDefault();
+      }
+    } else if (e.key === 'Escape') {
+      list.classList.add('hidden');
+      e.preventDefault();
+    } else if (e.key === 'Tab') {
+      list.classList.add('hidden');
+    }
+  }
+
+  function highlightConceptAC(items) {
+    items.forEach((el, i) => el.classList.toggle('ac-focus', i === gasConceptoIdx));
+    if (gasConceptoIdx >= 0) items[gasConceptoIdx].scrollIntoView({block: 'nearest'});
+  }
+
+  function selectConcepto(el) {
+    const inp = document.getElementById('gas-concept-txt');
+    const list = document.getElementById('gas-concept-ac');
+    inp.value = el.querySelector('.font-semibold').textContent;
+    document.getElementById('gas-concept-id').value = el.dataset.id;
+    document.getElementById('gas-concept-tercero').value = el.dataset.tercero;
+    list.classList.add('hidden');
+    onConceptChange();
+    document.getElementById('gas-monto').focus();
+  }
+
+  function clearGasConcepto() {
+    document.getElementById('gas-concept-txt').value = '';
+    document.getElementById('gas-concept-id').value = '';
+    document.getElementById('gas-concept-tercero').value = '';
+    document.getElementById('gas-concept-ac').classList.add('hidden');
+    onConceptChange();
+  }
+
+  // Controla la visibilidad del Tercero según la cuenta seleccionada
+  function onConceptChange() {
+    const requiereTercero = document.getElementById('gas-concept-tercero').value === 'true';
+    const container = document.getElementById('gas-tercero-container');
+    if (requiereTercero) {
+      container.classList.remove('hidden');
+    } else {
+      container.classList.add('hidden');
+      clearGasTercero();
+    }
+  }
+
+  function normalizeStr(str) {
+    if (!str) return '';
+    try {
+      return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    } catch (e) {
+      return str.toString().toLowerCase().trim();
+    }
+  }
+
+  // Autocomplete interactivo para Terceros
+  function onInputGasTercero(input) {
+    const q = input.value.trim();
+    const acBox = document.getElementById('gas-tercero-ac');
+    if (q.length < 2) {
+      if (!q) {
+        document.getElementById('gas-tercero-id').value = '';
+      }
+      acBox.classList.add('hidden');
+      return;
+    }
+    clearTimeout(gasTerceroTimer);
+    gasTerceroTimer = setTimeout(async () => {
+      const resp = await fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`);
+      const terceros = await resp.json();
+      gasTerceroIdx = -1;
+      acBox.innerHTML = terceros.slice(0, 10).map(t =>
+        `<div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs" data-id="${t.id}" data-nombre="${t.nombre}">${t.nombre}</div>`
+      ).join('');
+      
+      acBox.querySelectorAll('.ac-item').forEach(item => {
+        item.onclick = () => {
+          input.value = item.dataset.nombre;
+          document.getElementById('gas-tercero-id').value = item.dataset.id;
+          acBox.classList.add('hidden');
+        };
+      });
+      acBox.classList.toggle('hidden', !terceros.length);
+    }, 280);
+  }
+
+  function clearGasTercero() {
+    document.getElementById('gas-tercero-txt').value = '';
+    document.getElementById('gas-tercero-id').value = '';
+    document.getElementById('gas-tercero-ac').classList.add('hidden');
+  }
+
+  function navTerceroAC(e) {
+    const list = document.getElementById('gas-tercero-ac');
+    if (list.classList.contains('hidden')) {
+      if (e.key === 'ArrowDown') { onInputGasTercero(document.getElementById('gas-tercero-txt')); e.preventDefault(); }
+      return;
+    }
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      gasTerceroIdx = Math.min(gasTerceroIdx + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('ac-focus', i === gasTerceroIdx));
+      if (gasTerceroIdx >= 0) items[gasTerceroIdx].scrollIntoView({block: 'nearest'});
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      gasTerceroIdx = Math.max(gasTerceroIdx - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('ac-focus', i === gasTerceroIdx));
+      if (gasTerceroIdx >= 0) items[gasTerceroIdx].scrollIntoView({block: 'nearest'});
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      if (gasTerceroIdx >= 0 && items[gasTerceroIdx]) {
+        items[gasTerceroIdx].dispatchEvent(new Event('mousedown'));
+        e.preventDefault();
+      }
+    } else if (e.key === 'Escape') {
+      list.classList.add('hidden');
+      e.preventDefault();
+    } else if (e.key === 'Tab') {
+      list.classList.add('hidden');
+    }
+  }
+
+  // Modifica la fecha de todos los registros de la relación
+  async function actualizarFechaRelacion() {
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    const numDoc = document.getElementById('gas-num-doc').value;
+    const fecha = document.getElementById('gas-fecha').value;
+    if (!tipoDoc || !numDoc || !fecha) return;
+    
+    const opt = document.getElementById('gas-tipo-doc').options[document.getElementById('gas-tipo-doc').selectedIndex];
+    const isAbierto = opt.text.includes('ABIERTO');
+    
+    if (!isAbierto) {
+      // Si el documento aún está nuevo, simplemente asignamos la fecha localmente
+      gasRelacionFecha = fecha;
+      return;
+    }
+    
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/relacion/fecha`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ tipo_doc: tipoDoc, num_doc: numDoc, fecha: fecha })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        gasRelacionFecha = fecha;
+        toast('Fecha de la relación actualizada con éxito.');
+        cargarRelacionGastoActiva();
+      } else {
+        toast(d.error, false);
+        document.getElementById('gas-fecha').value = gasRelacionFecha;
+      }
+    } catch(e) {
+      console.error(e);
+      toast('Error de red al actualizar la fecha', false);
+    }
+  }
+
+  // Envía el nuevo registro de gasto al servidor
+  async function agregarLineaGasto() {
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    const numDoc = document.getElementById('gas-num-doc').value;
+    const fecha = document.getElementById('gas-fecha').value;
+    const cuenta_puc_id = document.getElementById('gas-concept-id').value;
+    const conceptoText = document.getElementById('gas-concept-txt').value.trim();
+    const monto = parseFloat(document.getElementById('gas-monto').value || 0);
+    const nota = document.getElementById('gas-nota').value.trim();
+    const tercero_id = document.getElementById('gas-tercero-id').value || null;
+    
+    if (!tipoDoc || !numDoc) {
+      toast('Seleccione un tipo de documento de gastos', false);
+      return;
+    }
+    if (!fecha) {
+      toast('Debe definir la fecha de la relación', false);
+      return;
+    }
+    if (!cuenta_puc_id) {
+      toast('Defina un concepto válido', false);
+      return;
+    }
+    if (monto <= 0) {
+      toast('Ingrese un monto mayor a cero', false);
+      return;
+    }
+    
+    if (document.getElementById('gas-concept-tercero').value === 'true' && !tercero_id) {
+      toast('Esta cuenta requiere que asocie un tercero/proveedor.', false);
+      return;
+    }
+    
+    const conceptoFinal = nota ? `${conceptoText} (${nota})` : conceptoText;
+    
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          tipo_doc: tipoDoc,
+          num_doc: numDoc,
+          fecha: fecha,
+          cuenta_puc_id: parseInt(cuenta_puc_id),
+          monto: monto,
+          concepto: conceptoFinal,
+          tercero_id: tercero_id ? parseInt(tercero_id) : null
+        })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast('Línea de gasto agregada.');
+        clearGasConcepto();
+        document.getElementById('gas-monto').value = '';
+        document.getElementById('gas-nota').value = '';
+        clearGasTercero();
+        
+        // Recargar relaciones y líneas
+        await cargarGastosDocumentos();
+      } else {
+        toast(d.error, false);
+      }
+    } catch(e) {
+      console.error(e);
+      toast('Error de red al registrar el gasto', false);
+    }
+  }
+
+  // Elimina una línea de la relación activa
+  async function eliminarLineaGasto(id) {
+    if (!confirm('¿Desea eliminar esta línea de gasto de la relación?')) return;
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea/${id}`, { method: 'DELETE' });
+      const d = await r.json();
+      if (d.ok) {
+        toast('Registro eliminado.');
+        await cargarGastosDocumentos();
+      } else {
+        toast(d.error, false);
+      }
+    } catch(e) {
+      console.error(e);
+      toast('Error de red al eliminar el registro', false);
+    }
+  }
+
+  // Ejecuta el cierre de la relación añadiendo la contrapartida de crédito
+  async function cerrarRelacionGasto() {
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    const numDoc = document.getElementById('gas-num-doc').value;
+    const metodoPago = document.getElementById('gas-metodo-pago').value;
+    
+    if (!tipoDoc || !numDoc) return;
+    if (!metodoPago) {
+      toast('Debe seleccionar un método de pago con cuenta de gastos configurada para el cierre.', false);
+      return;
+    }
+    
+    if (!confirm(`¿Está seguro de cerrar la relación de gastos ${tipoDoc} #${numDoc}?\nEsto registrará el egreso final acumulado con el método de pago seleccionado y no podrá añadir más registros en este consecutivo.`)) {
+      return;
+    }
+    
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/cierre`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          tipo_doc: tipoDoc,
+          num_doc: numDoc,
+          metodo_pago: metodoPago
+        })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast('¡Relación de gastos cerrada con éxito!');
+        closedTipoDoc = tipoDoc;
+        closedNumDoc = numDoc;
+        
+        // Bloquear interfaz para evitar modificaciones fantasma
+        document.getElementById('gas-form-container').classList.add('opacity-50', 'pointer-events-none');
+        document.getElementById('gas-metodo-pago-container').classList.add('hidden');
+        document.getElementById('gas-btn-cerrar-rel').classList.add('hidden');
+        
+        // Mostrar botón de imprimir relación cerrada y continuar
+        document.getElementById('gas-btn-pdf-cerrado').classList.remove('hidden');
+        document.getElementById('gas-btn-pdf-cerrado').classList.add('flex');
+        document.getElementById('gas-btn-siguiente').classList.remove('hidden');
+        document.getElementById('gas-btn-siguiente').classList.add('flex');
+      } else {
+        toast(d.error, false);
+      }
+    } catch(e) {
+      console.error(e);
+      toast('Error de red al procesar el cierre', false);
+    }
+  }
+
+  let closedTipoDoc = null;
+  let closedNumDoc = null;
+
+  function imprimirPdfRelacionCerrada() {
+    if (!closedTipoDoc || !closedNumDoc) return;
+    window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${closedTipoDoc}/${closedNumDoc}/pdf`, '_blank');
+  }
+
+  function irASiguienteRelacion() {
+    // Restaurar controles a estado inicial
+    document.getElementById('gas-form-container').classList.remove('opacity-50', 'pointer-events-none');
+    document.getElementById('gas-metodo-pago-container').classList.remove('hidden');
+    document.getElementById('gas-btn-cerrar-rel').classList.remove('hidden');
+    
+    document.getElementById('gas-btn-pdf-cerrado').classList.add('hidden');
+    document.getElementById('gas-btn-pdf-cerrado').classList.remove('flex');
+    document.getElementById('gas-btn-siguiente').classList.add('hidden');
+    document.getElementById('gas-btn-siguiente').classList.remove('flex');
+    
+    closedTipoDoc = null;
+    closedNumDoc = null;
+    
+    // Recargar documentos y consecutive activo
+    cargarGastosDocumentos();
+  }
+
+  // Abre el PDF de la relación actual (sea abierta o cerrada) en una nueva pestaña
+  function imprimirPdfRelacion() {
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    const numDoc = document.getElementById('gas-num-doc').value;
+    if (!tipoDoc || !numDoc) {
+      toast('Seleccione una relación válida para imprimir', false);
+      return;
+    }
+    window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${numDoc}/pdf`, '_blank');
+  }
+</script>

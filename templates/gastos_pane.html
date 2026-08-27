@@ -106,10 +106,6 @@
       </div>
       
     </div>
-
-    <!-- Dropdowns fuera del grid para no afectar layout -->
-    <div id="gas-concept-ac" class="ac-drop"></div>
-    <div id="gas-tercero-ac" class="ac-drop"></div>
   </div>
 
   <!-- Detalle / Grilla de Gastos Agregados -->
@@ -176,6 +172,17 @@
   let gasConceptoIdx = -1;
   let gasConceptoTimer = null;
   let gasTerceroIdx = -1;
+
+  // Crear dropdowns fuera de cualquier contenedor
+  const gasConceptAC = document.createElement('div');
+  gasConceptAC.id = 'gas-concept-ac';
+  gasConceptAC.className = 'ac-drop';
+  document.body.appendChild(gasConceptAC);
+
+  const gasTerceroAC = document.createElement('div');
+  gasTerceroAC.id = 'gas-tercero-ac';
+  gasTerceroAC.className = 'ac-drop';
+  document.body.appendChild(gasTerceroAC);
 
   // Inicialización del panel de Gastos
   async function inicializarModuloGastos() {

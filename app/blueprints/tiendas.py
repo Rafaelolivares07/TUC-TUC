@@ -20,7 +20,7 @@ from ..visitas_publicas import (
     respuesta_con_visitante as _respuesta_con_visitante_generica,
 )
 from .auth import solo_admin
-from .inventarios import _aplicar_tarjeta, _es_ensamble, _verificar_stock_pedido, _mov_directo, _recostear_producto
+from .inventarios import _aplicar_tarjeta, _es_ensamble, _verificar_stock_pedido, _mov_directo, _recostear_producto, _sync_precio
 try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
     from .contabilidad import obtener_siguiente_consecutivo
@@ -1434,12 +1434,14 @@ def api_tienda_producto_crear(slug):
                 (nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct, producto_id, tienda['tercero_id'])
             )
             nuevo_id = producto_id
+            _sync_precio(conn, tienda['tercero_id'], producto_id)
         else:
             row = conn.execute(
                 "INSERT INTO productos (negocio_id, nombre, categoria, precio, descripcion, catalogo_id, codigo_barra, iva_pct) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                 (tienda['tercero_id'], nombre, categoria, precio, descripcion or None, catalogo_id, codigo_barra, iva_pct)
             ).fetchone()
             nuevo_id = row['id']
+            _sync_precio(conn, tienda['tercero_id'], nuevo_id)
         conn.commit()
         return jsonify({'ok': True, 'id': nuevo_id})
     except Exception as e:
@@ -1563,7 +1565,9 @@ def api_tienda_adoptar_producto(slug):
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
         if conn.execute("SELECT id FROM productos WHERE negocio_id = %s AND LOWER(nombre) = %s", (tienda['tercero_id'], nombre.lower())).fetchone():
             return jsonify({'ok': False, 'error': 'Ya tienes este producto'}), 400
-        conn.execute("INSERT INTO productos (negocio_id, nombre, categoria, precio) VALUES (%s,%s,%s,0)", (tienda['tercero_id'], nombre, categoria))
+        conn.execute("INSERT INTO productos (negocio_id, nombre, categoria, precio) VALUES (%s,%s,%s,0) RETURNING id", (tienda['tercero_id'], nombre, categoria))
+        nuevo_id = conn.fetchone()[0]
+        _sync_precio(conn, tienda['tercero_id'], nuevo_id)
         conn.commit()
         return jsonify({'ok': True})
     except Exception as e:

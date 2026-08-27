@@ -15,7 +15,7 @@ from ..visitas_publicas import (
     respuesta_con_visitante,
 )
 from .auth import admin_required
-from .inventarios import _aplicar_tarjeta, _verificar_stock_pedido
+from .inventarios import _aplicar_tarjeta, _verificar_stock_pedido, _sync_precio
 try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
 except ImportError:
@@ -813,9 +813,11 @@ def api_adoptar_producto(slug):
             conn.close()
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
         conn.execute(
-            "INSERT INTO productos (negocio_id, categoria, nombre, precio, recargo, imagen) VALUES (%s,%s,%s,%s,%s,%s)",
+            "INSERT INTO productos (negocio_id, categoria, nombre, precio, recargo, imagen) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
             (rest['tercero_id'], original['tipo'], original['nombre'], original['precio'], original['recargo'], original['imagen'])
         )
+        nuevo_id = conn.fetchone()[0]
+        _sync_precio(conn, rest['tercero_id'], nuevo_id)
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
@@ -875,12 +877,14 @@ def api_opcion_crear(slug):
                 "WHERE id=%s AND negocio_id=%s",
                 (tipo, nombre, recargo, precio, descripcion or None, es_adicion, opcion_id, rest['tercero_id'])
             )
+            _sync_precio(conn, rest['tercero_id'], opcion_id)
         else:
-            conn.execute(
+            r = conn.execute(
                 "INSERT INTO productos (negocio_id, categoria, nombre, recargo, precio, descripcion, es_adicion) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                "VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                 (rest['tercero_id'], tipo, nombre, recargo, precio, descripcion or None, es_adicion)
             )
+            _sync_precio(conn, rest['tercero_id'], r[0])
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

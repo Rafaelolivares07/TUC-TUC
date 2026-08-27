@@ -44,3 +44,11 @@ INMEDIATAMENTE (antes de cualquier otra cosa):
 4. El daemon detecta el outbox, lo inserta en BD y lo borra
 
 IMPORTANTE: "__MERLIN__" tiene prioridad absoluta sobre cualquier conversación en curso.
+
+## Sincronización de Sala de Juntas (bridge_chat.md)
+El archivo `bridge_chat.md` está conectado a Telegram 24/7 mediante un servicio en AWS. 
+- **Al inicio de cada turno**: Debes descargar la versión más reciente del servidor para leer los mensajes que Rafael haya enviado desde su celular:
+  `scp -o StrictHostKeyChecking=no -i "C:\Users\RAFAEL OLIVARES\Documents\tuctuc-linux.pem" ubuntu@18.217.231.167:/home/ubuntu/tuctucv2/bridge_chat.md C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\bridge_chat.md`
+- **Al final de cada turno o al escribir una actualización**: Debes subir el archivo al servidor para que el puente de Telegram notifique a Rafael automáticamente a su celular:
+  `scp -o StrictHostKeyChecking=no -i "C:\Users\RAFAEL OLIVARES\Documents\tuctuc-linux.pem" C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\bridge_chat.md ubuntu@18.217.231.167:/home/ubuntu/tuctucv2/bridge_chat.md`
+

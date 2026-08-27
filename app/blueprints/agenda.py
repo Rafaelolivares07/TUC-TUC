@@ -55,6 +55,11 @@ def _asegurar_tabla():
             conn.commit()
         except Exception:
             conn.rollback()
+        try:
+            conn.execute("ALTER TABLE agenda_items ADD COLUMN enviado_a TEXT DEFAULT ''")
+            conn.commit()
+        except Exception:
+            conn.rollback()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS agenda_item_imagenes (
                 id SERIAL PRIMARY KEY,
@@ -88,7 +93,7 @@ def agenda():
     _asegurar_tabla()
     with get_db_connection() as conn:
         cur = conn.execute("""
-            SELECT id, texto, completado, categoria, orden, fecha_limite, completado_en
+            SELECT id, texto, completado, categoria, orden, fecha_limite, completado_en, enviado_a
             FROM agenda_items
             ORDER BY completado ASC,
                      CASE WHEN completado = FALSE THEN
@@ -256,8 +261,17 @@ def editar_item(item_id):
         
     with get_db_connection() as conn:
         conn.execute(
-            "UPDATE agenda_items SET texto = %s, categoria = %s, fecha_limite = %s WHERE id = %s",
-            (texto, categoria, fecha_limite, item_id)
+            "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
+            (contenido,)
+        )
+        conn.execute(
+            "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
+            (contenido,)
+        )
+        placeholders3 = ', '.join(['%s'] * len(ids))
+        conn.execute(
+            f"UPDATE agenda_items SET enviado_a = 'ASISTENTES' WHERE id IN ({placeholders3})",
+            tuple(ids)
         )
         conn.commit()
     return jsonify({'ok': True})

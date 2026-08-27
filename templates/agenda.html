@@ -165,6 +165,12 @@
   .item-fecha.vence-hoy { color: #e07b00; font-weight: 600; }
   .item-fecha.vencido   { color: #d04040; font-weight: 600; }
 
+  .item-status-badge {
+    display: inline-block; font-size: .7rem; font-weight: 600;
+    background: #dbeafe; color: #1e40af; border-radius: 9999px;
+    padding: 1px 8px; margin-top: 3px;
+  }
+
   .item.completado {
     margin-top: 8px;
     padding: 13px 12px;
@@ -415,7 +421,7 @@
     <input type="text" id="inp-buscar" placeholder="🔍 Buscar y filtrar tareas..." style="width: 100%; border: none; border-bottom: 1.5px solid #ccc; padding: 8px 4px; font-size: .95rem; background: transparent; outline: none; transition: border-color .2s;" oninput="filtrarTareas(this.value)">
   </div>
 
-  <button id="btn-enviar-multi" class="btn-enviar-multi" style="display:none" onclick="enviarSeleccionadas()">🚀 Enviar seleccionadas a Antigravity (<span id="selected-count">0</span>)</button>
+  <button id="btn-enviar-multi" class="btn-enviar-multi" style="display:none" onclick="enviarSeleccionadas()">🚀 Enviar seleccionadas a ASISTENTES (<span id="selected-count">0</span>)</button>
 
   <ul class="items" id="lista">
     {% set pendientes = items | selectattr('2', 'equalto', False) | list %}
@@ -433,10 +439,13 @@
           <input type="file" accept="image/*" id="file-{{ item[0] }}" style="display:none" onchange="subirImagen({{ item[0] }}, this)">
           <button class="btn-img" onclick="document.getElementById('file-{{ item[0] }}').click()" title="Adjuntar imagen">📎<span class="accion-label">Adjuntar</span></button>
           <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️<span class="accion-label">Editar</span></button>
-          <button class="btn-activar" onclick="activar({{ item[0] }}, this)" title="Activar en Antigravity">🚀<span class="accion-label">Activar</span></button>
+          <button class="btn-activar" onclick="activar({{ item[0] }}, this)" title="Enviar a ASISTENTES">🚀<span class="accion-label">Activar</span></button>
           <button class="btn-borrar" onclick="borrar({{ item[0] }})" title="Eliminar tarea">×<span class="accion-label">Eliminar</span></button>
         </div>
         <span class="item-texto" onclick="comenzarEdicion({{ item[0] }})">{{ item[1] }}</span>
+        {% if item[7] %}
+        <span class="item-status-badge">📡 Enviado a {{ item[7] }}</span>
+        {% endif %}
         {% if item[5] %}
         <span class="item-fecha" data-ts="{{ item[5].isoformat() }}"></span>
         {% endif %}
@@ -652,7 +661,7 @@
     const btnMulti = document.getElementById('btn-enviar-multi');
     btnMulti.disabled = true;
     const originalText = btnMulti.innerHTML;
-    btnMulti.innerHTML = '⏳ Enviando tareas a Antigravity...';
+    btnMulti.innerHTML = '⏳ Enviando tareas a ASISTENTES...';
     
     const ids = Array.from(seleccionados);
     try {

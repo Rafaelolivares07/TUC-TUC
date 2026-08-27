@@ -69,7 +69,6 @@
         <button onclick="clearGasConcepto()" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
         <input type="hidden" id="gas-concept-id">
         <input type="hidden" id="gas-concept-tercero">
-        <div id="gas-concept-ac" class="ac-drop"></div>
       </div>
       
       <!-- Tercero / Proveedor (Condicional) -->
@@ -81,7 +80,6 @@
                oninput="onTerceroInput()" onfocus="onTerceroInput()" onkeydown="navTerceroAC(event)">
         <button onclick="clearGasTercero()" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
         <input type="hidden" id="gas-tercero-id">
-        <div id="gas-tercero-ac" class="ac-drop"></div>
       </div>
       
       <!-- Monto -->
@@ -108,6 +106,10 @@
       </div>
       
     </div>
+
+    <!-- Dropdowns fuera del grid para no afectar layout -->
+    <div id="gas-concept-ac" class="ac-drop"></div>
+    <div id="gas-tercero-ac" class="ac-drop"></div>
   </div>
 
   <!-- Detalle / Grilla de Gastos Agregados -->

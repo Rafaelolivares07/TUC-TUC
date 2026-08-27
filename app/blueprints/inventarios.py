@@ -314,13 +314,19 @@ def _negocio_id_de_producto(conn, producto_id):
 
 
 def _sync_precio(conn, negocio_id, producto_id):
-    """Sincroniza precio/costo/iva/categoría de productos → precios."""
+    """Sincroniza precio/costo/iva/categoría de productos → precios (solo si precio > 0)."""
     try:
         row = conn.execute(
             "SELECT precio, costo, iva_pct, categoria FROM productos WHERE id = %s",
             (producto_id,)
         ).fetchone()
         if not row:
+            return
+        precio_venta = float(row['precio'] or 0)
+        if precio_venta <= 0:
+            # Producto no se vende — eliminar de precios si existe
+            conn.execute("DELETE FROM precios WHERE negocio_id = %s AND producto_id = %s",
+                         (negocio_id, producto_id))
             return
         conn.execute("""
             INSERT INTO precios (negocio_id, producto_id, precio_venta, costo, iva_pct, categoria)
@@ -331,7 +337,7 @@ def _sync_precio(conn, negocio_id, producto_id):
                 iva_pct = EXCLUDED.iva_pct,
                 categoria = EXCLUDED.categoria,
                 updated_at = NOW()
-        """, (negocio_id, producto_id, row['precio'], row['costo'], row['iva_pct'], row['categoria']))
+        """, (negocio_id, producto_id, precio_venta, row['costo'], row['iva_pct'], row['categoria']))
     except Exception:
         pass
 

@@ -94,6 +94,18 @@ def _crear_tablas(conn):
             equivalencia NUMERIC(14,4) NOT NULL DEFAULT 1.0,
             created_at   TIMESTAMP DEFAULT NOW()
         )""",
+        """CREATE TABLE IF NOT EXISTS precios (
+            id            SERIAL PRIMARY KEY,
+            negocio_id    INTEGER NOT NULL,
+            producto_id   INTEGER NOT NULL REFERENCES productos(id),
+            precio_venta  DECIMAL(12,2) DEFAULT 0,
+            costo         DECIMAL(12,2) DEFAULT 0,
+            iva_pct       NUMERIC(5,2) DEFAULT 0,
+            categoria     VARCHAR(100),
+            created_at    TIMESTAMP DEFAULT NOW(),
+            updated_at    TIMESTAMP DEFAULT NOW(),
+            UNIQUE(negocio_id, producto_id)
+        )""",
     ]
     for sql in sqls:
         try:
@@ -113,6 +125,8 @@ def _crear_tablas(conn):
         "ALTER TABLE tarjeta_estandar ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "CREATE INDEX IF NOT EXISTS idx_saldos_negocio_producto ON saldos_inventario(negocio_id, producto_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_presentaciones_unique ON presentaciones(LOWER(nombre), equivalencia)",
+        "CREATE INDEX IF NOT EXISTS idx_precios_negocio ON precios(negocio_id)",
+        "CREATE INDEX IF NOT EXISTS idx_precios_producto ON precios(producto_id)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS presentacion_id INTEGER REFERENCES presentaciones(id)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS costo_und NUMERIC(12,4)",
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS tipo_documento VARCHAR(50)",
@@ -299,6 +313,29 @@ def _negocio_id_de_producto(conn, producto_id):
     return row['negocio_id'] if row else None
 
 
+def _sync_precio(conn, negocio_id, producto_id):
+    """Sincroniza precio/costo/iva/categoría de productos → precios."""
+    try:
+        row = conn.execute(
+            "SELECT precio, costo, iva_pct, categoria FROM productos WHERE id = %s",
+            (producto_id,)
+        ).fetchone()
+        if not row:
+            return
+        conn.execute("""
+            INSERT INTO precios (negocio_id, producto_id, precio_venta, costo, iva_pct, categoria)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (negocio_id, producto_id) DO UPDATE SET
+                precio_venta = EXCLUDED.precio_venta,
+                costo = EXCLUDED.costo,
+                iva_pct = EXCLUDED.iva_pct,
+                categoria = EXCLUDED.categoria,
+                updated_at = NOW()
+        """, (negocio_id, producto_id, row['precio'], row['costo'], row['iva_pct'], row['categoria']))
+    except Exception:
+        pass
+
+
 def _es_ensamble(conn, producto_id):
     """Retorna True si el producto tiene componentes distintos a sí mismo."""
     rows = conn.execute(
@@ -421,6 +458,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
     conn.execute("""
         UPDATE productos SET costo=%s WHERE id=%s AND negocio_id=%s
     """, (float(costo_nuevo), producto_id, negocio_id))
+    _sync_precio(conn, negocio_id, producto_id)
 
 
 
@@ -927,6 +965,7 @@ def api_inventario_producto_crear():
             float(data.get('iva_pct') or 0),
             int(data.get('orden') or 0),
         )).fetchone()
+        _sync_precio(conn, int(negocio_id), row[0])
         conn.commit()
         return jsonify({'ok': True, 'id': row[0]})
     except Exception as e:

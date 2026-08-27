@@ -1521,39 +1521,49 @@ def api_puc_nueva():
 
 def _asegurar_tipos_doc_saldos(conn, negocio_id):
     """Garantiza la existencia de tipos de documento por defecto para cobros y pagos."""
-    # 1. Verificar si existe algún tipo de documento para COBRO (Recaudos)
-    exists_cobro = conn.execute(
-        "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'cobro' AND activo = TRUE LIMIT 1",
+    # 1. Verificar si ya existe un predeterminado para COBRO
+    pred_cobro = conn.execute(
+        "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'cobro' AND predeterminado = TRUE LIMIT 1",
         (negocio_id,)
     ).fetchone()
-    if not exists_cobro:
-        try:
-            conn.execute("""
-                INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, consecutivo, predeterminado, mueve_inventario, tipo_movimiento, es_interno, activo)
-                VALUES (%s, 'RECIBO_DE_CAJA', 'RECIBO DE CAJA', 1, 0, TRUE, FALSE, 'cobro', TRUE, TRUE)
-                ON CONFLICT (negocio_id, codigo) DO NOTHING
-            """, (negocio_id,))
-            conn.commit()
-        except Exception:
-            try: conn.rollback()
-            except Exception: pass
+    if not pred_cobro:
+        exists_cobro = conn.execute(
+            "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'cobro' AND activo = TRUE LIMIT 1",
+            (negocio_id,)
+        ).fetchone()
+        if not exists_cobro:
+            try:
+                conn.execute("""
+                    INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, consecutivo, predeterminado, mueve_inventario, tipo_movimiento, es_interno, activo)
+                    VALUES (%s, 'RECIBO_DE_CAJA', 'RECIBO DE CAJA', 1, 0, TRUE, FALSE, 'cobro', TRUE, TRUE)
+                    ON CONFLICT (negocio_id, codigo) DO NOTHING
+                """, (negocio_id,))
+                conn.commit()
+            except Exception:
+                try: conn.rollback()
+                except Exception: pass
 
-    # 2. Verificar si existe algún tipo de documento para PAGO (Egresos)
-    exists_pago = conn.execute(
-        "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'pago' AND activo = TRUE LIMIT 1",
+    # 2. Verificar si ya existe un predeterminado para PAGO
+    pred_pago = conn.execute(
+        "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'pago' AND predeterminado = TRUE LIMIT 1",
         (negocio_id,)
     ).fetchone()
-    if not exists_pago:
-        try:
-            conn.execute("""
-                INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, consecutivo, predeterminado, mueve_inventario, tipo_movimiento, es_interno, activo)
-                VALUES (%s, 'COMP_EGRESO', 'COMPROBANTE DE EGRESO', 1, 0, TRUE, FALSE, 'pago', TRUE, TRUE)
-                ON CONFLICT (negocio_id, codigo) DO NOTHING
-            """, (negocio_id,))
-            conn.commit()
-        except Exception:
-            try: conn.rollback()
-            except Exception: pass
+    if not pred_pago:
+        exists_pago = conn.execute(
+            "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'pago' AND activo = TRUE LIMIT 1",
+            (negocio_id,)
+        ).fetchone()
+        if not exists_pago:
+            try:
+                conn.execute("""
+                    INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, consecutivo, predeterminado, mueve_inventario, tipo_movimiento, es_interno, activo)
+                    VALUES (%s, 'COMP_EGRESO', 'COMPROBANTE DE EGRESO', 1, 0, TRUE, FALSE, 'pago', TRUE, TRUE)
+                    ON CONFLICT (negocio_id, codigo) DO NOTHING
+                """, (negocio_id,))
+                conn.commit()
+            except Exception:
+                try: conn.rollback()
+                except Exception: pass
 
 
 @bp.route('/api/contabilidad/<int:negocio_id>/tipos-doc', methods=['GET'])
@@ -1589,7 +1599,7 @@ def api_tipos_doc_post(negocio_id):
     tipo_movimiento = data.get('tipo_movimiento')
     if tipo_movimiento:
         tipo_movimiento = tipo_movimiento.strip().lower()
-        if tipo_movimiento not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste', 'cierre', 'cobro', 'pago'):
+        if tipo_movimiento not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste', 'cierre', 'cobro', 'pago', 'gasto'):
             tipo_movimiento = None
     else:
         tipo_movimiento = None
@@ -1672,10 +1682,35 @@ def api_tipos_doc_patch(negocio_id, tid):
             conn.execute(
                 "UPDATE tipos_documento_negocio SET consecutivo=%s WHERE id=%s AND negocio_id=%s",
                 (int(data['consecutivo'] or 0), tid, negocio_id))
-        if 'predeterminado' in data:
+        if 'predeterminado' in data and bool(data['predeterminado']):
+            # Obtener el tipo_movimiento actual de este documento
+            doc_actual = conn.execute(
+                "SELECT tipo_movimiento, nombre FROM tipos_documento_negocio WHERE id=%s AND negocio_id=%s",
+                (tid, negocio_id)
+            ).fetchone()
+            tipo_mov = doc_actual['tipo_movimiento'] if doc_actual else None
+            if tipo_mov:
+                conflicto = conn.execute(
+                    "SELECT id, nombre FROM tipos_documento_negocio WHERE negocio_id=%s AND tipo_movimiento=%s AND predeterminado=TRUE AND id!=%s",
+                    (negocio_id, tipo_mov, tid)
+                ).fetchone()
+                if conflicto:
+                    conn.close()
+                    return jsonify({
+                        'ok': False,
+                        'conflicto': True,
+                        'error': f'Ya existe un tipo de documento predeterminado para {tipo_mov}: "{conflicto["nombre"]}". Primero debes quitar esa característica del otro tipo de documento.',
+                        'conflicto_nombre': conflicto['nombre'],
+                        'conflicto_id': conflicto['id'],
+                        'tipo_movimiento': tipo_mov
+                    }), 409
             conn.execute(
-                "UPDATE tipos_documento_negocio SET predeterminado=%s WHERE id=%s AND negocio_id=%s",
-                (bool(data['predeterminado']), tid, negocio_id))
+                "UPDATE tipos_documento_negocio SET predeterminado=TRUE WHERE id=%s AND negocio_id=%s",
+                (tid, negocio_id))
+        elif 'predeterminado' in data and not bool(data['predeterminado']):
+            conn.execute(
+                "UPDATE tipos_documento_negocio SET predeterminado=FALSE WHERE id=%s AND negocio_id=%s",
+                (tid, negocio_id))
         if 'mueve_inventario' in data:
             conn.execute(
                 "UPDATE tipos_documento_negocio SET mueve_inventario=%s WHERE id=%s AND negocio_id=%s",
@@ -1688,7 +1723,7 @@ def api_tipos_doc_patch(negocio_id, tid):
             tipo_mov = data['tipo_movimiento']
             if tipo_mov:
                 tipo_mov = tipo_mov.strip().lower()
-                if tipo_mov not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste', 'cierre', 'cobro', 'pago'):
+                if tipo_mov not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste', 'cierre', 'cobro', 'pago', 'gasto'):
                     tipo_mov = None
             else:
                 tipo_mov = None

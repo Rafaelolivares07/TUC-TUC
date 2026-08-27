@@ -884,6 +884,7 @@ async function cargarTiposDocs() {
           <option value="cierre" ${t.tipo_movimiento==='cierre'?'selected':''}>Cierre de Periodo</option>
           <option value="cobro" ${t.tipo_movimiento==='cobro'?'selected':''}>Recaudos / Cobros</option>
           <option value="pago" ${t.tipo_movimiento==='pago'?'selected':''}>Pagos / Egresos</option>
+          <option value="gasto" ${t.tipo_movimiento==='gasto'?'selected':''}>Relación de Gastos</option>
         </select>
       </td>
       <td class="px-3 py-2 text-center">
@@ -941,8 +942,34 @@ async function toggleTipoDoc(id, activo) {
 }
 
 async function togglePredeterminado(id, predeterminado) {
-  await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({predeterminado})});
-  cargarTiposDocs();
+  if (!predeterminado) {
+    await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({predeterminado: false})});
+    cargarTiposDocs();
+    return;
+  }
+  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({predeterminado: true})});
+  const data = await resp.json();
+  if (data.ok) {
+    cargarTiposDocs();
+    return;
+  }
+  if (data.conflicto) {
+    document.getElementById('pm-msg').innerHTML = data.error;
+    document.getElementById('modal-predeterminado').classList.remove('hidden');
+    document.getElementById('modal-predeterminado').classList.add('flex');
+    document.getElementById('pm-btn-cambiar').onclick = async () => {
+      await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc/${data.conflicto_id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({predeterminado: false})});
+      await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc/${id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({predeterminado: true})});
+      cerrarModalPredeterminado();
+      cargarTiposDocs();
+    };
+    return;
+  }
+  toast(data.error || 'Error al actualizar', false);
+}
+function cerrarModalPredeterminado() {
+  document.getElementById('modal-predeterminado').classList.add('hidden');
+  document.getElementById('modal-predeterminado').classList.remove('flex');
 }
 
 async function patchTipoDoc(id, campos) {
@@ -2809,5 +2836,21 @@ if (activeTab && TABS.includes(activeTab)) {
         }
       })();
     </script>
+
+<!-- Modal conflicto predeterminado -->
+<div id="modal-predeterminado" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 text-xl">⚠</div>
+      <h3 class="text-lg font-bold text-gray-800">Tipo de documento predeterminado</h3>
+    </div>
+    <p id="pm-msg" class="text-sm text-gray-600 mb-6"></p>
+    <div class="flex gap-3">
+      <button onclick="cerrarModalPredeterminado()" class="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition">No cambiar</button>
+      <button id="pm-btn-cambiar" class="flex-1 px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition">Sí, cambiar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

@@ -117,18 +117,18 @@ function renderMetodos() {
                 ${METODO_NOTAS[m.codigo] ? `<small class="block text-[11px] font-normal text-gray-400 leading-tight">${METODO_NOTAS[m.codigo]}</small>` : ''}
                 ${sinCuenta ? `<small class="block text-[11px] font-semibold text-amber-600 leading-tight">Sin cuenta contable asignada</small>` : ''}
             </span>
-            <input type="number" min="0" step="100" value="0" placeholder="$0"
+            <input type="text" inputmode="decimal" min="0" step="100" value="0" placeholder="$0"
                    id="mp-${m.codigo}"
                    class="border-2 rounded-xl px-3 py-2 text-sm w-28 text-right font-bold focus:border-amber-400 focus:outline-none ${sinCuenta ? 'border-amber-400' : ''}"
-                   oninput="onInputPago('${m.codigo}')">
+                   onfocus="this.select()" oninput="onInputPago('${m.codigo}')">
         </div>
         ${METODOS_EFECTIVO.has(m.codigo) && cambioEfectivoModo !== 'N' ? `
         <div id="cambio-box-${m.codigo}" class="hidden ml-10 -mt-1 mb-2 bg-gray-50 border border-gray-100 rounded-xl p-3">
             <label class="block text-[11px] font-bold uppercase text-gray-400 mb-1">Â¿Con cuÃ¡nto pagas?</label>
-            <input type="number" min="0" step="100" placeholder="Ej: 100000"
+            <input type="text" inputmode="decimal" min="0" step="100" placeholder="Ej: 100000"
                    id="recibido-${m.codigo}"
                    class="w-full border rounded-xl px-3 py-2 text-sm text-right font-bold focus:border-amber-400 focus:outline-none"
-                   oninput="validarPagos()">
+                   onfocus="this.select()" oninput="validarPagos()">
             <p id="devuelta-${m.codigo}" class="text-xs font-semibold text-emerald-600 mt-1 hidden"></p>
         </div>` : ''}
     `}).join('');

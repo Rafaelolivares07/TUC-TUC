@@ -773,10 +773,10 @@ function renderMetodosPago() {
             <span class="text-xs text-gray-600 w-28 flex-shrink-0">${m.nombre}
                 ${sinCuenta ? `<small class="block text-[10px] text-amber-600 font-semibold leading-tight">Sin cuenta contable</small>` : ''}
             </span>
-            <input type="number" min="0" step="100" value="0" placeholder="$0"
+            <input type="text" inputmode="decimal" min="0" step="100" value="0" placeholder="$0"
                    id="mp-${m.codigo}"
                    class="border rounded-lg px-2 py-1 text-sm w-full text-right ${sinCuenta ? 'border-amber-400' : ''}"
-                   oninput="validarPagos()">
+                   onfocus="this.select()" oninput="validarPagos()">
         </div>
     `}).join('');
 }

@@ -6664,7 +6664,7 @@ def _sembrar_parametros_inv_dist(conn, negocio_id):
             conn.execute("""
                 INSERT INTO parametros_sistema (nombre, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
                 VALUES (%s, %s, %s, %s, %s, %s, NOW())
-            """, (nombre, cfg['valor'], cfg['valor'] if cfg['tipo'] == 'booleano' else None,
+            """, (nombre, cfg['valor'], cfg['valor'].lower() if cfg['tipo'] == 'booleano' else None,
                   cfg['tipo'], cfg['desc'], negocio_id))
 
 
@@ -6707,12 +6707,13 @@ def inv_dist_config_set(negocio_id):
                 (nombre, negocio_id)
             ).fetchone()
             if cfg['tipo'] == 'booleano':
+                val_str = str(valor).lower()
                 if existing:
                     conn.execute("UPDATE parametros_sistema SET valor_booleano = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
-                                 (str(valor), nombre, negocio_id))
+                                 (val_str, nombre, negocio_id))
                 else:
                     conn.execute("INSERT INTO parametros_sistema (nombre, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, %s, 'booleano', %s, %s, NOW())",
-                                 (nombre, str(valor), cfg['desc'], negocio_id))
+                                 (nombre, val_str, cfg['desc'], negocio_id))
             else:
                 if existing:
                     conn.execute("UPDATE parametros_sistema SET valor_texto = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",

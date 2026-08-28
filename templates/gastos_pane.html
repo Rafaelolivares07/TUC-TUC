@@ -191,6 +191,7 @@
       }
       
       gasDocumentos = d.documentos || [];
+      console.log('DEBUG GASTOS:', gasDocumentos.map(d => ({codigo:d.codigo, predeterminado:d.predeterminado, status:d.status})));
       const sel = document.getElementById('gas-tipo-doc');
       
       if (gasDocumentos.length === 0) {
@@ -202,6 +203,7 @@
         const lbl = `${doc.nombre} (${doc.codigo}) — ${doc.status === 'abierto' ? 'ABIERTO (# ' + doc.numero_documento + ')' : 'NUEVO'}`;
         return `<option value="${doc.codigo}" ${doc.predeterminado ? 'selected' : ''}>${lbl}</option>`;
       }).join('');
+      console.log('DEBUG GASTOS SELECT:', sel.value, sel.selectedIndex);
       
       cargarRelacionGastoActiva();
     } catch(e) {

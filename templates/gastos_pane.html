@@ -197,6 +197,7 @@
       }
       
       gasDocumentos = d.documentos || [];
+      console.log('GASTOS DOCS:', JSON.stringify(gasDocumentos));
       const sel = document.getElementById('gas-tipo-doc');
       
       if (gasDocumentos.length === 0) {
@@ -210,6 +211,7 @@
       }).join('');
       const pred = gasDocumentos.find(d => d.predeterminado);
       if (pred) sel.value = pred.id;
+      console.log('GASTOS SELECT:', sel.value, 'pred:', pred ? pred.id : null);
       
       cargarRelacionGastoActiva();
     } catch(e) {

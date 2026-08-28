@@ -55,3 +55,14 @@ El archivo `bridge_chat.md` está conectado a Telegram 24/7 mediante un servicio
 - **Al final de cada turno o al escribir una actualización**: Debes subir el archivo al servidor para que el puente de Telegram notifique a Rafael automáticamente a su celular:
   `scp -o StrictHostKeyChecking=no -i "C:\Users\RAFAEL OLIVARES\Documents\tuctuc-linux.pem" C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\bridge_chat.md ubuntu@18.217.231.167:/home/ubuntu/tuctucv2/bridge_chat.md`
 
+
+## PROTOCOLO DE DESPLIEGUE EN PRODUCCIÓN (AWS) — Evitar Basura
+- **NUNCA usar `scp` para subir archivos de código** a AWS. Las actualizaciones deben desplegarse únicamente usando Git para evitar desfases de versión y dejar el repositorio en estado "dirty".
+- **Flujo de despliegue oficial**:
+  1. Realizar los cambios localmente en la laptop.
+  2. Hacer commit y push limpio a GitHub (`git push origin v2`).
+  3. Conectarse por SSH a AWS y hacer pull:
+     `cd /home/ubuntu/tuctucv2 && git pull origin v2 && sudo systemctl restart tuctuc`
+- **Case-Sensitivity (Mayúsculas/Minúsculas)**: El servidor de producción corre sobre Linux (case-sensitive) y localmente se desarrolla en Windows (case-insensitive). Las carpetas estáticas como `static/JS` y `static/CSS` están registradas en mayúsculas en Git. Para evitar enlaces rotos, se configuró un enlace simbólico `js -> JS` en AWS. NUNCA crear directorios o archivos duplicados variando solo la capitalización.
+- **Ignorar archivos temporales**: NUNCA añadir o subir logs, estados de deploy (`deploy_estado.json`, `deploy_watcher.log`) ni scripts de diagnóstico (`scratch/`). Todos están debidamente configurados en el `.gitignore`.
+

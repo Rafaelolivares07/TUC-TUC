@@ -6669,7 +6669,6 @@ def _sembrar_parametros_inv_dist(conn, negocio_id):
 
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/config', methods=['GET'])
-@admin_required
 def inv_dist_config_get(negocio_id):
     """Retorna la configuración de inventario distribuido para un negocio."""
     try:
@@ -6692,7 +6691,6 @@ def inv_dist_config_get(negocio_id):
 
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/config', methods=['POST'])
-@admin_required
 def inv_dist_config_set(negocio_id):
     """Guarda configuración de inventario distribuido."""
     try:
@@ -6730,7 +6728,6 @@ def inv_dist_config_set(negocio_id):
 
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/siguiente', methods=['GET'])
-@admin_required
 def inv_dist_siguiente(negocio_id):
     """Retorna el siguiente ítem a contar según prioridad."""
     try:
@@ -6801,7 +6798,6 @@ def inv_dist_siguiente(negocio_id):
 
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/conteo', methods=['POST'])
-@admin_required
 def inv_dist_conteo(negocio_id):
     """Registra un conteo físico (el operario ingresa la cantidad)."""
     try:
@@ -6871,7 +6867,6 @@ def inv_dist_conteo(negocio_id):
 
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/saltar', methods=['POST'])
-@admin_required
 def inv_dist_saltar(negocio_id):
     """El operario salta un ítem (reporta como problemático)."""
     try:
@@ -6916,7 +6911,6 @@ def inv_dist_saltar(negocio_id):
 
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/cancelar', methods=['POST'])
-@admin_required
 def inv_dist_cancelar(negocio_id):
     """El operario cancela la sesión de conteo."""
     try:
@@ -6931,7 +6925,6 @@ def inv_dist_cancelar(negocio_id):
 
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/resumen', methods=['GET'])
-@admin_required
 def inv_dist_resumen(negocio_id):
     """Resumen del ciclo para el parametrizador."""
     try:

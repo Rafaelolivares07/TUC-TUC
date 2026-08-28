@@ -734,6 +734,7 @@ function cambiarTab(t) {
   if (t === 'manual')       { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
   if (t === 'consulta')     inicializarFechasConsulta();
   if (t === 'balance')      inicializarBalanceTab();
+  if (t === 'gastos')       inicializarModuloGastos();
 }
 
 function toast(msg, ok=true) {

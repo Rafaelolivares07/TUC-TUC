@@ -12,6 +12,7 @@ CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "telegram
 
 # Detectar rutas según sistema operativo
 IS_WINDOWS = os.name == 'nt'
+_last_aws_size = 0  # Track último tamaño conocido del archivo en AWS
 if IS_WINDOWS:
     BRIDGE_FILE = r"C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\bridge_chat.md"
     PEM_FILE = r"C:\Users\RAFAEL OLIVARES\Documents\tuctuc-linux.pem"
@@ -46,7 +47,8 @@ def deploy_to_aws():
 
 
 def sync_from_aws():
-    """Descarga bridge_chat.md desde AWS si tiene más contenido que el local."""
+    """Descarga bridge_chat.md desde AWS si creció desde la última sync."""
+    global _last_aws_size
     if not IS_WINDOWS:
         return
     try:
@@ -56,20 +58,33 @@ def sync_from_aws():
         if result.returncode != 0 or not os.path.exists(tmp):
             return
         aws_size = os.path.getsize(tmp)
-        local_size = os.path.getsize(BRIDGE_FILE) if os.path.exists(BRIDGE_FILE) else 0
-        if aws_size > local_size:
+        if aws_size > _last_aws_size and _last_aws_size > 0:
+            # AWS creció — hay contenido nuevo del backend
             with open(tmp, 'r', encoding='utf-8') as f:
                 aws_content = f.read()
             if os.path.exists(BRIDGE_FILE):
                 with open(BRIDGE_FILE, 'r', encoding='utf-8') as f:
                     local_content = f.read()
-                new_part = aws_content[len(local_content):]
+                # Extraer solo lo que el backend agregó
+                if len(aws_content) > len(local_content):
+                    new_part = aws_content[len(local_content):]
+                else:
+                    # El backend reescribió o el local se adelantó — tomar diff por líneas
+                    local_lines = set(local_content.splitlines())
+                    aws_lines = aws_content.splitlines()
+                    new_part = '\n'.join(l for l in aws_lines if l not in local_lines and l.strip())
+                    if new_part:
+                        new_part = '\n' + new_part + '\n'
             else:
                 new_part = aws_content
-            if new_part.strip():
+            if new_part and new_part.strip():
                 with open(BRIDGE_FILE, 'a', encoding='utf-8') as f:
                     f.write(new_part)
                 print(f"[AWS -> Bridge] Nuevas tareas sincronizadas ({len(new_part)} chars)")
+        elif _last_aws_size == 0:
+            # Primera ejecución — solo registrar tamaño
+            print(f"[AWS -> Bridge] Tamaño AWS registrado: {aws_size} bytes")
+        _last_aws_size = aws_size
         os.remove(tmp)
     except Exception as e:
         print(f"[AWS -> Bridge] Error: {e}")

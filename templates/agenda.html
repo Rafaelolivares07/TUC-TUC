@@ -408,6 +408,19 @@
   </div>
     <p class="subtitulo">Rafael Olivares · TUC TUC</p>
 
+  <!-- Presencia de Asistentes -->
+  <div style="display:flex; gap:12px; font-size:12px; margin-bottom:14px; background:#fafafa; padding:8px 12px; border-radius:6px; border:1px solid #e2e2e2; width:fit-content; margin-top: 4px;">
+    <span style="font-weight:600; color:#555">📡 Asistentes:</span>
+    <span style="display:flex; align-items:center; gap:4px; font-weight: 500; color: #444;">
+      <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:{% if asistentes.get('antigravity') == 'online' %}#2ecc71{% else %}#bdc3c7{% endif %}; box-shadow: 0 0 4px {% if asistentes.get('antigravity') == 'online' %}#2ecc71{% else %}#bdc3c7{% endif %};"></span>
+      Antigravity
+    </span>
+    <span style="display:flex; align-items:center; gap:4px; font-weight: 500; color: #444;">
+      <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:{% if asistentes.get('opencode') == 'online' %}#2ecc71{% else %}#bdc3c7{% endif %}; box-shadow: 0 0 4px {% if asistentes.get('opencode') == 'online' %}#2ecc71{% else %}#bdc3c7{% endif %};"></span>
+      Open Code
+    </span>
+  </div>
+
   <button type="button" id="btn-nueva-tarea" class="btn-nueva-tarea" onclick="toggleNuevaTarea()">+ Nueva tarea</button>
 
   <div class="agregar collapsed" id="panel-nueva-tarea">
@@ -421,7 +434,18 @@
     <input type="text" id="inp-buscar" placeholder="🔍 Buscar y filtrar tareas..." style="width: 100%; border: none; border-bottom: 1.5px solid #ccc; padding: 8px 4px; font-size: .95rem; background: transparent; outline: none; transition: border-color .2s;" oninput="filtrarTareas(this.value)">
   </div>
 
-  <button id="btn-enviar-multi" class="btn-enviar-multi" style="display:none" onclick="enviarSeleccionadas()">🚀 Enviar seleccionadas a ASISTENTES (<span id="selected-count">0</span>)</button>
+  <!-- Panel de Envío Múltiple -->
+  <div id="panel-enviar-multi" style="display:none; flex-direction:column; gap:8px; margin-bottom:20px; background:#fff; padding:12px; border-radius:8px; border:1px solid #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+    <div style="display:flex; align-items:center; gap:8px; justify-content:space-between">
+      <span style="font-size:0.85rem; font-weight:600; color:#555">Enviar <span id="selected-count">0</span> tareas seleccionadas a:</span>
+      <select id="sel-asistente-multi" style="padding:4px 8px; font-size:0.8rem; border-radius:6px; border:1px solid #ccc; outline:none; background:#fafafa; font-weight: 500; color: #444; cursor: pointer;">
+        <option value="todos">🤖 Ambos Asistentes (Todos)</option>
+        <option value="antigravity">🤖 Antigravity</option>
+        <option value="opencode">👨‍💻 Open Code</option>
+      </select>
+    </div>
+    <button id="btn-enviar-multi" class="btn-enviar-multi" style="margin-bottom:0" onclick="enviarSeleccionadas()">🚀 Enviar seleccionadas</button>
+  </div>
 
   <ul class="items" id="lista">
     {% set pendientes = items | selectattr('2', 'equalto', False) | list %}
@@ -503,7 +527,6 @@
     }
   });
 
-  // Renderizar fechas
   const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   function fmtFecha(ts) {
     const d = new Date(ts);
@@ -645,30 +668,32 @@
   }
 
   function actualizarBotonMulti() {
-    const btnMulti = document.getElementById('btn-enviar-multi');
+    const panelMulti = document.getElementById('panel-enviar-multi');
     const countSpan = document.getElementById('selected-count');
     const count = seleccionados.size;
     
     if (count > 0) {
       countSpan.textContent = count;
-      btnMulti.style.display = 'block';
+      panelMulti.style.display = 'flex';
     } else {
-      btnMulti.style.display = 'none';
+      panelMulti.style.display = 'none';
     }
   }
 
   async function enviarSeleccionadas() {
+    const panelMulti = document.getElementById('panel-enviar-multi');
     const btnMulti = document.getElementById('btn-enviar-multi');
+    const asistente = document.getElementById('sel-asistente-multi').value;
     btnMulti.disabled = true;
     const originalText = btnMulti.innerHTML;
-    btnMulti.innerHTML = '⏳ Enviando tareas a ASISTENTES...';
+    btnMulti.innerHTML = '⏳ Enviando tareas...';
     
     const ids = Array.from(seleccionados);
     try {
       const r = await fetch('/agenda/item/activar-multi', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ids})
+        body: JSON.stringify({ids, asistente})
       });
       const d = await r.json();
       if (d.ok) {
@@ -677,10 +702,11 @@
         document.querySelectorAll('.item.seleccionada').forEach(li => li.classList.remove('seleccionada'));
         document.querySelectorAll('.btn-activar.active-select').forEach(btn => btn.classList.remove('active-select'));
         setTimeout(() => {
-          btnMulti.style.display = 'none';
+          panelMulti.style.display = 'none';
           btnMulti.disabled = false;
           btnMulti.innerHTML = originalText;
-        }, 2000);
+          location.reload();
+        }, 1500);
       } else {
         alert('Error al enviar tareas: ' + (d.error || 'Desconocido'));
         btnMulti.disabled = false;
@@ -690,6 +716,7 @@
       console.error(e);
       alert('Error de red al conectar con el servidor.');
       btnMulti.disabled = false;
+      btnMulti.innerHTML = originalText;
     }
   }
 
@@ -697,7 +724,7 @@
     const li = document.getElementById(`item-${id}`);
     if (!li) return;
     const span = li.querySelector('.item-texto');
-    if (span.querySelector('textarea')) return; // already editing
+    if (span.querySelector('textarea')) return;
 
     const textoOriginal = span.textContent.trim();
     span.innerHTML = `<textarea class="edit-input" style="width: 100%; min-height: 85px; border: 1.5px solid #ccc; padding: 6px 10px; border-radius: 8px; font-size: .95rem; outline: none; background: #fff; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1); resize: vertical; font-family: inherit; margin: 4px 0; display: block; line-height: 1.4;"></textarea>`;
@@ -706,7 +733,6 @@
     input.focus();
     input.select();
 
-    // Prevent dragging during edit
     const wasDraggable = li.getAttribute('draggable');
     li.setAttribute('draggable', 'false');
 
@@ -728,7 +754,7 @@
         return;
       }
       
-      span.textContent = nuevoTexto; // update optimistic
+      span.textContent = nuevoTexto;
       li.setAttribute('draggable', wasDraggable);
       
       try {

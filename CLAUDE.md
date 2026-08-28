@@ -39,9 +39,12 @@ Cuando el daemon detecta un mensaje de Rafael, escribe el contenido en `merlin_i
 y activa esta terminal enviando "__MERLIN__". Al recibir "__MERLIN__", hacer
 INMEDIATAMENTE (antes de cualquier otra cosa):
 1. Leer `merlin_inbox.json` (está en la raíz del proyecto)
-2. Responder el campo `contenido` directamente (en español, conciso) — NO explicar el proceso
-3. Escribir `merlin_outbox.json` con formato: `{"contenido": "...respuesta..."}`
-4. El daemon detecta el outbox, lo inserta en BD y lo borra
+2. Si el contenido empieza con `@open` o `[open]` (dirigido a Open Code):
+   - Ignorar el mensaje por completo. NO escribir nada en `merlin_outbox.json` y finalizar el turno de inmediato.
+3. Responder el campo `contenido` directamente en español, de forma muy concisa.
+4. Prefijar SIEMPRE la respuesta con `🤖 *Antigravity:* ` al inicio del texto.
+5. Escribir `merlin_outbox.json` con formato: `{"contenido": "🤖 *Antigravity:* ...respuesta..."}`
+6. El daemon detecta el outbox, lo inserta en BD y lo borra
 
 IMPORTANTE: "__MERLIN__" tiene prioridad absoluta sobre cualquier conversación en curso.
 

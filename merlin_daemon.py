@@ -70,6 +70,10 @@ _cursor_prev   = (-1, -1)
 _relay_activo  = False     # True mientras relay_via_captura espera outbox
 _conn          = None      # conexión persistente a BD
 _bd_ok         = False     # True cuando la conexión está viva
+BRIDGE_FILE    = Path(r"C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\bridge_chat.md")
+_last_bridge_mtime = None
+_processed_bridge_msgs = set()
+_bridge_activo = False
 
 MEDIA_PROCS = {'chrome','msedge','firefox','spotify','vlc','wmplayer',
                'groove','mpc-hc','mpc-be','itunes','winamp','potplayer','mpv','obs64','obs32'}
@@ -84,7 +88,10 @@ def ts():
 
 def log(msg):
     line = f"[{ts()}] {msg}"
-    print(line, flush=True)
+    try:
+        print(line, flush=True)
+    except Exception:
+        pass
     with _log_lock:
         try:
             with open(LOG_FILE, 'a', encoding='utf-8') as f:
@@ -429,6 +436,32 @@ def _cmd_claude(extra_flags, prompt, timeout=45):
     )
 
 def llamar_claude(prompt):
+    api_key = os.getenv('ANTHROPIC_API_KEY')
+    if api_key:
+        try:
+            import requests
+            url = "https://api.anthropic.com/v1/messages"
+            headers = {
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            }
+            payload = {
+                "model": "claude-3-5-sonnet-20240620",
+                "max_tokens": 1000,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ]
+            }
+            r = requests.post(url, json=payload, headers=headers, timeout=30)
+            if r.status_code == 200:
+                res_data = r.json()
+                return res_data["content"][0]["text"].strip()
+            else:
+                log(f"  ✗ Anthropic API error: {r.status_code} - {r.text}")
+        except Exception as e:
+            log(f"  ✗ Anthropic API exception: {e}")
+
     try:
         result = _cmd_claude([], prompt, timeout=45)
         if result.returncode == 0 and result.stdout.strip():
@@ -442,6 +475,46 @@ def llamar_claude(prompt):
         return '_(claude no encontrado — verifica instalación)_'
     except Exception as e:
         return f'_(Error: {e})_'
+
+
+def enqueue_to_antigravity(text):
+    try:
+        import uuid
+        from datetime import datetime
+        import json
+        brain_dir = r"C:\Users\RAFAEL OLIVARES\.gemini\antigravity\brain"
+        if not os.path.exists(brain_dir):
+            return
+        subdirs = [os.path.join(brain_dir, d) for d in os.listdir(brain_dir) if os.path.isdir(os.path.join(brain_dir, d)) and not d.startswith('.')]
+        if not subdirs:
+            return
+        active_conv_dir = max(subdirs, key=os.path.getmtime)
+        active_conv_id = os.path.basename(active_conv_dir)
+        
+        msg_dir = os.path.join(active_conv_dir, ".system_generated", "messages")
+        os.makedirs(msg_dir, exist_ok=True)
+        
+        msg_id = str(uuid.uuid4())
+        msg_file = os.path.join(msg_dir, f"{msg_id}.json")
+        
+        payload = {
+            "id": msg_id,
+            "recipient": active_conv_id,
+            "sender": f"{active_conv_id}/telegram",
+            "priority": "MESSAGE_PRIORITY_HIGH",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "renderDetails": {
+                "messageTitle": "Mensaje desde Telegram"
+            },
+            "content": f"Rafael (vía Telegram): {text}"
+        }
+        
+        with open(msg_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+        
+        log(f"📨 Mensaje encolado en Antigravity para conv {active_conv_id}: {text[:60]}")
+    except Exception as e:
+        log(f"✗ Error encolando mensaje en Antigravity: {e}")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -508,8 +581,8 @@ def get_captura_pendiente():
         conn.close()
 
 
-def activar_claude():
-    """Activa la terminal de Claude Code y envía __MERLIN__ via SendKeys."""
+def activar_claude(target='antigravity'):
+    """Activa la terminal correspondiente (antigravity o opencode) y envía __MERLIN__ via SendKeys."""
     global _last_trigger, _last_sendkeys
     try:
         import pythoncom
@@ -523,29 +596,81 @@ def activar_claude():
         sent = False
 
         def _enviar_keys():
-            time.sleep(0.4)
-            wshell.SendKeys("__MERLIN__")
-            wshell.SendKeys("{ENTER}")
+            import win32clipboard
+            old_data = None
+            old_format = None
+            try:
+                win32clipboard.OpenClipboard()
+                if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                    old_data = win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
+                    old_format = win32clipboard.CF_UNICODETEXT
+                elif win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_TEXT):
+                    old_data = win32clipboard.GetClipboardData(win32clipboard.CF_TEXT)
+                    old_format = win32clipboard.CF_TEXT
+                win32clipboard.CloseClipboard()
+            except Exception:
+                pass
 
-        # 1a. PID directo de WindowsTerminal.exe via PowerShell (siempre fresco)
-        try:
-            r = subprocess.run(
-                ['powershell', '-NoProfile', '-Command',
-                 'Get-Process WindowsTerminal -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Id'],
-                capture_output=True, text=True, timeout=5
-            )
-            wt_pid_str = r.stdout.strip()
-            if wt_pid_str.isdigit():
-                wt_pid = int(wt_pid_str)
-                Path(r"C:\Users\RAFAEL OLIVARES\claude_pid.txt").write_text(str(wt_pid))
-                if wshell.AppActivate(wt_pid):
-                    _enviar_keys()
-                    sent = True
-        except Exception:
-            pass
+            try:
+                win32clipboard.OpenClipboard()
+                win32clipboard.EmptyClipboard()
+                win32clipboard.SetClipboardText("__MERLIN__")
+                win32clipboard.CloseClipboard()
+                
+                time.sleep(0.4)
+                wshell.SendKeys("^v")
+                wshell.SendKeys("{ENTER}")
+                time.sleep(0.1)
+            except Exception:
+                pass
 
-        # 1b. PID guardado por chat_terminal_hook.py
-        if not sent:
+            if old_data is not None:
+                try:
+                    win32clipboard.OpenClipboard()
+                    win32clipboard.EmptyClipboard()
+                    win32clipboard.SetClipboardData(old_format, old_data)
+                    win32clipboard.CloseClipboard()
+                except Exception:
+                    pass
+
+        # Filtros de búsqueda según target
+        if target == 'opencode':
+            patterns = ['opencode', 'open code']
+        else:
+            patterns = ['claude', 'antigravity']
+
+        # 1. Título conteniendo el target ("Antigravity" o "Open Code") - Más específico
+        for pat in patterns:
+            if wshell.AppActivate(pat):
+                _enviar_keys()
+                sent = True
+                break
+
+        # 2. Título exacto "Claude Code" (solo para antigravity)
+        if not sent and target == 'antigravity' and wshell.AppActivate(CLAUDE_WINDOW):
+            _enviar_keys()
+            sent = True
+
+        # 3. PID directo de WindowsTerminal.exe (solo como fallback para antigravity)
+        if not sent and target == 'antigravity':
+            try:
+                r = subprocess.run(
+                    ['powershell', '-NoProfile', '-Command',
+                     'Get-Process WindowsTerminal -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Id'],
+                    capture_output=True, text=True, timeout=5
+                )
+                wt_pid_str = r.stdout.strip()
+                if wt_pid_str.isdigit():
+                    wt_pid = int(wt_pid_str)
+                    Path(r"C:\Users\RAFAEL OLIVARES\claude_pid.txt").write_text(str(wt_pid))
+                    if wshell.AppActivate(wt_pid):
+                        _enviar_keys()
+                        sent = True
+            except Exception:
+                pass
+
+        # 4. PID guardado por chat_terminal_hook.py (como fallback para antigravity)
+        if not sent and target == 'antigravity':
             pid_file = Path(r"C:\Users\RAFAEL OLIVARES\claude_pid.txt")
             if pid_file.exists():
                 try:
@@ -556,24 +681,25 @@ def activar_claude():
                 except Exception:
                     pass
 
-        # 2. Título exacto "Claude Code"
-        if not sent and wshell.AppActivate(CLAUDE_WINDOW):
-            _enviar_keys()
-            sent = True
-
-        # 2b. Título conteniendo "Antigravity"
-        if not sent and wshell.AppActivate("Antigravity"):
-            _enviar_keys()
-            sent = True
-
-        # 3. Enumerar ventanas con proceso WindowsTerminal o título con "claude" o "antigravity"
+        # 5. Enumerar ventanas con proceso WindowsTerminal o título con coincidencia
         if not sent:
-            import win32process
+            import win32process, win32api, win32con as _wc
             def _enum(hwnd, result):
                 if win32gui.IsWindowVisible(hwnd):
-                    title = win32gui.GetWindowText(hwnd)
-                    if 'WindowsTerminal' in title or 'claude' in title.lower() or 'antigravity' in title.lower():
-                        result.append(hwnd)
+                    title = win32gui.GetWindowText(hwnd).lower()
+                    if any(pat in title for pat in patterns):
+                        # Excluir editores y navegadores para evitar falsos positivos
+                        if any(bad in title for bad in ['visual studio', 'vscode', 'code', 'notepad', 'chrome', 'edge', 'firefox', 'sublime']):
+                            return
+                        try:
+                            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                            h = win32api.OpenProcess(_wc.PROCESS_QUERY_INFORMATION | _wc.PROCESS_VM_READ, False, pid)
+                            proc_name = win32process.GetModuleFileNameEx(h, 0).lower()
+                            win32api.CloseHandle(h)
+                            if any(term in proc_name for term in ['windowsterminal', 'cmd', 'powershell', 'conhost', 'bash', 'wsl']):
+                                result.append(hwnd)
+                        except Exception:
+                            pass
             hwnds = []
             win32gui.EnumWindows(_enum, hwnds)
             for hwnd in hwnds:
@@ -586,7 +712,7 @@ def activar_claude():
                 except Exception:
                     pass
 
-        # 4. Buscar por nombre de proceso WindowsTerminal.exe
+        # 6. Buscar por nombre de proceso (solo si el título coincide en patrones)
         if not sent:
             try:
                 import win32process, win32api, win32con as _wc
@@ -598,7 +724,8 @@ def activar_claude():
                         h = win32api.OpenProcess(_wc.PROCESS_QUERY_INFORMATION | _wc.PROCESS_VM_READ, False, pid)
                         name = win32process.GetModuleFileNameEx(h, 0)
                         win32api.CloseHandle(h)
-                        if 'WindowsTerminal' in name or 'claude' in name.lower() or 'antigravity' in name.lower():
+                        title = win32gui.GetWindowText(hwnd).lower()
+                        if any(pat in title for pat in patterns) and ('WindowsTerminal' in name or 'powershell' in name or 'cmd' in name):
                             result.append((hwnd, pid))
                     except Exception:
                         pass
@@ -617,8 +744,9 @@ def activar_claude():
             now = datetime.now()
             _last_trigger  = now
             _last_sendkeys = now
+            log(f"Terminal {target} activada OK")
             time.sleep(0.15)
-            # Minimizar terminal (SW_MINIMIZE=6) y devolver foco al navegador
+            # Minimizar terminal (SW_MINIMIZE=6) y devolver foco
             term_hwnd = get_foreground_hwnd()
             if term_hwnd and term_hwnd != prev_hwnd:
                 show_window(term_hwnd, 6)
@@ -628,12 +756,11 @@ def activar_claude():
                     wshell.AppActivate(int(ctypes.windll.user32.GetWindowThreadProcessId(prev_hwnd, None)))
                 except Exception:
                     pass
-            log("Terminal activada OK")
         else:
-            log(f"Ventana '{CLAUDE_WINDOW}' no encontrada")
+            log(f"Ventana para target '{target}' no encontrada")
         return sent
     except Exception as e:
-        log(f"Error activando Claude: {e}")
+        log(f"Error activando terminal {target}: {e}")
         return False
 
 
@@ -739,9 +866,177 @@ def send_heartbeat(idle_sec):
         log(f"Heartbeat error: {e}")
 
 
-# ══════════════════════════════════════════════════════════════
-#  LOOP PRINCIPAL
-# ══════════════════════════════════════════════════════════════
+def actualizar_estado_asistentes():
+    try:
+        import win32gui, win32process, win32api, win32con as _wc
+        
+        def check_terminal_exists(patterns):
+            found = [False]
+            def _enum(hwnd, extra):
+                if win32gui.IsWindowVisible(hwnd):
+                    title = win32gui.GetWindowText(hwnd).lower()
+                    if any(pat in title for pat in patterns) or 'windowsterminal' in title:
+                        if any(bad in title for bad in ['visual studio', 'vscode', 'code', 'notepad', 'chrome', 'edge', 'firefox', 'sublime']):
+                            return
+                        try:
+                            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                            h = win32api.OpenProcess(_wc.PROCESS_QUERY_INFORMATION | _wc.PROCESS_VM_READ, False, pid)
+                            proc_name = win32process.GetModuleFileNameEx(h, 0).lower()
+                            win32api.CloseHandle(h)
+                            if any(term in proc_name for term in ['windowsterminal', 'cmd', 'powershell', 'conhost', 'bash', 'wsl']):
+                                found[0] = True
+                        except Exception:
+                            pass
+            win32gui.EnumWindows(_enum, None)
+            return found[0]
+            
+        anti_ok = check_terminal_exists(['claude', 'antigravity'])
+        open_ok = check_terminal_exists(['opencode', 'open code'])
+        
+        conn = get_conn()
+        if not conn:
+            return
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO asistentes_estado (nombre, disponible, ultimo_heartbeat)
+                VALUES ('antigravity', %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (nombre) DO UPDATE SET disponible = EXCLUDED.disponible, ultimo_heartbeat = CURRENT_TIMESTAMP
+            """, (anti_ok,))
+            cur.execute("""
+                INSERT INTO asistentes_estado (nombre, disponible, ultimo_heartbeat)
+                VALUES ('opencode', %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (nombre) DO UPDATE SET disponible = EXCLUDED.disponible, ultimo_heartbeat = CURRENT_TIMESTAMP
+            """, (open_ok,))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        log(f"Error actualizando estado de asistentes: {e}")
+
+
+def procesar_cambio_bridge():
+    global _last_bridge_mtime, _bridge_activo
+    try:
+        if not BRIDGE_FILE.exists():
+            return
+        content = BRIDGE_FILE.read_text(encoding='utf-8')
+        
+        # Obtener las líneas no vacías
+        lines = [l.strip() for l in content.split('\n') if l.strip()]
+        if not lines:
+            return
+            
+        last_line = lines[-1]
+        
+        # Evitar procesar lo mismo dos veces
+        msg_key = last_line
+        if msg_key in _processed_bridge_msgs:
+            return
+        _processed_bridge_msgs.add(msg_key)
+        
+        # 1. Intentar parsear el formato simplificado (last_line)
+        target_keys = []
+        cuerpo = ""
+        
+        if last_line.lower().startswith("open -"):
+            target_keys = ["opencode"]
+            cuerpo = last_line[6:].strip()
+        elif last_line.lower().startswith("anti -"):
+            target_keys = ["antigravity"]
+            cuerpo = last_line[6:].strip()
+        elif last_line.lower().startswith("todos -") or last_line.lower().startswith("all -"):
+            target_keys = ["antigravity", "opencode"]
+            cuerpo = last_line[last_line.find("-")+1:].strip()
+        else:
+            # 2. Fallback: Intentar parsear el formato de cabecera anterior buscando hacia atrás
+            import re
+            pattern = r"###\s*\[(.*?)\]\s*👤\s*(.*?)\s*para\s*(.*?):"
+            matches = list(re.finditer(pattern, content))
+            if not matches:
+                return
+            
+            last_match = matches[-1]
+            remitente = last_match.group(2).strip()
+            destinatario = last_match.group(3).strip()
+            
+            start_idx = last_match.end()
+            cuerpo = content[start_idx:].strip()
+            
+            if "rafael" not in remitente.lower():
+                return
+                
+            dest_lower = destinatario.lower()
+            if "gemini" in dest_lower or "antigravity" in dest_lower:
+                target_keys = ["antigravity"]
+            elif "open" in dest_lower:
+                target_keys = ["opencode"]
+            elif "asistentes" in dest_lower or "todos" in dest_lower or "all" in dest_lower:
+                target_keys = ["antigravity", "opencode"]
+            else:
+                log(f"[Bridge Local] Destinatario desconocido en cabecera: {destinatario}")
+                return
+        
+        if not target_keys or not cuerpo:
+            return
+            
+        log(f"[Bridge Local] Mensaje detectado para {target_keys}: '{cuerpo}'")
+        
+        global _bridge_activo
+        _bridge_activo = True
+        
+        # Procesar para cada target uno por uno
+        for target in target_keys:
+            prefijo = "anti" if target == "antigravity" else "open"
+            
+            _escribir_inbox(cuerpo)
+            activar_claude(target)
+            
+            respuesta = None
+            for _ in range(90):
+                time.sleep(2)
+                if OUTBOX_FILE.exists():
+                    try:
+                        import json
+                        data = json.loads(OUTBOX_FILE.read_text(encoding='utf-8'))
+                        respuesta = data.get('contenido', '').strip()
+                        OUTBOX_FILE.unlink()
+                    except Exception as e:
+                        log(f"  ✗ Error leyendo outbox: {e}")
+                    break
+                    
+            if respuesta:
+                # Eliminar prefijos redundantes
+                clean_resp = respuesta
+                for p in ["🤖 *Antigravity:*", "👨‍💻 *Open Code:*", "🤖 Antigravity:", "👨‍💻 Open Code:", "anti :", "open :", "anti:", "open:"]:
+                    if clean_resp.startswith(p):
+                        clean_resp = clean_resp[len(p):].strip()
+                
+                # Escribir respuesta
+                append_text = f"\n{prefijo} : {clean_resp}\n"
+                with open(BRIDGE_FILE, 'a', encoding='utf-8') as f:
+                    f.write(append_text)
+                
+                _last_bridge_mtime = BRIDGE_FILE.stat().st_mtime
+                _processed_bridge_msgs.add(append_text.strip())
+                log(f"[Bridge Local] Respuesta de {prefijo} escrita en bridge_chat.md")
+                
+        _bridge_activo = False
+        
+        # Sincronizar a AWS al terminar
+        try:
+            pem_file = r"C:\Users\RAFAEL OLIVARES\Documents\tuctuc-linux.pem"
+            server_path = "ubuntu@18.217.231.167:/home/ubuntu/tuctucv2/bridge_chat.md"
+            cmd = f'scp -o StrictHostKeyChecking=no -i "{pem_file}" "{BRIDGE_FILE}" {server_path}'
+            subprocess.run(cmd, shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+            log("[Bridge Local] Sincronizado bridge_chat.md con AWS.")
+        except Exception as e:
+            log(f"[Bridge Local] Error al sincronizar con AWS: {e}")
+            
+    except Exception as e:
+        log(f"[Bridge Local] Error procesando cambio: {e}")
+        _bridge_activo = False
+
 
 def main():
     global _last_hb, _last_db_check, _last_trigger, _last_sendkeys, _bd_ok, _conn
@@ -799,13 +1094,19 @@ def main():
                     continue
 
             # ── B) Outbox (respuesta de Claude lista en archivo) ─────────────
-            if not _relay_activo:
+            if not _relay_activo and not _bridge_activo:
                 check_outbox()
+
+            # ── D) Monitor local de bridge_chat.md ───────────────────────────
+            if not _relay_activo:
+                procesar_cambio_bridge()
 
             # ── B) Check canal='captura' (throttled) ──────────────────────────
             db_elapsed = (now - _last_db_check).total_seconds() if _last_db_check else 9999
             if db_elapsed >= DB_POLL_CADA and not _relay_activo:
                 _last_db_check = now
+                if _bd_ok:
+                    actualizar_estado_asistentes()
                 trigger_elapsed = (now - _last_trigger).total_seconds() if _last_trigger else 9999
                 if get_captura_pendiente() and trigger_elapsed > COOLDOWN_SEC:
                     log("Mensaje pendiente en captura — activando Claude...")
@@ -822,12 +1123,56 @@ def main():
                 log(f"📨 Conv {conv_id}: {n} msg(s) de usuario {creador_id}")
                 ctx = get_contexto_usuario(creador_id, conv_id, merlin_id)
                 if creador_id == RAFAEL_ID:
-                    log(f"  Rafael → relay captura...")
-                    respuesta = relay_via_captura(conv_id, merlin_id, creador_id, msgs)
-                else:
-                    prompt = construir_prompt(ctx, msgs)
-                    log(f"  Llamando Claude ({len(ctx['historial'])} msgs contexto)...")
-                    respuesta = llamar_claude(prompt)
+                    log(f"  Rafael → activando terminal...")
+                    texto_msg = _contenido_msg(msgs[0]) if len(msgs) == 1 else " ".join([_contenido_msg(m) for m in msgs])
+                    
+                    # Determinar destinatarios
+                    texto_lower = texto_msg.lower().strip()
+                    if texto_lower.startswith("@open") or texto_lower.startswith("[open]") or texto_lower.startswith("open -"):
+                        target_keys = ["opencode"]
+                    elif texto_lower.startswith("@anti") or texto_lower.startswith("[anti]") or texto_lower.startswith("anti -"):
+                        target_keys = ["antigravity"]
+                    elif texto_lower.startswith("todos -") or texto_lower.startswith("all -"):
+                        target_keys = ["antigravity", "opencode"]
+                    else:
+                        target_keys = ["antigravity", "opencode"]
+                        
+                    log(f"  [DB Msg] Ruteando mensaje a targets {target_keys}")
+                    
+                    respuestas = []
+                    for target in target_keys:
+                        _escribir_inbox(texto_msg)
+                        activar_claude(target)
+                        
+                        respuesta = None
+                        for _ in range(90):
+                            time.sleep(2)
+                            if OUTBOX_FILE.exists():
+                                try:
+                                    import json
+                                    data = json.loads(OUTBOX_FILE.read_text(encoding='utf-8'))
+                                    respuesta = data.get('contenido', '').strip()
+                                    OUTBOX_FILE.unlink()
+                                except Exception as e:
+                                    log(f"  ✗ Error leyendo outbox: {e}")
+                                break
+                        if respuesta:
+                            respuestas.append(respuesta)
+                            
+                    if respuestas:
+                        final_resp = "\n\n".join(respuestas)
+                        guardar_respuesta(conv_id, merlin_id, creador_id, final_resp)
+                        log("  ✅ Listo (procesado por desarrollador).")
+                    else:
+                        guardar_respuesta(conv_id, merlin_id, creador_id, "⚠️ El desarrollador no respondió a tiempo o las ventanas de los agentes no están activas.")
+                        log("  ✗ Timeout esperando respuesta de los agentes.")
+                    marcar_leidos(msg_ids)
+                    continue
+
+
+                prompt = construir_prompt(ctx, msgs)
+                log(f"  Llamando Claude ({len(ctx['historial'])} msgs contexto)...")
+                respuesta = llamar_claude(prompt)
                 marcar_leidos(msg_ids)
                 log(f"  💬 {respuesta[:80]}...")
                 guardar_respuesta(conv_id, merlin_id, creador_id, respuesta)

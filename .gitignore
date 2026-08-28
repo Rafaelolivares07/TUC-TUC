@@ -62,3 +62,11 @@ static/*.zip
 # Memoria interna de Claude Code (puede contener keys y contexto privado)
 .claude/projects/
 bridge_session_id.txt
+
+# Deploy state & watcher logs
+deploy_estado.json
+deploy_watcher.log
+
+# Scratch diagnostic files
+scratch/
+temp_*.py

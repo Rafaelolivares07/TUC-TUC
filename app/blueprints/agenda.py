@@ -17,15 +17,14 @@ for _candidate in ('/usr/bin/tesseract', r'C:\Program Files\Tesseract-OCR\tesser
         break
 
 
-def _escribir_bridge_chat(mensaje):
+def _escribir_bridge_chat(mensaje, prefix='todos'):
     """Escribe mensaje en bridge_chat.md para que el Telegram bridge lo reenvíe."""
     try:
         bridge_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
             'bridge_chat.md'
         )
-        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        bloque = f"\n### [{ts}] 👤 Rafael (Agenda) para ASISTENTES:\n{mensaje}\n\n"
+        bloque = f"\n{prefix} - {mensaje}\n"
         with open(bridge_path, 'a', encoding='utf-8') as f:
             f.write(bloque)
     except Exception:
@@ -100,6 +99,13 @@ def _asegurar_tabla():
             conn.commit()
         except Exception:
             conn.rollback()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS asistentes_estado (
+                nombre VARCHAR(50) PRIMARY KEY,
+                disponible BOOLEAN DEFAULT FALSE,
+                ultimo_heartbeat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         conn.commit()
 
 
@@ -112,6 +118,7 @@ def agenda():
             SELECT id, texto, completado, categoria, orden, fecha_limite, completado_en, enviado_a
             FROM agenda_items
             ORDER BY completado ASC,
+                     CASE WHEN completado = FALSE AND enviado_a IS NOT NULL AND enviado_a != '' THEN 0 ELSE 1 END ASC,
                      CASE WHEN completado = FALSE THEN
                          (CASE WHEN fecha_limite IS NOT NULL THEN 0 ELSE 1 END)
                      ELSE 2 END ASC,
@@ -134,14 +141,32 @@ def agenda():
                 'id': r[1], 'url': url,
                 'ocr_texto': r['ocr_texto'] or ''
             })
-    return render_template('agenda.html', items=items, imagenes=imagenes)
+            
+        # Obtener estados de asistentes
+        asistentes = {'antigravity': 'offline', 'opencode': 'offline'}
+        try:
+            cur_states = conn.execute("SELECT nombre, disponible, ultimo_heartbeat FROM asistentes_estado")
+            for row in cur_states.fetchall():
+                nombre = row['nombre']
+                disponible = row['disponible']
+                ultimo = row['ultimo_heartbeat']
+                online = False
+                if disponible and ultimo:
+                    diff = (datetime.now() - ultimo).total_seconds()
+                    if diff < 45:
+                        online = True
+                asistentes[nombre] = 'online' if online else 'offline'
+        except Exception:
+            pass
+
+    return render_template('agenda.html', items=items, imagenes=imagenes, asistentes=asistentes)
 
 
 @bp.route('/agenda/item', methods=['POST'])
 @admin_required
 def agregar_item():
     _asegurar_tabla()
-    data = request.get_json()
+    data = request.get_json() or {}
     texto = (data.get('texto') or '').strip()
     categoria = (data.get('categoria') or '').strip()
     fecha_limite = (data.get('fecha_limite') or '').strip() or None
@@ -442,6 +467,7 @@ def activar_item_agenda(item_id):
 def activar_multi_agenda():
     data = request.get_json() or {}
     ids = data.get('ids')
+    asistente = (data.get('asistente') or 'todos').strip().lower()
     if not ids or not isinstance(ids, list):
         return jsonify({'ok': False, 'error': 'Lista de IDs inválida'})
     
@@ -454,14 +480,28 @@ def activar_multi_agenda():
         rows = cur.fetchall()
         if not rows:
             return jsonify({'ok': False, 'error': 'Tareas no encontradas'})
-
+        
+        # Resolver etiquetas del asistente
+        if asistente == 'antigravity':
+            db_label = 'Antigravity'
+            prefix = 'anti'
+            db_content = f"@anti Activar tareas agrupadas:\n"
+        elif asistente == 'opencode':
+            db_label = 'Open Code'
+            prefix = 'open'
+            db_content = f"@open Activar tareas agrupadas:\n"
+        else:
+            db_label = 'ASISTENTES'
+            prefix = 'todos'
+            db_content = "Activar tareas agrupadas:\n"
+            
         # Build consolidated message
         lines = []
         for row in rows:
             lines.append(f"- [Requerimiento #{row['id']}] {row['texto']} ({row['categoria']})")
-
-        contenido = "Activar tareas agrupadas:\n" + "\n".join(lines)
-
+        
+        contenido = "\n".join(lines)
+        
         placeholders2 = ', '.join(['%s'] * len(ids))
         cur2 = conn.execute(
             f"SELECT item_id, id, url, ruta, ocr_texto FROM agenda_item_imagenes WHERE item_id IN ({placeholders2}) ORDER BY item_id, id",
@@ -475,19 +515,20 @@ def activar_multi_agenda():
                 contenido += f"\n- {r['item_id']}: {u}"
                 if r['ocr_texto']:
                     contenido += f"\n  [OCR: {r['ocr_texto'][:1500]}]"
-
+        
+        db_content += contenido
+        
         conn.execute(
             "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
-            (contenido,)
+            (db_content,)
         )
+        
         placeholders3 = ', '.join(['%s'] * len(ids))
         conn.execute(
-            f"UPDATE agenda_items SET enviado_a = 'ASISTENTES' WHERE id IN ({placeholders3})",
-            tuple(ids)
+            f"UPDATE agenda_items SET enviado_a = %s WHERE id IN ({placeholders3})",
+            (db_label,) + tuple(ids)
         )
         conn.commit()
-
-        _escribir_bridge_chat(contenido)
-
+        _escribir_bridge_chat(db_content, prefix)
+        
     return jsonify({'ok': True})
-

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi Menú — Accesos Rápidos</title>
+  <script src="/static/js/tailwind.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f3f4f6;
+    }
+  </style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+
+  <div class="max-w-4xl mx-auto">
+    <!-- Encabezado / Bienvenida -->
+    <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-150 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div>
+        <h1 class="text-2xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+          <span>⭐</span> Mi Menú Personalizado
+        </h1>
+        <p class="text-sm text-gray-500 mt-1">¡Hola, {{ nombre }}! Administra y accede a tus herramientas de trabajo diarias.</p>
+      </div>
+      
+      <div class="flex items-center gap-3">
+        <a href="{{ dashboard_url }}" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 no-underline">
+          <i class="bi bi-house-door-fill"></i> Inicio
+        </a>
+        <button onclick="toggleModoEdicion()" id="btn-modo-edicion" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5">
+          <i class="bi bi-pencil-fill"></i> Editar Menú
+        </button>
+      </div>
+    </div>
+
+    <!-- Controles Principales: Agregar Nuevo y Toggle de Comportamiento -->
+    <div id="controles-gestion" class="hidden grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      
+      <!-- Formulario para agregar -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-150 md:col-span-2">
+        <h2 class="text-sm font-bold text-gray-800 mb-3 flex items-center gap-1.5">
+          <span>➕</span> Agregar Acceso Directo
+        </h2>
+        
+        <form onsubmit="agregarAcceso(event)" class="space-y-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre / Descripción</label>
+              <input type="text" id="add-nombre" placeholder="Ej. Kardex de Entregas" required
+                     class="border border-gray-200 rounded-xl px-3 py-2 text-xs w-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Dirección URL</label>
+              <input type="text" id="add-url" placeholder="Pegue la URL completa..." required
+                     class="border border-gray-200 rounded-xl px-3 py-2 text-xs w-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+            </div>
+          </div>
+          
+          <div class="flex justify-between items-center pt-2">
+            <button type="button" onclick="pegarPortapapeles()" 
+                    class="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1">
+              📋 Pegar de Portapapeles
+            </button>
+            <button type="submit" 
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-sm">
+              💾 Guardar Acceso
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Configuración / Toggle global -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-150 flex flex-col justify-between">
+        <div>
+          <h2 class="text-sm font-bold text-gray-800 mb-2 flex items-center gap-1.5">
+            <span>⚙️</span> Comportamiento
+          </h2>
+          <p class="text-xs text-gray-400">Define cómo se abren los accesos directos al hacer clic en ellos.</p>
+        </div>
+        
+        <div class="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between">
+          <span class="text-xs font-semibold text-gray-600">Abrir en pestaña nueva</span>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="toggle-pestana" onchange="guardarPreferenciaPestana()" class="sr-only peer">
+            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+          </label>
+        </div>
+      </div>
+      
+    </div>
+
+    <!-- Grilla de Accesos Directos -->
+    <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-150">
+      <h2 class="text-sm font-bold text-gray-800 mb-4 flex items-center gap-1.5">
+        <span>🚀</span> Mis Enlaces Guardados
+      </h2>
+      
+      <div id="accesos-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Dinámico -->
+      </div>
+      
+      <!-- Estado vacío -->
+      <div id="sin-accesos" class="hidden text-center py-12 text-gray-400">
+        <i class="bi bi-bookmark-plus text-4xl block mb-2 opacity-40"></i>
+        <p class="text-xs font-semibold">No tienes accesos directos guardados todavía.</p>
+        <p class="text-[10px] opacity-75 mt-0.5">Usa el formulario de arriba para añadir tus enlaces favoritos.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification simple -->
+  <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg transition-opacity duration-300 opacity-0 pointer-events-none z-[999999]"></div>
+
+  <script>
+    let accesos = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      cargarPreferenciaPestana();
+      obtenerAccesos();
+    });
+
+    // Carga la preferencia desde localStorage
+    function cargarPreferenciaPestana() {
+      const pref = localStorage.getItem('menu_open_new_tab');
+      document.getElementById('toggle-pestana').checked = (pref === 'true');
+    }
+
+    // Guarda la preferencia en localStorage
+    function guardarPreferenciaPestana() {
+      const checked = document.getElementById('toggle-pestana').checked;
+      localStorage.setItem('menu_open_new_tab', checked);
+      showToast(checked ? 'Enlaces se abrirán en pestaña nueva' : 'Enlaces se abrirán en la misma pestaña');
+      renderAccesos(); // Volver a generar URLs con origin=menu si aplica
+    }
+
+    // Carga los accesos desde la API
+    async function obtenerAccesos() {
+      const container = document.getElementById('accesos-container');
+      const emptyState = document.getElementById('sin-accesos');
+      try {
+        const r = await fetch('/api/mi-menu/items');
+        const d = await r.json();
+        if (d.ok) {
+          accesos = d.items || [];
+          renderAccesos();
+        } else {
+          showToast(d.error || 'Error al obtener accesos', false);
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Error de red al conectar con el servidor', false);
+      }
+    }
+
+    let modoEdicionActivo = false;
+
+    function toggleModoEdicion() {
+      modoEdicionActivo = !modoEdicionActivo;
+      const controles = document.getElementById('controles-gestion');
+      const btn = document.getElementById('btn-modo-edicion');
+      
+      if (modoEdicionActivo) {
+        controles.classList.remove('hidden');
+        btn.innerHTML = `<i class="bi bi-check-lg"></i> Listo`;
+        btn.className = "text-xs bg-green-600 hover:bg-green-700 text-white font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5";
+      } else {
+        controles.classList.add('hidden');
+        btn.innerHTML = `<i class="bi bi-pencil-fill"></i> Editar Menú`;
+        btn.className = "text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5";
+      }
+      renderAccesos();
+    }
+
+    // Renderiza la lista
+    function renderAccesos() {
+      const container = document.getElementById('accesos-container');
+      const emptyState = document.getElementById('sin-accesos');
+      container.innerHTML = '';
+      
+      if (accesos.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      emptyState.classList.add('hidden');
+
+      const openInNewTab = document.getElementById('toggle-pestana').checked;
+
+      accesos.forEach((item) => {
+        // Formatear url
+        let targetUrl = item.url;
+        if (!openInNewTab) {
+          // Agregar origin=menu
+          const urlObj = parseUrl(targetUrl);
+          if (urlObj) {
+            urlObj.searchParams.set('origin', 'menu');
+            targetUrl = urlObj.toString();
+          } else {
+            // Fallback simple por si no es URL completa
+            if (targetUrl.includes('?')) {
+              targetUrl += '&origin=menu';
+            } else {
+              targetUrl += '?origin=menu';
+            }
+          }
+        }
+
+        // Sugerir un emoji según el nombre del acceso
+        let emoji = '🔗';
+        const nomLower = item.nombre.toLowerCase();
+        if (nomLower.includes('kardex') || nomLower.includes('inventario') || nomLower.includes('stock')) emoji = '📦';
+        else if (nomLower.includes('gasto') || nomLower.includes('pago') || nomLower.includes('egreso') || nomLower.includes('compra')) emoji = '💵';
+        else if (nomLower.includes('venta') || nomLower.includes('ingreso') || nomLower.includes('caja') || nomLower.includes('factura')) emoji = '📈';
+        else if (nomLower.includes('puc') || nomLower.includes('cuenta') || nomLower.includes('contabil')) emoji = '📒';
+        else if (nomLower.includes('config') || nomLower.includes('ajuste') || nomLower.includes('parametro')) emoji = '⚙️';
+        else if (nomLower.includes('mesa') || nomLower.includes('restaurante') || nomLower.includes('carta')) emoji = '🍽️';
+
+        const div = document.createElement('div');
+        div.id = `item-box-${item.id}`;
+
+        if (!modoEdicionActivo) {
+          // MODO LANZAMIENTO (Normal): Tarjetas grandes, limpias y clickables
+          div.className = 'bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 rounded-2xl p-4 transition duration-200 ease-in-out transform hover:scale-[1.01] shadow-sm flex items-center gap-3.5 cursor-pointer';
+          div.onclick = () => {
+            if (openInNewTab) {
+              window.open(targetUrl, '_blank');
+            } else {
+              window.location.href = targetUrl;
+            }
+          };
+          div.innerHTML = `
+            <span class="text-2xl">${emoji}</span>
+            <div class="truncate">
+              <div class="font-bold text-gray-900 text-xs sm:text-sm tracking-tight truncate">${item.nombre}</div>
+              <div class="text-[9px] text-gray-400 font-mono truncate mt-0.5">${item.url}</div>
+            </div>
+          `;
+        } else {
+          // MODO EDICION: Tarjetas editables
+          div.className = 'border border-dashed border-gray-300 rounded-2xl p-4 bg-gray-50/50 shadow-sm';
+          div.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 truncate">
+                <span class="text-lg">${emoji}</span>
+                <span class="font-bold text-gray-800 text-xs truncate">${item.nombre}</span>
+              </div>
+              <button onclick="toggleEditar(${item.id})" class="bg-white hover:bg-gray-100 border border-gray-200 text-gray-500 hover:text-gray-700 px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1">
+                ✏️ Editar
+              </button>
+            </div>
+            
+            <div id="edit-box-${item.id}" class="hidden mt-3 pt-3 border-t border-gray-200 space-y-2">
+              <div>
+                <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Editar Nombre</label>
+                <input type="text" id="edit-nombre-${item.id}" value="${item.nombre}" 
+                       class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs w-full bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
+              </div>
+              <div>
+                <label class="block text-[9px] font-bold text-gray-400 uppercase mb-0.5">Editar Dirección URL</label>
+                <input type="text" id="edit-url-${item.id}" value="${item.url}" 
+                       class="border border-gray-200 rounded-lg px-2 py-1.5 text-xs w-full bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500">
+              </div>
+              <div class="flex items-center justify-between pt-1">
+                <button onclick="eliminarAcceso(${item.id})" 
+                        class="bg-red-50 hover:bg-red-100 text-red-600 font-bold px-2.5 py-1.5 rounded-lg text-[10px] transition">
+                  🗑️ Eliminar
+                </button>
+                <div class="flex gap-1.5">
+                  <button onclick="toggleEditar(${item.id})" 
+                          class="bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold px-2.5 py-1.5 rounded-lg text-[10px] transition">
+                    Cancelar
+                  </button>
+                  <button onclick="guardarEdicion(${item.id})" 
+                          class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2.5 py-1.5 rounded-lg text-[10px] transition">
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        container.appendChild(div);
+      });
+    }
+
+    // Helper para parsear URL
+    function parseUrl(str) {
+      try {
+        // Si no tiene protocolo, asumir absoluto del host actual
+        if (!str.startsWith('http://') && !str.startsWith('https://')) {
+          return new URL(str, window.location.origin);
+        }
+        return new URL(str);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Toggle de edición
+    function toggleEditar(id) {
+      const box = document.getElementById(`edit-box-${id}`);
+      if (box.classList.contains('hidden')) {
+        // Cerrar otros
+        document.querySelectorAll('[id^="edit-box-"]').forEach(el => el.classList.add('hidden'));
+        box.classList.remove('hidden');
+      } else {
+        box.classList.add('hidden');
+      }
+    }
+
+    // Guardar nuevo acceso
+    async function agregarAcceso(e) {
+      e.preventDefault();
+      const nombreInput = document.getElementById('add-nombre');
+      const urlInput = document.getElementById('add-url');
+      const nombre = nombreInput.value.trim();
+      const url = urlInput.value.trim();
+
+      if (!nombre || !url) return;
+
+      try {
+        const r = await fetch('/api/mi-menu/item', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ nombre, url })
+        });
+        const d = await r.json();
+        if (d.ok) {
+          showToast('Acceso directo guardado con éxito');
+          nombreInput.value = '';
+          urlInput.value = '';
+          await obtenerAccesos();
+        } else {
+          showToast(d.error || 'Error al guardar', false);
+        }
+      } catch(err) {
+        console.error(err);
+        showToast('Error de conexión', false);
+      }
+    }
+
+    // Guardar edición
+    async function guardarEdicion(id) {
+      const nombre = document.getElementById(`edit-nombre-${id}`).value.trim();
+      const url = document.getElementById(`edit-url-${id}`).value.trim();
+
+      if (!nombre || !url) {
+        showToast('El nombre y la URL no pueden estar vacíos', false);
+        return;
+      }
+
+      try {
+        const r = await fetch('/api/mi-menu/item', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ id, nombre, url })
+        });
+        const d = await r.json();
+        if (d.ok) {
+          showToast('Cambios guardados con éxito');
+          await obtenerAccesos();
+        } else {
+          showToast(d.error || 'Error al guardar', false);
+        }
+      } catch(err) {
+        console.error(err);
+        showToast('Error de conexión', false);
+      }
+    }
+
+    // Eliminar acceso
+    async function eliminarAcceso(id) {
+      if (!confirm('¿Está seguro de eliminar este acceso directo por completo?')) return;
+
+      try {
+        const r = await fetch(`/api/mi-menu/item/${id}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (d.ok) {
+          showToast('Acceso eliminado');
+          await obtenerAccesos();
+        } else {
+          showToast(d.error || 'Error al eliminar', false);
+        }
+      } catch(err) {
+        console.error(err);
+        showToast('Error de conexión', false);
+      }
+    }
+
+    // Pegar del portapapeles
+    async function pegarPortapapeles() {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          document.getElementById('add-url').value = text;
+          showToast('Dirección pegada del portapapeles');
+        }
+      } catch (err) {
+        showToast('No se pudo acceder al portapapeles. Péguelo manualmente.', false);
+      }
+    }
+
+    // Toast Notification helper
+    function showToast(msg, success = true) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = `fixed bottom-6 left-1/2 transform -translate-x-1/2 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg transition-opacity duration-300 pointer-events-none z-[999999] ${success ? 'bg-indigo-600' : 'bg-red-600'}`;
+      toast.classList.remove('opacity-0');
+      toast.classList.add('opacity-100');
+      
+      setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+      }, 2500);
+    }
+  </script>
+</body>
+</html>

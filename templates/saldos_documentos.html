@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saldos x Documento — {{ negocio_nombre }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="/static/js/tailwind.js"></script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #f8fafc; }
+  .toast {
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    padding:12px 24px; border-radius:8px; color:#fff; font-weight:600;
+    z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none;
+  }
+  .toast.show { opacity:1; }
+  .toast-ok  { background:#059669; }
+  .toast-err { background:#dc2626; }
+</style>
+</head>
+<body class="p-4 sm:p-6 min-h-screen text-gray-800">
+<div id="toast" class="toast"></div>
+
+<div class="max-w-7xl mx-auto">
+  <!-- Header / Navigation -->
+  <div class="bg-white rounded-2xl shadow-sm p-4 mb-6 border border-gray-100 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="/admin/contabilidad/{{ negocio_id }}" class="text-gray-400 hover:text-gray-700 transition" title="Volver a Contabilidad">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+        </svg>
+      </a>
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">Saldos por Documento</h1>
+        <p class="text-xs text-gray-500">{{ negocio_nombre }}</p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
+        <span class="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+        Consistencia Activa
+      </span>
+    </div>
+  </div>
+
+  <!-- KPI summary cards -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="bg-white rounded-2xl shadow-sm p-5 border border-gray-100 flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Cuentas por Cobrar (Clientes)</p>
+        <h3 class="text-2xl font-extrabold text-gray-900 mt-1" id="kpi-cobrar">$0.00</h3>
+      </div>
+      <div class="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+        </svg>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm p-5 border border-gray-100 flex items-center justify-between">
+      <div>
+        <p class="text-xs font-medium text-gray-400 uppercase tracking-wider">Cuentas por Pagar (Proveedores)</p>
+        <h3 class="text-2xl font-extrabold text-gray-900 mt-1" id="kpi-pagar">$0.00</h3>
+      </div>
+      <div class="p-3 bg-rose-50 rounded-xl text-rose-600">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter & Actions Bar -->
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6">
+    <div class="flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div class="flex flex-1 w-full gap-3">
+        <div class="relative flex-1">
+          <input type="text" id="search-input" placeholder="Filtrar por Tercero, Documento o Cuenta..." 
+                 class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                 oninput="filtrarTabla()">
+          <span class="absolute left-3.5 top-2.5 text-gray-400">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+      
+      <div class="flex flex-wrap gap-2 w-full md:w-auto justify-end">
+        <button id="btn-cobrar" disabled onclick="abrirModalProcesar('cobro')"
+                class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2">
+          💵 Cobrar Seleccionados
+        </button>
+        <button id="btn-pagar" disabled onclick="abrirModalProcesar('pago')"
+                class="px-4 py-2 bg-rose-600 text-white rounded-xl text-sm font-semibold shadow-sm hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2">
+          💸 Pagar Seleccionados
+        </button>
+        <button id="btn-saldar" disabled onclick="saldarSeleccionados()"
+                class="px-4 py-2 bg-gray-600 text-white rounded-xl text-sm font-semibold shadow-sm hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                title="Ajusta o castiga saldos de forma auditable">
+          ⚙️ Ajustar a Cero (Saldar)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Collapsible group-by-tercero container -->
+  <div id="saldos-accordion-container" class="space-y-4 mb-6">
+    <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-gray-400 border border-gray-100">
+      Cargando saldos...
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Confirmación de Transacción (Cobros / Pagos) -->
+<div id="trans-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]">
+    <!-- Header -->
+    <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+      <h3 id="modal-title" class="font-extrabold text-gray-900 text-lg">Procesar Transacción</h3>
+      <button onclick="cerrarModal()" class="text-gray-400 hover:text-gray-700 transition">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    
+    <!-- Content -->
+    <div class="p-6 overflow-y-auto space-y-4">
+      <!-- Document Consecutive Alert -->
+      <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-blue-800">
+        <p class="text-xs font-semibold uppercase tracking-wider text-blue-500">Documento a generar</p>
+        <h4 id="modal-document-consecutive" class="text-lg font-bold mt-0.5">Cargando consecutivo...</h4>
+      </div>
+      
+      <!-- Third party name -->
+      <div>
+        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Tercero / Beneficiario</label>
+        <p id="modal-tercero-nombre" class="font-bold text-gray-800 text-sm">--</p>
+      </div>
+      
+      <!-- Payment Method Selector -->
+      <div>
+        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Método de Recaudo/Pago</label>
+        <select id="modal-metodo-pago" class="w-full border border-gray-250 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
+          <option value="">Cargando métodos...</option>
+        </select>
+      </div>
+      
+      <!-- Summary table of selected docs & abonos -->
+      <div>
+        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Detalle de abonos y saldos</label>
+        <div class="border border-gray-150 rounded-xl overflow-hidden text-xs">
+          <table class="w-full text-left">
+            <thead class="bg-gray-50 text-gray-500 font-semibold border-b border-gray-150">
+              <tr>
+                <th class="px-3 py-2">Documento</th>
+                <th class="px-3 py-2 text-right">Abono</th>
+              </tr>
+            </thead>
+            <tbody id="modal-abonos-tbody" class="divide-y divide-gray-100 bg-white">
+              <!-- Filled dynamically -->
+            </tbody>
+            <tfoot class="bg-gray-50/50 font-bold border-t border-gray-150 text-gray-850">
+              <tr>
+                <td class="px-3 py-2 text-right">Total Transacción:</td>
+                <td id="modal-total-monto" class="px-3 py-2 text-right text-sm">--</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="p-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50/50">
+      <button onclick="cerrarModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-350 text-gray-700 font-bold text-xs rounded-xl transition">
+        Cancelar
+      </button>
+      <button id="btn-modal-confirmar" onclick="confirmarTransaccion()" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition">
+        Procesar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const NEGOCIO_ID = {{ negocio_id }};
+let saldosOriginales = [];
+let detallesCargados = {}; 
+let transaccionGlobal = null; // Holds the prepared payload
+
+function toast(msg, ok=true) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (ok ? 'toast-ok' : 'toast-err');
+  setTimeout(() => el.className = 'toast', 2500);
+}
+
+function fmtMon(v) {
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 2 }).format(v);
+}
+
+// Load balances on page ready
+async function cargarSaldos() {
+  try {
+    const res = await fetch(`/api/saldos/${NEGOCIO_ID}/reporte`);
+    const data = await res.json();
+    if (data.ok) {
+      saldosOriginales = data.saldos;
+      renderizarTabla(saldosOriginales);
+      calcularKPIs(saldosOriginales);
+    } else {
+      toast(data.error || 'Error al cargar saldos', false);
+    }
+  } catch (err) {
+    toast('Error de conexión', false);
+  }
+}
+
+function renderizarTabla(lista) {
+  const container = document.getElementById('saldos-accordion-container');
+  if (lista.length === 0) {
+    container.innerHTML = `
+      <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-gray-400 border border-gray-100">
+        No hay saldos pendientes registrados.
+      </div>`;
+    return;
+  }
+  
+  // Group by Tercero
+  const grupos = {};
+  lista.forEach(s => {
+    if (!grupos[s.tercero_id]) {
+      grupos[s.tercero_id] = {
+        id: s.tercero_id,
+        nombre: s.tercero_nombre,
+        saldos: [],
+        totalCobrar: 0,
+        totalPagar: 0
+      };
+    }
+    grupos[s.tercero_id].saldos.push(s);
+    if (s.cuenta_naturaleza === 'debito') {
+      grupos[s.tercero_id].totalCobrar += parseFloat(s.saldo);
+    } else {
+      grupos[s.tercero_id].totalPagar += parseFloat(s.saldo);
+    }
+  });
+
+  container.innerHTML = Object.values(grupos).map(g => {
+    const totalDocs = g.saldos.length;
+    return `
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200/60 overflow-hidden transition-all duration-300">
+        <!-- Accordion Header -->
+        <div onclick="toggleTercero(${g.id})" 
+             class="p-4 bg-gray-50/50 hover:bg-gray-50 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 transition-colors">
+          <div class="flex items-center gap-3">
+            <svg id="arrow-t-${g.id}" class="w-5 h-5 text-gray-400 transform transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+            <div>
+              <span class="font-bold text-gray-800 text-base">${g.nombre}</span>
+              <span class="text-xs text-gray-400 ml-2">(${totalDocs} documento${totalDocs > 1 ? 's' : ''})</span>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-2 self-end sm:self-auto">
+            ${g.totalCobrar > 0 ? `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">Por Cobrar: ${fmtMon(g.totalCobrar)}</span>` : ''}
+            ${g.totalPagar > 0 ? `<span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-100">Por Pagar: ${fmtMon(g.totalPagar)}</span>` : ''}
+          </div>
+        </div>
+        
+        <!-- Accordion Body -->
+        <div id="docs-t-${g.id}" class="hidden border-t border-gray-100">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left border-collapse">
+              <thead class="bg-gray-50/50 text-gray-400 text-[11px] uppercase border-b border-gray-100 font-semibold">
+                <tr>
+                  <th class="p-3 text-center w-12">
+                    <input type="checkbox" class="tercero-master-check w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500" 
+                           onchange="seleccionarGrupoTercero(${g.id}, this)">
+                  </th>
+                  <th class="px-4 py-3">Documento</th>
+                  <th class="px-4 py-3">Cuenta Contable</th>
+                  <th class="px-4 py-3 text-right">Monto Original</th>
+                  <th class="px-4 py-3 text-right">Saldo Pendiente</th>
+                  <th class="px-4 py-3 text-right w-32">Monto Abono</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100/70">
+                ${g.saldos.map(s => {
+                  const esDebito = (s.cuenta_naturaleza === 'debito');
+                  return `
+                    <!-- Main Doc Row -->
+                    <tr class="hover:bg-gray-50/30 transition-colors">
+                      <td class="p-3 text-center">
+                        <input type="checkbox" class="saldo-check saldo-check-t-${g.id} w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500" 
+                               data-id="${s.id}" data-naturaleza="${s.cuenta_naturaleza}" data-tercero-id="${g.id}" data-tercero-nombre="${g.nombre}" onchange="actualizarBotonesAccion()">
+                      </td>
+                      <td class="px-4 py-3">
+                        <div class="flex items-center gap-2">
+                          <button onclick="toggleDocDetalles(${s.id}, ${s.tipo_documento_id}, '${s.numero_documento}', '${s.cuenta_naturaleza}')" 
+                                  class="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600 transition duration-200" 
+                                  title="Ver ítems del documento">
+                            <svg id="arrow-doc-${s.id}" class="w-4 h-4 transform transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                          </button>
+                          <div class="leading-tight">
+                            <a href="/admin/mantenimiento/{{ negocio_id }}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(s.tipo_documento_id)}&documento_numero=${encodeURIComponent(s.numero_documento)}&scroll=bottom"
+                               target="_blank"
+                               class="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-[13px] inline-flex items-center gap-1"
+                               title="Ver auditoría técnica en pestaña nueva">
+                              ${s.numero_documento}
+                              <svg class="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                              </svg>
+                            </a>
+                            <span class="text-[10px] text-gray-400 block">${s.tipo_documento_nombre}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-4 py-3 text-xs leading-tight">
+                        <span class="font-mono text-gray-600 block">${s.cuenta_codigo}</span>
+                        <span class="text-gray-400 text-[10px]">${s.cuenta_nombre}</span>
+                      </td>
+                      <td class="px-4 py-3 text-right font-mono text-[13px] text-gray-500">
+                        ${fmtMon(s.monto_original)}
+                      </td>
+                      <td class="px-4 py-3 text-right font-mono font-semibold text-[13px] ${esDebito ? 'text-emerald-700 bg-emerald-50/10' : 'text-rose-700 bg-rose-50/10'}">
+                        ${fmtMon(s.saldo)}
+                      </td>
+                      <td class="px-3 py-2 text-right">
+                        <input type="number" step="0.01" max="${s.saldo}" placeholder="${s.saldo}" 
+                               id="abono-${s.id}"
+                               class="border border-gray-200 rounded-lg px-2.5 py-1 text-xs w-28 text-right bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                      </td>
+                    </tr>
+                    
+                    <!-- Collapsible Document Details Row -->
+                    <tr id="details-row-${s.id}" class="hidden bg-slate-50/50">
+                      <td colspan="6" class="p-4 pl-12 border-b border-gray-100">
+                        <div id="details-container-${s.id}" class="text-xs text-gray-500">
+                          <span class="inline-flex items-center gap-1.5 text-gray-400">
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
+                            Consultando registros de soporte...
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function calcularKPIs(lista) {
+  let totalCobrar = 0;
+  let totalPagar = 0;
+  
+  lista.forEach(s => {
+    if (s.cuenta_naturaleza === 'debito') {
+      totalCobrar += parseFloat(s.saldo);
+    } else {
+      totalPagar += parseFloat(s.saldo);
+    }
+  });
+  
+  document.getElementById('kpi-cobrar').textContent = fmtMon(totalCobrar);
+  document.getElementById('kpi-pagar').textContent = fmtMon(totalPagar);
+}
+
+function toggleTercero(tid) {
+  const panel = document.getElementById(`docs-t-${tid}`);
+  const arrow = document.getElementById(`arrow-t-${tid}`);
+  if (panel.classList.contains('hidden')) {
+    panel.classList.remove('hidden');
+    arrow.classList.add('rotate-90');
+  } else {
+    panel.classList.add('hidden');
+    arrow.classList.remove('rotate-90');
+  }
+}
+
+function seleccionarGrupoTercero(tid, masterChk) {
+  document.querySelectorAll(`.saldo-check-t-${tid}`).forEach(el => {
+    el.checked = masterChk.checked;
+  });
+  actualizarBotonesAccion();
+}
+
+async function toggleDocDetalles(sid, tipoDocId, numeroDoc, cuentaNaturaleza) {
+  const row = document.getElementById(`details-row-${sid}`);
+  const arrow = document.getElementById(`arrow-doc-${sid}`);
+  const container = document.getElementById(`details-container-${sid}`);
+  
+  if (row.classList.contains('hidden')) {
+    row.classList.remove('hidden');
+    arrow.classList.add('rotate-180');
+    
+    // Load details if not cached
+    if (!detallesCargados[sid]) {
+      try {
+        const res = await fetch(`/api/saldos/${NEGOCIO_ID}/documento-detalle?tipo_documento_id=${tipoDocId}&numero_documento=${encodeURIComponent(numeroDoc)}&cuenta_naturaleza=${cuentaNaturaleza}`);
+        const data = await res.json();
+        
+        if (data.ok && data.items && data.items.length > 0) {
+          detallesCargados[sid] = data.items;
+          renderizarDetallesItems(sid, data.items, cuentaNaturaleza);
+        } else {
+          container.innerHTML = `
+            <div class="flex items-center gap-1.5 text-gray-400 py-1 font-medium">
+              ⚠️ No se encontraron productos o movimientos de inventario vinculados a esta transacción.
+            </div>`;
+        }
+      } catch (err) {
+        container.innerHTML = `<span class="text-red-500 font-medium">Error al cargar detalles de transacción.</span>`;
+      }
+    }
+  } else {
+    row.classList.add('hidden');
+    arrow.classList.remove('rotate-180');
+  }
+}
+
+function renderizarDetallesItems(sid, items, naturaleza) {
+  const container = document.getElementById(`details-container-${sid}`);
+  const headerTitle = (naturaleza === 'debito') ? 'Ítems vendidos (Detalle del Pedido)' : 'Movimientos de Stock entrantes / Soporte';
+  
+  let tableHtml = `
+    <div class="max-w-3xl bg-white border border-gray-200 rounded-xl overflow-hidden shadow-xs my-2">
+      <div class="px-3.5 py-2 bg-gray-100/80 text-[11px] font-bold text-gray-700 border-b border-gray-200">
+        ${headerTitle}
+      </div>
+      <table class="w-full text-xs text-left border-collapse">
+        <thead class="bg-gray-50/50 text-gray-400 font-bold border-b border-gray-150 uppercase tracking-wide">
+          <tr>
+            <th class="px-3 py-2">Producto / Insumo</th>
+            <th class="px-3 py-2 text-right">Cantidad</th>
+            <th class="px-3 py-2 text-right">Valor Unitario</th>
+            <th class="px-3 py-2 text-right">Valor Total</th>
+            ${items[0].motivo ? '<th class="px-3 py-2 text-center">Tipo</th>' : ''}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${items.map(item => `
+            <tr class="hover:bg-slate-50/40">
+              <td class="px-3 py-2 font-medium text-gray-750">${item.nombre_producto}</td>
+              <td class="px-3 py-2 text-right text-gray-600">${item.cantidad.toLocaleString('es-CO')}</td>
+              <td class="px-3 py-2 text-right text-gray-550">${fmtMon(item.valor_unitario || item.precio_unitario || 0)}</td>
+              <td class="px-3 py-2 text-right font-semibold text-gray-750">${fmtMon(item.valor_total || (item.cantidad * (item.valor_unitario || item.precio_unitario || 0)))}</td>
+              ${item.motivo ? `<td class="px-3 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-[10px] uppercase font-bold ${item.motivo === 'entrada' ? 'bg-emerald-55 text-emerald-800' : 'bg-gray-100 text-gray-600'}">${item.motivo}</span></td>` : ''}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  container.innerHTML = tableHtml;
+}
+
+function filtrarTabla() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  if (!q) {
+    renderizarTabla(saldosOriginales);
+    return;
+  }
+  const filtrados = saldosOriginales.filter(s => 
+    s.tercero_nombre.toLowerCase().includes(q) || 
+    s.numero_documento.toLowerCase().includes(q) ||
+    s.cuenta_codigo.toLowerCase().includes(q) ||
+    s.cuenta_nombre.toLowerCase().includes(q)
+  );
+  renderizarTabla(filtrados);
+}
+
+function actualizarBotonesAccion() {
+  const checks = document.querySelectorAll('.saldo-check:checked');
+  const btnCobrar = document.getElementById('btn-cobrar');
+  const btnPagar = document.getElementById('btn-pagar');
+  const btnSaldar = document.getElementById('btn-saldar');
+  
+  if (checks.length === 0) {
+    btnCobrar.disabled = true;
+    btnPagar.disabled = true;
+    btnSaldar.disabled = true;
+    return;
+  }
+  
+  // Enforce same third party and nature rule
+  let targetTerceroId = null;
+  let targetNaturaleza = null;
+  let mixError = false;
+  
+  checks.forEach(el => {
+    const tId = el.dataset.terceroId;
+    const nat = el.dataset.naturaleza;
+    
+    if (targetTerceroId === null) {
+      targetTerceroId = tId;
+      targetNaturaleza = nat;
+    } else {
+      if (tId !== targetTerceroId || nat !== targetNaturaleza) {
+        mixError = true;
+      }
+    }
+  });
+  
+  if (mixError) {
+    btnCobrar.disabled = true;
+    btnPagar.disabled = true;
+    btnSaldar.disabled = true;
+    toast('No puedes mezclar saldos de diferentes terceros o tipos (cobros/pagos) a la vez.', false);
+    return;
+  }
+  
+  btnCobrar.disabled = (targetNaturaleza !== 'debito');
+  btnPagar.disabled = (targetNaturaleza !== 'credito');
+  btnSaldar.disabled = false;
+}
+
+async function abrirModalProcesar(tipo) {
+  const checks = document.querySelectorAll('.saldo-check:checked');
+  if (checks.length === 0) return;
+  
+  let totalMonto = 0;
+  const abonosList = [];
+  let terceroId = null;
+  let terceroNombre = "";
+  
+  // Enforce checks validation
+  for (const el of checks) {
+    const id = el.dataset.id;
+    terceroId = el.dataset.terceroId;
+    terceroNombre = el.dataset.terceroNombre;
+    
+    const inputAbono = document.getElementById(`abono-${id}`);
+    let abonoVal = parseFloat(inputAbono.value);
+    
+    if (isNaN(abonoVal) || abonoVal <= 0) {
+      // Fallback to placeholder (which is the full current s.saldo)
+      abonoVal = parseFloat(inputAbono.placeholder);
+    }
+    
+    totalMonto += abonoVal;
+    
+    // Retrieve doc labels from link inside row
+    const row = el.closest('tr');
+    const docLabel = row.querySelector('a').textContent.trim();
+    
+    abonosList.push({
+      id: parseInt(id),
+      monto: abonoVal,
+      label: docLabel
+    });
+  }
+  
+  // Populate UI loaders in Modal
+  document.getElementById('modal-title').textContent = (tipo === 'cobro') ? 'Registrar Recaudo / Cobro' : 'Registrar Pago / Egreso';
+  document.getElementById('modal-document-consecutive').textContent = 'Cargando consecutivo...';
+  document.getElementById('modal-tercero-nombre').textContent = terceroNombre;
+  document.getElementById('modal-total-monto').textContent = fmtMon(totalMonto);
+  
+  const selectFin = document.getElementById('modal-metodo-pago');
+  selectFin.innerHTML = '<option value="">Cargando métodos...</option>';
+  
+  const tbody = document.getElementById('modal-abonos-tbody');
+  tbody.innerHTML = abonosList.map(a => `
+    <tr>
+      <td class="px-3 py-2 text-gray-700">${a.label}</td>
+      <td class="px-3 py-2 text-right font-mono text-gray-900">${fmtMon(a.monto)}</td>
+    </tr>
+  `).join('');
+  
+  // Fetch details and accounts from Backend
+  try {
+    const res = await fetch(`/api/saldos/${NEGOCIO_ID}/preparar?tipo=${tipo}`);
+    const data = await res.json();
+    
+    if (data.ok) {
+      // Set consecutivo string
+      const doc = data.documento;
+      if (doc) {
+        document.getElementById('modal-document-consecutive').textContent = `${doc.nombre} No. ${doc.siguiente_numero}`;
+      } else {
+        document.getElementById('modal-document-consecutive').textContent = `ERROR: No hay tipo de documento de ${tipo} activo.`;
+      }
+      
+      // Populate payment methods list
+      selectFin.innerHTML = '<option value="">Selecciona método...</option>';
+      (data.metodos || []).forEach(m => {
+        const acctLabel = m.cuenta_codigo ? `(${m.cuenta_codigo} — ${m.cuenta_nombre})` : '(⚠️ SIN CONFIGURAR EN CONTABILIDAD)';
+        selectFin.innerHTML += `<option value="${m.codigo}" ${!m.cuenta_id ? 'disabled' : ''}>${m.nombre} ${acctLabel}</option>`;
+      });
+      
+      // Select first configured method by default if available
+      const firstEnabled = (data.metodos || []).find(m => m.cuenta_id);
+      if (firstEnabled) {
+        selectFin.value = firstEnabled.codigo;
+      }
+      
+      // Save state to global
+      transaccionGlobal = {
+        tercero_id: parseInt(terceroId),
+        metodo_pago: null, // set on submit
+        tipo_movimiento: tipo,
+        tipo_documento_id: doc ? doc.id : null,
+        abonos: abonosList.map(a => ({ id: a.id, monto: a.monto }))
+      };
+      
+      // Open Modal
+      document.getElementById('trans-modal').classList.remove('hidden');
+    } else {
+      toast(data.error || 'Error al preparar la transacción', false);
+    }
+  } catch (err) {
+    toast('Error de conexión', false);
+  }
+}
+
+function cerrarModal() {
+  document.getElementById('trans-modal').classList.add('hidden');
+  transaccionGlobal = null;
+}
+
+async function confirmarTransaccion() {
+  if (!transaccionGlobal || !transaccionGlobal.tipo_documento_id) {
+    toast('Falta información del tipo de documento', false);
+    return;
+  }
+  
+  const metCod = document.getElementById('modal-metodo-pago').value;
+  if (!metCod) {
+    alert('Por favor selecciona un método de pago.');
+    return;
+  }
+  
+  transaccionGlobal.metodo_pago = metCod;
+  
+  const btn = document.getElementById('btn-modal-confirmar');
+  btn.disabled = true;
+  btn.textContent = 'Procesando...';
+  
+  try {
+    const res = await fetch(`/api/saldos/${NEGOCIO_ID}/procesar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(transaccionGlobal)
+    });
+    const data = await res.json();
+    
+    if (data.ok) {
+      toast(data.mensaje || 'Transacción procesada con éxito');
+      cerrarModal();
+      cargarSaldos();
+      if (data.tipo_documento && data.numero_documento) {
+        window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${data.tipo_documento}/${data.numero_documento}/pdf`, '_blank');
+      }
+    } else {
+      toast(data.error || 'Error al procesar la transacción', false);
+    }
+  } catch (err) {
+    toast('Error de conexión', false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Procesar';
+  }
+}
+
+async function saldarSeleccionados() {
+  const checks = document.querySelectorAll('.saldo-check:checked');
+  if (checks.length === 0) return;
+  
+  const ids = Array.from(checks).map(el => parseInt(el.dataset.id));
+  
+  const motivo = prompt("Por favor ingresa el motivo del ajuste / saldado a cero (quedará como registro de auditoría en el documento):");
+  if (motivo === null) return; 
+  const motivoClean = motivo.trim();
+  if (!motivoClean) {
+    alert('El motivo es obligatorio para poder saldar los documentos.');
+    return;
+  }
+  
+  const btn = document.getElementById('btn-saldar');
+  btn.disabled = true;
+  
+  try {
+    const res = await fetch(`/api/saldos/${NEGOCIO_ID}/saldar-cero`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, motivo: motivoClean })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast(data.mensaje || 'Documentos ajustados con éxito');
+      cargarSaldos();
+    } else {
+      toast(data.error || 'Error al ajustar documentos', false);
+    }
+  } catch (err) {
+    toast('Error de conexión', false);
+  } finally {
+    btn.disabled = false;
+    actualizarBotonesAccion();
+  }
+}
+
+window.onload = cargarSaldos;
+</script>
+</body>
+</html>

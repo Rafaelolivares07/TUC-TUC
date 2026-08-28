@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Catálogo Técnico de Pantallas - TUC TUC{% endblock %}
+
+{% block content %}
+<div class="container my-4" style="max-width: 800px;">
+    <!-- Encabezado -->
+    <div class="d-flex align-items-center mb-4">
+        <div class="bg-dark text-white rounded-3 p-2.5 me-3 shadow-sm d-flex align-items-center justify-content-center" style="height: 48px; width: 48px;">
+            <i class="bi bi-grid-3x3-gap-fill" style="font-size: 24px;"></i>
+        </div>
+        <div>
+            <h4 class="fw-bold text-dark mb-0">Catálogo de Pantallas</h4>
+            <p class="text-muted small mb-0">Listado técnico de módulos registrados en la base de datos de producción.</p>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3 py-3" style="width: 80px;">ID</th>
+                            <th class="py-3" style="width: 60px;">Icono</th>
+                            <th class="py-3">Nombre del Módulo</th>
+                            <th class="py-3">Clave de Acceso (Code)</th>
+                            <th class="pe-3 py-3">Endpoint Flask (View)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pant in pantallas %}
+                        <tr>
+                            <td class="ps-3 fw-bold text-secondary">{{ pant.id }}</td>
+                            <td class="text-center"><span class="fs-4">{{ pant.icono or '🖥️' }}</span></td>
+                            <td class="fw-bold text-dark">{{ pant.nombre }}</td>
+                            <td><code>{{ pant.clave }}</code></td>
+                            <td class="pe-3 text-muted"><code>{{ pant.endpoint }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

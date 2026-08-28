@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Inventario Distribuido — {{ negocio_nombre }}</title>
+<title>Inventario Físico Distribuido — {{ negocio_nombre }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="/static/js/tailwind.js"></script>
@@ -22,7 +22,7 @@
   <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 mx-4">
     <div class="text-center mb-4">
       <div class="text-4xl mb-2">📦</div>
-      <h3 class="text-lg font-bold text-gray-900">Inventario Físico</h3>
+      <h3 class="text-lg font-bold text-gray-900">Inventario Físico Distribuido</h3>
       <p class="text-xs text-gray-400 mt-1">Cuenta el ítem y ingresa la cantidad física</p>
     </div>
 
@@ -69,9 +69,27 @@
 
 <!-- ═══════════════ PANEL CONFIGURACIÓN (PARAMETRIZADOR) ═══════════════ -->
 <div id="panel-config-dist">
+  <!-- Explicación inicial -->
+  <div class="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-6">
+    <h2 class="text-lg font-bold text-blue-900 mb-2">🔄 Inventario Físico Distribuido</h2>
+    <p class="text-sm text-blue-800 leading-relaxed">
+      Esta metodología realiza inventarios físicos <strong>distribuidos en el tiempo</strong>, de uno en uno,
+      mientras el usuario trabaja normalmente en otras tareas. Al final del ciclo, se alcanza el 100%
+      del inventario físico sin necesidad de un cierre estresante.
+    </p>
+    <p class="text-sm text-blue-700 mt-2">
+      <strong>¿Cómo funciona?</strong> El sistema detecta una pausa en la navegación del usuario y le presenta
+      un ítem para contar. El operario ingresa la cantidad física <em>sin ver el stock del sistema</em>,
+      y el ajuste se realiza automáticamente. Los conteos toman máximo 3 minutos por ítem.
+    </p>
+    <p class="text-xs text-blue-600 mt-3 italic">
+      Los ajustes de inventario solo son visibles para el parametrizador, nunca para el operario que realiza el conteo.
+    </p>
+  </div>
+
   <div class="bg-white rounded-2xl shadow-sm border p-6 mb-6">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-bold text-gray-900">⚙️ Inventario Distribuido</h2>
+      <h2 class="text-lg font-bold text-gray-900">⚙️ Configuración</h2>
       <label class="relative inline-flex items-center cursor-pointer">
         <input type="checkbox" id="dist-activo" class="sr-only peer" onchange="invDistGuardarConfig()">
         <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -83,22 +101,27 @@
         <div>
           <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Días del ciclo</label>
           <input type="number" id="dist-dias-ciclo" min="1" max="365" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+          <p class="text-[11px] text-gray-400 mt-1">Duración total del ciclo de conteo en días. Todos los ítems deben estar contados al finalizar este período.</p>
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Recordar en (minutos)</label>
           <input type="number" id="dist-recordar-min" min="1" max="480" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+          <p class="text-[11px] text-gray-400 mt-1">Si el usuario cancela o salta un conteo, el sistema esperará este tiempo antes de volver a pedirle.</p>
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Hora inicio permitida</label>
           <input type="time" id="dist-hora-inicio" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+          <p class="text-[11px] text-gray-400 mt-1">Hora a partir de la cual se pueden mostrar conteos. Fuera de este horario no se interrumpe al usuario.</p>
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Hora fin permitida</label>
           <input type="time" id="dist-hora-fin" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+          <p class="text-[11px] text-gray-400 mt-1">Hora límite para mostrar conteos. Después de esta hora el sistema deja de pedir hasta el día siguiente.</p>
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Segundos de pausa antes de mostrar</label>
           <input type="number" id="dist-pausa-seg" min="5" max="300" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+          <p class="text-[11px] text-gray-400 mt-1">Tiempo mínimo de inactividad (en segundos) en una pantalla habilitada antes de mostrar el modal de conteo.</p>
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Orden de prioridad</label>
@@ -107,11 +130,13 @@
             <option value="rotacion">Rotación (últimos 30 días)</option>
             <option value="valor_rotacion">Valor × Rotación (combinado)</option>
           </select>
+          <p class="text-[11px] text-gray-400 mt-1">Define qué ítems aparecen primero. "Valor × Rotación" prioriza productos de alto valor que se mueven rápido.</p>
         </div>
       </div>
 
       <div>
         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Módulos activos para conteo</label>
+        <p class="text-[11px] text-gray-400 mb-2">Selecciona en qué pantallas del sistema se detectará la pausa para mostrar el conteo. Solo se activa en los módulos marcados.</p>
         <div class="flex flex-wrap gap-2" id="dist-modulos">
           <label class="flex items-center gap-1 bg-gray-100 rounded-lg px-3 py-1.5 text-sm cursor-pointer">
             <input type="checkbox" value="produccion" class="dist-modulo rounded" onchange="invDistGuardarConfig()"> Producción
@@ -130,7 +155,10 @@
 
       <div class="flex items-center gap-2">
         <input type="checkbox" id="dist-reiniciar" class="rounded" onchange="invDistGuardarConfig()">
-        <label for="dist-reiniciar" class="text-sm text-gray-700">Reiniciar ciclo automáticamente al terminar</label>
+        <div>
+          <label for="dist-reiniciar" class="text-sm text-gray-700 font-medium">Reiniciar ciclo automáticamente al terminar</label>
+          <p class="text-[11px] text-gray-400">Al completar el 100% de conteos, inicia un nuevo ciclo automáticamente sin configuración adicional.</p>
+        </div>
       </div>
     </div>
   </div>

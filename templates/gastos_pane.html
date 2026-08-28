@@ -203,6 +203,8 @@
         const lbl = `${doc.nombre} (${doc.codigo}) — ${doc.status === 'abierto' ? 'ABIERTO (# ' + doc.numero_documento + ')' : 'NUEVO'}`;
         return `<option value="${doc.codigo}" ${doc.predeterminado ? 'selected' : ''}>${lbl}</option>`;
       }).join('');
+      const pred = gasDocumentos.find(d => d.predeterminado);
+      if (pred) sel.value = pred.codigo;
       console.log('DEBUG GASTOS SELECT:', sel.value, sel.selectedIndex);
       
       cargarRelacionGastoActiva();

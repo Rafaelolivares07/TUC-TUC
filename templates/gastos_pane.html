@@ -182,9 +182,11 @@
 
   // Carga las tipologías de documentos asignadas al módulo de Gastos
   async function cargarGastosDocumentos() {
+    console.log('GASTOS: cargarGastosDocumentos called, NEGOCIO_ID=', typeof NEGOCIO_ID, NEGOCIO_ID);
     try {
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/documentos`);
       const d = await r.json();
+      console.log('GASTOS RESPONSE:', d);
       if (!d.ok) {
         toast(d.error || 'Error al obtener documentos de gastos', false);
         return;

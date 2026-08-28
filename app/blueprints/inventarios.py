@@ -106,6 +106,20 @@ def _crear_tablas(conn):
             updated_at    TIMESTAMP DEFAULT NOW(),
             UNIQUE(negocio_id, producto_id)
         )""",
+        """CREATE TABLE IF NOT EXISTS inventario_distribuido_estado (
+            id              SERIAL PRIMARY KEY,
+            negocio_id      INTEGER NOT NULL,
+            producto_id     INTEGER NOT NULL REFERENCES productos(id),
+            usuario_id      INTEGER,
+            estado          VARCHAR(20) DEFAULT 'pendiente',
+            fecha_ultimo_conteo TIMESTAMP,
+            conteos_total   INTEGER DEFAULT 0,
+            prioridad_score NUMERIC(14,4) DEFAULT 0,
+            quién_contó     VARCHAR(255),
+            ciclo_inicio    TIMESTAMP,
+            ciclo_fin       TIMESTAMP,
+            UNIQUE(negocio_id, producto_id, ciclo_inicio)
+        )""",
     ]
     for sql in sqls:
         try:
@@ -146,6 +160,9 @@ def _crear_tablas(conn):
         "ALTER TABLE movimientos_inventario ALTER COLUMN costo_und TYPE NUMERIC(16,6)",
         "ALTER TABLE saldos_inventario ALTER COLUMN costo_und TYPE NUMERIC(16,6)",
         "ALTER TABLE productos ALTER COLUMN costo TYPE NUMERIC(16,6)",
+        "CREATE INDEX IF NOT EXISTS idx_inv_dist_negocio ON inventario_distribuido_estado(negocio_id)",
+        "CREATE INDEX IF NOT EXISTS idx_inv_dist_producto ON inventario_distribuido_estado(producto_id)",
+        "CREATE INDEX IF NOT EXISTS idx_inv_dist_estado ON inventario_distribuido_estado(estado)",
     ]
     for sql in alters:
         try:
@@ -4609,6 +4626,23 @@ def api_tienda_ajuste_rapido(negocio_id):
 
 # ── NUEVOS ENDPOINTS: INVENTARIO FISICO Y CONTABILIZACION INDIVIDUAL ───────────────────
 
+@bp.route('/admin/inventario-distribuido/<int:negocio_id>')
+def admin_inventario_distribuido(negocio_id):
+    if 'usuario_id' not in session:
+        return redirect(url_for('auth.admin_login'))
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto:
+            return "Negocio no encontrado", 404
+        if not _puede_gestionar_negocio(contexto):
+            return "No autorizado para este negocio", 403
+        return render_template('inventario_distribuido.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=contexto.get('negocio_nombre', ''))
+    finally:
+        conn.close()
+
 @bp.route('/admin/inventario-fisico/<int:negocio_id>')
 def admin_inventario_fisico(negocio_id):
     if 'usuario_id' not in session:
@@ -6599,4 +6633,363 @@ def api_compras_sugerencias(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INVENTARIO DISTRIBUIDO — Configuración y endpoints
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_PARAM_DEFAULTS_INV_DIST = {
+    'inv_distribuido_activo':              {'tipo': 'booleano', 'valor': 'false', 'desc': 'Activa inventario distribuido por ítems'},
+    'inv_distribuido_dias_ciclo':          {'tipo': 'numerico', 'valor': '30',   'desc': 'Días de duración del ciclo de conteo'},
+    'inv_distribuido_reiniciar':           {'tipo': 'booleano', 'valor': 'false', 'desc': 'Reiniciar ciclo automáticamente al terminar'},
+    'inv_distribuido_recordar_min':        {'tipo': 'numerico', 'valor': '15',   'desc': 'Minutos para recordar al usuario que canceló'},
+    'inv_distribuido_orden':               {'tipo': 'texto',   'valor': 'valor_rotacion', 'desc': 'Orden de prioridad: valor / rotacion / valor_rotacion'},
+    'inv_distribuido_horario_inicio':      {'tipo': 'texto',   'valor': '08:00', 'desc': 'Hora inicio permitida para conteos'},
+    'inv_distribuido_horario_fin':         {'tipo': 'texto',   'valor': '17:00', 'desc': 'Hora fin permitida para conteos'},
+    'inv_distribuido_dias_semana':         {'tipo': 'texto',   'valor': '1,2,3,4,5', 'desc': 'Días hábiles (1=Lun..7=Dom)'},
+    'inv_distribuido_modulos':             {'tipo': 'texto',   'valor': 'produccion,caja,restaurantes', 'desc': 'Módulos donde se invoca el conteo'},
+    'inv_distribuido_pausa_seg':          {'tipo': 'numerico', 'valor': '30',   'desc': 'Segundos de pausa antes de mostrar modal'},
+}
+
+
+def _sembrar_parametros_inv_dist(conn, negocio_id):
+    """Inserta parámetros default de inventario distribuido si no existen."""
+    for nombre, cfg in _PARAM_DEFAULTS_INV_DIST.items():
+        exists = conn.execute(
+            "SELECT 1 FROM parametros_sistema WHERE nombre = %s AND negocio_id = %s",
+            (nombre, negocio_id)
+        ).fetchone()
+        if not exists:
+            conn.execute("""
+                INSERT INTO parametros_sistema (nombre, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            """, (nombre, cfg['valor'], cfg['valor'] if cfg['tipo'] == 'booleano' else None,
+                  cfg['tipo'], cfg['desc'], negocio_id))
+
+
+@bp.route('/api/inventario/<int:negocio_id>/inv-dist/config', methods=['GET'])
+@admin_required
+def inv_dist_config_get(negocio_id):
+    """Retorna la configuración de inventario distribuido para un negocio."""
+    try:
+        conn = get_db_connection()
+        _sembrar_parametros_inv_dist(conn, negocio_id)
+        conn.commit()
+        rows = conn.execute("""
+            SELECT nombre, valor_texto, valor_booleano, tipo, descripcion
+            FROM parametros_sistema
+            WHERE nombre LIKE 'inv_distribuido%%' AND negocio_id = %s
+        """, (negocio_id,)).fetchall()
+        config = {}
+        for r in rows:
+            val = r['valor_booleano'] if r['tipo'] == 'booleano' else r['valor_texto']
+            config[r['nombre']] = {'valor': val, 'tipo': r['tipo'], 'descripcion': r['descripcion']}
+        conn.close()
+        return jsonify({'ok': True, 'config': config})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/inventario/<int:negocio_id>/inv-dist/config', methods=['POST'])
+@admin_required
+def inv_dist_config_set(negocio_id):
+    """Guarda configuración de inventario distribuido."""
+    try:
+        data = request.get_json() or {}
+        conn = get_db_connection()
+        for nombre, valor in data.items():
+            if not nombre.startswith('inv_distribuido'):
+                continue
+            cfg = _PARAM_DEFAULTS_INV_DIST.get(nombre)
+            if not cfg:
+                continue
+            existing = conn.execute(
+                "SELECT 1 FROM parametros_sistema WHERE nombre = %s AND negocio_id = %s",
+                (nombre, negocio_id)
+            ).fetchone()
+            if cfg['tipo'] == 'booleano':
+                if existing:
+                    conn.execute("UPDATE parametros_sistema SET valor_booleano = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
+                                 (str(valor), nombre, negocio_id))
+                else:
+                    conn.execute("INSERT INTO parametros_sistema (nombre, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, %s, 'booleano', %s, %s, NOW())",
+                                 (nombre, str(valor), cfg['desc'], negocio_id))
+            else:
+                if existing:
+                    conn.execute("UPDATE parametros_sistema SET valor_texto = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
+                                 (str(valor), nombre, negocio_id))
+                else:
+                    conn.execute("INSERT INTO parametros_sistema (nombre, valor_texto, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, %s, %s, %s, %s, NOW())",
+                                 (nombre, str(valor), cfg['tipo'], cfg['desc'], negocio_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'mensaje': 'Configuración guardada'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/inventario/<int:negocio_id>/inv-dist/siguiente', methods=['GET'])
+@admin_required
+def inv_dist_siguiente(negocio_id):
+    """Retorna el siguiente ítem a contar según prioridad."""
+    try:
+        conn = get_db_connection()
+        usuario_id = request.args.get('usuario_id', type=int)
+
+        # Obtener ciclo activo
+        ciclo = conn.execute("""
+            SELECT MIN(ciclo_inicio) AS inicio, MAX(ciclo_fin) AS fin
+            FROM inventario_distribuido_estado
+            WHERE negocio_id = %s AND ciclo_inicio IS NOT NULL
+        """, (negocio_id,)).fetchone()
+
+        ciclo_inicio = None
+        if ciclo and ciclo['inicio']:
+            ciclo_inicio = ciclo['inicio']
+
+        # Obtener configuración
+        orden_row = conn.execute(
+            "SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inv_distribuido_orden' AND negocio_id = %s",
+            (negocio_id,)
+        ).fetchone()
+        orden = orden_row['valor_texto'] if orden_row else 'valor_rotacion'
+
+        # Construir ORDER BY según prioridad
+        order_sql = {
+            'valor': 'p.precio * COALESCE(si.stock, 0) DESC',
+            'rotacion': '(SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.fecha >= NOW() - INTERVAL \'30 days\') DESC',
+            'valor_rotacion': '(p.precio * COALESCE(si.stock, 0)) * (SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.fecha >= NOW() - INTERVAL \'30 days\') DESC',
+        }.get(orden, 'p.precio * COALESCE(si.stock, 0) DESC')
+
+        # Buscar siguiente ítem pendiente, excluyendo los que el usuario ya saltó en este ciclo
+        params = [negocio_id]
+        excl = ''
+        if usuario_id:
+            excl = "AND (est.estado IS NULL OR est.estado != 'saltado' OR est.usuario_id != %s OR est.ciclo_inicio IS NOT DISTINCT FROM %s)"
+            params.extend([usuario_id, ciclo_inicio])
+
+        row = conn.execute(f"""
+            SELECT p.id AS producto_id, p.nombre, p.categoria, p.precio, p.codigo_barra,
+                   COALESCE(si.stock, 0) AS stock_sistema
+            FROM productos p
+            LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = 1
+            LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id
+                {'AND est.ciclo_inicio IS NOT DISTINCT FROM %s' if ciclo_inicio else ''}
+            WHERE p.negocio_id = %s AND p.disponible = TRUE
+                AND (est.estado IS NULL OR est.estado = 'saltado')
+                {excl}
+            ORDER BY {order_sql}
+            LIMIT 1
+        """, params + ([ciclo_inicio] if ciclo_inicio else []) + [negocio_id]).fetchone()
+
+        conn.close()
+        if not row:
+            return jsonify({'ok': True, 'item': None, 'mensaje': 'No hay ítems pendientes'})
+        return jsonify({
+            'ok': True,
+            'item': {
+                'producto_id': row['producto_id'],
+                'nombre': row['nombre'],
+                'categoria': row['categoria'],
+                'precio': float(row['precio'] or 0),
+                'codigo_barra': row['codigo_barra'],
+            }
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/inventario/<int:negocio_id>/inv-dist/conteo', methods=['POST'])
+@admin_required
+def inv_dist_conteo(negocio_id):
+    """Registra un conteo físico (el operario ingresa la cantidad)."""
+    try:
+        data = request.get_json() or {}
+        producto_id = data.get('producto_id')
+        cantidad_fisica = data.get('cantidad_fisica')
+        usuario_id = data.get('usuario_id')
+        usuario_nombre = data.get('usuario_nombre', '')
+
+        if not producto_id or cantidad_fisica is None:
+            return jsonify({'ok': False, 'error': 'Faltan datos'}), 400
+
+        conn = get_db_connection()
+
+        # Stock actual del sistema (NO se expone al operario)
+        sal = conn.execute(
+            "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1",
+            (negocio_id, producto_id)
+        ).fetchone()
+        stock_sistema = float(sal['stock'] or 0) if sal else 0
+        diff = float(cantidad_fisica) - stock_sistema
+
+        # Obtener ciclo activo
+        ciclo = conn.execute(
+            "SELECT MIN(ciclo_inicio) AS inicio FROM inventario_distribuido_estado WHERE negocio_id = %s AND ciclo_inicio IS NOT NULL",
+            (negocio_id,)
+        ).fetchone()
+        ciclo_inicio = ciclo['inicio'] if ciclo and ciclo['inicio'] else None
+
+        # Upsert estado
+        exists = conn.execute(
+            "SELECT id FROM inventario_distribuido_estado WHERE negocio_id = %s AND producto_id = %s AND ciclo_inicio IS NOT DISTINCT FROM %s",
+            (negocio_id, producto_id, ciclo_inicio)
+        ).fetchone()
+
+        if exists:
+            conn.execute("""
+                UPDATE inventario_distribuido_estado
+                SET estado = 'contado', fecha_ultimo_conteo = NOW(), conteos_total = conteos_total + 1,
+                    quién_contó = %s, usuario_id = %s
+                WHERE id = %s
+            """, (usuario_nombre, usuario_id, exists['id']))
+        else:
+            conn.execute("""
+                INSERT INTO inventario_distribuido_estado (negocio_id, producto_id, usuario_id, estado, fecha_ultimo_conteo, conteos_total, quién_contó, ciclo_inicio)
+                VALUES (%s, %s, %s, 'contado', NOW(), 1, %s, %s)
+            """, (negocio_id, producto_id, usuario_id, usuario_nombre, ciclo_inicio))
+
+        # Si hay diferencia, registrar ajuste
+        ajuste_monto = 0
+        if abs(diff) > 0.001:
+            _mov_directo(conn, negocio_id, producto_id, diff, 'ajuste', usuario_nombre)
+            ajuste_monto = diff * float(conn.execute(
+                "SELECT costo FROM productos WHERE id = %s", (producto_id,)
+            ).fetchone()['costo'] or 0)
+
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'diferencia': diff,
+            'ajuste_monto': round(ajuste_monto, 2),
+            'mensaje': f'Conteo registrado. Diferencia: {diff}'
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/inventario/<int:negocio_id>/inv-dist/saltar', methods=['POST'])
+@admin_required
+def inv_dist_saltar(negocio_id):
+    """El operario salta un ítem (reporta como problemático)."""
+    try:
+        data = request.get_json() or {}
+        producto_id = data.get('producto_id')
+        usuario_id = data.get('usuario_id')
+        usuario_nombre = data.get('usuario_nombre', '')
+        motivo = data.get('motivo', '')
+
+        if not producto_id:
+            return jsonify({'ok': False, 'error': 'Faltan datos'}), 400
+
+        conn = get_db_connection()
+        ciclo = conn.execute(
+            "SELECT MIN(ciclo_inicio) AS inicio FROM inventario_distribuido_estado WHERE negocio_id = %s AND ciclo_inicio IS NOT NULL",
+            (negocio_id,)
+        ).fetchone()
+        ciclo_inicio = ciclo['inicio'] if ciclo and ciclo['inicio'] else None
+
+        exists = conn.execute(
+            "SELECT id FROM inventario_distribuido_estado WHERE negocio_id = %s AND producto_id = %s AND ciclo_inicio IS NOT DISTINCT FROM %s",
+            (negocio_id, producto_id, ciclo_inicio)
+        ).fetchone()
+
+        if exists:
+            conn.execute("""
+                UPDATE inventario_distribuido_estado
+                SET estado = 'saltado', usuario_id = %s, quién_contó = %s, fecha_ultimo_conteo = NOW()
+                WHERE id = %s
+            """, (usuario_id, usuario_nombre, exists['id']))
+        else:
+            conn.execute("""
+                INSERT INTO inventario_distribuido_estado (negocio_id, producto_id, usuario_id, estado, quién_contó, fecha_ultimo_conteo, ciclo_inicio)
+                VALUES (%s, %s, %s, 'saltado', %s, NOW(), %s)
+            """, (negocio_id, producto_id, usuario_id, usuario_nombre, ciclo_inicio))
+
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'mensaje': 'Ítem saltado'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/inventario/<int:negocio_id>/inv-dist/cancelar', methods=['POST'])
+@admin_required
+def inv_dist_cancelar(negocio_id):
+    """El operario cancela la sesión de conteo."""
+    try:
+        data = request.get_json() or {}
+        usuario_id = data.get('usuario_id')
+        recordar_min = data.get('recordar_min', 15)
+
+        # Solo retorna OK — el frontend deja de mostrar modales por el tiempo configurado
+        return jsonify({'ok': True, 'mensaje': f'Sesión cancelada. Recordar en {recordar_min} minutos'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/inventario/<int:negocio_id>/inv-dist/resumen', methods=['GET'])
+@admin_required
+def inv_dist_resumen(negocio_id):
+    """Resumen del ciclo para el parametrizador."""
+    try:
+        conn = get_db_connection()
+        ciclo = conn.execute(
+            "SELECT MIN(ciclo_inicio) AS inicio FROM inventario_distribuido_estado WHERE negocio_id = %s AND ciclo_inicio IS NOT NULL",
+            (negocio_id,)
+        ).fetchone()
+        ciclo_inicio = ciclo['inicio'] if ciclo and ciclo['inicio'] else None
+
+        # Total productos del negocio
+        total = conn.execute(
+            "SELECT COUNT(*) AS n FROM productos WHERE negocio_id = %s AND disponible = TRUE",
+            (negocio_id,)
+        ).fetchone()['n']
+
+        # Estados
+        estados = conn.execute("""
+            SELECT estado, COUNT(*) AS n
+            FROM inventario_distribuido_estado
+            WHERE negocio_id = %s AND ciclo_inicio IS NOT DISTINCT FROM %s
+            GROUP BY estado
+        """, (negocio_id, ciclo_inicio)).fetchall()
+        resumen_estados = {r['estado']: r['n'] for r in estados}
+
+        # Detalle items contados
+        items = conn.execute("""
+            SELECT est.producto_id, p.nombre, p.categoria, est.estado, est.fecha_ultimo_conteo,
+                   est.quién_contó, est.conteos_total,
+                   COALESCE(si.stock, 0) AS stock_sistema
+            FROM inventario_distribuido_estado est
+            JOIN productos p ON p.id = est.producto_id
+            LEFT JOIN saldos_inventario si ON si.producto_id = est.producto_id AND si.negocio_id = est.negocio_id AND si.bodega = 1
+            WHERE est.negocio_id = %s AND est.ciclo_inicio IS NOT DISTINCT FROM %s
+            ORDER BY est.fecha_ultimo_conteo DESC
+        """, (negocio_id, ciclo_inicio)).fetchall()
+
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'ciclo_inicio': str(ciclo_inicio) if ciclo_inicio else None,
+            'total_productos': total,
+            'resumen': {
+                'contados': resumen_estados.get('contado', 0),
+                'saltados': resumen_estados.get('saltado', 0),
+                'pendientes': total - resumen_estados.get('contado', 0) - resumen_estados.get('saltado', 0),
+            },
+            'items': [{
+                'producto_id': it['producto_id'],
+                'nombre': it['nombre'],
+                'categoria': it['categoria'],
+                'estado': it['estado'],
+                'fecha': str(it['fecha_ultimo_conteo']) if it['fecha_ultimo_conteo'] else None,
+                'quien': it['quién_contó'],
+                'stock_sistema': float(it['stock_sistema'] or 0),
+                'conteos_total': it['conteos_total'],
+            } for it in items]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 

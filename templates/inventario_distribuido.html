@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario Distribuido — {{ negocio_nombre }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="/static/js/tailwind.js"></script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:12px 24px; border-radius:12px; color:#fff; font-weight:600; z-index:9999; opacity:0; transition:opacity .3s,transform .3s; pointer-events:none; box-shadow:0 10px 15px -3px rgba(0,0,0,.1); }
+  .toast.show { opacity:1; transform:translate(-50%,-5px); }
+  .toast-ok { background:#10b981; } .toast-err { background:#ef4444; }
+</style>
+</head>
+<body class="p-4 sm:p-6 min-h-screen">
+<div id="toast" class="toast"></div>
+
+<!-- ═══════════════ MODAL CONTEO OPERATIVO ═══════════════ -->
+<div id="modal-conteo" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 mx-4">
+    <div class="text-center mb-4">
+      <div class="text-4xl mb-2">📦</div>
+      <h3 class="text-lg font-bold text-gray-900">Inventario Físico</h3>
+      <p class="text-xs text-gray-400 mt-1">Cuenta el ítem y ingresa la cantidad física</p>
+    </div>
+
+    <div id="conteo-item-info" class="bg-gray-50 rounded-xl p-4 mb-4">
+      <p id="conteo-nombre" class="font-bold text-gray-900 text-lg"></p>
+      <p id="conteo-categoria" class="text-sm text-gray-500"></p>
+      <p id="conteo-codigo" class="text-xs text-gray-400 mt-1"></p>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad física que cuentas</label>
+      <input type="text" inputmode="numeric" id="conteo-cantidad" placeholder="0"
+             class="w-full border-2 rounded-xl px-4 py-3 text-2xl font-bold text-center focus:border-blue-500 focus:outline-none"
+             onfocus="this.select()">
+    </div>
+
+    <div class="flex gap-2">
+      <button onclick="invDistContar()" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition">
+        Contar
+      </button>
+      <button onclick="invDistSaltar()" class="bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl hover:bg-gray-300 transition text-sm">
+        Saltar
+      </button>
+      <button onclick="invDistCancelar()" class="bg-red-100 text-red-600 font-bold py-3 px-4 rounded-xl hover:bg-red-200 transition text-sm">
+        Cancelar
+      </button>
+    </div>
+
+    <p id="conteo-mensaje" class="text-xs text-center text-gray-400 mt-3 hidden"></p>
+  </div>
+</div>
+
+<!-- ═══════════════ MODAL CANCELAR ═══════════════ -->
+<div id="modal-cancelar" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[60] flex items-center justify-center hidden">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 mx-4">
+    <h3 class="text-lg font-bold text-gray-900 mb-2">¿Cancelar conteo?</h3>
+    <p class="text-sm text-gray-500 mb-4">El sistema dejará de pedirte conteos por ahora. Podrás retomar más tarde.</p>
+    <div class="flex gap-2">
+      <button onclick="invDistConfirmarCancelar()" class="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700">Sí, cancelar</button>
+      <button onclick="document.getElementById('modal-cancelar').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-300">Volver</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PANEL CONFIGURACIÓN (PARAMETRIZADOR) ═══════════════ -->
+<div id="panel-config-dist" class="hidden">
+  <div class="bg-white rounded-2xl shadow-sm border p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-bold text-gray-900">⚙️ Inventario Distribuido</h2>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" id="dist-activo" class="sr-only peer" onchange="invDistGuardarConfig()">
+        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+      </label>
+    </div>
+
+    <div id="dist-config-body" class="hidden space-y-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Días del ciclo</label>
+          <input type="number" id="dist-dias-ciclo" min="1" max="365" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Recordar en (minutos)</label>
+          <input type="number" id="dist-recordar-min" min="1" max="480" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Hora inicio permitida</label>
+          <input type="time" id="dist-hora-inicio" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Hora fin permitida</label>
+          <input type="time" id="dist-hora-fin" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Segundos de pausa antes de mostrar</label>
+          <input type="number" id="dist-pausa-seg" min="5" max="300" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Orden de prioridad</label>
+          <select id="dist-orden" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="invDistGuardarConfig()">
+            <option value="valor">Valor unitario × stock</option>
+            <option value="rotacion">Rotación (últimos 30 días)</option>
+            <option value="valor_rotacion">Valor × Rotación (combinado)</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Módulos activos para conteo</label>
+        <div class="flex flex-wrap gap-2" id="dist-modulos">
+          <label class="flex items-center gap-1 bg-gray-100 rounded-lg px-3 py-1.5 text-sm cursor-pointer">
+            <input type="checkbox" value="produccion" class="dist-modulo rounded" onchange="invDistGuardarConfig()"> Producción
+          </label>
+          <label class="flex items-center gap-1 bg-gray-100 rounded-lg px-3 py-1.5 text-sm cursor-pointer">
+            <input type="checkbox" value="caja" class="dist-modulo rounded" onchange="invDistGuardarConfig()"> Caja/POS
+          </label>
+          <label class="flex items-center gap-1 bg-gray-100 rounded-lg px-3 py-1.5 text-sm cursor-pointer">
+            <input type="checkbox" value="restaurantes" class="dist-modulo rounded" onchange="invDistGuardarConfig()"> Restaurantes
+          </label>
+          <label class="flex items-center gap-1 bg-gray-100 rounded-lg px-3 py-1.5 text-sm cursor-pointer">
+            <input type="checkbox" value="tiendas" class="dist-modulo rounded" onchange="invDistGuardarConfig()"> Tiendas
+          </label>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input type="checkbox" id="dist-reiniciar" class="rounded" onchange="invDistGuardarConfig()">
+        <label for="dist-reiniciar" class="text-sm text-gray-700">Reiniciar ciclo automáticamente al terminar</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resumen del ciclo -->
+  <div id="dist-resumen-panel" class="bg-white rounded-2xl shadow-sm border p-6">
+    <h3 class="font-bold text-gray-900 mb-3">📊 Resumen del Ciclo</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+      <div class="bg-blue-50 rounded-xl p-3 text-center">
+        <p id="dist-total" class="text-2xl font-bold text-blue-700">0</p>
+        <p class="text-xs text-blue-500">Total ítems</p>
+      </div>
+      <div class="bg-green-50 rounded-xl p-3 text-center">
+        <p id="dist-contados" class="text-2xl font-bold text-green-700">0</p>
+        <p class="text-xs text-green-500">Contados</p>
+      </div>
+      <div class="bg-amber-50 rounded-xl p-3 text-center">
+        <p id="dist-saltados" class="text-2xl font-bold text-amber-700">0</p>
+        <p class="text-xs text-amber-500">Saltados</p>
+      </div>
+      <div class="bg-gray-50 rounded-xl p-3 text-center">
+        <p id="dist-pendientes" class="text-2xl font-bold text-gray-700">0</p>
+        <p class="text-xs text-gray-500">Pendientes</p>
+      </div>
+    </div>
+
+    <div id="dist-items-lista" class="space-y-1 max-h-80 overflow-y-auto"></div>
+  </div>
+</div>
+
+<script>
+const NEGOCIO_ID = {{ negocio_id }};
+let _distConfig = {};
+let _distItemActual = null;
+let _distTimeoutPausa = null;
+let _distCancelHasta = null;
+
+// ── Toast ──
+function toast(msg, tipo='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (tipo === 'ok' ? 'toast-ok' : 'toast-err');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ── Config ──
+async function invDistCargarConfig() {
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/config`);
+    const d = await r.json();
+    if (!d.ok) return;
+    _distConfig = d.config;
+    document.getElementById('dist-activo').checked = _distConfig.inv_distribuido_activo?.valor === 'true';
+    document.getElementById('dist-dias-ciclo').value = _distConfig.inv_distribuido_dias_ciclo?.valor || 30;
+    document.getElementById('dist-recordar-min').value = _distConfig.inv_distribuido_recordar_min?.valor || 15;
+    document.getElementById('dist-hora-inicio').value = _distConfig.inv_distribuido_horario_inicio?.valor || '08:00';
+    document.getElementById('dist-hora-fin').value = _distConfig.inv_distribuido_horario_fin?.valor || '17:00';
+    document.getElementById('dist-pausa-seg').value = _distConfig.inv_distribuido_pausa_seg?.valor || 30;
+    document.getElementById('dist-orden').value = _distConfig.inv_distribuido_orden?.valor || 'valor_rotacion';
+    document.getElementById('dist-reiniciar').checked = _distConfig.inv_distribuido_reiniciar?.valor === 'true';
+    const modulos = (_distConfig.inv_distribuido_modulos?.valor || '').split(',');
+    document.querySelectorAll('.dist-modulo').forEach(cb => {
+      cb.checked = modulos.includes(cb.value);
+    });
+    document.getElementById('dist-config-body').classList.toggle('hidden', !_distConfig.inv_distribuido_activo?.valor || _distConfig.inv_distribuido_activo?.valor === 'false');
+    if (_distConfig.inv_distribuido_activo?.valor === 'true') invDistCargarResumen();
+  } catch(e) { console.error('Error cargando config inv dist:', e); }
+}
+
+async function invDistGuardarConfig() {
+  const modulos = [...document.querySelectorAll('.dist-modulo:checked')].map(cb => cb.value).join(',');
+  const data = {
+    inv_distribuido_activo: document.getElementById('dist-activo').checked,
+    inv_distribuido_dias_ciclo: document.getElementById('dist-dias-ciclo').value,
+    inv_distribuido_recordar_min: document.getElementById('dist-recordar-min').value,
+    inv_distribuido_horario_inicio: document.getElementById('dist-hora-inicio').value,
+    inv_distribuido_horario_fin: document.getElementById('dist-hora-fin').value,
+    inv_distribuido_pausa_seg: document.getElementById('dist-pausa-seg').value,
+    inv_distribuido_orden: document.getElementById('dist-orden').value,
+    inv_distribuido_reiniciar: document.getElementById('dist-reiniciar').checked,
+    inv_distribuido_modulos: modulos,
+  };
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/config`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Configuración guardada');
+      document.getElementById('dist-config-body').classList.toggle('hidden', !data.inv_distribuido_activo);
+    } else toast(d.error || 'Error', 'err');
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+// ── Resumen ──
+async function invDistCargarResumen() {
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/resumen`);
+    const d = await r.json();
+    if (!d.ok) return;
+    document.getElementById('dist-total').textContent = d.total_productos;
+    document.getElementById('dist-contados').textContent = d.resumen.contados;
+    document.getElementById('dist-saltados').textContent = d.resumen.saltados;
+    document.getElementById('dist-pendientes').textContent = d.resumen.pendientes;
+    const lista = document.getElementById('dist-items-lista');
+    lista.innerHTML = d.items.map(it => `
+      <div class="flex items-center justify-between py-2 px-3 rounded-lg ${it.estado === 'contado' ? 'bg-green-50' : it.estado === 'saltado' ? 'bg-amber-50' : 'bg-gray-50'}">
+        <div>
+          <span class="font-medium text-sm">${it.nombre}</span>
+          <span class="text-xs text-gray-400 ml-2">${it.categoria || ''}</span>
+        </div>
+        <div class="text-right">
+          <span class="text-xs font-semibold ${it.estado === 'contado' ? 'text-green-700' : it.estado === 'saltado' ? 'text-amber-700' : 'text-gray-500'}">${it.estado === 'contado' ? 'Contado' : it.estado === 'saltado' ? 'Saltado' : 'Pendiente'}</span>
+          ${it.quien ? `<span class="block text-[10px] text-gray-400">${it.quien}</span>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { console.error('Error resumen:', e); }
+}
+
+// ── Modal operativo ──
+async function invDistSiguiente() {
+  if (document.getElementById('modal-conteo').classList.contains('hidden') === false) return;
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/siguiente?usuario_id=${_distUsuarioId || ''}`);
+    const d = await r.json();
+    if (!d.ok || !d.item) return;
+    _distItemActual = d.item;
+    document.getElementById('conteo-nombre').textContent = d.item.nombre;
+    document.getElementById('conteo-categoria').textContent = d.item.categoria || 'Sin categoría';
+    document.getElementById('conteo-codigo').textContent = d.item.codigo_barra || '';
+    document.getElementById('conteo-cantidad').value = '';
+    document.getElementById('conteo-mensaje').classList.add('hidden');
+    document.getElementById('modal-conteo').classList.remove('hidden');
+    setTimeout(() => document.getElementById('conteo-cantidad').focus(), 200);
+  } catch(e) { console.error('Error siguiente:', e); }
+}
+
+async function invDistContar() {
+  if (!_distItemActual) return;
+  const cant = document.getElementById('conteo-cantidad').value.trim().replace(/\./g, '').replace(',', '.');
+  if (!cant || isNaN(cant)) { toast('Ingresa una cantidad', 'err'); return; }
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/conteo`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        producto_id: _distItemActual.producto_id,
+        cantidad_fisica: parseFloat(cant),
+        usuario_id: _distUsuarioId || null,
+        usuario_nombre: _distUsuarioNombre || ''
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('conteo-mensaje').textContent = `✓ ${d.mensaje}`;
+      document.getElementById('conteo-mensaje').classList.remove('hidden');
+      document.getElementById('conteo-mensaje').className = 'text-xs text-center mt-3 text-green-600';
+      setTimeout(() => { document.getElementById('modal-conteo').classList.add('hidden'); invDistSiguiente(); }, 1500);
+    } else {
+      toast(d.error || 'Error', 'err');
+    }
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+async function invDistSaltar() {
+  if (!_distItemActual) return;
+  try {
+    await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/saltar`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        producto_id: _distItemActual.producto_id,
+        usuario_id: _distUsuarioId || null,
+        usuario_nombre: _distUsuarioNombre || ''
+      })
+    });
+    document.getElementById('modal-conteo').classList.add('hidden');
+    invDistSiguiente();
+  } catch(e) { toast('Error', 'err'); }
+}
+
+function invDistCancelar() {
+  document.getElementById('modal-cancelar').classList.remove('hidden');
+}
+
+async function invDistConfirmarCancelar() {
+  document.getElementById('modal-cancelar').classList.add('hidden');
+  document.getElementById('modal-conteo').classList.add('hidden');
+  const min = parseInt(_distConfig.inv_distribuido_recordar_min?.valor || 15);
+  _distCancelHasta = Date.now() + min * 60 * 1000;
+  try {
+    await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/cancelar`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ usuario_id: _distUsuarioId || null, recordar_min: min })
+    });
+  } catch(e) {}
+}
+
+// ── Detección de pausa ──
+let _distLastActivity = Date.now();
+let _distUsuarioId = null;
+let _distUsuarioNombre = '';
+
+function invDistInitPausa(usuarioId, usuarioNombre) {
+  _distUsuarioId = usuarioId;
+  _distUsuarioNombre = usuarioNombre;
+
+  if (_distConfig.inv_distribuido_activo?.valor !== 'true') return;
+
+  const modulos = (_distConfig.inv_distribuido_modulos?.valor || '').split(',');
+  const currentPath = window.location.pathname.toLowerCase();
+  const inModulo = modulos.some(m => currentPath.includes(m));
+  if (!inModulo) return;
+
+  const pausaSeg = parseInt(_distConfig.inv_distribuido_pausa_seg?.valor || 30);
+  const horarioInicio = _distConfig.inv_distribuido_horario_inicio?.valor || '08:00';
+  const horarioFin = _distConfig.inv_distribuido_horario_fin?.valor || '17:00';
+
+  ['mousemove','keydown','click','scroll','touchstart'].forEach(evt => {
+    document.addEventListener(evt, () => { _distLastActivity = Date.now(); }, {passive: true});
+  });
+
+  setInterval(() => {
+    if (_distCancelHasta && Date.now() < _distCancelHasta) return;
+    _distCancelHasta = null;
+
+    const now = new Date();
+    const hhmm = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    if (hhmm < horarioInicio || hhmm > horarioFin) return;
+
+    if (Date.now() - _distLastActivity >= pausaSeg * 1000) {
+      invDistSiguiente();
+      _distLastActivity = Date.now();
+    }
+  }, 5000);
+}
+
+document.addEventListener('DOMContentLoaded', invDistCargarConfig);
+</script>
+</body>
+</html>

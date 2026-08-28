@@ -225,7 +225,7 @@ def _asegurar_tablas(conn):
     if not exists_credito:
         conn.execute("""
             INSERT INTO metodos_pago_catalogo (nombre, codigo, icono, activo, orden)
-            VALUES ('Crédito / Cuenta por cobrar o pagar', 'credito', '', TRUE, 9)
+            VALUES ('Cuenta por cobrar', 'credito', '', TRUE, 9)
         """)
         conn.commit()
 

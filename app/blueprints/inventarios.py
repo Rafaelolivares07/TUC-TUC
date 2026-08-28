@@ -6663,13 +6663,13 @@ def _sembrar_parametros_inv_dist(conn, negocio_id):
         if not exists:
             if cfg['tipo'] == 'booleano':
                 conn.execute("""
-                    INSERT INTO parametros_sistema (nombre, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
-                    VALUES (%s, NULL, %s, 'booleano', %s, %s, NOW())
+                    INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
+                    VALUES (%s, NULL, NULL, %s, 'booleano', %s, %s, NOW())
                 """, (nombre, cfg['valor'].lower(), cfg['desc'], negocio_id))
             else:
                 conn.execute("""
-                    INSERT INTO parametros_sistema (nombre, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
-                    VALUES (%s, %s, NULL, %s, %s, %s, NOW())
+                    INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
+                    VALUES (%s, %s, NULL, NULL, %s, %s, %s, NOW())
                 """, (nombre, cfg['valor'], cfg['tipo'], cfg['desc'], negocio_id))
 
 
@@ -6681,13 +6681,13 @@ def inv_dist_config_get(negocio_id):
         _sembrar_parametros_inv_dist(conn, negocio_id)
         conn.commit()
         rows = conn.execute("""
-            SELECT nombre, valor_texto, valor_booleano, tipo, descripcion
+            SELECT nombre, valor_numerico, valor_booleano, tipo, descripcion
             FROM parametros_sistema
             WHERE nombre LIKE 'inv_distribuido%%' AND negocio_id = %s
         """, (negocio_id,)).fetchall()
         config = {}
         for r in rows:
-            val = r['valor_booleano'] if r['tipo'] == 'booleano' else r['valor_texto']
+            val = r['valor_booleano'] if r['tipo'] == 'booleano' else r['valor_numerico']
             config[r['nombre']] = {'valor': val, 'tipo': r['tipo'], 'descripcion': r['descripcion']}
         conn.close()
         return jsonify({'ok': True, 'config': config})
@@ -6717,14 +6717,14 @@ def inv_dist_config_set(negocio_id):
                     conn.execute("UPDATE parametros_sistema SET valor_booleano = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
                                  (val_str, nombre, negocio_id))
                 else:
-                    conn.execute("INSERT INTO parametros_sistema (nombre, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, NULL, %s, 'booleano', %s, %s, NOW())",
+                    conn.execute("INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, NULL, NULL, %s, 'booleano', %s, %s, NOW())",
                                  (nombre, val_str, cfg['desc'], negocio_id))
             else:
                 if existing:
-                    conn.execute("UPDATE parametros_sistema SET valor_texto = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
+                    conn.execute("UPDATE parametros_sistema SET valor_numerico = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
                                  (str(valor), nombre, negocio_id))
                 else:
-                    conn.execute("INSERT INTO parametros_sistema (nombre, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, %s, NULL, %s, %s, %s, NOW())",
+                    conn.execute("INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, %s, NULL, NULL, %s, %s, %s, NOW())",
                                  (nombre, str(valor), cfg['tipo'], cfg['desc'], negocio_id))
         conn.commit()
         conn.close()

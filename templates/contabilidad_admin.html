@@ -1003,11 +1003,11 @@ async function cargarParametros() {
     <div class="border border-gray-200 rounded-xl p-4 mb-3">
       <div class="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <span class="font-mono font-bold text-blue-700">${p.tipo_codigo}</span>
+          <span class="font-bold text-blue-700">${p.tipo_nombre}</span>
           <span class="text-gray-500 text-sm ml-2">${p.descripcion_asiento||''}</span>
         </div>
         <div class="flex gap-2">
-          <button onclick="abrirLineas(${p.id},'${p.tipo_codigo}')"
+          <button onclick="abrirLineas(${p.id},'${p.tipo_nombre}')"
                   class="text-sm bg-indigo-100 text-indigo-700 font-semibold px-3 py-1 rounded-lg">Editar líneas</button>
           <button onclick="toggleParametro(${p.id},${!p.activo})"
                   class="text-xs px-2 py-1 rounded ${p.activo?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}">

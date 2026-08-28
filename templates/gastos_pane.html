@@ -175,6 +175,22 @@
   let gasConceptoTimer = null;
   let gasTerceroIdx = -1;
 
+  // Auto-inicialización: detectar cuándo el panel se hace visible
+  (function() {
+    let _gasInit = false;
+    const _panel = document.currentScript && document.currentScript.parentElement;
+    if (!_panel) return;
+    const _check = () => {
+      if (_gasInit) return;
+      if (_panel.offsetParent !== null) {
+        _gasInit = true;
+        inicializarModuloGastos();
+      }
+    };
+    new MutationObserver(_check).observe(_panel, { attributes: true, attributeFilter: ['class'] });
+    _check();
+  })();
+
   // Inicialización del panel de Gastos
   async function inicializarModuloGastos() {
     await cargarGastosDocumentos();
@@ -182,11 +198,9 @@
 
   // Carga las tipologías de documentos asignadas al módulo de Gastos
   async function cargarGastosDocumentos() {
-    console.log('GASTOS: cargarGastosDocumentos called, NEGOCIO_ID=', typeof NEGOCIO_ID, NEGOCIO_ID);
     try {
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/documentos`);
       const d = await r.json();
-      console.log('GASTOS RESPONSE:', d);
       if (!d.ok) {
         toast(d.error || 'Error al obtener documentos de gastos', false);
         return;

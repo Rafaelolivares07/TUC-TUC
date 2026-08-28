@@ -175,12 +175,6 @@
   let gasConceptoTimer = null;
   let gasTerceroIdx = -1;
 
-  function _gasCodigoSeleccionado() {
-    const sel = document.getElementById('gas-tipo-doc');
-    const doc = gasDocumentos.find(d => d.id == sel.value);
-    return doc ? doc.codigo : '';
-  }
-
   // Inicialización del panel de Gastos
   async function inicializarModuloGastos() {
     await cargarGastosDocumentos();
@@ -197,7 +191,6 @@
       }
       
       gasDocumentos = d.documentos || [];
-      console.log('GASTOS DOCS:', JSON.stringify(gasDocumentos));
       const sel = document.getElementById('gas-tipo-doc');
       
       if (gasDocumentos.length === 0) {
@@ -207,11 +200,10 @@
       
       sel.innerHTML = gasDocumentos.map(doc => {
         const lbl = doc.status === 'abierto' ? `${doc.nombre} — ABIERTO (# ${doc.numero_documento})` : doc.nombre;
-        return `<option value="${doc.id}" data-codigo="${doc.codigo}" ${doc.predeterminado ? 'selected' : ''}>${lbl}</option>`;
+        return `<option value="${doc.codigo}" ${doc.predeterminado ? 'selected' : ''}>${lbl}</option>`;
       }).join('');
       const pred = gasDocumentos.find(d => d.predeterminado);
-      if (pred) sel.value = pred.id;
-      console.log('GASTOS SELECT:', sel.value, 'pred:', pred ? pred.id : null);
+      if (pred) sel.value = pred.codigo;
       
       cargarRelacionGastoActiva();
     } catch(e) {
@@ -223,10 +215,10 @@
   // Carga los detalles (líneas y fecha) de la relación seleccionada
   async function cargarRelacionGastoActiva() {
     const sel = document.getElementById('gas-tipo-doc');
-    const docId = sel.value;
-    if (!docId) return;
+    const codigo = sel.value;
+    if (!codigo) return;
     
-    const doc = gasDocumentos.find(d => d.id == docId);
+    const doc = gasDocumentos.find(d => d.codigo === codigo);
     if (!doc) return;
     
     document.getElementById('gas-num-doc').value = doc.numero_documento;
@@ -542,7 +534,7 @@
     }
   }
   async function actualizarFechaRelacion() {
-    const tipoDoc = _gasCodigoSeleccionado();
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
     const numDoc = document.getElementById('gas-num-doc').value;
     const fecha = document.getElementById('gas-fecha').value;
     if (!tipoDoc || !numDoc || !fecha) return;
@@ -579,7 +571,7 @@
 
   // Envía el nuevo registro de gasto al servidor
   async function agregarLineaGasto() {
-    const tipoDoc = _gasCodigoSeleccionado();
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
     const numDoc = document.getElementById('gas-num-doc').value;
     const fecha = document.getElementById('gas-fecha').value;
     const cuenta_puc_id = document.getElementById('gas-concept-id').value;
@@ -667,7 +659,7 @@
 
   // Ejecuta el cierre de la relación añadiendo la contrapartida de crédito
   async function cerrarRelacionGasto() {
-    const tipoDoc = _gasCodigoSeleccionado();
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
     const numDoc = document.getElementById('gas-num-doc').value;
     const metodoPago = document.getElementById('gas-metodo-pago').value;
     
@@ -677,8 +669,7 @@
       return;
     }
     
-    const nombreDoc = (gasDocumentos.find(d => d.codigo === tipoDoc) || {}).nombre || tipoDoc;
-    if (!confirm(`¿Está seguro de cerrar la relación de gastos ${nombreDoc} #${numDoc}?\nEsto registrará el egreso final acumulado con el método de pago seleccionado y no podrá añadir más registros en este consecutivo.`)) {
+    if (!confirm(`¿Está seguro de cerrar la relación de gastos ${tipoDoc} #${numDoc}?\nEsto registrará el egreso final acumulado con el método de pago seleccionado y no podrá añadir más registros en este consecutivo.`)) {
       return;
     }
     
@@ -745,7 +736,7 @@
 
   // Abre el PDF de la relación actual (sea abierta o cerrada) en una nueva pestaña
   function imprimirPdfRelacion() {
-    const tipoDoc = _gasCodigoSeleccionado();
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
     const numDoc = document.getElementById('gas-num-doc').value;
     if (!tipoDoc || !numDoc) {
       toast('Seleccione una relación válida para imprimir', false);

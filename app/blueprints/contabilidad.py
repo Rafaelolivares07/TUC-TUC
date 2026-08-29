@@ -2520,15 +2520,6 @@ def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
             ORDER BY m.id
         """, (tipo_doc, numero_documento, negocio_id)).fetchall()
         
-        # Resolver nombre del tipo de documento
-        tipo_doc_nombre = tipo_doc
-        if tipo_doc_id:
-            td_row = conn.execute(
-                "SELECT nombre FROM tipos_documento_negocio WHERE id = %s", (tipo_doc_id,)
-            ).fetchone()
-            if td_row:
-                tipo_doc_nombre = td_row['nombre']
-        
         # Obtener el tipo_documento_id del documento a partir de movimientos_contables
         doc_info = conn.execute("""
             SELECT DISTINCT tipo_documento_id
@@ -2538,6 +2529,15 @@ def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
         """, (tipo_doc, numero_documento, negocio_id)).fetchone()
         
         tipo_doc_id = doc_info['tipo_documento_id'] if doc_info else None
+
+        # Resolver nombre del tipo de documento
+        tipo_doc_nombre = tipo_doc
+        if tipo_doc_id:
+            td_row = conn.execute(
+                "SELECT nombre FROM tipos_documento_negocio WHERE id = %s", (tipo_doc_id,)
+            ).fetchone()
+            if td_row:
+                tipo_doc_nombre = td_row['nombre']
         
         # Consultar movimientos de inventario asociados
         if tipo_doc_id:

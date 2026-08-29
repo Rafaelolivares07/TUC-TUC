@@ -366,6 +366,10 @@
       <button onclick="addLineaManual()" class="text-blue-600 text-sm font-semibold mb-4">+ Agregar línea</button>
       <div class="flex gap-3 justify-end items-center">
         <span id="man-balance" class="text-sm text-gray-500"></span>
+        <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+          <input type="checkbox" id="man-limpiar-guardar" class="rounded" checked>
+          Limpiar al guardar
+        </label>
         <button onclick="guardarComprobante()"
                 class="bg-green-600 text-white font-bold px-5 py-2 rounded-lg text-sm">Guardar</button>
       </div>
@@ -1434,6 +1438,7 @@ async function guardarComprobante() {
 
   // ── MODO EDICIÓN: endpoints granulares ──
   if (editComprobanteId) {
+    const limpiar = document.getElementById('man-limpiar-guardar').checked;
     try {
       // 1. Recolectar líneas actuales del DOM con sus IDs
       const domLineas = [];
@@ -1509,10 +1514,12 @@ async function guardarComprobante() {
       editLineasOriginales = [];
       const tabBtn = document.getElementById('tab-manual');
       if (tabBtn) tabBtn.innerHTML = '✏️ Comprobante';
-      document.getElementById('man-lineas').innerHTML = '';
-      addLineaManual();
-      if (esParam) { document.getElementById('param-tipodoc').value=''; document.getElementById('param-vars').innerHTML=''; document.getElementById('man-desc-p').value=''; }
-      else { document.getElementById('man-tipo').value=''; document.getElementById('man-desc').value=''; }
+      if (limpiar) {
+        document.getElementById('man-lineas').innerHTML = '';
+        addLineaManual();
+        if (esParam) { document.getElementById('param-tipodoc').value=''; document.getElementById('param-vars').innerHTML=''; document.getElementById('man-desc-p').value=''; }
+        else { document.getElementById('man-tipo').value=''; document.getElementById('man-desc').value=''; }
+      }
       calcBalance();
     } catch(e) {
       console.error(e);
@@ -1522,6 +1529,7 @@ async function guardarComprobante() {
   }
 
   // ── MODO CREACIÓN: flujo original ──
+  const limpiar = document.getElementById('man-limpiar-guardar').checked;
   const body = {tipo, fecha, descripcion, lineas};
   if (tipo_doc_id) body.tipo_doc_id = tipo_doc_id;
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante`, {
@@ -1530,10 +1538,12 @@ async function guardarComprobante() {
   const data = await resp.json();
   if (data.ok) {
     toast('Comprobante guardado');
-    document.getElementById('man-lineas').innerHTML = '';
-    addLineaManual();
-    if (esParam) { document.getElementById('param-tipodoc').value=''; document.getElementById('param-vars').innerHTML=''; document.getElementById('man-desc-p').value=''; }
-    else { document.getElementById('man-tipo').value=''; document.getElementById('man-desc').value=''; }
+    if (limpiar) {
+      document.getElementById('man-lineas').innerHTML = '';
+      addLineaManual();
+      if (esParam) { document.getElementById('param-tipodoc').value=''; document.getElementById('param-vars').innerHTML=''; document.getElementById('man-desc-p').value=''; }
+      else { document.getElementById('man-tipo').value=''; document.getElementById('man-desc').value=''; }
+    }
     calcBalance();
   } else toast(data.error, false);
 }

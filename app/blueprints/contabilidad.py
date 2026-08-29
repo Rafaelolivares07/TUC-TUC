@@ -2375,6 +2375,133 @@ def api_comprobante_post(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ── ENDPOINTS GRANULARES DE EDICIÓN ──────────────────────────────────────
+
+@bp.route('/api/contabilidad/<int:negocio_id>/comprobante/<int:comp_id>/linea/<int:linea_id>', methods=['PATCH'])
+def api_comprobante_linea_patch(negocio_id, comp_id, linea_id):
+    """Actualiza campos específicos de una línea SIN destruir el comprobante."""
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        # Verificar que la línea pertenece a este comprobante y negocio
+        row = conn.execute(
+            "SELECT id FROM movimientos_contables WHERE id=%s AND comprobante_id=%s AND negocio_id=%s",
+            (linea_id, comp_id, negocio_id)
+        ).fetchone()
+        if not row:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Línea no encontrada'}), 404
+        # Solo actualizar campos permitidos (nunca tocar: id, negocio_id, comprobante_id,
+        # registrado_por, created_at, producto_id, origen_tipo, origen_id)
+        allowed = {
+            'cuenta_id': 'cuenta_id',
+            'cuenta': 'cuenta',
+            'concepto': 'concepto',
+            'tipo': 'tipo',
+            'monto': 'monto',
+            'tercero_id': 'tercero_id',
+        }
+        sets = []
+        vals = []
+        for key, col in allowed.items():
+            if key in data:
+                sets.append(f"{col} = %s")
+                vals.append(data[key])
+        if not sets:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Sin cambios para aplicar'}), 400
+        vals.extend([linea_id, comp_id, negocio_id])
+        conn.execute(
+            f"UPDATE movimientos_contables SET {', '.join(sets)} WHERE id=%s AND comprobante_id=%s AND negocio_id=%s",
+            vals
+        )
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/comprobante/<int:comp_id>/linea/<int:linea_id>', methods=['DELETE'])
+def api_comprobante_linea_delete(negocio_id, comp_id, linea_id):
+    """Elimina una sola línea de un comprobante sin tocar las demás."""
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT id FROM movimientos_contables WHERE id=%s AND comprobante_id=%s AND negocio_id=%s",
+            (linea_id, comp_id, negocio_id)
+        ).fetchone()
+        if not row:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Línea no encontrada'}), 404
+        conn.execute(
+            "DELETE FROM movimientos_contables WHERE id=%s AND comprobante_id=%s AND negocio_id=%s",
+            (linea_id, comp_id, negocio_id)
+        )
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/comprobante/<int:comp_id>/lineas', methods=['POST'])
+def api_comprobante_agregar_linea(negocio_id, comp_id):
+    """Agrega una o más líneas a un comprobante EXISTENTE sin recrearlo."""
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    lineas = data.get('lineas', [])
+    if not lineas:
+        return jsonify({'ok': False, 'error': 'Debe enviar al menos una línea'}), 400
+    from ..db import get_db_connection
+    uid = session['usuario_id']
+    try:
+        conn = get_db_connection()
+        # Verificar que el comprobante existe y pertenece a este negocio
+        existing = conn.execute(
+            "SELECT tipo_documento, tipo_documento_id, numero_documento, fecha, descripcion_general "
+            "FROM movimientos_contables WHERE comprobante_id=%s AND negocio_id=%s LIMIT 1",
+            (comp_id, negocio_id)
+        ).fetchone()
+        if not existing:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Comprobante no encontrado'}), 404
+        tipo_comp = existing['tipo_documento']
+        tipo_doc_id = existing['tipo_documento_id']
+        num_doc = existing['numero_documento']
+        fecha_doc = existing['fecha']
+        desc_doc = existing['descripcion_general']
+        for l in lineas:
+            debito  = float(l.get('debito')  or 0)
+            credito = float(l.get('credito') or 0)
+            monto   = debito if debito > 0 else credito
+            tipo_m  = 'debito' if debito > 0 else 'credito'
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
+                     registrado_por, tercero_id, tipo_documento_id, numero_documento,
+                     fecha, tipo_documento, descripcion_general)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (negocio_id, comp_id, l.get('cuenta_id'), l.get('cuenta_codigo',''),
+                  (l.get('concepto') or '').strip() or None, tipo_m, monto, uid,
+                  l.get('tercero_id'), tipo_doc_id, num_doc, fecha_doc, tipo_comp, desc_doc))
+        conn.commit(); conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/contabilidad/<int:negocio_id>/documento/<tipo_doc>/<numero_documento>/lineas', methods=['GET'])
 def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
     if not session.get('usuario_id'):

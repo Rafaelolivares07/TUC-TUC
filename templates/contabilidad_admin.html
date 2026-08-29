@@ -1245,6 +1245,7 @@ async function eliminarGrupo(id) {
 let manTimers = {};
 let modoComprobante = 'libre';
 let editComprobanteId = null;
+let editLineasOriginales = [];
 
 function setModoComp(modo) {
   modoComprobante = modo;
@@ -1322,11 +1323,12 @@ async function previsualizarAsiento() {
   toast('Asiento precargado — revisa y ajusta si es necesario');
 }
 
-function addLineaManual(prefill = null) {
+function addLineaManual(prefill = null, lineId = null) {
   const cont = document.getElementById('man-lineas');
   const idx  = cont.querySelectorAll('.linea-manual').length;
   const div  = document.createElement('div');
   div.className = 'linea-manual grid grid-cols-12 gap-2 items-center';
+  if (lineId) div.dataset.lineId = lineId;
   div.innerHTML = `
     <div class="relative col-span-4">
       <input type="text" placeholder="Cuenta PUC" autocomplete="off"
@@ -1423,24 +1425,111 @@ async function guardarComprobante() {
   const cred = Array.from(document.querySelectorAll('.man-cred')).reduce((a,e) => a + parseFloat(e.value||0), 0);
   const diff = deb - cred;
   
-  if (!tipo && !tipo_doc_id) { toast('Ingresa o selecciona el tipo de documento', false); return; }
+  if (!tipo && !tipo_doc_id && !editComprobanteId) { toast('Ingresa o selecciona el tipo de documento', false); return; }
   if (!lineas.length) { toast('Agrega al menos una línea con monto', false); return; }
   if (Math.abs(diff) > 0.01) {
     const confirmed = confirm(`El comprobante está descuadrado.\n\nTotal Débitos: $${deb.toLocaleString('es-CO')}\nTotal Créditos: $${cred.toLocaleString('es-CO')}\nDiferencia: $${Math.abs(diff).toLocaleString('es-CO')}\n\n¿Deseas guardarlo descuadrado de todas formas?`);
     if (!confirmed) return;
   }
+
+  // ── MODO EDICIÓN: endpoints granulares ──
+  if (editComprobanteId) {
+    try {
+      // 1. Recolectar líneas actuales del DOM con sus IDs
+      const domLineas = [];
+      for (const f of document.querySelectorAll('.linea-manual')) {
+        const lineId = f.dataset.lineId ? parseInt(f.dataset.lineId) : null;
+        const debito  = parseFloat(f.querySelector('.man-deb').value||0);
+        const credito = parseFloat(f.querySelector('.man-cred').value||0);
+        if (debito > 0 || credito > 0) {
+          domLineas.push({
+            lineId,
+            cuenta_id: parseInt(f.querySelector('.man-cta-id').value)||null,
+            cuenta_codigo: f.querySelector('.man-cta-cod').value||'',
+            concepto: f.querySelector('.man-concepto').value.trim()||null,
+            monto: debito > 0 ? debito : credito,
+            tipo: debito > 0 ? 'debito' : 'credito'
+          });
+        }
+      }
+
+      const origIds = new Set(editLineasOriginales.map(l => l.id));
+      const domIds  = new Set(domLineas.filter(l => l.lineId).map(l => l.lineId));
+
+      // 2. ELIMINAR líneas que ya no están en el DOM
+      for (const orig of editLineasOriginales) {
+        if (!domIds.has(orig.id)) {
+          await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante/${editComprobanteId}/linea/${orig.id}`, { method: 'DELETE' });
+        }
+      }
+
+      // 3. PATCH líneas existentes que cambiaron
+      for (const dl of domLineas) {
+        if (!dl.lineId) continue; // es nueva, se maneja abajo
+        const orig = editLineasOriginales.find(o => o.id === dl.lineId);
+        if (!orig) continue;
+        const cambia = orig.cuenta_id !== dl.cuenta_id
+                    || orig.cuenta_codigo !== dl.cuenta_codigo
+                    || orig.concepto !== dl.concepto
+                    || Math.abs(orig.monto - dl.monto) > 0.01
+                    || orig.tipo !== dl.tipo;
+        if (cambia) {
+          await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante/${editComprobanteId}/linea/${dl.lineId}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              cuenta_id: dl.cuenta_id,
+              cuenta: dl.cuenta_codigo,
+              concepto: dl.concepto,
+              tipo: dl.tipo,
+              monto: dl.monto
+            })
+          });
+        }
+      }
+
+      // 4. POST líneas nuevas (sin lineId)
+      const nuevas = domLineas.filter(l => !l.lineId);
+      if (nuevas.length > 0) {
+        await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante/${editComprobanteId}/lineas`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ lineas: nuevas.map(l => ({
+            cuenta_id: l.cuenta_id,
+            cuenta_codigo: l.cuenta_codigo,
+            concepto: l.concepto,
+            debito: l.tipo === 'debito' ? l.monto : 0,
+            credito: l.tipo === 'credito' ? l.monto : 0
+          }))})
+        });
+      }
+
+      toast('Comprobante actualizado');
+      editComprobanteId = null;
+      editLineasOriginales = [];
+      const tabBtn = document.getElementById('tab-manual');
+      if (tabBtn) tabBtn.innerHTML = '✏️ Comprobante';
+      document.getElementById('man-lineas').innerHTML = '';
+      addLineaManual();
+      if (esParam) { document.getElementById('param-tipodoc').value=''; document.getElementById('param-vars').innerHTML=''; document.getElementById('man-desc-p').value=''; }
+      else { document.getElementById('man-tipo').value=''; document.getElementById('man-desc').value=''; }
+      calcBalance();
+    } catch(e) {
+      console.error(e);
+      toast('Error al actualizar comprobante', false);
+    }
+    return;
+  }
+
+  // ── MODO CREACIÓN: flujo original ──
   const body = {tipo, fecha, descripcion, lineas};
   if (tipo_doc_id) body.tipo_doc_id = tipo_doc_id;
-  if (editComprobanteId) body.comprobante_id = editComprobanteId;
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante`, {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
   });
   const data = await resp.json();
   if (data.ok) {
     toast('Comprobante guardado');
-    editComprobanteId = null;
-    const tabBtn = document.getElementById('tab-manual');
-    if (tabBtn) tabBtn.innerHTML = '✏️ Comprobante';
     document.getElementById('man-lineas').innerHTML = '';
     addLineaManual();
     if (esParam) { document.getElementById('param-tipodoc').value=''; document.getElementById('param-vars').innerHTML=''; document.getElementById('man-desc-p').value=''; }
@@ -1461,6 +1550,16 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
     if (data.lineas && data.lineas.length > 0) {
       const first = data.lineas[0];
       editComprobanteId = first.comprobante_id;
+      
+      // Guardar estado original para diff al guardar
+      editLineasOriginales = data.lineas.map(l => ({
+        id: l.id,
+        cuenta_id: l.cuenta_id || null,
+        cuenta_codigo: l.cuenta_codigo || l.cuenta || '',
+        concepto: l.concepto || '',
+        monto: parseFloat(l.monto || 0),
+        tipo: l.tipo
+      }));
       
       const tabBtn = document.getElementById('tab-manual');
       if (tabBtn) tabBtn.innerHTML = '✏️ Editar Doc. #' + numDoc;
@@ -1488,7 +1587,7 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
           concepto: l.concepto || '',
           monto: parseFloat(l.monto),
           tipo_mov: (l.tipo === 'debito' || l.tipo === 'D') ? 'D' : 'C'
-        });
+        }, l.id);
       }
       calcBalance();
       toast('Documento #' + numDoc + ' cargado para edición.');

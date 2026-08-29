@@ -2608,8 +2608,8 @@ async function cargarAuditoriaContable() {
 }
 
 function auditoriaFiltrarDocumento(tipoDoc, numDoc) {
-  cambiarTab('comps');
-  setTimeout(() => cargarDocumentoParaEdicion(tipoDoc, numDoc), 300);
+  const url = window.location.pathname + `?tab=comps&tipo_documento=${encodeURIComponent(tipoDoc)}&documento_numero=${encodeURIComponent(numDoc)}`;
+  window.open(url, '_blank');
 }
 
 async function consultarMovimientos() {
@@ -3020,6 +3020,12 @@ if (activeTab && TABS.includes(activeTab)) {
     const loadCompId = urlParams.get('comprobante_id');
     if (loadCompId) {
       setTimeout(() => cargarComprobanteParaEdicion(loadCompId), 150);
+    }
+  } else if (activeTab === 'comps') {
+    const tipoDoc = urlParams.get('tipo_documento');
+    const numDoc = urlParams.get('documento_numero');
+    if (tipoDoc && numDoc) {
+      setTimeout(() => cargarDocumentoParaEdicion(tipoDoc, numDoc), 150);
     }
   }
 } else {

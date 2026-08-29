@@ -5409,7 +5409,8 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta):
         JOIN pedidos ped ON ped.id = pi.pedido_id
         JOIN productos p ON p.id = pi.producto_id
         WHERE ped.negocio_id = %s 
-          AND (ped.estado IS NULL OR ped.estado != 'anulado')
+          AND (ped.estado IS NULL OR ped.estado = '' OR ped.estado NOT IN ('anulado', 'premontado'))
+          AND ped.numero_documento IS NOT NULL AND ped.numero_documento != ''
           AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date 
           AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
         GROUP BY pi.producto_id, p.nombre
@@ -5477,7 +5478,8 @@ def api_reporte_ventas_costos_detalle(negocio_id):
             JOIN pedidos ped ON ped.id = pi.pedido_id
             WHERE ped.negocio_id = %s
               AND pi.producto_id = %s
-              AND (ped.estado IS NULL OR ped.estado != 'anulado')
+              AND (ped.estado IS NULL OR ped.estado = '' OR ped.estado NOT IN ('anulado', 'premontado'))
+              AND ped.numero_documento IS NOT NULL AND ped.numero_documento != ''
               AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date
               AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
             ORDER BY COALESCE(ped.fecha, ped.created_at::date) DESC, ped.id DESC

@@ -4868,15 +4868,22 @@ def api_ajuste_guardar_item(negocio_id):
                 cuenta_favor = gi['cuenta_ajuste_favor_id']
                 cuenta_contra = gi['cuenta_ajuste_contra_id']
 
-                # Validar que las cuentas sean hoja (nivel >= 4)
+                # Validar que las cuentas existan, sean hoja (nivel >= 4) y acepten movimiento
                 for campo, val in [('cuenta_inve_id', cuenta_inve), ('cuenta_ajuste_favor_id', cuenta_favor), ('cuenta_ajuste_contra_id', cuenta_contra)]:
                     if val:
-                        nivel_row = conn.execute("SELECT nivel FROM cuentas_puc WHERE id=%s", (val,)).fetchone()
-                        if nivel_row and nivel_row['nivel'] < 4:
-                            warnings.append(f"La {campo} (ID {val}) es cuenta padre (nivel {nivel_row['nivel']}). Debe apuntar a una subcuenta hoja.")
-                            if campo == 'cuenta_inve_id': cuenta_inve = None
-                            elif campo == 'cuenta_ajuste_favor_id': cuenta_favor = None
-                            elif campo == 'cuenta_ajuste_contra_id': cuenta_contra = None
+                        cta = conn.execute("SELECT codigo, nombre, nivel, acepta_movimiento FROM cuentas_puc WHERE id=%s", (val,)).fetchone()
+                        if not cta:
+                            conn.rollback(); conn.close()
+                            return jsonify({'ok': False, 'error': f'La {campo} (ID {val}) no existe en el PUC.'}), 400
+                        if cta['nivel'] < 4:
+                            conn.rollback(); conn.close()
+                            return jsonify({'ok': False, 'error': f'La {campo} apunta a "{cta["codigo"]} — {cta["nombre"]}" (nivel {cta["nivel"]}). Debe ser una subcuenta hoja (nivel ≥ 4). Corrija la configuración de Grupos de Inventario.'}), 400
+                        if not cta['acepta_movimiento']:
+                            conn.rollback(); conn.close()
+                            return jsonify({'ok': False, 'error': f'La {campo} "{cta["codigo"]} — {cta["nombre"]}" tiene acepta_movimiento=FALSE.'}), 400
+                    else:
+                        conn.rollback(); conn.close()
+                        return jsonify({'ok': False, 'error': f'Falta configurar la {campo} en Grupos de Inventario para la categoría "{prod["categoria"]}".'}), 400
                 
                 monto_ajuste = abs(diff) * float(costo_unitario)
                 
@@ -4919,9 +4926,11 @@ def api_ajuste_guardar_item(negocio_id):
                     """, (negocio_id, comp_id, cr_cuenta_id, cr_cod, concepto, monto_ajuste, session.get('usuario_id'), producto_id,
                           tipo_documento_id, doc_num_final, tipo_code, doc_num_final, desc_asiento, tercero_id))
             else:
-                warnings.append("La categoría del producto no está configurada en Grupos de Inventario.")
+                conn.rollback(); conn.close()
+                return jsonify({'ok': False, 'error': f'La categoría "{prod["categoria"]}" no está configurada en Grupos de Inventario. Debe configurar cuenta de Inventario, Ajuste a Favor y Ajuste en Contra.'}), 400
         else:
-            warnings.append("El producto no pertenece a ninguna categoría.")
+            conn.rollback(); conn.close()
+            return jsonify({'ok': False, 'error': 'El producto no tiene categoría asignada. Asigne una categoría antes de ajustar.'}), 400
             
         conn.commit()
         return jsonify({

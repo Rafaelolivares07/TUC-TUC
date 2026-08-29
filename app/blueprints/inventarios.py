@@ -4867,6 +4867,16 @@ def api_ajuste_guardar_item(negocio_id):
                 cuenta_inve = gi['cuenta_inve_id']
                 cuenta_favor = gi['cuenta_ajuste_favor_id']
                 cuenta_contra = gi['cuenta_ajuste_contra_id']
+
+                # Validar que las cuentas sean hoja (nivel >= 4)
+                for campo, val in [('cuenta_inve_id', cuenta_inve), ('cuenta_ajuste_favor_id', cuenta_favor), ('cuenta_ajuste_contra_id', cuenta_contra)]:
+                    if val:
+                        nivel_row = conn.execute("SELECT nivel FROM cuentas_puc WHERE id=%s", (val,)).fetchone()
+                        if nivel_row and nivel_row['nivel'] < 4:
+                            warnings.append(f"La {campo} (ID {val}) es cuenta padre (nivel {nivel_row['nivel']}). Debe apuntar a una subcuenta hoja.")
+                            if campo == 'cuenta_inve_id': cuenta_inve = None
+                            elif campo == 'cuenta_ajuste_favor_id': cuenta_favor = None
+                            elif campo == 'cuenta_ajuste_contra_id': cuenta_contra = None
                 
                 monto_ajuste = abs(diff) * float(costo_unitario)
                 

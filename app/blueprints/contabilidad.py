@@ -4748,3 +4748,49 @@ def api_gastos_cierre_post(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/contabilidad/<int:negocio_id>/auditoria', methods=['GET'])
+def api_auditoria_contable(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        reglas = []
+
+        # Regla 1: Cuentas padre (codigo < 6 chars) en movimientos
+        filas = conn.execute("""
+            SELECT m.id, m.cuenta_id, p.codigo, p.nombre, p.nivel,
+                   m.concepto, m.tipo, m.monto, m.fecha,
+                   m.tipo_documento, m.numero_documento, m.comprobante_id
+            FROM movimientos_contables m
+            LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
+            WHERE m.negocio_id = %s
+              AND p.codigo IS NOT NULL
+              AND LENGTH(REPLACE(p.codigo, '.', '')) < 6
+            ORDER BY m.fecha DESC, m.id DESC
+            LIMIT 100
+        """, (negocio_id,)).fetchall()
+
+        if filas:
+            items = []
+            for f in filas:
+                d = dict(f)
+                if d.get('fecha'):
+                    d['fecha'] = d['fecha'].strftime('%Y-%m-%d') if hasattr(d['fecha'], 'strftime') else str(d['fecha'])
+                items.append(d)
+            reglas.append({
+                'codigo': 'CUENTA_PADRE',
+                'nombre': 'Cuentas padre en movimientos',
+                'descripcion': f'{len(items)} registro(s) usando cuentas de nivel padre (< 6 caracteres). Estas cuentas no deberían tener movimientos directos.',
+                'gravedad': 'alta',
+                'items': items
+            })
+
+        conn.close()
+        return jsonify({'ok': True, 'reglas': reglas})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+

@@ -539,6 +539,21 @@
       <div id="cons-resultados" class="space-y-6">
         <!-- Los bloques se renderizarán dinámicamente aquí -->
       </div>
+
+      <!-- Auditoría Colapsable -->
+      <div id="cons-auditoria" class="mt-6 hidden">
+        <details id="auditoria-details" class="border border-amber-200 bg-amber-50/50 rounded-xl overflow-hidden">
+          <summary class="cursor-pointer px-4 py-3 flex items-center gap-2 select-none hover:bg-amber-100/50 transition">
+            <span class="text-amber-600 text-lg">⚠️</span>
+            <span class="font-bold text-amber-800 text-sm">Auditoría Contable</span>
+            <span id="auditoria-badge" class="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full hidden">0</span>
+            <span class="text-amber-500 text-xs ml-auto">Click para expandir</span>
+          </summary>
+          <div id="auditoria-body" class="px-4 pb-4 space-y-3">
+            <p class="text-xs text-gray-500">Cargando auditoría...</p>
+          </div>
+        </details>
+      </div>
     </div>
 
     <!-- ═══ TAB: BALANCE Y CIERRE ═══ -->
@@ -736,7 +751,7 @@ function cambiarTab(t) {
   if (t === 'progs')        { progCargarTipos(); progCargarLista(); }
   if (t === 'comps')        { currentCompPage = 1; compSoloDescuadrados = false; cargarComprobantes(); }
   if (t === 'manual')       { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
-  if (t === 'consulta')     inicializarFechasConsulta();
+  if (t === 'consulta')     { inicializarFechasConsulta(); cargarAuditoriaContable(); }
   if (t === 'balance')      inicializarBalanceTab();
 }
 
@@ -2513,6 +2528,92 @@ function inicializarFechasConsulta() {
     hInput.value = `${yyyy}-${mm}-${dd}`;
     dInput.value = `${yyyy}-${mm}-01`; // primer dia del mes
   }
+}
+
+async function cargarAuditoriaContable() {
+  const el = document.getElementById('cons-auditoria');
+  el.classList.remove('hidden');
+  const body = document.getElementById('auditoria-body');
+  const badge = document.getElementById('auditoria-badge');
+  body.innerHTML = '<p class="text-xs text-gray-500 animate-pulse">Analizando movimientos contables...</p>';
+
+  try {
+    const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/auditoria`);
+    const data = await resp.json();
+    if (!data.ok) { body.innerHTML = `<p class="text-xs text-red-500">${data.error}</p>`; return; }
+
+    const reglas = data.reglas || [];
+    const totalInconsistencias = reglas.reduce((a, r) => a + r.items.length, 0);
+
+    if (totalInconsistencias === 0) {
+      body.innerHTML = '<div class="flex items-center gap-2 text-emerald-700 bg-emerald-50 rounded-lg p-3"><span class="text-lg">✅</span><span class="text-sm font-semibold">Sin inconsistencias detectadas</span></div>';
+      badge.classList.add('hidden');
+      return;
+    }
+
+    badge.textContent = totalInconsistencias;
+    badge.classList.remove('hidden');
+
+    let html = '';
+    for (const regla of reglas) {
+      const gravedadColor = regla.gravedad === 'alta' ? 'red' : regla.gravedad === 'media' ? 'amber' : 'blue';
+      html += `
+        <div class="border border-${gravedadColor}-200 bg-white rounded-lg overflow-hidden">
+          <div class="px-3 py-2 bg-${gravedadColor}-50 flex items-center gap-2">
+            <span class="font-bold text-${gravedadColor}-800 text-xs">${regla.nombre}</span>
+            <span class="bg-${gravedadColor}-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">${regla.items.length}</span>
+            <span class="text-[10px] text-${gravedadColor}-600 ml-auto">${regla.descripcion}</span>
+          </div>
+          <div class="max-h-64 overflow-y-auto">
+            <table class="w-full text-[11px]">
+              <thead class="bg-gray-50 sticky top-0">
+                <tr>
+                  <th class="px-2 py-1.5 text-left font-semibold text-gray-500">Fecha</th>
+                  <th class="px-2 py-1.5 text-left font-semibold text-gray-500">Cuenta</th>
+                  <th class="px-2 py-1.5 text-left font-semibold text-gray-500">Concepto</th>
+                  <th class="px-2 py-1.5 text-right font-semibold text-gray-500">Monto</th>
+                  <th class="px-2 py-1.5 text-left font-semibold text-gray-500">Documento</th>
+                  <th class="px-2 py-1.5 text-center font-semibold text-gray-500">Acción</th>
+                </tr>
+              </thead>
+              <tbody>`;
+      for (const item of regla.items) {
+        const docLabel = item.tipo_documento ? item.tipo_documento.replace(/_/g, ' ') + ' #' + item.numero_documento : '—';
+        html += `
+                <tr class="border-t border-gray-100 hover:bg-${gravedadColor}-50/30">
+                  <td class="px-2 py-1.5 font-mono">${item.fecha || ''}</td>
+                  <td class="px-2 py-1.5 font-mono font-bold text-${gravedadColor}-700">${item.codigo}</td>
+                  <td class="px-2 py-1.5 truncate max-w-[180px]" title="${item.concepto || ''}">${item.concepto || ''}</td>
+                  <td class="px-2 py-1.5 text-right font-mono">$${parseFloat(item.monto || 0).toLocaleString('es-CO', {minimumFractionDigits:2})}</td>
+                  <td class="px-2 py-1.5 font-mono text-gray-500">${docLabel}</td>
+                  <td class="px-2 py-1.5 text-center">
+                    <button onclick="auditoriaFiltrarDocumento('${item.tipo_documento}', '${item.numero_documento}')"
+                            class="text-blue-600 hover:text-blue-800 font-bold underline text-[10px]" title="Ver este documento en Consulta Mov">
+                      Ver doc
+                    </button>
+                  </td>
+                </tr>`;
+      }
+      html += `
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+    body.innerHTML = html;
+  } catch(e) {
+    console.error(e);
+    body.innerHTML = '<p class="text-xs text-red-500">Error al cargar auditoría</p>';
+  }
+}
+
+function auditoriaFiltrarDocumento(tipoDoc, numDoc) {
+  document.getElementById('cons-cuenta-txt').value = '';
+  document.getElementById('cons-cuenta-id').value = '';
+  document.getElementById('cons-tercero-txt').value = '';
+  document.getElementById('cons-tercero-id').value = '';
+  document.getElementById('cons-agrupar').value = 'sin_agrupar';
+  consultarMovimientos();
 }
 
 async function consultarMovimientos() {

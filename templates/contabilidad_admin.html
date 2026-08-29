@@ -2608,12 +2608,8 @@ async function cargarAuditoriaContable() {
 }
 
 function auditoriaFiltrarDocumento(tipoDoc, numDoc) {
-  document.getElementById('cons-cuenta-txt').value = '';
-  document.getElementById('cons-cuenta-id').value = '';
-  document.getElementById('cons-tercero-txt').value = '';
-  document.getElementById('cons-tercero-id').value = '';
-  document.getElementById('cons-agrupar').value = 'sin_agrupar';
-  consultarMovimientos();
+  cambiarTab('comps');
+  setTimeout(() => cargarDocumentoParaEdicion(tipoDoc, numDoc), 300);
 }
 
 async function consultarMovimientos() {

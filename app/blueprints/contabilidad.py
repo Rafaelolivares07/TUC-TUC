@@ -2175,7 +2175,8 @@ def api_comprobantes_get(negocio_id):
                     SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0.0 END) AS cred
                 FROM movimientos_contables mc
                 LEFT JOIN tipos_documento_negocio td ON td.id = mc.tipo_documento_id
-                WHERE {where_clause}
+                LEFT JOIN cuentas_puc p ON p.id = mc.cuenta_id
+                WHERE {where_clause} AND (p.nivel IS NULL OR p.nivel > 3)
                 GROUP BY mc.tipo_documento, mc.numero_documento
             )
             SELECT 
@@ -2196,7 +2197,8 @@ def api_comprobantes_get(negocio_id):
                 SELECT 1 
                 FROM movimientos_contables mc
                 LEFT JOIN tipos_documento_negocio td ON td.id = mc.tipo_documento_id
-                WHERE {where_clause}
+                LEFT JOIN cuentas_puc p ON p.id = mc.cuenta_id
+                WHERE {where_clause} AND (p.nivel IS NULL OR p.nivel > 3)
                 GROUP BY mc.tipo_documento, mc.numero_documento
                 {having_clause}
             ) AS temp
@@ -2248,7 +2250,8 @@ def api_comprobantes_get(negocio_id):
             FROM movimientos_contables mc
             LEFT JOIN tipos_documento_negocio td ON td.id = mc.tipo_documento_id
             LEFT JOIN terceros t ON t.id = mc.tercero_id
-            WHERE {where_clause}
+            LEFT JOIN cuentas_puc p ON p.id = mc.cuenta_id
+            WHERE {where_clause} AND (p.nivel IS NULL OR p.nivel > 3)
             GROUP BY mc.tipo_documento, mc.tipo_documento_id, mc.numero_documento, td.nombre, td.codigo
             {having_clause}
             {order_clause}
@@ -2511,7 +2514,7 @@ def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
         conn = get_db_connection()
         lineas = conn.execute("""
             SELECT m.id, m.tipo, m.cuenta, m.concepto, m.monto, m.cuenta_id,
-                   p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre,
+                   p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre, p.nivel AS cuenta_nivel,
                    m.fecha, m.descripcion_general, m.tercero_id,
                    m.tipo_documento, m.tipo_documento_id, m.comprobante_id
             FROM movimientos_contables m
@@ -2519,6 +2522,15 @@ def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
             WHERE m.tipo_documento = %s AND m.numero_documento = %s AND m.negocio_id = %s
             ORDER BY m.id
         """, (tipo_doc, numero_documento, negocio_id)).fetchall()
+        
+        # Resolver nombre del tipo de documento
+        tipo_doc_nombre = tipo_doc
+        if tipo_doc_id:
+            td_row = conn.execute(
+                "SELECT nombre FROM tipos_documento_negocio WHERE id = %s", (tipo_doc_id,)
+            ).fetchone()
+            if td_row:
+                tipo_doc_nombre = td_row['nombre']
         
         # Obtener el tipo_documento_id del documento a partir de movimientos_contables
         doc_info = conn.execute("""
@@ -2610,7 +2622,8 @@ def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
             'lineas': res, 
             'movimientos_inventario': movs_res,
             'pedido': pedido_res,
-            'pedido_items': items_res
+            'pedido_items': items_res,
+            'tipo_doc_nombre': tipo_doc_nombre
         })
     except Exception as e:
         try: conn.close()

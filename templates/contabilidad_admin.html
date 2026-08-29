@@ -1558,11 +1558,15 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
     }
     
     if (data.lineas && data.lineas.length > 0) {
-      const first = data.lineas[0];
+      const lineasValidas = data.lineas.filter(l => !l.cuenta_nivel || l.cuenta_nivel > 3);
+      if (lineasValidas.length === 0) {
+        toast('El documento solo tiene cuentas padre sin movimientos directos', false);
+        return;
+      }
+      const first = lineasValidas[0];
       editComprobanteId = first.comprobante_id;
       
-      // Guardar estado original para diff al guardar
-      editLineasOriginales = data.lineas.map(l => ({
+      editLineasOriginales = lineasValidas.map(l => ({
         id: l.id,
         cuenta_id: l.cuenta_id || null,
         cuenta_codigo: l.cuenta_codigo || l.cuenta || '',
@@ -1571,10 +1575,10 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
         tipo: l.tipo
       }));
       
+      const tipoDocNombre = data.tipo_doc_nombre || tipoDoc;
       const tabBtn = document.getElementById('tab-manual');
-      if (tabBtn) tabBtn.innerHTML = '✏️ Editar Doc. #' + numDoc;
+      if (tabBtn) tabBtn.innerHTML = '✏️ Editar ' + tipoDocNombre + ' #' + numDoc;
       
-      // Set to manual libre mode
       cambiarTab('manual');
       setModoComp('libre');
       document.getElementById('man-lineas').innerHTML = '';
@@ -1582,14 +1586,12 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
       if (first.fecha) {
         document.getElementById('man-fecha').value = first.fecha.split('T')[0];
       }
-      if (first.descripcion_general) {
-        document.getElementById('man-desc').value = first.descripcion_general;
-      }
+      document.getElementById('man-desc').value = tipoDocNombre + ' #' + numDoc + (first.descripcion_general ? ' — ' + first.descripcion_general : '');
       if (first.tipo_documento) {
-        document.getElementById('man-tipo').value = first.tipo_documento;
+        document.getElementById('man-tipo').value = tipoDocNombre;
       }
       
-      for (const l of data.lineas) {
+      for (const l of lineasValidas) {
         addLineaManual({
           cuenta_codigo: l.cuenta_codigo || l.cuenta,
           cuenta_nombre: l.cuenta_nombre || '',
@@ -1600,7 +1602,7 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
         }, l.id);
       }
       calcBalance();
-      toast('Documento #' + numDoc + ' cargado para edición.');
+      toast(tipoDocNombre + ' #' + numDoc + ' cargado para edición.');
     } else {
       toast('El documento no tiene líneas contables', false);
     }

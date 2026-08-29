@@ -5444,6 +5444,60 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta):
     return datos
 
 
+@bp.route('/api/inventario/<int:negocio_id>/reporte-ventas-costos/detalle')
+def api_reporte_ventas_costos_detalle(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    desde = request.args.get('desde')
+    hasta = request.args.get('hasta')
+    producto_id = request.args.get('producto_id')
+    if not desde or not hasta or not producto_id:
+        return jsonify({'ok': False, 'error': 'Fechas y producto_id requeridos'}), 400
+    try:
+        producto_id = int(producto_id)
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'producto_id inválido'}), 400
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT 
+                ped.id AS pedido_id,
+                COALESCE(ped.fecha, ped.created_at::date) AS fecha,
+                ped.numero_documento,
+                ped.nombre_cliente,
+                ped.estado,
+                pi.cantidad,
+                pi.precio_unitario,
+                pi.costo_unitario,
+                (pi.cantidad * pi.precio_unitario) AS total_venta,
+                (pi.cantidad * pi.costo_unitario) AS total_costo,
+                ped.metodo_pago
+            FROM pedido_items pi
+            JOIN pedidos ped ON ped.id = pi.pedido_id
+            WHERE ped.negocio_id = %s
+              AND pi.producto_id = %s
+              AND (ped.estado IS NULL OR ped.estado != 'anulado')
+              AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date
+              AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
+            ORDER BY COALESCE(ped.fecha, ped.created_at::date) DESC, ped.id DESC
+        """, (negocio_id, producto_id, desde, hasta)).fetchall()
+        documentos = []
+        for r in rows:
+            d = dict(r)
+            if d.get('fecha'):
+                d['fecha'] = d['fecha'].strftime('%Y-%m-%d') if hasattr(d['fecha'], 'strftime') else str(d['fecha'])
+            for k in ('cantidad', 'precio_unitario', 'costo_unitario', 'total_venta', 'total_costo'):
+                d[k] = float(d[k]) if d.get(k) is not None else 0.0
+            documentos.append(d)
+        conn.close()
+        return jsonify({'ok': True, 'documentos': documentos})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 def _pdf_sanitize(txt):
     out = []
     for ch in str(txt):

@@ -11010,9 +11010,9 @@ function renderTablaVC() {
 
     return `
 
-      <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs">
+      <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs cursor-pointer" onclick="toggleDetalleVC(this, ${r.producto_id})" data-producto="${r.producto_id}">
 
-        <td class="px-3 py-2.5 font-semibold text-gray-800">${r.nombre_producto}</td>
+        <td class="px-3 py-2.5 font-semibold text-gray-800"><span class="vc-arrow text-gray-400 mr-1 text-[10px]">▶</span> ${r.nombre_producto}</td>
 
         <td class="px-3 py-2.5 text-right num text-gray-600">${fmt(r.cantidad)}</td>
 
@@ -11031,6 +11031,8 @@ function renderTablaVC() {
         <td class="px-3 py-2.5 text-right num font-bold ${pctCls}">${fmt(r.margen_porcentual)}%</td>
 
       </tr>
+
+      <tr class="vc-detalle-${r.producto_id} hidden"><td colspan="9" class="px-3 py-2 bg-gray-50/50"><p class="text-[10px] text-gray-400 animate-pulse">Cargando documentos...</p></td></tr>
 
     `;
 
@@ -11094,6 +11096,73 @@ function renderTablaVC() {
 
 }
 
+async function toggleDetalleVC(tr, productoId) {
+  const detailRow = tr.nextElementSibling;
+  if (!detailRow || !detailRow.classList.contains('vc-detalle-' + productoId)) return;
+
+  const arrow = tr.querySelector('.vc-arrow');
+  if (!detailRow.classList.contains('hidden')) {
+    detailRow.classList.add('hidden');
+    if (arrow) arrow.textContent = '▶';
+    return;
+  }
+
+  detailRow.classList.remove('hidden');
+  if (arrow) arrow.textContent = '▼';
+
+  const desde = document.getElementById('vc-desde').value;
+  const hasta = document.getElementById('vc-hasta').value;
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/detalle?desde=${desde}&hasta=${hasta}&producto_id=${productoId}`);
+    const d = await r.json();
+    if (!d.ok) { detailRow.innerHTML = `<td colspan="9" class="text-xs text-red-500 px-3">${d.error}</td>`; return; }
+
+    const docs = d.documentos || [];
+    if (!docs.length) { detailRow.innerHTML = `<td colspan="9" class="text-xs text-gray-400 px-3">Sin documentos en este rango.</td>`; return; }
+
+    let totalVentaProd = 0, totalCostoProd = 0, totalCantProd = 0;
+    docs.forEach(doc => { totalVentaProd += doc.total_venta; totalCostoProd += doc.total_costo; totalCantProd += doc.cantidad; });
+
+    let html = `<td colspan="9" class="px-3 py-2 bg-blue-50/30">
+      <div class="flex items-center gap-4 mb-2 text-[10px] text-gray-500">
+        <span class="font-bold text-gray-700">${docs.length} factura(s)</span>
+        <span>Cant: <b>${fmt(totalCantProd)}</b></span>
+        <span>Venta: <b class="text-emerald-700">${fmtMon(totalVentaProd)}</b></span>
+        <span>Costo: <b class="text-rose-700">${fmtMon(totalCostoProd)}</b></span>
+      </div>
+      <table class="w-full text-[10px]">
+        <thead><tr class="text-gray-500 border-b border-gray-200">
+          <th class="px-2 py-1 text-left">Fecha</th>
+          <th class="px-2 py-1 text-left">Factura</th>
+          <th class="px-2 py-1 text-left">Cliente</th>
+          <th class="px-2 py-1 text-right">Cant</th>
+          <th class="px-2 py-1 text-right">P. Unit</th>
+          <th class="px-2 py-1 text-right">C. Unit</th>
+          <th class="px-2 py-1 text-right">Total Venta</th>
+          <th class="px-2 py-1 text-right">Total Costo</th>
+          <th class="px-2 py-1 text-right">Método</th>
+        </tr></thead><tbody>`;
+    for (const doc of docs) {
+      const numLimpio = (doc.numero_documento || '').replace(/^[^-]+-/, '');
+      html += `<tr class="border-b border-gray-100 hover:bg-white">
+        <td class="px-2 py-1 font-mono">${doc.fecha || ''}</td>
+        <td class="px-2 py-1 font-mono font-bold text-blue-700">#${numLimpio}</td>
+        <td class="px-2 py-1 truncate max-w-[120px]" title="${doc.nombre_cliente || ''}">${doc.nombre_cliente || '—'}</td>
+        <td class="px-2 py-1 text-right">${fmt(doc.cantidad)}</td>
+        <td class="px-2 py-1 text-right font-mono">${fmtMon(doc.precio_unitario)}</td>
+        <td class="px-2 py-1 text-right font-mono">${fmtMon(doc.costo_unitario)}</td>
+        <td class="px-2 py-1 text-right font-mono text-emerald-700">${fmtMon(doc.total_venta)}</td>
+        <td class="px-2 py-1 text-right font-mono text-rose-700">${fmtMon(doc.total_costo)}</td>
+        <td class="px-2 py-1 text-right">${doc.metodo_pago || ''}</td>
+      </tr>`;
+    }
+    html += '</tbody></table></td>';
+    detailRow.innerHTML = html;
+  } catch(e) {
+    detailRow.innerHTML = `<td colspan="9" class="text-xs text-red-500 px-3">Error de conexión</td>`;
+  }
+}
 
 
 function ordenarVC(col) {

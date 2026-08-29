@@ -2175,8 +2175,7 @@ def api_comprobantes_get(negocio_id):
                     SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0.0 END) AS cred
                 FROM movimientos_contables mc
                 LEFT JOIN tipos_documento_negocio td ON td.id = mc.tipo_documento_id
-                LEFT JOIN cuentas_puc p ON p.id = mc.cuenta_id
-                WHERE {where_clause} AND (p.nivel IS NULL OR p.nivel > 3)
+                WHERE {where_clause}
                 GROUP BY mc.tipo_documento, mc.numero_documento
             )
             SELECT 
@@ -2197,8 +2196,7 @@ def api_comprobantes_get(negocio_id):
                 SELECT 1 
                 FROM movimientos_contables mc
                 LEFT JOIN tipos_documento_negocio td ON td.id = mc.tipo_documento_id
-                LEFT JOIN cuentas_puc p ON p.id = mc.cuenta_id
-                WHERE {where_clause} AND (p.nivel IS NULL OR p.nivel > 3)
+                WHERE {where_clause}
                 GROUP BY mc.tipo_documento, mc.numero_documento
                 {having_clause}
             ) AS temp
@@ -2250,8 +2248,7 @@ def api_comprobantes_get(negocio_id):
             FROM movimientos_contables mc
             LEFT JOIN tipos_documento_negocio td ON td.id = mc.tipo_documento_id
             LEFT JOIN terceros t ON t.id = mc.tercero_id
-            LEFT JOIN cuentas_puc p ON p.id = mc.cuenta_id
-            WHERE {where_clause} AND (p.nivel IS NULL OR p.nivel > 3)
+            WHERE {where_clause}
             GROUP BY mc.tipo_documento, mc.tipo_documento_id, mc.numero_documento, td.nombre, td.codigo
             {having_clause}
             {order_clause}

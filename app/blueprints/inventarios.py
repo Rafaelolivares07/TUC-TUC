@@ -1565,7 +1565,8 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
 
         contab_rows = conn.execute("""
             SELECT mc.id, mc.cuenta_id, mc.concepto, mc.tipo, mc.monto,
-                   mc.producto_id, mc.producto_padre_id, mc.numero_documento
+                   mc.producto_id, mc.producto_padre_id, mc.numero_documento,
+                   mc.tipo_documento_id, mc.fecha
             FROM movimientos_contables mc
             WHERE mc.negocio_id = %s
               AND (mc.numero_documento = %s OR mc.numero_documento = %s OR mc.numero_documento = %s)
@@ -1592,6 +1593,9 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
                 'monto': float(c['monto']),
                 'producto_id': c['producto_id'],
                 'producto_padre_id': c['producto_padre_id'],
+                'numero_documento': c['numero_documento'],
+                'tipo_documento_id': c['tipo_documento_id'],
+                'fecha': str(c['fecha']) if c.get('fecha') else None,
             } for c in contab_rows]
 
         return jsonify({
@@ -1614,6 +1618,9 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
                 'monto': float(c['monto']),
                 'producto_id': c['producto_id'],
                 'producto_padre_id': c['producto_padre_id'],
+                'numero_documento': c['numero_documento'],
+                'tipo_documento_id': c['tipo_documento_id'],
+                'fecha': str(c['fecha']) if c.get('fecha') else None,
             } for c in contab],
             'resumen': {
                 'kardex_registros': len(kardex),

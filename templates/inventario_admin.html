@@ -11986,7 +11986,8 @@ async function cargarReporteEnsambles() {
             if (ff.pedido_item.id) {
               const dif = ff.pedido_item.diferencia;
               const cls = Math.abs(dif) > 0.01 ? 'text-red-600' : 'text-green-600';
-              html += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500">Costo venta (pedido):</span><span class="${cls} font-bold">$${ff.pedido_item.costo_total_actual.toLocaleString('es-CO')} → $${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
+              const costoActual = ff.pedido_item.costo_unitario_actual * ff.cantidad_vendida;
+              html += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500">Costo venta (pedido):</span><span class="${cls} font-bold">$${costoActual.toLocaleString('es-CO')} → $${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
             }
 
             // COGS contable

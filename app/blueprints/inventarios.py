@@ -1711,20 +1711,19 @@ def api_vincular_ids_contabilidad(negocio_id):
         # 4. Emparejar (con tracking de kardex ya usados)
         matches = []
         sin_kardex = 0
-        kardex_used = set()  # indices ya emparejados
+        kardex_used = set()  # (nombre, idx) ya emparejados
+
         for c in contab_rows:
             nombre_comp = c['concepto'].replace('Baja Inv:', '').replace('BAJA INV:', '').strip().upper()
             candidatos = kardex_por_nombre.get(nombre_comp, [])
 
             match = None
-            if len(candidatos) == 1:
-                match = candidatos[0]
-            elif len(candidatos) > 1:
+            if len(candidatos) >= 1:
                 c_monto = float(c['monto'])
                 mejor_idx = None
                 mejor_dif = float('inf')
                 for i, k in enumerate(candidatos):
-                    if i in kardex_used:
+                    if (nombre_comp, i) in kardex_used:
                         continue
                     dif = abs(k['total'] - c_monto)
                     if dif < mejor_dif:
@@ -1732,7 +1731,7 @@ def api_vincular_ids_contabilidad(negocio_id):
                         mejor_idx = i
                 if mejor_idx is not None:
                     match = candidatos[mejor_idx]
-                    kardex_used.add(mejor_idx)
+                    kardex_used.add((nombre_comp, mejor_idx))
 
             if match:
                 matches.append({

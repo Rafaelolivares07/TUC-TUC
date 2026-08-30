@@ -1564,16 +1564,18 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
         """, (negocio_id, numero_doc)).fetchall()
 
         contab_rows = conn.execute("""
-            SELECT mc.id, mc.cuenta_id, mc.concepto, mc.tipo, mc.monto,
+            SELECT mc.id, mc.cuenta, c.codigo AS cuenta_codigo, c.nombre AS cuenta_nombre,
+                   mc.concepto, mc.tipo, mc.monto,
                    mc.producto_id, mc.producto_padre_id, mc.numero_documento,
                    mc.tipo_documento_id, mc.fecha
             FROM movimientos_contables mc
+            LEFT JOIN cuentas_puc c ON c.id = mc.cuenta
             WHERE mc.negocio_id = %s
               AND (mc.numero_documento = %s OR mc.numero_documento = %s OR mc.numero_documento = %s)
             ORDER BY mc.concepto
         """, (negocio_id, f'FACTURA_DE_VENTA-{numero_doc}', str(numero_doc), f'VENTA-{numero_doc}')).fetchall()
 
-        contab = [c for c in contab_rows if str(c['cuenta_id']).startswith('14') and c['tipo'] == 'credito']
+        contab = [c for c in contab_rows if str(c['cuenta_codigo']).startswith('14') and c['tipo'] == 'credito']
 
         grupos = conn.execute("""
             SELECT gi.id, gi.nombre, gi.cuenta_inve_id, gi.cuenta_cos_id, gi.cuenta_ingre_id,
@@ -1587,7 +1589,9 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
 
         todos_contab = [{
                 'id': c['id'],
-                'cuenta_id': str(c['cuenta_id']),
+                'cuenta': c['cuenta'],
+                'cuenta_codigo': c['cuenta_codigo'],
+                'cuenta_nombre': c['cuenta_nombre'],
                 'concepto': c['concepto'],
                 'tipo': c['tipo'],
                 'monto': float(c['monto']),
@@ -1612,7 +1616,9 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
             'contabilidad_todos': todos_contab,
             'contabilidad_14': [{
                 'id': c['id'],
-                'cuenta_id': str(c['cuenta_id']),
+                'cuenta': c['cuenta'],
+                'cuenta_codigo': c['cuenta_codigo'],
+                'cuenta_nombre': c['cuenta_nombre'],
                 'concepto': c['concepto'],
                 'tipo': c['tipo'],
                 'monto': float(c['monto']),

@@ -1813,12 +1813,6 @@ def api_vincular_ids_contabilidad(negocio_id):
                         'kardex_monto': None,
                         'diferencia': None,
                     })
-                    'kardex_producto_id': None,
-                    'kardex_producto_padre_id': None,
-                    'kardex_nombre': None,
-                    'kardex_monto': None,
-                    'diferencia': None,
-                })
 
         # 5. Ejecutar si es POST
         vinculados = 0

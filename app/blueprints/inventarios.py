@@ -1727,9 +1727,6 @@ def api_vincular_ids_contabilidad(negocio_id):
         if fecha_hasta:
             k_where += " AND COALESCE(m.documento_fecha, m.created_at::date) <= %s"
             k_params.append(fecha_hasta)
-        if prod_padre_id and not numero_doc:
-            k_where += " AND m.producto_padre_id = %s"
-            k_params.append(prod_padre_id)
 
         kardex_rows = conn.execute(f"""
             SELECT m.producto_id, m.producto_padre_id, m.nombre_producto,
@@ -1743,12 +1740,25 @@ def api_vincular_ids_contabilidad(negocio_id):
             ORDER BY m.nombre_producto, COALESCE(m.valor_total, m.cantidad * m.costo_und, 0)
         """, k_params).fetchall()
 
+        # Si hay prod_padre_id + numero_doc, filtrar contab_rows a solo los componentes de ese producto
+        if prod_padre_id and numero_doc:
+            comp_names = set()
+            for k in kardex_rows:
+                if k['producto_padre_id'] == prod_padre_id:
+                    comp_names.add(k['nombre_producto'].strip().upper())
+            if comp_names:
+                contab_rows = [c for c in contab_rows
+                               if c['concepto'].replace('Baja Inv:', '').replace('BAJA INV:', '').strip().upper() in comp_names]
+
         # 3. Indexar Kardex por nombre + documento
         from collections import defaultdict
         kardex_por_nombre_doc = defaultdict(list)
         for k in kardex_rows:
             nombre_norm = k['nombre_producto'].strip().upper()
             doc = str(k['documento_numero']) if k['documento_numero'] else ''
+            # Si hay prod_padre_id, solo indexar Kardex de ese producto
+            if prod_padre_id and k['producto_padre_id'] != prod_padre_id:
+                continue
             kardex_por_nombre_doc[(nombre_norm, doc)].append({
                 'producto_id': k['producto_id'],
                 'producto_padre_id': k['producto_padre_id'],

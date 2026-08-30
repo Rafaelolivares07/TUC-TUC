@@ -301,18 +301,12 @@ def editar_item(item_id):
         return jsonify({'ok': False, 'error': 'El texto de la tarea no puede estar vacío'})
         
     with get_db_connection() as conn:
+        row = conn.execute("SELECT id FROM agenda_items WHERE id = %s", (item_id,)).fetchone()
+        if not row:
+            return jsonify({'ok': False, 'error': 'Tarea no encontrada'})
         conn.execute(
-            "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
-            (contenido,)
-        )
-        conn.execute(
-            "INSERT INTO chat_mensajes (rol, contenido, canal, archivado) VALUES ('user', %s, 'captura', FALSE)",
-            (contenido,)
-        )
-        placeholders3 = ', '.join(['%s'] * len(ids))
-        conn.execute(
-            f"UPDATE agenda_items SET enviado_a = 'ASISTENTES' WHERE id IN ({placeholders3})",
-            tuple(ids)
+            "UPDATE agenda_items SET texto = %s, categoria = %s, fecha_limite = %s WHERE id = %s",
+            (texto, categoria, fecha_limite, item_id)
         )
         conn.commit()
     return jsonify({'ok': True})

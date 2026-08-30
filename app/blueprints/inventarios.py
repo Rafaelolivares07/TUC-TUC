@@ -1568,11 +1568,21 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
                    mc.producto_id, mc.producto_padre_id, mc.numero_documento
             FROM movimientos_contables mc
             WHERE mc.negocio_id = %s
-              AND mc.numero_documento = %s
+              AND (mc.numero_documento = %s OR mc.numero_documento = %s OR mc.numero_documento = %s)
             ORDER BY mc.concepto
-        """, (negocio_id, f'FACTURA_DE_VENTA-{numero_doc}')).fetchall()
+        """, (negocio_id, f'FACTURA_DE_VENTA-{numero_doc}', str(numero_doc), f'VENTA-{numero_doc}')).fetchall()
 
         contab = [c for c in contab_rows if str(c['cuenta_id']).startswith('14')]
+
+        todos_contab = [{
+                'id': c['id'],
+                'cuenta_id': str(c['cuenta_id']),
+                'concepto': c['concepto'],
+                'tipo': c['tipo'],
+                'monto': float(c['monto']),
+                'producto_id': c['producto_id'],
+                'producto_padre_id': c['producto_padre_id'],
+            } for c in contab_rows]
 
         return jsonify({
             'ok': True,
@@ -1585,6 +1595,7 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
                 'costo_und': float(k['costo_und']),
                 'total': float(k['total']),
             } for k in kardex],
+            'contabilidad_todos': todos_contab,
             'contabilidad_14': [{
                 'id': c['id'],
                 'cuenta_id': str(c['cuenta_id']),
@@ -1596,7 +1607,8 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
             } for c in contab],
             'resumen': {
                 'kardex_registros': len(kardex),
-                'contab_registros': len(contab),
+                'contab_total': len(todos_contab),
+                'contab_14': len(contab),
             }
         })
     except Exception as e:

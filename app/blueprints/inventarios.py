@@ -1647,6 +1647,144 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
         conn.close()
 
 
+# ── Vincular producto_id / producto_padre_id en registros contables ───────────
+@bp.route('/api/inventario/<int:negocio_id>/vincular-ids-contabilidad', methods=['GET', 'POST'])
+def api_vincular_ids_contabilidad(negocio_id):
+    """GET=preview de matches, POST=ejecuta UPDATEs.
+    Cruza movimientos_contables (Baja Inv 14* credito, producto_id NULL)
+    con movimientos_inventario (salida) por nombre del componente y numero_documento.
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    numero_doc = request.args.get('numero_doc', '').strip()
+    es_ejecucion = request.method == 'POST'
+
+    if not numero_doc:
+        return jsonify({'ok': False, 'error': 'numero_doc requerido'}), 400
+
+    conn = get_db_connection()
+    try:
+        # 1. Obtener Baja Inv (14* credito) con producto_id NULL
+        contab_rows = conn.execute("""
+            SELECT mc.id, mc.concepto, mc.monto, mc.numero_documento,
+                   mc.cuenta
+            FROM movimientos_contables mc
+            WHERE mc.negocio_id = %s
+              AND mc.numero_documento = %s
+              AND mc.cuenta LIKE '14%'
+              AND mc.tipo = 'credito'
+              AND UPPER(mc.concepto) LIKE 'BAJA INV:%'
+              AND mc.producto_id IS NULL
+            ORDER BY mc.concepto, mc.monto
+        """, (negocio_id, numero_doc)).fetchall()
+
+        if not contab_rows:
+            return jsonify({'ok': True, 'matches': [], 'resumen': {
+                'total_contab': 0, 'vinculados': 0, 'sin_kardex': 0
+            }})
+
+        # 2. Obtener Kardex salidas de la factura
+        kardex_rows = conn.execute("""
+            SELECT m.producto_id, m.producto_padre_id, m.nombre_producto,
+                   m.cantidad, m.costo_und,
+                   COALESCE(m.valor_total, m.cantidad * m.costo_und, 0) AS total
+            FROM movimientos_inventario m
+            WHERE m.negocio_id = %s
+              AND m.documento_numero = %s
+              AND m.tipo = 'salida'
+            ORDER BY m.nombre_producto, m.total
+        """, (negocio_id, numero_doc)).fetchall()
+
+        # 3. Indexar Kardex por nombre (normalizado)
+        from collections import defaultdict
+        kardex_por_nombre = defaultdict(list)
+        for k in kardex_rows:
+            nombre_norm = k['nombre_producto'].strip().upper()
+            kardex_por_nombre[nombre_norm].append({
+                'producto_id': k['producto_id'],
+                'producto_padre_id': k['producto_padre_id'],
+                'nombre': k['nombre_producto'],
+                'total': float(k['total']),
+            })
+
+        # 4. Emparejar
+        matches = []
+        sin_kardex = 0
+        for c in contab_rows:
+            nombre_comp = c['concepto'].replace('Baja Inv:', '').replace('BAJA INV:', '').strip().upper()
+            candidatos = kardex_por_nombre.get(nombre_comp, [])
+
+            match = None
+            if len(candidatos) == 1:
+                match = candidatos[0]
+            elif len(candidatos) > 1:
+                # Emparejar por posición (ambos vienen ordenados por monto)
+                c_monto = float(c['monto'])
+                mejor_idx = 0
+                mejor_dif = abs(candidatos[0]['total'] - c_monto)
+                for i, k in enumerate(candidatos):
+                    dif = abs(k['total'] - c_monto)
+                    if dif < mejor_dif:
+                        mejor_dif = dif
+                        mejor_idx = i
+                match = candidatos[mejor_idx]
+
+            if match:
+                matches.append({
+                    'contab_id': c['id'],
+                    'componente': c['concepto'],
+                    'contab_monto': float(c['monto']),
+                    'kardex_producto_id': match['producto_id'],
+                    'kardex_producto_padre_id': match['producto_padre_id'],
+                    'kardex_nombre': match['nombre'],
+                    'kardex_monto': match['total'],
+                    'diferencia': float(c['monto']) - match['total'],
+                })
+            else:
+                sin_kardex += 1
+                matches.append({
+                    'contab_id': c['id'],
+                    'componente': c['concepto'],
+                    'contab_monto': float(c['monto']),
+                    'kardex_producto_id': None,
+                    'kardex_producto_padre_id': None,
+                    'kardex_nombre': None,
+                    'kardex_monto': None,
+                    'diferencia': None,
+                })
+
+        # 5. Ejecutar si es POST
+        vinculados = 0
+        if es_ejecucion:
+            for m in matches:
+                if m['kardex_producto_id'] is not None:
+                    conn.execute("""
+                        UPDATE movimientos_contables
+                        SET producto_id = %s, producto_padre_id = %s
+                        WHERE id = %s AND negocio_id = %s
+                    """, (m['kardex_producto_id'], m['kardex_producto_padre_id'],
+                          m['contab_id'], negocio_id))
+                    vinculados += 1
+            conn.commit()
+
+        return jsonify({
+            'ok': True,
+            'ejecutado': es_ejecucion,
+            'matches': matches,
+            'resumen': {
+                'total_contab': len(contab_rows),
+                'vinculados': vinculados if es_ejecucion else len([m for m in matches if m['kardex_producto_id']]),
+                'sin_kardex': sin_kardex,
+            }
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/tienda/<slug>/inventario/kardex')
 def api_tienda_inventario_kardex(slug):
     if 'usuario_id' not in session:

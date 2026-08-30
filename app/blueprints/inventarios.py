@@ -6060,30 +6060,38 @@ def api_reparar_costos_venta(negocio_id):
                 pi_id = pi_row['id'] if pi_row else None
                 costo_total_actual_pi = costo_actual_pi * cantidad_vendida
 
-                # Asiento de costo de venta (61xxx)
+                # Asiento de costo de venta (61xxx) — filtrado igual que Ensambles Historicos
+                td_code = f.get('tipo_documento_codigo', 'FACTURA_DE_VENTA')
+                padre_nombre = padres_map.get(ppid, '')
                 cogs_row = conn.execute("""
                     SELECT id, monto, concepto
                     FROM movimientos_contables
                     WHERE negocio_id = %s
                       AND (numero_documento = %s OR numero_documento = %s)
+                      AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
                       AND LEFT(cuenta, 2) = '61'
-                      AND UPPER(concepto) LIKE '%%COSTO%%VENTA%%'
+                      AND (
+                          UPPER(concepto) = 'COSTO VENTA: ' || UPPER(%s)
+                          OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
+                          OR producto_id = %s
+                      )
                     LIMIT 1
-                """, (negocio_id, consecutive, doc_num)).fetchone()
+                """, (negocio_id, consecutive, doc_num, td_code, padre_nombre, padre_nombre, ppid)).fetchone()
 
                 cogs_monto_actual = float(cogs_row['monto'] or 0) if cogs_row else 0
                 cogs_id = cogs_row['id'] if cogs_row else None
 
-                # Contrapartidas de inventario (14xxx) — solo las que matchean componentes de este producto
+                # Contrapartidas de inventario (14xxx) — filtradas por tipo_documento y componentes del producto
                 contras_raw = conn.execute("""
                     SELECT id, monto, cuenta, concepto
                     FROM movimientos_contables
                     WHERE negocio_id = %s
                       AND (numero_documento = %s OR numero_documento = %s)
+                      AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
                       AND LEFT(cuenta, 2) = '14'
                       AND UPPER(concepto) NOT LIKE '%%COSTO%%'
                     ORDER BY id
-                """, (negocio_id, consecutive, doc_num)).fetchall()
+                """, (negocio_id, consecutive, doc_num, td_code)).fetchall()
 
                 # Nombres de componentes de este producto padre (normalizados)
                 nombres_comp = set()

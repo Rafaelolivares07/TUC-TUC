@@ -1727,6 +1727,9 @@ def api_vincular_ids_contabilidad(negocio_id):
         if fecha_hasta:
             k_where += " AND COALESCE(m.documento_fecha, m.created_at::date) <= %s"
             k_params.append(fecha_hasta)
+        if prod_padre_id:
+            k_where += " AND m.producto_padre_id = %s"
+            k_params.append(prod_padre_id)
 
         kardex_rows = conn.execute(f"""
             SELECT m.producto_id, m.producto_padre_id, m.nombre_producto,

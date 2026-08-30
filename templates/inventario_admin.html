@@ -11897,6 +11897,7 @@ async function cargarReporteEnsambles() {
 
         preview.innerHTML = `<div class="text-green-700 text-xs font-semibold py-4">✅ ${d.resumen.vinculados} registro(s) vinculados exitosamente. Ahora puedes ejecutar "Vista Previa" y "Reparar".</div>`;
         toast(`${d.resumen.vinculados} registros vinculados`);
+        setTimeout(() => repararCostosPreview(), 600);
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
       }
@@ -11964,6 +11965,7 @@ async function cargarReporteEnsambles() {
         if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`; return; }
         preview.innerHTML = `<div class="text-green-700 text-[10px] font-semibold">✅ ${d.resumen.vinculados} vinculados, ${d.resumen.sin_kardex} sin kardex</div>`;
         toast(`${d.resumen.vinculados} vinculados (${nivel})`);
+        setTimeout(() => repararCostosPreview(), 600);
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
       }

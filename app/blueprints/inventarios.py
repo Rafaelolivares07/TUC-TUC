@@ -6080,8 +6080,8 @@ def api_reparar_costos_venta(negocio_id):
                 cogs_monto_actual = float(cogs_row['monto'] or 0) if cogs_row else 0
                 cogs_id = cogs_row['id'] if cogs_row else None
 
-                # Contrapartidas de inventario (14xxx)
-                contras = conn.execute("""
+                # Contrapartidas de inventario (14xxx) — solo las que matchean componentes de este producto
+                contras_raw = conn.execute("""
                     SELECT id, monto, cuenta, concepto
                     FROM movimientos_contables
                     WHERE negocio_id = %s
@@ -6090,6 +6090,19 @@ def api_reparar_costos_venta(negocio_id):
                       AND UPPER(concepto) NOT LIKE '%%COSTO%%'
                     ORDER BY id
                 """, (negocio_id, consecutive, doc_num)).fetchall()
+
+                # Nombres de componentes de este producto padre (normalizados)
+                nombres_comp = set()
+                for comp in f['componentes']:
+                    nombres_comp.add(comp['nombre'].strip().upper())
+
+                # Filtrar contrapartidas que matcheen componentes
+                contras = []
+                for c in contras_raw:
+                    concepto_upper = (c['concepto'] or '').upper()
+                    # Verificar si algun nombre de componente aparece en el concepto
+                    if any(nc in concepto_upper for nc in nombres_comp):
+                        contras.append(c)
 
                 contras_list = []
                 total_contras_actual = 0

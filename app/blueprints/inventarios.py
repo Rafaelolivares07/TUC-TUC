@@ -1572,7 +1572,7 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
             ORDER BY mc.concepto
         """, (negocio_id, f'FACTURA_DE_VENTA-{numero_doc}', str(numero_doc), f'VENTA-{numero_doc}')).fetchall()
 
-        contab = [c for c in contab_rows if str(c['cuenta_id']).startswith('14')]
+        contab = [c for c in contab_rows if str(c['cuenta_id']).startswith('14') and c['tipo'] == 'credito']
 
         todos_contab = [{
                 'id': c['id'],

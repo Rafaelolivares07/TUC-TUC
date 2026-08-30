@@ -1563,15 +1563,16 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
             ORDER BY m.nombre_producto
         """, (negocio_id, numero_doc)).fetchall()
 
-        contab = conn.execute("""
+        contab_rows = conn.execute("""
             SELECT mc.id, mc.cuenta_id, mc.concepto, mc.tipo, mc.monto,
                    mc.producto_id, mc.producto_padre_id, mc.numero_documento
             FROM movimientos_contables mc
             WHERE mc.negocio_id = %s
               AND mc.numero_documento = %s
-              AND CAST(mc.cuenta_id AS VARCHAR) LIKE '14%'
             ORDER BY mc.concepto
         """, (negocio_id, f'FACTURA_DE_VENTA-{numero_doc}')).fetchall()
+
+        contab = [c for c in contab_rows if str(c['cuenta_id']).startswith('14')]
 
         return jsonify({
             'ok': True,
@@ -1586,7 +1587,7 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
             } for k in kardex],
             'contabilidad_14': [{
                 'id': c['id'],
-                'cuenta_id': c['cuenta_id'],
+                'cuenta_id': str(c['cuenta_id']),
                 'concepto': c['concepto'],
                 'tipo': c['tipo'],
                 'monto': float(c['monto']),
@@ -1599,7 +1600,8 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
             }
         })
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        import traceback
+        return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
     finally:
         conn.close()
 

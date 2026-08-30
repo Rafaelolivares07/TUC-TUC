@@ -1299,6 +1299,7 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
                 'cod':       grp['cod'],
                 'nom_prod':  prod['nombre'],
                 'monto':     monto_c,
+                'producto_id': c['producto_id'],
             })
 
     if not lineas_cred:
@@ -1333,22 +1334,26 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
     conn.execute("""
         INSERT INTO movimientos_contables
             (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por,
-             tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
-        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s,%s,%s,%s,'PRODUCCION',%s,%s,%s,%s)
+             tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id,
+             producto_id)
+        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s,%s,%s,%s,'PRODUCCION',%s,%s,%s,%s,%s)
     """, (negocio_id, comp_id, grp_term['cuenta_inve_id'], grp_term['cod'],
           terminado['nombre'], monto_total, registrado_por,
-          tipo_documento_id, str(numero), fecha_uso, origen_tipo, origen_id, desc, tercero_id))
+          tipo_documento_id, str(numero), fecha_uso, origen_tipo, origen_id, desc, tercero_id,
+          producto_terminado_id))
 
     for l in lineas_cred:
         # Crédito componentes
         conn.execute("""
             INSERT INTO movimientos_contables
                 (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por,
-                 tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
-            VALUES (%s,%s,%s,%s,%s,'credito',%s,%s,%s,%s,%s,'PRODUCCION',%s,%s,%s,%s)
+                 tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id,
+                 producto_id, producto_padre_id)
+            VALUES (%s,%s,%s,%s,%s,'credito',%s,%s,%s,%s,%s,'PRODUCCION',%s,%s,%s,%s,%s,%s)
         """, (negocio_id, comp_id, l['cuenta_id'], l['cod'],
               l['nom_prod'], l['monto'], registrado_por,
-              tipo_documento_id, str(numero), fecha_uso, origen_tipo, origen_id, desc, tercero_id))
+              tipo_documento_id, str(numero), fecha_uso, origen_tipo, origen_id, desc, tercero_id,
+              l['producto_id'], producto_terminado_id))
 
     return comp_id
 

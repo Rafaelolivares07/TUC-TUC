@@ -868,6 +868,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                             'concepto':      f"Inv: {item['producto_nombre']}",
                             'tipo_mov':      'D', # Débito en compras/entradas
                             'monto':         float(item['valor_total']),
+                            'producto_id':   item['producto_id'],
                         })
 
     # Inyección automática de líneas de costo de venta (61x debit) y baja de inventario (14x credit) por cada producto si contab_costos_categoria está habilitado
@@ -884,7 +885,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                     WHERE m.negocio_id = %s AND m.referencia_id = %s AND m.referencia_tipo IN ('pedido', 'pedido_tienda', 'pedido_restaurante')
                 """, (negocio_id, int(origen_id))).fetchall()
                 
-                debitos_costos = {} # Key: (cuenta_puc_id, cuenta_codigo, concepto) -> total_costo
+                debitos_costos = {} # Key: (cuenta_puc_id, cuenta_codigo, concepto) -> {'monto': total, 'producto_padre_id': pid}
                 
                 for item in items_mov:
                     # Inyección automática de asientos para ajustes en caliente vinculados a la factura
@@ -938,6 +939,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                                     'tipo_mov':      'C',
                                     'monto':         total_costo,
                                     'producto_id':   item['producto_id'],
+                                    'producto_padre_id': item['producto_padre_id'],
                                 })
                         
                         # 2. Débito en costo de venta (61x) acumulado bajo la categoría del producto vendido (sándwich)
@@ -964,17 +966,20 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                             
                             if gi_sold and gi_sold['cuenta_cos_id']:
                                 key = (gi_sold['cuenta_cos_id'], gi_sold['cod_costo'], f"Costo Venta: {sold_name}")
-                                debitos_costos[key] = debitos_costos.get(key, 0.0) + total_costo
+                                if key not in debitos_costos:
+                                    debitos_costos[key] = {'monto': 0.0, 'producto_padre_id': p_padre_id}
+                                debitos_costos[key]['monto'] += total_costo
                 
                 # Agregar los débitos de costo agrupados por producto vendido
-                for (cuenta_puc_id, cuenta_codigo, concepto), monto in debitos_costos.items():
-                    if monto > 0:
+                for (cuenta_puc_id, cuenta_codigo, concepto), datos in debitos_costos.items():
+                    if datos['monto'] > 0:
                         mov_list.append({
                             'cuenta_puc_id': cuenta_puc_id,
                             'cuenta_codigo': cuenta_codigo,
                             'concepto':      concepto,
                             'tipo_mov':      'D',
-                            'monto':         monto,
+                            'monto':         datos['monto'],
+                            'producto_padre_id': datos['producto_padre_id'],
                         })
             except Exception as e_costos:
                 print(f"[cont] Error calculando costo de ventas/inventarios por categoria: {e_costos}")
@@ -1118,13 +1123,13 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
             INSERT INTO movimientos_contables
                 (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
                  tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general,
-                 producto_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 producto_id, producto_padre_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (negocio_id, comp_id, m['cuenta_puc_id'], m['cuenta_codigo'],
               m['concepto'], 'debito' if m['tipo_mov'] == 'D' else 'credito',
               m['monto'], registrado_por, tercero_id,
               tipo_doc['id'], str(num_doc), fecha_uso, tipo_doc_codigo, origen_tipo, origen_id, desc,
-              m.get('producto_id')))
+              m.get('producto_id'), m.get('producto_padre_id')))
 
     return comp_id
 
@@ -1215,19 +1220,23 @@ def _ejecutar_asiento_costo_mov(conn, negocio_id, producto_id, cantidad, costo_u
     conn.execute("""
         INSERT INTO movimientos_contables
             (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
-             tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
-        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s,%s,%s,%s,%s,'COSTO_VENTA','costo_venta',NULL,%s)
+             tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general,
+             producto_id, producto_padre_id)
+        VALUES (%s,%s,%s,%s,%s,'debito',%s,%s,%s,%s,%s,%s,'COSTO_VENTA','costo_venta',NULL,%s,%s,%s)
     """, (negocio_id, comp_id, grupo_costo['cuenta_cos_id'], grupo_costo['cod_cos'], grupo_costo['nom_cos'],
-          monto, registrado_por, tercero_id, tipo_doc_id, str((cnt or 0) + 1), fecha_uso, desc))
+          monto, registrado_por, tercero_id, tipo_doc_id, str((cnt or 0) + 1), fecha_uso, desc,
+          producto_id, producto_padre_id))
 
     # Crédito inventario (14x) - from component/ingredient category
     conn.execute("""
         INSERT INTO movimientos_contables
             (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
-             tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
-        VALUES (%s,%s,%s,%s,%s,'credito',%s,%s,%s,%s,%s,%s,'COSTO_VENTA','costo_venta',NULL,%s)
+             tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general,
+             producto_id, producto_padre_id)
+        VALUES (%s,%s,%s,%s,%s,'credito',%s,%s,%s,%s,%s,%s,'COSTO_VENTA','costo_venta',NULL,%s,%s,%s)
     """, (negocio_id, comp_id, grupo_inve['cuenta_inve_id'], grupo_inve['cod_inve'], grupo_inve['nom_inve'],
-          monto, registrado_por, tercero_id, tipo_doc_id, str((cnt or 0) + 1), fecha_uso, desc))
+          monto, registrado_por, tercero_id, tipo_doc_id, str((cnt or 0) + 1), fecha_uso, desc,
+          producto_id, producto_padre_id))
 
     return comp_id
 

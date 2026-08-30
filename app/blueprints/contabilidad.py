@@ -937,6 +937,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                                     'concepto':      f"Baja Inv: {item['producto_nombre']}",
                                     'tipo_mov':      'C',
                                     'monto':         total_costo,
+                                    'producto_id':   item['producto_id'],
                                 })
                         
                         # 2. Débito en costo de venta (61x) acumulado bajo la categoría del producto vendido (sándwich)
@@ -1116,12 +1117,14 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
         conn.execute("""
             INSERT INTO movimientos_contables
                 (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
-                 tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general,
+                 producto_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (negocio_id, comp_id, m['cuenta_puc_id'], m['cuenta_codigo'],
               m['concepto'], 'debito' if m['tipo_mov'] == 'D' else 'credito',
               m['monto'], registrado_por, tercero_id,
-              tipo_doc['id'], str(num_doc), fecha_uso, tipo_doc_codigo, origen_tipo, origen_id, desc))
+              tipo_doc['id'], str(num_doc), fecha_uso, tipo_doc_codigo, origen_tipo, origen_id, desc,
+              m.get('producto_id')))
 
     return comp_id
 

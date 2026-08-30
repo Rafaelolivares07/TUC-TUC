@@ -11856,8 +11856,8 @@ async function cargarReporteEnsambles() {
           html += `<div class="grid grid-cols-4 gap-1 text-[10px] py-0.5 ${ok ? 'hover:bg-blue-50' : 'bg-red-50'} rounded px-1">`;
           html += `<span class="${cls} truncate">${m.componente.replace('Baja Inv: ', '')}</span>`;
           html += `<span class="text-right font-mono">${ok ? '$' + m.kardex_monto.toLocaleString('es-CO') : '<span class="text-red-400">SIN KARDEX</span>'}</span>`;
-          html += `<span class="text-right font-mono">$${m.contab_monto.toLocaleString('es-CO')}</span>`;
-          html += `<span class="text-right ${ok ? (Math.abs(m.diferencia) > 0.01 ? 'text-amber-600' : 'text-green-600') : 'text-red-400'}">${ok ? (m.diferencia !== null ? '$' + m.diferencia.toLocaleString('es-CO') : '—') : ''}</span>`;
+          html += `<span class="text-right font-mono">${m.contab_monto != null ? '$' + m.contab_monto.toLocaleString('es-CO') : '—'}</span>`;
+          html += `<span class="text-right ${ok ? (Math.abs(m.diferencia) > 0.01 ? 'text-amber-600' : 'text-green-600') : 'text-red-400'}">${ok ? (m.diferencia != null ? '$' + m.diferencia.toLocaleString('es-CO') : '—') : ''}</span>`;
           html += '</div>';
         });
         html += '</div>';
@@ -11928,7 +11928,8 @@ async function cargarReporteEnsambles() {
           html += `<div class="grid grid-cols-4 gap-1 text-[9px] py-0.5 ${ok ? '' : 'bg-red-50'} rounded px-1">`;
           html += `<span class="${cls} truncate">${m.componente.replace('Baja Inv: ', '')}</span>`;
           html += `<span class="text-right font-mono">${ok ? '$' + m.kardex_monto.toLocaleString('es-CO') : '<span class="text-red-400">SIN KARDEX</span>'}</span>`;
-          html += `<span class="text-right font-mono">$${m.contab_monto.toLocaleString('es-CO')}</span>`;
+          html += `<span class="text-right font-mono">${m.contab_monto != null ? '$' + m.contab_monto.toLocaleString('es-CO') : '—'}</span>`;
+          html += `<span class="text-right ${ok ? (Math.abs(m.diferencia) > 0.01 ? 'text-amber-600' : 'text-green-600') : 'text-red-400'}">${ok ? (m.diferencia != null ? '$' + m.diferencia.toLocaleString('es-CO') : '—') : ''}</span>`;
           html += `<span class="text-right ${ok ? (Math.abs(m.diferencia) > 0.01 ? 'text-amber-600' : 'text-green-600') : 'text-red-400'}">${ok ? (m.diferencia !== null ? '$' + m.diferencia.toLocaleString('es-CO') : '—') : ''}</span>`;
           html += '</div>';
         });

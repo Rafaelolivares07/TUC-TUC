@@ -6197,7 +6197,7 @@ def api_reparar_costos_venta(negocio_id):
 
             con_dif = sum(1 for ff in facturas_producto if ff['tiene_diferencia'])
             total_contable = sum(ff['cogs_contable']['monto_actual'] for ff in facturas_producto if ff['cogs_contable']['ids'])
-            total_kardex = sum(ff['costo_real_kardex'] for ff in facturas_producto if ff['tiene_diferencia'])
+            total_kardex = sum(ff['costo_real_kardex'] for ff in facturas_producto)
             todos_resultados.append({
                 'producto_padre_id': ppid,
                 'producto_padre_nombre': nombre_padre,

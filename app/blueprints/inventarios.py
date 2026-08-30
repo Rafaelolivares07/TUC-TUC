@@ -1569,7 +1569,7 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
                    mc.producto_id, mc.producto_padre_id, mc.numero_documento,
                    mc.tipo_documento_id, mc.fecha
             FROM movimientos_contables mc
-            LEFT JOIN cuentas_puc c ON c.id = mc.cuenta
+            LEFT JOIN cuentas_puc c ON c.codigo = mc.cuenta
             WHERE mc.negocio_id = %s
               AND (mc.numero_documento = %s OR mc.numero_documento = %s OR mc.numero_documento = %s)
             ORDER BY mc.concepto

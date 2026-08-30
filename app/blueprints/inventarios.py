@@ -6215,11 +6215,13 @@ def api_reparar_costos_venta(negocio_id):
     """Preview (GET) o ejecucion (POST) de reparacion de costos de venta.
     Corrige pedido_items.costo_unitario y movimientos_contables asociados.
     Si no se pasa producto_padre_id, procesa TODOS los productos con salidas en el rango.
+    Si se pasa numero_doc, filtra solo esa factura.
     """
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
 
     prod_padre_id = _int_o_none(request.args.get('producto_padre_id'))
+    numero_doc = request.args.get('numero_doc', '').strip()
     fecha_desde = request.args.get('fecha_desde', '').strip()
     fecha_hasta = request.args.get('fecha_hasta', '').strip()
     es_ejecucion = request.method == 'POST'
@@ -6242,10 +6244,14 @@ def api_reparar_costos_venta(negocio_id):
             if not padre:
                 return jsonify({'ok': False, 'error': 'Producto padre no encontrado'}), 404
             where_extra = "AND m.producto_padre_id = %s"
-            params_where = (negocio_id, prod_padre_id, fecha_desde, fecha_hasta)
+            params_where = [negocio_id, prod_padre_id, fecha_desde, fecha_hasta]
         else:
             where_extra = ""
-            params_where = (negocio_id, fecha_desde, fecha_hasta)
+            params_where = [negocio_id, fecha_desde, fecha_hasta]
+
+        if numero_doc:
+            where_extra += " AND m.documento_numero = %s"
+            params_where.append(numero_doc)
 
         salidas = conn.execute(f"""
             SELECT

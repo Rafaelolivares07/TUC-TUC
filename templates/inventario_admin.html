@@ -11902,6 +11902,72 @@ async function cargarReporteEnsambles() {
       }
     }
 
+    async function vincularIdsNivel(nivel, productoPadreId, numeroDoc) {
+      const ini = document.getElementById('ensambles-fecha-ini').value;
+      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const容器Id = nivel === 'producto' ? `vincular-prod-${productoPadreId}` : `vincular-doc-${productoPadreId}`;
+      const preview = document.getElementById(容器Id) || document.getElementById('vincular-preview');
+      preview.innerHTML = '<div class="text-blue-600 text-[10px] py-1">Vinculando...</div>';
+      preview.classList.remove('hidden');
+
+      try {
+        let url = `/api/inventario/${NEGOCIO_ID}/vincular-ids-contabilidad?fecha_desde=${ini}&fecha_hasta=${fin}&producto_padre_id=${productoPadreId}`;
+        if (numeroDoc) url += `&numero_doc=${numeroDoc}`;
+        const r = await fetch(url, { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`; return; }
+        preview.innerHTML = `<div class="text-green-700 text-[10px] font-semibold">✅ ${d.resumen.vinculados} vinculados, ${d.resumen.sin_kardex} sin kardex</div>`;
+        toast(`${d.resumen.vinculados} vinculados (${nivel})`);
+      } catch (e) {
+        preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
+      }
+    }
+
+    async function repararNivel(nivel, productoPadreId, numeroDoc) {
+      const ini = document.getElementById('ensambles-fecha-ini').value;
+      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const容器Id = nivel === 'producto' ? `reparar-prod-${productoPadreId}` : `reparar-doc-${productoPadreId}`;
+      const preview = document.getElementById(容器Id) || document.getElementById('reparador-preview');
+      preview.innerHTML = '<div class="text-amber-600 text-[10px] py-1">Calculando...</div>';
+      preview.classList.remove('hidden');
+
+      try {
+        let url = `/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?fecha_desde=${ini}&fecha_hasta=${fin}&producto_padre_id=${productoPadreId}`;
+        if (numeroDoc) url += `&numero_doc=${numeroDoc}`;
+        const r = await fetch(url);
+        const d = await r.json();
+        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`; return; }
+        const res = d.resumen;
+        if (res.con_diferencia === 0) {
+          preview.innerHTML = '<div class="text-green-700 text-[10px]">✅ Sin diferencias</div>';
+          return;
+        }
+        preview.innerHTML = `<div class="text-amber-800 text-[10px]">${res.con_diferencia} doc(s) con dif — $${res.monto_corregir.toLocaleString('es-CO')} <button onclick="repararEjecutarNivel('${nivel}', ${productoPadreId}, '${numeroDoc || ''}')" class="ml-2 px-2 py-0.5 bg-red-500 text-white rounded font-bold">Reparar</button></div>`;
+      } catch (e) {
+        preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
+      }
+    }
+
+    async function repararEjecutarNivel(nivel, productoPadreId, numeroDoc) {
+      const ini = document.getElementById('ensambles-fecha-ini').value;
+      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const容器Id = nivel === 'producto' ? `reparar-prod-${productoPadreId}` : `reparar-doc-${productoPadreId}`;
+      const preview = document.getElementById(容器Id) || document.getElementById('reparador-preview');
+      preview.innerHTML = '<div class="text-red-600 text-[10px]">Ejecutando reparación...</div>';
+
+      try {
+        let url = `/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?fecha_desde=${ini}&fecha_hasta=${fin}&producto_padre_id=${productoPadreId}`;
+        if (numeroDoc) url += `&numero_doc=${numeroDoc}`;
+        const r = await fetch(url, { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`; return; }
+        preview.innerHTML = `<div class="text-green-700 text-[10px] font-semibold">✅ Reparación completada</div>`;
+        toast('Reparación completada');
+      } catch (e) {
+        preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
+      }
+    }
+
     async function repararCostosPreview() {
       const parentId = document.getElementById('ensambles-padre-id').value;
       const ini = document.getElementById('ensambles-fecha-ini').value;
@@ -11966,6 +12032,12 @@ async function cargarReporteEnsambles() {
 
           // Contenido del producto (colapsado por defecto)
           html += `<div id="prod-${pid}" class="hidden px-3 pb-3 space-y-2">`;
+          html += `<div class="flex gap-2 mb-2">`;
+          html += `<button onclick="vincularIdsNivel('producto', ${prod.producto_padre_id})" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold rounded-lg">🔗 Vincular</button>`;
+          html += `<button onclick="repararNivel('producto', ${prod.producto_padre_id})" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg">Reparar</button>`;
+          html += `</div>`;
+          html += `<div id="vincular-prod-${pid}" class="hidden"></div>`;
+          html += `<div id="reparar-prod-${pid}" class="hidden"></div>`;
 
           prod.facturas.filter(ff => ff.tiene_diferencia).forEach(ff => {
             const docId = ++uid;
@@ -11989,6 +12061,12 @@ async function cargarReporteEnsambles() {
 
             // Contenido del documento (colapsado por defecto)
             html += `<div id="doc-${docId}" class="hidden px-3 pb-2 space-y-1 text-xs">`;
+            html += `<div class="flex gap-2 mb-1">`;
+            html += `<button onclick="vincularIdsNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="px-2 py-0.5 bg-blue-400 hover:bg-blue-500 text-white text-[9px] font-bold rounded">🔗 Vincular</button>`;
+            html += `<button onclick="repararNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="px-2 py-0.5 bg-amber-400 hover:bg-amber-500 text-white text-[9px] font-bold rounded">Reparar</button>`;
+            html += `</div>`;
+            html += `<div id="vincular-doc-${docId}" class="hidden"></div>`;
+            html += `<div id="reparar-doc-${docId}" class="hidden"></div>`;
 
             // Pedido item
             if (ff.pedido_item.id) {

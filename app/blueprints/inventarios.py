@@ -1574,6 +1574,16 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
 
         contab = [c for c in contab_rows if str(c['cuenta_id']).startswith('14') and c['tipo'] == 'credito']
 
+        grupos = conn.execute("""
+            SELECT gi.id, gi.nombre, gi.cuenta_inve_id, gi.cuenta_cos_id, gi.cuenta_ingre_id,
+                   c_inv.codigo AS cod_inve, c_cos.codigo AS cod_cos, c_ingre.codigo AS cod_ingre
+            FROM grupos_inventario gi
+            LEFT JOIN cuentas_puc c_inv ON c_inv.id = gi.cuenta_inve_id
+            LEFT JOIN cuentas_puc c_cos ON c_cos.id = gi.cuenta_cos_id
+            LEFT JOIN cuentas_puc c_ingre ON c_ingre.id = gi.cuenta_ingre_id
+            WHERE gi.negocio_id = %s
+        """, (negocio_id,)).fetchall()
+
         todos_contab = [{
                 'id': c['id'],
                 'cuenta_id': str(c['cuenta_id']),
@@ -1609,7 +1619,13 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
                 'kardex_registros': len(kardex),
                 'contab_total': len(todos_contab),
                 'contab_14': len(contab),
-            }
+            },
+            'grupos_inventario': [{
+                'nombre': g['nombre'],
+                'cuenta_inve': g['cod_inve'],
+                'cuenta_cos': g['cod_cos'],
+                'cuenta_ingre': g['cod_ingre'],
+            } for g in grupos]
         })
     except Exception as e:
         import traceback

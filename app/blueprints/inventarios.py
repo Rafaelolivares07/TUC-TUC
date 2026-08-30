@@ -6130,7 +6130,7 @@ def api_reparar_costos_venta(negocio_id):
                     qty = float(qty_row[0]) if (qty_row and qty_row[0] is not None) else 0.0
                 else:
                     qty_row = conn.execute("""
-                        SELECT SUM(pi.cantidad), pi.id 
+                        SELECT SUM(pi.cantidad), MAX(pi.id)
                         FROM pedido_items pi
                         JOIN pedidos p ON p.id = pi.pedido_id
                         WHERE p.negocio_id = %s AND pi.producto_id = %s

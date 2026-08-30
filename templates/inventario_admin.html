@@ -11939,7 +11939,7 @@ async function cargarReporteEnsambles() {
               if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
                 let nombre = c.comp_nombre || c.concepto || c.cuenta || '';
                 nombre = nombre.replace(/^.*?:\s*/, '').trim();
-                if (!contraIdx[nombre]) contraIdx[nombre] = { monto: 0, producto_id: c.producto_id };
+                if (!contraIdx[nombre]) contraIdx[nombre] = { monto: 0, producto_id: c.producto_id, match_tipo: c.match_tipo };
                 contraIdx[nombre].monto += c.monto_actual;
               });
 
@@ -11950,23 +11950,32 @@ async function cargarReporteEnsambles() {
 
               Object.values(compAgrupados).forEach(c => {
                 const cid = ++uid;
-                const contraData = contraIdx[c.nombre] || { monto: 0, producto_id: null };
+                const contraData = contraIdx[c.nombre] || { monto: 0, producto_id: null, match_tipo: null };
                 const contraMonto = contraData.monto;
-                const difComp = contraMonto > 0 ? contraMonto - c.costo_total : 0;
+                const esConfiable = contraData.match_tipo === 'producto_id';
                 const sinContable = contraMonto === 0;
-                const sinMatch = !contraData.producto_id && !c.producto_id;
-                const cls = sinContable ? 'text-gray-400' : (Math.abs(difComp) > 0.01 ? 'text-red-600' : 'text-green-600');
+                const difComp = (sinContable || !esConfiable) ? 0 : contraMonto - c.costo_total;
+                const cls = sinContable ? 'text-gray-400' : (!esConfiable ? 'text-amber-500' : (Math.abs(difComp) > 0.01 ? 'text-red-600' : 'text-green-600'));
 
                 html += `<div class="px-2">`;
                 html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-4 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
                 html += `<span class="text-gray-600 text-xs truncate">${c.nombre}</span>`;
                 html += `<span class="text-gray-700 text-xs font-bold text-right">$${c.costo_total.toLocaleString('es-CO')}</span>`;
-                html += `<span class="text-xs font-bold text-right ${cls}">${sinContable ? '—' : '$' + contraMonto.toLocaleString('es-CO')}</span>`;
-                html += `<span class="text-xs font-bold text-right ${cls}">${sinContable ? '—' : (Math.abs(difComp) > 0.01 ? '$' + difComp.toLocaleString('es-CO') : 'OK')}</span>`;
+                if (sinContable) {
+                  html += `<span class="text-gray-400 text-xs text-right">—</span>`;
+                  html += `<span class="text-gray-400 text-xs text-right">—</span>`;
+                } else if (!esConfiable) {
+                  html += `<span class="text-amber-500 text-xs text-right font-semibold">SIN FUENTE</span>`;
+                  html += `<span class="text-amber-500 text-xs text-right">NO DISPONIBLE</span>`;
+                } else {
+                  html += `<span class="text-xs font-bold text-right ${cls}">$${contraMonto.toLocaleString('es-CO')}</span>`;
+                  html += `<span class="text-xs font-bold text-right ${cls}">${Math.abs(difComp) > 0.01 ? '$' + difComp.toLocaleString('es-CO') : 'OK'}</span>`;
+                }
                 html += `</button>`;
                 html += `<div id="comp-${cid}" class="hidden pl-4 text-[10px] text-gray-400 pb-1">`;
                 html += `Cant: ${c.cantidad.toFixed(2)} | Unit: $${(c.costo_total / c.cantidad).toLocaleString('es-CO')}`;
-                if (sinContable) html += ` | Contable: NO DISPONIBLE`;
+                if (sinContable) html += ` | Contable: SIN DATOS`;
+                else if (!esConfiable) html += ` | Contable: SIN FUENTE (match por nombre, no confiable)`;
                 else if (Math.abs(difComp) > 0.01) html += ` | Dif: $${difComp.toLocaleString('es-CO')}`;
                 html += `</div>`;
                 html += `</div>`;

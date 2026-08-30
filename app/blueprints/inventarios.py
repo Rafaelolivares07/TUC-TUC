@@ -6104,10 +6104,12 @@ def api_reparar_costos_venta(negocio_id):
                     concepto_upper = (c['concepto'] or '').upper()
                     # Matchear por producto_id primero, luego por nombre
                     match = comp_por_pid.get(c_pid) if c_pid else None
+                    match_tipo = 'producto_id' if match else None
                     if not match:
                         match = next((comp for nombre, comp in comp_por_nombre.items() if nombre in concepto_upper), None)
+                        match_tipo = 'nombre' if match else None
                     if match:
-                        contras.append({**c, '_comp_match': match})
+                        contras.append({**c, '_comp_match': match, '_match_tipo': match_tipo})
 
                 contras_list = []
                 contra_map = {}
@@ -6122,6 +6124,7 @@ def api_reparar_costos_venta(negocio_id):
                             'monto_actual': 0,
                             'producto_id': c.get('producto_id'),
                             'comp_nombre': comp_match['nombre'] if comp_match else None,
+                            'match_tipo': c['_match_tipo'],
                         }
                         contras_list.append(contra_map[concepto])
                     contra_map[concepto]['monto_actual'] += monto

@@ -11990,15 +11990,14 @@ async function cargarReporteEnsambles() {
             }
 
             // COGS contable
-            if (ff.cogs_contable.id) {
+            if (ff.cogs_contable.ids && ff.cogs_contable.ids.length > 0) {
               const dif = ff.cogs_contable.diferencia;
               const cls = Math.abs(dif) > 0.01 ? 'text-red-600' : 'text-green-600';
               html += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500">Asiento 61*:</span><span class="${cls} font-bold">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO')} → $${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
             }
 
-            // Componentes Kardex (desglose por componente)
-            if (ff.componentes.length > 0) {
-              // Agrupar componentes por nombre para mostrar
+            // Componentes Kardex + Contrapartidas lado a lado
+            if (ff.componentes.length > 0 || (ff.contrapartidas && ff.contrapartidas.length > 0)) {
               const compAgrupados = {};
               ff.componentes.forEach(c => {
                 if (!compAgrupados[c.nombre]) {
@@ -12008,22 +12007,49 @@ async function cargarReporteEnsambles() {
                 compAgrupados[c.nombre].costo_total += c.costo_total;
               });
 
+              const contraIdx = {};
+              if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
+                let nombre = c.concepto || c.cuenta || '';
+                nombre = nombre.replace(/^.*?:\s*/, '').trim();
+                if (!contraIdx[nombre]) contraIdx[nombre] = 0;
+                contraIdx[nombre] += c.monto_actual;
+              });
+
               html += `<div class="mt-1">`;
-              html += `<div class="grid grid-cols-2 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
-              html += `<span>Componente</span><span class="text-right">Costo Kardex</span>`;
+              html += `<div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
+              html += `<span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contable (14*)</span>`;
               html += `</div>`;
 
               Object.values(compAgrupados).forEach(c => {
                 const cid = ++uid;
+                const contraMonto = contraIdx[c.nombre] || 0;
+                const difComp = contraMonto - c.costo_total;
+                const cls = contraMonto > 0 ? (Math.abs(difComp) > 0.01 ? 'text-red-600' : 'text-green-600') : 'text-gray-400';
+
                 html += `<div class="px-2">`;
-                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-2 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
+                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-3 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
                 html += `<span class="text-gray-600 text-xs truncate">${c.nombre}</span>`;
                 html += `<span class="text-gray-700 text-xs font-bold text-right">$${c.costo_total.toLocaleString('es-CO')}</span>`;
+                html += `<span class="text-xs font-bold text-right ${cls}">$${contraMonto.toLocaleString('es-CO')}</span>`;
                 html += `</button>`;
                 html += `<div id="comp-${cid}" class="hidden pl-4 text-[10px] text-gray-400 pb-1">`;
                 html += `Cant: ${c.cantidad.toFixed(2)} | Unit: $${(c.costo_total / c.cantidad).toLocaleString('es-CO')}`;
+                if (Math.abs(difComp) > 0.01) html += ` | Dif: $${difComp.toLocaleString('es-CO')}`;
                 html += `</div>`;
                 html += `</div>`;
+              });
+
+              // Contrapartidas sin match en Kardex
+              if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
+                let nombre = c.concepto || c.cuenta || '';
+                nombre = nombre.replace(/^.*?:\s*/, '').trim();
+                if (!Object.keys(compAgrupados).includes(nombre)) {
+                  html += `<div class="px-2 grid grid-cols-3 gap-2 py-0.5">`;
+                  html += `<span class="text-gray-400 text-xs italic truncate">${nombre}</span>`;
+                  html += `<span class="text-gray-400 text-xs text-right">—</span>`;
+                  html += `<span class="text-gray-600 text-xs font-bold text-right">$${c.monto_actual.toLocaleString('es-CO')}</span>`;
+                  html += `</div>`;
+                }
               });
 
               html += `</div>`;

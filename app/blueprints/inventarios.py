@@ -6032,39 +6032,22 @@ def api_reparar_costos_venta(negocio_id):
             })
             ff['costo_real_kardex'] += float(s['costo_total'] or 0)
 
-        # 3. Para cada producto > factura: buscar costos actuales
+        # 3. Para cada producto > factura: buscar costos actuales (misma logica que Ensambles Historicos)
         todos_resultados = []
         for ppid, docs in por_producto.items():
             nombre_padre = padres_map.get(ppid, f'ID {ppid}')
+            padre_row = conn.execute("SELECT nombre FROM productos WHERE id = %s", (ppid,)).fetchone()
+            padre_nombre = padre_row['nombre'] if padre_row else ''
             facturas_producto = []
 
             for doc_num, f in docs.items():
                 consecutive = doc_num.split('-')[-1].strip() if '-' in doc_num else doc_num
-                # Reconstruir el numero_documento completo: CODIGO-NUMERO
                 td_code = f.get('tipo_documento_codigo', 'FACTURA_DE_VENTA')
                 num_completo = f"{td_code}-{consecutive}"
 
-                # Costo actual en pedido_items
-                pi_row = conn.execute("""
-                    SELECT pi.costo_unitario, pi.cantidad, pi.id
-                    FROM pedido_items pi
-                    JOIN pedidos p ON p.id = pi.pedido_id
-                    WHERE p.negocio_id = %s
-                      AND pi.producto_id = %s
-                      AND p.numero_documento = %s
-                    LIMIT 1
-                """, (negocio_id, ppid, num_completo)).fetchone()
-
-                costo_actual_pi = float(pi_row['costo_unitario'] or 0) if pi_row else 0
-                cantidad_vendida = float(pi_row['cantidad'] or 0) if pi_row else 0
-                pi_id = pi_row['id'] if pi_row else None
-                costo_total_actual_pi = costo_actual_pi * cantidad_vendida
-
-                # Asiento de costo de venta (61xxx) — filtrado igual que Ensambles Historicos
-                td_code = f.get('tipo_documento_codigo', 'FACTURA_DE_VENTA')
-                padre_nombre = padres_map.get(ppid, '')
+                # COGS (61*) — SUM igual que Ensambles
                 cogs_row = conn.execute("""
-                    SELECT id, monto, concepto
+                    SELECT SUM(monto) AS total_cogs
                     FROM movimientos_contables
                     WHERE negocio_id = %s
                       AND (numero_documento = %s OR numero_documento = %s)
@@ -6075,40 +6058,123 @@ def api_reparar_costos_venta(negocio_id):
                           OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
                           OR producto_id = %s
                       )
-                    LIMIT 1
                 """, (negocio_id, consecutive, doc_num, td_code, padre_nombre, padre_nombre, ppid)).fetchone()
 
-                cogs_monto_actual = float(cogs_row['monto'] or 0) if cogs_row else 0
-                cogs_id = cogs_row['id'] if cogs_row else None
+                cogs_monto = float(cogs_row['total_cogs']) if (cogs_row and cogs_row['total_cogs'] is not None) else 0.0
+
+                # IDs de asientos 61* para posible correccion
+                cogs_ids_row = conn.execute("""
+                    SELECT ARRAY_AGG(id) AS ids
+                    FROM movimientos_contables
+                    WHERE negocio_id = %s
+                      AND (numero_documento = %s OR numero_documento = %s)
+                      AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
+                      AND LEFT(cuenta, 2) = '61'
+                      AND (
+                          UPPER(concepto) = 'COSTO VENTA: ' || UPPER(%s)
+                          OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
+                          OR producto_id = %s
+                      )
+                """, (negocio_id, consecutive, doc_num, td_code, padre_nombre, padre_nombre, ppid)).fetchone()
+                cogs_ids = list(cogs_ids_row[0]) if (cogs_ids_row and cogs_ids_row[0]) else []
+
+                # Contrapartidas de inventario (14xxx)
+                contras_raw = conn.execute("""
+                    SELECT id, monto, cuenta, concepto
+                    FROM movimientos_contables
+                    WHERE negocio_id = %s
+                      AND (numero_documento = %s OR numero_documento = %s)
+                      AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
+                      AND LEFT(cuenta, 2) = '14'
+                      AND UPPER(concepto) NOT LIKE '%%COSTO%%'
+                    ORDER BY id
+                """, (negocio_id, consecutive, doc_num, td_code)).fetchall()
+
+                nombres_comp = set(comp['nombre'].strip().upper() for comp in f['componentes'])
+                contras = []
+                for c in contras_raw:
+                    concepto_upper = (c['concepto'] or '').upper()
+                    if any(nc in concepto_upper for nc in nombres_comp):
+                        contras.append(c)
+
+                contras_list = []
+                contra_map = {}
+                for c in contras:
+                    monto = float(c['monto'] or 0)
+                    concepto = (c['concepto'] or c['cuenta'] or '').strip()
+                    if concepto not in contra_map:
+                        contra_map[concepto] = {'concepto': concepto, 'cuenta': c['cuenta'], 'monto_actual': 0}
+                        contras_list.append(contra_map[concepto])
+                    contra_map[concepto]['monto_actual'] += monto
+
+                # Cantidad vendida — misma busqueda que Ensambles
+                ref_row = conn.execute("""
+                    SELECT DISTINCT referencia_tipo, referencia_id 
+                    FROM movimientos_inventario 
+                    WHERE negocio_id = %s AND producto_padre_id = %s AND documento_numero = %s
+                    LIMIT 1
+                """, (negocio_id, ppid, doc_num)).fetchone()
+
+                ref_type = ref_row['referencia_tipo'] if ref_row else None
+                ref_id = ref_row['referencia_id'] if ref_row else None
+                ref_id_int = _int_o_none(ref_id)
+                pi_id = None
+
+                qty = 0.0
+                if ref_type == 'produccion':
+                    qty_row = conn.execute("""
+                        SELECT SUM(cantidad) FROM movimientos_inventario
+                        WHERE negocio_id = %s AND producto_id = %s AND tipo = 'entrada'
+                          AND referencia_tipo = 'produccion' AND (documento_numero = %s OR referencia_id = %s)
+                    """, (negocio_id, ppid, doc_num, ref_id)).fetchone()
+                    qty = float(qty_row[0]) if (qty_row and qty_row[0] is not None) else 0.0
+                else:
+                    qty_row = conn.execute("""
+                        SELECT SUM(pi.cantidad), pi.id 
+                        FROM pedido_items pi
+                        JOIN pedidos p ON p.id = pi.pedido_id
+                        WHERE p.negocio_id = %s AND pi.producto_id = %s
+                          AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
+                    """, (negocio_id, ppid, consecutive, doc_num, ref_id_int)).fetchone()
+                    qty = float(qty_row[0]) if (qty_row and qty_row[0] is not None) else 0.0
+                    pi_id = qty_row[1] if qty_row and qty_row[1] else None
 
                 costo_real = f['costo_real_kardex']
-                dif_pi = costo_total_actual_pi - costo_real
-                dif_cogs = cogs_monto_actual - costo_real if cogs_row else 0
-                tiene_diferencia = abs(dif_pi) > 0.01 or abs(dif_cogs) > 0.01
+                costo_unitario_real = costo_real / qty if qty > 0 else 0
+
+                # Buscar costo_unitario actual en pedido_items
+                costo_actual_pi = 0.0
+                if pi_id:
+                    pi_cost_row = conn.execute("SELECT costo_unitario FROM pedido_items WHERE id = %s", (pi_id,)).fetchone()
+                    costo_actual_pi = float(pi_cost_row['costo_unitario'] or 0) if pi_cost_row else 0
+
+                dif_pi = (costo_actual_pi * qty) - costo_real if qty > 0 else 0
+                dif_cogs = cogs_monto - costo_real
 
                 facturas_producto.append({
                     'documento_numero': doc_num,
                     'tipo_documento': f['tipo_documento'],
                     'fecha': f['fecha'],
                     'componentes': f['componentes'],
+                    'cantidad_vendida': qty,
                     'costo_real_kardex': costo_real,
-                    'costo_actual_total': costo_total_actual_pi,
+                    'costo_unitario_real': round(costo_unitario_real, 2),
                     'pedido_item': {
                         'id': pi_id,
                         'costo_unitario_actual': costo_actual_pi,
-                        'costo_total_actual': costo_total_actual_pi,
                         'diferencia': dif_pi,
                     },
                     'cogs_contable': {
-                        'id': cogs_id,
-                        'monto_actual': cogs_monto_actual,
+                        'ids': cogs_ids,
+                        'monto_actual': cogs_monto,
                         'diferencia': dif_cogs,
                     },
-                    'tiene_diferencia': tiene_diferencia,
+                    'contrapartidas': contras_list,
+                    'tiene_diferencia': abs(dif_pi) > 0.01 or abs(dif_cogs) > 0.01,
                 })
 
             con_dif = sum(1 for ff in facturas_producto if ff['tiene_diferencia'])
-            total_contable = sum(ff['cogs_contable']['monto_actual'] for ff in facturas_producto if ff['cogs_contable']['id'])
+            total_contable = sum(ff['cogs_contable']['monto_actual'] for ff in facturas_producto if ff['cogs_contable']['ids'])
             total_kardex = sum(ff['costo_real_kardex'] for ff in facturas_producto if ff['tiene_diferencia'])
             todos_resultados.append({
                 'producto_padre_id': ppid,
@@ -6129,7 +6195,7 @@ def api_reparar_costos_venta(negocio_id):
 
                     # 4a. Corregir pedido_items
                     if r['pedido_item']['id'] and abs(r['pedido_item']['diferencia']) > 0.01:
-                        cant = r['pedido_item']['costo_total_actual'] / max(r['pedido_item']['costo_unitario_actual'], 0.0001) if r['pedido_item']['costo_unitario_actual'] > 0 else 0
+                        cant = r['cantidad_vendida']
                         nuevo_costo_und = r['costo_real_kardex'] / cant if cant > 0 else 0
                         conn.execute(
                             "UPDATE pedido_items SET costo_unitario = %s WHERE id = %s",
@@ -6137,12 +6203,18 @@ def api_reparar_costos_venta(negocio_id):
                         )
                         cambios_aplicados += 1
 
-                    # 4b. Corregir asiento de costo de venta (61xxx)
-                    if r['cogs_contable']['id'] and abs(r['cogs_contable']['diferencia']) > 0.01:
+                    # 4b. Corregir asiento de costo de venta (61xxx) — SUM a Kardex
+                    if r['cogs_contable']['ids'] and abs(r['cogs_contable']['diferencia']) > 0.01:
+                        # Si hay varios IDs, dejar solo uno con el monto correcto y borrar los demas
+                        ids_61 = r['cogs_contable']['ids']
                         conn.execute(
                             "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
-                            (r['costo_real_kardex'], r['cogs_contable']['id'])
+                            (r['costo_real_kardex'], ids_61[0])
                         )
+                        if len(ids_61) > 1:
+                            ids_borrar = ids_61[1:]
+                            placeholders = ','.join(['%s'] * len(ids_borrar))
+                            conn.execute(f"DELETE FROM movimientos_contables WHERE id IN ({placeholders})", ids_borrar)
                         cambios_aplicados += 1
 
             conn.commit()

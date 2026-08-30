@@ -1756,9 +1756,6 @@ def api_vincular_ids_contabilidad(negocio_id):
         for k in kardex_rows:
             nombre_norm = k['nombre_producto'].strip().upper()
             doc = str(k['documento_numero']) if k['documento_numero'] else ''
-            # Si hay prod_padre_id, solo indexar Kardex de ese producto
-            if prod_padre_id and k['producto_padre_id'] != prod_padre_id:
-                continue
             kardex_por_nombre_doc[(nombre_norm, doc)].append({
                 'producto_id': k['producto_id'],
                 'producto_padre_id': k['producto_padre_id'],
@@ -1766,49 +1763,56 @@ def api_vincular_ids_contabilidad(negocio_id):
                 'total': float(k['total']),
             })
 
-        # 4. Emparejar (con tracking de kardex ya usados)
+        # 4. Emparejar: agrupar por (nombre, doc), ordenar por monto y emparejar 1:1
         matches = []
         sin_kardex = 0
-        kardex_used = set()  # (nombre, doc, idx) ya emparejados
 
+        # Agrupar contab por (nombre, doc)
+        contab_por_grupo = defaultdict(list)
         for c in contab_rows:
             nombre_comp = c['concepto'].replace('Baja Inv:', '').replace('BAJA INV:', '').strip().upper()
             doc = str(c['numero_documento']) if c['numero_documento'] else ''
+            contab_por_grupo[(nombre_comp, doc)].append({
+                'id': c['id'],
+                'concepto': c['concepto'],
+                'monto': float(c['monto']),
+            })
+
+        kardex_used = set()
+        for (nombre_comp, doc), contab_list in contab_por_grupo.items():
             candidatos = kardex_por_nombre_doc.get((nombre_comp, doc), [])
-
-            match = None
-            if len(candidatos) >= 1:
-                c_monto = float(c['monto'])
-                mejor_idx = None
-                mejor_dif = float('inf')
-                for i, k in enumerate(candidatos):
-                    if (nombre_comp, doc, i) in kardex_used:
-                        continue
-                    dif = abs(k['total'] - c_monto)
-                    if dif < mejor_dif:
-                        mejor_dif = dif
-                        mejor_idx = i
-                if mejor_idx is not None:
-                    match = candidatos[mejor_idx]
-                    kardex_used.add((nombre_comp, doc, mejor_idx))
-
-            if match:
-                matches.append({
-                    'contab_id': c['id'],
-                    'componente': c['concepto'],
-                    'contab_monto': float(c['monto']),
-                    'kardex_producto_id': match['producto_id'],
-                    'kardex_producto_padre_id': match['producto_padre_id'],
-                    'kardex_nombre': match['nombre'],
-                    'kardex_monto': match['total'],
-                    'diferencia': float(c['monto']) - match['total'],
-                })
-            else:
-                sin_kardex += 1
-                matches.append({
-                    'contab_id': c['id'],
-                    'componente': c['concepto'],
-                    'contab_monto': float(c['monto']),
+            # Ordenar ambos por monto para emparejar 1:1
+            contab_sorted = sorted(contab_list, key=lambda x: x['monto'])
+            kardex_sorted = sorted(
+                [(i, k) for i, k in enumerate(candidatos) if (nombre_comp, doc, i) not in kardex_used],
+                key=lambda x: x[1]['total']
+            )
+            for ci, c in enumerate(contab_sorted):
+                if ci < len(kardex_sorted):
+                    ki, k = kardex_sorted[ci]
+                    kardex_used.add((nombre_comp, doc, ki))
+                    matches.append({
+                        'contab_id': c['id'],
+                        'componente': c['concepto'],
+                        'contab_monto': c['monto'],
+                        'kardex_producto_id': k['producto_id'],
+                        'kardex_producto_padre_id': k['producto_padre_id'],
+                        'kardex_nombre': k['nombre'],
+                        'kardex_monto': k['total'],
+                        'diferencia': c['monto'] - k['total'],
+                    })
+                else:
+                    sin_kardex += 1
+                    matches.append({
+                        'contab_id': c['id'],
+                        'componente': c['concepto'],
+                        'contab_monto': c['monto'],
+                        'kardex_producto_id': None,
+                        'kardex_producto_padre_id': None,
+                        'kardex_nombre': None,
+                        'kardex_monto': None,
+                        'diferencia': None,
+                    })
                     'kardex_producto_id': None,
                     'kardex_producto_padre_id': None,
                     'kardex_nombre': None,

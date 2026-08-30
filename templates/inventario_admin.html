@@ -11906,8 +11906,8 @@ async function cargarReporteEnsambles() {
     async function vincularIdsNivel(nivel, productoPadreId, numeroDoc) {
       const ini = document.getElementById('ensambles-fecha-ini').value;
       const fin = document.getElementById('ensambles-fecha-fin').value;
-      const容器Id = nivel === 'producto' ? `vincular-prod-${productoPadreId}` : `vincular-doc-${productoPadreId}-${numeroDoc || ''}`;
-      const preview = document.getElementById(容器Id) || document.getElementById('vincular-preview');
+      const containerId = nivel === 'producto' ? `vincular-prod-${productoPadreId}` : `vincular-doc-${productoPadreId}-${numeroDoc || ''}`;
+      const preview = document.getElementById(containerId) || document.getElementById('vincular-preview');
       preview.innerHTML = '<div class="text-blue-600 text-[10px] py-1">Consultando...</div>';
       preview.classList.remove('hidden');
 
@@ -11953,8 +11953,8 @@ async function cargarReporteEnsambles() {
     async function vincularIdsEjecutarNivel(nivel, productoPadreId, numeroDoc) {
       const ini = document.getElementById('ensambles-fecha-ini').value;
       const fin = document.getElementById('ensambles-fecha-fin').value;
-      const容器Id = nivel === 'producto' ? `vincular-prod-${productoPadreId}` : `vincular-doc-${productoPadreId}-${numeroDoc || ''}`;
-      const preview = document.getElementById(容器Id) || document.getElementById('vincular-preview');
+      const containerId = nivel === 'producto' ? `vincular-prod-${productoPadreId}` : `vincular-doc-${productoPadreId}-${numeroDoc || ''}`;
+      const preview = document.getElementById(containerId) || document.getElementById('vincular-preview');
       preview.innerHTML = '<div class="text-blue-600 text-[10px] py-1">Ejecutando...</div>';
 
       try {
@@ -11974,8 +11974,8 @@ async function cargarReporteEnsambles() {
     async function repararNivel(nivel, productoPadreId, numeroDoc) {
       const ini = document.getElementById('ensambles-fecha-ini').value;
       const fin = document.getElementById('ensambles-fecha-fin').value;
-      const容器Id = nivel === 'producto' ? `reparar-prod-${productoPadreId}` : `reparar-doc-${productoPadreId}-${numeroDoc || ''}`;
-      const preview = document.getElementById(容器Id) || document.getElementById('reparador-preview');
+      const containerId = nivel === 'producto' ? `reparar-prod-${productoPadreId}` : `reparar-doc-${productoPadreId}-${numeroDoc || ''}`;
+      const preview = document.getElementById(containerId) || document.getElementById('reparador-preview');
       preview.innerHTML = '<div class="text-amber-600 text-[10px] py-1">Calculando...</div>';
       preview.classList.remove('hidden');
 
@@ -12014,8 +12014,8 @@ async function cargarReporteEnsambles() {
     async function repararEjecutarNivel(nivel, productoPadreId, numeroDoc) {
       const ini = document.getElementById('ensambles-fecha-ini').value;
       const fin = document.getElementById('ensambles-fecha-fin').value;
-      const容器Id = nivel === 'producto' ? `reparar-prod-${productoPadreId}` : `reparar-doc-${productoPadreId}-${numeroDoc || ''}`;
-      const preview = document.getElementById(容器Id) || document.getElementById('reparador-preview');
+      const containerId = nivel === 'producto' ? `reparar-prod-${productoPadreId}` : `reparar-doc-${productoPadreId}-${numeroDoc || ''}`;
+      const preview = document.getElementById(containerId) || document.getElementById('reparador-preview');
       preview.innerHTML = '<div class="text-red-600 text-[10px]">Ejecutando reparación...</div>';
 
       try {

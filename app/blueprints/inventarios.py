@@ -1603,9 +1603,6 @@ def api_debug_analisis_factura(negocio_id, numero_doc):
     finally:
         conn.close()
 
-    finally:
-        conn.close()
-
 
 @bp.route('/api/tienda/<slug>/inventario/kardex')
 def api_tienda_inventario_kardex(slug):

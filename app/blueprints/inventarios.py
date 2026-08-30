@@ -5988,6 +5988,16 @@ def api_reparar_costos_venta(negocio_id):
         """, padres_ids + [negocio_id]).fetchall()
         padres_map = {p['id']: p['nombre'] for p in padres_rows}
 
+        # Mapear nombres de tipos de documento desde tipos_documento_negocio
+        td_rows = conn.execute(
+            "SELECT codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s",
+            (negocio_id,)
+        ).fetchall()
+        td_nombre_map = {}
+        for td in td_rows:
+            td_nombre_map[td['codigo'].upper()] = td['nombre']
+            td_nombre_map[td['codigo'].lower()] = td['nombre']
+
         # 2. Agrupar por producto padre > factura
         por_producto = {}
         for s in salidas:
@@ -5996,9 +6006,11 @@ def api_reparar_costos_venta(negocio_id):
             if ppid not in por_producto:
                 por_producto[ppid] = {}
             if doc not in por_producto[ppid]:
+                tipo_doc_codigo = s['tipo_documento'] or 'FACTURA_DE_VENTA'
+                tipo_doc_nombre = td_nombre_map.get(tipo_doc_codigo, td_nombre_map.get(tipo_doc_codigo.upper(), tipo_doc_codigo.replace('_', ' ')))
                 por_producto[ppid][doc] = {
                     'documento_numero': doc,
-                    'tipo_documento': s['tipo_documento'] or 'FACTURA_DE_VENTA',
+                    'tipo_documento': tipo_doc_nombre,
                     'fecha': s['fecha'].isoformat() if s['fecha'] else '',
                     'componentes': [],
                     'costo_real_kardex': 0,

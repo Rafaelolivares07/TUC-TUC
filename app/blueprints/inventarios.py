@@ -1693,7 +1693,7 @@ def api_vincular_ids_contabilidad(negocio_id):
             WHERE m.negocio_id = %s
               AND m.documento_numero = %s
               AND m.tipo = 'salida'
-            ORDER BY m.nombre_producto, m.total
+            ORDER BY m.nombre_producto, COALESCE(m.valor_total, m.cantidad * m.costo_und, 0)
         """, (negocio_id, numero_doc)).fetchall()
 
         # 3. Indexar Kardex por nombre (normalizado)

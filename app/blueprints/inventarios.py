@@ -1653,55 +1653,103 @@ def api_vincular_ids_contabilidad(negocio_id):
     """GET=preview de matches, POST=ejecuta UPDATEs.
     Cruza movimientos_contables (Baja Inv 14* credito, producto_id NULL)
     con movimientos_inventario (salida) por nombre del componente y numero_documento.
+    Acepta: numero_doc (factura especifica), producto_padre_id + rango fechas, o solo rango.
     """
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
 
     numero_doc = request.args.get('numero_doc', '').strip()
+    prod_padre_id = request.args.get('producto_padre_id', type=int)
+    fecha_desde = request.args.get('fecha_desde', '').strip()
+    fecha_hasta = request.args.get('fecha_hasta', '').strip()
     es_ejecucion = request.method == 'POST'
-
-    if not numero_doc:
-        return jsonify({'ok': False, 'error': 'numero_doc requerido'}), 400
 
     conn = get_db_connection()
     try:
-        # 1. Obtener Baja Inv (14* credito) con producto_id NULL
-        contab_rows = conn.execute("""
+        # 1. Construir WHERE para Baja Inv
+        where_extra = ""
+        params = [negocio_id]
+
+        if numero_doc:
+            where_extra += " AND (mc.numero_documento = %s OR mc.numero_documento = %s OR mc.numero_documento = %s)"
+            params.extend([str(numero_doc), f'FACTURA_DE_VENTA-{numero_doc}', f'VENTA-{numero_doc}'])
+
+        if fecha_desde:
+            where_extra += " AND mc.fecha >= %s"
+            params.append(fecha_desde)
+        if fecha_hasta:
+            where_extra += " AND mc.fecha <= %s"
+            params.append(fecha_hasta)
+
+        # Si hay producto_padre_id, buscar los documentos que tienen salidas de ese producto
+        doc_filter = ""
+        if prod_padre_id and not numero_doc:
+            doc_rows = conn.execute("""
+                SELECT DISTINCT documento_numero FROM movimientos_inventario
+                WHERE negocio_id = %s AND producto_padre_id = %s AND tipo = 'salida'
+            """, (negocio_id, prod_padre_id)).fetchall()
+            doc_nums = list(set([d['documento_numero'] for d in doc_rows if d['documento_numero']]))
+            if doc_nums:
+                placeholders = ','.join(['%s'] * len(doc_nums))
+                doc_filter = f" AND mc.numero_documento IN ({placeholders})"
+                params.extend(doc_nums)
+            else:
+                doc_filter = " AND 1=0"
+
+        contab_rows = conn.execute(f"""
             SELECT mc.id, mc.concepto, mc.monto, mc.numero_documento,
                    mc.cuenta
             FROM movimientos_contables mc
             WHERE mc.negocio_id = %s
-              AND (mc.numero_documento = %s OR mc.numero_documento = %s OR mc.numero_documento = %s)
               AND mc.cuenta LIKE '14%%'
               AND mc.tipo = 'credito'
               AND UPPER(mc.concepto) LIKE 'BAJA INV:%%'
               AND mc.producto_id IS NULL
+              {where_extra}
+              {doc_filter}
             ORDER BY mc.concepto, mc.monto
-        """, (negocio_id, str(numero_doc), f'FACTURA_DE_VENTA-{numero_doc}', f'VENTA-{numero_doc}')).fetchall()
+        """, params).fetchall()
 
         if not contab_rows:
             return jsonify({'ok': True, 'matches': [], 'resumen': {
                 'total_contab': 0, 'vinculados': 0, 'sin_kardex': 0
             }})
 
-        # 2. Obtener Kardex salidas de la factura
-        kardex_rows = conn.execute("""
+        # 2. Obtener Kardex salidas - misma lógica de filtros
+        k_params = [negocio_id]
+        k_where = ""
+        if numero_doc:
+            k_where += " AND m.documento_numero = %s"
+            k_params.append(str(numero_doc))
+        if fecha_desde:
+            k_where += " AND COALESCE(m.documento_fecha, m.created_at::date) >= %s"
+            k_params.append(fecha_desde)
+        if fecha_hasta:
+            k_where += " AND COALESCE(m.documento_fecha, m.created_at::date) <= %s"
+            k_params.append(fecha_hasta)
+        if prod_padre_id:
+            k_where += " AND m.producto_padre_id = %s"
+            k_params.append(prod_padre_id)
+
+        kardex_rows = conn.execute(f"""
             SELECT m.producto_id, m.producto_padre_id, m.nombre_producto,
+                   m.documento_numero,
                    m.cantidad, m.costo_und,
                    COALESCE(m.valor_total, m.cantidad * m.costo_und, 0) AS total
             FROM movimientos_inventario m
             WHERE m.negocio_id = %s
-              AND m.documento_numero = %s
               AND m.tipo = 'salida'
+              {k_where}
             ORDER BY m.nombre_producto, COALESCE(m.valor_total, m.cantidad * m.costo_und, 0)
-        """, (negocio_id, numero_doc)).fetchall()
+        """, k_params).fetchall()
 
-        # 3. Indexar Kardex por nombre (normalizado)
+        # 3. Indexar Kardex por nombre + documento
         from collections import defaultdict
-        kardex_por_nombre = defaultdict(list)
+        kardex_por_nombre_doc = defaultdict(list)
         for k in kardex_rows:
             nombre_norm = k['nombre_producto'].strip().upper()
-            kardex_por_nombre[nombre_norm].append({
+            doc = str(k['documento_numero']) if k['documento_numero'] else ''
+            kardex_por_nombre_doc[(nombre_norm, doc)].append({
                 'producto_id': k['producto_id'],
                 'producto_padre_id': k['producto_padre_id'],
                 'nombre': k['nombre_producto'],
@@ -1711,11 +1759,12 @@ def api_vincular_ids_contabilidad(negocio_id):
         # 4. Emparejar (con tracking de kardex ya usados)
         matches = []
         sin_kardex = 0
-        kardex_used = set()  # (nombre, idx) ya emparejados
+        kardex_used = set()  # (nombre, doc, idx) ya emparejados
 
         for c in contab_rows:
             nombre_comp = c['concepto'].replace('Baja Inv:', '').replace('BAJA INV:', '').strip().upper()
-            candidatos = kardex_por_nombre.get(nombre_comp, [])
+            doc = str(c['numero_documento']) if c['numero_documento'] else ''
+            candidatos = kardex_por_nombre_doc.get((nombre_comp, doc), [])
 
             match = None
             if len(candidatos) >= 1:
@@ -1723,7 +1772,7 @@ def api_vincular_ids_contabilidad(negocio_id):
                 mejor_idx = None
                 mejor_dif = float('inf')
                 for i, k in enumerate(candidatos):
-                    if (nombre_comp, i) in kardex_used:
+                    if (nombre_comp, doc, i) in kardex_used:
                         continue
                     dif = abs(k['total'] - c_monto)
                     if dif < mejor_dif:
@@ -1731,7 +1780,7 @@ def api_vincular_ids_contabilidad(negocio_id):
                         mejor_idx = i
                 if mejor_idx is not None:
                     match = candidatos[mejor_idx]
-                    kardex_used.add((nombre_comp, mejor_idx))
+                    kardex_used.add((nombre_comp, doc, mejor_idx))
 
             if match:
                 matches.append({

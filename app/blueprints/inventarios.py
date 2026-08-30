@@ -6022,13 +6022,20 @@ def api_reparar_costos_venta(negocio_id):
                     'costo_real_kardex': 0,
                 }
             ff = por_producto[ppid][doc]
-            ff['componentes'].append({
-                'producto_id': s['producto_id'],
-                'nombre': s['nombre_producto'],
-                'cantidad': float(s['cantidad']),
-                'costo_und': float(s['costo_und'] or 0),
-                'costo_total': float(s['costo_total'] or 0),
-            })
+            # Agrupar componentes por producto_id
+            key_comp = f"{s['producto_id']}"
+            if key_comp not in ff.get('_comp_map', {}):
+                if '_comp_map' not in ff:
+                    ff['_comp_map'] = {}
+                ff['_comp_map'][key_comp] = {
+                    'producto_id': s['producto_id'],
+                    'nombre': s['nombre_producto'],
+                    'cantidad': 0,
+                    'costo_total': 0,
+                }
+                ff['componentes'].append(ff['_comp_map'][key_comp])
+            ff['_comp_map'][key_comp]['cantidad'] += float(s['cantidad'])
+            ff['_comp_map'][key_comp]['costo_total'] += float(s['costo_total'] or 0)
             ff['costo_real_kardex'] += float(s['costo_total'] or 0)
 
         # 3. Para cada producto > factura: buscar costos actuales
@@ -6086,15 +6093,20 @@ def api_reparar_costos_venta(negocio_id):
 
                 contras_list = []
                 total_contras_actual = 0
+                contra_map = {}
                 for c in contras:
                     monto = float(c['monto'] or 0)
                     total_contras_actual += monto
-                    contras_list.append({
-                        'id': c['id'],
-                        'cuenta': c['cuenta'],
-                        'concepto': c['concepto'],
-                        'monto_actual': monto,
-                    })
+                    # Agrupar por concepto (producto)
+                    concepto = (c['concepto'] or c['cuenta'] or '').strip()
+                    if concepto not in contra_map:
+                        contra_map[concepto] = {
+                            'concepto': concepto,
+                            'cuenta': c['cuenta'],
+                            'monto_actual': 0,
+                        }
+                        contras_list.append(contra_map[concepto])
+                    contra_map[concepto]['monto_actual'] += monto
 
                 costo_real = f['costo_real_kardex']
                 dif_pi = costo_total_actual_pi - costo_real

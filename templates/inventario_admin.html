@@ -11996,40 +11996,55 @@ async function cargarReporteEnsambles() {
               html += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500">Asiento 61*:</span><span class="${cls} font-bold">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO')} → $${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
             }
 
-            // Componentes
-            if (ff.componentes.length > 0) {
-              html += `<div class="text-[10px] text-gray-400 font-bold uppercase mt-1">Componentes (Kardex)</div>`;
+            // Componentes + Contrapartidas lado a lado
+            if (ff.componentes.length > 0 || ff.contrapartidas.length > 0) {
+              // Indexar contrapartidas por nombre de producto para emparejar
+              const contraIdx = {};
+              ff.contrapartidas.forEach(c => {
+                // Extraer nombre del producto del concepto (quitar prefijo "Inv: " o "Baja Inv: ")
+                let nombre = c.concepto || c.cuenta || '';
+                nombre = nombre.replace(/^.*?:\s*/, '').trim();
+                if (!contraIdx[nombre]) contraIdx[nombre] = 0;
+                contraIdx[nombre] += c.monto_actual;
+              });
+
+              html += `<div class="mt-1">`;
+              html += `<div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
+              html += `<span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contrapartida</span>`;
+              html += `</div>`;
+
               ff.componentes.forEach(c => {
                 const cid = ++uid;
-                html += `<div class="pl-2 py-0.5">`;
-                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full flex items-center justify-between text-left">`;
-                html += `<div class="flex items-center gap-1">`;
-                html += `<svg class="w-2.5 h-2.5 text-gray-400 transition-transform repair-arrow" id="arrow-comp-${cid}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
-                html += `<span class="text-gray-500">${c.nombre}</span>`;
-                html += `</div>`;
-                html += `<span class="text-gray-600 font-bold">$${c.costo_total.toLocaleString('es-CO')}</span>`;
-                html += `</button>`;
-                html += `<div id="comp-${cid}" class="hidden pl-5 text-[10px] text-gray-400">${c.cantidad.toFixed(2)} x $${c.costo_und.toLocaleString('es-CO')}</div>`;
-                html += `</div>`;
-              });
-              html += `<div class="flex justify-between pl-2 py-0.5 border-t border-gray-200 mt-1"><span class="text-gray-500 font-bold">Total Kardex</span><span class="text-gray-700 font-bold">$${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
-            }
+                const contraMonto = contraIdx[c.nombre] || 0;
+                const difComp = contraMonto - c.costo_total;
 
-            // Contrapartidas
-            if (ff.contrapartidas.length > 0) {
-              const conId = ++uid;
-              html += `<div class="mt-1">`;
-              html += `<button onclick="toggleRepairLevel('contra-${conId}')" class="w-full flex items-center justify-between text-left pl-2">`;
-              html += `<span class="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1">`;
-              html += `<svg class="w-2.5 h-2.5 text-gray-400 transition-transform repair-arrow" id="arrow-contra-${conId}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
-              html += `Contrapartidas (14*)</span>`;
-              html += `<span class="text-[10px] text-gray-500 font-bold">$${ff.contrapartidas.reduce((s, c) => s + c.monto_actual, 0).toLocaleString('es-CO')}</span>`;
-              html += `</button>`;
-              html += `<div id="contra-${conId}" class="hidden pl-5 space-y-0.5">`;
-              ff.contrapartidas.forEach(c => {
-                html += `<div class="flex justify-between py-0.5"><span class="text-gray-500">${c.concepto || c.cuenta}</span><span class="text-gray-600 font-bold">$${c.monto_actual.toLocaleString('es-CO')}</span></div>`;
+                html += `<div class="px-2">`;
+                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-3 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
+                html += `<span class="text-gray-600 text-xs truncate">${c.nombre}</span>`;
+                html += `<span class="text-gray-700 text-xs font-bold text-right">$${c.costo_total.toLocaleString('es-CO')}</span>`;
+                html += `<span class="text-xs font-bold text-right ${Math.abs(difComp) > 0.01 ? 'text-red-600' : 'text-green-600'}">$${contraMonto.toLocaleString('es-CO')}</span>`;
+                html += `</button>`;
+                html += `<div id="comp-${cid}" class="hidden pl-4 text-[10px] text-gray-400 pb-1">`;
+                html += `Cant: ${c.cantidad.toFixed(2)} | Dif: $${difComp.toLocaleString('es-CO')}`;
+                html += `</div>`;
+                html += `</div>`;
               });
-              html += `</div></div>`;
+
+              // Contrapartidas que no tienen par en Kardex
+              ff.contrapartidas.forEach(c => {
+                let nombre = c.concepto || c.cuenta || '';
+                nombre = nombre.replace(/^.*?:\s*/, '').trim();
+                const yaEnKardex = ff.componentes.some(comp => comp.nombre === nombre);
+                if (!yaEnKardex) {
+                  html += `<div class="px-2 grid grid-cols-3 gap-2 py-0.5">`;
+                  html += `<span class="text-gray-400 text-xs italic truncate">${nombre}</span>`;
+                  html += `<span class="text-gray-400 text-xs text-right">—</span>`;
+                  html += `<span class="text-gray-600 text-xs font-bold text-right">$${c.monto_actual.toLocaleString('es-CO')}</span>`;
+                  html += `</div>`;
+                }
+              });
+
+              html += `</div>`;
             }
 
             html += `</div>`; // fin doc content

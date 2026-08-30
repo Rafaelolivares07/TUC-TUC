@@ -6081,53 +6081,10 @@ def api_reparar_costos_venta(negocio_id):
                 cogs_monto_actual = float(cogs_row['monto'] or 0) if cogs_row else 0
                 cogs_id = cogs_row['id'] if cogs_row else None
 
-                # Contrapartidas de inventario (14xxx) — filtradas por tipo_documento y componentes del producto
-                contras_raw = conn.execute("""
-                    SELECT id, monto, cuenta, concepto
-                    FROM movimientos_contables
-                    WHERE negocio_id = %s
-                      AND (numero_documento = %s OR numero_documento = %s)
-                      AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
-                      AND LEFT(cuenta, 2) = '14'
-                      AND UPPER(concepto) NOT LIKE '%%COSTO%%'
-                    ORDER BY id
-                """, (negocio_id, consecutive, doc_num, td_code)).fetchall()
-
-                # Nombres de componentes de este producto padre (normalizados)
-                nombres_comp = set()
-                for comp in f['componentes']:
-                    nombres_comp.add(comp['nombre'].strip().upper())
-
-                # Filtrar contrapartidas que matcheen componentes
-                contras = []
-                for c in contras_raw:
-                    concepto_upper = (c['concepto'] or '').upper()
-                    # Verificar si algun nombre de componente aparece en el concepto
-                    if any(nc in concepto_upper for nc in nombres_comp):
-                        contras.append(c)
-
-                contras_list = []
-                total_contras_actual = 0
-                contra_map = {}
-                for c in contras:
-                    monto = float(c['monto'] or 0)
-                    total_contras_actual += monto
-                    # Agrupar por concepto (producto)
-                    concepto = (c['concepto'] or c['cuenta'] or '').strip()
-                    if concepto not in contra_map:
-                        contra_map[concepto] = {
-                            'concepto': concepto,
-                            'cuenta': c['cuenta'],
-                            'monto_actual': 0,
-                        }
-                        contras_list.append(contra_map[concepto])
-                    contra_map[concepto]['monto_actual'] += monto
-
                 costo_real = f['costo_real_kardex']
                 dif_pi = costo_total_actual_pi - costo_real
                 dif_cogs = cogs_monto_actual - costo_real if cogs_row else 0
-                dif_contras = total_contras_actual - costo_real if contras else 0
-                tiene_diferencia = abs(dif_pi) > 0.01 or abs(dif_cogs) > 0.01 or abs(dif_contras) > 0.01
+                tiene_diferencia = abs(dif_pi) > 0.01 or abs(dif_cogs) > 0.01
 
                 facturas_producto.append({
                     'documento_numero': doc_num,
@@ -6147,8 +6104,6 @@ def api_reparar_costos_venta(negocio_id):
                         'monto_actual': cogs_monto_actual,
                         'diferencia': dif_cogs,
                     },
-                    'contrapartidas': contras_list,
-                    'diferencia_contras': dif_contras,
                     'tiene_diferencia': tiene_diferencia,
                 })
 
@@ -6189,21 +6144,6 @@ def api_reparar_costos_venta(negocio_id):
                             (r['costo_real_kardex'], r['cogs_contable']['id'])
                         )
                         cambios_aplicados += 1
-
-                    # 4c. Corregir contrapartidas (14xxx) — proporcionalmente
-                    if r['contrapartidas'] and abs(r['diferencia_contras']) > 0.01:
-                        total_contras_actual = sum(c['monto_actual'] for c in r['contrapartidas'])
-                        for contra in r['contrapartidas']:
-                            if total_contras_actual > 0:
-                                proporción = contra['monto_actual'] / total_contras_actual
-                            else:
-                                proporción = 1.0 / len(r['contrapartidas'])
-                            nuevo_monto = r['costo_real_kardex'] * proporción
-                            conn.execute(
-                                "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
-                                (nuevo_monto, contra['id'])
-                            )
-                            cambios_aplicados += 1
 
             conn.commit()
 

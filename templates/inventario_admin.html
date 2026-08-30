@@ -2447,7 +2447,7 @@
           <svg id="reparador-chevron" class="w-4 h-4 text-amber-600 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </button>
         <div id="reparador-body" class="hidden px-5 pb-5">
-          <p class="text-xs text-amber-700 mb-3">Corrige el costo unitario en pedidos y los asientos contables de costo de venta (61*) y contrapartidas de inventario (14*) para este producto padre en el rango seleccionado.</p>
+          <p class="text-xs text-amber-700 mb-3">Corrige el costo unitario en pedidos y el asiento contable de costo de venta (61*) para este producto padre en el rango seleccionado. Compara el costo Kardex real de los componentes vs el costo registrado en contabilidad.</p>
           <div id="reparador-preview" class="hidden mb-4"></div>
           <div class="flex gap-3">
             <button onclick="repararCostosPreview()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">Vista Previa</button>
@@ -11996,8 +11996,8 @@ async function cargarReporteEnsambles() {
               html += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500">Asiento 61*:</span><span class="${cls} font-bold">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO')} → $${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
             }
 
-            // Componentes + Contrapartidas lado a lado
-            if (ff.componentes.length > 0 || ff.contrapartidas.length > 0) {
+            // Componentes Kardex (desglose por componente)
+            if (ff.componentes.length > 0) {
               // Agrupar componentes por nombre para mostrar
               const compAgrupados = {};
               ff.componentes.forEach(c => {
@@ -12008,49 +12008,22 @@ async function cargarReporteEnsambles() {
                 compAgrupados[c.nombre].costo_total += c.costo_total;
               });
 
-              // Indexar contrapartidas por nombre de producto para emparejar
-              const contraIdx = {};
-              ff.contrapartidas.forEach(c => {
-                let nombre = c.concepto || c.cuenta || '';
-                nombre = nombre.replace(/^.*?:\s*/, '').trim();
-                if (!contraIdx[nombre]) contraIdx[nombre] = 0;
-                contraIdx[nombre] += c.monto_actual;
-              });
-
               html += `<div class="mt-1">`;
-              html += `<div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
-              html += `<span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contrapartida</span>`;
+              html += `<div class="grid grid-cols-2 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
+              html += `<span>Componente</span><span class="text-right">Costo Kardex</span>`;
               html += `</div>`;
 
               Object.values(compAgrupados).forEach(c => {
                 const cid = ++uid;
-                const contraMonto = contraIdx[c.nombre] || 0;
-                const difComp = contraMonto - c.costo_total;
-
                 html += `<div class="px-2">`;
-                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-3 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
+                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-2 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
                 html += `<span class="text-gray-600 text-xs truncate">${c.nombre}</span>`;
                 html += `<span class="text-gray-700 text-xs font-bold text-right">$${c.costo_total.toLocaleString('es-CO')}</span>`;
-                html += `<span class="text-xs font-bold text-right ${Math.abs(difComp) > 0.01 ? 'text-red-600' : 'text-green-600'}">$${contraMonto.toLocaleString('es-CO')}</span>`;
                 html += `</button>`;
                 html += `<div id="comp-${cid}" class="hidden pl-4 text-[10px] text-gray-400 pb-1">`;
-                html += `Cant: ${c.cantidad.toFixed(2)} | Dif: $${difComp.toLocaleString('es-CO')}`;
+                html += `Cant: ${c.cantidad.toFixed(2)} | Unit: $${(c.costo_total / c.cantidad).toLocaleString('es-CO')}`;
                 html += `</div>`;
                 html += `</div>`;
-              });
-
-              // Contrapartidas que no tienen par en Kardex
-              ff.contrapartidas.forEach(c => {
-                let nombre = c.concepto || c.cuenta || '';
-                nombre = nombre.replace(/^.*?:\s*/, '').trim();
-                const yaEnKardex = Object.keys(compAgrupados).includes(nombre);
-                if (!yaEnKardex) {
-                  html += `<div class="px-2 grid grid-cols-3 gap-2 py-0.5">`;
-                  html += `<span class="text-gray-400 text-xs italic truncate">${nombre}</span>`;
-                  html += `<span class="text-gray-400 text-xs text-right">—</span>`;
-                  html += `<span class="text-gray-600 text-xs font-bold text-right">$${c.monto_actual.toLocaleString('es-CO')}</span>`;
-                  html += `</div>`;
-                }
               });
 
               html += `</div>`;

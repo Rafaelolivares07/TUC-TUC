@@ -11998,10 +11998,19 @@ async function cargarReporteEnsambles() {
 
             // Componentes + Contrapartidas lado a lado
             if (ff.componentes.length > 0 || ff.contrapartidas.length > 0) {
+              // Agrupar componentes por nombre para mostrar
+              const compAgrupados = {};
+              ff.componentes.forEach(c => {
+                if (!compAgrupados[c.nombre]) {
+                  compAgrupados[c.nombre] = { nombre: c.nombre, cantidad: 0, costo_total: 0 };
+                }
+                compAgrupados[c.nombre].cantidad += c.cantidad;
+                compAgrupados[c.nombre].costo_total += c.costo_total;
+              });
+
               // Indexar contrapartidas por nombre de producto para emparejar
               const contraIdx = {};
               ff.contrapartidas.forEach(c => {
-                // Extraer nombre del producto del concepto (quitar prefijo "Inv: " o "Baja Inv: ")
                 let nombre = c.concepto || c.cuenta || '';
                 nombre = nombre.replace(/^.*?:\s*/, '').trim();
                 if (!contraIdx[nombre]) contraIdx[nombre] = 0;
@@ -12013,7 +12022,7 @@ async function cargarReporteEnsambles() {
               html += `<span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contrapartida</span>`;
               html += `</div>`;
 
-              ff.componentes.forEach(c => {
+              Object.values(compAgrupados).forEach(c => {
                 const cid = ++uid;
                 const contraMonto = contraIdx[c.nombre] || 0;
                 const difComp = contraMonto - c.costo_total;
@@ -12034,7 +12043,7 @@ async function cargarReporteEnsambles() {
               ff.contrapartidas.forEach(c => {
                 let nombre = c.concepto || c.cuenta || '';
                 nombre = nombre.replace(/^.*?:\s*/, '').trim();
-                const yaEnKardex = ff.componentes.some(comp => comp.nombre === nombre);
+                const yaEnKardex = Object.keys(compAgrupados).includes(nombre);
                 if (!yaEnKardex) {
                   html += `<div class="px-2 grid grid-cols-3 gap-2 py-0.5">`;
                   html += `<span class="text-gray-400 text-xs italic truncate">${nombre}</span>`;

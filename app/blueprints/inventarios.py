@@ -940,12 +940,15 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
         except Exception as _e:
             raise _e
 
-    # Recostear any products that were deleted or registered/modified in this document
-    prods_to_recost = set(data.get('_prod_ids_to_recost', []))
-    for ln in lineas_procesadas:
-        prods_to_recost.add(ln['producto_id'])
-    for p_id in prods_to_recost:
-        _recostear_producto(conn, negocio_id, p_id)
+    # Recostear solo si es modificacion de documento existente
+    # (se elimino y re-registro, cambiando los movimientos)
+    # Compra nueva NO necesita recosteo — solo actualiza saldos_inventario
+    if es_modificacion:
+        prods_to_recost = set(data.get('_prod_ids_to_recost', []))
+        for ln in lineas_procesadas:
+            prods_to_recost.add(ln['producto_id'])
+        for p_id in prods_to_recost:
+            _recostear_producto(conn, negocio_id, p_id)
 
     return {
         'ok': True,

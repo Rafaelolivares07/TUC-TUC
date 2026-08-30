@@ -1540,6 +1540,69 @@ def api_inventario_kardex(producto_id):
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── Debug: Analisis Kardex vs Contabilidad por factura ────────────────────────
+@bp.route('/api/debug/analisis-factura/<int:negocio_id>/<numero_doc>')
+def api_debug_analisis_factura(negocio_id, numero_doc):
+    """Devuelve JSON con los registros de Kardex y Contabilidad para una factura."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    conn = get_db_connection()
+    try:
+        kardex = conn.execute("""
+            SELECT m.producto_id, m.producto_padre_id, m.nombre_producto,
+                   m.cantidad, m.costo_und,
+                   COALESCE(m.valor_total, m.cantidad * m.costo_und, 0) AS total,
+                   m.tipo, m.documento_numero
+            FROM movimientos_inventario m
+            WHERE m.negocio_id = %s
+              AND m.documento_numero = %s
+              AND m.tipo = 'salida'
+            ORDER BY m.nombre_producto
+        """, (negocio_id, numero_doc)).fetchall()
+
+        contab = conn.execute("""
+            SELECT mc.id, mc.cuenta_id, mc.concepto, mc.tipo, mc.monto,
+                   mc.producto_id, mc.producto_padre_id, mc.numero_documento
+            FROM movimientos_contables mc
+            WHERE mc.negocio_id = %s
+              AND mc.numero_documento = %s
+              AND CAST(mc.cuenta_id AS VARCHAR) LIKE '14%'
+            ORDER BY mc.concepto
+        """, (negocio_id, f'FACTURA_DE_VENTA-{numero_doc}')).fetchall()
+
+        return jsonify({
+            'ok': True,
+            'factura': numero_doc,
+            'kardex': [{
+                'producto_id': k['producto_id'],
+                'producto_padre_id': k['producto_padre_id'],
+                'nombre': k['nombre_producto'],
+                'cantidad': float(k['cantidad']),
+                'costo_und': float(k['costo_und']),
+                'total': float(k['total']),
+            } for k in kardex],
+            'contabilidad_14': [{
+                'id': c['id'],
+                'cuenta_id': c['cuenta_id'],
+                'concepto': c['concepto'],
+                'tipo': c['tipo'],
+                'monto': float(c['monto']),
+                'producto_id': c['producto_id'],
+                'producto_padre_id': c['producto_padre_id'],
+            } for c in contab],
+            'resumen': {
+                'kardex_registros': len(kardex),
+                'contab_registros': len(contab),
+            }
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
     finally:
         conn.close()
 

@@ -11949,7 +11949,10 @@ async function cargarReporteEnsambles() {
           html += `<span class="text-xs font-bold text-amber-900">${prod.producto_padre_nombre}</span>`;
           html += `<span class="text-[10px] px-1.5 py-0.5 bg-amber-200 text-amber-700 rounded-full font-bold">${prod.con_diferencia} doc(s)</span>`;
           html += `</div>`;
-          html += `<span class="text-xs font-bold text-red-600">$${montoProd.toLocaleString('es-CO')}</span>`;
+          html += `<div class="text-right">`;
+          html += `<div class="text-[10px] text-gray-500">Actual: <span class="font-bold text-gray-700">$${prod.costo_total_actual.toLocaleString('es-CO')}</span> → Real: <span class="font-bold text-gray-700">$${prod.costo_total_real.toLocaleString('es-CO')}</span></div>`;
+          html += `<div class="text-xs font-bold ${Math.abs(prod.costo_total_real - prod.costo_total_actual) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${(prod.costo_total_real - prod.costo_total_actual).toLocaleString('es-CO')}</div>`;
+          html += `</div>`;
           html += `</button>`;
 
           // Contenido del producto (colapsado por defecto)
@@ -11968,7 +11971,10 @@ async function cargarReporteEnsambles() {
             html += `<span class="text-xs font-bold text-gray-800">${ff.documento_numero}</span>`;
             html += `<span class="text-[10px] text-gray-400">${ff.fecha}</span>`;
             html += `</div>`;
-            html += `<span class="text-xs font-bold text-red-600">$${Math.abs(ff.pedido_item.diferencia).toLocaleString('es-CO')}</span>`;
+            html += `<div class="text-right">`;
+            html += `<div class="text-[10px] text-gray-500">Actual: <span class="font-bold text-gray-700">$${ff.costo_actual_total.toLocaleString('es-CO')}</span> → Real: <span class="font-bold text-gray-700">$${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
+            html += `<div class="text-xs font-bold ${Math.abs(ff.costo_real_kardex - ff.costo_actual_total) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${(ff.costo_real_kardex - ff.costo_actual_total).toLocaleString('es-CO')}</div>`;
+            html += `</div>`;
             html += `</button>`;
 
             // Contenido del documento (colapsado por defecto)
@@ -11992,16 +11998,36 @@ async function cargarReporteEnsambles() {
             if (ff.componentes.length > 0) {
               html += `<div class="text-[10px] text-gray-400 font-bold uppercase mt-1">Componentes (Kardex)</div>`;
               ff.componentes.forEach(c => {
-                html += `<div class="flex justify-between pl-2 py-0.5"><span class="text-gray-500">${c.nombre}</span><span class="text-gray-600">${c.cantidad.toFixed(2)} x $${c.costo_und.toLocaleString('es-CO')} = $${c.costo_total.toLocaleString('es-CO')}</span></div>`;
+                const cid = ++uid;
+                html += `<div class="pl-2 py-0.5">`;
+                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full flex items-center justify-between text-left">`;
+                html += `<div class="flex items-center gap-1">`;
+                html += `<svg class="w-2.5 h-2.5 text-gray-400 transition-transform repair-arrow" id="arrow-comp-${cid}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+                html += `<span class="text-gray-500">${c.nombre}</span>`;
+                html += `</div>`;
+                html += `<span class="text-gray-600 font-bold">$${c.costo_total.toLocaleString('es-CO')}</span>`;
+                html += `</button>`;
+                html += `<div id="comp-${cid}" class="hidden pl-5 text-[10px] text-gray-400">${c.cantidad.toFixed(2)} x $${c.costo_und.toLocaleString('es-CO')}</div>`;
+                html += `</div>`;
               });
+              html += `<div class="flex justify-between pl-2 py-0.5 border-t border-gray-200 mt-1"><span class="text-gray-500 font-bold">Total Kardex</span><span class="text-gray-700 font-bold">$${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
             }
 
             // Contrapartidas
             if (ff.contrapartidas.length > 0) {
-              html += `<div class="text-[10px] text-gray-400 font-bold uppercase mt-1">Contrapartidas (14*)</div>`;
+              const conId = ++uid;
+              html += `<div class="mt-1">`;
+              html += `<button onclick="toggleRepairLevel('contra-${conId}')" class="w-full flex items-center justify-between text-left pl-2">`;
+              html += `<span class="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1">`;
+              html += `<svg class="w-2.5 h-2.5 text-gray-400 transition-transform repair-arrow" id="arrow-contra-${conId}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+              html += `Contrapartidas (14*)</span>`;
+              html += `<span class="text-[10px] text-gray-500 font-bold">$${ff.contrapartidas.reduce((s, c) => s + c.monto_actual, 0).toLocaleString('es-CO')}</span>`;
+              html += `</button>`;
+              html += `<div id="contra-${conId}" class="hidden pl-5 space-y-0.5">`;
               ff.contrapartidas.forEach(c => {
-                html += `<div class="flex justify-between pl-2 py-0.5"><span class="text-gray-500">${c.concepto || c.cuenta}</span><span class="text-gray-600">$${c.monto_actual.toLocaleString('es-CO')}</span></div>`;
+                html += `<div class="flex justify-between py-0.5"><span class="text-gray-500">${c.concepto || c.cuenta}</span><span class="text-gray-600 font-bold">$${c.monto_actual.toLocaleString('es-CO')}</span></div>`;
               });
+              html += `</div></div>`;
             }
 
             html += `</div>`; // fin doc content

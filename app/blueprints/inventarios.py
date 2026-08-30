@@ -6099,6 +6099,7 @@ def api_reparar_costos_venta(negocio_id):
                     'fecha': f['fecha'],
                     'componentes': f['componentes'],
                     'costo_real_kardex': costo_real,
+                    'costo_actual_total': costo_total_actual_pi,
                     'pedido_item': {
                         'id': pi_id,
                         'costo_unitario_actual': costo_actual_pi,
@@ -6116,11 +6117,15 @@ def api_reparar_costos_venta(negocio_id):
                 })
 
             con_dif = sum(1 for ff in facturas_producto if ff['tiene_diferencia'])
+            total_actual = sum(ff['pedido_item']['costo_total_actual'] for ff in facturas_producto if ff['pedido_item']['id'])
+            total_real = sum(ff['costo_real_kardex'] for ff in facturas_producto if ff['tiene_diferencia'])
             todos_resultados.append({
                 'producto_padre_id': ppid,
                 'producto_padre_nombre': nombre_padre,
                 'facturas': facturas_producto,
                 'con_diferencia': con_dif,
+                'costo_total_actual': total_actual,
+                'costo_total_real': total_real,
             })
 
         # 4. Si es ejecucion, aplicar cambios

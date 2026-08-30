@@ -11929,7 +11929,7 @@ async function cargarReporteEnsambles() {
               const compAgrupados = {};
               ff.componentes.forEach(c => {
                 if (!compAgrupados[c.nombre]) {
-                  compAgrupados[c.nombre] = { nombre: c.nombre, cantidad: 0, costo_total: 0 };
+                  compAgrupados[c.nombre] = { nombre: c.nombre, cantidad: 0, costo_total: 0, producto_id: c.producto_id };
                 }
                 compAgrupados[c.nombre].cantidad += c.cantidad;
                 compAgrupados[c.nombre].costo_total += c.costo_total;
@@ -11937,45 +11937,51 @@ async function cargarReporteEnsambles() {
 
               const contraIdx = {};
               if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
-                let nombre = c.concepto || c.cuenta || '';
+                let nombre = c.comp_nombre || c.concepto || c.cuenta || '';
                 nombre = nombre.replace(/^.*?:\s*/, '').trim();
-                if (!contraIdx[nombre]) contraIdx[nombre] = 0;
-                contraIdx[nombre] += c.monto_actual;
+                if (!contraIdx[nombre]) contraIdx[nombre] = { monto: 0, producto_id: c.producto_id };
+                contraIdx[nombre].monto += c.monto_actual;
               });
 
               html += `<div class="mt-1">`;
-              html += `<div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
-              html += `<span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contable (14*)</span>`;
+              html += `<div class="grid grid-cols-4 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
+              html += `<span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contable (14*)</span><span class="text-right">Diferencia</span>`;
               html += `</div>`;
 
               Object.values(compAgrupados).forEach(c => {
                 const cid = ++uid;
-                const contraMonto = contraIdx[c.nombre] || 0;
-                const difComp = contraMonto - c.costo_total;
-                const cls = contraMonto > 0 ? (Math.abs(difComp) > 0.01 ? 'text-red-600' : 'text-green-600') : 'text-gray-400';
+                const contraData = contraIdx[c.nombre] || { monto: 0, producto_id: null };
+                const contraMonto = contraData.monto;
+                const difComp = contraMonto > 0 ? contraMonto - c.costo_total : 0;
+                const sinContable = contraMonto === 0;
+                const sinMatch = !contraData.producto_id && !c.producto_id;
+                const cls = sinContable ? 'text-gray-400' : (Math.abs(difComp) > 0.01 ? 'text-red-600' : 'text-green-600');
 
                 html += `<div class="px-2">`;
-                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-3 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
+                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-4 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
                 html += `<span class="text-gray-600 text-xs truncate">${c.nombre}</span>`;
                 html += `<span class="text-gray-700 text-xs font-bold text-right">$${c.costo_total.toLocaleString('es-CO')}</span>`;
-                html += `<span class="text-xs font-bold text-right ${cls}">$${contraMonto.toLocaleString('es-CO')}</span>`;
+                html += `<span class="text-xs font-bold text-right ${cls}">${sinContable ? '—' : '$' + contraMonto.toLocaleString('es-CO')}</span>`;
+                html += `<span class="text-xs font-bold text-right ${cls}">${sinContable ? '—' : (Math.abs(difComp) > 0.01 ? '$' + difComp.toLocaleString('es-CO') : 'OK')}</span>`;
                 html += `</button>`;
                 html += `<div id="comp-${cid}" class="hidden pl-4 text-[10px] text-gray-400 pb-1">`;
                 html += `Cant: ${c.cantidad.toFixed(2)} | Unit: $${(c.costo_total / c.cantidad).toLocaleString('es-CO')}`;
-                if (Math.abs(difComp) > 0.01) html += ` | Dif: $${difComp.toLocaleString('es-CO')}`;
+                if (sinContable) html += ` | Contable: NO DISPONIBLE`;
+                else if (Math.abs(difComp) > 0.01) html += ` | Dif: $${difComp.toLocaleString('es-CO')}`;
                 html += `</div>`;
                 html += `</div>`;
               });
 
               // Contrapartidas sin match en Kardex
               if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
-                let nombre = c.concepto || c.cuenta || '';
+                let nombre = c.comp_nombre || c.concepto || c.cuenta || '';
                 nombre = nombre.replace(/^.*?:\s*/, '').trim();
                 if (!Object.keys(compAgrupados).includes(nombre)) {
-                  html += `<div class="px-2 grid grid-cols-3 gap-2 py-0.5">`;
+                  html += `<div class="px-2 grid grid-cols-4 gap-2 py-0.5">`;
                   html += `<span class="text-gray-400 text-xs italic truncate">${nombre}</span>`;
                   html += `<span class="text-gray-400 text-xs text-right">—</span>`;
                   html += `<span class="text-gray-600 text-xs font-bold text-right">$${c.monto_actual.toLocaleString('es-CO')}</span>`;
+                  html += `<span class="text-red-400 text-xs font-bold text-right">SIN KARDEX</span>`;
                   html += `</div>`;
                 }
               });

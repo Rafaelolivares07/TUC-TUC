@@ -6080,7 +6080,7 @@ def api_reparar_costos_venta(negocio_id):
 
                 # Contrapartidas de inventario (14xxx)
                 contras_raw = conn.execute("""
-                    SELECT id, monto, cuenta, concepto
+                    SELECT id, monto, cuenta, concepto, producto_id
                     FROM movimientos_contables
                     WHERE negocio_id = %s
                       AND (numero_documento = %s OR numero_documento = %s)
@@ -6090,20 +6090,39 @@ def api_reparar_costos_venta(negocio_id):
                     ORDER BY id
                 """, (negocio_id, consecutive, doc_num, td_code)).fetchall()
 
-                nombres_comp = set(comp['nombre'].strip().upper() for comp in f['componentes'])
+                # Indexar componentes por producto_id y por nombre
+                comp_por_pid = {}
+                comp_por_nombre = {}
+                for comp in f['componentes']:
+                    comp_por_nombre[comp['nombre'].strip().upper()] = comp
+                    if comp.get('producto_id'):
+                        comp_por_pid[comp['producto_id']] = comp
+
                 contras = []
                 for c in contras_raw:
+                    c_pid = c['producto_id']
                     concepto_upper = (c['concepto'] or '').upper()
-                    if any(nc in concepto_upper for nc in nombres_comp):
-                        contras.append(c)
+                    # Matchear por producto_id primero, luego por nombre
+                    match = comp_por_pid.get(c_pid) if c_pid else None
+                    if not match:
+                        match = next((comp for nombre, comp in comp_por_nombre.items() if nombre in concepto_upper), None)
+                    if match:
+                        contras.append({**c, '_comp_match': match})
 
                 contras_list = []
                 contra_map = {}
                 for c in contras:
                     monto = float(c['monto'] or 0)
                     concepto = (c['concepto'] or c['cuenta'] or '').strip()
+                    comp_match = c['_comp_match']
                     if concepto not in contra_map:
-                        contra_map[concepto] = {'concepto': concepto, 'cuenta': c['cuenta'], 'monto_actual': 0}
+                        contra_map[concepto] = {
+                            'concepto': concepto,
+                            'cuenta': c['cuenta'],
+                            'monto_actual': 0,
+                            'producto_id': c.get('producto_id'),
+                            'comp_nombre': comp_match['nombre'] if comp_match else None,
+                        }
                         contras_list.append(contra_map[concepto])
                     contra_map[concepto]['monto_actual'] += monto
 

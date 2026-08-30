@@ -11848,21 +11848,16 @@ async function cargarReporteEnsambles() {
 
         let html = `<div class="text-xs text-blue-800 font-semibold mb-3">${res.vinculados} registro(s) se pueden vincular, ${res.sin_kardex} sin match en Kardex</div>`;
         html += '<div class="max-h-[20rem] overflow-y-auto space-y-1">';
+        html += '<div class="grid grid-cols-4 gap-1 text-[9px] font-bold text-gray-400 uppercase px-1 mb-1"><span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contable</span><span class="text-right">Dif</span></div>';
 
         d.matches.forEach(m => {
           const ok = m.kardex_producto_id !== null;
           const cls = ok ? 'text-gray-700' : 'text-red-500';
-          html += `<div class="grid grid-cols-5 gap-1 text-[10px] py-0.5 ${ok ? 'hover:bg-blue-50' : 'bg-red-50'} rounded px-1">`;
+          html += `<div class="grid grid-cols-4 gap-1 text-[10px] py-0.5 ${ok ? 'hover:bg-blue-50' : 'bg-red-50'} rounded px-1">`;
           html += `<span class="${cls} truncate">${m.componente.replace('Baja Inv: ', '')}</span>`;
+          html += `<span class="text-right font-mono">${ok ? '$' + m.kardex_monto.toLocaleString('es-CO') : '<span class="text-red-400">SIN KARDEX</span>'}</span>`;
           html += `<span class="text-right font-mono">$${m.contab_monto.toLocaleString('es-CO')}</span>`;
-          if (ok) {
-            html += `<span class="text-green-600 text-right">→ pid:${m.kardex_producto_id}</span>`;
-            html += `<span class="text-green-600 text-right">padre:${m.kardex_producto_padre_id}</span>`;
-            html += `<span class="text-right ${Math.abs(m.diferencia) > 0.01 ? 'text-amber-600' : 'text-green-600'}">${m.diferencia !== null ? '$' + m.diferencia.toLocaleString('es-CO') : '—'}</span>`;
-          } else {
-            html += `<span class="text-red-400" colspan="2">SIN KARDEX</span>`;
-            html += `<span></span>`;
-          }
+          html += `<span class="text-right ${ok ? (Math.abs(m.diferencia) > 0.01 ? 'text-amber-600' : 'text-green-600') : 'text-red-400'}">${ok ? (m.diferencia !== null ? '$' + m.diferencia.toLocaleString('es-CO') : '—') : ''}</span>`;
           html += '</div>';
         });
         html += '</div>';
@@ -11926,15 +11921,15 @@ async function cargarReporteEnsambles() {
 
         let html = `<div class="text-[10px] text-blue-800 font-semibold mb-1">${res.vinculados} por vincular, ${res.sin_kardex} sin kardex</div>`;
         html += '<div class="max-h-[12rem] overflow-y-auto space-y-0.5">';
+        html += '<div class="grid grid-cols-4 gap-1 text-[8px] font-bold text-gray-400 uppercase px-1 mb-0.5"><span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contable</span><span class="text-right">Dif</span></div>';
         d.matches.forEach(m => {
           const ok = m.kardex_producto_id !== null;
           const cls = ok ? 'text-gray-700' : 'text-red-500';
           html += `<div class="grid grid-cols-4 gap-1 text-[9px] py-0.5 ${ok ? '' : 'bg-red-50'} rounded px-1">`;
           html += `<span class="${cls} truncate">${m.componente.replace('Baja Inv: ', '')}</span>`;
+          html += `<span class="text-right font-mono">${ok ? '$' + m.kardex_monto.toLocaleString('es-CO') : '<span class="text-red-400">SIN KARDEX</span>'}</span>`;
           html += `<span class="text-right font-mono">$${m.contab_monto.toLocaleString('es-CO')}</span>`;
-          html += ok
-            ? `<span class="text-green-600 text-right">pid:${m.kardex_producto_id}</span>`
-            : `<span class="text-red-400" colspan="2">SIN KARDEX</span>`;
+          html += `<span class="text-right ${ok ? (Math.abs(m.diferencia) > 0.01 ? 'text-amber-600' : 'text-green-600') : 'text-red-400'}">${ok ? (m.diferencia !== null ? '$' + m.diferencia.toLocaleString('es-CO') : '—') : ''}</span>`;
           html += '</div>';
         });
         html += '</div>';

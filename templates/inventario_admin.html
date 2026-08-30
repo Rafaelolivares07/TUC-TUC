@@ -11922,49 +11922,94 @@ async function cargarReporteEnsambles() {
         }
 
         if (res.con_diferencia === 0) {
-          preview.innerHTML = '<div class="text-green-700 text-xs font-semibold py-4">✅ Todos los costos están correctos. No hay nada que reparar.</div>';
+          preview.innerHTML = '<div class="text-green-700 text-xs font-semibold py-4">Todos los costos estan correctos. No hay nada que reparar.</div>';
           return;
         }
 
-        let html = `<div class="text-xs text-amber-800 font-semibold mb-2">${res.total_productos} producto(s), ${res.con_diferencia} factura(s) con diferencia — monto a corregir: $${res.monto_corregir.toLocaleString('es-CO')}</div>`;
-        html += '<div class="space-y-4 max-h-96 overflow-y-auto">';
+        let uid = 0;
+        let html = `<div class="text-xs text-amber-800 font-semibold mb-3">${res.total_productos} producto(s), ${res.con_diferencia} factura(s) con diferencia — monto a corregir: $${res.monto_corregir.toLocaleString('es-CO')}</div>`;
+        html += '<div class="space-y-3 max-h-[32rem] overflow-y-auto">';
 
         d.productos.forEach(prod => {
           if (prod.con_diferencia === 0) return;
+          const pid = ++uid;
+
+          // Calcular monto total de diferencia del producto
+          let montoProd = 0;
+          prod.facturas.filter(ff => ff.tiene_diferencia).forEach(ff => {
+            montoProd += Math.abs(ff.pedido_item.diferencia);
+          });
+
           html += `<div class="border border-amber-300 rounded-xl overflow-hidden">`;
-          html += `<div class="bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800">${prod.producto_padre_nombre} — ${prod.con_diferencia} factura(s) con diferencia</div>`;
-          html += `<div class="p-3 space-y-2">`;
 
-          prod.facturas.filter(ff => ff.tiene_diferencia).forEach(f => {
-            html += `<div class="bg-white border border-gray-200 rounded-lg p-2 text-xs">`;
-            html += `<div class="flex justify-between items-center mb-1">`;
-            html += `<span class="font-bold text-gray-800">${f.documento_numero}</span>`;
-            html += `<span class="text-gray-400">${f.fecha}</span>`;
+          // NIVEL 1: Producto colapsable
+          html += `<button onclick="toggleRepairLevel('prod-${pid}')" class="w-full flex items-center justify-between px-4 py-2.5 bg-amber-100 hover:bg-amber-200/70 text-left transition-colors">`;
+          html += `<div class="flex items-center gap-2">`;
+          html += `<svg class="w-3 h-3 text-amber-600 transition-transform repair-arrow" id="arrow-prod-${pid}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+          html += `<span class="text-xs font-bold text-amber-900">${prod.producto_padre_nombre}</span>`;
+          html += `<span class="text-[10px] px-1.5 py-0.5 bg-amber-200 text-amber-700 rounded-full font-bold">${prod.con_diferencia} doc(s)</span>`;
+          html += `</div>`;
+          html += `<span class="text-xs font-bold text-red-600">$${montoProd.toLocaleString('es-CO')}</span>`;
+          html += `</button>`;
+
+          // Contenido del producto (colapsado por defecto)
+          html += `<div id="prod-${pid}" class="hidden px-3 pb-3 space-y-2">`;
+
+          prod.facturas.filter(ff => ff.tiene_diferencia).forEach(ff => {
+            const docId = ++uid;
+
+            html += `<div class="border border-gray-200 rounded-lg overflow-hidden">`;
+
+            // NIVEL 2: Documento colapsable
+            html += `<button onclick="toggleRepairLevel('doc-${docId}')" class="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left transition-colors">`;
+            html += `<div class="flex items-center gap-2">`;
+            html += `<svg class="w-3 h-3 text-gray-500 transition-transform repair-arrow" id="arrow-doc-${docId}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+            html += `<span class="text-[10px] text-gray-500 font-bold uppercase">${ff.tipo_documento}</span>`;
+            html += `<span class="text-xs font-bold text-gray-800">${ff.documento_numero}</span>`;
+            html += `<span class="text-[10px] text-gray-400">${ff.fecha}</span>`;
             html += `</div>`;
+            html += `<span class="text-xs font-bold text-red-600">$${Math.abs(ff.pedido_item.diferencia).toLocaleString('es-CO')}</span>`;
+            html += `</button>`;
 
-            if (f.pedido_item.id) {
-              const dif = f.pedido_item.diferencia;
-              const cls = Math.abs(dif) > 0.01 ? 'text-red-600 font-bold' : 'text-green-600';
-              html += `<div class="flex justify-between"><span class="text-gray-500">Costo venta:</span><span class="${cls}">$${f.pedido_item.costo_total_actual.toLocaleString('es-CO')} → $${f.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
+            // Contenido del documento (colapsado por defecto)
+            html += `<div id="doc-${docId}" class="hidden px-3 pb-2 space-y-1 text-xs">`;
+
+            // Pedido item
+            if (ff.pedido_item.id) {
+              const dif = ff.pedido_item.diferencia;
+              const cls = Math.abs(dif) > 0.01 ? 'text-red-600' : 'text-green-600';
+              html += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500">Costo venta (pedido):</span><span class="${cls} font-bold">$${ff.pedido_item.costo_total_actual.toLocaleString('es-CO')} → $${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
             }
 
-            if (f.cogs_contable.id) {
-              const dif = f.cogs_contable.diferencia;
-              const cls = Math.abs(dif) > 0.01 ? 'text-red-600 font-bold' : 'text-green-600';
-              html += `<div class="flex justify-between"><span class="text-gray-500">Asiento 61*:</span><span class="${cls}">$${f.cogs_contable.monto_actual.toLocaleString('es-CO')} → $${f.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
+            // COGS contable
+            if (ff.cogs_contable.id) {
+              const dif = ff.cogs_contable.diferencia;
+              const cls = Math.abs(dif) > 0.01 ? 'text-red-600' : 'text-green-600';
+              html += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500">Asiento 61*:</span><span class="${cls} font-bold">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO')} → $${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
             }
 
-            if (f.contrapartidas.length > 0) {
-              html += `<div class="mt-1 text-[10px] text-gray-400 font-bold uppercase">Contrapartidas (14*)</div>`;
-              f.contrapartidas.forEach(c => {
-                html += `<div class="flex justify-between pl-2"><span class="text-gray-500">${c.concepto || c.cuenta}</span><span class="text-gray-600">$${c.monto_actual.toLocaleString('es-CO')}</span></div>`;
+            // Componentes
+            if (ff.componentes.length > 0) {
+              html += `<div class="text-[10px] text-gray-400 font-bold uppercase mt-1">Componentes (Kardex)</div>`;
+              ff.componentes.forEach(c => {
+                html += `<div class="flex justify-between pl-2 py-0.5"><span class="text-gray-500">${c.nombre}</span><span class="text-gray-600">${c.cantidad.toFixed(2)} x $${c.costo_und.toLocaleString('es-CO')} = $${c.costo_total.toLocaleString('es-CO')}</span></div>`;
               });
             }
 
-            html += '</div>';
+            // Contrapartidas
+            if (ff.contrapartidas.length > 0) {
+              html += `<div class="text-[10px] text-gray-400 font-bold uppercase mt-1">Contrapartidas (14*)</div>`;
+              ff.contrapartidas.forEach(c => {
+                html += `<div class="flex justify-between pl-2 py-0.5"><span class="text-gray-500">${c.concepto || c.cuenta}</span><span class="text-gray-600">$${c.monto_actual.toLocaleString('es-CO')}</span></div>`;
+              });
+            }
+
+            html += `</div>`; // fin doc content
+            html += `</div>`; // fin doc card
           });
 
-          html += '</div></div>';
+          html += `</div>`; // fin prod content
+          html += `</div>`; // fin prod card
         });
 
         html += '</div>';
@@ -11974,6 +12019,15 @@ async function cargarReporteEnsambles() {
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
       }
+    }
+
+    function toggleRepairLevel(id) {
+      const el = document.getElementById(id);
+      const arrow = document.getElementById('arrow-' + id);
+      if (!el) return;
+      const isOpen = !el.classList.contains('hidden');
+      el.classList.toggle('hidden');
+      if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
     }
 
     async function repararCostosEjecutar() {

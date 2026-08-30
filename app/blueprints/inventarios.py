@@ -5916,6 +5916,240 @@ def api_reporte_ensambles(negocio_id):
         conn.close()
 
 
+# ── Reparador de Costos de Venta ─────────────────────────────────────────────
+@bp.route('/api/inventario/<int:negocio_id>/reparar-costos-venta', methods=['GET', 'POST'])
+def api_reparar_costos_venta(negocio_id):
+    """Preview (GET) o ejecucion (POST) de reparacion de costos de venta.
+    Corrige pedido_items.costo_unitario y movimientos_contables asociados.
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    prod_padre_id = _int_o_none(request.args.get('producto_padre_id'))
+    fecha_desde = request.args.get('fecha_desde', '').strip()
+    fecha_hasta = request.args.get('fecha_hasta', '').strip()
+    es_ejecucion = request.method == 'POST'
+
+    if not prod_padre_id or not fecha_desde or not fecha_hasta:
+        return jsonify({'ok': False, 'error': 'Filtros incompletos'}), 400
+
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        if not contexto or not _puede_gestionar_negocio(contexto):
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+
+        padre = conn.execute(
+            "SELECT id, nombre FROM productos WHERE id = %s AND negocio_id = %s",
+            (prod_padre_id, negocio_id)
+        ).fetchone()
+        if not padre:
+            return jsonify({'ok': False, 'error': 'Producto padre no encontrado'}), 404
+
+        # 1. Obtener salidas de componentes del producto padre por factura
+        salidas = conn.execute("""
+            SELECT
+                m.documento_numero,
+                m.tipo_documento,
+                COALESCE(m.documento_fecha, m.created_at::date) AS fecha,
+                m.producto_id,
+                m.nombre_producto,
+                m.cantidad,
+                m.costo_und,
+                COALESCE(m.valor_total, m.cantidad * m.costo_und, 0) AS costo_total
+            FROM movimientos_inventario m
+            WHERE m.negocio_id = %s
+              AND m.producto_padre_id = %s
+              AND m.tipo = 'salida'
+              AND COALESCE(m.documento_fecha, m.created_at::date) >= %s
+              AND COALESCE(m.documento_fecha, m.created_at::date) <= %s
+            ORDER BY m.documento_numero, m.nombre_producto
+        """, (negocio_id, prod_padre_id, fecha_desde, fecha_hasta)).fetchall()
+
+        if not salidas:
+            return jsonify({'ok': True, 'facturas': [], 'resumen': {
+                'total_facturas': 0, 'con_diferencia': 0, 'monto_corregir': 0
+            }})
+
+        # 2. Agrupar por factura
+        facturas = {}
+        for s in salidas:
+            doc = s['documento_numero']
+            if doc not in facturas:
+                facturas[doc] = {
+                    'documento_numero': doc,
+                    'tipo_documento': s['tipo_documento'] or 'FACTURA_DE_VENTA',
+                    'fecha': s['fecha'].isoformat() if s['fecha'] else '',
+                    'componentes': [],
+                    'costo_real_kardex': 0,
+                }
+            f = facturas[doc]
+            f['componentes'].append({
+                'producto_id': s['producto_id'],
+                'nombre': s['nombre_producto'],
+                'cantidad': float(s['cantidad']),
+                'costo_und': float(s['costo_und'] or 0),
+                'costo_total': float(s['costo_total'] or 0),
+            })
+            f['costo_real_kardex'] += float(s['costo_total'] or 0)
+
+        # 3. Para cada factura: buscar costo actual en pedido_items y asientos contables
+        resultado = []
+        for doc_num, f in facturas.items():
+            # Buscar consecutive del documento
+            consecutive = doc_num.split('-')[-1].strip() if '-' in doc_num else doc_num
+
+            # Costo actual en pedido_items
+            pi_row = conn.execute("""
+                SELECT pi.costo_unitario, pi.cantidad, pi.id
+                FROM pedido_items pi
+                JOIN pedidos p ON p.id = pi.pedido_id
+                WHERE p.negocio_id = %s
+                  AND pi.producto_id = %s
+                  AND (p.numero_documento = %s OR p.numero_documento = %s)
+                LIMIT 1
+            """, (negocio_id, prod_padre_id, consecutive, doc_num)).fetchone()
+
+            costo_actual_pi = float(pi_row['costo_unitario'] or 0) if pi_row else 0
+            cantidad_vendida = float(pi_row['cantidad'] or 0) if pi_row else 0
+            pi_id = pi_row['id'] if pi_row else None
+            costo_total_actual_pi = costo_actual_pi * cantidad_vendida
+
+            # Asiento de costo de venta (61xxx)
+            cogs_row = conn.execute("""
+                SELECT id, monto, concepto
+                FROM movimientos_contables
+                WHERE negocio_id = %s
+                  AND (numero_documento = %s OR numero_documento = %s)
+                  AND LEFT(cuenta, 2) = '61'
+                  AND UPPER(concepto) LIKE '%%COSTO%%VENTA%%'
+                LIMIT 1
+            """, (negocio_id, consecutive, doc_num)).fetchone()
+
+            cogs_monto_actual = float(cogs_row['monto'] or 0) if cogs_row else 0
+            cogs_id = cogs_row['id'] if cogs_row else None
+
+            # Contrapartidas de inventario (14xxx) — una por componente
+            contras = conn.execute("""
+                SELECT id, monto, cuenta, concepto
+                FROM movimientos_contables
+                WHERE negocio_id = %s
+                  AND (numero_documento = %s OR numero_documento = %s)
+                  AND LEFT(cuenta, 2) = '14'
+                  AND UPPER(concepto) NOT LIKE '%%COSTO%%'
+                ORDER BY id
+            """, (negocio_id, consecutive, doc_num)).fetchall()
+
+            contras_list = []
+            total_contras_actual = 0
+            for c in contras:
+                monto = float(c['monto'] or 0)
+                total_contras_actual += monto
+                contras_list.append({
+                    'id': c['id'],
+                    'cuenta': c['cuenta'],
+                    'concepto': c['concepto'],
+                    'monto_actual': monto,
+                })
+
+            # El costo real del Kardex es la suma de componentes
+            costo_real = f['costo_real_kardex']
+
+            # Diferencias
+            dif_pi = costo_total_actual_pi - costo_real
+            dif_cogs = cogs_monto_actual - costo_real if cogs_row else 0
+            dif_contras = total_contras_actual - costo_real if contras else 0
+
+            tiene_diferencia = abs(dif_pi) > 0.01 or abs(dif_cogs) > 0.01 or abs(dif_contras) > 0.01
+
+            resultado.append({
+                'documento_numero': doc_num,
+                'tipo_documento': f['tipo_documento'],
+                'fecha': f['fecha'],
+                'componentes': f['componentes'],
+                'costo_real_kardex': costo_real,
+                'pedido_item': {
+                    'id': pi_id,
+                    'costo_unitario_actual': costo_actual_pi,
+                    'costo_total_actual': costo_total_actual_pi,
+                    'diferencia': dif_pi,
+                },
+                'cogs_contable': {
+                    'id': cogs_id,
+                    'monto_actual': cogs_monto_actual,
+                    'diferencia': dif_cogs,
+                },
+                'contrapartidas': contras_list,
+                'diferencia_contras': dif_contras,
+                'tiene_diferencia': tiene_diferencia,
+            })
+
+        # 4. Si es ejecucion, aplicar cambios
+        cambios_aplicados = 0
+        if es_ejecucion:
+            for r in resultado:
+                if not r['tiene_diferencia']:
+                    continue
+
+                # 4a. Corregir pedido_items
+                if r['pedido_item']['id'] and abs(r['pedido_item']['diferencia']) > 0.01:
+                    nuevo_costo_und = r['costo_real_kardex'] / max(r['pedido_item']['costo_total_actual'] / max(r['pedido_item']['costo_unitario_actual'], 0.0001), 0.0001) if r['pedido_item']['costo_unitario_actual'] > 0 else 0
+                    cant = r['pedido_item']['costo_total_actual'] / max(r['pedido_item']['costo_unitario_actual'], 0.0001) if r['pedido_item']['costo_unitario_actual'] > 0 else 0
+                    nuevo_costo_und = r['costo_real_kardex'] / cant if cant > 0 else 0
+                    conn.execute(
+                        "UPDATE pedido_items SET costo_unitario = %s WHERE id = %s",
+                        (nuevo_costo_und, r['pedido_item']['id'])
+                    )
+                    cambios_aplicados += 1
+
+                # 4b. Corregir asiento de costo de venta (61xxx)
+                if r['cogs_contable']['id'] and abs(r['cogs_contable']['diferencia']) > 0.01:
+                    conn.execute(
+                        "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
+                        (r['costo_real_kardex'], r['cogs_contable']['id'])
+                    )
+                    cambios_aplicados += 1
+
+                # 4c. Corregir contrapartidas (14xxx) — proporcionalmente
+                if r['contrapartidas'] and abs(r['diferencia_contras']) > 0.01:
+                    total_contras_actual = sum(c['monto_actual'] for c in r['contrapartidas'])
+                    for contra in r['contrapartidas']:
+                        if total_contras_actual > 0:
+                            proporción = contra['monto_actual'] / total_contras_actual
+                        else:
+                            proporción = 1.0 / len(r['contrapartidas'])
+                        nuevo_monto = r['costo_real_kardex'] * proporción
+                        conn.execute(
+                            "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
+                            (nuevo_monto, contra['id'])
+                        )
+                        cambios_aplicados += 1
+
+            conn.commit()
+
+        # 5. Resumen
+        con_diferencia = sum(1 for r in resultado if r['tiene_diferencia'])
+        monto_corregir = sum(abs(r['pedido_item']['diferencia']) for r in resultado if r['tiene_diferencia'])
+
+        return jsonify({
+            'ok': True,
+            'ejecutado': es_ejecucion,
+            'cambios_aplicados': cambios_aplicados,
+            'resumen': {
+                'total_facturas': len(resultado),
+                'con_diferencia': con_diferencia,
+                'monto_corregir': round(monto_corregir, 2),
+            },
+            'facturas': resultado,
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/produccion/sugerencias')
 def api_produccion_sugerencias(negocio_id):
     if 'usuario_id' not in session:

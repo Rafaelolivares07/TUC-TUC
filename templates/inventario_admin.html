@@ -11898,7 +11898,6 @@ async function cargarReporteEnsambles() {
       const parentId = document.getElementById('ensambles-padre-id').value;
       const ini = document.getElementById('ensambles-fecha-ini').value;
       const fin = document.getElementById('ensambles-fecha-fin').value;
-      if (!parentId) { toast('Selecciona un producto padre primero', false); return; }
       if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
 
       const preview = document.getElementById('reparador-preview');
@@ -11907,7 +11906,9 @@ async function cargarReporteEnsambles() {
       document.getElementById('btn-ejecutar-reparacion').classList.add('hidden');
 
       try {
-        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?producto_padre_id=${parentId}&fecha_desde=${ini}&fecha_hasta=${fin}`);
+        let url = `/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?fecha_desde=${ini}&fecha_hasta=${fin}`;
+        if (parentId) url += `&producto_padre_id=${parentId}`;
+        const r = await fetch(url);
         const d = await r.json();
         if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
 
@@ -11925,39 +11926,45 @@ async function cargarReporteEnsambles() {
           return;
         }
 
-        let html = `<div class="text-xs text-amber-800 font-semibold mb-2">${res.con_diferencia} factura(s) con diferencia — monto a corregir: $${res.monto_corregir.toLocaleString('es-CO')}</div>`;
-        html += '<div class="space-y-2 max-h-64 overflow-y-auto">';
+        let html = `<div class="text-xs text-amber-800 font-semibold mb-2">${res.total_productos} producto(s), ${res.con_diferencia} factura(s) con diferencia — monto a corregir: $${res.monto_corregir.toLocaleString('es-CO')}</div>`;
+        html += '<div class="space-y-4 max-h-96 overflow-y-auto">';
 
-        d.facturas.filter(f => f.tiene_diferencia).forEach(f => {
-          html += `<div class="bg-white border border-amber-200 rounded-xl p-3 text-xs">`;
-          html += `<div class="flex justify-between items-center mb-2">`;
-          html += `<span class="font-bold text-gray-800">${f.documento_numero}</span>`;
-          html += `<span class="text-gray-400">${f.fecha}</span>`;
-          html += `</div>`;
+        d.productos.forEach(prod => {
+          if (prod.con_diferencia === 0) return;
+          html += `<div class="border border-amber-300 rounded-xl overflow-hidden">`;
+          html += `<div class="bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800">${prod.producto_padre_nombre} — ${prod.con_diferencia} factura(s) con diferencia</div>`;
+          html += `<div class="p-3 space-y-2">`;
 
-          // Pedido item
-          if (f.pedido_item.id) {
-            const dif = f.pedido_item.diferencia;
-            const cls = Math.abs(dif) > 0.01 ? 'text-red-600 font-bold' : 'text-green-600';
-            html += `<div class="flex justify-between"><span class="text-gray-500">Costo venta (pedido):</span><span class="${cls}">$${f.pedido_item.costo_total_actual.toLocaleString('es-CO')} → $${f.costo_real_kardex.toLocaleString('es-CO')} (dif: $${dif.toLocaleString('es-CO')})</span></div>`;
-          }
+          prod.facturas.filter(ff => ff.tiene_diferencia).forEach(f => {
+            html += `<div class="bg-white border border-gray-200 rounded-lg p-2 text-xs">`;
+            html += `<div class="flex justify-between items-center mb-1">`;
+            html += `<span class="font-bold text-gray-800">${f.documento_numero}</span>`;
+            html += `<span class="text-gray-400">${f.fecha}</span>`;
+            html += `</div>`;
 
-          // COGS contable
-          if (f.cogs_contable.id) {
-            const dif = f.cogs_contable.diferencia;
-            const cls = Math.abs(dif) > 0.01 ? 'text-red-600 font-bold' : 'text-green-600';
-            html += `<div class="flex justify-between"><span class="text-gray-500">Asiento 61*:</span><span class="${cls}">$${f.cogs_contable.monto_actual.toLocaleString('es-CO')} → $${f.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
-          }
+            if (f.pedido_item.id) {
+              const dif = f.pedido_item.diferencia;
+              const cls = Math.abs(dif) > 0.01 ? 'text-red-600 font-bold' : 'text-green-600';
+              html += `<div class="flex justify-between"><span class="text-gray-500">Costo venta:</span><span class="${cls}">$${f.pedido_item.costo_total_actual.toLocaleString('es-CO')} → $${f.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
+            }
 
-          // Contrapartidas
-          if (f.contrapartidas.length > 0) {
-            html += `<div class="mt-1 text-[10px] text-gray-400 font-bold uppercase">Contrapartidas (14*)</div>`;
-            f.contrapartidas.forEach(c => {
-              html += `<div class="flex justify-between pl-2"><span class="text-gray-500">${c.concepto || c.cuenta}</span><span class="text-gray-600">$${c.monto_actual.toLocaleString('es-CO')}</span></div>`;
-            });
-          }
+            if (f.cogs_contable.id) {
+              const dif = f.cogs_contable.diferencia;
+              const cls = Math.abs(dif) > 0.01 ? 'text-red-600 font-bold' : 'text-green-600';
+              html += `<div class="flex justify-between"><span class="text-gray-500">Asiento 61*:</span><span class="${cls}">$${f.cogs_contable.monto_actual.toLocaleString('es-CO')} → $${f.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
+            }
 
-          html += '</div>';
+            if (f.contrapartidas.length > 0) {
+              html += `<div class="mt-1 text-[10px] text-gray-400 font-bold uppercase">Contrapartidas (14*)</div>`;
+              f.contrapartidas.forEach(c => {
+                html += `<div class="flex justify-between pl-2"><span class="text-gray-500">${c.concepto || c.cuenta}</span><span class="text-gray-600">$${c.monto_actual.toLocaleString('es-CO')}</span></div>`;
+              });
+            }
+
+            html += '</div>';
+          });
+
+          html += '</div></div>';
         });
 
         html += '</div>';
@@ -11970,7 +11977,7 @@ async function cargarReporteEnsambles() {
     }
 
     async function repararCostosEjecutar() {
-      if (!confirm('¿Corregir los costos de venta y asientos contables para este producto en el rango seleccionado?')) return;
+      if (!confirm('¿Corregir los costos de venta y asientos contables para todos los productos en el rango seleccionado?')) return;
 
       const parentId = document.getElementById('ensambles-padre-id').value;
       const ini = document.getElementById('ensambles-fecha-ini').value;
@@ -11980,11 +11987,13 @@ async function cargarReporteEnsambles() {
       preview.innerHTML = '<div class="text-center text-red-600 py-4 text-xs font-bold">Ejecutando reparación...</div>';
 
       try {
-        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?producto_padre_id=${parentId}&fecha_desde=${ini}&fecha_hasta=${fin}`, { method: 'POST' });
+        let url = `/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?fecha_desde=${ini}&fecha_hasta=${fin}`;
+        if (parentId) url += `&producto_padre_id=${parentId}`;
+        const r = await fetch(url, { method: 'POST' });
         const d = await r.json();
         if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
 
-        preview.innerHTML = `<div class="text-green-700 text-xs font-semibold py-4">✅ Reparación completada. ${d.cambios_aplicados} registros corregidos en ${d.resumen.total_facturas} factura(s).</div>`;
+        preview.innerHTML = `<div class="text-green-700 text-xs font-semibold py-4">✅ Reparación completada. ${d.cambios_aplicados} registros corregidos en ${d.resumen.total_facturas} factura(s) de ${d.resumen.total_productos} producto(s).</div>`;
         document.getElementById('btn-ejecutar-reparacion').classList.add('hidden');
         document.getElementById('reparador-badge').classList.add('hidden');
         toast(`${d.cambios_aplicados} registros corregidos`, true);

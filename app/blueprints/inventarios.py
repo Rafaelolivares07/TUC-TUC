@@ -1671,13 +1671,13 @@ def api_vincular_ids_contabilidad(negocio_id):
                    mc.cuenta
             FROM movimientos_contables mc
             WHERE mc.negocio_id = %s
-              AND mc.numero_documento = %s
-              AND mc.cuenta LIKE '14%'
+              AND (mc.numero_documento = %s OR mc.numero_documento = %s OR mc.numero_documento = %s)
+              AND mc.cuenta LIKE '14%%'
               AND mc.tipo = 'credito'
-              AND UPPER(mc.concepto) LIKE 'BAJA INV:%'
+              AND UPPER(mc.concepto) LIKE 'BAJA INV:%%'
               AND mc.producto_id IS NULL
             ORDER BY mc.concepto, mc.monto
-        """, (negocio_id, numero_doc)).fetchall()
+        """, (negocio_id, str(numero_doc), f'FACTURA_DE_VENTA-{numero_doc}', f'VENTA-{numero_doc}')).fetchall()
 
         if not contab_rows:
             return jsonify({'ok': True, 'matches': [], 'resumen': {

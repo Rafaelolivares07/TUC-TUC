@@ -11942,6 +11942,21 @@ async function cargarReporteEnsambles() {
           preview.innerHTML = '<div class="text-green-700 text-[10px]">✅ Sin diferencias</div>';
           return;
         }
+
+        let tieneSinFuente = false;
+        if (d.productos) d.productos.forEach(prod => {
+          prod.facturas.forEach(ff => {
+            if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
+              if (c.match_tipo !== 'producto_id' && c.monto_actual > 0) tieneSinFuente = true;
+            });
+          });
+        });
+
+        if (tieneSinFuente) {
+          preview.innerHTML = `<div class="p-1 bg-amber-50 border border-amber-300 rounded text-[9px] text-amber-800">⚠️ Sin FUENTE detectado. Vincula IDs primero.</div>`;
+          return;
+        }
+
         preview.innerHTML = `<div class="text-amber-800 text-[10px]">${res.con_diferencia} doc(s) con dif — $${res.monto_corregir.toLocaleString('es-CO')} <button onclick="repararEjecutarNivel('${nivel}', ${productoPadreId}, '${numeroDoc || ''}')" class="ml-2 px-2 py-0.5 bg-red-500 text-white rounded font-bold">Reparar</button></div>`;
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
@@ -12001,6 +12016,7 @@ async function cargarReporteEnsambles() {
         }
 
         let uid = 0;
+        let tieneSinFuente = false;
         let html = `<div class="text-xs text-amber-800 font-semibold mb-3">${res.total_productos} producto(s), ${res.con_diferencia} factura(s) con diferencia — monto a corregir: $${res.monto_corregir.toLocaleString('es-CO')}</div>`;
         html += '<div class="space-y-3 max-h-[32rem] overflow-y-auto">';
 
@@ -12113,6 +12129,7 @@ async function cargarReporteEnsambles() {
                 const contraMonto = contraData.monto;
                 const esConfiable = contraData.match_tipo === 'producto_id';
                 const sinContable = contraMonto === 0;
+                if (!esConfiable && !sinContable) tieneSinFuente = true;
                 const difComp = (sinContable || !esConfiable) ? 0 : contraMonto - c.costo_total;
                 const cls = sinContable ? 'text-gray-400' : (!esConfiable ? 'text-amber-500' : (Math.abs(difComp) > 0.01 ? 'text-red-600' : 'text-green-600'));
 
@@ -12167,7 +12184,13 @@ async function cargarReporteEnsambles() {
 
         html += '</div>';
         preview.innerHTML = html;
-        document.getElementById('btn-ejecutar-reparacion').classList.remove('hidden');
+        const btnReparar = document.getElementById('btn-ejecutar-reparacion');
+        if (tieneSinFuente) {
+          btnReparar.classList.add('hidden');
+          preview.innerHTML += '<div class="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-[10px] text-amber-800 font-semibold">⚠️ Hay registros SIN FUENTE. Primero ejecuta "Vincular IDs" para asignar producto_id y producto_padre_id antes de reparar.</div>';
+        } else {
+          btnReparar.classList.remove('hidden');
+        }
 
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;

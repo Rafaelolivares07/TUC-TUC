@@ -11950,8 +11950,9 @@ async function cargarReporteEnsambles() {
           html += `<span class="text-[10px] px-1.5 py-0.5 bg-amber-200 text-amber-700 rounded-full font-bold">${prod.con_diferencia} doc(s)</span>`;
           html += `</div>`;
           html += `<div class="text-right">`;
-          html += `<div class="text-[10px] text-gray-500">Actual: <span class="font-bold text-gray-700">$${prod.costo_total_actual.toLocaleString('es-CO')}</span> → Real: <span class="font-bold text-gray-700">$${prod.costo_total_real.toLocaleString('es-CO')}</span></div>`;
-          html += `<div class="text-xs font-bold ${Math.abs(prod.costo_total_real - prod.costo_total_actual) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${(prod.costo_total_real - prod.costo_total_actual).toLocaleString('es-CO')}</div>`;
+          html += `<div class="text-[10px] text-gray-500">Contable: <span class="font-bold text-gray-700">$${prod.costo_total_contable.toLocaleString('es-CO')}</span> → Kardex: <span class="font-bold text-gray-700">$${prod.costo_total_kardex.toLocaleString('es-CO')}</span></div>`;
+          const difProd = prod.costo_total_contable - prod.costo_total_kardex;
+          html += `<div class="text-xs font-bold ${Math.abs(difProd) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${difProd.toLocaleString('es-CO')}</div>`;
           html += `</div>`;
           html += `</button>`;
 
@@ -11972,8 +11973,9 @@ async function cargarReporteEnsambles() {
             html += `<span class="text-[10px] text-gray-400">${ff.fecha}</span>`;
             html += `</div>`;
             html += `<div class="text-right">`;
-            html += `<div class="text-[10px] text-gray-500">Actual: <span class="font-bold text-gray-700">$${ff.costo_actual_total.toLocaleString('es-CO')}</span> → Real: <span class="font-bold text-gray-700">$${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
-            html += `<div class="text-xs font-bold ${Math.abs(ff.costo_real_kardex - ff.costo_actual_total) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${(ff.costo_real_kardex - ff.costo_actual_total).toLocaleString('es-CO')}</div>`;
+            html += `<div class="text-[10px] text-gray-500">Contable: <span class="font-bold text-gray-700">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO')}</span> → Kardex: <span class="font-bold text-gray-700">$${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
+            const difDoc = ff.cogs_contable.monto_actual - ff.costo_real_kardex;
+            html += `<div class="text-xs font-bold ${Math.abs(difDoc) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${difDoc.toLocaleString('es-CO')}</div>`;
             html += `</div>`;
             html += `</button>`;
 

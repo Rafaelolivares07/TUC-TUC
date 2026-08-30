@@ -5958,6 +5958,7 @@ def api_reparar_costos_venta(negocio_id):
             SELECT
                 m.documento_numero,
                 m.tipo_documento,
+                m.tipo_documento_id,
                 COALESCE(m.documento_fecha, m.created_at::date) AS fecha,
                 m.producto_padre_id,
                 m.producto_id,
@@ -5988,15 +5989,17 @@ def api_reparar_costos_venta(negocio_id):
         """, padres_ids + [negocio_id]).fetchall()
         padres_map = {p['id']: p['nombre'] for p in padres_rows}
 
-        # Mapear nombres de tipos de documento desde tipos_documento_negocio
+        # Mapear nombres y codigos de tipos de documento desde tipos_documento_negocio
         td_rows = conn.execute(
-            "SELECT codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s",
+            "SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s",
             (negocio_id,)
         ).fetchall()
         td_nombre_map = {}
+        td_codigo_map = {}
         for td in td_rows:
             td_nombre_map[td['codigo'].upper()] = td['nombre']
             td_nombre_map[td['codigo'].lower()] = td['nombre']
+            td_codigo_map[td['id']] = td['codigo']
 
         # 2. Agrupar por producto padre > factura
         por_producto = {}
@@ -6008,9 +6011,12 @@ def api_reparar_costos_venta(negocio_id):
             if doc not in por_producto[ppid]:
                 tipo_doc_codigo = s['tipo_documento'] or 'FACTURA_DE_VENTA'
                 tipo_doc_nombre = td_nombre_map.get(tipo_doc_codigo, td_nombre_map.get(tipo_doc_codigo.upper(), tipo_doc_codigo.replace('_', ' ')))
+                td_id = s['tipo_documento_id']
+                td_code = td_codigo_map.get(td_id, tipo_doc_codigo) if td_id else tipo_doc_codigo
                 por_producto[ppid][doc] = {
                     'documento_numero': doc,
                     'tipo_documento': tipo_doc_nombre,
+                    'tipo_documento_codigo': td_code,
                     'fecha': s['fecha'].isoformat() if s['fecha'] else '',
                     'componentes': [],
                     'costo_real_kardex': 0,
@@ -6033,6 +6039,9 @@ def api_reparar_costos_venta(negocio_id):
 
             for doc_num, f in docs.items():
                 consecutive = doc_num.split('-')[-1].strip() if '-' in doc_num else doc_num
+                # Reconstruir el numero_documento completo: CODIGO-NUMERO
+                td_code = f.get('tipo_documento_codigo', 'FACTURA_DE_VENTA')
+                num_completo = f"{td_code}-{consecutive}"
 
                 # Costo actual en pedido_items
                 pi_row = conn.execute("""
@@ -6041,9 +6050,9 @@ def api_reparar_costos_venta(negocio_id):
                     JOIN pedidos p ON p.id = pi.pedido_id
                     WHERE p.negocio_id = %s
                       AND pi.producto_id = %s
-                      AND (p.numero_documento = %s OR p.numero_documento = %s)
+                      AND p.numero_documento = %s
                     LIMIT 1
-                """, (negocio_id, ppid, consecutive, doc_num)).fetchone()
+                """, (negocio_id, ppid, num_completo)).fetchone()
 
                 costo_actual_pi = float(pi_row['costo_unitario'] or 0) if pi_row else 0
                 cantidad_vendida = float(pi_row['cantidad'] or 0) if pi_row else 0
@@ -6117,15 +6126,15 @@ def api_reparar_costos_venta(negocio_id):
                 })
 
             con_dif = sum(1 for ff in facturas_producto if ff['tiene_diferencia'])
-            total_actual = sum(ff['pedido_item']['costo_total_actual'] for ff in facturas_producto if ff['pedido_item']['id'])
-            total_real = sum(ff['costo_real_kardex'] for ff in facturas_producto if ff['tiene_diferencia'])
+            total_contable = sum(ff['cogs_contable']['monto_actual'] for ff in facturas_producto if ff['cogs_contable']['id'])
+            total_kardex = sum(ff['costo_real_kardex'] for ff in facturas_producto if ff['tiene_diferencia'])
             todos_resultados.append({
                 'producto_padre_id': ppid,
                 'producto_padre_nombre': nombre_padre,
                 'facturas': facturas_producto,
                 'con_diferencia': con_dif,
-                'costo_total_actual': total_actual,
-                'costo_total_real': total_real,
+                'costo_total_contable': total_contable,
+                'costo_total_kardex': total_kardex,
             })
 
         # 4. Si es ejecucion, aplicar cambios

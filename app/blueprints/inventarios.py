@@ -1763,11 +1763,11 @@ def api_vincular_ids_contabilidad(negocio_id):
                 'total': float(k['total']),
             })
 
-        # 4. Emparejar: agrupar por (nombre, doc), ordenar por monto y emparejar 1:1
+        # 4. Emparejar: cada entrada Kardex busca su contab más cercana
         matches = []
         sin_kardex = 0
 
-        # Agrupar contab por (nombre, doc)
+        # Indexar contab por (nombre, doc)
         contab_por_grupo = defaultdict(list)
         for c in contab_rows:
             nombre_comp = c['concepto'].replace('Baja Inv:', '').replace('BAJA INV:', '').strip().upper()
@@ -1778,19 +1778,23 @@ def api_vincular_ids_contabilidad(negocio_id):
                 'monto': float(c['monto']),
             })
 
-        kardex_used = set()
-        for (nombre_comp, doc), contab_list in contab_por_grupo.items():
-            candidatos = kardex_por_nombre_doc.get((nombre_comp, doc), [])
-            # Ordenar ambos por monto para emparejar 1:1
-            contab_sorted = sorted(contab_list, key=lambda x: x['monto'])
-            kardex_sorted = sorted(
-                [(i, k) for i, k in enumerate(candidatos) if (nombre_comp, doc, i) not in kardex_used],
-                key=lambda x: x[1]['total']
-            )
-            for ci, c in enumerate(contab_sorted):
-                if ci < len(kardex_sorted):
-                    ki, k = kardex_sorted[ci]
-                    kardex_used.add((nombre_comp, doc, ki))
+        # Iterar Kardex, cada uno busca su pareja contab más cercana
+        contab_used = set()
+        for (nombre_comp, doc), kardex_list in kardex_por_nombre_doc.items():
+            candidatos_contab = contab_por_grupo.get((nombre_comp, doc), [])
+            for k in sorted(kardex_list, key=lambda x: x['total']):
+                mejor = None
+                mejor_dif = float('inf')
+                for j, c in enumerate(candidatos_contab):
+                    if (nombre_comp, doc, j) in contab_used:
+                        continue
+                    dif = abs(c['monto'] - k['total'])
+                    if dif < mejor_dif:
+                        mejor_dif = dif
+                        mejor = j
+                if mejor is not None:
+                    contab_used.add((nombre_comp, doc, mejor))
+                    c = candidatos_contab[mejor]
                     matches.append({
                         'contab_id': c['id'],
                         'componente': c['concepto'],
@@ -1804,13 +1808,13 @@ def api_vincular_ids_contabilidad(negocio_id):
                 else:
                     sin_kardex += 1
                     matches.append({
-                        'contab_id': c['id'],
-                        'componente': c['concepto'],
-                        'contab_monto': c['monto'],
-                        'kardex_producto_id': None,
-                        'kardex_producto_padre_id': None,
-                        'kardex_nombre': None,
-                        'kardex_monto': None,
+                        'contab_id': None,
+                        'componente': f"Baja Inv: {k['nombre']}",
+                        'contab_monto': None,
+                        'kardex_producto_id': k['producto_id'],
+                        'kardex_producto_padre_id': k['producto_padre_id'],
+                        'kardex_nombre': k['nombre'],
+                        'kardex_monto': k['total'],
                         'diferencia': None,
                     })
 
@@ -1818,7 +1822,7 @@ def api_vincular_ids_contabilidad(negocio_id):
         vinculados = 0
         if es_ejecucion:
             for m in matches:
-                if m['kardex_producto_id'] is not None:
+                if m['contab_id'] is not None and m['kardex_producto_id'] is not None:
                     conn.execute("""
                         UPDATE movimientos_contables
                         SET producto_id = %s, producto_padre_id = %s

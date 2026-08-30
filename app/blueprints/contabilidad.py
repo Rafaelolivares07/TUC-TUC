@@ -798,7 +798,8 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                                 'cuenta_codigo': gi['cod_ingre'],
                                 'concepto':      f"Venta: {item['producto_nombre']}",
                                 'tipo_mov':      'C', # Crédito para ingresos
-                                'monto':         subtotal_item
+                                'monto':         subtotal_item,
+                                'producto_id':   item['producto_id'],
                             })
                             
             if 'subtotal_venta' in variables:

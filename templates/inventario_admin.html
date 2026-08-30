@@ -2406,7 +2406,9 @@
         <div id="reparador-body" class="hidden px-5 pb-5">
           <p class="text-xs text-amber-700 mb-3">Corrige el costo unitario en pedidos y el asiento contable de costo de venta (61*) para este producto padre en el rango seleccionado. Compara el costo Kardex real de los componentes vs el costo registrado en contabilidad.</p>
           <div id="reparador-preview" class="hidden mb-4"></div>
-          <div class="flex gap-3">
+          <div id="vincular-preview" class="hidden mb-4"></div>
+          <div class="flex gap-3 flex-wrap">
+            <button onclick="vincularIdsPreview()" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">🔗 Vincular IDs</button>
             <button onclick="repararCostosPreview()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">Vista Previa</button>
             <button id="btn-ejecutar-reparacion" onclick="repararCostosEjecutar()" class="hidden px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">Reparar</button>
           </div>
@@ -11818,6 +11820,85 @@ async function cargarReporteEnsambles() {
       } else {
         body.classList.remove('hidden');
         chevron.style.transform = 'rotate(180deg)';
+      }
+    }
+
+    async function vincularIdsPreview() {
+      const parentId = document.getElementById('ensambles-padre-id').value;
+      const ini = document.getElementById('ensambles-fecha-ini').value;
+      const fin = document.getElementById('ensambles-fecha-fin').value;
+      if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
+
+      const preview = document.getElementById('vincular-preview');
+      preview.innerHTML = '<div class="text-center text-blue-600 py-4 text-xs">Buscando registros contables sin IDs...</div>';
+      preview.classList.remove('hidden');
+
+      try {
+        let url = `/api/inventario/${NEGOCIO_ID}/vincular-ids-contabilidad?fecha_desde=${ini}&fecha_hasta=${fin}`;
+        if (parentId) url += `&producto_padre_id=${parentId}`;
+        const r = await fetch(url);
+        const d = await r.json();
+        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
+
+        const res = d.resumen;
+        if (res.total_contab === 0) {
+          preview.innerHTML = '<div class="text-green-700 text-xs font-semibold py-4">Todos los registros contables ya tienen producto_id asignado. No hay nada que vincular.</div>';
+          return;
+        }
+
+        let html = `<div class="text-xs text-blue-800 font-semibold mb-3">${res.vinculados} registro(s) se pueden vincular, ${res.sin_kardex} sin match en Kardex</div>`;
+        html += '<div class="max-h-[20rem] overflow-y-auto space-y-1">';
+
+        d.matches.forEach(m => {
+          const ok = m.kardex_producto_id !== null;
+          const cls = ok ? 'text-gray-700' : 'text-red-500';
+          html += `<div class="grid grid-cols-5 gap-1 text-[10px] py-0.5 ${ok ? 'hover:bg-blue-50' : 'bg-red-50'} rounded px-1">`;
+          html += `<span class="${cls} truncate">${m.componente.replace('Baja Inv: ', '')}</span>`;
+          html += `<span class="text-right font-mono">$${m.contab_monto.toLocaleString('es-CO')}</span>`;
+          if (ok) {
+            html += `<span class="text-green-600 text-right">→ pid:${m.kardex_producto_id}</span>`;
+            html += `<span class="text-green-600 text-right">padre:${m.kardex_producto_padre_id}</span>`;
+            html += `<span class="text-right ${Math.abs(m.diferencia) > 0.01 ? 'text-amber-600' : 'text-green-600'}">${m.diferencia !== null ? '$' + m.diferencia.toLocaleString('es-CO') : '—'}</span>`;
+          } else {
+            html += `<span class="text-red-400" colspan="2">SIN KARDEX</span>`;
+            html += `<span></span>`;
+          }
+          html += '</div>';
+        });
+        html += '</div>';
+
+        if (res.vinculados > 0) {
+          html += `<div class="mt-3 flex gap-2">`;
+          html += `<button onclick="vincularIdsEjecutar()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm">✅ Confirmar Vinculación</button>`;
+          html += `<button onclick="document.getElementById('vincular-preview').classList.add('hidden')" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-xl">Cancelar</button>`;
+          html += `</div>`;
+        }
+
+        preview.innerHTML = html;
+      } catch (e) {
+        preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
+      }
+    }
+
+    async function vincularIdsEjecutar() {
+      const parentId = document.getElementById('ensambles-padre-id').value;
+      const ini = document.getElementById('ensambles-fecha-ini').value;
+      const fin = document.getElementById('ensambles-fecha-fin').value;
+
+      const preview = document.getElementById('vincular-preview');
+      preview.innerHTML = '<div class="text-center text-blue-600 py-4 text-xs">Ejecutando vinculación...</div>';
+
+      try {
+        let url = `/api/inventario/${NEGOCIO_ID}/vincular-ids-contabilidad?fecha_desde=${ini}&fecha_hasta=${fin}`;
+        if (parentId) url += `&producto_padre_id=${parentId}`;
+        const r = await fetch(url, { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
+
+        preview.innerHTML = `<div class="text-green-700 text-xs font-semibold py-4">✅ ${d.resumen.vinculados} registro(s) vinculados exitosamente. Ahora puedes ejecutar "Vista Previa" y "Reparar".</div>`;
+        toast(`${d.resumen.vinculados} registros vinculados`);
+      } catch (e) {
+        preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
       }
     }
 

@@ -1246,7 +1246,7 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
                                  componentes, registrado_por=None, descripcion=None,
                                  origen_tipo=None, origen_id=None,
                                  tipo_documento=None, documento_numero=None,
-                                 tipo_documento_id=None, tercero_id=None):
+                                 tipo_documento_id=None, tercero_id=None, fecha=None):
     """
     Asiento de producción — reclasificación dentro del 14x:
       Débito  cuenta_inve del producto terminado  × costo_total
@@ -1316,7 +1316,7 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
         if td_row:
             tipo_documento_id = td_row['id']
 
-    fecha_uso = _date.today()
+    fecha_uso = fecha or _date.today()
     _verificar_periodo_cerrado(conn, negocio_id, fecha_uso)
     desc = descripcion or f'Producción: {terminado["nombre"]}'
     if documento_numero:

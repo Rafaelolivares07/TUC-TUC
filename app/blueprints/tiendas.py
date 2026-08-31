@@ -20,7 +20,7 @@ from ..visitas_publicas import (
     respuesta_con_visitante as _respuesta_con_visitante_generica,
 )
 from .auth import solo_admin
-from .inventarios import _aplicar_tarjeta, _es_ensamble, _verificar_stock_pedido, _mov_directo, _recostear_producto, _sync_precio
+from .inventarios import _aplicar_tarjeta, _es_ensamble, _verificar_stock_pedido, _mov_directo, _recostear_producto, _sync_precio, _fecha_o_none
 try:
     from .contabilidad import _ejecutar_asiento_automatico as _asiento_auto
     from .contabilidad import obtener_siguiente_consecutivo
@@ -2235,10 +2235,15 @@ def api_tienda_pedido_crear(slug):
     nombre_cajero    = data.get('nombre_cajero', '').strip() or None
     id_tercero_cajero = data.get('id_tercero_cajero')
     pedido_premontado_id = data.get('pedido_premontado_id')
+    fecha_raw        = (data.get('fecha') or '').strip()
+    fecha_pedido     = _fecha_o_none(fecha_raw) or date.today()
     if not items:
         return jsonify({'ok': False, 'error': 'El carrito esta vacio'}), 400
     if not nombre_cliente and tipo_entrega != 'caja':
         return jsonify({'ok': False, 'error': 'Nombre requerido'}), 400
+    if fecha_pedido > date.today():
+        return jsonify({'ok': False, 'error': 'La fecha de la venta no puede ser futura'}), 400
+
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
@@ -2246,6 +2251,13 @@ def api_tienda_pedido_crear(slug):
         if not negocio:
             return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
         
+        if negocio.get('tercero_id'):
+            try:
+                from .contabilidad import _verificar_periodo_cerrado
+                _verificar_periodo_cerrado(conn, negocio['tercero_id'], fecha_pedido)
+            except Exception as exc:
+                return jsonify({'ok': False, 'error': str(exc)}), 400
+
         tienda = negocio
         telegram_chat_id = negocio['telegram_chat_id']
         fecha_vence = None
@@ -2366,6 +2378,7 @@ def api_tienda_pedido_crear(slug):
                     bodega=1,
                     tipo_documento=tipo_doc_codigo or 'Factura de Venta',
                     documento_numero=numero_documento,
+                    documento_fecha=fecha_pedido,
                     tipo_documento_id=tipo_doc_id,
                     referencia_tipo='pedido_tienda'
                 )
@@ -2507,6 +2520,7 @@ def api_tienda_pedido_crear(slug):
                         referencia_tipo= 'pedido_tienda',
                         tipo_documento = tipo_doc['nombre'] if (tipo_doc_id and tipo_doc) else 'Venta POS',
                         documento_numero = numero_documento or str(pedido_id),
+                        documento_fecha = fecha_pedido,
                         proveedor_nombre = nombre_cliente or None,
                         tipo_documento_id = tipo_doc_id,
                         excluir_componentes_ids = excluded_ids,
@@ -2553,7 +2567,8 @@ def api_tienda_pedido_crear(slug):
                               metodo_pago=metodo_pago,
                               tercero_id=cliente_id,
                               tipo_documento_fisico=tipo_doc_codigo,
-                              documento_numero_fisico=res_num)
+                              documento_numero_fisico=res_num,
+                              fecha=fecha_pedido)
             except Exception as _e:
                 print(f'[cont] venta tienda {slug}: {_e}')
         

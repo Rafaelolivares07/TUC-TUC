@@ -2407,9 +2407,11 @@
           <p class="text-xs text-amber-700 mb-3">Corrige el costo unitario en pedidos y el asiento contable de costo de venta (61*) para este producto padre en el rango seleccionado. Compara el costo Kardex real de los componentes vs el costo registrado en contabilidad.</p>
           <div id="reparador-preview" class="hidden mb-4"></div>
           <div id="vincular-preview" class="hidden mb-4"></div>
+          <div id="reparador-preview" class="hidden mb-4"></div>
           <div class="flex gap-3 flex-wrap">
             <button onclick="vincularIdsPreview()" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">🔗 Vincular IDs</button>
             <button onclick="repararCostosPreview()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">Vista Previa</button>
+            <button onclick="repararCostosGlobal()" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">⚡ Reparar Todo</button>
           </div>
         </div>
       </div>
@@ -12057,20 +12059,21 @@ async function cargarReporteEnsambles() {
           return;
         }
 
+        const res = d.resultados && d.resultados[0] ? d.resultados[0] : {};
         let html = '<div class="text-[10px] space-y-1">';
-        if (d.cambios_contables && d.cambios_contables.length > 0) {
+        if (res.cambios_contables && res.cambios_contables.length > 0) {
           html += `<div class="font-bold text-amber-800">Entradas 14* ajustadas:</div>`;
-          d.cambios_contables.forEach(c => {
+          res.cambios_contables.forEach(c => {
             html += `<div class="flex justify-between"><span class="truncate max-w-[180px]">${c.componente}</span><span>$${c.monto_anterior.toLocaleString('es-CO')} → $${c.monto_nuevo.toLocaleString('es-CO')}</span></div>`;
           });
         } else {
-          html += '<div class="text-green-700 font-bold">Todos los 14* ya están correctos</div>';
+          html += '<div class="text-green-700 font-bold">Todos los 14* ya estan correctos</div>';
         }
-        if (d.cogs_modificado) {
-          html += `<div class="text-amber-800 font-bold">Contrapartida 61* (ID ${d.cogs_id}) ajustada a $${d.total_14_nuevo.toLocaleString('es-CO')}</div>`;
+        if (res.cogs_modificado) {
+          html += `<div class="text-amber-800 font-bold">Contrapartida 61* ajustada</div>`;
         }
-        if (d.pedido_item_modificado) {
-          html += `<div class="text-amber-800 font-bold">pedido_items.costo_unitario ajustado ($${d.total_14_nuevo.toLocaleString('es-CO')} / ${d.cantidad_vendida} uds)</div>`;
+        if (res.pedido_item_modificado) {
+          html += `<div class="text-amber-800 font-bold">pedido_items.costo_unitario ajustado</div>`;
         }
         html += '</div>';
         el.innerHTML = html;
@@ -12079,6 +12082,84 @@ async function cargarReporteEnsambles() {
         setTimeout(() => repararCostosPreview(), 800);
       } catch (e) {
         el.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
+      }
+    }
+
+    async function repararCostosProducto(productoPadreId) {
+      const ini = document.getElementById('ensambles-fecha-ini').value;
+      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const containerId = `reparar-prod-${productoPadreId}`;
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      el.classList.remove('hidden');
+      el.innerHTML = '<div class="text-amber-600 text-[10px] py-1">Reparando todos los documentos de este producto...</div>';
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ producto_padre_id: productoPadreId, fecha_desde: ini, fecha_hasta: fin })
+        });
+        const d = await r.json();
+        if (!d.ok) {
+          el.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`;
+          return;
+        }
+
+        let html = `<div class="text-[10px] font-bold text-amber-800 mb-1">${d.documentos_modificados} de ${d.documentos_procesados} documentos modificados (${d.total_cambios_contables} cambios contables)</div>`;
+        if (d.resultados) {
+          d.resultados.forEach(r => {
+            const nCambios = r.cambios_contables ? r.cambios_contables.length : 0;
+            const icono = r.skip ? '⏭️' : (nCambios > 0 || r.cogs_modificado ? '✅' : '✔️');
+            html += `<div class="text-[10px]">${icono} Doc ${r.numero_doc}${nCambios > 0 ? ` — ${nCambios} ajustes` : ''}${r.cogs_modificado ? ' + 61*' : ''}${r.pedido_item_modificado ? ' + PI' : ''}</div>`;
+          });
+        }
+        el.innerHTML = html;
+
+        toast(`${d.documentos_modificados} documentos reparados`);
+        setTimeout(() => repararCostosPreview(), 800);
+      } catch (e) {
+        el.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
+      }
+    }
+
+    async function repararCostosGlobal() {
+      const ini = document.getElementById('ensambles-fecha-ini').value;
+      const fin = document.getElementById('ensambles-fecha-fin').value;
+      if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
+
+      const preview = document.getElementById('reparador-preview');
+      preview.innerHTML = '<div class="text-center text-amber-600 py-4 text-xs">Reparando todos los documentos en el rango...</div>';
+      preview.classList.remove('hidden');
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fecha_desde: ini, fecha_hasta: fin })
+        });
+        const d = await r.json();
+        if (!d.ok) {
+          preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`;
+          return;
+        }
+
+        let html = `<div class="text-xs font-bold text-amber-800 mb-2">${d.documentos_modificados} de ${d.documentos_procesados} documentos modificados (${d.total_cambios_contables} cambios contables)</div>`;
+        html += '<div class="max-h-[20rem] overflow-y-auto space-y-1">';
+        if (d.resultados) {
+          d.resultados.forEach(r => {
+            const nCambios = r.cambios_contables ? r.cambios_contables.length : 0;
+            const icono = r.skip ? '⏭️' : (nCambios > 0 || r.cogs_modificado ? '✅' : '✔️');
+            html += `<div class="text-[10px]">${icono} Doc ${r.numero_doc} (prod ${r.producto_padre_id})${nCambios > 0 ? ` — ${nCambios} ajustes` : ''}${r.cogs_modificado ? ' + 61*' : ''}${r.pedido_item_modificado ? ' + PI' : ''}</div>`;
+          });
+        }
+        html += '</div>';
+        preview.innerHTML = html;
+
+        toast(`${d.documentos_modificados} documentos reparados`);
+        setTimeout(() => repararCostosPreview(), 800);
+      } catch (e) {
+        preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
       }
     }
 
@@ -12152,7 +12233,11 @@ async function cargarReporteEnsambles() {
           html += `<div class="flex gap-2 mb-2">`;
           html += `<button onclick="vincularIdsNivel('producto', ${prod.producto_padre_id})" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold rounded-lg">🔗 Vincular</button>`;
           html += `<button onclick="desvincularIds(null, ${prod.producto_padre_id})" class="px-3 py-1 bg-red-300 hover:bg-red-400 text-white text-[10px] font-bold rounded-lg">🔓 Desvincular</button>`;
+          if (prod.con_diferencia > 0) {
+            html += `<button onclick="repararCostosProducto(${prod.producto_padre_id})" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg">⚡ Reparar (${prod.con_diferencia})</button>`;
+          }
           html += `</div>`;
+          html += `<div id="reparar-prod-${prod.producto_padre_id}" class="hidden"></div>`;
           html += `<div id="vincular-prod-${prod.producto_padre_id}" class="hidden"></div>`;
 
           prod.facturas.filter(ff => ff.tiene_diferencia).forEach(ff => {

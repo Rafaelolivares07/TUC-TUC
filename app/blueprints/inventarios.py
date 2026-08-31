@@ -1932,10 +1932,11 @@ def api_desvincular_ids_contabilidad(negocio_id):
 
 @bp.route('/api/inventario/<int:negocio_id>/reparar-costos-documento', methods=['POST'])
 def api_reparar_costos_documento(negocio_id):
-    """Repara costos de un documento puntual para un producto padre.
-    Body JSON: { numero_doc: str, producto_padre_id: int }
-    Ajusta movimientos_contables 14*, contrapartida 6xxx y pedido_items.costo_unitario
-    al costo real del kardex.
+    """Repara costos. Acepta tres alcances:
+    - Documento: { numero_doc, producto_padre_id }
+    - Producto: { producto_padre_id, fecha_desde, fecha_hasta }
+    - Global: { fecha_desde, fecha_hasta }
+    Ajusta movimientos_contables 14*, contrapartida 6xxx y pedido_items.costo_unitario.
     """
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
@@ -1943,9 +1944,8 @@ def api_reparar_costos_documento(negocio_id):
     data = request.get_json(silent=True) or {}
     numero_doc = str(data.get('numero_doc', '')).strip()
     prod_padre_id = data.get('producto_padre_id')
-
-    if not numero_doc or not prod_padre_id:
-        return jsonify({'ok': False, 'error': 'numero_doc y producto_padre_id requeridos'}), 400
+    fecha_desde = data.get('fecha_desde', '').strip()
+    fecha_hasta = data.get('fecha_hasta', '').strip()
 
     conn = get_db_connection()
     try:
@@ -1953,176 +1953,77 @@ def api_reparar_costos_documento(negocio_id):
         if not contexto or not _puede_gestionar_negocio(contexto):
             return jsonify({'ok': False, 'error': 'No autorizado'}), 403
 
-        # 1. Buscar entradas 14* vinculadas a este producto/documento
-        contab_rows = conn.execute("""
-            SELECT id, monto, cuenta, concepto, producto_id
-            FROM movimientos_contables
-            WHERE negocio_id = %s
-              AND cuenta LIKE '14%%'
-              AND tipo = 'credito'
-              AND UPPER(concepto) LIKE 'BAJA INV:%%'
-              AND producto_padre_id = %s
-              AND (numero_documento = %s OR numero_documento = %s)
-            ORDER BY id
-        """, (negocio_id, prod_padre_id, numero_doc, str(numero_doc))).fetchall()
-
-        if not contab_rows:
-            return jsonify({'ok': False, 'error': 'No hay entradas 14* vinculadas para este documento/producto'}), 404
-
-        # 2. Buscar salidas kardex del producto padre en este documento
-        kardex_rows = conn.execute("""
-            SELECT producto_id, nombre_producto,
-                   cantidad, costo_und,
-                   COALESCE(valor_total, cantidad * costo_und, 0) AS total
-            FROM movimientos_inventario
-            WHERE negocio_id = %s
-              AND producto_padre_id = %s
-              AND tipo = 'salida'
-              AND documento_numero = %s
-            ORDER BY nombre_producto
-        """, (negocio_id, prod_padre_id, numero_doc)).fetchall()
-
-        if not kardex_rows:
-            return jsonify({'ok': False, 'error': 'No hay salidas kardex para este documento/producto'}), 404
-
-        # 3. Indexar kardex por producto_id y por nombre
-        comp_por_pid = {}
-        comp_por_nombre = {}
-        for k in kardex_rows:
-            total = float(k['total'])
-            comp_por_nombre[k['nombre_producto'].strip().upper()] = {
-                'producto_id': k['producto_id'],
-                'nombre': k['nombre_producto'],
-                'total': total,
-            }
-            if k['producto_id']:
-                comp_por_pid[k['producto_id']] = {
-                    'nombre': k['nombre_producto'],
-                    'total': total,
-                }
-
-        # 4. Emparejar y actualizar cada 14*
-        cambios = []
-        total_nuevo_14 = 0
-        for c in contab_rows:
-            c_pid = c['producto_id']
-            match = comp_por_pid.get(c_pid) if c_pid else None
-            if not match:
-                concepto_upper = (c['concepto'] or '').upper()
-                match = next((v for k, v in comp_por_nombre.items() if k in concepto_upper), None)
-
-            if match:
-                nuevo_monto = match['total']
-                if abs(float(c['monto']) - nuevo_monto) > 0.01:
-                    conn.execute(
-                        "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
-                        (nuevo_monto, c['id'])
-                    )
-                    cambios.append({
-                        'id': c['id'],
-                        'concepto': c['concepto'],
-                        'monto_anterior': float(c['monto']),
-                        'monto_nuevo': nuevo_monto,
-                        'componente': match['nombre'],
-                    })
-                total_nuevo_14 += nuevo_monto
-            else:
-                total_nuevo_14 += float(c['monto'])
-
-        # 5. Buscar y actualizar contrapartida 6xxx
+        # Mapa de tipos de documento
         td_rows = conn.execute(
             "SELECT id, codigo FROM tipos_documento_negocio WHERE negocio_id = %s",
             (negocio_id,)
         ).fetchall()
         td_codigo_map = {td['id']: td['codigo'] for td in td_rows}
 
-        # Buscar el tipo de documento de las entradas contables
-        td_id_row = conn.execute("""
-            SELECT tipo_documento_id FROM movimientos_contables
-            WHERE id = %s
-        """, (contab_rows[0]['id'],)).fetchone()
-        td_id = td_id_row['tipo_documento_id'] if td_id_row else None
-        td_code = td_codigo_map.get(td_id, 'FACTURA_DE_VENTA') if td_id else 'FACTURA_DE_VENTA'
+        # Determinar pares (producto_padre_id, numero_doc) a reparar
+        pares = []
 
-        consecutive = numero_doc.split('-')[-1].strip() if '-' in numero_doc else numero_doc
+        if numero_doc and prod_padre_id:
+            # Nivel documento
+            pares.append((prod_padre_id, numero_doc))
 
-        # Buscar producto padre nombre
-        padre_row = conn.execute(
-            "SELECT nombre FROM productos WHERE id = %s AND negocio_id = %s",
-            (prod_padre_id, negocio_id)
-        ).fetchone()
-        padre_nombre = padre_row['nombre'] if padre_row else ''
+        elif prod_padre_id and not numero_doc:
+            # Nivel producto: todos los documentos de ese producto en rango
+            where_fechas = ""
+            params_k = [negocio_id, prod_padre_id]
+            if fecha_desde:
+                where_fechas += " AND COALESCE(m.documento_fecha, m.created_at::date) >= %s"
+                params_k.append(fecha_desde)
+            if fecha_hasta:
+                where_fechas += " AND COALESCE(m.documento_fecha, m.created_at::date) <= %s"
+                params_k.append(fecha_hasta)
+            docs = conn.execute(f"""
+                SELECT DISTINCT documento_numero
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND producto_padre_id = %s AND tipo = 'salida'
+                  {where_fechas}
+            """, params_k).fetchall()
+            for d in docs:
+                if d['documento_numero']:
+                    pares.append((prod_padre_id, str(d['documento_numero'])))
 
-        cogs_row = conn.execute("""
-            SELECT id, monto
-            FROM movimientos_contables
-            WHERE negocio_id = %s
-              AND (numero_documento = %s OR numero_documento = %s)
-              AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
-              AND LEFT(cuenta, 2) = '61'
-              AND (
-                  UPPER(concepto) = 'COSTO VENTA: ' || UPPER(%s)
-                  OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
-                  OR producto_id = %s
-              )
-            LIMIT 1
-        """, (negocio_id, consecutive, numero_doc, td_code, padre_nombre, padre_nombre, prod_padre_id)).fetchone()
+        elif fecha_desde and fecha_hasta:
+            # Nivel global: todos los productos con salidas en rango
+            docs = conn.execute("""
+                SELECT DISTINCT producto_padre_id, documento_numero
+                FROM movimientos_inventario
+                WHERE negocio_id = %s
+                  AND tipo = 'salida'
+                  AND producto_padre_id IS NOT NULL
+                  AND COALESCE(documento_fecha, created_at::date) >= %s
+                  AND COALESCE(documento_fecha, created_at::date) <= %s
+            """, (negocio_id, fecha_desde, fecha_hasta)).fetchall()
+            for d in docs:
+                if d['documento_numero']:
+                    pares.append((d['producto_padre_id'], str(d['documento_numero'])))
+        else:
+            return jsonify({'ok': False, 'error': 'Parmetros insuficientes. Envía numero_doc+producto_padre_id, o producto_padre_id+fechas, o solo fechas.'}), 400
 
-        cogs_modificado = False
-        if cogs_row:
-            monto_actual_cogs = float(cogs_row['monto'] or 0)
-            if abs(monto_actual_cogs - total_nuevo_14) > 0.01:
-                conn.execute(
-                    "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
-                    (total_nuevo_14, cogs_row['id'])
-                )
-                cogs_modificado = True
+        if not pares:
+            return jsonify({'ok': True, 'documentos_procesados': 0, 'mensaje': 'No hay documentos para reparar con los filtros indicados'})
 
-        # 6. Actualizar pedido_items.costo_unitario
-        # Buscar referencia del movimiento
-        ref_row = conn.execute("""
-            SELECT DISTINCT referencia_tipo, referencia_id
-            FROM movimientos_inventario
-            WHERE negocio_id = %s AND producto_padre_id = %s AND documento_numero = %s
-            LIMIT 1
-        """, (negocio_id, prod_padre_id, numero_doc)).fetchone()
-
-        ref_type = ref_row['referencia_tipo'] if ref_row else None
-        ref_id = ref_row['referencia_id'] if ref_row else None
-        ref_id_int = _int_o_none(ref_id)
-
-        pi_modificado = False
-        qty = 0.0
-        if ref_type != 'produccion':
-            qty_row = conn.execute("""
-                SELECT SUM(pi.cantidad), MAX(pi.id)
-                FROM pedido_items pi
-                JOIN pedidos p ON p.id = pi.pedido_id
-                WHERE p.negocio_id = %s AND pi.producto_id = %s
-                  AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
-            """, (negocio_id, prod_padre_id, consecutive, numero_doc, ref_id_int)).fetchone()
-            qty = float(qty_row[0]) if (qty_row and qty_row[0] is not None) else 0.0
-            pi_id = qty_row[1] if qty_row and qty_row[1] else None
-
-            if pi_id and qty > 0:
-                nuevo_costo_und = total_nuevo_14 / qty
-                conn.execute(
-                    "UPDATE pedido_items SET costo_unitario = %s WHERE id = %s",
-                    (nuevo_costo_und, pi_id)
-                )
-                pi_modificado = True
+        # Procesar cada par (producto, documento)
+        resultados = []
+        for ppid, doc_num in pares:
+            resultado = _reparar_un_documento(conn, negocio_id, ppid, doc_num, td_codigo_map)
+            resultados.append(resultado)
 
         conn.commit()
 
+        total_cambios = sum(len(r['cambios_contables']) for r in resultados)
+        total_docs_modificados = sum(1 for r in resultados if r['cambios_contables'] or r['cogs_modificado'] or r['pedido_item_modificado'])
+
         return jsonify({
             'ok': True,
-            'cambios_contables': cambios,
-            'total_14_anterior': sum(c['monto_anterior'] for c in cambios),
-            'total_14_nuevo': total_nuevo_14,
-            'cogs_modificado': cogs_modificado,
-            'cogs_id': cogs_row['id'] if cogs_row else None,
-            'pedido_item_modificado': pi_modificado,
-            'cantidad_vendida': qty,
+            'documentos_procesados': len(resultados),
+            'documentos_modificados': total_docs_modificados,
+            'total_cambios_contables': total_cambios,
+            'resultados': resultados,
         })
 
     except Exception as e:
@@ -2131,6 +2032,170 @@ def api_reparar_costos_documento(negocio_id):
         return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
     finally:
         conn.close()
+
+
+def _reparar_un_documento(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
+    """Repara un par (producto_padre, documento) puntual."""
+    # 1. Buscar entradas 14* vinculadas
+    contab_rows = conn.execute("""
+        SELECT id, monto, cuenta, concepto, producto_id
+        FROM movimientos_contables
+        WHERE negocio_id = %s
+          AND cuenta LIKE '14%%'
+          AND tipo = 'credito'
+          AND UPPER(concepto) LIKE 'BAJA INV:%%'
+          AND producto_padre_id = %s
+          AND (numero_documento = %s OR numero_documento = %s)
+        ORDER BY id
+    """, (negocio_id, prod_padre_id, numero_doc, str(numero_doc))).fetchall()
+
+    if not contab_rows:
+        return {'numero_doc': numero_doc, 'producto_padre_id': prod_padre_id,
+                'cambios_contables': [], 'cogs_modificado': False, 'pedido_item_modificado': False,
+                'skip': True}
+
+    # 2. Buscar salidas kardex
+    kardex_rows = conn.execute("""
+        SELECT producto_id, nombre_producto,
+               cantidad, costo_und,
+               COALESCE(valor_total, cantidad * costo_und, 0) AS total
+        FROM movimientos_inventario
+        WHERE negocio_id = %s
+          AND producto_padre_id = %s
+          AND tipo = 'salida'
+          AND documento_numero = %s
+        ORDER BY nombre_producto
+    """, (negocio_id, prod_padre_id, numero_doc)).fetchall()
+
+    if not kardex_rows:
+        return {'numero_doc': numero_doc, 'producto_padre_id': prod_padre_id,
+                'cambios_contables': [], 'cogs_modificado': False, 'pedido_item_modificado': False,
+                'skip': True}
+
+    # 3. Indexar kardex
+    comp_por_pid = {}
+    comp_por_nombre = {}
+    for k in kardex_rows:
+        total = float(k['total'])
+        comp_por_nombre[k['nombre_producto'].strip().upper()] = {
+            'producto_id': k['producto_id'],
+            'nombre': k['nombre_producto'],
+            'total': total,
+        }
+        if k['producto_id']:
+            comp_por_pid[k['producto_id']] = {
+                'nombre': k['nombre_producto'],
+                'total': total,
+            }
+
+    # 4. Emparejar y actualizar cada 14*
+    cambios = []
+    total_nuevo_14 = 0
+    for c in contab_rows:
+        c_pid = c['producto_id']
+        match = comp_por_pid.get(c_pid) if c_pid else None
+        if not match:
+            concepto_upper = (c['concepto'] or '').upper()
+            match = next((v for kn, v in comp_por_nombre.items() if kn in concepto_upper), None)
+
+        if match:
+            nuevo_monto = match['total']
+            if abs(float(c['monto']) - nuevo_monto) > 0.01:
+                conn.execute(
+                    "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
+                    (nuevo_monto, c['id'])
+                )
+                cambios.append({
+                    'id': c['id'],
+                    'concepto': c['concepto'],
+                    'monto_anterior': float(c['monto']),
+                    'monto_nuevo': nuevo_monto,
+                    'componente': match['nombre'],
+                })
+            total_nuevo_14 += nuevo_monto
+        else:
+            total_nuevo_14 += float(c['monto'])
+
+    # 5. Buscar y actualizar contrapartida 6xxx
+    td_id_row = conn.execute("""
+        SELECT tipo_documento_id FROM movimientos_contables WHERE id = %s
+    """, (contab_rows[0]['id'],)).fetchone()
+    td_id = td_id_row['tipo_documento_id'] if td_id_row else None
+    td_code = td_codigo_map.get(td_id, 'FACTURA_DE_VENTA') if td_id else 'FACTURA_DE_VENTA'
+    consecutive = numero_doc.split('-')[-1].strip() if '-' in numero_doc else numero_doc
+
+    padre_row = conn.execute(
+        "SELECT nombre FROM productos WHERE id = %s AND negocio_id = %s",
+        (prod_padre_id, negocio_id)
+    ).fetchone()
+    padre_nombre = padre_row['nombre'] if padre_row else ''
+
+    cogs_row = conn.execute("""
+        SELECT id, monto
+        FROM movimientos_contables
+        WHERE negocio_id = %s
+          AND (numero_documento = %s OR numero_documento = %s)
+          AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
+          AND LEFT(cuenta, 2) = '61'
+          AND (
+              UPPER(concepto) = 'COSTO VENTA: ' || UPPER(%s)
+              OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
+              OR producto_id = %s
+          )
+        LIMIT 1
+    """, (negocio_id, consecutive, numero_doc, td_code, padre_nombre, padre_nombre, prod_padre_id)).fetchone()
+
+    cogs_modificado = False
+    if cogs_row:
+        monto_actual_cogs = float(cogs_row['monto'] or 0)
+        if abs(monto_actual_cogs - total_nuevo_14) > 0.01:
+            conn.execute(
+                "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
+                (total_nuevo_14, cogs_row['id'])
+            )
+            cogs_modificado = True
+
+    # 6. Actualizar pedido_items.costo_unitario
+    ref_row = conn.execute("""
+        SELECT DISTINCT referencia_tipo, referencia_id
+        FROM movimientos_inventario
+        WHERE negocio_id = %s AND producto_padre_id = %s AND documento_numero = %s
+        LIMIT 1
+    """, (negocio_id, prod_padre_id, numero_doc)).fetchone()
+
+    ref_type = ref_row['referencia_tipo'] if ref_row else None
+    ref_id = ref_row['referencia_id'] if ref_row else None
+    ref_id_int = _int_o_none(ref_id)
+
+    pi_modificado = False
+    qty = 0.0
+    if ref_type != 'produccion':
+        qty_row = conn.execute("""
+            SELECT SUM(pi.cantidad), MAX(pi.id)
+            FROM pedido_items pi
+            JOIN pedidos p ON p.id = pi.pedido_id
+            WHERE p.negocio_id = %s AND pi.producto_id = %s
+              AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
+        """, (negocio_id, prod_padre_id, consecutive, numero_doc, ref_id_int)).fetchone()
+        qty = float(qty_row[0]) if (qty_row and qty_row[0] is not None) else 0.0
+        pi_id = qty_row[1] if qty_row and qty_row[1] else None
+
+        if pi_id and qty > 0:
+            nuevo_costo_und = total_nuevo_14 / qty
+            conn.execute(
+                "UPDATE pedido_items SET costo_unitario = %s WHERE id = %s",
+                (nuevo_costo_und, pi_id)
+            )
+            pi_modificado = True
+
+    return {
+        'numero_doc': numero_doc,
+        'producto_padre_id': prod_padre_id,
+        'cambios_contables': cambios,
+        'cogs_modificado': cogs_modificado,
+        'cogs_id': cogs_row['id'] if cogs_row else None,
+        'pedido_item_modificado': pi_modificado,
+    }
 
 
 @bp.route('/api/tienda/<slug>/inventario/kardex')

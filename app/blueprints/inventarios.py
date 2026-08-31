@@ -1894,16 +1894,13 @@ def api_desvincular_ids_contabilidad(negocio_id):
         if not rows:
             return jsonify({'ok': True, 'desvinculados': 0, 'mensaje': 'No hay registros vinculados para desvincular'})
 
+        row_ids = [r['id'] for r in rows]
+        placeholders = ','.join(['%s'] * len(row_ids))
         conn.execute(f"""
             UPDATE movimientos_contables
             SET producto_id = NULL, producto_padre_id = NULL
-            WHERE negocio_id = %s
-              AND cuenta LIKE '14%%'
-              AND tipo = 'credito'
-              AND UPPER(concepto) LIKE 'BAJA INV:%%'
-              AND producto_id IS NOT NULL
-              {where_extra}
-        """, params)
+            WHERE id IN ({placeholders})
+        """, row_ids)
         conn.commit()
 
         return jsonify({

@@ -12038,6 +12038,50 @@ async function cargarReporteEnsambles() {
       }
     }
 
+    async function repararCostosDocumento(numeroDoc, productoPadreId) {
+      const containerId = `reparar-doc-${productoPadreId}-${numeroDoc}`;
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      el.classList.remove('hidden');
+      el.innerHTML = '<div class="text-amber-600 text-[10px] py-1">Reparando costos...</div>';
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero_doc: numeroDoc, producto_padre_id: productoPadreId })
+        });
+        const d = await r.json();
+        if (!d.ok) {
+          el.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`;
+          return;
+        }
+
+        let html = '<div class="text-[10px] space-y-1">';
+        if (d.cambios_contables && d.cambios_contables.length > 0) {
+          html += `<div class="font-bold text-amber-800">Entradas 14* ajustadas:</div>`;
+          d.cambios_contables.forEach(c => {
+            html += `<div class="flex justify-between"><span class="truncate max-w-[180px]">${c.componente}</span><span>$${c.monto_anterior.toLocaleString('es-CO')} → $${c.monto_nuevo.toLocaleString('es-CO')}</span></div>`;
+          });
+        } else {
+          html += '<div class="text-green-700 font-bold">Todos los 14* ya están correctos</div>';
+        }
+        if (d.cogs_modificado) {
+          html += `<div class="text-amber-800 font-bold">Contrapartida 61* (ID ${d.cogs_id}) ajustada a $${d.total_14_nuevo.toLocaleString('es-CO')}</div>`;
+        }
+        if (d.pedido_item_modificado) {
+          html += `<div class="text-amber-800 font-bold">pedido_items.costo_unitario ajustado ($${d.total_14_nuevo.toLocaleString('es-CO')} / ${d.cantidad_vendida} uds)</div>`;
+        }
+        html += '</div>';
+        el.innerHTML = html;
+
+        toast('Costos reparados');
+        setTimeout(() => repararCostosPreview(), 800);
+      } catch (e) {
+        el.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
+      }
+    }
+
 
     async function repararCostosPreview() {
       const parentId = document.getElementById('ensambles-padre-id').value;
@@ -12143,7 +12187,11 @@ async function cargarReporteEnsambles() {
             html += `<div class="flex gap-2 mb-1">`;
             html += `<button onclick="vincularIdsNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="px-2 py-0.5 bg-blue-400 hover:bg-blue-500 text-white text-[9px] font-bold rounded">🔗 Vincular</button>`;
             html += `<button onclick="desvincularIds('${ff.documento_numero}', ${prod.producto_padre_id})" class="px-2 py-0.5 bg-red-300 hover:bg-red-400 text-white text-[9px] font-bold rounded">🔓 Desvincular</button>`;
+            if (!docSinFuente && ff.tiene_diferencia) {
+              html += `<button onclick="repararCostosDocumento('${ff.documento_numero}', ${prod.producto_padre_id})" class="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-bold rounded">⚡ Reparar</button>`;
+            }
             html += `</div>`;
+            html += `<div id="reparar-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden"></div>`;
             html += `<div id="vincular-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden"></div>`;
 
             // Pedido item

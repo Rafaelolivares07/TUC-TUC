@@ -1852,6 +1852,72 @@ def api_vincular_ids_contabilidad(negocio_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/desvincular-ids-contabilidad', methods=['POST'])
+def api_desvincular_ids_contabilidad(negocio_id):
+    """Desvincula: pone producto_id=NULL y producto_padre_id=NULL en movimientos_contables 14*
+    para un documento + producto especifico.
+    Body JSON: { numero_doc: str, producto_padre_id: int }
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json(silent=True) or {}
+    numero_doc = data.get('numero_doc', '').strip()
+    prod_padre_id = data.get('producto_padre_id')
+
+    if not numero_doc and not prod_padre_id:
+        return jsonify({'ok': False, 'error': 'numero_doc o producto_padre_id requerido'}), 400
+
+    conn = get_db_connection()
+    try:
+        # Buscar todas las entradas 14* que tengan producto_padre_id para este documento
+        where_extra = ""
+        params = [negocio_id]
+        if numero_doc:
+            where_extra += " AND (mc.numero_documento = %s OR mc.numero_documento = %s OR mc.numero_documento = %s)"
+            params.extend([str(numero_doc), f'FACTURA_DE_VENTA-{numero_doc}', f'VENTA-{numero_doc}'])
+        if prod_padre_id:
+            where_extra += " AND mc.producto_padre_id = %s"
+            params.append(prod_padre_id)
+
+        rows = conn.execute(f"""
+            SELECT mc.id, mc.concepto, mc.monto, mc.producto_id, mc.producto_padre_id
+            FROM movimientos_contables mc
+            WHERE mc.negocio_id = %s
+              AND mc.cuenta LIKE '14%%'
+              AND mc.tipo = 'credito'
+              AND UPPER(mc.concepto) LIKE 'BAJA INV:%%'
+              AND mc.producto_id IS NOT NULL
+              {where_extra}
+        """, params).fetchall()
+
+        if not rows:
+            return jsonify({'ok': True, 'desvinculados': 0, 'mensaje': 'No hay registros vinculados para desvincular'})
+
+        conn.execute(f"""
+            UPDATE movimientos_contables
+            SET producto_id = NULL, producto_padre_id = NULL
+            WHERE negocio_id = %s
+              AND cuenta LIKE '14%%'
+              AND tipo = 'credito'
+              AND UPPER(concepto) LIKE 'BAJA INV:%%'
+              AND producto_id IS NOT NULL
+              {where_extra}
+        """, params)
+        conn.commit()
+
+        return jsonify({
+            'ok': True,
+            'desvinculados': len(rows),
+            'detalles': [{'id': r['id'], 'concepto': r['concepto'], 'monto': float(r['monto'])} for r in rows]
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/tienda/<slug>/inventario/kardex')
 def api_tienda_inventario_kardex(slug):
     if 'usuario_id' not in session:

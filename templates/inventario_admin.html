@@ -11976,6 +11976,28 @@ async function cargarReporteEnsambles() {
       }
     }
 
+    async function desvincularIds(numeroDoc, productoPadreId) {
+      const msg = numeroDoc
+        ? `Desvincular producto_id de las cuentas 14* de la factura ${numeroDoc}?`
+        : `Desvincular TODOS los producto_id de las cuentas 14* de este producto?`;
+      if (!confirm(msg)) return;
+      try {
+        const body = {producto_padre_id: productoPadreId};
+        if (numeroDoc) body.numero_doc = numeroDoc;
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/desvincular-ids-contabilidad`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        if (!d.ok) { toast(d.error, 'error'); return; }
+        toast(`${d.desvinculados} registros desvinculados`);
+        setTimeout(() => repararCostosPreview(), 600);
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+
     async function repararNivel(nivel, productoPadreId, numeroDoc) {
       const ini = document.getElementById('ensambles-fecha-ini').value;
       const fin = document.getElementById('ensambles-fecha-fin').value;
@@ -12112,6 +12134,7 @@ async function cargarReporteEnsambles() {
 
           html += `<div class="flex gap-2 mb-2">`;
           html += `<button onclick="vincularIdsNivel('producto', ${prod.producto_padre_id})" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold rounded-lg">🔗 Vincular</button>`;
+          html += `<button onclick="desvincularIds(null, ${prod.producto_padre_id})" class="px-3 py-1 bg-red-300 hover:bg-red-400 text-white text-[10px] font-bold rounded-lg">🔓 Desvincular</button>`;
           if (prodTieneSinFuente) {
             html += `<span class="px-3 py-1 bg-gray-300 text-gray-500 text-[10px] font-bold rounded-lg cursor-not-allowed" title="Primero vincula IDs">🔒 Reparar</span>`;
           } else {
@@ -12152,6 +12175,7 @@ async function cargarReporteEnsambles() {
 
             html += `<div class="flex gap-2 mb-1">`;
             html += `<button onclick="vincularIdsNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="px-2 py-0.5 bg-blue-400 hover:bg-blue-500 text-white text-[9px] font-bold rounded">🔗 Vincular</button>`;
+            html += `<button onclick="desvincularIds('${ff.documento_numero}', ${prod.producto_padre_id})" class="px-2 py-0.5 bg-red-300 hover:bg-red-400 text-white text-[9px] font-bold rounded">🔓 Desvincular</button>`;
             if (docSinFuente) {
               html += `<span class="px-2 py-0.5 bg-gray-300 text-gray-500 text-[9px] font-bold rounded cursor-not-allowed" title="Primero vincula IDs">🔒 Reparar</span>`;
             } else {

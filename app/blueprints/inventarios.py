@@ -2191,6 +2191,38 @@ def api_reparar_costos_preview(negocio_id):
 
                     contab_total = float(cogs_row['monto']) if cogs_row and cogs_row['monto'] else 0
 
+                    # Buscar contrapartidas 14xx (Baja Inv) y comparar con kardex
+                    contras_raw = conn.execute("""
+                        SELECT id, monto, cuenta, concepto, producto_id
+                        FROM movimientos_contables
+                        WHERE negocio_id = %s
+                          AND (numero_documento = %s OR numero_documento = %s)
+                          AND LEFT(cuenta, 2) = '14'
+                          AND UPPER(concepto) NOT LIKE '%%COSTO%%'
+                          AND UPPER(concepto) LIKE '%%BAJA%%'
+                        ORDER BY id
+                    """, (negocio_id, consecutive, doc_num)).fetchall()
+
+                    comp_por_nombre = {}
+                    for comp in f['componentes']:
+                        comp_por_nombre[comp['nombre'].strip().upper()] = comp
+
+                    contrapartidas = []
+                    for c in contras_raw:
+                        concepto_upper = (c['concepto'] or '').strip().upper()
+                        nombre_limpio = concepto_upper.replace('BAJA INV:', '').strip()
+                        match = comp_por_nombre.get(nombre_limpio)
+                        if not match:
+                            match = next((v for k, v in comp_por_nombre.items() if k in nombre_limpio or nombre_limpio in k), None)
+                        contrapartidas.append({
+                            'id': c['id'],
+                            'concepto': (c['concepto'] or '').strip(),
+                            'monto': float(c['monto']),
+                            'kardex_nombre': match['nombre'] if match else None,
+                            'kardex_total': match['total'] if match else None,
+                            'match': match is not None,
+                        })
+
                     todos_resultados.append({
                         'producto_padre_id': ppid,
                         'producto_padre_nombre': nombre,
@@ -2199,7 +2231,7 @@ def api_reparar_costos_preview(negocio_id):
                         'kardex_total': f['kardex_total'],
                         'contab_total': contab_total,
                         'diferencia': contab_total - f['kardex_total'],
-                        'contrapartidas': [],
+                        'contrapartidas': contrapartidas,
                         'tiene_diferencia': abs(contab_total - f['kardex_total']) > 0.01,
                     })
 

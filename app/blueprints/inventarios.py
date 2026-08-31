@@ -2020,18 +2020,16 @@ def api_reparar_costos_preview(negocio_id):
                     if not kardex_prod:
                         continue
 
-                    # Buscar asiento 14xx debito (producto terminado)
+                    # Buscar asiento 14xx debito (producto terminado) - buscar por cuenta, no por concepto
                     contab_debito = conn.execute("""
                         SELECT id, monto, concepto
                         FROM movimientos_contables
                         WHERE negocio_id = %s
                           AND cuenta LIKE '14%%' AND tipo = 'debito'
                           AND numero_documento = %s
-                          AND UPPER(concepto) LIKE '%%' || UPPER(
-                              (SELECT nombre FROM productos WHERE id = %s AND negocio_id = %s)
-                          ) || '%%'
+                        ORDER BY id
                         LIMIT 1
-                    """, (negocio_id, doc_num, ppid, negocio_id)).fetchone()
+                    """, (negocio_id, doc_num)).fetchone()
 
                     # Buscar asientos 14xx credito (materias primas)
                     contab_creditos = conn.execute("""
@@ -2381,9 +2379,9 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
         WHERE negocio_id = %s
           AND cuenta LIKE '14%%' AND tipo = 'debito'
           AND numero_documento = %s
-          AND UPPER(concepto) LIKE '%%' || UPPER(%s) || '%%'
+        ORDER BY id
         LIMIT 1
-    """, (negocio_id, numero_doc, padre_nombre)).fetchone()
+    """, (negocio_id, numero_doc)).fetchone()
 
     # 3. Buscar asientos 14xx credito (materias primas)
     contab_creditos = conn.execute("""

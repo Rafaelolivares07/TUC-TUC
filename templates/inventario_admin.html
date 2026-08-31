@@ -12179,63 +12179,119 @@ async function cargarReporteEnsambles() {
           return;
         }
 
+        // Agrupar por producto_padre_id
+        const porProducto = {};
+        d.productos.forEach(p => {
+          if (!porProducto[p.producto_padre_id]) {
+            porProducto[p.producto_padre_id] = {
+              producto_padre_id: p.producto_padre_id,
+              producto_padre_nombre: p.producto_padre_nombre,
+              tipo: p.tipo,
+              documentos: [],
+            };
+          }
+          porProducto[p.producto_padre_id].documentos.push(p);
+        });
+
         let uid = 0;
-        let html = `<div class="text-xs text-amber-800 font-semibold mb-3">${res.total_documentos} documento(s), ${res.con_diferencia} con diferencia</div>`;
+        let html = `<div class="text-xs text-amber-800 font-semibold mb-3">${Object.keys(porProducto).length} producto(s), ${res.con_diferencia} doc(s) con diferencia</div>`;
         html += '<div class="space-y-3 max-h-[32rem] overflow-y-auto">';
 
-        d.productos.forEach(prod => {
-          if (!prod.tiene_diferencia) return;
+        Object.values(porProducto).forEach(prod => {
+          const docsConDif = prod.documentos.filter(d => d.tiene_diferencia);
+          if (docsConDif.length === 0) return;
           const pid = ++uid;
+
           const tipoLabel = prod.tipo === 'produccion' ? '🏭 Producción' : '🛒 Venta';
           const tipoBg = prod.tipo === 'produccion' ? 'bg-blue-100' : 'bg-amber-100';
           const tipoBorder = prod.tipo === 'produccion' ? 'border-blue-300' : 'border-amber-300';
 
+          const totalContab = prod.documentos.reduce((s, d) => s + d.contab_total, 0);
+          const totalKardex = prod.documentos.reduce((s, d) => s + d.kardex_total, 0);
+          const totalDif = totalContab - totalKardex;
+
           html += `<div class="border ${tipoBorder} rounded-xl overflow-hidden">`;
 
-          // Producto
+          // NIVEL 1: Producto colapsable
           html += `<button onclick="toggleRepairLevel('prod-${pid}')" class="w-full flex items-center justify-between px-4 py-2.5 ${tipoBg} hover:opacity-80 text-left transition-colors">`;
           html += `<div class="flex items-center gap-2">`;
           html += `<svg class="w-3 h-3 text-amber-600 transition-transform repair-arrow" id="arrow-prod-${pid}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
           html += `<span class="text-[10px] px-1.5 py-0.5 rounded font-bold ${prod.tipo === 'produccion' ? 'bg-blue-200 text-blue-700' : 'bg-amber-200 text-amber-700'}">${tipoLabel}</span>`;
           html += `<span class="text-xs font-bold text-gray-900">${prod.producto_padre_nombre}</span>`;
+          html += `<span class="text-[10px] px-1.5 py-0.5 bg-white/60 text-gray-600 rounded-full font-bold">${docsConDif.length} doc(s)</span>`;
           html += `</div>`;
           html += `<div class="text-right">`;
-          html += `<div class="text-[10px] text-gray-500">Contable: <span class="font-bold text-gray-700">$${prod.contab_total.toLocaleString('es-CO')}</span> → Kardex: <span class="font-bold text-gray-700">$${prod.kardex_total.toLocaleString('es-CO')}</span></div>`;
-          html += `<div class="text-xs font-bold ${Math.abs(prod.diferencia) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${prod.diferencia.toLocaleString('es-CO')}</div>`;
+          html += `<div class="text-[10px] text-gray-500">Contable: <span class="font-bold text-gray-700">$${totalContab.toLocaleString('es-CO')}</span> → Kardex: <span class="font-bold text-gray-700">$${totalKardex.toLocaleString('es-CO')}</span></div>`;
+          html += `<div class="text-xs font-bold ${Math.abs(totalDif) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${totalDif.toLocaleString('es-CO')}</div>`;
           html += `</div>`;
           html += `</button>`;
 
-          // Contenido
+          // Contenido del producto (colapsado)
           html += `<div id="prod-${pid}" class="hidden px-3 pb-3 space-y-2">`;
 
+          // Botones nivel producto
           html += `<div class="flex gap-2 mb-2">`;
-          html += `<button onclick="repararCostosDocumento('${prod.documento_numero}', ${prod.producto_padre_id})" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg">⚡ Reparar</button>`;
-          html += `</div>`;
-          html += `<div id="reparar-doc-${prod.producto_padre_id}-${prod.documento_numero}" class="hidden"></div>`;
-
-          // Doc info
-          html += `<div class="text-[10px] text-gray-500">Doc: <span class="font-bold text-gray-700">${prod.documento_numero}</span></div>`;
-
-          // Contrapartidas (materias primas para produccion)
-          if (prod.contrapartidas && prod.contrapartidas.length > 0) {
-            html += `<div class="mt-1">`;
-            html += `<div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
-            html += `<span>Componente</span><span class="text-right">Contable</span><span class="text-right">Kardex</span>`;
-            html += `</div>`;
-            prod.contrapartidas.forEach(c => {
-              const cls = c.match ? (Math.abs(c.monto - c.kardex_total) > 0.01 ? 'text-red-600' : 'text-green-600') : 'text-gray-400';
-              html += `<div class="grid grid-cols-3 gap-2 text-[10px] px-2 py-0.5">`;
-              html += `<span class="text-gray-600 truncate">${(c.concepto || '').replace(/^.*?:\s*/, '')}</span>`;
-              html += `<span class="text-gray-700 font-bold text-right">$${c.monto.toLocaleString('es-CO')}</span>`;
-              if (c.match) {
-                html += `<span class="${cls} font-bold text-right">$${c.kardex_total.toLocaleString('es-CO')}</span>`;
-              } else {
-                html += `<span class="text-gray-400 text-right">—</span>`;
-              }
-              html += `</div>`;
-            });
-            html += `</div>`;
+          html += `<button onclick="vincularIdsNivel('producto', ${prod.producto_padre_id})" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold rounded-lg">🔗 Vincular</button>`;
+          html += `<button onclick="desvincularIds(null, ${prod.producto_padre_id})" class="px-3 py-1 bg-red-300 hover:bg-red-400 text-white text-[10px] font-bold rounded-lg">🔓 Desvincular</button>`;
+          if (docsConDif.length > 0) {
+            html += `<button onclick="repararCostosProducto(${prod.producto_padre_id})" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg">⚡ Reparar (${docsConDif.length})</button>`;
           }
+          html += `</div>`;
+          html += `<div id="reparar-prod-${prod.producto_padre_id}" class="hidden"></div>`;
+
+          // NIVEL 2: Documentos
+          prod.documentos.forEach(ff => {
+            if (!ff.tiene_diferencia) return;
+            const docId = ++uid;
+
+            html += `<div class="border border-gray-200 rounded-lg overflow-hidden">`;
+
+            // Documento colapsable
+            html += `<button onclick="toggleRepairLevel('doc-${docId}')" class="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left transition-colors">`;
+            html += `<div class="flex items-center gap-2">`;
+            html += `<svg class="w-3 h-3 text-gray-500 transition-transform repair-arrow" id="arrow-doc-${docId}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+            html += `<span class="text-xs font-bold text-gray-800">Doc ${ff.documento_numero}</span>`;
+            html += `</div>`;
+            html += `<div class="text-right">`;
+            html += `<div class="text-[10px] text-gray-500">Contable: <span class="font-bold text-gray-700">$${ff.contab_total.toLocaleString('es-CO')}</span> → Kardex: <span class="font-bold text-gray-700">$${ff.kardex_total.toLocaleString('es-CO')}</span></div>`;
+            const difDoc = ff.contab_total - ff.kardex_total;
+            html += `<div class="text-xs font-bold ${Math.abs(difDoc) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${difDoc.toLocaleString('es-CO')}</div>`;
+            html += `</div>`;
+            html += `</button>`;
+
+            // Contenido documento
+            html += `<div id="doc-${docId}" class="hidden px-3 pb-2 space-y-1 text-xs">`;
+
+            // Botones documento
+            html += `<div class="flex gap-2 mb-1">`;
+            html += `<button onclick="repararCostosDocumento('${ff.documento_numero}', ${prod.producto_padre_id})" class="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-bold rounded">⚡ Reparar</button>`;
+            html += `</div>`;
+            html += `<div id="reparar-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden"></div>`;
+
+            // Contrapartidas
+            if (ff.contrapartidas && ff.contrapartidas.length > 0) {
+              html += `<div class="mt-1">`;
+              html += `<div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
+              html += `<span>Componente</span><span class="text-right">Contable</span><span class="text-right">Kardex</span>`;
+              html += `</div>`;
+              ff.contrapartidas.forEach(c => {
+                const cls = c.match ? (Math.abs(c.monto - c.kardex_total) > 0.01 ? 'text-red-600' : 'text-green-600') : 'text-gray-400';
+                html += `<div class="grid grid-cols-3 gap-2 text-[10px] px-2 py-0.5">`;
+                html += `<span class="text-gray-600 truncate">${(c.concepto || '').replace(/^.*?:\s*/, '')}</span>`;
+                html += `<span class="text-gray-700 font-bold text-right">$${c.monto.toLocaleString('es-CO')}</span>`;
+                if (c.match) {
+                  html += `<span class="${cls} font-bold text-right">$${c.kardex_total.toLocaleString('es-CO')}</span>`;
+                } else {
+                  html += `<span class="text-gray-400 text-right">—</span>`;
+                }
+                html += `</div>`;
+              });
+              html += `</div>`;
+            }
+
+            html += `</div>`; // fin doc content
+            html += `</div>`; // fin doc card
+          });
 
           html += `</div>`; // fin prod content
           html += `</div>`; // fin prod card

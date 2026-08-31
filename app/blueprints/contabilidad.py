@@ -891,7 +891,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                 for item in items_mov:
                     # Inyección automática de asientos para ajustes en caliente vinculados a la factura
                     if item['motivo'] == 'ajuste':
-                        total_adj = float(item['cantidad'] or 0) * float(item['valor_unitario'] or 0)
+                        total_adj = round(float(Decimal(str(item['cantidad'] or 0)) * Decimal(str(item['valor_unitario'] or 0))), 2)
                         if total_adj > 0 and item['categoria']:
                             gi_adj = conn.execute("""
                                 SELECT gi.cuenta_inve_id, gi.cuenta_ajuste_favor_id,
@@ -921,9 +921,10 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                                 })
                         continue
 
-                    total_costo = float(item['cantidad'] or 0) * float(item['costo_und'] or 0)
+                    total_costo = round(float(Decimal(str(item['cantidad'] or 0)) * Decimal(str(item['costo_und'] or 0))), 2)
                     if total_costo > 0:
                         # 1. Crédito en inventario (14x) usando la categoría del ingrediente/componente
+                        gi_ing = None
                         if item['categoria']:
                             gi_ing = conn.execute("""
                                 SELECT gi.cuenta_inve_id, c_inv.codigo AS cod_inve, c_inv.nombre AS nom_inve
@@ -931,17 +932,6 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                                 LEFT JOIN cuentas_puc c_inv ON c_inv.id = gi.cuenta_inve_id
                                 WHERE gi.negocio_id = %s AND gi.nombre = %s
                             """, (negocio_id, item['categoria'])).fetchone()
-                            
-                            if gi_ing and gi_ing['cuenta_inve_id']:
-                                mov_list.append({
-                                    'cuenta_puc_id': gi_ing['cuenta_inve_id'],
-                                    'cuenta_codigo': gi_ing['cod_inve'],
-                                    'concepto':      f"Baja Inv: {item['producto_nombre']}",
-                                    'tipo_mov':      'C',
-                                    'monto':         total_costo,
-                                    'producto_id':   item['producto_id'],
-                                    'producto_padre_id': item['producto_padre_id'],
-                                })
                         
                         # 2. Débito en costo de venta (61x) acumulado bajo la categoría del producto vendido (sándwich)
                         p_padre_id = item['producto_padre_id']
@@ -957,6 +947,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                             sold_name = item['producto_nombre']
                             sold_cat = item['categoria']
                             
+                        gi_sold = None
                         if sold_cat:
                             gi_sold = conn.execute("""
                                 SELECT gi.cuenta_cos_id, c_cos.codigo AS cod_costo, c_cos.nombre AS nom_costo
@@ -965,21 +956,31 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                                 WHERE gi.negocio_id = %s AND gi.nombre = %s
                             """, (negocio_id, sold_cat)).fetchone()
                             
-                            if gi_sold and gi_sold['cuenta_cos_id']:
-                                key = (gi_sold['cuenta_cos_id'], gi_sold['cod_costo'], f"Costo Venta: {sold_name}")
-                                if key not in debitos_costos:
-                                    debitos_costos[key] = {'monto': 0.0, 'producto_padre_id': p_padre_id}
-                                debitos_costos[key]['monto'] += total_costo
+                        if gi_ing and gi_ing['cuenta_inve_id'] and gi_sold and gi_sold['cuenta_cos_id']:
+                            mov_list.append({
+                                'cuenta_puc_id': gi_ing['cuenta_inve_id'],
+                                'cuenta_codigo': gi_ing['cod_inve'],
+                                'concepto':      f"Baja Inv: {item['producto_nombre']}",
+                                'tipo_mov':      'C',
+                                'monto':         total_costo,
+                                'producto_id':   item['producto_id'],
+                                'producto_padre_id': item['producto_padre_id'],
+                            })
+                            key = (gi_sold['cuenta_cos_id'], gi_sold['cod_costo'], f"Costo Venta: {sold_name}")
+                            if key not in debitos_costos:
+                                debitos_costos[key] = {'monto': 0.0, 'producto_padre_id': p_padre_id}
+                            debitos_costos[key]['monto'] = round(debitos_costos[key]['monto'] + total_costo, 2)
                 
                 # Agregar los débitos de costo agrupados por producto vendido
                 for (cuenta_puc_id, cuenta_codigo, concepto), datos in debitos_costos.items():
-                    if datos['monto'] > 0:
+                    monto_deb = round(datos['monto'], 2)
+                    if monto_deb > 0:
                         mov_list.append({
                             'cuenta_puc_id': cuenta_puc_id,
                             'cuenta_codigo': cuenta_codigo,
                             'concepto':      concepto,
                             'tipo_mov':      'D',
-                            'monto':         datos['monto'],
+                            'monto':         monto_deb,
                             'producto_padre_id': datos['producto_padre_id'],
                         })
             except Exception as e_costos:
@@ -1293,7 +1294,7 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
         grp = _cuenta_inve(c['producto_id'], prod['categoria'])
         if not grp:
             return None
-        monto_c = float(Decimal(str(c['cantidad'])) * Decimal(str(c['costo_und'])))
+        monto_c = round(float(Decimal(str(c['cantidad'])) * Decimal(str(c['costo_und']))), 2)
         if monto_c > 0:
             lineas_cred.append({
                 'cuenta_id': grp['cuenta_inve_id'],
@@ -1327,7 +1328,8 @@ def _ejecutar_asiento_produccion(conn, negocio_id, producto_terminado_id, costo_
             (negocio_id,)
         ).fetchone()['n']
         numero = f"AUTO-PRODUCCION-{(cnt or 0) + 1}"
-    total_cred = sum(l['monto'] for l in lineas_cred)
+    total_cred = round(sum(l['monto'] for l in lineas_cred), 2)
+    monto_total = total_cred
 
     comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
 

@@ -3819,36 +3819,32 @@ def api_cambiar_fecha_documento_inventario(negocio_id):
         hora_uso = hora or (rows[0]['created_at'].time() if rows[0]['created_at'] else time(0, 0))
         fecha_hora = datetime.combine(nueva_fecha, hora_uso)
 
-        # Actualizar movimientos de inventario
+        # 1. Actualizar movimientos de inventario
         conn.execute("""
             UPDATE movimientos_inventario
             SET documento_fecha = %s, created_at = %s
-            WHERE negocio_id = %s AND (tipo_documento_id = %s OR LOWER(tipo_documento) = LOWER(%s)) AND documento_numero = %s
+            WHERE negocio_id = %s 
+              AND (tipo_documento_id = %s OR LOWER(COALESCE(tipo_documento, '')) = LOWER(%s)) 
+              AND documento_numero = %s
         """, (nueva_fecha, fecha_hora, negocio_id, tipo_documento_id, tipo_documento, documento_numero))
 
-        # Actualizar movimientos contables
+        # 2. Actualizar movimientos contables
         conn.execute("""
             UPDATE movimientos_contables
             SET fecha = %s, created_at = %s
-            WHERE negocio_id = %s AND (tipo_documento_id = %s OR LOWER(tipo_documento) = LOWER(%s)) AND numero_documento = %s
+            WHERE negocio_id = %s 
+              AND (tipo_documento_id = %s OR LOWER(COALESCE(tipo_documento, '')) = LOWER(%s)) 
+              AND numero_documento = %s
         """, (nueva_fecha, fecha_hora, negocio_id, tipo_documento_id, tipo_documento, documento_numero))
 
-        # Actualizar saldo_por_documentos
+        # 3. Actualizar saldo_por_documentos
         conn.execute("""
             UPDATE saldo_por_documentos
             SET fecha_hora = %s, created_at = %s
-            WHERE negocio_id = %s AND (tipo_documento_id = %s OR LOWER(tipo_documento) = LOWER(%s)) AND numero_documento = %s
+            WHERE negocio_id = %s 
+              AND (tipo_documento_id = %s OR LOWER(COALESCE(tipo_documento, '')) = LOWER(%s)) 
+              AND numero_documento = %s
         """, (fecha_hora, fecha_hora, negocio_id, tipo_documento_id, tipo_documento, documento_numero))
-
-        # Actualizar compras / facturas si aplica
-        try:
-            conn.execute("""
-                UPDATE facturas_proveedor
-                SET fecha_factura = %s, updated_at = %s
-                WHERE negocio_id = %s AND (numero_factura = %s OR consecutivo::text = %s)
-            """, (nueva_fecha, fecha_hora, negocio_id, documento_numero, documento_numero))
-        except Exception:
-            pass
 
         # Recostear en cascada todos los productos de este documento
         producto_ids = sorted({r['producto_id'] for r in rows})

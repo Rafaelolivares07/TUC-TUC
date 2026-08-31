@@ -3517,7 +3517,9 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id):
         WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
     """, (negocio_id, producto_id)).fetchone()
     stock_inconsistente = bool(saldo and diferente(saldo['stock'], stock))
-    costo_inconsistente = bool(saldo and diferente(saldo['costo_und'], costo_und))
+    # Cuando el stock es 0 (y el saldo guardado también es 0), el valor de inventario es $0
+    # por lo que no existe discrepancia de valor ni afectación contable.
+    costo_inconsistente = bool(saldo and (stock > 0 or Decimal(str(saldo['stock'] or 0)) > 0) and diferente(saldo['costo_und'], costo_und))
     valor_inconsistente = bool(
         saldo and abs(Decimal(str(saldo['valor_existencia'] or 0)) - valor_existencia)
         >= Decimal('1')

@@ -12271,24 +12271,62 @@ async function cargarReporteEnsambles() {
             html += `<div id="reparar-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden"></div>`;
             html += `<div id="vincular-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden"></div>`;
 
-            // Contrapartidas
+            // Detalle de componentes: Contrapartidas contables vs Kardex
             if (ff.contrapartidas && ff.contrapartidas.length > 0) {
+              const sinFuente = ff.contrapartidas.some(c => !c.match && c.monto > 0);
+
               html += `<div class="mt-1">`;
-              html += `<div class="grid grid-cols-3 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
-              html += `<span>Componente</span><span class="text-right">Contable</span><span class="text-right">Kardex</span>`;
+              html += `<div class="grid grid-cols-4 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
+              html += `<span>Componente</span><span class="text-right">Contable (14*)</span><span class="text-right">Kardex</span><span class="text-right">Diferencia</span>`;
               html += `</div>`;
+
               ff.contrapartidas.forEach(c => {
-                const cls = c.match ? (Math.abs(c.monto - c.kardex_total) > 0.01 ? 'text-red-600' : 'text-green-600') : 'text-gray-400';
-                html += `<div class="grid grid-cols-3 gap-2 text-[10px] px-2 py-0.5">`;
-                html += `<span class="text-gray-600 truncate">${(c.concepto || '').replace(/^.*?:\s*/, '')}</span>`;
-                html += `<span class="text-gray-700 font-bold text-right">$${c.monto.toLocaleString('es-CO')}</span>`;
-                if (c.match) {
-                  html += `<span class="${cls} font-bold text-right">$${c.kardex_total.toLocaleString('es-CO')}</span>`;
+                const cid = ++uid;
+                const monto = c.monto;
+                const kTotal = c.match ? c.kardex_total : null;
+                const dif = kTotal !== null ? monto - kTotal : null;
+                const cls = !c.match ? 'text-amber-500' : (dif !== null && Math.abs(dif) > 0.01 ? 'text-red-600' : 'text-green-600');
+
+                html += `<div class="px-2">`;
+                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-4 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
+                html += `<span class="text-gray-600 text-xs truncate">${(c.concepto || '').replace(/^.*?:\s*/, '')}</span>`;
+                if (!c.match) {
+                  html += `<span class="text-amber-500 text-xs text-right font-semibold">SIN FUENTE</span>`;
+                  html += `<span class="text-gray-400 text-xs text-right">—</span>`;
+                  html += `<span class="text-amber-500 text-xs text-right">NO DISP.</span>`;
                 } else {
-                  html += `<span class="text-gray-400 text-right">—</span>`;
+                  html += `<span class="text-xs font-bold text-right ${cls}">$${monto.toLocaleString('es-CO')}</span>`;
+                  html += `<span class="text-xs font-bold text-right ${cls}">$${kTotal.toLocaleString('es-CO')}</span>`;
+                  html += `<span class="text-xs font-bold text-right ${cls}">${dif !== null && Math.abs(dif) > 0.01 ? '$' + dif.toLocaleString('es-CO') : 'OK'}</span>`;
+                }
+                html += `</button>`;
+
+                // Sub-detalle expandible
+                html += `<div id="comp-${cid}" class="hidden pl-4 text-[10px] text-gray-400 pb-1">`;
+                if (!c.match) {
+                  html += `SIN FUENTE (match por nombre, no confiable)`;
+                } else {
+                  const dif2 = monto - kTotal;
+                  const clsDif = Math.abs(dif2) > 0.01 ? 'text-amber-600' : 'text-green-600';
+                  html += `<div class="flex justify-between"><span>Contable: $${monto.toLocaleString('es-CO')}</span><span>Kardex: $${kTotal.toLocaleString('es-CO')}</span><span class="${clsDif} ml-2">${Math.abs(dif2) > 0.01 ? '$' + dif2.toLocaleString('es-CO') : 'OK'}</span></div>`;
                 }
                 html += `</div>`;
+                html += `</div>`;
               });
+
+              // Sin match en kardex
+              const sinKardex = ff.contrapartidas.filter(c => !c.match);
+              if (sinKardex.length > 0) {
+                sinKardex.forEach(c => {
+                  html += `<div class="px-2 grid grid-cols-4 gap-2 py-0.5">`;
+                  html += `<span class="text-gray-400 text-xs italic truncate">${(c.concepto || '').replace(/^.*?:\s*/, '')}</span>`;
+                  html += `<span class="text-gray-600 text-xs font-bold text-right">$${c.monto.toLocaleString('es-CO')}</span>`;
+                  html += `<span class="text-gray-400 text-xs text-right">—</span>`;
+                  html += `<span class="text-red-400 text-xs font-bold text-right">SIN KARDEX</span>`;
+                  html += `</div>`;
+                });
+              }
+
               html += `</div>`;
             }
 

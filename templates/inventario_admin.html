@@ -2410,7 +2410,6 @@
           <div class="flex gap-3 flex-wrap">
             <button onclick="vincularIdsPreview()" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">🔗 Vincular IDs</button>
             <button onclick="repararCostosPreview()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">Vista Previa</button>
-            <button id="btn-ejecutar-reparacion" onclick="repararCostosEjecutar()" class="hidden px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">Reparar</button>
           </div>
         </div>
       </div>
@@ -6754,34 +6753,13 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
 
   ];
 
-  const acciones = alertas.length ? `
-
-    <button type="button" onclick="repararDesdeKardex(${productoId})" class="ml-auto rounded-lg bg-indigo-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700">Reparar saldos y costos</button>` : '';
+  const acciones = '';
 
   el.className = `mb-3 rounded-xl border p-3 text-xs ${alertas.length ? 'border-amber-200 bg-amber-50/40' : 'border-emerald-200 bg-emerald-50/40'}`;
 
   el.innerHTML = `<div class="flex flex-wrap items-center gap-2"><strong>Auditoría del producto</strong>${alertas.length ? alertas.join('') : '<span class="rounded-md bg-emerald-100 px-2 py-1 text-emerald-700 font-bold">Sin inconsistencias detectadas</span>'}${acciones}</div>${valores}${detalle.length ? `<details class="mt-3 border-t border-amber-200/70 pt-2"><summary class="cursor-pointer font-bold text-gray-600">Ver detalle de movimientos</summary><ul class="mt-2 space-y-1 text-[11px] text-gray-600">${detalle.map(x => `<li>• ${x}</li>`).join('')}</ul></details>` : ''}`;
 
 }
-
-
-
-async function repararDesdeKardex(productoId) {
-
-  const auditoria = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/auditoria?producto_ids=${productoId}`).then(r => r.json());
-
-  const p = auditoria.productos?.[0];
-
-  if (!p) { toast('No se pudo obtener la auditoría del producto.', false); return; }
-
-  if (!confirm(`Se recalcularán ${p.movimientos} movimientos de ${p.producto_nombre}. Los negativos reales no serán eliminados. ¿Continuar?`)) return;
-
-  await ejecutarRecosteo({ producto_ids: [Number(productoId)] }, `el producto ${p.producto_nombre}`);
-
-  await cargarKardex(productoId);
-
-}
-
 
 
 async function cargarSugerenciasProduccion() {
@@ -12054,31 +12032,12 @@ async function cargarReporteEnsambles() {
           return;
         }
 
-        preview.innerHTML = `<div class="text-amber-800 text-[10px]">${res.con_diferencia} doc(s) con dif — $${res.monto_corregir.toLocaleString('es-CO')} <button onclick="repararEjecutarNivel('${nivel}', ${productoPadreId}, '${numeroDoc || ''}')" class="ml-2 px-2 py-0.5 bg-red-500 text-white rounded font-bold">Reparar</button></div>`;
+        preview.innerHTML = `<div class="text-amber-800 text-[10px]">${res.con_diferencia} doc(s) con diferencia — $${res.monto_corregir.toLocaleString('es-CO')}</div>`;
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
       }
     }
 
-    async function repararEjecutarNivel(nivel, productoPadreId, numeroDoc) {
-      const ini = document.getElementById('ensambles-fecha-ini').value;
-      const fin = document.getElementById('ensambles-fecha-fin').value;
-      const containerId = nivel === 'producto' ? `reparar-prod-${productoPadreId}` : `reparar-doc-${productoPadreId}-${numeroDoc || ''}`;
-      const preview = document.getElementById(containerId) || document.getElementById('reparador-preview');
-      preview.innerHTML = '<div class="text-red-600 text-[10px]">Ejecutando reparación...</div>';
-
-      try {
-        let url = `/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?fecha_desde=${ini}&fecha_hasta=${fin}&producto_padre_id=${productoPadreId}`;
-        if (numeroDoc) url += `&numero_doc=${numeroDoc}`;
-        const r = await fetch(url, { method: 'POST' });
-        const d = await r.json();
-        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`; return; }
-        preview.innerHTML = `<div class="text-green-700 text-[10px] font-semibold">✅ Reparación completada</div>`;
-        toast('Reparación completada');
-      } catch (e) {
-        preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
-      }
-    }
 
     async function repararCostosPreview() {
       const parentId = document.getElementById('ensambles-padre-id').value;
@@ -12089,7 +12048,6 @@ async function cargarReporteEnsambles() {
       const preview = document.getElementById('reparador-preview');
       preview.innerHTML = '<div class="text-center text-amber-600 py-4 text-xs">Calculando diferencias...</div>';
       preview.classList.remove('hidden');
-      document.getElementById('btn-ejecutar-reparacion').classList.add('hidden');
 
       try {
         let url = `/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?fecha_desde=${ini}&fecha_hasta=${fin}`;
@@ -12099,13 +12057,6 @@ async function cargarReporteEnsambles() {
         if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
 
         const res = d.resumen;
-        const badge = document.getElementById('reparador-badge');
-        if (res.con_diferencia > 0) {
-          badge.textContent = res.con_diferencia;
-          badge.classList.remove('hidden');
-        } else {
-          badge.classList.add('hidden');
-        }
 
         if (res.con_diferencia === 0) {
           preview.innerHTML = '<div class="text-green-700 text-xs font-semibold py-4">Todos los costos estan correctos. No hay nada que reparar.</div>';
@@ -12157,14 +12108,8 @@ async function cargarReporteEnsambles() {
           html += `<div class="flex gap-2 mb-2">`;
           html += `<button onclick="vincularIdsNivel('producto', ${prod.producto_padre_id})" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold rounded-lg">🔗 Vincular</button>`;
           html += `<button onclick="desvincularIds(null, ${prod.producto_padre_id})" class="px-3 py-1 bg-red-300 hover:bg-red-400 text-white text-[10px] font-bold rounded-lg">🔓 Desvincular</button>`;
-          if (prodTieneSinFuente) {
-            html += `<span class="px-3 py-1 bg-gray-300 text-gray-500 text-[10px] font-bold rounded-lg cursor-not-allowed" title="Primero vincula IDs">🔒 Reparar</span>`;
-          } else {
-            html += `<button onclick="repararNivel('producto', ${prod.producto_padre_id})" class="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg">Reparar</button>`;
-          }
           html += `</div>`;
           html += `<div id="vincular-prod-${prod.producto_padre_id}" class="hidden"></div>`;
-          html += `<div id="reparar-prod-${prod.producto_padre_id}" class="hidden"></div>`;
 
           prod.facturas.filter(ff => ff.tiene_diferencia).forEach(ff => {
             const docId = ++uid;
@@ -12198,14 +12143,8 @@ async function cargarReporteEnsambles() {
             html += `<div class="flex gap-2 mb-1">`;
             html += `<button onclick="vincularIdsNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="px-2 py-0.5 bg-blue-400 hover:bg-blue-500 text-white text-[9px] font-bold rounded">🔗 Vincular</button>`;
             html += `<button onclick="desvincularIds('${ff.documento_numero}', ${prod.producto_padre_id})" class="px-2 py-0.5 bg-red-300 hover:bg-red-400 text-white text-[9px] font-bold rounded">🔓 Desvincular</button>`;
-            if (docSinFuente) {
-              html += `<span class="px-2 py-0.5 bg-gray-300 text-gray-500 text-[9px] font-bold rounded cursor-not-allowed" title="Primero vincula IDs">🔒 Reparar</span>`;
-            } else {
-              html += `<button onclick="repararNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="px-2 py-0.5 bg-amber-400 hover:bg-amber-500 text-white text-[9px] font-bold rounded">Reparar</button>`;
-            }
             html += `</div>`;
             html += `<div id="vincular-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden"></div>`;
-            html += `<div id="reparar-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden"></div>`;
 
             // Pedido item
             if (ff.pedido_item.id) {
@@ -12332,13 +12271,6 @@ async function cargarReporteEnsambles() {
 
         html += '</div>';
         preview.innerHTML = html;
-        const btnReparar = document.getElementById('btn-ejecutar-reparacion');
-        if (tieneSinFuente) {
-          btnReparar.classList.add('hidden');
-          preview.innerHTML += '<div class="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-[10px] text-amber-800 font-semibold">⚠️ Hay registros SIN FUENTE. Primero ejecuta "Vincular IDs" para asignar producto_id y producto_padre_id antes de reparar.</div>';
-        } else {
-          btnReparar.classList.remove('hidden');
-        }
 
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
@@ -12354,32 +12286,6 @@ async function cargarReporteEnsambles() {
       if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
     }
 
-    async function repararCostosEjecutar() {
-      if (!confirm('¿Corregir los costos de venta y asientos contables para todos los productos en el rango seleccionado?')) return;
-
-      const parentId = document.getElementById('ensambles-padre-id').value;
-      const ini = document.getElementById('ensambles-fecha-ini').value;
-      const fin = document.getElementById('ensambles-fecha-fin').value;
-
-      const preview = document.getElementById('reparador-preview');
-      preview.innerHTML = '<div class="text-center text-red-600 py-4 text-xs font-bold">Ejecutando reparación...</div>';
-
-      try {
-        let url = `/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?fecha_desde=${ini}&fecha_hasta=${fin}`;
-        if (parentId) url += `&producto_padre_id=${parentId}`;
-        const r = await fetch(url, { method: 'POST' });
-        const d = await r.json();
-        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
-
-        preview.innerHTML = `<div class="text-green-700 text-xs font-semibold py-4">✅ Reparación completada. ${d.cambios_aplicados} registros corregidos en ${d.resumen.total_facturas} factura(s) de ${d.resumen.total_productos} producto(s).</div>`;
-        document.getElementById('btn-ejecutar-reparacion').classList.add('hidden');
-        document.getElementById('reparador-badge').classList.add('hidden');
-        toast(`${d.cambios_aplicados} registros corregidos`, true);
-
-      } catch (e) {
-        preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
-      }
-    }
 
     </script>
 

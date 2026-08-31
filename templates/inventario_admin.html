@@ -11846,6 +11846,8 @@ async function cargarReporteEnsambles() {
           return;
         }
 
+        _vincularMatches['global'] = d.matches.filter(m => m.contab_id !== null && m.kardex_producto_id !== null);
+
         let html = `<div class="text-xs text-blue-800 font-semibold mb-2">${res.vinculados} registro(s) se pueden vincular, ${res.sin_kardex} sin match en Kardex</div>`;
         html += '<div class="max-h-[20rem] overflow-y-auto">';
         html += '<div class="grid grid-cols-4 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5"><span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contable</span><span class="text-right">Diferencia</span></div>';
@@ -11888,20 +11890,29 @@ async function cargarReporteEnsambles() {
       const preview = document.getElementById('vincular-preview');
       preview.innerHTML = '<div class="text-center text-blue-600 py-4 text-xs">Ejecutando vinculación...</div>';
 
+      const matches = _vincularMatches['global'] || [];
+
       try {
         let url = `/api/inventario/${NEGOCIO_ID}/vincular-ids-contabilidad?fecha_desde=${ini}&fecha_hasta=${fin}`;
         if (parentId) url += `&producto_padre_id=${parentId}`;
-        const r = await fetch(url, { method: 'POST' });
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({matches: matches})
+        });
         const d = await r.json();
         if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
 
         preview.innerHTML = `<div class="text-green-700 text-xs font-semibold py-4">✅ ${d.resumen.vinculados} registro(s) vinculados exitosamente. Ahora puedes ejecutar "Vista Previa" y "Reparar".</div>`;
         toast(`${d.resumen.vinculados} registros vinculados`);
+        delete _vincularMatches['global'];
         setTimeout(() => repararCostosPreview(), 600);
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
       }
     }
+
+    let _vincularMatches = {};
 
     async function vincularIdsNivel(nivel, productoPadreId, numeroDoc) {
       const ini = document.getElementById('ensambles-fecha-ini').value;
@@ -11923,6 +11934,9 @@ async function cargarReporteEnsambles() {
           preview.innerHTML = '<div class="text-green-700 text-[10px] font-semibold py-1">✅ Todo vinculado</div>';
           return;
         }
+
+        const matchKey = `${nivel}-${productoPadreId}-${numeroDoc || ''}`;
+        _vincularMatches[matchKey] = d.matches.filter(m => m.contab_id !== null && m.kardex_producto_id !== null);
 
         let html = `<div class="text-xs text-blue-800 font-semibold mb-2">${res.vinculados} registro(s) se pueden vincular, ${res.sin_kardex} sin match en Kardex</div>`;
         html += '<div class="max-h-[20rem] overflow-y-auto">';
@@ -11962,14 +11976,22 @@ async function cargarReporteEnsambles() {
       const preview = document.getElementById(containerId) || document.getElementById('vincular-preview');
       preview.innerHTML = '<div class="text-blue-600 text-[10px] py-1">Ejecutando...</div>';
 
+      const matchKey = `${nivel}-${productoPadreId}-${numeroDoc || ''}`;
+      const matches = _vincularMatches[matchKey] || [];
+
       try {
         let url = `/api/inventario/${NEGOCIO_ID}/vincular-ids-contabilidad?fecha_desde=${ini}&fecha_hasta=${fin}&producto_padre_id=${productoPadreId}`;
         if (numeroDoc) url += `&numero_doc=${numeroDoc}`;
-        const r = await fetch(url, { method: 'POST' });
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({matches: matches})
+        });
         const d = await r.json();
         if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`; return; }
         preview.innerHTML = `<div class="text-green-700 text-[10px] font-semibold">✅ ${d.resumen.vinculados} vinculados, ${d.resumen.sin_kardex} sin kardex</div>`;
         toast(`${d.resumen.vinculados} vinculados (${nivel})`);
+        delete _vincularMatches[matchKey];
         setTimeout(() => repararCostosPreview(), 600);
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;

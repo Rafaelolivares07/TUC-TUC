@@ -1824,15 +1824,30 @@ def api_vincular_ids_contabilidad(negocio_id):
         # 5. Ejecutar si es POST
         vinculados = 0
         if es_ejecucion:
-            for m in matches:
-                if m['contab_id'] is not None and m['kardex_producto_id'] is not None:
-                    conn.execute("""
-                        UPDATE movimientos_contables
-                        SET producto_id = %s, producto_padre_id = %s
-                        WHERE id = %s AND negocio_id = %s
-                    """, (m['kardex_producto_id'], m['kardex_producto_padre_id'],
-                          m['contab_id'], negocio_id))
-                    vinculados += 1
+            # Si el frontend envía matches pre-calculados, usarlos directamente
+            body_matches = (request.get_json(silent=True) or {}).get('matches')
+            if body_matches is not None:
+                for m in body_matches:
+                    cid = m.get('contab_id')
+                    kpid = m.get('kardex_producto_id')
+                    kppid = m.get('kardex_producto_padre_id')
+                    if cid is not None and kpid is not None:
+                        conn.execute("""
+                            UPDATE movimientos_contables
+                            SET producto_id = %s, producto_padre_id = %s
+                            WHERE id = %s AND negocio_id = %s
+                        """, (kpid, kppid, cid, negocio_id))
+                        vinculados += 1
+            else:
+                for m in matches:
+                    if m['contab_id'] is not None and m['kardex_producto_id'] is not None:
+                        conn.execute("""
+                            UPDATE movimientos_contables
+                            SET producto_id = %s, producto_padre_id = %s
+                            WHERE id = %s AND negocio_id = %s
+                        """, (m['kardex_producto_id'], m['kardex_producto_padre_id'],
+                              m['contab_id'], negocio_id))
+                        vinculados += 1
             conn.commit()
 
         return jsonify({

@@ -6479,7 +6479,7 @@ def api_reparar_costos_venta(negocio_id):
                       AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
                       AND LEFT(cuenta, 2) = '14'
                       AND UPPER(concepto) NOT LIKE '%%COSTO%%'
-                      AND (producto_padre_id = %s OR producto_padre_id IS NULL)
+                      AND (producto_padre_id = %s)
                     ORDER BY id
                 """, (negocio_id, consecutive, doc_num, td_code, ppid)).fetchall()
 

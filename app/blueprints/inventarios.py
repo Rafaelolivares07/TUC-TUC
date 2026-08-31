@@ -2031,7 +2031,8 @@ def api_reparar_costos_preview(negocio_id):
                         LIMIT 1
                     """, (negocio_id, doc_num)).fetchone()
 
-                    # Buscar asientos 14xx credito (materias primas)
+                    # Buscar asientos 14xx credito (materias primas de produccion)
+                    # Excluir BAJA INV (es de ventas) y COSTO (es de costo de venta)
                     contab_creditos = conn.execute("""
                         SELECT id, monto, concepto, cuenta
                         FROM movimientos_contables
@@ -2039,6 +2040,7 @@ def api_reparar_costos_preview(negocio_id):
                           AND cuenta LIKE '14%%' AND tipo = 'credito'
                           AND numero_documento = %s
                           AND UPPER(concepto) NOT LIKE '%%COSTO%%'
+                          AND UPPER(concepto) NOT LIKE '%%BAJA%%'
                         ORDER BY id
                     """, (negocio_id, doc_num)).fetchall()
 
@@ -2383,7 +2385,8 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
         LIMIT 1
     """, (negocio_id, numero_doc)).fetchone()
 
-    # 3. Buscar asientos 14xx credito (materias primas)
+    # 3. Buscar asientos 14xx credito (materias primas de produccion)
+    # Excluir BAJA INV (es de ventas) y COSTO (es de costo de venta)
     contab_creditos = conn.execute("""
         SELECT id, monto, concepto, cuenta
         FROM movimientos_contables
@@ -2391,6 +2394,7 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
           AND cuenta LIKE '14%%' AND tipo = 'credito'
           AND numero_documento = %s
           AND UPPER(concepto) NOT LIKE '%%COSTO%%'
+          AND UPPER(concepto) NOT LIKE '%%BAJA%%'
         ORDER BY id
     """, (negocio_id, numero_doc)).fetchall()
 

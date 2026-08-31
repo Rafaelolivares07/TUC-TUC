@@ -2321,136 +2321,126 @@
 
 
   <!-- ── TAB ENSAMBLES HISTÓRICOS ─────────────────────────────── -->
+  <div id="tab-ensambles_historicos" class="hidden bg-white rounded-2xl shadow p-5 space-y-6">
 
-  <div id="tab-ensambles_historicos" class="hidden bg-white rounded-2xl shadow p-5">
+    <!-- HEADER DE LA PESTAÑA -->
+    <div class="border-b border-gray-150 pb-3">
+      <h2 class="text-lg font-bold text-gray-800">Ensambles Históricos</h2>
+      <p class="text-xs text-gray-400 font-medium">Reconciliación y trazabilidad entre consumos físicos de insumos (Kardex) y costos financieros (Asientos).</p>
+    </div>
 
-    <div class="border-b border-gray-150 pb-4 mb-4 flex items-center justify-between flex-wrap gap-4">
-
-      <div>
-
-        <h2 class="text-lg font-bold text-gray-800">Ensambles Históricos</h2>
-
-        <p class="text-xs text-gray-400 font-medium">Reconciliación entre salidas físicas de insumos (Kardex) y costos de ventas financieros (Asientos).</p>
-
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- BLOQUE 1: CONSULTA DE ENSAMBLES POR PRODUCTO (SOLO LECTURA) -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-base">📊</span>
+          <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wide">1. Consulta Individual por Producto</h3>
+          <span class="px-2 py-0.5 bg-slate-200 text-slate-600 text-[10px] font-semibold rounded-full">Solo Lectura</span>
+        </div>
+        <span class="text-xs text-slate-500">Muestra los consumos y recetas de un producto específico</span>
       </div>
 
       <div class="flex items-end gap-3 flex-wrap text-xs">
-
         <div class="flex flex-col relative w-64">
-
-          <label class="text-[10px] font-bold text-gray-400 uppercase mb-1">Producto Padre</label>
-
+          <label class="text-[10px] font-bold text-gray-500 uppercase mb-1">Producto Padre (Receta)</label>
           <input id="ensambles-ac-input" type="text" placeholder="Buscar producto padre..." autocomplete="off"
-
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
-
+                 class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
           <div id="ensambles-ac-list" class="absolute left-0 right-0 top-[60px] z-50 bg-white border border-gray-200 rounded-lg shadow-lg hidden max-h-48 overflow-y-auto"></div>
-
           <input type="hidden" id="ensambles-padre-id" value="">
-
         </div>
 
         <div class="flex flex-col">
-
-          <label class="text-[10px] font-bold text-gray-400 uppercase mb-1">Desde</label>
-
-          <input id="ensambles-fecha-ini" type="date" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
-
+          <label class="text-[10px] font-bold text-gray-500 uppercase mb-1">Desde</label>
+          <input id="ensambles-fecha-ini" type="date" class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
         </div>
 
         <div class="flex flex-col">
-
-          <label class="text-[10px] font-bold text-gray-400 uppercase mb-1">Hasta</label>
-
-          <input id="ensambles-fecha-fin" type="date" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
-
+          <label class="text-[10px] font-bold text-gray-500 uppercase mb-1">Hasta</label>
+          <input id="ensambles-fecha-fin" type="date" class="bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
         </div>
 
-        <button onclick="cargarReporteEnsambles()" class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition-all shadow-xs flex items-center gap-1">
-
-          🔍 Generar Reporte
-
+        <button onclick="cargarReporteEnsambles()" class="px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5">
+          🔍 Consultar Ensamble
         </button>
-
       </div>
 
+      <!-- Panel de Consolidados/Resumen del Periodo -->
+      <div id="ensambles-resumen-periodo" class="hidden mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div class="bg-white rounded-xl p-3 border border-gray-200/60 shadow-2xs">
+          <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Transacciones</span>
+          <span id="ensambles-res-transacciones" class="text-lg font-bold text-gray-700 block mt-0.5">0</span>
+        </div>
+        <div class="bg-white rounded-xl p-3 border border-gray-200/60 shadow-2xs">
+          <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Costo Contabilizado (61*)</span>
+          <span id="ensambles-res-contabilizado" class="text-lg font-bold text-blue-700 block mt-0.5">$ 0</span>
+        </div>
+        <div class="bg-white rounded-xl p-3 border border-gray-200/60 shadow-2xs">
+          <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Costo Insumos (Kardex)</span>
+          <span id="ensambles-res-kardex" class="text-lg font-bold text-amber-700 block mt-0.5">$ 0</span>
+        </div>
+        <div class="bg-white rounded-xl p-3 border border-gray-200/60 shadow-2xs" id="ensambles-res-diferencia-card">
+          <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Diferencia Acumulada</span>
+          <span id="ensambles-res-diferencia" class="text-lg font-bold block mt-0.5">$ 0</span>
+        </div>
+      </div>
+
+      <!-- Resultados del Reporte -->
+      <div id="ensambles-report-content" class="mt-4 space-y-4">
+        <div class="text-center text-gray-400 py-6 text-xs">Selecciona un producto padre y rango de fechas para consultar su reporte.</div>
+      </div>
     </div>
 
-
-
-    <!-- Reparador de Costos de Venta (colapsado) -->
-    <div id="ensambles-reparador" class="hidden mb-4">
-      <div class="border border-amber-200 bg-amber-50/50 rounded-2xl overflow-hidden">
-        <button onclick="toggleReparador()" class="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-amber-100/50 transition-colors">
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- BLOQUE 2: AUDITORÍA Y REPARADOR DE COSTOS (KARDEX VS CONTABILIDAD) -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="ensambles-reparador" class="border-2 border-amber-300 bg-amber-50/40 rounded-2xl p-5 space-y-4 shadow-sm">
+      
+      <!-- CABECERA DEL REPARADOR -->
+      <div class="flex items-center justify-between flex-wrap gap-2 border-b border-amber-200/70 pb-3">
+        <div>
           <div class="flex items-center gap-2">
             <span class="text-lg">🔧</span>
-            <span class="text-sm font-bold text-amber-800">Reparar Costos de Venta</span>
-            <span id="reparador-badge" class="hidden ml-2 px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full"></span>
+            <h3 class="text-sm font-extrabold text-amber-900 uppercase tracking-wide">2. Auditoría y Reparación de Costos</h3>
+            <span class="px-2 py-0.5 bg-amber-200 text-amber-900 text-[10px] font-bold rounded-full">Kardex vs Contabilidad</span>
           </div>
-          <svg id="reparador-chevron" class="w-4 h-4 text-amber-600 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-        </button>
-        <div id="reparador-body" class="hidden px-5 pb-5">
-          <p class="text-xs text-amber-700 mb-3">Corrige el costo unitario en pedidos y el asiento contable de costo de venta (61*) para este producto padre en el rango seleccionado. Compara el costo Kardex real de los componentes vs el costo registrado en contabilidad.</p>
-          <div id="reparador-preview" class="hidden mb-4"></div>
-          <div id="vincular-preview" class="hidden mb-4"></div>
-          <div id="reparador-preview" class="hidden mb-4"></div>
-          <div class="flex gap-3 flex-wrap">
-            <button onclick="vincularIdsPreview()" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">🔗 Vincular IDs</button>
-            <button onclick="repararCostosPreview()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">Vista Previa</button>
-            <button onclick="repararCostosGlobal()" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm">⚡ Reparar Todo</button>
-          </div>
+          <p class="text-xs text-amber-800 mt-0.5">Audita diferencias entre salidas físicas (14xx) y asientos contables (61xx / 14xx), y repara los registros.</p>
         </div>
       </div>
-    </div>
 
+      <!-- BARRA DE CONTROL DEL REPARADOR -->
+      <div class="flex items-end justify-between flex-wrap gap-4 bg-white/80 border border-amber-200 rounded-xl p-3">
+        <!-- LADO IZQUIERDO: FECHAS + BOTÓN VISTA PREVIA (DIAGNÓSTICO) -->
+        <div class="flex items-end gap-3 flex-wrap text-xs">
+          <div class="flex flex-col w-36">
+            <label class="text-[10px] font-bold text-amber-900 uppercase mb-1">Desde</label>
+            <input id="reparador-fecha-ini" type="date" class="border border-amber-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-amber-400">
+          </div>
+          <div class="flex flex-col w-36">
+            <label class="text-[10px] font-bold text-amber-900 uppercase mb-1">Hasta</label>
+            <input id="reparador-fecha-fin" type="date" class="border border-amber-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-amber-400">
+          </div>
+          <button onclick="repararCostosPreview()" class="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition">
+            👁️ Vista Previa / Auditar
+          </button>
+        </div>
 
-
-    <!-- Panel de Consolidados/Resumen del Periodo -->
-
-    <div id="ensambles-resumen-periodo" class="hidden mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-
-      <div class="bg-gray-50 rounded-xl p-4 border border-gray-200/60 shadow-2xs">
-
-        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Transacciones</span>
-
-        <span id="ensambles-res-transacciones" class="text-xl font-bold text-gray-700 block mt-1">0</span>
-
+        <!-- LADO DERECHO: PROCESOS GLOBALES -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] font-bold text-gray-400 uppercase mr-1">Procesos Globales:</span>
+          <button onclick="vincularIdsPreview()" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition">
+            🔗 Vincular IDs (Global)
+          </button>
+          <button onclick="repararCostosGlobal()" class="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition">
+            ⚡ Reparar Todo el Período
+          </button>
+        </div>
       </div>
 
-      <div class="bg-gray-50 rounded-xl p-4 border border-gray-200/60 shadow-2xs">
-
-        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Costo de Ventas Contabilizado (61*)</span>
-
-        <span id="ensambles-res-contabilizado" class="text-xl font-bold text-blue-700 block mt-1">$ 0</span>
-
-      </div>
-
-      <div class="bg-gray-50 rounded-xl p-4 border border-gray-200/60 shadow-2xs">
-
-        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Costo Consumo Insumos (Kardex)</span>
-
-        <span id="ensambles-res-kardex" class="text-xl font-bold text-amber-700 block mt-1">$ 0</span>
-
-      </div>
-
-      <div class="bg-gray-50 rounded-xl p-4 border border-gray-200/60 shadow-2xs" id="ensambles-res-diferencia-card">
-
-        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Diferencia Acumulada</span>
-
-        <span id="ensambles-res-diferencia" class="text-xl font-bold block mt-1">$ 0</span>
-
-      </div>
-
-    </div>
-
-
-
-    <!-- Resultados del Reporte -->
-
-    <div id="ensambles-report-content" class="space-y-6">
-
-      <div class="text-center text-gray-400 py-12">Selecciona un producto padre y rango de fechas para generar el reporte</div>
-
+      <!-- PANELES DE RESULTADOS DE VINCULAR Y REPARAR -->
+      <div id="vincular-preview" class="hidden mb-4"></div>
+      <div id="reparador-preview" class="hidden mb-4"></div>
     </div>
 
   </div>
@@ -11285,37 +11275,22 @@ function renderMateriasEnsambles() {
 // ── Ensambles históricos (Códigos Padres) ──
 
 function inicializarFechasEnsambles() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const primerDia = `${y}-${m}-01`;
+  const hoy = `${y}-${m}-${day}`;
 
   const desdeInp = document.getElementById('ensambles-fecha-ini');
-
   const hastaInp = document.getElementById('ensambles-fecha-fin');
+  if (desdeInp && !desdeInp.value) desdeInp.value = primerDia;
+  if (hastaInp && !hastaInp.value) hastaInp.value = hoy;
 
-  if (desdeInp && !desdeInp.value) {
-
-    const d = new Date();
-
-    const y = d.getFullYear();
-
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-
-    desdeInp.value = `${y}-${m}-01`;
-
-  }
-
-  if (hastaInp && !hastaInp.value) {
-
-    const d = new Date();
-
-    const y = d.getFullYear();
-
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-
-    const day = String(d.getDate()).padStart(2, '0');
-
-    hastaInp.value = `${y}-${m}-${day}`;
-
-  }
-
+  const repDesdeInp = document.getElementById('reparador-fecha-ini');
+  const repHastaInp = document.getElementById('reparador-fecha-fin');
+  if (repDesdeInp && !repDesdeInp.value) repDesdeInp.value = primerDia;
+  if (repHastaInp && !repHastaInp.value) repHastaInp.value = hoy;
 }
 
 
@@ -11719,27 +11694,23 @@ async function cargarReporteEnsambles() {
       })();
 
     // ── Reparador de Costos de Venta ──────────────────────────────────────
+    function getReparadorFechas() {
+      const ini = document.getElementById('reparador-fecha-ini')?.value || document.getElementById('ensambles-fecha-ini')?.value || '';
+      const fin = document.getElementById('reparador-fecha-fin')?.value || document.getElementById('ensambles-fecha-fin')?.value || '';
+      return { ini, fin };
+    }
+
     function toggleReparador() {
-      const body = document.getElementById('reparador-body');
-      const chevron = document.getElementById('reparador-chevron');
-      const isOpen = !body.classList.contains('hidden');
-      if (isOpen) {
-        body.classList.add('hidden');
-        chevron.style.transform = 'rotate(0deg)';
-      } else {
-        body.classList.remove('hidden');
-        chevron.style.transform = 'rotate(180deg)';
-      }
+      // Panel permanente, no requiere colapsar
     }
 
     async function vincularIdsPreview() {
-      const parentId = document.getElementById('ensambles-padre-id').value;
-      const ini = document.getElementById('ensambles-fecha-ini').value;
-      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const { ini, fin } = getReparadorFechas();
+      const parentId = document.getElementById('ensambles-padre-id')?.value;
       if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
 
       const preview = document.getElementById('vincular-preview');
-      preview.innerHTML = '<div class="text-center text-blue-600 py-4 text-xs">Buscando registros contables sin IDs...</div>';
+      preview.innerHTML = '<div class="text-center text-blue-600 py-4 text-xs font-semibold">Buscando registros contables sin IDs...</div>';
       preview.classList.remove('hidden');
 
       try {
@@ -11792,12 +11763,11 @@ async function cargarReporteEnsambles() {
     }
 
     async function vincularIdsEjecutar() {
-      const parentId = document.getElementById('ensambles-padre-id').value;
-      const ini = document.getElementById('ensambles-fecha-ini').value;
-      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const { ini, fin } = getReparadorFechas();
+      const parentId = document.getElementById('ensambles-padre-id')?.value;
 
       const preview = document.getElementById('vincular-preview');
-      preview.innerHTML = '<div class="text-center text-blue-600 py-4 text-xs">Ejecutando vinculación...</div>';
+      preview.innerHTML = '<div class="text-center text-blue-600 py-4 text-xs font-semibold">Ejecutando vinculación...</div>';
 
       const matches = _vincularMatches['global'] || [];
 
@@ -11824,11 +11794,10 @@ async function cargarReporteEnsambles() {
     let _vincularMatches = {};
 
     async function vincularIdsNivel(nivel, productoPadreId, numeroDoc) {
-      const ini = document.getElementById('ensambles-fecha-ini').value;
-      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const { ini, fin } = getReparadorFechas();
       const containerId = nivel === 'producto' ? `vincular-prod-${productoPadreId}` : `vincular-doc-${productoPadreId}-${numeroDoc || ''}`;
       const preview = document.getElementById(containerId) || document.getElementById('vincular-preview');
-      preview.innerHTML = '<div class="text-blue-600 text-[10px] py-1">Consultando...</div>';
+      preview.innerHTML = '<div class="text-blue-600 text-[10px] py-1 font-semibold">Consultando...</div>';
       preview.classList.remove('hidden');
 
       try {
@@ -11879,11 +11848,10 @@ async function cargarReporteEnsambles() {
     }
 
     async function vincularIdsEjecutarNivel(nivel, productoPadreId, numeroDoc) {
-      const ini = document.getElementById('ensambles-fecha-ini').value;
-      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const { ini, fin } = getReparadorFechas();
       const containerId = nivel === 'producto' ? `vincular-prod-${productoPadreId}` : `vincular-doc-${productoPadreId}-${numeroDoc || ''}`;
       const preview = document.getElementById(containerId) || document.getElementById('vincular-preview');
-      preview.innerHTML = '<div class="text-blue-600 text-[10px] py-1">Ejecutando...</div>';
+      preview.innerHTML = '<div class="text-blue-600 text-[10px] py-1 font-semibold">Ejecutando...</div>';
 
       const matchKey = `${nivel}-${productoPadreId}-${numeroDoc || ''}`;
       const matches = _vincularMatches[matchKey] || [];
@@ -11909,8 +11877,8 @@ async function cargarReporteEnsambles() {
 
     async function desvincularIds(numeroDoc, productoPadreId) {
       const msg = numeroDoc
-        ? `Desvincular producto_id de las cuentas 14* de la factura ${numeroDoc}?`
-        : `Desvincular TODOS los producto_id de las cuentas 14* de este producto?`;
+        ? `¿Desvincular producto_id de las cuentas 14* de la factura ${numeroDoc}?`
+        : `¿Desvincular TODOS los producto_id de las cuentas 14* de este producto?`;
       if (!confirm(msg)) return;
       try {
         const body = {producto_padre_id: productoPadreId};
@@ -11921,20 +11889,19 @@ async function cargarReporteEnsambles() {
           body: JSON.stringify(body)
         });
         const d = await r.json();
-        if (!d.ok) { toast(d.error, 'error'); return; }
+        if (!d.ok) { toast(d.error, false); return; }
         toast(`${d.desvinculados} registros desvinculados`);
         setTimeout(() => repararCostosPreview(), 600);
       } catch (e) {
-        toast(e.message, 'error');
+        toast(e.message, false);
       }
     }
 
     async function repararNivel(nivel, productoPadreId, numeroDoc) {
-      const ini = document.getElementById('ensambles-fecha-ini').value;
-      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const { ini, fin } = getReparadorFechas();
       const containerId = nivel === 'producto' ? `reparar-prod-${productoPadreId}` : `reparar-doc-${productoPadreId}-${numeroDoc || ''}`;
       const preview = document.getElementById(containerId) || document.getElementById('reparador-preview');
-      preview.innerHTML = '<div class="text-amber-600 text-[10px] py-1">Calculando...</div>';
+      preview.innerHTML = '<div class="text-amber-600 text-[10px] py-1 font-semibold">Calculando...</div>';
       preview.classList.remove('hidden');
 
       try {
@@ -11945,7 +11912,7 @@ async function cargarReporteEnsambles() {
         if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`; return; }
         const res = d.resumen;
         if (res.con_diferencia === 0) {
-          preview.innerHTML = '<div class="text-green-700 text-[10px]">✅ Sin diferencias</div>';
+          preview.innerHTML = '<div class="text-green-700 text-[10px] font-semibold">✅ Sin diferencias</div>';
           return;
         }
 
@@ -11963,7 +11930,7 @@ async function cargarReporteEnsambles() {
           return;
         }
 
-        preview.innerHTML = `<div class="text-amber-800 text-[10px]">${res.con_diferencia} doc(s) con diferencia — $${res.monto_corregir.toLocaleString('es-CO')}</div>`;
+        preview.innerHTML = `<div class="text-amber-800 text-[10px] font-bold">${res.con_diferencia} doc(s) con diferencia — $${res.monto_corregir.toLocaleString('es-CO')}</div>`;
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
       }
@@ -11974,7 +11941,7 @@ async function cargarReporteEnsambles() {
       const el = document.getElementById(containerId);
       if (!el) return;
       el.classList.remove('hidden');
-      el.innerHTML = '<div class="text-amber-600 text-[10px] py-1">Reparando costos...</div>';
+      el.innerHTML = '<div class="text-amber-600 text-[10px] py-1 font-semibold">Reparando costos...</div>';
 
       try {
         const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
@@ -11996,7 +11963,7 @@ async function cargarReporteEnsambles() {
             html += `<div class="flex justify-between"><span class="truncate max-w-[180px]">${c.componente}</span><span>$${c.monto_anterior.toLocaleString('es-CO')} → $${c.monto_nuevo.toLocaleString('es-CO')}</span></div>`;
           });
         } else {
-          html += '<div class="text-green-700 font-bold">Todos los 14* ya estan correctos</div>';
+          html += '<div class="text-green-700 font-bold">Todos los 14* ya están correctos</div>';
         }
         if (res.cogs_modificado) {
           html += `<div class="text-amber-800 font-bold">Contrapartida 61* ajustada</div>`;
@@ -12015,13 +11982,12 @@ async function cargarReporteEnsambles() {
     }
 
     async function repararCostosProducto(productoPadreId) {
-      const ini = document.getElementById('ensambles-fecha-ini').value;
-      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const { ini, fin } = getReparadorFechas();
       const containerId = `reparar-prod-${productoPadreId}`;
       const el = document.getElementById(containerId);
       if (!el) return;
       el.classList.remove('hidden');
-      el.innerHTML = '<div class="text-amber-600 text-[10px] py-1">Reparando todos los documentos de este producto...</div>';
+      el.innerHTML = '<div class="text-amber-600 text-[10px] py-1 font-semibold">Reparando todos los documentos de este producto...</div>';
 
       try {
         const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
@@ -12053,12 +12019,14 @@ async function cargarReporteEnsambles() {
     }
 
     async function repararCostosGlobal() {
-      const ini = document.getElementById('ensambles-fecha-ini').value;
-      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const { ini, fin } = getReparadorFechas();
       if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
 
+      const confirmed = confirm(`¿Estás seguro de que deseas reparar automáticamente TODOS los costos del período ${ini} al ${fin}?`);
+      if (!confirmed) return;
+
       const preview = document.getElementById('reparador-preview');
-      preview.innerHTML = '<div class="text-center text-amber-600 py-4 text-xs">Reparando todos los documentos en el rango...</div>';
+      preview.innerHTML = '<div class="text-center text-amber-600 py-4 text-xs font-semibold">Reparando todos los documentos en el rango...</div>';
       preview.classList.remove('hidden');
 
       try {
@@ -12092,15 +12060,15 @@ async function cargarReporteEnsambles() {
       }
     }
 
-
     async function repararCostosPreview() {
-      const parentId = document.getElementById('ensambles-padre-id').value;
-      const ini = document.getElementById('ensambles-fecha-ini').value;
-      const fin = document.getElementById('ensambles-fecha-fin').value;
+      const { ini, fin } = getReparadorFechas();
+      const parentId = document.getElementById('ensambles-padre-id')?.value;
       if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
+
       const preview = document.getElementById('reparador-preview');
-      preview.innerHTML = '<div class="text-center text-amber-600 py-4 text-xs">Calculando diferencias...</div>';
+      preview.innerHTML = '<div class="text-center text-amber-600 py-4 text-xs font-semibold">Calculando diferencias y diagnosticando costos...</div>';
       preview.classList.remove('hidden');
+
       try {
         let url = `/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?fecha_desde=${ini}&fecha_hasta=${fin}`;
         if (parentId) url += `&producto_padre_id=${parentId}`;
@@ -12109,12 +12077,12 @@ async function cargarReporteEnsambles() {
         if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
         const res = d.resumen;
         if (res.con_diferencia === 0) {
-          preview.innerHTML = '<div class="text-green-700 text-xs font-semibold py-4">Todos los costos estan correctos. No hay nada que reparar.</div>';
+          preview.innerHTML = '<div class="text-green-700 text-xs font-semibold py-4 bg-green-50 border border-green-200 rounded-xl text-center">✅ Todos los costos del período están correctos. No hay nada que reparar.</div>';
           return;
         }
         let uid = 0;
         let tieneSinFuente = false;
-        let html = `<div class="text-xs text-amber-800 font-semibold mb-3">${res.total_productos} producto(s), ${res.con_diferencia} factura(s) con diferencia — monto a corregir: $${res.monto_corregir.toLocaleString('es-CO')}</div>`;
+        let html = `<div class="text-xs text-amber-900 font-bold mb-3 flex items-center justify-between bg-amber-100/70 border border-amber-300 rounded-xl px-4 py-2.5"><span>Diagnóstico: ${res.total_productos} producto(s), ${res.con_diferencia} documento(s) con diferencia</span><span class="text-rose-700 font-mono font-extrabold text-sm">Monto a corregir: $${res.monto_corregir.toLocaleString('es-CO')}</span></div>`;
         html += '<div class="space-y-3 max-h-[32rem] overflow-y-auto">';
         d.productos.forEach(prod => {
           if (prod.con_diferencia === 0) return;
@@ -12123,57 +12091,55 @@ async function cargarReporteEnsambles() {
           prod.facturas.filter(ff => ff.tiene_diferencia).forEach(ff => {
             montoProd += Math.abs(ff.pedido_item.diferencia);
           });
-          html += `<div class="border border-amber-300 rounded-xl overflow-hidden">`;
-          html += `<button onclick="toggleRepairLevel('prod-${pid}')" class="w-full flex items-center justify-between px-4 py-2.5 bg-amber-100 hover:bg-amber-200/70 text-left transition-colors">`;
+          html += `<div class="border border-amber-300 rounded-xl overflow-hidden bg-white shadow-xs">`;
+          html += `<button onclick="toggleRepairLevel('prod-${pid}')" class="w-full flex items-center justify-between px-4 py-3 bg-amber-100/70 hover:bg-amber-200/70 text-left transition-colors flex-wrap gap-2">`;
           html += `<div class="flex items-center gap-2">`;
-          html += `<svg class="w-3 h-3 text-amber-600 transition-transform repair-arrow" id="arrow-prod-${pid}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+          html += `<svg class="w-3.5 h-3.5 text-amber-600 transition-transform repair-arrow" id="arrow-prod-${pid}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
           html += `<span class="text-xs font-bold text-amber-900">${prod.producto_padre_nombre}</span>`;
-          html += `<span class="text-[10px] px-1.5 py-0.5 bg-amber-200 text-amber-700 rounded-full font-bold">${prod.con_diferencia} doc(s)</span>`;
+          html += `<span class="text-[10px] px-2 py-0.5 bg-amber-200 text-amber-900 rounded-full font-extrabold">${prod.con_diferencia} doc(s)</span>`;
           html += `</div>`;
-          html += `<div class="text-right">`;
-          html += `<div class="text-[10px] text-gray-500">Contable: <span class="font-bold text-gray-700">$${prod.costo_total_contable.toLocaleString('es-CO')}</span> → Kardex: <span class="font-bold text-gray-700">$${prod.costo_total_kardex.toLocaleString('es-CO')}</span></div>`;
+          html += `<div class="flex items-center gap-3">`;
+          html += `<div class="text-right text-xs">`;
+          html += `<span class="text-gray-500">Contable: <b>$${prod.costo_total_contable.toLocaleString('es-CO')}</b> → Kardex: <b>$${prod.costo_total_kardex.toLocaleString('es-CO')}</b></span>`;
           const difProd = prod.costo_total_contable - prod.costo_total_kardex;
-          html += `<div class="text-xs font-bold ${Math.abs(difProd) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${difProd.toLocaleString('es-CO')}</div>`;
+          html += `<span class="ml-2 text-xs font-bold ${Math.abs(difProd) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${difProd.toLocaleString('es-CO')}</span>`;
+          html += `</div>`;
+          html += `<div class="flex items-center gap-1.5" onclick="event.stopPropagation()">`;
+          html += `<button onclick="vincularIdsNivel('producto', ${prod.producto_padre_id})" class="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold rounded-lg shadow-xs transition">🔗 Vincular</button>`;
+          html += `<button onclick="desvincularIds(null, ${prod.producto_padre_id})" class="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[10px] font-bold rounded-lg transition">🔓 Desvincular</button>`;
+          html += `<button onclick="repararCostosProducto(${prod.producto_padre_id})" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold rounded-lg shadow-xs transition">⚡ Reparar Producto</button>`;
+          html += `</div>`;
           html += `</div>`;
           html += `</button>`;
-          html += `<div id="prod-${pid}" class="hidden px-3 pb-3 space-y-2">`;
-          let prodTieneSinFuente = false;
-          prod.facturas.forEach(ff => {
-            if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
-              if (c.match_tipo !== 'producto_id' && c.monto_actual > 0) prodTieneSinFuente = true;
-            });
-          });
-          html += `<div class="flex gap-2 mb-2">`;
-          html += `<button onclick="vincularIdsNivel('producto', ${prod.producto_padre_id})" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold rounded-lg">🔗 Vincular</button>`;
-          html += `<button onclick="desvincularIds(null, ${prod.producto_padre_id})" class="px-3 py-1 bg-red-300 hover:bg-red-400 text-white text-[10px] font-bold rounded-lg">🔓 Desvincular</button>`;
-          html += `</div>`;
-          html += `<div id="vincular-prod-${prod.producto_padre_id}" class="hidden"></div>`;
+          html += `<div id="prod-${pid}" class="hidden px-3 pb-3 space-y-2 bg-slate-50/50">`;
+          html += `<div id="vincular-prod-${prod.producto_padre_id}" class="hidden mt-2"></div>`;
+          html += `<div id="reparar-prod-${prod.producto_padre_id}" class="hidden mt-2"></div>`;
           prod.facturas.filter(ff => ff.tiene_diferencia).forEach(ff => {
             const docId = ++uid;
-            html += `<div class="border border-gray-200 rounded-lg overflow-hidden">`;
-            html += `<button onclick="toggleRepairLevel('doc-${docId}')" class="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left transition-colors">`;
+            html += `<div class="border border-gray-200 rounded-lg overflow-hidden bg-white mt-2">`;
+            html += `<button onclick="toggleRepairLevel('doc-${docId}')" class="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left transition-colors flex-wrap gap-2">`;
             html += `<div class="flex items-center gap-2">`;
             html += `<svg class="w-3 h-3 text-gray-500 transition-transform repair-arrow" id="arrow-doc-${docId}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
-            html += `<span class="text-[10px] text-gray-500 font-bold uppercase">${ff.tipo_documento}</span>`;
+            html += `<span class="text-[10px] text-gray-500 font-bold uppercase bg-gray-200 px-1.5 py-0.5 rounded">${ff.tipo_documento}</span>`;
             html += `<span class="text-xs font-bold text-gray-800">${ff.documento_numero}</span>`;
             html += `<span class="text-[10px] text-gray-400">${ff.fecha}</span>`;
             html += `</div>`;
-            html += `<div class="text-right">`;
-            html += `<div class="text-[10px] text-gray-500">Contable: <span class="font-bold text-gray-700">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO')}</span> → Kardex: <span class="font-bold text-gray-700">$${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
+            html += `<div class="flex items-center gap-3">`;
+            html += `<div class="text-right text-xs">`;
+            html += `<span class="text-gray-500">Contable: <b>$${ff.cogs_contable.monto_actual.toLocaleString('es-CO')}</b> → Kardex: <b>$${ff.costo_real_kardex.toLocaleString('es-CO')}</b></span>`;
             const difDoc = ff.cogs_contable.monto_actual - ff.costo_real_kardex;
-            html += `<div class="text-xs font-bold ${Math.abs(difDoc) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${difDoc.toLocaleString('es-CO')}</div>`;
+            html += `<span class="ml-1 text-xs font-bold ${Math.abs(difDoc) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${difDoc.toLocaleString('es-CO')}</span>`;
+            html += `</div>`;
+            html += `<div class="flex items-center gap-1.5" onclick="event.stopPropagation()">`;
+            html += `<button onclick="vincularIdsNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="px-2 py-0.5 bg-blue-500 hover:bg-blue-600 text-white text-[9px] font-bold rounded shadow-xs">🔗 Vincular</button>`;
+            html += `<button onclick="desvincularIds('${ff.documento_numero}', ${prod.producto_padre_id})" class="px-1.5 py-0.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[9px] font-bold rounded">🔓 Desvincular</button>`;
+            html += `<button onclick="repararCostosDocumento('${ff.documento_numero}', ${prod.producto_padre_id})" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-900 text-white text-[9px] font-bold rounded shadow-xs">⚡ Reparar Doc</button>`;
+            html += `</div>`;
             html += `</div>`;
             html += `</button>`;
             html += `<div id="doc-${docId}" class="hidden px-3 pb-2 space-y-1 text-xs">`;
-            let docSinFuente = false;
-            if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
-              if (c.match_tipo !== 'producto_id' && c.monto_actual > 0) docSinFuente = true;
-            });
-            html += `<div class="flex gap-2 mb-1">`;
-            html += `<button onclick="vincularIdsNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="px-2 py-0.5 bg-blue-400 hover:bg-blue-500 text-white text-[9px] font-bold rounded">🔗 Vincular</button>`;
-            html += `<button onclick="desvincularIds('${ff.documento_numero}', ${prod.producto_padre_id})" class="px-2 py-0.5 bg-red-300 hover:bg-red-400 text-white text-[9px] font-bold rounded">🔓 Desvincular</button>`;
-            html += `</div>`;
-            html += `<div id="vincular-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden"></div>`;
+            html += `<div id="vincular-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden my-1"></div>`;
+            html += `<div id="reparar-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden my-1"></div>`;
             if (ff.pedido_item.id) {
               const dif = ff.pedido_item.diferencia;
               const cls = Math.abs(dif) > 0.01 ? 'text-red-600' : 'text-green-600';

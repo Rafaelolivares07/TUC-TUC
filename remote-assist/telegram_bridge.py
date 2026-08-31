@@ -104,7 +104,11 @@ def send_telegram_message(token, chat_id, text):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
     try:
-        requests.post(url, json=payload, timeout=10)
+        r = requests.post(url, json=payload, timeout=10)
+        if not r.ok:
+            # Fallback sin Markdown
+            payload2 = {"chat_id": chat_id, "text": text}
+            requests.post(url, json=payload2, timeout=10)
     except Exception as e:
         print(f"[Telegram] Error al enviar mensaje: {e}")
 
@@ -138,17 +142,20 @@ def check_for_agent_replies(token, chat_id):
         rows = cur.fetchall()
         for r in rows:
             msg_id, msg_text = r[0], r[1]
-            if msg_text.startswith("🤖 *Antigravity:*") or msg_text.startswith("👨‍💻 *Open Code:*") or msg_text.startswith("🧙‍♂️ *Merlin:*"):
-                send_telegram_message(token, chat_id, msg_text)
-            else:
-                send_telegram_message(token, chat_id, f"🧙‍♂️ *Merlin:* {msg_text}")
-            print(f"[DB -> Telegram] Enviada respuesta (ID: {msg_id})")
-            cur.execute("UPDATE mensajes SET estado = 'leido' WHERE id = %s", (msg_id,))
+            try:
+                if msg_text.startswith("🤖 *Antigravity:*") or msg_text.startswith("👨‍💻 *Open Code:*") or msg_text.startswith("🧙‍♂️ *Merlin:*"):
+                    send_telegram_message(token, chat_id, msg_text)
+                else:
+                    send_telegram_message(token, chat_id, f"🧙‍♂️ *Merlin:* {msg_text}")
+                print(f"[DB -> Telegram] Enviada respuesta (ID: {msg_id})")
+                cur.execute("UPDATE mensajes SET estado = 'leido' WHERE id = %s", (msg_id,))
+            except Exception as e:
+                print(f"[DB -> Telegram] Error enviando msg {msg_id}: {e}")
         conn.commit()
         cur.close()
         conn.close()
     except Exception as e:
-        pass  # Evitar spam en la consola por fallos temporales de red
+        print(f"[DB -> Telegram] Error general: {e}")
 
 def main():
     config = load_config()

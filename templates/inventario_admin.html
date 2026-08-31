@@ -2214,46 +2214,75 @@
 
 
 
-  <div id="modal-fecha-documento" class="hidden fixed inset-0 z-50 bg-black/40 items-center justify-center p-4">
-
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-5">
-
-      <div class="flex items-start justify-between gap-3 mb-4">
-
+  <!-- Modal Enriquecido de Verificación y Cambio de Fecha/Hora de Documento (Kardex Drag & Drop) -->
+  <div id="modal-fecha-documento" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+      
+      <!-- CABECERA -->
+      <div class="bg-slate-900 text-white p-5 flex items-start justify-between">
         <div>
+          <span class="px-2 py-0.5 bg-indigo-500/30 text-indigo-300 rounded text-[10px] font-bold uppercase tracking-wider">Reordenamiento Cronológico / Kardex</span>
+          <h3 class="text-base font-extrabold text-white mt-1 flex items-center gap-2">
+            <span>🕒</span> Reordenar Fecha y Hora de Documento
+          </h3>
+          <p id="fecha-doc-identidad" class="text-xs text-slate-300 font-semibold mt-0.5"></p>
+        </div>
+        <button type="button" onclick="cerrarModalFechaDocumento()" class="text-slate-400 hover:text-white text-xl font-bold p-1">✕</button>
+      </div>
 
-          <p class="text-xs text-gray-400 font-semibold uppercase">Corrección documental</p>
+      <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
+        
+        <!-- COMPARATIVA DE FECHA Y HORA -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+          <div class="flex items-center justify-between text-xs border-b border-slate-200/60 pb-2">
+            <span class="text-gray-500 font-bold uppercase text-[10px]">Registro Actual:</span>
+            <span id="fecha-doc-actual-display" class="font-mono font-bold text-gray-700">—</span>
+          </div>
 
-          <h3 class="text-lg font-extrabold text-gray-800">Cambiar fecha del documento</h3>
-
-          <p id="fecha-doc-identidad" class="text-xs text-gray-500 mt-1"></p>
-
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Nueva Fecha</label>
+              <input id="fecha-doc-nueva" type="date" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Nueva Hora</label>
+              <input id="hora-doc-nueva" type="time" step="60" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-gray-800 focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
         </div>
 
-        <button type="button" onclick="cerrarModalFechaDocumento()" class="text-gray-400 hover:text-gray-700 text-xl">×</button>
+        <!-- ITEMS / PRODUCTOS CONTENIDOS EN ESTE DOCUMENTO -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-bold text-gray-700 uppercase">Ítems contenidos en este documento:</span>
+            <span id="fecha-doc-items-count" class="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full">0 ítems</span>
+          </div>
+          <div id="fecha-doc-items-list" class="space-y-1.5 max-h-44 overflow-y-auto border border-gray-150 rounded-xl p-2 bg-gray-50/50 text-xs">
+            <div class="text-center text-gray-400 py-3 text-xs">Consultando ítems...</div>
+          </div>
+        </div>
+
+        <!-- ALERTA INFORMATIVA DE RECOSTEO -->
+        <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+          <span class="text-base">⚡</span>
+          <div class="text-[11px] leading-relaxed">
+            <b>Recosteo automático en cascada:</b> Al confirmar, se actualizará la fecha y hora de este documento en <b>Kardex</b>, <b>Contabilidad</b> y <b>Saldos</b>. Todos los movimientos posteriores de los productos listados arriba serán recalculados cronológicamente.
+          </div>
+        </div>
 
       </div>
 
-      <div class="grid grid-cols-2 gap-3 mb-4">
-
-        <label>Fecha nueva<input id="fecha-doc-nueva" type="date" class="mt-1"></label>
-
-        <label>Hora nueva<input id="hora-doc-nueva" type="time" class="mt-1"></label>
-
-      </div>
-
-      <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">El cambio se aplicará a todos los movimientos del documento y luego se recostearán todos sus productos.</p>
-
-      <div class="flex justify-end gap-2">
-
-        <button type="button" onclick="cerrarModalFechaDocumento()" class="px-3 py-2 border rounded-xl text-xs font-bold text-gray-600">Cancelar</button>
-
-        <button type="button" onclick="guardarFechaDocumento()" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold">Aplicar y recostear</button>
-
+      <!-- FOOTER / BOTONES -->
+      <div class="bg-gray-50 px-5 py-3.5 border-t border-gray-150 flex items-center justify-between">
+        <button type="button" onclick="cerrarModalFechaDocumento()" class="px-4 py-2 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 font-bold rounded-xl text-xs transition">
+          Cancelar
+        </button>
+        <button id="btn-guardar-fecha-doc" type="button" onclick="guardarFechaDocumento()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-xs shadow-sm transition flex items-center gap-1.5">
+          <span>✅ Confirmar y Recostear</span>
+        </button>
       </div>
 
     </div>
-
   </div>
 
 
@@ -6548,141 +6577,281 @@ async function cargarKardex(productoId) {
 
 
     const alertaMovimiento = movimientosNegativos.has(Number(m.id)) || movimientosInconsistentes.has(Number(m.id));
-
     const fechaKardex = m.documento_fecha || '';
+    const esDocValido = (m.tipo_documento_id || m.tipo_documento) && m.documento_numero;
+    const createdAtIso = m.created_at_iso || (m.created_at ? new Date(m.created_at).toISOString() : '');
+    const horaDoc = m.hora_documento || (createdAtIso ? createdAtIso.slice(11, 16) : '00:00');
 
-    const fechaCelda = (m.tipo_documento_id || m.tipo_documento) && m.documento_numero
+    const dragHandle = esDocValido
+      ? `<span class="inline-block text-gray-300 hover:text-indigo-600 cursor-grab active:cursor-grabbing mr-1 select-none font-bold text-sm" title="Arrastra para reordenar la hora de este documento en el Kardex">⠿</span>`
+      : '';
 
-      ? `<button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${m.hora_documento || ''}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline" title="Cambiar fecha y recostear documento">${m.fecha}</button>`
-
+    const fechaCelda = esDocValido
+      ? `<button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold" title="Clic para cambiar fecha/hora o arrastra la fila">${m.fecha}</button>`
       : m.fecha;
 
+    const dragAttrs = esDocValido
+      ? `draggable="true" ondragstart="kardexDragStart(event)" ondragover="kardexDragOver(event)" ondragleave="kardexDragLeave(event)" ondrop="kardexDrop(event)" ondragend="kardexDragEnd(event)"`
+      : '';
+
     return `
-
-      <tr id="kardex-mov-${m.id}" class="hover:bg-gray-50/50 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''}" title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
-
-        <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">${fechaCelda}</td>
-
+      <tr id="kardex-mov-${m.id}" ${dragAttrs}
+          data-mov-id="${m.id}"
+          data-doc-tipo="${m.tipo_documento || ''}"
+          data-doc-tipo-id="${m.tipo_documento_id || ''}"
+          data-doc-num="${m.documento_numero || ''}"
+          data-doc-fecha="${fechaKardex}"
+          data-doc-hora="${horaDoc}"
+          data-created-at-iso="${createdAtIso}"
+          class="hover:bg-gray-50/70 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''} ${esDocValido ? 'cursor-default' : ''}" 
+          title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
+        <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap flex items-center">${dragHandle}${fechaCelda}</td>
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
-
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
-
         <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${fmt(m.stock_nuevo)}</td>
-
         <td class="px-3 py-2.5 text-right num font-mono text-xs text-gray-600 border-r border-gray-100/50">${fmtUnitCost(transCostVal)}</td>
-
         <td class="px-3 py-2.5 text-right num font-mono text-xs text-gray-600">${fmtUnitCost(avgCostVal)}</td>
-
         <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-800">${fmtMon(lineTotal)}</td>
-
         <td class="px-3 py-2.5 text-xs text-gray-600">${docOrProveedorInfo}</td>
-
         <td class="px-3 py-2.5 text-xs text-gray-400 max-w-[140px] truncate" title="${m.notes || m.notas || ''}">${m.notes || m.notas || ''}</td>
-
       </tr>
-
     `;
-
   }).join('');
-
 }
 
+// ── Kardex Drag & Drop Handlers ──────────────────────────────────────────────
+let _draggedKardexRow = null;
 
+function kardexDragStart(e) {
+  const tr = e.target.closest('tr[data-doc-num]');
+  if (!tr) return;
+  _draggedKardexRow = tr;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', tr.dataset.docNum || '');
+  tr.classList.add('opacity-40', 'bg-indigo-50');
+}
 
-function abrirModalFechaDocumento(tipoDocumentoId, numeroCodificado, fechaActual, horaActual, tipoCodificado) {
+function kardexDragOver(e) {
+  e.preventDefault();
+  const tr = e.target.closest('#tabla-kardex tr');
+  if (!tr || tr === _draggedKardexRow) return;
+  e.dataTransfer.dropEffect = 'move';
+  
+  document.querySelectorAll('#tabla-kardex tr').forEach(r => {
+    if (r !== tr) r.classList.remove('border-t-2', 'border-b-2', 'border-indigo-500');
+  });
 
+  const rect = tr.getBoundingClientRect();
+  const midY = rect.top + rect.height / 2;
+  if (e.clientY < midY) {
+    tr.classList.add('border-t-2', 'border-indigo-500');
+    tr.classList.remove('border-b-2');
+  } else {
+    tr.classList.add('border-b-2', 'border-indigo-500');
+    tr.classList.remove('border-t-2');
+  }
+}
+
+function kardexDragLeave(e) {
+  const tr = e.target.closest('#tabla-kardex tr');
+  if (tr) {
+    tr.classList.remove('border-t-2', 'border-b-2', 'border-indigo-500');
+  }
+}
+
+function kardexDragEnd(e) {
+  document.querySelectorAll('#tabla-kardex tr').forEach(r => {
+    r.classList.remove('opacity-40', 'bg-indigo-50', 'border-t-2', 'border-b-2', 'border-indigo-500');
+  });
+  _draggedKardexRow = null;
+}
+
+async function kardexDrop(e) {
+  e.preventDefault();
+  const targetTr = e.target.closest('#tabla-kardex tr');
+  if (!targetTr || !_draggedKardexRow || targetTr === _draggedKardexRow) {
+    kardexDragEnd(e);
+    return;
+  }
+
+  const dragged = _draggedKardexRow;
+  const docTipoId = dragged.dataset.docTipoId || null;
+  const docTipo = dragged.dataset.docTipo || '';
+  const docNum = dragged.dataset.docNum || '';
+  const docFechaActual = dragged.dataset.docFecha || '';
+  const docHoraActual = dragged.dataset.docHora || '';
+
+  const rect = targetTr.getBoundingClientRect();
+  const isAbove = e.clientY < (rect.top + rect.height / 2);
+
+  const allRows = Array.from(document.querySelectorAll('#tabla-kardex tr[data-created-at-iso]'));
+  const targetIndex = allRows.indexOf(targetTr);
+  
+  let targetIso = targetTr.dataset.createdAtIso || '';
+  let targetFecha = targetTr.dataset.docFecha || (targetIso ? targetIso.slice(0, 10) : docFechaActual);
+  let computedHora = '00:00';
+
+  if (targetIso) {
+    const targetDt = new Date(targetIso);
+    let newDt = new Date(targetDt);
+
+    if (isAbove) {
+      const prevRow = targetIndex > 0 ? allRows[targetIndex - 1] : null;
+      if (prevRow && prevRow !== dragged && prevRow.dataset.createdAtIso) {
+        const prevDt = new Date(prevRow.dataset.createdAtIso);
+        newDt = new Date((targetDt.getTime() + prevDt.getTime()) / 2);
+      } else {
+        newDt = new Date(targetDt.getTime() + 60 * 1000);
+      }
+    } else {
+      const nextRow = targetIndex < allRows.length - 1 ? allRows[targetIndex + 1] : null;
+      if (nextRow && nextRow !== dragged && nextRow.dataset.createdAtIso) {
+        const nextDt = new Date(nextRow.dataset.createdAtIso);
+        newDt = new Date((targetDt.getTime() + nextDt.getTime()) / 2);
+      } else {
+        newDt = new Date(targetDt.getTime() - 60 * 1000);
+      }
+    }
+
+    const yyyy = newDt.getFullYear();
+    const mm = String(newDt.getMonth() + 1).padStart(2, '0');
+    const dd = String(newDt.getDate()).padStart(2, '0');
+    targetFecha = `${yyyy}-${mm}-${dd}`;
+    const hh = String(newDt.getHours()).padStart(2, '0');
+    const min = String(newDt.getMinutes()).padStart(2, '0');
+    computedHora = `${hh}:${min}`;
+  } else {
+    computedHora = docHoraActual || '00:00';
+  }
+
+  kardexDragEnd(e);
+
+  abrirModalFechaDocumento(docTipoId, encodeURIComponent(docNum), docFechaActual, docHoraActual, encodeURIComponent(docTipo), targetFecha, computedHora);
+}
+
+// ── Modal de Verificación y Cambio de Fecha/Hora ──────────────────────────────
+async function abrirModalFechaDocumento(tipoDocumentoId, numeroCodificado, fechaActual, horaActual, tipoCodificado, targetFecha = null, targetHora = null) {
   const modal = document.getElementById('modal-fecha-documento');
+  const tipoDoc = decodeURIComponent(tipoCodificado || '');
+  const docNum = decodeURIComponent(numeroCodificado || '');
+  const fActual = (fechaActual || '').slice(0, 10);
+  const hActual = horaActual || '00:00';
 
-  const fecha = (fechaActual || '').slice(0, 10);
+  const fNueva = targetFecha || fActual;
+  const hNueva = targetHora || hActual;
 
-  document.getElementById('fecha-doc-identidad').textContent = `${decodeURIComponent(tipoCodificado)}-${decodeURIComponent(numeroCodificado)}`;
+  document.getElementById('fecha-doc-identidad').textContent = `${tipoDoc} ${docNum}`;
+  document.getElementById('fecha-doc-actual-display').textContent = `${fActual} a las ${hActual}`;
+  
+  const fInp = document.getElementById('fecha-doc-nueva');
+  fInp.value = fNueva;
+  fInp.max = new Date().toISOString().slice(0, 10);
 
-  document.getElementById('fecha-doc-nueva').value = fecha;
+  const hInp = document.getElementById('hora-doc-nueva');
+  hInp.value = hNueva;
 
-  document.getElementById('fecha-doc-nueva').max = new Date().toISOString().slice(0, 10);
+  modal.dataset.tipoDocumentoId = tipoDocumentoId || '';
+  modal.dataset.tipoDocumento = tipoDoc;
+  modal.dataset.documentoNumero = docNum;
 
-  document.getElementById('hora-doc-nueva').value = horaActual || '00:00';
-
-  modal.dataset.tipoDocumentoId = tipoDocumentoId;
-
-  modal.dataset.tipoDocumento = decodeURIComponent(tipoCodificado);
-
-  modal.dataset.documentoNumero = decodeURIComponent(numeroCodificado);
+  const itemsList = document.getElementById('fecha-doc-items-list');
+  const itemsCount = document.getElementById('fecha-doc-items-count');
+  itemsList.innerHTML = '<div class="text-center text-indigo-600 py-3 text-xs font-semibold flex items-center justify-center gap-1.5"><div class="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div> Analizando ítems e impacto en Kardex...</div>';
+  itemsCount.textContent = '...';
 
   modal.classList.remove('hidden');
-
   modal.classList.add('flex');
 
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/verificar-cambio-fecha`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tipo_documento_id: Number(tipoDocumentoId) || null,
+        tipo_documento: tipoDoc,
+        documento_numero: docNum,
+        nueva_fecha: fNueva,
+        nueva_hora: hNueva
+      })
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      itemsList.innerHTML = `<div class="text-red-500 text-xs py-2">${d.error}</div>`;
+      return;
+    }
+
+    itemsCount.textContent = `${d.total_items} ítem(s) en documento`;
+
+    let html = '';
+    d.items.forEach(it => {
+      const tieneAfectados = it.movimientos_posteriores > 0;
+      html += `
+        <div class="flex items-center justify-between p-2 bg-white rounded-lg border border-gray-150 text-xs gap-2">
+          <div class="truncate max-w-[240px]">
+            <span class="font-bold text-gray-800">${it.producto_nombre}</span>
+            <span class="text-[10px] text-gray-400 block">${it.tipo === 'entrada' ? '📥 Entrada' : '📤 Salida'}: ${fmt(it.cantidad)} und</span>
+          </div>
+          <div class="text-right flex-shrink-0">
+            ${tieneAfectados 
+              ? `<span class="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full font-extrabold text-[10px] inline-flex items-center gap-1">⚡ Recosteará ${it.movimientos_posteriores} mov(s)</span>`
+              : `<span class="px-2 py-0.5 bg-green-100 text-green-800 rounded-full font-semibold text-[10px]">Sin salidas afectadas</span>`
+            }
+          </div>
+        </div>
+      `;
+    });
+    itemsList.innerHTML = html || '<div class="text-gray-400 text-center py-2 text-xs">Sin ítems</div>';
+  } catch (e) {
+    itemsList.innerHTML = `<div class="text-red-500 text-xs py-2">Error al verificar: ${e.message}</div>`;
+  }
 }
-
-
 
 function cerrarModalFechaDocumento() {
-
   const modal = document.getElementById('modal-fecha-documento');
-
   modal.classList.add('hidden');
-
   modal.classList.remove('flex');
-
 }
 
-
-
 async function guardarFechaDocumento() {
-
   const modal = document.getElementById('modal-fecha-documento');
-
   const fecha = document.getElementById('fecha-doc-nueva').value;
-
   const hora = document.getElementById('hora-doc-nueva').value;
-
   const hoy = new Date().toISOString().slice(0, 10);
+  const btn = document.getElementById('btn-guardar-fecha-doc');
 
   if (!fecha) { toast('Selecciona una fecha.', false); return; }
-
   if (fecha > hoy) { toast('La fecha no puede ser futura.', false); return; }
 
-  if (!confirm('Se actualizará el documento completo y se recostearán todos sus productos. ¿Continuar?')) return;
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<span>⏳ Aplicando y recosteando...</span>';
 
   try {
-
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/documento/cambiar-fecha`, {
-
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-
         tipo_documento_id: Number(modal.dataset.tipoDocumentoId) || null,
-
         tipo_documento: modal.dataset.tipoDocumento || null,
-
         documento_numero: modal.dataset.documentoNumero,
-
         nueva_fecha: fecha,
-
         nueva_hora: hora || null
-
       })
-
     });
-
     const d = await r.json();
-
     if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo cambiar la fecha.');
 
     cerrarModalFechaDocumento();
-
-    toast(`Documento actualizado. Productos recosteados: ${d.productos_recosteados}.`);
-
-    await cargarKardex(kardexProductoActual);
-
+    toast(`✅ Documento actualizado. ${d.productos_recosteados} producto(s) recosteados exitosamente.`);
+    if (kardexProductoActual) {
+      await cargarKardex(kardexProductoActual);
+    }
   } catch (error) {
-
     toast(error.message, false);
-
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
   }
-
 }
 
 

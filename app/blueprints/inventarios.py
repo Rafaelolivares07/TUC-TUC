@@ -1499,6 +1499,8 @@ def api_inventario_kardex(producto_id):
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.iva_total, m.documento_total,
                    COALESCE(TO_CHAR(m.documento_fecha, 'DD/MM/YY') || ' ' || TO_CHAR(m.created_at, 'HH24:MI'), TO_CHAR(m.created_at, 'DD/MM/YY HH24:MI')) AS fecha,
                    TO_CHAR(m.created_at, 'HH24:MI') AS hora_documento,
+                   TO_CHAR(m.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at_iso,
+                   TO_CHAR(m.documento_fecha, 'YYYY-MM-DD') AS documento_fecha_iso,
                    p_padre.nombre AS producto_padre_nombre
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
@@ -3640,6 +3642,121 @@ def api_ejecutar_recosteo(negocio_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/documento/verificar-cambio-fecha', methods=['POST'])
+def api_verificar_cambio_fecha_documento(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json() or {}
+    tipo_documento_id = _int_o_none(data.get('tipo_documento_id'))
+    tipo_documento = (_txt(data.get('tipo_documento')) or '').strip()
+    documento_numero = (_txt(data.get('documento_numero')) or '').strip()
+    nueva_fecha_raw = (_txt(data.get('nueva_fecha')) or '').strip()
+    nueva_hora = (_txt(data.get('nueva_hora')) or '').strip() or None
+
+    if (not tipo_documento_id and not tipo_documento) or not documento_numero:
+        return jsonify({'ok': False, 'error': 'Tipo de documento y número son requeridos'}), 400
+
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        if not tipo_documento_id:
+            tipo_row = conn.execute("""
+                SELECT id, codigo, nombre FROM tipos_documento_negocio
+                WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))
+                LIMIT 1
+            """, (negocio_id, tipo_documento, tipo_documento)).fetchone()
+            if tipo_row:
+                tipo_documento_id = tipo_row['id']
+                tipo_documento = tipo_row['codigo'] or tipo_row['nombre']
+        else:
+            tipo_row = conn.execute("SELECT codigo, nombre FROM tipos_documento_negocio WHERE id = %s", (tipo_documento_id,)).fetchone()
+            if tipo_row:
+                tipo_documento = tipo_row['codigo'] or tipo_row['nombre']
+
+        rows = conn.execute("""
+            SELECT m.id, m.producto_id, p.nombre AS producto_nombre, m.tipo, m.cantidad, 
+                   m.valor_unitario, m.costo_und, m.documento_fecha, m.created_at,
+                   COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre,
+                   m.tipo_documento, m.documento_numero
+            FROM movimientos_inventario m
+            JOIN productos p ON p.id = m.producto_id
+            LEFT JOIN terceros t ON t.id = m.proveedor_id
+            WHERE m.negocio_id = %s 
+              AND (m.tipo_documento_id = %s OR LOWER(m.tipo_documento) = LOWER(%s))
+              AND m.documento_numero = %s
+            ORDER BY m.id ASC
+        """, (negocio_id, tipo_documento_id, tipo_documento, documento_numero)).fetchall()
+
+        if not rows:
+            return jsonify({'ok': False, 'error': 'No se encontraron movimientos para ese documento'}), 404
+
+        fecha_original = min((r['documento_fecha'] or r['created_at'].date()) for r in rows)
+        hora_original = rows[0]['created_at'].strftime('%H:%M') if rows[0]['created_at'] else '00:00'
+        created_at_original = rows[0]['created_at']
+
+        target_fecha = nueva_fecha_raw[:10] if nueva_fecha_raw else fecha_original.isoformat()
+        target_hora = nueva_hora if nueva_hora else hora_original
+
+        from datetime import datetime, time
+        try:
+            d_obj = date.fromisoformat(target_fecha)
+            h_obj = time.fromisoformat(target_hora if len(target_hora) == 5 else target_hora[:5])
+            target_dt = datetime.combine(d_obj, h_obj)
+        except Exception:
+            target_dt = created_at_original
+
+        min_dt = min(target_dt, created_at_original) if (target_dt and created_at_original) else (target_dt or created_at_original)
+
+        items = []
+        total_movimientos_posteriores = 0
+
+        for r in rows:
+            p_id = r['producto_id']
+            posteriores = conn.execute("""
+                SELECT COUNT(*) AS total
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND producto_id = %s AND created_at >= %s AND id != %s
+            """, (negocio_id, p_id, min_dt, r['id'])).fetchone()['total']
+
+            total_movimientos_posteriores += posteriores
+
+            items.append({
+                'movimiento_id': r['id'],
+                'producto_id': p_id,
+                'producto_nombre': r['producto_nombre'],
+                'tipo': r['tipo'],
+                'cantidad': float(r['cantidad'] or 0),
+                'valor_unitario': float(r['valor_unitario'] or 0),
+                'costo_und': float(r['costo_und'] or 0),
+                'movimientos_posteriores': posteriores
+            })
+
+        return jsonify({
+            'ok': True,
+            'documento': {
+                'tipo_documento': tipo_documento or rows[0]['tipo_documento'],
+                'tipo_documento_id': tipo_documento_id,
+                'documento_numero': documento_numero,
+                'fecha_actual': fecha_original.isoformat(),
+                'hora_actual': hora_original,
+                'nueva_fecha': target_fecha,
+                'nueva_hora': target_hora[:5],
+                'proveedor_nombre': rows[0]['proveedor_nombre']
+            },
+            'items': items,
+            'total_items': len(items),
+            'total_movimientos_posteriores': total_movimientos_posteriores
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/documento/cambiar-fecha', methods=['POST'])
 def api_cambiar_fecha_documento_inventario(negocio_id):
     if 'usuario_id' not in session:
@@ -3657,7 +3774,7 @@ def api_cambiar_fecha_documento_inventario(negocio_id):
     try:
         from datetime import datetime, time
         nueva_fecha = date.fromisoformat(nueva_fecha_raw[:10])
-        hora = time.fromisoformat(nueva_hora) if nueva_hora else None
+        hora = time.fromisoformat(nueva_hora if len(nueva_hora or '') == 5 else (nueva_hora[:5] if nueva_hora else '00:00')) if nueva_hora else None
     except ValueError:
         return jsonify({'ok': False, 'error': 'Fecha u hora inválida'}), 400
 
@@ -3671,18 +3788,24 @@ def api_cambiar_fecha_documento_inventario(negocio_id):
             return error
         if not tipo_documento_id:
             tipo_row = conn.execute("""
-                SELECT id FROM tipos_documento_negocio
+                SELECT id, codigo, nombre FROM tipos_documento_negocio
                 WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))
                 LIMIT 1
             """, (negocio_id, tipo_documento, tipo_documento)).fetchone()
             if not tipo_row:
                 return jsonify({'ok': False, 'error': 'No se pudo identificar el tipo de documento'}), 400
             tipo_documento_id = tipo_row['id']
+            tipo_documento = tipo_row['codigo'] or tipo_row['nombre']
+        else:
+            tipo_row = conn.execute("SELECT codigo, nombre FROM tipos_documento_negocio WHERE id = %s", (tipo_documento_id,)).fetchone()
+            if tipo_row:
+                tipo_documento = tipo_row['codigo'] or tipo_row['nombre']
+
         rows = conn.execute("""
             SELECT id, producto_id, documento_fecha, created_at
             FROM movimientos_inventario
-            WHERE negocio_id = %s AND tipo_documento_id = %s AND documento_numero = %s
-        """, (negocio_id, tipo_documento_id, documento_numero)).fetchall()
+            WHERE negocio_id = %s AND (tipo_documento_id = %s OR LOWER(tipo_documento) = LOWER(%s)) AND documento_numero = %s
+        """, (negocio_id, tipo_documento_id, tipo_documento, documento_numero)).fetchall()
         if not rows:
             return jsonify({'ok': False, 'error': 'No se encontraron movimientos para ese documento'}), 404
 
@@ -3693,28 +3816,45 @@ def api_cambiar_fecha_documento_inventario(negocio_id):
         except Exception as exc:
             return jsonify({'ok': False, 'error': str(exc)}), 400
 
-        hora_uso = hora or rows[0]['created_at'].time()
+        hora_uso = hora or (rows[0]['created_at'].time() if rows[0]['created_at'] else time(0, 0))
         fecha_hora = datetime.combine(nueva_fecha, hora_uso)
-        params = (nueva_fecha, fecha_hora, negocio_id, tipo_documento_id, documento_numero)
+
+        # Actualizar movimientos de inventario
         conn.execute("""
             UPDATE movimientos_inventario
             SET documento_fecha = %s, created_at = %s
-            WHERE negocio_id = %s AND tipo_documento_id = %s AND documento_numero = %s
-        """, params)
+            WHERE negocio_id = %s AND (tipo_documento_id = %s OR LOWER(tipo_documento) = LOWER(%s)) AND documento_numero = %s
+        """, (nueva_fecha, fecha_hora, negocio_id, tipo_documento_id, tipo_documento, documento_numero))
+
+        # Actualizar movimientos contables
         conn.execute("""
             UPDATE movimientos_contables
             SET fecha = %s, created_at = %s
-            WHERE negocio_id = %s AND tipo_documento_id = %s AND numero_documento = %s
-        """, params)
+            WHERE negocio_id = %s AND (tipo_documento_id = %s OR LOWER(tipo_documento) = LOWER(%s)) AND numero_documento = %s
+        """, (nueva_fecha, fecha_hora, negocio_id, tipo_documento_id, tipo_documento, documento_numero))
+
+        # Actualizar saldo_por_documentos
         conn.execute("""
             UPDATE saldo_por_documentos
             SET fecha_hora = %s, created_at = %s
-            WHERE negocio_id = %s AND tipo_documento_id = %s AND numero_documento = %s
-        """, (fecha_hora, fecha_hora, negocio_id, tipo_documento_id, documento_numero))
+            WHERE negocio_id = %s AND (tipo_documento_id = %s OR LOWER(tipo_documento) = LOWER(%s)) AND numero_documento = %s
+        """, (fecha_hora, fecha_hora, negocio_id, tipo_documento_id, tipo_documento, documento_numero))
 
+        # Actualizar compras / facturas si aplica
+        try:
+            conn.execute("""
+                UPDATE facturas_proveedor
+                SET fecha_factura = %s, updated_at = %s
+                WHERE negocio_id = %s AND (numero_factura = %s OR consecutivo::text = %s)
+            """, (nueva_fecha, fecha_hora, negocio_id, documento_numero, documento_numero))
+        except Exception:
+            pass
+
+        # Recostear en cascada todos los productos de este documento
         producto_ids = sorted({r['producto_id'] for r in rows})
         for producto_id in producto_ids:
             _recostear_producto(conn, negocio_id, producto_id)
+
         conn.commit()
         return jsonify({
             'ok': True,

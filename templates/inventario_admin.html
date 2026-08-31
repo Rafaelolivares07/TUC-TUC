@@ -12176,23 +12176,20 @@ async function cargarReporteEnsambles() {
               html += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500">Asiento 61*:</span><span class="${cls} font-bold">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO')} → $${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
             }
 
-            // Componentes Kardex + Contrapartidas lado a lado
+            // Componentes Kardex + Contrapartidas — entrada por entrada
             if (ff.componentes.length > 0 || (ff.contrapartidas && ff.contrapartidas.length > 0)) {
-              const compAgrupados = {};
+              const compKardex = {};
               ff.componentes.forEach(c => {
-                if (!compAgrupados[c.nombre]) {
-                  compAgrupados[c.nombre] = { nombre: c.nombre, cantidad: 0, costo_total: 0, producto_id: c.producto_id };
-                }
-                compAgrupados[c.nombre].cantidad += c.cantidad;
-                compAgrupados[c.nombre].costo_total += c.costo_total;
+                if (!compKardex[c.nombre]) compKardex[c.nombre] = [];
+                compKardex[c.nombre].push(c);
               });
 
-              const contraIdx = {};
+              const contraPorComp = {};
               if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
                 let nombre = c.comp_nombre || c.concepto || c.cuenta || '';
                 nombre = nombre.replace(/^.*?:\s*/, '').trim();
-                if (!contraIdx[nombre]) contraIdx[nombre] = { monto: 0, producto_id: c.producto_id, match_tipo: c.match_tipo };
-                contraIdx[nombre].monto += c.monto_actual;
+                if (!contraPorComp[nombre]) contraPorComp[nombre] = [];
+                contraPorComp[nombre].push(c);
               });
 
               html += `<div class="mt-1">`;
@@ -12200,53 +12197,81 @@ async function cargarReporteEnsambles() {
               html += `<span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contable (14*)</span><span class="text-right">Diferencia</span>`;
               html += `</div>`;
 
-              Object.values(compAgrupados).forEach(c => {
+              const todosNombres = [...new Set([...Object.keys(compKardex), ...Object.keys(contraPorComp)])];
+              todosNombres.forEach(nombre => {
                 const cid = ++uid;
-                const contraData = contraIdx[c.nombre] || { monto: 0, producto_id: null, match_tipo: null };
-                const contraMonto = contraData.monto;
-                const esConfiable = contraData.match_tipo === 'producto_id';
-                const sinContable = contraMonto === 0;
-                if (!esConfiable && !sinContable) tieneSinFuente = true;
-                const difComp = (sinContable || !esConfiable) ? 0 : contraMonto - c.costo_total;
-                const cls = sinContable ? 'text-gray-400' : (!esConfiable ? 'text-amber-500' : (Math.abs(difComp) > 0.01 ? 'text-red-600' : 'text-green-600'));
+                const kardexEntries = compKardex[nombre] || [];
+                const contabEntries = contraPorComp[nombre] || [];
+                const totalKardex = kardexEntries.reduce((s, e) => s + e.costo_total, 0);
+                const totalContab = contabEntries.reduce((s, e) => s + e.monto_actual, 0);
+                const difTotal = totalContab - totalKardex;
+                const mismaCantidad = kardexEntries.length === contabEntries.length && kardexEntries.length > 0;
+                const sinContable = contabEntries.length === 0;
+                const sinKardex = kardexEntries.length === 0;
+                const todoConfiable = contabEntries.every(c => c.match_tipo === 'producto_id');
+                if (!todoConfiable && !sinContable) tieneSinFuente = true;
+                const cls = sinContable || sinKardex ? 'text-gray-400' : (!todoConfiable ? 'text-amber-500' : (Math.abs(difTotal) > 0.01 ? 'text-red-600' : 'text-green-600'));
 
                 html += `<div class="px-2">`;
                 html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-4 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
-                html += `<span class="text-gray-600 text-xs truncate">${c.nombre}</span>`;
-                html += `<span class="text-gray-700 text-xs font-bold text-right">$${c.costo_total.toLocaleString('es-CO')}</span>`;
+                html += `<span class="text-gray-600 text-xs truncate">${nombre}</span>`;
+                html += `<span class="text-gray-700 text-xs font-bold text-right">$${totalKardex.toLocaleString('es-CO')}</span>`;
                 if (sinContable) {
                   html += `<span class="text-gray-400 text-xs text-right">—</span>`;
                   html += `<span class="text-gray-400 text-xs text-right">—</span>`;
-                } else if (!esConfiable) {
+                } else if (!todoConfiable) {
                   html += `<span class="text-amber-500 text-xs text-right font-semibold">SIN FUENTE</span>`;
                   html += `<span class="text-amber-500 text-xs text-right">NO DISPONIBLE</span>`;
+                } else if (mismaCantidad) {
+                  html += `<span class="text-xs font-bold text-right ${cls}">$${totalContab.toLocaleString('es-CO')}</span>`;
+                  html += `<span class="text-xs font-bold text-right ${cls}">${Math.abs(difTotal) > 0.01 ? '$' + difTotal.toLocaleString('es-CO') : 'OK'}</span>`;
                 } else {
-                  html += `<span class="text-xs font-bold text-right ${cls}">$${contraMonto.toLocaleString('es-CO')}</span>`;
-                  html += `<span class="text-xs font-bold text-right ${cls}">${Math.abs(difComp) > 0.01 ? '$' + difComp.toLocaleString('es-CO') : 'OK'}</span>`;
+                  html += `<span class="text-xs font-bold text-right text-amber-600">$${totalContab.toLocaleString('es-CO')} (${contabEntries.length})</span>`;
+                  html += `<span class="text-xs font-bold text-right text-amber-600">$${totalKardex.toLocaleString('es-CO')} (${kardexEntries.length})</span>`;
                 }
                 html += `</button>`;
+
                 html += `<div id="comp-${cid}" class="hidden pl-4 text-[10px] text-gray-400 pb-1">`;
-                html += `Cant: ${c.cantidad.toFixed(2)} | Unit: $${(c.costo_total / c.cantidad).toLocaleString('es-CO')}`;
-                if (sinContable) html += ` | Contable: SIN DATOS`;
-                else if (!esConfiable) html += ` | Contable: SIN FUENTE (match por nombre, no confiable)`;
-                else if (Math.abs(difComp) > 0.01) html += ` | Dif: $${difComp.toLocaleString('es-CO')}`;
+                if (sinContable) {
+                  html += `Sin datos contables`;
+                } else if (!todoConfiable) {
+                  html += `SIN FUENTE (match por nombre, no confiable)`;
+                } else if (mismaCantidad) {
+                  const kSorted = [...kardexEntries].sort((a, b) => a.costo_total - b.costo_total);
+                  const cSorted = [...contabEntries].sort((a, b) => a.monto_actual - b.monto_actual);
+                  kSorted.forEach((k, i) => {
+                    const c = cSorted[i];
+                    const dif = c.monto_actual - k.costo_total;
+                    const clsDif = Math.abs(dif) > 0.01 ? 'text-amber-600' : 'text-green-600';
+                    html += `<div class="flex justify-between"><span>${k.costo_total.toLocaleString('es-CO')} → ${c.monto_actual.toLocaleString('es-CO')}</span><span class="${clsDif} ml-2">${Math.abs(dif) > 0.01 ? '$' + dif.toLocaleString('es-CO') : 'OK'}</span></div>`;
+                  });
+                } else {
+                  html += `<div class="text-amber-600 font-semibold">⚠ ${contabEntries.length} contab vs ${kardexEntries.length} kardex — revisar manualmente</div>`;
+                  html += `<div class="mt-1">Contab:</div>`;
+                  contabEntries.forEach(c => { html += `<div>$${c.monto_actual.toLocaleString('es-CO')} — ${c.concepto}</div>`; });
+                  html += `<div class="mt-1">Kardex:</div>`;
+                  kardexEntries.forEach(k => { html += `<div>$${k.costo_total.toLocaleString('es-CO')} — ${k.nombre}</div>`; });
+                }
                 html += `</div>`;
                 html += `</div>`;
               });
 
               // Contrapartidas sin match en Kardex
-              if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
-                let nombre = c.comp_nombre || c.concepto || c.cuenta || '';
-                nombre = nombre.replace(/^.*?:\s*/, '').trim();
-                if (!Object.keys(compAgrupados).includes(nombre)) {
-                  html += `<div class="px-2 grid grid-cols-4 gap-2 py-0.5">`;
-                  html += `<span class="text-gray-400 text-xs italic truncate">${nombre}</span>`;
-                  html += `<span class="text-gray-400 text-xs text-right">—</span>`;
-                  html += `<span class="text-gray-600 text-xs font-bold text-right">$${c.monto_actual.toLocaleString('es-CO')}</span>`;
-                  html += `<span class="text-red-400 text-xs font-bold text-right">SIN KARDEX</span>`;
-                  html += `</div>`;
-                }
-              });
+              if (ff.contrapartidas) {
+                const kardexNombres = new Set(Object.keys(compKardex));
+                ff.contrapartidas.forEach(c => {
+                  let nombre = c.comp_nombre || c.concepto || c.cuenta || '';
+                  nombre = nombre.replace(/^.*?:\s*/, '').trim();
+                  if (!kardexNombres.has(nombre)) {
+                    html += `<div class="px-2 grid grid-cols-4 gap-2 py-0.5">`;
+                    html += `<span class="text-gray-400 text-xs italic truncate">${nombre}</span>`;
+                    html += `<span class="text-gray-400 text-xs text-right">—</span>`;
+                    html += `<span class="text-gray-600 text-xs font-bold text-right">$${c.monto_actual.toLocaleString('es-CO')}</span>`;
+                    html += `<span class="text-red-400 text-xs font-bold text-right">SIN KARDEX</span>`;
+                    html += `</div>`;
+                  }
+                });
+              }
 
               html += `</div>`;
             }

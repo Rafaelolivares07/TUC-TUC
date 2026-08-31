@@ -6426,22 +6426,17 @@ def api_reparar_costos_venta(negocio_id):
                         contras.append({**c, '_comp_match': match, '_match_tipo': match_tipo})
 
                 contras_list = []
-                contra_map = {}
                 for c in contras:
                     monto = float(c['monto'] or 0)
-                    concepto = (c['concepto'] or c['cuenta'] or '').strip()
                     comp_match = c['_comp_match']
-                    if concepto not in contra_map:
-                        contra_map[concepto] = {
-                            'concepto': concepto,
-                            'cuenta': c['cuenta'],
-                            'monto_actual': 0,
-                            'producto_id': c.get('producto_id'),
-                            'comp_nombre': comp_match['nombre'] if comp_match else None,
-                            'match_tipo': c['_match_tipo'],
-                        }
-                        contras_list.append(contra_map[concepto])
-                    contra_map[concepto]['monto_actual'] += monto
+                    contras_list.append({
+                        'concepto': (c['concepto'] or c['cuenta'] or '').strip(),
+                        'cuenta': c['cuenta'],
+                        'monto_actual': monto,
+                        'producto_id': c.get('producto_id'),
+                        'comp_nombre': comp_match['nombre'] if comp_match else None,
+                        'match_tipo': c['_match_tipo'],
+                    })
 
                 # Cantidad vendida — misma busqueda que Ensambles
                 ref_row = conn.execute("""

@@ -10102,16 +10102,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (qProvNom) {
-
       document.getElementById('entrada-proveedor').value = qProvNom;
-
       const btnCrear = document.getElementById('btn-crear-proveedor');
-
       if (btnCrear) btnCrear.classList.add('hidden');
-
       const badgeProv = document.getElementById('badge-proveedor-creado');
+      if (badgeProv) badgeProv.classList.add('hidden');
+    }
 
-      setTimeout(() => verificarDocumentoExistente(), 150);
+    setTimeout(() => verificarDocumentoExistente(), 150);
   }
 });
 

@@ -3663,7 +3663,7 @@ def api_verificar_cambio_fecha_documento(negocio_id):
         if error:
             return error
 
-        if not tipo_documento_id:
+        if not tipo_documento_id and tipo_documento:
             tipo_row = conn.execute("""
                 SELECT id, codigo, nombre FROM tipos_documento_negocio
                 WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))
@@ -3672,7 +3672,7 @@ def api_verificar_cambio_fecha_documento(negocio_id):
             if tipo_row:
                 tipo_documento_id = tipo_row['id']
                 tipo_documento = tipo_row['codigo'] or tipo_row['nombre']
-        else:
+        elif tipo_documento_id:
             tipo_row = conn.execute("SELECT codigo, nombre FROM tipos_documento_negocio WHERE id = %s", (tipo_documento_id,)).fetchone()
             if tipo_row:
                 tipo_documento = tipo_row['codigo'] or tipo_row['nombre']
@@ -3681,18 +3681,34 @@ def api_verificar_cambio_fecha_documento(negocio_id):
             SELECT m.id, m.producto_id, p.nombre AS producto_nombre, m.tipo, m.cantidad, 
                    m.valor_unitario, m.costo_und, m.documento_fecha, m.created_at,
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre,
-                   m.tipo_documento, m.documento_numero
+                   m.tipo_documento, m.documento_numero, m.tipo_documento_id
             FROM movimientos_inventario m
             JOIN productos p ON p.id = m.producto_id
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             WHERE m.negocio_id = %s 
-              AND (m.tipo_documento_id = %s OR LOWER(m.tipo_documento) = LOWER(%s))
+              AND (m.tipo_documento_id = %s OR LOWER(COALESCE(m.tipo_documento, '')) = LOWER(%s) OR (m.tipo_documento_id IS NULL AND %s IS NULL))
               AND m.documento_numero = %s
             ORDER BY m.id ASC
-        """, (negocio_id, tipo_documento_id, tipo_documento, documento_numero)).fetchall()
+        """, (negocio_id, tipo_documento_id, tipo_documento or '', tipo_documento, documento_numero)).fetchall()
 
         if not rows:
-            return jsonify({'ok': False, 'error': 'No se encontraron movimientos para ese documento'}), 404
+            rows = conn.execute("""
+                SELECT m.id, m.producto_id, p.nombre AS producto_nombre, m.tipo, m.cantidad, 
+                       m.valor_unitario, m.costo_und, m.documento_fecha, m.created_at,
+                       COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre,
+                       m.tipo_documento, m.documento_numero, m.tipo_documento_id
+                FROM movimientos_inventario m
+                JOIN productos p ON p.id = m.producto_id
+                LEFT JOIN terceros t ON t.id = m.proveedor_id
+                WHERE m.negocio_id = %s AND m.documento_numero = %s
+                ORDER BY m.id ASC
+            """, (negocio_id, documento_numero)).fetchall()
+
+        if not rows:
+            return jsonify({'ok': False, 'error': f'No se encontraron movimientos para el documento {documento_numero}'}), 404
+
+        tipo_documento_id = tipo_documento_id or rows[0]['tipo_documento_id']
+        tipo_documento = tipo_documento or rows[0]['tipo_documento']
 
         fecha_original = min((r['documento_fecha'] or r['created_at'].date()) for r in rows)
         hora_original = rows[0]['created_at'].strftime('%H:%M') if rows[0]['created_at'] else '00:00'
@@ -3786,28 +3802,40 @@ def api_cambiar_fecha_documento_inventario(negocio_id):
         _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
-        if not tipo_documento_id:
+        if not tipo_documento_id and tipo_documento:
             tipo_row = conn.execute("""
                 SELECT id, codigo, nombre FROM tipos_documento_negocio
                 WHERE negocio_id = %s AND (LOWER(codigo) = LOWER(%s) OR LOWER(nombre) = LOWER(%s))
                 LIMIT 1
             """, (negocio_id, tipo_documento, tipo_documento)).fetchone()
-            if not tipo_row:
-                return jsonify({'ok': False, 'error': 'No se pudo identificar el tipo de documento'}), 400
-            tipo_documento_id = tipo_row['id']
-            tipo_documento = tipo_row['codigo'] or tipo_row['nombre']
-        else:
+            if tipo_row:
+                tipo_documento_id = tipo_row['id']
+                tipo_documento = tipo_row['codigo'] or tipo_row['nombre']
+        elif tipo_documento_id:
             tipo_row = conn.execute("SELECT codigo, nombre FROM tipos_documento_negocio WHERE id = %s", (tipo_documento_id,)).fetchone()
             if tipo_row:
                 tipo_documento = tipo_row['codigo'] or tipo_row['nombre']
 
         rows = conn.execute("""
-            SELECT id, producto_id, documento_fecha, created_at
+            SELECT id, producto_id, documento_fecha, created_at, tipo_documento_id, tipo_documento
             FROM movimientos_inventario
-            WHERE negocio_id = %s AND (tipo_documento_id = %s OR LOWER(tipo_documento) = LOWER(%s)) AND documento_numero = %s
-        """, (negocio_id, tipo_documento_id, tipo_documento, documento_numero)).fetchall()
+            WHERE negocio_id = %s 
+              AND (tipo_documento_id = %s OR LOWER(COALESCE(tipo_documento, '')) = LOWER(%s) OR (tipo_documento_id IS NULL AND %s IS NULL)) 
+              AND documento_numero = %s
+        """, (negocio_id, tipo_documento_id, tipo_documento or '', tipo_documento, documento_numero)).fetchall()
+
         if not rows:
-            return jsonify({'ok': False, 'error': 'No se encontraron movimientos para ese documento'}), 404
+            rows = conn.execute("""
+                SELECT id, producto_id, documento_fecha, created_at, tipo_documento_id, tipo_documento
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND documento_numero = %s
+            """, (negocio_id, documento_numero)).fetchall()
+
+        if not rows:
+            return jsonify({'ok': False, 'error': f'No se encontraron movimientos para el documento {documento_numero}'}), 404
+
+        tipo_documento_id = tipo_documento_id or rows[0]['tipo_documento_id']
+        tipo_documento = tipo_documento or rows[0]['tipo_documento']
 
         fecha_anterior = min((r['documento_fecha'] or r['created_at'].date()) for r in rows)
         try:

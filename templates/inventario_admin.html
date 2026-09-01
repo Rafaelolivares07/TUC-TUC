@@ -2142,6 +2142,12 @@
 
       </div>
 
+      <button id="kardex-btn-pdf" onclick="generarPdfKardex()" class="hidden ml-2 px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-xl transition-colors shadow-sm items-center gap-1.5">
+
+        <span>📄</span> PDF
+
+      </button>
+
     </div>
 
 
@@ -2158,17 +2164,19 @@
 
           <tr class="text-gray-500 uppercase text-[10px]">
 
-            <th rowspan="2" class="px-3 py-2 text-left bg-gray-50">Fecha</th>
+            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50">Fecha</th>
+
+            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50">Documento / Proveedor</th>
+
+            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50">Origen</th>
 
             <th colspan="3" class="px-3 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100">CANTIDADES</th>
 
             <th colspan="2" class="px-3 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100">COSTOS UNITARIOS</th>
 
-            <th rowspan="2" class="px-3 py-2 text-right num bg-gray-50">Total Línea</th>
+            <th rowspan="2" class="px-3 py-2 text-right num align-middle bg-gray-50">Total Línea</th>
 
-            <th rowspan="2" class="px-3 py-2 text-left bg-gray-50">Documento / Proveedor / Origen</th>
-
-            <th rowspan="2" class="px-3 py-2 text-left bg-gray-50">Notas</th>
+            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50">Notas</th>
 
           </tr>
 
@@ -6361,6 +6369,7 @@ function verKardex(id, nombre, movimientoId = null) {
 }
 
 let kardexProductoActual = null;
+let _kardexPdfInfo = null;
 
 async function cargarKardex(productoId) {
 
@@ -6368,7 +6377,11 @@ async function cargarKardex(productoId) {
 
   const tb = document.getElementById('tabla-kardex');
 
-  tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+  tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+
+  _kardexPdfInfo = null;
+  const btnPdfReset = document.getElementById('kardex-btn-pdf');
+  if (btnPdfReset) { btnPdfReset.classList.add('hidden'); btnPdfReset.classList.remove('flex'); }
 
   
 
@@ -6440,11 +6453,22 @@ async function cargarKardex(productoId) {
 
   if (!d.movimientos.length) {
 
-    tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+
+    _kardexPdfInfo = null;
+    const btnPdf = document.getElementById('kardex-btn-pdf');
+    if (btnPdf) { btnPdf.classList.add('hidden'); btnPdf.classList.remove('flex'); }
 
     return;
 
   }
+
+  _kardexPdfInfo = {
+    producto_id: Number(productoId),
+    producto_nombre: prod?.nombre || (d.movimientos[0]?.nombre_producto || 'Producto'),
+  };
+  const btnPdf = document.getElementById('kardex-btn-pdf');
+  if (btnPdf) { btnPdf.classList.remove('hidden'); btnPdf.classList.add('flex'); }
 
   
 
@@ -6528,15 +6552,17 @@ async function cargarKardex(productoId) {
 
     }
 
+    let origenInfo = '';
+
     if (m.producto_padre_nombre) {
 
-      docOrProveedorInfo += `
+      origenInfo += `
 
-        <div class="mt-1 flex items-center gap-1">
+        <div class="flex items-center gap-1">
 
           <span class="inline-block px-1.5 py-0.5 rounded bg-indigo-50 text-[10px] font-bold text-indigo-700 border border-indigo-100">
 
-            🍳 Consumido por: ${m.producto_padre_nombre}
+            🍳 ${m.producto_padre_nombre}
 
           </span>
 
@@ -6577,18 +6603,29 @@ async function cargarKardex(productoId) {
           data-created-at-iso="${createdAtIso}"
           class="hover:bg-gray-50/70 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''} ${esDocValido ? 'cursor-default' : ''}" 
           title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
-        <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap flex items-center">${dragHandle}${fechaCelda}</td>
+        <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap align-middle">
+          <div class="flex items-center">${dragHandle}${fechaCelda}</div>
+        </td>
+        <td class="px-3 py-2.5 text-xs text-gray-600">${docOrProveedorInfo}</td>
+        <td class="px-3 py-2.5 text-xs text-gray-600">${origenInfo}</td>
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
         <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
         <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${fmt(m.stock_nuevo)}</td>
         <td class="px-3 py-2.5 text-right num font-mono text-xs text-gray-600 border-r border-gray-100/50">${fmtUnitCost(transCostVal)}</td>
         <td class="px-3 py-2.5 text-right num font-mono text-xs text-gray-600">${fmtUnitCost(avgCostVal)}</td>
         <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-800">${fmtMon(lineTotal)}</td>
-        <td class="px-3 py-2.5 text-xs text-gray-600">${docOrProveedorInfo}</td>
         <td class="px-3 py-2.5 text-xs text-gray-400 max-w-[140px] truncate" title="${m.notes || m.notas || ''}">${m.notes || m.notas || ''}</td>
       </tr>
     `;
   }).join('');
+}
+
+// ── PDF de Cardex por producto ───────────────────────────────────────────────
+async function generarPdfKardex() {
+  if (!_kardexPdfInfo) { toast('Selecciona un producto para generar el PDF', false); return; }
+  toast('Generando PDF…');
+  const pid = _kardexPdfInfo.producto_id;
+  window.open(`/api/inventario/producto/${pid}/kardex/pdf`, '_blank');
 }
 
 // ── Kardex Drag & Drop Handlers con Auto-Scroll Fluido ────────────────────────

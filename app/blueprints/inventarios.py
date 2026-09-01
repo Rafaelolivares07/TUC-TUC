@@ -1544,6 +1544,85 @@ def api_inventario_kardex(producto_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/inventario/producto/<int:producto_id>/kardex/pdf')
+def api_inventario_kardex_pdf(producto_id):
+    """Genera un PDF del Kardex del producto.
+    Encabezado: nombre del negocio. Pie: TUC TUC (herramienta) + fecha/hora de
+    impresion y usuario que genero el reporte.
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    if FPDF is None:
+        return jsonify({'ok': False, 'error': 'PDF no disponible (falta fpdf2)'}), 500
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        negocio_id = _negocio_id_de_producto(conn, producto_id)
+        if not negocio_id:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        contexto = _contexto_negocio(conn, negocio_id)
+        nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
+
+        prod_row = conn.execute(
+            "SELECT nombre, codigo FROM productos WHERE id = %s", (producto_id,)
+        ).fetchone()
+        nombre_producto = prod_row['nombre'] if prod_row else 'Producto'
+        codigo_producto = prod_row['codigo'] if (prod_row and prod_row['codigo']) else ''
+
+        rows = conn.execute("""
+            SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
+                   m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
+                   m.documento_numero, m.documento_fecha,
+                   COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre,
+                   TO_CHAR(m.documento_fecha, 'DD/MM/YY') || ' ' || TO_CHAR(m.created_at, 'HH24:MI') AS fecha,
+                   TO_CHAR(m.documento_fecha, 'YYYY-MM-DD') AS documento_fecha_iso,
+                   p_padre.nombre AS producto_padre_nombre
+            FROM movimientos_inventario m
+            LEFT JOIN terceros t ON t.id = m.proveedor_id
+            LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
+            WHERE m.producto_id = %s
+            ORDER BY COALESCE(m.documento_fecha, m.created_at::date), m.created_at, m.id
+        """, (producto_id,)).fetchall()
+
+        prod_info = conn.execute("""
+            SELECT p.costo, COALESCE(s.stock, 0.0) AS stock,
+                   COALESCE(s.valor_existencia, 0.0) AS valor_existencia
+            FROM productos p
+            LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = 1
+            WHERE p.id = %s
+        """, (producto_id,)).fetchone()
+
+        stock_actual = float(prod_info['stock']) if prod_info and prod_info['stock'] is not None else 0.0
+        costo_actual = float(prod_info['costo']) if prod_info and prod_info['costo'] is not None else 0.0
+        valor_existencia = float(prod_info['valor_existencia']) if prod_info else 0.0
+
+        usuario = session.get('nombre') or session.get('usuario') or 'Usuario'
+        usuario_id = session.get('usuario_id')
+        if usuario_id:
+            try:
+                u_row = conn.execute("SELECT nombre FROM usuarios WHERE id = %s", (usuario_id,)).fetchone()
+                if u_row and u_row['nombre']:
+                    usuario = u_row['nombre']
+            except Exception:
+                pass
+
+        pdf = _pdf_kardex_producto(
+            nombre_negocio, nombre_producto, codigo_producto,
+            stock_actual, costo_actual, valor_existencia,
+            [dict(r) for r in rows], usuario
+        )
+        resp = Response(bytes(pdf.output()), mimetype='application/pdf')
+        resp.headers['Content-Disposition'] = f"inline; filename=kardex_{producto_id}.pdf"
+        return resp
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 # ── Debug: Analisis Kardex vs Contabilidad por factura ────────────────────────
 @bp.route('/api/debug/analisis-factura/<int:negocio_id>/<numero_doc>')
 def api_debug_analisis_factura(negocio_id, numero_doc):
@@ -7313,6 +7392,122 @@ def _pdf_firma_tuctuc(pdf):
     pdf.set_text_color(170, 170, 170)
     pdf.cell(0, 4, 'Generado con TUC TUC', ln=1, align='C')
     pdf.set_text_color(0, 0, 0)
+
+
+def _timestamp_pdf():
+    from datetime import datetime
+    return datetime.now().strftime('%d/%m/%Y %H:%M')
+
+
+def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
+                         stock_actual, costo_actual, valor_existencia, movimientos, usuario):
+
+    class KardexPDF(FPDF):
+        def footer(self):
+            self.set_y(-12)
+            self.set_font('Helvetica', '', 7)
+            self.set_text_color(130, 130, 130)
+            self.cell(0, 4, 'TUC TUC  ·  Impreso: ' + _pdf_sanitize(
+                _timestamp_pdf()) + '  ·  Usuario: ' + _pdf_sanitize(self._pie_usuario),
+                align='C')
+            self.set_text_color(0, 0, 0)
+
+    pdf = KardexPDF(format='letter', unit='mm')
+    pdf._pie_usuario = usuario
+    pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.set_margins(10, 10, 10)
+    pdf.add_page()
+
+    # ── Encabezado: negocio ──
+    pdf.set_font('Helvetica', 'B', 14)
+    pdf.set_text_color(30, 30, 30)
+    pdf.cell(0, 8, _pdf_sanitize(nombre_negocio), ln=1, align='C')
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(0, 5, 'Kardex de Producto', ln=1, align='C')
+
+    # ── Titulo producto ──
+    pdf.ln(1)
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.set_text_color(20, 20, 20)
+    titulo = nombre_producto + (f'  (Cód: {codigo_producto})' if codigo_producto else '')
+    pdf.cell(0, 6, _pdf_sanitize(titulo), ln=1, align='C')
+
+    # ── Resumen ──
+    pdf.set_font('Helvetica', '', 8.5)
+    pdf.set_text_color(90, 90, 90)
+    resumen = (f'Stock: {_pdf_money(stock_actual)}  ·  Costo prom: ${_pdf_money(costo_actual)}'
+               f'  ·  Valor inventario: ${_pdf_money(valor_existencia)}'
+               f'  ·  Movimientos: {len(movimientos)}')
+    pdf.cell(0, 5, _pdf_sanitize(resumen), ln=1, align='C')
+
+    pdf.ln(2)
+
+    # ── Tabla ──
+    col_w = [22, 30, 17, 17, 17, 17, 17, 22, 22, 22]
+    headers = ['Fecha', 'Documento / Proveedor', 'Origen', 'Entradas', 'Salidas',
+               'Saldo', 'C.Trans', 'C.Prom', 'Total Línea', 'Notas']
+    aligns = ['L', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R', 'L']
+
+    pdf.set_fill_color(235, 235, 235)
+    pdf.set_text_color(70, 70, 70)
+    pdf.set_font('Helvetica', 'B', 6.5)
+    for i, h in enumerate(headers):
+        pdf.cell(col_w[i], 6, h, border=1, align='C', fill=True)
+    pdf.ln()
+
+    pdf.set_font('Helvetica', '', 6.5)
+    pdf.set_text_color(40, 40, 40)
+    alto_linea = 5
+    for m in movimientos:
+        doc = m['tipo_documento'] or ''
+        if m['documento_numero']:
+            doc = (doc + ' ' + str(m['documento_numero'])).strip()
+        prov = m['proveedor_nombre'] or ''
+        if prov:
+            doc = (doc + ' / ' + str(prov)).strip() if doc else str(prov)
+        origen = m['producto_padre_nombre'] or ''
+        cant = float(m['cantidad'] or 0)
+        entrada = f"{cant:,.0f}" if m['tipo'] == 'entrada' else '—'
+        salida = f"{cant:,.0f}" if m['tipo'] == 'salida' else '—'
+        saldo = m.get('stock_nuevo', 0)
+        field = [
+            _pdf_sanitize(m.get('fecha') or ''),
+            _pdf_sanitize(doc)[:32],
+            _pdf_sanitize(origen)[:30],
+            entrada,
+            salida,
+            _pdf_money(saldo),
+            _pdf_money(m.get('valor_unitario')),
+            _pdf_money(m.get('costo_und')),
+            _pdf_money(m.get('valor_total')),
+            _pdf_sanitize(m.get('notas') or '')[:28],
+        ]
+        # Detectar salto de pagina en la primera columna
+        multi = pdf.multi_cell(col_w[0], alto_linea, field[0], split_only=True)
+        alto_fila = max(len(multi) * alto_linea, alto_linea)
+        if pdf.get_y() + alto_fila > pdf.page_break_trigger:
+            pdf.add_page()
+        x_fila = pdf.get_x()
+        y_fila = pdf.get_y()
+        # Dibujar col 0 con wrap
+        pdf.multi_cell(col_w[0], alto_linea, field[0], border=1, align='L')
+        pdf.set_xy(x_fila + col_w[0], y_fila)
+        for i in range(1, len(field)):
+            pdf.cell(col_w[i], alto_fila, field[i], border=1, align=aligns[i])
+        pdf.set_xy(pdf.l_margin, y_fila + alto_fila)
+
+    # ── Totales ──
+    pdf.ln(1)
+    total_entradas = sum(float(m['cantidad'] or 0) for m in movimientos if m['tipo'] == 'entrada')
+    total_salidas = sum(float(m['cantidad'] or 0) for m in movimientos if m['tipo'] == 'salida')
+    total_valor = sum(float(m['valor_total'] or 0) for m in movimientos)
+    pdf.set_font('Helvetica', 'B', 7)
+    pdf.cell(0, 5, f"Totales — Entradas: {_pdf_money(total_entradas)}  ·  "
+                    f"Salidas: {_pdf_money(total_salidas)}  ·  Valor movimientos: ${_pdf_money(total_valor)}",
+             ln=1, align='L')
+
+    return pdf
 
 
 def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos):

@@ -7484,10 +7484,10 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
             self.ln(4)
 
         def footer(self):
-            self.set_y(-12)
-            self.set_font('Helvetica', '', 7)
+            self.set_y(-7)
+            self.set_font('Helvetica', '', 6.5)
             self.set_text_color(130, 130, 130)
-            self.cell(0, 4, 'TUC TUC  ·  Impreso: ' + _pdf_sanitize(
+            self.cell(0, 3.5, 'TUC TUC  ·  Impreso: ' + _pdf_sanitize(
                 _timestamp_pdf()) + '  ·  Usuario: ' + _pdf_sanitize(self._pie_usuario),
                 align='C')
             self.set_text_color(0, 0, 0)
@@ -7501,7 +7501,7 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
                     f'Movs: {len(movimientos)}')
     pdf._col_w = col_w
     pdf._headers = headers
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=11)
     pdf.set_margins(8, 5, 8)
     pdf.add_page()
 

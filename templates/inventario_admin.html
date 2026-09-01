@@ -12337,7 +12337,7 @@ async function cargarReporteEnsambles() {
           const difProd = prod.costo_total_contable - prod.costo_total_kardex;
           html += `<span class="ml-2 text-xs font-bold ${Math.abs(difProd) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${difProd.toLocaleString('es-CO')}</span>`;
           html += `</div>`;
-          html += `<div class="flex items-center gap-1.5" onclick="event.stopPropagation()">`;
+          html += `<div id="btns-prod-${pid}" class="hidden flex items-center gap-1.5" onclick="event.stopPropagation()">`;
           html += `<button onclick="vincularIdsNivel('producto', ${prod.producto_padre_id})" class="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold rounded-lg shadow-xs transition">🔗 Vincular</button>`;
           html += `<button onclick="desvincularIds(null, ${prod.producto_padre_id})" class="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[10px] font-bold rounded-lg transition">🔓 Desvincular</button>`;
           html += `<button onclick="repararCostosProducto(${prod.producto_padre_id})" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold rounded-lg shadow-xs transition">⚡ Reparar Producto</button>`;
@@ -12363,7 +12363,7 @@ async function cargarReporteEnsambles() {
             const difDoc = ff.cogs_contable.monto_actual - ff.costo_real_kardex;
             html += `<span class="ml-1 text-xs font-bold ${Math.abs(difDoc) > 0.01 ? 'text-red-600' : 'text-green-600'}">Dif: $${difDoc.toLocaleString('es-CO')}</span>`;
             html += `</div>`;
-            html += `<div class="flex items-center gap-1.5" onclick="event.stopPropagation()">`;
+            html += `<div id="btns-doc-${docId}" class="hidden flex items-center gap-1.5" onclick="event.stopPropagation()">`;
             html += `<button onclick="vincularIdsNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="px-2 py-0.5 bg-blue-500 hover:bg-blue-600 text-white text-[9px] font-bold rounded shadow-xs">🔗 Vincular</button>`;
             html += `<button onclick="desvincularIds('${ff.documento_numero}', ${prod.producto_padre_id})" class="px-1.5 py-0.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-[9px] font-bold rounded">🔓 Desvincular</button>`;
             html += `<button onclick="repararCostosDocumento('${ff.documento_numero}', ${prod.producto_padre_id})" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-900 text-white text-[9px] font-bold rounded shadow-xs">⚡ Reparar Doc</button>`;
@@ -12490,10 +12490,20 @@ async function cargarReporteEnsambles() {
     function toggleRepairLevel(id) {
       const el = document.getElementById(id);
       const arrow = document.getElementById('arrow-' + id);
+      const btns = document.getElementById('btns-' + id);
       if (!el) return;
       const isOpen = !el.classList.contains('hidden');
       el.classList.toggle('hidden');
       if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+      if (btns) {
+        if (isOpen) {
+          btns.classList.add('hidden');
+          btns.classList.remove('flex');
+        } else {
+          btns.classList.remove('hidden');
+          btns.classList.add('flex');
+        }
+      }
     }
 
 

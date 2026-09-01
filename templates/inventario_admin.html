@@ -12355,12 +12355,18 @@ async function cargarReporteEnsambles() {
           
           prod.facturas.filter(ff => ff.tiene_diferencia).forEach(ff => {
             const docId = ++uid;
+            const isProd = ff.grupo_tipo === 'produccion';
+            const badgeGrupo = isProd 
+              ? `<span class="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1">🍳 Producción (Grupo 2)</span>`
+              : `<span class="text-[10px] font-bold text-emerald-900 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-md flex items-center gap-1">🍽️ Venta (Grupo 3)</span>`;
+
             html += `<div class="border border-gray-200 rounded-xl overflow-hidden bg-white mt-2 shadow-xs">`;
             html += `<button onclick="toggleRepairLevel('doc-${docId}')" class="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 text-left transition-colors flex-wrap gap-2 cursor-pointer">`;
-            html += `<div class="flex items-center gap-2">`;
+            html += `<div class="flex items-center gap-2 flex-wrap">`;
             html += `<svg class="w-3.5 h-3.5 text-gray-500 transition-transform repair-arrow" id="arrow-doc-${docId}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+            html += `${badgeGrupo}`;
             html += `<span class="text-xs text-gray-600 font-bold uppercase bg-gray-200 px-2 py-0.5 rounded">${ff.tipo_documento}</span>`;
-            html += `<span class="text-xs font-bold text-gray-900">${ff.documento_numero}</span>`;
+            html += `<span class="text-xs font-bold text-gray-900 font-mono">${ff.documento_numero}</span>`;
             html += `<span class="text-xs text-gray-500 font-mono">${ff.fecha}</span>`;
             html += `</div>`;
             html += `<div class="text-right text-xs">`;
@@ -12384,17 +12390,53 @@ async function cargarReporteEnsambles() {
             
             html += `<div id="vincular-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden my-1"></div>`;
             html += `<div id="reparar-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden my-1"></div>`;
-            if (ff.pedido_item.id) {
-              const dif = ff.pedido_item.diferencia;
-              const cls = Math.abs(dif) > 0.01 ? 'text-red-600' : 'text-green-600';
-              const costoActual = ff.pedido_item.costo_unitario_actual * ff.cantidad_vendida;
-              html += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500">Costo venta (pedido):</span><span class="${cls} font-bold">$${costoActual.toLocaleString('es-CO')} → $${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
+
+            // Resumen de Cantidad Base & Costo Unitario
+            const cantBase = parseFloat(ff.cantidad_base || 0);
+            const cantStr = cantBase.toLocaleString('es-CO', {maximumFractionDigits: 3});
+
+            html += `<div class="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs mb-3 space-y-2">`;
+            if (isProd) {
+              const costoUnitKardex = ff.costo_unitario_real || 0;
+              const costoUnitContab = (cantBase > 0 ? (ff.cogs_contable.monto_actual / cantBase) : 0);
+              const difCostoUnit = costoUnitContab - costoUnitKardex;
+              
+              html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">`;
+              html += `<div class="p-2.5 bg-amber-50/60 rounded-lg border border-amber-200/80">`;
+              html += `<span class="text-[10px] text-amber-800 font-bold uppercase block mb-1">📦 Kardex: Cantidad Elaborada & Costo Unitario</span>`;
+              html += `<div class="font-mono font-bold text-gray-800 text-xs">Cantidad: <span class="text-amber-900">${cantStr}</span> | Unitario: <span class="text-amber-900">$${costoUnitKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
+              html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Kardex: <b class="text-gray-800 font-mono">$${ff.costo_real_kardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
+              html += `</div>`;
+
+              html += `<div class="p-2.5 bg-slate-50 rounded-lg border border-gray-200">`;
+              html += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Contable: Débito 14* (Entrada Elaborada)</span>`;
+              html += `<div class="font-mono font-bold text-gray-800 text-xs">Total Débito 14*: <span class="text-gray-900">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> | Unit: <span class="text-gray-900">$${costoUnitContab.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
+              const clsU = Math.abs(difCostoUnit) > 0.01 ? 'text-red-600' : 'text-green-600';
+              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Diferencia Total: $${(ff.cogs_contable.monto_actual - ff.costo_real_kardex).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
+              html += `</div>`;
+              html += `</div>`;
+            } else {
+              const costoUnitKardex = ff.costo_unitario_real || 0;
+              const costoUnitPi = ff.pedido_item ? (ff.pedido_item.costo_unitario_actual || 0) : 0;
+              const difCostoUnit = costoUnitPi - costoUnitKardex;
+              
+              html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">`;
+              html += `<div class="p-2.5 bg-emerald-50/60 rounded-lg border border-emerald-200/80">`;
+              html += `<span class="text-[10px] text-emerald-800 font-bold uppercase block mb-1">📦 Kardex: Cantidad Vendida & Costo Unitario</span>`;
+              html += `<div class="font-mono font-bold text-gray-800 text-xs">Cantidad: <span class="text-emerald-900">${cantStr}</span> | Unitario: <span class="text-emerald-900">$${costoUnitKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
+              html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Receta: <b class="text-gray-800 font-mono">$${ff.costo_real_kardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
+              html += `</div>`;
+
+              html += `<div class="p-2.5 bg-slate-50 rounded-lg border border-gray-200">`;
+              html += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Contable & Pedido: Costo Venta (61* & Pedido)</span>`;
+              html += `<div class="font-mono font-bold text-gray-800 text-xs">Asiento 61*: <span class="text-gray-900">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> | Pedido Unit: <span class="text-gray-900">$${costoUnitPi.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
+              const clsU = Math.abs(difCostoUnit) > 0.01 ? 'text-red-600' : 'text-green-600';
+              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Diferencia Total: $${(ff.cogs_contable.monto_actual - ff.costo_real_kardex).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
+              html += `</div>`;
+              html += `</div>`;
             }
-            if (ff.cogs_contable.ids && ff.cogs_contable.ids.length > 0) {
-              const dif = ff.cogs_contable.diferencia;
-              const cls = Math.abs(dif) > 0.01 ? 'text-red-600' : 'text-green-600';
-              html += `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500">Asiento 61*:</span><span class="${cls} font-bold">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO')} → $${ff.costo_real_kardex.toLocaleString('es-CO')}</span></div>`;
-            }
+            html += `</div>`;
+
             if (ff.componentes.length > 0 || (ff.contrapartidas && ff.contrapartidas.length > 0)) {
               const compKardex = {};
               ff.componentes.forEach(c => {
@@ -12408,9 +12450,9 @@ async function cargarReporteEnsambles() {
                 if (!contraPorComp[nombre]) contraPorComp[nombre] = [];
                 contraPorComp[nombre].push(c);
               });
-              html += `<div class="mt-1">`;
+              html += `<div class="mt-2">`;
               html += `<div class="grid grid-cols-4 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
-              html += `<span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contable (14*)</span><span class="text-right">Diferencia</span>`;
+              html += `<span>Componente / Insumo</span><span class="text-right">Total Kardex</span><span class="text-right">Contable (14* Cr)</span><span class="text-right">Diferencia</span>`;
               html += `</div>`;
               const todosNombres = [...new Set([...Object.keys(compKardex), ...Object.keys(contraPorComp)])];
               todosNombres.forEach(nombre => {
@@ -12426,40 +12468,54 @@ async function cargarReporteEnsambles() {
                 const todoConfiable = contabEntries.every(c => c.match_tipo === 'producto_id');
                 if (!todoConfiable && !sinContable) tieneSinFuente = true;
                 const cls = sinContable || sinKardex ? 'text-gray-400' : (!todoConfiable ? 'text-amber-500' : (Math.abs(difTotal) > 0.01 ? 'text-red-600' : 'text-green-600'));
-                html += `<div class="px-2">`;
-                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-4 gap-2 text-left py-0.5 hover:bg-gray-50 rounded transition-colors">`;
-                html += `<span class="text-gray-600 text-xs truncate">${nombre}</span>`;
-                html += `<span class="text-gray-700 text-xs font-bold text-right">$${totalKardex.toLocaleString('es-CO')}</span>`;
+                html += `<div class="px-1">`;
+                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-4 gap-2 text-left py-1 hover:bg-gray-50 rounded transition-colors cursor-pointer">`;
+                html += `<span class="text-gray-700 text-xs font-semibold truncate">${nombre}</span>`;
+                html += `<span class="text-gray-800 text-xs font-bold text-right font-mono">$${totalKardex.toLocaleString('es-CO')}</span>`;
                 if (sinContable) {
                   html += `<span class="text-gray-400 text-xs text-right">—</span>`;
                   html += `<span class="text-gray-400 text-xs text-right">—</span>`;
                 } else if (!todoConfiable) {
                   html += `<span class="text-amber-500 text-xs text-right font-semibold">SIN FUENTE</span>`;
-                  html += `<span class="text-amber-500 text-xs text-right">NO DISPONIBLE</span>`;
+                  html += `<span class="text-amber-500 text-xs text-right font-semibold">NO DISPONIBLE</span>`;
                 } else if (mismaCantidad) {
-                  html += `<span class="text-xs font-bold text-right ${cls}">$${totalContab.toLocaleString('es-CO')}</span>`;
-                  html += `<span class="text-xs font-bold text-right ${cls}">${Math.abs(difTotal) > 0.01 ? '$' + difTotal.toLocaleString('es-CO') : 'OK'}</span>`;
+                  html += `<span class="text-xs font-bold text-right font-mono ${cls}">$${totalContab.toLocaleString('es-CO')}</span>`;
+                  html += `<span class="text-xs font-bold text-right font-mono ${cls}">${Math.abs(difTotal) > 0.01 ? '$' + difTotal.toLocaleString('es-CO') : 'OK'}</span>`;
                 } else {
-                  html += `<span class="text-xs font-bold text-right text-amber-600">$${totalContab.toLocaleString('es-CO')} (${contabEntries.length})</span>`;
-                  html += `<span class="text-xs font-bold text-right text-amber-600">$${totalKardex.toLocaleString('es-CO')} (${kardexEntries.length})</span>`;
+                  html += `<span class="text-xs font-bold text-right text-amber-600 font-mono">$${totalContab.toLocaleString('es-CO')} (${contabEntries.length})</span>`;
+                  html += `<span class="text-xs font-bold text-right text-amber-600 font-mono">$${totalKardex.toLocaleString('es-CO')} (${kardexEntries.length})</span>`;
                 }
                 html += `</button>`;
-                html += `<div id="comp-${cid}" class="hidden pl-4 text-[10px] text-gray-400 pb-1">`;
+                html += `<div id="comp-${cid}" class="hidden pl-2 pb-1 space-y-1">`;
                 if (sinContable) {
-                  html += `Sin datos contables`;
+                  html += `<div class="text-[10px] text-gray-400 p-2 bg-gray-50 rounded-lg">Sin datos contables asociados</div>`;
                 } else if (!todoConfiable) {
-                  html += `SIN FUENTE (match por nombre, no confiable)`;
+                  html += `<div class="text-[10px] text-amber-700 p-2 bg-amber-50 rounded-lg border border-amber-200">SIN FUENTE (match por nombre, requiere vinculación de IDs)</div>`;
                 } else if (mismaCantidad) {
                   const kSorted = [...kardexEntries].sort((a, b) => a.costo_total - b.costo_total);
                   const cSorted = [...contabEntries].sort((a, b) => a.monto_actual - b.monto_actual);
                   kSorted.forEach((k, i) => {
-                    const c = cSorted[i];
+                    const c = cSorted[i] || { monto_actual: 0, cuenta: '' };
                     const dif = c.monto_actual - k.costo_total;
                     const clsDif = Math.abs(dif) > 0.01 ? 'text-amber-600' : 'text-green-600';
-                    html += `<div class="flex justify-between"><span>${k.costo_total.toLocaleString('es-CO')} → ${c.monto_actual.toLocaleString('es-CO')}</span><span class="${clsDif} ml-2">${Math.abs(dif) > 0.01 ? '$' + dif.toLocaleString('es-CO') : 'OK'}</span></div>`;
+                    const cantK = parseFloat(k.cantidad || 0);
+                    const costUndK = parseFloat(k.costo_und || 0);
+                    const totalK = parseFloat(k.costo_total || 0);
+                    
+                    html += `<div class="py-2 px-3 bg-slate-50 rounded-xl border border-gray-200 my-1 text-xs">`;
+                    html += `<div class="flex items-center justify-between flex-wrap gap-2">`;
+                    html += `<div class="text-gray-700">`;
+                    html += `📦 <b class="text-gray-900">Kardex:</b> <span class="font-mono text-gray-800">${cantK.toLocaleString('es-CO', {maximumFractionDigits: 3})} × $${costUndK.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> = <b class="text-rose-700 font-mono font-bold">$${totalK.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>`;
+                    html += `</div>`;
+                    html += `<div class="text-gray-700">`;
+                    html += `🏛️ <b class="text-gray-900">Contable (14* Cr):</b> <b class="font-mono text-gray-800">$${c.monto_actual.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>`;
+                    html += `<span class="${clsDif} font-bold ml-2 font-mono">${Math.abs(dif) > 0.01 ? 'Dif: $' + dif.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '✅ OK'}</span>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                    html += `</div>`;
                   });
                 } else {
-                  html += `<div class="text-amber-600 font-semibold">⚠ ${contabEntries.length} contab vs ${kardexEntries.length} kardex — revisar manualmente</div>`;
+                  html += `<div class="text-amber-600 font-semibold text-xs py-1">⚠ ${contabEntries.length} contab vs ${kardexEntries.length} kardex — revisar manualmente</div>`;
                   html += `<div class="mt-1">Contab:</div>`;
                   contabEntries.forEach(c => { html += `<div>$${c.monto_actual.toLocaleString('es-CO')} — ${c.concepto}</div>`; });
                   html += `<div class="mt-1">Kardex:</div>`;

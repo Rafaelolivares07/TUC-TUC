@@ -4654,6 +4654,62 @@ def api_gastos_linea_delete(negocio_id, line_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/contabilidad/<int:negocio_id>/gastos/linea/<int:line_id>/soporte', methods=['PUT', 'PATCH'])
+def api_gastos_linea_soporte_put(negocio_id, line_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    nuevo_soporte = (data.get('soporte') or '').strip()
+    
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        line = conn.execute("""
+            SELECT id, fecha, concepto FROM movimientos_contables 
+            WHERE id = %s AND negocio_id = %s
+        """, (line_id, negocio_id)).fetchone()
+        
+        if not line:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Registro de gasto no encontrado'}), 404
+            
+        _verificar_periodo_cerrado(conn, negocio_id, line['fecha'])
+        
+        concepto_actual = line['concepto'] or ''
+        
+        import re
+        # Extraer nota entre parentesis al final si existe
+        match_nota = re.search(r'\(([^)]+)\)$', concepto_actual)
+        nota = match_nota.group(1).strip() if match_nota else ''
+        
+        # Extraer concepto base eliminando [Soporte: ...] y (nota)
+        concepto_base = re.sub(r'\[Soporte:\s*[^\]]+\]', '', concepto_actual)
+        if nota:
+            concepto_base = re.sub(r'\([^)]+\)$', '', concepto_base)
+        concepto_base = concepto_base.strip()
+        
+        # Reconstruir concepto con el nuevo soporte
+        nuevo_concepto = concepto_base
+        if nuevo_soporte:
+            nuevo_concepto += f" [Soporte: {nuevo_soporte}]"
+        if nota:
+            nuevo_concepto += f" ({nota})"
+            
+        conn.execute("""
+            UPDATE movimientos_contables
+            SET concepto = %s
+            WHERE id = %s AND negocio_id = %s
+        """, (nuevo_concepto, line_id, negocio_id))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'nuevo_concepto': nuevo_concepto})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/contabilidad/<int:negocio_id>/gastos/relacion/fecha', methods=['PUT'])
 def api_gastos_fecha_put(negocio_id):
     if not session.get('usuario_id'):

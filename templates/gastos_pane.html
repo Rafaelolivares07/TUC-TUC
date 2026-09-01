@@ -178,6 +178,42 @@
     </div>
   </div>
 
+  <!-- Modal Editar N° Soporte -->
+  <div id="modal-editar-soporte-gasto" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-5 max-w-sm w-full animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2 text-gray-800">
+          <span class="text-lg">🧾</span>
+          <h4 class="text-sm font-bold">N° Recibo / Factura Soporte</h4>
+        </div>
+        <button onclick="cerrarModalEditarSoporte()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+      </div>
+      
+      <div class="mb-3 p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+        <span class="text-gray-400 block text-[10px] uppercase font-bold">Concepto</span>
+        <span id="modal-soporte-concepto" class="font-bold text-gray-800 block truncate"></span>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Número de Soporte / Factura</label>
+        <input id="modal-soporte-input" type="text" placeholder="Ej. FAC-4589, REC-12, Vale 05..."
+               autocomplete="off"
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none font-mono text-gray-800"
+               onkeydown="if(event.key==='Enter') guardarSoporteGasto(); if(event.key==='Escape') cerrarModalEditarSoporte();">
+        <span class="text-[10px] text-gray-400 mt-1 block">Deje en blanco si desea eliminar el número de soporte.</span>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="cerrarModalEditarSoporte()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+          Cancelar
+        </button>
+        <button id="btn-guardar-soporte" onclick="guardarSoporteGasto()" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1">
+          💾 Guardar
+        </button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -300,8 +336,11 @@
           let soporteBadge = '';
           const matchSoporte = displayConcepto.match(/\[Soporte:\s*([^\]]+)\]/i);
           if (matchSoporte) {
-            soporteBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1.5">🧾 ${matchSoporte[1]}</span>`;
+            const soporteValor = matchSoporte[1].trim();
+            soporteBadge = `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition" onclick="abrirModalEditarSoporte(${l.id}, '${escapeGasHtml(soporteValor)}', '${escapeGasHtml(displayConcepto)}')" title="Haga clic para modificar el N° de recibo/factura">🧾 ${escapeGasHtml(soporteValor)} <span class="text-[9px] text-amber-600 opacity-70">✏️</span></span>`;
             displayConcepto = displayConcepto.replace(/\[Soporte:\s*[^\]]+\]/i, '').trim();
+          } else {
+            soporteBadge = `<button type="button" onclick="abrirModalEditarSoporte(${l.id}, '', '${escapeGasHtml(displayConcepto)}')" class="inline-flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-amber-700 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-dashed border-gray-250 ml-1 font-mono" title="Asociar número de recibo o factura a este gasto">+ Soporte</button>`;
           }
 
           tr.innerHTML = `
@@ -817,12 +856,70 @@
     window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${numDoc}/pdf`, '_blank');
   }
 
+  function escapeGasHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  let _lineaEditandoSoporteId = null;
+
+  function abrirModalEditarSoporte(lineaId, soporteActual, conceptoNombre) {
+    _lineaEditandoSoporteId = lineaId;
+    document.getElementById('modal-soporte-concepto').textContent = conceptoNombre || 'Gasto';
+    const inp = document.getElementById('modal-soporte-input');
+    inp.value = soporteActual || '';
+    const modal = document.getElementById('modal-editar-soporte-gasto');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => {
+      inp.focus();
+      inp.select();
+    }, 60);
+  }
+
+  function cerrarModalEditarSoporte() {
+    _lineaEditandoSoporteId = null;
+    const modal = document.getElementById('modal-editar-soporte-gasto');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  async function guardarSoporteGasto() {
+    if (!_lineaEditandoSoporteId) return;
+    const nuevoSoporte = document.getElementById('modal-soporte-input').value.trim();
+    const btn = document.getElementById('btn-guardar-soporte');
+    btn.disabled = true;
+    
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea/${_lineaEditandoSoporteId}/soporte`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ soporte: nuevoSoporte })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast('N° de soporte actualizado.');
+        cerrarModalEditarSoporte();
+        await cargarRelacionGastoActiva();
+      } else {
+        toast(d.error || 'Error al guardar soporte', false);
+      }
+    } catch(e) {
+      toast('Error de red al actualizar soporte', false);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   document.addEventListener('click', e => {
     if (!e.target.closest('#gas-concept-txt') && !e.target.closest('#gas-concept-ac')) {
       document.getElementById('gas-concept-ac').classList.add('hidden');
     }
     if (!e.target.closest('#gas-tercero-txt') && !e.target.closest('#gas-tercero-ac')) {
       document.getElementById('gas-tercero-ac').classList.add('hidden');
+    }
+    if (e.target.id === 'modal-editar-soporte-gasto') {
+      cerrarModalEditarSoporte();
     }
   });
 </script>

@@ -2164,25 +2164,23 @@
 
           <tr class="text-gray-500 uppercase text-[10px]">
 
-            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50">Fecha</th>
+            <th rowspan="2" class="px-2.5 py-1.5 text-left align-middle bg-gray-50 whitespace-nowrap w-[115px]">Fecha</th>
 
-            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50">Documento / Proveedor</th>
+            <th rowspan="2" class="px-3 py-1.5 text-left align-middle bg-gray-50 min-w-[190px]">Documento / Proveedor</th>
 
-            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50">Origen</th>
+            <th rowspan="2" class="px-3 py-1.5 text-left align-middle bg-gray-50 min-w-[170px]">Origen</th>
 
-            <th colspan="3" class="px-3 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100">CANTIDADES</th>
+            <th colspan="3" class="px-2 py-0.5 text-center border-b border-gray-200/60 font-bold bg-gray-100">CANTIDADES</th>
 
-            <th colspan="2" class="px-3 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100">COSTOS UNITARIOS</th>
+            <th colspan="2" class="px-2 py-0.5 text-center border-b border-gray-200/60 font-bold bg-gray-100">COSTOS UNITARIOS</th>
 
-            <th rowspan="2" class="px-3 py-2 text-right num align-middle bg-gray-50">Total Línea</th>
-
-            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50">Notas</th>
+            <th rowspan="2" class="px-3 py-1.5 text-right num align-middle bg-gray-50 whitespace-nowrap">Total Línea</th>
 
           </tr>
 
           <tr class="text-gray-500 uppercase text-[10px]">
 
-            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-50 text-emerald-800 border-r border-gray-100">
+            <th class="px-2.5 py-1 text-right num font-semibold bg-gray-50 text-emerald-800 border-r border-gray-100 min-w-[75px]">
 
               Entradas
 
@@ -2190,7 +2188,7 @@
 
             </th>
 
-            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-50 text-rose-800 border-r border-gray-100">
+            <th class="px-2.5 py-1 text-right num font-semibold bg-gray-50 text-rose-800 border-r border-gray-100 min-w-[75px]">
 
               Salidas
 
@@ -2198,11 +2196,11 @@
 
             </th>
 
-            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-50 text-gray-800">Saldo</th>
+            <th class="px-2.5 py-1 text-right num font-semibold bg-gray-50 text-gray-800 min-w-[75px]">Saldo</th>
 
-            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-50 text-blue-800 border-r border-gray-100" title="Costo unitario del movimiento">Costo Trans.</th>
+            <th class="px-2.5 py-1 text-right num font-semibold bg-gray-50 text-blue-800 border-r border-gray-100 min-w-[85px]" title="Costo unitario del movimiento">Costo Trans.</th>
 
-            <th class="px-3 py-1.5 text-right num font-semibold bg-gray-50 text-purple-800" title="Costo promedio ponderado resultante">Costo Prom.</th>
+            <th class="px-2.5 py-1 text-right num font-semibold bg-gray-50 text-purple-800 min-w-[85px]" title="Costo promedio ponderado resultante">Costo Prom.</th>
 
           </tr>
 
@@ -2210,7 +2208,7 @@
 
         <tbody id="tabla-kardex" class="divide-y divide-gray-100">
 
-          <tr><td colspan="10" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
+          <tr><td colspan="9" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
 
         </tbody>
 
@@ -6371,13 +6369,20 @@ function verKardex(id, nombre, movimientoId = null) {
 let kardexProductoActual = null;
 let _kardexPdfInfo = null;
 
+function toggleKardexNota(movId) {
+  const row = document.getElementById(`kardex-nota-${movId}`);
+  if (row) {
+    row.classList.toggle('hidden');
+  }
+}
+
 async function cargarKardex(productoId) {
 
   kardexProductoActual = Number(productoId);
 
   const tb = document.getElementById('tabla-kardex');
 
-  tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+  tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
 
   _kardexPdfInfo = null;
   const btnPdfReset = document.getElementById('kardex-btn-pdf');
@@ -6453,7 +6458,7 @@ async function cargarKardex(productoId) {
 
   if (!d.movimientos.length) {
 
-    tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
 
     _kardexPdfInfo = null;
     const btnPdf = document.getElementById('kardex-btn-pdf');
@@ -6514,7 +6519,11 @@ async function cargarKardex(productoId) {
 
     const salidaClass = m.tipo === 'salida' ? 'font-bold text-rose-600 bg-rose-50/10' : 'text-gray-400';
 
-
+    const notaTexto = (m.notes || m.notas || '').trim();
+    const tieneNota = notaTexto.length > 0;
+    const btnNota = tieneNota
+      ? `<button type="button" onclick="toggleKardexNota(${m.id})" class="inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[9px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition cursor-pointer select-none" title="Clic para ver/ocultar nota">📝 Nota</button>`
+      : '';
 
     let docOrProveedorInfo = '';
 
@@ -6534,21 +6543,27 @@ async function cargarKardex(productoId) {
 
       docOrProveedorInfo += `
 
-        <div class="font-semibold text-gray-700 flex items-center gap-1.5">
+        <div class="font-semibold text-gray-700 flex items-center gap-1.5 flex-wrap leading-tight">
 
-          <span>${docType} ${docNum}</span>
+          <span class="whitespace-nowrap">${docType} ${docNum}</span>
 
-          ${docNum ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-[13px] inline-flex items-center">🔗</a>` : ''}
+          ${docNum ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-[12px] inline-flex items-center">🔗</a>` : ''}
+
+          ${btnNota}
 
         </div>
 
       `;
 
+    } else if (btnNota) {
+
+      docOrProveedorInfo += `<div class="flex items-center">${btnNota}</div>`;
+
     }
 
     if (m.proveedor_nombre) {
 
-      docOrProveedorInfo += `<div class="text-gray-400 text-[10px]">${m.proveedor_nombre}</div>`;
+      docOrProveedorInfo += `<div class="text-gray-400 text-[10px] leading-tight truncate max-w-[260px]" title="${m.proveedor_nombre}">${m.proveedor_nombre}</div>`;
 
     }
 
@@ -6560,7 +6575,7 @@ async function cargarKardex(productoId) {
 
         <div class="flex items-center gap-1">
 
-          <span class="inline-block px-1.5 py-0.5 rounded bg-indigo-50 text-[10px] font-bold text-indigo-700 border border-indigo-100">
+          <span class="inline-block px-1.5 py-0.5 rounded bg-indigo-50 text-[10px] font-bold text-indigo-700 border border-indigo-100 whitespace-nowrap">
 
             🍳 ${m.producto_padre_nombre}
 
@@ -6592,7 +6607,7 @@ async function cargarKardex(productoId) {
       ? `draggable="true" ondragstart="kardexDragStart(event)" ondragover="kardexDragOver(event)" ondragleave="kardexDragLeave(event)" ondrop="kardexDrop(event)" ondragend="kardexDragEnd(event)"`
       : '';
 
-    return `
+    const filaPrincipal = `
       <tr id="kardex-mov-${m.id}" ${dragAttrs}
           data-mov-id="${m.id}"
           data-doc-tipo="${m.tipo_documento || ''}"
@@ -6603,20 +6618,31 @@ async function cargarKardex(productoId) {
           data-created-at-iso="${createdAtIso}"
           class="hover:bg-gray-50/70 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''} ${esDocValido ? 'cursor-default' : ''}" 
           title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
-        <td class="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap align-middle">
+        <td class="px-2.5 py-1 text-xs text-gray-500 whitespace-nowrap align-middle">
           <div class="flex items-center">${dragHandle}${fechaCelda}</div>
         </td>
-        <td class="px-3 py-2.5 text-xs text-gray-600">${docOrProveedorInfo}</td>
-        <td class="px-3 py-2.5 text-xs text-gray-600">${origenInfo}</td>
-        <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
-        <td class="px-3 py-2.5 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
-        <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${fmt(m.stock_nuevo)}</td>
-        <td class="px-3 py-2.5 text-right num font-mono text-xs text-gray-600 border-r border-gray-100/50">${fmtUnitCost(transCostVal)}</td>
-        <td class="px-3 py-2.5 text-right num font-mono text-xs text-gray-600">${fmtUnitCost(avgCostVal)}</td>
-        <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-800">${fmtMon(lineTotal)}</td>
-        <td class="px-3 py-2.5 text-xs text-gray-400 max-w-[140px] truncate" title="${m.notes || m.notas || ''}">${m.notes || m.notas || ''}</td>
+        <td class="px-3 py-1 text-xs text-gray-600">${docOrProveedorInfo}</td>
+        <td class="px-3 py-1 text-xs text-gray-600">${origenInfo}</td>
+        <td class="px-2.5 py-1 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
+        <td class="px-2.5 py-1 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
+        <td class="px-2.5 py-1 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${fmt(m.stock_nuevo)}</td>
+        <td class="px-2.5 py-1 text-right num font-mono text-xs text-gray-600 border-r border-gray-100/50">${fmtUnitCost(transCostVal)}</td>
+        <td class="px-2.5 py-1 text-right num font-mono text-xs text-gray-600">${fmtUnitCost(avgCostVal)}</td>
+        <td class="px-3 py-1 text-right num font-mono font-semibold text-gray-800">${fmtMon(lineTotal)}</td>
       </tr>
     `;
+
+    const filaNota = tieneNota
+      ? `
+      <tr id="kardex-nota-${m.id}" class="hidden bg-amber-50/40 text-gray-600 text-[11px] border-b border-amber-100/60">
+        <td colspan="9" class="px-6 py-1 italic">
+          <span class="font-bold not-italic text-amber-800">📝 Nota:</span> ${notaTexto}
+        </td>
+      </tr>
+      `
+      : '';
+
+    return filaPrincipal + filaNota;
   }).join('');
 }
 

@@ -7443,11 +7443,11 @@ def _pdf_fila_wrap(pdf, col_w, field, aligns, wrap_cols, alto_linea=4.0):
 def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
                          stock_actual, costo_actual, valor_existencia, movimientos, usuario):
 
-    col_w = [24, 50, 20, 14, 14, 14, 17, 17, 20]
-    headers = ['Fecha', 'Documento / Proveedor', 'Origen', 'Entradas', 'Salidas',
+    col_w = [24, 62, 15, 15, 15, 18, 18, 22]
+    headers = ['Fecha', 'Documento / Proveedor', 'Entradas', 'Salidas',
                'Saldo', 'C.Trans', 'C.Prom', 'Total Línea']
-    aligns = ['L', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R']
-    wrap_cols = {0, 1, 2}
+    aligns = ['L', 'L', 'R', 'R', 'R', 'R', 'R', 'R']
+    wrap_cols = {0, 1}
 
     class KardexPDF(FPDF):
         def __init__(self, *a, **k):
@@ -7523,7 +7523,6 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
         field = [
             _pdf_sanitize(m.get('fecha') or ''),
             _pdf_sanitize(doc),
-            _pdf_sanitize(origen),
             entrada,
             salida,
             _pdf_money(saldo),
@@ -7532,18 +7531,23 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
             _pdf_money(m.get('valor_total')),
         ]
         _pdf_fila_wrap(pdf, col_w, field, aligns, wrap_cols)
+        segmentos = []
+        if origen:
+            segmentos.append('Origen: ' + _pdf_sanitize(origen))
         nota_txt = _pdf_sanitize(m.get('notas') or '').strip()
         if nota_txt:
+            segmentos.append('Nota: ' + nota_txt)
+        if segmentos:
             pdf.set_font('Helvetica', 'I', 6)
             pdf.set_text_color(130, 130, 130)
-            texto_nota = 'Nota: ' + nota_txt
-            nls = pdf.multi_cell(ancho_tabla - 8, 3.4, texto_nota, split_only=True)
+            texto_extra = '     -     '.join(segmentos)
+            nls = pdf.multi_cell(ancho_tabla - 8, 3.4, texto_extra, split_only=True)
             alto_nota = max(len(nls), 1) * 3.4 + 0.6
             if pdf.get_y() + alto_nota > pdf.page_break_trigger:
                 pdf.add_page()
             y_nota = pdf.get_y()
             pdf.set_xy(pdf.l_margin + 5, y_nota + 0.3)
-            pdf.multi_cell(ancho_tabla - 8, 3.4, texto_nota, border=0, align='L')
+            pdf.multi_cell(ancho_tabla - 8, 3.4, texto_extra, border=0, align='L')
             pdf.set_draw_color(208, 208, 208)
             pdf.line(pdf.l_margin, y_nota + alto_nota, pdf.l_margin + ancho_tabla, y_nota + alto_nota)
             pdf.set_draw_color(0, 0, 0)

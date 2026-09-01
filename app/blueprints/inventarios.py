@@ -1567,10 +1567,10 @@ def api_inventario_kardex_pdf(producto_id):
         nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
 
         prod_row = conn.execute(
-            "SELECT nombre, codigo FROM productos WHERE id = %s", (producto_id,)
+            "SELECT nombre FROM productos WHERE id = %s", (producto_id,)
         ).fetchone()
         nombre_producto = prod_row['nombre'] if prod_row else 'Producto'
-        codigo_producto = prod_row['codigo'] if (prod_row and prod_row['codigo']) else ''
+        codigo_producto = ''
 
         rows = conn.execute("""
             SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,

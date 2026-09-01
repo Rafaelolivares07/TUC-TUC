@@ -7399,6 +7399,47 @@ def _timestamp_pdf():
     return datetime.now().strftime('%d/%m/%Y %H:%M')
 
 
+def _pdf_fila_wrap(pdf, col_w, field, aligns, wrap_cols, alto_linea=4.0):
+    """Fila de tabla con wrap real por columna. El alto de la fila es el maximo
+    de lineas entre columnas de texto, evitando que el contenido se monte sobre
+    columnas vecinas. wrap_cols = indices de columnas que admiten multiple linea."""
+    n_max = 1
+    for i, txt in enumerate(field):
+        t = str(txt or '')
+        if i in wrap_cols and t:
+            ls = pdf.multi_cell(max(col_w[i] - 1.6, 4), alto_linea, t, split_only=True)
+            n_max = max(n_max, len(ls))
+    alto_fila = n_max * alto_linea + 1.0
+    if pdf.get_y() + alto_fila > pdf.page_break_trigger:
+        pdf.add_page()
+    x0 = pdf.l_margin
+    y0 = pdf.get_y()
+    ancho_total = sum(col_w)
+    # Separadores de columna: casi imperceptibles
+    pdf.set_draw_color(240, 240, 240)
+    x_cur = x0
+    for i in range(1, len(col_w)):
+        x_cur += col_w[i - 1]
+        pdf.line(x_cur, y0, x_cur, y0 + alto_fila)
+    # Separador de fila: sutil
+    pdf.set_draw_color(208, 208, 208)
+    pdf.line(x0, y0 + alto_fila, x0 + ancho_total, y0 + alto_fila)
+    pdf.set_draw_color(0, 0, 0)
+    for i, txt in enumerate(field):
+        t = str(txt or '')
+        x_cur = x0 + sum(col_w[:i]) + 0.8
+        w_cur = col_w[i] - 1.6
+        align = aligns[i] if i < len(aligns) else 'L'
+        if i in wrap_cols:
+            if t:
+                pdf.set_xy(x_cur, y0 + 0.4)
+                pdf.multi_cell(w_cur, alto_linea, t, border=0, align=align)
+        else:
+            pdf.set_xy(x_cur, y0)
+            pdf.cell(w_cur, alto_fila, t, border=0, align=align)
+    pdf.set_xy(x0, y0 + alto_fila)
+
+
 def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
                          stock_actual, costo_actual, valor_existencia, movimientos, usuario):
 
@@ -7443,11 +7484,12 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
 
     pdf.ln(2)
 
-    # ── Tabla ──
-    col_w = [22, 30, 17, 17, 17, 17, 17, 22, 22, 22]
+    # ── Tabla ── (suma de anchos = 190mm, dentro del area imprimible carta de 196mm)
+    col_w = [24, 32, 16, 14, 14, 14, 17, 17, 20, 22]
     headers = ['Fecha', 'Documento / Proveedor', 'Origen', 'Entradas', 'Salidas',
                'Saldo', 'C.Trans', 'C.Prom', 'Total Línea', 'Notas']
     aligns = ['L', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R', 'L']
+    wrap_cols = {0, 1, 2, 9}
 
     pdf.set_fill_color(235, 235, 235)
     pdf.set_text_color(70, 70, 70)
@@ -7458,7 +7500,6 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
 
     pdf.set_font('Helvetica', '', 6.5)
     pdf.set_text_color(40, 40, 40)
-    alto_linea = 5
     for m in movimientos:
         doc = m['tipo_documento'] or ''
         if m['documento_numero']:
@@ -7473,29 +7514,17 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
         saldo = m.get('stock_nuevo', 0)
         field = [
             _pdf_sanitize(m.get('fecha') or ''),
-            _pdf_sanitize(doc)[:32],
-            _pdf_sanitize(origen)[:30],
+            _pdf_sanitize(doc),
+            _pdf_sanitize(origen),
             entrada,
             salida,
             _pdf_money(saldo),
             _pdf_money(m.get('valor_unitario')),
             _pdf_money(m.get('costo_und')),
             _pdf_money(m.get('valor_total')),
-            _pdf_sanitize(m.get('notas') or '')[:28],
+            _pdf_sanitize(m.get('notas') or ''),
         ]
-        # Detectar salto de pagina en la primera columna
-        multi = pdf.multi_cell(col_w[0], alto_linea, field[0], split_only=True)
-        alto_fila = max(len(multi) * alto_linea, alto_linea)
-        if pdf.get_y() + alto_fila > pdf.page_break_trigger:
-            pdf.add_page()
-        x_fila = pdf.get_x()
-        y_fila = pdf.get_y()
-        # Dibujar col 0 con wrap
-        pdf.multi_cell(col_w[0], alto_linea, field[0], border=1, align='L')
-        pdf.set_xy(x_fila + col_w[0], y_fila)
-        for i in range(1, len(field)):
-            pdf.cell(col_w[i], alto_fila, field[i], border=1, align=aligns[i])
-        pdf.set_xy(pdf.l_margin, y_fila + alto_fila)
+        _pdf_fila_wrap(pdf, col_w, field, aligns, wrap_cols)
 
     # ── Totales ──
     pdf.ln(1)

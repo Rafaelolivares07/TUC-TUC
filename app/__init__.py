@@ -159,13 +159,12 @@ def create_app():
                     return cobrar_mesa_page(slug, mesa_id)
             return restaurante_publico(slug)
 
-    # scheduler contabilidad desactivado — colgaba el worker de gunicorn
-    # reactivar cuando se confirme que las tablas existen y no hay locks
-    # if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-    #     from apscheduler.schedulers.background import BackgroundScheduler
-    #     scheduler = BackgroundScheduler(daemon=True)
-    #     scheduler.add_job(ejecutar_programaciones_job, 'interval', minutes=1,
-    #                       args=[app], id='programaciones_contables')
-    #     scheduler.start()
+    @app.after_request
+    def add_no_cache_headers(response):
+        if not request.path.startswith('/static/'):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
 
     return app

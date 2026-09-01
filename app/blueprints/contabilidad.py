@@ -4618,7 +4618,7 @@ def api_gastos_linea_post(negocio_id):
                  tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (negocio_id, comp_id, cuenta_puc_id, acc['codigo'], concepto, 'debito', monto, uid, tercero_id,
-              tipo_doc_id, num_doc, fecha, tipo_doc, 'Relación de Gastos mensual', 'gasto'))
+              tipo_doc_id, num_doc, fecha, tipo_doc, 'Relación de Gastos', 'gasto'))
               
         conn.commit()
         conn.close()
@@ -4750,7 +4750,7 @@ def api_gastos_cierre_post(negocio_id):
                  tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (negocio_id, rows['comprobante_id'], cuenta_puc_id, acc['codigo'], 'Cierre relación gastos - Contrapartida ' + metodo_pago_codigo, 'credito',
-              float(rows['total_deb']), uid, rows['tipo_doc_id'], num_doc, fecha, tipo_doc, 'Relación de Gastos mensual cerrada', 'gasto'))
+              float(rows['total_deb']), uid, rows['tipo_doc_id'], num_doc, fecha, tipo_doc, 'Relación de Gastos cerrada', 'gasto'))
               
         # Increment consecutive number of the document type
         conn.execute("""

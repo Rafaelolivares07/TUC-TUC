@@ -10,8 +10,8 @@
         </svg>
       </div>
       <div>
-        <h2 class="text-lg font-bold text-gray-800">Relación Mensual de Gastos</h2>
-        <p class="text-xs text-gray-500">Registre y agrupe los gastos del mes de manera operativa para su posterior cierre y contabilización automática.</p>
+        <h2 class="text-lg font-bold text-gray-800">Relación de Gastos</h2>
+        <p class="text-xs text-gray-500">Relacione individualmente los gastos del período por medio de pago o fondo (ej. Efectivo, Bancolombia, etc.). Cada gasto se asienta contablemente bajo la fecha de la relación (no se permite mezclar meses diferentes en un mismo documento). La relación permanecerá abierta hasta definir el método de pago y efectuar el registro del desembolso final.</p>
       </div>
     </div>
     
@@ -95,16 +95,30 @@
       <!-- Botón Agregar -->
       <div class="md:col-span-2">
         <button onclick="agregarLineaGasto()"
-                class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-sm w-full transition shadow-sm flex items-center justify-center gap-1">
+                class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-sm w-full transition shadow-sm flex items-center justify-center gap-1 h-[38px]">
           ➕ Agregar
         </button>
       </div>
 
-      <!-- Nota / Observación -->
-      <div class="md:col-span-12 mt-1">
-        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Observación o Detalle adicional</label>
+      <!-- N° Recibo / Factura Soporte (Opcional) -->
+      <div class="md:col-span-4 mt-1">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">
+          N° Recibo / Factura Soporte <span class="text-gray-400 font-normal lowercase">(opcional)</span>
+        </label>
+        <input id="gas-soporte" type="text" placeholder="Ej. FAC-4589, REC-12, Vale 05..."
+               autocomplete="off"
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono text-gray-700"
+               onkeydown="navSoporte(event)">
+      </div>
+
+      <!-- Nota / Observación (Opcional) -->
+      <div class="md:col-span-8 mt-1">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">
+          Observación o Detalle adicional <span class="text-gray-400 font-normal lowercase">(opcional)</span>
+        </label>
         <input id="gas-nota" type="text" placeholder="Ej. Pago de arriendo local agosto o transporte de entregas"
-               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none">
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+               onkeydown="navNota(event)">
       </div>
       
     </div>
@@ -281,15 +295,24 @@
           total += parseFloat(l.monto);
           const tr = document.createElement('tr');
           tr.className = 'hover:bg-gray-50';
+          
+          let displayConcepto = l.concepto || '';
+          let soporteBadge = '';
+          const matchSoporte = displayConcepto.match(/\[Soporte:\s*([^\]]+)\]/i);
+          if (matchSoporte) {
+            soporteBadge = `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1.5">🧾 ${matchSoporte[1]}</span>`;
+            displayConcepto = displayConcepto.replace(/\[Soporte:\s*[^\]]+\]/i, '').trim();
+          }
+
           tr.innerHTML = `
             <td class="px-4 py-2.5 text-xs font-semibold text-gray-700">
-              <div>${l.concepto}</div>
+              <div class="flex items-center flex-wrap gap-1">${displayConcepto} ${soporteBadge}</div>
               <span class="text-[9px] text-gray-400 font-mono">${l.cuenta}</span>
             </td>
             <td class="px-4 py-2.5 text-xs text-gray-600">${l.tercero_nombre || 'N/A'}</td>
             <td class="px-4 py-2.5 text-right font-mono text-xs text-rose-700 font-bold">$${parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             <td class="px-4 py-2.5 text-center">
-              <button onclick="eliminarLineaGasto(${l.id})" class="text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2 py-1 rounded transition text-xs">
+              <button onclick="eliminarLineaGasto(${l.id})" class="text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2 py-1 rounded transition text-xs" title="Eliminar este gasto">
                 ❌
               </button>
             </td>
@@ -538,8 +561,12 @@
   }
 
   function navMonto(e) {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); }
-    else if (e.key === 'Escape') {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { 
+      e.preventDefault(); 
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      agregarLineaGasto();
+    } else if (e.key === 'Escape') {
       const terceroContainer = document.getElementById('gas-tercero-container');
       if (!terceroContainer.classList.contains('hidden')) {
         document.getElementById('gas-tercero-txt').focus();
@@ -549,6 +576,27 @@
       e.preventDefault();
     }
   }
+
+  function navSoporte(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      agregarLineaGasto();
+    } else if (e.key === 'Escape') {
+      document.getElementById('gas-monto').focus();
+      e.preventDefault();
+    }
+  }
+
+  function navNota(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      agregarLineaGasto();
+    } else if (e.key === 'Escape') {
+      document.getElementById('gas-soporte').focus();
+      e.preventDefault();
+    }
+  }
+
   async function actualizarFechaRelacion() {
     const tipoDoc = document.getElementById('gas-tipo-doc').value;
     const numDoc = document.getElementById('gas-num-doc').value;
@@ -594,6 +642,7 @@
     const conceptoText = document.getElementById('gas-concept-txt').value.trim();
     const montoRaw = document.getElementById('gas-monto').value.replace(/[$\s.]/g, '').replace(',', '.');
     const monto = parseFloat(montoRaw || 0);
+    const soporte = document.getElementById('gas-soporte').value.trim();
     const nota = document.getElementById('gas-nota').value.trim();
     const tercero_id = document.getElementById('gas-tercero-id').value || null;
     
@@ -619,7 +668,13 @@
       return;
     }
     
-    const conceptoFinal = nota ? `${conceptoText} (${nota})` : conceptoText;
+    let conceptoFinal = conceptoText;
+    if (soporte) {
+      conceptoFinal += ` [Soporte: ${soporte}]`;
+    }
+    if (nota) {
+      conceptoFinal += ` (${nota})`;
+    }
     
     try {
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea`, {
@@ -640,6 +695,7 @@
         toast('Línea de gasto agregada.');
         clearGasConcepto();
         document.getElementById('gas-monto').value = '';
+        document.getElementById('gas-soporte').value = '';
         document.getElementById('gas-nota').value = '';
         clearGasTercero();
         document.getElementById('gas-concept-txt').focus();

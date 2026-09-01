@@ -7468,8 +7468,8 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
             doc = (doc + ' / ' + str(prov)).strip() if doc else str(prov)
         origen = m['producto_padre_nombre'] or ''
         cant = float(m['cantidad'] or 0)
-        entrada = f"{cant:,.0f}" if m['tipo'] == 'entrada' else '—'
-        salida = f"{cant:,.0f}" if m['tipo'] == 'salida' else '—'
+        entrada = f"{cant:,.0f}" if m['tipo'] == 'entrada' else '-'
+        salida = f"{cant:,.0f}" if m['tipo'] == 'salida' else '-'
         saldo = m.get('stock_nuevo', 0)
         field = [
             _pdf_sanitize(m.get('fecha') or ''),
@@ -7503,7 +7503,7 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
     total_salidas = sum(float(m['cantidad'] or 0) for m in movimientos if m['tipo'] == 'salida')
     total_valor = sum(float(m['valor_total'] or 0) for m in movimientos)
     pdf.set_font('Helvetica', 'B', 7)
-    pdf.cell(0, 5, f"Totales — Entradas: {_pdf_money(total_entradas)}  ·  "
+    pdf.cell(0, 5, f"Totales - Entradas: {_pdf_money(total_entradas)}  ·  "
                     f"Salidas: {_pdf_money(total_salidas)}  ·  Valor movimientos: ${_pdf_money(total_valor)}",
              ln=1, align='L')
 

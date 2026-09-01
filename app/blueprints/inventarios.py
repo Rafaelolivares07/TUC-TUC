@@ -1700,12 +1700,12 @@ def api_vincular_ids_contabilidad(negocio_id):
 
         contab_rows = conn.execute(f"""
             SELECT mc.id, mc.concepto, mc.monto, mc.numero_documento,
-                   mc.cuenta
+                   mc.cuenta, mc.tipo_documento
             FROM movimientos_contables mc
             WHERE mc.negocio_id = %s
               AND mc.cuenta LIKE '14%%'
-              AND mc.tipo = 'credito'
-              AND UPPER(mc.concepto) LIKE 'BAJA INV:%%'
+              AND (mc.tipo = 'credito' OR mc.tipo IS NULL)
+              AND UPPER(mc.concepto) NOT LIKE '%%COSTO%%'
               AND mc.producto_id IS NULL
               {where_extra}
               {doc_filter}
@@ -1730,7 +1730,7 @@ def api_vincular_ids_contabilidad(negocio_id):
             k_where += " AND COALESCE(m.documento_fecha, m.created_at::date) <= %s"
             k_params.append(fecha_hasta)
         if prod_padre_id:
-            k_where += " AND m.producto_padre_id = %s"
+            k_where += " AND (m.producto_padre_id = %s OR m.referencia_tipo = 'produccion')"
             k_params.append(prod_padre_id)
 
         kardex_rows = conn.execute(f"""
@@ -1745,15 +1745,20 @@ def api_vincular_ids_contabilidad(negocio_id):
             ORDER BY m.nombre_producto, COALESCE(m.valor_total, m.cantidad * m.costo_und, 0)
         """, k_params).fetchall()
 
+        def _clean_concepto_str(s):
+            s = s or ''
+            s = s.replace('Baja Inv:', '').replace('BAJA INV:', '').replace('Baja Inv', '').replace('BAJA INV', '')
+            return s.strip().upper()
+
         # Si hay prod_padre_id + numero_doc, filtrar contab_rows a solo los componentes de ese producto
         if prod_padre_id and numero_doc:
             comp_names = set()
             for k in kardex_rows:
-                if k['producto_padre_id'] == prod_padre_id:
+                if k['producto_padre_id'] == prod_padre_id or not k['producto_padre_id']:
                     comp_names.add(k['nombre_producto'].strip().upper())
             if comp_names:
                 contab_rows = [c for c in contab_rows
-                               if c['concepto'].replace('Baja Inv:', '').replace('BAJA INV:', '').strip().upper() in comp_names]
+                               if _clean_concepto_str(c['concepto']) in comp_names]
 
         # 3. Indexar Kardex por nombre + documento
         from collections import defaultdict
@@ -1763,7 +1768,7 @@ def api_vincular_ids_contabilidad(negocio_id):
             doc = str(k['documento_numero']) if k['documento_numero'] else ''
             kardex_por_nombre_doc[(nombre_norm, doc)].append({
                 'producto_id': k['producto_id'],
-                'producto_padre_id': k['producto_padre_id'],
+                'producto_padre_id': k['producto_padre_id'] or prod_padre_id,
                 'nombre': k['nombre_producto'],
                 'total': float(k['total']),
             })
@@ -1775,7 +1780,7 @@ def api_vincular_ids_contabilidad(negocio_id):
         # Indexar contab por (nombre, doc)
         contab_por_grupo = defaultdict(list)
         for c in contab_rows:
-            nombre_comp = c['concepto'].replace('Baja Inv:', '').replace('BAJA INV:', '').strip().upper()
+            nombre_comp = _clean_concepto_str(c['concepto'])
             doc = str(c['numero_documento']) if c['numero_documento'] else ''
             contab_por_grupo[(nombre_comp, doc)].append({
                 'id': c['id'],
@@ -2227,10 +2232,13 @@ def api_reparar_costos_venta(negocio_id):
                     monto = float(c['monto'] or 0)
                     comp_match = c['_comp_match']
                     contras_list.append({
+                        'id': c['id'],
                         'concepto': (c['concepto'] or c['cuenta'] or '').strip(),
                         'cuenta': c['cuenta'],
                         'monto_actual': monto,
                         'producto_id': c.get('producto_id'),
+                        'producto_padre_id': c.get('producto_padre_id'),
+                        'esta_vinculado': bool(c.get('producto_id')),
                         'comp_nombre': comp_match['nombre'] if comp_match else None,
                         'match_tipo': c['_match_tipo'],
                     })

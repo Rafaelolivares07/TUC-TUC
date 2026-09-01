@@ -2458,7 +2458,7 @@
         <!-- LADO DERECHO: PROCESOS GLOBALES -->
         <div class="flex items-center gap-2 flex-wrap">
           <span class="text-[10px] font-bold text-gray-400 uppercase mr-1">Procesos Globales:</span>
-          <button onclick="vincularIdsPreview()" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition">
+          <button onclick="vincularIdsGlobal()" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition">
             🔗 Vincular IDs (Global)
           </button>
           <button onclick="repararCostosGlobal()" class="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition">
@@ -11937,174 +11937,48 @@ async function cargarReporteEnsambles() {
       // Panel permanente, no requiere colapsar
     }
 
-    async function vincularIdsPreview() {
+    async function vincularIdsGlobal() {
       const { ini, fin } = getReparadorFechas();
       const parentId = document.getElementById('ensambles-padre-id')?.value;
       if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
+      const confirmed = confirm(`¿Estás seguro de que deseas vincular y otorgar aval a TODOS los registros contables del período ${ini} al ${fin}?`);
+      if (!confirmed) return;
 
-      const preview = document.getElementById('vincular-preview');
-      preview.innerHTML = '<div class="text-center text-blue-600 py-4 text-xs font-semibold">Buscando registros contables sin IDs...</div>';
-      preview.classList.remove('hidden');
-
-      try {
-        let url = `/api/inventario/${NEGOCIO_ID}/vincular-ids-contabilidad?fecha_desde=${ini}&fecha_hasta=${fin}`;
-        if (parentId) url += `&producto_padre_id=${parentId}`;
-        const r = await fetch(url);
-        const d = await r.json();
-        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
-
-        const res = d.resumen;
-        if (res.total_contab === 0) {
-          preview.innerHTML = '<div class="text-green-700 text-xs font-semibold py-4">Todos los registros contables ya tienen producto_id asignado. No hay nada que vincular.</div>';
-          return;
-        }
-
-        _vincularMatches['global'] = d.matches.filter(m => m.contab_id !== null && m.kardex_producto_id !== null);
-
-        let html = `<div class="text-xs text-blue-800 font-semibold mb-2">${res.vinculados} registro(s) se pueden vincular, ${res.sin_kardex} sin match en Kardex</div>`;
-        html += '<div class="max-h-[20rem] overflow-y-auto">';
-        html += '<div class="grid grid-cols-4 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5"><span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contable</span><span class="text-right">Diferencia</span></div>';
-
-        d.matches.forEach(m => {
-          const ok = m.kardex_producto_id !== null;
-          html += `<div class="grid grid-cols-4 gap-2 text-xs py-0.5 px-2 ${ok ? 'hover:bg-blue-50' : 'bg-red-50'} rounded">`;
-          html += `<span class="text-gray-600 truncate">${m.componente.replace('Baja Inv: ', '')}</span>`;
-          html += `<span class="text-gray-700 font-bold text-right">$${ok ? m.kardex_monto.toLocaleString('es-CO') : '—'}</span>`;
-          html += `<span class="text-gray-700 font-bold text-right">${m.contab_monto != null ? '$' + m.contab_monto.toLocaleString('es-CO') : '—'}</span>`;
-          if (!ok) {
-            html += `<span class="text-red-400 text-right">SIN KARDEX</span>`;
-          } else if (m.diferencia != null && Math.abs(m.diferencia) > 0.01) {
-            html += `<span class="text-amber-600 font-bold text-right">$${m.diferencia.toLocaleString('es-CO')}</span>`;
-          } else {
-            html += `<span class="text-green-600 font-bold text-right">OK</span>`;
-          }
-          html += '</div>';
-        });
-        html += '</div>';
-
-        if (res.vinculados > 0) {
-          html += `<div class="mt-3 flex gap-2">`;
-          html += `<button onclick="vincularIdsEjecutar()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm">✅ Confirmar Vinculación</button>`;
-          html += `<button onclick="document.getElementById('vincular-preview').classList.add('hidden')" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-xl">Cancelar</button>`;
-          html += `</div>`;
-        }
-
-        preview.innerHTML = html;
-      } catch (e) {
-        preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
-      }
-    }
-
-    async function vincularIdsEjecutar() {
-      const { ini, fin } = getReparadorFechas();
-      const parentId = document.getElementById('ensambles-padre-id')?.value;
-
-      const preview = document.getElementById('vincular-preview');
-      preview.innerHTML = '<div class="text-center text-blue-600 py-4 text-xs font-semibold">Ejecutando vinculación...</div>';
-
-      const matches = _vincularMatches['global'] || [];
-
+      toast('Vinculando IDs (otorgando aval global)...');
       try {
         let url = `/api/inventario/${NEGOCIO_ID}/vincular-ids-contabilidad?fecha_desde=${ini}&fecha_hasta=${fin}`;
         if (parentId) url += `&producto_padre_id=${parentId}`;
         const r = await fetch(url, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({matches: matches})
+          body: JSON.stringify({})
         });
         const d = await r.json();
-        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
-
-        preview.innerHTML = `<div class="text-green-700 text-xs font-semibold py-4">✅ ${d.resumen.vinculados} registro(s) vinculados exitosamente. Ahora puedes ejecutar "Vista Previa" y "Reparar".</div>`;
-        toast(`${d.resumen.vinculados} registros vinculados`);
-        delete _vincularMatches['global'];
-        setTimeout(() => repararCostosPreview(), 600);
+        if (!d.ok) { toast(d.error || 'Error al vincular', false); return; }
+        toast(`✅ ${d.resumen.vinculados} registros vinculados y avalados exitosamente`);
+        setTimeout(() => repararCostosPreview(), 400);
       } catch (e) {
-        preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
+        toast(e.message, false);
       }
     }
-
-    let _vincularMatches = {};
 
     async function vincularIdsNivel(nivel, productoPadreId, numeroDoc) {
       const { ini, fin } = getReparadorFechas();
-      const containerId = nivel === 'producto' ? `vincular-prod-${productoPadreId}` : `vincular-doc-${productoPadreId}-${numeroDoc || ''}`;
-      const preview = document.getElementById(containerId) || document.getElementById('vincular-preview');
-      preview.innerHTML = '<div class="text-blue-600 text-[10px] py-1 font-semibold">Consultando...</div>';
-      preview.classList.remove('hidden');
-
-      try {
-        let url = `/api/inventario/${NEGOCIO_ID}/vincular-ids-contabilidad?fecha_desde=${ini}&fecha_hasta=${fin}&producto_padre_id=${productoPadreId}`;
-        if (numeroDoc) url += `&numero_doc=${numeroDoc}`;
-        const r = await fetch(url);
-        const d = await r.json();
-        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`; return; }
-
-        const res = d.resumen;
-        if (res.total_contab === 0) {
-          preview.innerHTML = '<div class="text-green-700 text-[10px] font-semibold py-1">✅ Todo vinculado</div>';
-          return;
-        }
-
-        const matchKey = `${nivel}-${productoPadreId}-${numeroDoc || ''}`;
-        _vincularMatches[matchKey] = d.matches.filter(m => m.contab_id !== null && m.kardex_producto_id !== null);
-
-        let html = `<div class="text-xs text-blue-800 font-semibold mb-2">${res.vinculados} registro(s) se pueden vincular, ${res.sin_kardex} sin match en Kardex</div>`;
-        html += '<div class="max-h-[20rem] overflow-y-auto">';
-        html += '<div class="grid grid-cols-4 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5"><span>Componente</span><span class="text-right">Kardex</span><span class="text-right">Contable</span><span class="text-right">Diferencia</span></div>';
-        d.matches.forEach(m => {
-          const ok = m.kardex_producto_id !== null;
-          html += `<div class="grid grid-cols-4 gap-2 text-xs py-0.5 px-2 ${ok ? 'hover:bg-blue-50' : 'bg-red-50'} rounded">`;
-          html += `<span class="text-gray-600 truncate">${m.componente.replace('Baja Inv: ', '')}</span>`;
-          html += `<span class="text-gray-700 font-bold text-right">${ok ? '$' + m.kardex_monto.toLocaleString('es-CO') : '—'}</span>`;
-          html += `<span class="text-gray-700 font-bold text-right">${m.contab_monto != null ? '$' + m.contab_monto.toLocaleString('es-CO') : '—'}</span>`;
-          if (!ok) {
-            html += `<span class="text-red-400 text-right">SIN KARDEX</span>`;
-          } else if (m.diferencia != null && Math.abs(m.diferencia) > 0.01) {
-            html += `<span class="text-amber-600 font-bold text-right">$${m.diferencia.toLocaleString('es-CO')}</span>`;
-          } else {
-            html += `<span class="text-green-600 font-bold text-right">OK</span>`;
-          }
-          html += '</div>';
-        });
-        html += '</div>';
-        if (res.vinculados > 0) {
-          html += `<div class="mt-3 flex gap-2">`;
-          html += `<button onclick="vincularIdsEjecutarNivel('${nivel}', ${productoPadreId}, '${numeroDoc || ''}')" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm">✅ Confirmar Vinculación</button>`;
-          html += `<button onclick="this.closest('[id^=vincular-]').classList.add('hidden')" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-xl">Cancelar</button>`;
-          html += `</div>`;
-        }
-        preview.innerHTML = html;
-      } catch (e) {
-        preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
-      }
-    }
-
-    async function vincularIdsEjecutarNivel(nivel, productoPadreId, numeroDoc) {
-      const { ini, fin } = getReparadorFechas();
-      const containerId = nivel === 'producto' ? `vincular-prod-${productoPadreId}` : `vincular-doc-${productoPadreId}-${numeroDoc || ''}`;
-      const preview = document.getElementById(containerId) || document.getElementById('vincular-preview');
-      preview.innerHTML = '<div class="text-blue-600 text-[10px] py-1 font-semibold">Ejecutando...</div>';
-
-      const matchKey = `${nivel}-${productoPadreId}-${numeroDoc || ''}`;
-      const matches = _vincularMatches[matchKey] || [];
-
+      toast('Vinculando IDs (otorgando aval)...');
       try {
         let url = `/api/inventario/${NEGOCIO_ID}/vincular-ids-contabilidad?fecha_desde=${ini}&fecha_hasta=${fin}&producto_padre_id=${productoPadreId}`;
         if (numeroDoc) url += `&numero_doc=${numeroDoc}`;
         const r = await fetch(url, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({matches: matches})
+          body: JSON.stringify({})
         });
         const d = await r.json();
-        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`; return; }
-        preview.innerHTML = `<div class="text-green-700 text-[10px] font-semibold">✅ ${d.resumen.vinculados} vinculados, ${d.resumen.sin_kardex} sin kardex</div>`;
-        toast(`${d.resumen.vinculados} vinculados (${nivel})`);
-        delete _vincularMatches[matchKey];
-        setTimeout(() => repararCostosPreview(), 600);
+        if (!d.ok) { toast(d.error || 'Error al vincular', false); return; }
+        toast(`✅ ${d.resumen.vinculados} IDs vinculados y avalados`);
+        setTimeout(() => repararCostosPreview(), 400);
       } catch (e) {
-        preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
+        toast(e.message, false);
       }
     }
 
@@ -12454,29 +12328,34 @@ async function cargarReporteEnsambles() {
 
               const todosNombres = [...new Set([...Object.keys(compKardex), ...Object.keys(contraPorComp)])];
               
-              // Calcular sumatoria total de insumos y sumatoria de diferencias
+              // Calcular sumatoria total de insumos, sumatoria de diferencias y conteo de vinculados
               let sumaKardexComps = 0;
               let sumaContabComps = 0;
+              let numVinculados = 0;
               todosNombres.forEach(nombre => {
                 const kEntries = compKardex[nombre] || [];
                 const cEntries = contraPorComp[nombre] || [];
                 sumaKardexComps += kEntries.reduce((s, e) => s + e.costo_total, 0);
                 sumaContabComps += cEntries.reduce((s, e) => s + e.monto_actual, 0);
+                if (cEntries.length > 0 && cEntries.every(c => c.esta_vinculado || c.match_tipo === 'producto_id')) {
+                  numVinculados++;
+                }
               });
               const sumaDifComps = sumaContabComps - sumaKardexComps;
 
               html += `<div class="mt-2">`;
-              html += `<div class="grid grid-cols-4 gap-2 text-[10px] text-gray-500 font-bold uppercase px-2 mb-0.5">`;
-              html += `<span>Componente / Insumo</span><span class="text-right">Kardex Insumo</span><span class="text-right">Contable (14* Cr)</span><span class="text-right">Diferencia Insumo</span>`;
+              html += `<div class="grid grid-cols-5 gap-2 text-[10px] text-gray-500 font-bold uppercase px-2 mb-0.5">`;
+              html += `<span>Componente / Insumo</span><span class="text-right">Kardex Insumo</span><span class="text-right">Contable (14* Cr)</span><span class="text-right">Diferencia Insumo</span><span class="text-center">Estado ID</span>`;
               html += `</div>`;
 
-              // Fila Resumen Superior con Totales y Suma de Diferencias
-              html += `<div class="grid grid-cols-4 gap-2 text-xs font-bold px-2 py-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-gray-800 mb-1.5">`;
+              // Fila Resumen Superior con Totales, Suma de Diferencias y Estado de Vinculación
+              html += `<div class="grid grid-cols-5 gap-2 text-xs font-bold px-2 py-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-gray-800 mb-1.5 items-center">`;
               html += `<span class="text-[11px] font-bold text-gray-700 uppercase flex items-center gap-1">🥗 TOTAL INSUMOS <span class="text-[10px] text-gray-500 font-normal">(${todosNombres.length})</span></span>`;
               html += `<span class="text-right font-mono text-gray-900">$${sumaKardexComps.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
               html += `<span class="text-right font-mono text-gray-900">$${sumaContabComps.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
               const clsSumaDif = Math.abs(sumaDifComps) > 0.01 ? 'text-red-600' : 'text-green-600';
               html += `<span class="text-right font-mono font-extrabold ${clsSumaDif}">${Math.abs(sumaDifComps) > 0.01 ? 'Σ Dif: $' + sumaDifComps.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'Σ OK ($0)'}</span>`;
+              html += `<span class="text-center text-[10px] font-bold ${numVinculados === todosNombres.length && todosNombres.length > 0 ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-amber-700 bg-amber-50 border border-amber-200'} px-1.5 py-0.5 rounded">${numVinculados}/${todosNombres.length} Vinculados</span>`;
               html += `</div>`;
 
               todosNombres.forEach(nombre => {
@@ -12486,30 +12365,35 @@ async function cargarReporteEnsambles() {
                 const totalKardex = kardexEntries.reduce((s, e) => s + e.costo_total, 0);
                 const totalContab = contabEntries.reduce((s, e) => s + e.monto_actual, 0);
                 const difTotal = totalContab - totalKardex;
-                const mismaCantidad = kardexEntries.length === contabEntries.length && kardexEntries.length > 0;
                 const sinContable = contabEntries.length === 0;
                 const sinKardex = kardexEntries.length === 0;
-                const todoConfiable = contabEntries.every(c => c.match_tipo === 'producto_id');
-                if (!todoConfiable && !sinContable) tieneSinFuente = true;
-                const cls = sinContable || sinKardex ? 'text-gray-400' : (!todoConfiable ? 'text-amber-500' : (Math.abs(difTotal) > 0.01 ? 'text-red-600' : 'text-green-600'));
+                const estaVinculado = contabEntries.length > 0 && contabEntries.every(c => c.esta_vinculado || c.match_tipo === 'producto_id');
+
+                let badgeEstado = '';
+                if (sinContable) {
+                  badgeEstado = `<span class="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded font-semibold inline-block">Sin Asiento</span>`;
+                } else if (estaVinculado) {
+                  badgeEstado = `<span class="text-[10px] text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded font-extrabold inline-block">🔗 Vinculado</span>`;
+                } else {
+                  badgeEstado = `<span class="text-[10px] text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded font-extrabold inline-block">🔓 Sin Vincular</span>`;
+                }
+
+                const clsDif = sinContable || sinKardex ? 'text-gray-400' : (Math.abs(difTotal) > 0.01 ? 'text-red-600' : 'text-green-600');
+
                 html += `<div class="px-1">`;
-                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-4 gap-2 text-left py-1 hover:bg-gray-50 rounded transition-colors cursor-pointer">`;
+                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-5 gap-2 text-left py-1.5 hover:bg-gray-50 rounded transition-colors cursor-pointer items-center">`;
                 html += `<span class="text-gray-700 text-xs font-semibold truncate">${nombre}</span>`;
-                html += `<span class="text-gray-800 text-xs font-bold text-right font-mono">$${totalKardex.toLocaleString('es-CO')}</span>`;
+                html += `<span class="text-gray-800 text-xs font-bold text-right font-mono">$${totalKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
                 if (sinContable) {
                   html += `<span class="text-amber-600 text-xs text-right font-semibold">$0 (Pendiente)</span>`;
-                  html += `<span class="text-red-600 text-xs font-bold text-right font-mono">-$${totalKardex.toLocaleString('es-CO')}</span>`;
-                } else if (!todoConfiable) {
-                  html += `<span class="text-amber-500 text-xs text-right font-semibold">SIN FUENTE</span>`;
-                  html += `<span class="text-amber-500 text-xs text-right font-semibold">NO DISPONIBLE</span>`;
-                } else if (mismaCantidad) {
-                  html += `<span class="text-xs font-bold text-right font-mono ${cls}">$${totalContab.toLocaleString('es-CO')}</span>`;
-                  html += `<span class="text-xs font-bold text-right font-mono ${cls}">${Math.abs(difTotal) > 0.01 ? '$' + difTotal.toLocaleString('es-CO') : 'OK'}</span>`;
+                  html += `<span class="text-red-600 text-xs font-bold text-right font-mono">-$${totalKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
                 } else {
-                  html += `<span class="text-xs font-bold text-right text-amber-600 font-mono">$${totalContab.toLocaleString('es-CO')} (${contabEntries.length})</span>`;
-                  html += `<span class="text-xs font-bold text-right text-amber-600 font-mono">$${totalKardex.toLocaleString('es-CO')} (${kardexEntries.length})</span>`;
+                  html += `<span class="text-gray-800 text-xs font-bold text-right font-mono">$${totalContab.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+                  html += `<span class="text-xs font-bold text-right font-mono ${clsDif}">${Math.abs(difTotal) > 0.01 ? '$' + difTotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'OK'}</span>`;
                 }
+                html += `<div class="text-center">${badgeEstado}</div>`;
                 html += `</button>`;
+
                 html += `<div id="comp-${cid}" class="hidden pl-2 pb-1 space-y-1">`;
                 if (sinContable) {
                   html += `<div class="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-1 text-xs">`;
@@ -12524,37 +12408,35 @@ async function cargarReporteEnsambles() {
                     html += `</div>`;
                   });
                   html += `</div>`;
-                } else if (!todoConfiable) {
-                  html += `<div class="text-[10px] text-amber-700 p-2 bg-amber-50 rounded-lg border border-amber-200">SIN FUENTE (match por nombre, requiere vinculación de IDs)</div>`;
-                } else if (mismaCantidad) {
+                } else {
                   const kSorted = [...kardexEntries].sort((a, b) => a.costo_total - b.costo_total);
                   const cSorted = [...contabEntries].sort((a, b) => a.monto_actual - b.monto_actual);
-                  kSorted.forEach((k, i) => {
-                    const c = cSorted[i] || { monto_actual: 0, cuenta: '' };
-                    const dif = c.monto_actual - k.costo_total;
-                    const clsDif = Math.abs(dif) > 0.01 ? 'text-amber-600' : 'text-green-600';
+                  const maxRows = Math.max(kSorted.length, cSorted.length);
+                  for (let idx = 0; idx < maxRows; idx++) {
+                    const k = kSorted[idx] || { cantidad: 0, costo_und: 0, costo_total: 0 };
+                    const c = cSorted[idx] || { monto_actual: 0, cuenta: '', id: null, esta_vinculado: false };
                     const cantK = parseFloat(k.cantidad || 0);
                     const costUndK = parseFloat(k.costo_und || 0);
                     const totalK = parseFloat(k.costo_total || 0);
-                    
+                    const difRow = c.monto_actual - totalK;
+                    const clsRowDif = Math.abs(difRow) > 0.01 ? 'text-amber-600' : 'text-green-600';
+                    const tagVinc = c.esta_vinculado 
+                      ? `<span class="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-bold">🔗 ID #${c.producto_id || 'OK'}</span>`
+                      : `<span class="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-bold">🔓 Sin ID en BD</span>`;
+
                     html += `<div class="py-2 px-3 bg-slate-50 rounded-xl border border-gray-200 my-1 text-xs">`;
                     html += `<div class="flex items-center justify-between flex-wrap gap-2">`;
                     html += `<div class="text-gray-700">`;
                     html += `📦 <b class="text-gray-900">Kardex:</b> <span class="font-mono text-gray-800">${cantK.toLocaleString('es-CO', {maximumFractionDigits: 3})} × $${costUndK.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> = <b class="text-rose-700 font-mono font-bold">$${totalK.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>`;
                     html += `</div>`;
-                    html += `<div class="text-gray-700">`;
-                    html += `🏛️ <b class="text-gray-900">Contable (14* Cr):</b> <b class="font-mono text-gray-800">$${c.monto_actual.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>`;
-                    html += `<span class="${clsDif} font-bold ml-2 font-mono">${Math.abs(dif) > 0.01 ? 'Dif: $' + dif.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '✅ OK'}</span>`;
+                    html += `<div class="text-gray-700 flex items-center gap-2">`;
+                    html += `🏛️ <b class="text-gray-900">Contable:</b> <b class="font-mono text-gray-800">$${c.monto_actual.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>`;
+                    html += `${tagVinc}`;
+                    html += `<span class="${clsRowDif} font-bold font-mono">${Math.abs(difRow) > 0.01 ? 'Dif: $' + difRow.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '✅ OK'}</span>`;
                     html += `</div>`;
                     html += `</div>`;
                     html += `</div>`;
-                  });
-                } else {
-                  html += `<div class="text-amber-600 font-semibold text-xs py-1">⚠ ${contabEntries.length} contab vs ${kardexEntries.length} kardex — revisar manualmente</div>`;
-                  html += `<div class="mt-1">Contab:</div>`;
-                  contabEntries.forEach(c => { html += `<div>$${c.monto_actual.toLocaleString('es-CO')} — ${c.concepto}</div>`; });
-                  html += `<div class="mt-1">Kardex:</div>`;
-                  kardexEntries.forEach(k => { html += `<div>$${k.costo_total.toLocaleString('es-CO')} — ${k.nombre}</div>`; });
+                  }
                 }
                 html += `</div>`;
                 html += `</div>`;
@@ -12565,11 +12447,12 @@ async function cargarReporteEnsambles() {
                   let nombre = c.comp_nombre || c.concepto || c.cuenta || '';
                   nombre = nombre.replace(/^.*?:\s*/, '').trim();
                   if (!kardexNombres.has(nombre)) {
-                    html += `<div class="px-2 grid grid-cols-4 gap-2 py-0.5">`;
+                    html += `<div class="px-2 grid grid-cols-5 gap-2 py-0.5 items-center">`;
                     html += `<span class="text-gray-400 text-xs italic truncate">${nombre}</span>`;
                     html += `<span class="text-gray-400 text-xs text-right">—</span>`;
                     html += `<span class="text-gray-600 text-xs font-bold text-right">$${c.monto_actual.toLocaleString('es-CO')}</span>`;
                     html += `<span class="text-red-400 text-xs font-bold text-right">SIN KARDEX</span>`;
+                    html += `<span class="text-center text-[10px] text-gray-400">—</span>`;
                     html += `</div>`;
                   }
                 });

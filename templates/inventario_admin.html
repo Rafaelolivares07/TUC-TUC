@@ -12294,6 +12294,7 @@ async function cargarReporteEnsambles() {
     }
 
     async function repararCostosPreview() {
+      const prevScrollY = window.scrollY || document.documentElement.scrollTop;
       const { ini, fin } = getReparadorFechas();
       const parentId = document.getElementById('ensambles-padre-id')?.value;
       if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
@@ -12450,11 +12451,34 @@ async function cargarReporteEnsambles() {
                 if (!contraPorComp[nombre]) contraPorComp[nombre] = [];
                 contraPorComp[nombre].push(c);
               });
-              html += `<div class="mt-2">`;
-              html += `<div class="grid grid-cols-4 gap-2 text-[10px] text-gray-400 font-bold uppercase px-2 mb-0.5">`;
-              html += `<span>Componente / Insumo</span><span class="text-right">Total Kardex</span><span class="text-right">Contable (14* Cr)</span><span class="text-right">Diferencia</span>`;
-              html += `</div>`;
+
               const todosNombres = [...new Set([...Object.keys(compKardex), ...Object.keys(contraPorComp)])];
+              
+              // Calcular sumatoria total de insumos y sumatoria de diferencias
+              let sumaKardexComps = 0;
+              let sumaContabComps = 0;
+              todosNombres.forEach(nombre => {
+                const kEntries = compKardex[nombre] || [];
+                const cEntries = contraPorComp[nombre] || [];
+                sumaKardexComps += kEntries.reduce((s, e) => s + e.costo_total, 0);
+                sumaContabComps += cEntries.reduce((s, e) => s + e.monto_actual, 0);
+              });
+              const sumaDifComps = sumaContabComps - sumaKardexComps;
+
+              html += `<div class="mt-2">`;
+              html += `<div class="grid grid-cols-4 gap-2 text-[10px] text-gray-500 font-bold uppercase px-2 mb-0.5">`;
+              html += `<span>Componente / Insumo</span><span class="text-right">Kardex Insumo</span><span class="text-right">Contable (14* Cr)</span><span class="text-right">Diferencia Insumo</span>`;
+              html += `</div>`;
+
+              // Fila Resumen Superior con Totales y Suma de Diferencias
+              html += `<div class="grid grid-cols-4 gap-2 text-xs font-bold px-2 py-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-gray-800 mb-1.5">`;
+              html += `<span class="text-[11px] font-bold text-gray-700 uppercase flex items-center gap-1">🥗 TOTAL INSUMOS <span class="text-[10px] text-gray-500 font-normal">(${todosNombres.length})</span></span>`;
+              html += `<span class="text-right font-mono text-gray-900">$${sumaKardexComps.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+              html += `<span class="text-right font-mono text-gray-900">$${sumaContabComps.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+              const clsSumaDif = Math.abs(sumaDifComps) > 0.01 ? 'text-red-600' : 'text-green-600';
+              html += `<span class="text-right font-mono font-extrabold ${clsSumaDif}">${Math.abs(sumaDifComps) > 0.01 ? 'Σ Dif: $' + sumaDifComps.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'Σ OK ($0)'}</span>`;
+              html += `</div>`;
+
               todosNombres.forEach(nombre => {
                 const cid = ++uid;
                 const kardexEntries = compKardex[nombre] || [];
@@ -12473,8 +12497,8 @@ async function cargarReporteEnsambles() {
                 html += `<span class="text-gray-700 text-xs font-semibold truncate">${nombre}</span>`;
                 html += `<span class="text-gray-800 text-xs font-bold text-right font-mono">$${totalKardex.toLocaleString('es-CO')}</span>`;
                 if (sinContable) {
-                  html += `<span class="text-gray-400 text-xs text-right">—</span>`;
-                  html += `<span class="text-gray-400 text-xs text-right">—</span>`;
+                  html += `<span class="text-amber-600 text-xs text-right font-semibold">$0 (Pendiente)</span>`;
+                  html += `<span class="text-red-600 text-xs font-bold text-right font-mono">-$${totalKardex.toLocaleString('es-CO')}</span>`;
                 } else if (!todoConfiable) {
                   html += `<span class="text-amber-500 text-xs text-right font-semibold">SIN FUENTE</span>`;
                   html += `<span class="text-amber-500 text-xs text-right font-semibold">NO DISPONIBLE</span>`;
@@ -12488,7 +12512,18 @@ async function cargarReporteEnsambles() {
                 html += `</button>`;
                 html += `<div id="comp-${cid}" class="hidden pl-2 pb-1 space-y-1">`;
                 if (sinContable) {
-                  html += `<div class="text-[10px] text-gray-400 p-2 bg-gray-50 rounded-lg">Sin datos contables asociados</div>`;
+                  html += `<div class="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-1 text-xs">`;
+                  html += `<div class="text-[11px] font-bold text-amber-800 mb-1">⚠️ Sin asiento contable 14* crédito registrado aún (Pendiente por contabilizar/reparar)</div>`;
+                  kardexEntries.forEach(k => {
+                    const cantK = parseFloat(k.cantidad || 0);
+                    const costUndK = parseFloat(k.costo_und || 0);
+                    const totalK = parseFloat(k.costo_total || 0);
+                    html += `<div class="flex items-center justify-between flex-wrap gap-2 text-xs py-1.5 px-2.5 bg-white rounded-lg border border-amber-100 shadow-2xs">`;
+                    html += `<span class="text-gray-700">📦 <b>Kardex Insumo:</b> <span class="font-mono text-gray-800">${cantK.toLocaleString('es-CO', {maximumFractionDigits: 3})} × $${costUndK.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> = <b class="text-rose-700 font-mono font-bold">$${totalK.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></span>`;
+                    html += `<span class="text-gray-600">🏛️ Contable: <b>$0</b> <span class="text-red-600 font-bold ml-1.5 font-mono">(-$${totalK.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</span></span>`;
+                    html += `</div>`;
+                  });
+                  html += `</div>`;
                 } else if (!todoConfiable) {
                   html += `<div class="text-[10px] text-amber-700 p-2 bg-amber-50 rounded-lg border border-amber-200">SIN FUENTE (match por nombre, requiere vinculación de IDs)</div>`;
                 } else if (mismaCantidad) {
@@ -12549,18 +12584,47 @@ async function cargarReporteEnsambles() {
         });
         html += '</div>';
         preview.innerHTML = html;
+
+        // Restaurar estado de acordeones abiertos
+        if (window._openRepairAccordions && window._openRepairAccordions.size > 0) {
+          window._openRepairAccordions.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+              el.classList.remove('hidden');
+              const arrow = document.getElementById('arrow-' + id);
+              if (arrow) arrow.style.transform = 'rotate(90deg)';
+            }
+          });
+        }
+
+        // Restaurar posición del scroll
+        if (prevScrollY > 0) {
+          setTimeout(() => {
+            window.scrollTo({ top: prevScrollY, behavior: 'instant' });
+          }, 30);
+        }
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
       }
     }
+
+    // Persistencia de acordeones abiertos
+    window._openRepairAccordions = window._openRepairAccordions || new Set();
 
     function toggleRepairLevel(id) {
       const el = document.getElementById(id);
       const arrow = document.getElementById('arrow-' + id);
       if (!el) return;
       const isOpen = !el.classList.contains('hidden');
-      el.classList.toggle('hidden');
-      if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+      if (isOpen) {
+        el.classList.add('hidden');
+        if (arrow) arrow.style.transform = 'rotate(0deg)';
+        window._openRepairAccordions.delete(id);
+      } else {
+        el.classList.remove('hidden');
+        if (arrow) arrow.style.transform = 'rotate(90deg)';
+        window._openRepairAccordions.add(id);
+      }
     }
 
 

@@ -2095,15 +2095,22 @@ def api_reparar_costos_venta(negocio_id):
                         FROM movimientos_contables
                         WHERE negocio_id = %s
                           AND (numero_documento = %s OR numero_documento = %s)
-                          AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
+                          AND (
+                              tipo_documento ILIKE '%%PRODUC%%'
+                              OR tipo_documento ILIKE '%%REPORTE%%'
+                              OR tipo_documento ILIKE '%%ENSAMBLE%%'
+                              OR REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
+                          )
                           AND LEFT(cuenta, 2) = '14'
                           AND tipo = 'debito'
                           AND (
                               producto_id = %s
                               OR producto_padre_id = %s
-                              OR UPPER(concepto) NOT LIKE '%%COSTO%%'
+                              OR UPPER(concepto) = UPPER(%s)
+                              OR UPPER(concepto) LIKE '%%' || UPPER(%s) || '%%'
+                              OR (producto_id IS NULL AND producto_padre_id IS NULL)
                           )
-                    """, (negocio_id, consecutive, doc_num, td_code, ppid, ppid)).fetchone()
+                    """, (negocio_id, consecutive, doc_num, td_code, ppid, ppid, padre_nombre, padre_nombre)).fetchone()
                     contab_monto = float(deb_row['total_deb']) if (deb_row and deb_row['total_deb'] is not None) else 0.0
                     contab_ids = list(deb_row['ids']) if (deb_row and deb_row['ids']) else []
                     
@@ -2117,6 +2124,25 @@ def api_reparar_costos_venta(negocio_id):
                     dif_cogs = dif
                     cogs_monto = contab_monto
                     cogs_ids = contab_ids
+
+                    # Contrapartidas de inventario (14xxx creditos de produccion)
+                    contras_raw = conn.execute("""
+                        SELECT id, monto, cuenta, concepto, producto_id, producto_padre_id
+                        FROM movimientos_contables
+                        WHERE negocio_id = %s
+                          AND (numero_documento = %s OR numero_documento = %s)
+                          AND (
+                              tipo_documento ILIKE '%%PRODUC%%'
+                              OR tipo_documento ILIKE '%%REPORTE%%'
+                              OR tipo_documento ILIKE '%%ENSAMBLE%%'
+                              OR REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
+                          )
+                          AND LEFT(cuenta, 2) = '14'
+                          AND tipo = 'credito'
+                          AND UPPER(concepto) NOT LIKE '%%COSTO%%'
+                          AND (producto_padre_id = %s OR producto_padre_id IS NULL)
+                        ORDER BY id
+                    """, (negocio_id, consecutive, doc_num, td_code, ppid)).fetchall()
                 else:
                     grupo_tipo = 'venta'
                     grupo_label = 'Grupo 3 (Venta)'
@@ -2137,14 +2163,19 @@ def api_reparar_costos_venta(negocio_id):
                         FROM movimientos_contables
                         WHERE negocio_id = %s
                           AND (numero_documento = %s OR numero_documento = %s)
-                          AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
+                          AND (
+                              REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
+                              OR tipo_documento ILIKE '%%VENTA%%'
+                              OR tipo_documento ILIKE '%%FACTURA%%'
+                          )
                           AND LEFT(cuenta, 2) = '61'
                           AND (
                               UPPER(concepto) = 'COSTO VENTA: ' || UPPER(%s)
                               OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
+                              OR UPPER(concepto) LIKE '%%' || UPPER(%s) || '%%'
                               OR producto_id = %s
                           )
-                    """, (negocio_id, consecutive, doc_num, td_code, padre_nombre, padre_nombre, ppid)).fetchone()
+                    """, (negocio_id, consecutive, doc_num, td_code, padre_nombre, padre_nombre, padre_nombre, ppid)).fetchone()
                     cogs_monto = float(cogs_row['total_cogs']) if (cogs_row and cogs_row['total_cogs'] is not None) else 0.0
                     cogs_ids = list(cogs_row['ids']) if (cogs_row and cogs_row['ids']) else []
                     
@@ -2156,18 +2187,23 @@ def api_reparar_costos_venta(negocio_id):
                     dif_pi = (costo_actual_pi * qty) - costo_real if qty > 0 else 0.0
                     dif_cogs = cogs_monto - costo_real
 
-                # Contrapartidas de inventario (14xxx creditos)
-                contras_raw = conn.execute("""
-                    SELECT id, monto, cuenta, concepto, producto_id
-                    FROM movimientos_contables
-                    WHERE negocio_id = %s
-                      AND (numero_documento = %s OR numero_documento = %s)
-                      AND REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
-                      AND LEFT(cuenta, 2) = '14'
-                      AND UPPER(concepto) NOT LIKE '%%COSTO%%'
-                      AND (producto_padre_id = %s)
-                    ORDER BY id
-                """, (negocio_id, consecutive, doc_num, td_code, ppid)).fetchall()
+                    # Contrapartidas de inventario (14xxx creditos de venta)
+                    contras_raw = conn.execute("""
+                        SELECT id, monto, cuenta, concepto, producto_id, producto_padre_id
+                        FROM movimientos_contables
+                        WHERE negocio_id = %s
+                          AND (numero_documento = %s OR numero_documento = %s)
+                          AND (
+                              REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
+                              OR tipo_documento ILIKE '%%VENTA%%'
+                              OR tipo_documento ILIKE '%%FACTURA%%'
+                          )
+                          AND LEFT(cuenta, 2) = '14'
+                          AND (tipo = 'credito' OR tipo IS NULL)
+                          AND UPPER(concepto) NOT LIKE '%%COSTO%%'
+                          AND (producto_padre_id = %s OR producto_padre_id IS NULL)
+                        ORDER BY id
+                    """, (negocio_id, consecutive, doc_num, td_code, ppid)).fetchall()
                 # Indexar componentes por producto_id y por nombre
                 comp_por_pid = {}
                 comp_por_nombre = {}
@@ -2832,7 +2868,6 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
     """, (negocio_id, numero_doc)).fetchall()
 
     # 4. Buscar salidas kardex de materias primas
-    mp_kardex = []
     if ref_id:
         mp_kardex = conn.execute("""
             SELECT producto_id, nombre_producto,
@@ -2840,10 +2875,21 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
             FROM movimientos_inventario
             WHERE negocio_id = %s
               AND tipo = 'salida'
-              AND referencia_tipo = 'produccion'
-              AND referencia_id = %s
+              AND (referencia_tipo = 'produccion' OR producto_padre_id = %s)
+              AND (referencia_id = %s OR documento_numero = %s)
             ORDER BY nombre_producto
-        """, (negocio_id, ref_id)).fetchall()
+        """, (negocio_id, prod_padre_id, ref_id, numero_doc)).fetchall()
+    else:
+        mp_kardex = conn.execute("""
+            SELECT producto_id, nombre_producto,
+                   COALESCE(valor_total, cantidad * costo_und, 0) AS total
+            FROM movimientos_inventario
+            WHERE negocio_id = %s
+              AND tipo = 'salida'
+              AND (producto_padre_id = %s OR referencia_tipo = 'produccion')
+              AND documento_numero = %s
+            ORDER BY nombre_producto
+        """, (negocio_id, prod_padre_id, numero_doc)).fetchall()
 
     # Indexar kardex MP por nombre
     mp_por_nombre = {}
@@ -2858,31 +2904,50 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
     # 5. Emparejar y actualizar creditos (materias primas)
     cambios = []
     total_nuevo_creditos = 0
-    for c in contab_creditos:
-        nombre_c = (c['concepto'] or '').strip().upper()
-        match = mp_por_nombre.get(nombre_c)
-        if not match:
-            match = next((v for k, v in mp_por_nombre.items() if k in nombre_c or nombre_c in k), None)
 
-        if match:
-            nuevo_monto = match['total']
-            if abs(float(c['monto']) - nuevo_monto) > 0.01:
-                conn.execute(
-                    "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
-                    (nuevo_monto, c['id'])
-                )
-                cambios.append({
-                    'id': c['id'],
-                    'concepto': c['concepto'],
-                    'monto_anterior': float(c['monto']),
-                    'monto_nuevo': nuevo_monto,
-                    'componente': match['nombre'],
-                })
-            total_nuevo_creditos += nuevo_monto
-        else:
-            total_nuevo_creditos += float(c['monto'])
+    if contab_creditos:
+        for c in contab_creditos:
+            nombre_c = (c['concepto'] or '').strip().upper()
+            match = mp_por_nombre.get(nombre_c)
+            if not match:
+                match = next((v for k, v in mp_por_nombre.items() if k in nombre_c or nombre_c in k), None)
 
-    # 6. Actualizar debito (producto terminado) = suma de creditos
+            if match:
+                nuevo_monto = match['total']
+                if abs(float(c['monto']) - nuevo_monto) > 0.01:
+                    conn.execute(
+                        "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
+                        (nuevo_monto, c['id'])
+                    )
+                    cambios.append({
+                        'id': c['id'],
+                        'concepto': c['concepto'],
+                        'monto_anterior': float(c['monto']),
+                        'monto_nuevo': nuevo_monto,
+                        'componente': match['nombre'],
+                    })
+                total_nuevo_creditos += nuevo_monto
+            else:
+                total_nuevo_creditos += float(c['monto'])
+    elif mp_kardex:
+        # Si no habia creditos contables registrados, crearlos desde el Kardex
+        for mp in mp_kardex:
+            monto_k = float(mp['total'])
+            c_res = conn.execute("""
+                INSERT INTO movimientos_contables (negocio_id, tipo_documento, numero_documento, cuenta, concepto, tipo, monto, producto_id, producto_padre_id, created_at)
+                VALUES (%s, 'PRODUCCION', %s, '140505', %s, 'credito', %s, %s, %s, CURRENT_TIMESTAMP)
+                RETURNING id
+            """, (negocio_id, numero_doc, mp['nombre_producto'], monto_k, mp['producto_id'], prod_padre_id)).fetchone()
+            cambios.append({
+                'id': c_res['id'] if c_res else 0,
+                'concepto': mp['nombre_producto'],
+                'monto_anterior': 0.0,
+                'monto_nuevo': monto_k,
+                'componente': mp['nombre_producto'],
+            })
+            total_nuevo_creditos += monto_k
+
+    # 6. Actualizar o crear debito (producto terminado) = suma de creditos
     debito_modificado = False
     if contab_debito:
         monto_actual = float(contab_debito['monto'] or 0)
@@ -2892,6 +2957,12 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
                 (total_nuevo_creditos, contab_debito['id'])
             )
             debito_modificado = True
+    elif total_nuevo_creditos > 0:
+        conn.execute("""
+            INSERT INTO movimientos_contables (negocio_id, tipo_documento, numero_documento, cuenta, concepto, tipo, monto, producto_id, producto_padre_id, created_at)
+            VALUES (%s, 'PRODUCCION', %s, '140505', %s, 'debito', %s, %s, %s, CURRENT_TIMESTAMP)
+        """, (negocio_id, numero_doc, padre_nombre or 'PRODUCTO ELABORADO', total_nuevo_creditos, prod_padre_id, prod_padre_id))
+        debito_modificado = True
 
     return {
         'numero_doc': numero_doc,

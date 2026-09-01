@@ -7443,7 +7443,46 @@ def _pdf_fila_wrap(pdf, col_w, field, aligns, wrap_cols, alto_linea=4.0):
 def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
                          stock_actual, costo_actual, valor_existencia, movimientos, usuario):
 
+    col_w = [24, 32, 16, 14, 14, 14, 17, 17, 20, 22]
+    headers = ['Fecha', 'Documento / Proveedor', 'Origen', 'Entradas', 'Salidas',
+               'Saldo', 'C.Trans', 'C.Prom', 'Total Línea', 'Notas']
+    aligns = ['L', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R', 'L']
+    wrap_cols = {0, 1, 2, 9}
+
     class KardexPDF(FPDF):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            self._pie_usuario = ''
+            self._negocio_hdr = ''
+            self._sub_hdr = ''
+            self._col_w = []
+            self._headers = []
+            try:
+                self.alias_nb_pages()
+            except AttributeError:
+                pass
+
+        def header(self):
+            if not self._negocio_hdr:
+                return
+            w_util = self.w - self.l_margin - self.r_margin
+            self.set_y(self.t_margin)
+            self.set_font('Helvetica', 'B', 8.5)
+            self.set_text_color(20, 20, 20)
+            self.cell(w_util - 34, 3.2, _pdf_sanitize(self._negocio_hdr), align='L')
+            self.set_font('Helvetica', '', 6.5)
+            self.set_text_color(120, 120, 120)
+            self.cell(34, 3.2, f'Página {self.page_no()} de {{nb}}', align='R', ln=1)
+            self.set_font('Helvetica', 'B', 6.5)
+            self.set_text_color(90, 90, 90)
+            self.cell(w_util, 3.0, _pdf_sanitize(self._sub_hdr), ln=1, align='L')
+            self.set_fill_color(240, 240, 240)
+            self.set_text_color(80, 80, 80)
+            self.set_font('Helvetica', 'B', 5.8)
+            for i, h in enumerate(self._headers):
+                self.cell(self._col_w[i], 4, h, border=0, align='C', fill=True)
+            self.ln(4)
+
         def footer(self):
             self.set_y(-12)
             self.set_font('Helvetica', '', 7)
@@ -7455,48 +7494,16 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
 
     pdf = KardexPDF(format='letter', unit='mm')
     pdf._pie_usuario = usuario
-    pdf.set_auto_page_break(auto=True, margin=18)
-    pdf.set_margins(10, 10, 10)
-    pdf.add_page()
-
-    # ── Encabezado: negocio ──
-    pdf.set_font('Helvetica', 'B', 14)
-    pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 8, _pdf_sanitize(nombre_negocio), ln=1, align='C')
-    pdf.set_font('Helvetica', 'B', 10)
-    pdf.set_text_color(80, 80, 80)
-    pdf.cell(0, 5, 'Kardex de Producto', ln=1, align='C')
-
-    # ── Titulo producto ──
-    pdf.ln(1)
-    pdf.set_font('Helvetica', 'B', 10)
-    pdf.set_text_color(20, 20, 20)
+    pdf._negocio_hdr = nombre_negocio
     titulo = nombre_producto + (f'  (Cód: {codigo_producto})' if codigo_producto else '')
-    pdf.cell(0, 6, _pdf_sanitize(titulo), ln=1, align='C')
-
-    # ── Resumen ──
-    pdf.set_font('Helvetica', '', 8.5)
-    pdf.set_text_color(90, 90, 90)
-    resumen = (f'Stock: {_pdf_money(stock_actual)}  ·  Costo prom: ${_pdf_money(costo_actual)}'
-               f'  ·  Valor inventario: ${_pdf_money(valor_existencia)}'
-               f'  ·  Movimientos: {len(movimientos)}')
-    pdf.cell(0, 5, _pdf_sanitize(resumen), ln=1, align='C')
-
-    pdf.ln(2)
-
-    # ── Tabla ── (suma de anchos = 190mm, dentro del area imprimible carta de 196mm)
-    col_w = [24, 32, 16, 14, 14, 14, 17, 17, 20, 22]
-    headers = ['Fecha', 'Documento / Proveedor', 'Origen', 'Entradas', 'Salidas',
-               'Saldo', 'C.Trans', 'C.Prom', 'Total Línea', 'Notas']
-    aligns = ['L', 'L', 'L', 'R', 'R', 'R', 'R', 'R', 'R', 'L']
-    wrap_cols = {0, 1, 2, 9}
-
-    pdf.set_fill_color(235, 235, 235)
-    pdf.set_text_color(70, 70, 70)
-    pdf.set_font('Helvetica', 'B', 6.5)
-    for i, h in enumerate(headers):
-        pdf.cell(col_w[i], 6, h, border=1, align='C', fill=True)
-    pdf.ln()
+    pdf._sub_hdr = (f'Kardex - {titulo}   Stock: {_pdf_money(stock_actual)}   '
+                    f'C.Prom: ${_pdf_money(costo_actual)}   Valor: ${_pdf_money(valor_existencia)}   '
+                    f'Movs: {len(movimientos)}')
+    pdf._col_w = col_w
+    pdf._headers = headers
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_margins(8, 5, 8)
+    pdf.add_page()
 
     pdf.set_font('Helvetica', '', 6.5)
     pdf.set_text_color(40, 40, 40)

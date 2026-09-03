@@ -5,296 +5,473 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Inventario Físico Distribuido — {{ negocio_nombre }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="/static/js/tailwind.js"></script>
 <style>
-  body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
-  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:12px 24px; border-radius:12px; color:#fff; font-weight:600; z-index:9999; opacity:0; transition:opacity .3s,transform .3s; pointer-events:none; box-shadow:0 10px 15px -3px rgba(0,0,0,.1); }
-  .toast.show { opacity:1; transform:translate(-50%,-5px); }
-  .toast-ok { background:#10b981; } .toast-err { background:#ef4444; }
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #f8fafc; color: #0f172a; }
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); padding:12px 24px; border-radius:14px; color:#fff; font-weight:700; font-size:13px; z-index:9999; opacity:0; transition:all .3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:none; box-shadow:0 12px 24px -6px rgba(0,0,0,.25); }
+  .toast.show { opacity:1; transform:translate(-50%,-8px); }
+  .toast-ok { background:#059669; } .toast-err { background:#e11d48; }
+  .glass-card { background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(8px); border: 1px solid #e2e8f0; }
 </style>
 </head>
-<body class="p-4 sm:p-6 min-h-screen">
+<body class="p-3 sm:p-6 min-h-screen">
 <div id="toast" class="toast"></div>
 
 <!-- Barra Superior de Navegación -->
-<div class="max-w-5xl mx-auto mb-6 flex items-center justify-between">
-  <div class="flex items-center gap-3">
-    <a href="/admin/inventario/{{ negocio_id }}" class="text-xs font-bold text-gray-600 hover:text-gray-900 bg-white px-3 py-2 rounded-xl shadow-xs border border-gray-200 transition">
-      ← Volver al Inventario
+<div class="max-w-6xl mx-auto mb-6 flex flex-wrap items-center justify-between gap-3">
+  <div class="flex items-center gap-2.5">
+    <a href="/admin/inventario/{{ negocio_id }}" class="text-xs font-bold text-slate-600 hover:text-slate-900 bg-white px-3.5 py-2 rounded-xl shadow-xs border border-slate-200 transition inline-flex items-center gap-1.5">
+      <span>←</span> Volver al Inventario
     </a>
-    <span class="text-xs text-gray-400">/</span>
-    <span class="text-xs font-bold text-gray-700">Inventario Físico Distribuido</span>
+    <span class="text-slate-300">/</span>
+    <span class="text-xs font-extrabold text-slate-800 tracking-tight">Inventario Físico Distribuido</span>
   </div>
-  <span class="text-xs font-mono font-bold bg-white px-3 py-1.5 rounded-xl border border-gray-200 text-gray-700 shadow-2xs">
-    Negocio: {{ negocio_nombre }}
-  </span>
+  <div class="flex items-center gap-2.5">
+    <span class="text-xs font-semibold text-slate-500 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+      Sede: <strong class="text-slate-800">{{ negocio_nombre }}</strong>
+    </span>
+    <span id="dist-doc-pill" class="text-xs font-mono font-bold bg-blue-50 text-blue-800 px-3 py-1.5 rounded-xl border border-blue-200">
+      Doc: <span id="dist-doc-nombre">IFD</span> <span id="dist-doc-consecutivo" class="text-blue-950 font-black">#1</span>
+    </span>
+  </div>
 </div>
 
 <!-- Contenedor Principal -->
-<div class="max-w-5xl mx-auto">
+<div class="max-w-6xl mx-auto space-y-6">
 
-  <!-- ═══════════════ MODAL CONTEO OPERATIVO ═══════════════ -->
-  <div id="modal-conteo" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 mx-4">
-      <div class="text-center mb-4">
-        <div class="text-4xl mb-2">📦</div>
-        <h3 class="text-lg font-bold text-gray-900">Inventario Físico Distribuido</h3>
-        <p class="text-xs text-gray-400 mt-1">Cuenta el ítem e ingresa la cantidad física</p>
+  <!-- ═══════════════ TARJETA MAESTRA: CONTROL Y FILOSOFÍA ═══════════════ -->
+  <div class="glass-card rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 border-b border-slate-100 pb-5">
+      <div>
+        <div class="flex items-center gap-3 mb-1.5">
+          <span class="text-2xl">🔄</span>
+          <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">Planeador y Control de Inventarios Distribuidos</h1>
+          <span id="dist-estado-badge" class="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-600 transition-colors">
+            Cargando estado...
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 max-w-2xl leading-relaxed">
+          Dosificación estratégica de conteos físicos por ítems prioritarios. Diseñado para auditar el 100% de los insumos y materias primas del negocio de forma continua y ligera, <strong>sin suspender la operación comercial ni desgastar jornadas enteras de conteo masivo</strong>.
+        </p>
       </div>
 
-      <div id="conteo-item-info" class="bg-gray-50 rounded-xl p-4 mb-4">
-        <p id="conteo-nombre" class="font-bold text-gray-900 text-lg"></p>
-        <p id="conteo-categoria" class="text-sm text-gray-500"></p>
-        <p id="conteo-codigo" class="text-xs text-gray-400 mt-1"></p>
+      <!-- Toggle Maestro de Activación -->
+      <div class="flex items-center gap-4 bg-slate-50 px-5 py-3 rounded-2xl border border-slate-200/80 shrink-0">
+        <div class="text-right">
+          <span class="block text-xs font-extrabold text-slate-800" id="dist-toggle-label">Activar Programa</span>
+          <span class="block text-[11px] text-slate-500 font-medium" id="dist-toggle-sub">Monitoreo y rondas</span>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="dist-activo" class="sr-only peer" onchange="onToggleActivoChange()">
+          <div class="w-13 h-7 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-5.5 after:w-5.5 after:transition-all peer-checked:bg-emerald-600 shadow-inner"></div>
+        </label>
       </div>
+    </div>
 
-      <div class="mb-4">
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Cantidad física que cuentas</label>
-        <input type="text" inputmode="numeric" id="conteo-cantidad" placeholder="0"
-               class="w-full border-2 rounded-xl px-4 py-3 text-2xl font-bold text-center focus:border-blue-500 focus:outline-none"
-               onfocus="this.select()">
-      </div>
-
-      <div class="flex gap-2">
-        <button onclick="invDistContar()" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition">
-          Contar
-        </button>
-        <button onclick="invDistSaltar()" class="bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl hover:bg-gray-300 transition text-sm">
-          Saltar
-        </button>
-        <button onclick="invDistCancelar()" class="bg-red-100 text-red-600 font-bold py-3 px-4 rounded-xl hover:bg-red-200 transition text-sm">
-          Cancelar
-        </button>
-      </div>
-
-      <p id="conteo-mensaje" class="text-xs text-center text-gray-400 mt-3 hidden"></p>
+    <!-- Advertencia de Integridad Contable -->
+    <div class="mt-4 bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5 flex items-start gap-3">
+      <span class="text-lg">⚖️</span>
+      <p class="text-xs text-amber-900 leading-relaxed">
+        <strong>Principio de Integridad Contable:</strong> Para que cualquier conteo físico genere ajustes válidos en el Kardex y la contabilidad, <strong>todas las facturas de compras, consumos y ventas del día deben estar previamente asentadas</strong>. Contar con documentos pendientes genera diferencias falsas en los saldos.
+      </p>
     </div>
   </div>
 
-  <!-- ═══════════════ MODAL CANCELAR ═══════════════ -->
-  <div id="modal-cancelar" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[60] flex items-center justify-center hidden">
-    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 mx-4">
-      <h3 class="text-lg font-bold text-gray-900 mb-2">¿Pausar conteos?</h3>
-      <p class="text-sm text-gray-500 mb-4">El sistema dejará de pedirte conteos durante el tiempo de recordatorio configurado. Podrás retomar luego.</p>
-      <div class="flex gap-2">
-        <button onclick="invDistConfirmarCancelar()" class="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700">Sí, pausar</button>
-        <button onclick="document.getElementById('modal-cancelar').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-300">Volver</button>
+  <!-- ═══════════════ SECCIÓN 1: CALCULADORA Y PLANIFICADOR DE METAS ═══════════════ -->
+  <div class="glass-card rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-base font-extrabold text-slate-900 flex items-center gap-2">
+          <span>🎯</span> Calculadora y Planificador de Ritmo del Ciclo
+        </h2>
+        <p class="text-xs text-slate-500 mt-0.5">Define la duración meta y el sistema calculará automáticamente la cadencia matemática requerida.</p>
       </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════ PANEL CONFIGURACIÓN (PARAMETRIZADOR) ═══════════════ -->
-  <div id="panel-config-dist">
-    
-    <!-- Explicación Profesional Inicial -->
-    <div class="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-6">
-      <div class="flex items-center gap-2.5 mb-2">
-        <span class="text-2xl">🔄</span>
-        <h2 class="text-lg font-bold text-blue-900">Inventario Físico Distribuido</h2>
-        <span class="text-[10px] bg-blue-200 text-blue-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Auditoría Continua</span>
-      </div>
-      <p class="text-sm text-blue-900 leading-relaxed">
-        Esta metodología realiza inventarios físicos <strong>continuos y dosificados en el tiempo</strong> (ítem por ítem),
-        integrándose de forma transparente a la rutina diaria. Al finalizar el ciclo, se audita el 100%
-        del inventario físico garantizando la continuidad operativa del negocio, <strong>sin requerir suspensiones de servicio ni extenuantes jornadas de conteo masivo</strong>.
-      </p>
-      <p class="text-xs text-blue-800 mt-2.5">
-        <strong>¿Cómo funciona?</strong> El sistema detecta pausas de navegación del usuario en los módulos seleccionados y le presenta un ítem aleatorio para contar. El usuario ingresa la cantidad física <em>sin ver el stock del sistema</em>, y si existe diferencia, el sistema genera automáticamente el ajuste de inventario con su consecutivo oficial y su asiento contable.
-      </p>
+      <span class="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-xl">
+        Algoritmo Adaptativo
+      </span>
     </div>
 
-    <!-- Tarjeta Principal de Configuración -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-150 p-6 mb-6">
-      
-      <!-- Encabezado con Toggle Maestro y Estado Visual -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100 pb-5 mb-5">
-        <div>
-          <div class="flex items-center gap-2 mb-1">
-            <h2 class="text-lg font-bold text-gray-900">⚙️ Configuración del Ciclo</h2>
-            <span id="dist-estado-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600 transition-colors">
-              Inactivo
+    <!-- Cuadrícula de Cálculo de Metas en Tiempo Real -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3.5 mb-6">
+      <div class="bg-gradient-to-b from-blue-50/60 to-blue-50/20 border border-blue-100 rounded-xl p-4 text-center">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 block mb-1">Catálogo a Auditar</span>
+        <p id="calc-total-items" class="text-3xl font-black font-mono text-blue-900">0</p>
+        <span class="text-[11px] font-medium text-blue-700 mt-1 block">Ítems activos disponibles</span>
+      </div>
+
+      <div class="bg-gradient-to-b from-purple-50/60 to-purple-50/20 border border-purple-100 rounded-xl p-4 text-center">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-purple-600 block mb-1">Meta del Ciclo</span>
+        <div class="flex items-center justify-center gap-1 my-0.5">
+          <input type="number" id="dist-dias-ciclo" min="1" max="180" value="15"
+                 class="w-16 text-center text-3xl font-black font-mono text-purple-900 bg-transparent border-b-2 border-purple-400 focus:outline-none"
+                 oninput="recalcularMetas()" onchange="invDistGuardarConfig()">
+          <span class="text-sm font-bold text-purple-700">días</span>
+        </div>
+        <div class="flex justify-center gap-1.5 mt-1.5">
+          <button type="button" onclick="setDiasCiclo(7)" class="text-[10px] font-bold bg-white text-purple-700 border border-purple-200 px-2 py-0.5 rounded hover:bg-purple-100 transition">7d</button>
+          <button type="button" onclick="setDiasCiclo(15)" class="text-[10px] font-bold bg-white text-purple-700 border border-purple-200 px-2 py-0.5 rounded hover:bg-purple-100 transition">15d</button>
+          <button type="button" onclick="setDiasCiclo(30)" class="text-[10px] font-bold bg-white text-purple-700 border border-purple-200 px-2 py-0.5 rounded hover:bg-purple-100 transition">30d</button>
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-b from-emerald-50/60 to-emerald-50/20 border border-emerald-100 rounded-xl p-4 text-center">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block mb-1">Cadencia Diaria</span>
+        <p id="calc-meta-diaria" class="text-3xl font-black font-mono text-emerald-900">0.0</p>
+        <span class="text-[11px] font-medium text-emerald-700 mt-1 block">Conteos promedio / día</span>
+      </div>
+
+      <div class="bg-gradient-to-b from-amber-50/60 to-amber-50/20 border border-amber-100 rounded-xl p-4 text-center">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-amber-600 block mb-1">Dedicación Estimada</span>
+        <p id="calc-tiempo-estimado" class="text-3xl font-black font-mono text-amber-900">~2 min</p>
+        <span class="text-[11px] font-medium text-amber-700 mt-1 block">Por ronda de sesión</span>
+      </div>
+    </div>
+
+    <!-- Selector de Modalidad Operativa: Ráfaga vs Distribuido -->
+    <div class="pt-5 border-t border-slate-100">
+      <label class="block text-xs font-extrabold uppercase tracking-wide text-slate-700 mb-2">
+        Selecciona la Modalidad Operativa del Negocio
+      </label>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+        <!-- Opción A: Modo Ráfaga (Recomendado para propietarios) -->
+        <div id="card-modalidad-rafaga" onclick="seleccionarModalidad('rafaga')"
+             class="border-2 rounded-2xl p-4.5 cursor-pointer transition relative bg-white border-blue-500 shadow-sm hover:border-blue-600">
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div class="flex items-center gap-2">
+              <span class="text-2xl">⚡</span>
+              <h3 class="font-extrabold text-sm text-slate-900">Modo Ronda Rápida / Ráfaga</h3>
+            </div>
+            <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+              ⭐ Recomendado para Dueños
             </span>
           </div>
-          <p class="text-xs text-gray-500">
-            Control maestro de activación para el muestreo físico distribuido en las pantallas operativas.
+          <p class="text-xs text-slate-600 leading-relaxed mb-3">
+            Ideal si solo abres el sistema <strong>15 a 45 minutos al día</strong>. Al iniciar sesión y validar que tus documentos están al día, el sistema te invita a realizar una micro-ronda encadenada (ej: 3 ítems seguidos) en menos de 2 minutos antes de salir.
           </p>
-        </div>
-
-        <div class="flex items-center gap-3 bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-200">
-          <div class="text-right">
-            <span class="block text-xs font-bold text-gray-800" id="dist-toggle-label">Activar Conteo Físico</span>
-            <span class="block text-[10px] text-gray-500" id="dist-toggle-sub">Monitoreo de pausas</span>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="dist-activo" class="sr-only peer" onchange="onToggleActivoChange()">
-            <div class="w-12 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-          </label>
-        </div>
-      </div>
-
-      <!-- Nota orientadora de Conciencia Operativa (Criterio del Administrador) -->
-      <div class="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 mb-5 flex items-start gap-3">
-        <span class="text-xl mt-0.5">💡</span>
-        <div class="text-xs text-amber-900 leading-relaxed">
-          <strong>Conciencia del Administrador:</strong> Al activar el ciclo de conteos, asegúrese según el criterio e instancias de su operación de que los documentos de ingreso (compras), consumos y ventas se encuentren asentados para que las comparaciones de stock físico frente al Kardex reflejen la realidad operativa.
-        </div>
-      </div>
-
-      <!-- Tarjeta informativa del Tipo de Documento Contable Vinculado -->
-      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 mb-5 flex items-center justify-between text-xs">
-        <div class="flex items-center gap-2.5">
-          <span class="text-xl">📄</span>
-          <div>
-            <span class="font-bold text-gray-800">Documento Oficial en Tipos Doc:</span>
-            <span id="dist-doc-nombre" class="font-semibold text-blue-700 ml-1">Cargando...</span>
-            <span class="text-[10px] text-gray-400 block">Asociado por Módulo / Uso = 'inventario_distribuido'. Puedes renombrarlo libremente en Contabilidad > Tipos Doc.</span>
-          </div>
-        </div>
-        <div class="text-right">
-          <span class="text-[10px] text-gray-500 uppercase font-bold block">Próximo Consecutivo</span>
-          <span id="dist-doc-consecutivo" class="font-mono font-bold text-sm text-gray-800">#1</span>
-        </div>
-      </div>
-
-      <!-- Cuerpo de Campos de Configuración -->
-      <div id="dist-config-body" class="space-y-5">
-        
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          <div>
-            <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Días del ciclo</label>
-            <input type="number" id="dist-dias-ciclo" min="1" max="365" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" onchange="invDistGuardarConfig()">
-            <p class="text-[11px] text-gray-400 mt-1">Duración total del ciclo en días para cubrir el 100% de ítems.</p>
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Recordar en (minutos)</label>
-            <input type="number" id="dist-recordar-min" min="1" max="480" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" onchange="invDistGuardarConfig()">
-            <p class="text-[11px] text-gray-400 mt-1">Tiempo de espera tras saltar o cancelar antes de volver a pedir.</p>
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Segundos de pausa</label>
-            <input type="number" id="dist-pausa-seg" min="5" max="300" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" onchange="invDistGuardarConfig()">
-            <p class="text-[11px] text-gray-400 mt-1">Segundos de inactividad antes de lanzar el modal de conteo.</p>
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Hora inicio permitida</label>
-            <input type="time" id="dist-hora-inicio" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" onchange="invDistGuardarConfig()">
-            <p class="text-[11px] text-gray-400 mt-1">Hora a partir de la cual se pueden mostrar conteos.</p>
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Hora fin permitida</label>
-            <input type="time" id="dist-hora-fin" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" onchange="invDistGuardarConfig()">
-            <p class="text-[11px] text-gray-400 mt-1">Hora límite diaria para mostrar conteos.</p>
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Orden de prioridad</label>
-            <select id="dist-orden" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" onchange="invDistGuardarConfig()">
-              <option value="valor">Valor unitario × stock</option>
-              <option value="rotacion">Rotación (últimos 30 días)</option>
-              <option value="valor_rotacion">Valor × Rotación (combinado)</option>
-            </select>
-            <p class="text-[11px] text-gray-400 mt-1">Prioridad de ítems (alto valor y alta rotación primero).</p>
+          <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 flex items-center justify-between text-xs">
+            <span class="font-bold text-slate-700">Cuota por Ronda de Sesión:</span>
+            <div class="flex items-center gap-1.5">
+              <input type="number" id="dist-cuota-sesion" min="1" max="15" value="3"
+                     class="w-14 text-center font-black font-mono text-sm py-1 border border-slate-300 rounded-lg bg-white outline-none focus:border-blue-500"
+                     onchange="invDistGuardarConfig()">
+              <span class="font-semibold text-slate-500 text-[11px]">ítems</span>
+            </div>
           </div>
         </div>
 
-        <!-- Módulos Activos Específicos -->
-        <div class="pt-4 border-t border-gray-100">
-          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Módulos activos para conteo</label>
-          <p class="text-[11px] text-gray-400 mb-3">Selecciona en qué pantallas operativas se detectará la inactividad para solicitar el conteo.</p>
-          
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5" id="dist-modulos">
-            <label class="flex items-center gap-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl p-3 text-xs font-medium cursor-pointer transition">
-              <input type="checkbox" value="dashboard" class="dist-modulo rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
-              <div>
-                <span class="font-bold text-gray-800 block">🖥️ Dashboard Administrador</span>
-                <span class="text-[10px] text-gray-400 block">Panel general y menú principal</span>
-              </div>
-            </label>
-            <label class="flex items-center gap-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl p-3 text-xs font-medium cursor-pointer transition">
-              <input type="checkbox" value="inventario" class="dist-modulo rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
-              <div>
-                <span class="font-bold text-gray-800 block">📦 Módulo de Inventarios</span>
-                <span class="text-[10px] text-gray-400 block">Kardex, existencias y productos</span>
-              </div>
-            </label>
-            <label class="flex items-center gap-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl p-3 text-xs font-medium cursor-pointer transition">
-              <input type="checkbox" value="contabilidad" class="dist-modulo rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
-              <div>
-                <span class="font-bold text-gray-800 block">⚖️ Módulo de Contabilidad</span>
-                <span class="text-[10px] text-gray-400 block">PUC, movimientos y balances</span>
-              </div>
-            </label>
-            <label class="flex items-center gap-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl p-3 text-xs font-medium cursor-pointer transition">
-              <input type="checkbox" value="caja" class="dist-modulo rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
-              <div>
-                <span class="font-bold text-gray-800 block">💳 Punto de Venta / Caja POS</span>
-                <span class="text-[10px] text-gray-400 block">Facturación de mostrador y pedidos</span>
-              </div>
-            </label>
-            <label class="flex items-center gap-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl p-3 text-xs font-medium cursor-pointer transition">
-              <input type="checkbox" value="gastos" class="dist-modulo rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
-              <div>
-                <span class="font-bold text-gray-800 block">💰 Módulo / Pestaña Gastos</span>
-                <span class="text-[10px] text-gray-400 block">Egresos y gastos operativos</span>
-              </div>
-            </label>
+        <!-- Opción B: Modo Pausas Continuas -->
+        <div id="card-modalidad-distribuido" onclick="seleccionarModalidad('distribuido')"
+             class="border-2 rounded-2xl p-4.5 cursor-pointer transition relative bg-white border-slate-200 hover:border-slate-300">
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div class="flex items-center gap-2">
+              <span class="text-2xl">⏱️</span>
+              <h3 class="font-extrabold text-sm text-slate-900">Modo Pausas de Inactividad</h3>
+            </div>
+            <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+              Para Caja / POS Permanente
+            </span>
           </div>
-        </div>
-
-        <div class="flex items-center gap-2 pt-2">
-          <input type="checkbox" id="dist-reiniciar" class="rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
-          <div>
-            <label for="dist-reiniciar" class="text-xs text-gray-700 font-bold">Reiniciar ciclo automáticamente al completar el 100%</label>
-            <p class="text-[11px] text-gray-400">Al terminar de contar todos los ítems, inicia un nuevo ciclo continuo sin requerir reconfiguración.</p>
+          <p class="text-xs text-slate-600 leading-relaxed mb-3">
+            Diseñado para terminales o pantallas que <strong>permanecen encendidas todo el día</strong>. El sistema monitorea pausas de inactividad de varios minutos u horas entre transacciones para solicitar conteos individuales.
+          </p>
+          <div class="bg-slate-50 rounded-xl p-3 border border-slate-200 flex items-center justify-between text-xs">
+            <span class="font-bold text-slate-700">Segundos de Pausa Requeridos:</span>
+            <div class="flex items-center gap-1.5">
+              <input type="number" id="dist-pausa-seg" min="5" max="300" value="20"
+                     class="w-14 text-center font-black font-mono text-sm py-1 border border-slate-300 rounded-lg bg-white outline-none focus:border-blue-500"
+                     onchange="invDistGuardarConfig()">
+              <span class="font-semibold text-slate-500 text-[11px]">seg</span>
+            </div>
           </div>
         </div>
 
       </div>
-    </div>
-
-    <!-- Resumen del Ciclo de Conteo -->
-    <div id="dist-resumen-panel" class="bg-white rounded-2xl shadow-sm border border-gray-150 p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-bold text-gray-900 flex items-center gap-2">
-          <span>📊</span> Progreso del Ciclo de Inventario
-        </h3>
-        <button onclick="invDistCargarResumen()" class="text-xs text-blue-600 hover:text-blue-800 font-bold">
-          Actualizar datos
-        </button>
-      </div>
-
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-        <div class="bg-blue-50/70 border border-blue-100 rounded-xl p-3.5 text-center">
-          <p id="dist-total" class="text-2xl font-bold font-mono text-blue-700">0</p>
-          <p class="text-xs font-semibold text-blue-600 mt-0.5">Total ítems</p>
-        </div>
-        <div class="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3.5 text-center">
-          <p id="dist-contados" class="text-2xl font-bold font-mono text-emerald-700">0</p>
-          <p class="text-xs font-semibold text-emerald-600 mt-0.5">Contados</p>
-        </div>
-        <div class="bg-amber-50/70 border border-amber-100 rounded-xl p-3.5 text-center">
-          <p id="dist-saltados" class="text-2xl font-bold font-mono text-amber-700">0</p>
-          <p class="text-xs font-semibold text-amber-600 mt-0.5">Saltados</p>
-        </div>
-        <div class="bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-center">
-          <p id="dist-pendientes" class="text-2xl font-bold font-mono text-gray-700">0</p>
-          <p class="text-xs font-semibold text-gray-600 mt-0.5">Pendientes</p>
-        </div>
-      </div>
-
-      <div id="dist-items-lista" class="space-y-1 max-h-80 overflow-y-auto divide-y divide-gray-100"></div>
+      <input type="hidden" id="dist-modalidad" value="rafaga">
     </div>
 
   </div>
 
+  <!-- ═══════════════ SECCIÓN 2: TABLERO DE RITMO Y CUMPLIMIENTO EN VIVO ═══════════════ -->
+  <div class="glass-card rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+      <div>
+        <h2 class="text-base font-extrabold text-slate-900 flex items-center gap-2">
+          <span>📊</span> Tablero de Ritmo en Tiempo Real y Diagnóstico de Metas
+        </h2>
+        <p class="text-xs text-slate-500 mt-0.5">Monitoreo de sincronía entre el tiempo transcurrido del ciclo y el avance real de conteos físicos.</p>
+      </div>
+      <button onclick="invDistCargarResumen()" class="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3.5 py-1.5 rounded-xl transition border border-blue-200 self-start sm:self-auto">
+        🔄 Refrescar métricas
+      </button>
+    </div>
+
+    <!-- Semáforo / Diagnóstico de Rezago -->
+    <div id="dist-alerta-ritmo" class="rounded-xl p-4 mb-5 border transition-all flex items-start gap-3.5 bg-slate-50 border-slate-200 text-slate-700">
+      <span id="dist-ritmo-icon" class="text-2xl mt-0.5">⏳</span>
+      <div class="flex-1 text-xs leading-relaxed">
+        <div class="flex items-center gap-2 mb-1">
+          <strong id="dist-ritmo-titulo" class="font-extrabold text-sm">Calculando estado del ciclo...</strong>
+          <span id="dist-ritmo-badge" class="font-mono text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200">Verificando</span>
+        </div>
+        <p id="dist-ritmo-mensaje" class="text-slate-600">Sincronizando estado con el servidor.</p>
+      </div>
+      <div class="text-right shrink-0">
+        <span class="text-[10px] font-bold uppercase text-slate-400 block">Rezago Acumulado</span>
+        <span id="dist-ritmo-rezago" class="font-mono text-xl font-black text-slate-800">0</span>
+        <span class="text-[10px] text-slate-400 block">ítems pendientes</span>
+      </div>
+    </div>
+
+    <!-- Doble Barra Comparativa: Tiempo vs Avance Físico -->
+    <div class="space-y-4 bg-slate-50/70 p-4.5 rounded-2xl border border-slate-200 mb-6">
+      <!-- Barra 1: Tiempo Transcurrido -->
+      <div>
+        <div class="flex justify-between text-xs font-bold mb-1.5">
+          <span class="text-slate-700 flex items-center gap-1.5">
+            <span>📅</span> Tiempo del Ciclo Transcurrido:
+            <span id="dist-tiempo-texto" class="text-purple-700 font-extrabold">Día 1 de 15</span>
+          </span>
+          <span id="dist-tiempo-pct" class="font-mono text-purple-700 font-extrabold">0%</span>
+        </div>
+        <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+          <div id="dist-tiempo-bar" class="bg-purple-600 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+        </div>
+        <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+          <span>Inicio: <span id="dist-fecha-inicio" class="font-mono text-slate-600">--</span></span>
+          <span>Fin estimado: <span id="dist-fecha-fin" class="font-mono text-slate-600">--</span></span>
+        </div>
+      </div>
+
+      <!-- Barra 2: Inventario Físico Auditado -->
+      <div>
+        <div class="flex justify-between text-xs font-bold mb-1.5">
+          <span class="text-slate-700 flex items-center gap-1.5">
+            <span>📦</span> Avance de Inventario Físico:
+            <span id="dist-avance-texto" class="text-emerald-700 font-extrabold">0 de 0 ítems</span>
+          </span>
+          <span id="dist-avance-pct" class="font-mono text-emerald-700 font-extrabold">0%</span>
+        </div>
+        <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+          <div id="dist-avance-bar" class="bg-emerald-600 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+        </div>
+        <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+          <span>Meta esperada a la fecha: <strong id="dist-meta-esperada" class="font-mono text-slate-700">0 ítems</strong></span>
+          <span>Cobertura total requerida: 100%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Métricas Numéricas de Estado -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div class="bg-blue-50/50 border border-blue-100 rounded-xl p-3.5 text-center">
+        <p id="dist-total" class="text-2xl font-black font-mono text-blue-800">0</p>
+        <span class="text-xs font-semibold text-blue-600 mt-0.5 block">Total en Catálogo</span>
+      </div>
+      <div class="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3.5 text-center">
+        <p id="dist-contados" class="text-2xl font-black font-mono text-emerald-800">0</p>
+        <span class="text-xs font-semibold text-emerald-600 mt-0.5 block">Auditados en Ciclo</span>
+      </div>
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-center">
+        <p id="dist-pendientes" class="text-2xl font-black font-mono text-slate-700">0</p>
+        <span class="text-xs font-semibold text-slate-600 mt-0.5 block">Pendientes</span>
+      </div>
+      <div class="bg-amber-50/50 border border-amber-100 rounded-xl p-3.5 text-center">
+        <p id="dist-saltados" class="text-2xl font-black font-mono text-amber-800">0</p>
+        <span class="text-xs font-semibold text-amber-600 mt-0.5 block">Postergados / Saltados</span>
+      </div>
+    </div>
+
+    <!-- Tarjeta del Próximo Ítem en Fila -->
+    <div id="dist-proximo-item-card" class="mt-5 bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-slate-50 border border-blue-200/70 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-xs">
+          🎯
+        </div>
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700 block">Siguiente ítem prioritario en cola</span>
+          <h4 id="dist-sig-nombre" class="font-extrabold text-sm text-slate-900">Cargando próximo ítem...</h4>
+          <span id="dist-sig-meta" class="text-[11px] text-slate-500 font-medium">Categoría y existencia teórica</span>
+        </div>
+      </div>
+      <button onclick="invDistSiguiente()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 self-start sm:self-auto">
+        <span>📦</span> Probar Conteo de Prueba
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════ SECCIÓN 3: PARÁMETROS OPERATIVOS Y HORARIOS ═══════════════ -->
+  <div class="glass-card rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200">
+    <h2 class="text-base font-extrabold text-slate-900 flex items-center gap-2 mb-4">
+      <span>⚙️</span> Parámetros Operativos, Horarios y Módulos
+    </h2>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-5">
+      <div>
+        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Hora Inicio Permitida</label>
+        <input type="time" id="dist-hora-inicio" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" onchange="invDistGuardarConfig()">
+        <p class="text-[11px] text-slate-400 mt-1">Hora a partir de la cual se solicitan conteos.</p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Hora Fin Permitida</label>
+        <input type="time" id="dist-hora-fin" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" onchange="invDistGuardarConfig()">
+        <p class="text-[11px] text-slate-400 mt-1">Hora límite diaria para pedir conteos.</p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Criterio de Prioridad</label>
+        <select id="dist-orden" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" onchange="invDistGuardarConfig()">
+          <option value="valor_rotacion">Valor × Rotación (Recomendado)</option>
+          <option value="valor">Valor unitario × Stock</option>
+          <option value="rotacion">Mayor rotación de salidas</option>
+        </select>
+        <p class="text-[11px] text-slate-400 mt-1">Ordena qué productos se auditan primero.</p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Recordar tras Pausa (min)</label>
+        <input type="number" id="dist-recordar-min" min="1" max="480" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" onchange="invDistGuardarConfig()">
+        <p class="text-[11px] text-slate-400 mt-1">Espera tras saltar o pausar antes de reintentar.</p>
+      </div>
+
+      <div class="sm:col-span-2 flex items-center gap-3 pt-4">
+        <input type="checkbox" id="dist-reiniciar" class="rounded text-blue-600 w-5 h-5 cursor-pointer" onchange="invDistGuardarConfig()">
+        <div>
+          <label for="dist-reiniciar" class="text-xs text-slate-800 font-bold cursor-pointer">Reiniciar automáticamente al completar el 100% del ciclo</label>
+          <p class="text-[11px] text-slate-400">Al terminar de auditar todos los ítems, inicia un nuevo ciclo continuo de forma autónoma.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Módulos Activos para Detección -->
+    <div class="pt-4 border-t border-slate-100">
+      <label class="block text-xs font-extrabold uppercase tracking-wide text-slate-700 mb-1.5">
+        Módulos Activos donde se Solicitará el Conteo
+      </label>
+      <p class="text-[11px] text-slate-400 mb-3">Marca las pantallas operativas donde se activará la verificación y muestreo.</p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+        <label class="flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl p-3 text-xs font-medium cursor-pointer transition">
+          <input type="checkbox" value="dashboard" class="dist-modulo rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
+          <div>
+            <span class="font-bold text-slate-800 block">🖥️ Dashboard Principal</span>
+            <span class="text-[10px] text-slate-400">Menú inicial de administración</span>
+          </div>
+        </label>
+        <label class="flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl p-3 text-xs font-medium cursor-pointer transition">
+          <input type="checkbox" value="inventario" class="dist-modulo rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
+          <div>
+            <span class="font-bold text-slate-800 block">📦 Módulo de Inventarios</span>
+            <span class="text-[10px] text-slate-400">Kardex y catálogo de productos</span>
+          </div>
+        </label>
+        <label class="flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl p-3 text-xs font-medium cursor-pointer transition">
+          <input type="checkbox" value="caja" class="dist-modulo rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
+          <div>
+            <span class="font-bold text-slate-800 block">💳 Punto de Venta / Caja POS</span>
+            <span class="text-[10px] text-slate-400">Terminal de atención al cliente</span>
+          </div>
+        </label>
+        <label class="flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl p-3 text-xs font-medium cursor-pointer transition">
+          <input type="checkbox" value="gastos" class="dist-modulo rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
+          <div>
+            <span class="font-bold text-slate-800 block">💰 Pestaña de Gastos</span>
+            <span class="text-[10px] text-slate-400">Registro de egresos operativos</span>
+          </div>
+        </label>
+        <label class="flex items-center gap-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl p-3 text-xs font-medium cursor-pointer transition">
+          <input type="checkbox" value="contabilidad" class="dist-modulo rounded text-blue-600 w-4 h-4" onchange="invDistGuardarConfig()">
+          <div>
+            <span class="font-bold text-slate-800 block">⚖️ Contabilidad General</span>
+            <span class="text-[10px] text-slate-400">Balances y movimientos contables</span>
+          </div>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ SECCIÓN 4: AUDITORÍA DETALLADA DE ÍTEMS ═══════════════ -->
+  <div class="glass-card rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+      <div>
+        <h2 class="text-base font-extrabold text-slate-900 flex items-center gap-2">
+          <span>📋</span> Registro y Auditoría del Inventario en Curso
+        </h2>
+        <p class="text-xs text-slate-500 mt-0.5">Explora el estado individual de cada ítem en el ciclo actual.</p>
+      </div>
+
+      <!-- Filtros Rápidos -->
+      <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold self-start sm:self-auto">
+        <button type="button" onclick="filtrarItems('todos')" id="btn-filtro-todos" class="px-3 py-1 rounded-lg bg-white shadow-2xs text-slate-900 font-extrabold">Todos</button>
+        <button type="button" onclick="filtrarItems('contado')" id="btn-filtro-contado" class="px-3 py-1 rounded-lg text-slate-500 hover:text-slate-800">Contados</button>
+        <button type="button" onclick="filtrarItems('pendiente')" id="btn-filtro-pendiente" class="px-3 py-1 rounded-lg text-slate-500 hover:text-slate-800">Pendientes</button>
+        <button type="button" onclick="filtrarItems('saltado')" id="btn-filtro-saltado" class="px-3 py-1 rounded-lg text-slate-500 hover:text-slate-800">Saltados</button>
+      </div>
+    </div>
+
+    <!-- Buscador -->
+    <div class="mb-4">
+      <input type="text" id="buscador-items" placeholder="🔍 Buscar por nombre o categoría..."
+             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs outline-none focus:bg-white focus:ring-2 focus:ring-blue-500"
+             oninput="renderizarListaItems()">
+    </div>
+
+    <!-- Contenedor de la Lista -->
+    <div id="dist-items-lista" class="space-y-1.5 max-h-96 overflow-y-auto divide-y divide-slate-100 pr-1"></div>
+  </div>
+
+</div>
+
+<!-- ═══════════════ MODAL CONTEO OPERATIVO (PARA PRUEBAS) ═══════════════ -->
+<div id="modal-conteo" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 mx-4 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+    <div class="text-center mb-4">
+      <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-2 shadow-2xs">
+        📦
+      </div>
+      <h3 class="text-base font-extrabold text-slate-900">Muestreo Físico de Prueba</h3>
+      <p class="text-xs text-slate-500 mt-0.5">Ingresa la cantidad física que observas</p>
+    </div>
+
+    <div class="bg-slate-50 rounded-xl p-3.5 mb-4 text-center border border-slate-200">
+      <p id="conteo-nombre" class="font-extrabold text-slate-900 text-sm leading-tight"></p>
+      <p id="conteo-categoria" class="text-xs text-slate-500 mt-0.5"></p>
+      <p id="conteo-codigo" class="text-[10px] text-slate-400 font-mono mt-0.5"></p>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1 text-center">Cantidad Física Observada</label>
+      <input type="text" inputmode="decimal" id="conteo-cantidad" placeholder="0"
+             class="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-2xl font-black font-mono text-center outline-none focus:border-blue-500"
+             onfocus="this.select()" onkeydown="if(event.key==='Enter') invDistContar()">
+    </div>
+
+    <div class="flex gap-2">
+      <button onclick="invDistContar()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-xs">
+        ✓ Registrar
+      </button>
+      <button onclick="invDistSaltar()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-3.5 rounded-xl text-xs transition">
+        Saltar
+      </button>
+      <button onclick="document.getElementById('modal-conteo').classList.add('hidden')" class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2.5 px-3 rounded-xl text-xs transition">
+        Cerrar
+      </button>
+    </div>
+
+    <p id="conteo-mensaje" class="text-xs text-center mt-3 hidden font-bold"></p>
+  </div>
 </div>
 
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
 let _distConfig = {};
+let _distResumen = {};
 let _distItemActual = null;
-let _distTimeoutPausa = null;
-let _distCancelHasta = null;
+let _filtroEstadoActual = 'todos';
+let _todosLosItems = [];
 
 function toast(msg, tipo='ok') {
   const t = document.getElementById('toast');
@@ -303,6 +480,7 @@ function toast(msg, tipo='ok') {
   setTimeout(() => t.className = 'toast', 3000);
 }
 
+// ── Carga y Sincronización Inicial ──
 async function invDistCargarConfig() {
   try {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/config`);
@@ -310,9 +488,9 @@ async function invDistCargarConfig() {
     if (!d.ok) return;
     _distConfig = d.config || {};
     
-    // Cargar info del documento contable oficial
+    // Consecutivo del documento contable IFD
     if (d.documento) {
-      document.getElementById('dist-doc-nombre').textContent = d.documento.nombre;
+      document.getElementById('dist-doc-nombre').textContent = d.documento.codigo || 'IFD';
       document.getElementById('dist-doc-consecutivo').textContent = '#' + ((d.documento.consecutivo || 0) + 1);
     }
     
@@ -320,21 +498,59 @@ async function invDistCargarConfig() {
     document.getElementById('dist-activo').checked = activo;
     actualizarBadgeEstado(activo);
 
-    document.getElementById('dist-dias-ciclo').value = _distConfig.inv_distribuido_dias_ciclo?.valor || 30;
+    const dias = parseInt(_distConfig.inv_distribuido_dias_ciclo?.valor || 15);
+    document.getElementById('dist-dias-ciclo').value = dias;
     document.getElementById('dist-recordar-min').value = _distConfig.inv_distribuido_recordar_min?.valor || 15;
     document.getElementById('dist-hora-inicio').value = _distConfig.inv_distribuido_horario_inicio?.valor || '08:00';
     document.getElementById('dist-hora-fin').value = _distConfig.inv_distribuido_horario_fin?.valor || '17:00';
-    document.getElementById('dist-pausa-seg').value = _distConfig.inv_distribuido_pausa_seg?.valor || 30;
+    document.getElementById('dist-pausa-seg').value = _distConfig.inv_distribuido_pausa_seg?.valor || 20;
     document.getElementById('dist-orden').value = _distConfig.inv_distribuido_orden?.valor || 'valor_rotacion';
     document.getElementById('dist-reiniciar').checked = _distConfig.inv_distribuido_reiniciar?.valor === 'true';
     
+    const cuota = parseInt(_distConfig.inv_distribuido_cuota_sesion?.valor || 3);
+    document.getElementById('dist-cuota-sesion').value = cuota;
+
+    const mod = _distConfig.inv_distribuido_modalidad?.valor || 'rafaga';
+    seleccionarModalidad(mod, false);
+
     const modulos = (_distConfig.inv_distribuido_modulos?.valor || '').split(',');
     document.querySelectorAll('.dist-modulo').forEach(cb => {
       cb.checked = modulos.includes(cb.value);
     });
-    
-    invDistCargarResumen();
+
+    await invDistCargarResumen();
   } catch(e) { console.error('Error cargando config inv dist:', e); }
+}
+
+function setDiasCiclo(d) {
+  document.getElementById('dist-dias-ciclo').value = d;
+  recalcularMetas();
+  invDistGuardarConfig();
+}
+
+function recalcularMetas() {
+  const total = _distResumen.total_productos || 0;
+  const dias = Math.max(1, parseInt(document.getElementById('dist-dias-ciclo').value || 15));
+  const metaDiaria = (total / dias).toFixed(1);
+  
+  document.getElementById('calc-total-items').textContent = total;
+  document.getElementById('calc-meta-diaria').textContent = metaDiaria;
+}
+
+function seleccionarModalidad(mod, guardar=true) {
+  document.getElementById('dist-modalidad').value = mod;
+  const cardRafaga = document.getElementById('card-modalidad-rafaga');
+  const cardDist = document.getElementById('card-modalidad-distribuido');
+
+  if (mod === 'rafaga') {
+    cardRafaga.className = 'border-2 rounded-2xl p-4.5 cursor-pointer transition relative bg-white border-blue-500 shadow-sm';
+    cardDist.className = 'border-2 rounded-2xl p-4.5 cursor-pointer transition relative bg-white border-slate-200 hover:border-slate-300 opacity-75';
+  } else {
+    cardDist.className = 'border-2 rounded-2xl p-4.5 cursor-pointer transition relative bg-white border-blue-500 shadow-sm';
+    cardRafaga.className = 'border-2 rounded-2xl p-4.5 cursor-pointer transition relative bg-white border-slate-200 hover:border-slate-300 opacity-75';
+  }
+
+  if (guardar) invDistGuardarConfig();
 }
 
 function actualizarBadgeEstado(activo) {
@@ -342,15 +558,15 @@ function actualizarBadgeEstado(activo) {
   const lbl = document.getElementById('dist-toggle-label');
   const sub = document.getElementById('dist-toggle-sub');
   if (activo) {
-    badge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800';
-    badge.textContent = '🟢 Activo y Monitoreando';
-    lbl.textContent = 'Sistema de Conteo Activado';
-    sub.textContent = 'Muestreando pausas en pantallas seleccionadas';
+    badge.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200';
+    badge.textContent = '🟢 En Ejecución Continua';
+    lbl.textContent = 'Programa Activado';
+    sub.textContent = 'Muestreando en pantallas';
   } else {
-    badge.className = 'text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-200 text-gray-700';
-    badge.textContent = '🔴 Inactivo';
-    lbl.textContent = 'Activar Conteo Físico';
-    sub.textContent = 'Pausas desactivadas';
+    badge.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-slate-200 text-slate-700';
+    badge.textContent = '⚪ En Pausa';
+    lbl.textContent = 'Activar Programa';
+    sub.textContent = 'Muestreo pausado';
   }
 }
 
@@ -365,6 +581,8 @@ async function invDistGuardarConfig() {
   const data = {
     inv_distribuido_activo: document.getElementById('dist-activo').checked,
     inv_distribuido_dias_ciclo: document.getElementById('dist-dias-ciclo').value,
+    inv_distribuido_cuota_sesion: document.getElementById('dist-cuota-sesion').value,
+    inv_distribuido_modalidad: document.getElementById('dist-modalidad').value,
     inv_distribuido_recordar_min: document.getElementById('dist-recordar-min').value,
     inv_distribuido_horario_inicio: document.getElementById('dist-hora-inicio').value,
     inv_distribuido_horario_fin: document.getElementById('dist-hora-fin').value,
@@ -379,7 +597,7 @@ async function invDistGuardarConfig() {
     });
     const d = await r.json();
     if (d.ok) {
-      toast('Configuración guardada correctamente');
+      toast('Configuración guardada y sincronizada');
     } else toast(d.error || 'Error', 'err');
   } catch(e) { toast('Error de red', 'err'); }
 }
@@ -389,70 +607,174 @@ async function invDistCargarResumen() {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/resumen`);
     const d = await r.json();
     if (!d.ok) return;
+    _distResumen = d;
+
+    // Métricas
     document.getElementById('dist-total').textContent = d.total_productos;
     document.getElementById('dist-contados').textContent = d.resumen.contados;
-    document.getElementById('dist-saltados').textContent = d.resumen.saltados;
     document.getElementById('dist-pendientes').textContent = d.resumen.pendientes;
-    const lista = document.getElementById('dist-items-lista');
-    if (!d.items || !d.items.length) {
-      lista.innerHTML = '<p class="text-xs text-gray-400 italic py-3 text-center">No hay ítems configurados en este ciclo.</p>';
-      return;
+    document.getElementById('dist-saltados').textContent = d.resumen.saltados;
+
+    // Calculadora superior
+    document.getElementById('calc-total-items').textContent = d.total_productos;
+    document.getElementById('calc-meta-diaria').textContent = d.meta_diaria || (d.total_productos / (d.dias_ciclo || 15)).toFixed(1);
+
+    // Barra 1: Tiempo
+    document.getElementById('dist-tiempo-texto').textContent = `Día ${d.dias_transcurridos} de ${d.dias_ciclo}`;
+    document.getElementById('dist-tiempo-pct').textContent = `${d.pct_tiempo}%`;
+    document.getElementById('dist-tiempo-bar').style.width = `${d.pct_tiempo}%`;
+    document.getElementById('dist-fecha-inicio').textContent = d.ciclo_inicio || '--';
+    document.getElementById('dist-fecha-fin').textContent = d.fecha_fin_estimada || '--';
+
+    // Barra 2: Inventario Físico
+    document.getElementById('dist-avance-texto').textContent = `${d.resumen.contados} de ${d.total_productos} ítems`;
+    document.getElementById('dist-avance-pct').textContent = `${d.pct_inventario}%`;
+    document.getElementById('dist-avance-bar').style.width = `${d.pct_inventario}%`;
+    document.getElementById('dist-meta-esperada').textContent = `${d.meta_esperada_a_hoy} ítems`;
+
+    // Semáforo de Ritmo
+    const alertaBox = document.getElementById('dist-alerta-ritmo');
+    const icono = document.getElementById('dist-ritmo-icon');
+    const titulo = document.getElementById('dist-ritmo-titulo');
+    const mensaje = document.getElementById('dist-ritmo-mensaje');
+    const badge = document.getElementById('dist-ritmo-badge');
+    document.getElementById('dist-ritmo-rezago').textContent = d.rezago;
+
+    if (d.estado_ritmo === 'optimo') {
+      alertaBox.className = 'rounded-xl p-4 mb-5 border transition-all flex items-start gap-3.5 bg-emerald-50/80 border-emerald-200 text-emerald-900';
+      icono.textContent = '🟢';
+      titulo.textContent = 'Ritmo Óptimo de Conteo';
+      badge.className = 'font-mono text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900';
+      badge.textContent = 'Al día';
+      mensaje.textContent = d.mensaje_ritmo || '¡Vas exactamente al día con la meta del ciclo!';
+    } else if (d.estado_ritmo === 'alerta') {
+      alertaBox.className = 'rounded-xl p-4 mb-5 border transition-all flex items-start gap-3.5 bg-amber-50/80 border-amber-200 text-amber-900';
+      icono.textContent = '🟡';
+      titulo.textContent = 'Leve Rezago en el Ritmo';
+      badge.className = 'font-mono text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900';
+      badge.textContent = `${d.rezago} pendientes`;
+      mensaje.textContent = d.mensaje_ritmo || `Llevas ${d.rezago} ítems de retraso frente al ritmo esperado.`;
+    } else {
+      alertaBox.className = 'rounded-xl p-4 mb-5 border transition-all flex items-start gap-3.5 bg-rose-50/80 border-rose-200 text-rose-900';
+      icono.textContent = '🔴';
+      titulo.textContent = 'Atención: Rezago Acumulado';
+      badge.className = 'font-mono text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-200 text-rose-900';
+      badge.textContent = `Atrasado (-${d.rezago})`;
+      mensaje.textContent = d.mensaje_ritmo || `Llevas ${d.rezago} ítems de retraso acumulado. Se sugiere una ronda de desatraso.`;
     }
-    lista.innerHTML = d.items.map(it => `
-      <div class="flex items-center justify-between py-2.5 px-3 rounded-lg ${it.estado === 'contado' ? 'bg-emerald-50/60' : it.estado === 'saltado' ? 'bg-amber-50/60' : 'bg-gray-50/60'}">
-        <div>
-          <span class="font-medium text-xs text-gray-800">${it.nombre}</span>
-          <span class="text-[10px] text-gray-400 ml-2">${it.categoria || 'Sin categoría'}</span>
-        </div>
-        <div class="text-right">
-          <span class="text-xs font-bold ${it.estado === 'contado' ? 'text-emerald-700' : it.estado === 'saltado' ? 'text-amber-700' : 'text-gray-500'}">${it.estado === 'contado' ? 'Contado' : it.estado === 'saltado' ? 'Saltado' : 'Pendiente'}</span>
-          ${it.quien ? `<span class="block text-[10px] text-gray-400 font-mono">${it.quien}</span>` : ''}
-        </div>
-      </div>
-    `).join('');
+
+    // Próximo Ítem en Fila
+    if (d.siguiente_item) {
+      document.getElementById('dist-sig-nombre').textContent = d.siguiente_item.nombre;
+      document.getElementById('dist-sig-meta').textContent = `${d.siguiente_item.categoria || 'Sin categoría'} • Stock Teórico: ${d.siguiente_item.stock_sistema.toFixed(2)}`;
+    } else {
+      document.getElementById('dist-sig-nombre').textContent = '¡Ciclo 100% completado!';
+      document.getElementById('dist-sig-meta').textContent = 'Todos los ítems del catálogo han sido auditados.';
+    }
+
+    // Lista de ítems
+    _todosLosItems = d.items || [];
+    renderizarListaItems();
+
   } catch(e) { console.error('Error resumen:', e); }
 }
 
-// ── Modal operativo en pantalla de configuración ──
+function filtrarItems(estado) {
+  _filtroEstadoActual = estado;
+  ['todos', 'contado', 'pendiente', 'saltado'].forEach(f => {
+    const b = document.getElementById(`btn-filtro-${f}`);
+    if (f === estado) {
+      b.className = 'px-3 py-1 rounded-lg bg-white shadow-2xs text-slate-900 font-extrabold';
+    } else {
+      b.className = 'px-3 py-1 rounded-lg text-slate-500 hover:text-slate-800';
+    }
+  });
+  renderizarListaItems();
+}
+
+function renderizarListaItems() {
+  const lista = document.getElementById('dist-items-lista');
+  const query = (document.getElementById('buscador-items').value || '').toLowerCase().trim();
+
+  let items = _todosLosItems;
+  if (_filtroEstadoActual !== 'todos') {
+    items = items.filter(it => it.estado === _filtroEstadoActual || (_filtroEstadoActual === 'pendiente' && !it.estado));
+  }
+
+  if (query) {
+    items = items.filter(it => (it.nombre || '').toLowerCase().includes(query) || (it.categoria || '').toLowerCase().includes(query));
+  }
+
+  if (!items.length) {
+    lista.innerHTML = '<p class="text-xs text-slate-400 italic py-6 text-center">No se encontraron ítems para este criterio.</p>';
+    return;
+  }
+
+  lista.innerHTML = items.map(it => {
+    const esContado = it.estado === 'contado';
+    const esSaltado = it.estado === 'saltado';
+    const badgeColor = esContado ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                       esSaltado ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                       'bg-slate-100 text-slate-600 border-slate-200';
+    const txtEstado = esContado ? '✓ Contado' : esSaltado ? '⚠️ Saltado' : '⏳ Pendiente';
+
+    return `
+      <div class="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-slate-50 transition border border-transparent hover:border-slate-200">
+        <div>
+          <span class="font-bold text-xs text-slate-900 block">${it.nombre}</span>
+          <span class="text-[11px] text-slate-400 font-medium">${it.categoria || 'Sin categoría'} • Stock Kardex: <strong class="font-mono text-slate-600">${it.stock_sistema.toFixed(2)}</strong></span>
+        </div>
+        <div class="text-right">
+          <span class="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${badgeColor}">
+            ${txtEstado}
+          </span>
+          ${it.fecha ? `<span class="block text-[10px] text-slate-400 font-mono mt-0.5">${it.fecha.slice(0, 16)} ${it.quien ? '• ' + it.quien : ''}</span>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Modal Operativo de Prueba ──
 async function invDistSiguiente() {
-  if (document.getElementById('modal-conteo').classList.contains('hidden') === false) return;
   try {
-    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/siguiente?usuario_id=${_distUsuarioId || ''}`);
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/siguiente`);
     const d = await r.json();
-    if (!d.ok || !d.item) return;
+    if (!d.ok || !d.item) {
+      toast('No hay más ítems pendientes en este ciclo');
+      return;
+    }
     _distItemActual = d.item;
     document.getElementById('conteo-nombre').textContent = d.item.nombre;
     document.getElementById('conteo-categoria').textContent = d.item.categoria || 'Sin categoría';
-    document.getElementById('conteo-codigo').textContent = d.item.codigo_barra || '';
+    document.getElementById('conteo-codigo').textContent = d.item.codigo_barra ? `Cód: ${d.item.codigo_barra}` : '';
     document.getElementById('conteo-cantidad').value = '';
     document.getElementById('conteo-mensaje').classList.add('hidden');
     document.getElementById('modal-conteo').classList.remove('hidden');
-    setTimeout(() => document.getElementById('conteo-cantidad').focus(), 200);
+    setTimeout(() => document.getElementById('conteo-cantidad').focus(), 150);
   } catch(e) { console.error('Error siguiente:', e); }
 }
 
 async function invDistContar() {
   if (!_distItemActual) return;
   const cant = document.getElementById('conteo-cantidad').value.trim().replace(/\./g, '').replace(',', '.');
-  if (!cant || isNaN(cant)) { toast('Ingresa una cantidad válida', 'err'); return; }
+  if (!cant || isNaN(cant)) { toast('Ingresa una cantidad numérica válida', 'err'); return; }
   try {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/conteo`, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         producto_id: _distItemActual.producto_id,
         cantidad_fisica: parseFloat(cant),
-        usuario_id: _distUsuarioId || null,
-        usuario_nombre: _distUsuarioNombre || ''
+        usuario_nombre: 'Prueba Administrador'
       })
     });
     const d = await r.json();
     if (d.ok) {
       document.getElementById('conteo-mensaje').textContent = `✓ ${d.mensaje}`;
       document.getElementById('conteo-mensaje').classList.remove('hidden');
-      document.getElementById('conteo-mensaje').className = 'text-xs text-center mt-3 text-emerald-600 font-bold';
+      document.getElementById('conteo-mensaje').className = 'text-xs text-center mt-3 text-emerald-600 font-bold block';
       invDistCargarResumen();
-      invDistCargarConfig();
-      setTimeout(() => { document.getElementById('modal-conteo').classList.add('hidden'); }, 1500);
+      setTimeout(() => { document.getElementById('modal-conteo').classList.add('hidden'); }, 1200);
     } else {
       toast(d.error || 'Error', 'err');
     }
@@ -466,30 +788,12 @@ async function invDistSaltar() {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         producto_id: _distItemActual.producto_id,
-        usuario_id: _distUsuarioId || null,
-        usuario_nombre: _distUsuarioNombre || ''
+        usuario_nombre: 'Prueba Administrador'
       })
     });
     document.getElementById('modal-conteo').classList.add('hidden');
     invDistCargarResumen();
   } catch(e) { toast('Error', 'err'); }
-}
-
-function invDistCancelar() {
-  document.getElementById('modal-cancelar').classList.remove('hidden');
-}
-
-async function invDistConfirmarCancelar() {
-  document.getElementById('modal-cancelar').classList.add('hidden');
-  document.getElementById('modal-conteo').classList.add('hidden');
-  const min = parseInt(_distConfig.inv_distribuido_recordar_min?.valor || 15);
-  _distCancelHasta = Date.now() + min * 60 * 1000;
-  try {
-    await fetch(`/api/inventario/${NEGOCIO_ID}/inv-dist/cancelar`, {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ usuario_id: _distUsuarioId || null, recordar_min: min })
-    });
-  } catch(e) {}
 }
 
 document.addEventListener('DOMContentLoaded', () => {

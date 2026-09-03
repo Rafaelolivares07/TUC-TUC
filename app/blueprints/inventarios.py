@@ -4558,18 +4558,24 @@ def api_crear_proveedor():
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     data = request.get_json() or {}
     nombre = _txt(data.get('nombre'))
+    telefono = _txt(data.get('telefono'))
+    direccion = _txt(data.get('direccion'))
     if not nombre:
         return jsonify({'ok': False, 'error': 'Nombre de proveedor requerido'}), 400
     conn = get_db_connection()
     try:
         # Check if already exists
-        row = conn.execute("SELECT id FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1", (nombre,)).fetchone()
+        row = conn.execute("SELECT id, nombre FROM terceros WHERE LOWER(nombre) = LOWER(%s) LIMIT 1", (nombre,)).fetchone()
         if row:
-            return jsonify({'ok': True, 'id': row['id'], 'mensaje': 'Ya existía'})
+            return jsonify({'ok': True, 'id': row['id'], 'nombre': row['nombre'], 'mensaje': 'Ya existía'})
         # Insert new
-        row_ins = conn.execute("INSERT INTO terceros (nombre) VALUES (%s) RETURNING id", (nombre,)).fetchone()
+        row_ins = conn.execute("""
+            INSERT INTO terceros (nombre, telefono, direccion, tipo_tercero) 
+            VALUES (%s, %s, %s, 'proveedor') 
+            RETURNING id
+        """, (nombre, telefono, direccion)).fetchone()
         conn.commit()
-        return jsonify({'ok': True, 'id': row_ins['id'], 'mensaje': 'Creado con éxito'})
+        return jsonify({'ok': True, 'id': row_ins['id'], 'nombre': nombre, 'mensaje': 'Creado con éxito'})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -8917,15 +8923,17 @@ def api_compras_sugerencias(negocio_id):
 
 _PARAM_DEFAULTS_INV_DIST = {
     'inv_distribuido_activo':              {'tipo': 'booleano', 'valor': 'false', 'desc': 'Activa inventario distribuido por ítems'},
-    'inv_distribuido_dias_ciclo':          {'tipo': 'numerico', 'valor': '30',   'desc': 'Días de duración del ciclo de conteo'},
-    'inv_distribuido_reiniciar':           {'tipo': 'booleano', 'valor': 'false', 'desc': 'Reiniciar ciclo automáticamente al terminar'},
-    'inv_distribuido_recordar_min':        {'tipo': 'numerico', 'valor': '15',   'desc': 'Minutos para recordar al usuario que canceló'},
+    'inv_distribuido_modalidad':           {'tipo': 'texto',   'valor': 'rafaga', 'desc': 'Modalidad: rafaga (ronda rápida por sesión) / distribuido (pausas continuas)'},
+    'inv_distribuido_cuota_sesion':        {'tipo': 'numerico', 'valor': '3',      'desc': 'Cantidad de ítems a contar por ronda/sesión'},
+    'inv_distribuido_dias_ciclo':          {'tipo': 'numerico', 'valor': '15',     'desc': 'Días de duración del ciclo de conteo'},
+    'inv_distribuido_reiniciar':           {'tipo': 'booleano', 'valor': 'true',  'desc': 'Reiniciar ciclo automáticamente al terminar'},
+    'inv_distribuido_recordar_min':        {'tipo': 'numerico', 'valor': '15',     'desc': 'Minutos para recordar al usuario que canceló'},
     'inv_distribuido_orden':               {'tipo': 'texto',   'valor': 'valor_rotacion', 'desc': 'Orden de prioridad: valor / rotacion / valor_rotacion'},
-    'inv_distribuido_horario_inicio':      {'tipo': 'texto',   'valor': '08:00', 'desc': 'Hora inicio permitida para conteos'},
-    'inv_distribuido_horario_fin':         {'tipo': 'texto',   'valor': '17:00', 'desc': 'Hora fin permitida para conteos'},
+    'inv_distribuido_horario_inicio':      {'tipo': 'texto',   'valor': '08:00',   'desc': 'Hora inicio permitida para conteos'},
+    'inv_distribuido_horario_fin':         {'tipo': 'texto',   'valor': '17:00',   'desc': 'Hora fin permitida para conteos'},
     'inv_distribuido_dias_semana':         {'tipo': 'texto',   'valor': '1,2,3,4,5', 'desc': 'Días hábiles (1=Lun..7=Dom)'},
     'inv_distribuido_modulos':             {'tipo': 'texto',   'valor': 'dashboard,inventario,contabilidad,caja,gastos', 'desc': 'Módulos donde se invoca el conteo'},
-    'inv_distribuido_pausa_seg':          {'tipo': 'numerico', 'valor': '30',   'desc': 'Segundos de pausa antes de mostrar modal'},
+    'inv_distribuido_pausa_seg':          {'tipo': 'numerico', 'valor': '20',     'desc': 'Segundos de pausa antes de mostrar modal'},
 }
 
 
@@ -8942,6 +8950,11 @@ def _sembrar_parametros_inv_dist(conn, negocio_id):
                     INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
                     VALUES (%s, NULL, NULL, %s, 'booleano', %s, %s, NOW())
                 """, (nombre, cfg['valor'].lower(), cfg['desc'], negocio_id))
+            elif cfg['tipo'] == 'texto':
+                conn.execute("""
+                    INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
+                    VALUES (%s, NULL, %s, NULL, 'texto', %s, %s, NOW())
+                """, (nombre, cfg['valor'], cfg['desc'], negocio_id))
             else:
                 conn.execute("""
                     INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
@@ -8957,13 +8970,18 @@ def inv_dist_config_get(negocio_id):
         _sembrar_parametros_inv_dist(conn, negocio_id)
         conn.commit()
         rows = conn.execute("""
-            SELECT nombre, valor_numerico, valor_booleano, tipo, descripcion
+            SELECT nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion
             FROM parametros_sistema
             WHERE nombre LIKE 'inv_distribuido%%' AND negocio_id = %s
         """, (negocio_id,)).fetchall()
         config = {}
         for r in rows:
-            val = r['valor_booleano'] if r['tipo'] == 'booleano' else r['valor_numerico']
+            if r['tipo'] == 'booleano':
+                val = r['valor_booleano']
+            elif r['tipo'] == 'texto':
+                val = r['valor_texto']
+            else:
+                val = r['valor_numerico']
             config[r['nombre']] = {'valor': val, 'tipo': r['tipo'], 'descripcion': r['descripcion']}
         from .contabilidad import obtener_o_crear_tipo_doc_distribuido
         tipo_doc = obtener_o_crear_tipo_doc_distribuido(conn, negocio_id)
@@ -9004,13 +9022,22 @@ def inv_dist_config_set(negocio_id):
                 else:
                     conn.execute("INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, NULL, NULL, %s, 'booleano', %s, %s, NOW())",
                                  (nombre, val_str, cfg['desc'], negocio_id))
+            elif cfg['tipo'] == 'texto':
+                val_str = str(valor)
+                if existing:
+                    conn.execute("UPDATE parametros_sistema SET valor_texto = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
+                                 (val_str, nombre, negocio_id))
+                else:
+                    conn.execute("INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, NULL, %s, NULL, 'texto', %s, %s, NOW())",
+                                 (nombre, val_str, cfg['desc'], negocio_id))
             else:
+                val_num = str(valor)
                 if existing:
                     conn.execute("UPDATE parametros_sistema SET valor_numerico = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
-                                 (str(valor), nombre, negocio_id))
+                                 (val_num, nombre, negocio_id))
                 else:
                     conn.execute("INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, %s, NULL, NULL, %s, %s, %s, NOW())",
-                                 (nombre, str(valor), cfg['tipo'], cfg['desc'], negocio_id))
+                                 (nombre, val_num, cfg['tipo'], cfg['desc'], negocio_id))
         conn.commit()
         conn.close()
         return jsonify({'ok': True, 'mensaje': 'Configuración guardada'})
@@ -9050,9 +9077,16 @@ def inv_dist_siguiente(negocio_id):
             'valor_rotacion': '(p.precio * COALESCE(si.stock, 0)) * (SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.fecha >= NOW() - INTERVAL \'30 days\') DESC',
         }.get(orden, 'p.precio * COALESCE(si.stock, 0) DESC')
 
-        # Buscar siguiente ítem pendiente, excluyendo los que el usuario ya saltó en este ciclo
-        params = [negocio_id]
-        excl = ''
+        # Buscar siguiente ítem pendiente
+        params = []
+        ciclo_join = ""
+        if ciclo_inicio:
+            ciclo_join = "AND est.ciclo_inicio IS NOT DISTINCT FROM %s"
+            params.append(ciclo_inicio)
+
+        params.append(negocio_id)
+
+        excl = ""
         if usuario_id:
             excl = "AND (est.estado IS NULL OR est.estado != 'saltado' OR est.usuario_id != %s OR est.ciclo_inicio IS NOT DISTINCT FROM %s)"
             params.extend([usuario_id, ciclo_inicio])
@@ -9063,13 +9097,13 @@ def inv_dist_siguiente(negocio_id):
             FROM productos p
             LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = 1
             LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id
-                {'AND est.ciclo_inicio IS NOT DISTINCT FROM %s' if ciclo_inicio else ''}
+                {ciclo_join}
             WHERE p.negocio_id = %s AND p.disponible = TRUE
                 AND (est.estado IS NULL OR est.estado = 'saltado')
                 {excl}
             ORDER BY {order_sql}
             LIMIT 1
-        """, params + ([ciclo_inicio] if ciclo_inicio else []) + [negocio_id]).fetchone()
+        """, tuple(params)).fetchone()
 
         conn.close()
         if not row:
@@ -9347,15 +9381,103 @@ def inv_dist_resumen(negocio_id):
             ORDER BY est.fecha_ultimo_conteo DESC
         """, (negocio_id, ciclo_inicio)).fetchall()
 
+        # Configuración del ciclo
+        dias_ciclo_row = conn.execute(
+            "SELECT valor_numerico FROM parametros_sistema WHERE nombre = 'inv_distribuido_dias_ciclo' AND negocio_id = %s",
+            (negocio_id,)
+        ).fetchone()
+        dias_ciclo = int(dias_ciclo_row['valor_numerico'] or 15) if dias_ciclo_row and dias_ciclo_row['valor_numerico'] else 15
+
+        modalidad_row = conn.execute(
+            "SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inv_distribuido_modalidad' AND negocio_id = %s",
+            (negocio_id,)
+        ).fetchone()
+        modalidad = modalidad_row['valor_texto'] if modalidad_row and modalidad_row['valor_texto'] else 'rafaga'
+
+        cuota_row = conn.execute(
+            "SELECT valor_numerico FROM parametros_sistema WHERE nombre = 'inv_distribuido_cuota_sesion' AND negocio_id = %s",
+            (negocio_id,)
+        ).fetchone()
+        cuota_sesion = int(cuota_row['valor_numerico'] or 3) if cuota_row and cuota_row['valor_numerico'] else 3
+
+        # Cálculo de fechas y ritmo del ciclo
+        from datetime import datetime, timedelta, date
+        hoy = date.today()
+
+        if ciclo_inicio:
+            fecha_inicio_date = ciclo_inicio.date() if isinstance(ciclo_inicio, datetime) else ciclo_inicio
+        else:
+            fecha_inicio_date = hoy
+
+        dias_transcurridos = max(1, (hoy - fecha_inicio_date).days + 1)
+        fecha_fin_estimada = fecha_inicio_date + timedelta(days=dias_ciclo)
+
+        n_contados = resumen_estados.get('contado', 0)
+        n_saltados = resumen_estados.get('saltado', 0)
+        n_pendientes = max(0, total - n_contados - n_saltados)
+
+        pct_tiempo = min(100.0, round((dias_transcurridos / max(1, dias_ciclo)) * 100, 1))
+        pct_inventario = min(100.0, round((n_contados / max(1, total)) * 100, 1)) if total > 0 else 0
+
+        # Meta matemática esperada acumulada al día de hoy
+        meta_esperada_a_hoy = min(total, int(round((dias_transcurridos / max(1, dias_ciclo)) * total)))
+        rezago = max(0, meta_esperada_a_hoy - n_contados)
+        meta_diaria = round(total / max(1, dias_ciclo), 1)
+
+        if rezago == 0:
+            estado_ritmo = 'optimo'
+            mensaje_ritmo = '¡Excelente ritmo! Estás al día con la meta del ciclo.'
+        elif rezago <= 3:
+            estado_ritmo = 'alerta'
+            mensaje_ritmo = f'Leve rezago: llevas {rezago} ítems pendientes frente al ritmo esperado para el día {dias_transcurridos}.'
+        else:
+            estado_ritmo = 'atrasado'
+            mensaje_ritmo = f'Atención: llevas {rezago} ítems de rezago acumulado. Te sugerimos una ronda rápida hoy para desatrasarte.'
+
+        # Siguiente ítem recomendado en cola según prioridad
+        sig_row = conn.execute("""
+            SELECT p.id, p.nombre, p.categoria, p.precio, p.codigo_barra,
+                   COALESCE(si.stock, 0) AS stock_sistema
+            FROM productos p
+            LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = 1
+            LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id
+            WHERE p.negocio_id = %s AND p.disponible = TRUE
+                AND (est.estado IS NULL OR est.estado = 'saltado')
+            ORDER BY (p.precio * COALESCE(si.stock, 0)) DESC
+            LIMIT 1
+        """, (negocio_id,)).fetchone()
+
+        sig_item = {
+            'producto_id': sig_row['id'],
+            'nombre': sig_row['nombre'],
+            'categoria': sig_row['categoria'],
+            'precio': float(sig_row['precio'] or 0),
+            'stock_sistema': float(sig_row['stock_sistema'] or 0),
+            'codigo_barra': sig_row['codigo_barra']
+        } if sig_row else None
+
         conn.close()
         return jsonify({
             'ok': True,
-            'ciclo_inicio': str(ciclo_inicio) if ciclo_inicio else None,
+            'ciclo_inicio': str(fecha_inicio_date),
+            'fecha_fin_estimada': str(fecha_fin_estimada),
+            'dias_ciclo': dias_ciclo,
+            'dias_transcurridos': dias_transcurridos,
+            'modalidad': modalidad,
+            'cuota_sesion': cuota_sesion,
             'total_productos': total,
+            'pct_tiempo': pct_tiempo,
+            'pct_inventario': pct_inventario,
+            'meta_esperada_a_hoy': meta_esperada_a_hoy,
+            'meta_diaria': meta_diaria,
+            'rezago': rezago,
+            'estado_ritmo': estado_ritmo,
+            'mensaje_ritmo': mensaje_ritmo,
+            'siguiente_item': sig_item,
             'resumen': {
-                'contados': resumen_estados.get('contado', 0),
-                'saltados': resumen_estados.get('saltado', 0),
-                'pendientes': total - resumen_estados.get('contado', 0) - resumen_estados.get('saltado', 0),
+                'contados': n_contados,
+                'saltados': n_saltados,
+                'pendientes': n_pendientes,
             },
             'items': [{
                 'producto_id': it['producto_id'],

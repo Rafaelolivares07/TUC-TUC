@@ -3524,6 +3524,14 @@ def api_balance_comprobacion(negocio_id):
         """, (negocio_id,)).fetchall()
         puc_map = {r['codigo']: dict(r) for r in puc_rows}
         
+        # Cuentas que tienen al menos un movimiento contable directo registrado en su historia
+        cuentas_con_mov_directo = set(
+            r[0] for r in conn.execute(
+                "SELECT DISTINCT cuenta_id FROM movimientos_contables WHERE negocio_id = %s AND cuenta_id IS NOT NULL",
+                (negocio_id,)
+            ).fetchall()
+        )
+        
         # 2. Consultar saldos y movimientos acumulados para cuentas con movimiento
         mov_rows = conn.execute("""
             SELECT 
@@ -3537,9 +3545,10 @@ def api_balance_comprobacion(negocio_id):
                 COALESCE(SUM(CASE WHEN m.fecha >= %s AND m.fecha <= %s AND m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS cred_per
             FROM cuentas_puc c
             LEFT JOIN movimientos_contables m ON m.cuenta_id = c.id AND m.negocio_id = %s
-            WHERE c.acepta_movimiento = TRUE
+            WHERE c.acepta_movimiento = TRUE 
+               OR c.id IN (SELECT DISTINCT cuenta_id FROM movimientos_contables WHERE negocio_id = %s AND cuenta_id IS NOT NULL)
             GROUP BY c.id, c.codigo, c.nombre, c.naturaleza
-        """, (desde, desde, desde, hasta, desde, hasta, negocio_id)).fetchall()
+        """, (desde, desde, desde, hasta, desde, hasta, negocio_id, negocio_id)).fetchall()
         
         # 3. Inicializar el árbol de resultados con las cuentas de nivel 1 y 2
         result_map = {}
@@ -3569,17 +3578,23 @@ def api_balance_comprobacion(negocio_id):
                 continue
                 
             code = r['codigo']
-            result_map[code] = {
-                'id': r['cuenta_id'],
-                'codigo': r['codigo'],
-                'nombre': r['nombre'],
-                'nivel': puc_map.get(code, {}).get('nivel', 4),
-                'naturaleza': r['naturaleza'],
-                'deb_ant': deb_ant,
-                'cred_ant': cred_ant,
-                'deb_per': deb_per,
-                'cred_per': cred_per,
-            }
+            if code in result_map:
+                result_map[code]['deb_ant'] += deb_ant
+                result_map[code]['cred_ant'] += cred_ant
+                result_map[code]['deb_per'] += deb_per
+                result_map[code]['cred_per'] += cred_per
+            else:
+                result_map[code] = {
+                    'id': r['cuenta_id'],
+                    'codigo': r['codigo'],
+                    'nombre': r['nombre'],
+                    'nivel': puc_map.get(code, {}).get('nivel', 4),
+                    'naturaleza': r['naturaleza'],
+                    'deb_ant': deb_ant,
+                    'cred_ant': cred_ant,
+                    'deb_per': deb_per,
+                    'cred_per': cred_per,
+                }
             
             # Acumular hacia arriba en los padres
             curr_code = code
@@ -3638,6 +3653,7 @@ def api_balance_comprobacion(negocio_id):
                 'nivel': r['nivel'],
                 'naturaleza': nat,
                 'acepta_movimiento': bool(puc_map.get(code, {}).get('acepta_movimiento', False)),
+                'tiene_mov_directo': (r['id'] in cuentas_con_mov_directo),
                 'saldo_anterior': saldo_anterior,
                 'debito': deb_per,
                 'credito': cred_per,

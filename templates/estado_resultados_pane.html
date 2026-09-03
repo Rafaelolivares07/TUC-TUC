@@ -305,28 +305,9 @@
 </div>
 
 <script>
+  const _ER_NEGOCIO_ID = {{ negocio_id }};
   let erRangoActual = { desde: '', hasta: '' };
   let erSeccionesData = {};
-
-  // Inicialización inteligente con MutationObserver
-  (function() {
-    let _erInit = false;
-    const _panel = document.getElementById('pane-estado-resultados-content');
-    if (!_panel) return;
-    const _check = () => {
-      if (_erInit) return;
-      if (_panel.offsetParent !== null) {
-        _erInit = true;
-        initEstadoResultados();
-      }
-    };
-    new MutationObserver(_check).observe(_panel, { attributes: true, attributeFilter: ['class', 'style'] });
-    // Verificar si ya está visible
-    if (_panel.offsetParent !== null) {
-      _erInit = true;
-      initEstadoResultados();
-    }
-  })();
 
   function initEstadoResultados() {
     const hoy = new Date();
@@ -334,13 +315,30 @@
     const m = String(hoy.getMonth() + 1).padStart(2, '0');
     const d = String(hoy.getDate()).padStart(2, '0');
     
-    // Por defecto mes actual
-    document.getElementById('er-desde').value = `${y}-${m}-01`;
-    document.getElementById('er-hasta').value = `${y}-${m}-${d}`;
-    document.getElementById('er-selector-mes').value = 'actual';
+    const inpDesde = document.getElementById('er-desde');
+    const inpHasta = document.getElementById('er-hasta');
+    if (inpDesde && inpHasta && (!inpDesde.value || !inpHasta.value)) {
+      inpDesde.value = `${y}-${m}-01`;
+      inpHasta.value = `${y}-${m}-${d}`;
+      const selMes = document.getElementById('er-selector-mes');
+      if (selMes) selMes.value = 'actual';
+    }
 
     cargarEstadoResultados();
   }
+
+  window.initEstadoResultados = initEstadoResultados;
+  window.cargarEstadoResultados = cargarEstadoResultados;
+  window.seleccionarMesRapido = seleccionarMesRapido;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const parentContab = document.getElementById('panel-estado_resultados');
+    const parentInv = document.getElementById('tab-estado_resultados');
+    if ((parentContab && !parentContab.classList.contains('hidden')) ||
+        (parentInv && !parentInv.classList.contains('hidden'))) {
+      initEstadoResultados();
+    }
+  });
 
   function seleccionarMesRapido(val) {
     const hoy = new Date();
@@ -384,7 +382,7 @@
     erRangoActual = { desde, hasta };
 
     try {
-      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/estado-resultados?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+      const r = await fetch(`/api/contabilidad/${_ER_NEGOCIO_ID}/estado-resultados?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
       const d = await r.json();
 
       if (!d.ok) {
@@ -686,7 +684,7 @@
     const orderedIds = [...container.querySelectorAll('.er-row')].map(el => parseInt(el.dataset.id));
     
     try {
-      await fetch(`/api/contabilidad/${NEGOCIO_ID}/estado-resultados/orden`, {
+      await fetch(`/api/contabilidad/${_ER_NEGOCIO_ID}/estado-resultados/orden`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -705,7 +703,7 @@
       toast('Seleccione las fechas para exportar el PDF', false);
       return;
     }
-    window.open(`/api/contabilidad/${NEGOCIO_ID}/estado-resultados/pdf?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`, '_blank');
+    window.open(`/api/contabilidad/${_ER_NEGOCIO_ID}/estado-resultados/pdf?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`, '_blank');
   }
 
   function escapeErHtml(str) {

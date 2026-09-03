@@ -2861,6 +2861,14 @@ function mostrarTab(t) {
 
   }
 
+  if (t === 'estado_resultados') {
+
+    if (typeof initEstadoResultados === 'function') {
+      initEstadoResultados();
+    }
+
+  }
+
 }
 
 

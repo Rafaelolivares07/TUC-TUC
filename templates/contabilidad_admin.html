@@ -738,10 +738,10 @@ function cambiarTab(t) {
   const cleanTabName = t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ');
   document.title = `${cleanTabName} — Contabilidad`;
 
-  // Dynamic width control for Consulta / Balance tabs
+  // Dynamic width control for Consulta / Balance / Estado de Resultados tabs
   const container = document.getElementById('main-container');
   if (container) {
-    if (t === 'consulta' || t === 'balance') {
+    if (t === 'consulta' || t === 'balance' || t === 'estado_resultados') {
       container.classList.remove('max-w-5xl');
       container.classList.add('w-full', 'max-w-none', 'px-4');
     } else {
@@ -750,16 +750,21 @@ function cambiarTab(t) {
     }
   }
 
-  if (t === 'puc')          buscarPUC();
-  if (t === 'pago_metodos') cargarPagoMetodos();
-  if (t === 'tipos')        cargarTiposDocs();
-  if (t === 'params')       { cargarTiposDocs(); cargarParametros(); }
-  if (t === 'grupos')       { cargarGrupos(); cargarConfigContable(); }
-  if (t === 'progs')        { progCargarTipos(); progCargarLista(); }
-  if (t === 'comps')        { currentCompPage = 1; compSoloDescuadrados = false; cargarComprobantes(); }
-  if (t === 'manual')       { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
-  if (t === 'consulta')     { inicializarFechasConsulta(); cargarAuditoriaContable(); }
-  if (t === 'balance')      inicializarBalanceTab();
+  if (t === 'puc')               buscarPUC();
+  if (t === 'pago_metodos')      cargarPagoMetodos();
+  if (t === 'tipos')             cargarTiposDocs();
+  if (t === 'params')            { cargarTiposDocs(); cargarParametros(); }
+  if (t === 'grupos')            { cargarGrupos(); cargarConfigContable(); }
+  if (t === 'progs')             { progCargarTipos(); progCargarLista(); }
+  if (t === 'comps')             { currentCompPage = 1; compSoloDescuadrados = false; cargarComprobantes(); }
+  if (t === 'manual')            { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
+  if (t === 'consulta')          { inicializarFechasConsulta(); cargarAuditoriaContable(); }
+  if (t === 'balance')           inicializarBalanceTab();
+  if (t === 'estado_resultados') {
+    if (typeof initEstadoResultados === 'function') {
+      initEstadoResultados();
+    }
+  }
 }
 
 function toast(msg, ok=true) {
@@ -2853,9 +2858,11 @@ async function cargarBalanceComprobacion() {
       tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-gray-400 text-xs">No hay cuentas con saldos o movimientos en este rango.</td></tr>`;
     } else {
       tbody.innerHTML = data.cuentas.map(c => {
-        const canViewMovs = c.acepta_movimiento || (c.nivel >= 3 && (c.debito !== 0 || c.credito !== 0 || c.saldo_anterior !== 0 || c.saldo_final !== 0));
+        // Criterio exacto:
+        // El enlace 🔗 se dibuja si y solo si esa cuenta puntual tiene al menos un registro contable directo imputado a ella
+        const canViewMovs = Boolean(c.tiene_mov_directo);
         const btnLink = canViewMovs ? `
-          <button onclick="verMovimientosDeCuenta(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 font-bold focus:outline-none mr-1 inline-flex items-center" title="Ver movimientos de ${c.codigo} - ${c.nombre.replace(/"/g, '&quot;')}">
+          <button onclick="verMovimientosDeCuenta(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 font-bold focus:outline-none mr-1 inline-flex items-center" title="Ver movimientos directos de ${c.codigo} - ${c.nombre.replace(/"/g, '&quot;')}">
             🔗
           </button>
         ` : '';
@@ -2863,7 +2870,7 @@ async function cargarBalanceComprobacion() {
         if (c.nivel === 1) {
           return `
             <tr class="bg-slate-100 font-extrabold text-xs text-slate-800 uppercase border-t border-b border-slate-200">
-              <td class="px-4 py-2 font-mono">${c.codigo}</td>
+              <td class="px-4 py-2 font-mono">${btnLink}${c.codigo}</td>
               <td class="px-4 py-2">${c.nombre}</td>
               <td class="px-4 py-2 text-right font-mono">${formatMoni(c.saldo_anterior)}</td>
               <td class="px-4 py-2 text-right font-mono">${formatMoni(c.debito)}</td>
@@ -2874,7 +2881,7 @@ async function cargarBalanceComprobacion() {
         } else if (c.nivel === 2) {
           return `
             <tr class="bg-slate-50 font-bold text-xs text-slate-700">
-              <td class="px-4 py-1.5 pl-6 font-mono">${c.codigo}</td>
+              <td class="px-4 py-1.5 pl-6 font-mono">${btnLink}${c.codigo}</td>
               <td class="px-4 py-1.5">${c.nombre}</td>
               <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.saldo_anterior)}</td>
               <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.debito)}</td>

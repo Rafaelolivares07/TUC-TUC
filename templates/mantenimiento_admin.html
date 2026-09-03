@@ -521,17 +521,17 @@
         </div>
       </div>
       
-      <div class="flex justify-end gap-3 pt-3 border-t">
-        <button id="btn-aud-modificar" onclick="modificarDocumentoAuditor()" class="px-5 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50">
+      <div class="flex justify-end gap-3 pt-3 border-t flex-wrap items-center">
+        <button id="btn-aud-modificar" onclick="modificarDocumentoAuditor()" class="px-5 py-2.5 border border-gray-300 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 transition">
           ✏️ Ir a Modificar
         </button>
-        <button id="btn-aud-anular" onclick="anularDocumentoAuditor()" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition text-center flex flex-col items-center justify-center leading-tight">
-          <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
-          <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL CONSECUTIVO COMO ANULADO</span>
+        <button id="btn-aud-anular" onclick="anularDocumentoAuditor()" class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition text-center flex flex-col items-center justify-center leading-tight shadow-sm cursor-pointer">
+          <span class="text-[13px] uppercase tracking-wide">🚫 Anular Documento</span>
+          <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL CONSECUTIVO FISCAL COMO ANULADO</span>
         </button>
-        <button id="btn-aud-eliminar" onclick="eliminarDocumentoAuditor()" class="px-6 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl transition text-center flex flex-col items-center justify-center leading-tight">
-          <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
-          <span class="text-[10px] text-orange-100 font-normal mt-0.5">DEJA INCLUSO DISPONIBLE EL CONSECUTIVO PARA SER REUTILIZADO</span>
+        <button id="btn-aud-eliminar" onclick="eliminarDocumentoAuditor()" class="hidden px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition text-center flex flex-col items-center justify-center leading-tight shadow-sm cursor-pointer">
+          <span class="text-[13px] uppercase tracking-wide">🗑️ Eliminar y Liberar Número</span>
+          <span class="text-[10px] text-amber-100 font-normal mt-0.5">BORRA EL REGISTRO Y REUTILIZA EL CONSECUTIVO</span>
         </button>
       </div>
 
@@ -730,47 +730,44 @@
       const btnEliminar = document.getElementById('btn-aud-eliminar');
       
       if (d.es_interno) {
-        // Documento interno (controlamos consecutividad)
+        // Documento interno (controlamos consecutividad fiscal)
         if (btnAnular) {
           btnAnular.innerHTML = `
-            <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
-            <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL CONSECUTIVO COMO ANULADO</span>
+            <span class="text-[13px] uppercase tracking-wide">🚫 Anular Documento</span>
+            <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL CONSECUTIVO FISCAL COMO ANULADO</span>
           `;
         }
         if (btnEliminar) {
-          btnEliminar.innerHTML = `
-            <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
-            <span class="text-[10px] text-orange-100 font-normal mt-0.5">DEJA INCLUSO DISPONIBLE EL CONSECUTIVO PARA SER REUTILIZADO</span>
-          `;
           if (d.es_ultimo_consecutivo) {
+            btnEliminar.classList.remove('hidden');
             btnEliminar.disabled = false;
-            btnEliminar.classList.remove('opacity-40', 'cursor-not-allowed');
-            btnEliminar.classList.add('bg-orange-600', 'hover:bg-orange-700');
-            btnEliminar.title = '';
+            btnEliminar.innerHTML = `
+              <span class="text-[13px] uppercase tracking-wide">🗑️ Eliminar y Liberar Número</span>
+              <span class="text-[10px] text-amber-100 font-normal mt-0.5">BORRA EL REGISTRO Y REUTILIZA EL CONSECUTIVO</span>
+            `;
+            btnEliminar.title = 'Elimina la transacción y retrocede el consecutivo en 1 para ser reutilizado.';
           } else {
+            // Si es un consecutivo intermedio, se oculta para evitar inconsistencias de numeración
+            btnEliminar.classList.add('hidden');
             btnEliminar.disabled = true;
-            btnEliminar.classList.add('opacity-40', 'cursor-not-allowed');
-            btnEliminar.classList.remove('bg-orange-600', 'hover:bg-orange-700');
-            btnEliminar.title = 'No se puede liberar el consecutivo porque existen documentos posteriores de este tipo.';
           }
         }
       } else {
-        // Documento externo (no controlamos consecutividad)
+        // Documento externo (facturas de compra / recibos donde no controlamos consecutividad)
         if (btnAnular) {
           btnAnular.innerHTML = `
-            <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
+            <span class="text-[13px] uppercase tracking-wide">🚫 Anular Documento</span>
             <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL REGISTRO HISTÓRICO COMO ANULADO</span>
           `;
         }
         if (btnEliminar) {
-          btnEliminar.innerHTML = `
-            <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
-            <span class="text-[10px] text-orange-100 font-normal mt-0.5">BORRA FÍSICAMENTE EL REGISTRO DE LA BASE DE DATOS</span>
-          `;
+          btnEliminar.classList.remove('hidden');
           btnEliminar.disabled = false;
-          btnEliminar.classList.remove('opacity-40', 'cursor-not-allowed');
-          btnEliminar.classList.add('bg-orange-600', 'hover:bg-orange-700');
-          btnEliminar.title = '';
+          btnEliminar.innerHTML = `
+            <span class="text-[13px] uppercase tracking-wide">🗑️ Eliminar Registro</span>
+            <span class="text-[10px] text-amber-100 font-normal mt-0.5">BORRA FÍSICAMENTE DE LA BASE DE DATOS</span>
+          `;
+          btnEliminar.title = 'Borra completamente la transacción de compras de la base de datos.';
         }
       }
       
@@ -932,12 +929,12 @@
     if (!auditorDocumentoSeleccionado) return;
     const { tipo, numero, terceroId } = auditorDocumentoSeleccionado;
     
-    const confirmed = confirm(`¿ESTÁS ABSOLUTAMENTE SEGURO de que deseas ANULAR COMPLETAMENTE el documento "${numero}"?\n\nEsta acción borrará irreversiblemente los comprobantes contables del diario, los movimientos de inventario y actualizará el estado de facturación. Los costos promedio de stock se recalcularán automáticamente de forma retroactiva.`);
+    const confirmed = confirm(`¿ESTÁS SEGURO de que deseas ANULAR el documento "${numero}"?\n\nEsta acción eliminará sus movimientos contables y de Kardex, y marcará el pedido como ANULADO en el historial. El consecutivo fiscal se conservará como anulado.`);
     if (!confirmed) return;
     
     const btn = document.getElementById('btn-aud-anular');
     btn.disabled = true;
-    btn.innerHTML = '<span class="text-[13px] uppercase">Anulando transacción...</span>';
+    btn.innerHTML = '<span class="text-[13px] uppercase">Anulando documento...</span>';
     
     try {
       const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/anular-documento`, {
@@ -962,8 +959,8 @@
     } finally {
       btn.disabled = false;
       btn.innerHTML = `
-        <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
-        <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL CONSECUTIVO COMO ANULADO</span>
+        <span class="text-[13px] uppercase tracking-wide">🚫 Anular Documento</span>
+        <span class="text-[10px] text-red-100 font-normal mt-0.5">CONSERVA EL CONSECUTIVO FISCAL COMO ANULADO</span>
       `;
     }
   }
@@ -972,12 +969,12 @@
     if (!auditorDocumentoSeleccionado) return;
     const { tipo, numero, terceroId } = auditorDocumentoSeleccionado;
     
-    const confirmed = confirm(`¿ESTÁS ABSOLUTAMENTE SEGURO de que deseas ELIMINAR COMPLETAMENTE el documento "${numero}"?\n\nEsta acción borrará el pedido permanentemente de la base de datos e intentará liberar su número de consecutivo si era el último generado. Los comprobantes y Kardex serán borrados de forma irreversible.`);
+    const confirmed = confirm(`¿ESTÁS SEGURO de que deseas ELIMINAR COMPLETAMENTE el documento "${numero}"?\n\nEsta acción borrará definitivamente el registro de la base de datos y liberará el número de consecutivo para que vuelva a estar disponible.`);
     if (!confirmed) return;
     
     const btn = document.getElementById('btn-aud-eliminar');
     btn.disabled = true;
-    btn.innerHTML = '<span class="text-[13px] uppercase">Eliminando transacción...</span>';
+    btn.innerHTML = '<span class="text-[13px] uppercase">Eliminando y liberando...</span>';
     
     try {
       const r = await fetch(`/api/inventario/${NEGOCIO_ID}/mantenimiento/anular-documento`, {
@@ -1005,8 +1002,8 @@
     } finally {
       btn.disabled = false;
       btn.innerHTML = `
-        <span class="text-[13px] uppercase">Eliminar completamente el documento</span>
-        <span class="text-[10px] text-orange-100 font-normal mt-0.5">DEJA INCLUSO DISPONIBLE EL CONSECUTIVO PARA SER REUTILIZADO</span>
+        <span class="text-[13px] uppercase tracking-wide">🗑️ Eliminar y Liberar Número</span>
+        <span class="text-[10px] text-amber-100 font-normal mt-0.5">BORRA EL REGISTRO Y REUTILIZA EL CONSECUTIVO</span>
       `;
     }
   }

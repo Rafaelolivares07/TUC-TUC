@@ -1,0 +1,215 @@
+<!-- Widget: Modal de Inventario Físico Distribuido (Inyectable en Pantallas Operativas) -->
+<div id="invdist-modal-conteo" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden" style="font-family: 'Inter', system-ui, sans-serif;">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 mx-4 border border-gray-150 animate-in fade-in zoom-in-95 duration-200">
+    <div class="text-center mb-4">
+      <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-2 shadow-2xs">
+        📦
+      </div>
+      <h3 class="text-base font-bold text-gray-900">Muestreo Físico de Inventario</h3>
+      <p class="text-[11px] text-gray-500 mt-0.5">Auditoría distribuida continua. Digita lo que ves físicamente.</p>
+    </div>
+
+    <div id="invdist-item-info" class="bg-gray-50 border border-gray-150 rounded-xl p-3 mb-4 text-center">
+      <p id="invdist-nombre" class="font-bold text-gray-900 text-sm leading-tight"></p>
+      <p id="invdist-categoria" class="text-[11px] text-gray-500 mt-0.5"></p>
+      <p id="invdist-codigo" class="text-[10px] text-gray-400 font-mono mt-0.5"></p>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1 text-center">Cantidad física observada</label>
+      <input type="text" inputmode="decimal" id="invdist-cantidad" placeholder="0"
+             class="w-full border-2 border-gray-200 focus:border-blue-500 rounded-xl px-4 py-2.5 text-2xl font-black font-mono text-center outline-none transition"
+             onfocus="this.select()" onkeydown="if(event.key==='Enter') invDistWidgetContar()">
+    </div>
+
+    <div class="flex gap-2">
+      <button onclick="invDistWidgetContar()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-xs">
+        ✓ Registrar
+      </button>
+      <button onclick="invDistWidgetSaltar()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 px-3.5 rounded-xl transition text-xs">
+        Saltar
+      </button>
+      <button onclick="invDistWidgetCancelar()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-2.5 px-3 rounded-xl transition text-xs">
+        Pausar
+      </button>
+    </div>
+
+    <p id="invdist-mensaje" class="text-xs text-center mt-3 hidden font-semibold"></p>
+  </div>
+</div>
+
+<!-- Modal Pausar Conteos -->
+<div id="invdist-modal-cancelar" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[10000] flex items-center justify-center hidden" style="font-family: 'Inter', system-ui, sans-serif;">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 mx-4 border border-gray-150">
+    <h3 class="text-base font-bold text-gray-900 mb-1">¿Pausar conteos por ahora?</h3>
+    <p class="text-xs text-gray-500 mb-4 leading-relaxed">El sistema dejará de solicitar conteos en esta pantalla durante el lapso de recordatorio configurado.</p>
+    <div class="flex gap-2">
+      <button onclick="invDistWidgetConfirmarCancelar()" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-xs transition">Sí, pausar</button>
+      <button onclick="document.getElementById('invdist-modal-cancelar').classList.add('hidden')" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-xs transition">Volver</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _invDistNegocioId = null;
+let _invDistItemActual = null;
+let _invDistConfig = null;
+let _invDistCancelHasta = null;
+
+(async function initInvDistWidget() {
+  if (window._invDistWidgetInitialized) return;
+  window._invDistWidgetInitialized = true;
+
+  _invDistNegocioId = window.NEGOCIO_ID || (function() {
+    const m = window.location.pathname.match(/\/(\d+)(\/|$|\?)/);
+    return m ? parseInt(m[1]) : null;
+  })();
+  if (!_invDistNegocioId) return;
+
+  try {
+    const r = await fetch(`/api/inventario/${_invDistNegocioId}/inv-dist/config`);
+    const d = await r.json();
+    if (!d.ok || !d.config) return;
+    _invDistConfig = d.config;
+
+    if (_invDistConfig.inv_distribuido_activo?.valor !== 'true') return;
+
+    const modulosHabilitados = (_invDistConfig.inv_distribuido_modulos?.valor || '').split(',');
+    const path = window.location.pathname.toLowerCase();
+
+    let moduloActual = null;
+    if (path.includes('/admin/inventario') || path.includes('/admin/inventario-fisico')) {
+      moduloActual = 'inventario';
+    } else if (path.includes('/admin/contabilidad') || path.includes('/admin/saldos-documentos')) {
+      moduloActual = 'contabilidad';
+    } else if (path.includes('/admin/caja') || path.includes('/admin/restaurante') || path.includes('/pos')) {
+      moduloActual = 'caja';
+    } else if (path.includes('/admin/menu') || path.includes('/admin/negocio') || path === '/admin' || path === '/admin/') {
+      moduloActual = 'dashboard';
+    }
+
+    // Comprobar si estamos en la pestaña o vista de gastos
+    const panelGastos = document.getElementById('panel-gastos') || document.getElementById('tab-gastos');
+    if (panelGastos && panelGastos.offsetParent !== null) {
+      if (modulosHabilitados.includes('gastos')) moduloActual = 'gastos';
+    }
+
+    if (!moduloActual || !modulosHabilitados.includes(moduloActual)) return;
+
+    const pausaSeg = parseInt(_invDistConfig.inv_distribuido_pausa_seg?.valor || 30);
+    const horarioInicio = _invDistConfig.inv_distribuido_horario_inicio?.valor || '08:00';
+    const horarioFin = _invDistConfig.inv_distribuido_horario_fin?.valor || '17:00';
+    let lastActivity = Date.now();
+
+    ['mousemove','keydown','click','scroll','touchstart'].forEach(evt => {
+      document.addEventListener(evt, () => { lastActivity = Date.now(); }, {passive: true});
+    });
+
+    setInterval(async () => {
+      if (_invDistCancelHasta && Date.now() < _invDistCancelHasta) return;
+      _invDistCancelHasta = null;
+
+      const now = new Date();
+      const hhmm = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+      if (hhmm < horarioInicio || hhmm > horarioFin) return;
+
+      const modal = document.getElementById('invdist-modal-conteo');
+      if (modal && !modal.classList.contains('hidden')) return;
+
+      if (Date.now() - lastActivity >= pausaSeg * 1000) {
+        invDistWidgetSiguiente();
+        lastActivity = Date.now();
+      }
+    }, 5000);
+
+  } catch(e) {
+    console.error('Error inicializando widget inv dist:', e);
+  }
+})();
+
+async function invDistWidgetSiguiente() {
+  const modal = document.getElementById('invdist-modal-conteo');
+  if (modal && !modal.classList.contains('hidden')) return;
+  try {
+    const r = await fetch(`/api/inventario/${_invDistNegocioId}/inv-dist/siguiente`);
+    const d = await r.json();
+    if (!d.ok || !d.item) return;
+    _invDistItemActual = d.item;
+
+    document.getElementById('invdist-nombre').textContent = d.item.nombre;
+    document.getElementById('invdist-categoria').textContent = d.item.categoria || 'Sin categoría';
+    document.getElementById('invdist-codigo').textContent = d.item.codigo_barra ? `Cód: ${d.item.codigo_barra}` : '';
+    document.getElementById('invdist-cantidad').value = '';
+    const msg = document.getElementById('invdist-mensaje');
+    msg.classList.add('hidden');
+    msg.textContent = '';
+
+    modal.classList.remove('hidden');
+    setTimeout(() => document.getElementById('invdist-cantidad').focus(), 200);
+  } catch(e) {
+    console.error('Error invDistWidgetSiguiente:', e);
+  }
+}
+
+async function invDistWidgetContar() {
+  if (!_invDistItemActual) return;
+  const valStr = document.getElementById('invdist-cantidad').value.trim().replace(/\./g, '').replace(',', '.');
+  if (!valStr || isNaN(valStr)) {
+    alert('Ingresa una cantidad numérica válida');
+    return;
+  }
+  try {
+    const r = await fetch(`/api/inventario/${_invDistNegocioId}/inv-dist/conteo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        producto_id: _invDistItemActual.producto_id,
+        cantidad_fisica: parseFloat(valStr)
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      const msg = document.getElementById('invdist-mensaje');
+      msg.textContent = `✓ ${d.mensaje}`;
+      msg.className = 'text-xs text-center mt-3 text-emerald-600 font-bold block';
+      setTimeout(() => {
+        document.getElementById('invdist-modal-conteo').classList.add('hidden');
+      }, 1500);
+    } else {
+      alert(d.error || 'Error al registrar conteo');
+    }
+  } catch(e) {
+    console.error('Error invDistWidgetContar:', e);
+  }
+}
+
+async function invDistWidgetSaltar() {
+  if (!_invDistItemActual) return;
+  try {
+    await fetch(`/api/inventario/${_invDistNegocioId}/inv-dist/saltar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ producto_id: _invDistItemActual.producto_id })
+    });
+  } catch(e) {}
+  document.getElementById('invdist-modal-conteo').classList.add('hidden');
+}
+
+function invDistWidgetCancelar() {
+  document.getElementById('invdist-modal-cancelar').classList.remove('hidden');
+}
+
+async function invDistWidgetConfirmarCancelar() {
+  document.getElementById('invdist-modal-cancelar').classList.add('hidden');
+  document.getElementById('invdist-modal-conteo').classList.add('hidden');
+  const min = parseInt(_invDistConfig?.inv_distribuido_recordar_min?.valor || 15);
+  _invDistCancelHasta = Date.now() + min * 60 * 1000;
+  try {
+    await fetch(`/api/inventario/${_invDistNegocioId}/inv-dist/cancelar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recordar_min: min })
+    });
+  } catch(e) {}
+}
+</script>

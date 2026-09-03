@@ -64,6 +64,7 @@
       <button onclick="cambiarTab('params')" id="tab-params" class="tab-btn">⚙️ Parametrización</button>
       <button onclick="cambiarTab('pago_metodos')" id="tab-pago_metodos" class="tab-btn">💳 Métodos de Pago</button>
       <button onclick="cambiarTab('gastos')" id="tab-gastos" class="tab-btn">💰 Gastos</button>
+      <button onclick="cambiarTab('estado_resultados')" id="tab-estado_resultados" class="tab-btn">📊 Estado de Resultados</button>
       <button onclick="cambiarTab('grupos')" id="tab-grupos" class="tab-btn">🗂️ Grupos Inv.</button>
       <button onclick="cambiarTab('manual')" id="tab-manual" class="tab-btn">✏️ Comprobante</button>
       <button onclick="cambiarTab('comps')"  id="tab-comps"  class="tab-btn">📚 Comprobantes</button>
@@ -125,6 +126,7 @@
           <option value="produccion">Módulo de Producción (Producción)</option>
           <option value="venta">Ventas / POS (Venta)</option>
           <option value="ajuste">Inventario Físico (Ajuste)</option>
+          <option value="inventario_distribuido">Inventario Físico Distribuido</option>
           <option value="cierre">Cierre de Periodo (Cierre)</option>
           <option value="cobro">Recaudos / Cobros</option>
           <option value="pago">Pagos / Egresos</option>
@@ -472,6 +474,11 @@
       {% include "gastos_pane.html" %}
     </div>
 
+    <!-- TAB: ESTADO DE RESULTADOS GERENCIAL -->
+    <div id="panel-estado_resultados" class="p-5 hidden">
+      {% include "estado_resultados_pane.html" %}
+    </div>
+
     <!-- ═══ TAB: CONSULTA MOVIMIENTOS ═══ -->
     <div id="panel-consulta" class="p-5 hidden">
       <!-- Filtros de Consulta -->
@@ -707,7 +714,7 @@
 
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
-const TABS = ['puc','tipos','params','pago_metodos','gastos','grupos','progs','manual','comps', 'consulta', 'balance'];
+const TABS = ['puc','tipos','params','pago_metodos','gastos','estado_resultados','grupos','progs','manual','comps', 'consulta', 'balance'];
 let tiposDocs = [];
 let variablesModulo = [];
 let paramActivo = null;
@@ -903,6 +910,7 @@ async function cargarTiposDocs() {
           <option value="produccion" ${t.tipo_movimiento==='produccion'?'selected':''}>Producción</option>
           <option value="venta" ${t.tipo_movimiento==='venta'?'selected':''}>Ventas / POS</option>
           <option value="ajuste" ${t.tipo_movimiento==='ajuste'?'selected':''}>Inventario Físico</option>
+          <option value="inventario_distribuido" ${t.tipo_movimiento==='inventario_distribuido'?'selected':''}>Inventario Físico Distribuido</option>
           <option value="cierre" ${t.tipo_movimiento==='cierre'?'selected':''}>Cierre de Periodo</option>
           <option value="cobro" ${t.tipo_movimiento==='cobro'?'selected':''}>Recaudos / Cobros</option>
           <option value="pago" ${t.tipo_movimiento==='pago'?'selected':''}>Pagos / Egresos</option>
@@ -2845,6 +2853,13 @@ async function cargarBalanceComprobacion() {
       tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-gray-400 text-xs">No hay cuentas con saldos o movimientos en este rango.</td></tr>`;
     } else {
       tbody.innerHTML = data.cuentas.map(c => {
+        const canViewMovs = c.acepta_movimiento || (c.nivel >= 3 && (c.debito !== 0 || c.credito !== 0 || c.saldo_anterior !== 0 || c.saldo_final !== 0));
+        const btnLink = canViewMovs ? `
+          <button onclick="verMovimientosDeCuenta(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 font-bold focus:outline-none mr-1 inline-flex items-center" title="Ver movimientos de ${c.codigo} - ${c.nombre.replace(/"/g, '&quot;')}">
+            🔗
+          </button>
+        ` : '';
+
         if (c.nivel === 1) {
           return `
             <tr class="bg-slate-100 font-extrabold text-xs text-slate-800 uppercase border-t border-b border-slate-200">
@@ -2867,10 +2882,10 @@ async function cargarBalanceComprobacion() {
               <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.saldo_final)}</td>
             </tr>
           `;
-        } else if (c.nivel === 3) {
+        } else if (c.nivel === 3 && !c.acepta_movimiento) {
           return `
             <tr class="text-xs text-slate-600 font-semibold hover:bg-slate-50/50">
-              <td class="px-4 py-1.5 pl-10 font-mono">${c.codigo}</td>
+              <td class="px-4 py-1.5 pl-10 font-mono">${btnLink}${c.codigo}</td>
               <td class="px-4 py-1.5">${c.nombre}</td>
               <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoni(c.saldo_anterior)}</td>
               <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoni(c.debito)}</td>
@@ -2880,18 +2895,15 @@ async function cargarBalanceComprobacion() {
           `;
         } else {
           return `
-            <tr class="text-xs text-gray-500 hover:bg-slate-50/50">
+            <tr class="text-xs text-gray-600 hover:bg-slate-50/50">
               <td class="px-4 py-1 pl-14 font-mono text-[11px]">
-                <button onclick="verMovimientosDeCuenta(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 font-bold focus:outline-none mr-1" title="Ver movimientos">
-                  🔗
-                </button>
-                ${c.codigo}
+                ${btnLink}${c.codigo}
               </td>
-              <td class="px-4 py-1 italic">${c.nombre}</td>
+              <td class="px-4 py-1 ${c.nivel > 3 ? 'italic' : 'font-medium'}">${c.nombre}</td>
               <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.saldo_anterior)}</td>
               <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.debito)}</td>
               <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.credito)}</td>
-              <td class="px-4 py-1 text-right font-mono text-[11px] ${c.saldo_final !== 0 ? 'text-gray-700 font-semibold' : ''}">${formatMoni(c.saldo_final)}</td>
+              <td class="px-4 py-1 text-right font-mono text-[11px] ${c.saldo_final !== 0 ? 'text-gray-800 font-semibold' : ''}">${formatMoni(c.saldo_final)}</td>
             </tr>
           `;
         }
@@ -2942,11 +2954,11 @@ async function cargarBalanceComprobacion() {
     const utilidadDiv = document.getElementById('bal-utilidad-periodo');
     if (utilidadDiv) {
       if (utilidad > 0) {
-        utilidadDiv.innerHTML = `<span class="text-emerald-600 font-bold font-mono">+$${formatMoni(utilidad)} (Utilidad)</span>`;
+        utilidadDiv.innerHTML = `<span class="text-emerald-600 font-bold font-mono">+${formatMoni(utilidad)} (Utilidad)</span>`;
       } else if (utilidad < 0) {
-        utilidadDiv.innerHTML = `<span class="text-red-600 font-bold font-mono">-$${formatMoni(Math.abs(utilidad))} (Pérdida)</span>`;
+        utilidadDiv.innerHTML = `<span class="text-red-600 font-bold font-mono">-${formatMoni(Math.abs(utilidad))} (Pérdida)</span>`;
       } else {
-        utilidadDiv.innerHTML = `<span class="text-slate-500 font-bold font-mono">$0.00</span>`;
+        utilidadDiv.innerHTML = `<span class="text-slate-500 font-bold font-mono">$0</span>`;
       }
     }
     
@@ -3067,5 +3079,6 @@ if (activeTab && TABS.includes(activeTab)) {
   </div>
 </div>
 
+{% include 'inv_distribuido_modal.html' %}
 </body>
 </html>

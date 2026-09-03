@@ -1,0 +1,715 @@
+<!-- Componente: Estado de Resultados Gerencial en Lenguaje Natural (Compartido Inventario y Contabilidad) -->
+<div id="pane-estado-resultados-content" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6 mb-6">
+
+  <!-- Encabezado y Filtros -->
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-gray-100 pb-5 mb-5">
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-2xl">📊</span>
+        <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Estado de Resultados Gerencial</h2>
+        <span class="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Flujo del Período</span>
+      </div>
+      <p class="text-xs text-gray-500">
+        Visión financiera en lenguaje natural. Cero códigos contables, control de períodos y consistencia en vivo.
+      </p>
+    </div>
+
+    <!-- Acciones Rápidas & Exportar -->
+    <div class="flex items-center flex-wrap gap-2">
+      <button onclick="exportarPdfEstadoResultados()"
+              class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-xs"
+              title="Descargar o imprimir reporte en PDF">
+        <span>📄</span> Imprimir / PDF
+      </button>
+      <button onclick="cargarEstadoResultados()"
+              class="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-xs">
+        <span>🔄</span> Actualizar
+      </button>
+    </div>
+  </div>
+
+  <!-- Barra de Filtros: Selector Rápido de Mes y Rango Personalizado -->
+  <div class="bg-gray-50/80 rounded-2xl p-4 border border-gray-100 mb-5">
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+      
+      <!-- Selector Rápido de Mes -->
+      <div class="md:col-span-4">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Período Rápido (Mes)</label>
+        <select id="er-selector-mes" onchange="seleccionarMesRapido(this.value)"
+                class="border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none">
+          <option value="actual">Mes actual en curso</option>
+          <option value="anterior">Mes anterior</option>
+          <option value="ano_actual">Todo el año en curso</option>
+        </select>
+      </div>
+
+      <!-- Fecha Desde -->
+      <div class="md:col-span-3">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha Desde</label>
+        <input id="er-desde" type="date"
+               class="border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-medium w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+               onchange="onErFechasManual()">
+      </div>
+
+      <!-- Fecha Hasta -->
+      <div class="md:col-span-3">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha Hasta</label>
+        <input id="er-hasta" type="date"
+               class="border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-medium w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+               onchange="onErFechasManual()">
+      </div>
+
+      <!-- Botón Consultar -->
+      <div class="md:col-span-2">
+        <button onclick="cargarEstadoResultados()"
+                class="w-full bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold py-2 rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 h-[36px]">
+          <span>🔍</span> Consultar
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Indicador de Estado Contable de los Períodos Consultados -->
+    <div class="mt-3 pt-3 border-t border-gray-200/60 flex items-center flex-wrap gap-2 text-xs" id="er-periodos-container">
+      <span class="text-gray-400 font-semibold text-[11px] uppercase mr-1">Estado de los Meses:</span>
+      <div id="er-periodos-badges" class="flex items-center flex-wrap gap-1.5">
+        <span class="text-gray-400 italic text-[11px]">Cargando estado...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Semáforo de Consistencia (Auditoría Comercial POS vs Contabilidad) -->
+  <div id="er-semaforo-container" class="mb-5 hidden">
+    <!-- Render dinámico según cuadrado -->
+  </div>
+
+  <!-- Tarjetas KPI Resumen Superior -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+    <!-- Ingresos Operacionales -->
+    <div class="p-3.5 bg-emerald-50/70 border border-emerald-100 rounded-2xl">
+      <span class="block text-[10px] font-bold text-emerald-800 uppercase tracking-wide">Ingresos Totales</span>
+      <span id="kpi-er-ingresos" class="text-base md:text-lg font-black font-mono text-emerald-700 block mt-0.5">$0.00</span>
+      <span class="text-[9px] text-emerald-600 block mt-0.5 font-medium">Ventas + Ajustes a Favor</span>
+    </div>
+
+    <!-- Costo de Mercancía -->
+    <div class="p-3.5 bg-rose-50/70 border border-rose-100 rounded-2xl">
+      <span class="block text-[10px] font-bold text-rose-800 uppercase tracking-wide">Costo Mercancía</span>
+      <span id="kpi-er-costo-mercancia" class="text-base md:text-lg font-black font-mono text-rose-700 block mt-0.5">$0.00</span>
+      <span class="text-[9px] text-rose-600 block mt-0.5 font-medium">Recetas + Ajustes en Contra</span>
+    </div>
+
+    <!-- Margen de Contribución -->
+    <div class="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl shadow-xs">
+      <div class="flex items-center justify-between">
+        <span class="block text-[10px] font-bold text-amber-900 uppercase tracking-wide">Margen Contrib.</span>
+        <span id="kpi-er-margen-pct" class="text-[10px] font-black font-mono bg-amber-200/80 text-amber-900 px-1.5 py-0.5 rounded">0.0%</span>
+      </div>
+      <span id="kpi-er-margen-valor" class="text-base md:text-lg font-black font-mono text-amber-800 block mt-0.5">$0.00</span>
+      <span class="text-[9px] text-amber-700 block mt-0.5 font-medium">Ingresos - Costos Insumos</span>
+    </div>
+
+    <!-- Costos Operativos -->
+    <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+      <span class="block text-[10px] font-bold text-slate-700 uppercase tracking-wide">Costos Operativos</span>
+      <span id="kpi-er-costos-operativos" class="text-base md:text-lg font-black font-mono text-slate-800 block mt-0.5">$0.00</span>
+      <span class="text-[9px] text-slate-500 block mt-0.5 font-medium">Entregas, Aseo, Servicios</span>
+    </div>
+
+    <!-- Gastos de Administración -->
+    <div class="p-3.5 bg-purple-50/70 border border-purple-100 rounded-2xl">
+      <span class="block text-[10px] font-bold text-purple-900 uppercase tracking-wide">Gastos Generales</span>
+      <span id="kpi-er-gastos" class="text-base md:text-lg font-black font-mono text-purple-800 block mt-0.5">$0.00</span>
+      <span class="text-[9px] text-purple-600 block mt-0.5 font-medium">Gastos de Clase 5</span>
+    </div>
+
+    <!-- Resultado Neto Final -->
+    <div id="kpi-er-resultado-card" class="p-3.5 bg-emerald-500 text-white rounded-2xl shadow-sm transition-colors">
+      <div class="flex items-center justify-between">
+        <span id="kpi-er-resultado-lbl" class="block text-[10px] font-bold text-emerald-100 uppercase tracking-wide">Utilidad Neta</span>
+        <span id="kpi-er-resultado-pct" class="text-[10px] font-black font-mono bg-black/20 text-white px-1.5 py-0.5 rounded">0.0%</span>
+      </div>
+      <span id="kpi-er-resultado-valor" class="text-base md:text-lg font-black font-mono text-white block mt-0.5">$0.00</span>
+      <span class="text-[9px] text-emerald-100/90 block mt-0.5 font-medium">Resultado final real</span>
+    </div>
+  </div>
+
+  <!-- Cuerpo de la Cascada Financiera en Lenguaje Natural -->
+  <div class="border border-gray-150 rounded-2xl overflow-hidden shadow-xs bg-white">
+    
+    <div class="bg-gray-100/80 px-4 py-3 border-b border-gray-200 flex items-center justify-between text-xs font-bold text-gray-700">
+      <div class="flex items-center gap-2">
+        <span>📋</span>
+        <span>Estructura Operativa Detallada</span>
+      </div>
+      <span class="text-[11px] text-gray-400 font-normal flex items-center gap-1">
+        <span>💡</span> Puedes reordenar los rubros arrastrándolos con el icono <strong class="font-mono text-gray-600">⠿</strong>
+      </span>
+    </div>
+
+    <!-- Contenedor Principal de Secciones -->
+    <div class="divide-y divide-gray-100 text-xs font-sans">
+      
+      <!-- 1. SECCIÓN INGRESOS OPERACIONALES -->
+      <div class="seccion-bloque bg-emerald-50/20">
+        <div class="px-4 py-2.5 bg-emerald-100/60 font-bold text-emerald-950 flex items-center justify-between border-b border-emerald-100">
+          <span class="flex items-center gap-1.5">
+            <span class="text-emerald-700 font-black">1.</span>
+            <span>INGRESOS OPERACIONALES</span>
+          </span>
+          <span id="sec-subtotal-ingresos-totales" class="font-mono font-bold text-emerald-800">$0.00</span>
+        </div>
+
+        <!-- Ventas del Menú -->
+        <div class="px-4 py-2 bg-gray-50/60 text-[11px] font-bold text-gray-600 uppercase tracking-wider flex justify-between">
+          <span>Ventas de Productos y Menú</span>
+          <span id="sec-subtotal-ventas" class="font-mono">$0.00</span>
+        </div>
+        <div id="drop-ingresos_ventas" class="drop-zone divide-y divide-gray-100" data-section="ingresos_ventas">
+          <!-- Items dinámicos -->
+        </div>
+
+        <!-- Ajustes de Inventario a Favor (ANTES DEL MARGEN) -->
+        <div class="px-4 py-2 bg-emerald-50/40 text-[11px] font-bold text-emerald-800 uppercase tracking-wider flex justify-between border-t border-emerald-100/60">
+          <span class="flex items-center gap-1">
+            <span>✨</span> Ajustes de Inventario a Favor (Sobrantes / Recuperaciones)
+          </span>
+          <span id="sec-subtotal-ajustes-favor" class="font-mono">$0.00</span>
+        </div>
+        <div id="drop-ingresos_ajustes_favor" class="drop-zone divide-y divide-gray-100" data-section="ingresos_ajustes_favor">
+          <!-- Items dinámicos -->
+        </div>
+      </div>
+
+      <!-- 2. SECCIÓN COSTO DE MERCANCÍA E INSUMOS -->
+      <div class="seccion-bloque bg-rose-50/20">
+        <div class="px-4 py-2.5 bg-rose-100/60 font-bold text-rose-950 flex items-center justify-between border-b border-rose-100">
+          <span class="flex items-center gap-1.5">
+            <span class="text-rose-700 font-black">2.</span>
+            <span>COSTO DE MERCANCÍA E INSUMOS</span>
+          </span>
+          <span id="sec-subtotal-costo-mercancia" class="font-mono font-bold text-rose-800">$0.00</span>
+        </div>
+
+        <!-- Costo Directo de Recetas -->
+        <div class="px-4 py-2 bg-gray-50/60 text-[11px] font-bold text-gray-600 uppercase tracking-wider flex justify-between">
+          <span>Costo de Venta Directo (Kardex / Recetas)</span>
+          <span id="sec-subtotal-costo-ventas" class="font-mono">$0.00</span>
+        </div>
+        <div id="drop-costos_ventas_directas" class="drop-zone divide-y divide-gray-100" data-section="costos_ventas_directas">
+          <!-- Items dinámicos -->
+        </div>
+
+        <!-- Ajustes de Inventario en Contra / Mermas (ANTES DEL MARGEN) -->
+        <div class="px-4 py-2 bg-rose-50/40 text-[11px] font-bold text-rose-800 uppercase tracking-wider flex justify-between border-t border-rose-100/60">
+          <span class="flex items-center gap-1">
+            <span>📉</span> Ajustes de Inventario en Contra (Faltantes / Mermas de Materia Prima)
+          </span>
+          <span id="sec-subtotal-ajustes-contra" class="font-mono">$0.00</span>
+        </div>
+        <div id="drop-costos_ajustes_contra" class="drop-zone divide-y divide-gray-100" data-section="costos_ajustes_contra">
+          <!-- Items dinámicos -->
+        </div>
+      </div>
+
+      <!-- 3. RESULTADO DESTACADO: MARGEN DE CONTRIBUCIÓN BRUTO -->
+      <div class="px-5 py-3.5 bg-amber-100/80 border-y-2 border-amber-300 flex items-center justify-between shadow-xs">
+        <div>
+          <span class="text-sm font-black text-amber-950 uppercase tracking-tight flex items-center gap-1.5">
+            <span>⭐</span> (=) MARGEN DE CONTRIBUCIÓN BRUTO
+          </span>
+          <span class="text-[10px] text-amber-800 font-medium block">Ingresos Operacionales menos Costo Total de Mercancía e Insumos</span>
+        </div>
+        <div class="text-right">
+          <span id="res-margen-contribucion" class="text-base md:text-lg font-black font-mono text-amber-950 block">$0.00</span>
+          <span id="res-margen-contribucion-pct" class="text-xs font-bold font-mono text-amber-800">Rentabilidad: 0.0%</span>
+        </div>
+      </div>
+
+      <!-- 4. SECCIÓN COSTOS OPERATIVOS Y DE ENTREGA (SERIE 6142 Y DEMÁS) -->
+      <div class="seccion-bloque bg-slate-50/40">
+        <div class="px-4 py-2.5 bg-slate-100 font-bold text-slate-800 flex items-center justify-between border-b border-slate-200">
+          <span class="flex items-center gap-1.5">
+            <span class="text-slate-600 font-black">3.</span>
+            <span>COSTOS OPERATIVOS Y DE SERVICIO</span>
+            <span class="text-[10px] text-slate-500 font-normal lowercase">(entregas, aseo, mano de obra, servicios)</span>
+          </span>
+          <span id="sec-subtotal-costos-operativos" class="font-mono font-bold text-slate-800">$0.00</span>
+        </div>
+        <div id="drop-costos_operativos" class="drop-zone divide-y divide-gray-100" data-section="costos_operativos">
+          <!-- Items dinámicos -->
+        </div>
+      </div>
+
+      <!-- 5. RESULTADO DESTACADO: UTILIDAD OPERATIVA BRUTA -->
+      <div class="px-5 py-3 bg-blue-50/80 border-y border-blue-200 flex items-center justify-between">
+        <div>
+          <span class="text-xs md:text-sm font-bold text-blue-950 uppercase tracking-tight flex items-center gap-1.5">
+            <span>⚡</span> (=) UTILIDAD OPERATIVA BRUTA
+          </span>
+          <span class="text-[10px] text-blue-700 block font-medium">Margen de contribución menos costos operativos</span>
+        </div>
+        <div class="text-right">
+          <span id="res-utilidad-operativa" class="text-sm md:text-base font-black font-mono text-blue-950 block">$0.00</span>
+          <span id="res-utilidad-operativa-pct" class="text-[11px] font-bold font-mono text-blue-700">Margen Operativo: 0.0%</span>
+        </div>
+      </div>
+
+      <!-- 6. SECCIÓN GASTOS DE ADMINISTRACIÓN Y VENTAS (CLASE 5) -->
+      <div class="seccion-bloque bg-purple-50/20">
+        <div class="px-4 py-2.5 bg-purple-100/60 font-bold text-purple-950 flex items-center justify-between border-b border-purple-100">
+          <span class="flex items-center gap-1.5">
+            <span class="text-purple-700 font-black">4.</span>
+            <span>GASTOS DE ADMINISTRACIÓN Y VENTAS</span>
+          </span>
+          <span id="sec-subtotal-gastos" class="font-mono font-bold text-purple-800">$0.00</span>
+        </div>
+        <div id="drop-gastos_operacionales" class="drop-zone divide-y divide-gray-100" data-section="gastos_operacionales">
+          <!-- Items dinámicos -->
+        </div>
+      </div>
+
+      <!-- 7. SECCIÓN RESULTADOS NO OPERACIONALES (OPCIONAL) -->
+      <div id="seccion-no-operacionales" class="seccion-bloque bg-gray-50/60 hidden">
+        <div class="px-4 py-2.5 bg-gray-200/70 font-bold text-gray-800 flex items-center justify-between border-b border-gray-200">
+          <span class="flex items-center gap-1.5">
+            <span class="text-gray-600 font-black">5.</span>
+            <span>RESULTADOS NO OPERACIONALES</span>
+            <span class="text-[10px] text-gray-500 font-normal lowercase">(rendimientos, intereses, gastos bancarios)</span>
+          </span>
+          <span id="sec-subtotal-no-operacionales" class="font-mono font-bold text-gray-700">$0.00</span>
+        </div>
+        <div id="drop-no_operacionales" class="drop-zone divide-y divide-gray-100" data-section="no_operacionales">
+          <!-- Items dinámicos -->
+        </div>
+      </div>
+
+      <!-- 8. FILA FINAL DESTACADA: RESULTADO NETO DEL PERÍODO -->
+      <div id="er-barra-resultado-final" class="px-5 py-4 bg-emerald-600 text-white flex items-center justify-between transition-colors">
+        <div>
+          <span id="res-resultado-final-badge" class="text-xs font-black uppercase tracking-wider bg-black/20 px-2 py-0.5 rounded text-white inline-block mb-1">
+            Utilidad Neta del Período
+          </span>
+          <h3 id="res-resultado-final-titulo" class="text-base md:text-lg font-black tracking-tight">(=) RESULTADO NETO REAL</h3>
+          <span class="text-[11px] text-white/80 block">Superávit contable final después de todos los costos y gastos</span>
+        </div>
+        <div class="text-right">
+          <span id="res-resultado-final-valor" class="text-xl md:text-2xl font-black font-mono block">$0.00</span>
+          <span id="res-resultado-final-pct" class="text-xs font-bold font-mono text-white/90">0.0% sobre ventas</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let erRangoActual = { desde: '', hasta: '' };
+  let erSeccionesData = {};
+
+  // Inicialización inteligente con MutationObserver
+  (function() {
+    let _erInit = false;
+    const _panel = document.getElementById('pane-estado-resultados-content');
+    if (!_panel) return;
+    const _check = () => {
+      if (_erInit) return;
+      if (_panel.offsetParent !== null) {
+        _erInit = true;
+        initEstadoResultados();
+      }
+    };
+    new MutationObserver(_check).observe(_panel, { attributes: true, attributeFilter: ['class', 'style'] });
+    // Verificar si ya está visible
+    if (_panel.offsetParent !== null) {
+      _erInit = true;
+      initEstadoResultados();
+    }
+  })();
+
+  function initEstadoResultados() {
+    const hoy = new Date();
+    const y = hoy.getFullYear();
+    const m = String(hoy.getMonth() + 1).padStart(2, '0');
+    const d = String(hoy.getDate()).padStart(2, '0');
+    
+    // Por defecto mes actual
+    document.getElementById('er-desde').value = `${y}-${m}-01`;
+    document.getElementById('er-hasta').value = `${y}-${m}-${d}`;
+    document.getElementById('er-selector-mes').value = 'actual';
+
+    cargarEstadoResultados();
+  }
+
+  function seleccionarMesRapido(val) {
+    const hoy = new Date();
+    const y = hoy.getFullYear();
+    const m = hoy.getMonth(); // 0 a 11
+
+    if (val === 'actual') {
+      const mesStr = String(m + 1).padStart(2, '0');
+      const diaStr = String(hoy.getDate()).padStart(2, '0');
+      document.getElementById('er-desde').value = `${y}-${mesStr}-01`;
+      document.getElementById('er-hasta').value = `${y}-${mesStr}-${diaStr}`;
+    } else if (val === 'anterior') {
+      const prevDate = new Date(y, m, 0); // Ultimo dia del mes anterior
+      const prevY = prevDate.getFullYear();
+      const prevM = String(prevDate.getMonth() + 1).padStart(2, '0');
+      const prevLastDay = String(prevDate.getDate()).padStart(2, '0');
+      document.getElementById('er-desde').value = `${prevY}-${prevM}-01`;
+      document.getElementById('er-hasta').value = `${prevY}-${prevM}-${prevLastDay}`;
+    } else if (val === 'ano_actual') {
+      const mesStr = String(m + 1).padStart(2, '0');
+      const diaStr = String(hoy.getDate()).padStart(2, '0');
+      document.getElementById('er-desde').value = `${y}-01-01`;
+      document.getElementById('er-hasta').value = `${y}-${mesStr}-${diaStr}`;
+    }
+    cargarEstadoResultados();
+  }
+
+  function onErFechasManual() {
+    document.getElementById('er-selector-mes').value = '';
+  }
+
+  async function cargarEstadoResultados() {
+    const desde = document.getElementById('er-desde').value;
+    const hasta = document.getElementById('er-hasta').value;
+
+    if (!desde || !hasta) {
+      toast('Especifique el rango de fechas para consultar', false);
+      return;
+    }
+
+    erRangoActual = { desde, hasta };
+
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/estado-resultados?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`);
+      const d = await r.json();
+
+      if (!d.ok) {
+        toast(d.error || 'Error al consultar el Estado de Resultados', false);
+        return;
+      }
+
+      erSeccionesData = d.secciones || {};
+
+      // 1. Renderizar Estado de los Períodos (Cerrado / Abierto)
+      renderPeriodosBadges(d.periodos || []);
+
+      // 2. Renderizar Semáforo de Consistencia
+      renderSemaforo(d.auditoria || {});
+
+      // 3. Renderizar Tarjetas KPI
+      renderKpis(d.kpis || {});
+
+      // 4. Renderizar Filas de la Cascada con Drag & Drop
+      renderCascada(d);
+
+    } catch (e) {
+      console.error(e);
+      toast('Error de red al consultar el Estado de Resultados', false);
+    }
+  }
+
+  function renderPeriodosBadges(periodos) {
+    const container = document.getElementById('er-periodos-badges');
+    if (!periodos.length) {
+      container.innerHTML = '<span class="text-gray-400 italic text-[11px]">Sin datos de período</span>';
+      return;
+    }
+
+    container.innerHTML = periodos.map(p => {
+      if (p.cerrado) {
+        return `
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-gray-200 text-gray-800 border border-gray-300" title="Mes cerrado formalmente en contabilidad">
+            <span>🔒</span> ${p.nombre}: <strong>Cerrado</strong>
+          </span>
+        `;
+      } else {
+        return `
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200" title="Mes en curso con movimientos abiertos">
+            <span>🔓</span> ${p.nombre}: <strong>Abierto</strong>
+          </span>
+        `;
+      }
+    }).join('');
+  }
+
+  function renderSemaforo(aud) {
+    const sem = document.getElementById('er-semaforo-container');
+    sem.classList.remove('hidden');
+
+    if (aud.cuadrado) {
+      sem.innerHTML = `
+        <div class="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between shadow-2xs">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl">✅</span>
+            <div>
+              <h4 class="text-xs font-bold text-emerald-900">Contabilidad y Ventas 100% Conciliadas</h4>
+              <p class="text-[11px] text-emerald-700">Las ventas comerciales en Pedidos coinciden con exactitud matemática con los asientos contables de la clase 4.</p>
+            </div>
+          </div>
+          <div class="hidden sm:flex items-center gap-4 text-right">
+            <div>
+              <span class="text-[10px] text-gray-400 block uppercase font-bold">Ventas POS</span>
+              <span class="text-xs font-bold font-mono text-gray-700">$${(aud.ventas_comercial || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-gray-400 block uppercase font-bold">Contabilidad</span>
+              <span class="text-xs font-bold font-mono text-emerald-700">$${(aud.ventas_contable || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-gray-400 block uppercase font-bold">Diferencia</span>
+              <span class="text-xs font-bold font-mono text-emerald-600">$0.00</span>
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      const difV = aud.diferencia_ventas || 0;
+      const difC = aud.diferencia_costos || 0;
+      sem.innerHTML = `
+        <div class="p-3.5 bg-amber-50 border border-amber-300 rounded-2xl shadow-2xs">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="flex items-start gap-2.5">
+              <span class="text-xl mt-0.5">⚠️</span>
+              <div>
+                <h4 class="text-xs font-bold text-amber-950">Se detectó diferencia entre Ventas del POS y Contabilidad</h4>
+                <p class="text-[11px] text-amber-800">
+                  Existe un desfase en el período consultado. Verifique si existen documentos pendientes de contabilizar o anular.
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 bg-white/80 p-2 rounded-xl border border-amber-200 text-xs self-start sm:self-auto">
+              <div>
+                <span class="text-[9px] text-gray-500 block uppercase font-bold">Desfase Ventas:</span>
+                <span class="font-mono font-bold ${Math.abs(difV) > 1 ? 'text-rose-600' : 'text-emerald-700'}">
+                  ${difV >= 0 ? '+' : ''}$${difV.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}
+                </span>
+              </div>
+              <div class="border-l border-gray-200 pl-3">
+                <span class="text-[9px] text-gray-500 block uppercase font-bold">Desfase Costos:</span>
+                <span class="font-mono font-bold ${Math.abs(difC) > 1 ? 'text-rose-600' : 'text-emerald-700'}">
+                  ${difC >= 0 ? '+' : ''}$${difC.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  function renderKpis(k) {
+    document.getElementById('kpi-er-ingresos').textContent = '$' + (k.total_ingresos || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('kpi-er-costo-mercancia').textContent = '$' + (k.total_costo_mercancia || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('kpi-er-margen-valor').textContent = '$' + (k.margen_contribucion || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('kpi-er-margen-pct').textContent = (k.margen_contribucion_pct || 0).toFixed(1) + '%';
+    document.getElementById('kpi-er-costos-operativos').textContent = '$' + (k.total_costos_operativos || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('kpi-er-gastos').textContent = '$' + (k.total_gastos || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    const neto = k.resultado_neto || 0;
+    const netoPct = k.resultado_neto_pct || 0;
+    const cardNeto = document.getElementById('kpi-er-resultado-card');
+    const lblNeto = document.getElementById('kpi-er-resultado-lbl');
+    const valNeto = document.getElementById('kpi-er-resultado-valor');
+    const pctNeto = document.getElementById('kpi-er-resultado-pct');
+
+    valNeto.textContent = '$' + neto.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    pctNeto.textContent = netoPct.toFixed(1) + '%';
+
+    if (neto >= 0) {
+      cardNeto.className = 'p-3.5 bg-emerald-600 text-white rounded-2xl shadow-sm transition-colors';
+      lblNeto.textContent = 'Utilidad Neta';
+    } else {
+      cardNeto.className = 'p-3.5 bg-rose-600 text-white rounded-2xl shadow-sm transition-colors';
+      lblNeto.textContent = 'Pérdida Neta';
+    }
+  }
+
+  function renderCascada(d) {
+    const sec = d.secciones || {};
+    const subs = d.subtotales || {};
+    const kpis = d.kpis || {};
+
+    // 1. Ingresos Ventas
+    renderDropZone('drop-ingresos_ventas', sec.ingresos_ventas || []);
+    document.getElementById('sec-subtotal-ventas').textContent = '$' + (subs.ingresos_ventas || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    // 2. Ajustes a Favor
+    renderDropZone('drop-ingresos_ajustes_favor', sec.ingresos_ajustes_favor || [], 'Ajuste a Favor');
+    document.getElementById('sec-subtotal-ajustes-favor').textContent = '$' + (subs.ingresos_ajustes_favor || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('sec-subtotal-ingresos-totales').textContent = '$' + (kpis.total_ingresos || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    // 3. Costos Ventas Directas
+    renderDropZone('drop-costos_ventas_directas', sec.costos_ventas_directas || []);
+    document.getElementById('sec-subtotal-costo-ventas').textContent = '$' + (subs.costos_ventas_directas || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    // 4. Ajustes en Contra / Mermas
+    renderDropZone('drop-costos_ajustes_contra', sec.costos_ajustes_contra || [], 'Faltante / Merma');
+    document.getElementById('sec-subtotal-ajustes-contra').textContent = '$' + (subs.costos_ajustes_contra || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('sec-subtotal-costo-mercancia').textContent = '$' + (kpis.total_costo_mercancia || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    // 5. Margen de Contribución
+    document.getElementById('res-margen-contribucion').textContent = '$' + (kpis.margen_contribucion || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('res-margen-contribucion-pct').textContent = `Rentabilidad: ${(kpis.margen_contribucion_pct || 0).toFixed(2)}% sobre ingresos`;
+
+    // 6. Costos Operativos (6142*)
+    renderDropZone('drop-costos_operativos', sec.costos_operativos || []);
+    document.getElementById('sec-subtotal-costos-operativos').textContent = '$' + (subs.costos_operativos || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    // 7. Utilidad Operativa
+    document.getElementById('res-utilidad-operativa').textContent = '$' + (kpis.utilidad_operativa || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById('res-utilidad-operativa-pct').textContent = `Margen Operativo: ${(kpis.utilidad_operativa_pct || 0).toFixed(2)}%`;
+
+    // 8. Gastos Generales (Clase 5)
+    renderDropZone('drop-gastos_operacionales', sec.gastos_operacionales || []);
+    document.getElementById('sec-subtotal-gastos').textContent = '$' + (subs.gastos_operacionales || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    // 9. No Operacionales
+    const tieneNoOp = (sec.no_operacionales_ingresos && sec.no_operacionales_ingresos.length > 0) ||
+                      (sec.no_operacionales_gastos && sec.no_operacionales_gastos.length > 0);
+    const secNoOp = document.getElementById('seccion-no-operacionales');
+    if (tieneNoOp) {
+      secNoOp.classList.remove('hidden');
+      const itemsNoOp = [
+        ...(sec.no_operacionales_ingresos || []).map(x => ({...x, esIngreso: true})),
+        ...(sec.no_operacionales_gastos || []).map(x => ({...x, esIngreso: false}))
+      ];
+      renderDropZone('drop-no_operacionales', itemsNoOp);
+      const subNoOpNeto = (subs.no_operacionales_ingresos || 0) - (subs.no_operacionales_gastos || 0);
+      document.getElementById('sec-subtotal-no-operacionales').textContent = (subNoOpNeto >= 0 ? '+' : '-') + '$' + Math.abs(subNoOpNeto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    } else {
+      secNoOp.classList.add('hidden');
+    }
+
+    // 10. Resultado Final
+    const neto = kpis.resultado_neto || 0;
+    const netoPct = kpis.resultado_neto_pct || 0;
+    const barraFinal = document.getElementById('er-barra-resultado-final');
+    const badgeFinal = document.getElementById('res-resultado-final-badge');
+    const valFinal = document.getElementById('res-resultado-final-valor');
+    const pctFinal = document.getElementById('res-resultado-final-pct');
+
+    valFinal.textContent = '$' + neto.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    pctFinal.textContent = `${netoPct.toFixed(2)}% sobre ingresos totales`;
+
+    if (neto >= 0) {
+      barraFinal.className = 'px-5 py-4 bg-emerald-600 text-white flex items-center justify-between transition-colors';
+      badgeFinal.textContent = 'Utilidad Neta del Período';
+    } else {
+      barraFinal.className = 'px-5 py-4 bg-rose-600 text-white flex items-center justify-between transition-colors';
+      badgeFinal.textContent = 'Pérdida Neta del Período';
+    }
+  }
+
+  function renderDropZone(zoneId, items, badgeExtra = '') {
+    const zone = document.getElementById(zoneId);
+    if (!zone) return;
+
+    if (!items || !items.length) {
+      zone.innerHTML = '<div class="px-6 py-2.5 text-xs text-gray-400 italic">No se registraron movimientos en este grupo para el período.</div>';
+      return;
+    }
+
+    zone.innerHTML = items.map((it, idx) => {
+      let badgeHtml = '';
+      if (badgeExtra) {
+        badgeHtml = `<span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.2 rounded border border-gray-200 font-medium">${badgeExtra}</span>`;
+      }
+      return `
+        <div class="er-row flex items-center justify-between px-4 py-2 hover:bg-gray-50/80 cursor-grab active:cursor-grabbing transition group select-none"
+             draggable="true" data-id="${it.cuenta_id}" data-idx="${idx}">
+          <div class="flex items-center gap-2">
+            <span class="text-gray-300 group-hover:text-gray-500 font-mono text-xs select-none">⠿</span>
+            <span class="font-medium text-gray-800">${escapeErHtml(it.nombre)}</span>
+            ${badgeHtml}
+          </div>
+          <span class="font-mono font-semibold text-gray-700">$${parseFloat(it.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+        </div>
+      `;
+    }).join('');
+
+    // Adjuntar eventos drag & drop a las filas
+    initDragAndDrop(zone);
+  }
+
+  // ═══ GESTIÓN DRAG & DROP NATIVO ═══
+  let _draggedElement = null;
+
+  function initDragAndDrop(container) {
+    const rows = container.querySelectorAll('.er-row');
+    rows.forEach(row => {
+      row.addEventListener('dragstart', e => {
+        _draggedElement = row;
+        row.classList.add('opacity-40', 'bg-rose-50');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', row.dataset.id);
+      });
+
+      row.addEventListener('dragend', () => {
+        if (_draggedElement) {
+          _draggedElement.classList.remove('opacity-40', 'bg-rose-50');
+          _draggedElement = null;
+        }
+      });
+
+      row.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      });
+
+      row.addEventListener('drop', e => {
+        e.preventDefault();
+        if (!_draggedElement || _draggedElement === row) return;
+
+        const allRows = [...container.querySelectorAll('.er-row')];
+        const draggedIndex = allRows.indexOf(_draggedElement);
+        const targetIndex = allRows.indexOf(row);
+
+        if (draggedIndex < targetIndex) {
+          container.insertBefore(_draggedElement, row.nextSibling);
+        } else {
+          container.insertBefore(_draggedElement, row);
+        }
+
+        guardarOrdenSeccion(container);
+      });
+    });
+  }
+
+  async function guardarOrdenSeccion(container) {
+    const sectionName = container.dataset.section;
+    if (!sectionName) return;
+
+    const orderedIds = [...container.querySelectorAll('.er-row')].map(el => parseInt(el.dataset.id));
+    
+    try {
+      await fetch(`/api/contabilidad/${NEGOCIO_ID}/estado-resultados/orden`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orden: { [sectionName]: orderedIds }
+        })
+      });
+    } catch(e) {
+      console.error('Error al guardar orden:', e);
+    }
+  }
+
+  function exportarPdfEstadoResultados() {
+    const desde = document.getElementById('er-desde').value;
+    const hasta = document.getElementById('er-hasta').value;
+    if (!desde || !hasta) {
+      toast('Seleccione las fechas para exportar el PDF', false);
+      return;
+    }
+    window.open(`/api/contabilidad/${NEGOCIO_ID}/estado-resultados/pdf?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`, '_blank');
+  }
+
+  function escapeErHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+</script>

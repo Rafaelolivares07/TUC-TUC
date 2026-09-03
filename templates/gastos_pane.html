@@ -61,12 +61,17 @@
       
       <!-- Concepto -->
       <div class="md:col-span-4 relative">
-        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Concepto / Cuenta</label>
-        <input id="gas-concept-txt" type="text" placeholder="Escriba para buscar..."
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-semibold text-gray-500 uppercase">Concepto / Cuenta</label>
+          <button type="button" onclick="abrirModalNuevoGasto()" class="text-[10px] text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer inline-flex items-center gap-0.5">
+            <span>✨</span> + Crear Nuevo
+          </button>
+        </div>
+        <input id="gas-concept-txt" type="text" placeholder="Escriba para buscar o crear..."
                autocomplete="off"
                class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
                oninput="onConceptInput()" onfocus="onConceptInput()" onkeydown="navConceptAC(event)">
-        <button onclick="clearGasConcepto()" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
+        <button onclick="clearGasConcepto()" class="absolute right-2 top-[28px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
         <input type="hidden" id="gas-concept-id">
         <input type="hidden" id="gas-concept-tercero">
         <div id="gas-concept-ac" class="ac-drop hidden"></div>
@@ -111,12 +116,12 @@
                onkeydown="navSoporte(event)">
       </div>
 
-      <!-- Nota / Observación (Opcional) -->
+      <!-- Nota Explicativa del Rubro (Opcional) -->
       <div class="md:col-span-8 mt-1">
         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">
-          Observación o Detalle adicional <span class="text-gray-400 font-normal lowercase">(opcional)</span>
+          📝 Nota Explicativa del Rubro <span class="text-gray-400 font-normal lowercase">(opcional)</span>
         </label>
-        <input id="gas-nota" type="text" placeholder="Ej. Pago de arriendo local agosto o transporte de entregas"
+        <input id="gas-nota" type="text" placeholder="Ej. Detalle puntual de la compra, destino del gasto o justificación"
                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
                onkeydown="navNota(event)">
       </div>
@@ -133,7 +138,8 @@
       <table class="w-full text-sm">
         <thead>
           <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-100">
-            <th class="px-4 py-3 text-left">Concepto</th>
+            <th class="px-4 py-3 text-left">Concepto / Cuenta</th>
+            <th class="px-4 py-3 text-left">Nota Explicativa</th>
             <th class="px-4 py-3 text-left">Tercero</th>
             <th class="px-4 py-3 text-right">Monto</th>
             <th class="px-4 py-3 text-center w-24">Acción</th>
@@ -214,6 +220,99 @@
     </div>
   </div>
 
+  <!-- Modal Editar Nota Explicativa -->
+  <div id="modal-editar-nota-gasto" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-5 max-w-sm w-full animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2 text-gray-800">
+          <span class="text-lg">📝</span>
+          <h4 class="text-sm font-bold">Nota Explicativa del Rubro</h4>
+        </div>
+        <button onclick="cerrarModalEditarNota()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+      </div>
+      
+      <div class="mb-3 p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+        <span class="text-gray-400 block text-[10px] uppercase font-bold">Concepto</span>
+        <span id="modal-nota-concepto" class="font-bold text-gray-800 block truncate"></span>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nota / Observación</label>
+        <input id="modal-nota-input" type="text" placeholder="Ej. Pago de 5 escobas y desinfectante..."
+               autocomplete="off"
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none text-gray-800"
+               onkeydown="if(event.key==='Enter') guardarNotaGasto(); if(event.key==='Escape') cerrarModalEditarNota();">
+        <span class="text-[10px] text-gray-400 mt-1 block">Deje en blanco si desea eliminar la nota de este rubro.</span>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="cerrarModalEditarNota()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+          Cancelar
+        </button>
+        <button id="btn-guardar-nota" onclick="guardarNotaGasto()" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1">
+          💾 Guardar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Crear Nuevo Rubro de Gasto / Costo -->
+  <div id="modal-nuevo-gasto" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-5 max-w-md w-full animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2 text-gray-800">
+          <span class="text-xl">✨</span>
+          <div>
+            <h4 class="text-sm font-bold text-gray-800">Crear Nuevo Rubro de Gasto / Costo</h4>
+            <p class="text-[11px] text-gray-500">Se creará la cuenta en el PUC y se añadirá a la tipología activa.</p>
+          </div>
+        </div>
+        <button onclick="cerrarModalNuevoGasto()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+      </div>
+      
+      <div class="space-y-3 mb-4">
+        <!-- Código Consecutivo -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-gray-600 uppercase">Código Contable PUC</label>
+            <span id="modal-nuevo-gasto-badge" class="text-[10px] bg-rose-100 text-rose-800 font-mono font-bold px-1.5 py-0.5 rounded">Siguiente en secuencia</span>
+          </div>
+          <input id="modal-nuevo-gasto-codigo" type="text"
+                 class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-gray-50 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono font-bold text-gray-700">
+          <span id="modal-nuevo-gasto-padre" class="text-[10px] text-gray-400 mt-0.5 block"></span>
+        </div>
+
+        <!-- Nombre del Rubro -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nombre del Rubro / Concepto <span class="text-rose-500">*</span></label>
+          <input id="modal-nuevo-gasto-nombre" type="text" placeholder="Ej. INSUMOS DE CAFETERÍA, PUBLICIDAD..."
+                 autocomplete="off"
+                 class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none uppercase font-semibold text-gray-800"
+                 onkeydown="if(event.key==='Enter') guardarNuevoGasto(); if(event.key==='Escape') cerrarModalNuevoGasto();">
+        </div>
+
+        <!-- Checkbox Terceros -->
+        <div class="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-start gap-2.5">
+          <input id="modal-nuevo-gasto-terceros" type="checkbox" checked
+                 class="mt-0.5 h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-500 cursor-pointer">
+          <label for="modal-nuevo-gasto-terceros" class="text-xs text-gray-700 cursor-pointer leading-tight">
+            <strong>Exigir Tercero / Proveedor</strong>
+            <span class="block text-[11px] text-gray-500 mt-0.5">Requerir registrar a qué persona o empresa se le pagó este gasto al asentarlo.</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="cerrarModalNuevoGasto()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+          Cancelar
+        </button>
+        <button id="btn-guardar-nuevo-gasto" onclick="guardarNuevoGasto()" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5">
+          <span>💾</span> Guardar y Seleccionar
+        </button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -278,6 +377,14 @@
     }
   }
 
+  function getFechaHoyLocal() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
   // Carga los detalles (líneas y fecha) de la relación seleccionada
   async function cargarRelacionGastoActiva() {
     const sel = document.getElementById('gas-tipo-doc');
@@ -291,14 +398,17 @@
     
     const inputFecha = document.getElementById('gas-fecha');
     
-    if (doc.status === 'abierto') {
+    if (doc.status === 'abierto' && doc.fecha) {
       inputFecha.value = doc.fecha;
       gasRelacionFecha = doc.fecha;
+      try { localStorage.setItem(`gas_fecha_${NEGOCIO_ID}_${codigo}`, doc.fecha); } catch(e){}
     } else {
-      // Si es nueva, pre-rellenar con la fecha de hoy
-      const hoy = new Date().toISOString().split('T')[0];
-      inputFecha.value = hoy;
-      gasRelacionFecha = hoy;
+      // Si aún no tiene movimientos guardados, persistir la fecha elegida por el usuario o la fecha local
+      let fechaPersistida = null;
+      try { fechaPersistida = localStorage.getItem(`gas_fecha_${NEGOCIO_ID}_${codigo}`); } catch(e){}
+      const fechaDefinitiva = fechaPersistida || getFechaHoyLocal();
+      inputFecha.value = fechaDefinitiva;
+      gasRelacionFecha = fechaDefinitiva;
     }
     
     // Obtener las líneas y cuentas del documento
@@ -323,7 +433,7 @@
       tbody.innerHTML = '';
       
       if (!d.lineas || d.lineas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400 text-xs">No hay gastos agregados en esta relación.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400 text-xs">No hay gastos agregados en esta relación.</td></tr>';
         document.getElementById('gas-total-gastos').textContent = '$0.00';
       } else {
         let total = 0.0;
@@ -343,11 +453,26 @@
             soporteBadge = `<button type="button" onclick="abrirModalEditarSoporte(${l.id}, '', '${escapeGasHtml(displayConcepto)}')" class="inline-flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-amber-700 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-dashed border-gray-250 ml-1 font-mono" title="Asociar número de recibo o factura a este gasto">+ Soporte</button>`;
           }
 
+          let notaValor = '';
+          const matchNota = displayConcepto.match(/\(([^)]+)\)$/);
+          if (matchNota) {
+            notaValor = matchNota[1].trim();
+            displayConcepto = displayConcepto.replace(/\([^)]+\)$/, '').trim();
+          }
+
+          let notaCell = '';
+          if (notaValor) {
+            notaCell = `<div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs bg-gray-50 text-gray-700 border border-gray-200 cursor-pointer hover:bg-amber-50 hover:border-amber-200 hover:text-amber-800 transition max-w-xs truncate" onclick="abrirModalEditarNota(${l.id}, '${escapeGasHtml(notaValor)}', '${escapeGasHtml(displayConcepto)}')" title="Haga clic para editar la nota explicativa"><span>📝</span> <span class="italic truncate">${escapeGasHtml(notaValor)}</span> <span class="text-[9px] text-gray-400">✏️</span></div>`;
+          } else {
+            notaCell = `<button type="button" onclick="abrirModalEditarNota(${l.id}, '', '${escapeGasHtml(displayConcepto)}')" class="inline-flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-amber-700 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-dashed border-gray-250 font-sans" title="Añadir nota explicativa a este rubro">+ Nota</button>`;
+          }
+
           tr.innerHTML = `
             <td class="px-4 py-2.5 text-xs font-semibold text-gray-700">
               <div class="flex items-center flex-wrap gap-1">${displayConcepto} ${soporteBadge}</div>
               <span class="text-[9px] text-gray-400 font-mono">${l.cuenta}</span>
             </td>
+            <td class="px-4 py-2.5 text-xs text-gray-600">${notaCell}</td>
             <td class="px-4 py-2.5 text-xs text-gray-600">${l.tercero_nombre || 'N/A'}</td>
             <td class="px-4 py-2.5 text-right font-mono text-xs text-rose-700 font-bold">$${parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             <td class="px-4 py-2.5 text-center">
@@ -411,8 +536,18 @@
       return;
     }
 
-    if (!gasConceptos.length) {
-      list.classList.add('hidden');
+    if (!gasConceptos.length && rawQ.length > 0) {
+      gasConceptoIdx = -1;
+      list.innerHTML = `
+        <div class="p-2.5 bg-rose-50 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition"
+             onmousedown="event.preventDefault(); abrirModalNuevoGasto('${escapeGasHtml(inp.value.trim())}')">
+          <span class="flex items-center gap-1.5">
+            <span>✨</span> Crear como nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(inp.value.trim())}</strong>
+          </span>
+          <span class="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-mono font-bold">+ Siguiente cuenta</span>
+        </div>
+      `;
+      list.classList.remove('hidden');
       return;
     }
 
@@ -422,17 +557,40 @@
     });
 
     if (!matches.length) {
-      list.classList.add('hidden');
+      gasConceptoIdx = -1;
+      list.innerHTML = `
+        <div class="px-3 py-2 text-xs text-gray-400 italic">No se encontró el rubro "${escapeGasHtml(inp.value.trim())}"</div>
+        <div class="p-2.5 border-t border-gray-100 bg-rose-50 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition"
+             onmousedown="event.preventDefault(); abrirModalNuevoGasto('${escapeGasHtml(inp.value.trim())}')">
+          <span class="flex items-center gap-1.5">
+            <span>✨</span> Crear como nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(inp.value.trim())}</strong>
+          </span>
+          <span class="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-mono font-bold">+ Siguiente cuenta</span>
+        </div>
+      `;
+      list.classList.remove('hidden');
       return;
     }
 
     gasConceptoIdx = -1;
-    list.innerHTML = matches.map((c, i) =>
+    let html = matches.map((c, i) =>
       `<div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs" data-i="${i}"
             data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}">
         <span class="font-semibold text-gray-700">${c.cuenta_nombre}</span>
       </div>`
     ).join('');
+
+    html += `
+      <div class="p-2.5 border-t border-gray-100 bg-rose-50/70 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition"
+           onmousedown="event.preventDefault(); abrirModalNuevoGasto('${escapeGasHtml(inp.value.trim())}')">
+        <span class="flex items-center gap-1.5">
+          <span>✨</span> Crear nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(inp.value.trim())}</strong>
+        </span>
+        <span class="text-[10px] bg-rose-200/80 text-rose-800 px-1.5 py-0.5 rounded font-mono font-bold">+ Siguiente cuenta</span>
+      </div>
+    `;
+
+    list.innerHTML = html;
 
     list.querySelectorAll('.ac-item').forEach(el => {
       el.addEventListener('mousedown', e => { e.preventDefault(); selectConcepto(el); });
@@ -642,12 +800,15 @@
     const fecha = document.getElementById('gas-fecha').value;
     if (!tipoDoc || !numDoc || !fecha) return;
     
-    const opt = document.getElementById('gas-tipo-doc').options[document.getElementById('gas-tipo-doc').selectedIndex];
-    const isAbierto = opt.text.includes('ABIERTO');
+    // Persistir de inmediato en localStorage para evitar que un reload mute la fecha
+    try { localStorage.setItem(`gas_fecha_${NEGOCIO_ID}_${tipoDoc}`, fecha); } catch(e){}
+
+    const doc = gasDocumentos.find(d => d.codigo === tipoDoc);
+    const isAbierto = doc && doc.status === 'abierto';
     
     if (!isAbierto) {
-      // Si el documento aún está nuevo, simplemente asignamos la fecha localmente
       gasRelacionFecha = fecha;
+      if (doc) doc.fecha = fecha;
       return;
     }
     
@@ -660,6 +821,7 @@
       const d = await r.json();
       if (d.ok) {
         gasRelacionFecha = fecha;
+        if (doc) doc.fecha = fecha;
         toast('Fecha de la relación actualizada con éxito.');
         cargarRelacionGastoActiva();
       } else {
@@ -799,6 +961,7 @@
         toast('¡Relación de gastos cerrada con éxito!');
         closedTipoDoc = tipoDoc;
         closedNumDoc = numDoc;
+        try { localStorage.removeItem(`gas_fecha_${NEGOCIO_ID}_${tipoDoc}`); } catch(e){}
         
         // Bloquear interfaz para evitar modificaciones fantasma
         document.getElementById('gas-form-container').classList.add('opacity-50', 'pointer-events-none');
@@ -911,6 +1074,167 @@
     }
   }
 
+  // ═══ GESTIÓN DE NOTA EXPLICATIVA DE LÍNEA ═══
+  let _lineaEditandoNotaId = null;
+
+  function abrirModalEditarNota(lineaId, notaActual, conceptoNombre) {
+    _lineaEditandoNotaId = lineaId;
+    document.getElementById('modal-nota-concepto').textContent = conceptoNombre || 'Gasto';
+    const inp = document.getElementById('modal-nota-input');
+    inp.value = notaActual || '';
+    const modal = document.getElementById('modal-editar-nota-gasto');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => {
+      inp.focus();
+      inp.select();
+    }, 60);
+  }
+
+  function cerrarModalEditarNota() {
+    _lineaEditandoNotaId = null;
+    const modal = document.getElementById('modal-editar-nota-gasto');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  async function guardarNotaGasto() {
+    if (!_lineaEditandoNotaId) return;
+    const nuevaNota = document.getElementById('modal-nota-input').value.trim();
+    const btn = document.getElementById('btn-guardar-nota');
+    btn.disabled = true;
+    
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea/${_lineaEditandoNotaId}/nota`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ nota: nuevaNota })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast('Nota explicativa actualizada.');
+        cerrarModalEditarNota();
+        await cargarRelacionGastoActiva();
+      } else {
+        toast(d.error || 'Error al guardar nota', false);
+      }
+    } catch(e) {
+      toast('Error de red al actualizar nota', false);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ═══ CREAR NUEVO RUBRO DE GASTO EN CALIENTE ═══
+  async function abrirModalNuevoGasto(nombreSugerido = '') {
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    if (!tipoDoc) {
+      toast('Seleccione una tipología de gasto activa', false);
+      return;
+    }
+
+    const inpNombre = document.getElementById('modal-nuevo-gasto-nombre');
+    inpNombre.value = nombreSugerido.toUpperCase();
+    document.getElementById('modal-nuevo-gasto-terceros').checked = true;
+
+    // Consultar el siguiente código sugerido
+    const inpCodigo = document.getElementById('modal-nuevo-gasto-codigo');
+    inpCodigo.value = 'Calculando...';
+    document.getElementById('modal-nuevo-gasto-padre').textContent = '';
+
+    const modal = document.getElementById('modal-nuevo-gasto');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/siguiente-codigo?tipo_doc=${encodeURIComponent(tipoDoc)}`);
+      const d = await r.json();
+      if (d.ok) {
+        inpCodigo.value = d.siguiente_codigo;
+        document.getElementById('modal-nuevo-gasto-padre').textContent = `Pertenece a grupo: ${d.padre_codigo} - ${d.padre_nombre || 'Costos'}`;
+      } else {
+        inpCodigo.value = '614207';
+      }
+    } catch(e) {
+      inpCodigo.value = '614207';
+    }
+
+    setTimeout(() => {
+      inpNombre.focus();
+      if (nombreSugerido) inpNombre.select();
+    }, 60);
+  }
+
+  function cerrarModalNuevoGasto() {
+    const modal = document.getElementById('modal-nuevo-gasto');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  async function guardarNuevoGasto() {
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    const nombre = document.getElementById('modal-nuevo-gasto-nombre').value.trim().toUpperCase();
+    const codigo = document.getElementById('modal-nuevo-gasto-codigo').value.trim();
+    const manejaTerceros = document.getElementById('modal-nuevo-gasto-terceros').checked;
+
+    if (!nombre) {
+      toast('El nombre del rubro es obligatorio', false);
+      return;
+    }
+
+    const btn = document.getElementById('btn-guardar-nuevo-gasto');
+    btn.disabled = true;
+
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/concepto/nuevo`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          tipo_doc: tipoDoc,
+          nombre: nombre,
+          codigo: codigo,
+          maneja_terceros: manejaTerceros
+        })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast(`Rubro "${d.cuenta_nombre}" (${d.cuenta_codigo}) creado y asociado con éxito.`);
+        
+        // Agregar a la lista local de conceptos si no existe
+        if (!gasConceptos.some(c => c.cuenta_puc_id === d.cuenta_puc_id)) {
+          gasConceptos.push({
+            cuenta_puc_id: d.cuenta_puc_id,
+            cuenta_nombre: d.cuenta_nombre,
+            maneja_terceros: d.maneja_terceros
+          });
+        }
+
+        // Seleccionarlo inmediatamente en el formulario
+        document.getElementById('gas-concept-txt').value = d.cuenta_nombre;
+        document.getElementById('gas-concept-id').value = d.cuenta_puc_id;
+        document.getElementById('gas-concept-tercero').value = d.maneja_terceros ? 'true' : 'false';
+        document.getElementById('gas-concept-ac').classList.add('hidden');
+
+        onConceptChange();
+        cerrarModalNuevoGasto();
+
+        // Dar foco al siguiente input
+        if (d.maneja_terceros) {
+          document.getElementById('gas-tercero-txt').focus();
+        } else {
+          document.getElementById('gas-monto').focus();
+        }
+      } else {
+        toast(d.error || 'Error al crear rubro de gasto', false);
+      }
+    } catch(e) {
+      console.error(e);
+      toast('Error de red al registrar el nuevo rubro', false);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   document.addEventListener('click', e => {
     if (!e.target.closest('#gas-concept-txt') && !e.target.closest('#gas-concept-ac')) {
       document.getElementById('gas-concept-ac').classList.add('hidden');
@@ -920,6 +1244,12 @@
     }
     if (e.target.id === 'modal-editar-soporte-gasto') {
       cerrarModalEditarSoporte();
+    }
+    if (e.target.id === 'modal-editar-nota-gasto') {
+      cerrarModalEditarNota();
+    }
+    if (e.target.id === 'modal-nuevo-gasto') {
+      cerrarModalNuevoGasto();
     }
   });
 </script>

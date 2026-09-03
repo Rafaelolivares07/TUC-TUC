@@ -925,6 +925,8 @@
 
       <button class="tab-btn" onclick="mostrarTab('gastos')">Gastos</button>
 
+      <button class="tab-btn" onclick="mostrarTab('estado_resultados')">📊 Estado de Resultados</button>
+
       <button class="tab-btn" onclick="mostrarTab('recosteo')">Recosteo / Auditoría</button>
 
       <a href="/admin/inventario-fisico/{{ negocio_id }}" class="tab-btn">📋 Inv. Físico</a>
@@ -2464,10 +2466,10 @@
         <!-- LADO DERECHO: PROCESOS GLOBALES -->
         <div class="flex items-center gap-2 flex-wrap">
           <span class="text-[10px] font-bold text-gray-400 uppercase mr-1">Procesos Globales:</span>
-          <button onclick="vincularIdsGlobal()" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition">
+          <button id="btn-vincular-global" onclick="vincularIdsGlobal()" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer">
             🔗 Vincular IDs (Global)
           </button>
-          <button onclick="repararCostosGlobal()" class="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition">
+          <button id="btn-reparar-global" onclick="repararCostosGlobal()" class="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer">
             ⚡ Reparar Todo el Período
           </button>
         </div>
@@ -2630,6 +2632,14 @@
 
   </div>
 
+  <!-- ── TAB ESTADO DE RESULTADOS ──────────────────────────────────── -->
+
+  <div id="tab-estado_resultados" class="hidden bg-white rounded-2xl shadow p-5">
+
+    {% include 'estado_resultados_pane.html' %}
+
+  </div>
+
 
 
   <!-- ── TAB RECOSTEO Y AUDITORÍA ──────────────────────────────────── -->
@@ -2760,7 +2770,7 @@ function toast(msg, ok = true) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'cotizaciones', 'kardex', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'gastos', 'recosteo'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'cotizaciones', 'kardex', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'gastos', 'estado_resultados', 'recosteo'];
 
 function mostrarTab(t) {
 
@@ -2947,7 +2957,7 @@ function renderizarListaRecosteo(productos) {
 
     if (p.negativo_final) alertas.push('Saldo final negativo');
 
-    if (p.negativos_intermedios?.length) alertas.push(`${p.negativos_intermedios.length} negativo(s) histórico(s)`);
+    if ((p.negativos_intermedios && p.negativos_intermedios.length)) alertas.push(`${p.negativos_intermedios.length} negativo(s) histórico(s)`);
 
     if (p.inconsistencias_movimientos?.length) alertas.push('Cadena inconsistente');
 
@@ -2969,7 +2979,7 @@ function renderizarListaRecosteo(productos) {
 
       ? 'Requiere entrada o ajuste físico'
 
-      : p.negativos_intermedios?.length
+      : (p.negativos_intermedios && p.negativos_intermedios.length)
 
         ? 'Revisar fecha o cantidad'
 
@@ -11614,31 +11624,17 @@ async function cargarReporteEnsambles() {
     toast('Selecciona las fechas de inicio y fin', false);
 
     return;
-
   }
 
-  
-
   const content = document.getElementById('ensambles-report-content');
-
   content.innerHTML = `<div class="text-center text-gray-500 py-12 flex flex-col items-center justify-center gap-2">
-
     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
-
     <span>Consultando base de datos y cargando movimientos contables...</span>
-
   </div>`;
-
-  
-
   try {
-
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reporte-ensambles?producto_padre_id=${parentId}&fecha_desde=${ini}&fecha_hasta=${fin}`);
-
     const d = await r.json();
-
     if (!d.ok) {
-
       content.innerHTML = `<div class="text-center text-red-500 font-semibold py-12">${d.error || 'Error al cargar reporte'}</div>`;
 
       return;
@@ -11828,173 +11824,116 @@ async function cargarReporteEnsambles() {
               <span class="bg-rose-100 text-rose-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">Cantidad Vendida/Producida: ${fmt(pQty)}</span>
 
             </div>
-
             
-
             <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[10px]">
-
               <div class="bg-blue-50/30 rounded-lg p-2 border border-blue-100/50">
-
                 <span class="text-blue-500 font-bold uppercase tracking-wider block">Costo Contabilizado (61*)</span>
-
                 <span class="text-xs font-extrabold text-blue-700 block mt-0.5">${fmtMon(doc.cogsCost)}</span>
-
                 <span class="text-[9px] text-blue-600 font-medium block mt-0.5">Unitario: ${fmtMon(unitCogs)}</span>
-
               </div>
-
               <div class="bg-amber-50/30 rounded-lg p-2 border border-amber-100/50">
-
                 <span class="text-amber-500 font-bold uppercase tracking-wider block">Costo Insumos (Kardex)</span>
-
                 <span class="text-xs font-extrabold text-amber-700 block mt-0.5">${fmtMon(doc.itemsCost)}</span>
-
                 <span class="text-[9px] text-amber-600 font-medium block mt-0.5">Unitario: ${fmtMon(unitItems)}</span>
-
               </div>
-
               <div class="${isReconciled ? 'bg-green-50/30 border-green-100/50' : 'bg-rose-50/30 border-rose-100/50'} rounded-lg p-2 border">
-
                 <span class="${isReconciled ? 'text-green-500' : 'text-rose-500'} font-bold uppercase tracking-wider block">Diferencia / Descuadre</span>
-
                 <span class="text-xs font-extrabold ${diffCls} block mt-0.5">${fmtMon(diff)} ${isReconciled ? '✓' : '⚠️'}</span>
-
                 <span class="text-[9px] ${isReconciled ? 'text-green-600' : 'text-rose-500'} font-medium block mt-0.5">Unitario: ${fmtMon(unitDiff)}</span>
-
               </div>
-
             </div>
-
           </div>
-
           
-
           <!-- Tabla de Componentes de esta Factura -->
-
           <div class="overflow-x-auto rounded-xl border border-gray-100 bg-white">
-
             <table class="w-full text-xs text-left text-gray-600">
-
               <thead class="bg-gray-50 text-[10px] text-gray-500 uppercase border-b border-gray-100">
-
                 <tr>
-
                   <th class="px-3 py-2 font-bold text-gray-700">Componente / Insumo</th>
-
                   <th class="px-3 py-2 text-right font-bold text-gray-700">Cantidad</th>
-
                   <th class="px-3 py-2 text-right font-bold text-gray-700">Costo Unitario</th>
-
                   <th class="px-3 py-2 text-right font-bold text-gray-700">Costo Total</th>
-
                 </tr>
-
               </thead>
-
               <tbody class="divide-y divide-gray-100 font-mono">
-
                 ${doc.components.map(c => `
-
                   <tr class="hover:bg-gray-50/50">
-
                     <td class="px-3 py-2 text-gray-800 font-sans font-semibold">${c.nombre_producto}</td>
-
                     <td class="px-3 py-2 text-right text-gray-600">${fmt(c.cantidad)}</td>
-
                     <td class="px-3 py-2 text-right text-gray-500">${fmtMon(c.costo_unitario)}</td>
-
                     <td class="px-3 py-2 text-right text-gray-800 font-semibold">${fmtMon(c.costo_total)}</td>
-
                   </tr>
-
                 `).join('')}
-
               </tbody>
-
               <tfoot class="bg-gray-50/80 font-bold border-t border-gray-150">
-
                 <tr class="text-[11px] text-gray-800">
-
                   <td class="px-3 py-2 text-left font-extrabold">COSTO TOTAL DE INSUMOS (KARDEX)</td>
-
                   <td class="px-3 py-2"></td>
-
                   <td class="px-3 py-2 text-right num text-gray-700 font-extrabold">Costo Unitario: ${fmtUnitCost(unitItems)}</td>
-
                   <td class="px-3 py-2 text-right num text-rose-700 font-extrabold">Costo Total: ${fmtMon(doc.itemsCost)}</td>
-
                 </tr>
-
               </tfoot>
-
             </table>
-
           </div>
-
         </div>
-
       `;
-
     });
-
     
-
     content.innerHTML = html;
-
   } catch (e) {
-
     console.error(e);
-
     content.innerHTML = `<div class="text-center text-red-500 font-semibold py-12">Error de red al conectar con el servidor</div>`;
-
   }
-
 }
-
 </script>
 
     <!-- Botón flotante para regresar a Mi Menú (Tailwind) -->
+    <script>
+      (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('origin') === 'menu') {
+          const btn = document.createElement('div');
+          btn.style.position = 'fixed';
+          btn.style.bottom = '24px';
+          btn.style.right = '24px';
+          btn.style.zIndex = '99999';
+          btn.innerHTML = `
+            <a href="/admin/mi-menu" class="bg-gray-900 hover:bg-gray-800 text-white font-bold px-4 py-2.5 rounded-full text-xs transition shadow-lg border border-gray-700 flex items-center gap-1.5 no-underline">
+              🏠 <span style="font-size: 11px;">Regresar a Mi Menú</span>
+            </a>
+          `;
+          document.body.appendChild(btn);
+        }
+      })();
+    </script>
 
     <script>
-
-      (function() {
-
-        const urlParams = new URLSearchParams(window.location.search);
-
-        if (urlParams.get('origin') === 'menu') {
-
-          const btn = document.createElement('div');
-
-          btn.style.position = 'fixed';
-
-          btn.style.bottom = '24px';
-
-          btn.style.right = '24px';
-
-          btn.style.zIndex = '99999';
-
-          btn.innerHTML = `
-
-            <a href="/admin/mi-menu" class="bg-gray-900 hover:bg-gray-800 text-white font-bold px-4 py-2.5 rounded-full text-xs transition shadow-lg border border-gray-700 flex items-center gap-1.5 no-underline">
-
-              🏠 <span style="font-size: 11px;">Regresar a Mi Menú</span>
-
-            </a>
-
-          `;
-
-          document.body.appendChild(btn);
-
-        }
-
-      })();
-
     // ── Reparador de Costos de Venta ──────────────────────────────────────
     function getReparadorFechas() {
-      const ini = document.getElementById('reparador-fecha-ini')?.value || document.getElementById('ensambles-fecha-ini')?.value || '';
-      const fin = document.getElementById('reparador-fecha-fin')?.value || document.getElementById('ensambles-fecha-fin')?.value || '';
+      let iniEl = document.getElementById('reparador-fecha-ini');
+      let finEl = document.getElementById('reparador-fecha-fin');
+      let ini = (iniEl ? iniEl.value : "") || (document.getElementById('ensambles-fecha-ini') ? document.getElementById('ensambles-fecha-ini').value : '') || '';
+      let fin = (finEl ? finEl.value : "") || (document.getElementById('ensambles-fecha-fin') ? document.getElementById('ensambles-fecha-fin').value : '') || '';
+      if (!ini || !fin) {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+        if (!ini) {
+          ini = `${y}-${m}-01`;
+          if (iniEl) iniEl.value = ini;
+        }
+        if (!fin) {
+          fin = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+          if (finEl) finEl.value = fin;
+        }
+      }
       return { ini, fin };
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      getReparadorFechas();
+    });
 
     function toggleReparador() {
       // Panel permanente, no requiere colapsar
@@ -12002,7 +11941,6 @@ async function cargarReporteEnsambles() {
 
     async function vincularIdsGlobal() {
       const { ini, fin } = getReparadorFechas();
-      const parentId = document.getElementById('ensambles-padre-id')?.value;
       if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
       const confirmed = confirm(`¿Estás seguro de que deseas vincular y otorgar aval a TODOS los registros contables del período ${ini} al ${fin}?`);
       if (!confirmed) return;
@@ -12010,7 +11948,6 @@ async function cargarReporteEnsambles() {
       toast('Vinculando IDs (otorgando aval global)...');
       try {
         let url = `/api/inventario/${NEGOCIO_ID}/vincular-ids-contabilidad?fecha_desde=${ini}&fecha_hasta=${fin}`;
-        if (parentId) url += `&producto_padre_id=${parentId}`;
         const r = await fetch(url, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -12019,13 +11956,16 @@ async function cargarReporteEnsambles() {
         const d = await r.json();
         if (!d.ok) { toast(d.error || 'Error al vincular', false); return; }
         toast(`✅ ${d.resumen.vinculados} registros vinculados y avalados exitosamente`);
-        setTimeout(() => repararCostosPreview(), 400);
+        await repararCostosPreview(true);
       } catch (e) {
         toast(e.message, false);
       }
     }
 
     async function vincularIdsNivel(nivel, productoPadreId, numeroDoc) {
+      const currentScroll = window.scrollY;
+      if (productoPadreId) window._openRepairAccordions.add(`prod-acc-${productoPadreId}`);
+      if (numeroDoc) window._openRepairAccordions.add(`doc-acc-${productoPadreId}-${numeroDoc}`);
       const { ini, fin } = getReparadorFechas();
       toast('Vinculando IDs (otorgando aval)...');
       try {
@@ -12039,13 +11979,16 @@ async function cargarReporteEnsambles() {
         const d = await r.json();
         if (!d.ok) { toast(d.error || 'Error al vincular', false); return; }
         toast(`✅ ${d.resumen.vinculados} IDs vinculados y avalados`);
-        setTimeout(() => repararCostosPreview(), 400);
+        await repararCostosPreview(true, currentScroll);
       } catch (e) {
         toast(e.message, false);
       }
     }
 
     async function desvincularIds(numeroDoc, productoPadreId) {
+      const currentScroll = window.scrollY;
+      if (productoPadreId) window._openRepairAccordions.add(`prod-acc-${productoPadreId}`);
+      if (numeroDoc) window._openRepairAccordions.add(`doc-acc-${productoPadreId}-${numeroDoc}`);
       const msg = numeroDoc
         ? `¿Desvincular producto_id de las cuentas 14* de la factura ${numeroDoc}?`
         : `¿Desvincular TODOS los producto_id de las cuentas 14* de este producto?`;
@@ -12061,7 +12004,7 @@ async function cargarReporteEnsambles() {
         const d = await r.json();
         if (!d.ok) { toast(d.error, false); return; }
         toast(`${d.desvinculados} registros desvinculados`);
-        setTimeout(() => repararCostosPreview(), 600);
+        await repararCostosPreview(true, currentScroll);
       } catch (e) {
         toast(e.message, false);
       }
@@ -12100,18 +12043,17 @@ async function cargarReporteEnsambles() {
           return;
         }
 
-        preview.innerHTML = `<div class="text-amber-800 text-[10px] font-bold">${res.con_diferencia} doc(s) con diferencia — $${res.monto_corregir.toLocaleString('es-CO')}</div>`;
+        preview.innerHTML = `<div class="text-amber-800 text-[10px] font-bold">${res.con_diferencia} doc(s) con diferencia — $${Number(res.monto_corregir || 0).toLocaleString('es-CO')}</div>`;
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
       }
     }
 
     async function repararCostosDocumento(numeroDoc, productoPadreId) {
-      const containerId = `reparar-doc-${productoPadreId}-${numeroDoc}`;
-      const el = document.getElementById(containerId);
-      if (!el) return;
-      el.classList.remove('hidden');
-      el.innerHTML = '<div class="text-amber-600 text-[10px] py-1 font-semibold">Reparando costos...</div>';
+      const currentScroll = window.scrollY;
+      if (productoPadreId) window._openRepairAccordions.add(`prod-acc-${productoPadreId}`);
+      if (numeroDoc) window._openRepairAccordions.add(`doc-acc-${productoPadreId}-${numeroDoc}`);
+      toast('Reparando costos del documento...');
 
       try {
         const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
@@ -12121,43 +12063,22 @@ async function cargarReporteEnsambles() {
         });
         const d = await r.json();
         if (!d.ok) {
-          el.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`;
+          toast(d.error || 'Error al reparar', false);
           return;
         }
 
-        const res = d.resultados && d.resultados[0] ? d.resultados[0] : {};
-        let html = '<div class="text-[10px] space-y-1">';
-        if (res.cambios_contables && res.cambios_contables.length > 0) {
-          html += `<div class="font-bold text-amber-800">Entradas 14* ajustadas:</div>`;
-          res.cambios_contables.forEach(c => {
-            html += `<div class="flex justify-between"><span class="truncate max-w-[180px]">${c.componente}</span><span>$${c.monto_anterior.toLocaleString('es-CO')} → $${c.monto_nuevo.toLocaleString('es-CO')}</span></div>`;
-          });
-        } else {
-          html += '<div class="text-green-700 font-bold">Todos los 14* ya están correctos</div>';
-        }
-        if (res.cogs_modificado) {
-          html += `<div class="text-amber-800 font-bold">Contrapartida 61* ajustada</div>`;
-        }
-        if (res.pedido_item_modificado) {
-          html += `<div class="text-amber-800 font-bold">pedido_items.costo_unitario ajustado</div>`;
-        }
-        html += '</div>';
-        el.innerHTML = html;
-
-        toast('Costos reparados');
-        setTimeout(() => repararCostosPreview(), 800);
+        toast('✅ Costos del documento reparados');
+        await repararCostosPreview(true, currentScroll);
       } catch (e) {
-        el.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
+        toast(e.message, false);
       }
     }
 
     async function repararCostosProducto(productoPadreId) {
+      const currentScroll = window.scrollY;
+      if (productoPadreId) window._openRepairAccordions.add(`prod-acc-${productoPadreId}`);
       const { ini, fin } = getReparadorFechas();
-      const containerId = `reparar-prod-${productoPadreId}`;
-      const el = document.getElementById(containerId);
-      if (!el) return;
-      el.classList.remove('hidden');
-      el.innerHTML = '<div class="text-amber-600 text-[10px] py-1 font-semibold">Reparando todos los documentos de este producto...</div>';
+      toast('Reparando todos los documentos de este producto...');
 
       try {
         const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
@@ -12167,37 +12088,24 @@ async function cargarReporteEnsambles() {
         });
         const d = await r.json();
         if (!d.ok) {
-          el.innerHTML = `<div class="text-red-500 text-[10px]">${d.error}</div>`;
+          toast(d.error || 'Error al reparar', false);
           return;
         }
 
-        let html = `<div class="text-[10px] font-bold text-amber-800 mb-1">${d.documentos_modificados} de ${d.documentos_procesados} documentos modificados (${d.total_cambios_contables} cambios contables)</div>`;
-        if (d.resultados) {
-          d.resultados.forEach(r => {
-            const nCambios = r.cambios_contables ? r.cambios_contables.length : 0;
-            const icono = r.skip ? '⏭️' : (nCambios > 0 || r.cogs_modificado ? '✅' : '✔️');
-            html += `<div class="text-[10px]">${icono} Doc ${r.numero_doc}${nCambios > 0 ? ` — ${nCambios} ajustes` : ''}${r.cogs_modificado ? ' + 61*' : ''}${r.pedido_item_modificado ? ' + PI' : ''}</div>`;
-          });
-        }
-        el.innerHTML = html;
-
-        toast(`${d.documentos_modificados} documentos reparados`);
-        setTimeout(() => repararCostosPreview(), 800);
+        toast(`✅ ${d.documentos_modificados} documentos reparados`);
+        await repararCostosPreview(true, currentScroll);
       } catch (e) {
-        el.innerHTML = `<div class="text-red-500 text-[10px]">${e.message}</div>`;
+        toast(e.message, false);
       }
     }
 
     async function repararCostosGlobal() {
+      const currentScroll = window.scrollY;
       const { ini, fin } = getReparadorFechas();
-      if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
-
       const confirmed = confirm(`¿Estás seguro de que deseas reparar automáticamente TODOS los costos del período ${ini} al ${fin}?`);
       if (!confirmed) return;
 
-      const preview = document.getElementById('reparador-preview');
-      preview.innerHTML = '<div class="text-center text-amber-600 py-4 text-xs font-semibold">Reparando todos los documentos en el rango...</div>';
-      preview.classList.remove('hidden');
+      toast('Reparando todos los documentos del período...');
 
       try {
         const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reparar-costos-documento`, {
@@ -12207,169 +12115,236 @@ async function cargarReporteEnsambles() {
         });
         const d = await r.json();
         if (!d.ok) {
-          preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`;
+          toast(d.error || 'Error al reparar período', false);
           return;
         }
 
-        let html = `<div class="text-xs font-bold text-amber-800 mb-2">${d.documentos_modificados} de ${d.documentos_procesados} documentos modificados (${d.total_cambios_contables} cambios contables)</div>`;
-        html += '<div class="max-h-[20rem] overflow-y-auto space-y-1">';
-        if (d.resultados) {
-          d.resultados.forEach(r => {
-            const nCambios = r.cambios_contables ? r.cambios_contables.length : 0;
-            const icono = r.skip ? '⏭️' : (nCambios > 0 || r.cogs_modificado ? '✅' : '✔️');
-            html += `<div class="text-[10px]">${icono} Doc ${r.numero_doc} (prod ${r.producto_padre_id})${nCambios > 0 ? ` — ${nCambios} ajustes` : ''}${r.cogs_modificado ? ' + 61*' : ''}${r.pedido_item_modificado ? ' + PI' : ''}</div>`;
-          });
-        }
-        html += '</div>';
-        preview.innerHTML = html;
-
-        toast(`${d.documentos_modificados} documentos reparados`);
-        setTimeout(() => repararCostosPreview(), 800);
+        toast(`✅ ${d.documentos_modificados} de ${d.documentos_procesados} documentos reparados`);
+        await repararCostosPreview(true, currentScroll);
       } catch (e) {
-        preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
+        toast(e.message, false);
       }
     }
 
-    async function repararCostosPreview() {
-      const prevScrollY = window.scrollY || document.documentElement.scrollTop;
+    async function repararCostosPreview(preserveState = false, targetScroll = null) {
+      const prevScrollY = targetScroll !== null ? targetScroll : (window.scrollY || document.documentElement.scrollTop);
+      const preview = document.getElementById('reparador-preview');
+      if (!preview) return;
+
       const { ini, fin } = getReparadorFechas();
-      const parentId = document.getElementById('ensambles-padre-id')?.value;
       if (!ini || !fin) { toast('Selecciona fechas primero', false); return; }
 
-      const preview = document.getElementById('reparador-preview');
-      preview.innerHTML = '<div class="text-center text-amber-600 py-4 text-xs font-semibold">Calculando diferencias y diagnosticando costos...</div>';
+      const hadContent = preview.innerHTML.trim().length > 0 && !preview.innerHTML.includes('Calculando diferencias');
+      if (!hadContent || !preserveState) {
+        preview.innerHTML = '<div class="text-center text-amber-600 py-4 text-xs font-semibold">Calculando diferencias y diagnosticando costos...</div>';
+      }
       preview.classList.remove('hidden');
 
       try {
         let url = `/api/inventario/${NEGOCIO_ID}/reparar-costos-venta?fecha_desde=${ini}&fecha_hasta=${fin}`;
-        if (parentId) url += `&producto_padre_id=${parentId}`;
         const r = await fetch(url);
         const d = await r.json();
-        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error}</div>`; return; }
-        const res = d.resumen;
-        let uid = 0;
-        let tieneSinFuente = false;
+        if (!d.ok) { preview.innerHTML = `<div class="text-red-500 text-xs py-4">${d.error || 'Error al obtener diagnóstico'}</div>`; return; }
+        const res = d.resumen || { total_productos: 0, total_facturas: 0, con_diferencia: 0, monto_corregir: 0 };
+
+        const btnRepGlobal = document.getElementById('btn-reparar-global');
+        if (btnRepGlobal) {
+          if (res.con_diferencia === 0) {
+            btnRepGlobal.disabled = true;
+            btnRepGlobal.title = 'Todos los costos del período están cuadrados ($0 diferencia)';
+            btnRepGlobal.className = 'px-3.5 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-300 font-bold text-xs rounded-xl shadow-none opacity-90 cursor-not-allowed flex items-center gap-1.5 transition';
+            btnRepGlobal.innerHTML = '✔️ Período Cuadrado ($0)';
+          } else {
+            btnRepGlobal.disabled = false;
+            btnRepGlobal.title = 'Reparar automáticamente todos los costos con diferencias';
+            btnRepGlobal.className = 'px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer';
+            btnRepGlobal.innerHTML = '⚡ Reparar Todo el Período';
+          }
+        }
+
         let banner = res.con_diferencia === 0
           ? `<div class="text-green-700 text-xs font-bold mb-3 bg-green-50 border border-green-300 rounded-xl px-4 py-2.5 text-center">✅ Todos los costos del período están cuadrados ($0 diferencia). Puedes desplegar cualquier producto para auditar sus documentos y componentes.</div>`
-          : `<div class="text-xs text-amber-900 font-bold mb-3 flex items-center justify-between bg-amber-100/70 border border-amber-300 rounded-xl px-4 py-2.5 flex-wrap gap-2"><span>Diagnóstico: ${res.total_productos} producto(s), ${res.con_diferencia} documento(s) con diferencia de ${res.total_facturas} totales</span><span class="text-rose-700 font-mono font-extrabold text-sm">Monto a corregir: $${res.monto_corregir.toLocaleString('es-CO')}</span></div>`;
+          : `<div class="text-xs text-amber-900 font-bold mb-3 flex items-center justify-between bg-amber-100/70 border border-amber-300 rounded-xl px-4 py-2.5 flex-wrap gap-2"><span>Diagnóstico: ${res.total_productos} producto(s), ${res.con_diferencia} documento(s) con diferencia de ${res.total_facturas} totales</span><span class="text-rose-700 font-mono font-extrabold text-sm">Monto a corregir: $${Number(res.monto_corregir || 0).toLocaleString('es-CO')}</span></div>`;
 
         let html = banner;
-        html += '<div class="space-y-3 max-h-[34rem] overflow-y-auto">';
-        d.productos.forEach(prod => {
+        html += '<div class="space-y-3">';
+        (d.productos || []).forEach(prod => {
           if (!prod.facturas || prod.facturas.length === 0) return;
-          const pid = ++uid;
-          const badgeProdStatus = prod.con_diferencia > 0 
-            ? `<span class="text-xs px-2.5 py-0.5 bg-amber-200 text-amber-900 rounded-full font-extrabold">${prod.con_diferencia} con dif</span>`
-            : `<span class="text-xs px-2.5 py-0.5 bg-green-100 text-green-800 rounded-full font-bold">✅ ${prod.facturas.length} doc(s) OK</span>`;
+          const prodAccId = `prod-acc-${prod.producto_padre_id}`;
+          const isProdOpen = window._openRepairAccordions && window._openRepairAccordions.has(prodAccId);
+          const prodHiddenClass = isProdOpen ? '' : 'hidden';
+          const prodArrowStyle = isProdOpen ? 'style="transform: rotate(90deg)"' : '';
+
+          const costTotalContab = Number(prod.costo_total_contable || 0);
+          const costTotalKardex = Number(prod.costo_total_kardex || 0);
+          const difProd = costTotalContab - costTotalKardex;
+          const tieneDifProd = prod.con_diferencia > 0 || Math.abs(difProd) > 0.01;
+
+          let totalContrasProd = 0;
+          let tieneDesvinculadosProd = false;
+          let tieneVinculadosProd = false;
+          prod.facturas.forEach(f => {
+            (f.contrapartidas || []).forEach(c => {
+              totalContrasProd++;
+              if (!c.esta_vinculado && c.match_tipo !== 'producto_id') tieneDesvinculadosProd = true;
+              if (c.esta_vinculado || c.match_tipo === 'producto_id') tieneVinculadosProd = true;
+            });
+          });
+          const puedeVincularProd = totalContrasProd > 0 && tieneDesvinculadosProd;
+
+          const btnVincProd = puedeVincularProd
+            ? `<button type="button" onclick="vincularIdsNivel('producto', ${prod.producto_padre_id})" class="min-w-[150px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">🔗 Vincular IDs</button>`
+            : `<button type="button" disabled title="Todos los insumos de este producto ya tienen ID contable asignado" class="min-w-[150px] px-4 py-2 bg-blue-50 text-blue-500 border border-blue-200 text-xs font-bold rounded-xl opacity-85 cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none">✔️ IDs Vinculados</button>`;
+
+          const btnDesvincProd = tieneVinculadosProd
+            ? `<button type="button" onclick="desvincularIds(null, ${prod.producto_padre_id})" class="min-w-[150px] px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl border border-gray-300 transition flex items-center justify-center gap-1.5 cursor-pointer">🔓 Desvincular</button>`
+            : `<button type="button" disabled title="No hay IDs vinculados para desvincular" class="min-w-[150px] px-4 py-2 bg-gray-50 text-gray-400 border border-gray-200 text-xs font-semibold rounded-xl opacity-70 cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none">🔓 Desvincular</button>`;
+
+          const btnRepararProd = tieneDifProd
+            ? `<button type="button" onclick="repararCostosProducto(${prod.producto_padre_id})" class="min-w-[170px] px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">⚡ Reparar Producto</button>`
+            : `<button type="button" disabled title="Todos los documentos de este producto están cuadrados ($0 diferencia)" class="min-w-[170px] px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-bold rounded-xl opacity-90 cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none">✔️ Cuadrado ($0)</button>`;
+
+          const totalCantProd = prod.facturas.reduce((s, ff) => s + parseFloat(ff.cantidad_base || 0), 0);
+          const esProdGeneral = prod.facturas.some(ff => ff.grupo_tipo === 'produccion');
+          const cantProdStr = totalCantProd.toLocaleString('es-CO', {maximumFractionDigits: 2});
+          const badgeCantProd = esProdGeneral
+            ? `<span class="text-xs px-2.5 py-0.5 bg-amber-200/90 text-amber-950 rounded-full font-bold border border-amber-300 flex items-center gap-1">🍳 ${cantProdStr} Elaboradas</span>`
+            : `<span class="text-xs px-2.5 py-0.5 bg-emerald-100 text-emerald-950 rounded-full font-bold border border-emerald-300 flex items-center gap-1">🍽️ ${cantProdStr} Vendidas</span>`;
+
+          const docsConDifContab = prod.facturas.filter(f => Math.abs((f.cogs_contable ? Number(f.cogs_contable.monto_actual || 0) : 0) - Number(f.costo_real_kardex || 0)) > 0.01).length;
+          const docsConDifPedido = prod.facturas.filter(f => f.pedido_item && Math.abs(Number(f.pedido_item.diferencia || 0)) > 0.01).length;
+
+          let badgeProdStatus = '';
+          if (docsConDifContab > 0) {
+            badgeProdStatus = `<span class="text-xs px-2.5 py-0.5 bg-amber-200 text-amber-900 rounded-full font-extrabold">${docsConDifContab} con dif contable</span>`;
+          } else if (docsConDifPedido > 0) {
+            badgeProdStatus = `<span class="text-xs px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-full font-bold border border-amber-300">⚠️ ${docsConDifPedido} pedido${docsConDifPedido > 1 ? 's' : ''} por sincronizar</span>`;
+          } else {
+            badgeProdStatus = `<span class="text-xs px-2.5 py-0.5 bg-green-100 text-green-800 rounded-full font-bold">✅ ${prod.facturas.length} doc(s) OK</span>`;
+          }
 
           html += `<div class="border border-amber-300 rounded-xl overflow-hidden bg-white shadow-xs">`;
-          html += `<button onclick="toggleRepairLevel('prod-${pid}')" class="w-full flex items-center justify-between px-4 py-3 bg-amber-100/70 hover:bg-amber-200/70 text-left transition-colors flex-wrap gap-2 cursor-pointer">`;
-          html += `<div class="flex items-center gap-2">`;
-          html += `<svg class="w-4 h-4 text-amber-700 transition-transform repair-arrow" id="arrow-prod-${pid}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+          html += `<button type="button" onclick="toggleRepairLevel('${prodAccId}')" class="w-full flex items-center justify-between px-4 py-3 bg-amber-100/70 hover:bg-amber-200/70 text-left transition-colors flex-wrap gap-2 cursor-pointer">`;
+          html += `<div class="flex items-center gap-2 flex-wrap">`;
+          html += `<svg class="w-4 h-4 text-amber-700 transition-transform repair-arrow" id="arrow-${prodAccId}" ${prodArrowStyle} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
           html += `<span class="text-sm font-bold text-amber-950">${prod.producto_padre_nombre}</span>`;
+          html += `${badgeCantProd}`;
           html += `${badgeProdStatus}`;
           html += `</div>`;
           html += `<div class="text-right text-xs">`;
-          html += `<span class="text-gray-600">Contable: <b>$${prod.costo_total_contable.toLocaleString('es-CO')}</b> → Kardex: <b>$${prod.costo_total_kardex.toLocaleString('es-CO')}</b></span>`;
-          const difProd = prod.costo_total_contable - prod.costo_total_kardex;
+          html += `<span class="text-gray-600">Contable: <b>$${costTotalContab.toLocaleString('es-CO')}</b> → Kardex: <b>$${costTotalKardex.toLocaleString('es-CO')}</b></span>`;
           html += `<span class="ml-2 text-sm font-bold ${Math.abs(difProd) > 0.01 ? 'text-red-600' : 'text-green-600'}">${Math.abs(difProd) > 0.01 ? 'Dif: $' + difProd.toLocaleString('es-CO') : '✅ Cuadrado ($0)'}</span>`;
           html += `</div>`;
           html += `</button>`;
           
-          html += `<div id="prod-${pid}" class="hidden px-4 pb-4 pt-2 space-y-3 bg-slate-50/70 border-t border-amber-200/60">`;
-          
-          // Barra de acciones del Producto (limpia, espaciosa, fuentes legibles y tamaño homogéneo)
+          html += `<div id="${prodAccId}" class="${prodHiddenClass} px-4 pb-4 pt-2 space-y-3 bg-slate-50/70 border-t border-amber-200/60">`;
           html += `<div class="p-3 bg-white rounded-xl border border-amber-200 shadow-xs flex items-center justify-between flex-wrap gap-3">`;
           html += `<div class="text-xs text-amber-900 font-semibold flex items-center gap-1.5"><span>⚡ Acciones para</span> <b class="text-gray-800">${prod.producto_padre_nombre}</b>:</div>`;
           html += `<div class="flex items-center flex-wrap gap-3">`;
-          html += `<button onclick="vincularIdsNivel('producto', ${prod.producto_padre_id})" class="min-w-[150px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">🔗 Vincular IDs</button>`;
-          html += `<button onclick="desvincularIds(null, ${prod.producto_padre_id})" class="min-w-[150px] px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl border border-gray-300 transition flex items-center justify-center gap-1.5 cursor-pointer">🔓 Desvincular</button>`;
-          html += `<button onclick="repararCostosProducto(${prod.producto_padre_id})" class="min-w-[170px] px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">⚡ Reparar Producto</button>`;
+          html += `${btnVincProd}${btnDesvincProd}${btnRepararProd}`;
           html += `</div>`;
           html += `</div>`;
-          
-          html += `<div id="vincular-prod-${prod.producto_padre_id}" class="hidden"></div>`;
-          html += `<div id="reparar-prod-${prod.producto_padre_id}" class="hidden"></div>`;
           
           prod.facturas.forEach(ff => {
-            const docId = ++uid;
+            const docAccId = `doc-acc-${prod.producto_padre_id}-${ff.documento_numero}`;
+            const isDocOpen = window._openRepairAccordions && window._openRepairAccordions.has(docAccId);
+            const docHiddenClass = isDocOpen ? '' : 'hidden';
+            const docArrowStyle = isDocOpen ? 'style="transform: rotate(90deg)"' : '';
             const isProd = ff.grupo_tipo === 'produccion';
             const badgeGrupo = isProd 
               ? `<span class="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1">🍳 Producción (Grupo 2)</span>`
               : `<span class="text-[10px] font-bold text-emerald-900 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-md flex items-center gap-1">🍽️ Venta (Grupo 3)</span>`;
 
+            const cogsMontoDoc = Number(ff.cogs_contable?.monto_actual || 0);
+            const kardexMontoDoc = Number(ff.costo_real_kardex || 0);
+            const difDoc = cogsMontoDoc - kardexMontoDoc;
+            const difPiDoc = Number(ff.pedido_item?.diferencia || 0);
+            const tieneDifContabDoc = Math.abs(difDoc) > 0.01;
+            const tieneDifPiDoc = Math.abs(difPiDoc) > 0.01;
+
+            const contrasDoc = ff.contrapartidas || [];
+            const btnVincDoc = contrasDoc.some(c => !c.esta_vinculado && c.match_tipo !== 'producto_id')
+              ? `<button type="button" onclick="vincularIdsNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="min-w-[130px] px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer">🔗 Vincular IDs</button>`
+              : `<button type="button" disabled title="Todos los insumos de este documento ya tienen ID contable asignado" class="min-w-[130px] px-3 py-1.5 bg-blue-50 text-blue-500 border border-blue-200 text-xs font-bold rounded-lg opacity-85 cursor-not-allowed flex items-center justify-center gap-1 shadow-none">✔️ IDs Vinculados</button>`;
+
+            const btnDesvincDoc = contrasDoc.some(c => c.esta_vinculado || c.match_tipo === 'producto_id')
+              ? `<button type="button" onclick="desvincularIds('${ff.documento_numero}', ${prod.producto_padre_id})" class="min-w-[130px] px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg border border-gray-300 transition flex items-center justify-center gap-1 cursor-pointer">🔓 Desvincular</button>`
+              : `<button type="button" disabled title="No hay IDs vinculados para desvincular" class="min-w-[130px] px-3 py-1.5 bg-gray-50 text-gray-400 border border-gray-200 text-xs font-semibold rounded-lg opacity-70 cursor-not-allowed flex items-center justify-center gap-1 shadow-none">🔓 Desvincular</button>`;
+
+            const btnRepararDoc = (tieneDifContabDoc || tieneDifPiDoc)
+              ? `<button type="button" onclick="repararCostosDocumento('${ff.documento_numero}', ${prod.producto_padre_id})" class="min-w-[150px] px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer">⚡ Reparar Doc</button>`
+              : `<button type="button" disabled title="Este documento ya está 100% cuadrado ($0 diferencia)" class="min-w-[150px] px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-bold rounded-lg opacity-90 cursor-not-allowed flex items-center justify-center gap-1 shadow-none">✔️ Cuadrado ($0)</button>`;
+
+            const cantBase = parseFloat(ff.cantidad_base || 0);
+            const cantStr = cantBase.toLocaleString('es-CO', {maximumFractionDigits: 3});
+            const badgeCantDoc = isProd
+              ? `<span class="text-xs font-bold text-amber-950 bg-amber-200/90 border border-amber-300 px-2 py-0.5 rounded font-mono">🍳 ${cantStr} Elaboradas</span>`
+              : `<span class="text-xs font-bold text-emerald-950 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded font-mono">🍽️ ${cantStr} Vendidas</span>`;
+
+            let badgeDocStatus = '';
+            if (tieneDifContabDoc) {
+              badgeDocStatus = `<span class="ml-2 text-xs font-bold text-red-600">Dif: $${difDoc.toLocaleString('es-CO')}</span>`;
+            } else if (tieneDifPiDoc) {
+              badgeDocStatus = `<span class="ml-2 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">⚠️ Pedido por sincronizar</span>`;
+            } else {
+              badgeDocStatus = `<span class="ml-2 text-xs font-bold text-green-600">✅ OK ($0)</span>`;
+            }
+
             html += `<div class="border border-gray-200 rounded-xl overflow-hidden bg-white mt-2 shadow-xs">`;
-            html += `<button onclick="toggleRepairLevel('doc-${docId}')" class="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 text-left transition-colors flex-wrap gap-2 cursor-pointer">`;
+            html += `<button type="button" onclick="toggleRepairLevel('${docAccId}')" class="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 text-left transition-colors flex-wrap gap-2 cursor-pointer">`;
             html += `<div class="flex items-center gap-2 flex-wrap">`;
-            html += `<svg class="w-3.5 h-3.5 text-gray-500 transition-transform repair-arrow" id="arrow-doc-${docId}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
-            html += `${badgeGrupo}`;
-            html += `<span class="text-xs text-gray-600 font-bold uppercase bg-gray-200 px-2 py-0.5 rounded">${ff.tipo_documento}</span>`;
-            html += `<span class="text-xs font-bold text-gray-900 font-mono">${ff.documento_numero}</span>`;
-            html += `<span class="text-xs text-gray-500 font-mono">${ff.fecha}</span>`;
+            html += `<svg class="w-3.5 h-3.5 text-gray-500 transition-transform repair-arrow" id="arrow-${docAccId}" ${docArrowStyle} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
+            html += `${badgeGrupo}<span class="text-xs text-gray-600 font-bold uppercase bg-gray-200 px-2 py-0.5 rounded">${ff.tipo_documento}</span><span class="text-xs font-bold text-gray-900 font-mono">${ff.documento_numero}</span><span class="text-xs text-gray-500 font-mono">${ff.fecha}</span>${badgeCantDoc}`;
             html += `</div>`;
-            html += `<div class="text-right text-xs">`;
-            html += `<span class="text-gray-500">Contable: <b>$${ff.cogs_contable.monto_actual.toLocaleString('es-CO')}</b> → Kardex: <b>$${ff.costo_real_kardex.toLocaleString('es-CO')}</b></span>`;
-            const difDoc = ff.cogs_contable.monto_actual - ff.costo_real_kardex;
-            html += `<span class="ml-2 text-xs font-bold ${Math.abs(difDoc) > 0.01 ? 'text-red-600' : 'text-green-600'}">${Math.abs(difDoc) > 0.01 ? 'Dif: $' + difDoc.toLocaleString('es-CO') : '✅ OK ($0)'}</span>`;
-            html += `</div>`;
+            html += `<div class="text-right text-xs"><span class="text-gray-500">Contable: <b>$${cogsMontoDoc.toLocaleString('es-CO')}</b> → Kardex: <b>$${kardexMontoDoc.toLocaleString('es-CO')}</b></span>${badgeDocStatus}</div>`;
             html += `</button>`;
             
-            html += `<div id="doc-${docId}" class="hidden px-3.5 pb-3 pt-2 space-y-2 text-xs border-t border-gray-100">`;
-            
-            // Barra de acciones del Documento (limpia, espaciosa, fuentes legibles y tamaño homogéneo)
+            html += `<div id="${docAccId}" class="${docHiddenClass} px-3.5 pb-3 pt-2 space-y-2 text-xs border-t border-gray-100">`;
             html += `<div class="p-2.5 bg-slate-50 rounded-xl border border-gray-200 flex items-center justify-between flex-wrap gap-2.5 mb-2">`;
             html += `<div class="text-xs text-gray-700 font-semibold flex items-center gap-1"><span>📄 Acciones Documento</span> <b class="font-mono text-gray-900">${ff.documento_numero}</b>:</div>`;
             html += `<div class="flex items-center flex-wrap gap-2.5">`;
-            html += `<button onclick="vincularIdsNivel('documento', ${prod.producto_padre_id}, '${ff.documento_numero}')" class="min-w-[130px] px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer">🔗 Vincular IDs</button>`;
-            html += `<button onclick="desvincularIds('${ff.documento_numero}', ${prod.producto_padre_id})" class="min-w-[130px] px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg border border-gray-300 transition flex items-center justify-center gap-1 cursor-pointer">🔓 Desvincular</button>`;
-            html += `<button onclick="repararCostosDocumento('${ff.documento_numero}', ${prod.producto_padre_id})" class="min-w-[150px] px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer">⚡ Reparar Doc</button>`;
+            html += `${btnVincDoc}${btnDesvincDoc}${btnRepararDoc}`;
             html += `</div>`;
             html += `</div>`;
-            
-            html += `<div id="vincular-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden my-1"></div>`;
-            html += `<div id="reparar-doc-${prod.producto_padre_id}-${ff.documento_numero}" class="hidden my-1"></div>`;
 
             // Resumen de Cantidad Base & Costo Unitario
-            const cantBase = parseFloat(ff.cantidad_base || 0);
-            const cantStr = cantBase.toLocaleString('es-CO', {maximumFractionDigits: 3});
-
             html += `<div class="p-3 bg-white rounded-xl border border-gray-200 shadow-2xs mb-3 space-y-2">`;
             if (isProd) {
-              const costoUnitKardex = ff.costo_unitario_real || 0;
-              const costoUnitContab = (cantBase > 0 ? (ff.cogs_contable.monto_actual / cantBase) : 0);
+              const costoUnitKardex = Number(ff.costo_unitario_real || 0);
+              const costoUnitContab = (cantBase > 0 ? (cogsMontoDoc / cantBase) : 0);
               const difCostoUnit = costoUnitContab - costoUnitKardex;
               
               html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">`;
               html += `<div class="p-2.5 bg-amber-50/60 rounded-lg border border-amber-200/80">`;
               html += `<span class="text-[10px] text-amber-800 font-bold uppercase block mb-1">📦 Kardex: Cantidad Elaborada & Costo Unitario</span>`;
               html += `<div class="font-mono font-bold text-gray-800 text-xs">Cantidad: <span class="text-amber-900">${cantStr}</span> | Unitario: <span class="text-amber-900">$${costoUnitKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
-              html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Kardex: <b class="text-gray-800 font-mono">$${ff.costo_real_kardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
+              html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Kardex: <b class="text-gray-800 font-mono">$${kardexMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
               html += `</div>`;
 
               html += `<div class="p-2.5 bg-slate-50 rounded-lg border border-gray-200">`;
               html += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Contable: Débito 14* (Entrada Elaborada)</span>`;
-              html += `<div class="font-mono font-bold text-gray-800 text-xs">Total Débito 14*: <span class="text-gray-900">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> | Unit: <span class="text-gray-900">$${costoUnitContab.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
+              html += `<div class="font-mono font-bold text-gray-800 text-xs">Total Débito 14*: <span class="text-gray-900">$${cogsMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> | Unit: <span class="text-gray-900">$${costoUnitContab.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
               const clsU = Math.abs(difCostoUnit) > 0.01 ? 'text-red-600' : 'text-green-600';
-              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Diferencia Total: $${(ff.cogs_contable.monto_actual - ff.costo_real_kardex).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
+              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Diferencia Total: $${(cogsMontoDoc - kardexMontoDoc).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
               html += `</div>`;
               html += `</div>`;
             } else {
-              const costoUnitKardex = ff.costo_unitario_real || 0;
-              const costoUnitPi = ff.pedido_item ? (ff.pedido_item.costo_unitario_actual || 0) : 0;
+              const costoUnitKardex = Number(ff.costo_unitario_real || 0);
+              const costoUnitPi = ff.pedido_item ? Number(ff.pedido_item.costo_unitario_actual || 0) : 0;
               const difCostoUnit = costoUnitPi - costoUnitKardex;
               
               html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">`;
               html += `<div class="p-2.5 bg-emerald-50/60 rounded-lg border border-emerald-200/80">`;
               html += `<span class="text-[10px] text-emerald-800 font-bold uppercase block mb-1">📦 Kardex: Cantidad Vendida & Costo Unitario</span>`;
               html += `<div class="font-mono font-bold text-gray-800 text-xs">Cantidad: <span class="text-emerald-900">${cantStr}</span> | Unitario: <span class="text-emerald-900">$${costoUnitKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
-              html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Receta: <b class="text-gray-800 font-mono">$${ff.costo_real_kardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
+              html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Receta: <b class="text-gray-800 font-mono">$${kardexMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
               html += `</div>`;
 
               html += `<div class="p-2.5 bg-slate-50 rounded-lg border border-gray-200">`;
               html += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Contable & Pedido: Costo Venta (61* & Pedido)</span>`;
-              html += `<div class="font-mono font-bold text-gray-800 text-xs">Asiento 61*: <span class="text-gray-900">$${ff.cogs_contable.monto_actual.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> | Pedido Unit: <span class="text-gray-900">$${costoUnitPi.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
+              html += `<div class="font-mono font-bold text-gray-800 text-xs">Asiento 61*: <span class="text-gray-900">$${cogsMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> | Pedido Unit: <span class="text-gray-900">$${costoUnitPi.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
               const clsU = Math.abs(difCostoUnit) > 0.01 ? 'text-red-600' : 'text-green-600';
-              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Diferencia Total: $${(ff.cogs_contable.monto_actual - ff.costo_real_kardex).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
+              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Diferencia Total: $${(cogsMontoDoc - kardexMontoDoc).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
               html += `</div>`;
               html += `</div>`;
             }
@@ -12382,16 +12357,17 @@ async function cargarReporteEnsambles() {
                 compKardex[c.nombre].push(c);
               });
               const contraPorComp = {};
-              if (ff.contrapartidas) ff.contrapartidas.forEach(c => {
-                let nombre = c.comp_nombre || c.concepto || c.cuenta || '';
-                nombre = nombre.replace(/^.*?:\s*/, '').trim();
-                if (!contraPorComp[nombre]) contraPorComp[nombre] = [];
-                contraPorComp[nombre].push(c);
-              });
+              if (ff.contrapartidas) {
+                ff.contrapartidas.forEach(c => {
+                  let nombre = c.comp_nombre || c.concepto || c.cuenta || '';
+                  nombre = nombre.replace(/^.*?:\s*/, '').trim();
+                  if (!contraPorComp[nombre]) contraPorComp[nombre] = [];
+                  contraPorComp[nombre].push(c);
+                });
+              }
 
               const todosNombres = [...new Set([...Object.keys(compKardex), ...Object.keys(contraPorComp)])];
               
-              // Calcular sumatoria total de insumos, sumatoria de diferencias y conteo de vinculados
               let sumaKardexComps = 0;
               let sumaContabComps = 0;
               let numVinculados = 0;
@@ -12411,7 +12387,6 @@ async function cargarReporteEnsambles() {
               html += `<span>Componente / Insumo</span><span class="text-right">Kardex Insumo</span><span class="text-right">Contable (14* Cr)</span><span class="text-right">Diferencia Insumo</span><span class="text-center">Estado ID</span>`;
               html += `</div>`;
 
-              // Fila Resumen Superior con Totales, Suma de Diferencias y Estado de Vinculación
               html += `<div class="grid grid-cols-5 gap-2 text-xs font-bold px-2 py-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-gray-800 mb-1.5 items-center">`;
               html += `<span class="text-[11px] font-bold text-gray-700 uppercase flex items-center gap-1">🥗 TOTAL INSUMOS <span class="text-[10px] text-gray-500 font-normal">(${todosNombres.length})</span></span>`;
               html += `<span class="text-right font-mono text-gray-900">$${sumaKardexComps.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
@@ -12422,7 +12397,11 @@ async function cargarReporteEnsambles() {
               html += `</div>`;
 
               todosNombres.forEach(nombre => {
-                const cid = ++uid;
+                const compSlug = encodeURIComponent(nombre).replace(/%/g, '_');
+                const compAccId = `comp-acc-${prod.producto_padre_id}-${ff.documento_numero}-${compSlug}`;
+                const isCompOpen = window._openRepairAccordions && window._openRepairAccordions.has(compAccId);
+                const compHiddenClass = isCompOpen ? '' : 'hidden';
+
                 const kardexEntries = compKardex[nombre] || [];
                 const contabEntries = contraPorComp[nombre] || [];
                 const totalKardex = kardexEntries.reduce((s, e) => s + e.costo_total, 0);
@@ -12444,7 +12423,7 @@ async function cargarReporteEnsambles() {
                 const clsDif = sinContable || sinKardex ? 'text-gray-400' : (Math.abs(difTotal) > 0.01 ? 'text-red-600' : 'text-green-600');
 
                 html += `<div class="px-1">`;
-                html += `<button onclick="toggleRepairLevel('comp-${cid}')" class="w-full grid grid-cols-5 gap-2 text-left py-1.5 hover:bg-gray-50 rounded transition-colors cursor-pointer items-center">`;
+                html += `<button type="button" onclick="toggleRepairLevel('${compAccId}')" class="w-full grid grid-cols-5 gap-2 text-left py-1.5 hover:bg-gray-50 rounded transition-colors cursor-pointer items-center">`;
                 html += `<span class="text-gray-700 text-xs font-semibold truncate">${nombre}</span>`;
                 html += `<span class="text-gray-800 text-xs font-bold text-right font-mono">$${totalKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
                 if (sinContable) {
@@ -12457,7 +12436,7 @@ async function cargarReporteEnsambles() {
                 html += `<div class="text-center">${badgeEstado}</div>`;
                 html += `</button>`;
 
-                html += `<div id="comp-${cid}" class="hidden pl-2 pb-1 space-y-1">`;
+                html += `<div id="${compAccId}" class="${compHiddenClass} pl-2 pb-1 space-y-1">`;
                 if (sinContable) {
                   html += `<div class="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-1 text-xs">`;
                   html += `<div class="text-[11px] font-bold text-amber-800 mb-1">⚠️ Sin asiento contable 14* crédito registrado aún (Pendiente por contabilizar/reparar)</div>`;
@@ -12531,23 +12510,20 @@ async function cargarReporteEnsambles() {
         html += '</div>';
         preview.innerHTML = html;
 
-        // Restaurar estado de acordeones abiertos
+        // Restaurar estado de flechas de acordeones abiertos
         if (window._openRepairAccordions && window._openRepairAccordions.size > 0) {
           window._openRepairAccordions.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-              el.classList.remove('hidden');
-              const arrow = document.getElementById('arrow-' + id);
-              if (arrow) arrow.style.transform = 'rotate(90deg)';
-            }
+            const arrow = document.getElementById('arrow-' + id);
+            if (arrow) arrow.style.transform = 'rotate(90deg)';
           });
         }
 
-        // Restaurar posición del scroll
+        // Restaurar posición exacta del scroll sin ningún salto visual
         if (prevScrollY > 0) {
-          setTimeout(() => {
+          window.scrollTo({ top: prevScrollY, behavior: 'instant' });
+          requestAnimationFrame(() => {
             window.scrollTo({ top: prevScrollY, behavior: 'instant' });
-          }, 30);
+          });
         }
       } catch (e) {
         preview.innerHTML = `<div class="text-red-500 text-xs py-4">Error: ${e.message}</div>`;
@@ -12575,6 +12551,8 @@ async function cargarReporteEnsambles() {
 
 
     </script>
+
+    {% include 'inv_distribuido_modal.html' %}
 
 </body>
 

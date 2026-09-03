@@ -263,6 +263,15 @@ def _asegurar_tablas(conn):
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_saldo_doc_unico ON saldo_por_documentos(negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento)")
     conn.commit()
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS preferencias_estado_resultados (
+            negocio_id INTEGER PRIMARY KEY REFERENCES terceros(id),
+            orden_items JSONB DEFAULT '{}',
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+
     # Alteraciones de columnas
     for sql in [
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(50) DEFAULT NULL",
@@ -1584,6 +1593,58 @@ def _asegurar_tipos_doc_saldos(conn, negocio_id):
             except Exception:
                 try: conn.rollback()
                 except Exception: pass
+
+    # 3. Verificar si ya existe un predeterminado para INVENTARIO FÍSICO DISTRIBUIDO
+    pred_inv_dist = conn.execute(
+        "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'inventario_distribuido' AND activo = TRUE LIMIT 1",
+        (negocio_id,)
+    ).fetchone()
+    if not pred_inv_dist:
+        try:
+            conn.execute("""
+                INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, consecutivo, predeterminado, mueve_inventario, tipo_movimiento, es_interno, activo)
+                VALUES (%s, 'IFD', 'Inventario Físico Distribuido', 1, 0, TRUE, TRUE, 'inventario_distribuido', TRUE, TRUE)
+                ON CONFLICT (negocio_id, codigo) DO NOTHING
+            """, (negocio_id,))
+            conn.commit()
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+
+
+def obtener_o_crear_tipo_doc_distribuido(conn, negocio_id):
+    """Retorna el tipo de documento asociado a inventario_distribuido para el negocio, o lo crea formalmente con su ID."""
+    td = conn.execute("""
+        SELECT id, codigo, nombre, consecutivo, numero_inicio, tipo_movimiento
+        FROM tipos_documento_negocio
+        WHERE negocio_id = %s AND tipo_movimiento = 'inventario_distribuido' AND activo = TRUE
+        ORDER BY predeterminado DESC, id ASC
+        LIMIT 1
+    """, (negocio_id,)).fetchone()
+    if td:
+        return td
+
+    try:
+        res = conn.execute("""
+            INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, consecutivo, predeterminado, mueve_inventario, tipo_movimiento, es_interno, activo)
+            VALUES (%s, 'IFD', 'Inventario Físico Distribuido', 1, 0, TRUE, TRUE, 'inventario_distribuido', TRUE, TRUE)
+            ON CONFLICT (negocio_id, codigo) DO UPDATE
+                SET tipo_movimiento = 'inventario_distribuido', mueve_inventario = TRUE
+            RETURNING id, codigo, nombre, consecutivo, numero_inicio, tipo_movimiento
+        """, (negocio_id,)).fetchone()
+        conn.commit()
+        if res:
+            return res
+    except Exception:
+        try: conn.rollback()
+        except Exception: pass
+
+    return conn.execute("""
+        SELECT id, codigo, nombre, consecutivo, numero_inicio, tipo_movimiento
+        FROM tipos_documento_negocio
+        WHERE negocio_id = %s AND tipo_movimiento = 'inventario_distribuido'
+        ORDER BY id ASC LIMIT 1
+    """, (negocio_id,)).fetchone()
 
 
 @bp.route('/api/contabilidad/<int:negocio_id>/tipos-doc', methods=['GET'])
@@ -3457,7 +3518,7 @@ def api_balance_comprobacion(negocio_id):
         
         # 1. Obtener todas las cuentas del PUC para mapear nombres y jerarquías
         puc_rows = conn.execute("""
-            SELECT id, codigo, nombre, nivel, naturaleza, codigo_padre
+            SELECT id, codigo, nombre, nivel, naturaleza, codigo_padre, COALESCE(acepta_movimiento, false) AS acepta_movimiento
             FROM cuentas_puc
             WHERE creada_por_negocio_id IS NULL OR creada_por_negocio_id = %s
         """, (negocio_id,)).fetchall()
@@ -3576,6 +3637,7 @@ def api_balance_comprobacion(negocio_id):
                 'nombre': r['nombre'],
                 'nivel': r['nivel'],
                 'naturaleza': nat,
+                'acepta_movimiento': bool(puc_map.get(code, {}).get('acepta_movimiento', False)),
                 'saldo_anterior': saldo_anterior,
                 'debito': deb_per,
                 'credito': cred_per,
@@ -4485,6 +4547,7 @@ def api_gastos_documentos(negocio_id):
                 GROUP BY numero_documento
                 HAVING SUM(CASE WHEN tipo IN ('debito', 'D') THEN monto ELSE 0 END) > 0
                    AND SUM(CASE WHEN tipo IN ('credito', 'C') THEN monto ELSE 0 END) = 0
+                ORDER BY numero_documento DESC
                 LIMIT 1
             """, (negocio_id, t['codigo'])).fetchone()
             
@@ -4710,6 +4773,252 @@ def api_gastos_linea_soporte_put(negocio_id, line_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/contabilidad/<int:negocio_id>/gastos/linea/<int:line_id>/nota', methods=['PUT', 'PATCH'])
+def api_gastos_linea_nota_put(negocio_id, line_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    nueva_nota = (data.get('nota') or '').strip()
+    
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        line = conn.execute("""
+            SELECT id, fecha, concepto FROM movimientos_contables 
+            WHERE id = %s AND negocio_id = %s
+        """, (line_id, negocio_id)).fetchone()
+        
+        if not line:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Registro de gasto no encontrado'}), 404
+            
+        _verificar_periodo_cerrado(conn, negocio_id, line['fecha'])
+        
+        concepto_actual = line['concepto'] or ''
+        
+        import re
+        # Extraer soporte si existe
+        match_soporte = re.search(r'\[Soporte:\s*([^\]]+)\]', concepto_actual)
+        soporte = match_soporte.group(1).strip() if match_soporte else ''
+        
+        # Extraer concepto base eliminando [Soporte: ...] y (nota)
+        concepto_base = re.sub(r'\[Soporte:\s*[^\]]+\]', '', concepto_actual)
+        concepto_base = re.sub(r'\([^)]+\)$', '', concepto_base).strip()
+        
+        # Reconstruir concepto con soporte y nueva nota
+        nuevo_concepto = concepto_base
+        if soporte:
+            nuevo_concepto += f" [Soporte: {soporte}]"
+        if nueva_nota:
+            nuevo_concepto += f" ({nueva_nota})"
+            
+        conn.execute("""
+            UPDATE movimientos_contables
+            SET concepto = %s
+            WHERE id = %s AND negocio_id = %s
+        """, (nuevo_concepto, line_id, negocio_id))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'nuevo_concepto': nuevo_concepto, 'nota': nueva_nota})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/gastos/siguiente-codigo', methods=['GET'])
+def api_gastos_siguiente_codigo(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    tipo_doc = request.args.get('tipo_doc', '').strip()
+    
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        
+        # Consultar cuentas existentes asociadas a este tipo de documento
+        cuentas = conn.execute("""
+            SELECT p.codigo, p.codigo_padre, p.nombre
+            FROM parametros_lineas_contables plc
+            JOIN cuentas_puc p ON p.id = plc.cuenta_puc_id
+            WHERE plc.parametro_id = (
+                SELECT id FROM parametros_contables_negocio 
+                WHERE negocio_id = %s AND tipo_doc_id = (
+                    SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND codigo = %s LIMIT 1
+                ) AND activo = true LIMIT 1
+            ) AND plc.tipo_mov = 'D' AND plc.activo = true
+            ORDER BY p.codigo ASC
+        """, (negocio_id, negocio_id, tipo_doc)).fetchall()
+        
+        prefijo = "6142"
+        padre_codigo = "6142"
+        padre_nombre = "Costos Indirectos"
+        max_num = 0
+        
+        if cuentas:
+            prefijos = {}
+            for c in cuentas:
+                cod = str(c['codigo']).strip()
+                if len(cod) >= 4:
+                    pref = cod[:4]
+                    prefijos[pref] = prefijos.get(pref, 0) + 1
+            if prefijos:
+                prefijo = max(prefijos, key=prefijos.get)
+                padre_codigo = prefijo
+                
+            for c in cuentas:
+                cod = str(c['codigo']).strip()
+                if cod.startswith(prefijo) and len(cod) > len(prefijo):
+                    try:
+                        sufijo_int = int(cod[len(prefijo):])
+                        if sufijo_int > max_num:
+                            max_num = sufijo_int
+                    except ValueError:
+                        pass
+        else:
+            row_puc = conn.execute("""
+                SELECT codigo FROM cuentas_puc
+                WHERE creada_por_negocio_id = %s AND codigo LIKE '6142%'
+                ORDER BY codigo DESC LIMIT 1
+            """, (negocio_id,)).fetchone()
+            if row_puc:
+                cod = row_puc['codigo']
+                try:
+                    max_num = int(cod[4:])
+                except ValueError:
+                    max_num = 0
+                    
+        siguiente_int = max_num + 1
+        siguiente_codigo = f"{prefijo}{siguiente_int:02d}"
+        
+        while conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (siguiente_codigo,)).fetchone():
+            siguiente_int += 1
+            siguiente_codigo = f"{prefijo}{siguiente_int:02d}"
+            
+        padre_row = conn.execute("SELECT nombre FROM cuentas_puc WHERE codigo = %s", (padre_codigo,)).fetchone()
+        if padre_row:
+            padre_nombre = padre_row['nombre']
+            
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'siguiente_codigo': siguiente_codigo,
+            'prefijo': prefijo,
+            'padre_codigo': padre_codigo,
+            'padre_nombre': padre_nombre
+        })
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/gastos/concepto/nuevo', methods=['POST'])
+def api_gastos_concepto_nuevo_post(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    tipo_doc = (data.get('tipo_doc') or '').strip()
+    nombre = (data.get('nombre') or '').strip().upper()
+    codigo = (data.get('codigo') or '').strip()
+    maneja_terceros = bool(data.get('maneja_terceros', True))
+    
+    if not tipo_doc:
+        return jsonify({'ok': False, 'error': 'Tipo de documento requerido'}), 400
+    if not nombre:
+        return jsonify({'ok': False, 'error': 'El nombre del rubro o gasto es requerido'}), 400
+        
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        
+        td = conn.execute("SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND codigo = %s LIMIT 1", (negocio_id, tipo_doc)).fetchone()
+        if not td:
+            conn.close()
+            return jsonify({'ok': False, 'error': f'Tipo de documento {tipo_doc} no encontrado'}), 404
+            
+        param = conn.execute("SELECT id FROM parametros_contables_negocio WHERE negocio_id = %s AND tipo_doc_id = %s AND activo = true LIMIT 1", (negocio_id, td['id'])).fetchone()
+        if not param:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Parámetro contable del documento no encontrado'}), 404
+            
+        param_id = param['id']
+        
+        # Si no especificaron código, calcular el siguiente en la secuencia
+        if not codigo:
+            cuentas = conn.execute("""
+                SELECT p.codigo FROM parametros_lineas_contables plc
+                JOIN cuentas_puc p ON p.id = plc.cuenta_puc_id
+                WHERE plc.parametro_id = %s AND plc.tipo_mov = 'D' AND plc.activo = true
+                ORDER BY p.codigo ASC
+            """, (param_id,)).fetchall()
+            
+            prefijo = "6142"
+            max_num = 0
+            for c in cuentas:
+                cod = str(c['codigo']).strip()
+                if cod.startswith(prefijo):
+                    try:
+                        n = int(cod[len(prefijo):])
+                        if n > max_num:
+                            max_num = n
+                    except ValueError:
+                        pass
+            siguiente_int = max_num + 1
+            codigo = f"{prefijo}{siguiente_int:02d}"
+            while conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (codigo,)).fetchone():
+                siguiente_int += 1
+                codigo = f"{prefijo}{siguiente_int:02d}"
+                
+        # Verificar si la cuenta ya existe en cuentas_puc
+        existente = conn.execute("SELECT id, codigo, nombre, maneja_terceros FROM cuentas_puc WHERE codigo = %s", (codigo,)).fetchone()
+        if existente:
+            cuenta_id = existente['id']
+        else:
+            codigo_padre = codigo[:4] if len(codigo) >= 6 else (codigo[:2] if len(codigo) >= 4 else None)
+            row_ins = conn.execute("""
+                INSERT INTO cuentas_puc
+                    (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento,
+                     maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                VALUES
+                    (%s, %s, 3, %s, 'debito', true, %s, false, %s, false, true)
+                RETURNING id
+            """, (codigo, nombre, codigo_padre, maneja_terceros, negocio_id)).fetchone()
+            cuenta_id = row_ins['id']
+            
+        # Asociar a parametros_lineas_contables si aún no está asociada
+        linea_existente = conn.execute("""
+            SELECT id FROM parametros_lineas_contables
+            WHERE parametro_id = %s AND cuenta_puc_id = %s AND activo = true
+        """, (param_id, cuenta_id)).fetchone()
+        
+        if not linea_existente:
+            max_orden_row = conn.execute("SELECT COALESCE(MAX(orden), 0) AS max_ord FROM parametros_lineas_contables WHERE parametro_id = %s", (param_id,)).fetchone()
+            nuevo_orden = (max_orden_row['max_ord'] or 0) + 1
+            conn.execute("""
+                INSERT INTO parametros_lineas_contables
+                    (parametro_id, cuenta_puc_id, tipo_mov, origen, orden, activo)
+                VALUES
+                    (%s, %s, 'D', 'M', %s, true)
+            """, (param_id, cuenta_id, nuevo_orden))
+            
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'ok': True,
+            'cuenta_puc_id': cuenta_id,
+            'cuenta_codigo': codigo,
+            'cuenta_nombre': nombre,
+            'maneja_terceros': maneja_terceros
+        })
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/contabilidad/<int:negocio_id>/gastos/relacion/fecha', methods=['PUT'])
 def api_gastos_fecha_put(negocio_id):
     if not session.get('usuario_id'):
@@ -4868,5 +5177,699 @@ def api_auditoria_contable(negocio_id):
         try: conn.close()
         except: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ═════════════════════════════════════════════════════════════════════
+# ESTADO DE RESULTADOS GERENCIAL (P&G EN LENGUAJE NATURAL)
+# ═════════════════════════════════════════════════════════════════════
+
+@bp.route('/api/contabilidad/<int:negocio_id>/estado-resultados', methods=['GET'])
+def api_estado_resultados_get(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        
+    from datetime import datetime, date
+    hoy = datetime.now().date()
+    primer_dia_mes = hoy.replace(day=1)
+    
+    fecha_desde = request.args.get('desde') or primer_dia_mes.strftime('%Y-%m-%d')
+    fecha_hasta = request.args.get('hasta') or hoy.strftime('%Y-%m-%d')
+    
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        f_d = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+        f_h = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+        
+        # 1. Identificar meses cubiertos y su estado de cierre
+        meses_set = []
+        cur_y, cur_m = f_d.year, f_d.month
+        end_y, end_m = f_h.year, f_h.month
+        
+        while (cur_y < end_y) or (cur_y == end_y and cur_m <= end_m):
+            meses_set.append(f"{cur_y:04d}-{cur_m:02d}")
+            cur_m += 1
+            if cur_m > 12:
+                cur_m = 1
+                cur_y += 1
+                
+        MESES_ES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+        periodos_info = []
+        for p in meses_set:
+            row_cierre = conn.execute("SELECT comprobante_id FROM cierres_periodos WHERE negocio_id = %s AND periodo = %s", (negocio_id, p)).fetchone()
+            y, m = int(p[:4]), int(p[5:7])
+            periodos_info.append({
+                'periodo': p,
+                'nombre': f"{MESES_ES[m]} {y}",
+                'cerrado': bool(row_cierre)
+            })
+            
+        # 2. Consultar orden guardado por drag & drop
+        orden_guardado = {}
+        has_pref = conn.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'preferencias_estado_resultados'").fetchone()
+        if has_pref:
+            pref_row = conn.execute("SELECT orden_items FROM preferencias_estado_resultados WHERE negocio_id = %s", (negocio_id,)).fetchone()
+            if pref_row and pref_row['orden_items']:
+                orden_guardado = pref_row['orden_items']
+                
+        # 3. Consulta exhaustiva de cuentas 4, 5, 6 y 7
+        movs = conn.execute("""
+            SELECT 
+                p.id AS cuenta_id,
+                p.codigo AS cuenta_codigo,
+                p.nombre AS cuenta_nombre,
+                p.naturaleza,
+                COALESCE(SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE 0 END), 0) AS total_debito,
+                COALESCE(SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0 END), 0) AS total_credito
+            FROM movimientos_contables mc
+            JOIN cuentas_puc p ON p.codigo = mc.cuenta
+            WHERE mc.negocio_id = %s
+              AND mc.fecha >= %s AND mc.fecha <= %s
+              AND (mc.origen_tipo != 'cierre' OR mc.origen_tipo IS NULL)
+              AND SUBSTRING(mc.cuenta, 1, 1) IN ('4', '5', '6', '7')
+            GROUP BY p.id, p.codigo, p.nombre, p.naturaleza
+            ORDER BY p.codigo ASC
+        """, (negocio_id, fecha_desde, fecha_hasta)).fetchall()
+        
+        secciones = {
+            'ingresos_ventas': [],
+            'ingresos_ajustes_favor': [],
+            'costos_ventas_directas': [],
+            'costos_ajustes_contra': [],
+            'costos_operativos': [],
+            'gastos_operacionales': [],
+            'no_operacionales_ingresos': [],
+            'no_operacionales_gastos': []
+        }
+        
+        for m in movs:
+            cod = str(m['cuenta_codigo']).strip()
+            nom = str(m['cuenta_nombre']).strip()
+            deb = float(m['total_debito'])
+            cred = float(m['total_credito'])
+            
+            if cod.startswith('4'):
+                neto = cred - deb
+            else:
+                neto = deb - cred
+                
+            if abs(neto) < 0.001:
+                continue
+                
+            item = {
+                'cuenta_id': m['cuenta_id'],
+                'nombre': nom,
+                'monto': round(neto, 2)
+            }
+            
+            if cod.startswith('4141'):
+                secciones['ingresos_ajustes_favor'].append(item)
+            elif cod.startswith('41'):
+                secciones['ingresos_ventas'].append(item)
+            elif cod.startswith('42') or cod.startswith('48'):
+                secciones['no_operacionales_ingresos'].append(item)
+            elif cod.startswith('4'):
+                secciones['ingresos_ventas'].append(item)
+            elif cod.startswith('6140'):
+                secciones['costos_ventas_directas'].append(item)
+            elif cod.startswith('6141'):
+                secciones['costos_ajustes_contra'].append(item)
+            elif cod.startswith('6') or cod.startswith('7'):
+                secciones['costos_operativos'].append(item)
+            elif cod.startswith('53') or cod.startswith('54') or cod.startswith('59'):
+                secciones['no_operacionales_gastos'].append(item)
+            elif cod.startswith('5'):
+                secciones['gastos_operacionales'].append(item)
+                
+        # Aplicar orden personalizado si existe
+        for sec_key, items in secciones.items():
+            if sec_key in orden_guardado:
+                order_list = orden_guardado[sec_key]
+                order_map = {cid: idx for idx, cid in enumerate(order_list)}
+                items.sort(key=lambda x: order_map.get(x['cuenta_id'], 999999))
+                
+        # Cálculos de Subtotales y Márgenes
+        sub_ing_ventas = sum(x['monto'] for x in secciones['ingresos_ventas'])
+        sub_ing_ajustes = sum(x['monto'] for x in secciones['ingresos_ajustes_favor'])
+        total_ingresos_operacionales = round(sub_ing_ventas + sub_ing_ajustes, 2)
+        
+        sub_cost_ventas = sum(x['monto'] for x in secciones['costos_ventas_directas'])
+        sub_cost_ajustes = sum(x['monto'] for x in secciones['costos_ajustes_contra'])
+        total_costo_mercancia = round(sub_cost_ventas + sub_cost_ajustes, 2)
+        
+        margen_contribucion = round(total_ingresos_operacionales - total_costo_mercancia, 2)
+        margen_contribucion_pct = round((margen_contribucion / total_ingresos_operacionales * 100), 2) if total_ingresos_operacionales > 0 else 0.0
+        
+        total_costos_operativos = round(sum(x['monto'] for x in secciones['costos_operativos']), 2)
+        utilidad_operativa = round(margen_contribucion - total_costos_operativos, 2)
+        utilidad_operativa_pct = round((utilidad_operativa / total_ingresos_operacionales * 100), 2) if total_ingresos_operacionales > 0 else 0.0
+        
+        total_gastos = round(sum(x['monto'] for x in secciones['gastos_operacionales']), 2)
+        utilidad_antes_no_op = round(utilidad_operativa - total_gastos, 2)
+        
+        total_no_op_ing = round(sum(x['monto'] for x in secciones['no_operacionales_ingresos']), 2)
+        total_no_op_gas = round(sum(x['monto'] for x in secciones['no_operacionales_gastos']), 2)
+        
+        resultado_neto = round(utilidad_antes_no_op + total_no_op_ing - total_no_op_gas, 2)
+        resultado_neto_pct = round((resultado_neto / total_ingresos_operacionales * 100), 2) if total_ingresos_operacionales > 0 else 0.0
+        
+        # 4. Auditoría Comercial vs Contable (Semáforo)
+        from .inventarios import _query_reporte_ventas_costos
+        datos_com = _query_reporte_ventas_costos(conn, negocio_id, fecha_desde, fecha_hasta)
+        ventas_com = round(sum(d['total_venta'] for d in datos_com), 2)
+        costos_com = round(sum(d['total_costo'] for d in datos_com), 2)
+        
+        dif_v = round(ventas_com - sub_ing_ventas, 2)
+        dif_c = round(costos_com - sub_cost_ventas, 2)
+        cuadrado = abs(dif_v) < 1.0 and abs(dif_c) < 1.0
+        
+        conn.close()
+        
+        return jsonify({
+            'ok': True,
+            'rango': {'desde': fecha_desde, 'hasta': fecha_hasta},
+            'periodos': periodos_info,
+            'auditoria': {
+                'cuadrado': cuadrado,
+                'ventas_comercial': ventas_com,
+                'ventas_contable': sub_ing_ventas,
+                'diferencia_ventas': dif_v,
+                'costos_comercial': costos_com,
+                'costos_contable': sub_cost_ventas,
+                'diferencia_costos': dif_c
+            },
+            'kpis': {
+                'total_ingresos': total_ingresos_operacionales,
+                'total_costo_mercancia': total_costo_mercancia,
+                'margen_contribucion': margen_contribucion,
+                'margen_contribucion_pct': margen_contribucion_pct,
+                'total_costos_operativos': total_costos_operativos,
+                'utilidad_operativa': utilidad_operativa,
+                'utilidad_operativa_pct': utilidad_operativa_pct,
+                'total_gastos': total_gastos,
+                'total_no_op_ingresos': total_no_op_ing,
+                'total_no_op_gastos': total_no_op_gas,
+                'resultado_neto': resultado_neto,
+                'resultado_neto_pct': resultado_neto_pct
+            },
+            'subtotales': {
+                'ingresos_ventas': sub_ing_ventas,
+                'ingresos_ajustes_favor': sub_ing_ajustes,
+                'costos_ventas_directas': sub_cost_ventas,
+                'costos_ajustes_contra': sub_cost_ajustes,
+                'costos_operativos': total_costos_operativos,
+                'gastos_operacionales': total_gastos,
+                'no_operacionales_ingresos': total_no_op_ing,
+                'no_operacionales_gastos': total_no_op_gas
+            },
+            'secciones': secciones
+        })
+        
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/estado-resultados/orden', methods=['POST'])
+def api_estado_resultados_orden_post(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+        
+    data = request.get_json() or {}
+    orden = data.get('orden') or {}
+    
+    import json
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS preferencias_estado_resultados (
+                negocio_id INTEGER PRIMARY KEY REFERENCES terceros(id),
+                orden_items JSONB DEFAULT '{}',
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        conn.execute("""
+            INSERT INTO preferencias_estado_resultados (negocio_id, orden_items, updated_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (negocio_id) DO UPDATE
+                SET orden_items = EXCLUDED.orden_items, updated_at = NOW()
+        """, (negocio_id, json.dumps(orden)))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def _clean_pdf_text(t):
+    if not t:
+        return ""
+    replacements = {
+        "•": "|", "—": "-", "–": "-", "“": '"', "”": '"', "’": "'", "‘": "'",
+        "…": "...", "≥": ">=", "≤": "<=", "≠": "!=", "±": "+/-", "×": "x"
+    }
+    s = str(t)
+    for k, v in replacements.items():
+        s = s.replace(k, v)
+    return s.encode('latin-1', 'replace').decode('latin-1')
+
+
+def _fmt_money_pdf(val, show_cents=True):
+    if val is None:
+        val = 0
+    val = float(val)
+    sign = "-" if val < 0 else ""
+    val_abs = abs(val)
+    if show_cents:
+        parts = f"{val_abs:,.2f}".split(".")
+        int_part = parts[0].replace(",", ".")
+        dec_part = parts[1]
+        return f"{sign}${int_part},{dec_part}"
+    else:
+        int_part = f"{round(val_abs):,}".replace(",", ".")
+        return f"{sign}${int_part}"
+
+
+def _fmt_pct_pdf(val):
+    if val is None:
+        return "0.0%"
+    return f"{float(val):.1f}%"
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/estado-resultados/pdf', methods=['GET'])
+def api_estado_resultados_pdf(negocio_id):
+    if not session.get('usuario_id'):
+        return "No autorizado", 403
+
+    try:
+        from datetime import datetime
+        from fpdf import FPDF
+        from flask import Response
+    except ImportError:
+        return "PDF no disponible", 500
+
+    resp_json = api_estado_resultados_get(negocio_id).get_json()
+    if not resp_json.get('ok'):
+        return resp_json.get('error', 'Error al generar reporte'), 500
+
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    negocio = conn.execute("SELECT nombre, telefono, direccion FROM terceros WHERE id = %s", (negocio_id,)).fetchone()
+    conn.close()
+
+    rango = resp_json['rango']
+    kpis = resp_json['kpis']
+    sec = resp_json['secciones']
+    subs = resp_json['subtotales']
+    total_ingresos_base = max(kpis['total_ingresos'], 0.001)
+
+    class FinancialReportPDF(FPDF):
+        def __init__(self, *args, **kwargs):
+            super().__init__(format='letter', unit='mm', *args, **kwargs)
+            self.set_auto_page_break(auto=True, margin=18)
+            self.alias_nb_pages()
+
+        def header(self):
+            # Línea superior de acento corporativo
+            self.set_fill_color(15, 23, 42) # Slate 900
+            self.rect(14, 10, 188, 2, style='F')
+
+            # Bloque Izquierdo: Identidad Empresarial
+            self.set_xy(14, 14)
+            self.set_font('Helvetica', 'B', 15)
+            self.set_text_color(15, 23, 42)
+            nombre_negocio = _clean_pdf_text(negocio['nombre'] if negocio else 'EMPRESA').upper()
+            self.cell(110, 7, nombre_negocio, align='L')
+
+            # Bloque Derecho: Ficha Técnica en tarjeta redondeada
+            box_x = 128
+            box_y = 14
+            box_w = 74
+            box_h = 24
+            self.set_fill_color(248, 250, 252) # Slate 50
+            self.set_draw_color(226, 232, 240) # Slate 200
+            self.rect(box_x, box_y, box_w, box_h, style='DF', round_corners=True, corner_radius=2.5)
+
+            self.set_xy(box_x + 3, box_y + 2.5)
+            self.set_font('Helvetica', 'B', 9.5)
+            self.set_text_color(15, 23, 42)
+            self.cell(box_w - 6, 4.5, "ESTADO DE RESULTADOS", align='R')
+
+            self.set_xy(box_x + 3, box_y + 7)
+            self.set_font('Helvetica', 'I', 7)
+            self.set_text_color(100, 116, 139)
+            self.cell(box_w - 6, 3.5, _clean_pdf_text("P&G Gerencial | Cifras en COP"), align='R')
+
+            self.set_xy(box_x + 3, box_y + 11.5)
+            self.set_font('Helvetica', 'B', 7.5)
+            self.set_text_color(30, 41, 59)
+            rango_str = f"Período: {rango.get('desde', '')} al {rango.get('hasta', '')}"
+            self.cell(box_w - 6, 4, _clean_pdf_text(rango_str), align='R')
+
+            self.set_xy(box_x + 3, box_y + 16.5)
+            self.set_font('Helvetica', '', 6.5)
+            self.set_text_color(148, 163, 184)
+            emision_str = f"Emisión: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            self.cell(box_w - 6, 3.5, _clean_pdf_text(emision_str), align='R')
+
+            # Datos secundarios del negocio debajo del nombre
+            self.set_xy(14, 21.5)
+            self.set_font('Helvetica', 'B', 7.5)
+            self.set_text_color(71, 85, 105)
+            self.cell(110, 4, "INFORME FINANCIERO Y OPERACIONAL DE GESTIÓN", align='L')
+
+            self.set_xy(14, 25.5)
+            self.set_font('Helvetica', '', 7.5)
+            self.set_text_color(100, 116, 139)
+            dir_tel = []
+            if negocio and negocio.get('telefono'):
+                dir_tel.append(f"Tel: {negocio.get('telefono')}")
+            if negocio and negocio.get('direccion'):
+                dir_tel.append(f"Dir: {negocio.get('direccion')}")
+            sub_info = " | ".join(dir_tel) if dir_tel else "Operación Comercial Integrada"
+            self.cell(110, 3.5, _clean_pdf_text(sub_info), align='L')
+
+            self.set_xy(14, 29.5)
+            self.set_font('Helvetica', 'I', 7)
+            self.set_text_color(148, 163, 184)
+            self.cell(110, 3.5, _clean_pdf_text("Moneda: Pesos Colombianos (COP) | Base Contable Causación"), align='L')
+
+            self.set_y(41)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_draw_color(226, 232, 240)
+            self.line(14, self.get_y(), 202, self.get_y())
+
+            self.set_y(-13)
+            self.set_font('Helvetica', '', 7)
+            self.set_text_color(148, 163, 184)
+            self.cell(85, 5, _clean_pdf_text("TUC TUC Contabilidad Inteligente | Reporte Oficial Gerencial"), align='L')
+            self.cell(60, 5, "Documento Confidencial de Uso Interno", align='C')
+            self.cell(43, 5, f"Página {self.page_no()} de {{nb}}", align='R')
+
+    pdf = FinancialReportPDF()
+    pdf.add_page()
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TARJETAS EJECUTIVAS RESUMEN (4 CARDS SUPERIORES)
+    # ═══════════════════════════════════════════════════════════════════
+    cards_y = 40
+    card_w = 44.5
+    gap = 3.3
+    card_h = 20
+
+    # Card 1: Ingresos Operacionales
+    c1_x = 14
+    pdf.set_fill_color(248, 250, 252)
+    pdf.set_draw_color(226, 232, 240)
+    pdf.rect(c1_x, cards_y, card_w, card_h, style='DF', round_corners=True, corner_radius=2)
+    pdf.set_fill_color(5, 150, 105)
+    pdf.rect(c1_x, cards_y, 2, card_h, style='F', round_corners=True, corner_radius=1)
+    pdf.set_xy(c1_x + 4, cards_y + 2.5)
+    pdf.set_font('Helvetica', 'B', 6.5)
+    pdf.set_text_color(100, 116, 139)
+    pdf.cell(card_w - 6, 3.5, "INGRESOS TOTALES")
+    pdf.set_xy(c1_x + 4, cards_y + 6.5)
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.set_text_color(15, 23, 42)
+    pdf.cell(card_w - 6, 5.5, _fmt_money_pdf(kpis['total_ingresos']))
+    pdf.set_xy(c1_x + 4, cards_y + 12.5)
+    pdf.set_font('Helvetica', 'I', 6.5)
+    pdf.set_text_color(5, 150, 105)
+    pdf.cell(card_w - 6, 3.5, "100.0% Base Operacional")
+
+    # Card 2: Margen de Contribución
+    c2_x = c1_x + card_w + gap
+    pdf.set_fill_color(255, 251, 235) # Amber 50
+    pdf.set_draw_color(254, 215, 170) # Amber 200
+    pdf.rect(c2_x, cards_y, card_w, card_h, style='DF', round_corners=True, corner_radius=2)
+    pdf.set_fill_color(217, 119, 6) # Amber 600
+    pdf.rect(c2_x, cards_y, 2, card_h, style='F', round_corners=True, corner_radius=1)
+    pdf.set_xy(c2_x + 4, cards_y + 2.5)
+    pdf.set_font('Helvetica', 'B', 6.5)
+    pdf.set_text_color(180, 83, 9)
+    pdf.cell(card_w - 6, 3.5, _clean_pdf_text("MARGEN CONTRIBUCIÓN"))
+    pdf.set_xy(c2_x + 4, cards_y + 6.5)
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.set_text_color(146, 64, 14)
+    pdf.cell(card_w - 6, 5.5, _fmt_money_pdf(kpis['margen_contribucion']))
+    pdf.set_xy(c2_x + 4, cards_y + 12.5)
+    pdf.set_font('Helvetica', 'B', 6.5)
+    pdf.cell(card_w - 6, 3.5, f"Margen: {_fmt_pct_pdf(kpis['margen_contribucion_pct'])}")
+
+    # Card 3: Utilidad Operativa
+    c3_x = c2_x + card_w + gap
+    pdf.set_fill_color(239, 246, 255) # Blue 50
+    pdf.set_draw_color(191, 219, 254) # Blue 200
+    pdf.rect(c3_x, cards_y, card_w, card_h, style='DF', round_corners=True, corner_radius=2)
+    pdf.set_fill_color(29, 78, 216) # Blue 700
+    pdf.rect(c3_x, cards_y, 2, card_h, style='F', round_corners=True, corner_radius=1)
+    pdf.set_xy(c3_x + 4, cards_y + 2.5)
+    pdf.set_font('Helvetica', 'B', 6.5)
+    pdf.set_text_color(30, 64, 175)
+    pdf.cell(card_w - 6, 3.5, "UTILIDAD OPERATIVA")
+    pdf.set_xy(c3_x + 4, cards_y + 6.5)
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.set_text_color(30, 58, 138)
+    pdf.cell(card_w - 6, 5.5, _fmt_money_pdf(kpis['utilidad_operativa']))
+    pdf.set_xy(c3_x + 4, cards_y + 12.5)
+    pdf.set_font('Helvetica', 'B', 6.5)
+    pdf.cell(card_w - 6, 3.5, f"Margen: {_fmt_pct_pdf(kpis['utilidad_operativa_pct'])}")
+
+    # Card 4: Resultado Neto del Periodo
+    c4_x = c3_x + card_w + gap
+    is_positive = kpis['resultado_neto'] >= 0
+    bg_neto = (236, 253, 245) if is_positive else (254, 242, 242)
+    brd_neto = (167, 243, 208) if is_positive else (254, 202, 202)
+    bar_neto = (5, 150, 105) if is_positive else (225, 29, 72)
+    txt_neto = (6, 95, 70) if is_positive else (159, 18, 57)
+
+    pdf.set_fill_color(*bg_neto)
+    pdf.set_draw_color(*brd_neto)
+    pdf.rect(c4_x, cards_y, card_w, card_h, style='DF', round_corners=True, corner_radius=2)
+    pdf.set_fill_color(*bar_neto)
+    pdf.rect(c4_x, cards_y, 2, card_h, style='F', round_corners=True, corner_radius=1)
+    pdf.set_xy(c4_x + 4, cards_y + 2.5)
+    pdf.set_font('Helvetica', 'B', 6.5)
+    pdf.set_text_color(*txt_neto)
+    pdf.cell(card_w - 6, 3.5, "RESULTADO NETO")
+    pdf.set_xy(c4_x + 4, cards_y + 6.5)
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.set_text_color(*txt_neto)
+    pdf.cell(card_w - 6, 5.5, _fmt_money_pdf(kpis['resultado_neto']))
+    pdf.set_xy(c4_x + 4, cards_y + 12.5)
+    pdf.set_font('Helvetica', 'B', 6.5)
+    pdf.cell(card_w - 6, 3.5, f"Rendimiento: {_fmt_pct_pdf(kpis['resultado_neto_pct'])}")
+
+    pdf.set_y(cards_y + card_h + 5)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TABLA FINANCIERA EDITORIAL (CASCADA P&G)
+    # ═══════════════════════════════════════════════════════════════════
+    col_w = [118, 46, 24] # Total = 188 mm
+
+    def print_table_header():
+        pdf.set_fill_color(15, 23, 42) # Navy Slate 900
+        pdf.set_font('Helvetica', 'B', 7.5)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(col_w[0], 6.5, "   CONCEPTO / DETALLE OPERACIONAL", border=0, fill=True)
+        pdf.cell(col_w[1], 6.5, "VALOR PERÍODO (COP)   ", border=0, align='R', fill=True)
+        pdf.cell(col_w[2], 6.5, "% INCIDENCIA   ", border=0, align='R', fill=True)
+        pdf.ln(6.5)
+
+    def print_section_header(num_str, title, accent_color=(5, 150, 105), bg_color=(248, 250, 252), text_color=(15, 23, 42)):
+        if pdf.get_y() > 245:
+            pdf.add_page()
+            print_table_header()
+        pdf.ln(2)
+        curr_y = pdf.get_y()
+        pdf.set_fill_color(*bg_color)
+        pdf.set_draw_color(226, 232, 240)
+        pdf.rect(14, curr_y, 188, 6.5, style='DF')
+        pdf.set_fill_color(*accent_color)
+        pdf.rect(14, curr_y, 2.5, 6.5, style='F')
+        pdf.set_xy(18, curr_y)
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.set_text_color(*text_color)
+        pdf.cell(184, 6.5, _clean_pdf_text(f"{num_str}. {title.upper()}"), border=0)
+        pdf.ln(6.5)
+
+    def print_item_row(name, amount, is_even=False):
+        if pdf.get_y() > 250:
+            pdf.add_page()
+            print_table_header()
+        pct = (amount / total_ingresos_base) * 100
+        bg_c = (255, 255, 255) if not is_even else (248, 250, 252)
+        pdf.set_fill_color(*bg_c)
+
+        pdf.set_font('Helvetica', '', 8)
+        pdf.set_text_color(51, 65, 85) # Slate 700
+        pdf.cell(col_w[0], 5.2, _clean_pdf_text(f"      {name}"), border=0, fill=True)
+
+        pdf.set_font('Helvetica', '', 8)
+        pdf.set_text_color(30, 41, 59)
+        pdf.cell(col_w[1], 5.2, f"{_fmt_money_pdf(amount)}   ", border=0, align='R', fill=True)
+
+        pdf.set_font('Helvetica', '', 7.5)
+        pdf.set_text_color(100, 116, 139)
+        pdf.cell(col_w[2], 5.2, f"{pct:.1f}%   ", border=0, align='R', fill=True)
+        pdf.ln(5.2)
+
+        # Línea divisoria muy suave
+        pdf.set_draw_color(241, 245, 249)
+        pdf.line(18, pdf.get_y(), 202, pdf.get_y())
+
+    def print_subtotal_row(title, amount, pct_val=None):
+        if pdf.get_y() > 248:
+            pdf.add_page()
+            print_table_header()
+        pct = (amount / total_ingresos_base) * 100 if pct_val is None else pct_val
+        pdf.set_fill_color(241, 245, 249) # Slate 100
+        pdf.set_draw_color(203, 213, 225) # Slate 300
+        pdf.line(14, pdf.get_y(), 202, pdf.get_y())
+
+        pdf.set_font('Helvetica', 'B', 7.5)
+        pdf.set_text_color(30, 41, 59)
+        pdf.cell(col_w[0], 5.5, _clean_pdf_text(f"   TOTAL {title.upper()}"), border=0, fill=True)
+
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.cell(col_w[1], 5.5, f"{_fmt_money_pdf(amount)}   ", border=0, align='R', fill=True)
+
+        pdf.set_font('Helvetica', 'B', 7.5)
+        pdf.set_text_color(71, 85, 105)
+        pdf.cell(col_w[2], 5.5, f"{pct:.1f}%   ", border=0, align='R', fill=True)
+        pdf.ln(6.5)
+
+    def print_milestone_badge(title, amount, pct, bg_c, border_c, text_c, bar_c):
+        if pdf.get_y() > 245:
+            pdf.add_page()
+            print_table_header()
+        pdf.ln(1.5)
+        curr_y = pdf.get_y()
+        pdf.set_fill_color(*bg_c)
+        pdf.set_draw_color(*border_c)
+        pdf.rect(14, curr_y, 188, 7.5, style='DF', round_corners=True, corner_radius=2)
+
+        pdf.set_fill_color(*bar_c)
+        pdf.rect(14, curr_y, 3, 7.5, style='F', round_corners=True, corner_radius=1.5)
+
+        pdf.set_xy(19, curr_y)
+        pdf.set_font('Helvetica', 'B', 8.5)
+        pdf.set_text_color(*text_c)
+        pdf.cell(col_w[0] - 5, 7.5, _clean_pdf_text(title.upper()), border=0)
+
+        pdf.set_font('Helvetica', 'B', 9.5)
+        pdf.cell(col_w[1], 7.5, f"{_fmt_money_pdf(amount)}   ", border=0, align='R')
+
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.cell(col_w[2], 7.5, f"{pct:.1f}%   ", border=0, align='R')
+        pdf.set_xy(14, curr_y + 9)
+
+    print_table_header()
+
+    # 1. INGRESOS OPERACIONALES
+    print_section_header("1", "Ingresos Operacionales", accent_color=(5, 150, 105), bg_color=(236, 253, 245), text_color=(6, 95, 70))
+    idx = 0
+    for it in sec['ingresos_ventas']:
+        print_item_row(it['nombre'], it['monto'], is_even=(idx % 2 == 1))
+        idx += 1
+    if subs.get('ingresos_ventas') and len(sec['ingresos_ventas']) > 1:
+        print_subtotal_row("Ventas del Menú", subs['ingresos_ventas'])
+
+    for it in sec['ingresos_ajustes_favor']:
+        print_item_row(f"{it['nombre']} (Ajustes Físicos a Favor +)", it['monto'], is_even=(idx % 2 == 1))
+        idx += 1
+    print_subtotal_row("Ingresos Operacionales", kpis['total_ingresos'], 100.0)
+
+    # 2. COSTO DE MERCANCÍA E INSUMOS
+    print_section_header("2", "Costo de Mercancía e Insumos Consumidos", accent_color=(225, 29, 72), bg_color=(255, 241, 242), text_color=(159, 18, 57))
+    idx = 0
+    for it in sec['costos_ventas_directas']:
+        print_item_row(it['nombre'], it['monto'], is_even=(idx % 2 == 1))
+        idx += 1
+    for it in sec['costos_ajustes_contra']:
+        print_item_row(f"{it['nombre']} (Ajustes en Contra / Mermas -)", it['monto'], is_even=(idx % 2 == 1))
+        idx += 1
+    print_subtotal_row("Costo de Mercancía e Inventario", kpis['total_costo_mercancia'])
+
+    # ── HITO 1: MARGEN DE CONTRIBUCIÓN ──
+    print_milestone_badge("(=) Margen de Contribución Bruto", kpis['margen_contribucion'], kpis['margen_contribucion_pct'],
+                          bg_c=(255, 251, 235), border_c=(254, 215, 170), text_c=(146, 64, 14), bar_c=(217, 119, 6))
+
+    # 3. COSTOS OPERATIVOS Y DE ENTREGA
+    if sec['costos_operativos']:
+        print_section_header("3", "Costos Operativos y de Servicio", accent_color=(217, 119, 6), bg_color=(254, 243, 199), text_color=(146, 64, 14))
+        idx = 0
+        for it in sec['costos_operativos']:
+            print_item_row(it['nombre'], it['monto'], is_even=(idx % 2 == 1))
+            idx += 1
+        print_subtotal_row("Costos Operativos", kpis['total_costos_operativos'])
+
+    # ── HITO 2: UTILIDAD OPERATIVA ──
+    print_milestone_badge("(=) Utilidad Operativa del Negocio", kpis['utilidad_operativa'], kpis['utilidad_operativa_pct'],
+                          bg_c=(239, 246, 255), border_c=(191, 219, 254), text_c=(30, 64, 175), bar_c=(29, 78, 216))
+
+    # 4. GASTOS DE ADMINISTRACIÓN Y VENTAS
+    if sec['gastos_operacionales']:
+        print_section_header("4", "Gastos de Administración y Ventas", accent_color=(100, 116, 139), bg_color=(241, 245, 249), text_color=(51, 65, 85))
+        idx = 0
+        for it in sec['gastos_operacionales']:
+            print_item_row(it['nombre'], it['monto'], is_even=(idx % 2 == 1))
+            idx += 1
+        print_subtotal_row("Gastos Operacionales", kpis['total_gastos'])
+
+    # 5. NO OPERACIONALES
+    if sec['no_operacionales_ingresos'] or sec['no_operacionales_gastos']:
+        print_section_header("5", "Resultados No Operacionales", accent_color=(79, 70, 229), bg_color=(238, 242, 255), text_color=(55, 48, 163))
+        idx = 0
+        for it in sec['no_operacionales_ingresos']:
+            print_item_row(f"(+) {it['nombre']}", it['monto'], is_even=(idx % 2 == 1))
+            idx += 1
+        for it in sec['no_operacionales_gastos']:
+            print_item_row(f"(-) {it['nombre']}", it['monto'], is_even=(idx % 2 == 1))
+            idx += 1
+
+    # ── HITO FINAL: RESULTADO NETO DEL PERÍODO ──
+    if pdf.get_y() > 240:
+        pdf.add_page()
+        print_table_header()
+    pdf.ln(2)
+    curr_y = pdf.get_y()
+    is_positive = kpis['resultado_neto'] >= 0
+    bg_n = (236, 253, 245) if is_positive else (254, 242, 242)
+    border_n = (110, 231, 183) if is_positive else (252, 165, 165)
+    bar_n = (5, 150, 105) if is_positive else (225, 29, 72)
+    txt_n = (6, 95, 70) if is_positive else (159, 18, 57)
+    label_n = "(=) RESULTADO NETO DEL PERÍODO (UTILIDAD NETA)" if is_positive else "(=) RESULTADO NETO DEL PERÍODO (PÉRDIDA NETA)"
+
+    pdf.set_fill_color(*bg_n)
+    pdf.set_draw_color(*border_n)
+    pdf.rect(14, curr_y, 188, 9.5, style='DF', round_corners=True, corner_radius=2.5)
+
+    pdf.set_fill_color(*bar_n)
+    pdf.rect(14, curr_y, 3.5, 9.5, style='F', round_corners=True, corner_radius=1.5)
+
+    pdf.set_xy(20, curr_y)
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.set_text_color(*txt_n)
+    pdf.cell(col_w[0] - 6, 9.5, _clean_pdf_text(label_n), border=0)
+
+    pdf.set_font('Helvetica', 'B', 11)
+    pdf.cell(col_w[1], 9.5, f"{_fmt_money_pdf(kpis['resultado_neto'])}   ", border=0, align='R')
+
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.cell(col_w[2], 9.5, f"{_fmt_pct_pdf(kpis['resultado_neto_pct'])}   ", border=0, align='R')
+    pdf.set_xy(14, curr_y + 12)
+
+
+    resp = Response(bytes(pdf.output()), mimetype='application/pdf')
+    resp.headers['Content-Disposition'] = f"inline; filename=estado_resultados_{rango['desde']}_{rango['hasta']}.pdf"
+    return resp
+
 
 

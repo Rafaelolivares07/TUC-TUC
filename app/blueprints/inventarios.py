@@ -8926,9 +8926,11 @@ _PARAM_DEFAULTS_INV_DIST = {
     'inv_distribuido_modalidad':           {'tipo': 'texto',   'valor': 'rafaga', 'desc': 'Modalidad: rafaga (ronda rápida por sesión) / distribuido (pausas continuas)'},
     'inv_distribuido_cuota_sesion':        {'tipo': 'numerico', 'valor': '3',      'desc': 'Cantidad de ítems a contar por ronda/sesión'},
     'inv_distribuido_dias_ciclo':          {'tipo': 'numerico', 'valor': '15',     'desc': 'Días de duración del ciclo de conteo'},
-    'inv_distribuido_reiniciar':           {'tipo': 'booleano', 'valor': 'true',  'desc': 'Reiniciar ciclo automáticamente al terminar'},
+    'inv_distribuido_reiniciar':           {'tipo': 'booleano', 'valor': 'true',   'desc': 'Reiniciar ciclo automáticamente al terminar'},
     'inv_distribuido_recordar_min':        {'tipo': 'numerico', 'valor': '15',     'desc': 'Minutos para recordar al usuario que canceló'},
-    'inv_distribuido_orden':               {'tipo': 'texto',   'valor': 'valor_rotacion', 'desc': 'Orden de prioridad: valor / rotacion / valor_rotacion'},
+    'inv_distribuido_orden':               {'tipo': 'texto',   'valor': 'valor_rotacion', 'desc': 'Orden: valor_total / rotacion / costo_unitario / valor_rotacion / alfabetico'},
+    'inv_distribuido_filtro_items':        {'tipo': 'texto',   'valor': 'con_kardex',     'desc': 'Filtro de ítems: con_kardex / stock_positivo / materias_primas / todos'},
+    'inv_distribuido_ignorar_ceros':       {'tipo': 'booleano', 'valor': 'true',   'desc': 'Excluir ítems con saldo cero repetido sin nuevas entradas'},
     'inv_distribuido_horario_inicio':      {'tipo': 'texto',   'valor': '08:00',   'desc': 'Hora inicio permitida para conteos'},
     'inv_distribuido_horario_fin':         {'tipo': 'texto',   'valor': '17:00',   'desc': 'Hora fin permitida para conteos'},
     'inv_distribuido_dias_semana':         {'tipo': 'texto',   'valor': '1,2,3,4,5', 'desc': 'Días hábiles (1=Lun..7=Dom)'},
@@ -8950,16 +8952,35 @@ def _sembrar_parametros_inv_dist(conn, negocio_id):
                     INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
                     VALUES (%s, NULL, NULL, %s, 'booleano', %s, %s, NOW())
                 """, (nombre, cfg['valor'].lower(), cfg['desc'], negocio_id))
-            elif cfg['tipo'] == 'texto':
-                conn.execute("""
-                    INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
-                    VALUES (%s, NULL, %s, NULL, 'texto', %s, %s, NOW())
-                """, (nombre, cfg['valor'], cfg['desc'], negocio_id))
             else:
+                # En Postgres valor_numerico es TEXT y valor_texto es INTEGER, por lo que guardamos cadenas en valor_numerico
                 conn.execute("""
                     INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
                     VALUES (%s, %s, NULL, NULL, %s, %s, %s, NOW())
-                """, (nombre, cfg['valor'], cfg['tipo'], cfg['desc'], negocio_id))
+                """, (nombre, str(cfg['valor']), cfg['tipo'], cfg['desc'], negocio_id))
+
+
+def _obtener_filtro_productos_sql(conn, negocio_id, alias='p'):
+    """Genera la cláusula WHERE y parámetros para el universo de productos según el filtro configurado."""
+    filtro_row = conn.execute(
+        "SELECT valor_numerico FROM parametros_sistema WHERE nombre = 'inv_distribuido_filtro_items' AND negocio_id = %s",
+        (negocio_id,)
+    ).fetchone()
+    filtro = filtro_row['valor_numerico'] if filtro_row and filtro_row['valor_numerico'] else 'con_kardex'
+
+    conds = [f"{alias}.negocio_id = %s", f"{alias}.disponible = TRUE"]
+    params = [negocio_id]
+
+    if filtro == 'con_kardex':
+        conds.append(f"{alias}.id IN (SELECT DISTINCT producto_id FROM movimientos_inventario WHERE negocio_id = %s)")
+        params.append(negocio_id)
+    elif filtro == 'stock_positivo':
+        conds.append(f"{alias}.id IN (SELECT producto_id FROM saldos_inventario WHERE negocio_id = %s AND stock > 0)")
+        params.append(negocio_id)
+    elif filtro == 'materias_primas':
+        conds.append(f"(UPPER({alias}.categoria) LIKE '%%MATERIA%%' OR UPPER({alias}.categoria) LIKE '%%INSUMO%%' OR UPPER({alias}.categoria) LIKE '%%SALSA%%')")
+
+    return " AND ".join(conds), params
 
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/config', methods=['GET'])
@@ -8977,9 +8998,7 @@ def inv_dist_config_get(negocio_id):
         config = {}
         for r in rows:
             if r['tipo'] == 'booleano':
-                val = r['valor_booleano']
-            elif r['tipo'] == 'texto':
-                val = r['valor_texto']
+                val = (r['valor_booleano'] == 'true' or r['valor_booleano'] == 't')
             else:
                 val = r['valor_numerico']
             config[r['nombre']] = {'valor': val, 'tipo': r['tipo'], 'descripcion': r['descripcion']}
@@ -9000,7 +9019,7 @@ def inv_dist_config_get(negocio_id):
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/config', methods=['POST'])
 def inv_dist_config_set(negocio_id):
-    """Guarda configuración de inventario distribuido."""
+    """Guarda configuración de inventario distribuido de forma segura."""
     try:
         data = request.get_json() or {}
         conn = get_db_connection()
@@ -9022,32 +9041,25 @@ def inv_dist_config_set(negocio_id):
                 else:
                     conn.execute("INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, NULL, NULL, %s, 'booleano', %s, %s, NOW())",
                                  (nombre, val_str, cfg['desc'], negocio_id))
-            elif cfg['tipo'] == 'texto':
+            else:
+                # Guardar en valor_numerico (tipo TEXT en DB)
                 val_str = str(valor)
                 if existing:
-                    conn.execute("UPDATE parametros_sistema SET valor_texto = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
+                    conn.execute("UPDATE parametros_sistema SET valor_numerico = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
                                  (val_str, nombre, negocio_id))
                 else:
-                    conn.execute("INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, NULL, %s, NULL, 'texto', %s, %s, NOW())",
-                                 (nombre, val_str, cfg['desc'], negocio_id))
-            else:
-                val_num = str(valor)
-                if existing:
-                    conn.execute("UPDATE parametros_sistema SET valor_numerico = %s, fecha_actualizacion = NOW() WHERE nombre = %s AND negocio_id = %s",
-                                 (val_num, nombre, negocio_id))
-                else:
                     conn.execute("INSERT INTO parametros_sistema (nombre, valor_numerico, valor_texto, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion) VALUES (%s, %s, NULL, NULL, %s, %s, %s, NOW())",
-                                 (nombre, val_num, cfg['tipo'], cfg['desc'], negocio_id))
+                                 (nombre, val_str, cfg['tipo'], cfg['desc'], negocio_id))
         conn.commit()
         conn.close()
-        return jsonify({'ok': True, 'mensaje': 'Configuración guardada'})
+        return jsonify({'ok': True, 'mensaje': 'Configuración guardada correctamente'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/siguiente', methods=['GET'])
 def inv_dist_siguiente(negocio_id):
-    """Retorna el siguiente ítem a contar según prioridad."""
+    """Retorna el siguiente ítem a contar según prioridad y filtro de catálogo."""
     try:
         conn = get_db_connection()
         usuario_id = request.args.get('usuario_id', type=int)
@@ -9059,55 +9071,71 @@ def inv_dist_siguiente(negocio_id):
             WHERE negocio_id = %s AND ciclo_inicio IS NOT NULL
         """, (negocio_id,)).fetchone()
 
-        ciclo_inicio = None
-        if ciclo and ciclo['inicio']:
-            ciclo_inicio = ciclo['inicio']
+        ciclo_inicio = ciclo['inicio'] if ciclo and ciclo['inicio'] else None
 
-        # Obtener configuración
+        # Obtener criterio de orden
         orden_row = conn.execute(
-            "SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inv_distribuido_orden' AND negocio_id = %s",
+            "SELECT valor_numerico FROM parametros_sistema WHERE nombre = 'inv_distribuido_orden' AND negocio_id = %s",
             (negocio_id,)
         ).fetchone()
-        orden = orden_row['valor_texto'] if orden_row else 'valor_rotacion'
+        orden = orden_row['valor_numerico'] if orden_row and orden_row['valor_numerico'] else 'valor_rotacion'
 
-        # Construir ORDER BY según prioridad
+        # Construir ORDER BY
         order_sql = {
-            'valor': 'p.precio * COALESCE(si.stock, 0) DESC',
+            'valor_total': '(COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC',
             'rotacion': '(SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.fecha >= NOW() - INTERVAL \'30 days\') DESC',
-            'valor_rotacion': '(p.precio * COALESCE(si.stock, 0)) * (SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.fecha >= NOW() - INTERVAL \'30 days\') DESC',
-        }.get(orden, 'p.precio * COALESCE(si.stock, 0) DESC')
+            'costo_unitario': 'COALESCE(p.costo, p.precio, 0) DESC',
+            'valor_rotacion': '(COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) * (SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.fecha >= NOW() - INTERVAL \'30 days\') DESC',
+            'alfabetico': 'p.nombre ASC',
+        }.get(orden, '(COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC')
 
-        # Buscar siguiente ítem pendiente
-        params = []
+        # Filtro de productos aplicable (ej. con_kardex para excluir platos preparados)
+        filtro_where, filtro_params = _obtener_filtro_productos_sql(conn, negocio_id, 'p')
+
+        query_params = []
         ciclo_join = ""
         if ciclo_inicio:
             ciclo_join = "AND est.ciclo_inicio IS NOT DISTINCT FROM %s"
-            params.append(ciclo_inicio)
+            query_params.append(ciclo_inicio)
 
-        params.append(negocio_id)
+        query_params.extend(filtro_params)
 
         excl = ""
         if usuario_id:
             excl = "AND (est.estado IS NULL OR est.estado != 'saltado' OR est.usuario_id != %s OR est.ciclo_inicio IS NOT DISTINCT FROM %s)"
-            params.extend([usuario_id, ciclo_inicio])
+            query_params.extend([usuario_id, ciclo_inicio])
 
         row = conn.execute(f"""
-            SELECT p.id AS producto_id, p.nombre, p.categoria, p.precio, p.codigo_barra,
+            SELECT p.id AS producto_id, p.nombre, p.categoria, p.precio, p.costo, p.codigo_barra,
                    COALESCE(si.stock, 0) AS stock_sistema
             FROM productos p
             LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = 1
             LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id
                 {ciclo_join}
-            WHERE p.negocio_id = %s AND p.disponible = TRUE
+            WHERE {filtro_where}
                 AND (est.estado IS NULL OR est.estado = 'saltado')
                 {excl}
             ORDER BY {order_sql}
             LIMIT 1
-        """, tuple(params)).fetchone()
+        """, tuple(query_params)).fetchone()
 
         conn.close()
         if not row:
-            return jsonify({'ok': True, 'item': None, 'mensaje': 'No hay ítems pendientes'})
+            return jsonify({'ok': True, 'item': None, 'mensaje': 'No hay ítems pendientes en este ciclo'})
+        return jsonify({
+            'ok': True,
+            'item': {
+                'producto_id': row['producto_id'],
+                'nombre': row['nombre'],
+                'categoria': row['categoria'],
+                'precio': float(row['precio'] or 0),
+                'costo': float(row['costo'] or 0),
+                'stock_sistema': float(row['stock_sistema'] or 0),
+                'codigo_barra': row['codigo_barra'],
+            }
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
         return jsonify({
             'ok': True,
             'item': {
@@ -9354,10 +9382,13 @@ def inv_dist_resumen(negocio_id):
         ).fetchone()
         ciclo_inicio = ciclo['inicio'] if ciclo and ciclo['inicio'] else None
 
-        # Total productos del negocio
+        # Filtro de catálogo configurado (por defecto solo ítems con movimientos en Kardex)
+        filtro_where, filtro_params = _obtener_filtro_productos_sql(conn, negocio_id, 'p')
+
+        # Total productos que aplican al ciclo según el filtro
         total = conn.execute(
-            "SELECT COUNT(*) AS n FROM productos WHERE negocio_id = %s AND disponible = TRUE",
-            (negocio_id,)
+            f"SELECT COUNT(*) AS n FROM productos p WHERE {filtro_where}",
+            tuple(filtro_params)
         ).fetchone()['n']
 
         # Estados
@@ -9369,17 +9400,18 @@ def inv_dist_resumen(negocio_id):
         """, (negocio_id, ciclo_inicio)).fetchall()
         resumen_estados = {r['estado']: r['n'] for r in estados}
 
-        # Detalle items contados
-        items = conn.execute("""
-            SELECT est.producto_id, p.nombre, p.categoria, est.estado, est.fecha_ultimo_conteo,
-                   est.quién_contó, est.conteos_total,
+        # Detalle items contados o pendientes que cumplen el filtro
+        items = conn.execute(f"""
+            SELECT p.id AS producto_id, p.nombre, p.categoria, p.precio, p.costo,
+                   est.estado, est.fecha_ultimo_conteo, est.quién_contó, est.conteos_total,
                    COALESCE(si.stock, 0) AS stock_sistema
-            FROM inventario_distribuido_estado est
-            JOIN productos p ON p.id = est.producto_id
-            LEFT JOIN saldos_inventario si ON si.producto_id = est.producto_id AND si.negocio_id = est.negocio_id AND si.bodega = 1
-            WHERE est.negocio_id = %s AND est.ciclo_inicio IS NOT DISTINCT FROM %s
-            ORDER BY est.fecha_ultimo_conteo DESC
-        """, (negocio_id, ciclo_inicio)).fetchall()
+            FROM productos p
+            LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = 1
+            LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id
+                {'AND est.ciclo_inicio IS NOT DISTINCT FROM %s' if ciclo_inicio else ''}
+            WHERE {filtro_where}
+            ORDER BY est.fecha_ultimo_conteo DESC NULLS LAST, (COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC
+        """, tuple(([ciclo_inicio] if ciclo_inicio else []) + filtro_params)).fetchall()
 
         # Configuración del ciclo
         dias_ciclo_row = conn.execute(
@@ -9389,10 +9421,16 @@ def inv_dist_resumen(negocio_id):
         dias_ciclo = int(dias_ciclo_row['valor_numerico'] or 15) if dias_ciclo_row and dias_ciclo_row['valor_numerico'] else 15
 
         modalidad_row = conn.execute(
-            "SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inv_distribuido_modalidad' AND negocio_id = %s",
+            "SELECT valor_numerico FROM parametros_sistema WHERE nombre = 'inv_distribuido_modalidad' AND negocio_id = %s",
             (negocio_id,)
         ).fetchone()
-        modalidad = modalidad_row['valor_texto'] if modalidad_row and modalidad_row['valor_texto'] else 'rafaga'
+        modalidad = modalidad_row['valor_numerico'] if modalidad_row and modalidad_row['valor_numerico'] else 'rafaga'
+
+        filtro_row = conn.execute(
+            "SELECT valor_numerico FROM parametros_sistema WHERE nombre = 'inv_distribuido_filtro_items' AND negocio_id = %s",
+            (negocio_id,)
+        ).fetchone()
+        filtro_items = filtro_row['valor_numerico'] if filtro_row and filtro_row['valor_numerico'] else 'con_kardex'
 
         cuota_row = conn.execute(
             "SELECT valor_numerico FROM parametros_sistema WHERE nombre = 'inv_distribuido_cuota_sesion' AND negocio_id = %s",
@@ -9412,8 +9450,8 @@ def inv_dist_resumen(negocio_id):
         dias_transcurridos = max(1, (hoy - fecha_inicio_date).days + 1)
         fecha_fin_estimada = fecha_inicio_date + timedelta(days=dias_ciclo)
 
-        n_contados = resumen_estados.get('contado', 0)
-        n_saltados = resumen_estados.get('saltado', 0)
+        n_contados = sum(1 for it in items if it['estado'] == 'contado')
+        n_saltados = sum(1 for it in items if it['estado'] == 'saltado')
         n_pendientes = max(0, total - n_contados - n_saltados)
 
         pct_tiempo = min(100.0, round((dias_transcurridos / max(1, dias_ciclo)) * 100, 1))
@@ -9435,23 +9473,24 @@ def inv_dist_resumen(negocio_id):
             mensaje_ritmo = f'Atención: llevas {rezago} ítems de rezago acumulado. Te sugerimos una ronda rápida hoy para desatrasarte.'
 
         # Siguiente ítem recomendado en cola según prioridad
-        sig_row = conn.execute("""
-            SELECT p.id, p.nombre, p.categoria, p.precio, p.codigo_barra,
+        sig_row = conn.execute(f"""
+            SELECT p.id, p.nombre, p.categoria, p.precio, p.costo, p.codigo_barra,
                    COALESCE(si.stock, 0) AS stock_sistema
             FROM productos p
             LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = 1
             LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id
-            WHERE p.negocio_id = %s AND p.disponible = TRUE
+            WHERE {filtro_where}
                 AND (est.estado IS NULL OR est.estado = 'saltado')
-            ORDER BY (p.precio * COALESCE(si.stock, 0)) DESC
+            ORDER BY (COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC
             LIMIT 1
-        """, (negocio_id,)).fetchone()
+        """, tuple(filtro_params)).fetchone()
 
         sig_item = {
             'producto_id': sig_row['id'],
             'nombre': sig_row['nombre'],
             'categoria': sig_row['categoria'],
             'precio': float(sig_row['precio'] or 0),
+            'costo': float(sig_row['costo'] or 0),
             'stock_sistema': float(sig_row['stock_sistema'] or 0),
             'codigo_barra': sig_row['codigo_barra']
         } if sig_row else None

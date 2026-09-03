@@ -1,53 +1,160 @@
 <!-- Widget: Modal de Inventario Físico Distribuido (Inyectable en Pantallas Operativas) -->
-<div id="invdist-modal-conteo" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden" style="font-family: 'Inter', system-ui, sans-serif;">
-  <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 mx-4 border border-gray-150 animate-in fade-in zoom-in-95 duration-200">
-    <div class="text-center mb-4">
-      <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-2 shadow-2xs">
-        📦
+<div id="invdist-modal-root" class="hidden" style="font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+
+  <!-- ═══════════════ PILL FLOTANTE DE AVISO (DISCRETO) ═══════════════ -->
+  <div id="invdist-floating-pill" class="fixed bottom-5 right-5 z-[9990] bg-slate-900/90 backdrop-blur-md text-white px-4 py-2.5 rounded-2xl shadow-xl border border-slate-700/60 flex items-center gap-3 cursor-pointer hover:bg-slate-900 transition-all transform hover:scale-[1.02] active:scale-95 hidden animate-in fade-in slide-in-from-bottom-3 duration-300">
+    <div class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+      📦
+    </div>
+    <div class="text-left">
+      <span class="block text-[11px] font-extrabold text-blue-400 uppercase tracking-wider">Inventario Físico</span>
+      <span class="block text-xs font-semibold text-slate-200">Tienes <strong id="invdist-pill-items-pendientes" class="text-white">3 insumos</strong> pendientes</span>
+    </div>
+    <button type="button" onclick="invDistAbrirModalAdvertencia()" class="ml-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold px-3 py-1.5 rounded-xl transition shadow-xs">
+      Auditar (~2 min)
+    </button>
+  </div>
+
+  <!-- ═══════════════ MODAL PASO 1: ADVERTENCIA PREVIA DE INTEGRIDAD DOCUMENTAL ═══════════════ -->
+  <div id="invdist-modal-advertencia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+      
+      <div class="text-center mb-4">
+        <div class="w-14 h-14 bg-amber-50 text-amber-600 border border-amber-200 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3 shadow-2xs">
+          ⚖️
+        </div>
+        <span class="text-[10px] font-extrabold text-amber-700 uppercase tracking-wider bg-amber-100/70 border border-amber-200 px-3 py-0.5 rounded-full">
+          Control de Integridad Contable
+        </span>
+        <h3 class="text-lg font-black text-slate-900 mt-2">¿Están tus documentos al día?</h3>
+        <p class="text-xs text-slate-500 mt-1">
+          Hola, <strong class="text-slate-800">{{ session.get('nombre', session.get('nombre_usuario', 'David y Margarita')) }}</strong>
+        </p>
       </div>
-      <h3 class="text-base font-bold text-gray-900">Muestreo Físico de Inventario</h3>
-      <p class="text-[11px] text-gray-500 mt-0.5">Auditoría distribuida continua. Digita lo que ves físicamente.</p>
-    </div>
 
-    <div id="invdist-item-info" class="bg-gray-50 border border-gray-150 rounded-xl p-3 mb-4 text-center">
-      <p id="invdist-nombre" class="font-bold text-gray-900 text-sm leading-tight"></p>
-      <p id="invdist-categoria" class="text-[11px] text-gray-500 mt-0.5"></p>
-      <p id="invdist-codigo" class="text-[10px] text-gray-400 font-mono mt-0.5"></p>
-    </div>
+      <div class="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 mb-5 text-xs text-amber-950 leading-relaxed space-y-2">
+        <p>
+          Para que el conteo físico de inventario genere <strong>ajustes reales y válidos en el Kardex y la contabilidad</strong>, es indispensable que:
+        </p>
+        <ul class="list-disc pl-4 space-y-1 font-medium text-amber-900">
+          <li>Todas las <strong>facturas de compra</strong> de insumos ya estén registradas.</li>
+          <li>Los <strong>reportes de producción</strong> de cocina estén asentados.</li>
+          <li>Todas las <strong>ventas y comandas</strong> del turno estén al día.</li>
+        </ul>
+        <p class="text-[11px] font-bold text-amber-800 pt-1 border-t border-amber-200/60">
+          ⚠️ Contar inventario con facturas o documentos pendientes genera diferencias falsas en los saldos.
+        </p>
+      </div>
 
-    <div class="mb-4">
-      <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1 text-center">Cantidad física observada</label>
-      <input type="text" inputmode="decimal" id="invdist-cantidad" placeholder="0"
-             class="w-full border-2 border-gray-200 focus:border-blue-500 rounded-xl px-4 py-2.5 text-2xl font-black font-mono text-center outline-none transition"
-             onfocus="this.select()" onkeydown="if(event.key==='Enter') invDistWidgetContar()">
-    </div>
+      <div class="space-y-2.5">
+        <button type="button" onclick="invDistConfirmarDocumentosAlDia()"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-2xl text-xs transition shadow-md flex items-center justify-center gap-2">
+          <span>✓</span> Mis documentos están al día (Iniciar Ronda)
+        </button>
 
-    <div class="flex gap-2">
-      <button onclick="invDistWidgetContar()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition text-xs shadow-xs">
-        ✓ Registrar
-      </button>
-      <button onclick="invDistWidgetSaltar()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 px-3.5 rounded-xl transition text-xs">
-        Saltar
-      </button>
-      <button onclick="invDistWidgetCancelar()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-2.5 px-3 rounded-xl transition text-xs">
-        Pausar
-      </button>
-    </div>
+        <button type="button" onclick="invDistAbortarPorDocumentos()"
+                class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-2xl text-xs transition">
+          ❌ Tengo documentos pendientes (Ingresarlos primero)
+        </button>
+      </div>
 
-    <p id="invdist-mensaje" class="text-xs text-center mt-3 hidden font-semibold"></p>
-  </div>
-</div>
-
-<!-- Modal Pausar Conteos -->
-<div id="invdist-modal-cancelar" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[10000] flex items-center justify-center hidden" style="font-family: 'Inter', system-ui, sans-serif;">
-  <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 mx-4 border border-gray-150">
-    <h3 class="text-base font-bold text-gray-900 mb-1">¿Pausar conteos por ahora?</h3>
-    <p class="text-xs text-gray-500 mb-4 leading-relaxed">El sistema dejará de solicitar conteos en esta pantalla durante el lapso de recordatorio configurado.</p>
-    <div class="flex gap-2">
-      <button onclick="invDistWidgetConfirmarCancelar()" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl text-xs transition">Sí, pausar</button>
-      <button onclick="document.getElementById('invdist-modal-cancelar').classList.add('hidden')" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-xs transition">Volver</button>
     </div>
   </div>
+
+  <!-- ═══════════════ MODAL PASO 2: CONTEO FÍSICO RÁPIDO ENCADENADO ═══════════════ -->
+  <div id="invdist-modal-conteo" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Progreso de la ronda -->
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <span class="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full" id="invdist-ronda-badge">
+          Ronda Rápida • Ítem 1 de 3
+        </span>
+        <span class="text-[11px] font-bold text-slate-400 font-mono" id="invdist-ronda-pct">33%</span>
+      </div>
+
+      <!-- Barra de progreso visual -->
+      <div class="w-full bg-slate-100 rounded-full h-1.5 mb-4 overflow-hidden">
+        <div id="invdist-ronda-bar" class="bg-blue-600 h-full rounded-full transition-all duration-300" style="width: 33%;"></div>
+      </div>
+
+      <!-- Tarjeta del Ítem a Auditar -->
+      <div id="invdist-item-info" class="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 mb-4 text-center">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5" id="invdist-categoria">MATERIA PRIMA</span>
+        <h4 id="invdist-nombre" class="font-black text-slate-900 text-sm leading-tight">Cargando insumo...</h4>
+        <div class="flex items-center justify-center gap-3 mt-2 pt-2 border-t border-slate-200/60 text-[11px] text-slate-500">
+          <span>Stock Teórico: <strong id="invdist-stock-teorico" class="font-mono text-slate-800 font-bold">0</strong></span>
+          <span id="invdist-costo-badge" class="hidden font-mono text-slate-400"></span>
+        </div>
+        <p id="invdist-codigo" class="text-[10px] text-slate-400 font-mono mt-0.5"></p>
+      </div>
+
+      <!-- Entrada de Conteo Físico -->
+      <div class="mb-4">
+        <label class="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide mb-1 text-center">
+          Cantidad física que tienes en bodega / nevera
+        </label>
+        <input type="text" inputmode="decimal" id="invdist-cantidad" placeholder="0"
+               class="w-full border-2 border-slate-200 focus:border-blue-500 rounded-2xl px-4 py-3 text-3xl font-black font-mono text-center outline-none transition bg-white"
+               onfocus="this.select()" onkeydown="if(event.key==='Enter') invDistWidgetContar()">
+      </div>
+
+      <!-- Botones de Acción -->
+      <div class="flex gap-2">
+        <button onclick="invDistWidgetContar()" id="btn-invdist-contar"
+                class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-3 rounded-2xl transition text-xs shadow-md">
+          ✓ Registrar y Continuar
+        </button>
+        <button onclick="invDistWidgetSaltar()"
+                class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-3.5 rounded-2xl transition text-xs">
+          Saltar
+        </button>
+        <button onclick="invDistWidgetCancelar()"
+                class="bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold py-3 px-3 rounded-2xl transition text-xs">
+          ✕
+        </button>
+      </div>
+
+      <p id="invdist-mensaje" class="text-xs text-center mt-3 hidden font-bold"></p>
+    </div>
+  </div>
+
+  <!-- ═══════════════ MODAL PASO 3: META DE LA RONDA CUMPLIDA ═══════════════ -->
+  <div id="invdist-modal-exito" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 border border-slate-200 text-center animate-in fade-in zoom-in-95 duration-200">
+      <div class="w-14 h-14 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-3 shadow-2xs">
+        🎉
+      </div>
+      <h3 class="text-base font-black text-slate-900">¡Meta de la Ronda Cumplida!</h3>
+      <p class="text-xs text-slate-500 mt-1 leading-relaxed">
+        Has auditado con éxito la cuota de hoy en menos de 2 minutos. Tu inventario físico y Kardex están al día.
+      </p>
+      
+      <div class="my-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 text-xs text-emerald-900 font-bold">
+        ✓ <span id="invdist-exito-items-contados">3</span> insumos verificados
+      </div>
+
+      <button type="button" onclick="invDistCerrarModalExito()"
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-2xl text-xs transition shadow-md">
+        Entendido, continuar trabajando
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ MODAL PAUSAR RONDA ═══════════════ -->
+  <div id="invdist-modal-cancelar" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[10000] flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 border border-slate-200">
+      <h3 class="text-base font-black text-slate-900 mb-1">¿Posponer la ronda por ahora?</h3>
+      <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+        El sistema pausará las solicitudes de conteo durante el lapso de recordatorio configurado.
+      </p>
+      <div class="flex gap-2">
+        <button onclick="invDistWidgetConfirmarCancelar()" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-extrabold py-2.5 rounded-xl text-xs transition">Sí, posponer</button>
+        <button onclick="document.getElementById('invdist-modal-cancelar').classList.add('hidden')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition">Volver</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -55,6 +162,9 @@ let _invDistNegocioId = null;
 let _invDistItemActual = null;
 let _invDistConfig = null;
 let _invDistCancelHasta = null;
+let _invDistRondaIndice = 0;
+let _invDistRondaCuota = 3;
+let _invDistModalidad = 'rafaga';
 
 (async function initInvDistWidget() {
   if (window._invDistWidgetInitialized) return;
@@ -72,7 +182,12 @@ let _invDistCancelHasta = null;
     if (!d.ok || !d.config) return;
     _invDistConfig = d.config;
 
-    if (_invDistConfig.inv_distribuido_activo?.valor !== 'true') return;
+    // Verificar si está activo (soporta boolean o string)
+    const activo = (_invDistConfig.inv_distribuido_activo?.valor === true || _invDistConfig.inv_distribuido_activo?.valor === 'true');
+    if (!activo) return;
+
+    _invDistModalidad = _invDistConfig.inv_distribuido_modalidad?.valor || 'rafaga';
+    _invDistRondaCuota = parseInt(_invDistConfig.inv_distribuido_cuota_sesion?.valor || 3);
 
     const modulosHabilitados = (_invDistConfig.inv_distribuido_modulos?.valor || '').split(',');
     const path = window.location.pathname.toLowerCase();
@@ -88,7 +203,7 @@ let _invDistCancelHasta = null;
       moduloActual = 'dashboard';
     }
 
-    // Comprobar si estamos en la pestaña o vista de gastos
+    // Comprobar panel gastos
     const panelGastos = document.getElementById('panel-gastos') || document.getElementById('tab-gastos');
     if (panelGastos && panelGastos.offsetParent !== null) {
       if (modulosHabilitados.includes('gastos')) moduloActual = 'gastos';
@@ -96,11 +211,40 @@ let _invDistCancelHasta = null;
 
     if (!moduloActual || !modulosHabilitados.includes(moduloActual)) return;
 
-    const pausaSeg = parseInt(_invDistConfig.inv_distribuido_pausa_seg?.valor || 30);
+    // Hacer visible el contenedor raíz
+    const root = document.getElementById('invdist-modal-root');
+    if (root) root.classList.remove('hidden');
+
+    const pausaSeg = parseInt(_invDistConfig.inv_distribuido_pausa_seg?.valor || 20);
     const horarioInicio = _invDistConfig.inv_distribuido_horario_inicio?.valor || '08:00';
     const horarioFin = _invDistConfig.inv_distribuido_horario_fin?.valor || '17:00';
-    let lastActivity = Date.now();
 
+    // Comprobar si ya se completó la ronda en esta sesión de navegador
+    const rondaCompletadaKey = `invdist_ronda_ok_${_invDistNegocioId}_${new Date().toISOString().slice(0,10)}`;
+    if (sessionStorage.getItem(rondaCompletadaKey)) {
+      return; // Ya hizo la ronda de hoy en esta sesión
+    }
+
+    // Mostrar pill flotante con aviso sutil
+    const pill = document.getElementById('invdist-floating-pill');
+    if (pill) {
+      document.getElementById('invdist-pill-items-pendientes').textContent = `${_invDistRondaCuota} insumos`;
+      pill.classList.remove('hidden');
+    }
+
+    // Si es modo ráfaga, disparar modal de advertencia tras 6 segundos de cortesía al entrar
+    if (_invDistModalidad === 'rafaga') {
+      setTimeout(() => {
+        const cancelado = sessionStorage.getItem('invdist_cancelado_temporal');
+        if (!cancelado && !sessionStorage.getItem(rondaCompletadaKey)) {
+          invDistAbrirModalAdvertencia();
+        }
+      }, 6000);
+      return;
+    }
+
+    // Si es modo distribuido tradicional, monitorear inactividad
+    let lastActivity = Date.now();
     ['mousemove','keydown','click','scroll','touchstart'].forEach(evt => {
       document.addEventListener(evt, () => { lastActivity = Date.now(); }, {passive: true});
     });
@@ -113,11 +257,12 @@ let _invDistCancelHasta = null;
       const hhmm = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
       if (hhmm < horarioInicio || hhmm > horarioFin) return;
 
-      const modal = document.getElementById('invdist-modal-conteo');
-      if (modal && !modal.classList.contains('hidden')) return;
+      const modalAdv = document.getElementById('invdist-modal-advertencia');
+      const modalCon = document.getElementById('invdist-modal-conteo');
+      if ((modalAdv && !modalAdv.classList.contains('hidden')) || (modalCon && !modalCon.classList.contains('hidden'))) return;
 
       if (Date.now() - lastActivity >= pausaSeg * 1000) {
-        invDistWidgetSiguiente();
+        invDistAbrirModalAdvertencia();
         lastActivity = Date.now();
       }
     }, 5000);
@@ -127,25 +272,80 @@ let _invDistCancelHasta = null;
   }
 })();
 
+// ── PASO 1: Modal de Advertencia ──
+function invDistAbrirModalAdvertencia() {
+  const pill = document.getElementById('invdist-floating-pill');
+  if (pill) pill.classList.add('hidden');
+  document.getElementById('invdist-modal-advertencia').classList.remove('hidden');
+}
+
+function invDistConfirmarDocumentosAlDia() {
+  document.getElementById('invdist-modal-advertencia').classList.add('hidden');
+  _invDistRondaIndice = 0;
+  invDistWidgetSiguiente();
+}
+
+function invDistAbortarPorDocumentos() {
+  document.getElementById('invdist-modal-advertencia').classList.add('hidden');
+  sessionStorage.setItem('invdist_cancelado_temporal', '1');
+  
+  // Mensaje discreto de agradecimiento por cuidar la contabilidad
+  const pill = document.getElementById('invdist-floating-pill');
+  if (pill) {
+    pill.classList.remove('hidden');
+    pill.innerHTML = `
+      <div class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+        ⚖️
+      </div>
+      <div class="text-left text-xs">
+        <span class="block font-bold text-amber-300">Auditoría pausada</span>
+        <span class="block text-slate-300">Ingresa tus documentos pendientes</span>
+      </div>
+      <button onclick="invDistAbrirModalAdvertencia()" class="ml-2 text-xs font-bold underline text-white">Reanudar</button>
+    `;
+  }
+}
+
+// ── PASO 2: Conteo Físico Encadenado ──
 async function invDistWidgetSiguiente() {
   const modal = document.getElementById('invdist-modal-conteo');
-  if (modal && !modal.classList.contains('hidden')) return;
   try {
     const r = await fetch(`/api/inventario/${_invDistNegocioId}/inv-dist/siguiente`);
     const d = await r.json();
-    if (!d.ok || !d.item) return;
+    if (!d.ok || !d.item) {
+      // No hay más ítems pendientes en el ciclo
+      modal.classList.add('hidden');
+      invDistMostrarExito(_invDistRondaIndice || 1);
+      return;
+    }
     _invDistItemActual = d.item;
+    _invDistRondaIndice++;
 
+    // Actualizar badges de la ronda
+    const totalRonda = Math.max(_invDistRondaIndice, _invDistRondaCuota);
+    const pct = Math.min(100, Math.round((_invDistRondaIndice / totalRonda) * 100));
+    document.getElementById('invdist-ronda-badge').textContent = `Ronda Rápida • Ítem ${_invDistRondaIndice} de ${totalRonda}`;
+    document.getElementById('invdist-ronda-pct').textContent = `${pct}%`;
+    document.getElementById('invdist-ronda-bar').style.width = `${pct}%`;
+
+    // Llenar tarjeta del ítem
     document.getElementById('invdist-nombre').textContent = d.item.nombre;
-    document.getElementById('invdist-categoria').textContent = d.item.categoria || 'Sin categoría';
-    document.getElementById('invdist-codigo').textContent = d.item.codigo_barra ? `Cód: ${d.item.codigo_barra}` : '';
+    document.getElementById('invdist-categoria').textContent = d.item.categoria || 'MATERIA PRIMA';
+    document.getElementById('invdist-stock-teorico').textContent = Number(d.item.stock_sistema).toLocaleString('es-CO');
+    
+    if (d.item.codigo_barra) {
+      document.getElementById('invdist-codigo').textContent = `Cód: ${d.item.codigo_barra}`;
+    } else {
+      document.getElementById('invdist-codigo').textContent = '';
+    }
+
     document.getElementById('invdist-cantidad').value = '';
     const msg = document.getElementById('invdist-mensaje');
     msg.classList.add('hidden');
     msg.textContent = '';
 
     modal.classList.remove('hidden');
-    setTimeout(() => document.getElementById('invdist-cantidad').focus(), 200);
+    setTimeout(() => document.getElementById('invdist-cantidad').focus(), 150);
   } catch(e) {
     console.error('Error invDistWidgetSiguiente:', e);
   }
@@ -158,27 +358,47 @@ async function invDistWidgetContar() {
     alert('Ingresa una cantidad numérica válida');
     return;
   }
+
+  const btn = document.getElementById('btn-invdist-contar');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
   try {
     const r = await fetch(`/api/inventario/${_invDistNegocioId}/inv-dist/conteo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         producto_id: _invDistItemActual.producto_id,
-        cantidad_fisica: parseFloat(valStr)
+        cantidad_fisica: parseFloat(valStr),
+        usuario_nombre: '{{ session.get("nombre", session.get("nombre_usuario", "Operario")) }}'
       })
     });
     const d = await r.json();
+    btn.disabled = false;
+    btn.textContent = '✓ Registrar y Continuar';
+
     if (d.ok) {
       const msg = document.getElementById('invdist-mensaje');
       msg.textContent = `✓ ${d.mensaje}`;
       msg.className = 'text-xs text-center mt-3 text-emerald-600 font-bold block';
-      setTimeout(() => {
-        document.getElementById('invdist-modal-conteo').classList.add('hidden');
-      }, 1500);
+
+      // Verificar si ya completó la cuota de la ronda
+      if (_invDistRondaIndice >= _invDistRondaCuota) {
+        setTimeout(() => {
+          document.getElementById('invdist-modal-conteo').classList.add('hidden');
+          invDistMostrarExito(_invDistRondaIndice);
+        }, 800);
+      } else {
+        setTimeout(() => {
+          invDistWidgetSiguiente();
+        }, 600);
+      }
     } else {
       alert(d.error || 'Error al registrar conteo');
     }
   } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '✓ Registrar y Continuar';
     console.error('Error invDistWidgetContar:', e);
   }
 }
@@ -189,10 +409,32 @@ async function invDistWidgetSaltar() {
     await fetch(`/api/inventario/${_invDistNegocioId}/inv-dist/saltar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ producto_id: _invDistItemActual.producto_id })
+      body: JSON.stringify({
+        producto_id: _invDistItemActual.producto_id,
+        usuario_nombre: '{{ session.get("nombre", session.get("nombre_usuario", "Operario")) }}'
+      })
     });
   } catch(e) {}
-  document.getElementById('invdist-modal-conteo').classList.add('hidden');
+
+  // Pasar al siguiente de la ronda
+  if (_invDistRondaIndice >= _invDistRondaCuota) {
+    document.getElementById('invdist-modal-conteo').classList.add('hidden');
+    invDistMostrarExito(_invDistRondaIndice);
+  } else {
+    invDistWidgetSiguiente();
+  }
+}
+
+// ── PASO 3: Éxito y Cierre de Ronda ──
+function invDistMostrarExito(totalContados) {
+  document.getElementById('invdist-exito-items-contados').textContent = totalContados;
+  document.getElementById('invdist-modal-exito').classList.remove('hidden');
+  const rondaCompletadaKey = `invdist_ronda_ok_${_invDistNegocioId}_${new Date().toISOString().slice(0,10)}`;
+  sessionStorage.setItem(rondaCompletadaKey, '1');
+}
+
+function invDistCerrarModalExito() {
+  document.getElementById('invdist-modal-exito').classList.add('hidden');
 }
 
 function invDistWidgetCancelar() {
@@ -204,6 +446,8 @@ async function invDistWidgetConfirmarCancelar() {
   document.getElementById('invdist-modal-conteo').classList.add('hidden');
   const min = parseInt(_invDistConfig?.inv_distribuido_recordar_min?.valor || 15);
   _invDistCancelHasta = Date.now() + min * 60 * 1000;
+  sessionStorage.setItem('invdist_cancelado_temporal', '1');
+
   try {
     await fetch(`/api/inventario/${_invDistNegocioId}/inv-dist/cancelar`, {
       method: 'POST',

@@ -612,63 +612,52 @@
         </div>
       </div>
 
-      <!-- Barra de Navegación y Niveles Jerárquicos del Balance -->
-      <div class="bg-white border border-slate-200 rounded-2xl p-3.5 mb-4 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <!-- Botones de Vista Rápida -->
-        <div class="flex items-center flex-wrap gap-1.5 text-xs">
-          <span class="font-extrabold text-slate-500 uppercase text-[10px] mr-1 tracking-wider">Profundidad:</span>
-          <button type="button" onclick="setNivelBalance('todos')" id="btn-bal-nivel-todos"
-                  class="bal-nivel-btn bg-blue-600 text-white border-blue-700 shadow-xs px-3 py-1.5 rounded-xl font-bold transition">
-            🌐 Todo el Árbol
-          </button>
-          <button type="button" onclick="setNivelBalance('movimiento')" id="btn-bal-nivel-movimiento"
-                  class="bal-nivel-btn px-3 py-1.5 rounded-xl font-bold transition">
-            ⚡ Solo Movimientos
-          </button>
-          <button type="button" onclick="setNivelBalance(1)" id="btn-bal-nivel-1"
-                  class="bal-nivel-btn px-2.5 py-1.5 rounded-xl font-bold transition">
-            1 Dígito (Clase)
-          </button>
-          <button type="button" onclick="setNivelBalance(2)" id="btn-bal-nivel-2"
-                  class="bal-nivel-btn px-2.5 py-1.5 rounded-xl font-bold transition">
-            2 Dígitos (Grupo)
-          </button>
-          <button type="button" onclick="setNivelBalance(3)" id="btn-bal-nivel-3"
-                  class="bal-nivel-btn px-2.5 py-1.5 rounded-xl font-bold transition">
-            4 Dígitos (Cuenta)
-          </button>
+      <!-- Conmutadores de Capas / Niveles de Cuentas del Balance -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-3 mb-4 shadow-xs flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+            Niveles Visibles del Balance:
+          </span>
+          <span class="text-[11px] text-slate-400 font-medium hidden sm:inline">(Haz clic en un nivel para ocultarlo o mostrarlo)</span>
         </div>
 
-        <!-- Switches / Toggles por Nivel de Caracteres -->
-        <div class="flex items-center flex-wrap gap-2 text-xs border-t md:border-t-0 md:border-l border-slate-200 pt-2 md:pt-0 md:pl-3">
-          <span class="font-extrabold text-slate-400 uppercase text-[10px] tracking-wider">Ver:</span>
-          <label class="inline-flex items-center gap-1 cursor-pointer select-none text-slate-700 hover:text-slate-900 font-semibold text-xs">
-            <input type="checkbox" id="chk-bal-l1" checked onchange="filtrarBalancePorToggles()" class="rounded text-blue-600 focus:ring-0">
-            <span>1 char</span>
-          </label>
-          <label class="inline-flex items-center gap-1 cursor-pointer select-none text-slate-700 hover:text-slate-900 font-semibold text-xs">
-            <input type="checkbox" id="chk-bal-l2" checked onchange="filtrarBalancePorToggles()" class="rounded text-blue-600 focus:ring-0">
-            <span>2 chars</span>
-          </label>
-          <label class="inline-flex items-center gap-1 cursor-pointer select-none text-slate-700 hover:text-slate-900 font-semibold text-xs">
-            <input type="checkbox" id="chk-bal-l3" checked onchange="filtrarBalancePorToggles()" class="rounded text-blue-600 focus:ring-0">
-            <span>4 chars</span>
-          </label>
-          <label class="inline-flex items-center gap-1 cursor-pointer select-none text-slate-700 hover:text-slate-900 font-semibold text-xs">
-            <input type="checkbox" id="chk-bal-mov" checked onchange="filtrarBalancePorToggles()" class="rounded text-blue-600 focus:ring-0">
-            <span>6+ chars</span>
-          </label>
-          <div class="h-4 w-px bg-slate-200 mx-1"></div>
-          <button type="button" onclick="colapsarTodoElArbol()" title="Contraer todo el árbol a Nivel 1"
-                  class="text-[11px] font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition">
-            ◀ Colapsar
+        <div class="flex items-center flex-wrap gap-2 text-xs">
+          <!-- Botón Conmutador 1 Char -->
+          <button type="button" id="btn-toggle-l1" onclick="toggleCapaBalance(1)"
+                  class="capa-btn px-3 py-1.5 rounded-xl font-bold border transition flex items-center gap-1.5 bg-blue-600 text-white border-blue-700 shadow-xs cursor-pointer select-none">
+            <span id="icon-toggle-l1">✓</span> 1 Dígito <span class="text-[10px] font-normal opacity-85">(Clase)</span>
           </button>
-          <button type="button" onclick="expandirTodoElArbol()" title="Desplegar todas las ramas"
-                  class="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition">
-            ▼ Desplegar
+
+          <!-- Botón Conmutador 2 Chars -->
+          <button type="button" id="btn-toggle-l2" onclick="toggleCapaBalance(2)"
+                  class="capa-btn px-3 py-1.5 rounded-xl font-bold border transition flex items-center gap-1.5 bg-blue-600 text-white border-blue-700 shadow-xs cursor-pointer select-none">
+            <span id="icon-toggle-l2">✓</span> 2 Dígitos <span class="text-[10px] font-normal opacity-85">(Grupo)</span>
+          </button>
+
+          <!-- Botón Conmutador 4 Chars -->
+          <button type="button" id="btn-toggle-l4" onclick="toggleCapaBalance(4)"
+                  class="capa-btn px-3 py-1.5 rounded-xl font-bold border transition flex items-center gap-1.5 bg-blue-600 text-white border-blue-700 shadow-xs cursor-pointer select-none">
+            <span id="icon-toggle-l4">✓</span> 4 Dígitos <span class="text-[10px] font-normal opacity-85">(Cuenta)</span>
+          </button>
+
+          <!-- Botón Conmutador 6+ Chars -->
+          <button type="button" id="btn-toggle-l6" onclick="toggleCapaBalance(6)"
+                  class="capa-btn px-3 py-1.5 rounded-xl font-bold border transition flex items-center gap-1.5 bg-blue-600 text-white border-blue-700 shadow-xs cursor-pointer select-none">
+            <span id="icon-toggle-l6">✓</span> 6+ Dígitos <span class="text-[10px] font-normal opacity-85">(Movimiento)</span>
+          </button>
+
+          <div class="h-4 w-px bg-slate-200 mx-1"></div>
+
+          <!-- Botón para Mostrar Todo -->
+          <button type="button" onclick="mostrarTodasLasCapas()"
+                  class="px-2.5 py-1.5 rounded-xl font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition text-xs cursor-pointer"
+                  title="Restablecer y mostrar todos los niveles">
+            Mostrar Todo
           </button>
         </div>
       </div>
+
 
       <!-- Tabla del Balance de Comprobación -->
       <div class="overflow-x-auto border border-gray-200 rounded-2xl shadow-xs bg-white">
@@ -2944,157 +2933,52 @@ function inicializarBalanceTab() {
   cargarBalanceComprobacion();
 }
 
-let _balanceRamasColapsadas = new Set();
-let _balanceCuentasData = [];
+let _capasVisibles = {
+  1: true,
+  2: true,
+  4: true,
+  6: true
+};
 
-function toggleRamaBalance(codigo) {
-  if (_balanceRamasColapsadas.has(codigo)) {
-    _balanceRamasColapsadas.delete(codigo);
-  } else {
-    _balanceRamasColapsadas.add(codigo);
-  }
-  aplicarVisibilidadBalance();
+function toggleCapaBalance(numChars) {
+  _capasVisibles[numChars] = !_capasVisibles[numChars];
+  aplicarVisibilidadCapas();
 }
 
-function colapsarTodoElArbol() {
-  const rows = document.querySelectorAll('#bal-tbody tr.bal-row');
-  _balanceRamasColapsadas.clear();
-  rows.forEach(r => {
-    const chars = parseInt(r.dataset.chars || 0);
-    const codigo = r.dataset.codigo;
-    if (chars === 1 || chars === 2) {
-      _balanceRamasColapsadas.add(codigo);
+function mostrarTodasLasCapas() {
+  _capasVisibles[1] = true;
+  _capasVisibles[2] = true;
+  _capasVisibles[4] = true;
+  _capasVisibles[6] = true;
+  aplicarVisibilidadCapas();
+}
+
+function aplicarVisibilidadCapas() {
+  [1, 2, 4, 6].forEach(n => {
+    const btn = document.getElementById(`btn-toggle-l${n}`);
+    const icon = document.getElementById(`icon-toggle-l${n}`);
+    const activo = _capasVisibles[n];
+    if (btn) {
+      if (activo) {
+        btn.className = 'capa-btn px-3 py-1.5 rounded-xl font-bold border transition flex items-center gap-1.5 bg-blue-600 text-white border-blue-700 shadow-xs cursor-pointer select-none';
+        if (icon) icon.textContent = '✓';
+      } else {
+        btn.className = 'capa-btn px-3 py-1.5 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200 hover:text-slate-600 cursor-pointer select-none';
+        if (icon) icon.textContent = '✗';
+      }
     }
   });
-  const chkL1 = document.getElementById('chk-bal-l1'); if (chkL1) chkL1.checked = true;
-  const chkL2 = document.getElementById('chk-bal-l2'); if (chkL2) chkL2.checked = true;
-  const chkL3 = document.getElementById('chk-bal-l3'); if (chkL3) chkL3.checked = true;
-  const chkMov = document.getElementById('chk-bal-mov'); if (chkMov) chkMov.checked = true;
-  actualizarBotonesNivel('arbol');
-  aplicarVisibilidadBalance();
-}
-
-function expandirTodoElArbol() {
-  _balanceRamasColapsadas.clear();
-  const chkL1 = document.getElementById('chk-bal-l1'); if (chkL1) chkL1.checked = true;
-  const chkL2 = document.getElementById('chk-bal-l2'); if (chkL2) chkL2.checked = true;
-  const chkL3 = document.getElementById('chk-bal-l3'); if (chkL3) chkL3.checked = true;
-  const chkMov = document.getElementById('chk-bal-mov'); if (chkMov) chkMov.checked = true;
-  actualizarBotonesNivel('todos');
-  aplicarVisibilidadBalance();
-}
-
-function setNivelBalance(modo) {
-  const chkL1 = document.getElementById('chk-bal-l1');
-  const chkL2 = document.getElementById('chk-bal-l2');
-  const chkL3 = document.getElementById('chk-bal-l3');
-  const chkMov = document.getElementById('chk-bal-mov');
-
-  if (modo === 'todos') {
-    if (chkL1) chkL1.checked = true;
-    if (chkL2) chkL2.checked = true;
-    if (chkL3) chkL3.checked = true;
-    if (chkMov) chkMov.checked = true;
-    _balanceRamasColapsadas.clear();
-  } else if (modo === 'movimiento') {
-    if (chkL1) chkL1.checked = false;
-    if (chkL2) chkL2.checked = false;
-    if (chkL3) chkL3.checked = false;
-    if (chkMov) chkMov.checked = true;
-    _balanceRamasColapsadas.clear();
-  } else if (modo === 1) {
-    if (chkL1) chkL1.checked = true;
-    if (chkL2) chkL2.checked = false;
-    if (chkL3) chkL3.checked = false;
-    if (chkMov) chkMov.checked = false;
-    _balanceRamasColapsadas.clear();
-  } else if (modo === 2) {
-    if (chkL1) chkL1.checked = true;
-    if (chkL2) chkL2.checked = true;
-    if (chkL3) chkL3.checked = false;
-    if (chkMov) chkMov.checked = false;
-    _balanceRamasColapsadas.clear();
-  } else if (modo === 3) {
-    if (chkL1) chkL1.checked = true;
-    if (chkL2) chkL2.checked = true;
-    if (chkL3) chkL3.checked = true;
-    if (chkMov) chkMov.checked = false;
-    _balanceRamasColapsadas.clear();
-  }
-  actualizarBotonesNivel(modo);
-  aplicarVisibilidadBalance();
-}
-
-function filtrarBalancePorToggles() {
-  actualizarBotonesNivel('custom');
-  aplicarVisibilidadBalance();
-}
-
-function actualizarBotonesNivel(activoModo) {
-  const btns = {
-    'todos': document.getElementById('btn-bal-nivel-todos'),
-    'movimiento': document.getElementById('btn-bal-nivel-movimiento'),
-    1: document.getElementById('btn-bal-nivel-1'),
-    2: document.getElementById('btn-bal-nivel-2'),
-    3: document.getElementById('btn-bal-nivel-3')
-  };
-  Object.keys(btns).forEach(k => {
-    const b = btns[k];
-    if (!b) return;
-    if (String(k) === String(activoModo)) {
-      b.className = 'bal-nivel-btn bg-blue-600 text-white border-blue-700 shadow-xs px-3 py-1.5 rounded-xl font-bold transition';
-    } else {
-      b.className = 'bal-nivel-btn px-2.5 py-1.5 rounded-xl font-bold transition';
-    }
-  });
-}
-
-function aplicarVisibilidadBalance() {
-  const verL1 = document.getElementById('chk-bal-l1')?.checked ?? true;
-  const verL2 = document.getElementById('chk-bal-l2')?.checked ?? true;
-  const verL3 = document.getElementById('chk-bal-l3')?.checked ?? true;
-  const verMov = document.getElementById('chk-bal-mov')?.checked ?? true;
 
   const rows = document.querySelectorAll('#bal-tbody tr.bal-row');
   rows.forEach(tr => {
     const chars = parseInt(tr.dataset.chars || 0);
-    const codigo = tr.dataset.codigo || '';
+    let visible = true;
+    if (chars === 1) visible = _capasVisibles[1];
+    else if (chars === 2) visible = _capasVisibles[2];
+    else if (chars === 4) visible = _capasVisibles[4];
+    else if (chars >= 6) visible = _capasVisibles[6];
 
-    // 1. Verificar filtro de nivel por checkboxes
-    let visiblePorNivel = true;
-    if (chars === 1 && !verL1) visiblePorNivel = false;
-    else if (chars === 2 && !verL2) visiblePorNivel = false;
-    else if (chars === 4 && !verL3) visiblePorNivel = false;
-    else if (chars >= 6 && !verMov) visiblePorNivel = false;
-
-    // 2. Verificar si algún ancestro en el árbol está colapsado
-    let ocultoPorRama = false;
-    if (_balanceRamasColapsadas.size > 0) {
-      for (const colapsadoCode of _balanceRamasColapsadas) {
-        if (codigo !== colapsadoCode && codigo.startsWith(colapsadoCode)) {
-          ocultoPorRama = true;
-          break;
-        }
-      }
-    }
-
-    if (visiblePorNivel && !ocultoPorRama) {
-      tr.style.display = '';
-    } else {
-      tr.style.display = 'none';
-    }
-
-    // Actualizar icono del chevron
-    const toggleBtn = document.getElementById(`tree-toggle-${codigo}`);
-    if (toggleBtn) {
-      if (_balanceRamasColapsadas.has(codigo)) {
-        toggleBtn.textContent = '▶';
-        toggleBtn.className = 'bal-tree-btn text-xs font-mono select-none px-1 text-blue-600 font-bold focus:outline-none';
-      } else {
-        toggleBtn.textContent = '▼';
-        toggleBtn.className = 'bal-tree-btn text-xs font-mono select-none px-1 text-slate-400 hover:text-slate-700 focus:outline-none';
-      }
-    }
+    tr.style.display = visible ? '' : 'none';
   });
 }
 
@@ -3134,32 +3018,13 @@ async function cargarBalanceComprobacion() {
     } else {
       _balanceCuentasData = data.cuentas;
 
-      // Determinar qué cuentas tienen hijas en el conjunto de resultados
-      const codigosConHijos = new Set();
-      data.cuentas.forEach(c => {
-        data.cuentas.forEach(other => {
-          if (other.codigo !== c.codigo && other.codigo.startsWith(c.codigo)) {
-            codigosConHijos.add(c.codigo);
-          }
-        });
-      });
-
       tbody.innerHTML = data.cuentas.map(c => {
         const canViewMovs = Boolean(c.tiene_mov_directo);
         const btnLink = canViewMovs ? `
-          <button onclick="verMovimientosDeCuenta(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 font-bold focus:outline-none mr-1 inline-flex items-center" title="Ver movimientos directos de ${c.codigo} - ${c.nombre.replace(/"/g, '&quot;')}">
+          <button onclick="verMovimientosDeCuenta(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 font-bold focus:outline-none mr-1.5 inline-flex items-center" title="Ver movimientos directos de ${c.codigo} - ${c.nombre.replace(/"/g, '&quot;')}">
             🔗
           </button>
         ` : '';
-
-        const tieneHijos = codigosConHijos.has(c.codigo);
-        const btnTree = tieneHijos ? `
-          <button type="button" onclick="toggleRamaBalance('${c.codigo}')" id="tree-toggle-${c.codigo}"
-                  class="bal-tree-btn text-xs font-mono select-none px-1 text-slate-400 hover:text-blue-600 focus:outline-none transition-colors"
-                  title="Expandir/Contraer rama ${c.codigo}">
-            ▼
-          </button>
-        ` : '<span class="inline-block w-4"></span>';
 
         const cLen = c.codigo.length;
 
@@ -3167,7 +3032,7 @@ async function cargarBalanceComprobacion() {
           return `
             <tr class="bal-row bal-row-l1 bg-slate-100 font-extrabold text-xs text-slate-800 uppercase border-t border-b border-slate-200 hover:bg-slate-200/70 transition-colors"
                 data-codigo="${c.codigo}" data-padre="" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
-              <td class="px-4 py-2 font-mono whitespace-nowrap">${btnTree}${btnLink}${c.codigo}</td>
+              <td class="px-4 py-2 font-mono whitespace-nowrap">${btnLink}${c.codigo}</td>
               <td class="px-4 py-2 font-bold text-slate-900">${c.nombre}</td>
               <td class="px-4 py-2 text-right font-mono">${formatMoni(c.saldo_anterior)}</td>
               <td class="px-4 py-2 text-right font-mono text-emerald-700">${formatMoni(c.debito)}</td>
@@ -3179,7 +3044,7 @@ async function cargarBalanceComprobacion() {
           return `
             <tr class="bal-row bal-row-l2 bg-slate-50/90 font-bold text-xs text-slate-700 hover:bg-slate-100/80 transition-colors"
                 data-codigo="${c.codigo}" data-padre="${c.codigo.substring(0,1)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
-              <td class="px-4 py-1.5 pl-6 font-mono whitespace-nowrap">${btnTree}${btnLink}${c.codigo}</td>
+              <td class="px-4 py-1.5 pl-6 font-mono whitespace-nowrap">${btnLink}${c.codigo}</td>
               <td class="px-4 py-1.5 font-bold">${c.nombre}</td>
               <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.saldo_anterior)}</td>
               <td class="px-4 py-1.5 text-right font-mono text-emerald-700">${formatMoni(c.debito)}</td>
@@ -3191,7 +3056,7 @@ async function cargarBalanceComprobacion() {
           return `
             <tr class="bal-row bal-row-l3 text-xs text-slate-600 font-semibold hover:bg-blue-50/30 transition-colors"
                 data-codigo="${c.codigo}" data-padre="${c.codigo.substring(0,2)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
-              <td class="px-4 py-1.5 pl-9 font-mono whitespace-nowrap">${btnTree}${btnLink}${c.codigo}</td>
+              <td class="px-4 py-1.5 pl-9 font-mono whitespace-nowrap">${btnLink}${c.codigo}</td>
               <td class="px-4 py-1.5 font-medium">${c.nombre}</td>
               <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoni(c.saldo_anterior)}</td>
               <td class="px-4 py-1.5 text-right font-mono text-emerald-600">${formatMoni(c.debito)}</td>
@@ -3204,7 +3069,7 @@ async function cargarBalanceComprobacion() {
             <tr class="bal-row bal-row-mov text-xs text-gray-600 hover:bg-blue-50/40 transition-colors"
                 data-codigo="${c.codigo}" data-padre="${cLen >= 6 ? c.codigo.substring(0,4) : c.codigo.substring(0,2)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="true">
               <td class="px-4 py-1 pl-12 font-mono text-[11px] whitespace-nowrap">
-                ${btnTree}${btnLink}${c.codigo}
+                ${btnLink}${c.codigo}
               </td>
               <td class="px-4 py-1 ${c.nivel > 3 ? 'italic' : 'font-medium'}">${c.nombre}</td>
               <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.saldo_anterior)}</td>
@@ -3234,8 +3099,8 @@ async function cargarBalanceComprobacion() {
         }
       }
 
-      // Aplicar filtros de visibilidad de niveles y ramas colapsadas
-      aplicarVisibilidadBalance();
+      // Aplicar filtros de visibilidad de capas
+      aplicarVisibilidadCapas();
     }
     
     // Estado del periodo

@@ -216,164 +216,194 @@
       </button>
     </div>
 
-    <!-- Opciones de búsqueda de documento -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-      
-      <!-- Opción A: Buscar por Tercero (Cliente / Proveedor) -->
-      <div class="bg-rose-50/50 p-4 rounded-xl border border-rose-100 flex flex-col justify-between">
-        <div>
-          <label class="block text-xs font-bold text-rose-800 uppercase mb-1">A. Buscar por Tercero (Cliente / Proveedor)</label>
-          <p class="text-xs text-rose-700/80 mb-3">
-            Visualiza el historial completo de compras o ventas de un tercero seleccionado.
-          </p>
+    <!-- Opciones de búsqueda de documento (Colapsable) -->
+    <div id="aud-seccion-busqueda" class="bg-white border border-gray-200 rounded-2xl shadow-xs mb-4 overflow-hidden transition-all">
+      <div onclick="toggleSeccionAuditoria('aud-busqueda')" class="cursor-pointer bg-slate-50 hover:bg-slate-100/80 px-4 py-3 border-b border-gray-200 flex items-center justify-between select-none transition">
+        <div class="flex items-center gap-2">
+          <span class="text-sm">🔎</span>
+          <span class="text-xs font-black uppercase tracking-wide text-slate-700">Opciones de Búsqueda de Documento</span>
+          <span class="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-md">Por Tercero o Directo</span>
         </div>
-        <div class="relative mt-2">
-          <input id="auditor-tercero" type="text" placeholder="Buscar tercero por nombre..." autocomplete="off" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500 bg-white">
-          <div id="auditor-tercero-list" class="ac-list hidden"></div>
-          <input type="hidden" id="auditor-tercero-id">
-        </div>
-        <div id="selected-aud-tercero-badge" class="mt-2 hidden">
-          <span class="inline-flex items-center gap-1 text-xs bg-rose-600 text-white font-bold px-3 py-1 rounded-full">
-            <span>Tercero:</span> <span id="aud-tercero-nombre-lbl"></span>
-          </span>
+        <div class="flex items-center gap-1.5 text-slate-400 text-xs font-bold">
+          <span id="aud-busqueda-toggle-txt" class="text-[11px] text-slate-500">Colapsar</span>
+          <span id="aud-busqueda-icon" class="text-sm">▲</span>
         </div>
       </div>
-
-      <!-- Opción B: Buscar Documento Directamente -->
-      <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col justify-between">
-        <div>
-          <label class="block text-xs font-bold text-blue-800 uppercase mb-1">B. Consultar Documento por Número o ID</label>
-          <p class="text-xs text-blue-700/80 mb-3">
-            Ingresa directamente el consecutivo físico, ID de pedido o código de comprobante.
-          </p>
-        </div>
-        <div class="flex gap-2 mt-2">
-          <input id="auditor-directo-num" type="text" placeholder="Ej: FV-0009, VENTA-0004 o ID 6" class="border border-gray-300 rounded-lg px-3 py-2 flex-1 text-sm outline-none focus:border-blue-500 bg-white">
-          <select id="auditor-directo-tipo" class="border border-gray-300 rounded-lg px-2 py-2 text-xs outline-none bg-white">
-            <option value="">Tipo de documento</option>
-          </select>
-          <button onclick="auditarDocumentoDirecto()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition">🔍 Auditar</button>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Panel: Documentos Recientes -->
-    <div id="auditor-panel-recientes" class="bg-white border border-gray-200 rounded-xl shadow-sm p-4 mb-6">
-      <div class="flex justify-between items-center mb-3">
-        <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5">
-          <span>⚡</span> Buscador e Historial General de Transacciones
-        </h3>
-        <button onclick="cargarDocumentosRecientes()" class="text-xs text-blue-600 hover:text-blue-800 font-semibold">🔄 Actualizar Lista</button>
-      </div>
-
-      <!-- Filtros de Búsqueda -->
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
-        <div>
-          <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Buscar</label>
-          <input id="aud-filtro-recientes-q" type="text" placeholder="No. doc o tercero..." onkeydown="if(event.key === 'Enter') aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
-        </div>
-        <div>
-          <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Tipo de Documento</label>
-          <select id="aud-filtro-recientes-tipo" onchange="aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
-            <option value="todos">Todos los tipos</option>
-            <option value="pedido_venta">Venta / Pedido</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Desde</label>
-          <input id="aud-filtro-recientes-desde" type="date" onchange="aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
-        </div>
-        <div class="flex items-end gap-1.5">
-          <div class="flex-1">
-            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Hasta</label>
-            <input id="aud-filtro-recientes-hasta" type="date" onchange="aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
+      <div id="aud-busqueda-body" class="p-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Opción A: Buscar por Tercero (Cliente / Proveedor) -->
+          <div class="bg-rose-50/50 p-4 rounded-xl border border-rose-100 flex flex-col justify-between">
+            <div>
+              <label class="block text-xs font-bold text-rose-800 uppercase mb-1">A. Buscar por Tercero (Cliente / Proveedor)</label>
+              <p class="text-xs text-rose-700/80 mb-3">
+                Visualiza el historial completo de compras o ventas de un tercero seleccionado.
+              </p>
+            </div>
+            <div class="relative mt-2">
+              <input id="auditor-tercero" type="text" placeholder="Buscar tercero por nombre..." autocomplete="off" class="border border-gray-300 rounded-lg px-3 py-2 w-full text-sm outline-none focus:border-rose-500 bg-white">
+              <div id="auditor-tercero-list" class="ac-list hidden"></div>
+              <input type="hidden" id="auditor-tercero-id">
+            </div>
+            <div id="selected-aud-tercero-badge" class="mt-2 hidden">
+              <span class="inline-flex items-center gap-1 text-xs bg-rose-600 text-white font-bold px-3 py-1 rounded-full">
+                <span>Tercero:</span> <span id="aud-tercero-nombre-lbl"></span>
+              </span>
+            </div>
           </div>
-          <button onclick="aplicarFiltrosAuditoria()" class="bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs px-3 py-2.5 rounded-lg shadow-xs transition" title="Filtrar">🔍</button>
-          <button onclick="limpiarFiltrosAuditoria()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold text-xs px-2.5 py-2.5 rounded-lg transition" title="Limpiar Filtros">🧹</button>
-        </div>
-      </div>
 
-      <div class="overflow-x-auto max-h-72 overflow-y-auto">
-        <table class="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr class="border-b text-gray-400">
-              <th class="py-2">Fecha</th>
-              <th class="py-2">Tipo de Doc.</th>
-              <th class="py-2">Número / ID</th>
-              <th class="py-2">Tercero Relacionado</th>
-              <th class="py-2 text-right">Total Contable</th>
-              <th class="py-2 text-right">Total Inventario</th>
-              <th class="py-2 text-right">Total Pedidos</th>
-              <th class="py-2 text-center">Acción</th>
-            </tr>
-          </thead>
-          <tbody id="aud-tbody-recientes">
-            <tr>
-              <td colspan="6" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Paginación -->
-      <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-150 flex-wrap gap-2 text-xs">
-        <span class="text-gray-500 font-semibold">
-          Total: <span id="aud-total-recientes" class="font-bold text-gray-800">0</span> registros
-        </span>
-        <div class="flex items-center gap-3">
-          <button id="btn-aud-recientes-prev" onclick="audPaginaAnterior()" disabled
-                  class="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
-            ← Anterior
-          </button>
-          <span class="text-gray-500">
-            Página <span id="aud-pag-actual" class="font-bold text-gray-800">1</span> de <span id="aud-pag-total" class="font-bold text-gray-800">1</span>
-          </span>
-          <button id="btn-aud-recientes-next" onclick="audPaginaSiguiente()" disabled
-                  class="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
-            Siguiente →
-          </button>
+          <!-- Opción B: Buscar Documento Directamente -->
+          <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col justify-between">
+            <div>
+              <label class="block text-xs font-bold text-blue-800 uppercase mb-1">B. Consultar Documento por Número o ID</label>
+              <p class="text-xs text-blue-700/80 mb-3">
+                Ingresa directamente el consecutivo físico, ID de pedido o código de comprobante.
+              </p>
+            </div>
+            <div class="flex gap-2 mt-2">
+              <input id="auditor-directo-num" type="text" placeholder="Ej: FV-0009, VENTA-0004 o ID 6" class="border border-gray-300 rounded-lg px-3 py-2 flex-1 text-sm outline-none focus:border-blue-500 bg-white">
+              <select id="auditor-directo-tipo" class="border border-gray-300 rounded-lg px-2 py-2 text-xs outline-none bg-white">
+                <option value="">Tipo de documento</option>
+              </select>
+              <button onclick="auditarDocumentoDirecto()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition">🔍 Auditar</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Paso 2: Historial y Filtros (se muestra cuando hay un tercero seleccionado) -->
-    <div id="auditor-panel-historico" class="hidden space-y-4 mb-6">
-      <div class="flex items-center justify-between gap-4 flex-wrap bg-gray-50 p-4 rounded-xl border border-gray-200">
-        <div class="w-full sm:w-auto">
-          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Filtrar por Tipo</label>
-          <select id="auditor-filtro-tipo" onchange="filtrarTablaHistorico()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none bg-white">
-            <option value="todos">Todos los tipos</option>
-          </select>
+    <!-- Panel: Documentos Recientes (Colapsable) -->
+    <div id="auditor-panel-recientes" class="bg-white border border-gray-200 rounded-2xl shadow-xs mb-4 overflow-hidden transition-all">
+      <div onclick="toggleSeccionAuditoria('aud-recientes')" class="cursor-pointer bg-slate-50 hover:bg-slate-100/80 px-4 py-3 border-b border-gray-200 flex items-center justify-between select-none transition">
+        <div class="flex items-center gap-2">
+          <span class="text-sm">⚡</span>
+          <span class="text-xs font-black uppercase tracking-wide text-slate-700">Buscador e Historial General de Transacciones</span>
+          <span class="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-md">Historial General</span>
         </div>
-        <div class="w-full sm:w-auto flex-1 max-w-xs">
-          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Filtrar por Número de Documento</label>
-          <input id="auditor-filtro-numero" type="text" oninput="filtrarTablaHistorico()" placeholder="Buscar número..." class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none w-full bg-white">
+        <div class="flex items-center gap-2">
+          <button onclick="event.stopPropagation(); cargarDocumentosRecientes()" class="text-[11px] text-blue-600 hover:text-blue-800 font-bold bg-white px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-50 transition">🔄 Actualizar Lista</button>
+          <span id="aud-recientes-toggle-txt" class="text-[11px] text-slate-500 font-bold ml-1">Colapsar</span>
+          <span id="aud-recientes-icon" class="text-sm text-slate-400">▲</span>
         </div>
       </div>
+      <div id="aud-recientes-body" class="p-4">
+        <!-- Filtros de Búsqueda -->
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
+          <div>
+            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Buscar</label>
+            <input id="aud-filtro-recientes-q" type="text" placeholder="No. doc o tercero..." onkeydown="if(event.key === 'Enter') aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Tipo de Documento</label>
+            <select id="aud-filtro-recientes-tipo" onchange="aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
+              <option value="todos">Todos los tipos</option>
+              <option value="pedido_venta">Venta / Pedido</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Desde</label>
+            <input id="aud-filtro-recientes-desde" type="date" onchange="aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
+          </div>
+          <div class="flex items-end gap-1.5">
+            <div class="flex-1">
+              <label class="block text-[10px] font-bold text-gray-400 uppercase mb-0.5">Hasta</label>
+              <input id="aud-filtro-recientes-hasta" type="date" onchange="aplicarFiltrosAuditoria()" class="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white outline-none">
+            </div>
+            <button onclick="aplicarFiltrosAuditoria()" class="bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs px-3 py-2.5 rounded-lg shadow-xs transition" title="Filtrar">🔍</button>
+            <button onclick="limpiarFiltrosAuditoria()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold text-xs px-2.5 py-2.5 rounded-lg transition" title="Limpiar Filtros">🧹</button>
+          </div>
+        </div>
 
-      <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-        <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5 mb-3">
-          <span>📅</span> Historial de Documentos del Tercero
-        </h3>
-        <div class="overflow-x-auto max-h-60 overflow-y-auto">
+        <div class="overflow-x-auto max-h-72 overflow-y-auto">
           <table class="w-full text-left text-xs border-collapse">
             <thead>
               <tr class="border-b text-gray-400">
-                <th class="py-2">Tipo de Documento</th>
-                <th class="py-2">Número de Documento</th>
                 <th class="py-2">Fecha</th>
-                <th class="py-2 text-right">Monto Total</th>
-                <th class="py-2 text-right">Saldo Pendiente</th>
+                <th class="py-2">Tipo de Doc.</th>
+                <th class="py-2">Número / ID</th>
+                <th class="py-2">Tercero Relacionado</th>
+                <th class="py-2 text-right">Total Contable</th>
+                <th class="py-2 text-right">Total Inventario</th>
+                <th class="py-2 text-right">Total Pedidos</th>
                 <th class="py-2 text-center">Acción</th>
               </tr>
             </thead>
-            <tbody id="aud-tbody-historico">
+            <tbody id="aud-tbody-recientes">
               <tr>
-                <td colspan="6" class="text-center text-gray-400 py-6">Selecciona un tercero para cargar el historial</td>
+                <td colspan="6" class="text-center text-gray-400 py-6">Cargando transacciones recientes...</td>
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Paginación -->
+        <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-150 flex-wrap gap-2 text-xs">
+          <span class="text-gray-500 font-semibold">
+            Total: <span id="aud-total-recientes" class="font-bold text-gray-800">0</span> registros
+          </span>
+          <div class="flex items-center gap-3">
+            <button id="btn-aud-recientes-prev" onclick="audPaginaAnterior()" disabled
+                    class="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
+              ← Anterior
+            </button>
+            <span class="text-gray-500">
+              Página <span id="aud-pag-actual" class="font-bold text-gray-800">1</span> de <span id="aud-pag-total" class="font-bold text-gray-800">1</span>
+            </span>
+            <button id="btn-aud-recientes-next" onclick="audPaginaSiguiente()" disabled
+                    class="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed">
+              Siguiente →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paso 2: Historial y Filtros (se muestra cuando hay un tercero seleccionado - Colapsable) -->
+    <div id="auditor-panel-historico" class="hidden bg-white border border-gray-200 rounded-2xl shadow-xs mb-4 overflow-hidden transition-all">
+      <div onclick="toggleSeccionAuditoria('aud-historico')" class="cursor-pointer bg-slate-50 hover:bg-slate-100/80 px-4 py-3 border-b border-gray-200 flex items-center justify-between select-none transition">
+        <div class="flex items-center gap-2">
+          <span class="text-sm">📅</span>
+          <span class="text-xs font-black uppercase tracking-wide text-slate-700">Historial de Documentos del Tercero</span>
+          <span id="aud-historico-badge" class="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-md">Por Tercero</span>
+        </div>
+        <div class="flex items-center gap-1.5 text-slate-400 text-xs font-bold">
+          <span id="aud-historico-toggle-txt" class="text-[11px] text-slate-500">Colapsar</span>
+          <span id="aud-historico-icon" class="text-sm">▲</span>
+        </div>
+      </div>
+      <div id="aud-historico-body" class="p-4 space-y-4">
+        <div class="flex items-center justify-between gap-4 flex-wrap bg-gray-50 p-4 rounded-xl border border-gray-200">
+          <div class="w-full sm:w-auto">
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Filtrar por Tipo</label>
+            <select id="auditor-filtro-tipo" onchange="filtrarTablaHistorico()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none bg-white">
+              <option value="todos">Todos los tipos</option>
+            </select>
+          </div>
+          <div class="w-full sm:w-auto flex-1 max-w-xs">
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Filtrar por Número de Documento</label>
+            <input id="auditor-filtro-numero" type="text" oninput="filtrarTablaHistorico()" placeholder="Buscar número..." class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none w-full bg-white">
+          </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+          <div class="overflow-x-auto max-h-60 overflow-y-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b text-gray-400">
+                  <th class="py-2">Tipo de Documento</th>
+                  <th class="py-2">Número de Documento</th>
+                  <th class="py-2">Fecha</th>
+                  <th class="py-2 text-right">Monto Total</th>
+                  <th class="py-2 text-right">Saldo Pendiente</th>
+                  <th class="py-2 text-center">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="aud-tbody-historico">
+                <tr>
+                  <td colspan="6" class="text-center text-gray-400 py-6">Selecciona un tercero para cargar el historial</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -571,7 +601,45 @@
   let auditorDocumentosHistorial = [];
   let auditorDocumentoSeleccionado = null;
 
+  function toggleSeccionAuditoria(seccion, forzarColapsar = null) {
+    const body = document.getElementById(`${seccion}-body`);
+    const txt = document.getElementById(`${seccion}-toggle-txt`);
+    const icon = document.getElementById(`${seccion}-icon`);
+    if (!body) return;
+
+    const estaColapsado = body.classList.contains('hidden');
+    const debeColapsar = (forzarColapsar !== null) ? forzarColapsar : !estaColapsado;
+
+    if (debeColapsar) {
+      body.classList.add('hidden');
+      if (txt) txt.textContent = 'Expandir';
+      if (icon) {
+        icon.textContent = '▼';
+        icon.className = 'text-sm text-slate-400';
+      }
+    } else {
+      body.classList.remove('hidden');
+      if (txt) txt.textContent = 'Colapsar';
+      if (icon) {
+        icon.textContent = '▲';
+        icon.className = 'text-sm text-blue-600 font-bold';
+      }
+    }
+  }
+
+  function colapsarSeccionesGeneralesAuditoria() {
+    toggleSeccionAuditoria('aud-busqueda', true);
+    toggleSeccionAuditoria('aud-recientes', true);
+    toggleSeccionAuditoria('aud-historico', true);
+  }
+
+  function expandirSeccionesGeneralesAuditoria() {
+    toggleSeccionAuditoria('aud-busqueda', false);
+    toggleSeccionAuditoria('aud-recientes', false);
+  }
+
   function resetAuditorForm() {
+    expandirSeccionesGeneralesAuditoria();
     document.getElementById('auditor-tercero').value = '';
     document.getElementById('auditor-tercero-id').value = '';
     document.getElementById('selected-aud-tercero-badge').classList.add('hidden');
@@ -712,6 +780,7 @@
   }
 
   async function consultarDocumentoDetalle(tipo, numero, terceroId) {
+    colapsarSeccionesGeneralesAuditoria();
     const loader = document.getElementById('auditor-cargando');
     const vacio = document.getElementById('auditor-vacio');
     const resultados = document.getElementById('auditor-resultados');
@@ -1480,6 +1549,7 @@
     const numero = urlParams.get('documento_numero');
     const terceroId = urlParams.get('tercero_id') || '';
     if (tipo && numero) {
+      colapsarSeccionesGeneralesAuditoria();
       const inputNum = document.getElementById('auditor-directo-num');
       if (inputNum) inputNum.value = numero;
       
@@ -1490,7 +1560,7 @@
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
           }, 300);
         }
-      }, 300);
+      }, 150);
     }
   }
 </script>

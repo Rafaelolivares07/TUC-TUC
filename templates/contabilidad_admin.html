@@ -2696,8 +2696,10 @@ async function consultarMovimientos() {
         `;
       }).join('');
 
-      const thCuenta = (agrupar !== 'cuenta') ? '<th class="px-3 py-2.5 text-left">Cuenta PUC</th>' : '';
-      const thTercero = (agrupar !== 'tercero') ? '<th class="px-3 py-2.5 text-left">Tercero</th>' : '';
+      const thCuenta = (agrupar !== 'cuenta') ? '<th class="px-3 py-2.5 text-center">Cuenta PUC</th>' : '';
+      const thTercero = (agrupar !== 'tercero') ? '<th class="px-3 py-2.5 text-center">Tercero</th>' : '';
+      const colspanLeft = 3 + (agrupar !== 'cuenta' ? 1 : 0) + (agrupar !== 'tercero' ? 1 : 0);
+      const totalCols = colspanLeft + 3;
 
       return `
         <div class="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden transition hover:shadow-lg">
@@ -2716,47 +2718,96 @@ async function consultarMovimientos() {
             </div>
           </div>
 
-          <!-- Tabla de Movimientos -->
+          <!-- Tabla de Movimientos con Totales Alineados -->
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
-                <tr class="bg-gray-50/50 border-b border-gray-100 text-xs uppercase text-gray-400 font-bold">
-                  <th class="px-3 py-2.5 text-left w-24">Fecha</th>
-                  <th class="px-3 py-2.5 text-left w-36">Comprobante</th>
+                <tr class="bg-gray-50/80 border-b border-gray-200 text-xs uppercase text-gray-500 font-bold">
+                  <th class="px-3 py-2.5 text-center w-24">Fecha</th>
+                  <th class="px-3 py-2.5 text-center w-36">Comprobante</th>
                   ${thCuenta}
                   ${thTercero}
-                  <th class="px-3 py-2.5 text-left">Concepto</th>
-                  <th class="px-3 py-2.5 text-right w-28">Débito</th>
-                  <th class="px-3 py-2.5 text-right w-28">Crédito</th>
-                  <th class="px-3 py-2.5 text-right w-32">Saldo</th>
+                  <th class="px-3 py-2.5 text-center">Concepto</th>
+                  <th class="px-3 py-2.5 text-center w-28">Débito</th>
+                  <th class="px-3 py-2.5 text-center w-28">Crédito</th>
+                  <th class="px-3 py-2.5 text-center w-32">Saldo</th>
                 </tr>
               </thead>
               <tbody>
-                ${lineasHtml || `<tr><td colspan="10" class="px-3 py-6 text-center text-gray-400 text-xs">Sin movimientos en el periodo seleccionado</td></tr>`}
+                ${lineasHtml || `<tr><td colspan="${totalCols}" class="px-3 py-6 text-center text-gray-400 text-xs">Sin movimientos en el periodo seleccionado</td></tr>`}
               </tbody>
+              <tfoot>
+                <tr class="bg-slate-100/90 border-t-2 border-slate-300 text-xs font-bold text-slate-800">
+                  <td colspan="${colspanLeft}" class="px-4 py-3 text-right font-black uppercase text-xs text-slate-700 tracking-wider">
+                    TOTALES
+                  </td>
+                  <td class="px-3 py-3 text-right font-mono font-bold text-emerald-700 w-28 whitespace-nowrap">
+                    ${formatMoni(b.total_debitos)}
+                  </td>
+                  <td class="px-3 py-3 text-right font-mono font-bold text-rose-700 w-28 whitespace-nowrap">
+                    ${formatMoni(b.total_creditos)}
+                  </td>
+                  <td class="px-3 py-3 text-right font-mono font-black text-slate-900 w-32 whitespace-nowrap">
+                    <span class="${b.saldo_final >= 0 ? 'text-emerald-800 bg-emerald-50 border border-emerald-200' : 'text-rose-800 bg-rose-50 border border-rose-200'} px-2.5 py-1 rounded-lg inline-block">
+                      ${formatMoni(b.saldo_final)}
+                    </span>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
-          </div>
-
-          <!-- Pie del Bloque con Totales -->
-          <div class="bg-gray-50/50 px-5 py-3 border-t border-gray-100 flex flex-wrap justify-between items-center gap-4 text-sm font-semibold">
-            <div class="flex gap-4">
-              <div class="text-xs text-gray-500">
-                Total Débitos: <span class="font-mono font-bold text-emerald-700">${formatMoni(b.total_debitos)}</span>
-              </div>
-              <div class="text-xs text-gray-500">
-                Total Créditos: <span class="font-mono font-bold text-rose-700">${formatMoni(b.total_creditos)}</span>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 text-sm">
-              <span class="text-gray-600 font-bold uppercase text-xs">Saldo Final:</span>
-              <span class="${b.saldo_final >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800'} text-sm font-extrabold px-4 py-2 rounded-xl font-mono shadow-sm">
-                ${formatMoni(b.saldo_final)}
-              </span>
-            </div>
           </div>
         </div>
       `;
     }).join('');
+
+    let granTotalHtml = '';
+    if (data.blocks.length > 1) {
+      const granTotalDebitos = data.blocks.reduce((acc, b) => acc + (b.total_debitos || 0), 0);
+      const granTotalCreditos = data.blocks.reduce((acc, b) => acc + (b.total_creditos || 0), 0);
+      const granSaldoFinal = data.blocks.reduce((acc, b) => acc + (b.saldo_final || 0), 0);
+
+      granTotalHtml = `
+        <div class="bg-white rounded-2xl shadow-md border-2 border-blue-200 overflow-hidden mt-6">
+          <div class="bg-gradient-to-r from-blue-50 to-indigo-50 px-5 py-3.5 border-b border-blue-200 flex justify-between items-center">
+            <h3 class="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-2">
+              <span>📊</span> Resumen General Consolidado (${data.blocks.length} Grupos Consultados)
+            </h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-slate-50/70 border-b border-slate-200 text-xs uppercase text-slate-500 font-bold">
+                  <th class="px-4 py-2.5 text-center">Descripción</th>
+                  <th class="px-3 py-2.5 text-center w-28">Débito</th>
+                  <th class="px-3 py-2.5 text-center w-28">Crédito</th>
+                  <th class="px-3 py-2.5 text-center w-32">Saldo</th>
+                </tr>
+              </thead>
+              <tfoot>
+                <tr class="bg-slate-100/90 border-t-2 border-slate-300 text-xs font-bold text-slate-800">
+                  <td class="px-4 py-3 text-right font-black uppercase text-xs text-slate-700 tracking-wider">
+                    TOTALES
+                  </td>
+                  <td class="px-3 py-3 text-right font-mono font-bold text-emerald-700 w-28 whitespace-nowrap">
+                    ${formatMoni(granTotalDebitos)}
+                  </td>
+                  <td class="px-3 py-3 text-right font-mono font-bold text-rose-700 w-28 whitespace-nowrap">
+                    ${formatMoni(granTotalCreditos)}
+                  </td>
+                  <td class="px-3 py-3 text-right font-mono font-black text-slate-900 w-32 whitespace-nowrap">
+                    <span class="${granSaldoFinal >= 0 ? 'text-emerald-800 bg-emerald-50 border border-emerald-200' : 'text-rose-800 bg-rose-50 border border-rose-200'} px-2.5 py-1 rounded-lg inline-block">
+                      ${formatMoni(granSaldoFinal)}
+                    </span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    resultsDiv.innerHTML = blocksHtml + granTotalHtml;
 
   } catch (err) {
     loadingDiv.classList.add('hidden');

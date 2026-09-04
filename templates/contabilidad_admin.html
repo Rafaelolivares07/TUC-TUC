@@ -649,6 +649,15 @@
 
           <div class="h-4 w-px bg-slate-200 mx-1"></div>
 
+          <!-- Botón Conmutador de Decimales -->
+          <button type="button" id="btn-toggle-decimales" onclick="toggleDecimalesBalance()"
+                  class="px-3 py-1.5 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200 hover:text-slate-800 cursor-pointer select-none text-xs"
+                  title="Mostrar u ocultar 2 decimales en todas las cifras (por defecto sin decimales)">
+            <span id="icon-toggle-decimales">✗</span> .00 Decimales
+          </button>
+
+          <div class="h-4 w-px bg-slate-200 mx-1"></div>
+
           <!-- Botón para Mostrar Todo -->
           <button type="button" onclick="mostrarTodasLasCapas()"
                   class="px-2.5 py-1.5 rounded-xl font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition text-xs cursor-pointer"
@@ -2940,6 +2949,10 @@ let _capasVisibles = {
   6: true
 };
 
+let _balanceMostrarDecimales = false; // Por defecto decimales ocultos (homogéneo a enteros)
+let _balanceDataActual = null;
+let _balanceCuentasData = [];
+
 function toggleCapaBalance(numChars) {
   _capasVisibles[numChars] = !_capasVisibles[numChars];
   aplicarVisibilidadCapas();
@@ -2982,6 +2995,155 @@ function aplicarVisibilidadCapas() {
   });
 }
 
+function formatMoniBalance(val) {
+  const num = parseFloat(val || 0);
+  const dec = _balanceMostrarDecimales ? 2 : 0;
+  return '$' + num.toLocaleString('es-CO', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+function toggleDecimalesBalance() {
+  _balanceMostrarDecimales = !_balanceMostrarDecimales;
+  actualizarBotonDecimales();
+  renderizarTablaBalance();
+}
+
+function actualizarBotonDecimales() {
+  const btn = document.getElementById('btn-toggle-decimales');
+  const icon = document.getElementById('icon-toggle-decimales');
+  if (!btn) return;
+  if (_balanceMostrarDecimales) {
+    btn.className = 'px-3 py-1.5 rounded-xl font-bold border transition flex items-center gap-1.5 bg-blue-600 text-white border-blue-700 shadow-xs cursor-pointer select-none text-xs';
+    if (icon) icon.textContent = '✓';
+  } else {
+    btn.className = 'px-3 py-1.5 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200 hover:text-slate-800 cursor-pointer select-none text-xs';
+    if (icon) icon.textContent = '✗';
+  }
+}
+
+function renderizarTablaBalance() {
+  if (!_balanceDataActual || !_balanceDataActual.cuentas) return;
+  const tbody = document.getElementById('bal-tbody');
+  if (!tbody) return;
+
+  if (_balanceDataActual.cuentas.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-gray-400 text-xs">No hay cuentas con saldos o movimientos en este rango.</td></tr>`;
+    document.getElementById('bal-tfoot')?.classList.add('hidden');
+    return;
+  }
+
+  tbody.innerHTML = _balanceDataActual.cuentas.map(c => {
+    const canViewMovs = Boolean(c.tiene_mov_directo);
+    const btnLink = canViewMovs ? `
+      <button onclick="verMovimientosDeCuenta(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 font-bold focus:outline-none mr-1.5 inline-flex items-center" title="Ver movimientos directos de ${c.codigo} - ${c.nombre.replace(/"/g, '&quot;')}">
+        🔗
+      </button>
+    ` : '';
+
+    const cLen = c.codigo.length;
+
+    if (c.nivel === 1) {
+      return `
+        <tr class="bal-row bal-row-l1 bg-slate-100 font-extrabold text-xs text-slate-800 uppercase border-t border-b border-slate-200 hover:bg-slate-200/70 transition-colors"
+            data-codigo="${c.codigo}" data-padre="" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
+          <td class="px-4 py-2 font-mono whitespace-nowrap">${btnLink}${c.codigo}</td>
+          <td class="px-4 py-2 font-bold text-slate-900">${c.nombre}</td>
+          <td class="px-4 py-2 text-right font-mono">${formatMoniBalance(c.saldo_anterior)}</td>
+          <td class="px-4 py-2 text-right font-mono text-emerald-700">${formatMoniBalance(c.debito)}</td>
+          <td class="px-4 py-2 text-right font-mono text-rose-700">${formatMoniBalance(c.credito)}</td>
+          <td class="px-4 py-2 text-right font-mono font-black">${formatMoniBalance(c.saldo_final)}</td>
+        </tr>
+      `;
+    } else if (c.nivel === 2) {
+      return `
+        <tr class="bal-row bal-row-l2 bg-slate-50/90 font-bold text-xs text-slate-700 hover:bg-slate-100/80 transition-colors"
+            data-codigo="${c.codigo}" data-padre="${c.codigo.substring(0,1)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
+          <td class="px-4 py-1.5 pl-6 font-mono whitespace-nowrap">${btnLink}${c.codigo}</td>
+          <td class="px-4 py-1.5 font-bold">${c.nombre}</td>
+          <td class="px-4 py-1.5 text-right font-mono">${formatMoniBalance(c.saldo_anterior)}</td>
+          <td class="px-4 py-1.5 text-right font-mono text-emerald-700">${formatMoniBalance(c.debito)}</td>
+          <td class="px-4 py-1.5 text-right font-mono text-rose-700">${formatMoniBalance(c.credito)}</td>
+          <td class="px-4 py-1.5 text-right font-mono">${formatMoniBalance(c.saldo_final)}</td>
+        </tr>
+      `;
+    } else if (c.nivel === 3 && !c.acepta_movimiento) {
+      return `
+        <tr class="bal-row bal-row-l3 text-xs text-slate-600 font-semibold hover:bg-blue-50/30 transition-colors"
+            data-codigo="${c.codigo}" data-padre="${c.codigo.substring(0,2)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
+          <td class="px-4 py-1.5 pl-9 font-mono whitespace-nowrap">${btnLink}${c.codigo}</td>
+          <td class="px-4 py-1.5 font-medium">${c.nombre}</td>
+          <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoniBalance(c.saldo_anterior)}</td>
+          <td class="px-4 py-1.5 text-right font-mono text-emerald-600">${formatMoniBalance(c.debito)}</td>
+          <td class="px-4 py-1.5 text-right font-mono text-rose-600">${formatMoniBalance(c.credito)}</td>
+          <td class="px-4 py-1.5 text-right font-mono text-slate-700 font-bold">${formatMoniBalance(c.saldo_final)}</td>
+        </tr>
+      `;
+    } else {
+      return `
+        <tr class="bal-row bal-row-mov text-xs text-gray-600 hover:bg-blue-50/40 transition-colors"
+            data-codigo="${c.codigo}" data-padre="${cLen >= 6 ? c.codigo.substring(0,4) : c.codigo.substring(0,2)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="true">
+          <td class="px-4 py-1 pl-12 font-mono text-[11px] whitespace-nowrap">
+            ${btnLink}${c.codigo}
+          </td>
+          <td class="px-4 py-1 ${c.nivel > 3 ? 'italic' : 'font-medium'}">${c.nombre}</td>
+          <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoniBalance(c.saldo_anterior)}</td>
+          <td class="px-4 py-1 text-right font-mono text-[11px] text-emerald-600">${formatMoniBalance(c.debito)}</td>
+          <td class="px-4 py-1 text-right font-mono text-[11px] text-rose-600">${formatMoniBalance(c.credito)}</td>
+          <td class="px-4 py-1 text-right font-mono text-[11px] ${c.saldo_final !== 0 ? 'text-gray-900 font-bold' : ''}">${formatMoniBalance(c.saldo_final)}</td>
+        </tr>
+      `;
+    }
+  }).join('');
+
+  // Calcular y mostrar totales generales en tfoot (Sumas Iguales)
+  const tfoot = document.getElementById('bal-tfoot');
+  if (tfoot) {
+    tfoot.classList.remove('hidden');
+    const sumDebitos = _balanceDataActual.cuentas.filter(c => c.nivel === 1).reduce((acc, c) => acc + (parseFloat(c.debito) || 0), 0);
+    const sumCreditos = _balanceDataActual.cuentas.filter(c => c.nivel === 1).reduce((acc, c) => acc + (parseFloat(c.credito) || 0), 0);
+    document.getElementById('bal-tot-debitos').textContent = formatMoniBalance(sumDebitos);
+    document.getElementById('bal-tot-creditos').textContent = formatMoniBalance(sumCreditos);
+    
+    const diff = Math.abs(sumDebitos - sumCreditos);
+    const totFinalEl = document.getElementById('bal-tot-final');
+    if (diff < 0.01) {
+      totFinalEl.innerHTML = `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded text-[10px] font-mono">✓ CUADRADO</span>`;
+    } else {
+      totFinalEl.innerHTML = `<span class="bg-rose-500/20 text-rose-300 border border-rose-400/30 px-2 py-0.5 rounded text-[10px] font-mono">DIF: ${formatMoniBalance(diff)}</span>`;
+    }
+  }
+
+  // Calcular Utilidad / Pérdida del Periodo
+  let ingresos = 0.0;
+  let gastos = 0.0;
+  let costosVenta = 0.0;
+  let costosProduccion = 0.0;
+  _balanceDataActual.cuentas.forEach(c => {
+    if (c.nivel === 1) {
+      const deb_per = parseFloat(c.debito || 0.0);
+      const cred_per = parseFloat(c.credito || 0.0);
+      if (c.codigo === '4') ingresos = cred_per - deb_per;
+      else if (c.codigo === '5') gastos = deb_per - cred_per;
+      else if (c.codigo === '6') costosVenta = deb_per - cred_per;
+      else if (c.codigo === '7') costosProduccion = deb_per - cred_per;
+    }
+  });
+
+  const utilidad = ingresos - gastos - costosVenta - costosProduccion;
+  const utilidadDiv = document.getElementById('bal-utilidad-periodo');
+  if (utilidadDiv) {
+    if (utilidad > 0) {
+      utilidadDiv.innerHTML = `<span class="text-emerald-600 font-bold font-mono">+${formatMoniBalance(utilidad)} (Utilidad)</span>`;
+    } else if (utilidad < 0) {
+      utilidadDiv.innerHTML = `<span class="text-red-600 font-bold font-mono">-${formatMoniBalance(Math.abs(utilidad))} (Pérdida)</span>`;
+    } else {
+      utilidadDiv.innerHTML = `<span class="text-slate-500 font-bold font-mono">$0</span>`;
+    }
+  }
+
+  // Aplicar filtros de visibilidad de capas
+  aplicarVisibilidadCapas();
+}
+
 async function cargarBalanceComprobacion() {
   const desde = document.getElementById('bal-desde').value;
   const hasta = document.getElementById('bal-hasta').value;
@@ -3011,97 +3173,11 @@ async function cargarBalanceComprobacion() {
       return;
     }
     
-    // Renderizado de las cuentas
-    if (!data.cuentas || data.cuentas.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-gray-400 text-xs">No hay cuentas con saldos o movimientos en este rango.</td></tr>`;
-      document.getElementById('bal-tfoot')?.classList.add('hidden');
-    } else {
-      _balanceCuentasData = data.cuentas;
-
-      tbody.innerHTML = data.cuentas.map(c => {
-        const canViewMovs = Boolean(c.tiene_mov_directo);
-        const btnLink = canViewMovs ? `
-          <button onclick="verMovimientosDeCuenta(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 font-bold focus:outline-none mr-1.5 inline-flex items-center" title="Ver movimientos directos de ${c.codigo} - ${c.nombre.replace(/"/g, '&quot;')}">
-            🔗
-          </button>
-        ` : '';
-
-        const cLen = c.codigo.length;
-
-        if (c.nivel === 1) {
-          return `
-            <tr class="bal-row bal-row-l1 bg-slate-100 font-extrabold text-xs text-slate-800 uppercase border-t border-b border-slate-200 hover:bg-slate-200/70 transition-colors"
-                data-codigo="${c.codigo}" data-padre="" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
-              <td class="px-4 py-2 font-mono whitespace-nowrap">${btnLink}${c.codigo}</td>
-              <td class="px-4 py-2 font-bold text-slate-900">${c.nombre}</td>
-              <td class="px-4 py-2 text-right font-mono">${formatMoni(c.saldo_anterior)}</td>
-              <td class="px-4 py-2 text-right font-mono text-emerald-700">${formatMoni(c.debito)}</td>
-              <td class="px-4 py-2 text-right font-mono text-rose-700">${formatMoni(c.credito)}</td>
-              <td class="px-4 py-2 text-right font-mono font-black">${formatMoni(c.saldo_final)}</td>
-            </tr>
-          `;
-        } else if (c.nivel === 2) {
-          return `
-            <tr class="bal-row bal-row-l2 bg-slate-50/90 font-bold text-xs text-slate-700 hover:bg-slate-100/80 transition-colors"
-                data-codigo="${c.codigo}" data-padre="${c.codigo.substring(0,1)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
-              <td class="px-4 py-1.5 pl-6 font-mono whitespace-nowrap">${btnLink}${c.codigo}</td>
-              <td class="px-4 py-1.5 font-bold">${c.nombre}</td>
-              <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.saldo_anterior)}</td>
-              <td class="px-4 py-1.5 text-right font-mono text-emerald-700">${formatMoni(c.debito)}</td>
-              <td class="px-4 py-1.5 text-right font-mono text-rose-700">${formatMoni(c.credito)}</td>
-              <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.saldo_final)}</td>
-            </tr>
-          `;
-        } else if (c.nivel === 3 && !c.acepta_movimiento) {
-          return `
-            <tr class="bal-row bal-row-l3 text-xs text-slate-600 font-semibold hover:bg-blue-50/30 transition-colors"
-                data-codigo="${c.codigo}" data-padre="${c.codigo.substring(0,2)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
-              <td class="px-4 py-1.5 pl-9 font-mono whitespace-nowrap">${btnLink}${c.codigo}</td>
-              <td class="px-4 py-1.5 font-medium">${c.nombre}</td>
-              <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoni(c.saldo_anterior)}</td>
-              <td class="px-4 py-1.5 text-right font-mono text-emerald-600">${formatMoni(c.debito)}</td>
-              <td class="px-4 py-1.5 text-right font-mono text-rose-600">${formatMoni(c.credito)}</td>
-              <td class="px-4 py-1.5 text-right font-mono text-slate-700 font-bold">${formatMoni(c.saldo_final)}</td>
-            </tr>
-          `;
-        } else {
-          return `
-            <tr class="bal-row bal-row-mov text-xs text-gray-600 hover:bg-blue-50/40 transition-colors"
-                data-codigo="${c.codigo}" data-padre="${cLen >= 6 ? c.codigo.substring(0,4) : c.codigo.substring(0,2)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="true">
-              <td class="px-4 py-1 pl-12 font-mono text-[11px] whitespace-nowrap">
-                ${btnLink}${c.codigo}
-              </td>
-              <td class="px-4 py-1 ${c.nivel > 3 ? 'italic' : 'font-medium'}">${c.nombre}</td>
-              <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.saldo_anterior)}</td>
-              <td class="px-4 py-1 text-right font-mono text-[11px] text-emerald-600">${formatMoni(c.debito)}</td>
-              <td class="px-4 py-1 text-right font-mono text-[11px] text-rose-600">${formatMoni(c.credito)}</td>
-              <td class="px-4 py-1 text-right font-mono text-[11px] ${c.saldo_final !== 0 ? 'text-gray-900 font-bold' : ''}">${formatMoni(c.saldo_final)}</td>
-            </tr>
-          `;
-        }
-      }).join('');
-
-      // Calcular y mostrar totales generales en tfoot (Sumas Iguales)
-      const tfoot = document.getElementById('bal-tfoot');
-      if (tfoot) {
-        tfoot.classList.remove('hidden');
-        const sumDebitos = data.cuentas.filter(c => c.nivel === 1).reduce((acc, c) => acc + (parseFloat(c.debito) || 0), 0);
-        const sumCreditos = data.cuentas.filter(c => c.nivel === 1).reduce((acc, c) => acc + (parseFloat(c.credito) || 0), 0);
-        document.getElementById('bal-tot-debitos').textContent = formatMoni(sumDebitos);
-        document.getElementById('bal-tot-creditos').textContent = formatMoni(sumCreditos);
-        
-        const diff = Math.abs(sumDebitos - sumCreditos);
-        const totFinalEl = document.getElementById('bal-tot-final');
-        if (diff < 0.01) {
-          totFinalEl.innerHTML = `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded text-[10px] font-mono">✓ CUADRADO</span>`;
-        } else {
-          totFinalEl.innerHTML = `<span class="bg-rose-500/20 text-rose-300 border border-rose-400/30 px-2 py-0.5 rounded text-[10px] font-mono">DIF: ${formatMoni(diff)}</span>`;
-        }
-      }
-
-      // Aplicar filtros de visibilidad de capas
-      aplicarVisibilidadCapas();
-    }
+    _balanceDataActual = data;
+    _balanceCuentasData = data.cuentas || [];
+    
+    // Renderizar tabla con homogeneidad de decimales configurada
+    renderizarTablaBalance();
     
     // Estado del periodo
     if (data.periodo_cerrado) {
@@ -3118,43 +3194,6 @@ async function cargarBalanceComprobacion() {
       `;
     }
 
-    // Calcular Utilidad / Pérdida del Periodo (Movimientos netos de Clase 4 - Clase 5 - Clase 6 - Clase 7)
-    let ingresos = 0.0;
-    let gastos = 0.0;
-    let costosVenta = 0.0;
-    let costosProduccion = 0.0;
-    
-    if (data.cuentas && data.cuentas.length > 0) {
-      data.cuentas.forEach(c => {
-        if (c.nivel === 1) {
-          const deb_per = parseFloat(c.debito || 0.0);
-          const cred_per = parseFloat(c.credito || 0.0);
-          
-          if (c.codigo === '4') {
-            ingresos = cred_per - deb_per;
-          } else if (c.codigo === '5') {
-            gastos = deb_per - cred_per;
-          } else if (c.codigo === '6') {
-            costosVenta = deb_per - cred_per;
-          } else if (c.codigo === '7') {
-            costosProduccion = deb_per - cred_per;
-          }
-        }
-      });
-    }
-    
-    const utilidad = ingresos - gastos - costosVenta - costosProduccion;
-    const utilidadDiv = document.getElementById('bal-utilidad-periodo');
-    if (utilidadDiv) {
-      if (utilidad > 0) {
-        utilidadDiv.innerHTML = `<span class="text-emerald-600 font-bold font-mono">+${formatMoni(utilidad)} (Utilidad)</span>`;
-      } else if (utilidad < 0) {
-        utilidadDiv.innerHTML = `<span class="text-red-600 font-bold font-mono">-${formatMoni(Math.abs(utilidad))} (Pérdida)</span>`;
-      } else {
-        utilidadDiv.innerHTML = `<span class="text-slate-500 font-bold font-mono">$0</span>`;
-      }
-    }
-    
     // Lista de periodos cerrados
     if (data.periodos_cerrados && data.periodos_cerrados.length > 0) {
       cierresDiv.innerHTML = data.periodos_cerrados.map(p => `

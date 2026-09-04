@@ -612,26 +612,95 @@
         </div>
       </div>
 
+      <!-- Barra de Navegación y Niveles Jerárquicos del Balance -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-3.5 mb-4 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <!-- Botones de Vista Rápida -->
+        <div class="flex items-center flex-wrap gap-1.5 text-xs">
+          <span class="font-extrabold text-slate-500 uppercase text-[10px] mr-1 tracking-wider">Profundidad:</span>
+          <button type="button" onclick="setNivelBalance('todos')" id="btn-bal-nivel-todos"
+                  class="bal-nivel-btn bg-blue-600 text-white border-blue-700 shadow-xs px-3 py-1.5 rounded-xl font-bold transition">
+            🌐 Todo el Árbol
+          </button>
+          <button type="button" onclick="setNivelBalance('movimiento')" id="btn-bal-nivel-movimiento"
+                  class="bal-nivel-btn px-3 py-1.5 rounded-xl font-bold transition">
+            ⚡ Solo Movimientos
+          </button>
+          <button type="button" onclick="setNivelBalance(1)" id="btn-bal-nivel-1"
+                  class="bal-nivel-btn px-2.5 py-1.5 rounded-xl font-bold transition">
+            1 Dígito (Clase)
+          </button>
+          <button type="button" onclick="setNivelBalance(2)" id="btn-bal-nivel-2"
+                  class="bal-nivel-btn px-2.5 py-1.5 rounded-xl font-bold transition">
+            2 Dígitos (Grupo)
+          </button>
+          <button type="button" onclick="setNivelBalance(3)" id="btn-bal-nivel-3"
+                  class="bal-nivel-btn px-2.5 py-1.5 rounded-xl font-bold transition">
+            4 Dígitos (Cuenta)
+          </button>
+        </div>
+
+        <!-- Switches / Toggles por Nivel de Caracteres -->
+        <div class="flex items-center flex-wrap gap-2 text-xs border-t md:border-t-0 md:border-l border-slate-200 pt-2 md:pt-0 md:pl-3">
+          <span class="font-extrabold text-slate-400 uppercase text-[10px] tracking-wider">Ver:</span>
+          <label class="inline-flex items-center gap-1 cursor-pointer select-none text-slate-700 hover:text-slate-900 font-semibold text-xs">
+            <input type="checkbox" id="chk-bal-l1" checked onchange="filtrarBalancePorToggles()" class="rounded text-blue-600 focus:ring-0">
+            <span>1 char</span>
+          </label>
+          <label class="inline-flex items-center gap-1 cursor-pointer select-none text-slate-700 hover:text-slate-900 font-semibold text-xs">
+            <input type="checkbox" id="chk-bal-l2" checked onchange="filtrarBalancePorToggles()" class="rounded text-blue-600 focus:ring-0">
+            <span>2 chars</span>
+          </label>
+          <label class="inline-flex items-center gap-1 cursor-pointer select-none text-slate-700 hover:text-slate-900 font-semibold text-xs">
+            <input type="checkbox" id="chk-bal-l3" checked onchange="filtrarBalancePorToggles()" class="rounded text-blue-600 focus:ring-0">
+            <span>4 chars</span>
+          </label>
+          <label class="inline-flex items-center gap-1 cursor-pointer select-none text-slate-700 hover:text-slate-900 font-semibold text-xs">
+            <input type="checkbox" id="chk-bal-mov" checked onchange="filtrarBalancePorToggles()" class="rounded text-blue-600 focus:ring-0">
+            <span>6+ chars</span>
+          </label>
+          <div class="h-4 w-px bg-slate-200 mx-1"></div>
+          <button type="button" onclick="colapsarTodoElArbol()" title="Contraer todo el árbol a Nivel 1"
+                  class="text-[11px] font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition">
+            ◀ Colapsar
+          </button>
+          <button type="button" onclick="expandirTodoElArbol()" title="Desplegar todas las ramas"
+                  class="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition">
+            ▼ Desplegar
+          </button>
+        </div>
+      </div>
+
       <!-- Tabla del Balance de Comprobación -->
-      <div class="overflow-x-auto border border-gray-100 rounded-xl">
+      <div class="overflow-x-auto border border-gray-200 rounded-2xl shadow-xs bg-white">
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-slate-800 text-white text-xs font-bold uppercase">
-              <th class="px-4 py-3">Código</th>
-              <th class="px-4 py-3">Cuenta</th>
-              <th class="px-4 py-3 text-right">Saldo Anterior</th>
-              <th class="px-4 py-3 text-right">Débitos</th>
-              <th class="px-4 py-3 text-right">Créditos</th>
-              <th class="px-4 py-3 text-right">Saldo Final</th>
+              <th class="px-4 py-3 text-center w-40">Código</th>
+              <th class="px-4 py-3 text-center">Cuenta</th>
+              <th class="px-4 py-3 text-center w-36">Saldo Anterior</th>
+              <th class="px-4 py-3 text-center w-32">Débitos</th>
+              <th class="px-4 py-3 text-center w-32">Créditos</th>
+              <th class="px-4 py-3 text-center w-36">Saldo Final</th>
             </tr>
           </thead>
           <tbody id="bal-tbody" class="divide-y divide-gray-100">
             <tr>
               <td colspan="6" class="text-center py-12 text-gray-400 text-sm">
-                Haz clic en "Generar Balance" para cargar los saldos.
+                Haz clic en "Actualizar Balance" para cargar los saldos.
               </td>
             </tr>
           </tbody>
+          <tfoot id="bal-tfoot" class="hidden">
+            <tr class="bg-slate-900 text-white font-extrabold text-xs">
+              <td colspan="2" class="px-4 py-3.5 text-right uppercase tracking-wider text-slate-300 font-black">
+                TOTALES BALANCE (SUMAS IGUALES)
+              </td>
+              <td id="bal-tot-anterior" class="px-4 py-3.5 text-right font-mono font-bold text-slate-200">—</td>
+              <td id="bal-tot-debitos" class="px-4 py-3.5 text-right font-mono font-bold text-emerald-400">$0</td>
+              <td id="bal-tot-creditos" class="px-4 py-3.5 text-right font-mono font-bold text-rose-400">$0</td>
+              <td id="bal-tot-final" class="px-4 py-3.5 text-right font-mono font-black text-white">—</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -2872,7 +2941,158 @@ function inicializarBalanceTab() {
     }
   }
   
-  cargarBalanceComprobacion();
+let _balanceRamasColapsadas = new Set();
+let _balanceCuentasData = [];
+
+function toggleRamaBalance(codigo) {
+  if (_balanceRamasColapsadas.has(codigo)) {
+    _balanceRamasColapsadas.delete(codigo);
+  } else {
+    _balanceRamasColapsadas.add(codigo);
+  }
+  aplicarVisibilidadBalance();
+}
+
+function colapsarTodoElArbol() {
+  const rows = document.querySelectorAll('#bal-tbody tr.bal-row');
+  _balanceRamasColapsadas.clear();
+  rows.forEach(r => {
+    const chars = parseInt(r.dataset.chars || 0);
+    const codigo = r.dataset.codigo;
+    if (chars === 1 || chars === 2) {
+      _balanceRamasColapsadas.add(codigo);
+    }
+  });
+  const chkL1 = document.getElementById('chk-bal-l1'); if (chkL1) chkL1.checked = true;
+  const chkL2 = document.getElementById('chk-bal-l2'); if (chkL2) chkL2.checked = true;
+  const chkL3 = document.getElementById('chk-bal-l3'); if (chkL3) chkL3.checked = true;
+  const chkMov = document.getElementById('chk-bal-mov'); if (chkMov) chkMov.checked = true;
+  actualizarBotonesNivel('arbol');
+  aplicarVisibilidadBalance();
+}
+
+function expandirTodoElArbol() {
+  _balanceRamasColapsadas.clear();
+  const chkL1 = document.getElementById('chk-bal-l1'); if (chkL1) chkL1.checked = true;
+  const chkL2 = document.getElementById('chk-bal-l2'); if (chkL2) chkL2.checked = true;
+  const chkL3 = document.getElementById('chk-bal-l3'); if (chkL3) chkL3.checked = true;
+  const chkMov = document.getElementById('chk-bal-mov'); if (chkMov) chkMov.checked = true;
+  actualizarBotonesNivel('todos');
+  aplicarVisibilidadBalance();
+}
+
+function setNivelBalance(modo) {
+  const chkL1 = document.getElementById('chk-bal-l1');
+  const chkL2 = document.getElementById('chk-bal-l2');
+  const chkL3 = document.getElementById('chk-bal-l3');
+  const chkMov = document.getElementById('chk-bal-mov');
+
+  if (modo === 'todos') {
+    if (chkL1) chkL1.checked = true;
+    if (chkL2) chkL2.checked = true;
+    if (chkL3) chkL3.checked = true;
+    if (chkMov) chkMov.checked = true;
+    _balanceRamasColapsadas.clear();
+  } else if (modo === 'movimiento') {
+    if (chkL1) chkL1.checked = false;
+    if (chkL2) chkL2.checked = false;
+    if (chkL3) chkL3.checked = false;
+    if (chkMov) chkMov.checked = true;
+    _balanceRamasColapsadas.clear();
+  } else if (modo === 1) {
+    if (chkL1) chkL1.checked = true;
+    if (chkL2) chkL2.checked = false;
+    if (chkL3) chkL3.checked = false;
+    if (chkMov) chkMov.checked = false;
+    _balanceRamasColapsadas.clear();
+  } else if (modo === 2) {
+    if (chkL1) chkL1.checked = true;
+    if (chkL2) chkL2.checked = true;
+    if (chkL3) chkL3.checked = false;
+    if (chkMov) chkMov.checked = false;
+    _balanceRamasColapsadas.clear();
+  } else if (modo === 3) {
+    if (chkL1) chkL1.checked = true;
+    if (chkL2) chkL2.checked = true;
+    if (chkL3) chkL3.checked = true;
+    if (chkMov) chkMov.checked = false;
+    _balanceRamasColapsadas.clear();
+  }
+  actualizarBotonesNivel(modo);
+  aplicarVisibilidadBalance();
+}
+
+function filtrarBalancePorToggles() {
+  actualizarBotonesNivel('custom');
+  aplicarVisibilidadBalance();
+}
+
+function actualizarBotonesNivel(activoModo) {
+  const btns = {
+    'todos': document.getElementById('btn-bal-nivel-todos'),
+    'movimiento': document.getElementById('btn-bal-nivel-movimiento'),
+    1: document.getElementById('btn-bal-nivel-1'),
+    2: document.getElementById('btn-bal-nivel-2'),
+    3: document.getElementById('btn-bal-nivel-3')
+  };
+  Object.keys(btns).forEach(k => {
+    const b = btns[k];
+    if (!b) return;
+    if (String(k) === String(activoModo)) {
+      b.className = 'bal-nivel-btn bg-blue-600 text-white border-blue-700 shadow-xs px-3 py-1.5 rounded-xl font-bold transition';
+    } else {
+      b.className = 'bal-nivel-btn px-2.5 py-1.5 rounded-xl font-bold transition';
+    }
+  });
+}
+
+function aplicarVisibilidadBalance() {
+  const verL1 = document.getElementById('chk-bal-l1')?.checked ?? true;
+  const verL2 = document.getElementById('chk-bal-l2')?.checked ?? true;
+  const verL3 = document.getElementById('chk-bal-l3')?.checked ?? true;
+  const verMov = document.getElementById('chk-bal-mov')?.checked ?? true;
+
+  const rows = document.querySelectorAll('#bal-tbody tr.bal-row');
+  rows.forEach(tr => {
+    const chars = parseInt(tr.dataset.chars || 0);
+    const codigo = tr.dataset.codigo || '';
+
+    // 1. Verificar filtro de nivel por checkboxes
+    let visiblePorNivel = true;
+    if (chars === 1 && !verL1) visiblePorNivel = false;
+    else if (chars === 2 && !verL2) visiblePorNivel = false;
+    else if (chars === 4 && !verL3) visiblePorNivel = false;
+    else if (chars >= 6 && !verMov) visiblePorNivel = false;
+
+    // 2. Verificar si algún ancestro en el árbol está colapsado
+    let ocultoPorRama = false;
+    if (_balanceRamasColapsadas.size > 0) {
+      for (const colapsadoCode of _balanceRamasColapsadas) {
+        if (codigo !== colapsadoCode && codigo.startsWith(colapsadoCode)) {
+          ocultoPorRama = true;
+          break;
+        }
+      }
+    }
+
+    if (visiblePorNivel && !ocultoPorRama) {
+      tr.style.display = '';
+    } else {
+      tr.style.display = 'none';
+    }
+
+    // Actualizar icono del chevron
+    const toggleBtn = document.getElementById(`tree-toggle-${codigo}`);
+    if (toggleBtn) {
+      if (_balanceRamasColapsadas.has(codigo)) {
+        toggleBtn.textContent = '▶';
+        toggleBtn.className = 'bal-tree-btn text-xs font-mono select-none px-1 text-blue-600 font-bold focus:outline-none';
+      } else {
+        toggleBtn.textContent = '▼';
+        toggleBtn.className = 'bal-tree-btn text-xs font-mono select-none px-1 text-slate-400 hover:text-slate-700 focus:outline-none';
+      }
+    }
+  });
 }
 
 async function cargarBalanceComprobacion() {
@@ -2907,10 +3127,21 @@ async function cargarBalanceComprobacion() {
     // Renderizado de las cuentas
     if (!data.cuentas || data.cuentas.length === 0) {
       tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-gray-400 text-xs">No hay cuentas con saldos o movimientos en este rango.</td></tr>`;
+      document.getElementById('bal-tfoot')?.classList.add('hidden');
     } else {
+      _balanceCuentasData = data.cuentas;
+
+      // Determinar qué cuentas tienen hijas en el conjunto de resultados
+      const codigosConHijos = new Set();
+      data.cuentas.forEach(c => {
+        data.cuentas.forEach(other => {
+          if (other.codigo !== c.codigo && other.codigo.startsWith(c.codigo)) {
+            codigosConHijos.add(c.codigo);
+          }
+        });
+      });
+
       tbody.innerHTML = data.cuentas.map(c => {
-        // Criterio exacto:
-        // El enlace 🔗 se dibuja si y solo si esa cuenta puntual tiene al menos un registro contable directo imputado a ella
         const canViewMovs = Boolean(c.tiene_mov_directo);
         const btnLink = canViewMovs ? `
           <button onclick="verMovimientosDeCuenta(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\\'")}')" class="text-blue-500 hover:text-blue-700 font-bold focus:outline-none mr-1 inline-flex items-center" title="Ver movimientos directos de ${c.codigo} - ${c.nombre.replace(/"/g, '&quot;')}">
@@ -2918,54 +3149,90 @@ async function cargarBalanceComprobacion() {
           </button>
         ` : '';
 
+        const tieneHijos = codigosConHijos.has(c.codigo);
+        const btnTree = tieneHijos ? `
+          <button type="button" onclick="toggleRamaBalance('${c.codigo}')" id="tree-toggle-${c.codigo}"
+                  class="bal-tree-btn text-xs font-mono select-none px-1 text-slate-400 hover:text-blue-600 focus:outline-none transition-colors"
+                  title="Expandir/Contraer rama ${c.codigo}">
+            ▼
+          </button>
+        ` : '<span class="inline-block w-4"></span>';
+
+        const cLen = c.codigo.length;
+
         if (c.nivel === 1) {
           return `
-            <tr class="bg-slate-100 font-extrabold text-xs text-slate-800 uppercase border-t border-b border-slate-200">
-              <td class="px-4 py-2 font-mono">${btnLink}${c.codigo}</td>
-              <td class="px-4 py-2">${c.nombre}</td>
+            <tr class="bal-row bal-row-l1 bg-slate-100 font-extrabold text-xs text-slate-800 uppercase border-t border-b border-slate-200 hover:bg-slate-200/70 transition-colors"
+                data-codigo="${c.codigo}" data-padre="" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
+              <td class="px-4 py-2 font-mono whitespace-nowrap">${btnTree}${btnLink}${c.codigo}</td>
+              <td class="px-4 py-2 font-bold text-slate-900">${c.nombre}</td>
               <td class="px-4 py-2 text-right font-mono">${formatMoni(c.saldo_anterior)}</td>
-              <td class="px-4 py-2 text-right font-mono">${formatMoni(c.debito)}</td>
-              <td class="px-4 py-2 text-right font-mono">${formatMoni(c.credito)}</td>
-              <td class="px-4 py-2 text-right font-mono">${formatMoni(c.saldo_final)}</td>
+              <td class="px-4 py-2 text-right font-mono text-emerald-700">${formatMoni(c.debito)}</td>
+              <td class="px-4 py-2 text-right font-mono text-rose-700">${formatMoni(c.credito)}</td>
+              <td class="px-4 py-2 text-right font-mono font-black">${formatMoni(c.saldo_final)}</td>
             </tr>
           `;
         } else if (c.nivel === 2) {
           return `
-            <tr class="bg-slate-50 font-bold text-xs text-slate-700">
-              <td class="px-4 py-1.5 pl-6 font-mono">${btnLink}${c.codigo}</td>
-              <td class="px-4 py-1.5">${c.nombre}</td>
+            <tr class="bal-row bal-row-l2 bg-slate-50/90 font-bold text-xs text-slate-700 hover:bg-slate-100/80 transition-colors"
+                data-codigo="${c.codigo}" data-padre="${c.codigo.substring(0,1)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
+              <td class="px-4 py-1.5 pl-6 font-mono whitespace-nowrap">${btnTree}${btnLink}${c.codigo}</td>
+              <td class="px-4 py-1.5 font-bold">${c.nombre}</td>
               <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.saldo_anterior)}</td>
-              <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.debito)}</td>
-              <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.credito)}</td>
+              <td class="px-4 py-1.5 text-right font-mono text-emerald-700">${formatMoni(c.debito)}</td>
+              <td class="px-4 py-1.5 text-right font-mono text-rose-700">${formatMoni(c.credito)}</td>
               <td class="px-4 py-1.5 text-right font-mono">${formatMoni(c.saldo_final)}</td>
             </tr>
           `;
         } else if (c.nivel === 3 && !c.acepta_movimiento) {
           return `
-            <tr class="text-xs text-slate-600 font-semibold hover:bg-slate-50/50">
-              <td class="px-4 py-1.5 pl-10 font-mono">${btnLink}${c.codigo}</td>
-              <td class="px-4 py-1.5">${c.nombre}</td>
+            <tr class="bal-row bal-row-l3 text-xs text-slate-600 font-semibold hover:bg-blue-50/30 transition-colors"
+                data-codigo="${c.codigo}" data-padre="${c.codigo.substring(0,2)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="false">
+              <td class="px-4 py-1.5 pl-9 font-mono whitespace-nowrap">${btnTree}${btnLink}${c.codigo}</td>
+              <td class="px-4 py-1.5 font-medium">${c.nombre}</td>
               <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoni(c.saldo_anterior)}</td>
-              <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoni(c.debito)}</td>
-              <td class="px-4 py-1.5 text-right font-mono text-gray-500">${formatMoni(c.credito)}</td>
+              <td class="px-4 py-1.5 text-right font-mono text-emerald-600">${formatMoni(c.debito)}</td>
+              <td class="px-4 py-1.5 text-right font-mono text-rose-600">${formatMoni(c.credito)}</td>
               <td class="px-4 py-1.5 text-right font-mono text-slate-700 font-bold">${formatMoni(c.saldo_final)}</td>
             </tr>
           `;
         } else {
           return `
-            <tr class="text-xs text-gray-600 hover:bg-slate-50/50">
-              <td class="px-4 py-1 pl-14 font-mono text-[11px]">
-                ${btnLink}${c.codigo}
+            <tr class="bal-row bal-row-mov text-xs text-gray-600 hover:bg-blue-50/40 transition-colors"
+                data-codigo="${c.codigo}" data-padre="${cLen >= 6 ? c.codigo.substring(0,4) : c.codigo.substring(0,2)}" data-nivel="${c.nivel}" data-chars="${cLen}" data-es-movimiento="true">
+              <td class="px-4 py-1 pl-12 font-mono text-[11px] whitespace-nowrap">
+                ${btnTree}${btnLink}${c.codigo}
               </td>
               <td class="px-4 py-1 ${c.nivel > 3 ? 'italic' : 'font-medium'}">${c.nombre}</td>
               <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.saldo_anterior)}</td>
-              <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.debito)}</td>
-              <td class="px-4 py-1 text-right font-mono text-[11px]">${formatMoni(c.credito)}</td>
-              <td class="px-4 py-1 text-right font-mono text-[11px] ${c.saldo_final !== 0 ? 'text-gray-800 font-semibold' : ''}">${formatMoni(c.saldo_final)}</td>
+              <td class="px-4 py-1 text-right font-mono text-[11px] text-emerald-600">${formatMoni(c.debito)}</td>
+              <td class="px-4 py-1 text-right font-mono text-[11px] text-rose-600">${formatMoni(c.credito)}</td>
+              <td class="px-4 py-1 text-right font-mono text-[11px] ${c.saldo_final !== 0 ? 'text-gray-900 font-bold' : ''}">${formatMoni(c.saldo_final)}</td>
             </tr>
           `;
         }
       }).join('');
+
+      // Calcular y mostrar totales generales en tfoot (Sumas Iguales)
+      const tfoot = document.getElementById('bal-tfoot');
+      if (tfoot) {
+        tfoot.classList.remove('hidden');
+        const sumDebitos = data.cuentas.filter(c => c.nivel === 1).reduce((acc, c) => acc + (parseFloat(c.debito) || 0), 0);
+        const sumCreditos = data.cuentas.filter(c => c.nivel === 1).reduce((acc, c) => acc + (parseFloat(c.credito) || 0), 0);
+        document.getElementById('bal-tot-debitos').textContent = formatMoni(sumDebitos);
+        document.getElementById('bal-tot-creditos').textContent = formatMoni(sumCreditos);
+        
+        const diff = Math.abs(sumDebitos - sumCreditos);
+        const totFinalEl = document.getElementById('bal-tot-final');
+        if (diff < 0.01) {
+          totFinalEl.innerHTML = `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded text-[10px] font-mono">✓ CUADRADO</span>`;
+        } else {
+          totFinalEl.innerHTML = `<span class="bg-rose-500/20 text-rose-300 border border-rose-400/30 px-2 py-0.5 rounded text-[10px] font-mono">DIF: ${formatMoni(diff)}</span>`;
+        }
+      }
+
+      // Aplicar filtros de visibilidad de niveles y ramas colapsadas
+      aplicarVisibilidadBalance();
     }
     
     // Estado del periodo

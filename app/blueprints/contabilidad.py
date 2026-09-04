@@ -3653,6 +3653,7 @@ def api_balance_comprobacion(negocio_id):
                 'nivel': r['nivel'],
                 'naturaleza': nat,
                 'acepta_movimiento': bool(puc_map.get(code, {}).get('acepta_movimiento', False)),
+                'codigo_padre': puc_map.get(code, {}).get('codigo_padre'),
                 'tiene_mov_directo': (r['id'] in cuentas_con_mov_directo),
                 'saldo_anterior': saldo_anterior,
                 'debito': deb_per,

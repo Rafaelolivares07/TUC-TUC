@@ -2664,7 +2664,7 @@ async function consultarMovimientos() {
       return;
     }
 
-    resultsDiv.innerHTML = data.blocks.map(b => {
+    const blocksHtml = data.blocks.map(b => {
       const lineasHtml = b.lineas.map(l => {
         const cuentaTd = (agrupar !== 'cuenta') 
           ? `<td class="px-3 py-2.5 text-xs text-gray-700 font-mono text-left"><span class="font-bold text-blue-700">${l.cuenta_codigo || ''}</span> <span class="text-gray-400">${l.cuenta_nombre || ''}</span></td>`

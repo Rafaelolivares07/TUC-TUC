@@ -9083,9 +9083,9 @@ def inv_dist_siguiente(negocio_id):
         # Construir ORDER BY
         order_sql = {
             'valor_total': '(COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC',
-            'rotacion': '(SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.fecha >= NOW() - INTERVAL \'30 days\') DESC',
+            'rotacion': '(SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.created_at >= NOW() - INTERVAL \'30 days\') DESC',
             'costo_unitario': 'COALESCE(p.costo, p.precio, 0) DESC',
-            'valor_rotacion': '(COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) * (SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.fecha >= NOW() - INTERVAL \'30 days\') DESC',
+            'valor_rotacion': '(COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) * (1 + (SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.created_at >= NOW() - INTERVAL \'30 days\')) DESC',
             'alfabetico': 'p.nombre ASC',
         }.get(orden, '(COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC')
 

@@ -312,10 +312,19 @@ async function invDistWidgetSiguiente() {
   try {
     const r = await fetch(`/api/inventario/${_invDistNegocioId}/inv-dist/siguiente`);
     const d = await r.json();
-    if (!d.ok || !d.item) {
-      // No hay más ítems pendientes en el ciclo
+    if (!d.ok) {
+      console.error('Error al obtener siguiente ítem:', d.error);
+      alert('Error del servidor: ' + (d.error || 'No se pudo obtener el insumo a auditar'));
+      return;
+    }
+    if (!d.item) {
+      // Realmente no hay más ítems pendientes en el ciclo
       modal.classList.add('hidden');
-      invDistMostrarExito(_invDistRondaIndice || 1);
+      if (_invDistRondaIndice > 0) {
+        invDistMostrarExito(_invDistRondaIndice);
+      } else {
+        alert('🎉 ¡Todos los insumos del inventario ya han sido auditados en este ciclo!');
+      }
       return;
     }
     _invDistItemActual = d.item;

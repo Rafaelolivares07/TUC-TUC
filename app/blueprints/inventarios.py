@@ -9775,6 +9775,8 @@ def api_auditoria_vincular_ids(negocio_id):
                 """, (pid, ids_to_update))
                 vinculadas += len(ids_to_update)
 
+        conn.commit()
+
         return jsonify({
             'ok': True,
             'vinculadas': vinculadas,
@@ -9979,6 +9981,8 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
                               AND (cp.codigo LIKE '61%%' OR cp.codigo LIKE '71%%')
                               AND mc.producto_id = %s AND mc.tipo IN ('debito', 'D')
                         """, (val_kardex, ac['comprobante_id'], producto_id))
+
+        conn.commit()
 
         return jsonify({
             'ok': True,

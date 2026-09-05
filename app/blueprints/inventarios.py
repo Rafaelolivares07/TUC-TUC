@@ -9800,16 +9800,38 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
         if not prod:
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
 
+        td_rows = conn.execute("""
+            SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s
+        """, (negocio_id,)).fetchall()
+        td_por_id = {r['id']: r['nombre'] for r in td_rows}
+        td_por_cod = {r['codigo'].upper(): r['nombre'] for r in td_rows if r['codigo']}
+
+        def _resolver_tipo_doc(tipo_id, tipo_str):
+            if tipo_id and tipo_id in td_por_id:
+                return td_por_id[tipo_id]
+            if tipo_str:
+                s = str(tipo_str).strip().upper()
+                if s in td_por_cod:
+                    return td_por_cod[s]
+                try:
+                    tid = int(s)
+                    if tid in td_por_id:
+                        return td_por_id[tid]
+                except ValueError:
+                    pass
+                return tipo_str
+            return 'Documento'
+
         kmovs = conn.execute("""
             SELECT id, tipo, cantidad, costo_und, COALESCE(valor_total, cantidad * costo_und, 0) as valor_total,
-                   documento_numero, tipo_documento, COALESCE(documento_fecha, created_at::date) as fecha
+                   documento_numero, tipo_documento, tipo_documento_id, COALESCE(documento_fecha, created_at::date) as fecha
             FROM movimientos_inventario
             WHERE negocio_id = %s AND producto_id = %s
             ORDER BY COALESCE(documento_fecha, created_at::date) ASC, id ASC
         """, (negocio_id, producto_id)).fetchall()
 
         cmovs = conn.execute("""
-            SELECT mc.id, mc.comprobante_id, mc.tipo, mc.monto, mc.numero_documento, mc.tipo_documento,
+            SELECT mc.id, mc.comprobante_id, mc.tipo, mc.monto, mc.numero_documento, mc.tipo_documento, mc.tipo_documento_id,
                    COALESCE(mc.fecha, mc.created_at::date) as fecha, mc.concepto, cp.codigo as cuenta_codigo
             FROM movimientos_contables mc
             JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
@@ -9851,8 +9873,16 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
                 fecha_doc = str(c_items[0]['fecha'])
                 num_doc_display = c_items[0]['numero_documento'] or d
 
+            tipo_doc_k = _resolver_tipo_doc(k_items[0].get('tipo_documento_id'), k_items[0].get('tipo_documento')) if k_items else None
+            tipo_doc_c = _resolver_tipo_doc(c_items[0].get('tipo_documento_id'), c_items[0].get('tipo_documento')) if c_items else None
+
+            tipo_doc_nombre = tipo_doc_k or tipo_doc_c or 'Documento'
+            if tipo_doc_nombre == 'Documento' and tipo_doc_c and tipo_doc_c != 'Documento':
+                tipo_doc_nombre = tipo_doc_c
+
             cotejo.append({
                 'documento': num_doc_display,
+                'tipo_documento_nombre': tipo_doc_nombre,
                 'fecha': fecha_doc,
                 'kardex': [{
                     'id': x['id'],

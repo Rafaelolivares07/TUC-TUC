@@ -12987,7 +12987,7 @@ async function cargarReporteEnsambles() {
           html += `
             <tr class="hover:bg-gray-50 ${!isOk ? 'bg-amber-50/40' : ''}">
               <td class="px-2.5 py-1.5 text-left font-sans">
-                <div class="font-bold text-gray-800">Doc #${c.documento}</div>
+                <div class="font-bold text-gray-800">${c.tipo_documento_nombre || 'Documento'} #${c.documento}</div>
                 <div class="text-[10px] text-gray-400">${c.fecha || '—'}</div>
               </td>
               <td class="px-2.5 py-1.5 text-left font-sans text-gray-700">${kDetalle}</td>

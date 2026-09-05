@@ -2888,9 +2888,9 @@ def api_reparar_costos_documento(negocio_id):
                 where_fechas += " AND COALESCE(m.documento_fecha, m.created_at::date) <= %s"
                 params_k.append(fecha_hasta)
             docs = conn.execute(f"""
-                SELECT DISTINCT documento_numero
-                FROM movimientos_inventario
-                WHERE negocio_id = %s AND producto_padre_id = %s AND tipo = 'salida'
+                SELECT DISTINCT m.documento_numero
+                FROM movimientos_inventario m
+                WHERE m.negocio_id = %s AND m.producto_padre_id = %s AND m.tipo = 'salida'
                   {where_fechas}
             """, params_k).fetchall()
             for d in docs:

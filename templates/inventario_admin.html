@@ -12848,13 +12848,13 @@ async function cargarReporteEnsambles() {
         let fase1Html = '';
         if (hasSinId) {
           fase1Html = `
-            <button onclick="abrirModalVincularIds(${p.id}, event)" title="Previsualizar y vincular ${p.lineas_sin_id} asiento(s) huérfano(s)"
-                    class="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs">
-              🔗 Vincular ID (${p.lineas_sin_id})
+            <button onclick="abrirModalVincularIds(${p.id}, event)" title="Fase 1 requerida: Vincular ${p.lineas_sin_id} asiento(s) huérfano(s)"
+                    class="px-2 py-1 bg-amber-100 hover:bg-amber-200 border border-amber-400 text-amber-900 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs">
+              🔗 1. Vincular ID (${p.lineas_sin_id})
             </button>
           `;
         } else {
-          fase1Html = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ IDs OK</span>`;
+          fase1Html = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 1. IDs OK</span>`;
         }
 
         // Fase 2: Cotejo
@@ -12865,21 +12865,28 @@ async function cargarReporteEnsambles() {
         let fase2Html = `
           <button onclick="toggleCotejoDoc(${p.id})" id="btn-cotejo-${p.id}" title="Fase 2: Desplegar cotejo documento por documento"
                   class="px-2 py-1 bg-sky-50 hover:bg-sky-100 border border-sky-300 text-sky-800 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs">
-            👁️ Cotejar ${fase2Badge}
+            👁️ 2. Cotejar ${fase2Badge}
           </button>
         `;
 
-        // Fase 3: Reparación / Valores
+        // Fase 3: Reparación / Valores (Bloqueada si faltan IDs huérfanos por vincular)
         let fase3Html = '';
-        if (hasDifStock || hasDifValor) {
+        if (hasSinId) {
+          fase3Html = `
+            <button disabled title="Bloqueado: Primero debes completar la Fase 1 (Vincular IDs) para que el balance contable esté completo"
+                    class="px-2 py-1 bg-gray-100 border border-gray-300 text-gray-400 text-[11px] font-bold rounded-lg cursor-not-allowed opacity-60 flex items-center gap-1 shadow-none select-none">
+              🔒 3. Reparar (Bloqueado)
+            </button>
+          `;
+        } else if (hasDifStock || hasDifValor) {
           fase3Html = `
             <button onclick="abrirModalRepararValores(${p.id}, event)" title="Fase 3: Previsualizar y reparar valores"
                     class="px-2 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs">
-              ⚡ Reparar
+              ⚡ 3. Reparar
             </button>
           `;
         } else {
-          fase3Html = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ Valores OK</span>`;
+          fase3Html = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 3. Valores OK</span>`;
         }
 
         return `
@@ -13162,6 +13169,26 @@ async function cargarReporteEnsambles() {
           return;
         }
 
+        let bannerHuerfanos = '';
+        if (d.total_huerfanos > 0) {
+          bannerHuerfanos = `
+            <div class="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
+              <div class="flex items-center gap-2.5">
+                <span class="text-lg">⚠️</span>
+                <div>
+                  <span class="font-bold uppercase tracking-wider text-[11px] bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded">Fase 1 Requerida</span>
+                  <div class="mt-0.5 font-sans">
+                    Hay <strong>${d.total_huerfanos} asiento(s) contable(s) huérfano(s)</strong> (resaltados con borde amarillo abajo) que pertenecen a este producto pero no tienen su ID asignado en contabilidad. Por orden contable, debes vincularlos antes de poder reparar valores.
+                  </div>
+                </div>
+              </div>
+              <button onclick="confirmarVincularIds(${productoId})" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shrink-0 shadow-sm flex items-center gap-1.5 cursor-pointer">
+                <span>🔗</span> Vincular IDs Ahora (Fase 1)
+              </button>
+            </div>
+          `;
+        }
+
         let html = `
           <div class="bg-white rounded-xl border border-gray-200 p-3 shadow-xs space-y-3">
             <div class="flex items-center justify-between border-b border-gray-100 pb-2">
@@ -13170,6 +13197,8 @@ async function cargarReporteEnsambles() {
               </span>
               <span class="text-[11px] font-semibold text-gray-500">${cotejo.length} documento(s) cotejados</span>
             </div>
+
+            ${bannerHuerfanos}
 
             <div class="overflow-x-auto">
               <table class="w-full text-xs">
@@ -13189,26 +13218,51 @@ async function cargarReporteEnsambles() {
 
         cotejo.forEach(c => {
           const kDetalle = c.kardex.map(k => `${k.tipo === 'entrada' ? '📥 Ent' : '📤 Sal'} ${fmt(k.cantidad)} × ${fmtMon(k.costo_und)}`).join(', ') || '<span class="text-gray-400 font-sans italic">Sin kardex</span>';
-          const cDetalle = c.contabilidad.map(ac => `#${ac.id} (${ac.tipo.toUpperCase()} - Cta ${ac.cuenta})`).join(', ') || '<span class="text-gray-400 font-sans italic">Sin asiento</span>';
+          
+          const cDetalle = c.contabilidad.map(ac => {
+            if (ac.pendiente_vinculo) {
+              return `
+                <div class="bg-amber-100/90 border border-amber-300 rounded-lg p-1.5 my-1 text-amber-950 font-sans">
+                  <div class="flex items-center gap-1 font-bold">
+                    <span>#${ac.id} (${ac.tipo.toUpperCase()} - Cta ${ac.cuenta}): ${fmtMon(ac.monto)}</span>
+                    <span class="px-1 py-0.2 bg-amber-300 text-amber-900 rounded text-[9px] uppercase font-bold">⚠️ Sin Vincular ID</span>
+                  </div>
+                  <div class="text-[10px] text-amber-800 italic mt-0.5 truncate max-w-xs" title="${ac.concepto}">
+                    Concepto: ${ac.concepto}
+                  </div>
+                </div>
+              `;
+            }
+            return `<div class="font-sans py-0.5">#${ac.id} (${ac.tipo.toUpperCase()} - Cta ${ac.cuenta})</div>`;
+          }).join('') || '<span class="text-gray-400 font-sans italic">Sin asiento</span>';
 
           const dif = c.diferencia;
           const isOk = c.ok;
-          const badge = isOk 
-            ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">✅ OK</span>`
-            : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">⚠️ Dif</span>`;
+          let badge = '';
+          if (c.tiene_huerfanos) {
+            badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">🔗 Requiere Vínculo</span>`;
+          } else if (isOk) {
+            badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">✅ OK</span>`;
+          } else {
+            badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">⚠️ Dif</span>`;
+          }
+
+          const rowClass = c.tiene_huerfanos
+            ? 'bg-amber-50/80 hover:bg-amber-100/60 border-l-4 border-amber-400'
+            : (!isOk ? 'bg-amber-50/30 hover:bg-gray-50' : 'hover:bg-gray-50');
 
           html += `
-            <tr class="hover:bg-gray-50 ${!isOk ? 'bg-amber-50/40' : ''}">
-              <td class="px-2.5 py-1.5 text-left font-sans">
+            <tr class="${rowClass}">
+              <td class="px-2.5 py-2 text-left font-sans">
                 <div class="font-bold text-gray-800">${c.tipo_documento_nombre || 'Documento'} #${c.documento}</div>
                 <div class="text-[10px] text-gray-400">${c.fecha || '—'}</div>
               </td>
-              <td class="px-2.5 py-1.5 text-left font-sans text-gray-700">${kDetalle}</td>
-              <td class="px-2.5 py-1.5 text-right font-bold text-gray-900">${fmtMon(c.kardex_total)}</td>
-              <td class="px-2.5 py-1.5 text-left font-sans text-gray-700">${cDetalle}</td>
-              <td class="px-2.5 py-1.5 text-right font-bold text-gray-900">${fmtMon(c.contab_total)}</td>
-              <td class="px-2.5 py-1.5 text-right font-bold ${Math.abs(dif) >= 0.01 ? 'text-rose-600' : 'text-gray-400'}">${fmtMon(dif)}</td>
-              <td class="px-2.5 py-1.5 text-center font-sans">${badge}</td>
+              <td class="px-2.5 py-2 text-left font-sans text-gray-700">${kDetalle}</td>
+              <td class="px-2.5 py-2 text-right font-bold text-gray-900">${fmtMon(c.kardex_total)}</td>
+              <td class="px-2.5 py-2 text-left text-gray-700">${cDetalle}</td>
+              <td class="px-2.5 py-2 text-right font-bold text-gray-900">${fmtMon(c.contab_total)}</td>
+              <td class="px-2.5 py-2 text-right font-bold ${Math.abs(dif) >= 0.01 ? 'text-rose-600' : 'text-gray-400'}">${fmtMon(dif)}</td>
+              <td class="px-2.5 py-2 text-center font-sans">${badge}</td>
             </tr>
           `;
         });

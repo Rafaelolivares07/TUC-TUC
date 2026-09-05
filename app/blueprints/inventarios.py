@@ -9591,8 +9591,8 @@ def _limpiar_nombre_match(txt):
 def _obtener_huerfanos_por_producto(conn, negocio_id, prods):
     """Mapea asientos contables de cuentas 14 sin producto_id hacia su producto_id correspondiente."""
     huerfanos = conn.execute("""
-        SELECT mc.id, mc.concepto, mc.monto, mc.tipo, mc.numero_documento,
-               COALESCE(mc.fecha, mc.created_at::date) as fecha
+        SELECT mc.id, mc.concepto, mc.monto, mc.tipo, mc.numero_documento, mc.tipo_documento, mc.tipo_documento_id,
+               COALESCE(mc.fecha, mc.created_at::date) as fecha, cp.codigo as cuenta_codigo, mc.comprobante_id
         FROM movimientos_contables mc
         JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
         WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id IS NULL
@@ -9847,6 +9847,20 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
             ORDER BY COALESCE(mc.fecha, mc.created_at::date) ASC, mc.id ASC
         """, (negocio_id, producto_id)).fetchall()
 
+        huerfanos_map, _ = _obtener_huerfanos_por_producto(conn, negocio_id, [prod])
+        h_list = huerfanos_map.get(producto_id, [])
+
+        cmovs_todos = []
+        for c in cmovs:
+            cd = dict(c)
+            cd['pendiente_vinculo'] = False
+            cmovs_todos.append(cd)
+
+        for h in h_list:
+            hd = dict(h)
+            hd['pendiente_vinculo'] = True
+            cmovs_todos.append(hd)
+
         docs_k = {}
         for k in kmovs:
             d = normalizar_numero(k['documento_numero']) or f"k_{k['id']}"
@@ -9855,7 +9869,7 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
             docs_k[d].append(k)
 
         docs_c = {}
-        for c in cmovs:
+        for c in cmovs_todos:
             d = normalizar_numero(c['numero_documento']) or f"c_{c['id']}"
             if d not in docs_c:
                 docs_c[d] = []
@@ -9888,10 +9902,13 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
             if tipo_doc_nombre == 'Documento' and tipo_doc_c and tipo_doc_c != 'Documento':
                 tipo_doc_nombre = tipo_doc_c
 
+            tiene_huerfanos = any(x.get('pendiente_vinculo') for x in c_items)
+
             cotejo.append({
                 'documento': num_doc_display,
                 'tipo_documento_nombre': tipo_doc_nombre,
                 'fecha': fecha_doc,
+                'tiene_huerfanos': tiene_huerfanos,
                 'kardex': [{
                     'id': x['id'],
                     'tipo': x['tipo'],
@@ -9904,17 +9921,19 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
                     'tipo': x['tipo'],
                     'monto': float(x['monto']),
                     'cuenta': x['cuenta_codigo'],
-                    'concepto': x['concepto']
+                    'concepto': x['concepto'],
+                    'pendiente_vinculo': x.get('pendiente_vinculo', False)
                 } for x in c_items],
                 'kardex_total': k_total,
                 'contab_total': c_total,
                 'diferencia': dif,
-                'ok': abs(dif) < 0.01 and len(k_items) > 0 and len(c_items) > 0
+                'ok': abs(dif) < 0.01 and len(k_items) > 0 and len(c_items) > 0 and not tiene_huerfanos
             })
 
         return jsonify({
             'ok': True,
             'producto': {'id': prod['id'], 'nombre': prod['nombre']},
+            'total_huerfanos': len(h_list),
             'cotejo': cotejo
         })
     except Exception as e:

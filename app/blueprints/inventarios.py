@@ -10013,7 +10013,7 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
 
         kmovs = conn.execute("""
             SELECT id, tipo, cantidad, costo_und, COALESCE(valor_total, cantidad * costo_und, 0) as valor_total,
-                   documento_numero
+                   documento_numero, tipo_documento, tipo_documento_id
             FROM movimientos_inventario
             WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida' AND documento_numero IS NOT NULL
         """, (negocio_id, producto_id)).fetchall()
@@ -10040,10 +10040,20 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
                 return tipo_str
             return 'Documento'
 
+        def _norm_tipo_str(tipo_id, tipo_str):
+            res = _resolver_td_nombre(tipo_id, tipo_str)
+            if not res or res == 'Documento':
+                return 'DOC'
+            import unicodedata
+            s = unicodedata.normalize('NFKD', str(res)).encode('ascii', 'ignore').decode('utf-8')
+            s = s.strip().upper().replace('_', ' ').replace('-', ' ')
+            return ' '.join(s.split())
+
         asientos_a_modificar = []
         for km in kmovs:
             num_norm = normalizar_numero(km['documento_numero'])
             val_kardex = float(km['valor_total'])
+            tipo_km_norm = _norm_tipo_str(km.get('tipo_documento_id'), km.get('tipo_documento'))
 
             asientos_c = conn.execute("""
                 SELECT mc.id, mc.monto, mc.comprobante_id, mc.numero_documento, mc.tipo_documento, mc.tipo_documento_id,
@@ -10056,6 +10066,16 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
             """, (negocio_id, producto_id, km['documento_numero'], f'%{num_norm}%')).fetchall()
 
             for ac in asientos_c:
+                # Validar que pertenezcan al mismo tipo de documento
+                tipo_ac_norm = _norm_tipo_str(ac.get('tipo_documento_id'), ac.get('tipo_documento'))
+                if tipo_km_norm != 'DOC' and tipo_ac_norm != 'DOC' and tipo_km_norm != tipo_ac_norm:
+                    continue
+
+                # Validar coincidencia de número de documento normalizado
+                num_ac_norm = normalizar_numero(ac.get('numero_documento'))
+                if num_norm and num_ac_norm and num_norm != num_ac_norm and str(ac.get('numero_documento') or '').strip() != str(km.get('documento_numero') or '').strip():
+                    continue
+
                 monto_contab = float(ac['monto'])
                 if abs(monto_contab - val_kardex) >= 0.01:
                     asientos_a_modificar.append({

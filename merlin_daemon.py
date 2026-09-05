@@ -156,9 +156,36 @@ class _NoClose:
     def closed(self):    return self._c.closed
 
 
+def _asegurar_tunel_ssh():
+    """Verifica si el puerto local 5435 responde. Si no, levanta el túnel SSH a AWS."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.settimeout(1)
+        s.connect(('127.0.0.1', 5435))
+        s.close()
+        return True
+    except Exception:
+        pass
+    pem = r"C:\Users\RAFAEL OLIVARES\Documents\tuctuc-linux.pem"
+    if not os.path.exists(pem):
+        return False
+    cmd = f'cmd /c "ssh -i \"{pem}\" -L 5435:localhost:5432 -N -o StrictHostKeyChecking=no -o ServerAliveInterval=30 ubuntu@18.217.231.167 > \"C:\\Users\\RAFAEL OLIVARES\\ssh_tunnel.log\" 2>&1"'
+    flags = 0x08000000 if os.name == 'nt' else 0
+    try:
+        subprocess.Popen(cmd, shell=True, creationflags=flags)
+        time.sleep(2)
+        log("✓ Túnel SSH a AWS (puerto 5435) relanzado automáticamente")
+        return True
+    except Exception as e:
+        log(f"✗ Error relanzando túnel SSH: {e}")
+        return False
+
+
 def _reconectar():
     global _conn, _bd_ok, _last_reconectar
     _last_reconectar = datetime.now()
+    _asegurar_tunel_ssh()
     try:
         if _conn:
             try: _conn.close()
@@ -176,6 +203,7 @@ def _reconectar():
         _conn = None
         _bd_ok = False
         log(f"✗ BD no disponible: {e}")
+
 
 
 def get_conn():
@@ -482,12 +510,14 @@ def enqueue_to_antigravity(text):
         import uuid
         from datetime import datetime
         import json
+        import re
         brain_dir = r"C:\Users\RAFAEL OLIVARES\.gemini\antigravity\brain"
         if not os.path.exists(brain_dir):
-            return
-        subdirs = [os.path.join(brain_dir, d) for d in os.listdir(brain_dir) if os.path.isdir(os.path.join(brain_dir, d)) and not d.startswith('.')]
+            return False
+        uuid_regex = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
+        subdirs = [os.path.join(brain_dir, d) for d in os.listdir(brain_dir) if os.path.isdir(os.path.join(brain_dir, d)) and uuid_regex.match(d)]
         if not subdirs:
-            return
+            return False
         active_conv_dir = max(subdirs, key=os.path.getmtime)
         active_conv_id = os.path.basename(active_conv_dir)
         
@@ -504,17 +534,19 @@ def enqueue_to_antigravity(text):
             "priority": "MESSAGE_PRIORITY_HIGH",
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "renderDetails": {
-                "messageTitle": "Mensaje desde Telegram"
+                "messageTitle": "Mensaje desde Telegram / Bridge"
             },
             "content": f"Rafael (vía Telegram): {text}"
         }
         
         with open(msg_file, "w", encoding="utf-8") as f:
-            json.dump(payload, f)
+            json.dump(payload, f, indent=2)
         
         log(f"📨 Mensaje encolado en Antigravity para conv {active_conv_id}: {text[:60]}")
+        return True
     except Exception as e:
         log(f"✗ Error encolando mensaje en Antigravity: {e}")
+        return False
 
 
 # ══════════════════════════════════════════════════════════════
@@ -887,10 +919,19 @@ def actualizar_estado_asistentes():
                                 found[0] = True
                         except Exception:
                             pass
-            win32gui.EnumWindows(_enum, None)
+            try:
+                win32gui.EnumWindows(_enum, None)
+            except Exception:
+                pass
             return found[0]
             
-        anti_ok = check_terminal_exists(['claude', 'antigravity'])
+        anti_running = False
+        try:
+            import psutil
+            anti_running = any('antigravity' in (p.info['name'] or '').lower() for p in psutil.process_iter(['name']))
+        except Exception:
+            pass
+        anti_ok = anti_running or check_terminal_exists(['claude', 'antigravity'])
         open_ok = check_terminal_exists(['opencode', 'open code'])
         
         conn = get_conn()
@@ -920,7 +961,7 @@ def procesar_cambio_bridge():
     try:
         if not BRIDGE_FILE.exists():
             return
-        content = BRIDGE_FILE.read_text(encoding='utf-8')
+        content = BRIDGE_FILE.read_text(encoding='utf-8', errors='replace')
         
         # Obtener las líneas no vacías
         lines = [l.strip() for l in content.split('\n') if l.strip()]
@@ -938,51 +979,53 @@ def procesar_cambio_bridge():
         # 1. Intentar parsear el formato simplificado (last_line)
         target_keys = []
         cuerpo = ""
+        last_lower = last_line.lower().strip()
         
-        if last_line.lower().startswith("open -"):
-            target_keys = ["opencode"]
-            cuerpo = last_line[6:].strip()
-        elif last_line.lower().startswith("anti -"):
-            target_keys = ["antigravity"]
-            cuerpo = last_line[6:].strip()
-        elif last_line.lower().startswith("todos -") or last_line.lower().startswith("all -"):
-            target_keys = ["antigravity", "opencode"]
-            cuerpo = last_line[last_line.find("-")+1:].strip()
-        else:
+        for p in ["open -", "open:", "@open", "[open]", "open "]:
+            if last_lower.startswith(p):
+                target_keys = ["opencode"]
+                cuerpo = last_line[len(p):].strip()
+                break
+                
+        if not target_keys:
+            for p in ["anti -", "anti:", "@anti", "[anti]", "anti "]:
+                if last_lower.startswith(p):
+                    target_keys = ["antigravity"]
+                    cuerpo = last_line[len(p):].strip()
+                    break
+                    
+        if not target_keys:
+            for p in ["todos -", "todos:", "@todos", "all -", "all:", "@all"]:
+                if last_lower.startswith(p):
+                    target_keys = ["antigravity", "opencode"]
+                    cuerpo = last_line[len(p):].strip()
+                    break
+
+        if not target_keys:
             # 2. Fallback: Intentar parsear el formato de cabecera anterior buscando hacia atrás
             import re
-            pattern = r"###\s*\[(.*?)\]\s*👤\s*(.*?)\s*para\s*(.*?):"
+            pattern = r"###\s*\[(.*?)\]\s*👤\s*(.*?)(?:\s*para\s*(.*?))?:\s*\n+([^\n#]+)"
             matches = list(re.finditer(pattern, content))
-            if not matches:
-                return
-            
-            last_match = matches[-1]
-            remitente = last_match.group(2).strip()
-            destinatario = last_match.group(3).strip()
-            
-            start_idx = last_match.end()
-            cuerpo = content[start_idx:].strip()
-            
-            if "rafael" not in remitente.lower():
-                return
+            if matches:
+                last_match = matches[-1]
+                remitente = (last_match.group(2) or "").strip()
+                destinatario = (last_match.group(3) or "").strip().lower()
+                cuerpo_cand = (last_match.group(4) or "").strip()
                 
-            dest_lower = destinatario.lower()
-            if "gemini" in dest_lower or "antigravity" in dest_lower:
-                target_keys = ["antigravity"]
-            elif "open" in dest_lower:
-                target_keys = ["opencode"]
-            elif "asistentes" in dest_lower or "todos" in dest_lower or "all" in dest_lower:
-                target_keys = ["antigravity", "opencode"]
-            else:
-                log(f"[Bridge Local] Destinatario desconocido en cabecera: {destinatario}")
-                return
+                if "rafael" in remitente.lower() and cuerpo_cand:
+                    cuerpo = cuerpo_cand
+                    if "gemini" in destinatario or "antigravity" in destinatario or "anti" in destinatario:
+                        target_keys = ["antigravity"]
+                    elif "open" in destinatario:
+                        target_keys = ["opencode"]
+                    else:
+                        target_keys = ["antigravity", "opencode"]
         
         if not target_keys or not cuerpo:
             return
             
         log(f"[Bridge Local] Mensaje detectado para {target_keys}: '{cuerpo}'")
         
-        global _bridge_activo
         _bridge_activo = True
         
         # Procesar para cada target uno por uno
@@ -990,10 +1033,17 @@ def procesar_cambio_bridge():
             prefijo = "anti" if target == "antigravity" else "open"
             
             _escribir_inbox(cuerpo)
-            activar_claude(target)
             
+            if target == "antigravity":
+                enqueue_to_antigravity(cuerpo)
+                sent = activar_claude(target)
+            else:
+                sent = activar_claude(target)
+            
+            # Si no se activó consola (ej. Antigravity Desktop), no bloquear esperando outbox
+            max_espera = 45 if sent else 2
             respuesta = None
-            for _ in range(90):
+            for _ in range(max_espera):
                 time.sleep(2)
                 if OUTBOX_FILE.exists():
                     try:
@@ -1089,9 +1139,6 @@ def main():
                     if _bd_ok and merlin_id is None:
                         merlin_id = get_or_create_merlin()
                         log(f'Merlin listo (id={merlin_id})')
-                if not _bd_ok:
-                    time.sleep(POLL_SEC)
-                    continue
 
             # ── B) Outbox (respuesta de Claude lista en archivo) ─────────────
             if not _relay_activo and not _bridge_activo:
@@ -1101,82 +1148,90 @@ def main():
             if not _relay_activo:
                 procesar_cambio_bridge()
 
-            # ── B) Check canal='captura' (throttled) ──────────────────────────
-            db_elapsed = (now - _last_db_check).total_seconds() if _last_db_check else 9999
-            if db_elapsed >= DB_POLL_CADA and not _relay_activo:
-                _last_db_check = now
-                if _bd_ok:
+            # ── B) Check canal='captura' (throttled, requiere BD) ─────────────
+            if _bd_ok:
+                db_elapsed = (now - _last_db_check).total_seconds() if _last_db_check else 9999
+                if db_elapsed >= DB_POLL_CADA and not _relay_activo:
+                    _last_db_check = now
                     actualizar_estado_asistentes()
-                trigger_elapsed = (now - _last_trigger).total_seconds() if _last_trigger else 9999
-                if get_captura_pendiente() and trigger_elapsed > COOLDOWN_SEC:
-                    log("Mensaje pendiente en captura — activando Claude...")
-                    activar_claude()
+                    trigger_elapsed = (now - _last_trigger).total_seconds() if _last_trigger else 9999
+                    if get_captura_pendiente() and trigger_elapsed > COOLDOWN_SEC:
+                        log("Mensaje pendiente en captura — activando Claude...")
+                        activar_claude()
 
-            # ── A) Bridge conversaciones usuarios ────────────────────────────
-            grupos = get_pendientes(merlin_id)
-            for g in grupos:
-                conv_id    = g['conv_id']
-                creador_id = g['creador_id']
-                msgs       = g['msgs']
-                msg_ids    = [m['id'] for m in msgs]
-                n          = len(msgs)
-                log(f"📨 Conv {conv_id}: {n} msg(s) de usuario {creador_id}")
-                ctx = get_contexto_usuario(creador_id, conv_id, merlin_id)
-                if creador_id == RAFAEL_ID:
-                    log(f"  Rafael → activando terminal...")
-                    texto_msg = _contenido_msg(msgs[0]) if len(msgs) == 1 else " ".join([_contenido_msg(m) for m in msgs])
-                    
-                    # Determinar destinatarios
-                    texto_lower = texto_msg.lower().strip()
-                    if texto_lower.startswith("@open") or texto_lower.startswith("[open]") or texto_lower.startswith("open -"):
-                        target_keys = ["opencode"]
-                    elif texto_lower.startswith("@anti") or texto_lower.startswith("[anti]") or texto_lower.startswith("anti -"):
-                        target_keys = ["antigravity"]
-                    elif texto_lower.startswith("todos -") or texto_lower.startswith("all -"):
-                        target_keys = ["antigravity", "opencode"]
-                    else:
-                        target_keys = ["antigravity", "opencode"]
-                        
-                    log(f"  [DB Msg] Ruteando mensaje a targets {target_keys}")
-                    
-                    respuestas = []
-                    for target in target_keys:
-                        _escribir_inbox(texto_msg)
-                        activar_claude(target)
-                        
-                        respuesta = None
-                        for _ in range(90):
-                            time.sleep(2)
-                            if OUTBOX_FILE.exists():
-                                try:
-                                    import json
-                                    data = json.loads(OUTBOX_FILE.read_text(encoding='utf-8'))
-                                    respuesta = data.get('contenido', '').strip()
-                                    OUTBOX_FILE.unlink()
-                                except Exception as e:
-                                    log(f"  ✗ Error leyendo outbox: {e}")
-                                break
-                        if respuesta:
-                            respuestas.append(respuesta)
+                # ── A) Bridge conversaciones usuarios (requiere BD) ───────────
+                if merlin_id:
+                    grupos = get_pendientes(merlin_id)
+                    for g in grupos:
+                        conv_id    = g['conv_id']
+                        creador_id = g['creador_id']
+                        msgs       = g['msgs']
+                        msg_ids    = [m['id'] for m in msgs]
+                        n          = len(msgs)
+                        log(f"📨 Conv {conv_id}: {n} msg(s) de usuario {creador_id}")
+                        ctx = get_contexto_usuario(creador_id, conv_id, merlin_id)
+                        if creador_id == RAFAEL_ID:
+                            log(f"  Rafael → activando terminal...")
+                            texto_msg = _contenido_msg(msgs[0]) if len(msgs) == 1 else " ".join([_contenido_msg(m) for m in msgs])
                             
-                    if respuestas:
-                        final_resp = "\n\n".join(respuestas)
-                        guardar_respuesta(conv_id, merlin_id, creador_id, final_resp)
-                        log("  ✅ Listo (procesado por desarrollador).")
-                    else:
-                        guardar_respuesta(conv_id, merlin_id, creador_id, "⚠️ El desarrollador no respondió a tiempo o las ventanas de los agentes no están activas.")
-                        log("  ✗ Timeout esperando respuesta de los agentes.")
-                    marcar_leidos(msg_ids)
-                    continue
+                            # Determinar destinatarios
+                            texto_lower = texto_msg.lower().strip()
+                            if texto_lower.startswith("@open") or texto_lower.startswith("[open]") or texto_lower.startswith("open -"):
+                                target_keys = ["opencode"]
+                            elif texto_lower.startswith("@anti") or texto_lower.startswith("[anti]") or texto_lower.startswith("anti -"):
+                                target_keys = ["antigravity"]
+                            elif texto_lower.startswith("todos -") or texto_lower.startswith("all -"):
+                                target_keys = ["antigravity", "opencode"]
+                            else:
+                                target_keys = ["antigravity", "opencode"]
+                                
+                            log(f"  [DB Msg] Ruteando mensaje a targets {target_keys}")
+                            
+                            respuestas = []
+                            for target in target_keys:
+                                _escribir_inbox(texto_msg)
+                                if target == "antigravity":
+                                    enqueue_to_antigravity(texto_msg)
+                                    sent = activar_claude(target)
+                                else:
+                                    sent = activar_claude(target)
+                                
+                                max_espera = 45 if sent else 2
+                                respuesta = None
+                                for _ in range(max_espera):
+                                    time.sleep(2)
+                                    if OUTBOX_FILE.exists():
+                                        try:
+                                            import json
+                                            data = json.loads(OUTBOX_FILE.read_text(encoding='utf-8'))
+                                            respuesta = data.get('contenido', '').strip()
+                                            OUTBOX_FILE.unlink()
+                                        except Exception as e:
+                                            log(f"  ✗ Error leyendo outbox: {e}")
+                                        break
+                                if respuesta:
+                                    respuestas.append(respuesta)
+                                    
+                            if respuestas:
+                                final_resp = "\n\n".join(respuestas)
+                                guardar_respuesta(conv_id, merlin_id, creador_id, final_resp)
+                                log("  ✅ Listo (procesado por desarrollador).")
+                            elif "antigravity" in target_keys:
+                                guardar_respuesta(conv_id, merlin_id, creador_id, "📨 Mensaje encolado en Antigravity.")
+                                log("  ✅ Mensaje encolado en Antigravity para Rafael.")
+                            else:
+                                guardar_respuesta(conv_id, merlin_id, creador_id, "⚠️ El desarrollador no respondió a tiempo o las ventanas de los agentes no están activas.")
+                                log("  ✗ Timeout esperando respuesta de los agentes.")
+                            marcar_leidos(msg_ids)
+                            continue
 
-
-                prompt = construir_prompt(ctx, msgs)
-                log(f"  Llamando Claude ({len(ctx['historial'])} msgs contexto)...")
-                respuesta = llamar_claude(prompt)
-                marcar_leidos(msg_ids)
-                log(f"  💬 {respuesta[:80]}...")
-                guardar_respuesta(conv_id, merlin_id, creador_id, respuesta)
-                log("  ✅ Listo.")
+                        prompt = construir_prompt(ctx, msgs)
+                        log(f"  Llamando Claude ({len(ctx['historial'])} msgs contexto)...")
+                        respuesta = llamar_claude(prompt)
+                        marcar_leidos(msg_ids)
+                        log(f"  💬 {respuesta[:80]}...")
+                        guardar_respuesta(conv_id, merlin_id, creador_id, respuesta)
+                        log("  ✅ Listo.")
 
             time.sleep(POLL_SEC)
 

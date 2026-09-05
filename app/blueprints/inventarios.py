@@ -3217,6 +3217,13 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
             LIMIT 1
         """, (negocio_id, consecutive, numero_doc)).fetchone()
 
+    comprobante_id = doc_ref_row['comprobante_id'] if doc_ref_row else None
+    tipo_doc_id = doc_ref_row['tipo_documento_id'] if doc_ref_row else None
+    tipo_doc_nombre = doc_ref_row['tipo_documento'] if doc_ref_row else 'FACTURA_DE_VENTA'
+    fecha_ref = doc_ref_row['fecha'] if doc_ref_row else None
+    cta_140505_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '140505' LIMIT 1").fetchone()
+    cta_140505_id = cta_140505_row['id'] if cta_140505_row else None
+
     # 3. Emparejar insumos consolidados con asientos 14* existentes
     cambios = []
     asientos_usados = set()
@@ -3257,14 +3264,6 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
                 })
         else:
             # 4. Insertar salida de kardex faltante en contabilidad
-            cta_140505_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '140505' LIMIT 1").fetchone()
-            cta_140505_id = cta_140505_row['id'] if cta_140505_row else None
-
-            comprobante_id = doc_ref_row['comprobante_id'] if doc_ref_row else None
-            tipo_doc_id = doc_ref_row['tipo_documento_id'] if doc_ref_row else None
-            tipo_doc_nombre = doc_ref_row['tipo_documento'] if doc_ref_row else 'FACTURA_DE_VENTA'
-            fecha_ref = doc_ref_row['fecha'] if doc_ref_row else None
-
             ins_res = conn.execute("""
                 INSERT INTO movimientos_contables (
                     negocio_id, comprobante_id, cuenta, cuenta_id, tipo, monto,

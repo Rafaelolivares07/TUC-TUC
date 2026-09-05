@@ -2234,15 +2234,17 @@ def api_reparar_costos_venta(negocio_id):
                     grupo_label = 'Grupo 3 (Venta)'
                     # Cantidad vendida en pedido_items
                     qty_row = conn.execute("""
-                        SELECT SUM(pi.cantidad), SUM(pi.cantidad * COALESCE(pi.costo_unitario, 0)), MAX(pi.id)
+                        SELECT SUM(pi.cantidad) AS cant_vendida,
+                               SUM(pi.cantidad * COALESCE(pi.costo_unitario, 0)) AS costo_total_ped,
+                               MAX(pi.id) AS max_pi_id
                         FROM pedido_items pi
                         JOIN pedidos p ON p.id = pi.pedido_id
                         WHERE p.negocio_id = %s AND pi.producto_id = %s
                           AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
                     """, (negocio_id, ppid, consecutive, doc_num, ref_id_int)).fetchone()
-                    qty = float(qty_row[0]) if (qty_row and qty_row[0] is not None) else 0.0
-                    costo_total_pi = float(qty_row[1]) if (qty_row and qty_row[1] is not None) else 0.0
-                    pi_id = qty_row[2] if qty_row and qty_row[2] else None
+                    qty = float(qty_row['cant_vendida']) if (qty_row and qty_row['cant_vendida'] is not None) else 0.0
+                    costo_total_pi = float(qty_row['costo_total_ped']) if (qty_row and qty_row['costo_total_ped'] is not None) else 0.0
+                    pi_id = qty_row['max_pi_id'] if (qty_row and qty_row['max_pi_id']) else None
                     
                     # COGS (61*) — SUM
                     cogs_row = conn.execute("""
@@ -3358,13 +3360,13 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
     qty = 0.0
     if ref_type != 'produccion':
         qty_row = conn.execute("""
-            SELECT SUM(pi.cantidad), MAX(pi.id)
+            SELECT SUM(pi.cantidad) AS cant_vendida, MAX(pi.id) AS max_pi_id
             FROM pedido_items pi
             JOIN pedidos p ON p.id = pi.pedido_id
             WHERE p.negocio_id = %s AND pi.producto_id = %s
               AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
         """, (negocio_id, prod_padre_id, consecutive, numero_doc, ref_id_int)).fetchone()
-        qty = float(qty_row[0]) if (qty_row and qty_row[0] is not None) else 0.0
+        qty = float(qty_row['cant_vendida']) if (qty_row and qty_row['cant_vendida'] is not None) else 0.0
 
         if qty > 0:
             nuevo_costo_und = total_kardex_padre / qty

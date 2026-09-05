@@ -12675,6 +12675,8 @@ async function cargarReporteEnsambles() {
 
     let auditProductosData = [];
     let auditAbierto = false;
+    const auditOpenCotejos = new Set();
+    const openCotejos = auditOpenCotejos;
 
     function toggleSeccionAuditoria(forzarAbrir = null) {
       const c = document.getElementById('audit-container');
@@ -12715,11 +12717,10 @@ async function cargarReporteEnsambles() {
       const tb = document.getElementById('tabla-auditoria-body');
       
       // Guardar IDs de cotejos abiertos
-      const openCotejos = new Set();
       document.querySelectorAll('[id^="row-cotejo-"]').forEach(el => {
         if (!el.classList.contains('hidden')) {
           const pid = el.id.replace('row-cotejo-', '');
-          openCotejos.add(pid);
+          auditOpenCotejos.add(pid);
         }
       });
 
@@ -12910,7 +12911,9 @@ async function cargarReporteEnsambles() {
           </tr>
           <tr id="row-cotejo-${p.id}" class="hidden bg-slate-50 border-b border-slate-200">
             <td colspan="9" class="p-4" id="content-cotejo-${p.id}">
-              <div class="text-center py-2 text-xs text-gray-500 font-semibold">Cargando desglose de documentos...</div>
+              <div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-500 font-semibold">
+                <span class="animate-spin inline-block">⏳</span> Cargando documentos y cotejo contable...
+              </div>
             </td>
           </tr>
         `;
@@ -13130,6 +13133,7 @@ async function cargarReporteEnsambles() {
 
     // Despliegue de Acordeón Documental por Producto (Estilo Ensambles Históricos)
     async function toggleAcordeonAuditoria(productoId, ev = null, forzarAbrir = null) {
+      console.log('[Auditoria] toggleAcordeonAuditoria llamado para productoId:', productoId, 'forzarAbrir:', forzarAbrir);
       if (typeof ev === 'boolean') {
         forzarAbrir = ev;
         ev = null;
@@ -13141,7 +13145,10 @@ async function cargarReporteEnsambles() {
       const row = document.getElementById(`row-cotejo-${productoId}`);
       const chevron = document.getElementById(`chevron-${productoId}`);
       const container = document.getElementById(`content-cotejo-${productoId}`);
-      if (!row) return;
+      if (!row) {
+        console.warn('[Auditoria] Fila no encontrada: row-cotejo-' + productoId);
+        return;
+      }
 
       const isHidden = row.classList.contains('hidden');
       const abrir = (forzarAbrir !== null && forzarAbrir !== undefined) ? !!forzarAbrir : isHidden;
@@ -13149,28 +13156,44 @@ async function cargarReporteEnsambles() {
       if (!abrir) {
         row.classList.add('hidden');
         if (chevron) chevron.textContent = '▶';
-        openCotejos.delete(String(productoId));
+        auditOpenCotejos.delete(String(productoId));
         return;
       }
 
       row.classList.remove('hidden');
       if (chevron) chevron.textContent = '▼';
-      openCotejos.add(String(productoId));
+      auditOpenCotejos.add(String(productoId));
       if (container) {
-        container.innerHTML = `<div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-500 font-semibold"><span class="animate-spin inline-block">⏳</span> Cargando documentos y cotejo contable...</div>`;
+        container.innerHTML = `
+          <div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-500 font-semibold">
+            <span class="animate-spin inline-block">⏳</span> Cargando documentos y cotejo contable...
+          </div>
+        `;
       }
 
       try {
-        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/detalle-cotejo`);
+        const url = `/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/detalle-cotejo`;
+        console.log('[Auditoria] Fetching:', url);
+        const r = await fetch(url);
         const d = await r.json();
+        console.log('[Auditoria] Respuesta recibida para', productoId, d);
         if (!d.ok) {
-          if (container) container.innerHTML = `<div class="text-red-500 text-xs font-bold py-2">Error: ${d.error}</div>`;
+          if (container) {
+            container.innerHTML = `
+              <div class="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center justify-between">
+                <span><strong>Error al cargar:</strong> ${d.error || 'Error desconocido'}</span>
+                <button onclick="toggleAcordeonAuditoria(${productoId}, null, true)" class="px-3 py-1 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700">Reintentar</button>
+              </div>
+            `;
+          }
           return;
         }
 
         const cotejo = d.cotejo || [];
         if (!cotejo.length) {
-          if (container) container.innerHTML = `<div class="text-gray-400 text-xs py-3 italic text-center">Sin documentos registrados en Kardex ni Contabilidad para este producto.</div>`;
+          if (container) {
+            container.innerHTML = `<div class="text-gray-400 text-xs py-3 italic text-center">Sin documentos registrados en Kardex ni Contabilidad para este producto.</div>`;
+          }
           return;
         }
 
@@ -13282,7 +13305,15 @@ async function cargarReporteEnsambles() {
 
         if (container) container.innerHTML = html;
       } catch (err) {
-        if (container) container.innerHTML = `<div class="text-red-500 text-xs font-bold py-2">Error de conexión: ${err.message}</div>`;
+        console.error('[Auditoria] Error capturado en toggleAcordeonAuditoria:', err);
+        if (container) {
+          container.innerHTML = `
+            <div class="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center justify-between">
+              <span><strong>Error de conexión o script:</strong> ${err.message}</span>
+              <button onclick="toggleAcordeonAuditoria(${productoId}, null, true)" class="px-3 py-1 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700">Reintentar</button>
+            </div>
+          `;
+        }
       }
     }
 

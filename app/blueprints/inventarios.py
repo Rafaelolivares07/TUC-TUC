@@ -9573,3 +9573,424 @@ def inv_dist_resumen(negocio_id):
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+
+# ==============================================================================
+# ── AUDITORÍA DE PRODUCTOS (TABLA RESUMEN vs KARDEX vs CONTABILIDAD) ──────────
+# ==============================================================================
+
+def _limpiar_nombre_match(txt):
+    if not txt:
+        return ""
+    t = txt.upper()
+    for prefijo in ['INV:', 'BAJA INV:', 'AJUSTE FISICO (+):', 'AJUSTE FISICO (-):', 'PRODUCCIÓN', 'PRODUCCION', 'AJUSTE INV:']:
+        t = t.replace(prefijo, '')
+    t = t.replace(' X ', ' ').replace('  ', ' ').strip()
+    return t
+
+
+def _obtener_huerfanos_por_producto(conn, negocio_id, prods):
+    """Mapea asientos contables de cuentas 14 sin producto_id hacia su producto_id correspondiente."""
+    huerfanos = conn.execute("""
+        SELECT mc.id, mc.concepto, mc.monto, mc.tipo, mc.numero_documento,
+               COALESCE(mc.fecha, mc.created_at::date) as fecha
+        FROM movimientos_contables mc
+        JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+        WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id IS NULL
+    """, (negocio_id,)).fetchall()
+
+    huerfanos_por_prod = {}
+    for h in huerfanos:
+        c_norm = _limpiar_nombre_match(h['concepto'])
+        matched_id = None
+        for p in prods:
+            p_norm = _limpiar_nombre_match(p['nombre'])
+            if p_norm and (p_norm in c_norm or c_norm in p_norm):
+                matched_id = p['id']
+                break
+
+        if not matched_id and h['numero_documento']:
+            doc_mov = conn.execute("""
+                SELECT producto_id FROM movimientos_inventario
+                WHERE negocio_id = %s AND documento_numero = %s
+                LIMIT 1
+            """, (negocio_id, h['numero_documento'])).fetchone()
+            if doc_mov:
+                matched_id = doc_mov['producto_id']
+
+        if matched_id:
+            if matched_id not in huerfanos_por_prod:
+                huerfanos_por_prod[matched_id] = []
+            huerfanos_por_prod[matched_id].append(h)
+
+    return huerfanos_por_prod, len(huerfanos)
+
+
+@bp.route('/api/inventario/<int:negocio_id>/auditoria-productos')
+def api_auditoria_productos(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        prods = conn.execute("""
+            SELECT p.id, p.nombre, p.categoria, p.costo, p.precio, p.disponible,
+                   COALESCE(s.stock, 0) as stock_tabla,
+                   COALESCE(s.costo_und, p.costo, 0) as costo_tabla,
+                   COALESCE(s.valor_existencia, 0) as valor_tabla
+            FROM productos p
+            LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = p.negocio_id AND s.bodega = 1
+            WHERE p.negocio_id = %s
+            ORDER BY p.categoria, p.nombre
+        """, (negocio_id,)).fetchall()
+
+        kardex_res = conn.execute("""
+            SELECT producto_id,
+                   SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE -cantidad END) as stock_kardex,
+                   SUM(CASE WHEN tipo = 'entrada' THEN COALESCE(valor_total, cantidad * costo_und, 0)
+                            ELSE -COALESCE(valor_total, cantidad * costo_und, 0) END) as neto_kardex,
+                   COUNT(*) as total_movimientos
+            FROM movimientos_inventario
+            WHERE negocio_id = %s
+            GROUP BY producto_id
+        """, (negocio_id,)).fetchall()
+        k_map = {r['producto_id']: r for r in kardex_res}
+
+        contab_res = conn.execute("""
+            SELECT mc.producto_id,
+                   SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE -mc.monto END) as saldo_contab,
+                   COUNT(*) as lineas_contab
+            FROM movimientos_contables mc
+            JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+            WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id IS NOT NULL
+            GROUP BY mc.producto_id
+        """, (negocio_id,)).fetchall()
+        c_map = {r['producto_id']: r for r in contab_res}
+
+        huerfanos_map, total_huerfanos = _obtener_huerfanos_por_producto(conn, negocio_id, prods)
+
+        items = []
+        for p in prods:
+            pid = p['id']
+            k = k_map.get(pid, {'stock_kardex': Decimal('0'), 'neto_kardex': Decimal('0'), 'total_movimientos': 0})
+            c = c_map.get(pid, {'saldo_contab': Decimal('0'), 'lineas_contab': 0})
+            h_list = huerfanos_map.get(pid, [])
+
+            stock_tabla = Decimal(str(p['stock_tabla'] or 0))
+            costo_tabla = Decimal(str(p['costo_tabla'] or 0))
+            valor_tabla = Decimal(str(p['valor_tabla'] or 0))
+            if valor_tabla == Decimal('0') and stock_tabla > Decimal('0'):
+                valor_tabla = stock_tabla * costo_tabla
+
+            stock_kardex = Decimal(str(k['stock_kardex'] or 0))
+            neto_kardex = Decimal(str(k['neto_kardex'] or 0))
+            saldo_contab = Decimal(str(c['saldo_contab'] or 0))
+
+            dif_stock = stock_tabla - stock_kardex
+            dif_valor = neto_kardex - saldo_contab
+
+            estado = 'OK'
+            if len(h_list) > 0:
+                estado = 'REQUIERE_VINCULAR_IDS'
+            elif abs(dif_stock) >= Decimal('0.001'):
+                estado = 'DIF_STOCK'
+            elif abs(dif_valor) >= Decimal('1.0'):
+                estado = 'DIF_VALOR'
+
+            items.append({
+                'id': pid,
+                'nombre': p['nombre'],
+                'categoria': p['categoria'] or 'Sin categoría',
+                'stock_tabla': float(stock_tabla),
+                'costo_tabla': float(costo_tabla),
+                'valor_tabla': float(valor_tabla),
+                'stock_kardex': float(stock_kardex),
+                'valor_kardex': float(neto_kardex),
+                'saldo_contab': float(saldo_contab),
+                'dif_stock': float(dif_stock),
+                'dif_valor': float(dif_valor),
+                'lineas_sin_id': len(h_list),
+                'lineas_con_id': c['lineas_contab'],
+                'total_movimientos_kardex': k['total_movimientos'],
+                'estado': estado
+            })
+
+        return jsonify({
+            'ok': True,
+            'totales': {
+                'total_productos': len(prods),
+                'total_huerfanos': total_huerfanos,
+                'productos_ok': sum(1 for x in items if x['estado'] == 'OK'),
+                'productos_con_huerfanos': sum(1 for x in items if x['lineas_sin_id'] > 0),
+                'productos_con_dif_stock': sum(1 for x in items if abs(x['dif_stock']) >= 0.001),
+                'productos_con_dif_valor': sum(1 for x in items if abs(x['dif_valor']) >= 1.0)
+            },
+            'productos': items
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/auditoria-productos/vincular-ids', methods=['POST'])
+def api_auditoria_vincular_ids(negocio_id):
+    """FASE 1: Vincula producto_id a asientos contables de cuentas 14 huérfanos."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    producto_id = data.get('producto_id')
+    if producto_id is not None:
+        try:
+            producto_id = int(producto_id)
+        except (ValueError, TypeError):
+            return jsonify({'ok': False, 'error': 'producto_id inválido'}), 400
+
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        where_prod = "AND p.id = %s" if producto_id else ""
+        params_prods = (negocio_id, producto_id) if producto_id else (negocio_id,)
+        prods = conn.execute(f"""
+            SELECT p.id, p.nombre FROM productos p WHERE p.negocio_id = %s {where_prod}
+        """, params_prods).fetchall()
+
+        huerfanos_map, _ = _obtener_huerfanos_por_producto(conn, negocio_id, prods)
+
+        vinculadas = 0
+        for pid, h_list in huerfanos_map.items():
+            ids_to_update = [h['id'] for h in h_list]
+            if ids_to_update:
+                conn.execute("""
+                    UPDATE movimientos_contables
+                    SET producto_id = %s
+                    WHERE id = ANY(%s)
+                """, (pid, ids_to_update))
+                vinculadas += len(ids_to_update)
+
+        return jsonify({
+            'ok': True,
+            'vinculadas': vinculadas,
+            'mensaje': f'Se vincularon {vinculadas} línea(s) contable(s) exitosamente.'
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/auditoria-productos/<int:producto_id>/detalle-cotejo')
+def api_auditoria_detalle_cotejo(negocio_id, producto_id):
+    """FASE 2: Desglose documento a documento entre Kardex y Contabilidad Cta 14."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        prod = conn.execute("SELECT id, nombre FROM productos WHERE id = %s AND negocio_id = %s", (producto_id, negocio_id)).fetchone()
+        if not prod:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+
+        kmovs = conn.execute("""
+            SELECT id, tipo, cantidad, costo_und, COALESCE(valor_total, cantidad * costo_und, 0) as valor_total,
+                   documento_numero, tipo_documento, COALESCE(documento_fecha, created_at::date) as fecha
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s
+            ORDER BY COALESCE(documento_fecha, created_at::date) ASC, id ASC
+        """, (negocio_id, producto_id)).fetchall()
+
+        cmovs = conn.execute("""
+            SELECT mc.id, mc.asiento_id, mc.tipo, mc.monto, mc.numero_documento, mc.tipo_documento,
+                   COALESCE(mc.fecha, mc.created_at::date) as fecha, mc.concepto, cp.codigo as cuenta_codigo
+            FROM movimientos_contables mc
+            JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+            WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id = %s
+            ORDER BY COALESCE(mc.fecha, mc.created_at::date) ASC, mc.id ASC
+        """, (negocio_id, producto_id)).fetchall()
+
+        docs_k = {}
+        for k in kmovs:
+            d = normalizar_numero(k['documento_numero']) or f"k_{k['id']}"
+            if d not in docs_k:
+                docs_k[d] = []
+            docs_k[d].append(k)
+
+        docs_c = {}
+        for c in cmovs:
+            d = normalizar_numero(c['numero_documento']) or f"c_{c['id']}"
+            if d not in docs_c:
+                docs_c[d] = []
+            docs_c[d].append(c)
+
+        todos_docs = list(dict.fromkeys(list(docs_k.keys()) + list(docs_c.keys())))
+
+        cotejo = []
+        for d in todos_docs:
+            k_items = docs_k.get(d, [])
+            c_items = docs_c.get(d, [])
+
+            k_total = sum(float(x['valor_total']) for x in k_items)
+            c_total = sum(float(x['monto']) for x in c_items)
+            dif = round(k_total - c_total, 2)
+
+            fecha_doc = None
+            num_doc_display = d
+            if k_items:
+                fecha_doc = str(k_items[0]['fecha'])
+                num_doc_display = k_items[0]['documento_numero'] or d
+            elif c_items:
+                fecha_doc = str(c_items[0]['fecha'])
+                num_doc_display = c_items[0]['numero_documento'] or d
+
+            cotejo.append({
+                'documento': num_doc_display,
+                'fecha': fecha_doc,
+                'kardex': [{
+                    'id': x['id'],
+                    'tipo': x['tipo'],
+                    'cantidad': float(x['cantidad']),
+                    'costo_und': float(x['costo_und'] or 0),
+                    'valor_total': float(x['valor_total'] or 0)
+                } for x in k_items],
+                'contabilidad': [{
+                    'id': x['id'],
+                    'tipo': x['tipo'],
+                    'monto': float(x['monto']),
+                    'cuenta': x['cuenta_codigo'],
+                    'concepto': x['concepto']
+                } for x in c_items],
+                'kardex_total': k_total,
+                'contab_total': c_total,
+                'diferencia': dif,
+                'ok': abs(dif) < 0.01 and len(k_items) > 0 and len(c_items) > 0
+            })
+
+        return jsonify({
+            'ok': True,
+            'producto': {'id': prod['id'], 'nombre': prod['nombre']},
+            'cotejo': cotejo
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/auditoria-productos/<int:producto_id>/reparar-valores', methods=['POST'])
+def api_auditoria_reparar_valores(negocio_id, producto_id):
+    """FASE 2: Sincroniza la tabla saldos_inventario y repara asientos desfasados en cuentas 14."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        prod = conn.execute("SELECT id, nombre, costo FROM productos WHERE id = %s AND negocio_id = %s", (producto_id, negocio_id)).fetchone()
+        if not prod:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+
+        k_row = conn.execute("""
+            SELECT SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE -cantidad END) as stock_real,
+                   SUM(CASE WHEN tipo = 'entrada' THEN COALESCE(valor_total, cantidad * costo_und, 0)
+                            ELSE -COALESCE(valor_total, cantidad * costo_und, 0) END) as neto_real
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s
+        """, (negocio_id, producto_id)).fetchone()
+
+        stock_real = float(k_row['stock_real'] or 0)
+        neto_real = float(k_row['neto_real'] or 0)
+
+        last_mov = conn.execute("""
+            SELECT costo_und FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND costo_und > 0
+            ORDER BY COALESCE(documento_fecha, created_at::date) DESC, id DESC
+            LIMIT 1
+        """, (negocio_id, producto_id)).fetchone()
+        costo_real = float(last_mov['costo_und']) if last_mov else float(prod['costo'] or 0)
+        val_existencia_real = round(stock_real * costo_real, 2) if stock_real > 0 else 0.0
+
+        saldo_existente = conn.execute("""
+            SELECT id FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
+        """, (negocio_id, producto_id)).fetchone()
+
+        if saldo_existente:
+            conn.execute("""
+                UPDATE saldos_inventario
+                SET stock = %s, costo_und = %s, valor_existencia = %s, updated_at = NOW()
+                WHERE id = %s
+            """, (stock_real, costo_real, val_existencia_real, saldo_existente['id']))
+        else:
+            conn.execute("""
+                INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock, costo_und, valor_existencia)
+                VALUES (%s, %s, 1, %s, %s, %s)
+            """, (negocio_id, producto_id, stock_real, costo_real, val_existencia_real))
+
+        kmovs = conn.execute("""
+            SELECT id, tipo, cantidad, costo_und, COALESCE(valor_total, cantidad * costo_und, 0) as valor_total,
+                   documento_numero
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida' AND documento_numero IS NOT NULL
+        """, (negocio_id, producto_id)).fetchall()
+
+        asientos_modificados = 0
+        for km in kmovs:
+            num_norm = normalizar_numero(km['documento_numero'])
+            val_kardex = float(km['valor_total'])
+
+            asientos_c = conn.execute("""
+                SELECT mc.id, mc.asiento_id, mc.monto, mc.comprobante_id
+                FROM movimientos_contables mc
+                JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+                WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id = %s
+                  AND mc.tipo IN ('credito', 'C')
+                  AND (mc.numero_documento = %s OR mc.numero_documento LIKE %s)
+            """, (negocio_id, producto_id, km['documento_numero'], f'%{num_norm}%')).fetchall()
+
+            for ac in asientos_c:
+                monto_contab = float(ac['monto'])
+                if abs(monto_contab - val_kardex) >= 0.01:
+                    conn.execute("""
+                        UPDATE movimientos_contables
+                        SET monto = %s
+                        WHERE id = %s
+                    """, (val_kardex, ac['id']))
+                    asientos_modificados += 1
+
+                    if ac['comprobante_id']:
+                        conn.execute("""
+                            UPDATE movimientos_contables mc
+                            SET monto = %s
+                            FROM cuentas_puc cp
+                            WHERE cp.id = mc.cuenta_id AND mc.comprobante_id = %s
+                              AND (cp.codigo LIKE '61%%' OR cp.codigo LIKE '71%%')
+                              AND mc.producto_id = %s AND mc.tipo IN ('debito', 'D')
+                        """, (val_kardex, ac['comprobante_id'], producto_id))
+
+        return jsonify({
+            'ok': True,
+            'mensaje': f'Tabla resumen sincronizada (Stock: {stock_real}, Costo: {costo_real}) y {asientos_modificados} asiento(s) contable(s) corregido(s).',
+            'stock_reparado': stock_real,
+            'costo_reparado': costo_real,
+            'valor_reparado': val_existencia_real,
+            'asientos_modificados': asientos_modificados
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+

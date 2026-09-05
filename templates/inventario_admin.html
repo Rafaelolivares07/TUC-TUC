@@ -1045,34 +1045,84 @@
 
     
 
-    <!-- Sección de Conciliación Kardex vs Contabilidad -->
-
-    <div class="mt-8 border-t border-gray-100 pt-6">
-
-      <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-
-        <div>
-
-          <h4 class="text-sm font-bold text-gray-800">Conciliación de Inventario vs Contabilidad (Cuentas 14)</h4>
-
-          <p class="text-xs text-gray-500">Compara los saldos y movimientos registrados en Kardex con los asientos contables de la clase 14.</p>
-
+    <!-- ── SECCIÓN DE AUDITORÍA INTEGRAL: TABLA vs KARDEX vs CONTABILIDAD (COLAPSADA POR DEFECTO) ── -->
+    <div class="mt-8 border-t border-gray-200 pt-6">
+      <div class="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-4 text-white shadow-lg">
+        <div class="flex items-center justify-between cursor-pointer select-none" onclick="toggleSeccionAuditoria()">
+          <div class="flex items-center gap-3">
+            <span class="text-xl">🔍</span>
+            <div>
+              <h4 class="text-sm font-bold flex items-center gap-2">
+                AUDITORÍA DE INTEGRIDAD: TABLA vs KARDEX vs CONTABILIDAD
+                <span id="audit-badge-status" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-700 text-slate-300">Colapsado</span>
+              </h4>
+              <p class="text-xs text-slate-400">Reconstruye el inventario movimiento a movimiento y coteja la tabla resumen con las cuentas 14 contables.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="audit-chevron" class="text-lg text-slate-400 transform transition-transform duration-200">▼</span>
+          </div>
         </div>
 
-        <button onclick="ejecutarConciliacionInventario()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2">
+        <!-- Contenedor desplegable -->
+        <div id="audit-container" class="hidden mt-5 pt-4 border-t border-slate-700 space-y-4">
+          <!-- Barra de controles y contadores -->
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="px-2.5 py-1 bg-slate-700 rounded-lg text-slate-200 font-semibold" id="audit-stat-total">Total: 0</span>
+              <span class="px-2.5 py-1 bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 rounded-lg font-semibold" id="audit-stat-ok">✅ Cuadrados: 0</span>
+              <span class="px-2.5 py-1 bg-amber-900/60 text-amber-300 border border-amber-700/50 rounded-lg font-semibold" id="audit-stat-huerfanos">🔗 Sin ID: 0</span>
+              <span class="px-2.5 py-1 bg-rose-900/60 text-rose-300 border border-rose-700/50 rounded-lg font-semibold" id="audit-stat-dif-stock">⚠️ Dif Stock: 0</span>
+              <span class="px-2.5 py-1 bg-purple-900/60 text-purple-300 border border-purple-700/50 rounded-lg font-semibold" id="audit-stat-dif-valor">⚠️ Dif Contab: 0</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="vincularIdsAuditoria(null)" id="btn-vincular-todos-ids" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-sm">
+                🔗 Vincular Todos los IDs (Fase 1)
+              </button>
+              <button onclick="cargarAuditoriaProductos()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-sm">
+                ⚡ Ejecutar / Actualizar Auditoría
+              </button>
+            </div>
+          </div>
 
-          🔍 Ejecutar Auditoría de Saldos
+          <!-- Filtros internos de auditoría -->
+          <div class="flex items-center gap-3 flex-wrap">
+            <input id="filtro-auditoria-txt" type="text" placeholder="Buscar en auditoría..." oninput="filtrarTablaAuditoria()"
+                   class="text-xs bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500" style="max-width:240px">
+            <select id="filtro-auditoria-estado" onchange="filtrarTablaAuditoria()"
+                    class="text-xs bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500">
+              <option value="todos">Todos los productos</option>
+              <option value="con_problemas" selected>Solo con Diferencias / Sin ID ⚠️</option>
+              <option value="sin_id">Solo con Líneas sin ID 🔗</option>
+              <option value="dif_stock">Solo con Diferencia en Stock 📦</option>
+              <option value="dif_valor">Solo con Diferencia Contable 🏛️</option>
+              <option value="ok">Solo Cuadrados ✅</option>
+            </select>
+          </div>
 
-        </button>
-
+          <!-- Tabla de Auditoría -->
+          <div class="overflow-x-auto bg-white rounded-xl text-gray-800 shadow-inner">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-100 text-gray-600 font-bold uppercase border-b border-gray-200 select-none">
+                <tr>
+                  <th class="px-3 py-2.5 text-left">Producto</th>
+                  <th class="px-3 py-2.5 text-right">Stock Tabla</th>
+                  <th class="px-3 py-2.5 text-right">Stock Kardex</th>
+                  <th class="px-3 py-2.5 text-right">Dif Stock</th>
+                  <th class="px-3 py-2.5 text-right">Valor Tabla ($)</th>
+                  <th class="px-3 py-2.5 text-right">Valor Kardex ($)</th>
+                  <th class="px-3 py-2.5 text-right">Saldo Cta 14 ($)</th>
+                  <th class="px-3 py-2.5 text-right">Dif Valor ($)</th>
+                  <th class="px-3 py-2.5 text-center">Fases de Reparación</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-auditoria-body">
+                <tr><td colspan="9" class="text-center py-6 text-gray-400">Haz clic en "Ejecutar / Actualizar Auditoría" para iniciar el diagnóstico.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-
-      <div id="reconcile-report-container" class="hidden bg-gray-50 rounded-2xl p-5 border border-gray-100 space-y-4">
-
-        <!-- Contenido dinámico del reporte de conciliación -->
-
-      </div>
-
     </div>
 
   </div>
@@ -12615,6 +12665,322 @@ async function cargarReporteEnsambles() {
       }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // ── AUDITORÍA INTEGRAL DE PRODUCTOS (TABLA vs KARDEX vs CONTABILIDAD) ────
+    // ══════════════════════════════════════════════════════════════════════════
+
+    let auditProductosData = [];
+    let auditAbierto = false;
+
+    function toggleSeccionAuditoria() {
+      const c = document.getElementById('audit-container');
+      const chev = document.getElementById('audit-chevron');
+      const badge = document.getElementById('audit-badge-status');
+      if (!c) return;
+
+      auditAbierto = !auditAbierto;
+      if (auditAbierto) {
+        c.classList.remove('hidden');
+        if (chev) chev.style.transform = 'rotate(180deg)';
+        if (badge) {
+          badge.textContent = 'Abierto';
+          badge.className = 'px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-600 text-white';
+        }
+        if (!auditProductosData.length) {
+          cargarAuditoriaProductos();
+        }
+      } else {
+        c.classList.add('hidden');
+        if (chev) chev.style.transform = 'rotate(0deg)';
+        if (badge) {
+          badge.textContent = 'Colapsado';
+          badge.className = 'px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-700 text-slate-300';
+        }
+      }
+    }
+
+    async function cargarAuditoriaProductos() {
+      const tb = document.getElementById('tabla-auditoria-body');
+      if (tb) {
+        tb.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-gray-500 font-semibold"><span class="animate-spin inline-block mr-2">⏳</span> Reconstruyendo Kardex y auditando cuentas 14 contables...</td></tr>`;
+      }
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos`);
+        const d = await r.json();
+        if (!d.ok) {
+          if (tb) tb.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-red-500 font-bold">Error: ${d.error}</td></tr>`;
+          return;
+        }
+
+        auditProductosData = d.productos || [];
+
+        const t = d.totales || {};
+        const elTotal = document.getElementById('audit-stat-total');
+        if (elTotal) elTotal.textContent = `Total: ${t.total_productos || 0}`;
+        const elOk = document.getElementById('audit-stat-ok');
+        if (elOk) elOk.textContent = `✅ Cuadrados: ${t.productos_ok || 0}`;
+        const elHuerf = document.getElementById('audit-stat-huerfanos');
+        if (elHuerf) elHuerf.textContent = `🔗 Sin ID: ${t.productos_con_huerfanos || 0} (${t.total_huerfanos || 0} líneas)`;
+        const elDifStock = document.getElementById('audit-stat-dif-stock');
+        if (elDifStock) elDifStock.textContent = `⚠️ Dif Stock: ${t.productos_con_dif_stock || 0}`;
+        const elDifValor = document.getElementById('audit-stat-dif-valor');
+        if (elDifValor) elDifValor.textContent = `⚠️ Dif Contab: ${t.productos_con_dif_valor || 0}`;
+
+        const btnVincularTodos = document.getElementById('btn-vincular-todos-ids');
+        if (btnVincularTodos) {
+          btnVincularTodos.style.display = (t.total_huerfanos > 0) ? 'inline-flex' : 'none';
+          btnVincularTodos.textContent = `🔗 Vincular Todos los IDs (${t.total_huerfanos} líneas)`;
+        }
+
+        filtrarTablaAuditoria();
+      } catch (err) {
+        if (tb) tb.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-red-500 font-bold">Error de conexión: ${err.message}</td></tr>`;
+      }
+    }
+
+    function filtrarTablaAuditoria() {
+      const term = (document.getElementById('filtro-auditoria-txt')?.value || '').toLowerCase().trim();
+      const estadoFiltro = document.getElementById('filtro-auditoria-estado')?.value || 'todos';
+
+      let lista = auditProductosData.filter(p => {
+        const matchTerm = (p.nombre || '').toLowerCase().includes(term) || (p.categoria || '').toLowerCase().includes(term) || String(p.id).includes(term);
+        if (!matchTerm) return false;
+
+        const hasDifStock = Math.abs(p.dif_stock) >= 0.001;
+        const hasDifValor = Math.abs(p.dif_valor) >= 1.0;
+        const hasSinId = p.lineas_sin_id > 0;
+
+        if (estadoFiltro === 'con_problemas') return hasDifStock || hasDifValor || hasSinId;
+        if (estadoFiltro === 'sin_id') return hasSinId;
+        if (estadoFiltro === 'dif_stock') return hasDifStock;
+        if (estadoFiltro === 'dif_valor') return hasDifValor;
+        if (estadoFiltro === 'ok') return !hasDifStock && !hasDifValor && !hasSinId;
+        return true;
+      });
+
+      renderTablaAuditoria(lista);
+    }
+
+    function renderTablaAuditoria(lista) {
+      const tb = document.getElementById('tabla-auditoria-body');
+      if (!tb) return;
+
+      if (!lista.length) {
+        tb.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-gray-400 font-semibold">No se encontraron productos con el filtro seleccionado.</td></tr>`;
+        return;
+      }
+
+      tb.innerHTML = lista.map(p => {
+        const difStock = p.dif_stock;
+        const difValor = p.dif_valor;
+        const hasDifStock = Math.abs(difStock) >= 0.001;
+        const hasDifValor = Math.abs(difValor) >= 1.0;
+        const hasSinId = p.lineas_sin_id > 0;
+
+        const badgeStock = hasDifStock 
+          ? `<span class="px-1.5 py-0.5 rounded font-mono font-bold bg-rose-100 text-rose-700 text-[11px]">${difStock > 0 ? '+' : ''}${fmt(difStock)}</span>`
+          : `<span class="text-emerald-600 font-mono font-bold text-[11px]">✅ 0</span>`;
+
+        const badgeValor = hasDifValor
+          ? `<span class="px-1.5 py-0.5 rounded font-mono font-bold bg-purple-100 text-purple-700 text-[11px]">${fmtMon(difValor)}</span>`
+          : `<span class="text-emerald-600 font-mono font-bold text-[11px]">✅ $0</span>`;
+
+        let accionesHtml = `<div class="flex items-center justify-center gap-1.5 flex-wrap">`;
+
+        if (hasSinId) {
+          accionesHtml += `
+            <button onclick="vincularIdsAuditoria(${p.id})" title="Fase 1: Vincular ${p.lineas_sin_id} asiento(s) contable(s) huérfano(s) a este producto"
+                    class="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs">
+              🔗 Vincular ID (${p.lineas_sin_id})
+            </button>
+          `;
+        }
+
+        accionesHtml += `
+          <button onclick="toggleCotejoDoc(${p.id})" id="btn-cotejo-${p.id}" title="Fase 2: Desplegar cotejo documento por documento entre Kardex y Contabilidad"
+                  class="px-2 py-1 bg-sky-50 hover:bg-sky-100 border border-sky-300 text-sky-800 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs">
+            👁️ Cotejar
+          </button>
+        `;
+
+        if (hasDifStock || hasDifValor) {
+          accionesHtml += `
+            <button onclick="repararValoresAuditoria(${p.id}, '${(p.nombre || '').replace(/'/g, "\\'")}')" title="Fase 2: Sincronizar tabla resumen y corregir montos contables desfasados contra Kardex"
+                    class="px-2 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs">
+              ⚡ Reparar
+            </button>
+          `;
+        }
+
+        accionesHtml += `</div>`;
+
+        return `
+          <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
+            <td class="px-3 py-2 text-left">
+              <div class="font-bold text-gray-900">${p.nombre}</div>
+              <div class="text-[10px] text-gray-400">ID #${p.id} &bull; ${p.categoria}</div>
+            </td>
+            <td class="px-3 py-2 text-right font-mono text-gray-700">${fmt(p.stock_tabla)}</td>
+            <td class="px-3 py-2 text-right font-mono text-gray-900 font-bold">${fmt(p.stock_kardex)}</td>
+            <td class="px-3 py-2 text-right font-mono">${badgeStock}</td>
+            <td class="px-3 py-2 text-right font-mono text-gray-600">${fmtMon(p.valor_tabla)}</td>
+            <td class="px-3 py-2 text-right font-mono font-bold text-gray-900">${fmtMon(p.valor_kardex)}</td>
+            <td class="px-3 py-2 text-right font-mono ${p.saldo_contab < 0 ? 'text-rose-600' : 'text-gray-800'}">${fmtMon(p.saldo_contab)}</td>
+            <td class="px-3 py-2 text-right font-mono">${badgeValor}</td>
+            <td class="px-3 py-2 text-center">${accionesHtml}</td>
+          </tr>
+          <tr id="row-cotejo-${p.id}" class="hidden bg-slate-50 border-b border-slate-200">
+            <td colspan="9" class="p-4" id="content-cotejo-${p.id}">
+              <div class="text-center py-2 text-xs text-gray-500 font-semibold">Cargando desglose de documentos...</div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function vincularIdsAuditoria(productoId) {
+      const msg = productoId 
+        ? `¿Vincular los asientos contables huérfanos para este producto?` 
+        : `¿Vincular automáticamente todos los asientos contables huérfanos a sus productos por coincidencia de concepto y documento?`;
+      if (!confirm(msg)) return;
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/vincular-ids`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ producto_id: productoId })
+        });
+        const d = await r.json();
+        if (!d.ok) {
+          toast(d.error || 'Error al vincular IDs', false);
+          return;
+        }
+
+        toast(d.mensaje || `Se vincularon ${d.vinculadas} línea(s) exitosamente`, true);
+        cargarAuditoriaProductos();
+      } catch (err) {
+        toast(`Error: ${err.message}`, false);
+      }
+    }
+
+    async function toggleCotejoDoc(productoId) {
+      const row = document.getElementById(`row-cotejo-${productoId}`);
+      const btn = document.getElementById(`btn-cotejo-${productoId}`);
+      const container = document.getElementById(`content-cotejo-${productoId}`);
+      if (!row) return;
+
+      const isHidden = row.classList.contains('hidden');
+      if (!isHidden) {
+        row.classList.add('hidden');
+        if (btn) btn.textContent = '👁️ Cotejar';
+        return;
+      }
+
+      row.classList.remove('hidden');
+      if (btn) btn.textContent = '✕ Ocultar';
+      container.innerHTML = `<div class="flex items-center justify-center gap-2 py-3 text-xs text-gray-500 font-semibold"><span class="animate-spin inline-block">⏳</span> Cotejando movimientos de Kardex vs Asientos Contables...</div>`;
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/detalle-cotejo`);
+        const d = await r.json();
+        if (!d.ok) {
+          container.innerHTML = `<div class="text-red-500 text-xs font-bold py-2">Error: ${d.error}</div>`;
+          return;
+        }
+
+        const cotejo = d.cotejo || [];
+        if (!cotejo.length) {
+          container.innerHTML = `<div class="text-gray-400 text-xs py-2 italic text-center">Sin documentos registrados en Kardex ni Contabilidad para este producto.</div>`;
+          return;
+        }
+
+        let html = `
+          <div class="bg-white rounded-xl border border-gray-200 p-3 shadow-xs space-y-3">
+            <div class="flex items-center justify-between border-b border-gray-100 pb-2">
+              <span class="text-xs font-bold text-gray-800 uppercase flex items-center gap-1.5">
+                <span>📋</span> Desglose Documental: Kardex vs Contabilidad (Cta 14) &bull; ${d.producto.nombre}
+              </span>
+              <span class="text-[11px] font-semibold text-gray-500">${cotejo.length} documento(s) cotejados</span>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="bg-gray-100 text-gray-600 border-b border-gray-200">
+                    <th class="px-2.5 py-2 text-left">Documento / Fecha</th>
+                    <th class="px-2.5 py-2 text-left">📦 Kardex (Cantidad &bull; Costo Unitario)</th>
+                    <th class="px-2.5 py-2 text-right">Valor Kardex ($)</th>
+                    <th class="px-2.5 py-2 text-left">🏛️ Asiento Contable (Cta 14 &bull; Tipo)</th>
+                    <th class="px-2.5 py-2 text-right">Valor Contab ($)</th>
+                    <th class="px-2.5 py-2 text-right">Diferencia ($)</th>
+                    <th class="px-2.5 py-2 text-center">Estado</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 font-mono">
+        `;
+
+        cotejo.forEach(c => {
+          const kDetalle = c.kardex.map(k => `${k.tipo === 'entrada' ? '📥 Ent' : '📤 Sal'} ${fmt(k.cantidad)} × ${fmtMon(k.costo_und)}`).join(', ') || '<span class="text-gray-400 font-sans italic">Sin kardex</span>';
+          const cDetalle = c.contabilidad.map(ac => `#${ac.id} (${ac.tipo.toUpperCase()} - Cta ${ac.cuenta})`).join(', ') || '<span class="text-gray-400 font-sans italic">Sin asiento</span>';
+
+          const dif = c.diferencia;
+          const isOk = c.ok;
+          const badge = isOk 
+            ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">✅ OK</span>`
+            : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">⚠️ Dif</span>`;
+
+          html += `
+            <tr class="hover:bg-gray-50 ${!isOk ? 'bg-amber-50/40' : ''}">
+              <td class="px-2.5 py-1.5 text-left font-sans">
+                <div class="font-bold text-gray-800">Doc #${c.documento}</div>
+                <div class="text-[10px] text-gray-400">${c.fecha || '—'}</div>
+              </td>
+              <td class="px-2.5 py-1.5 text-left font-sans text-gray-700">${kDetalle}</td>
+              <td class="px-2.5 py-1.5 text-right font-bold text-gray-900">${fmtMon(c.kardex_total)}</td>
+              <td class="px-2.5 py-1.5 text-left font-sans text-gray-700">${cDetalle}</td>
+              <td class="px-2.5 py-1.5 text-right font-bold text-gray-900">${fmtMon(c.contab_total)}</td>
+              <td class="px-2.5 py-1.5 text-right font-bold ${Math.abs(dif) >= 0.01 ? 'text-rose-600' : 'text-gray-400'}">${fmtMon(dif)}</td>
+              <td class="px-2.5 py-1.5 text-center font-sans">${badge}</td>
+            </tr>
+          `;
+        });
+
+        html += `
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        container.innerHTML = html;
+      } catch (err) {
+        container.innerHTML = `<div class="text-red-500 text-xs font-bold py-2">Error de conexión: ${err.message}</div>`;
+      }
+    }
+
+    async function repararValoresAuditoria(productoId, productoNombre) {
+      if (!confirm(`¿Sincronizar la tabla resumen y corregir los asientos contables de cuentas 14 desfasados para "${productoNombre}"?`)) return;
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/reparar-valores`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const d = await r.json();
+        if (!d.ok) {
+          toast(d.error || 'Error al reparar valores', false);
+          return;
+        }
+
+        toast(d.mensaje || 'Valores reparados exitosamente', true);
+        cargarAuditoriaProductos();
+        cargarProductos();
+      } catch (err) {
+        toast(`Error: ${err.message}`, false);
+      }
+    }
+
 
     </script>
 
@@ -12623,4 +12989,5 @@ async function cargarReporteEnsambles() {
 </body>
 
 </html>
+
 

@@ -1030,7 +1030,25 @@ Con la nueva separaciÃ³n vemos la radiografÃ­a exacta del producto:
 
 ---
 
-### [2026-09-05 16:39:00] ?? Rafael (vía Telegram):
+### [2026-09-05 16:51:00] 👤 Gemini (Antigravity) para 👤 Rafael:
 
-Anti - Hola Antigravity, prueba de recepcion
+¡Aviso enviado a tu Telegram! 📱
+
+**Diagnóstico y Blindaje del Reparador de Valores (Fase 2):**
+
+1. **¿Por qué se alteró la Fila 4 (Ajuste #10) a $5.597?**
+   - Al ejecutar la Fase 2 ("Reparar"), el algoritmo buscaba los asientos contables de la salida con `LIKE '%1%'` para emparejar la **Factura de Venta #1** ($5.597).
+   - Como el consecutivo del **Ajuste #10** contenía el dígito `'1'`, y el código no filtraba por el tipo de documento, emparejó indebidamente el asiento `#2732` (Ajuste #10) y le asignó el valor de la Factura de Venta ($5.597 en vez de sus $15.919 legítimos).
+
+2. **Blindaje Implementado (Commit `cb597e0` desplegado en EC2):**
+   - **Filtro estricto por Tipo de Documento:** Ahora normaliza y exige que `tipo_km_norm == tipo_ac_norm` (`FACTURA DE VENTA` no toca `AJUSTE DE INVENTARIO`).
+   - **Filtro estricto por Consecutivo Normalizado:** Requiere que el número exacto normalizado coincida (`'1' != '10'`).
+   - Con este doble candado, los documentos jamás se cruzarán entre sí.
+
+3. **Cómo Restaurar el Asiento #2732 a $15.919:**
+   - La corrección ya está activa y verificada en el servidor AWS EC2.
+   - Si vas a la interfaz web y haces clic en **"⚡ 2. Reparar"** para el *ATÚN PREPARADO PORCIÓN PEQUEÑA* (#296):
+     - El modal te mostrará exactamente la propuesta de corrección:
+       `Ajuste de Inventario #10 | Asiento #2732 | Actual: $5.597,36 -> Nuevo: $15.919,27`.
+     - Al darle confirmar, el sistema restaurará automáticamente el asiento `#2732` y su contrapartida a sus `$15.919,27` reales, dejando la diferencia en cero.
 

@@ -9602,21 +9602,14 @@ def _obtener_huerfanos_por_producto(conn, negocio_id, prods):
     huerfanos_por_prod = {}
     for h in huerfanos:
         c_norm = _limpiar_nombre_match(h['concepto'])
+        if not c_norm:
+            continue
         matched_id = None
         for p in prods:
             p_norm = _limpiar_nombre_match(p['nombre'])
-            if p_norm and (p_norm in c_norm or c_norm in p_norm):
+            if p_norm and (p_norm == c_norm or p_norm in c_norm or c_norm in p_norm):
                 matched_id = p['id']
                 break
-
-        if not matched_id and h['numero_documento']:
-            doc_mov = conn.execute("""
-                SELECT producto_id FROM movimientos_inventario
-                WHERE negocio_id = %s AND documento_numero = %s
-                LIMIT 1
-            """, (negocio_id, h['numero_documento'])).fetchone()
-            if doc_mov and doc_mov['producto_id'] in valid_prod_ids:
-                matched_id = doc_mov['producto_id']
 
         if matched_id and matched_id in valid_prod_ids:
             if matched_id not in huerfanos_por_prod:

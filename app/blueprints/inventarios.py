@@ -9861,39 +9861,62 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
             hd['pendiente_vinculo'] = True
             cmovs_todos.append(hd)
 
+        def _norm_tipo(t_id, t_str):
+            res = _resolver_tipo_doc(t_id, t_str)
+            if not res or res == 'Documento':
+                return 'DOC'
+            return str(res).strip().upper()
+
         docs_k = {}
         for k in kmovs:
-            d = normalizar_numero(k['documento_numero']) or f"k_{k['id']}"
-            if d not in docs_k:
-                docs_k[d] = []
-            docs_k[d].append(k)
+            t_norm = _norm_tipo(k.get('tipo_documento_id'), k.get('tipo_documento'))
+            num_norm = normalizar_numero(k['documento_numero']) or f"k_{k['id']}"
+            key = f"{t_norm}__{num_norm}"
+            if key not in docs_k:
+                docs_k[key] = []
+            docs_k[key].append(k)
 
         docs_c = {}
         for c in cmovs_todos:
-            d = normalizar_numero(c['numero_documento']) or f"c_{c['id']}"
-            if d not in docs_c:
-                docs_c[d] = []
-            docs_c[d].append(c)
+            t_norm = _norm_tipo(c.get('tipo_documento_id'), c.get('tipo_documento'))
+            num_norm = normalizar_numero(c['numero_documento']) or f"c_{c['id']}"
+            key = f"{t_norm}__{num_norm}"
+            if key not in docs_c:
+                docs_c[key] = []
+            docs_c[key].append(c)
 
         todos_docs = list(dict.fromkeys(list(docs_k.keys()) + list(docs_c.keys())))
 
         cotejo = []
-        for d in todos_docs:
-            k_items = docs_k.get(d, [])
-            c_items = docs_c.get(d, [])
+        for key in todos_docs:
+            k_items = docs_k.get(key, [])
+            c_items = docs_c.get(key, [])
 
+            # Calcular valor neto de Kardex: entradas (+) y salidas (+) para comparativa por documento
+            # Si el documento tiene entradas, se espera débito. Si tiene salidas, se espera crédito.
+            k_total_ent = sum(float(x['valor_total']) for x in k_items if x['tipo'] == 'entrada')
+            k_total_sal = sum(float(x['valor_total']) for x in k_items if x['tipo'] == 'salida')
             k_total = sum(float(x['valor_total']) for x in k_items)
+
+            c_total_deb = sum(float(x['monto']) for x in c_items if str(x['tipo']).lower() in ('debito', 'd'))
+            c_total_cred = sum(float(x['monto']) for x in c_items if str(x['tipo']).lower() in ('credito', 'c'))
             c_total = sum(float(x['monto']) for x in c_items)
-            dif = round(k_total - c_total, 2)
+
+            # Diferencia neta según naturaleza principal del documento:
+            # Si tiene entradas en kardex o débitos en contabilidad, comparamos entradas vs débitos
+            if k_total_ent > 0 or c_total_deb > 0:
+                dif = round(k_total_ent - c_total_deb, 2)
+            else:
+                dif = round(k_total_sal - c_total_cred, 2)
 
             fecha_doc = None
-            num_doc_display = d
+            num_doc_display = key.split('__')[-1]
             if k_items:
                 fecha_doc = str(k_items[0]['fecha'])
-                num_doc_display = k_items[0]['documento_numero'] or d
+                num_doc_display = k_items[0]['documento_numero'] or num_doc_display
             elif c_items:
                 fecha_doc = str(c_items[0]['fecha'])
-                num_doc_display = c_items[0]['numero_documento'] or d
+                num_doc_display = c_items[0]['numero_documento'] or num_doc_display
 
             tipo_doc_k = _resolver_tipo_doc(k_items[0].get('tipo_documento_id'), k_items[0].get('tipo_documento')) if k_items else None
             tipo_doc_c = _resolver_tipo_doc(c_items[0].get('tipo_documento_id'), c_items[0].get('tipo_documento')) if c_items else None

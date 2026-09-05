@@ -13249,11 +13249,18 @@ async function cargarReporteEnsambles() {
           
           const cDetalle = c.contabilidad.map(ac => {
             const rawConcepto = (ac.concepto || '').replace(/"/g, '&quot;');
+            const isDeb = String(ac.tipo).toUpperCase().startsWith('D');
+            const badgeTipo = isDeb 
+              ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-200">📥 DÉBITO</span>`
+              : `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-orange-100 text-orange-800 border border-orange-200">📤 CRÉDITO</span>`;
+
             if (ac.pendiente_vinculo) {
               return `
                 <div class="bg-amber-100/90 border border-amber-300 rounded-lg p-1.5 my-1 text-amber-950 font-sans">
-                  <div class="flex items-center gap-1 font-bold">
-                    <span>#${ac.id} (${ac.tipo.toUpperCase()} - Cta ${ac.cuenta}): ${fmtMon(ac.monto)}</span>
+                  <div class="flex items-center gap-1.5 font-bold flex-wrap">
+                    <span>#${ac.id} (Cta ${ac.cuenta})</span>
+                    ${badgeTipo}
+                    <span class="text-gray-900">${fmtMon(ac.monto)}</span>
                     <span class="px-1 py-0.2 bg-amber-300 text-amber-900 rounded text-[9px] uppercase font-bold">⚠️ Sin Vincular ID</span>
                   </div>
                   <div class="text-[10px] text-amber-800 italic mt-0.5 truncate max-w-xs" title="${rawConcepto}">
@@ -13262,7 +13269,14 @@ async function cargarReporteEnsambles() {
                 </div>
               `;
             }
-            return `<div class="font-sans py-0.5" title="${rawConcepto}">#${ac.id} (${ac.tipo.toUpperCase()} - Cta ${ac.cuenta})</div>`;
+            return `
+              <div class="font-sans py-0.5 flex items-center gap-1.5 flex-wrap" title="${rawConcepto}">
+                <span class="font-bold text-gray-700">#${ac.id}</span>
+                <span class="text-gray-500 text-[11px]">(Cta ${ac.cuenta})</span>
+                ${badgeTipo}
+                <span class="font-bold text-gray-900">${fmtMon(ac.monto)}</span>
+              </div>
+            `;
           }).join('') || '<span class="text-gray-400 font-sans italic">Sin asiento</span>';
 
           const dif = c.diferencia;

@@ -2257,7 +2257,7 @@ def api_reparar_costos_venta(negocio_id):
 
                     # Obtener líneas individuales del pedido para mostrar desglose (ej: 1 + 24)
                     lineas_pi = conn.execute("""
-                        SELECT pi.id, pi.cantidad, pi.precio_unitario, COALESCE(pi.costo_unitario, 0) AS costo_unitario, pi.notas
+                        SELECT pi.id, pi.cantidad, pi.precio_unitario, COALESCE(pi.costo_unitario, 0) AS costo_unitario
                         FROM pedido_items pi
                         JOIN pedidos p ON p.id = pi.pedido_id
                         WHERE p.negocio_id = %s AND pi.producto_id = %s
@@ -2272,7 +2272,6 @@ def api_reparar_costos_venta(negocio_id):
                             'cantidad': float(li['cantidad'] or 0),
                             'precio_unitario': float(li['precio_unitario'] or 0),
                             'costo_unitario': float(li['costo_unitario'] or 0),
-                            'notas': li['notas'] or '',
                         })
                     
                     # COGS (61*) — SUM

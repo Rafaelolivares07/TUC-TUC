@@ -12221,15 +12221,19 @@ async function cargarReporteEnsambles() {
 
           const docsConDifContab = prod.facturas.filter(f => Math.abs((f.cogs_contable ? Number(f.cogs_contable.monto_actual || 0) : 0) - Number(f.costo_real_kardex || 0)) > 0.01).length;
           const docsConDifPedido = prod.facturas.filter(f => f.pedido_item && Math.abs(Number(f.pedido_item.diferencia || 0)) > 0.01).length;
+          const montoDifPedidoProd = prod.facturas.reduce((s, ff) => s + (ff.pedido_item ? Math.abs(Number(ff.pedido_item.diferencia || 0)) : 0), 0);
 
-          let badgeProdStatus = '';
+          let badgesStatusList = [];
           if (docsConDifContab > 0) {
-            badgeProdStatus = `<span class="text-xs px-2.5 py-0.5 bg-amber-200 text-amber-900 rounded-full font-extrabold">${docsConDifContab} con dif contable</span>`;
-          } else if (docsConDifPedido > 0) {
-            badgeProdStatus = `<span class="text-xs px-2.5 py-0.5 bg-amber-100 text-amber-900 rounded-full font-bold border border-amber-300">⚠️ ${docsConDifPedido} pedido${docsConDifPedido > 1 ? 's' : ''} por sincronizar</span>`;
-          } else {
-            badgeProdStatus = `<span class="text-xs px-2.5 py-0.5 bg-green-100 text-green-800 rounded-full font-bold">✅ ${prod.facturas.length} doc(s) OK</span>`;
+            badgesStatusList.push(`<span class="text-xs px-2.5 py-0.5 bg-amber-200 text-amber-900 rounded-full font-extrabold">${docsConDifContab} dif contable</span>`);
           }
+          if (docsConDifPedido > 0) {
+            badgesStatusList.push(`<span class="text-xs px-2.5 py-0.5 bg-rose-100 text-rose-950 rounded-full font-extrabold border border-rose-300">⚠️ ${docsConDifPedido} pedido${docsConDifPedido > 1 ? 's' : ''} POS ($${montoDifPedidoProd.toLocaleString('es-CO')})</span>`);
+          }
+          if (badgesStatusList.length === 0) {
+            badgesStatusList.push(`<span class="text-xs px-2.5 py-0.5 bg-green-100 text-green-800 rounded-full font-bold">✅ ${prod.facturas.length} doc(s) OK</span>`);
+          }
+          const badgeProdStatus = badgesStatusList.join(' ');
 
           html += `<div class="border border-amber-300 rounded-xl overflow-hidden bg-white shadow-xs">`;
           html += `<button type="button" onclick="toggleRepairLevel('${prodAccId}')" class="w-full flex items-center justify-between px-4 py-3 bg-amber-100/70 hover:bg-amber-200/70 text-left transition-colors flex-wrap gap-2 cursor-pointer">`;
@@ -12241,7 +12245,10 @@ async function cargarReporteEnsambles() {
           html += `</div>`;
           html += `<div class="text-right text-xs">`;
           html += `<span class="text-gray-600">Contable: <b>$${costTotalContab.toLocaleString('es-CO')}</b> → Kardex: <b>$${costTotalKardex.toLocaleString('es-CO')}</b></span>`;
-          html += `<span class="ml-2 text-sm font-bold ${Math.abs(difProd) > 0.01 ? 'text-red-600' : 'text-green-600'}">${Math.abs(difProd) > 0.01 ? 'Dif: $' + difProd.toLocaleString('es-CO') : '✅ Cuadrado ($0)'}</span>`;
+          html += `<span class="ml-2 text-sm font-bold ${Math.abs(difProd) > 0.01 ? 'text-red-600' : 'text-green-600'}">${Math.abs(difProd) > 0.01 ? 'Dif Contab: $' + difProd.toLocaleString('es-CO') : '✅ Cuadrado ($0)'}</span>`;
+          if (docsConDifPedido > 0) {
+            html += `<span class="ml-2 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded font-mono">⚠️ Pedidos: $${montoDifPedidoProd.toLocaleString('es-CO')}</span>`;
+          }
           html += `</div>`;
           html += `</button>`;
           
@@ -12253,6 +12260,25 @@ async function cargarReporteEnsambles() {
           html += `</div>`;
           html += `</div>`;
           
+          // Lista de documentos con diferencias para identificación inmediata
+          const docsConProblema = prod.facturas.filter(f => f.tiene_diferencia);
+          if (docsConProblema.length > 0) {
+            html += `<div class="p-2.5 bg-amber-50 rounded-xl border border-amber-300 flex items-center justify-between flex-wrap gap-2 text-xs">`;
+            html += `<div class="text-amber-950 font-bold flex items-center gap-1.5 flex-wrap">`;
+            html += `<span>⚠️ Documentos con diferencias (${docsConProblema.length}):</span>`;
+            docsConProblema.forEach(dp => {
+              const difP = dp.pedido_item && Math.abs(Number(dp.pedido_item.diferencia || 0)) > 0.01;
+              const difC = Math.abs((dp.cogs_contable ? Number(dp.cogs_contable.monto_actual || 0) : 0) - Number(dp.costo_real_kardex || 0)) > 0.01;
+              let labelDoc = `Doc #${dp.documento_numero}`;
+              if (difP) labelDoc += ` (Pedido: $${Math.abs(Number(dp.pedido_item.diferencia)).toLocaleString('es-CO')})`;
+              else if (difC) labelDoc += ` (Contable: $${Math.abs(dp.cogs_contable.monto_actual - dp.costo_real_kardex).toLocaleString('es-CO')})`;
+              html += `<span class="bg-white border border-amber-300 px-2 py-0.5 rounded font-mono font-bold text-amber-900 shadow-2xs">${labelDoc}</span>`;
+            });
+            html += `</div>`;
+            html += `<div class="text-[11px] text-amber-800 font-semibold">💡 Pulsa <b>⚡ Reparar Producto</b> para corregir todos en lote, o abajo en cada documento.</div>`;
+            html += `</div>`;
+          }
+
           prod.facturas.forEach(ff => {
             const docAccId = `doc-acc-${prod.producto_padre_id}-${ff.documento_numero}`;
             const isDocOpen = window._openRepairAccordions && window._openRepairAccordions.has(docAccId);
@@ -12280,7 +12306,7 @@ async function cargarReporteEnsambles() {
               : `<button type="button" disabled title="No hay IDs vinculados para desvincular" class="min-w-[130px] px-3 py-1.5 bg-gray-50 text-gray-400 border border-gray-200 text-xs font-semibold rounded-lg opacity-70 cursor-not-allowed flex items-center justify-center gap-1 shadow-none">🔓 Desvincular</button>`;
 
             const btnRepararDoc = (tieneDifContabDoc || tieneDifPiDoc)
-              ? `<button type="button" onclick="repararCostosDocumento('${ff.documento_numero}', ${prod.producto_padre_id})" class="min-w-[150px] px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer">⚡ Reparar Doc</button>`
+              ? `<button type="button" onclick="repararCostosDocumento('${ff.documento_numero}', ${prod.producto_padre_id})" class="min-w-[150px] px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer">⚡ Reparar Doc</button>`
               : `<button type="button" disabled title="Este documento ya está 100% cuadrado ($0 diferencia)" class="min-w-[150px] px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-bold rounded-lg opacity-90 cursor-not-allowed flex items-center justify-center gap-1 shadow-none">✔️ Cuadrado ($0)</button>`;
 
             const cantBase = parseFloat(ff.cantidad_base || 0);
@@ -12301,15 +12327,18 @@ async function cargarReporteEnsambles() {
               : `<span class="text-xs font-bold text-emerald-950 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded font-mono">🍽️ ${cantStr} Vendidas</span>`;
 
             let badgeDocStatus = '';
-            if (tieneDifContabDoc) {
-              badgeDocStatus = `<span class="ml-2 text-xs font-bold text-red-600">Dif: $${difDoc.toLocaleString('es-CO')}</span>`;
+            if (tieneDifContabDoc && tieneDifPiDoc) {
+              badgeDocStatus = `<span class="ml-2 text-xs font-bold text-red-600 font-mono">Dif Contab: $${difDoc.toLocaleString('es-CO')}</span><span class="ml-1 text-xs font-extrabold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded font-mono">⚠️ Pedido: $${difPiDoc.toLocaleString('es-CO')}</span>`;
+            } else if (tieneDifContabDoc) {
+              badgeDocStatus = `<span class="ml-2 text-xs font-bold text-red-600 font-mono">Dif: $${difDoc.toLocaleString('es-CO')}</span>`;
             } else if (tieneDifPiDoc) {
-              badgeDocStatus = `<span class="ml-2 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">⚠️ Pedido por sincronizar</span>`;
+              badgeDocStatus = `<span class="ml-2 text-xs font-extrabold text-rose-800 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded font-mono">⚠️ Pedido por sincronizar: $${difPiDoc.toLocaleString('es-CO')}</span>`;
             } else {
-              badgeDocStatus = `<span class="ml-2 text-xs font-bold text-green-600">✅ OK ($0)</span>`;
+              badgeDocStatus = `<span class="ml-2 text-xs font-bold text-green-600 font-mono">✅ OK ($0)</span>`;
             }
 
-            html += `<div class="border border-gray-200 rounded-xl overflow-hidden bg-white mt-2 shadow-xs">`;
+            const docBorderClass = (tieneDifContabDoc || tieneDifPiDoc) ? 'border-amber-400 bg-amber-50/40 shadow-xs' : 'border-gray-200 bg-white shadow-xs';
+            html += `<div class="border ${docBorderClass} rounded-xl overflow-hidden mt-2">`;
             html += `<button type="button" onclick="toggleRepairLevel('${docAccId}')" class="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 text-left transition-colors flex-wrap gap-2 cursor-pointer">`;
             html += `<div class="flex items-center gap-2 flex-wrap">`;
             html += `<svg class="w-3.5 h-3.5 text-gray-500 transition-transform repair-arrow" id="arrow-${docAccId}" ${docArrowStyle} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;

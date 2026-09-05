@@ -9811,7 +9811,7 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
         """, (negocio_id, producto_id)).fetchall()
 
         cmovs = conn.execute("""
-            SELECT mc.id, mc.asiento_id, mc.tipo, mc.monto, mc.numero_documento, mc.tipo_documento,
+            SELECT mc.id, mc.comprobante_id, mc.tipo, mc.monto, mc.numero_documento, mc.tipo_documento,
                    COALESCE(mc.fecha, mc.created_at::date) as fecha, mc.concepto, cp.codigo as cuenta_codigo
             FROM movimientos_contables mc
             JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
@@ -9952,7 +9952,7 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
             val_kardex = float(km['valor_total'])
 
             asientos_c = conn.execute("""
-                SELECT mc.id, mc.asiento_id, mc.monto, mc.comprobante_id
+                SELECT mc.id, mc.monto, mc.comprobante_id
                 FROM movimientos_contables mc
                 JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
                 WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id = %s

@@ -899,3 +899,21 @@ Ahora, al hacer clic en "Mis documentos están al día", se abre directamente el
 - **Verificación en Vivo en EC2 (Factura 34):**
   - Salidas Kardex: 20 | Asientos Contables 14*: 20 exactos.
   - Diferencia: **$0,00**. Todos los ítems emparejados 1 a 1.
+
+---
+
+### [2026-09-05 09:25:00] 👤 Gemini (Antigravity) para 👤 Rafael:
+
+¡Implementada la distinción explícita de identificadores y desplegada en AWS EC2 (commits `d8783fa`, `3229bb9`, `ee18406`)!
+
+**Clarificación y Visualización de IDs por Registro:**
+1. **Encabezado de Documento (visible sin abrir acordeón):**
+   - Si un plato tiene múltiples líneas en la comanda/factura, muestra el badge destacado: `🍽️ 25 Vendidas` `📑 2 líneas (1 + 24)`.
+2. **Desglose Línea por Línea (al abrir el acordeón de insumos):**
+   - Ahora cada fila muestra con total transparencia sus propios IDs específicos de registro:
+     - `📦 Kardex #1202: 1 × $89,85 = $89,85`
+     - `🏛️ Asiento #1846: $89,85`
+     - `🔗 Insumo #285` (amarrado al catálogo maestro).
+   - Si un asiento aún no tiene ID de catálogo: `🔓 Sin Vincular (→ Insumo #285)`, anticipando a cuál insumo se emparejará.
+   - Si falta un asiento contable: `⚡ Por Crear (→ Insumo #285)`.
+

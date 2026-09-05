@@ -1105,19 +1105,19 @@
           </div>
 
           <!-- Tabla de Auditoría -->
-          <div class="overflow-x-auto bg-white rounded-xl text-gray-800 shadow-inner">
-            <table class="w-full text-xs">
-              <thead class="bg-gray-100 text-gray-600 font-bold uppercase border-b border-gray-200 select-none">
+          <div class="overflow-x-auto max-h-[75vh] overflow-y-auto bg-white rounded-xl text-gray-800 shadow-inner border border-gray-200">
+            <table class="w-full text-xs border-collapse">
+              <thead class="bg-gray-100 text-gray-700 font-bold uppercase border-b border-gray-200 select-none sticky top-0 z-10 shadow-xs">
                 <tr>
-                  <th class="px-3 py-2.5 text-left">Producto</th>
-                  <th class="px-3 py-2.5 text-right">Stock Tabla</th>
-                  <th class="px-3 py-2.5 text-right">Stock Kardex</th>
-                  <th class="px-3 py-2.5 text-right">Dif Stock</th>
-                  <th class="px-3 py-2.5 text-right">Valor Tabla ($)</th>
-                  <th class="px-3 py-2.5 text-right">Valor Kardex ($)</th>
-                  <th class="px-3 py-2.5 text-right">Saldo Cta 14 ($)</th>
-                  <th class="px-3 py-2.5 text-right">Dif Valor ($)</th>
-                  <th class="px-3 py-2.5 text-center">Fases de Reparación</th>
+                  <th class="px-3 py-2.5 text-left bg-gray-100 sticky top-0 z-10">Producto</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Stock Tabla</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Stock Kardex</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Dif Stock</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Valor Tabla ($)</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Valor Kardex ($)</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Saldo Cta 14 ($)</th>
+                  <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Dif Valor ($)</th>
+                  <th class="px-3 py-2.5 text-center bg-gray-100 sticky top-0 z-10">Fases de Reparación</th>
                 </tr>
               </thead>
               <tbody id="tabla-auditoria-body">
@@ -13228,17 +13228,17 @@ async function cargarReporteEnsambles() {
 
             ${bannerHuerfanos}
 
-            <div class="overflow-x-auto">
-              <table class="w-full text-xs">
-                <thead>
-                  <tr class="bg-gray-100 text-gray-600 border-b border-gray-200">
-                    <th class="px-2.5 py-2 text-left">Documento / Fecha</th>
-                    <th class="px-2.5 py-2 text-left">📦 Kardex (Cantidad &bull; Costo Unitario)</th>
-                    <th class="px-2.5 py-2 text-right">Valor Kardex ($)</th>
-                    <th class="px-2.5 py-2 text-left">🏛️ Asiento Contable (Cta 14 &bull; Tipo)</th>
-                    <th class="px-2.5 py-2 text-right">Valor Contab ($)</th>
-                    <th class="px-2.5 py-2 text-right">Diferencia ($)</th>
-                    <th class="px-2.5 py-2 text-center">Estado</th>
+            <div class="overflow-x-auto max-h-[60vh] overflow-y-auto border border-gray-200 rounded-lg">
+              <table class="w-full text-xs border-collapse">
+                <thead class="bg-gray-100 text-gray-700 font-bold border-b border-gray-200 sticky top-0 z-10 shadow-2xs">
+                  <tr>
+                    <th class="px-2.5 py-2 text-left bg-gray-100 sticky top-0 z-10">Documento / Fecha</th>
+                    <th class="px-2.5 py-2 text-left bg-gray-100 sticky top-0 z-10">📦 Kardex (Cantidad &bull; Costo Unitario)</th>
+                    <th class="px-2.5 py-2 text-right bg-gray-100 sticky top-0 z-10">Valor Kardex ($)</th>
+                    <th class="px-2.5 py-2 text-left bg-gray-100 sticky top-0 z-10">🏛️ Asiento Contable (Cta 14 &bull; Tipo)</th>
+                    <th class="px-2.5 py-2 text-right bg-gray-100 sticky top-0 z-10">Valor Contab ($)</th>
+                    <th class="px-2.5 py-2 text-right bg-gray-100 sticky top-0 z-10">Diferencia ($)</th>
+                    <th class="px-2.5 py-2 text-center bg-gray-100 sticky top-0 z-10">Estado</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 font-mono">

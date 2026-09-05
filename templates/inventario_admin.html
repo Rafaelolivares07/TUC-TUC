@@ -1091,13 +1091,17 @@
                    class="text-xs bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-rose-500" style="max-width:240px">
             <select id="filtro-auditoria-estado" onchange="filtrarTablaAuditoria()"
                     class="text-xs bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500">
-              <option value="todos">Todos los productos</option>
-              <option value="con_problemas" selected>Solo con Diferencias / Sin ID ⚠️</option>
+              <option value="todos" selected>Todos los estados</option>
+              <option value="con_problemas">Solo con Diferencias / Sin ID ⚠️</option>
               <option value="sin_id">Solo con Líneas sin ID 🔗</option>
               <option value="dif_stock">Solo con Diferencia en Stock 📦</option>
               <option value="dif_valor">Solo con Diferencia Contable 🏛️</option>
-              <option value="ok">Solo Cuadrados ✅</option>
+              <option value="ok">Solo Cuadrados / Sanos ✅</option>
             </select>
+            <label class="flex items-center gap-2 text-xs text-slate-200 cursor-pointer select-none bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 font-medium hover:bg-slate-800 transition">
+              <input type="checkbox" id="check-auditoria-sanos" checked onchange="filtrarTablaAuditoria()" class="w-3.5 h-3.5 rounded text-rose-600 focus:ring-0 cursor-pointer">
+              <span>Mostrar productos sanos (OK)</span>
+            </label>
           </div>
 
           <!-- Tabla de Auditoría -->
@@ -12800,12 +12804,16 @@ async function cargarReporteEnsambles() {
         const hasDifStock = Math.abs(p.dif_stock) >= 0.001;
         const hasDifValor = Math.abs(p.dif_valor) >= 1.0;
         const hasSinId = p.lineas_sin_id > 0;
+        const mostrarSanos = document.getElementById('check-auditoria-sanos')?.checked ?? true;
+        const esSano = !hasDifStock && !hasDifValor && !hasSinId;
+
+        if (!mostrarSanos && esSano) return false;
 
         if (estadoFiltro === 'con_problemas') return hasDifStock || hasDifValor || hasSinId;
         if (estadoFiltro === 'sin_id') return hasSinId;
         if (estadoFiltro === 'dif_stock') return hasDifStock;
         if (estadoFiltro === 'dif_valor') return hasDifValor;
-        if (estadoFiltro === 'ok') return !hasDifStock && !hasDifValor && !hasSinId;
+        if (estadoFiltro === 'ok') return esSano;
         return true;
       });
 
@@ -12836,34 +12844,43 @@ async function cargarReporteEnsambles() {
           ? `<span class="px-1.5 py-0.5 rounded font-mono font-bold bg-purple-100 text-purple-700 text-[11px]">${fmtMon(difValor)}</span>`
           : `<span class="text-emerald-600 font-mono font-bold text-[11px]">✅ $0</span>`;
 
-        let accionesHtml = `<div class="flex items-center justify-center gap-1.5 flex-wrap">`;
-
+        // Fase 1: Identidad / Vinculación
+        let fase1Html = '';
         if (hasSinId) {
-          accionesHtml += `
-            <button onclick="vincularIdsAuditoria(${p.id}, event)" title="Fase 1: Vincular ${p.lineas_sin_id} asiento(s) contable(s) huérfano(s) a este producto"
+          fase1Html = `
+            <button onclick="abrirModalVincularIds(${p.id}, event)" title="Previsualizar y vincular ${p.lineas_sin_id} asiento(s) huérfano(s)"
                     class="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs">
               🔗 Vincular ID (${p.lineas_sin_id})
             </button>
           `;
+        } else {
+          fase1Html = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ IDs OK</span>`;
         }
 
-        accionesHtml += `
-          <button onclick="toggleCotejoDoc(${p.id})" id="btn-cotejo-${p.id}" title="Fase 2: Desplegar cotejo documento por documento entre Kardex y Contabilidad"
+        // Fase 2: Cotejo
+        const fase2Badge = Math.abs(difValor) < 1.0 && p.total_movimientos_kardex > 0
+          ? `<span class="text-[10px] text-emerald-600 font-bold">✅ Cuadrado</span>`
+          : (Math.abs(difValor) >= 1.0 ? `<span class="text-[10px] text-rose-600 font-bold">⚠️ Dif</span>` : `<span class="text-[10px] text-gray-400">Sin movs</span>`);
+
+        let fase2Html = `
+          <button onclick="toggleCotejoDoc(${p.id})" id="btn-cotejo-${p.id}" title="Fase 2: Desplegar cotejo documento por documento"
                   class="px-2 py-1 bg-sky-50 hover:bg-sky-100 border border-sky-300 text-sky-800 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs">
-            👁️ Cotejar
+            👁️ Cotejar ${fase2Badge}
           </button>
         `;
 
+        // Fase 3: Reparación / Valores
+        let fase3Html = '';
         if (hasDifStock || hasDifValor) {
-          accionesHtml += `
-            <button onclick="repararValoresAuditoria(${p.id}, '${(p.nombre || '').replace(/'/g, "\\'")}', event)" title="Fase 2: Sincronizar tabla resumen y corregir montos contables desfasados contra Kardex"
+          fase3Html = `
+            <button onclick="abrirModalRepararValores(${p.id}, event)" title="Fase 3: Previsualizar y reparar valores"
                     class="px-2 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs">
               ⚡ Reparar
             </button>
           `;
+        } else {
+          fase3Html = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ Valores OK</span>`;
         }
-
-        accionesHtml += `</div>`;
 
         return `
           <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
@@ -12878,7 +12895,13 @@ async function cargarReporteEnsambles() {
             <td class="px-3 py-2 text-right font-mono font-bold text-gray-900">${fmtMon(p.valor_kardex)}</td>
             <td class="px-3 py-2 text-right font-mono ${p.saldo_contab < 0 ? 'text-rose-600' : 'text-gray-800'}">${fmtMon(p.saldo_contab)}</td>
             <td class="px-3 py-2 text-right font-mono">${badgeValor}</td>
-            <td class="px-3 py-2 text-center">${accionesHtml}</td>
+            <td class="px-3 py-2 text-center">
+              <div class="flex items-center justify-center gap-1.5 flex-wrap">
+                ${fase1Html}
+                ${fase2Html}
+                ${fase3Html}
+              </div>
+            </td>
           </tr>
           <tr id="row-cotejo-${p.id}" class="hidden bg-slate-50 border-b border-slate-200">
             <td colspan="9" class="p-4" id="content-cotejo-${p.id}">
@@ -12889,8 +12912,63 @@ async function cargarReporteEnsambles() {
       }).join('');
     }
 
-    async function vincularIdsAuditoria(productoId, ev) {
+    // Modal Fase 1: Previsualizar y Confirmar Vinculación de IDs
+    let productoVincularIdActual = null;
+    function abrirModalVincularIds(productoId, ev) {
       if (ev) ev.stopPropagation();
+      productoVincularIdActual = productoId;
+      const p = auditProductosData.find(x => x.id === productoId);
+      if (!p) return;
+
+      const sub = document.getElementById('modal-vincular-subtitulo');
+      if (sub) sub.textContent = `${p.nombre} (ID #${p.id}) • Categoría: ${p.categoria}`;
+
+      const tbody = document.getElementById('modal-vincular-tbody');
+      const huerfanos = p.huerfanos || [];
+      if (tbody) {
+        tbody.innerHTML = huerfanos.map(h => `
+          <tr class="hover:bg-amber-50/50">
+            <td class="px-3 py-2 font-bold text-gray-800">#${h.id}</td>
+            <td class="px-3 py-2 text-gray-700 font-sans">${h.concepto}</td>
+            <td class="px-3 py-2 text-gray-600 font-sans">${h.documento || '—'}</td>
+            <td class="px-3 py-2 text-gray-500 font-sans">${h.fecha || '—'}</td>
+            <td class="px-3 py-2 text-right font-bold text-gray-900">${fmtMon(h.monto)}</td>
+          </tr>
+        `).join('') || `<tr><td colspan="5" class="text-center py-3 text-gray-400">Sin asientos huérfanos detectados.</td></tr>`;
+      }
+
+      const totalEl = document.getElementById('modal-vincular-total');
+      if (totalEl) totalEl.textContent = `Total: ${huerfanos.length} asiento(s) contable(s) por vincular`;
+
+      const btn = document.getElementById('btn-confirmar-vincular');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<span>🔗</span> Confirmar Vinculación (${huerfanos.length})`;
+        btn.onclick = () => confirmarVincularIds(productoId);
+      }
+
+      const m = document.getElementById('modal-preview-vincular');
+      if (m) {
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+    }
+
+    function cerrarModalVincular() {
+      const m = document.getElementById('modal-preview-vincular');
+      if (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+      productoVincularIdActual = null;
+    }
+
+    async function confirmarVincularIds(productoId) {
+      const btn = document.getElementById('btn-confirmar-vincular');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="animate-spin inline-block">⏳</span> Vinculando...`;
+      }
       const prevScrollY = window.scrollY || window.pageYOffset;
 
       try {
@@ -12900,6 +12978,7 @@ async function cargarReporteEnsambles() {
           body: JSON.stringify({ producto_id: productoId })
         });
         const d = await r.json();
+        cerrarModalVincular();
         if (!d.ok) {
           toast(d.error || 'Error al vincular IDs', false);
           return;
@@ -12912,6 +12991,134 @@ async function cargarReporteEnsambles() {
           window.scrollTo({ top: prevScrollY, behavior: 'instant' });
         }
       } catch (err) {
+        cerrarModalVincular();
+        toast(`Error: ${err.message}`, false);
+      }
+    }
+
+    // Modal Fase 3: Previsualizar y Confirmar Reparación de Valores
+    let productoRepararIdActual = null;
+    async function abrirModalRepararValores(productoId, ev) {
+      if (ev) ev.stopPropagation();
+      productoRepararIdActual = productoId;
+      const p = auditProductosData.find(x => x.id === productoId);
+      const sub = document.getElementById('modal-reparar-subtitulo');
+      if (sub && p) sub.textContent = `${p.nombre} (ID #${p.id}) • Categoría: ${p.categoria}`;
+
+      const stockEl = document.getElementById('modal-reparar-stock');
+      const costoEl = document.getElementById('modal-reparar-costo');
+      const valorEl = document.getElementById('modal-reparar-valor');
+      const tbody = document.getElementById('modal-reparar-tbody');
+      const countEl = document.getElementById('modal-reparar-count-asientos');
+      const sinAsientosEl = document.getElementById('modal-reparar-sin-asientos');
+      const asientosContainer = document.getElementById('modal-reparar-asientos-container');
+      const btn = document.getElementById('btn-confirmar-reparar');
+
+      if (stockEl) stockEl.textContent = 'Calculando...';
+      if (costoEl) costoEl.textContent = 'Calculando...';
+      if (valorEl) valorEl.textContent = 'Calculando...';
+      if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500 font-semibold">Cargando diagnóstico...</td></tr>`;
+
+      const m = document.getElementById('modal-preview-reparar');
+      if (m) {
+        m.classList.remove('hidden');
+        m.classList.add('flex');
+      }
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/reparar-valores`);
+        const d = await r.json();
+        if (!d.ok) {
+          if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-500 font-bold">Error: ${d.error}</td></tr>`;
+          return;
+        }
+
+        const tr = d.tabla_resumen || {};
+        if (stockEl) {
+          const difStk = tr.stock_nuevo - tr.stock_actual;
+          stockEl.innerHTML = `${fmt(tr.stock_actual)} ➔ <span class="${Math.abs(difStk) >= 0.001 ? 'text-emerald-700' : 'text-gray-900'} font-bold">${fmt(tr.stock_nuevo)}</span>`;
+        }
+        if (costoEl) {
+          costoEl.innerHTML = `${fmtMon(tr.costo_actual)} ➔ <span class="text-gray-900 font-bold">${fmtMon(tr.costo_nuevo)}</span>`;
+        }
+        if (valorEl) {
+          const difVal = tr.valor_nuevo - tr.valor_actual;
+          valorEl.innerHTML = `${fmtMon(tr.valor_actual)} ➔ <span class="${Math.abs(difVal) >= 0.01 ? 'text-purple-700' : 'text-gray-900'} font-bold">${fmtMon(tr.valor_nuevo)}</span>`;
+        }
+
+        const asientos = d.asientos_a_modificar || [];
+        if (countEl) countEl.textContent = `${asientos.length} asiento(s) a ajustar`;
+
+        if (asientos.length === 0) {
+          if (asientosContainer) asientosContainer.classList.add('hidden');
+          if (sinAsientosEl) sinAsientosEl.classList.remove('hidden');
+        } else {
+          if (asientosContainer) asientosContainer.classList.remove('hidden');
+          if (sinAsientosEl) sinAsientosEl.classList.add('hidden');
+          if (tbody) {
+            tbody.innerHTML = asientos.map(a => `
+              <tr class="hover:bg-rose-50/40">
+                <td class="px-2.5 py-2 font-sans font-bold text-gray-800">${a.tipo_documento_nombre || 'Doc'} #${a.documento}</td>
+                <td class="px-2.5 py-2 font-bold text-gray-700">#${a.asiento_id}</td>
+                <td class="px-2.5 py-2 text-gray-600 font-sans truncate max-w-[200px]" title="${a.concepto}">${a.concepto}</td>
+                <td class="px-2.5 py-2 text-right text-gray-600 font-bold">${fmtMon(a.monto_actual)}</td>
+                <td class="px-2.5 py-2 text-right text-emerald-700 font-bold">${fmtMon(a.monto_nuevo)}</td>
+                <td class="px-2.5 py-2 text-right text-rose-600 font-bold">${fmtMon(a.diferencia)}</td>
+              </tr>
+            `).join('');
+          }
+        }
+
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span>⚡</span> Confirmar y Aplicar Reparación`;
+          btn.onclick = () => confirmarRepararValores(productoId);
+        }
+      } catch (err) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-red-500 font-bold">Error de conexión: ${err.message}</td></tr>`;
+      }
+    }
+
+    function cerrarModalReparar() {
+      const m = document.getElementById('modal-preview-reparar');
+      if (m) {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }
+      productoRepararIdActual = null;
+    }
+
+    async function confirmarRepararValores(productoId) {
+      const btn = document.getElementById('btn-confirmar-reparar');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="animate-spin inline-block">⏳</span> Reparando...`;
+      }
+      const prevScrollY = window.scrollY || window.pageYOffset;
+
+      try {
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/reparar-valores`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const d = await r.json();
+        cerrarModalReparar();
+        if (!d.ok) {
+          toast(d.error || 'Error al reparar valores', false);
+          return;
+        }
+
+        toast(d.mensaje || 'Valores reparados exitosamente', true);
+        await cargarAuditoriaProductos(true);
+        if (typeof cargarProductos === 'function') {
+          cargarProductos();
+        }
+
+        if (prevScrollY > 0) {
+          window.scrollTo({ top: prevScrollY, behavior: 'instant' });
+        }
+      } catch (err) {
+        cerrarModalReparar();
         toast(`Error: ${err.message}`, false);
       }
     }
@@ -12927,7 +13134,13 @@ async function cargarReporteEnsambles() {
 
       if (!abrir) {
         row.classList.add('hidden');
-        if (btn) btn.textContent = '👁️ Cotejar';
+        const p = auditProductosData.find(x => x.id === productoId);
+        const difVal = p ? p.dif_valor : 0;
+        const movs = p ? p.total_movimientos_kardex : 0;
+        const b = Math.abs(difVal) < 1.0 && movs > 0
+          ? `<span class="text-[10px] text-emerald-600 font-bold">✅ Cuadrado</span>`
+          : (Math.abs(difVal) >= 1.0 ? `<span class="text-[10px] text-rose-600 font-bold">⚠️ Dif</span>` : `<span class="text-[10px] text-gray-400">Sin movs</span>`);
+        if (btn) btn.innerHTML = `👁️ Cotejar ${b}`;
         return;
       }
 
@@ -13013,36 +13226,6 @@ async function cargarReporteEnsambles() {
       }
     }
 
-    async function repararValoresAuditoria(productoId, productoNombre, ev) {
-      if (ev) ev.stopPropagation();
-      const prevScrollY = window.scrollY || window.pageYOffset;
-
-      try {
-        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/reparar-valores`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        const d = await r.json();
-        if (!d.ok) {
-          toast(d.error || 'Error al reparar valores', false);
-          return;
-        }
-
-        toast(d.mensaje || 'Valores reparados exitosamente', true);
-        await cargarAuditoriaProductos(true);
-        // Actualizar tabla principal de productos silenciosamente
-        if (typeof cargarProductos === 'function') {
-          cargarProductos();
-        }
-
-        if (prevScrollY > 0) {
-          window.scrollTo({ top: prevScrollY, behavior: 'instant' });
-        }
-      } catch (err) {
-        toast(`Error: ${err.message}`, false);
-      }
-    }
-
     // Al cargar la página, si la auditoría estaba abierta, mantenerla abierta automáticamente
     document.addEventListener('DOMContentLoaded', () => {
       if (sessionStorage.getItem('audit_abierto') === '1') {
@@ -13050,8 +13233,128 @@ async function cargarReporteEnsambles() {
       }
     });
 
-
     </script>
+
+    <!-- Modales de Previsualización de Auditoría -->
+    <div id="modal-preview-vincular" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs hidden items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between border-b pb-3">
+          <div>
+            <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+              <span>🔗</span> Previsualizar Vinculación de Asientos (Fase 1)
+            </h3>
+            <p id="modal-vincular-subtitulo" class="text-xs text-gray-500 mt-0.5"></p>
+          </div>
+          <button onclick="cerrarModalVincular()" class="text-gray-400 hover:text-gray-700 text-lg font-bold">&times;</button>
+        </div>
+        
+        <div class="text-xs text-gray-600 bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-1">
+          <div class="font-bold text-amber-800">ℹ️ ¿Qué hará esta acción?</div>
+          <div>Asignará el <code class="font-mono font-bold text-amber-900">producto_id</code> a los siguientes asientos contables de cuentas 14 que actualmente están huérfanos (<code class="font-mono">producto_id IS NULL</code>), guiándose estrictamente por el concepto del asiento.</div>
+        </div>
+
+        <div class="overflow-y-auto flex-1 border rounded-xl">
+          <table class="w-full text-xs">
+            <thead class="bg-gray-100 text-gray-700 font-semibold border-b">
+              <tr>
+                <th class="px-3 py-2 text-left">Asiento #</th>
+                <th class="px-3 py-2 text-left">Concepto Contable</th>
+                <th class="px-3 py-2 text-left">Documento</th>
+                <th class="px-3 py-2 text-left">Fecha</th>
+                <th class="px-3 py-2 text-right">Monto ($)</th>
+              </tr>
+            </thead>
+            <tbody id="modal-vincular-tbody" class="divide-y divide-gray-100 font-mono"></tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between border-t pt-3">
+          <span id="modal-vincular-total" class="text-xs font-bold text-gray-700"></span>
+          <div class="flex gap-2">
+            <button onclick="cerrarModalVincular()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+              Cancelar
+            </button>
+            <button id="btn-confirmar-vincular" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow-sm flex items-center gap-1.5">
+              <span>🔗</span> Confirmar Vinculación
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-preview-reparar" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs hidden items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between border-b pb-3">
+          <div>
+            <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+              <span>⚡</span> Previsualizar Reparación de Valores (Fase 2)
+            </h3>
+            <p id="modal-reparar-subtitulo" class="text-xs text-gray-500 mt-0.5"></p>
+          </div>
+          <button onclick="cerrarModalReparar()" class="text-gray-400 hover:text-gray-700 text-lg font-bold">&times;</button>
+        </div>
+
+        <div class="overflow-y-auto flex-1 space-y-4">
+          <!-- Sección 1: Tabla Resumen -->
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+            <div class="text-xs font-bold text-slate-800 uppercase flex items-center gap-1.5">
+              <span>📊</span> 1. Sincronización de Tabla Resumen (<code class="font-mono">saldos_inventario</code>)
+            </div>
+            <div class="grid grid-cols-3 gap-3 text-xs">
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                <span class="text-gray-500 block text-[11px]">Stock</span>
+                <div id="modal-reparar-stock" class="font-mono font-bold mt-1"></div>
+              </div>
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                <span class="text-gray-500 block text-[11px]">Costo Unitario</span>
+                <div id="modal-reparar-costo" class="font-mono font-bold mt-1"></div>
+              </div>
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                <span class="text-gray-500 block text-[11px]">Valor de Existencia</span>
+                <div id="modal-reparar-valor" class="font-mono font-bold mt-1"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sección 2: Asientos Contables a Corregir -->
+          <div class="space-y-2">
+            <div class="text-xs font-bold text-slate-800 uppercase flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <span>🏛️</span> 2. Corrección de Asientos Contables Desfasados (Cuentas 14 y Contrapartidas)
+              </span>
+              <span id="modal-reparar-count-asientos" class="text-[11px] font-semibold text-gray-500"></span>
+            </div>
+            <div id="modal-reparar-asientos-container" class="border rounded-xl overflow-hidden">
+              <table class="w-full text-xs">
+                <thead class="bg-gray-100 text-gray-700 font-semibold border-b">
+                  <tr>
+                    <th class="px-2.5 py-2 text-left">Documento</th>
+                    <th class="px-2.5 py-2 text-left">Asiento #</th>
+                    <th class="px-2.5 py-2 text-left">Concepto</th>
+                    <th class="px-2.5 py-2 text-right">Monto Actual ($)</th>
+                    <th class="px-2.5 py-2 text-right">Monto Nuevo ($)</th>
+                    <th class="px-2.5 py-2 text-right">Diferencia ($)</th>
+                  </tr>
+                </thead>
+                <tbody id="modal-reparar-tbody" class="divide-y divide-gray-100 font-mono"></tbody>
+              </table>
+            </div>
+            <div id="modal-reparar-sin-asientos" class="hidden text-xs text-gray-500 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center font-semibold">
+              ✅ No hay asientos contables desfasados por corregir. Solo se actualizará la tabla resumen de saldos.
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 border-t pt-3">
+          <button onclick="cerrarModalReparar()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+            Cancelar
+          </button>
+          <button id="btn-confirmar-reparar" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-sm flex items-center gap-1.5">
+            <span>⚡</span> Confirmar y Aplicar Reparación
+          </button>
+        </div>
+      </div>
+    </div>
 
     {% include 'inv_distribuido_modal.html' %}
 

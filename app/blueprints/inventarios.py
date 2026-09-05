@@ -9707,6 +9707,14 @@ def api_auditoria_productos(negocio_id):
                 'dif_stock': float(dif_stock),
                 'dif_valor': float(dif_valor),
                 'lineas_sin_id': len(h_list),
+                'huerfanos': [{
+                    'id': h['id'],
+                    'concepto': h['concepto'],
+                    'monto': float(h['monto'] or 0),
+                    'tipo': h['tipo'],
+                    'documento': h['numero_documento'],
+                    'fecha': str(h['fecha']) if h['fecha'] else None
+                } for h in h_list],
                 'lineas_con_id': c['lineas_contab'],
                 'total_movimientos_kardex': k['total_movimientos'],
                 'estado': estado
@@ -9915,9 +9923,9 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
         conn.close()
 
 
-@bp.route('/api/inventario/<int:negocio_id>/auditoria-productos/<int:producto_id>/reparar-valores', methods=['POST'])
+@bp.route('/api/inventario/<int:negocio_id>/auditoria-productos/<int:producto_id>/reparar-valores', methods=['GET', 'POST'])
 def api_auditoria_reparar_valores(negocio_id, producto_id):
-    """FASE 2: Sincroniza la tabla saldos_inventario y repara asientos desfasados en cuentas 14."""
+    """FASE 2: GET=Previsualizar reparación de tabla saldos y asientos contables. POST=Ejecutar la reparación."""
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
@@ -9952,9 +9960,100 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
         val_existencia_real = round(stock_real * costo_real, 2) if stock_real > 0 else 0.0
 
         saldo_existente = conn.execute("""
-            SELECT id FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
+            SELECT id, stock, costo_und, valor_existencia
+            FROM saldos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
         """, (negocio_id, producto_id)).fetchone()
 
+        stock_actual = float(saldo_existente['stock'] or 0) if saldo_existente else 0.0
+        costo_actual = float(saldo_existente['costo_und'] or prod['costo'] or 0) if saldo_existente else float(prod['costo'] or 0)
+        valor_actual = float(saldo_existente['valor_existencia'] or 0) if saldo_existente else 0.0
+
+        kmovs = conn.execute("""
+            SELECT id, tipo, cantidad, costo_und, COALESCE(valor_total, cantidad * costo_und, 0) as valor_total,
+                   documento_numero
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida' AND documento_numero IS NOT NULL
+        """, (negocio_id, producto_id)).fetchall()
+
+        td_rows = conn.execute("""
+            SELECT id, codigo, nombre FROM tipos_documento_negocio WHERE negocio_id = %s
+        """, (negocio_id,)).fetchall()
+        td_por_id = {r['id']: r['nombre'] for r in td_rows}
+        td_por_cod = {r['codigo'].upper(): r['nombre'] for r in td_rows if r['codigo']}
+
+        def _resolver_td_nombre(tipo_id, tipo_str):
+            if tipo_id and tipo_id in td_por_id:
+                return td_por_id[tipo_id]
+            if tipo_str:
+                s = str(tipo_str).strip().upper()
+                if s in td_por_cod:
+                    return td_por_cod[s]
+                try:
+                    tid = int(s)
+                    if tid in td_por_id:
+                        return td_por_id[tid]
+                except ValueError:
+                    pass
+                return tipo_str
+            return 'Documento'
+
+        asientos_a_modificar = []
+        for km in kmovs:
+            num_norm = normalizar_numero(km['documento_numero'])
+            val_kardex = float(km['valor_total'])
+
+            asientos_c = conn.execute("""
+                SELECT mc.id, mc.monto, mc.comprobante_id, mc.numero_documento, mc.tipo_documento, mc.tipo_documento_id,
+                       COALESCE(mc.fecha, mc.created_at::date) as fecha, mc.concepto, cp.codigo as cuenta_codigo
+                FROM movimientos_contables mc
+                JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+                WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id = %s
+                  AND mc.tipo IN ('credito', 'C')
+                  AND (mc.numero_documento = %s OR mc.numero_documento LIKE %s)
+            """, (negocio_id, producto_id, km['documento_numero'], f'%{num_norm}%')).fetchall()
+
+            for ac in asientos_c:
+                monto_contab = float(ac['monto'])
+                if abs(monto_contab - val_kardex) >= 0.01:
+                    asientos_a_modificar.append({
+                        'asiento_id': ac['id'],
+                        'comprobante_id': ac['comprobante_id'],
+                        'documento': ac['numero_documento'] or km['documento_numero'],
+                        'tipo_documento_nombre': _resolver_td_nombre(ac['tipo_documento_id'], ac['tipo_documento']),
+                        'concepto': ac['concepto'],
+                        'cuenta': ac['cuenta_codigo'],
+                        'fecha': str(ac['fecha']) if ac['fecha'] else None,
+                        'monto_actual': monto_contab,
+                        'monto_nuevo': val_kardex,
+                        'diferencia': round(monto_contab - val_kardex, 2)
+                    })
+
+        requiere_actualizacion_tabla = (
+            abs(stock_actual - stock_real) >= 0.001 or
+            abs(valor_actual - val_existencia_real) >= 0.01 or
+            not saldo_existente
+        )
+
+        # Si la petición es solo GET (Previsualización antes de reparar)
+        if request.method == 'GET':
+            return jsonify({
+                'ok': True,
+                'producto': {'id': prod['id'], 'nombre': prod['nombre']},
+                'tabla_resumen': {
+                    'stock_actual': stock_actual,
+                    'stock_nuevo': stock_real,
+                    'costo_actual': costo_actual,
+                    'costo_nuevo': costo_real,
+                    'valor_actual': valor_actual,
+                    'valor_nuevo': val_existencia_real,
+                    'requiere_actualizacion': requiere_actualizacion_tabla
+                },
+                'asientos_a_modificar': asientos_a_modificar,
+                'total_asientos': len(asientos_a_modificar)
+            })
+
+        # Si es POST -> Ejecutar la reparación
         if saldo_existente:
             conn.execute("""
                 UPDATE saldos_inventario
@@ -9967,46 +10066,28 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
                 VALUES (%s, %s, 1, %s, %s, %s)
             """, (negocio_id, producto_id, stock_real, costo_real, val_existencia_real))
 
-        kmovs = conn.execute("""
-            SELECT id, tipo, cantidad, costo_und, COALESCE(valor_total, cantidad * costo_und, 0) as valor_total,
-                   documento_numero
-            FROM movimientos_inventario
-            WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida' AND documento_numero IS NOT NULL
-        """, (negocio_id, producto_id)).fetchall()
-
         asientos_modificados = 0
-        for km in kmovs:
-            num_norm = normalizar_numero(km['documento_numero'])
-            val_kardex = float(km['valor_total'])
+        for item_mod in asientos_a_modificar:
+            aid = item_mod['asiento_id']
+            val_nuevo = item_mod['monto_nuevo']
+            cid = item_mod['comprobante_id']
 
-            asientos_c = conn.execute("""
-                SELECT mc.id, mc.monto, mc.comprobante_id
-                FROM movimientos_contables mc
-                JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
-                WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id = %s
-                  AND mc.tipo IN ('credito', 'C')
-                  AND (mc.numero_documento = %s OR mc.numero_documento LIKE %s)
-            """, (negocio_id, producto_id, km['documento_numero'], f'%{num_norm}%')).fetchall()
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET monto = %s
+                WHERE id = %s
+            """, (val_nuevo, aid))
+            asientos_modificados += 1
 
-            for ac in asientos_c:
-                monto_contab = float(ac['monto'])
-                if abs(monto_contab - val_kardex) >= 0.01:
-                    conn.execute("""
-                        UPDATE movimientos_contables
-                        SET monto = %s
-                        WHERE id = %s
-                    """, (val_kardex, ac['id']))
-                    asientos_modificados += 1
-
-                    if ac['comprobante_id']:
-                        conn.execute("""
-                            UPDATE movimientos_contables mc
-                            SET monto = %s
-                            FROM cuentas_puc cp
-                            WHERE cp.id = mc.cuenta_id AND mc.comprobante_id = %s
-                              AND (cp.codigo LIKE '61%%' OR cp.codigo LIKE '71%%')
-                              AND mc.producto_id = %s AND mc.tipo IN ('debito', 'D')
-                        """, (val_kardex, ac['comprobante_id'], producto_id))
+            if cid:
+                conn.execute("""
+                    UPDATE movimientos_contables mc
+                    SET monto = %s
+                    FROM cuentas_puc cp
+                    WHERE cp.id = mc.cuenta_id AND mc.comprobante_id = %s
+                      AND (cp.codigo LIKE '61%%' OR cp.codigo LIKE '71%%')
+                      AND mc.producto_id = %s AND mc.tipo IN ('debito', 'D')
+                """, (val_nuevo, cid, producto_id))
 
         conn.commit()
 
@@ -10016,7 +10097,8 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
             'stock_reparado': stock_real,
             'costo_reparado': costo_real,
             'valor_reparado': val_existencia_real,
-            'asientos_modificados': asientos_modificados
+            'asientos_modificados': asientos_modificados,
+            'asientos_detalle': asientos_a_modificar
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

@@ -3171,22 +3171,8 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
         return {'numero_doc': numero_doc, 'producto_padre_id': prod_padre_id,
                 'cambios_contables': [], 'tipo': 'venta', 'skip': True}
 
-    # Consolidar kardex por insumo único (producto_id o nombre)
-    kardex_insumos = {}
-    total_kardex_padre = 0.0
-    for k in kardex_rows:
-        pid = k['producto_id']
-        nombre = (k['nombre_producto'] or '').strip()
-        tot = float(k['total'] or 0)
-        total_kardex_padre += tot
-        key = pid if pid else nombre.upper()
-        if key not in kardex_insumos:
-            kardex_insumos[key] = {
-                'producto_id': pid,
-                'nombre': nombre,
-                'total': 0.0,
-            }
-        kardex_insumos[key]['total'] += tot
+    # Consolidar total del plato
+    total_kardex_padre = sum(float(k['total'] or 0) for k in kardex_rows)
 
     # 2. Buscar entradas 14* vinculadas existentes (incluyendo producto_padre_id explícito)
     contab_rows = conn.execute("""
@@ -3201,7 +3187,7 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
               OR (producto_padre_id IS NULL AND UPPER(concepto) LIKE 'BAJA INV:%%')
           )
           AND (tipo_documento IS NULL OR UPPER(REPLACE(tipo_documento, '_', ' ')) LIKE '%%VENTA%%' OR UPPER(REPLACE(tipo_documento, '_', ' ')) LIKE '%%FACTURA%%')
-        ORDER BY id
+        ORDER BY producto_id, id
     """, (negocio_id, consecutive, numero_doc, prod_padre_id)).fetchall()
 
     # Si no hay 14* pero hay otros asientos de la factura (ej 61* o 41*), obtener comprobante_id de referencia
@@ -3224,74 +3210,87 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
     cta_140505_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '140505' LIMIT 1").fetchone()
     cta_140505_id = cta_140505_row['id'] if cta_140505_row else None
 
-    # 3. Emparejar insumos consolidados con asientos 14* existentes
+    # 3. Agrupar salidas de Kardex por insumo (producto_id o nombre) para emparejamiento línea por línea
+    from collections import defaultdict
+    k_por_insumo = defaultdict(list)
+    for k in kardex_rows:
+        pid = k['producto_id']
+        key = pid if pid else (k['nombre_producto'] or '').strip().upper()
+        k_por_insumo[key].append(k)
+
     cambios = []
     asientos_usados = set()
     asientos_disponibles = list(contab_rows)
 
-    for key, insumo in kardex_insumos.items():
-        k_pid = insumo['producto_id']
-        k_nombre = insumo['nombre'].strip().upper()
-        k_tot = insumo['total']
+    # 4. Emparejar cada salida individual de Kardex con un asiento 14*
+    for key, k_list in k_por_insumo.items():
+        nombre_insumo = (k_list[0]['nombre_producto'] or '').strip()
+        pid = k_list[0]['producto_id']
 
-        best_c = None
+        # Buscar asientos contables disponibles que coincidan con este insumo
+        c_candidatos = []
         for c in asientos_disponibles:
             if c['id'] in asientos_usados:
                 continue
             c_pid = c.get('producto_id')
             c_conc = (c.get('concepto') or '').strip().upper()
-            if k_pid and c_pid == k_pid:
-                best_c = c
-                break
-            elif k_nombre in c_conc or c_conc.replace('BAJA INV:', '').strip() in k_nombre:
-                if not best_c:
-                    best_c = c
+            nombre_upper = nombre_insumo.upper()
+            if pid and c_pid == pid:
+                c_candidatos.append(c)
+            elif (nombre_upper and nombre_upper in c_conc) or (c_conc and c_conc.replace('BAJA INV:', '').strip() in nombre_upper):
+                c_candidatos.append(c)
 
-        if best_c:
-            asientos_usados.add(best_c['id'])
-            nuevo_monto = k_tot
-            if abs(float(best_c['monto']) - nuevo_monto) > 0.01 or best_c.get('producto_id') != k_pid or best_c.get('producto_padre_id') != prod_padre_id:
-                conn.execute(
-                    "UPDATE movimientos_contables SET monto = %s, producto_id = %s, producto_padre_id = %s WHERE id = %s",
-                    (nuevo_monto, k_pid, prod_padre_id, best_c['id'])
-                )
+        # Ordenar por monto para emparejar ordenadamente (la salida menor con el asiento menor, etc.)
+        k_sorted = sorted(k_list, key=lambda x: float(x['total'] or 0))
+        c_sorted = sorted(c_candidatos, key=lambda x: float(x['monto'] or 0))
+
+        for idx, k in enumerate(k_sorted):
+            k_monto = float(k['total'] or 0)
+            if idx < len(c_sorted):
+                c = c_sorted[idx]
+                asientos_usados.add(c['id'])
+                if abs(float(c['monto']) - k_monto) > 0.01 or c.get('producto_id') != pid or c.get('producto_padre_id') != prod_padre_id:
+                    conn.execute(
+                        "UPDATE movimientos_contables SET monto = %s, producto_id = %s, producto_padre_id = %s WHERE id = %s",
+                        (k_monto, pid, prod_padre_id, c['id'])
+                    )
+                    cambios.append({
+                        'id': c['id'],
+                        'concepto': c['concepto'],
+                        'monto_anterior': float(c['monto']),
+                        'monto_nuevo': k_monto,
+                        'componente': nombre_insumo,
+                    })
+            else:
+                # Falta asiento para esta salida individual -> INSERTARLO
+                ins_res = conn.execute("""
+                    INSERT INTO movimientos_contables (
+                        negocio_id, comprobante_id, cuenta, cuenta_id, tipo, monto,
+                        concepto, producto_id, producto_padre_id,
+                        numero_documento, tipo_documento, tipo_documento_id,
+                        fecha, created_at
+                    ) VALUES (
+                        %s, %s, '140505', %s, 'credito', %s,
+                        %s, %s, %s,
+                        %s, %s, %s,
+                        %s, CURRENT_TIMESTAMP
+                    ) RETURNING id
+                """, (
+                    negocio_id, comprobante_id, cta_140505_id, k_monto,
+                    f"Baja Inv: {nombre_insumo}", pid, prod_padre_id,
+                    consecutive, tipo_doc_nombre, tipo_doc_id,
+                    fecha_ref
+                )).fetchone()
+
                 cambios.append({
-                    'id': best_c['id'],
-                    'concepto': best_c['concepto'],
-                    'monto_anterior': float(best_c['monto']),
-                    'monto_nuevo': nuevo_monto,
-                    'componente': insumo['nombre'],
+                    'id': ins_res['id'] if ins_res else None,
+                    'concepto': f"Baja Inv: {nombre_insumo}",
+                    'monto_anterior': 0.0,
+                    'monto_nuevo': k_monto,
+                    'componente': f"{nombre_insumo} (Creado)",
                 })
-        else:
-            # 4. Insertar salida de kardex faltante en contabilidad
-            ins_res = conn.execute("""
-                INSERT INTO movimientos_contables (
-                    negocio_id, comprobante_id, cuenta, cuenta_id, tipo, monto,
-                    concepto, producto_id, producto_padre_id,
-                    numero_documento, tipo_documento, tipo_documento_id,
-                    fecha, created_at
-                ) VALUES (
-                    %s, %s, '140505', %s, 'credito', %s,
-                    %s, %s, %s,
-                    %s, %s, %s,
-                    %s, CURRENT_TIMESTAMP
-                ) RETURNING id
-            """, (
-                negocio_id, comprobante_id, cta_140505_id, k_tot,
-                f"Baja Inv: {insumo['nombre']}", k_pid, prod_padre_id,
-                consecutive, tipo_doc_nombre, tipo_doc_id,
-                fecha_ref
-            )).fetchone()
 
-            cambios.append({
-                'id': ins_res['id'] if ins_res else None,
-                'concepto': f"Baja Inv: {insumo['nombre']}",
-                'monto_anterior': 0.0,
-                'monto_nuevo': k_tot,
-                'componente': f"{insumo['nombre']} (Creado)",
-            })
-
-    # 4. Eliminar asientos sobrantes / duplicados de la 14* para este producto_padre en este documento
+    # 5. Eliminar asientos sobrantes / duplicados de la 14* para este producto_padre en este documento
     for c in asientos_disponibles:
         if c['id'] not in asientos_usados:
             conn.execute("DELETE FROM movimientos_contables WHERE id = %s", (c['id'],))

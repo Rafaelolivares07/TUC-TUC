@@ -2058,6 +2058,7 @@ def api_reparar_costos_venta(negocio_id):
         params_where.extend([fecha_desde, fecha_hasta])
         salidas = conn.execute(f"""
             SELECT
+                m.id AS movimiento_id,
                 m.documento_numero,
                 m.tipo_documento,
                 m.tipo_documento_id,
@@ -2121,6 +2122,7 @@ def api_reparar_costos_venta(negocio_id):
                 }
             ff = por_producto[ppid][doc]
             ff['componentes'].append({
+                'id': s['movimiento_id'],
                 'producto_id': s['producto_id'],
                 'nombre': s['nombre_producto'],
                 'cantidad': float(s['cantidad']),

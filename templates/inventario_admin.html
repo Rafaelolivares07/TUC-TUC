@@ -13130,7 +13130,13 @@ async function cargarReporteEnsambles() {
 
     // Despliegue de Acordeón Documental por Producto (Estilo Ensambles Históricos)
     async function toggleAcordeonAuditoria(productoId, ev = null, forzarAbrir = null) {
-      if (ev && ev.stopPropagation) ev.stopPropagation();
+      if (typeof ev === 'boolean') {
+        forzarAbrir = ev;
+        ev = null;
+      }
+      if (ev && ev.stopPropagation) {
+        try { ev.stopPropagation(); } catch (_) {}
+      }
 
       const row = document.getElementById(`row-cotejo-${productoId}`);
       const chevron = document.getElementById(`chevron-${productoId}`);
@@ -13138,7 +13144,7 @@ async function cargarReporteEnsambles() {
       if (!row) return;
 
       const isHidden = row.classList.contains('hidden');
-      const abrir = (forzarAbrir !== null) ? forzarAbrir : isHidden;
+      const abrir = (forzarAbrir !== null && forzarAbrir !== undefined) ? !!forzarAbrir : isHidden;
 
       if (!abrir) {
         row.classList.add('hidden');
@@ -13150,19 +13156,21 @@ async function cargarReporteEnsambles() {
       row.classList.remove('hidden');
       if (chevron) chevron.textContent = '▼';
       openCotejos.add(String(productoId));
-      container.innerHTML = `<div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-500 font-semibold"><span class="animate-spin inline-block">⏳</span> Cargando documentos y cotejo contable...</div>`;
+      if (container) {
+        container.innerHTML = `<div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-500 font-semibold"><span class="animate-spin inline-block">⏳</span> Cargando documentos y cotejo contable...</div>`;
+      }
 
       try {
         const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/detalle-cotejo`);
         const d = await r.json();
         if (!d.ok) {
-          container.innerHTML = `<div class="text-red-500 text-xs font-bold py-2">Error: ${d.error}</div>`;
+          if (container) container.innerHTML = `<div class="text-red-500 text-xs font-bold py-2">Error: ${d.error}</div>`;
           return;
         }
 
         const cotejo = d.cotejo || [];
         if (!cotejo.length) {
-          container.innerHTML = `<div class="text-gray-400 text-xs py-3 italic text-center">Sin documentos registrados en Kardex ni Contabilidad para este producto.</div>`;
+          if (container) container.innerHTML = `<div class="text-gray-400 text-xs py-3 italic text-center">Sin documentos registrados en Kardex ni Contabilidad para este producto.</div>`;
           return;
         }
 
@@ -13217,6 +13225,7 @@ async function cargarReporteEnsambles() {
           const kDetalle = c.kardex.map(k => `${k.tipo === 'entrada' ? '📥 Ent' : '📤 Sal'} ${fmt(k.cantidad)} × ${fmtMon(k.costo_und)}`).join(', ') || '<span class="text-gray-400 font-sans italic">Sin kardex</span>';
           
           const cDetalle = c.contabilidad.map(ac => {
+            const rawConcepto = (ac.concepto || '').replace(/"/g, '&quot;');
             if (ac.pendiente_vinculo) {
               return `
                 <div class="bg-amber-100/90 border border-amber-300 rounded-lg p-1.5 my-1 text-amber-950 font-sans">
@@ -13224,13 +13233,13 @@ async function cargarReporteEnsambles() {
                     <span>#${ac.id} (${ac.tipo.toUpperCase()} - Cta ${ac.cuenta}): ${fmtMon(ac.monto)}</span>
                     <span class="px-1 py-0.2 bg-amber-300 text-amber-900 rounded text-[9px] uppercase font-bold">⚠️ Sin Vincular ID</span>
                   </div>
-                  <div class="text-[10px] text-amber-800 italic mt-0.5 truncate max-w-xs" title="${ac.concepto}">
-                    Concepto: ${ac.concepto}
+                  <div class="text-[10px] text-amber-800 italic mt-0.5 truncate max-w-xs" title="${rawConcepto}">
+                    Concepto: ${rawConcepto}
                   </div>
                 </div>
               `;
             }
-            return `<div class="font-sans py-0.5">#${ac.id} (${ac.tipo.toUpperCase()} - Cta ${ac.cuenta})</div>`;
+            return `<div class="font-sans py-0.5" title="${rawConcepto}">#${ac.id} (${ac.tipo.toUpperCase()} - Cta ${ac.cuenta})</div>`;
           }).join('') || '<span class="text-gray-400 font-sans italic">Sin asiento</span>';
 
           const dif = c.diferencia;
@@ -13271,14 +13280,15 @@ async function cargarReporteEnsambles() {
           </div>
         `;
 
-        container.innerHTML = html;
+        if (container) container.innerHTML = html;
       } catch (err) {
-        container.innerHTML = `<div class="text-red-500 text-xs font-bold py-2">Error de conexión: ${err.message}</div>`;
+        if (container) container.innerHTML = `<div class="text-red-500 text-xs font-bold py-2">Error de conexión: ${err.message}</div>`;
       }
     }
 
-    // Alias para compatibilidad
-    const toggleCotejoDoc = toggleAcordeonAuditoria;
+    // Alias y asignación global a window para máxima compatibilidad
+    window.toggleAcordeonAuditoria = toggleAcordeonAuditoria;
+    window.toggleCotejoDoc = toggleAcordeonAuditoria;
 
     // Al cargar la página, si la auditoría estaba abierta, mantenerla abierta automáticamente
     document.addEventListener('DOMContentLoaded', () => {

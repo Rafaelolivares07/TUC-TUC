@@ -12285,6 +12285,17 @@ async function cargarReporteEnsambles() {
 
             const cantBase = parseFloat(ff.cantidad_base || 0);
             const cantStr = cantBase.toLocaleString('es-CO', {maximumFractionDigits: 3});
+            
+            // Detección y badge de múltiples líneas del mismo plato en la factura/pedido
+            const numLineas = ff.num_lineas || (ff.lineas_detalle ? ff.lineas_detalle.length : 1);
+            let badgeLineasMulti = '';
+            let lineasDesgloseTxt = '';
+            if (numLineas > 1 && ff.lineas_detalle && ff.lineas_detalle.length > 1) {
+              const cants = ff.lineas_detalle.map(l => Number(l.cantidad).toLocaleString('es-CO', {maximumFractionDigits: 2}));
+              lineasDesgloseTxt = `${numLineas} líneas (${cants.join(' + ')})`;
+              badgeLineasMulti = `<span class="text-[10px] font-extrabold text-indigo-950 bg-indigo-100 border border-indigo-300 px-2 py-0.5 rounded font-mono shadow-2xs" title="Este producto tiene ${numLineas} líneas registradas en este documento: ${cants.join(' + ')}">📑 ${lineasDesgloseTxt}</span>`;
+            }
+
             const badgeCantDoc = isProd
               ? `<span class="text-xs font-bold text-amber-950 bg-amber-200/90 border border-amber-300 px-2 py-0.5 rounded font-mono">🍳 ${cantStr} Elaboradas</span>`
               : `<span class="text-xs font-bold text-emerald-950 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded font-mono">🍽️ ${cantStr} Vendidas</span>`;
@@ -12302,7 +12313,7 @@ async function cargarReporteEnsambles() {
             html += `<button type="button" onclick="toggleRepairLevel('${docAccId}')" class="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 text-left transition-colors flex-wrap gap-2 cursor-pointer">`;
             html += `<div class="flex items-center gap-2 flex-wrap">`;
             html += `<svg class="w-3.5 h-3.5 text-gray-500 transition-transform repair-arrow" id="arrow-${docAccId}" ${docArrowStyle} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
-            html += `${badgeGrupo}<span class="text-xs text-gray-600 font-bold uppercase bg-gray-200 px-2 py-0.5 rounded">${ff.tipo_documento}</span><span class="text-xs font-bold text-gray-900 font-mono">${ff.documento_numero}</span><span class="text-xs text-gray-500 font-mono">${ff.fecha}</span>${badgeCantDoc}`;
+            html += `${badgeGrupo}<span class="text-xs text-gray-600 font-bold uppercase bg-gray-200 px-2 py-0.5 rounded">${ff.tipo_documento}</span><span class="text-xs font-bold text-gray-900 font-mono">${ff.documento_numero}</span><span class="text-xs text-gray-500 font-mono">${ff.fecha}</span>${badgeCantDoc}${badgeLineasMulti}`;
             html += `</div>`;
             html += `<div class="text-right text-xs"><span class="text-gray-500">Contable: <b>$${cogsMontoDoc.toLocaleString('es-CO')}</b> → Kardex: <b>$${kardexMontoDoc.toLocaleString('es-CO')}</b></span>${badgeDocStatus}</div>`;
             html += `</button>`;
@@ -12344,7 +12355,7 @@ async function cargarReporteEnsambles() {
               html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">`;
               html += `<div class="p-2.5 bg-emerald-50/60 rounded-lg border border-emerald-200/80">`;
               html += `<span class="text-[10px] text-emerald-800 font-bold uppercase block mb-1">📦 Kardex: Cantidad Vendida & Costo Unitario</span>`;
-              html += `<div class="font-mono font-bold text-gray-800 text-xs">Cantidad: <span class="text-emerald-900">${cantStr}</span> | Unitario: <span class="text-emerald-900">$${costoUnitKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
+              html += `<div class="font-mono font-bold text-gray-800 text-xs">Cantidad: <span class="text-emerald-900">${cantStr}</span> ${numLineas > 1 ? `<span class="ml-1 text-[11px] text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">(${lineasDesgloseTxt})</span>` : ''} | Unitario: <span class="text-emerald-900">$${costoUnitKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
               html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Receta: <b class="text-gray-800 font-mono">$${kardexMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
               html += `</div>`;
 

@@ -2229,6 +2229,15 @@ def api_reparar_costos_venta(negocio_id):
                           AND (producto_padre_id = %s OR producto_padre_id IS NULL)
                         ORDER BY id
                     """, (negocio_id, consecutive, doc_num, td_code, ppid)).fetchall()
+                    # Líneas de producción individuales si aplica
+                    prod_entries = conn.execute("""
+                        SELECT id, cantidad, costo_und, COALESCE(valor_total, cantidad * costo_und, 0) AS total
+                        FROM movimientos_inventario
+                        WHERE negocio_id = %s AND producto_id = %s AND tipo = 'entrada'
+                          AND referencia_tipo = 'produccion' AND (documento_numero = %s OR referencia_id = %s OR documento_numero = %s)
+                        ORDER BY id
+                    """, (negocio_id, ppid, doc_num, ref_id, consecutive)).fetchall()
+                    lineas_detalle = [{'id': pe['id'], 'cantidad': float(pe['cantidad'] or 0)} for pe in prod_entries]
                 else:
                     grupo_tipo = 'venta'
                     grupo_label = 'Grupo 3 (Venta)'
@@ -2245,6 +2254,26 @@ def api_reparar_costos_venta(negocio_id):
                     qty = float(qty_row['cant_vendida']) if (qty_row and qty_row['cant_vendida'] is not None) else 0.0
                     costo_total_pi = float(qty_row['costo_total_ped']) if (qty_row and qty_row['costo_total_ped'] is not None) else 0.0
                     pi_id = qty_row['max_pi_id'] if (qty_row and qty_row['max_pi_id']) else None
+
+                    # Obtener líneas individuales del pedido para mostrar desglose (ej: 1 + 24)
+                    lineas_pi = conn.execute("""
+                        SELECT pi.id, pi.cantidad, pi.precio_unitario, COALESCE(pi.costo_unitario, 0) AS costo_unitario, pi.notas
+                        FROM pedido_items pi
+                        JOIN pedidos p ON p.id = pi.pedido_id
+                        WHERE p.negocio_id = %s AND pi.producto_id = %s
+                          AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
+                        ORDER BY pi.id
+                    """, (negocio_id, ppid, consecutive, doc_num, ref_id_int)).fetchall()
+
+                    lineas_detalle = []
+                    for li in lineas_pi:
+                        lineas_detalle.append({
+                            'id': li['id'],
+                            'cantidad': float(li['cantidad'] or 0),
+                            'precio_unitario': float(li['precio_unitario'] or 0),
+                            'costo_unitario': float(li['costo_unitario'] or 0),
+                            'notas': li['notas'] or '',
+                        })
                     
                     # COGS (61*) — SUM
                     cogs_row = conn.execute("""
@@ -2374,6 +2403,8 @@ def api_reparar_costos_venta(negocio_id):
                     },
                     'contrapartidas': contras_list,
                     'tiene_diferencia': abs(dif_pi) > 0.01 or abs(dif_cogs) > 0.01,
+                    'num_lineas': len(lineas_detalle),
+                    'lineas_detalle': lineas_detalle,
                 })
             con_dif = sum(1 for ff in facturas_producto if ff['tiene_diferencia'])
             total_contable = sum(ff['cogs_contable']['monto_actual'] for ff in facturas_producto if ff['cogs_contable']['ids'])

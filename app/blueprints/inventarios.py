@@ -9598,6 +9598,7 @@ def _obtener_huerfanos_por_producto(conn, negocio_id, prods):
         WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id IS NULL
     """, (negocio_id,)).fetchall()
 
+    valid_prod_ids = {p['id'] for p in prods}
     huerfanos_por_prod = {}
     for h in huerfanos:
         c_norm = _limpiar_nombre_match(h['concepto'])
@@ -9614,10 +9615,10 @@ def _obtener_huerfanos_por_producto(conn, negocio_id, prods):
                 WHERE negocio_id = %s AND documento_numero = %s
                 LIMIT 1
             """, (negocio_id, h['numero_documento'])).fetchone()
-            if doc_mov:
+            if doc_mov and doc_mov['producto_id'] in valid_prod_ids:
                 matched_id = doc_mov['producto_id']
 
-        if matched_id:
+        if matched_id and matched_id in valid_prod_ids:
             if matched_id not in huerfanos_por_prod:
                 huerfanos_por_prod[matched_id] = []
             huerfanos_por_prod[matched_id].append(h)
@@ -9766,6 +9767,8 @@ def api_auditoria_vincular_ids(negocio_id):
 
         vinculadas = 0
         for pid, h_list in huerfanos_map.items():
+            if producto_id and pid != producto_id:
+                continue
             ids_to_update = [h['id'] for h in h_list]
             if ids_to_update:
                 conn.execute("""

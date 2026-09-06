@@ -13223,14 +13223,8 @@ async function cargarReporteEnsambles() {
           `;
         }
 
-        let totalKardexSum = 0;
-        let totalContabSum = 0;
-
         let rowsHtml = '';
         cotejo.forEach(c => {
-          totalKardexSum += (c.kardex_total || 0);
-          totalContabSum += (c.contab_total || 0);
-
           const kDetalle = c.kardex.map(k => `${k.tipo === 'entrada' ? '📥 Ent' : '📤 Sal'} ${fmt(k.cantidad)} × ${fmtMon(k.costo_und)}`).join(', ') || '<span class="text-gray-400 font-sans italic">Sin kardex</span>';
           
           const cDetalle = c.contabilidad.map(ac => {
@@ -13298,13 +13292,58 @@ async function cargarReporteEnsambles() {
 
         if (tbody) tbody.innerHTML = rowsHtml;
 
-        // Totales en el pie
-        const difNeta = totalKardexSum - totalContabSum;
+        // Totales estructurados en el pie
+        const resu = d.resumen || {
+          entradas: { kardex: 0, contabilidad: 0, diferencia: 0 },
+          salidas: { kardex: 0, contabilidad: 0, diferencia: 0 },
+          existencia: { kardex: 0, contabilidad: 0, diferencia: 0 }
+        };
+
         if (totalesContainer) {
           totalesContainer.innerHTML = `
-            <span>Total Kardex: <strong class="font-mono text-gray-900 font-bold">${fmtMon(totalKardexSum)}</strong></span>
-            <span>Total Contabilidad: <strong class="font-mono text-gray-900 font-bold">${fmtMon(totalContabSum)}</strong></span>
-            <span>Diferencia Neta: <strong class="font-mono ${Math.abs(difNeta) >= 0.01 ? 'text-rose-600 font-bold' : 'text-emerald-600 font-bold'}">${fmtMon(difNeta)}</strong></span>
+            <div class="flex items-center gap-2.5 text-xs flex-wrap">
+              <!-- Entradas -->
+              <div class="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 space-y-0.5 shadow-2xs">
+                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                  <span>📥</span> Entradas (Compras / Prod)
+                </div>
+                <div class="text-xs text-gray-700 flex items-center gap-1.5 font-sans">
+                  <span>Kardex: <strong class="font-mono text-gray-900 font-bold">${fmtMon(resu.entradas.kardex)}</strong></span>
+                  <span class="text-gray-300">|</span>
+                  <span>Contab: <strong class="font-mono text-gray-900 font-bold">${fmtMon(resu.entradas.contabilidad)}</strong></span>
+                  <span class="text-gray-300">|</span>
+                  <span class="font-bold font-mono ${Math.abs(resu.entradas.diferencia) >= 0.01 ? 'text-rose-600' : 'text-emerald-600'}">Dif: ${fmtMon(resu.entradas.diferencia)}</span>
+                </div>
+              </div>
+
+              <!-- Salidas -->
+              <div class="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 space-y-0.5 shadow-2xs">
+                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                  <span>📤</span> Salidas (Ventas / Ajustes)
+                </div>
+                <div class="text-xs text-gray-700 flex items-center gap-1.5 font-sans">
+                  <span>Kardex: <strong class="font-mono text-gray-900 font-bold">${fmtMon(resu.salidas.kardex)}</strong></span>
+                  <span class="text-gray-300">|</span>
+                  <span>Contab: <strong class="font-mono text-gray-900 font-bold">${fmtMon(resu.salidas.contabilidad)}</strong></span>
+                  <span class="text-gray-300">|</span>
+                  <span class="font-bold font-mono ${Math.abs(resu.salidas.diferencia) >= 0.01 ? 'text-rose-600' : 'text-emerald-600'}">Dif: ${fmtMon(resu.salidas.diferencia)}</span>
+                </div>
+              </div>
+
+              <!-- Saldo Neto Existencia Actual -->
+              <div class="bg-indigo-50/80 border border-indigo-200 rounded-xl px-2.5 py-1.5 space-y-0.5 shadow-2xs">
+                <div class="text-[10px] font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-1">
+                  <span>📊</span> Existencia Neta (Ent − Sal)
+                </div>
+                <div class="text-xs text-indigo-950 flex items-center gap-1.5 font-sans">
+                  <span>Kardex: <strong class="font-mono font-bold">${fmtMon(resu.existencia.kardex)}</strong></span>
+                  <span class="text-indigo-300">|</span>
+                  <span>Cta 14: <strong class="font-mono font-bold">${fmtMon(resu.existencia.contabilidad)}</strong></span>
+                  <span class="text-indigo-300">|</span>
+                  <span class="font-bold font-mono ${Math.abs(resu.existencia.diferencia) >= 0.01 ? 'text-rose-600' : 'text-emerald-700'}">Dif: ${fmtMon(resu.existencia.diferencia)}</span>
+                </div>
+              </div>
+            </div>
           `;
         }
 

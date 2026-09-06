@@ -9953,11 +9953,41 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
                 'ok': abs(dif) < 0.01 and len(k_items) > 0 and len(c_items) > 0 and not tiene_huerfanos
             })
 
+        # Resumen consolidado para el pie del modal
+        k_ent_total = sum(sum(x['valor_total'] for x in c['kardex'] if x['tipo'] == 'entrada') for c in cotejo)
+        k_sal_total = sum(sum(x['valor_total'] for x in c['kardex'] if x['tipo'] == 'salida') for c in cotejo)
+        k_saldo_neto = k_ent_total - k_sal_total
+
+        c_deb_total = sum(sum(x['monto'] for x in c['contabilidad'] if str(x['tipo']).lower() in ('debito', 'd')) for c in cotejo)
+        c_cred_total = sum(sum(x['monto'] for x in c['contabilidad'] if str(x['tipo']).lower() in ('credito', 'c')) for c in cotejo)
+        c_saldo_neto = c_deb_total - c_cred_total
+
+        dif_existencia = k_saldo_neto - c_saldo_neto
+
+        resumen = {
+            'entradas': {
+                'kardex': round(k_ent_total, 2),
+                'contabilidad': round(c_deb_total, 2),
+                'diferencia': round(k_ent_total - c_deb_total, 2)
+            },
+            'salidas': {
+                'kardex': round(k_sal_total, 2),
+                'contabilidad': round(c_cred_total, 2),
+                'diferencia': round(k_sal_total - c_cred_total, 2)
+            },
+            'existencia': {
+                'kardex': round(k_saldo_neto, 2),
+                'contabilidad': round(c_saldo_neto, 2),
+                'diferencia': round(dif_existencia, 2)
+            }
+        }
+
         return jsonify({
             'ok': True,
             'producto': {'id': prod['id'], 'nombre': prod['nombre']},
             'total_huerfanos': len(h_list),
-            'cotejo': cotejo
+            'cotejo': cotejo,
+            'resumen': resumen
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500

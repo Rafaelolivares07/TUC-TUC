@@ -9928,7 +9928,12 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
         if error:
             return error
 
-        prod = conn.execute("SELECT id, nombre FROM productos WHERE id = %s AND negocio_id = %s", (producto_id, negocio_id)).fetchone()
+        prod = conn.execute("""
+            SELECT p.id, p.nombre, COALESCE(c.nombre, p.categoria, 'Sin categoría') as categoria
+            FROM productos p
+            LEFT JOIN categorias c ON c.id = p.categoria_id
+            WHERE p.id = %s AND p.negocio_id = %s
+        """, (producto_id, negocio_id)).fetchone()
         if not prod:
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
 
@@ -10137,7 +10142,7 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
 
         return jsonify({
             'ok': True,
-            'producto': {'id': prod['id'], 'nombre': prod['nombre']},
+            'producto': {'id': prod['id'], 'nombre': prod['nombre'], 'categoria': prod['categoria']},
             'total_huerfanos': len(h_list),
             'cotejo': cotejo,
             'resumen': resumen
@@ -10270,15 +10275,18 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
         # Determinar naturaleza del documento
         motivo = str(km.get('motivo') or '').lower()
         td_desc = str(km.get('tipo_documento') or '').upper()
-        es_produccion = (motivo == 'produccion' or 'PRODUCC' in td_desc)
-        es_venta = (motivo == 'venta' or 'VENTA' in td_desc or 'FACTURA' in td_desc)
-        es_ajuste = (motivo == 'ajuste' or 'AJUSTE' in td_desc)
+        td_id = km.get('tipo_documento_id')
+
+        es_produccion = (motivo == 'produccion' or 'PRODUCC' in td_desc or td_id == 5)
+        es_compra = (motivo == 'compra' or 'PROVEEDOR' in td_desc or 'COMPRA' in td_desc or td_id in (1, 2) or (km['tipo'] == 'entrada' and ('FACTURA' in td_desc and 'VENTA' not in td_desc)))
+        es_venta = (motivo == 'venta' or 'VENTA' in td_desc or td_id == 6 or (km['tipo'] == 'salida' and 'FACTURA' in td_desc))
+        es_ajuste = (motivo == 'ajuste' or 'AJUSTE' in td_desc or td_id == 3)
 
         val_mov = round(float(km['valor_total'] or (float(km['cantidad']) * float(km.get('costo_und') or 0))), 2)
         grp_prod = _get_grupo_cuentas(prod['categoria'])
 
         lineas_propuestas = []
-        tipo_comprobante = 'PRODUCCION' if es_produccion else ('COSTO_VENTA' if es_venta else 'AJUSTE_INVENTARIO')
+        tipo_comprobante = 'PRODUCCION' if es_produccion else ('FACTURA_PROVEEDOR' if es_compra else ('COSTO_VENTA' if es_venta else 'AJUSTE_INVENTARIO'))
 
         if es_produccion:
             # Reclasificación interna: Débito al producto elaborado
@@ -10344,6 +10352,72 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
             elif abs(tot_comps - val_mov) >= 0.01:
                 dif_cent = round(val_mov - tot_comps, 2)
                 lineas_propuestas[-1]['monto'] = round(lineas_propuestas[-1]['monto'] + dif_cent, 2)
+
+        elif es_compra:
+            # Buscar todos los productos que entraron en esta misma factura de proveedor
+            items_compra = conn.execute("""
+                SELECT mi.*, p.nombre as prod_nombre, p.categoria as prod_categoria,
+                       (SELECT COUNT(*) FROM movimientos_contables mc 
+                        JOIN cuentas_puc cp ON cp.id = mc.cuenta_id AND cp.codigo LIKE '14%%'
+                        WHERE mc.negocio_id = mi.negocio_id AND mc.producto_id = mi.producto_id 
+                          AND (mc.numero_documento = mi.documento_numero OR mc.numero_documento = mi.numero_documento)) as tiene_asientos
+                FROM movimientos_inventario mi
+                JOIN productos p ON p.id = mi.producto_id
+                WHERE mi.negocio_id = %s 
+                  AND mi.tipo = 'entrada'
+                  AND (mi.documento_numero = %s OR mi.numero_documento = %s)
+            """, (negocio_id, doc_str, doc_str)).fetchall()
+
+            items_sin_asiento = [it for it in items_compra if it['tiene_asientos'] == 0]
+            if not items_sin_asiento:
+                items_sin_asiento = items_compra or [km]
+
+            mp_codigo = str(km.get('metodo_pago') or 'efectivo').lower().strip()
+            pm_row = conn.execute("""
+                SELECT pmp.cuenta_pago_id, cp.codigo as cuenta_codigo, cp.nombre as cuenta_nombre
+                FROM parametros_metodos_pago_negocio pmp
+                JOIN cuentas_puc cp ON cp.id = pmp.cuenta_pago_id
+                WHERE pmp.negocio_id = %s AND LOWER(pmp.metodo_codigo) = %s
+            """, (negocio_id, mp_codigo)).fetchone()
+
+            if not pm_row:
+                pm_row = conn.execute("""
+                    SELECT id as cuenta_pago_id, codigo as cuenta_codigo, nombre as cuenta_nombre
+                    FROM cuentas_puc
+                    WHERE codigo = '110505'
+                    LIMIT 1
+                """).fetchone()
+
+            tot_compra = 0
+            for item in items_sin_asiento:
+                grp_i = _get_grupo_cuentas(item.get('prod_categoria') or prod['categoria'])
+                monto_i = round(float(item['valor_total'] or (float(item['cantidad']) * float(item.get('costo_und') or 0))), 2)
+                tot_compra += monto_i
+
+                lineas_propuestas.append({
+                    'cuenta_id': grp_i['cuenta_inve_id'] if grp_i else 131,
+                    'cuenta_codigo': (grp_i['cod_inve'] if grp_i else None) or '140505',
+                    'cuenta_nombre': (grp_i['nom_inve'] if grp_i else None) or 'Materias primas',
+                    'concepto': f"Inv: {item.get('prod_nombre') or prod['nombre']}",
+                    'tipo': 'debito',
+                    'monto': monto_i,
+                    'producto_id': item['producto_id'],
+                    'producto_padre_id': None,
+                    'tercero_id': item.get('proveedor_id') or km.get('proveedor_id')
+                })
+
+            val_mov = round(tot_compra, 2)
+            lineas_propuestas.append({
+                'cuenta_id': pm_row['cuenta_pago_id'] if pm_row else 126,
+                'cuenta_codigo': pm_row['cuenta_codigo'] if pm_row else '110505',
+                'cuenta_nombre': pm_row['cuenta_nombre'] if pm_row else 'Caja general',
+                'concepto': f"{pm_row['cuenta_nombre'] if pm_row else 'Caja general'} - Factura Proveedor #{doc_str}",
+                'tipo': 'credito',
+                'monto': round(tot_compra, 2),
+                'producto_id': None,
+                'producto_padre_id': None,
+                'tercero_id': km.get('proveedor_id')
+            })
 
         elif es_venta:
             lineas_propuestas.append({
@@ -10509,7 +10583,7 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
                         lp['tipo'], lp['monto'], session.get('usuario_id'), lp['producto_id'],
                         lp['producto_padre_id'], tipo_doc_final_id, doc_str, fecha_asiento,
                         tipo_doc_final_str, km.get('referencia_tipo') or 'auditoria_reparacion',
-                        str(km.get('referencia_id') or km['id']), desc_comp, tercero_id_doc
+                        str(km.get('referencia_id') or km['id']), desc_comp, lp.get('tercero_id') or tercero_id_doc
                     ))
         else:
             for lp in lineas_propuestas:
@@ -10530,7 +10604,7 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
                     lp['tipo'], lp['monto'], session.get('usuario_id'), lp['producto_id'],
                     lp['producto_padre_id'], tipo_doc_final_id, doc_str, fecha_asiento,
                     tipo_doc_final_str, km.get('referencia_tipo') or 'auditoria_reparacion',
-                    str(km.get('referencia_id') or km['id']), desc_comp, tercero_id_doc
+                    str(km.get('referencia_id') or km['id']), desc_comp, lp.get('tercero_id') or tercero_id_doc
                 ))
 
         conn.commit()

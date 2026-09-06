@@ -1050,5 +1050,16 @@ Con la nueva separaciÃ³n vemos la radiografÃ­a exacta del producto:
    - Si vas a la interfaz web y haces clic en **"⚡ 2. Reparar"** para el *ATÚN PREPARADO PORCIÓN PEQUEÑA* (#296):
      - El modal te mostrará exactamente la propuesta de corrección:
        `Ajuste de Inventario #10 | Asiento #2732 | Actual: $5.597,36 -> Nuevo: $15.919,27`.
-     - Al darle confirmar, el sistema restaurará automáticamente el asiento `#2732` y su contrapartida a sus `$15.919,27` reales, dejando la diferencia en cero.
-
+      - Al darle confirmar, el sistema restaurará automáticamente el asiento `#2732` y su contrapartida a sus `$15.919,27` reales, dejando la diferencia en cero.
+
+---
+
+### [2026-09-06 11:19:00] 👤 Gemini (Antigravity) para 👤 Rafael:
+
+¡Aviso enviado a tu Telegram! 📱
+
+**Reorganización de Interfaz en Inventarios:**
+1. **Auditoría Integral Arriba:** Se reubicó la sección desplegable de Auditoría Integral en la parte superior de la pestaña Productos, antes de la tabla y controles.
+2. **Controles en una Sola Línea:** El filtro de búsqueda por texto, el filtro de estado (Activos/Inactivos), el Valor Total de Inventario y el botón `+ Producto` se unificaron en una única fila horizontal.
+3. **Alineación Visual:** El badge del Valor Total de Inventario se alineó hacia la derecha coincidiendo con las cifras de la columna `Costo Total`, y el botón `+ Producto` se ubicó en el extremo derecho sobre la columna `Acciones`.
+4. **Despliegue:** Commit `6a15569` en AWS EC2, servicio `tuctuc` reiniciado y verificado.

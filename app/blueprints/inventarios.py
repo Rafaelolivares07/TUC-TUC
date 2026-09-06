@@ -10098,7 +10098,7 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
                 'kardex_total': k_disp,
                 'contab_total': c_disp,
                 'diferencia': dif,
-                'ok': abs(dif) < 0.01 and len(k_items) > 0 and len(c_items) > 0 and not tiene_huerfanos
+                'ok': abs(dif) <= 0.05 and len(k_items) > 0 and len(c_items) > 0 and not tiene_huerfanos
             })
 
         # Resumen consolidado para el pie del modal

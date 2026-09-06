@@ -10330,26 +10330,91 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
         tipo_doc_final_id = km.get('tipo_documento_id')
         tipo_doc_final_str = km.get('tipo_documento') or tipo_comprobante
 
-        for lp in lineas_propuestas:
-            conn.execute("""
-                INSERT INTO movimientos_contables (
-                    negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
-                    registrado_por, producto_id, producto_padre_id, tipo_documento_id,
-                    numero_documento, fecha, tipo_documento, origen_tipo, origen_id,
-                    descripcion_general
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s,
-                    %s
-                )
-            """, (
-                negocio_id, comprobante_id, lp['cuenta_id'], lp['cuenta_codigo'], lp['concepto'],
-                lp['tipo'], lp['monto'], session.get('usuario_id'), lp['producto_id'],
-                lp['producto_padre_id'], tipo_doc_final_id, doc_str, fecha_asiento,
-                tipo_doc_final_str, km.get('referencia_tipo') or 'auditoria_reparacion',
-                str(km.get('referencia_id') or km['id']), desc_comp
-            ))
+        # Verificar si ya existen movimientos_contables huérfanos o desvinculados para este documento
+        # (ej. creados sin cuenta_id o sin fecha al restaurar backups o en versiones anteriores)
+        movs_desvinculados = conn.execute("""
+            SELECT id, tipo, monto, cuenta, concepto, producto_id, producto_padre_id
+            FROM movimientos_contables
+            WHERE negocio_id = %s 
+              AND (numero_documento = %s OR numero_documento = %s)
+              AND (UPPER(tipo_documento) = %s OR UPPER(tipo_documento) = 'PRODUCCION' OR UPPER(tipo_documento) = 'REPORTE DE PRODUCCION')
+              AND (cuenta_id IS NULL OR fecha IS NULL)
+        """, (negocio_id, doc_str, normalizar_numero(doc_str), str(tipo_doc_final_str).upper())).fetchall()
+
+        if movs_desvinculados and len(movs_desvinculados) > 0:
+            # Reutilizar y enriquecer los movimientos existentes para vincularlos y no duplicar
+            ids_usados = set()
+            for lp in lineas_propuestas:
+                match_id = None
+                for md in movs_desvinculados:
+                    if md['id'] in ids_usados:
+                        continue
+                    if md['tipo'] == lp['tipo'] and abs(float(md['monto']) - float(lp['monto'])) < 0.05:
+                        match_id = md['id']
+                        break
+                if match_id:
+                    ids_usados.add(match_id)
+                    conn.execute("""
+                        UPDATE movimientos_contables
+                        SET comprobante_id = %s,
+                            cuenta_id = %s,
+                            cuenta = %s,
+                            tipo_documento_id = %s,
+                            fecha = %s,
+                            producto_id = COALESCE(producto_id, %s),
+                            producto_padre_id = COALESCE(producto_padre_id, %s),
+                            tipo_documento = %s,
+                            origen_tipo = COALESCE(origen_tipo, %s),
+                            origen_id = COALESCE(origen_id, %s)
+                        WHERE id = %s
+                    """, (
+                        comprobante_id, lp['cuenta_id'], lp['cuenta_codigo'],
+                        tipo_doc_final_id, fecha_asiento, lp['producto_id'],
+                        lp['producto_padre_id'], tipo_doc_final_str,
+                        km.get('referencia_tipo') or 'auditoria_reparacion',
+                        str(km.get('referencia_id') or km['id']), match_id
+                    ))
+                else:
+                    conn.execute("""
+                        INSERT INTO movimientos_contables (
+                            negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
+                            registrado_por, producto_id, producto_padre_id, tipo_documento_id,
+                            numero_documento, fecha, tipo_documento, origen_tipo, origen_id,
+                            descripcion_general
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s,
+                            %s
+                        )
+                    """, (
+                        negocio_id, comprobante_id, lp['cuenta_id'], lp['cuenta_codigo'], lp['concepto'],
+                        lp['tipo'], lp['monto'], session.get('usuario_id'), lp['producto_id'],
+                        lp['producto_padre_id'], tipo_doc_final_id, doc_str, fecha_asiento,
+                        tipo_doc_final_str, km.get('referencia_tipo') or 'auditoria_reparacion',
+                        str(km.get('referencia_id') or km['id']), desc_comp
+                    ))
+        else:
+            for lp in lineas_propuestas:
+                conn.execute("""
+                    INSERT INTO movimientos_contables (
+                        negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
+                        registrado_por, producto_id, producto_padre_id, tipo_documento_id,
+                        numero_documento, fecha, tipo_documento, origen_tipo, origen_id,
+                        descripcion_general
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s,
+                        %s
+                    )
+                """, (
+                    negocio_id, comprobante_id, lp['cuenta_id'], lp['cuenta_codigo'], lp['concepto'],
+                    lp['tipo'], lp['monto'], session.get('usuario_id'), lp['producto_id'],
+                    lp['producto_padre_id'], tipo_doc_final_id, doc_str, fecha_asiento,
+                    tipo_doc_final_str, km.get('referencia_tipo') or 'auditoria_reparacion',
+                    str(km.get('referencia_id') or km['id']), desc_comp
+                ))
 
         conn.commit()
 

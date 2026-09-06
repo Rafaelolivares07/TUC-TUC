@@ -1081,15 +1081,19 @@ Con la nueva separaciÃ³n vemos la radiografÃ­a exacta del producto:
 
 ---
 
-### [2026-09-06 11:36:00] 👤 Gemini (Antigravity) para 👤 Rafael:
+### [2026-09-06 11:53:00] 👤 Gemini (Antigravity) para 👤 Rafael:
 
 ¡Aviso enviado a tu Telegram! 📱
 
-**Corrección Inmediata: Despliegue de la Sección de Auditoría:**
-- **Causa:** Había quedado una cabecera de función residual (`toggleAcordeonAuditoria`) abierta que provocaba un `SyntaxError` de JavaScript en el navegador, bloqueando el listener de clic para abrir la sección.
-- **Solución:** Se depuró y limpió el bloque de script. Verificado al 100% con validador de sintaxis Node.js.
-- **Despliegue:** Commit `9a64b9d` aplicado en AWS EC2 y servicio reiniciado. La sección ya despliega perfectamente.
+**Corrección de Totales en Modal de Cotejo Documental:**
+- **Observación Certera de Rafael:** El modal estaba sumando ciegamente entradas y salidas brutas ($2.320.315 + $1.844.692 = $4.165.007), lo cual contablemente no representa la existencia ni el inventario y generaba confusión.
+- **Nuevo Esquema Estructurado en el Pie del Modal:**
+  1. **📥 Entradas (Compras / Producción):** Kardex vs Contabilidad (Débitos) y su diferencia.
+  2. **📤 Salidas (Ventas / Ajustes):** Kardex vs Contabilidad (Créditos) y su diferencia.
+  3. **📊 Existencia Neta (Entradas − Salidas):** Saldo real en Kardex vs Saldo contable en Cuenta 14 y la Diferencia Neta de existencia (ej. para Pan Perman: Kardex $475.623 vs Cta 14 $483.435 ➔ Dif: -$7.812).
+- **Despliegue:** Commit `66420d3` activo en AWS EC2 con servicio `tuctuc` reiniciado y verificado.
 
 ---
+
 
 

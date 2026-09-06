@@ -1063,3 +1063,18 @@ Con la nueva separaciÃ³n vemos la radiografÃ­a exacta del producto:
 2. **Controles en una Sola Línea:** El filtro de búsqueda por texto, el filtro de estado (Activos/Inactivos), el Valor Total de Inventario y el botón `+ Producto` se unificaron en una única fila horizontal.
 3. **Alineación Visual:** El badge del Valor Total de Inventario se alineó hacia la derecha coincidiendo con las cifras de la columna `Costo Total`, y el botón `+ Producto` se ubicó en el extremo derecho sobre la columna `Acciones`.
 4. **Despliegue:** Commit `6a15569` en AWS EC2, servicio `tuctuc` reiniciado y verificado.
+
+---
+
+### [2026-09-06 11:24:00] 👤 Gemini (Antigravity) para 👤 Rafael:
+
+¡Aviso enviado a tu Telegram! 📱
+
+**Corrección de Encabezados Sticky (Sobreposición Evitada):**
+1. **Causa del Conflicto:** El sub-acordeón de documentos tenía asignada también la clase `sticky top-0 z-10`, compitiendo a la misma altura con el encabezado principal de los productos.
+2. **Ajuste Aplicado:** Se eliminó la propiedad sticky y el scroll secundario del sub-acordeón de documentos. 
+3. **Resultado:** 
+   - La cabecera de **Productos** (`Producto`, `Stock`, `Diferencias`, etc.) se mantiene fija y acompaña todo el recorrido vertical de la tabla.
+   - La cabecera de **Documentos** (`Documento / Fecha`, `Kardex`, `Asiento Contable`, etc.) ahora se desplaza de forma natural con su acordeón y se sumerge limpiamente debajo del encabezado principal sin sobreponerse jamás.
+4. **Despliegue:** Commit `8b93034` en AWS EC2 y servicio `tuctuc` activo.
+

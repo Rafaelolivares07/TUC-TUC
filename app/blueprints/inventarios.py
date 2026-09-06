@@ -5397,7 +5397,7 @@ def api_auditar_documento(negocio_id):
         if prov_id_param:
             comp_sql += " AND (tercero_id = %s OR tercero_id IS NULL)"
             comp_params.append(prov_id_param)
-        comp_sql += " GROUP BY comprobante_id, numero_documento, tipo_documento, fecha ORDER BY (tercero_id IS NOT NULL) DESC LIMIT 1"
+        comp_sql += " GROUP BY comprobante_id, numero_documento, tipo_documento, fecha ORDER BY MAX(CASE WHEN tercero_id IS NOT NULL THEN 1 ELSE 0 END) DESC LIMIT 1"
         comp_row = conn.execute(comp_sql, tuple(comp_params)).fetchone()
             
         comprobante = None

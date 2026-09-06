@@ -1066,15 +1066,18 @@ Con la nueva separaciÃ³n vemos la radiografÃ­a exacta del producto:
 
 ---
 
-### [2026-09-06 11:24:00] 👤 Gemini (Antigravity) para 👤 Rafael:
+### [2026-09-06 11:34:00] 👤 Gemini (Antigravity) para 👤 Rafael:
 
 ¡Aviso enviado a tu Telegram! 📱
 
-**Corrección de Encabezados Sticky (Sobreposición Evitada):**
-1. **Causa del Conflicto:** El sub-acordeón de documentos tenía asignada también la clase `sticky top-0 z-10`, compitiendo a la misma altura con el encabezado principal de los productos.
-2. **Ajuste Aplicado:** Se eliminó la propiedad sticky y el scroll secundario del sub-acordeón de documentos. 
-3. **Resultado:** 
-   - La cabecera de **Productos** (`Producto`, `Stock`, `Diferencias`, etc.) se mantiene fija y acompaña todo el recorrido vertical de la tabla.
-   - La cabecera de **Documentos** (`Documento / Fecha`, `Kardex`, `Asiento Contable`, etc.) ahora se desplaza de forma natural con su acordeón y se sumerge limpiamente debajo del encabezado principal sin sobreponerse jamás.
-4. **Despliegue:** Commit `8b93034` en AWS EC2 y servicio `tuctuc` activo.
+**Solución Definitiva a Encabezados Sticky: Modal Dedicado de Desglose y Cotejo Documental:**
+1. **Problema con Acordeón Embebido:** Cuando un producto tiene decenas de documentos que superan el alto de la pantalla, el encabezado fijo de Productos (`Stock`, `Kardex`, etc.) se quedaba arriba flotando sobre filas de documentos (`Doc`, `Asiento`, etc.), o viceversa, volviendo confusa la lectura.
+2. **Solución Implementada (Modal Dedicado):**
+   - Al hacer clic en `📋` o en cualquier producto con documentos en la tabla de auditoría, se abre una ventana modal amplia y exclusiva.
+   - **Encabezados 100% de Documentos:** La tabla interna tiene su propio `sticky top-0` exclusivo (`Documento / Fecha`, `📦 Kardex`, `Valor Kardex`, `🏛️ Asiento Contable`, `Valor Contab`, `Diferencia`, `Estado`).
+   - Cero interferencia: Los encabezados de productos ya no se mezclan ni compiten en el mismo viewport.
+   - Incluye banner de huérfanos, resumen de totales (Kardex, Contabilidad, Diferencia Neta) y botones de acción rápida directos en el pie del modal (`Vincular IDs`, `Reparar Valores`).
+3. **Despliegue:** Commit `3ae87b6` desplegado en AWS EC2, servicio `tuctuc` reiniciado y verificado.
+
+---
 

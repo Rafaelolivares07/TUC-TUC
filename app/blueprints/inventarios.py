@@ -10522,7 +10522,7 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
         return jsonify({
             'ok': True,
             'comprobante_id': comprobante_id,
-            'numero_comprobante': num_comp,
+            'numero_comprobante': str(comprobante_id),
             'fecha_aplicada': fecha_asiento,
             'mensaje': f'Asiento contable #{comprobante_id} generado exitosamente con {len(lineas_propuestas)} líneas.'
         })

@@ -9918,9 +9918,20 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
 
         def _norm_tipo(t_id, t_str):
             res = _resolver_tipo_doc(t_id, t_str)
-            if not res or res == 'Documento':
+            s = str(res or t_str or '').strip().upper()
+            if 'AJUST' in s:
+                return 'AJUSTE'
+            if 'PROD' in s:
+                return 'PRODUCCION'
+            if 'VENT' in s or 'FAC' in s:
+                return 'VENTA'
+            if 'COMP' in s:
+                return 'COMPRA'
+            if 'TRAS' in s:
+                return 'TRASLADO'
+            if not s or s == 'DOCUMENTO':
                 return 'DOC'
-            return str(res).strip().upper()
+            return s
 
         docs_k = {}
         for k in kmovs:

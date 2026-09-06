@@ -9589,34 +9589,39 @@ def _limpiar_nombre_match(txt):
 
 
 def _obtener_huerfanos_por_producto(conn, negocio_id, prods):
-    """Mapea asientos contables de cuentas 14 sin producto_id hacia su producto_id correspondiente."""
+    """Mapea asientos contables de cuentas 14 sin producto_id o con enlaces incompletos hacia su producto_id correspondiente."""
     huerfanos = conn.execute("""
         SELECT mc.id, mc.concepto, mc.monto, mc.tipo, mc.numero_documento, mc.tipo_documento, mc.tipo_documento_id,
-               COALESCE(mc.fecha, mc.created_at::date) as fecha, cp.codigo as cuenta_codigo, mc.comprobante_id
+               COALESCE(mc.fecha, mc.created_at::date) as fecha, 
+               COALESCE(cp.codigo, mc.cuenta) as cuenta_codigo, mc.comprobante_id,
+               mc.producto_id, mc.cuenta_id
         FROM movimientos_contables mc
-        JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
-        WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id IS NULL
+        LEFT JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+        WHERE mc.negocio_id = %s 
+          AND (cp.codigo LIKE '14%%' OR mc.cuenta LIKE '14%%') 
+          AND (mc.producto_id IS NULL OR mc.cuenta_id IS NULL OR mc.tipo_documento_id IS NULL)
     """, (negocio_id,)).fetchall()
 
     valid_prod_ids = {p['id'] for p in prods}
     huerfanos_por_prod = {}
     for h in huerfanos:
-        c_norm = _limpiar_nombre_match(h['concepto'])
-        if not c_norm:
-            continue
-        matched_id = None
-        for p in prods:
-            p_norm = _limpiar_nombre_match(p['nombre'])
-            if p_norm and (p_norm == c_norm or p_norm in c_norm or c_norm in p_norm):
-                matched_id = p['id']
-                break
+        matched_id = h['producto_id']
+        if not matched_id:
+            c_norm = _limpiar_nombre_match(h['concepto'])
+            if c_norm:
+                for p in prods:
+                    p_norm = _limpiar_nombre_match(p['nombre'])
+                    if p_norm and (p_norm == c_norm or p_norm in c_norm or c_norm in p_norm):
+                        matched_id = p['id']
+                        break
 
         if matched_id and matched_id in valid_prod_ids:
             if matched_id not in huerfanos_por_prod:
                 huerfanos_por_prod[matched_id] = []
             huerfanos_por_prod[matched_id].append(h)
 
-    return huerfanos_por_prod, len(huerfanos)
+    total_desvinculados = sum(len(v) for v in huerfanos_por_prod.values())
+    return huerfanos_por_prod, total_desvinculados
 
 
 @bp.route('/api/inventario/<int:negocio_id>/auditoria-productos')
@@ -9658,21 +9663,21 @@ def api_auditoria_productos(negocio_id):
                    SUM(CASE WHEN mc.tipo = 'debito' THEN mc.monto ELSE -mc.monto END) as saldo_contab,
                    COUNT(*) as lineas_contab
             FROM movimientos_contables mc
-            JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
-            WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id IS NOT NULL
+            LEFT JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+            WHERE mc.negocio_id = %s AND (cp.codigo LIKE '14%%' OR mc.cuenta LIKE '14%%') AND mc.producto_id IS NOT NULL
             GROUP BY mc.producto_id
         """, (negocio_id,)).fetchall()
         c_map = {r['producto_id']: r for r in contab_res}
 
-        # Movimientos de Kardex que no tienen asiento contable en Cta 14
+        # Movimientos de Kardex que no tienen ningún asiento contable en Cta 14 (ni vinculado ni desvinculado)
         sin_asiento_res = conn.execute("""
             SELECT mi.producto_id, COUNT(DISTINCT COALESCE(mi.documento_numero, mi.numero_documento, mi.id::text)) as docs_sin_asiento
             FROM movimientos_inventario mi
             LEFT JOIN (
                 SELECT DISTINCT mc.producto_id, mc.numero_documento, mc.negocio_id
                 FROM movimientos_contables mc
-                JOIN cuentas_puc cp ON cp.id = mc.cuenta_id AND cp.codigo LIKE '14%%'
-                WHERE mc.negocio_id = %s AND mc.producto_id IS NOT NULL
+                LEFT JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+                WHERE mc.negocio_id = %s AND (cp.codigo LIKE '14%%' OR mc.cuenta LIKE '14%%') AND mc.producto_id IS NOT NULL
             ) ac ON ac.producto_id = mi.producto_id AND (ac.numero_documento = mi.documento_numero OR ac.numero_documento = mi.numero_documento)
             WHERE mi.negocio_id = %s AND ac.producto_id IS NULL
             GROUP BY mi.producto_id
@@ -9788,17 +9793,42 @@ def api_auditoria_vincular_ids(negocio_id):
         huerfanos_map, _ = _obtener_huerfanos_por_producto(conn, negocio_id, prods)
 
         vinculadas = 0
+        puc_cache = {}
+        td_cache = {}
         for pid, h_list in huerfanos_map.items():
             if producto_id and pid != producto_id:
                 continue
-            ids_to_update = [h['id'] for h in h_list]
-            if ids_to_update:
+            for h in h_list:
+                cuenta_id_val = h.get('cuenta_id')
+                if not cuenta_id_val:
+                    cod = h.get('cuenta_codigo') or '140505'
+                    if cod not in puc_cache:
+                        rp = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s LIMIT 1", (cod,)).fetchone()
+                        puc_cache[cod] = rp['id'] if rp else None
+                    cuenta_id_val = puc_cache[cod]
+                    if not cuenta_id_val:
+                        if 'def' not in puc_cache:
+                            rp_def = conn.execute("SELECT id FROM cuentas_puc WHERE codigo LIKE '14%%' LIMIT 1").fetchone()
+                            puc_cache['def'] = rp_def['id'] if rp_def else None
+                        cuenta_id_val = puc_cache['def']
+
+                td_id_val = h.get('tipo_documento_id')
+                if not td_id_val and h.get('tipo_documento'):
+                    td_str = str(h['tipo_documento']).upper().strip()
+                    if td_str not in td_cache:
+                        rtd = conn.execute("SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND (UPPER(nombre) = %s OR UPPER(nombre) LIKE %s) LIMIT 1", (negocio_id, td_str, f"%{td_str}%")).fetchone()
+                        td_cache[td_str] = rtd['id'] if rtd else None
+                    td_id_val = td_cache[td_str]
+
                 conn.execute("""
                     UPDATE movimientos_contables
-                    SET producto_id = %s
-                    WHERE id = ANY(%s)
-                """, (pid, ids_to_update))
-                vinculadas += len(ids_to_update)
+                    SET producto_id = COALESCE(producto_id, %s),
+                        cuenta_id = COALESCE(cuenta_id, %s),
+                        tipo_documento_id = COALESCE(tipo_documento_id, %s),
+                        fecha = COALESCE(fecha, created_at::date)
+                    WHERE id = %s
+                """, (pid, cuenta_id_val, td_id_val, h['id']))
+                vinculadas += 1
 
         conn.commit()
 
@@ -9861,26 +9891,30 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
 
         cmovs = conn.execute("""
             SELECT mc.id, mc.comprobante_id, mc.tipo, mc.monto, mc.numero_documento, mc.tipo_documento, mc.tipo_documento_id,
-                   COALESCE(mc.fecha, mc.created_at::date) as fecha, mc.concepto, cp.codigo as cuenta_codigo
+                   COALESCE(mc.fecha, mc.created_at::date) as fecha, mc.concepto, 
+                   COALESCE(cp.codigo, mc.cuenta) as cuenta_codigo,
+                   (mc.cuenta_id IS NULL OR mc.tipo_documento_id IS NULL) as pendiente_vinculo
             FROM movimientos_contables mc
-            JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
-            WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id = %s
+            LEFT JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+            WHERE mc.negocio_id = %s AND (cp.codigo LIKE '14%%' OR mc.cuenta LIKE '14%%') AND mc.producto_id = %s
             ORDER BY COALESCE(mc.fecha, mc.created_at::date) ASC, mc.id ASC
         """, (negocio_id, producto_id)).fetchall()
 
         huerfanos_map, _ = _obtener_huerfanos_por_producto(conn, negocio_id, [prod])
         h_list = huerfanos_map.get(producto_id, [])
 
+        cmovs_ids = {c['id'] for c in cmovs}
         cmovs_todos = []
         for c in cmovs:
             cd = dict(c)
-            cd['pendiente_vinculo'] = False
+            cd['pendiente_vinculo'] = bool(c['pendiente_vinculo'])
             cmovs_todos.append(cd)
 
         for h in h_list:
-            hd = dict(h)
-            hd['pendiente_vinculo'] = True
-            cmovs_todos.append(hd)
+            if h['id'] not in cmovs_ids:
+                hd = dict(h)
+                hd['pendiente_vinculo'] = True
+                cmovs_todos.append(hd)
 
         def _norm_tipo(t_id, t_str):
             res = _resolver_tipo_doc(t_id, t_str)

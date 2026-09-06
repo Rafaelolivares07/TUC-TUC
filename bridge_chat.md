@@ -1095,5 +1095,21 @@ Con la nueva separaciÃ³n vemos la radiografÃ­a exacta del producto:
 
 ---
 
+### [2026-09-06 13:05:00] 👤 Gemini (Antigravity) para 👤 Rafael:
 
+¡Aviso enviado a tu Telegram! 📱
 
+**Detección y Generación Dinámica de Asientos Contables Faltantes:**
+1. **Detección Automática de Documentos Sin Asiento:**
+   - La barra de auditoría ahora incluye el contador en vivo `📄 Sin Asiento: X`.
+   - Los productos con documentos en kardex pero sin asiento en contabilidad muestran el badge naranja `📄 X sin asiento` y el botón directo `⚡ Asentar (X)`.
+   - Dentro del Modal de Cotejo Documental, la cabecera advierte el requerimiento, la fila específica del documento muestra `📄 Sin Asiento` y se ofrece el botón `⚡ Asentar`.
+2. **Generación con Cero Hardcoding y Partida Doble Parametrizada:**
+   - Para Producciones (ej. *Reporte de Producción #1* de Atún #296 por $8.396,04), el sistema busca los insumos reales consumidos en `movimientos_inventario` y consulta las cuentas contables de inventario parametrizadas en `grupos_inventario`.
+   - **Partida Doble Perfecta:** Débito al producto elaborado (Cta 14) y Crédito a cada insumo/materia prima consumida (Cta 14), sin tocar cuentas de costo (clase 6), manteniendo sumas iguales exactas.
+   - **Trazabilidad Total de Enlaces:** El asiento generado vincula `producto_id`, `producto_padre_id` (en insumos), `tipo_documento_id`, `numero_documento`, `fecha`, `origen_tipo` y `origen_id`.
+3. **Selector de Fecha Contable:**
+   - El nuevo modal de previsualización permite elegir entre la **Fecha original del documento** o la **Fecha actual (hoy)** si el periodo contable original ya estuviese cerrado.
+4. **Despliegue:** Commit `18f5446` desplegado en AWS EC2, servicio `tuctuc` reiniciado y 100% operativo.
+
+---

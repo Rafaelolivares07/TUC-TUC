@@ -390,25 +390,30 @@
 
       <!-- Summary Indicators Banner -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-        <div class="bg-gray-50 border border-gray-150 rounded-xl p-3 flex flex-col">
+        <div class="bg-gray-50 border border-gray-150 rounded-xl p-3 flex flex-col justify-between">
           <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Débitos (Filtro)</span>
-          <span id="comp-tot-debitos" class="text-base font-mono font-bold text-green-700">$0.00</span>
+          <span id="comp-tot-debitos" class="text-base font-mono font-bold text-green-700 mt-1">$0.00</span>
         </div>
-        <div class="bg-gray-50 border border-gray-150 rounded-xl p-3 flex flex-col">
+        <div class="bg-gray-50 border border-gray-150 rounded-xl p-3 flex flex-col justify-between">
           <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Créditos (Filtro)</span>
-          <span id="comp-tot-creditos" class="text-base font-mono font-bold text-blue-700">$0.00</span>
+          <span id="comp-tot-creditos" class="text-base font-mono font-bold text-blue-700 mt-1">$0.00</span>
         </div>
         <div onclick="toggleFiltroDescuadrados()" 
-             class="bg-red-50/50 border border-red-250 hover:bg-red-50 hover:border-red-400 transition cursor-pointer rounded-xl p-3 flex flex-col relative select-none"
+             class="bg-red-50/50 border border-red-250 hover:bg-red-50 hover:border-red-400 transition cursor-pointer rounded-xl p-3 flex flex-col justify-between relative select-none"
              title="Haz clic aquí para filtrar y ver solo comprobantes descuadrados">
-          <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">
-            ⚠️ Documentos Descuadrados
-          </span>
-          <div class="flex items-baseline gap-2">
-            <span id="comp-count-descuadrados" class="text-base font-bold text-red-700">0</span>
-            <span id="comp-descuadrados-badge" class="text-[10px] text-red-650 font-bold hidden">(Filtrando Descuadrados)</span>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider flex items-center gap-1">
+              ⚠️ Total Diferencia (Déb - Créd)
+            </span>
+            <span id="comp-descuadrados-badge" class="text-[10px] text-red-650 font-bold hidden bg-red-100 px-1.5 py-0.5 rounded border border-red-200">(Filtrando)</span>
           </div>
-          <span class="absolute bottom-1 right-2 text-[9px] text-gray-400 italic">Clic para filtrar</span>
+          <div class="flex items-baseline justify-between gap-2 mt-1">
+            <span id="comp-tot-diferencia" class="text-base font-mono font-bold text-red-700">$0.00</span>
+            <span class="text-xs font-semibold text-gray-500">
+              <span id="comp-count-descuadrados" class="font-bold text-red-700">0</span> doc(s)
+            </span>
+          </div>
+          <span class="text-[9px] text-gray-400 italic text-right mt-1">Clic para filtrar</span>
         </div>
       </div>
 
@@ -1744,8 +1749,24 @@ async function cargarComprobantes() {
   if (!data.ok) return;
   
   // Render Summary Cards
-  document.getElementById('comp-tot-debitos').textContent = '$' + parseFloat(data.total_debitos_gral || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
-  document.getElementById('comp-tot-creditos').textContent = '$' + parseFloat(data.total_creditos_gral || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const debGral = parseFloat(data.total_debitos_gral || 0);
+  const credGral = parseFloat(data.total_creditos_gral || 0);
+  const difGral = debGral - credGral;
+  const absDif = Math.abs(difGral);
+
+  document.getElementById('comp-tot-debitos').textContent = '$' + debGral.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('comp-tot-creditos').textContent = '$' + credGral.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+  
+  const elDif = document.getElementById('comp-tot-diferencia');
+  if (elDif) {
+    elDif.textContent = '$' + difGral.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    if (absDif > 0.01) {
+      elDif.className = 'text-base font-mono font-bold text-red-700';
+    } else {
+      elDif.className = 'text-base font-mono font-bold text-emerald-700';
+    }
+  }
+
   document.getElementById('comp-count-descuadrados').textContent = data.count_descuadrados_gral || 0;
   document.getElementById('comp-descuadrados-badge').classList.toggle('hidden', !compSoloDescuadrados);
   

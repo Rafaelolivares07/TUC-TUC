@@ -9747,7 +9747,11 @@ def api_auditoria_productos(negocio_id):
                 FROM movimientos_contables mc
                 LEFT JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
                 WHERE mc.negocio_id = %s AND (cp.codigo LIKE '14%%' OR mc.cuenta LIKE '14%%') AND mc.producto_id IS NOT NULL
-            ) ac ON ac.producto_id = mi.producto_id AND (ac.numero_documento = mi.documento_numero OR ac.numero_documento = mi.numero_documento)
+            ) ac ON ac.producto_id = mi.producto_id 
+                 AND (ac.numero_documento = mi.documento_numero 
+                      OR ac.numero_documento = mi.numero_documento
+                      OR ac.numero_documento = regexp_replace(mi.documento_numero, '^.*-', '')
+                      OR mi.documento_numero = regexp_replace(ac.numero_documento, '^.*-', ''))
             WHERE mi.negocio_id = %s AND ac.producto_id IS NULL
             GROUP BY mi.producto_id
         """, (negocio_id, negocio_id)).fetchall()

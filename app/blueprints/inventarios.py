@@ -700,20 +700,20 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
         
         existing_movs = conn.execute("""
             SELECT id, producto_id FROM movimientos_inventario
-            WHERE negocio_id = %s AND tipo = 'entrada' AND (
-                (tipo_documento_id = %s AND documento_numero = %s AND proveedor_id = %s)
-                OR (documento_numero IN %s)
-            )
-        """, (negocio_id, tipo_doc_id, documento_numero, proveedor_id, tuple(num_variants))).fetchall()
+            WHERE negocio_id = %s AND tipo = 'entrada' 
+              AND tipo_documento_id = %s 
+              AND documento_numero IN %s 
+              AND proveedor_id = %s
+        """, (negocio_id, tipo_doc_id, tuple(num_variants), proveedor_id)).fetchall()
         
         existing_saldo = conn.execute("""
             SELECT 1 FROM saldo_por_documentos
-            WHERE negocio_id = %s AND (
-                (tercero_id = %s AND tipo_documento_id = %s AND numero_documento = %s)
-                OR (numero_documento IN %s)
-            )
+            WHERE negocio_id = %s 
+              AND tercero_id = %s 
+              AND tipo_documento_id = %s 
+              AND numero_documento IN %s
             LIMIT 1
-        """, (negocio_id, proveedor_id, tipo_doc_id, documento_numero, tuple(num_variants))).fetchone()
+        """, (negocio_id, proveedor_id, tipo_doc_id, tuple(num_variants))).fetchone()
         
         if existing_movs or existing_saldo:
             if es_modificacion:
@@ -721,42 +721,47 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                 prod_ids_to_recost = list({m['producto_id'] for m in existing_movs})
                 mov_ids = [m['id'] for m in existing_movs]
                 
-                # 1. Delete inventory movements
+                # 1. Delete inventory movements (strictly for this provider and document)
                 if mov_ids:
                     placeholders = ','.join(['%s'] * len(mov_ids))
                     conn.execute(f"DELETE FROM movimientos_inventario WHERE id IN ({placeholders})", tuple(mov_ids))
                     
-                # 2. Delete pending balance record
+                # 2. Delete pending balance record (strictly for this provider)
                 conn.execute("""
                     DELETE FROM saldo_por_documentos
-                    WHERE negocio_id = %s AND (
-                        numero_documento IN %s
-                        OR (tercero_id = %s AND numero_documento IN %s)
-                    )
-                """, (negocio_id, tuple(num_variants), proveedor_id, tuple(num_variants)))
+                    WHERE negocio_id = %s 
+                      AND tercero_id = %s 
+                      AND tipo_documento_id = %s 
+                      AND numero_documento IN %s
+                """, (negocio_id, proveedor_id, tipo_doc_id, tuple(num_variants)))
                 
-                # 3. Delete cotizaciones
+                # 3. Delete cotizaciones (strictly for this provider)
                 conn.execute("""
                     DELETE FROM cotizaciones_compras
-                    WHERE negocio_id = %s AND (numero_cotizacion IN %s OR (tercero_id = %s AND numero_cotizacion = %s)) AND origen = 'compra'
-                """, (negocio_id, tuple(num_variants), proveedor_id, documento_numero))
+                    WHERE negocio_id = %s 
+                      AND tercero_id = %s 
+                      AND numero_cotizacion IN %s 
+                      AND origen = 'compra'
+                """, (negocio_id, proveedor_id, tuple(num_variants)))
                 
-                # 4. Delete accounting vouchers
+                # 4. Delete accounting vouchers (strictly for this provider)
                 origen_ids = [f"{tipo_documento}:{v}" for v in num_variants]
                 if tipo_doc_id == 1:
                     for name in ['Factura de Proveedor', 'Factura Proveedor', 'Factura', 'FACTURA']:
                         for v in num_variants:
                             origen_ids.append(f"{name}:{v}")
                 
-                # Delete directly from movimientos_contables using flat metadata
+                # Delete directly from movimientos_contables strictly for this provider
                 conn.execute("""
                     DELETE FROM movimientos_contables
-                    WHERE negocio_id = %s AND (
-                        (origen_tipo IS NOT NULL AND LOWER(origen_id) IN %s)
-                        OR (numero_documento IN %s)
-                        OR (tipo_documento_id = %s AND numero_documento IN %s)
-                    )
-                """, (negocio_id, tuple(o.lower() for o in origen_ids), tuple(num_variants), tipo_doc_id, tuple(num_variants)))
+                    WHERE negocio_id = %s 
+                      AND tercero_id = %s 
+                      AND (
+                          (origen_tipo IS NOT NULL AND LOWER(origen_id) IN %s)
+                          OR (tipo_documento_id = %s AND numero_documento IN %s)
+                          OR (numero_documento IN %s)
+                      )
+                """, (negocio_id, proveedor_id, tuple(o.lower() for o in origen_ids), tipo_doc_id, tuple(num_variants), tuple(num_variants)))
                 
                 # Save products to recostear at the end
                 data['_prod_ids_to_recost'] = prod_ids_to_recost

@@ -13436,6 +13436,7 @@ async function cargarReporteEnsambles() {
       const btnConfirmar = document.getElementById('btn-confirmar-asiento-faltante');
 
       if (!modal) return;
+      modal.style.zIndex = '99999';
       modal.classList.remove('hidden');
       modal.classList.add('flex');
 
@@ -13587,7 +13588,21 @@ async function cargarReporteEnsambles() {
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        cerrarModalGenerarAsiento();
+        const mAsiento = document.getElementById('modal-generar-asiento-faltante');
+        if (mAsiento && !mAsiento.classList.contains('hidden')) {
+          cerrarModalGenerarAsiento();
+          return;
+        }
+        const mVincular = document.getElementById('modal-preview-vincular');
+        if (mVincular && !mVincular.classList.contains('hidden')) {
+          cerrarModalVincular();
+          return;
+        }
+        const mReparar = document.getElementById('modal-preview-reparar');
+        if (mReparar && !mReparar.classList.contains('hidden')) {
+          cerrarModalReparar();
+          return;
+        }
         cerrarModalCotejo();
       }
     });
@@ -13658,7 +13673,7 @@ async function cargarReporteEnsambles() {
     </div>
 
     <!-- Modal de Previsualización y Generación de Asiento Contable Faltante -->
-    <div id="modal-generar-asiento-faltante" class="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs hidden items-center justify-center p-3 md:p-6" onclick="if(event.target===this) cerrarModalGenerarAsiento()">
+    <div id="modal-generar-asiento-faltante" class="fixed inset-0 bg-black/70 backdrop-blur-xs hidden items-center justify-center p-3 md:p-6" style="z-index: 99999;" onclick="if(event.target===this) cerrarModalGenerarAsiento()">
       <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-5 space-y-4 max-h-[92vh] flex flex-col border border-gray-200">
         <!-- Cabecera -->
         <div class="flex items-center justify-between border-b pb-3">
@@ -13734,7 +13749,7 @@ async function cargarReporteEnsambles() {
     </div>
 
     <!-- Modales de Previsualización de Auditoría -->
-    <div id="modal-preview-vincular" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div id="modal-preview-vincular" class="fixed inset-0 bg-black/70 backdrop-blur-xs hidden items-center justify-center p-4" style="z-index: 99999;">
       <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between border-b pb-3">
           <div>
@@ -13780,7 +13795,7 @@ async function cargarReporteEnsambles() {
       </div>
     </div>
 
-    <div id="modal-preview-reparar" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div id="modal-preview-reparar" class="fixed inset-0 bg-black/70 backdrop-blur-xs hidden items-center justify-center p-4" style="z-index: 99999;">
       <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between border-b pb-3">
           <div>

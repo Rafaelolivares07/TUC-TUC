@@ -929,7 +929,7 @@
         const dateRaw = item.documento_fecha || (item.created_at ? item.created_at.split('T')[0] : null);
         const invDate = dateRaw ? new Date(dateRaw + 'T00:00:00').toLocaleDateString('es-CO') : '—';
         const terceroLbl = provNombre ? ` | Tercero: ${provNombre}` : '';
-        document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${tipo}-${numero}${terceiroLbl || terceroLbl} | Fecha: ${invDate}`;
+        document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${tipo}-${numero}${terceroLbl} | Fecha: ${invDate}`;
         tbodyInv.innerHTML = d.inventario.map(item => `
           <tr class="border-b">
             <td class="py-2 font-semibold text-gray-700">

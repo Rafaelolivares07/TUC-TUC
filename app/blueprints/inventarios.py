@@ -9362,21 +9362,7 @@ def inv_dist_conteo(negocio_id):
                         concepto_asiento = f"Ajuste Físico Distribuido (-): {prod['nombre']}"
                         
                     if db_cuenta_id and cr_cuenta_id and ajuste_monto > 0:
-                        comp_res = conn.execute("""
-                            INSERT INTO comprobantes_contables (
-                                negocio_id, numero_comprobante, tipo, fecha, descripcion,
-                                total_debitos, total_creditos, registrado_por, notas, origen_tipo, origen_id
-                            )
-                            VALUES (%s, %s, %s, CURRENT_DATE, %s, %s, %s, %s, %s, 'inventario_distribuido', %s)
-                            RETURNING id
-                        """, (
-                            negocio_id, doc_num_final, tipo_code,
-                            f"Inventario Distribuido #{doc_num_final} - {prod['nombre']}",
-                            ajuste_monto, ajuste_monto, usuario_id,
-                            f"Conteo físico realizado por {usuario_nombre or 'Operario'}",
-                            doc_num_final
-                        )).fetchone()
-                        comp_id = comp_res['id']
+                        comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
                         
                         db_cod = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s", (db_cuenta_id,)).fetchone()['codigo']
                         cr_cod = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s", (cr_cuenta_id,)).fetchone()['codigo']
@@ -10431,32 +10417,22 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
                 'cuadrado': abs(total_debito - total_credito) < 0.01
             })
 
-        # POST: Crear comprobante y asientos
+        # POST: Crear comprobante virtual y asientos directos en movimientos_contables
         fecha_asiento = str(fecha_seleccionada or fecha_original).strip()
         if not fecha_asiento:
             fecha_asiento = fecha_original
 
-        cnt = conn.execute(
-            "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id = %s AND tipo = %s",
-            (negocio_id, tipo_comprobante)
-        ).fetchone()['n']
-        num_comp = f"AUDIT-{tipo_comprobante}-{(cnt or 0) + 1}"
         desc_comp = f"Generación asiento auditoría: Doc #{doc_str} - {prod['nombre']}"
-
-        comp_row = conn.execute("""
-            INSERT INTO comprobantes_contables (negocio_id, tipo, numero, fecha, concepto, creado_por, estado)
-            VALUES (%s, %s, %s, %s, %s, %s, 'asentado')
-            RETURNING id
-        """, (negocio_id, tipo_comprobante, num_comp, fecha_asiento, desc_comp, session.get('usuario_id'))).fetchone()
-        comprobante_id = comp_row['id']
+        comprobante_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
 
         tipo_doc_final_id = km.get('tipo_documento_id')
         tipo_doc_final_str = km.get('tipo_documento') or tipo_comprobante
+        tercero_id_doc = km.get('proveedor_id') or None
 
         # Verificar si ya existen movimientos_contables huérfanos o desvinculados para este documento
         # (ej. creados sin cuenta_id o sin fecha al restaurar backups o en versiones anteriores)
         movs_desvinculados = conn.execute("""
-            SELECT id, tipo, monto, cuenta, concepto, producto_id, producto_padre_id
+            SELECT id, tipo, monto, cuenta, concepto, producto_id, producto_padre_id, tercero_id
             FROM movimientos_contables
             WHERE negocio_id = %s 
               AND (numero_documento = %s OR numero_documento = %s)
@@ -10488,14 +10464,16 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
                             producto_padre_id = COALESCE(producto_padre_id, %s),
                             tipo_documento = %s,
                             origen_tipo = COALESCE(origen_tipo, %s),
-                            origen_id = COALESCE(origen_id, %s)
+                            origen_id = COALESCE(origen_id, %s),
+                            tercero_id = COALESCE(tercero_id, %s)
                         WHERE id = %s
                     """, (
                         comprobante_id, lp['cuenta_id'], lp['cuenta_codigo'],
                         tipo_doc_final_id, fecha_asiento, lp['producto_id'],
                         lp['producto_padre_id'], tipo_doc_final_str,
                         km.get('referencia_tipo') or 'auditoria_reparacion',
-                        str(km.get('referencia_id') or km['id']), match_id
+                        str(km.get('referencia_id') or km['id']),
+                        tercero_id_doc, match_id
                     ))
                 else:
                     conn.execute("""
@@ -10503,19 +10481,19 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
                             negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
                             registrado_por, producto_id, producto_padre_id, tipo_documento_id,
                             numero_documento, fecha, tipo_documento, origen_tipo, origen_id,
-                            descripcion_general
+                            descripcion_general, tercero_id
                         ) VALUES (
                             %s, %s, %s, %s, %s, %s, %s,
                             %s, %s, %s, %s,
                             %s, %s, %s, %s, %s,
-                            %s
+                            %s, %s
                         )
                     """, (
                         negocio_id, comprobante_id, lp['cuenta_id'], lp['cuenta_codigo'], lp['concepto'],
                         lp['tipo'], lp['monto'], session.get('usuario_id'), lp['producto_id'],
                         lp['producto_padre_id'], tipo_doc_final_id, doc_str, fecha_asiento,
                         tipo_doc_final_str, km.get('referencia_tipo') or 'auditoria_reparacion',
-                        str(km.get('referencia_id') or km['id']), desc_comp
+                        str(km.get('referencia_id') or km['id']), desc_comp, tercero_id_doc
                     ))
         else:
             for lp in lineas_propuestas:
@@ -10524,19 +10502,19 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
                         negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
                         registrado_por, producto_id, producto_padre_id, tipo_documento_id,
                         numero_documento, fecha, tipo_documento, origen_tipo, origen_id,
-                        descripcion_general
+                        descripcion_general, tercero_id
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s,
                         %s, %s, %s, %s, %s,
-                        %s
+                        %s, %s
                     )
                 """, (
                     negocio_id, comprobante_id, lp['cuenta_id'], lp['cuenta_codigo'], lp['concepto'],
                     lp['tipo'], lp['monto'], session.get('usuario_id'), lp['producto_id'],
                     lp['producto_padre_id'], tipo_doc_final_id, doc_str, fecha_asiento,
                     tipo_doc_final_str, km.get('referencia_tipo') or 'auditoria_reparacion',
-                    str(km.get('referencia_id') or km['id']), desc_comp
+                    str(km.get('referencia_id') or km['id']), desc_comp, tercero_id_doc
                 ))
 
         conn.commit()

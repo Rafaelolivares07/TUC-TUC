@@ -9664,6 +9664,21 @@ def api_auditoria_productos(negocio_id):
         """, (negocio_id,)).fetchall()
         c_map = {r['producto_id']: r for r in contab_res}
 
+        # Movimientos de Kardex que no tienen asiento contable en Cta 14
+        sin_asiento_res = conn.execute("""
+            SELECT mi.producto_id, COUNT(DISTINCT COALESCE(mi.documento_numero, mi.numero_documento, mi.id::text)) as docs_sin_asiento
+            FROM movimientos_inventario mi
+            LEFT JOIN (
+                SELECT DISTINCT mc.producto_id, mc.numero_documento, mc.negocio_id
+                FROM movimientos_contables mc
+                JOIN cuentas_puc cp ON cp.id = mc.cuenta_id AND cp.codigo LIKE '14%%'
+                WHERE mc.negocio_id = %s AND mc.producto_id IS NOT NULL
+            ) ac ON ac.producto_id = mi.producto_id AND (ac.numero_documento = mi.documento_numero OR ac.numero_documento = mi.numero_documento)
+            WHERE mi.negocio_id = %s AND ac.producto_id IS NULL
+            GROUP BY mi.producto_id
+        """, (negocio_id, negocio_id)).fetchall()
+        sin_asiento_map = {r['producto_id']: r['docs_sin_asiento'] for r in sin_asiento_res}
+
         huerfanos_map, total_huerfanos = _obtener_huerfanos_por_producto(conn, negocio_id, prods)
 
         items = []
@@ -9672,6 +9687,7 @@ def api_auditoria_productos(negocio_id):
             k = k_map.get(pid, {'stock_kardex': Decimal('0'), 'neto_kardex': Decimal('0'), 'total_movimientos': 0})
             c = c_map.get(pid, {'saldo_contab': Decimal('0'), 'lineas_contab': 0})
             h_list = huerfanos_map.get(pid, [])
+            docs_sin_asiento = sin_asiento_map.get(pid, 0)
 
             stock_tabla = Decimal(str(p['stock_tabla'] or 0))
             costo_tabla = Decimal(str(p['costo_tabla'] or 0))
@@ -9689,6 +9705,8 @@ def api_auditoria_productos(negocio_id):
             estado = 'OK'
             if len(h_list) > 0:
                 estado = 'REQUIERE_VINCULAR_IDS'
+            elif docs_sin_asiento > 0:
+                estado = 'DOCS_SIN_ASIENTO'
             elif abs(dif_stock) >= Decimal('0.001'):
                 estado = 'DIF_STOCK'
             elif abs(dif_valor) >= Decimal('1.0'):
@@ -9707,6 +9725,7 @@ def api_auditoria_productos(negocio_id):
                 'dif_stock': float(dif_stock),
                 'dif_valor': float(dif_valor),
                 'lineas_sin_id': len(h_list),
+                'docs_sin_asiento': docs_sin_asiento,
                 'huerfanos': [{
                     'id': h['id'],
                     'concepto': h['concepto'],
@@ -9727,6 +9746,8 @@ def api_auditoria_productos(negocio_id):
                 'total_huerfanos': total_huerfanos,
                 'productos_ok': sum(1 for x in items if x['estado'] == 'OK'),
                 'productos_con_huerfanos': sum(1 for x in items if x['lineas_sin_id'] > 0),
+                'productos_con_docs_sin_asiento': sum(1 for x in items if x['docs_sin_asiento'] > 0),
+                'total_docs_sin_asiento': sum(x['docs_sin_asiento'] for x in items),
                 'productos_con_dif_stock': sum(1 for x in items if abs(x['dif_stock']) >= 0.001),
                 'productos_con_dif_valor': sum(1 for x in items if abs(x['dif_valor']) >= 1.0)
             },
@@ -9926,12 +9947,18 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
                 tipo_doc_nombre = tipo_doc_c
 
             tiene_huerfanos = any(x.get('pendiente_vinculo') for x in c_items)
+            es_sin_asiento = (len(k_items) > 0 and len(c_items) == 0)
+            tipo_doc_id_val = k_items[0].get('tipo_documento_id') if k_items else (c_items[0].get('tipo_documento_id') if c_items else None)
+            tipo_doc_raw = k_items[0].get('tipo_documento') if k_items else (c_items[0].get('tipo_documento') if c_items else None)
 
             cotejo.append({
                 'documento': num_doc_display,
                 'tipo_documento_nombre': tipo_doc_nombre,
+                'tipo_documento_id': tipo_doc_id_val,
+                'tipo_documento_raw': tipo_doc_raw,
                 'fecha': fecha_doc,
                 'tiene_huerfanos': tiene_huerfanos,
+                'sin_asiento': es_sin_asiento,
                 'kardex': [{
                     'id': x['id'],
                     'tipo': x['tipo'],
@@ -9979,7 +10006,8 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
                 'kardex': round(k_saldo_neto, 2),
                 'contabilidad': round(c_saldo_neto, 2),
                 'diferencia': round(dif_existencia, 2)
-            }
+            },
+            'total_sin_asiento': sum(1 for c in cotejo if c.get('sin_asiento'))
         }
 
         return jsonify({
@@ -9990,6 +10018,351 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
             'resumen': resumen
         })
     except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/auditoria-productos/generar-asiento-faltante', methods=['GET', 'POST'])
+def api_auditoria_generar_asiento_faltante(negocio_id):
+    """
+    Genera dinámicamente el comprobante y asientos contables faltantes para un documento de Kardex,
+    buscando las cuentas en grupos_inventario y reclasificando según el tipo de documento.
+    """
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        if request.method == 'GET':
+            producto_id = request.args.get('producto_id', type=int)
+            documento_numero = request.args.get('documento_numero')
+            tipo_doc = request.args.get('tipo_documento')
+            tipo_doc_id = request.args.get('tipo_documento_id', type=int)
+        else:
+            payload = request.get_json() or {}
+            producto_id = payload.get('producto_id')
+            documento_numero = payload.get('documento_numero')
+            tipo_doc = payload.get('tipo_documento')
+            tipo_doc_id = payload.get('tipo_documento_id')
+            fecha_seleccionada = payload.get('fecha')
+
+        if not producto_id or not documento_numero:
+            return jsonify({'ok': False, 'error': 'producto_id y documento_numero son requeridos'}), 400
+
+        prod = conn.execute("SELECT id, nombre, categoria FROM productos WHERE id = %s AND negocio_id = %s", (producto_id, negocio_id)).fetchone()
+        if not prod:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+
+        # Buscar el movimiento principal en kardex
+        doc_str = str(documento_numero).strip()
+        query_km = """
+            SELECT mi.*, 
+                   (SELECT COUNT(*) FROM movimientos_contables mc 
+                    JOIN cuentas_puc cp ON cp.id = mc.cuenta_id AND cp.codigo LIKE '14%%'
+                    WHERE mc.negocio_id = mi.negocio_id AND mc.producto_id = mi.producto_id 
+                      AND (mc.numero_documento = mi.documento_numero OR mc.numero_documento = mi.numero_documento)) as tiene_asientos
+            FROM movimientos_inventario mi
+            WHERE mi.negocio_id = %s AND mi.producto_id = %s 
+              AND (mi.documento_numero = %s OR mi.numero_documento = %s)
+        """
+        params_km = [negocio_id, producto_id, doc_str, doc_str]
+        if tipo_doc_id:
+            query_km += " AND mi.tipo_documento_id = %s"
+            params_km.append(tipo_doc_id)
+        elif tipo_doc:
+            query_km += " AND (UPPER(mi.tipo_documento) = %s OR UPPER(mi.tipo_documento) LIKE %s)"
+            params_km.append(str(tipo_doc).upper().strip())
+            params_km.append(f"%{str(tipo_doc).upper().strip()}%")
+
+        # Priorizar el movimiento que NO tiene asientos contables
+        query_km += " ORDER BY tiene_asientos ASC, mi.id ASC LIMIT 1"
+        km = conn.execute(query_km, tuple(params_km)).fetchone()
+
+        if not km:
+            # Fallback por normalización
+            todos_km = conn.execute("""
+                SELECT mi.*,
+                       (SELECT COUNT(*) FROM movimientos_contables mc 
+                        JOIN cuentas_puc cp ON cp.id = mc.cuenta_id AND cp.codigo LIKE '14%%'
+                        WHERE mc.negocio_id = mi.negocio_id AND mc.producto_id = mi.producto_id 
+                          AND (mc.numero_documento = mi.documento_numero OR mc.numero_documento = mi.numero_documento)) as tiene_asientos
+                FROM movimientos_inventario mi
+                WHERE mi.negocio_id = %s AND mi.producto_id = %s
+                ORDER BY tiene_asientos ASC, mi.id ASC
+            """, (negocio_id, producto_id)).fetchall()
+            for row in todos_km:
+                if normalizar_numero(row['documento_numero']) == normalizar_numero(doc_str) or normalizar_numero(row['numero_documento']) == normalizar_numero(doc_str):
+                    if tipo_doc_id and row.get('tipo_documento_id') != tipo_doc_id:
+                        continue
+                    km = row
+                    break
+
+        if not km:
+            return jsonify({'ok': False, 'error': f'No se encontró el movimiento de Kardex para el documento #{doc_str}'}), 404
+
+        fecha_original = str(km['documento_fecha'] or (km['created_at'].date() if km.get('created_at') else date.today()))
+        fecha_hoy = str(date.today())
+
+        # Función auxiliar para buscar cuenta PUC según grupo_inventario
+        def _get_grupo_cuentas(categoria):
+            if not categoria:
+                categoria = 'MATERIA PRIMA'
+            g = conn.execute("""
+                SELECT gi.*, 
+                       ci.codigo as cod_inve, ci.nombre as nom_inve,
+                       cc.codigo as cod_cos, cc.nombre as nom_cos,
+                       cf.codigo as cod_aj_fav, cf.nombre as nom_aj_fav,
+                       ca.codigo as cod_aj_con, ca.nombre as nom_aj_con
+                FROM grupos_inventario gi
+                LEFT JOIN cuentas_puc ci ON ci.id = gi.cuenta_inve_id
+                LEFT JOIN cuentas_puc cc ON cc.id = gi.cuenta_cos_id
+                LEFT JOIN cuentas_puc cf ON cf.id = gi.cuenta_ajuste_favor_id
+                LEFT JOIN cuentas_puc ca ON ca.id = gi.cuenta_ajuste_contra_id
+                WHERE gi.negocio_id = %s AND UPPER(TRIM(gi.nombre)) = UPPER(TRIM(%s))
+            """, (negocio_id, categoria)).fetchone()
+            if not g:
+                g = conn.execute("""
+                    SELECT gi.*, 
+                           ci.codigo as cod_inve, ci.nombre as nom_inve,
+                           cc.codigo as cod_cos, cc.nombre as nom_cos,
+                           cf.codigo as cod_aj_fav, cf.nombre as nom_aj_fav,
+                           ca.codigo as cod_aj_con, ca.nombre as nom_aj_con
+                    FROM grupos_inventario gi
+                    LEFT JOIN cuentas_puc ci ON ci.id = gi.cuenta_inve_id
+                    LEFT JOIN cuentas_puc cc ON cc.id = gi.cuenta_cos_id
+                    LEFT JOIN cuentas_puc cf ON cf.id = gi.cuenta_ajuste_favor_id
+                    LEFT JOIN cuentas_puc ca ON ca.id = gi.cuenta_ajuste_contra_id
+                    WHERE gi.negocio_id = %s AND gi.cuenta_inve_id IS NOT NULL
+                    ORDER BY gi.id ASC LIMIT 1
+                """, (negocio_id,)).fetchone()
+            return g
+
+        # Determinar naturaleza del documento
+        motivo = str(km.get('motivo') or '').lower()
+        td_desc = str(km.get('tipo_documento') or '').upper()
+        es_produccion = (motivo == 'produccion' or 'PRODUCC' in td_desc)
+        es_venta = (motivo == 'venta' or 'VENTA' in td_desc or 'FACTURA' in td_desc)
+        es_ajuste = (motivo == 'ajuste' or 'AJUSTE' in td_desc)
+
+        val_mov = round(float(km['valor_total'] or (float(km['cantidad']) * float(km.get('costo_und') or 0))), 2)
+        grp_prod = _get_grupo_cuentas(prod['categoria'])
+
+        lineas_propuestas = []
+        tipo_comprobante = 'PRODUCCION' if es_produccion else ('COSTO_VENTA' if es_venta else 'AJUSTE_INVENTARIO')
+
+        if es_produccion:
+            # Reclasificación interna: Débito al producto elaborado
+            lineas_propuestas.append({
+                'cuenta_id': grp_prod['cuenta_inve_id'],
+                'cuenta_codigo': grp_prod['cod_inve'] or '140505',
+                'cuenta_nombre': grp_prod['nom_inve'] or 'Inventario',
+                'concepto': f"Producción: {prod['nombre']} x{float(km['cantidad']):.2f}",
+                'tipo': 'debito',
+                'monto': val_mov,
+                'producto_id': producto_id,
+                'producto_padre_id': None
+            })
+
+            # Buscar componentes en Kardex enlazados a esta producción
+            comps = []
+            if km.get('referencia_id'):
+                comps = conn.execute("""
+                    SELECT mi.*, p.nombre as comp_nombre, p.categoria as comp_categoria
+                    FROM movimientos_inventario mi
+                    JOIN productos p ON p.id = mi.producto_id
+                    WHERE mi.negocio_id = %s AND mi.tipo = 'salida' AND mi.referencia_id = %s
+                """, (negocio_id, km['referencia_id'])).fetchall()
+
+            if not comps and km.get('documento_numero'):
+                comps = conn.execute("""
+                    SELECT mi.*, p.nombre as comp_nombre, p.categoria as comp_categoria
+                    FROM movimientos_inventario mi
+                    JOIN productos p ON p.id = mi.producto_id
+                    WHERE mi.negocio_id = %s AND mi.tipo = 'salida' 
+                      AND (mi.documento_numero = %s OR mi.numero_documento = %s)
+                      AND mi.producto_padre_id = %s
+                """, (negocio_id, doc_str, doc_str, producto_id)).fetchall()
+
+            tot_comps = 0
+            for c in comps:
+                grp_c = _get_grupo_cuentas(c['comp_categoria']) or grp_prod
+                monto_c = round(float(c['valor_total'] or (float(c['cantidad']) * float(c.get('costo_und') or 0))), 2)
+                tot_comps += monto_c
+                lineas_propuestas.append({
+                    'cuenta_id': grp_c['cuenta_inve_id'],
+                    'cuenta_codigo': grp_c['cod_inve'] or '140505',
+                    'cuenta_nombre': grp_c['nom_inve'] or 'Inventario Materia Prima',
+                    'concepto': f"Consumo: {c['comp_nombre']} x{float(c['cantidad']):.2f}",
+                    'tipo': 'credito',
+                    'monto': monto_c,
+                    'producto_id': c['producto_id'],
+                    'producto_padre_id': producto_id
+                })
+
+            # Si no hubo componentes desglosados en kardex, acreditar inventario general
+            if not comps:
+                lineas_propuestas.append({
+                    'cuenta_id': grp_prod['cuenta_inve_id'],
+                    'cuenta_codigo': grp_prod['cod_inve'] or '140505',
+                    'cuenta_nombre': grp_prod['nom_inve'] or 'Inventario Materia Prima',
+                    'concepto': f"Consumo materias primas para: {prod['nombre']}",
+                    'tipo': 'credito',
+                    'monto': val_mov,
+                    'producto_id': producto_id,
+                    'producto_padre_id': None
+                })
+            elif abs(tot_comps - val_mov) >= 0.01:
+                dif_cent = round(val_mov - tot_comps, 2)
+                lineas_propuestas[-1]['monto'] = round(lineas_propuestas[-1]['monto'] + dif_cent, 2)
+
+        elif es_venta:
+            lineas_propuestas.append({
+                'cuenta_id': grp_prod['cuenta_cos_id'],
+                'cuenta_codigo': grp_prod['cod_cos'] or '614005',
+                'cuenta_nombre': grp_prod['nom_cos'] or 'Costo de Ventas',
+                'concepto': f"Costo de venta: {prod['nombre']} x{float(km['cantidad']):.2f}",
+                'tipo': 'debito',
+                'monto': val_mov,
+                'producto_id': producto_id,
+                'producto_padre_id': None
+            })
+            lineas_propuestas.append({
+                'cuenta_id': grp_prod['cuenta_inve_id'],
+                'cuenta_codigo': grp_prod['cod_inve'] or '140505',
+                'cuenta_nombre': grp_prod['nom_inve'] or 'Inventario',
+                'concepto': f"Salida inventario: {prod['nombre']}",
+                'tipo': 'credito',
+                'monto': val_mov,
+                'producto_id': producto_id,
+                'producto_padre_id': None
+            })
+
+        else: # Ajuste u otro
+            if km['tipo'] == 'entrada':
+                lineas_propuestas.append({
+                    'cuenta_id': grp_prod['cuenta_inve_id'],
+                    'cuenta_codigo': grp_prod['cod_inve'] or '140505',
+                    'cuenta_nombre': grp_prod['nom_inve'] or 'Inventario',
+                    'concepto': f"Ajuste entrada (+): {prod['nombre']}",
+                    'tipo': 'debito',
+                    'monto': val_mov,
+                    'producto_id': producto_id,
+                    'producto_padre_id': None
+                })
+                lineas_propuestas.append({
+                    'cuenta_id': grp_prod['cuenta_ajuste_favor_id'] or grp_prod['cuenta_cos_id'],
+                    'cuenta_codigo': grp_prod['cod_aj_fav'] or grp_prod['cod_cos'] or '414101',
+                    'cuenta_nombre': grp_prod['nom_aj_fav'] or 'Ajuste de inventario sobrante',
+                    'concepto': f"Contrapartida ajuste (+): {prod['nombre']}",
+                    'tipo': 'credito',
+                    'monto': val_mov,
+                    'producto_id': producto_id,
+                    'producto_padre_id': None
+                })
+            else:
+                lineas_propuestas.append({
+                    'cuenta_id': grp_prod['cuenta_ajuste_contra_id'] or grp_prod['cuenta_cos_id'],
+                    'cuenta_codigo': grp_prod['cod_aj_con'] or grp_prod['cod_cos'] or '614101',
+                    'cuenta_nombre': grp_prod['nom_aj_con'] or 'Ajuste de inventario faltante',
+                    'concepto': f"Contrapartida ajuste (-): {prod['nombre']}",
+                    'tipo': 'debito',
+                    'monto': val_mov,
+                    'producto_id': producto_id,
+                    'producto_padre_id': None
+                })
+                lineas_propuestas.append({
+                    'cuenta_id': grp_prod['cuenta_inve_id'],
+                    'cuenta_codigo': grp_prod['cod_inve'] or '140505',
+                    'cuenta_nombre': grp_prod['nom_inve'] or 'Inventario',
+                    'concepto': f"Ajuste salida (-): {prod['nombre']}",
+                    'tipo': 'credito',
+                    'monto': val_mov,
+                    'producto_id': producto_id,
+                    'producto_padre_id': None
+                })
+
+        total_debito = sum(l['monto'] for l in lineas_propuestas if l['tipo'] == 'debito')
+        total_credito = sum(l['monto'] for l in lineas_propuestas if l['tipo'] == 'credito')
+
+        if request.method == 'GET':
+            return jsonify({
+                'ok': True,
+                'producto': {'id': prod['id'], 'nombre': prod['nombre'], 'categoria': prod['categoria']},
+                'documento': {
+                    'numero': doc_str,
+                    'tipo_nombre': km.get('tipo_documento') or ('Reporte de Producción' if es_produccion else 'Documento'),
+                    'tipo_id': km.get('tipo_documento_id'),
+                    'tipo_comprobante': tipo_comprobante,
+                    'fecha_original': fecha_original,
+                    'fecha_hoy': fecha_hoy,
+                    'valor_total': val_mov
+                },
+                'lineas': lineas_propuestas,
+                'total_debito': round(total_debito, 2),
+                'total_credito': round(total_credito, 2),
+                'cuadrado': abs(total_debito - total_credito) < 0.01
+            })
+
+        # POST: Crear comprobante y asientos
+        fecha_asiento = str(fecha_seleccionada or fecha_original).strip()
+        if not fecha_asiento:
+            fecha_asiento = fecha_original
+
+        cnt = conn.execute(
+            "SELECT COUNT(*) AS n FROM comprobantes_contables WHERE negocio_id = %s AND tipo = %s",
+            (negocio_id, tipo_comprobante)
+        ).fetchone()['n']
+        num_comp = f"AUDIT-{tipo_comprobante}-{(cnt or 0) + 1}"
+        desc_comp = f"Generación asiento auditoría: Doc #{doc_str} - {prod['nombre']}"
+
+        comp_row = conn.execute("""
+            INSERT INTO comprobantes_contables (negocio_id, tipo, numero, fecha, concepto, creado_por, estado)
+            VALUES (%s, %s, %s, %s, %s, %s, 'asentado')
+            RETURNING id
+        """, (negocio_id, tipo_comprobante, num_comp, fecha_asiento, desc_comp, session.get('usuario_id'))).fetchone()
+        comprobante_id = comp_row['id']
+
+        tipo_doc_final_id = km.get('tipo_documento_id')
+        tipo_doc_final_str = km.get('tipo_documento') or tipo_comprobante
+
+        for lp in lineas_propuestas:
+            conn.execute("""
+                INSERT INTO movimientos_contables (
+                    negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
+                    registrado_por, producto_id, producto_padre_id, tipo_documento_id,
+                    numero_documento, fecha, tipo_documento, origen_tipo, origen_id,
+                    descripcion_general
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s
+                )
+            """, (
+                negocio_id, comprobante_id, lp['cuenta_id'], lp['cuenta_codigo'], lp['concepto'],
+                lp['tipo'], lp['monto'], session.get('usuario_id'), lp['producto_id'],
+                lp['producto_padre_id'], tipo_doc_final_id, doc_str, fecha_asiento,
+                tipo_doc_final_str, km.get('referencia_tipo') or 'auditoria_reparacion',
+                str(km.get('referencia_id') or km['id']), desc_comp
+            ))
+
+        conn.commit()
+
+        return jsonify({
+            'ok': True,
+            'comprobante_id': comprobante_id,
+            'numero_comprobante': num_comp,
+            'fecha_aplicada': fecha_asiento,
+            'mensaje': f'Asiento contable #{comprobante_id} generado exitosamente con {len(lineas_propuestas)} líneas.'
+        })
+
+    except Exception as e:
+        conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

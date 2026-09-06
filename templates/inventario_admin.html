@@ -972,6 +972,7 @@
               <span class="px-2.5 py-1 bg-amber-900/60 text-amber-300 border border-amber-700/50 rounded-lg font-semibold" id="audit-stat-huerfanos">🔗 Sin ID: 0</span>
               <span class="px-2.5 py-1 bg-rose-900/60 text-rose-300 border border-rose-700/50 rounded-lg font-semibold" id="audit-stat-dif-stock">⚠️ Dif Stock: 0</span>
               <span class="px-2.5 py-1 bg-purple-900/60 text-purple-300 border border-purple-700/50 rounded-lg font-semibold" id="audit-stat-dif-valor">⚠️ Dif Contab: 0</span>
+              <span class="px-2.5 py-1 bg-orange-900/60 text-orange-300 border border-orange-700/50 rounded-lg font-semibold" id="audit-stat-sin-asiento">📄 Sin Asiento: 0</span>
             </div>
             <div class="flex items-center gap-2">
               <button onclick="vincularIdsAuditoria(null)" id="btn-vincular-todos-ids" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-sm">
@@ -12748,6 +12749,8 @@ async function cargarReporteEnsambles() {
         if (elDifStock) elDifStock.textContent = `⚠️ Dif Stock: ${t.productos_con_dif_stock || 0}`;
         const elDifValor = document.getElementById('audit-stat-dif-valor');
         if (elDifValor) elDifValor.textContent = `⚠️ Dif Contab: ${t.productos_con_dif_valor || 0}`;
+        const elSinAsiento = document.getElementById('audit-stat-sin-asiento');
+        if (elSinAsiento) elSinAsiento.textContent = `📄 Sin Asiento: ${t.productos_con_docs_sin_asiento || 0} (${t.total_docs_sin_asiento || 0} docs)`;
 
         const btnVincularTodos = document.getElementById('btn-vincular-todos-ids');
         if (btnVincularTodos) {
@@ -12849,13 +12852,20 @@ async function cargarReporteEnsambles() {
           fase1Html = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">✅ 1. IDs OK</span>`;
         }
 
-        // Fase 2: Reparación / Valores (Bloqueada si faltan IDs huérfanos por vincular)
+        // Fase 2: Reparación / Valores / Asientos Faltantes
         let fase3Html = '';
         if (hasSinId) {
           fase3Html = `
             <button disabled title="Bloqueado: Primero debes completar la Fase 1 (Vincular IDs) para que el balance contable esté completo"
                     class="px-2.5 py-1 bg-gray-100 border border-gray-300 text-gray-400 text-[11px] font-bold rounded-lg cursor-not-allowed opacity-60 flex items-center gap-1 shadow-none select-none">
               🔒 2. Reparar (Bloqueado)
+            </button>
+          `;
+        } else if (p.docs_sin_asiento > 0) {
+          fase3Html = `
+            <button onclick="abrirModalCotejoDocumental(${p.id}, event)" title="Tiene ${p.docs_sin_asiento} documento(s) en Kardex sin asiento contable. Abre el cotejo para asentar."
+                    class="px-2.5 py-1 bg-orange-100 hover:bg-orange-200 border border-orange-400 text-orange-950 text-[11px] font-bold rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer">
+              <span>⚡</span> 2. Asentar (${p.docs_sin_asiento})
             </button>
           `;
         } else if (hasDifStock || hasDifValor) {
@@ -12882,7 +12892,11 @@ async function cargarReporteEnsambles() {
                     <span>${p.nombre}</span>
                     ${p.total_movimientos_kardex > 0 ? `<span class="text-[9px] text-gray-400 font-normal">(${p.total_movimientos_kardex} movs)</span>` : ''}
                   </div>
-                  <div class="text-[10px] text-gray-400">ID #${p.id} &bull; ${p.categoria} &bull; <span class="text-indigo-600 font-semibold hover:underline">Ver documentos 📋</span></div>
+                  <div class="text-[10px] text-gray-400">
+                    ID #${p.id} &bull; ${p.categoria}
+                    ${p.docs_sin_asiento > 0 ? `<span class="ml-1 px-1.5 py-0.2 rounded font-bold bg-orange-100 text-orange-900 border border-orange-200">📄 ${p.docs_sin_asiento} sin asiento</span>` : ''}
+                    &bull; <span class="text-indigo-600 font-semibold hover:underline">Ver documentos 📋</span>
+                  </div>
                 </div>
               </div>
             </td>
@@ -13156,6 +13170,9 @@ async function cargarReporteEnsambles() {
         } else if (prodInfo.estado === 'REQUIERE_VINCULAR_IDS') {
           badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300';
           badgeEstado.textContent = '🔗 Requiere Vincular IDs (Fase 1)';
+        } else if (prodInfo.estado === 'DOCS_SIN_ASIENTO' || (prodInfo.docs_sin_asiento > 0)) {
+          badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-950 border border-orange-300';
+          badgeEstado.textContent = '📄 Requiere Generar Asientos Faltantes';
         } else {
           badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300';
           badgeEstado.textContent = '⚠️ Presenta Diferencias';
@@ -13202,7 +13219,7 @@ async function cargarReporteEnsambles() {
           subtitulo.textContent = `${d.producto.nombre} (ID #${d.producto.id}) • Categoría: ${d.producto.categoria || 'Sin categoría'} • ${cotejo.length} documento(s) cotejados`;
         }
 
-        // Banner huérfanos
+        // Banner huérfanos o sin asiento
         if (d.total_huerfanos > 0 && bannerHuerfanos) {
           bannerHuerfanos.classList.remove('hidden');
           bannerHuerfanos.innerHTML = `
@@ -13219,6 +13236,21 @@ async function cargarReporteEnsambles() {
               <button onclick="confirmarVincularIds(${productoId}); cerrarModalCotejo();" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shrink-0 shadow-sm flex items-center gap-1.5 cursor-pointer">
                 <span>🔗</span> Vincular IDs Ahora (Fase 1)
               </button>
+            </div>
+          `;
+        } else if (d.resumen && d.resumen.total_sin_asiento > 0 && bannerHuerfanos) {
+          bannerHuerfanos.classList.remove('hidden');
+          bannerHuerfanos.innerHTML = `
+            <div class="bg-orange-50 border border-orange-300 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-orange-950 shadow-2xs">
+              <div class="flex items-center gap-2.5">
+                <span class="text-lg">📄</span>
+                <div>
+                  <span class="font-bold uppercase tracking-wider text-[11px] bg-orange-200 text-orange-950 px-1.5 py-0.5 rounded">Asientos Contables Faltantes</span>
+                  <div class="mt-0.5 font-sans">
+                    Hay <strong>${d.resumen.total_sin_asiento} documento(s) en Kardex</strong> sin registro contable en la Cuenta 14. Puedes generar su asiento haciendo clic en el botón <strong>⚡ Asentar</strong> de la fila.
+                  </div>
+                </div>
+              </div>
             </div>
           `;
         }
@@ -13264,6 +13296,17 @@ async function cargarReporteEnsambles() {
           let badge = '';
           if (c.tiene_huerfanos) {
             badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">🔗 Requiere Vínculo</span>`;
+          } else if (c.sin_asiento) {
+            const rawNombreDoc = (c.tipo_documento_nombre || '').replace(/'/g, "\\'");
+            badge = `
+              <div class="flex flex-col items-center gap-1">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-900 border border-orange-300">📄 Sin Asiento</span>
+                <button onclick="abrirModalGenerarAsientoFaltante(${productoId}, '${c.documento}', ${c.tipo_documento_id || 'null'}, '${rawNombreDoc}')" 
+                        class="px-2 py-0.5 bg-orange-600 hover:bg-orange-700 text-white rounded text-[10px] font-bold shadow-2xs transition cursor-pointer flex items-center gap-1">
+                  <span>⚡</span> Asentar
+                </button>
+              </div>
+            `;
           } else if (isOk) {
             badge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">✅ OK</span>`;
           } else {
@@ -13379,14 +13422,172 @@ async function cargarReporteEnsambles() {
       }
     }
 
+    // Modal de Previsualización y Generación de Asiento Contable Faltante
+    let asientoFaltanteDataActual = null;
+
+    async function abrirModalGenerarAsientoFaltante(productoId, docNumero, tipoDocId = null, tipoDocNombre = '') {
+      const modal = document.getElementById('modal-generar-asiento-faltante');
+      const subtitulo = document.getElementById('asiento-faltante-subtitulo');
+      const tbody = document.getElementById('asiento-faltante-tbody');
+      const totDeb = document.getElementById('asiento-faltante-tot-deb');
+      const totCred = document.getElementById('asiento-faltante-tot-cred');
+      const lblOrig = document.getElementById('asiento-faltante-fecha-orig-lbl');
+      const lblHoy = document.getElementById('asiento-faltante-fecha-hoy-lbl');
+      const btnConfirmar = document.getElementById('btn-confirmar-asiento-faltante');
+
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      asientoFaltanteDataActual = { productoId, docNumero, tipoDocId, tipoDocNombre };
+
+      if (subtitulo) subtitulo.textContent = `Documento #${docNumero} • ${tipoDocNombre || 'Kardex'} • Producto ID #${productoId}`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-400 font-sans"><span class="animate-spin inline-block mr-1.5">⏳</span> Consultando cuentas parametrizadas y componentes...</td></tr>`;
+      if (btnConfirmar) btnConfirmar.disabled = true;
+
+      try {
+        let url = `/api/inventario/${NEGOCIO_ID}/auditoria-productos/generar-asiento-faltante?producto_id=${productoId}&documento_numero=${encodeURIComponent(docNumero)}`;
+        if (tipoDocId) url += `&tipo_documento_id=${tipoDocId}`;
+        if (tipoDocNombre) url += `&tipo_documento=${encodeURIComponent(tipoDocNombre)}`;
+
+        const r = await fetch(url);
+        const d = await r.json();
+
+        if (!d.ok) {
+          if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-rose-600 font-bold font-sans">Error: ${d.error || 'No se pudo generar la propuesta'}</td></tr>`;
+          return;
+        }
+
+        asientoFaltanteDataActual.doc = d.documento;
+        asientoFaltanteDataActual.lineas = d.lineas;
+
+        if (lblOrig) lblOrig.textContent = `Fecha original: ${d.documento.fecha_original}`;
+        if (lblHoy) lblHoy.textContent = `Fecha de hoy: ${d.documento.fecha_hoy}`;
+
+        const rOrig = document.getElementById('fecha-modo-orig');
+        if (rOrig) rOrig.checked = true;
+
+        if (subtitulo) {
+          subtitulo.textContent = `${d.producto.nombre} • ${d.documento.tipo_nombre} #${d.documento.numero} • Total: ${fmtMon(d.documento.valor_total)}`;
+        }
+
+        let rowsHtml = '';
+        d.lineas.forEach(l => {
+          const isDeb = l.tipo === 'debito';
+          rowsHtml += `
+            <tr class="hover:bg-gray-50/80">
+              <td class="px-3 py-2 text-left">
+                <span class="font-bold text-gray-900">${l.cuenta_codigo}</span>
+                <div class="text-[10px] text-gray-500 font-sans">${l.cuenta_nombre}</div>
+              </td>
+              <td class="px-3 py-2 text-left font-sans text-gray-800">
+                <div class="font-medium">${l.concepto}</div>
+                ${l.producto_id ? `<span class="text-[9px] text-gray-400">Prod #${l.producto_id}${l.producto_padre_id ? ` (Padre #${l.producto_padre_id})` : ''}</span>` : ''}
+              </td>
+              <td class="px-3 py-2 text-right font-bold ${isDeb ? 'text-gray-900' : 'text-gray-300'}">
+                ${isDeb ? fmtMon(l.monto) : '—'}
+              </td>
+              <td class="px-3 py-2 text-right font-bold ${!isDeb ? 'text-gray-900' : 'text-gray-300'}">
+                ${!isDeb ? fmtMon(l.monto) : '—'}
+              </td>
+            </tr>
+          `;
+        });
+
+        if (tbody) tbody.innerHTML = rowsHtml;
+        if (totDeb) totDeb.textContent = fmtMon(d.total_debito);
+        if (totCred) totCred.textContent = fmtMon(d.total_credito);
+
+        if (btnConfirmar) {
+          btnConfirmar.disabled = !d.cuadrado;
+          if (!d.cuadrado) {
+            btnConfirmar.title = 'La partida doble no está balanceada';
+          } else {
+            btnConfirmar.title = 'Crear comprobante y asentar';
+          }
+        }
+
+      } catch (err) {
+        console.error('[Auditoria] Error al previsualizar asiento faltante:', err);
+        if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-rose-600 font-bold font-sans">Error de conexión: ${err.message}</td></tr>`;
+      }
+    }
+
+    function cerrarModalGenerarAsiento() {
+      const modal = document.getElementById('modal-generar-asiento-faltante');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+      asientoFaltanteDataActual = null;
+    }
+
+    async function ejecutarGenerarAsientoFaltante() {
+      if (!asientoFaltanteDataActual) return;
+      const btn = document.getElementById('btn-confirmar-asiento-faltante');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="animate-spin inline-block mr-1">⏳</span> Asentando contablemente...`;
+      }
+
+      const modoHoy = document.getElementById('fecha-modo-hoy')?.checked;
+      const fechaUso = modoHoy ? asientoFaltanteDataActual.doc?.fecha_hoy : asientoFaltanteDataActual.doc?.fecha_original;
+
+      try {
+        const payload = {
+          producto_id: asientoFaltanteDataActual.productoId,
+          documento_numero: asientoFaltanteDataActual.docNumero,
+          tipo_documento_id: asientoFaltanteDataActual.tipoDocId,
+          tipo_documento: asientoFaltanteDataActual.tipoDocNombre,
+          fecha: fechaUso
+        };
+
+        const r = await fetch(`/api/inventario/${NEGOCIO_ID}/auditoria-productos/generar-asiento-faltante`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+
+        if (!d.ok) {
+          alert('Error al generar asiento contable: ' + (d.error || 'Error desconocido'));
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `<span>✅</span> Confirmar y Asentar Contablemente`;
+          }
+          return;
+        }
+
+        const prodId = asientoFaltanteDataActual.productoId;
+        cerrarModalGenerarAsiento();
+        toast(d.mensaje || '¡Asiento generado exitosamente!', true);
+
+        // Recargar cotejo y tabla principal de auditoría
+        abrirModalCotejoDocumental(prodId);
+        cargarAuditoriaProductos(true);
+
+      } catch (err) {
+        console.error('[Auditoria] Error al ejecutar asiento:', err);
+        alert('Error de conexión: ' + err.message);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span>✅</span> Confirmar y Asentar Contablemente`;
+        }
+      }
+    }
+
     // Alias y asignación global a window para máxima compatibilidad
     window.abrirModalCotejoDocumental = abrirModalCotejoDocumental;
     window.cerrarModalCotejo = cerrarModalCotejo;
     window.toggleAcordeonAuditoria = abrirModalCotejoDocumental;
     window.toggleCotejoDoc = abrirModalCotejoDocumental;
+    window.abrirModalGenerarAsientoFaltante = abrirModalGenerarAsientoFaltante;
+    window.cerrarModalGenerarAsiento = cerrarModalGenerarAsiento;
+    window.ejecutarGenerarAsientoFaltante = ejecutarGenerarAsientoFaltante;
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        cerrarModalGenerarAsiento();
         cerrarModalCotejo();
       }
     });
@@ -13452,6 +13653,82 @@ async function cargarReporteEnsambles() {
             </button>
             <div id="modal-cotejo-acciones" class="flex items-center gap-2"></div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Previsualización y Generación de Asiento Contable Faltante -->
+    <div id="modal-generar-asiento-faltante" class="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs hidden items-center justify-center p-3 md:p-6" onclick="if(event.target===this) cerrarModalGenerarAsiento()">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-5 space-y-4 max-h-[92vh] flex flex-col border border-gray-200">
+        <!-- Cabecera -->
+        <div class="flex items-center justify-between border-b pb-3">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">⚡</span>
+            <div>
+              <h3 class="text-base font-bold text-gray-900">
+                Generar Asiento Contable Faltante
+              </h3>
+              <p id="asiento-faltante-subtitulo" class="text-xs text-gray-500 font-medium"></p>
+            </div>
+          </div>
+          <button onclick="cerrarModalGenerarAsiento()" class="text-gray-400 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 transition cursor-pointer">&times;</button>
+        </div>
+
+        <!-- Selector de Fecha Contable -->
+        <div class="bg-amber-50/80 border border-amber-200 rounded-xl p-3 text-xs space-y-2">
+          <div class="font-bold text-amber-950 flex items-center gap-1.5">
+            <span>📅</span> Selecciona la Fecha Contable para el Asiento:
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-gray-800">
+            <label class="flex items-center gap-2 p-2.5 rounded-lg border border-amber-200 bg-white cursor-pointer hover:bg-amber-50 transition">
+              <input type="radio" name="fecha_asiento_modo" id="fecha-modo-orig" value="orig" checked>
+              <div>
+                <div class="font-bold text-gray-900">Fecha Original del Documento</div>
+                <div id="asiento-faltante-fecha-orig-lbl" class="text-[11px] text-gray-500 font-mono"></div>
+              </div>
+            </label>
+            <label class="flex items-center gap-2 p-2.5 rounded-lg border border-amber-200 bg-white cursor-pointer hover:bg-amber-50 transition">
+              <input type="radio" name="fecha_asiento_modo" id="fecha-modo-hoy" value="hoy">
+              <div>
+                <div class="font-bold text-gray-900">Fecha de Hoy (Periodo Cerrado)</div>
+                <div id="asiento-faltante-fecha-hoy-lbl" class="text-[11px] text-gray-500 font-mono"></div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Previsualización de Partida Doble -->
+        <div class="overflow-x-auto flex-1 overflow-y-auto border border-gray-200 rounded-xl bg-gray-50/50">
+          <table class="w-full text-xs border-collapse">
+            <thead class="bg-gray-100 text-gray-700 font-bold border-b border-gray-200 sticky top-0 z-10">
+              <tr>
+                <th class="px-3 py-2 text-left">Cuenta PUC</th>
+                <th class="px-3 py-2 text-left">Concepto / Producto</th>
+                <th class="px-3 py-2 text-right">Débito ($)</th>
+                <th class="px-3 py-2 text-right">Crédito ($)</th>
+              </tr>
+            </thead>
+            <tbody id="asiento-faltante-tbody" class="divide-y divide-gray-100 bg-white font-mono">
+              <tr><td colspan="4" class="text-center py-6 text-gray-400 font-sans">Cargando propuesta...</td></tr>
+            </tbody>
+            <tfoot class="bg-gray-50 border-t font-bold font-mono text-xs">
+              <tr>
+                <td colspan="2" class="px-3 py-2 text-right font-sans">Sumas Iguales:</td>
+                <td class="px-3 py-2 text-right text-gray-900 font-bold" id="asiento-faltante-tot-deb">$0</td>
+                <td class="px-3 py-2 text-right text-gray-900 font-bold" id="asiento-faltante-tot-cred">$0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- Pie -->
+        <div class="flex items-center justify-between border-t pt-3 gap-3">
+          <button onclick="cerrarModalGenerarAsiento()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
+            Cancelar
+          </button>
+          <button id="btn-confirmar-asiento-faltante" onclick="ejecutarGenerarAsientoFaltante()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow flex items-center gap-1.5 cursor-pointer">
+            <span>✅</span> Confirmar y Asentar Contablemente
+          </button>
         </div>
       </div>
     </div>

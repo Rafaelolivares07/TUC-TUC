@@ -10580,11 +10580,25 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
         costo_actual = float(saldo_existente['costo_und'] or prod['costo'] or 0) if saldo_existente else float(prod['costo'] or 0)
         valor_actual = float(saldo_existente['valor_existencia'] or 0) if saldo_existente else 0.0
 
+        # 1. Traer movimientos de Kardex para este producto (entradas y salidas con documento_numero)
         kmovs = conn.execute("""
-            SELECT id, tipo, cantidad, costo_und, COALESCE(valor_total, cantidad * costo_und, 0) as valor_total,
-                   documento_numero, tipo_documento, tipo_documento_id
+            SELECT id, tipo, motivo, cantidad, costo_und, COALESCE(valor_total, cantidad * costo_und, 0) as valor_total,
+                   documento_numero, tipo_documento, tipo_documento_id, producto_padre_id,
+                   COALESCE(documento_fecha, created_at::date) as fecha
             FROM movimientos_inventario
-            WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida' AND documento_numero IS NOT NULL
+            WHERE negocio_id = %s AND producto_id = %s AND documento_numero IS NOT NULL
+            ORDER BY COALESCE(documento_fecha, created_at::date) ASC, id ASC
+        """, (negocio_id, producto_id)).fetchall()
+
+        # 2. Traer movimientos contables asociados a la cuenta 14* para este producto
+        cmovs = conn.execute("""
+            SELECT mc.id, mc.comprobante_id, mc.tipo, mc.monto, mc.numero_documento, mc.tipo_documento, mc.tipo_documento_id,
+                   COALESCE(mc.fecha, mc.created_at::date) as fecha, mc.concepto, cp.codigo as cuenta_codigo,
+                   mc.cuenta_id, mc.producto_padre_id, mc.tercero_id
+            FROM movimientos_contables mc
+            JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+            WHERE mc.negocio_id = %s AND (cp.codigo LIKE '14%%' OR mc.cuenta LIKE '14%%') AND mc.producto_id = %s
+            ORDER BY COALESCE(mc.fecha, mc.created_at::date) ASC, mc.id ASC
         """, (negocio_id, producto_id)).fetchall()
 
         td_rows = conn.execute("""
@@ -10609,55 +10623,134 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
                 return tipo_str
             return 'Documento'
 
-        def _norm_tipo_str(tipo_id, tipo_str):
-            res = _resolver_td_nombre(tipo_id, tipo_str)
-            if not res or res == 'Documento':
-                return 'DOC'
-            import unicodedata
-            s = unicodedata.normalize('NFKD', str(res)).encode('ascii', 'ignore').decode('utf-8')
-            s = s.strip().upper().replace('_', ' ').replace('-', ' ')
-            return ' '.join(s.split())
+        def _norm_tipo(t_id, t_str):
+            res = _resolver_td_nombre(t_id, t_str)
+            s = str(res or t_str or '').strip().upper()
+            if 'AJUST' in s:
+                return 'AJUSTE'
+            if 'PROD' in s:
+                return 'PRODUCCION'
+            if 'VENT' in s or 'FAC' in s:
+                return 'VENTA'
+            if 'COMP' in s:
+                return 'COMPRA'
+            if 'TRAS' in s:
+                return 'TRASLADO'
+            return s or 'DOC'
+
+        # Agrupar Kardex y Contabilidad por clave de documento unificada
+        docs_k = {}
+        for k in kmovs:
+            t_norm = _norm_tipo(k.get('tipo_documento_id'), k.get('tipo_documento'))
+            num_norm = normalizar_numero(k['documento_numero']) or f"k_{k['id']}"
+            key = f"{t_norm}__{num_norm}"
+            docs_k.setdefault(key, []).append(k)
+
+        docs_c = {}
+        for c in cmovs:
+            t_norm = _norm_tipo(c.get('tipo_documento_id'), c.get('tipo_documento'))
+            num_norm = normalizar_numero(c['numero_documento']) or f"c_{c['id']}"
+            key = f"{t_norm}__{num_norm}"
+            docs_c.setdefault(key, []).append(c)
+
+        todos_docs = list(dict.fromkeys(list(docs_k.keys()) + list(docs_c.keys())))
 
         asientos_a_modificar = []
-        for km in kmovs:
-            num_norm = normalizar_numero(km['documento_numero'])
-            val_kardex = float(km['valor_total'])
-            tipo_km_norm = _norm_tipo_str(km.get('tipo_documento_id'), km.get('tipo_documento'))
+        asientos_a_insertar = []
 
-            asientos_c = conn.execute("""
-                SELECT mc.id, mc.monto, mc.comprobante_id, mc.numero_documento, mc.tipo_documento, mc.tipo_documento_id,
-                       COALESCE(mc.fecha, mc.created_at::date) as fecha, mc.concepto, cp.codigo as cuenta_codigo
-                FROM movimientos_contables mc
-                JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
-                WHERE mc.negocio_id = %s AND cp.codigo LIKE '14%%' AND mc.producto_id = %s
-                  AND mc.tipo IN ('credito', 'C')
-                  AND (mc.numero_documento = %s OR mc.numero_documento LIKE %s)
-            """, (negocio_id, producto_id, km['documento_numero'], f'%{num_norm}%')).fetchall()
+        for key in todos_docs:
+            k_items = docs_k.get(key, [])
+            c_items = docs_c.get(key, [])
 
-            for ac in asientos_c:
-                # Validar que pertenezcan al mismo tipo de documento
-                tipo_ac_norm = _norm_tipo_str(ac.get('tipo_documento_id'), ac.get('tipo_documento'))
-                if tipo_km_norm != 'DOC' and tipo_ac_norm != 'DOC' and tipo_km_norm != tipo_ac_norm:
-                    continue
+            if not k_items:
+                continue
 
-                # Validar coincidencia de número de documento normalizado
-                num_ac_norm = normalizar_numero(ac.get('numero_documento'))
-                if num_norm and num_ac_norm and num_norm != num_ac_norm and str(ac.get('numero_documento') or '').strip() != str(km.get('documento_numero') or '').strip():
-                    continue
+            c_disponibles = list(c_items)
+            c_usados = set()
 
-                monto_contab = float(ac['monto'])
-                if abs(monto_contab - val_kardex) >= 0.01:
-                    asientos_a_modificar.append({
-                        'asiento_id': ac['id'],
-                        'comprobante_id': ac['comprobante_id'],
-                        'documento': ac['numero_documento'] or km['documento_numero'],
-                        'tipo_documento_nombre': _resolver_td_nombre(ac['tipo_documento_id'], ac['tipo_documento']),
-                        'concepto': ac['concepto'],
-                        'cuenta': ac['cuenta_codigo'],
-                        'fecha': str(ac['fecha']) if ac['fecha'] else None,
-                        'monto_actual': monto_contab,
-                        'monto_nuevo': val_kardex,
-                        'diferencia': round(monto_contab - val_kardex, 2)
+            for k in k_items:
+                val_k = round(float(k['valor_total']), 2)
+                padre_k = k.get('producto_padre_id')
+                tipo_esperado = 'credito' if k['tipo'] == 'salida' else 'debito'
+
+                match_c = None
+
+                # Prioridad 1: Coincidencia exacta por producto_padre_id
+                if padre_k:
+                    for c in c_disponibles:
+                        if c['id'] not in c_usados and c.get('producto_padre_id') == padre_k:
+                            match_c = c
+                            break
+
+                # Prioridad 2: Coincidencia por monto exacto y mismo tipo
+                if not match_c:
+                    for c in c_disponibles:
+                        if c['id'] not in c_usados and abs(float(c['monto']) - val_k) < 0.01:
+                            if str(c['tipo']).lower() in (tipo_esperado, tipo_esperado[0]):
+                                match_c = c
+                                break
+
+                # Prioridad 3: Primer asiento disponible del mismo tipo (debito/credito)
+                if not match_c:
+                    for c in c_disponibles:
+                        if c['id'] not in c_usados and str(c['tipo']).lower() in (tipo_esperado, tipo_esperado[0]):
+                            match_c = c
+                            break
+
+                # Prioridad 4: Cualquier asiento disponible en este documento
+                if not match_c and len(c_disponibles) > len(c_usados):
+                    for c in c_disponibles:
+                        if c['id'] not in c_usados:
+                            match_c = c
+                            break
+
+                if match_c:
+                    c_usados.add(match_c['id'])
+                    monto_c = round(float(match_c['monto']), 2)
+                    dif = round(monto_c - val_k, 2)
+                    cambio_monto = abs(dif) >= 0.01
+                    cambio_padre = bool(padre_k and match_c.get('producto_padre_id') != padre_k)
+
+                    if cambio_monto or cambio_padre:
+                        es_ajuste = (
+                            'ajust' in str(k.get('tipo_documento') or '').lower() or
+                            'ajust' in str(match_c.get('tipo_documento') or '').lower() or
+                            'ajust' in str(match_c.get('concepto') or '').lower()
+                        )
+                        asientos_a_modificar.append({
+                            'asiento_id': match_c['id'],
+                            'comprobante_id': match_c['comprobante_id'],
+                            'documento': match_c['numero_documento'] or k['documento_numero'],
+                            'tipo_documento_nombre': _resolver_td_nombre(match_c['tipo_documento_id'], match_c['tipo_documento']),
+                            'concepto': match_c['concepto'],
+                            'cuenta': match_c['cuenta_codigo'],
+                            'fecha': str(match_c['fecha']) if match_c['fecha'] else None,
+                            'monto_actual': monto_c,
+                            'monto_nuevo': val_k,
+                            'diferencia': dif,
+                            'padre_id_nuevo': padre_k,
+                            'es_ajuste': es_ajuste
+                        })
+                else:
+                    # Falta asiento contable para esta línea de Kardex
+                    primer_c = c_items[0] if c_items else None
+                    cid = primer_c['comprobante_id'] if primer_c else None
+                    cta_id = primer_c['cuenta_id'] if primer_c else None
+                    cta_cod = primer_c['cuenta_codigo'] if primer_c else '140505'
+                    
+                    asientos_a_insertar.append({
+                        'kardex_id': k['id'],
+                        'comprobante_id': cid,
+                        'cuenta_id': cta_id,
+                        'cuenta_codigo': cta_cod,
+                        'documento': k['documento_numero'],
+                        'tipo_documento': k['tipo_documento'],
+                        'tipo_documento_id': k.get('tipo_documento_id'),
+                        'monto': val_k,
+                        'producto_padre_id': padre_k,
+                        'tipo_mov': tipo_esperado,
+                        'fecha': str(k['fecha']),
+                        'concepto': f"Baja Inv: {prod['nombre']}" if tipo_esperado == 'credito' else f"Inv: {prod['nombre']}"
                     })
 
         requiere_actualizacion_tabla = (
@@ -10668,6 +10761,21 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
 
         # Si la petición es solo GET (Previsualización antes de reparar)
         if request.method == 'GET':
+            items_visuales = list(asientos_a_modificar)
+            for ins in asientos_a_insertar:
+                items_visuales.append({
+                    'asiento_id': 'Nuevo',
+                    'comprobante_id': ins.get('comprobante_id'),
+                    'documento': ins['documento'],
+                    'tipo_documento_nombre': _resolver_td_nombre(ins.get('tipo_documento_id'), ins.get('tipo_documento')),
+                    'concepto': f"{ins['concepto']} (Línea Faltante)",
+                    'cuenta': ins['cuenta_codigo'],
+                    'fecha': ins['fecha'],
+                    'monto_actual': 0.0,
+                    'monto_nuevo': ins['monto'],
+                    'diferencia': -ins['monto']
+                })
+
             return jsonify({
                 'ok': True,
                 'producto': {'id': prod['id'], 'nombre': prod['nombre']},
@@ -10680,11 +10788,11 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
                     'valor_nuevo': val_existencia_real,
                     'requiere_actualizacion': requiere_actualizacion_tabla
                 },
-                'asientos_a_modificar': asientos_a_modificar,
-                'total_asientos': len(asientos_a_modificar)
+                'asientos_a_modificar': items_visuales,
+                'total_asientos': len(items_visuales)
             })
 
-        # Si es POST -> Ejecutar la reparación
+        # Si es POST -> Ejecutar la sincronización y reparación
         if saldo_existente:
             conn.execute("""
                 UPDATE saldos_inventario
@@ -10702,23 +10810,56 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
             aid = item_mod['asiento_id']
             val_nuevo = item_mod['monto_nuevo']
             cid = item_mod['comprobante_id']
+            padre_id = item_mod.get('padre_id_nuevo')
+            es_ajuste = item_mod.get('es_ajuste')
 
             conn.execute("""
                 UPDATE movimientos_contables
-                SET monto = %s
+                SET monto = %s,
+                    producto_padre_id = COALESCE(%s, producto_padre_id)
                 WHERE id = %s
-            """, (val_nuevo, aid))
+            """, (val_nuevo, padre_id, aid))
             asientos_modificados += 1
 
-            if cid:
+            # Si es ajuste de inventario, actualizar la contrapartida en el mismo comprobante
+            if es_ajuste and cid:
                 conn.execute("""
                     UPDATE movimientos_contables mc
                     SET monto = %s
                     FROM cuentas_puc cp
                     WHERE cp.id = mc.cuenta_id AND mc.comprobante_id = %s
-                      AND (cp.codigo LIKE '61%%' OR cp.codigo LIKE '71%%')
-                      AND mc.producto_id = %s AND mc.tipo IN ('debito', 'D')
-                """, (val_nuevo, cid, producto_id))
+                      AND mc.id != %s
+                      AND (cp.codigo LIKE '61%%' OR cp.codigo LIKE '71%%' OR cp.codigo LIKE '41%%' OR cp.codigo LIKE '14%%')
+                """, (val_nuevo, cid, aid))
+
+        # Insertar asientos faltantes si los hubiere
+        for ins in asientos_a_insertar:
+            cid = ins.get('comprobante_id')
+            if not cid:
+                cid = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+            cta_id = ins.get('cuenta_id')
+            if not cta_id:
+                cta_row = conn.execute("SELECT id FROM cuentas_puc WHERE negocio_id = %s AND codigo = %s", (negocio_id, ins['cuenta_codigo'])).fetchone()
+                cta_id = cta_row['id'] if cta_row else None
+
+            conn.execute("""
+                INSERT INTO movimientos_contables (
+                    negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
+                    producto_id, producto_padre_id, tipo_documento_id, numero_documento,
+                    fecha, tipo_documento, origen_tipo, origen_id, registrado_por
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, 'auditoria_reparacion', %s, %s
+                )
+            """, (
+                negocio_id, cid, cta_id, ins['cuenta_codigo'], ins['concepto'],
+                ins['tipo_mov'], ins['monto'], producto_id, ins.get('producto_padre_id'),
+                ins.get('tipo_documento_id'), str(ins['documento']), ins['fecha'],
+                ins.get('tipo_documento') or 'Documento', str(ins['kardex_id']),
+                session.get('usuario_id') or 1
+            ))
+            asientos_modificados += 1
 
         conn.commit()
 
@@ -10732,6 +10873,7 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
             'asientos_detalle': asientos_a_modificar
         })
     except Exception as e:
+        conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

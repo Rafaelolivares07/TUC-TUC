@@ -9985,7 +9985,10 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
                 hd['pendiente_vinculo'] = True
                 cmovs_todos.append(hd)
 
-        def _norm_tipo(t_id, t_str):
+        def _norm_tipo(t_id, t_str, doc_num=''):
+            doc_s = str(doc_num or '').upper()
+            if 'FACTURA_DE_VENTA' in doc_s or 'VENTA' in doc_s:
+                return 'VENTA'
             res = _resolver_tipo_doc(t_id, t_str)
             s = str(res or t_str or '').strip().upper()
             if 'AJUST' in s:
@@ -10004,7 +10007,7 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
 
         docs_k = {}
         for k in kmovs:
-            t_norm = _norm_tipo(k.get('tipo_documento_id'), k.get('tipo_documento'))
+            t_norm = _norm_tipo(k.get('tipo_documento_id'), k.get('tipo_documento'), k.get('documento_numero'))
             num_norm = normalizar_numero(k['documento_numero']) or f"k_{k['id']}"
             key = f"{t_norm}__{num_norm}"
             if key not in docs_k:
@@ -10013,7 +10016,7 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
 
         docs_c = {}
         for c in cmovs_todos:
-            t_norm = _norm_tipo(c.get('tipo_documento_id'), c.get('tipo_documento'))
+            t_norm = _norm_tipo(c.get('tipo_documento_id'), c.get('tipo_documento'), c.get('numero_documento'))
             num_norm = normalizar_numero(c['numero_documento']) or f"c_{c['id']}"
             key = f"{t_norm}__{num_norm}"
             if key not in docs_c:
@@ -10027,22 +10030,26 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
             k_items = docs_k.get(key, [])
             c_items = docs_c.get(key, [])
 
-            # Calcular valor neto de Kardex: entradas (+) y salidas (+) para comparativa por documento
-            # Si el documento tiene entradas, se espera débito. Si tiene salidas, se espera crédito.
+            # Calcular valores de Kardex
             k_total_ent = sum(float(x['valor_total']) for x in k_items if x['tipo'] == 'entrada')
             k_total_sal = sum(float(x['valor_total']) for x in k_items if x['tipo'] == 'salida')
-            k_total = sum(float(x['valor_total']) for x in k_items)
+            k_neto = round(k_total_ent - k_total_sal, 2)
 
+            # Calcular valores de Contabilidad (Cta 14)
             c_total_deb = sum(float(x['monto']) for x in c_items if str(x['tipo']).lower() in ('debito', 'd'))
             c_total_cred = sum(float(x['monto']) for x in c_items if str(x['tipo']).lower() in ('credito', 'c'))
-            c_total = sum(float(x['monto']) for x in c_items)
+            c_neto = round(c_total_deb - c_total_cred, 2)
 
-            # Diferencia neta según naturaleza principal del documento:
-            # Si tiene entradas en kardex o débitos en contabilidad, comparamos entradas vs débitos
-            if k_total_ent > 0 or c_total_deb > 0:
-                dif = round(k_total_ent - c_total_deb, 2)
+            # Para visualización: si el documento es principalmente de salida (ventas/consumos),
+            # mostrar el valor absoluto de la salida tanto en Kardex como en Contabilidad
+            if (k_total_sal > k_total_ent) or (c_total_cred > c_total_deb and k_total_ent == 0):
+                k_disp = round(k_total_sal - k_total_ent, 2)
+                c_disp = round(c_total_cred - c_total_deb, 2)
+                dif = round(k_disp - c_disp, 2)
             else:
-                dif = round(k_total_sal - c_total_cred, 2)
+                k_disp = round(k_total_ent - k_total_sal, 2)
+                c_disp = round(c_total_deb - c_total_cred, 2)
+                dif = round(k_disp - c_disp, 2)
 
             fecha_doc = None
             num_doc_display = key.split('__')[-1]
@@ -10088,8 +10095,8 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
                     'concepto': x['concepto'],
                     'pendiente_vinculo': x.get('pendiente_vinculo', False)
                 } for x in c_items],
-                'kardex_total': k_total,
-                'contab_total': c_total,
+                'kardex_total': k_disp,
+                'contab_total': c_disp,
                 'diferencia': dif,
                 'ok': abs(dif) < 0.01 and len(k_items) > 0 and len(c_items) > 0 and not tiene_huerfanos
             })

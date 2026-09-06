@@ -12873,16 +12873,16 @@ async function cargarReporteEnsambles() {
           <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors">
             <td class="px-3 py-2 text-left">
               <div class="flex items-center gap-2">
-                <button onclick="toggleAcordeonAuditoria(${p.id}, event)" id="btn-toggle-${p.id}" title="Desplegar documentos de este producto"
-                        class="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 flex items-center justify-center text-[10px] font-bold shrink-0 cursor-pointer shadow-2xs">
-                  <span id="chevron-${p.id}" class="inline-block transition-transform duration-150">▶</span>
+                <button onclick="abrirModalCotejoDocumental(${p.id}, event)" id="btn-toggle-${p.id}" title="Ver cotejo documental de este producto"
+                        class="w-7 h-7 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0 cursor-pointer shadow-2xs transition">
+                  <span>📋</span>
                 </button>
-                <div class="cursor-pointer select-none" onclick="toggleAcordeonAuditoria(${p.id}, event)">
-                  <div class="font-bold text-gray-900 hover:text-rose-600 transition-colors flex items-center gap-1.5">
+                <div class="cursor-pointer select-none" onclick="abrirModalCotejoDocumental(${p.id}, event)">
+                  <div class="font-bold text-gray-900 hover:text-indigo-600 transition-colors flex items-center gap-1.5">
                     <span>${p.nombre}</span>
                     ${p.total_movimientos_kardex > 0 ? `<span class="text-[9px] text-gray-400 font-normal">(${p.total_movimientos_kardex} movs)</span>` : ''}
                   </div>
-                  <div class="text-[10px] text-gray-400">ID #${p.id} &bull; ${p.categoria}</div>
+                  <div class="text-[10px] text-gray-400">ID #${p.id} &bull; ${p.categoria} &bull; <span class="text-indigo-600 font-semibold hover:underline">Ver documentos 📋</span></div>
                 </div>
               </div>
             </td>
@@ -12897,13 +12897,6 @@ async function cargarReporteEnsambles() {
               <div class="flex items-center justify-center gap-2 flex-wrap">
                 ${fase1Html}
                 ${fase3Html}
-              </div>
-            </td>
-          </tr>
-          <tr id="row-cotejo-${p.id}" class="hidden bg-slate-50 border-b border-slate-200">
-            <td colspan="9" class="p-4" id="content-cotejo-${p.id}">
-              <div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-500 font-semibold">
-                <span class="animate-spin inline-block">⏳</span> Cargando documentos y cotejo contable...
               </div>
             </td>
           </tr>
@@ -13129,52 +13122,75 @@ async function cargarReporteEnsambles() {
         forzarAbrir = ev;
         ev = null;
       }
+    let productoCotejoIdActual = null;
+
+    function cerrarModalCotejo() {
+      const modal = document.getElementById('modal-auditoria-cotejo');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+      productoCotejoIdActual = null;
+    }
+
+    async function abrirModalCotejoDocumental(productoId, ev = null) {
       if (ev && ev.stopPropagation) {
         try { ev.stopPropagation(); } catch (_) {}
       }
+      productoCotejoIdActual = productoId;
+      const modal = document.getElementById('modal-auditoria-cotejo');
+      const subtitulo = document.getElementById('modal-cotejo-subtitulo');
+      const badgeEstado = document.getElementById('modal-cotejo-badge-estado');
+      const bannerHuerfanos = document.getElementById('modal-cotejo-banner-huerfanos');
+      const tbody = document.getElementById('modal-cotejo-tbody');
+      const totalesContainer = document.getElementById('modal-cotejo-totales');
+      const accionesContainer = document.getElementById('modal-cotejo-acciones');
 
-      const row = document.getElementById(`row-cotejo-${productoId}`);
-      const chevron = document.getElementById(`chevron-${productoId}`);
-      const container = document.getElementById(`content-cotejo-${productoId}`);
-      if (!row) {
-        console.warn('[Auditoria] Fila no encontrada: row-cotejo-' + productoId);
-        return;
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      const prodInfo = (auditProductosData || []).find(x => x.id === productoId);
+      if (subtitulo) {
+        subtitulo.textContent = prodInfo 
+          ? `${prodInfo.nombre} (ID #${prodInfo.id}) • Categoría: ${prodInfo.categoria || 'Sin categoría'}`
+          : `Producto #${productoId}`;
+      }
+      if (badgeEstado && prodInfo) {
+        if (prodInfo.estado === 'OK') {
+          badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300';
+          badgeEstado.textContent = '✅ Cuadrado / Sano';
+        } else if (prodInfo.estado === 'REQUIERE_VINCULAR_IDS') {
+          badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300';
+          badgeEstado.textContent = '🔗 Requiere Vincular IDs (Fase 1)';
+        } else {
+          badgeEstado.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300';
+          badgeEstado.textContent = '⚠️ Presenta Diferencias';
+        }
       }
 
-      const isHidden = row.classList.contains('hidden');
-      const abrir = (forzarAbrir !== null && forzarAbrir !== undefined) ? !!forzarAbrir : isHidden;
-
-      if (!abrir) {
-        row.classList.add('hidden');
-        if (chevron) chevron.textContent = '▶';
-        auditOpenCotejos.delete(String(productoId));
-        return;
-      }
-
-      row.classList.remove('hidden');
-      if (chevron) chevron.textContent = '▼';
-      auditOpenCotejos.add(String(productoId));
-      if (container) {
-        container.innerHTML = `
-          <div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-500 font-semibold">
-            <span class="animate-spin inline-block">⏳</span> Cargando documentos y cotejo contable...
-          </div>
+      if (bannerHuerfanos) bannerHuerfanos.classList.add('hidden');
+      if (tbody) {
+        tbody.innerHTML = `
+          <tr><td colspan="7" class="text-center py-10 text-gray-500 font-sans">
+            <span class="animate-spin inline-block mr-2 text-rose-500 text-lg">⏳</span> Cargando desglose y cotejo documental de este producto...
+          </td></tr>
         `;
       }
+      if (totalesContainer) totalesContainer.innerHTML = '';
+      if (accionesContainer) accionesContainer.innerHTML = '';
 
       try {
         const url = `/api/inventario/${NEGOCIO_ID}/auditoria-productos/${productoId}/detalle-cotejo`;
-        console.log('[Auditoria] Fetching:', url);
         const r = await fetch(url);
         const d = await r.json();
-        console.log('[Auditoria] Respuesta recibida para', productoId, d);
         if (!d.ok) {
-          if (container) {
-            container.innerHTML = `
-              <div class="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center justify-between">
-                <span><strong>Error al cargar:</strong> ${d.error || 'Error desconocido'}</span>
-                <button onclick="toggleAcordeonAuditoria(${productoId}, null, true)" class="px-3 py-1 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700">Reintentar</button>
-              </div>
+          if (tbody) {
+            tbody.innerHTML = `
+              <tr><td colspan="7" class="text-center py-8 text-rose-600 font-sans font-bold">
+                Error al cargar documentos: ${d.error || 'Error desconocido'}
+                <div class="mt-2"><button onclick="abrirModalCotejoDocumental(${productoId})" class="px-3 py-1 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700 text-xs">Reintentar</button></div>
+              </td></tr>
             `;
           }
           return;
@@ -13182,60 +13198,46 @@ async function cargarReporteEnsambles() {
 
         const cotejo = d.cotejo || [];
         if (!cotejo.length) {
-          if (container) {
-            container.innerHTML = `<div class="text-gray-400 text-xs py-3 italic text-center">Sin documentos registrados en Kardex ni Contabilidad para este producto.</div>`;
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-gray-400 font-sans italic">Sin documentos registrados en Kardex ni Contabilidad para este producto.</td></tr>`;
           }
           return;
         }
 
-        let bannerHuerfanos = '';
-        if (d.total_huerfanos > 0) {
-          bannerHuerfanos = `
+        // Subtítulo con conteo
+        if (subtitulo) {
+          subtitulo.textContent = `${d.producto.nombre} (ID #${d.producto.id}) • Categoría: ${d.producto.categoria || 'Sin categoría'} • ${cotejo.length} documento(s) cotejados`;
+        }
+
+        // Banner huérfanos
+        if (d.total_huerfanos > 0 && bannerHuerfanos) {
+          bannerHuerfanos.classList.remove('hidden');
+          bannerHuerfanos.innerHTML = `
             <div class="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
               <div class="flex items-center gap-2.5">
                 <span class="text-lg">⚠️</span>
                 <div>
                   <span class="font-bold uppercase tracking-wider text-[11px] bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded">Fase 1 Requerida</span>
                   <div class="mt-0.5 font-sans">
-                    Hay <strong>${d.total_huerfanos} asiento(s) contable(s) huérfano(s)</strong> (resaltados con borde amarillo abajo) que pertenecen a este producto pero no tienen su ID asignado en contabilidad. Por orden contable, debes vincularlos antes de poder reparar valores.
+                    Hay <strong>${d.total_huerfanos} asiento(s) contable(s) huérfano(s)</strong> que pertenecen a este producto pero no tienen su ID asignado en contabilidad.
                   </div>
                 </div>
               </div>
-              <button onclick="confirmarVincularIds(${productoId})" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shrink-0 shadow-sm flex items-center gap-1.5 cursor-pointer">
+              <button onclick="confirmarVincularIds(${productoId}); cerrarModalCotejo();" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shrink-0 shadow-sm flex items-center gap-1.5 cursor-pointer">
                 <span>🔗</span> Vincular IDs Ahora (Fase 1)
               </button>
             </div>
           `;
         }
 
-        let html = `
-          <div class="bg-white rounded-xl border border-gray-200 p-3 shadow-xs space-y-3">
-            <div class="flex items-center justify-between border-b border-gray-100 pb-2">
-              <span class="text-xs font-bold text-gray-800 uppercase flex items-center gap-1.5">
-                <span>📋</span> Documentos Registrados &bull; Kardex vs Contabilidad (Cta 14) &bull; ${d.producto.nombre}
-              </span>
-              <span class="text-[11px] font-semibold text-gray-500">${cotejo.length} documento(s) cotejados</span>
-            </div>
+        let totalKardexSum = 0;
+        let totalContabSum = 0;
 
-            ${bannerHuerfanos}
-
-            <div class="overflow-x-auto border border-gray-200 rounded-lg">
-              <table class="w-full text-xs border-collapse">
-                <thead class="bg-gray-100 text-gray-700 font-bold border-b border-gray-200">
-                  <tr>
-                    <th class="px-2.5 py-2 text-left bg-gray-100">Documento / Fecha</th>
-                    <th class="px-2.5 py-2 text-left bg-gray-100">📦 Kardex (Cantidad &bull; Costo Unitario)</th>
-                    <th class="px-2.5 py-2 text-right bg-gray-100">Valor Kardex ($)</th>
-                    <th class="px-2.5 py-2 text-left bg-gray-100">🏛️ Asiento Contable (Cta 14 &bull; Tipo)</th>
-                    <th class="px-2.5 py-2 text-right bg-gray-100">Valor Contab ($)</th>
-                    <th class="px-2.5 py-2 text-right bg-gray-100">Diferencia ($)</th>
-                    <th class="px-2.5 py-2 text-center bg-gray-100">Estado</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 font-mono">
-        `;
-
+        let rowsHtml = '';
         cotejo.forEach(c => {
+          totalKardexSum += (c.kardex_total || 0);
+          totalContabSum += (c.contab_total || 0);
+
           const kDetalle = c.kardex.map(k => `${k.tipo === 'entrada' ? '📥 Ent' : '📤 Sal'} ${fmt(k.cantidad)} × ${fmtMon(k.costo_und)}`).join(', ') || '<span class="text-gray-400 font-sans italic">Sin kardex</span>';
           
           const cDetalle = c.contabilidad.map(ac => {
@@ -13254,7 +13256,7 @@ async function cargarReporteEnsambles() {
                     <span class="text-gray-900">${fmtMon(ac.monto)}</span>
                     <span class="px-1 py-0.2 bg-amber-300 text-amber-900 rounded text-[9px] uppercase font-bold">⚠️ Sin Vincular ID</span>
                   </div>
-                  <div class="text-[10px] text-amber-800 italic mt-0.5 truncate max-w-xs" title="${rawConcepto}">
+                  <div class="text-[10px] text-amber-800 italic mt-0.5 truncate max-w-sm" title="${rawConcepto}">
                     Concepto: ${rawConcepto}
                   </div>
                 </div>
@@ -13285,46 +13287,77 @@ async function cargarReporteEnsambles() {
             ? 'bg-amber-50/80 hover:bg-amber-100/60 border-l-4 border-amber-400'
             : (!isOk ? 'bg-amber-50/30 hover:bg-gray-50' : 'hover:bg-gray-50');
 
-          html += `
+          rowsHtml += `
             <tr class="${rowClass}">
-              <td class="px-2.5 py-2 text-left font-sans">
+              <td class="px-3 py-2 text-left font-sans">
                 <div class="font-bold text-gray-800">${c.tipo_documento_nombre || 'Documento'} #${c.documento}</div>
                 <div class="text-[10px] text-gray-400">${c.fecha || '—'}</div>
               </td>
-              <td class="px-2.5 py-2 text-left font-sans text-gray-700">${kDetalle}</td>
-              <td class="px-2.5 py-2 text-right font-bold text-gray-900">${fmtMon(c.kardex_total)}</td>
-              <td class="px-2.5 py-2 text-left text-gray-700">${cDetalle}</td>
-              <td class="px-2.5 py-2 text-right font-bold text-gray-900">${fmtMon(c.contab_total)}</td>
-              <td class="px-2.5 py-2 text-right font-bold ${Math.abs(dif) >= 0.01 ? 'text-rose-600' : 'text-gray-400'}">${fmtMon(dif)}</td>
-              <td class="px-2.5 py-2 text-center font-sans">${badge}</td>
+              <td class="px-3 py-2 text-left font-sans text-gray-700">${kDetalle}</td>
+              <td class="px-3 py-2 text-right font-bold text-gray-900">${fmtMon(c.kardex_total)}</td>
+              <td class="px-3 py-2 text-left text-gray-700">${cDetalle}</td>
+              <td class="px-3 py-2 text-right font-bold text-gray-900">${fmtMon(c.contab_total)}</td>
+              <td class="px-3 py-2 text-right font-bold ${Math.abs(dif) >= 0.01 ? 'text-rose-600' : 'text-gray-400'}">${fmtMon(dif)}</td>
+              <td class="px-3 py-2 text-center font-sans">${badge}</td>
             </tr>
           `;
         });
 
-        html += `
-                </tbody>
-              </table>
-            </div>
-          </div>
-        `;
+        if (tbody) tbody.innerHTML = rowsHtml;
 
-        if (container) container.innerHTML = html;
+        // Totales en el pie
+        const difNeta = totalKardexSum - totalContabSum;
+        if (totalesContainer) {
+          totalesContainer.innerHTML = `
+            <span>Total Kardex: <strong class="font-mono text-gray-900 font-bold">${fmtMon(totalKardexSum)}</strong></span>
+            <span>Total Contabilidad: <strong class="font-mono text-gray-900 font-bold">${fmtMon(totalContabSum)}</strong></span>
+            <span>Diferencia Neta: <strong class="font-mono ${Math.abs(difNeta) >= 0.01 ? 'text-rose-600 font-bold' : 'text-emerald-600 font-bold'}">${fmtMon(difNeta)}</strong></span>
+          `;
+        }
+
+        // Acciones en el pie si aplican
+        if (accionesContainer) {
+          let btns = '';
+          if (d.total_huerfanos > 0) {
+            btns += `
+              <button onclick="confirmarVincularIds(${productoId}); cerrarModalCotejo();" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1 cursor-pointer">
+                <span>🔗</span> Vincular IDs
+              </button>
+            `;
+          }
+          if (prodInfo && (Math.abs(prodInfo.dif_valor) >= 1.0 || Math.abs(prodInfo.dif_stock) >= 0.001)) {
+            btns += `
+              <button onclick="cerrarModalCotejo(); abrirModalRepararValores(${productoId});" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1 cursor-pointer">
+                <span>⚡</span> Reparar Valores
+              </button>
+            `;
+          }
+          accionesContainer.innerHTML = btns;
+        }
+
       } catch (err) {
-        console.error('[Auditoria] Error capturado en toggleAcordeonAuditoria:', err);
-        if (container) {
-          container.innerHTML = `
-            <div class="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs flex items-center justify-between">
-              <span><strong>Error de conexión o script:</strong> ${err.message}</span>
-              <button onclick="toggleAcordeonAuditoria(${productoId}, null, true)" class="px-3 py-1 bg-rose-600 text-white font-bold rounded-lg hover:bg-rose-700">Reintentar</button>
-            </div>
+        console.error('[Auditoria] Error al abrir modal cotejo:', err);
+        if (tbody) {
+          tbody.innerHTML = `
+            <tr><td colspan="7" class="text-center py-8 text-rose-600 font-sans font-bold">
+              Error de conexión: ${err.message}
+            </td></tr>
           `;
         }
       }
     }
 
     // Alias y asignación global a window para máxima compatibilidad
-    window.toggleAcordeonAuditoria = toggleAcordeonAuditoria;
-    window.toggleCotejoDoc = toggleAcordeonAuditoria;
+    window.abrirModalCotejoDocumental = abrirModalCotejoDocumental;
+    window.cerrarModalCotejo = cerrarModalCotejo;
+    window.toggleAcordeonAuditoria = abrirModalCotejoDocumental;
+    window.toggleCotejoDoc = abrirModalCotejoDocumental;
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        cerrarModalCotejo();
+      }
+    });
 
     // Al cargar la página, si la auditoría estaba abierta, mantenerla abierta automáticamente
     document.addEventListener('DOMContentLoaded', () => {
@@ -13334,6 +13367,62 @@ async function cargarReporteEnsambles() {
     });
 
     </script>
+
+    <!-- Modal de Desglose y Cotejo Documental de Auditoría -->
+    <div id="modal-auditoria-cotejo" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs hidden items-center justify-center p-3 md:p-6" onclick="if(event.target===this) cerrarModalCotejo()">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-6xl w-full p-5 space-y-3.5 max-h-[92vh] flex flex-col border border-gray-200">
+        <!-- Cabecera del Modal -->
+        <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">📋</span>
+            <div>
+              <h3 class="text-base font-bold text-gray-900 flex items-center gap-2">
+                <span>Desglose y Cotejo Documental (Kardex vs Contabilidad)</span>
+                <span id="modal-cotejo-badge-estado"></span>
+              </h3>
+              <p id="modal-cotejo-subtitulo" class="text-xs text-gray-500 font-medium mt-0.5"></p>
+            </div>
+          </div>
+          <button onclick="cerrarModalCotejo()" class="text-gray-400 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 transition cursor-pointer">&times;</button>
+        </div>
+
+        <!-- Banner de Huérfanos si existen -->
+        <div id="modal-cotejo-banner-huerfanos" class="hidden"></div>
+
+        <!-- Contenedor con Scroll de la Tabla de Documentos -->
+        <div class="overflow-x-auto flex-1 overflow-y-auto border border-gray-200 rounded-xl bg-gray-50/50">
+          <table class="w-full text-xs border-collapse">
+            <thead class="bg-gray-100 text-gray-700 font-bold border-b border-gray-200 sticky top-0 z-10 shadow-xs select-none">
+              <tr>
+                <th class="px-3 py-2.5 text-left bg-gray-100 sticky top-0 z-10">Documento / Fecha</th>
+                <th class="px-3 py-2.5 text-left bg-gray-100 sticky top-0 z-10">📦 Kardex (Cantidad &bull; Costo Unitario)</th>
+                <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Valor Kardex ($)</th>
+                <th class="px-3 py-2.5 text-left bg-gray-100 sticky top-0 z-10">🏛️ Asiento Contable (Cta 14 &bull; Tipo)</th>
+                <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Valor Contab ($)</th>
+                <th class="px-3 py-2.5 text-right bg-gray-100 sticky top-0 z-10">Diferencia ($)</th>
+                <th class="px-3 py-2.5 text-center bg-gray-100 sticky top-0 z-10">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="modal-cotejo-tbody" class="divide-y divide-gray-100 font-mono bg-white">
+              <tr><td colspan="7" class="text-center py-8 text-gray-400 font-sans">Cargando desglose de documentos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pie del Modal con Totales y Acciones -->
+        <div class="flex items-center justify-between border-t border-gray-100 pt-3 flex-wrap gap-3">
+          <div class="flex items-center gap-4 text-xs font-semibold" id="modal-cotejo-totales">
+            <!-- Totales -->
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="cerrarModalCotejo()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
+              Cerrar
+            </button>
+            <div id="modal-cotejo-acciones" class="flex items-center gap-2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Modales de Previsualización de Auditoría -->
     <div id="modal-preview-vincular" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs hidden items-center justify-center p-4">

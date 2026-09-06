@@ -230,10 +230,20 @@
 
     .num { text-align: right; }
 
-    
+    .sticky-table-header th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background-color: #f9fafb !important;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+    body.dark .sticky-table-header th {
+      background-color: #1f2937 !important;
+      color: #9ca3af !important;
+      border-bottom: 2px solid #374151 !important;
+    }
 
     /* Fallback crítico para ocultar elementos si Tailwind falla */
-
     .hidden { display: none !important; }
 
 
@@ -1058,11 +1068,11 @@
       </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto max-h-[75vh] overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl">
 
-      <table>
+      <table class="w-full">
 
-        <thead>
+        <thead class="sticky-table-header">
 
           <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100 select-none">
 

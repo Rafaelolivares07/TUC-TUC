@@ -13115,13 +13115,6 @@ async function cargarReporteEnsambles() {
       }
     }
 
-    // Despliegue de Acordeón Documental por Producto (Estilo Ensambles Históricos)
-    async function toggleAcordeonAuditoria(productoId, ev = null, forzarAbrir = null) {
-      console.log('[Auditoria] toggleAcordeonAuditoria llamado para productoId:', productoId, 'forzarAbrir:', forzarAbrir);
-      if (typeof ev === 'boolean') {
-        forzarAbrir = ev;
-        ev = null;
-      }
     let productoCotejoIdActual = null;
 
     function cerrarModalCotejo() {

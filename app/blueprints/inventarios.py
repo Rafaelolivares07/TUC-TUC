@@ -9929,10 +9929,9 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
             return error
 
         prod = conn.execute("""
-            SELECT p.id, p.nombre, COALESCE(c.nombre, p.categoria, 'Sin categoría') as categoria
-            FROM productos p
-            LEFT JOIN categorias c ON c.id = p.categoria_id
-            WHERE p.id = %s AND p.negocio_id = %s
+            SELECT id, nombre, COALESCE(categoria, 'Sin categoría') as categoria
+            FROM productos
+            WHERE id = %s AND negocio_id = %s
         """, (producto_id, negocio_id)).fetchone()
         if not prod:
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404

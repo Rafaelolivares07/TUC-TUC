@@ -424,6 +424,9 @@
 
     <div id="auditor-resultados" class="hidden space-y-6">
       
+      <!-- Aviso si hay múltiples proveedores para el mismo número -->
+      <div id="aud-multiples-proveedores-aviso" class="hidden"></div>
+      
       <!-- ✏️ Card: Modificar Cabecera de Documento -->
       <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
         <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5 mb-3">
@@ -840,6 +843,33 @@
         }
       }
       
+      // Mostrar aviso si hay múltiples proveedores
+      const divMultiples = document.getElementById('aud-multiples-proveedores-aviso');
+      if (divMultiples) {
+        if (d.multiples_proveedores && d.lista_proveedores && d.lista_proveedores.length > 1) {
+          divMultiples.classList.remove('hidden');
+          divMultiples.innerHTML = `
+            <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4">
+              <div class="flex items-center gap-2 text-amber-800 font-bold text-xs mb-1">
+                <span class="text-sm">⚠️</span>
+                <span>Existe más de un proveedor con el documento #${numero}. Selecciona cuál deseas auditar:</span>
+              </div>
+              <div class="flex flex-wrap gap-2 mt-2">
+                ${d.lista_proveedores.map(p => `
+                  <button type="button" onclick="consultarDocumentoDetalle('${tipo}', '${numero}', ${p.id})" class="px-3 py-1.5 bg-white hover:bg-amber-100 border border-amber-300 rounded-lg text-xs font-bold text-gray-800 flex items-center gap-1.5 shadow-xs transition">
+                    <span>🏢 ${p.nombre}</span>
+                    <span class="text-amber-700 font-normal">(${p.fecha || ''} - $${p.total.toLocaleString('es-CO', {minimumFractionDigits: 2})})</span>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        } else {
+          divMultiples.classList.add('hidden');
+          divMultiples.innerHTML = '';
+        }
+      }
+      
       // Store selected doc state for delete/edit actions
       let provId = terceroId;
       let provNombre = '';
@@ -898,7 +928,8 @@
         const item = d.inventario[0];
         const dateRaw = item.documento_fecha || (item.created_at ? item.created_at.split('T')[0] : null);
         const invDate = dateRaw ? new Date(dateRaw + 'T00:00:00').toLocaleDateString('es-CO') : '—';
-        document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${tipo}-${numero} | Fecha: ${invDate}`;
+        const terceroLbl = provNombre ? ` | Tercero: ${provNombre}` : '';
+        document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${tipo}-${numero}${terceiroLbl || terceroLbl} | Fecha: ${invDate}`;
         tbodyInv.innerHTML = d.inventario.map(item => `
           <tr class="border-b">
             <td class="py-2 font-semibold text-gray-700">

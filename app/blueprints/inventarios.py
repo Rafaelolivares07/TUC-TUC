@@ -4746,16 +4746,17 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         # 1. Fetch recent inventory documents
         sql_inv = """
             SELECT mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha, SUM(mi.valor_total) AS total_inventario,
-                   MIN(mi.proveedor_id) AS proveedor_id, MIN(mi.proveedor_nombre) AS proveedor_nombre
+                   mi.proveedor_id, COALESCE(t.nombre, mi.proveedor_nombre) AS proveedor_nombre
             FROM movimientos_inventario mi
+            LEFT JOIN terceros t ON t.id = mi.proveedor_id
             WHERE mi.negocio_id = %s AND mi.tipo_documento IS NOT NULL AND mi.tipo_documento <> '' 
               AND mi.documento_numero IS NOT NULL AND mi.documento_numero <> ''
         """
         params_inv = [negocio_id]
         
         if q:
-            sql_inv += " AND (mi.documento_numero ILIKE %s OR mi.proveedor_nombre ILIKE %s)"
-            params_inv.extend([f'%{q}%', f'%{q}%'])
+            sql_inv += " AND (mi.documento_numero ILIKE %s OR mi.proveedor_nombre ILIKE %s OR t.nombre ILIKE %s)"
+            params_inv.extend([f'%{q}%', f'%{q}%', f'%{q}%'])
         
         if tipo and tipo != 'todos':
             if tipo != 'pedido_venta':
@@ -4778,7 +4779,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             params_inv.append(hasta)
             
         sql_inv += """
-            GROUP BY mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha
+            GROUP BY mi.tipo_documento_id, mi.tipo_documento, mi.documento_numero, mi.documento_fecha, mi.proveedor_id, COALESCE(t.nombre, mi.proveedor_nombre)
             ORDER BY mi.documento_fecha DESC, mi.documento_numero DESC
             LIMIT 1000
         """
@@ -4797,7 +4798,9 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             if td_id and td_id in types_map:
                 td_name = types_map[td_id]
                 
-            key = (td_id, pure_num) if td_id else (td_name.lower(), pure_num)
+            p_id = r['proveedor_id']
+            td_key = td_id if td_id else td_name.lower()
+            key = (td_key, pure_num, p_id)
             
             consolidated[key] = {
                 'tipo_documento_id': td_id,
@@ -4810,7 +4813,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                 'total_contable': None,
                 'total_pedidos': None,
                 'tercero_nombre': r['proveedor_nombre'] or '—',
-                'tercero_id': r['proveedor_id']
+                'tercero_id': p_id
             }
             
         # 2. Fetch recent orders (sales) — solo pedidos convertidos en venta facturada (con tipo de documento)
@@ -4870,24 +4873,34 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             if td_id and td_id in types_map:
                 td_name = types_map[td_id]
                 
-            key = (td_id, pure_num) if td_id else (td_name.lower(), pure_num)
+            td_key = td_id if td_id else td_name.lower()
             f_val = r['fecha'] or r['created_at']
-            # Normalizar fecha a YYYY-MM-DD para consistencia en consolidado
             date_str = f_val.strftime('%Y-%m-%d') if f_val else None
             
-            # Consolidación: si ya existe el documento por inventario, unificar
-            if key in consolidated:
-                consolidated[key]['origen'] = 'ambos'
-                if not consolidated[key]['tercero_id'] and c_id:
-                    consolidated[key]['tercero_id'] = c_id
-                    consolidated[key]['tercero_nombre'] = c_name or 'Cliente general'
-                if r['total'] and float(r['total']) > (consolidated[key]['total_pedidos'] or 0):
-                    consolidated[key]['total_pedidos'] = float(r['total'])
-                # Prefer showing original prefix code if existing display name is shorter
-                if doc_num and len(doc_num) > len(consolidated[key].get('documento_numero_completo') or ''):
-                    consolidated[key]['documento_numero_completo'] = doc_num
+            # Buscar en consolidated por (td_key, pure_num, c_id) o por (td_key, pure_num, _)
+            exact_key = (td_key, pure_num, c_id)
+            found_key = None
+            if exact_key in consolidated:
+                found_key = exact_key
             else:
-                consolidated[key] = {
+                for k in list(consolidated.keys()):
+                    if k[0] == td_key and k[1] == pure_num:
+                        if k[2] is None or c_id is None or k[2] == c_id:
+                            found_key = k
+                            break
+            
+            # Consolidación: si ya existe el documento por inventario, unificar
+            if found_key:
+                consolidated[found_key]['origen'] = 'ambos'
+                if not consolidated[found_key]['tercero_id'] and c_id:
+                    consolidated[found_key]['tercero_id'] = c_id
+                    consolidated[found_key]['tercero_nombre'] = c_name or 'Cliente general'
+                if r['total'] and float(r['total']) > (consolidated[found_key]['total_pedidos'] or 0):
+                    consolidated[found_key]['total_pedidos'] = float(r['total'])
+                if doc_num and len(doc_num) > len(consolidated[found_key].get('documento_numero_completo') or ''):
+                    consolidated[found_key]['documento_numero_completo'] = doc_num
+            else:
+                consolidated[exact_key] = {
                     'tipo_documento_id': td_id,
                     'tipo_documento': td_name,
                     'documento_numero': _num_documento_limpio(doc_num, td_id, types_code),
@@ -4906,7 +4919,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
         sql_cont = """
             SELECT mc.tipo_documento_id, mc.numero_documento AS documento_numero,
                    SUM(CASE WHEN mc.tipo IN ('debito', 'D', 'deb') THEN mc.monto ELSE 0 END) AS total_contable,
-                   MIN(mc.tercero_id) AS proveedor_id,
+                   mc.tercero_id AS proveedor_id,
                    MIN(mc.fecha) AS documento_fecha
             FROM movimientos_contables mc
             WHERE mc.negocio_id = %s
@@ -4942,7 +4955,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             params_cont.append(hasta)
             
         sql_cont += """
-            GROUP BY mc.tipo_documento_id, mc.numero_documento
+            GROUP BY mc.tipo_documento_id, mc.numero_documento, mc.tercero_id
             ORDER BY MIN(mc.fecha) DESC, mc.numero_documento DESC
             LIMIT 1000
         """
@@ -4956,8 +4969,7 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             pure_num = _num_documento_limpio(doc_num, td_id, types_code)
             
             td_name = types_map.get(td_id) if td_id else 'comprobante'
-                
-            key = (td_id, pure_num) if td_id else ('comprobante', pure_num)
+            td_key = td_id if td_id else 'comprobante'
             
             p_id = r['proveedor_id']
             p_name = '—'
@@ -4968,17 +4980,27 @@ def api_mantenimiento_documentos_recientes(negocio_id):
             
             date_str = r['documento_fecha'].isoformat() if r['documento_fecha'] else None
             
-            # Consolidate
-            if key in consolidated:
-                if consolidated[key]['origen'] in ('inventario', 'ventas'):
-                    consolidated[key]['origen'] = 'ambos'
-                if not consolidated[key]['tercero_id'] and p_id:
-                    consolidated[key]['tercero_id'] = p_id
-                    consolidated[key]['tercero_nombre'] = p_name or 'Cliente/Proveedor general'
-                # El total contable se completa desde el asiento, sin reemplazar inventario/pedidos
-                consolidated[key]['total_contable'] = float(r['total_contable'] or 0)
+            exact_key = (td_key, pure_num, p_id)
+            found_key = None
+            if exact_key in consolidated:
+                found_key = exact_key
             else:
-                consolidated[key] = {
+                for k in list(consolidated.keys()):
+                    if k[0] == td_key and k[1] == pure_num:
+                        if k[2] is None or p_id is None or k[2] == p_id:
+                            found_key = k
+                            break
+            
+            # Consolidate
+            if found_key:
+                if consolidated[found_key]['origen'] in ('inventario', 'ventas'):
+                    consolidated[found_key]['origen'] = 'ambos'
+                if not consolidated[found_key]['tercero_id'] and p_id:
+                    consolidated[found_key]['tercero_id'] = p_id
+                    consolidated[found_key]['tercero_nombre'] = p_name or 'Cliente/Proveedor general'
+                consolidated[found_key]['total_contable'] = float(r['total_contable'] or 0)
+            else:
+                consolidated[exact_key] = {
                     'tipo_documento_id': td_id,
                     'tipo_documento': td_name,
                     'documento_numero': _num_documento_limpio(doc_num, td_id, types_code),
@@ -5226,45 +5248,59 @@ def api_auditar_documento(negocio_id):
         if pedido_row and not tipo_documento_id:
             tipo_documento_id = pedido_row['tipo_documento_id']
 
+        prov_id_param = _int_o_none(request.args.get('proveedor_id'))
+
         # 1. Query movimientos_inventario
         if tipo_documento_id:
             sql_inv = """
                 SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
                        m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, m.documento_fecha,
-                       m.proveedor_id, m.proveedor_nombre, m.producto_padre_id,
+                       m.proveedor_id, COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.producto_padre_id,
                        p_padre.nombre AS producto_padre_nombre, m.costo_und
                 FROM movimientos_inventario m
                 LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
+                LEFT JOIN terceros t ON t.id = m.proveedor_id
                 WHERE m.negocio_id = %s AND m.tipo_documento_id = %s AND m.documento_numero IN %s
             """
             params_inv = [negocio_id, tipo_documento_id, tuple(num_variants)]
+            if prov_id_param:
+                sql_inv += " AND m.proveedor_id = %s"
+                params_inv.append(prov_id_param)
         else:
             # Fallback legacy
             if pedido_row:
                 sql_inv = """
                     SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
                            m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, m.documento_fecha,
-                           m.proveedor_id, m.proveedor_nombre, m.producto_padre_id,
+                           m.proveedor_id, COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.producto_padre_id,
                            p_padre.nombre AS producto_padre_nombre, m.costo_und
                     FROM movimientos_inventario m
                     LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
+                    LEFT JOIN terceros t ON t.id = m.proveedor_id
                     WHERE m.negocio_id = %s AND (
                         (m.referencia_tipo IN ('pedido', 'pedido_tienda', 'pedido_restaurante') AND m.referencia_id = %s)
                         OR (LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) IN %s)
                     )
                 """
                 params_inv = [negocio_id, pedido_row['id'], tipo_doc, tuple(v.lower() for v in num_variants)]
+                if prov_id_param:
+                    sql_inv += " AND m.proveedor_id = %s"
+                    params_inv.append(prov_id_param)
             else:
                 sql_inv = """
                     SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
                            m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, m.documento_fecha,
-                           m.proveedor_id, m.proveedor_nombre, m.producto_padre_id,
+                           m.proveedor_id, COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.producto_padre_id,
                            p_padre.nombre AS producto_padre_nombre, m.costo_und
                     FROM movimientos_inventario m
                     LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
+                    LEFT JOIN terceros t ON t.id = m.proveedor_id
                     WHERE m.negocio_id = %s AND LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) IN %s
                 """
                 params_inv = [negocio_id, tipo_doc, tuple(v.lower() for v in num_variants)]
+                if prov_id_param:
+                    sql_inv += " AND m.proveedor_id = %s"
+                    params_inv.append(prov_id_param)
         
         rows_inv = conn.execute(sql_inv, tuple(params_inv)).fetchall()
         if not rows_inv and tipo_documento_id:
@@ -5272,13 +5308,36 @@ def api_auditar_documento(negocio_id):
             sql_inv_fallback = """
                 SELECT m.id, m.producto_id, m.nombre_producto, m.tipo, m.motivo, m.cantidad, 
                        m.valor_unitario, m.valor_total, m.iva_pct, m.created_at, m.documento_fecha,
-                       m.proveedor_id, m.proveedor_nombre, m.producto_padre_id,
+                       m.proveedor_id, COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre, m.producto_padre_id,
                        p_padre.nombre AS producto_padre_nombre, m.costo_und
                 FROM movimientos_inventario m
                 LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
+                LEFT JOIN terceros t ON t.id = m.proveedor_id
                 WHERE m.negocio_id = %s AND LOWER(m.tipo_documento) = LOWER(%s) AND LOWER(m.documento_numero) IN %s
             """
-            rows_inv = conn.execute(sql_inv_fallback, (negocio_id, tipo_doc, tuple(v.lower() for v in num_variants))).fetchall()
+            params_fb = [negocio_id, tipo_doc, tuple(v.lower() for v in num_variants)]
+            if prov_id_param:
+                sql_inv_fallback += " AND m.proveedor_id = %s"
+                params_fb.append(prov_id_param)
+            rows_inv = conn.execute(sql_inv_fallback, tuple(params_fb)).fetchall()
+            
+        distinct_provs = {}
+        for r in rows_inv:
+            pid = r['proveedor_id']
+            if pid:
+                if pid not in distinct_provs:
+                    distinct_provs[pid] = {
+                        'id': pid,
+                        'nombre': r['proveedor_nombre'] or 'Sin nombre',
+                        'total': 0.0,
+                        'fecha': r['documento_fecha'].isoformat() if r['documento_fecha'] else (r['created_at'].strftime('%Y-%m-%d') if r['created_at'] else None)
+                    }
+                val = float(r['valor_total'] if r['valor_total'] is not None else (float(r['cantidad'] or 0) * float(r['costo_und'] or 0)))
+                distinct_provs[pid]['total'] += val
+        
+        multiples_proveedores = (len(distinct_provs) > 1 and not prov_id_param)
+        lista_proveedores = list(distinct_provs.values())
+
         items_inventario = [
             {
                 'id': r['id'],
@@ -5313,7 +5372,7 @@ def api_auditar_documento(negocio_id):
         tipo_variants = list(set(tipo_variants))
         pedido_id_str = str(pedido_row['id']) if pedido_row else None
         
-        comp_row = conn.execute("""
+        comp_sql = """
             SELECT comprobante_id AS id, 
                    CASE WHEN tipo_documento IS NOT NULL AND tipo_documento <> '' AND POSITION('-' IN numero_documento) = 0 THEN tipo_documento || '-' || numero_documento ELSE numero_documento END AS numero_comprobante,
                    tipo_documento AS tipo, 
@@ -5333,9 +5392,13 @@ def api_auditar_documento(negocio_id):
                 OR numero_documento = %s
                 OR (origen_tipo = 'pedido' AND origen_id = %s)
               )
-            GROUP BY comprobante_id, numero_documento, tipo_documento, fecha
-            LIMIT 1
-        """, (negocio_id, tipo_documento_id, tuple(tipo_variants), tuple(num_variants), num_doc, pedido_id_str)).fetchone()
+        """
+        comp_params = [negocio_id, tipo_documento_id, tuple(tipo_variants), tuple(num_variants), num_doc, pedido_id_str]
+        if prov_id_param:
+            comp_sql += " AND (tercero_id = %s OR tercero_id IS NULL)"
+            comp_params.append(prov_id_param)
+        comp_sql += " GROUP BY comprobante_id, numero_documento, tipo_documento, fecha ORDER BY (tercero_id IS NOT NULL) DESC LIMIT 1"
+        comp_row = conn.execute(comp_sql, tuple(comp_params)).fetchone()
             
         comprobante = None
         if comp_row:
@@ -5457,7 +5520,9 @@ def api_auditar_documento(negocio_id):
             'monto_original': monto_original,
             'es_ultimo_consecutivo': es_ultimo_consecutivo,
             'es_interno': es_interno,
-            'tipo_movimiento': tipo_movimiento
+            'tipo_movimiento': tipo_movimiento,
+            'multiples_proveedores': multiples_proveedores,
+            'lista_proveedores': lista_proveedores
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -5530,6 +5595,8 @@ def api_anular_documento(negocio_id):
             except ValueError:
                 pass
         
+        prov_id_val = _int_o_none(proveedor_id)
+        
         # Get inventory movement IDs to be deleted, and their product IDs (for recosteo!)
         if pedido_row:
             sql_inv = """
@@ -5542,6 +5609,9 @@ def api_anular_documento(negocio_id):
                 )
             """
             params_inv = [negocio_id, pedido_row['id'], tipo_doc, tuple(doc_codes), tuple(doc_codes)]
+            if prov_id_val:
+                sql_inv += " AND proveedor_id = %s"
+                params_inv.append(prov_id_val)
         else:
             sql_inv = """
                 SELECT id, producto_id, proveedor_id
@@ -5552,11 +5622,14 @@ def api_anular_documento(negocio_id):
                 )
             """
             params_inv = [negocio_id, tipo_doc, tuple(doc_codes), tuple(doc_codes)]
+            if prov_id_val:
+                sql_inv += " AND proveedor_id = %s"
+                params_inv.append(prov_id_val)
         
         movs = conn.execute(sql_inv, tuple(params_inv)).fetchall()
         mov_ids = [m['id'] for m in movs]
         prod_ids = list({m['producto_id'] for m in movs})
-        p_id = proveedor_id or (pedido_row['cliente_id'] or pedido_row['id_tercero'] if pedido_row else None) or (movs[0]['proveedor_id'] if movs else None)
+        p_id = prov_id_val or (pedido_row['cliente_id'] or pedido_row['id_tercero'] if pedido_row else None) or (movs[0]['proveedor_id'] if movs else None)
         
         # Delete inventory movements
         if mov_ids:
@@ -5592,14 +5665,19 @@ def api_anular_documento(negocio_id):
         pedido_id_str = str(pedido_row['id']) if pedido_row else None
         
         # Delete directly from movimientos_contables using flat metadata
-        cur_mc = conn.execute("""
+        sql_del_mc = """
             DELETE FROM movimientos_contables
             WHERE negocio_id = %s AND (
                 (origen_tipo = 'pedido' AND origen_id = %s)
                 OR (origen_tipo IS NOT NULL AND LOWER(origen_id) = LOWER(%s))
                 OR (LOWER(numero_documento) IN %s)
             )
-        """, (negocio_id, pedido_id_str, origen_id_str, tuple(doc_codes)))
+        """
+        params_del_mc = [negocio_id, pedido_id_str, origen_id_str, tuple(doc_codes)]
+        if prov_id_val:
+            sql_del_mc += " AND (tercero_id = %s OR tercero_id IS NULL)"
+            params_del_mc.append(prov_id_val)
+        cur_mc = conn.execute(sql_del_mc, tuple(params_del_mc))
         deleted_contables = cur_mc.rowcount
         deleted_comprobantes = 0
             

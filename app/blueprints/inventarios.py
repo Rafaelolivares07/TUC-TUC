@@ -5074,12 +5074,14 @@ def api_mantenimiento_tipos_documentos(negocio_id):
 def normalizar_numero(num_str):
     if not num_str:
         return ""
-    num_str = num_str.strip().upper()
+    num_str = str(num_str).strip().upper()
     if '-' in num_str:
         parts = num_str.split('-')
         suffix = parts[-1].strip()
         if suffix:
-            return suffix
+            num_str = suffix
+    if num_str.isdigit():
+        return str(int(num_str))
     return num_str
 
 def resolver_variantes_numero(num_str):
@@ -9994,19 +9996,36 @@ def api_auditoria_detalle_cotejo(negocio_id, producto_id):
                 cmovs_todos.append(hd)
 
         def _norm_tipo(t_id, t_str, doc_num=''):
+            if t_id:
+                try:
+                    tid = int(t_id)
+                    if tid in (1, 2):
+                        return 'COMPRA'
+                    if tid == 6:
+                        return 'VENTA'
+                    if tid == 5:
+                        return 'PRODUCCION'
+                    if tid in (3, 13):
+                        return 'AJUSTE'
+                    if tid == 4:
+                        return 'DEVOLUCION'
+                except (ValueError, TypeError):
+                    pass
             doc_s = str(doc_num or '').upper()
             if 'FACTURA_DE_VENTA' in doc_s or 'VENTA' in doc_s:
                 return 'VENTA'
             res = _resolver_tipo_doc(t_id, t_str)
             s = str(res or t_str or '').strip().upper()
-            if 'AJUST' in s:
-                return 'AJUSTE'
+            if 'PROVEEDOR' in s or 'COMPRA' in s:
+                return 'COMPRA'
             if 'PROD' in s:
                 return 'PRODUCCION'
-            if 'VENT' in s or 'FAC' in s:
+            if 'AJUST' in s:
+                return 'AJUSTE'
+            if 'VENT' in s:
                 return 'VENTA'
-            if 'COMP' in s:
-                return 'COMPRA'
+            if 'FAC' in s:
+                return 'COMPRA' if 'PROV' in s else 'VENTA'
             if 'TRAS' in s:
                 return 'TRASLADO'
             if not s or s == 'DOCUMENTO':
@@ -10419,26 +10438,49 @@ def api_auditoria_generar_asiento_faltante(negocio_id):
             })
 
         elif es_venta:
-            lineas_propuestas.append({
-                'cuenta_id': grp_prod['cuenta_cos_id'],
-                'cuenta_codigo': grp_prod['cod_cos'] or '614005',
-                'cuenta_nombre': grp_prod['nom_cos'] or 'Costo de Ventas',
-                'concepto': f"Costo de venta: {prod['nombre']} x{float(km['cantidad']):.2f}",
-                'tipo': 'debito',
-                'monto': val_mov,
-                'producto_id': producto_id,
-                'producto_padre_id': None
-            })
-            lineas_propuestas.append({
-                'cuenta_id': grp_prod['cuenta_inve_id'],
-                'cuenta_codigo': grp_prod['cod_inve'] or '140505',
-                'cuenta_nombre': grp_prod['nom_inve'] or 'Inventario',
-                'concepto': f"Salida inventario: {prod['nombre']}",
-                'tipo': 'credito',
-                'monto': val_mov,
-                'producto_id': producto_id,
-                'producto_padre_id': None
-            })
+            if km['tipo'] == 'entrada':
+                # Devolución / Reingreso de venta: Débito a Inventario, Crédito a Costo de Ventas
+                lineas_propuestas.append({
+                    'cuenta_id': grp_prod['cuenta_inve_id'],
+                    'cuenta_codigo': grp_prod['cod_inve'] or '140505',
+                    'cuenta_nombre': grp_prod['nom_inve'] or 'Inventario',
+                    'concepto': f"Reingreso inventario (Devolución): {prod['nombre']}",
+                    'tipo': 'debito',
+                    'monto': val_mov,
+                    'producto_id': producto_id,
+                    'producto_padre_id': None
+                })
+                lineas_propuestas.append({
+                    'cuenta_id': grp_prod['cuenta_cos_id'],
+                    'cuenta_codigo': grp_prod['cod_cos'] or '614005',
+                    'cuenta_nombre': grp_prod['nom_cos'] or 'Costo de Ventas',
+                    'concepto': f"Costo devuelto venta: {prod['nombre']} x{float(km['cantidad']):.2f}",
+                    'tipo': 'credito',
+                    'monto': val_mov,
+                    'producto_id': producto_id,
+                    'producto_padre_id': None
+                })
+            else:
+                lineas_propuestas.append({
+                    'cuenta_id': grp_prod['cuenta_cos_id'],
+                    'cuenta_codigo': grp_prod['cod_cos'] or '614005',
+                    'cuenta_nombre': grp_prod['nom_cos'] or 'Costo de Ventas',
+                    'concepto': f"Costo de venta: {prod['nombre']} x{float(km['cantidad']):.2f}",
+                    'tipo': 'debito',
+                    'monto': val_mov,
+                    'producto_id': producto_id,
+                    'producto_padre_id': None
+                })
+                lineas_propuestas.append({
+                    'cuenta_id': grp_prod['cuenta_inve_id'],
+                    'cuenta_codigo': grp_prod['cod_inve'] or '140505',
+                    'cuenta_nombre': grp_prod['nom_inve'] or 'Inventario',
+                    'concepto': f"Salida inventario: {prod['nombre']}",
+                    'tipo': 'credito',
+                    'monto': val_mov,
+                    'producto_id': producto_id,
+                    'producto_padre_id': None
+                })
 
         else: # Ajuste u otro
             if km['tipo'] == 'entrada':

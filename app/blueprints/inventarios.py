@@ -9753,7 +9753,9 @@ def api_auditoria_productos(negocio_id):
                  AND (ac.numero_documento = mi.documento_numero 
                       OR ac.numero_documento = mi.numero_documento
                       OR ac.numero_documento = regexp_replace(mi.documento_numero, '^.*-', '')
-                      OR mi.documento_numero = regexp_replace(ac.numero_documento, '^.*-', ''))
+                      OR mi.documento_numero = regexp_replace(ac.numero_documento, '^.*-', '')
+                      OR ltrim(mi.documento_numero, '0') = ltrim(ac.numero_documento, '0')
+                      OR ltrim(regexp_replace(mi.documento_numero, '^.*-', ''), '0') = ltrim(regexp_replace(ac.numero_documento, '^.*-', ''), '0'))
             WHERE mi.negocio_id = %s AND ac.producto_id IS NULL
             GROUP BY mi.producto_id
         """, (negocio_id, negocio_id)).fetchall()

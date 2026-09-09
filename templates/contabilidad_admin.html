@@ -131,6 +131,7 @@
           <option value="cobro">Recaudos / Cobros</option>
           <option value="pago">Pagos / Egresos</option>
           <option value="gasto">Relación de Gastos (Gastos)</option>
+          <option value="nota_contable">Nota Contable / Conciliación</option>
         </select>
       </div>
       <div class="flex items-center gap-4 mb-4">
@@ -992,6 +993,7 @@ async function cargarTiposDocs() {
           <option value="cobro" ${t.tipo_movimiento==='cobro'?'selected':''}>Recaudos / Cobros</option>
           <option value="pago" ${t.tipo_movimiento==='pago'?'selected':''}>Pagos / Egresos</option>
           <option value="gasto" ${t.tipo_movimiento==='gasto'?'selected':''}>Relación de Gastos</option>
+          <option value="nota_contable" ${t.tipo_movimiento==='nota_contable'?'selected':''}>Nota Contable / Conciliación</option>
         </select>
       </td>
       <td class="px-3 py-2 text-center">

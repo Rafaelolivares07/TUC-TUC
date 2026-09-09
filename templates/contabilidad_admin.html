@@ -73,6 +73,7 @@
       <button onclick="cambiarTab('balance')" id="tab-balance" class="tab-btn">⚖️ Balance y Cierre</button>
       <a href="/admin/inventario-fisico/{{ negocio_id }}" class="tab-btn">📋 Inv. Físico</a>
       <a href="/admin/saldos-documentos/{{ negocio_id }}" class="tab-btn">💵 Saldos x Doc</a>
+      <a href="/admin/conciliacion-disponible/{{ negocio_id }}" class="tab-btn bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold border border-emerald-200">⚖️ Conciliar Disponible</a>
     </div>
 
     <!-- ═══ TAB: PUC ═══ -->
@@ -3335,5 +3336,6 @@ if (activeTab && TABS.includes(activeTab)) {
 </div>
 
 {% include 'inv_distribuido_modal.html' %}
+{% include 'conciliacion_disponible_modal.html' %}
 </body>
 </html>

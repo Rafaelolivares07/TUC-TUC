@@ -2048,13 +2048,14 @@
 
   <div id="tab-cotizaciones" class="hidden bg-white rounded-2xl shadow p-5">
 
-    <!-- Resumen -->
-    <div id="cotz-resumen" class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5"></div>
+    <!-- Resumen compacto en una sola barra -->
+    <div id="cotz-resumen" class="mb-3"></div>
 
-    <!-- Formulario nueva cotización -->
-    <details class="mb-5 border border-slate-200 rounded-xl">
-      <summary class="cursor-pointer px-4 py-2.5 bg-slate-50 rounded-t-xl text-xs font-bold text-slate-700 flex items-center gap-2">
-        <i class="bi bi-plus-circle"></i> Nueva Cotización
+    <!-- Formulario nueva / editar cotización -->
+    <details id="cotz-form-details" class="mb-4 border border-slate-200 rounded-xl">
+      <summary id="cotz-form-summary" class="cursor-pointer px-3 py-1.5 bg-slate-50 hover:bg-slate-100 rounded-t-xl text-xs font-bold text-slate-700 flex items-center justify-between transition-colors">
+        <span class="flex items-center gap-1.5"><i class="bi bi-plus-circle text-indigo-600"></i> <span id="cotz-form-title">Nueva Cotización</span></span>
+        <span class="text-[10px] text-slate-400 font-normal">Clic para desplegar / contraer</span>
       </summary>
       <div class="p-4 space-y-3 bg-white rounded-b-xl">
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -2110,11 +2111,11 @@
           <input id="cotz-observaciones" type="text" placeholder="Opcional..."
                  class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400">
         </div>
-        <div class="flex gap-2">
-          <button onclick="guardarCotizacion()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition">
+        <div class="flex gap-2 pt-1">
+          <button type="button" id="btn-guardar-cotz" onclick="guardarCotizacion()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition shadow-xs">
             Guardar Cotización
           </button>
-          <button onclick="limpiarFormCotz()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-lg transition">
+          <button type="button" id="btn-cancelar-cotz" onclick="limpiarFormCotz()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-lg transition">
             Limpiar
           </button>
         </div>
@@ -2127,18 +2128,32 @@
              oninput="cargarCotizaciones()" class="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-400">
     </div>
 
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto max-h-[65vh] border border-slate-200 rounded-xl custom-scrollbar scroll-smooth">
       <table class="w-full text-xs">
-        <thead>
-          <tr class="border-b border-slate-200 text-slate-500 uppercase text-[10px]">
-            <th class="text-left px-3 py-2 font-bold">Producto</th>
-            <th class="text-left px-3 py-2 font-bold">Proveedor</th>
-            <th class="text-left px-3 py-2 font-bold">Presentación</th>
-            <th class="text-center px-3 py-2 font-bold">Unid./Pres.</th>
-            <th class="text-right px-3 py-2 font-bold">Precio</th>
-            <th class="text-right px-3 py-2 font-bold">P. Unitario</th>
-            <th class="text-center px-3 py-2 font-bold">Estado</th>
-            <th class="text-center px-3 py-2 font-bold">Acciones</th>
+        <thead class="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 select-none shadow-xs">
+          <tr class="text-slate-600 uppercase text-[10px]">
+            <th onclick="ordenarCotizaciones('producto_nombre')" class="text-left px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+              <span class="inline-flex items-center gap-1">Producto <span id="sort-icon-producto_nombre" class="text-slate-400">↕</span></span>
+            </th>
+            <th onclick="ordenarCotizaciones('proveedor_nombre')" class="text-left px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+              <span class="inline-flex items-center gap-1">Proveedor <span id="sort-icon-proveedor_nombre" class="text-slate-400">↕</span></span>
+            </th>
+            <th onclick="ordenarCotizaciones('presentacion_nombre')" class="text-left px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+              <span class="inline-flex items-center gap-1">Presentación <span id="sort-icon-presentacion_nombre" class="text-slate-400">↕</span></span>
+            </th>
+            <th onclick="ordenarCotizaciones('unidades_item')" class="text-center px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+              <span class="inline-flex items-center gap-1">Unid./Pres. <span id="sort-icon-unidades_item" class="text-slate-400">↕</span></span>
+            </th>
+            <th onclick="ordenarCotizaciones('precio')" class="text-right px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+              <span class="inline-flex items-center gap-1 justify-end">Precio <span id="sort-icon-precio" class="text-slate-400">↕</span></span>
+            </th>
+            <th onclick="ordenarCotizaciones('precio_unitario')" class="text-right px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+              <span class="inline-flex items-center gap-1 justify-end">P. Unitario <span id="sort-icon-precio_unitario" class="text-slate-400">↕</span></span>
+            </th>
+            <th onclick="ordenarCotizaciones('vigente')" class="text-center px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+              <span class="inline-flex items-center gap-1">Estado <span id="sort-icon-vigente" class="text-slate-400">↕</span></span>
+            </th>
+            <th class="text-center px-3 py-1 font-bold">Acciones</th>
           </tr>
         </thead>
         <tbody id="cotz-body">
@@ -2172,9 +2187,9 @@
 
       <!-- Product Summary Panel -->
 
-      <div id="kardex-resumen-producto" class="hidden flex items-center gap-4 bg-gray-50 border border-gray-150 p-3 rounded-xl ml-auto">
+      <div id="kardex-resumen-producto" class="hidden flex items-center gap-4 bg-gray-50 border border-gray-150 p-2.5 rounded-xl ml-auto">
 
-        <div class="text-xs text-gray-500 border-r border-gray-200 pr-4">
+        <div class="text-xs text-gray-500 border-r border-gray-200 pr-3">
 
           <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Stock Disponible</span>
 
@@ -2182,7 +2197,7 @@
 
         </div>
 
-        <div class="text-xs text-gray-500 border-r border-gray-200 pr-4">
+        <div class="text-xs text-gray-500 border-r border-gray-200 pr-3">
 
           <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Costo Prom. Actual</span>
 
@@ -2200,11 +2215,22 @@
 
       </div>
 
-      <button id="kardex-btn-pdf" onclick="generarPdfKardex()" class="hidden ml-2 px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-xl transition-colors shadow-sm items-center gap-1.5">
+      <div class="flex items-center gap-2">
 
-        <span>📄</span> PDF
+        <!-- Botón Conmutador de Decimales homogéneos -->
+        <button type="button" id="btn-toggle-decimales-kardex" onclick="toggleDecimalesKardex()"
+                class="px-3 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-800 cursor-pointer select-none text-xs shadow-xs"
+                title="Mostrar u ocultar decimales homogéneamente en todas las columnas">
+          <span id="icon-toggle-decimales-kardex" class="text-slate-400">✗</span> .00 Decimales
+        </button>
 
-      </button>
+        <button id="kardex-btn-pdf" onclick="generarPdfKardex()" class="hidden px-3.5 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-xl transition-colors shadow-sm items-center gap-1.5">
+
+          <span>📄</span> PDF
+
+        </button>
+
+      </div>
 
     </div>
 
@@ -2216,29 +2242,31 @@
 
     <div id="kardex-table-container" ondragover="handleKardexAutoScroll(event)" class="overflow-x-auto overflow-y-auto max-h-[600px] border border-gray-150 rounded-xl custom-scrollbar scroll-smooth">
 
-      <table class="w-full text-xs">
+      <table class="w-full text-xs min-w-[960px]">
 
         <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
 
           <tr class="text-gray-500 uppercase text-[10px]">
 
-            <th rowspan="2" class="px-2.5 py-1.5 text-left align-middle bg-gray-50 whitespace-nowrap w-[115px]">Fecha</th>
+            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 whitespace-nowrap w-[95px]">Fecha</th>
 
-            <th rowspan="2" class="px-3 py-1.5 text-left align-middle bg-gray-50 min-w-[190px]">Documento / Proveedor</th>
+            <th rowspan="2" class="px-2.5 py-1 text-left align-middle bg-gray-50 min-w-[155px]">Documento / Proveedor</th>
 
-            <th rowspan="2" class="px-3 py-1.5 text-left align-middle bg-gray-50 min-w-[136px]">Origen</th>
+            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 min-w-[125px]">Origen</th>
 
-            <th colspan="3" class="px-2 py-0.5 text-center border-b border-gray-200/60 font-bold bg-gray-100">CANTIDADES</th>
+            <th colspan="3" class="px-1.5 py-0.5 text-center border-b border-gray-200/60 font-bold bg-gray-100">CANTIDADES</th>
 
-            <th colspan="2" class="px-2 py-0.5 text-center border-b border-gray-200/60 font-bold bg-gray-100">COSTOS UNITARIOS</th>
+            <th colspan="2" class="px-1.5 py-0.5 text-center border-b border-gray-200/60 font-bold bg-gray-100">COSTOS UNITARIOS</th>
 
-            <th rowspan="2" class="px-3 py-1.5 text-right num align-middle bg-gray-50 whitespace-nowrap">Total Línea</th>
+            <th rowspan="2" class="px-2 py-1 text-right num align-middle bg-gray-50 whitespace-nowrap min-w-[78px]">Total Línea</th>
+
+            <th rowspan="2" class="px-2 py-1 text-right num align-middle bg-gray-50 whitespace-nowrap text-emerald-800 font-bold min-w-[85px]" title="Valor monetario del stock en existencia (Saldo x Promedio)">Total Stock $</th>
 
           </tr>
 
           <tr class="text-gray-500 uppercase text-[10px]">
 
-            <th class="px-2.5 py-1 text-right num font-semibold bg-gray-50 text-emerald-800 border-r border-gray-100 min-w-[75px]">
+            <th class="px-2 py-1 text-right num font-semibold bg-gray-50 text-emerald-800 border-r border-gray-100 min-w-[68px]">
 
               Entradas
 
@@ -2246,7 +2274,7 @@
 
             </th>
 
-            <th class="px-2.5 py-1 text-right num font-semibold bg-gray-50 text-rose-800 border-r border-gray-100 min-w-[75px]">
+            <th class="px-2 py-1 text-right num font-semibold bg-gray-50 text-rose-800 border-r border-gray-100 min-w-[68px]">
 
               Salidas
 
@@ -2254,11 +2282,11 @@
 
             </th>
 
-            <th class="px-2.5 py-1 text-right num font-semibold bg-gray-50 text-gray-800 min-w-[75px]">Saldo</th>
+            <th class="px-2 py-1 text-right num font-semibold bg-gray-50 text-gray-800 min-w-[68px]">Saldo</th>
 
-            <th class="px-2.5 py-1 text-right num font-semibold bg-gray-50 text-blue-800 border-r border-gray-100 min-w-[85px]" title="Costo unitario del movimiento">Costo Trans.</th>
+            <th class="px-1.5 py-1 text-right num font-semibold bg-gray-50 text-blue-800 border-r border-gray-100 min-w-[72px]" title="Costo unitario de la transacción">Transacción</th>
 
-            <th class="px-2.5 py-1 text-right num font-semibold bg-gray-50 text-purple-800 min-w-[85px]" title="Costo promedio ponderado resultante">Costo Prom.</th>
+            <th class="px-1.5 py-1 text-right num font-semibold bg-gray-50 text-purple-800 min-w-[72px]" title="Costo promedio ponderado resultante">Promedio</th>
 
           </tr>
 
@@ -2266,7 +2294,7 @@
 
         <tbody id="tabla-kardex" class="divide-y divide-gray-100">
 
-          <tr><td colspan="9" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
+          <tr><td colspan="10" class="text-center text-gray-400 py-8">Selecciona un producto</td></tr>
 
         </tbody>
 
@@ -6442,6 +6470,63 @@ function verKardex(id, nombre, movimientoId = null) {
 
 let kardexProductoActual = null;
 let _kardexPdfInfo = null;
+let _kardexMostrarDecimales = false; // Por defecto sin decimales (homogéneo a enteros como en contabilidad)
+let _kardexDataActual = null;
+
+function toggleDecimalesKardex() {
+  _kardexMostrarDecimales = !_kardexMostrarDecimales;
+  actualizarBotonDecimalesKardex();
+  if (_kardexDataActual) {
+    renderizarTablaKardex(_kardexDataActual);
+  }
+}
+
+function actualizarBotonDecimalesKardex() {
+  const btn = document.getElementById('btn-toggle-decimales-kardex');
+  const icon = document.getElementById('icon-toggle-decimales-kardex');
+  if (!btn) return;
+  if (_kardexMostrarDecimales) {
+    btn.className = 'px-3 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-blue-600 text-white border-blue-700 shadow-xs cursor-pointer select-none text-xs';
+    if (icon) {
+      icon.className = 'text-white font-bold';
+      icon.textContent = '✓';
+    }
+  } else {
+    btn.className = 'px-3 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-800 cursor-pointer select-none text-xs shadow-xs';
+    if (icon) {
+      icon.className = 'text-slate-400';
+      icon.textContent = '✗';
+    }
+  }
+}
+
+// Formateadores homogéneos para Kardex
+function _fmtKardexQty(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  if (_kardexMostrarDecimales) {
+    return val.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function _fmtKardexUnit(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  if (_kardexMostrarDecimales) {
+    return '$' + val.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return '$' + Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function _fmtKardexMon(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  if (_kardexMostrarDecimales) {
+    return '$' + val.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return '$' + Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
 
 function toggleKardexNota(movId) {
   const row = document.getElementById(`kardex-nota-${movId}`);
@@ -6450,218 +6535,85 @@ function toggleKardexNota(movId) {
   }
 }
 
-async function cargarKardex(productoId) {
-
-  kardexProductoActual = Number(productoId);
-
+function renderizarTablaKardex(d) {
   const tb = document.getElementById('tabla-kardex');
-
-  tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
-
-  _kardexPdfInfo = null;
-  const btnPdfReset = document.getElementById('kardex-btn-pdf');
-  if (btnPdfReset) { btnPdfReset.classList.add('hidden'); btnPdfReset.classList.remove('flex'); }
-
-  
-
-  // Reset sum elements
+  if (!tb || !d) return;
 
   const sumEntradasEl = document.getElementById('kardex-sum-entradas');
-
   const sumSalidasEl = document.getElementById('kardex-sum-salidas');
 
-  if (sumEntradasEl) sumEntradasEl.textContent = '0';
-
-  if (sumSalidasEl) sumSalidasEl.textContent = '0';
-
-  
-
-  // Render product summary bar (initial fallback from cache)
-
-  const prod = productos.find(p => Number(p.id) === Number(productoId));
-
+  // Actualizar tarjeta resumen del producto
   const summaryPanel = document.getElementById('kardex-resumen-producto');
-
-  if (prod && summaryPanel) {
-
-    document.getElementById('kp-stock').textContent = fmt(prod.stock);
-
-    document.getElementById('kp-costo-prom').textContent = fmtUnitCost(prod.costo);
-
-    document.getElementById('kp-valor-existencia').textContent = fmtMon(Number(prod.costo || 0) * Number(prod.stock || 0));
-
-    summaryPanel.classList.remove('hidden');
-
-  } else if (summaryPanel) {
-
-    summaryPanel.classList.add('hidden');
-
-  }
-
-
-
-  const r = await fetch(`/api/inventario/producto/${productoId}/kardex`);
-
-  const d = await r.json();
-
-  if (!d.ok) { toast(d.error, false); return; }
-
-  renderizarAuditoriaKardex(d.auditoria, productoId);
-
-
-
-  // Update summary bar and local cache with live database values
-
   if (summaryPanel && d.stock_actual !== undefined && d.costo_actual !== undefined) {
-
-    document.getElementById('kp-stock').textContent = fmt(d.stock_actual);
-
-    document.getElementById('kp-costo-prom').textContent = fmtUnitCost(d.costo_actual);
-
-    document.getElementById('kp-valor-existencia').textContent = fmtMon(d.valor_existencia ?? (Number(d.costo_actual || 0) * Number(d.stock_actual || 0)));
-
-    if (prod) {
-
-      prod.stock = d.stock_actual;
-
-      prod.costo = d.costo_actual;
-
-    }
-
+    document.getElementById('kp-stock').textContent = _fmtKardexQty(d.stock_actual);
+    document.getElementById('kp-costo-prom').textContent = _fmtKardexUnit(d.costo_actual);
+    document.getElementById('kp-valor-existencia').textContent = _fmtKardexMon(d.valor_existencia ?? (Number(d.costo_actual || 0) * Number(d.stock_actual || 0)));
   }
 
-  if (!d.movimientos.length) {
-
-    tb.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
-
-    _kardexPdfInfo = null;
-    const btnPdf = document.getElementById('kardex-btn-pdf');
-    if (btnPdf) { btnPdf.classList.add('hidden'); btnPdf.classList.remove('flex'); }
-
+  if (!d.movimientos || !d.movimientos.length) {
+    tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
     return;
-
   }
-
-  _kardexPdfInfo = {
-    producto_id: Number(productoId),
-    producto_nombre: prod?.nombre || (d.movimientos[0]?.nombre_producto || 'Producto'),
-  };
-  const btnPdf = document.getElementById('kardex-btn-pdf');
-  if (btnPdf) { btnPdf.classList.remove('hidden'); btnPdf.classList.add('flex'); }
-
-  
-
-  // Totales del historial completo, no solo de los 300 movimientos visibles.
 
   const totalEntradas = Number(d.totales?.entradas || 0);
-
   const totalSalidas = Number(d.totales?.salidas || 0);
-
-  if (sumEntradasEl) sumEntradasEl.textContent = fmt(totalEntradas);
-
-  if (sumSalidasEl) sumSalidasEl.textContent = fmt(totalSalidas);
-
-  
+  if (sumEntradasEl) sumEntradasEl.textContent = _fmtKardexQty(totalEntradas);
+  if (sumSalidasEl) sumSalidasEl.textContent = _fmtKardexQty(totalSalidas);
 
   const movimientosNegativos = new Set((d.auditoria?.negativos_intermedios || []).map(x => Number(x.movimiento_id)));
-
   const movimientosInconsistentes = new Set((d.auditoria?.inconsistencias_movimientos || []).map(x => Number(x.movimiento_id)));
 
   tb.innerHTML = d.movimientos.map(m => {
-
     const transCostVal = m.valor_unitario;
-
     const avgCostVal = m.costo_und;
-
-    
-
     const unitCostVal = avgCostVal ?? transCostVal;
-
     const lineTotal = (m.valor_total != null && Number(m.valor_total) > 0) 
-
       ? Number(m.valor_total) 
-
       : (Number(m.cantidad || 0) * Number(unitCostVal || 0));
 
-
-
-    const entradaQty = m.tipo === 'entrada' ? fmt(m.cantidad) : '—';
-
-    const salidaQty = m.tipo === 'salida' ? fmt(m.cantidad) : '—';
-
+    const entradaQty = m.tipo === 'entrada' ? _fmtKardexQty(m.cantidad) : '—';
+    const salidaQty = m.tipo === 'salida' ? _fmtKardexQty(m.cantidad) : '—';
     const entradaClass = m.tipo === 'entrada' ? 'font-bold text-emerald-600 bg-emerald-50/10' : 'text-gray-400';
-
     const salidaClass = m.tipo === 'salida' ? 'font-bold text-rose-600 bg-rose-50/10' : 'text-gray-400';
 
     const notaTexto = (m.notes || m.notas || '').trim();
     const tieneNota = notaTexto.length > 0;
     const btnNota = tieneNota
-      ? `<button type="button" onclick="toggleKardexNota(${m.id})" class="inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[9px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition cursor-pointer select-none" title="Clic para ver/ocultar nota">📝 Nota</button>`
+      ? `<button type="button" onclick="toggleKardexNota(${m.id})" class="inline-flex items-center gap-0.5 px-1 py-0.2 text-[9px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition cursor-pointer select-none" title="Clic para ver/ocultar nota">📝 Nota</button>`
       : '';
 
     let docOrProveedorInfo = '';
-
     if (m.tipo_documento || m.documento_numero) {
-
       const docType = m.tipo_documento || '';
-
       const docNum = m.documento_numero || '';
-
       const tId = m.proveedor_id || '';
-
-      
-
       const linkUrl = `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docType)}&documento_numero=${encodeURIComponent(docNum)}&tercero_id=${encodeURIComponent(tId)}`;
 
-      
-
       docOrProveedorInfo += `
-
-        <div class="font-semibold text-gray-700 flex items-center gap-1.5 flex-wrap leading-tight">
-
-          <span class="whitespace-nowrap">${docType} ${docNum}</span>
-
-          ${docNum ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-[12px] inline-flex items-center">🔗</a>` : ''}
-
+        <div class="font-semibold text-gray-700 flex items-center gap-1 flex-wrap leading-tight text-[11px]">
+          <span>${docType} ${docNum}</span>
+          ${docNum ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-[11px] inline-flex items-center">🔗</a>` : ''}
           ${btnNota}
-
         </div>
-
       `;
-
     } else if (btnNota) {
-
       docOrProveedorInfo += `<div class="flex items-center">${btnNota}</div>`;
-
     }
 
     if (m.proveedor_nombre) {
-
-      docOrProveedorInfo += `<div class="text-gray-400 text-[10px] leading-tight truncate max-w-[260px]" title="${m.proveedor_nombre}">${m.proveedor_nombre}</div>`;
-
+      docOrProveedorInfo += `<div class="text-gray-400 text-[10px] leading-tight truncate max-w-[220px]" title="${m.proveedor_nombre}">${m.proveedor_nombre}</div>`;
     }
 
     let origenInfo = '';
-
     if (m.producto_padre_nombre) {
-
       origenInfo += `
-
         <div class="flex items-center gap-1">
-
-          <span class="inline-block px-1.5 py-0.5 rounded bg-indigo-50 text-[10px] font-bold text-indigo-700 border border-indigo-100 whitespace-nowrap">
-
+          <span class="inline-block px-1.5 py-0.5 rounded bg-indigo-50 text-[10px] font-bold text-indigo-700 border border-indigo-100 truncate max-w-[150px]" title="${m.producto_padre_nombre}">
             🍳 ${m.producto_padre_nombre}
-
           </span>
-
         </div>
-
       `;
-
     }
-
-
 
     const alertaMovimiento = movimientosNegativos.has(Number(m.id)) || movimientosInconsistentes.has(Number(m.id));
     const fechaKardex = m.documento_fecha || '';
@@ -6692,24 +6644,25 @@ async function cargarKardex(productoId) {
           data-created-at-iso="${createdAtIso}"
           class="hover:bg-gray-50/70 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''} ${esDocValido ? 'cursor-default' : ''}" 
           title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
-        <td class="px-2.5 py-1 text-xs text-gray-500 whitespace-nowrap align-middle">
+        <td class="px-2 py-1 text-xs text-gray-500 whitespace-nowrap align-middle">
           <div class="flex items-center">${dragHandle}${fechaCelda}</div>
         </td>
-        <td class="px-3 py-1 text-xs text-gray-600">${docOrProveedorInfo}</td>
-        <td class="px-3 py-1 text-xs text-gray-600">${origenInfo}</td>
-        <td class="px-2.5 py-1 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
-        <td class="px-2.5 py-1 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
-        <td class="px-2.5 py-1 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${fmt(m.stock_nuevo)}</td>
-        <td class="px-2.5 py-1 text-right num font-mono text-xs text-gray-600 border-r border-gray-100/50">${fmtUnitCost(transCostVal)}</td>
-        <td class="px-2.5 py-1 text-right num font-mono text-xs text-gray-600">${fmtUnitCost(avgCostVal)}</td>
-        <td class="px-3 py-1 text-right num font-mono font-semibold text-gray-800">${fmtMon(lineTotal)}</td>
+        <td class="px-2.5 py-1 text-xs text-gray-600 align-middle">${docOrProveedorInfo}</td>
+        <td class="px-2 py-1 text-xs text-gray-600 align-middle">${origenInfo}</td>
+        <td class="px-2 py-1 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
+        <td class="px-2 py-1 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
+        <td class="px-2 py-1 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${_fmtKardexQty(m.stock_nuevo)}</td>
+        <td class="px-1.5 py-1 text-right num font-mono text-xs text-gray-600 border-r border-gray-100/50">${_fmtKardexUnit(transCostVal)}</td>
+        <td class="px-1.5 py-1 text-right num font-mono text-xs text-gray-600">${_fmtKardexUnit(avgCostVal)}</td>
+        <td class="px-2 py-1 text-right num font-mono font-semibold text-gray-800">${_fmtKardexMon(lineTotal)}</td>
+        <td class="px-2 py-1 text-right num font-mono font-bold text-emerald-700 bg-emerald-50/20">${_fmtKardexMon(Number(m.stock_nuevo || 0) * Number(avgCostVal || 0))}</td>
       </tr>
     `;
 
     const filaNota = tieneNota
       ? `
       <tr id="kardex-nota-${m.id}" class="hidden bg-amber-50/40 text-gray-600 text-[11px] border-b border-amber-100/60">
-        <td colspan="9" class="px-6 py-1 italic">
+        <td colspan="10" class="px-6 py-1 italic">
           <span class="font-bold not-italic text-amber-800">📝 Nota:</span> ${notaTexto}
         </td>
       </tr>
@@ -6718,6 +6671,66 @@ async function cargarKardex(productoId) {
 
     return filaPrincipal + filaNota;
   }).join('');
+}
+
+async function cargarKardex(productoId) {
+  kardexProductoActual = Number(productoId);
+  const tb = document.getElementById('tabla-kardex');
+  tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
+
+  _kardexPdfInfo = null;
+  const btnPdfReset = document.getElementById('kardex-btn-pdf');
+  if (btnPdfReset) { btnPdfReset.classList.add('hidden'); btnPdfReset.classList.remove('flex'); }
+
+  // Reset sum elements
+  const sumEntradasEl = document.getElementById('kardex-sum-entradas');
+  const sumSalidasEl = document.getElementById('kardex-sum-salidas');
+  if (sumEntradasEl) sumEntradasEl.textContent = '0';
+  if (sumSalidasEl) sumSalidasEl.textContent = '0';
+
+  // Render product summary bar (initial fallback from cache)
+  const prod = productos.find(p => Number(p.id) === Number(productoId));
+  const summaryPanel = document.getElementById('kardex-resumen-producto');
+  if (prod && summaryPanel) {
+    document.getElementById('kp-stock').textContent = _fmtKardexQty(prod.stock);
+    document.getElementById('kp-costo-prom').textContent = _fmtKardexUnit(prod.costo);
+    document.getElementById('kp-valor-existencia').textContent = _fmtKardexMon(Number(prod.costo || 0) * Number(prod.stock || 0));
+    summaryPanel.classList.remove('hidden');
+  } else if (summaryPanel) {
+    summaryPanel.classList.add('hidden');
+  }
+
+  const r = await fetch(`/api/inventario/producto/${productoId}/kardex`);
+  const d = await r.json();
+  if (!d.ok) { toast(d.error, false); return; }
+
+  _kardexDataActual = d;
+  renderizarAuditoriaKardex(d.auditoria, productoId);
+
+  if (summaryPanel && d.stock_actual !== undefined && d.costo_actual !== undefined) {
+    if (prod) {
+      prod.stock = d.stock_actual;
+      prod.costo = d.costo_actual;
+    }
+  }
+
+  if (!d.movimientos.length) {
+    tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
+    _kardexPdfInfo = null;
+    const btnPdf = document.getElementById('kardex-btn-pdf');
+    if (btnPdf) { btnPdf.classList.add('hidden'); btnPdf.classList.remove('flex'); }
+    return;
+  }
+
+  _kardexPdfInfo = {
+    producto_id: Number(productoId),
+    producto_nombre: prod?.nombre || (d.movimientos[0]?.nombre_producto || 'Producto'),
+  };
+  const btnPdf = document.getElementById('kardex-btn-pdf');
+  if (btnPdf) { btnPdf.classList.remove('hidden'); btnPdf.classList.add('flex'); }
+
+  actualizarBotonDecimalesKardex();
+  renderizarTablaKardex(d);
 }
 
 // ── PDF de Cardex por producto ───────────────────────────────────────────────
@@ -7020,55 +7033,49 @@ async function guardarFechaDocumento() {
 
 
 function renderizarAuditoriaKardex(auditoria, productoId) {
-
   const el = document.getElementById('kardex-auditoria');
-
   if (!el || !auditoria) return;
 
   const alertas = [];
+  if (auditoria.negativo_final) alertas.push('<span class="rounded bg-red-100 px-1.5 py-0.5 text-red-700 font-bold text-[10px]">Saldo final negativo</span>');
+  if (auditoria.negativos_intermedios?.length) alertas.push(`<span class="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700 font-bold text-[10px]">${auditoria.negativos_intermedios.length} negativos</span>`);
+  if (auditoria.inconsistencias_movimientos?.length) alertas.push(`<span class="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 font-bold text-[10px]">${auditoria.inconsistencias_movimientos.length} cadenas dif.</span>`);
+  if (auditoria.stock_inconsistente) alertas.push('<span class="rounded bg-blue-100 px-1.5 py-0.5 text-blue-700 font-bold text-[10px]">Dif. stock</span>');
+  if (auditoria.costo_inconsistente) alertas.push('<span class="rounded bg-indigo-100 px-1.5 py-0.5 text-indigo-700 font-bold text-[10px]">Dif. costo</span>');
+  if (auditoria.valor_inconsistente) alertas.push('<span class="rounded bg-cyan-100 px-1.5 py-0.5 text-cyan-700 font-bold text-[10px]">Dif. valor</span>');
 
-  if (auditoria.negativo_final) alertas.push('<span class="rounded-md bg-red-100 px-2 py-1 text-red-700 font-bold">Saldo final negativo</span>');
-
-  if (auditoria.negativos_intermedios?.length) alertas.push(`<span class="rounded-md bg-amber-100 px-2 py-1 text-amber-700 font-bold">${auditoria.negativos_intermedios.length} saldo(s) negativo(s) histórico(s)</span>`);
-
-  if (auditoria.inconsistencias_movimientos?.length) alertas.push(`<span class="rounded-md bg-purple-100 px-2 py-1 text-purple-700 font-bold">${auditoria.inconsistencias_movimientos.length} cadena(s) inconsistente(s)</span>`);
-
-  if (auditoria.stock_inconsistente) alertas.push('<span class="rounded-md bg-blue-100 px-2 py-1 text-blue-700 font-bold">Stock final no coincide</span>');
-
-  if (auditoria.costo_inconsistente) alertas.push('<span class="rounded-md bg-indigo-100 px-2 py-1 text-indigo-700 font-bold">Costo no coincide</span>');
-
-  if (auditoria.valor_inconsistente) alertas.push('<span class="rounded-md bg-cyan-100 px-2 py-1 text-cyan-700 font-bold">Valor no coincide</span>');
-
-  const valores = `<div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 border-t border-gray-200/70 pt-3 text-[11px]">
-
-    <div><span class="block text-gray-500">Valor almacenado</span><strong>${fmtMonExact(auditoria.valor_almacenado)}</strong></div>
-
-    <div><span class="block text-gray-500">Valor reconstruido</span><strong>${fmtMonExact(auditoria.valor_reconstruido)}</strong></div>
-
-    <div><span class="block text-gray-500">Diferencia</span><strong class="${Math.abs(auditoria.diferencia_valor || 0) > 0.01 ? 'text-red-600' : 'text-emerald-600'}">${fmtMonExact(auditoria.diferencia_valor)}</strong></div>
-
-  </div>`;
+  const difVal = Math.abs(auditoria.diferencia_valor || 0);
+  const difClass = difVal > 0.01 ? 'text-red-600 font-bold' : 'text-emerald-600 font-bold';
 
   const detalle = [
-
-    ...(auditoria.negativos_intermedios || []).map(x => `Movimiento #${x.movimiento_id}: stock negativo (${fmt(x.stock)})`),
-
-    ...(auditoria.inconsistencias_movimientos || []).map(x => `Movimiento #${x.movimiento_id}: stock guardado ${fmt(x.guardado_nuevo)} / calculado ${fmt(x.calculado_nuevo)}`),
-
-    ...(auditoria.stock_inconsistente ? ['El stock final no coincide con la reconstrucción'] : []),
-
-    ...(auditoria.costo_inconsistente ? ['El costo unitario del saldo no coincide con el costo reconstruido'] : []),
-
-    ...(auditoria.valor_inconsistente ? ['El valor de existencia no coincide con la reconstrucción'] : [])
-
+    ...(auditoria.negativos_intermedios || []).map(x => `Mov #${x.movimiento_id}: stock negativo (${_fmtKardexQty(x.stock)})`),
+    ...(auditoria.inconsistencias_movimientos || []).map(x => `Mov #${x.movimiento_id}: stock guardado ${_fmtKardexQty(x.guardado_nuevo)} / calc ${_fmtKardexQty(x.calculado_nuevo)}`),
+    ...(auditoria.stock_inconsistente ? ['Stock final no coincide con reconstrucción'] : []),
+    ...(auditoria.costo_inconsistente ? ['Costo no coincide con reconstrucción'] : []),
+    ...(auditoria.valor_inconsistente ? ['Valor no coincide con reconstrucción'] : [])
   ];
 
-  const acciones = '';
+  el.className = `mb-2 rounded-lg border px-3 py-1.5 text-xs flex flex-wrap items-center justify-between gap-2 shadow-2xs ${alertas.length ? 'border-amber-200 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/40'}`;
 
-  el.className = `mb-3 rounded-xl border p-3 text-xs ${alertas.length ? 'border-amber-200 bg-amber-50/40' : 'border-emerald-200 bg-emerald-50/40'}`;
-
-  el.innerHTML = `<div class="flex flex-wrap items-center gap-2"><strong>Auditoría del producto</strong>${alertas.length ? alertas.join('') : '<span class="rounded-md bg-emerald-100 px-2 py-1 text-emerald-700 font-bold">Sin inconsistencias detectadas</span>'}${acciones}</div>${valores}${detalle.length ? `<details class="mt-3 border-t border-amber-200/70 pt-2"><summary class="cursor-pointer font-bold text-gray-600">Ver detalle de movimientos</summary><ul class="mt-2 space-y-1 text-[11px] text-gray-600">${detalle.map(x => `<li>• ${x}</li>`).join('')}</ul></details>` : ''}`;
-
+  el.innerHTML = `
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-[11px] font-extrabold text-gray-700">Auditoría:</span>
+      ${alertas.length ? alertas.join('') : '<span class="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 font-bold text-[10px]">✓ Sin inconsistencias</span>'}
+    </div>
+    <div class="flex items-center gap-3 text-[11px] font-mono text-gray-600">
+      <span>Alm: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_almacenado)}</strong></span>
+      <span>Rec: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_reconstruido)}</strong></span>
+      <span>Dif: <span class="${difClass}">${_fmtKardexMon(auditoria.diferencia_valor)}</span></span>
+      ${detalle.length ? `
+        <details class="inline-block relative">
+          <summary class="cursor-pointer text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline ml-1">Detalle</summary>
+          <div class="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg p-2.5 shadow-lg z-20 w-64 text-[10px] space-y-1 font-sans text-gray-700">
+            ${detalle.map(x => `<div>• ${x}</div>`).join('')}
+          </div>
+        </details>
+      ` : ''}
+    </div>
+  `;
 }
 
 
@@ -7985,6 +7992,35 @@ function recalcularLineaMaxStock(pIdx, productoId, inputId) {
 // ── COTIZACIONES DE COMPRA ─────────────────────────────────────────────────────
 
 let COTZ_DATA = [];
+let cotzSortCol = 'producto_nombre';
+let cotzSortAsc = true;
+
+function ordenarCotizaciones(col) {
+  if (cotzSortCol === col) {
+    cotzSortAsc = !cotzSortAsc;
+  } else {
+    cotzSortCol = col;
+    cotzSortAsc = true;
+  }
+  actualizarIconosOrdenCotz();
+  renderCotizaciones();
+}
+
+function actualizarIconosOrdenCotz() {
+  const columnas = ['producto_nombre', 'proveedor_nombre', 'presentacion_nombre', 'unidades_item', 'precio', 'precio_unitario', 'vigente'];
+  columnas.forEach(col => {
+    const el = document.getElementById(`sort-icon-${col}`);
+    if (el) {
+      if (col === cotzSortCol) {
+        el.textContent = cotzSortAsc ? '▲' : '▼';
+        el.className = 'text-indigo-600 font-extrabold';
+      } else {
+        el.textContent = '↕';
+        el.className = 'text-slate-400';
+      }
+    }
+  });
+}
 
 async function cargarCotizaciones() {
   const filtro = (document.getElementById('cotz-filtro')?.value || '').trim();
@@ -7992,6 +8028,7 @@ async function cargarCotizaciones() {
   const data = await resp.json();
   if (!data.ok) return;
   COTZ_DATA = data.cotizaciones;
+  actualizarIconosOrdenCotz();
   renderCotizaciones();
   cargarResumenCotz();
 }
@@ -8003,21 +8040,62 @@ function renderCotizaciones() {
     body.innerHTML = '<tr><td colspan="8" class="text-center text-slate-400 py-8 text-xs">No hay cotizaciones registradas</td></tr>';
     return;
   }
-  body.innerHTML = COTZ_DATA.map(c => {
+
+  // Ordenar copia de los datos
+  const dataOrdenada = [...COTZ_DATA].sort((a, b) => {
+    let valA, valB;
+    const puA = a.unidades_item > 0 ? (a.precio / a.unidades_item) : a.precio;
+    const puB = b.unidades_item > 0 ? (b.precio / b.unidades_item) : b.precio;
+
+    if (cotzSortCol === 'producto_nombre') {
+      valA = (a.producto_nombre || '').toLowerCase();
+      valB = (b.producto_nombre || '').toLowerCase();
+      return cotzSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    } else if (cotzSortCol === 'proveedor_nombre') {
+      valA = (a.proveedor_nombre || '').toLowerCase();
+      valB = (b.proveedor_nombre || '').toLowerCase();
+      return cotzSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    } else if (cotzSortCol === 'presentacion_nombre') {
+      valA = (a.presentacion_nombre || a.descripcion_presentacion || 'Unidad').toLowerCase();
+      valB = (b.presentacion_nombre || b.descripcion_presentacion || 'Unidad').toLowerCase();
+      return cotzSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    } else if (cotzSortCol === 'unidades_item') {
+      valA = parseFloat(a.unidades_item) || 0;
+      valB = parseFloat(b.unidades_item) || 0;
+    } else if (cotzSortCol === 'precio') {
+      valA = parseFloat(a.precio) || 0;
+      valB = parseFloat(b.precio) || 0;
+    } else if (cotzSortCol === 'precio_unitario') {
+      valA = puA || 0;
+      valB = puB || 0;
+    } else if (cotzSortCol === 'vigente') {
+      valA = a.vigente ? 1 : 0;
+      valB = b.vigente ? 1 : 0;
+    } else {
+      valA = a.id;
+      valB = b.id;
+    }
+
+    if (valA < valB) return cotzSortAsc ? -1 : 1;
+    if (valA > valB) return cotzSortAsc ? 1 : -1;
+    return 0;
+  });
+
+  body.innerHTML = dataOrdenada.map(c => {
     const precioUnit = c.unidades_item > 0 ? (c.precio / c.unidades_item) : c.precio;
     const vigente = c.vigente;
     const badge = vigente
       ? '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Vigente</span>'
       : '<span class="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Vencida</span>';
     return `<tr class="border-b border-slate-100 hover:bg-slate-50/50">
-      <td class="px-3 py-2 font-semibold text-slate-800">${c.producto_nombre}</td>
-      <td class="px-3 py-2 text-slate-600">${c.proveedor_nombre}</td>
-      <td class="px-3 py-2 text-slate-600">${c.presentacion_nombre || c.descripcion_presentacion || 'Unidad'}</td>
-      <td class="px-3 py-2 text-center font-mono">${c.unidades_item}</td>
-      <td class="px-3 py-2 text-right font-mono font-bold">$${parseFloat(c.precio).toLocaleString('es-CO', {minimumFractionDigits:2})}</td>
-      <td class="px-3 py-2 text-right font-mono text-indigo-600 font-bold">$${precioUnit.toLocaleString('es-CO', {minimumFractionDigits:2})}</td>
-      <td class="px-3 py-2 text-center">${badge}</td>
-      <td class="px-3 py-2 text-center">
+      <td class="px-3 py-1.5 font-semibold text-slate-800">${c.producto_nombre}</td>
+      <td class="px-3 py-1.5 text-slate-600">${c.proveedor_nombre}</td>
+      <td class="px-3 py-1.5 text-slate-600">${c.presentacion_nombre || c.descripcion_presentacion || 'Unidad'}</td>
+      <td class="px-3 py-1.5 text-center font-mono">${c.unidades_item}</td>
+      <td class="px-3 py-1.5 text-right font-mono font-bold">$${parseFloat(c.precio).toLocaleString('es-CO', {minimumFractionDigits:2})}</td>
+      <td class="px-3 py-1.5 text-right font-mono text-indigo-600 font-bold">$${precioUnit.toLocaleString('es-CO', {minimumFractionDigits:2})}</td>
+      <td class="px-3 py-1.5 text-center">${badge}</td>
+      <td class="px-3 py-1.5 text-center">
         <button onclick="editarCotizacion(${c.id})" class="text-indigo-500 hover:text-indigo-700 text-xs font-bold mr-2" title="Editar">✏️</button>
         <button onclick="eliminarCotizacion(${c.id}, '${c.producto_nombre}')" class="text-red-400 hover:text-red-600 text-xs font-bold" title="Eliminar">🗑️</button>
       </td>
@@ -8030,26 +8108,29 @@ async function cargarResumenCotz() {
   const data = await resp.json();
   if (!data.ok) return;
   const el = document.getElementById('cotz-resumen');
+  if (!el) return;
   el.innerHTML = `
-    <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center">
-      <div class="text-[10px] font-bold text-indigo-400 uppercase">Total</div>
-      <div class="text-lg font-extrabold text-indigo-700">${data.total}</div>
-    </div>
-    <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
-      <div class="text-[10px] font-bold text-emerald-400 uppercase">Vigentes</div>
-      <div class="text-lg font-extrabold text-emerald-700">${data.vigentes}</div>
-    </div>
-    <div class="bg-red-50 border border-red-100 rounded-xl p-3 text-center">
-      <div class="text-[10px] font-bold text-red-400 uppercase">Vencidas</div>
-      <div class="text-lg font-extrabold text-red-600">${data.vencidas}</div>
-    </div>
-    <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center">
-      <div class="text-[10px] font-bold text-amber-400 uppercase">Productos</div>
-      <div class="text-lg font-extrabold text-amber-700">${data.productos}</div>
-    </div>
-    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
-      <div class="text-[10px] font-bold text-slate-400 uppercase">Proveedores</div>
-      <div class="text-lg font-extrabold text-slate-700">${data.proveedores}</div>
+    <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+      <div class="flex items-center gap-1.5">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total:</span>
+        <span class="font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">${data.total}</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vigentes:</span>
+        <span class="font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">${data.vigentes}</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vencidas:</span>
+        <span class="font-extrabold text-red-700 bg-red-50 px-2 py-0.5 rounded-md border border-red-100">${data.vencidas}</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Productos:</span>
+        <span class="font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">${data.productos}</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Proveedores:</span>
+        <span class="font-extrabold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200">${data.proveedores}</span>
+      </div>
     </div>
   `;
 }
@@ -8175,22 +8256,42 @@ async function guardarCotizacion(id) {
 async function editarCotizacion(id) {
   const c = COTZ_DATA.find(x => x.id === id);
   if (!c) return;
+
+  // 1. Llenar los campos del formulario
   document.getElementById('cotz-proveedor-id').value = c.tercero_id;
   document.getElementById('cotz-proveedor-search').value = c.proveedor_nombre;
   document.getElementById('cotz-producto-id').value = c.item_id;
   document.getElementById('cotz-producto-search').value = c.producto_nombre;
   document.getElementById('cotz-presentacion-id').value = c.presentacion_id || '';
-  document.getElementById('cotz-presentacion-search').value = c.presentacion_nombre || '';
+  document.getElementById('cotz-presentacion-search').value = c.presentacion_nombre || c.descripcion_presentacion || '';
   document.getElementById('cotz-precio').value = c.precio;
   document.getElementById('cotz-unidades').value = c.unidades_item;
   document.getElementById('cotz-vencimiento').value = c.fecha_vencimiento ? c.fecha_vencimiento.split('T')[0] : '';
   document.getElementById('cotz-observaciones').value = c.observaciones || '';
-  // Change save button to update mode
-  const btn = document.querySelector('[onclick="guardarCotizacion()"]');
+
+  // 2. Abrir el details del formulario automáticamente
+  const details = document.getElementById('cotz-form-details');
+  if (details) {
+    details.open = true;
+  }
+
+  // 3. Cambiar título e ícono de la sección
+  const title = document.getElementById('cotz-form-title');
+  if (title) {
+    title.textContent = `Editar Cotización: ${c.producto_nombre} (${c.proveedor_nombre})`;
+  }
+
+  // 4. Cambiar botón a modo actualización
+  const btn = document.getElementById('btn-guardar-cotz');
   if (btn) {
     btn.textContent = 'Actualizar Cotización';
-    btn.setAttribute('onclick', `guardarCotizacion(${id})`);
+    btn.className = 'bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition shadow-xs';
+    btn.onclick = () => guardarCotizacion(id);
   }
+
+  // 5. Scroll hacia el formulario
+  details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  toast(`Cargada cotización para editar: ${c.producto_nombre}`);
 }
 
 function limpiarFormCotz() {
@@ -8202,10 +8303,15 @@ function limpiarFormCotz() {
   });
   const u = document.getElementById('cotz-unidades'); if (u) u.value = '1';
   const v = document.getElementById('cotz-vencimiento'); if (v) v.value = '';
-  const btn = document.querySelector('[onclick^="guardarCotizacion"]');
+
+  const title = document.getElementById('cotz-form-title');
+  if (title) title.textContent = 'Nueva Cotización';
+
+  const btn = document.getElementById('btn-guardar-cotz');
   if (btn) {
     btn.textContent = 'Guardar Cotización';
-    btn.setAttribute('onclick', 'guardarCotizacion()');
+    btn.className = 'bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition shadow-xs';
+    btn.onclick = () => guardarCotizacion();
   }
 }
 
@@ -12837,18 +12943,27 @@ async function cargarReporteEnsambles() {
       tb.innerHTML = lista.map(p => {
         const difStock = p.dif_stock;
         const difValor = p.dif_valor;
+        const difTablaKardex = p.dif_tabla_kardex !== undefined ? p.dif_tabla_kardex : 0;
         const hasDifStock = Math.abs(difStock) >= 0.001;
-        const hasDifValor = Math.abs(difValor) >= 1.0;
+        const hasDifKc = Math.abs(difValor) >= 1.0;
+        const hasDifTk = Math.abs(difTablaKardex) >= 1.0;
+        const hasDifValor = hasDifKc || hasDifTk;
         const hasSinId = p.lineas_sin_id > 0;
 
         const badgeStock = hasDifStock 
           ? `<span class="px-1.5 py-0.5 rounded font-mono font-bold bg-rose-100 text-rose-700 text-[11px]">${difStock > 0 ? '+' : ''}${fmt(difStock)}</span>`
           : `<span class="text-emerald-600 font-mono font-bold text-[11px]">✅ 0</span>`;
 
-        const badgeValor = hasDifValor
-          ? `<span class="px-1.5 py-0.5 rounded font-mono font-bold bg-purple-100 text-purple-700 text-[11px]">${fmtMon(difValor)}</span>`
-          : `<span class="text-emerald-600 font-mono font-bold text-[11px]">✅ $0</span>`;
-
+        let badgeValor = '';
+        if (hasDifKc && hasDifTk) {
+          badgeValor = `<div class="flex flex-col items-end gap-0.5"><span class="px-1.5 py-0.5 rounded font-mono font-bold bg-purple-100 text-purple-700 text-[10px]" title="Diferencia Kardex vs Contabilidad">K-C: ${fmtMon(difValor)}</span><span class="px-1.5 py-0.5 rounded font-mono font-bold bg-amber-100 text-amber-800 text-[10px]" title="Diferencia Tabla vs Kardex">T-K: ${fmtMon(difTablaKardex)}</span></div>`;
+        } else if (hasDifTk) {
+          badgeValor = `<span class="px-1.5 py-0.5 rounded font-mono font-bold bg-amber-100 text-amber-800 text-[11px]" title="Diferencia Tabla de Existencias vs Kardex">${fmtMon(difTablaKardex)} (T-K)</span>`;
+        } else if (hasDifKc) {
+          badgeValor = `<span class="px-1.5 py-0.5 rounded font-mono font-bold bg-purple-100 text-purple-700 text-[11px]" title="Diferencia Kardex vs Contabilidad">${fmtMon(difValor)} (K-C)</span>`;
+        } else {
+          badgeValor = `<span class="text-emerald-600 font-mono font-bold text-[11px]">✅ $0</span>`;
+        }
         // Fase 1: Identidad / Vinculación
         let fase1Html = '';
         if (hasSinId) {

@@ -62,10 +62,25 @@
         <span id="val-diferencia" class="font-bold"></span>
       </div>
       <div class="pt-2">
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Costo Unitario de Ajuste ($)</label>
-        <input type="number" id="val-costo-input" step="0.01" min="0" 
-               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-gray-50 animate-pulse"
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-bold text-gray-500 uppercase">Costo Unitario de Ajuste ($)</label>
+          <span id="val-costo-tipo-badge" class="text-[10px] font-bold px-2 py-0.5 rounded uppercase"></span>
+        </div>
+        <input type="number" id="val-costo-input" step="0.0001" min="0" 
+               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-gray-50"
                oninput="actualizarValorTotalAjuste()">
+        <!-- Análisis porcentual y advertencia -->
+        <div id="val-costo-variacion-box" class="mt-2 text-xs flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100 hidden">
+          <span class="text-gray-500">Costo Base: <b id="val-costo-base">$0.00</b></span>
+          <span id="val-costo-diff-pct" class="font-bold">0.0%</span>
+        </div>
+        <div id="val-costo-alerta-15" class="mt-2 text-xs p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 hidden flex items-start gap-2">
+          <span>⚠️</span>
+          <div>
+            <span class="font-bold">Variación significativa de costo (>15%):</span>
+            <p id="val-costo-alerta-msg" class="text-[11px] text-amber-800 mt-0.5"></p>
+          </div>
+        </div>
       </div>
       <div class="flex justify-between pt-2">
         <span class="text-gray-500 font-bold">Valor Total del Ajuste:</span>
@@ -490,15 +505,34 @@ function calcDiffFila(id, sysStock) {
   const diff = physVal - sysStock;
   btn.disabled = Math.abs(diff) < 0.000001;
   
+  const costInput = document.getElementById(`tbl-cost-${id}`);
+  const prod = currentProducts.find(x => x.id === id);
+
   if (Math.abs(diff) < 0.000001) {
     badge.className = "text-xs font-bold font-mono text-gray-400";
     badge.textContent = "0.0";
+    if (costInput && prod) {
+      costInput.readOnly = true;
+      costInput.value = parseFloat(prod.costo || 0).toFixed(2);
+      costInput.classList.add("bg-gray-100", "cursor-not-allowed", "text-gray-500");
+    }
   } else if (diff > 0) {
     badge.className = "text-xs font-extrabold font-mono text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded";
     badge.textContent = `+${diff.toFixed(2)}`;
+    // Entrada: editable
+    if (costInput) {
+      costInput.readOnly = false;
+      costInput.classList.remove("bg-gray-100", "cursor-not-allowed", "text-gray-500");
+    }
   } else {
     badge.className = "text-xs font-extrabold font-mono text-red-600 bg-red-50 px-1.5 py-0.5 rounded";
     badge.textContent = diff.toFixed(2);
+    // Salida: NUNCA editable (bloqueado con costo promedio)
+    if (costInput && prod) {
+      costInput.readOnly = true;
+      costInput.value = parseFloat(prod.costo || 0).toFixed(2);
+      costInput.classList.add("bg-gray-100", "cursor-not-allowed", "text-gray-500");
+    }
   }
 }
 
@@ -555,9 +589,30 @@ function abrirModalValidacionGenerica(product, physicalQty, overrideCosto = null
     badgeMonto.textContent = `${diff.toFixed(2)}`;
   }
 
-  // Cargar costo unitario
+  // Cargar costo unitario y costo base
+  const baseCosto = parseFloat(product.costo || 0.0);
   const costInput = document.getElementById("val-costo-input");
-  costInput.value = costo.toFixed(2);
+  const costBadge = document.getElementById("val-costo-tipo-badge");
+
+  costInput.dataset.baseCosto = baseCosto;
+  costInput.value = (overrideCosto !== null ? overrideCosto : baseCosto).toFixed(4);
+
+  if (diff > 0) {
+    // ENTRADA: permitir modificar costo
+    costInput.readOnly = false;
+    costInput.classList.remove("bg-gray-100", "cursor-not-allowed", "text-gray-500");
+    costInput.classList.add("bg-white", "text-gray-900");
+    costBadge.className = "text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-emerald-100 text-emerald-800";
+    costBadge.textContent = "Modificable (Entrada)";
+  } else {
+    // SALIDA: NUNCA permitir modificar costo unitario (usa costo promedio del sistema)
+    costInput.readOnly = true;
+    costInput.value = baseCosto.toFixed(4);
+    costInput.classList.add("bg-gray-100", "cursor-not-allowed", "text-gray-500");
+    costInput.classList.remove("bg-white", "text-gray-900");
+    costBadge.className = "text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-amber-100 text-amber-800";
+    costBadge.textContent = "Bloqueado (Costo Promedio)";
+  }
   
   actualizarValorTotalAjuste();
   
@@ -575,15 +630,59 @@ function cerrarModalValidacion() {
 
 function actualizarValorTotalAjuste() {
   if (!activeAjustePayload) return;
-  const sysStock = parseFloat(currentProducts.find(x => x.id === activeAjustePayload.producto_id).stock || 0);
+  const prod = currentProducts.find(x => x.id === activeAjustePayload.producto_id);
+  const sysStock = parseFloat(prod?.stock || 0);
   const diff = activeAjustePayload.cantidad_fisica - sysStock;
   const costInput = document.getElementById("val-costo-input");
-  const cost = parseFloat(costInput.value) || 0.0;
+  
+  let cost = Math.abs(parseFloat(costInput.value) || 0.0);
+  // Si es salida, asegurar estrictamente que sea el costo promedio del producto
+  if (diff <= 0) {
+    cost = Math.abs(parseFloat(prod?.costo || 0.0));
+    costInput.value = cost.toFixed(4);
+  }
   
   activeAjustePayload.costo_unitario = cost;
   
   const total = Math.abs(diff) * cost;
   document.getElementById("val-total-ajuste").textContent = `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+
+  // Análisis porcentual de variación del costo (solo para entradas)
+  const baseCosto = parseFloat(costInput.dataset.baseCosto || 0.0);
+  const variacionBox = document.getElementById("val-costo-variacion-box");
+  const baseEl = document.getElementById("val-costo-base");
+  const diffPctEl = document.getElementById("val-costo-diff-pct");
+  const alerta15 = document.getElementById("val-costo-alerta-15");
+  const alertaMsg = document.getElementById("val-costo-alerta-msg");
+
+  if (diff > 0 && baseCosto > 0) {
+    const varAbs = cost - baseCosto;
+    const pct = (varAbs / baseCosto) * 100;
+    const pctAbs = Math.abs(pct);
+
+    baseEl.textContent = `$${baseCosto.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
+    diffPctEl.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% ($${varAbs >= 0 ? '+' : ''}${varAbs.toFixed(2)})`;
+    
+    if (pct > 0) {
+      diffPctEl.className = "font-bold text-amber-700";
+    } else if (pct < 0) {
+      diffPctEl.className = "font-bold text-blue-700";
+    } else {
+      diffPctEl.className = "font-bold text-gray-600";
+    }
+    variacionBox.classList.remove("hidden");
+
+    // Advertencia si varía por encima del 15%
+    if (pctAbs > 15.0) {
+      alertaMsg.textContent = `El costo ingresado ($${cost.toLocaleString('es-CO', { minimumFractionDigits: 2 })}) difiere en un ${pctAbs.toFixed(1)}% respecto al costo base actual ($${baseCosto.toLocaleString('es-CO', { minimumFractionDigits: 2 })}). Revisa si la unidad de medida es correcta antes de confirmar.`;
+      alerta15.classList.remove("hidden");
+    } else {
+      alerta15.classList.add("hidden");
+    }
+  } else {
+    variacionBox.classList.add("hidden");
+    alerta15.classList.add("hidden");
+  }
 }
 
 // Comprobar la categoría con API grupos para mostrar warnings
@@ -639,7 +738,7 @@ async function guardarAjusteConfirmado() {
     documento_numero: activeDocNumber,
     producto_id: activeAjustePayload.producto_id,
     cantidad_fisica: activeAjustePayload.cantidad_fisica,
-    costo_unitario: activeAjustePayload.costo_unitario,
+    costo_unitario: Math.abs(parseFloat(activeAjustePayload.costo_unitario) || 0.0),
     notas: "Ajuste físico en caliente",
     tercero_id: parseInt(terceroId) || null,
     tercero_nombre: terceroNombre || null

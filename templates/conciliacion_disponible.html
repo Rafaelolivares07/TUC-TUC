@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conciliación y Nivelación de Disponible — {{ negocio_nombre }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="/static/js/tailwind.js"></script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #f8fafc; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    padding: 12px 24px; border-radius: 14px; color: #fff; font-weight: 700;
+    z-index: 9999; opacity: 0; transition: opacity .3s, transform .3s;
+    pointer-events: none; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, -5px); }
+  .toast-ok { background: #059669; }
+  .toast-err { background: #dc2626; }
+</style>
+</head>
+<body class="p-4 sm:p-6 min-h-screen text-slate-800">
+<div id="toast" class="toast"></div>
+
+<div class="max-w-4xl mx-auto">
+
+  <!-- Header -->
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 sm:p-6 mb-6">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div class="flex items-center gap-4">
+        <a href="/admin/contabilidad/{{ negocio_id }}?tab=consulta" class="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/>
+          </svg>
+        </a>
+        <div>
+          <span class="text-[11px] font-extrabold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+            Control de Tesorería y Disponible
+          </span>
+          <h1 class="text-2xl font-black text-slate-900 mt-1">{{ negocio_nombre }}</h1>
+          <p class="text-xs text-slate-500">Conciliación Guiada y Nivelación de Caja y Bancos</p>
+        </div>
+      </div>
+      
+      <!-- Control de Activación del Asistente Proactivo -->
+      <div class="flex items-center gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
+        <div class="text-right">
+          <span class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Asistente Proactivo</span>
+          <span id="txt-estado-activo" class="text-xs font-bold text-slate-700">Desactivado</span>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="toggle-activo" onchange="cambiarActivacionAsistente()" class="sr-only peer">
+          <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tarjeta de Saldos Calculados en Libros -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm relative overflow-hidden">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center font-bold text-base">💵</span>
+          <div>
+            <span class="text-xs font-bold text-slate-500 uppercase">Caja General (110505)</span>
+            <h4 class="text-xs font-medium text-slate-400">Efectivo en manos del negocio</h4>
+          </div>
+        </div>
+      </div>
+      <div class="mt-3">
+        <span class="text-xs font-semibold text-slate-400">Saldo calculado en libros:</span>
+        <div id="saldo-libros-caja" class="text-3xl font-black text-slate-900 mt-0.5">$0</div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm relative overflow-hidden">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center font-bold text-base">🏦</span>
+          <div>
+            <span class="text-xs font-bold text-slate-500 uppercase">Bancolombia (112005)</span>
+            <h4 class="text-xs font-medium text-slate-400">Cuenta de ahorros / transferencias</h4>
+          </div>
+        </div>
+      </div>
+      <div class="mt-3">
+        <span class="text-xs font-semibold text-slate-400">Saldo calculado en libros:</span>
+        <div id="saldo-libros-banco" class="text-3xl font-black text-slate-900 mt-0.5">$0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 1: ACLARACIONES HISTÓRICAS PENDIENTES -->
+  <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm mb-6">
+    <div class="flex items-center gap-2.5 mb-4">
+      <span class="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-600 font-black flex items-center justify-center text-sm border border-indigo-100">1</span>
+      <div>
+        <h3 class="text-base font-black text-slate-900">Aclaraciones Históricas (¿De dónde salió el dinero?)</h3>
+        <p class="text-xs text-slate-500">Registra aportes iniciales o traslados entre cuentas que no se hayan digitado aún.</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Botón Desplegar Modal: Saldo Inicial / Aporte -->
+      <div class="border border-slate-100 bg-slate-50/70 hover:bg-slate-50 rounded-2xl p-4 transition flex flex-col justify-between">
+        <div>
+          <span class="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+            <span>🚀</span> Capital o Préstamo Inicial
+          </span>
+          <p class="text-xs text-slate-500 mt-1">
+            Si empezaron comprando con dinero propio o un crédito, regístralo aquí para que no quede huérfano.
+          </p>
+        </div>
+        <button type="button" onclick="abrirModalAclaracion('saldo_inicial')" class="mt-3 w-full bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold py-2.5 px-3 rounded-xl border border-slate-200 shadow-xs transition">
+          + Registrar Aporte / Préstamo Inicial
+        </button>
+      </div>
+
+      <!-- Botón Desplegar Modal: Traslado / Consignación -->
+      <div class="border border-slate-100 bg-slate-50/70 hover:bg-slate-50 rounded-2xl p-4 transition flex flex-col justify-between">
+        <div>
+          <span class="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+            <span>🔄</span> Traslado entre Caja y Banco
+          </span>
+          <p class="text-xs text-slate-500 mt-1">
+            ¿Consignaron plata de las ventas en efectivo al banco? o ¿retiraron dinero del banco para la caja?
+          </p>
+        </div>
+        <button type="button" onclick="abrirModalAclaracion('traslado')" class="mt-3 w-full bg-white hover:bg-slate-100 text-slate-800 text-xs font-bold py-2.5 px-3 rounded-xl border border-slate-200 shadow-xs transition">
+          + Registrar Consignación / Retiro
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 2: ARQUEO FÍSICO Y NIVELACIÓN FINAL -->
+  <div class="bg-gradient-to-br from-emerald-50/80 via-white to-slate-50 rounded-3xl p-6 border-2 border-emerald-200/80 shadow-sm mb-6">
+    <div class="flex items-center gap-2.5 mb-3">
+      <span class="w-7 h-7 rounded-xl bg-emerald-600 text-white font-black flex items-center justify-center text-sm shadow-xs">2</span>
+      <div>
+        <h3 class="text-base font-black text-slate-900">Arqueo Físico y Nivelación de Saldos Finales</h3>
+        <p class="text-xs text-slate-600">Confronta lo que dice el sistema con lo que tienes en la mano y en tu app hoy.</p>
+      </div>
+    </div>
+
+    <div class="bg-white/90 backdrop-blur-xs rounded-2xl p-5 border border-emerald-100 shadow-xs space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <!-- Input Real Caja -->
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 uppercase mb-1 flex items-center justify-between">
+            <span>💵 Efectivo Real en Caja Hoy</span>
+            <span id="diff-tag-caja" class="text-[10px] font-black px-2 py-0.5 rounded-full hidden"></span>
+          </label>
+          <div class="relative">
+            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+            <input type="number" id="input-real-caja" step="100" min="0" placeholder="0" oninput="calcularDiferencias()"
+                   class="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-lg font-black text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition">
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Conteo físico de billetes y monedas en caja.</p>
+        </div>
+
+        <!-- Input Real Banco -->
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 uppercase mb-1 flex items-center justify-between">
+            <span>🏦 Saldo Real en Bancolombia Hoy</span>
+            <span id="diff-tag-banco" class="text-[10px] font-black px-2 py-0.5 rounded-full hidden"></span>
+          </label>
+          <div class="relative">
+            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+            <input type="number" id="input-real-banco" step="100" min="0" placeholder="0" oninput="calcularDiferencias()"
+                   class="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-lg font-black text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition">
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Saldo disponible según la app de Bancolombia.</p>
+        </div>
+      </div>
+
+      <!-- Resumen de Ajuste Resultante -->
+      <div id="panel-resumen-ajuste" class="hidden p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+        <div class="flex items-center justify-between border-b border-slate-200/80 pb-2 mb-2">
+          <span class="font-bold text-slate-600">Ajuste requerido en Caja:</span>
+          <span id="resumen-diff-caja" class="font-black">$0</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-slate-200/80 pb-2 mb-2">
+          <span class="font-bold text-slate-600">Ajuste requerido en Bancolombia:</span>
+          <span id="resumen-diff-banco" class="font-black">$0</span>
+        </div>
+        <p class="text-[11px] text-slate-500">
+          Al confirmar, el sistema generará automáticamente una <strong>Nota Contable</strong> con su consecutivo secuencial, ajustando los libros para que a partir de hoy tus saldos sean exactamente los reales.
+        </p>
+      </div>
+
+      <!-- Botón de Nivelación -->
+      <div class="pt-2">
+        <button type="button" id="btn-aplicar-nivelacion" onclick="aplicarNivelacion()"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-black py-3.5 px-4 rounded-2xl shadow-lg shadow-emerald-600/20 text-sm transition flex items-center justify-center gap-2">
+          <span>⚖️</span> Aplicar Nivelación a Saldos Reales
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORIAL DE AJUSTES Y NOTAS CONTABLES DE DISPONIBLE -->
+  <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider">Historial de Ajustes en Disponible</h3>
+      <span id="tag-documento-vinculado" class="text-xs font-mono font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-xl border border-slate-200">
+        Doc: NOTA CONTABLE
+      </span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs text-left">
+        <thead>
+          <tr class="border-b border-slate-100 text-slate-400 font-extrabold uppercase text-[10px]">
+            <th class="py-2.5 px-3">Fecha</th>
+            <th class="py-2.5 px-3">Comprobante / Doc</th>
+            <th class="py-2.5 px-3">Cuenta</th>
+            <th class="py-2.5 px-3">Concepto</th>
+            <th class="py-2.5 px-3 text-right">Monto</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-historial-ajustes" class="divide-y divide-slate-50 text-slate-700">
+          <tr><td colspan="5" class="py-6 text-center text-slate-400">No hay ajustes registrados aún.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL FLOTANTE DE ACLARACIÓN (SALDO INICIAL O TRASLADO) -->
+<div id="modal-aclaracion" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center hidden p-4">
+  <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+    <div class="flex items-center justify-between mb-4">
+      <h3 id="modal-titulo" class="text-base font-black text-slate-900">Aclaración Histórica</h3>
+      <button onclick="cerrarModalAclaracion()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">✕</button>
+    </div>
+
+    <form id="form-aclaracion" onsubmit="guardarAclaracion(event)" class="space-y-4 text-xs">
+      <input type="hidden" id="aclaracion-tipo">
+
+      <!-- Campos para Saldo Inicial -->
+      <div id="seccion-saldo-inicial" class="space-y-3">
+        <div>
+          <label class="block text-slate-600 font-extrabold uppercase mb-1">¿A qué cuenta entró el dinero?</label>
+          <select id="aclaracion-destino" class="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-800 font-medium">
+            <option value="110505">Caja General (Efectivo)</option>
+            <option value="112005">Cuentas de ahorro Bancolombia</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-slate-600 font-extrabold uppercase mb-1">¿Cuál fue el origen de esos fondos?</label>
+          <select id="aclaracion-origen-fondos" class="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-800 font-medium">
+            <option value="aporte">Aporte propio de socios / capital (Patrimonio 3115)</option>
+            <option value="prestamo">Préstamo personal / bancario (Pasivo 2105)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Campos para Traslado entre Cuentas -->
+      <div id="seccion-traslado" class="space-y-3 hidden">
+        <div>
+          <label class="block text-slate-600 font-extrabold uppercase mb-1">Dirección del movimiento</label>
+          <select id="aclaracion-direccion" class="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-800 font-medium">
+            <option value="caja_a_banco">Consignación: Salió de Caja -> Entró al Banco</option>
+            <option value="banco_a_caja">Retiro: Salió del Banco -> Entró a Caja</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Monto y Fecha Comunes -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-slate-600 font-extrabold uppercase mb-1">Fecha aproximada</label>
+          <input type="date" id="aclaracion-fecha" required class="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-800 font-medium">
+        </div>
+        <div>
+          <label class="block text-slate-600 font-extrabold uppercase mb-1">Monto ($)</label>
+          <input type="number" id="aclaracion-monto" min="1" step="100" required placeholder="0" class="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-900 font-black">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-slate-600 font-extrabold uppercase mb-1">Nota o Concepto (Opcional)</label>
+        <input type="text" id="aclaracion-concepto" placeholder="Ej. Aporte para arranque de local" class="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-800">
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="cerrarModalAclaracion()" class="flex-1 py-2.5 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Cancelar</button>
+        <button type="submit" class="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black shadow-md">Guardar Aclaración</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const NEGOCIO_ID = {{ negocio_id }};
+let estadoActual = { caja: 0, banco: 0 };
+
+function toast(msg, tipo = 'ok') {
+  const t = document.getElementById('toast');
+  t.innerText = msg;
+  t.className = `toast show ${tipo === 'ok' ? 'toast-ok' : 'toast-err'}`;
+  setTimeout(() => { t.className = 'toast'; }, 3500);
+}
+
+function fmtMoney(v) {
+  return '$' + Number(v || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+async function cargarEstado() {
+  try {
+    const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/conciliacion-disponible/estado`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    estadoActual = data.saldos;
+    document.getElementById('saldo-libros-caja').innerText = fmtMoney(data.saldos.caja);
+    document.getElementById('saldo-libros-banco').innerText = fmtMoney(data.saldos.banco);
+
+    const toggle = document.getElementById('toggle-activo');
+    const txtActivo = document.getElementById('txt-estado-activo');
+    toggle.checked = data.activo;
+    txtActivo.innerText = data.activo ? 'Activado' : 'Desactivado';
+    txtActivo.className = data.activo ? 'text-xs font-bold text-emerald-600' : 'text-xs font-bold text-slate-500';
+
+    if (data.tipo_documento) {
+      document.getElementById('tag-documento-vinculado').innerText = `Doc: ${data.tipo_documento.nombre} (No. ${data.tipo_documento.consecutivo})`;
+    }
+
+    renderHistorial(data.ultimos_ajustes || []);
+    calcularDiferencias();
+  } catch (err) {
+    toast("Error cargando saldos: " + err.message, 'err');
+  }
+}
+
+function renderHistorial(items) {
+  const tbody = document.getElementById('tabla-historial-ajustes');
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400">No hay ajustes registrados aún.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(it => `
+    <tr class="hover:bg-slate-50/50">
+      <td class="py-2.5 px-3 font-mono text-[11px] text-slate-500">${it.fecha || it.created_at?.substring(0,10) || ''}</td>
+      <td class="py-2.5 px-3 font-bold text-slate-800">${it.tipo_documento} #${it.numero_documento}</td>
+      <td class="py-2.5 px-3 font-mono text-[11px] font-bold text-slate-600">${it.cuenta_codigo}</td>
+      <td class="py-2.5 px-3 text-slate-600">${it.concepto || ''}</td>
+      <td class="py-2.5 px-3 text-right font-black ${it.tipo==='debito'?'text-emerald-700':'text-blue-700'}">${it.tipo.toUpperCase()} ${fmtMoney(it.monto)}</td>
+    </tr>
+  `).join('');
+}
+
+async function cambiarActivacionAsistente() {
+  const toggle = document.getElementById('toggle-activo');
+  const txtActivo = document.getElementById('txt-estado-activo');
+  const estadoDeseado = toggle.checked;
+  
+  // Feedback visual instantáneo
+  txtActivo.innerText = estadoDeseado ? 'Activado' : 'Desactivado';
+  txtActivo.className = estadoDeseado ? 'text-xs font-bold text-emerald-600' : 'text-xs font-bold text-slate-500';
+
+  try {
+    const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/conciliacion-disponible/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activo: estadoDeseado })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    toggle.checked = !!data.activo;
+    txtActivo.innerText = data.activo ? 'Activado' : 'Desactivado';
+    txtActivo.className = data.activo ? 'text-xs font-bold text-emerald-600' : 'text-xs font-bold text-slate-500';
+    toast(data.activo ? "Asistente proactivo activado" : "Asistente proactivo desactivado");
+  } catch (err) {
+    toast("Error: " + err.message, 'err');
+    toggle.checked = !estadoDeseado;
+    txtActivo.innerText = toggle.checked ? 'Activado' : 'Desactivado';
+    txtActivo.className = toggle.checked ? 'text-xs font-bold text-emerald-600' : 'text-xs font-bold text-slate-500';
+  }
+}
+
+function calcularDiferencias() {
+  const valCaja = document.getElementById('input-real-caja').value;
+  const valBanco = document.getElementById('input-real-banco').value;
+  const panelResumen = document.getElementById('panel-resumen-ajuste');
+
+  if (valCaja === '' && valBanco === '') {
+    panelResumen.classList.add('hidden');
+    document.getElementById('diff-tag-caja').classList.add('hidden');
+    document.getElementById('diff-tag-banco').classList.add('hidden');
+    return;
+  }
+
+  panelResumen.classList.remove('hidden');
+  const realCaja = parseFloat(valCaja || 0);
+  const realBanco = parseFloat(valBanco || 0);
+
+  const diffCaja = realCaja - estadoActual.caja;
+  const diffBanco = realBanco - estadoActual.banco;
+
+  // Tag Caja
+  const tagCaja = document.getElementById('diff-tag-caja');
+  tagCaja.classList.remove('hidden');
+  if (Math.abs(diffCaja) < 0.01) {
+    tagCaja.innerText = "Cuadrado ✓";
+    tagCaja.className = "text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800";
+  } else if (diffCaja > 0) {
+    tagCaja.innerText = `Sobrante +${fmtMoney(diffCaja)}`;
+    tagCaja.className = "text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800";
+  } else {
+    tagCaja.innerText = `Faltante ${fmtMoney(diffCaja)}`;
+    tagCaja.className = "text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-100 text-rose-800";
+  }
+
+  // Tag Banco
+  const tagBanco = document.getElementById('diff-tag-banco');
+  tagBanco.classList.remove('hidden');
+  if (Math.abs(diffBanco) < 0.01) {
+    tagBanco.innerText = "Cuadrado ✓";
+    tagBanco.className = "text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800";
+  } else if (diffBanco > 0) {
+    tagBanco.innerText = `Sobrante +${fmtMoney(diffBanco)}`;
+    tagBanco.className = "text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-800";
+  } else {
+    tagBanco.innerText = `Faltante ${fmtMoney(diffBanco)}`;
+    tagBanco.className = "text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-100 text-rose-800";
+  }
+
+  document.getElementById('resumen-diff-caja').innerText = (diffCaja >= 0 ? '+' : '') + fmtMoney(diffCaja);
+  document.getElementById('resumen-diff-banco').innerText = (diffBanco >= 0 ? '+' : '') + fmtMoney(diffBanco);
+}
+
+function abrirModalAclaracion(tipo) {
+  document.getElementById('aclaracion-tipo').value = tipo;
+  document.getElementById('modal-aclaracion').classList.remove('hidden');
+  document.getElementById('aclaracion-fecha').value = new Date().toISOString().substring(0,10);
+  document.getElementById('aclaracion-monto').value = '';
+  document.getElementById('aclaracion-concepto').value = '';
+
+  if (tipo === 'saldo_inicial') {
+    document.getElementById('modal-titulo').innerText = "Registrar Aporte / Préstamo Inicial";
+    document.getElementById('seccion-saldo-inicial').classList.remove('hidden');
+    document.getElementById('seccion-traslado').classList.add('hidden');
+  } else {
+    document.getElementById('modal-titulo').innerText = "Registrar Traslado entre Caja y Banco";
+    document.getElementById('seccion-saldo-inicial').classList.add('hidden');
+    document.getElementById('seccion-traslado').classList.remove('hidden');
+  }
+}
+
+function cerrarModalAclaracion() {
+  document.getElementById('modal-aclaracion').classList.add('hidden');
+}
+
+async function guardarAclaracion(e) {
+  e.preventDefault();
+  const tipo = document.getElementById('aclaracion-tipo').value;
+  const fecha = document.getElementById('aclaracion-fecha').value;
+  const monto = parseFloat(document.getElementById('aclaracion-monto').value || 0);
+  const concepto = document.getElementById('aclaracion-concepto').value;
+
+  const payload = {
+    tipo, fecha, monto, concepto,
+    cuenta_destino: document.getElementById('aclaracion-destino').value,
+    origen_fondos: document.getElementById('aclaracion-origen-fondos').value,
+    direccion: document.getElementById('aclaracion-direccion').value
+  };
+
+  try {
+    const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/conciliacion-disponible/registrar-aclaracion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    toast("Aclaración registrada con éxito");
+    cerrarModalAclaracion();
+    cargarEstado();
+  } catch (err) {
+    toast("Error: " + err.message, 'err');
+  }
+}
+
+async function aplicarNivelacion() {
+  const valCaja = document.getElementById('input-real-caja').value;
+  const valBanco = document.getElementById('input-real-banco').value;
+
+  if (valCaja === '' || valBanco === '') {
+    toast("Ingresa los montos reales de Caja y Banco antes de nivelar", 'err');
+    return;
+  }
+
+  if (!confirm("¿Deseas generar la Nota Contable de nivelación para llevar los libros a estos saldos reales a partir de hoy?")) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/conciliacion-disponible/nivelar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        real_caja: parseFloat(valCaja),
+        real_banco: parseFloat(valBanco)
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    toast(data.mensaje);
+    document.getElementById('input-real-caja').value = '';
+    document.getElementById('input-real-banco').value = '';
+    cargarEstado();
+  } catch (err) {
+    toast("Error: " + err.message, 'err');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', cargarEstado);
+</script>
+</body>
+</html>

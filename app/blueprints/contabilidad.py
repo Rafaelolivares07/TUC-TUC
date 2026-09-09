@@ -859,9 +859,13 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
             WHERE m.negocio_id = %s AND m.tipo_documento = %s AND m.documento_numero = %s
         """, (negocio_id, tipo_documento_fisico, documento_numero_fisico)).fetchall()
         
-        template_cuenta_ids = {m['cuenta_puc_id'] for m in mov_list}
+        # Inyección individualizada por ítem con producto_id estricto
+        # Si la plantilla ya tenía una línea genérica de inventario (14x) sin producto_id, se remueve para dar paso al desglose real
+        mov_list = [m for m in mov_list if not (m.get('tipo_mov') == 'D' and str(m.get('cuenta_codigo', '')).startswith('14') and not m.get('producto_id'))]
         
+        puc_14_default = None
         for item in items_mov:
+            gi = None
             if item['categoria']:
                 gi = conn.execute("""
                     SELECT gi.cuenta_inve_id, c.codigo AS cod_inve, c.nombre AS nom_inve
@@ -869,17 +873,31 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                     JOIN cuentas_puc c ON c.id = gi.cuenta_inve_id
                     WHERE gi.negocio_id = %s AND gi.nombre = %s
                 """, (negocio_id, item['categoria'])).fetchone()
+            
+            cuenta_inve_id = gi['cuenta_inve_id'] if (gi and gi['cuenta_inve_id']) else None
+            cod_inve = gi['cod_inve'] if gi else None
+            
+            if not cuenta_inve_id:
+                if not puc_14_default:
+                    rp_14 = conn.execute("""
+                        SELECT id, codigo FROM cuentas_puc 
+                        WHERE (negocio_id = %s OR negocio_id IS NULL) AND codigo LIKE '1405%%'
+                        ORDER BY codigo ASC LIMIT 1
+                    """, (negocio_id,)).fetchone()
+                    puc_14_default = rp_14 if rp_14 else {'id': 131, 'codigo': '140505'}
+                cuenta_inve_id = puc_14_default['id']
+                cod_inve = puc_14_default['codigo']
                 
-                if gi and gi['cuenta_inve_id']:
-                    if gi['cuenta_inve_id'] not in template_cuenta_ids:
-                        mov_list.append({
-                            'cuenta_puc_id': gi['cuenta_inve_id'],
-                            'cuenta_codigo': gi['cod_inve'],
-                            'concepto':      f"Inv: {item['producto_nombre']}",
-                            'tipo_mov':      'D', # Débito en compras/entradas
-                            'monto':         float(item['valor_total']),
-                            'producto_id':   item['producto_id'],
-                        })
+            val_total_item = float(item['valor_total'] or (float(item['cantidad'] or 0) * float(item.get('valor_unitario') or 0)))
+            if val_total_item > 0:
+                mov_list.append({
+                    'cuenta_puc_id': cuenta_inve_id,
+                    'cuenta_codigo': cod_inve,
+                    'concepto':      f"Inv: {item['producto_nombre']}",
+                    'tipo_mov':      'D', # Débito en compras/entradas
+                    'monto':         val_total_item,
+                    'producto_id':   item['producto_id'],
+                })
 
     # Inyección automática de líneas de costo de venta (61x debit) y baja de inventario (14x credit) por cada producto si contab_costos_categoria está habilitado
     if tipo_doc.get('tipo_movimiento') == 'venta' and origen_tipo == 'pedido' and origen_id:
@@ -995,11 +1013,45 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
             except Exception as e_costos:
                 print(f"[cont] Error calculando costo de ventas/inventarios por categoria: {e_costos}")
 
-    # Inyección automática de contrapartida de método de pago
-    if metodo_pago:
+    # Inyección automática de contrapartida de método de pago (soporta pagos mixtos en ventas)
+    tipo_mov_negocio = tipo_doc.get('tipo_movimiento')
+    pagos_desglosados = []
+    if tipo_mov_negocio == 'venta' and origen_tipo == 'pedido' and origen_id:
+        try:
+            pagos_db = conn.execute("""
+                SELECT metodo_codigo, metodo_nombre, monto
+                FROM pedido_pagos
+                WHERE pedido_id = %s
+                ORDER BY id
+            """, (int(origen_id),)).fetchall()
+            if pagos_db:
+                pagos_desglosados = [dict(p) for p in pagos_db if float(p.get('monto') or 0) > 0]
+        except Exception as _e_pp:
+            print(f"[cont] Error leyendo pedido_pagos para pedido {origen_id}: {_e_pp}")
+
+    if pagos_desglosados and tipo_mov_negocio == 'venta':
+        for pago_item in pagos_desglosados:
+            cod_met = pago_item.get('metodo_codigo')
+            monto_p = float(pago_item.get('monto') or 0.0)
+            if monto_p <= 0:
+                continue
+            row_metodo = conn.execute(
+                "SELECT cuenta_recaudo_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
+                (negocio_id, cod_met)
+            ).fetchone()
+            if row_metodo and row_metodo['cuenta_recaudo_id']:
+                c_puc = conn.execute("SELECT codigo, nombre FROM cuentas_puc WHERE id = %s", (row_metodo['cuenta_recaudo_id'],)).fetchone()
+                if c_puc:
+                    mov_list.append({
+                        'cuenta_puc_id': row_metodo['cuenta_recaudo_id'],
+                        'cuenta_codigo': c_puc['codigo'],
+                        'concepto':      f"{c_puc['nombre']} ({pago_item.get('metodo_nombre') or cod_met})",
+                        'tipo_mov':      'D',
+                        'monto':         monto_p,
+                    })
+    elif metodo_pago:
         cuenta_metodo = None
         tipo_mov_contra = 'C'
-        tipo_mov_negocio = tipo_doc.get('tipo_movimiento')
         
         if tipo_mov_negocio == 'entrada':
             row_metodo = conn.execute(
@@ -1139,7 +1191,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
         """, (negocio_id, comp_id, m['cuenta_puc_id'], m['cuenta_codigo'],
               m['concepto'], 'debito' if m['tipo_mov'] == 'D' else 'credito',
               m['monto'], registrado_por, tercero_id,
-              tipo_doc['id'], str(num_doc), fecha_uso, tipo_doc_codigo, origen_tipo, origen_id, desc,
+              tipo_doc['id'], (documento_numero_fisico or (str(num_doc) if num_doc is not None else '')), fecha_uso, tipo_doc_codigo, origen_tipo, origen_id, desc,
               m.get('producto_id'), m.get('producto_padre_id')))
 
     return comp_id
@@ -1611,6 +1663,58 @@ def _asegurar_tipos_doc_saldos(conn, negocio_id):
             try: conn.rollback()
             except Exception: pass
 
+    # 4. Verificar si ya existe un predeterminado para NOTA CONTABLE
+    pred_nota = conn.execute(
+        "SELECT 1 FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'nota_contable' AND activo = TRUE LIMIT 1",
+        (negocio_id,)
+    ).fetchone()
+    if not pred_nota:
+        try:
+            conn.execute("""
+                INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, consecutivo, predeterminado, mueve_inventario, tipo_movimiento, es_interno, activo)
+                VALUES (%s, 'NOTA_CONTABLE', 'NOTA CONTABLE', 1, 0, TRUE, FALSE, 'nota_contable', TRUE, TRUE)
+                ON CONFLICT (negocio_id, codigo) DO NOTHING
+            """, (negocio_id,))
+            conn.commit()
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
+
+
+def obtener_o_crear_tipo_doc_nota_contable(conn, negocio_id):
+    """Retorna el tipo de documento asociado a nota_contable para el negocio, o lo crea formalmente con su ID."""
+    td = conn.execute("""
+        SELECT id, codigo, nombre, consecutivo, numero_inicio, tipo_movimiento
+        FROM tipos_documento_negocio
+        WHERE negocio_id = %s AND tipo_movimiento = 'nota_contable' AND activo = TRUE
+        ORDER BY predeterminado DESC, id ASC
+        LIMIT 1
+    """, (negocio_id,)).fetchone()
+    if td:
+        return td
+
+    try:
+        res = conn.execute("""
+            INSERT INTO tipos_documento_negocio (negocio_id, codigo, nombre, numero_inicio, consecutivo, predeterminado, mueve_inventario, tipo_movimiento, es_interno, activo)
+            VALUES (%s, 'NOTA_CONTABLE', 'NOTA CONTABLE', 1, 0, TRUE, FALSE, 'nota_contable', TRUE, TRUE)
+            ON CONFLICT (negocio_id, codigo) DO UPDATE
+                SET tipo_movimiento = 'nota_contable'
+            RETURNING id, codigo, nombre, consecutivo, numero_inicio, tipo_movimiento
+        """, (negocio_id,)).fetchone()
+        conn.commit()
+        if res:
+            return res
+    except Exception:
+        try: conn.rollback()
+        except Exception: pass
+
+    return conn.execute("""
+        SELECT id, codigo, nombre, consecutivo, numero_inicio, tipo_movimiento
+        FROM tipos_documento_negocio
+        WHERE negocio_id = %s AND tipo_movimiento = 'nota_contable'
+        ORDER BY id ASC LIMIT 1
+    """, (negocio_id,)).fetchone()
+
 
 def obtener_o_crear_tipo_doc_distribuido(conn, negocio_id):
     """Retorna el tipo de documento asociado a inventario_distribuido para el negocio, o lo crea formalmente con su ID."""
@@ -1680,7 +1784,7 @@ def api_tipos_doc_post(negocio_id):
     tipo_movimiento = data.get('tipo_movimiento')
     if tipo_movimiento:
         tipo_movimiento = tipo_movimiento.strip().lower()
-        if tipo_movimiento not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste', 'cierre', 'cobro', 'pago', 'gasto'):
+        if tipo_movimiento not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste', 'cierre', 'cobro', 'pago', 'gasto', 'inventario_distribuido', 'nota_contable'):
             tipo_movimiento = None
     else:
         tipo_movimiento = None
@@ -1804,7 +1908,7 @@ def api_tipos_doc_patch(negocio_id, tid):
             tipo_mov = data['tipo_movimiento']
             if tipo_mov:
                 tipo_mov = tipo_mov.strip().lower()
-                if tipo_mov not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste', 'cierre', 'cobro', 'pago', 'gasto'):
+                if tipo_mov not in ('entrada', 'salida', 'produccion', 'venta', 'ajuste', 'cierre', 'cobro', 'pago', 'gasto', 'inventario_distribuido', 'nota_contable'):
                     tipo_mov = None
             else:
                 tipo_mov = None
@@ -2106,7 +2210,7 @@ def api_param_linea_delete(negocio_id, pid, lid):
 
 def _diagnosticar_causa_descuadre(conn, negocio_id, tipo_doc, num_doc):
     """Rastrea si el documento descuadrado tiene método de pago sin cuenta contable.
-    Compra (inventario_entrada) → cuenta_pago_id; Venta (pedido) → cuenta_recaudo_id."""
+    Compra (inventario_entrada) -> cuenta_pago_id; Venta (pedido) -> cuenta_recaudo_id."""
     try:
         # Sum total debits and credits of this document
         cred_row = conn.execute("""
@@ -5887,6 +5991,396 @@ def api_estado_resultados_pdf(negocio_id):
     resp = Response(bytes(pdf.output()), mimetype='application/pdf')
     resp.headers['Content-Disposition'] = f"inline; filename=estado_resultados_{rango['desde']}_{rango['hasta']}.pdf"
     return resp
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ── MÓDULO: CONCILIACIÓN Y NIVELACIÓN DE DISPONIBLE (ARQUEO PROACTIVO)
+# ══════════════════════════════════════════════════════════════════════
+
+@bp.route('/admin/conciliacion-disponible/<int:negocio_id>')
+def admin_conciliacion_disponible(negocio_id):
+    if not session.get('usuario_id'):
+        return __import__('flask').redirect('/login')
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        _asegurar_tipos_doc_saldos(conn, negocio_id)
+        negocio = conn.execute(
+            "SELECT nombre FROM terceros WHERE id=%s AND tipo_tercero='negocio'",
+            (negocio_id,)
+        ).fetchone()
+        conn.close()
+        if not negocio:
+            return "Negocio no encontrado", 404
+        return render_template('conciliacion_disponible.html',
+                               negocio_id=negocio_id,
+                               negocio_nombre=negocio['nombre'])
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return f"Error: {e}", 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/conciliacion-disponible/estado', methods=['GET'])
+def api_conciliacion_disponible_estado(negocio_id):
+    """Consulta el estado del asistente proactivo, saldos calculados y tipo de doc."""
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        _asegurar_tipos_doc_saldos(conn, negocio_id)
+        
+        # 1. Configuración de activación
+        param_row = conn.execute("""
+            SELECT valor_booleano FROM parametros_sistema
+            WHERE nombre = 'conciliacion_disponible_activo' AND negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        raw_val = param_row['valor_booleano'] if param_row else None
+        activo = str(raw_val).lower() in ('true', 't', '1') if raw_val is not None else False
+
+        # 2. Tipo de documento Nota Contable vinculado por ID
+        tipo_doc = obtener_o_crear_tipo_doc_nota_contable(conn, negocio_id)
+
+        # 3. Saldos actuales calculados en cuentas PUC
+        # Cuentas clave: 110505 (Caja General) y 112005 (Bancolombia)
+        cur_saldos = conn.execute("""
+            SELECT cp.id, cp.codigo, cp.nombre,
+                   COALESCE(SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE 0 END), 0) AS debitos,
+                   COALESCE(SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0 END), 0) AS creditos,
+                   COALESCE(SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE -mc.monto END), 0) AS saldo
+            FROM cuentas_puc cp
+            LEFT JOIN movimientos_contables mc ON mc.cuenta_id = cp.id AND mc.negocio_id = %s
+            WHERE cp.codigo IN ('110505', '112005')
+            GROUP BY cp.id, cp.codigo, cp.nombre
+            ORDER BY cp.codigo
+        """, (negocio_id,)).fetchall()
+
+        saldos_map = {r['codigo']: float(r['saldo'] or 0) for r in cur_saldos}
+        
+        # 4. Historial reciente de notas de conciliación
+        ultimos_ajustes = conn.execute("""
+            SELECT mc.id, mc.comprobante_id, mc.fecha, mc.numero_documento, mc.tipo_documento,
+                   cp.codigo as cuenta_codigo, cp.nombre as cuenta_nombre,
+                   mc.tipo, mc.monto, mc.concepto, mc.created_at
+            FROM movimientos_contables mc
+            JOIN cuentas_puc cp ON cp.id = mc.cuenta_id
+            WHERE mc.negocio_id = %s AND mc.origen_tipo = 'conciliacion_disponible'
+            ORDER BY mc.id DESC
+            LIMIT 20
+        """, (negocio_id,)).fetchall()
+
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'activo': activo,
+            'tipo_documento': {
+                'id': tipo_doc['id'],
+                'codigo': tipo_doc['codigo'],
+                'nombre': tipo_doc['nombre'],
+                'consecutivo': tipo_doc['consecutivo'] or 0
+            },
+            'saldos': {
+                'caja': saldos_map.get('110505', 0.0),
+                'banco': saldos_map.get('112005', 0.0),
+                'total': round(saldos_map.get('110505', 0.0) + saldos_map.get('112005', 0.0), 2)
+            },
+            'ultimos_ajustes': [dict(a) for a in ultimos_ajustes]
+        })
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/conciliacion-disponible/toggle', methods=['POST'])
+def api_conciliacion_disponible_toggle(negocio_id):
+    """Enciende o apaga el asistente proactivo."""
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    activo = bool(data.get('activo', False))
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        
+        existing = conn.execute("""
+            SELECT 1 FROM parametros_sistema
+            WHERE nombre = 'conciliacion_disponible_activo' AND negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        
+        str_activo = 'true' if activo else 'false'
+        if existing:
+            conn.execute("""
+                UPDATE parametros_sistema
+                SET valor_booleano = %s, fecha_actualizacion = NOW()
+                WHERE nombre = 'conciliacion_disponible_activo' AND negocio_id = %s
+            """, (str_activo, negocio_id))
+        else:
+            conn.execute("""
+                INSERT INTO parametros_sistema (nombre, valor_booleano, tipo, descripcion, negocio_id, fecha_actualizacion)
+                VALUES ('conciliacion_disponible_activo', %s, 'booleano', 'Activa asistente proactivo de conciliación y nivelación de disponible', %s, NOW())
+            """, (str_activo, negocio_id))
+            
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'activo': activo})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/conciliacion-disponible/registrar-aclaracion', methods=['POST'])
+def api_conciliacion_disponible_aclaracion(negocio_id):
+    """Registra una aclaración histórica (Saldo Inicial / Aporte o Traslado entre cuentas)."""
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    tipo_aclaracion = (data.get('tipo') or '').strip() # 'saldo_inicial' o 'traslado'
+    fecha = (data.get('fecha') or '').strip() or None
+    monto = float(data.get('monto') or 0.0)
+    cuenta_destino = (data.get('cuenta_destino') or '110505').strip() # '110505' o '112005'
+    origen_fondos = (data.get('origen_fondos') or 'aporte').strip() # 'aporte' (3115) o 'prestamo' (2105)
+    concepto_usuario = (data.get('concepto') or '').strip()
+    
+    if monto <= 0:
+        return jsonify({'ok': False, 'error': 'El monto debe ser mayor a 0'}), 400
+        
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        _asegurar_tipos_doc_saldos(conn, negocio_id)
+        
+        # Obtener tipo de documento NOTA_CONTABLE por su ID
+        tipo_doc = obtener_o_crear_tipo_doc_nota_contable(conn, negocio_id)
+        tipo_doc_id = tipo_doc['id']
+        num_doc = max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1))
+        
+        # Incrementar consecutivo
+        conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (num_doc, tipo_doc_id))
+        doc_str = str(num_doc)
+        
+        # Generar comprobante_id
+        comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+        uid = session.get('usuario_id')
+        
+        # Cuentas PUC involucradas
+        cta_caja = conn.execute("SELECT id, codigo, nombre FROM cuentas_puc WHERE codigo = '110505'").fetchone()
+        cta_banco = conn.execute("SELECT id, codigo, nombre FROM cuentas_puc WHERE codigo = '112005'").fetchone()
+        
+        movs = []
+        if tipo_aclaracion == 'saldo_inicial':
+            # Contrapartida según origen de fondos
+            if origen_fondos == 'prestamo':
+                contra = conn.execute("SELECT id, codigo, nombre FROM cuentas_puc WHERE codigo = '2105'").fetchone()
+                desc_contra = "Préstamo / Obligación Financiera Inicial"
+            else:
+                contra = conn.execute("SELECT id, codigo, nombre FROM cuentas_puc WHERE codigo = '3115'").fetchone()
+                desc_contra = "Aporte de Capital Propio"
+                
+            dest = cta_banco if cuenta_destino == '112005' else cta_caja
+            concepto_final = concepto_usuario or f"Saldo Inicial / {desc_contra} a {dest['nombre']}"
+            
+            # Débito a la cuenta receptora (Caja o Banco)
+            movs.append({
+                'cuenta_id': dest['id'], 'cuenta': dest['codigo'],
+                'concepto': concepto_final, 'tipo': 'debito', 'monto': monto
+            })
+            # Crédito a la contrapartida (Patrimonio o Pasivo)
+            movs.append({
+                'cuenta_id': contra['id'], 'cuenta': contra['codigo'],
+                'concepto': concepto_final, 'tipo': 'credito', 'monto': monto
+            })
+            
+        elif tipo_aclaracion == 'traslado':
+            # Traslado entre Caja y Banco
+            direccion = (data.get('direccion') or 'caja_a_banco').strip()
+            if direccion == 'caja_a_banco':
+                concepto_final = concepto_usuario or "Consignación de Caja General a Cuentas de Ahorro Bancolombia"
+                movs.append({'cuenta_id': cta_banco['id'], 'cuenta': cta_banco['codigo'], 'concepto': concepto_final, 'tipo': 'debito', 'monto': monto})
+                movs.append({'cuenta_id': cta_caja['id'], 'cuenta': cta_caja['codigo'], 'concepto': concepto_final, 'tipo': 'credito', 'monto': monto})
+            else:
+                concepto_final = concepto_usuario or "Retiro de Cuentas de Ahorro Bancolombia para Caja General"
+                movs.append({'cuenta_id': cta_caja['id'], 'cuenta': cta_caja['codigo'], 'concepto': concepto_final, 'tipo': 'debito', 'monto': monto})
+                movs.append({'cuenta_id': cta_banco['id'], 'cuenta': cta_banco['codigo'], 'concepto': concepto_final, 'tipo': 'credito', 'monto': monto})
+        else:
+            conn.rollback(); conn.close()
+            return jsonify({'ok': False, 'error': f'Tipo de aclaración no válido: {tipo_aclaracion}'}), 400
+
+        for m in movs:
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
+                     registrado_por, tipo_documento_id, numero_documento, fecha, tipo_documento,
+                     origen_tipo, origen_id, descripcion_general)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s::date, CURRENT_DATE), %s, 'conciliacion_disponible', %s, %s)
+            """, (negocio_id, comp_id, m['cuenta_id'], m['cuenta'], m['concepto'], m['tipo'], m['monto'],
+                  uid, tipo_doc_id, doc_str, fecha, tipo_doc['nombre'], str(comp_id), "Aclaración Histórica de Disponible"))
+                  
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Aclaración registrada con éxito',
+            'comprobante_id': comp_id,
+            'numero_documento': doc_str
+        })
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/conciliacion-disponible/nivelar', methods=['POST'])
+def api_conciliacion_disponible_nivelar(negocio_id):
+    """Aplica la nivelación contable automática confrontando saldos en libros vs dinero real."""
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    real_caja = data.get('real_caja')
+    real_banco = data.get('real_banco')
+    fecha = (data.get('fecha') or '').strip() or None
+    justificacion = (data.get('justificacion') or 'Nivelación y Arqueo Físico de Disponible').strip()
+    
+    if real_caja is None or real_banco is None:
+        return jsonify({'ok': False, 'error': 'Debes especificar los valores reales tanto para Caja como para Bancolombia'}), 400
+        
+    try:
+        real_caja = float(real_caja)
+        real_banco = float(real_banco)
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'Los montos reales deben ser números válidos'}), 400
+
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        _asegurar_tablas(conn)
+        _asegurar_tipos_doc_saldos(conn, negocio_id)
+        
+        # 1. Consultar saldos actuales exactos
+        cur_saldos = conn.execute("""
+            SELECT cp.id, cp.codigo, cp.nombre,
+                   COALESCE(SUM(CASE WHEN mc.tipo IN ('debito', 'D') THEN mc.monto ELSE -mc.monto END), 0) AS saldo
+            FROM cuentas_puc cp
+            LEFT JOIN movimientos_contables mc ON mc.cuenta_id = cp.id AND mc.negocio_id = %s
+            WHERE cp.codigo IN ('110505', '112005')
+            GROUP BY cp.id, cp.codigo, cp.nombre
+        """, (negocio_id,)).fetchall()
+        
+        saldos_db = {r['codigo']: {'id': r['id'], 'nombre': r['nombre'], 'saldo': float(r['saldo'] or 0)} for r in cur_saldos}
+        
+        caja_db = saldos_db.get('110505', {'id': None, 'nombre': 'Caja general', 'saldo': 0.0})
+        banco_db = saldos_db.get('112005', {'id': None, 'nombre': 'Cuentas de ahorro Bancolombia', 'saldo': 0.0})
+        
+        diff_caja = round(real_caja - caja_db['saldo'], 2)
+        diff_banco = round(real_banco - banco_db['saldo'], 2)
+        
+        if abs(diff_caja) < 0.01 and abs(diff_banco) < 0.01:
+            conn.close()
+            return jsonify({'ok': True, 'mensaje': 'Los saldos en libros ya coinciden exactamente con los saldos reales. No se requiere ajuste.', 'ajustado': False})
+
+        # Cuentas de contrapartida para ajustes
+        # Si la diferencia neta es positiva (hay más dinero físico del registrado) -> Ingreso no operacional por ajuste (4295)
+        # Si la diferencia neta es negativa (falta dinero en libros) -> Gasto no operacional por ajuste (5320)
+        cta_ingreso_ajuste = conn.execute("SELECT id, codigo, nombre FROM cuentas_puc WHERE codigo = '4295'").fetchone()
+        cta_gasto_ajuste = conn.execute("SELECT id, codigo, nombre FROM cuentas_puc WHERE codigo = '5320'").fetchone()
+
+        # Obtener tipo de doc NOTA_CONTABLE por ID
+        tipo_doc = obtener_o_crear_tipo_doc_nota_contable(conn, negocio_id)
+        tipo_doc_id = tipo_doc['id']
+        num_doc = max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1))
+        conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (num_doc, tipo_doc_id))
+        doc_str = str(num_doc)
+
+        comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+        uid = session.get('usuario_id')
+        
+        lineas = []
+        # Ajuste en Caja
+        if abs(diff_caja) >= 0.01:
+            if diff_caja > 0:
+                lineas.append({
+                    'cuenta_id': caja_db['id'], 'cuenta': '110505',
+                    'concepto': f"Ajuste Sobrante en Arqueo Físico Caja - {justificacion}",
+                    'tipo': 'debito', 'monto': abs(diff_caja)
+                })
+                lineas.append({
+                    'cuenta_id': cta_ingreso_ajuste['id'], 'cuenta': cta_ingreso_ajuste['codigo'],
+                    'concepto': f"Ingreso por Ajuste Arqueo Caja - {justificacion}",
+                    'tipo': 'credito', 'monto': abs(diff_caja)
+                })
+            else:
+                lineas.append({
+                    'cuenta_id': cta_gasto_ajuste['id'], 'cuenta': cta_gasto_ajuste['codigo'],
+                    'concepto': f"Gasto / Faltante por Ajuste Arqueo Caja - {justificacion}",
+                    'tipo': 'debito', 'monto': abs(diff_caja)
+                })
+                lineas.append({
+                    'cuenta_id': caja_db['id'], 'cuenta': '110505',
+                    'concepto': f"Ajuste Faltante en Arqueo Físico Caja - {justificacion}",
+                    'tipo': 'credito', 'monto': abs(diff_caja)
+                })
+
+        # Ajuste en Banco
+        if abs(diff_banco) >= 0.01:
+            if diff_banco > 0:
+                lineas.append({
+                    'cuenta_id': banco_db['id'], 'cuenta': '112005',
+                    'concepto': f"Ajuste Nivelación Bancolombia - {justificacion}",
+                    'tipo': 'debito', 'monto': abs(diff_banco)
+                })
+                lineas.append({
+                    'cuenta_id': cta_ingreso_ajuste['id'], 'cuenta': cta_ingreso_ajuste['codigo'],
+                    'concepto': f"Ingreso por Ajuste Bancolombia - {justificacion}",
+                    'tipo': 'credito', 'monto': abs(diff_banco)
+                })
+            else:
+                lineas.append({
+                    'cuenta_id': cta_gasto_ajuste['id'], 'cuenta': cta_gasto_ajuste['codigo'],
+                    'concepto': f"Gasto / Regularización Bancolombia - {justificacion}",
+                    'tipo': 'debito', 'monto': abs(diff_banco)
+                })
+                lineas.append({
+                    'cuenta_id': banco_db['id'], 'cuenta': '112005',
+                    'concepto': f"Ajuste Nivelación Bancolombia - {justificacion}",
+                    'tipo': 'credito', 'monto': abs(diff_banco)
+                })
+
+        # Insercion con estricta partida doble
+        sql_ins = (
+            "INSERT INTO movimientos_contables "
+            "(negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, "
+            "registrado_por, tipo_documento_id, numero_documento, fecha, tipo_documento, "
+            "origen_tipo, origen_id, descripcion_general) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s::date, CURRENT_DATE), %s, 'conciliacion_disponible', %s, %s)"
+        )
+        for l in lineas:
+            conn.execute(sql_ins, (negocio_id, comp_id, l['cuenta_id'], l['cuenta'], l['concepto'], l['tipo'], l['monto'],
+                                  uid, tipo_doc_id, doc_str, fecha, tipo_doc['nombre'], str(comp_id), "Nivelacion y Arqueo Fisico de Disponible"))
+
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'ajustado': True,
+            'mensaje': 'Nivelación contable aplicada con éxito. Tus saldos en libros ahora coinciden con la realidad.',
+            'comprobante_id': comp_id,
+            'numero_documento': doc_str,
+            'diferencias': {
+                'caja': diff_caja,
+                'banco': diff_banco
+            }
+        })
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 
 
 

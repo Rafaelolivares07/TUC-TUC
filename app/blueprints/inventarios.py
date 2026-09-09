@@ -405,8 +405,12 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
 
     stock_nuevo = stock_ant + cantidad * signo
 
+    # Garantizar que el costo unitario nunca sea negativo
+    if valor_unitario is not None:
+        valor_unitario = abs(Decimal(str(valor_unitario)))
+
     if tipo == 'entrada' and valor_unitario is not None:
-        vu = Decimal(str(valor_unitario))
+        vu = valor_unitario
         if valor_total is not None and valor_total > 0:
             vu = Decimal(str(valor_total)) / cantidad if cantidad > 0 else vu
         costo_nuevo   = (val_exi_ant + cantidad * vu) / stock_nuevo if stock_nuevo > 0 else vu
@@ -417,6 +421,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
 
     # Guardar costo de valoración del movimiento (evitando costo cero cuando cae a stock 0)
     costo_registro = costo_nuevo if (tipo == 'entrada' or stock_nuevo > 0) else costo_ant
+    if costo_registro < Decimal('0'):
+        costo_registro = abs(costo_registro)
 
     nombre_prod = conn.execute("SELECT nombre FROM productos WHERE id=%s", (producto_id,)).fetchone()
 
@@ -450,8 +456,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         tipo, motivo,
         float(cantidad), float(stock_ant), float(stock_nuevo),
         registrado_por, notas,
-        float(valor_unitario) if valor_unitario else None,
-        float(valor_total) if valor_total is not None else (float(cantidad * Decimal(str(valor_unitario))) if valor_unitario else None),
+        float(valor_unitario) if valor_unitario is not None else None,
+        abs(float(valor_total)) if valor_total is not None else (float(cantidad * valor_unitario) if valor_unitario is not None else None),
         float(costo_registro),
         referencia_id, referencia_tipo,
         tipo_documento, num_puro, num_puro, documento_fecha, proveedor_id,
@@ -890,8 +896,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             valor_total=ln['valor_total']
         )
 
-        # Feed/update quote (cotizacion) from this entry if it's a purchase and has a price
-        if motivo == 'compra' and proveedor_id and ln['valor_unitario'] and float(ln['valor_unitario']) > 0:
+        # Feed/update quote (cotizacion) from this entry if it's a purchase/external entry and has a price
+        if (motivo in ('compra', 'entrada') or not es_interno) and proveedor_id and ln['valor_unitario'] and float(ln['valor_unitario']) > 0:
             from datetime import timedelta
             vu = float(ln['valor_unitario'])
             f_cot = documento_fecha or date.today()
@@ -900,14 +906,14 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             pres_id = ln['presentacion_id']
             pres_nombre = ln['presentacion_nombre']
             pres_equiv = float(ln['presentacion_equivalencia'])
-            precio_cot = vu * pres_equiv
+            precio_cot = round(vu * pres_equiv, 4)
             
             # Check if a quote exists for this product, provider, and presentation
             cot_row = conn.execute("""
                 SELECT id FROM cotizaciones_compras
-                WHERE tercero_id = %s AND item_id = %s AND presentacion_id = %s
+                WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s AND presentacion_id = %s
                 LIMIT 1
-            """, (proveedor_id, ln['producto_id'], pres_id)).fetchone()
+            """, (negocio_id, proveedor_id, ln['producto_id'], pres_id)).fetchone()
             
             if cot_row:
                 conn.execute("""
@@ -3827,23 +3833,29 @@ def _recostear_producto(conn, negocio_id, producto_id):
         stock_ant = stock
         stock_nuevo = stock_ant + cant_m * signo
 
-        if m['tipo'] == 'entrada' and m['valor_unitario'] is not None:
-            vu = Decimal(str(m['valor_unitario']))
+        vu_raw = Decimal(str(m['valor_unitario'])) if m['valor_unitario'] is not None else None
+        vu = abs(vu_raw) if vu_raw is not None else None
+
+        if m['tipo'] == 'entrada' and vu is not None:
             costo_und = (val_existencia + cant_m * vu) / stock_nuevo if stock_nuevo > 0 else vu
+            costo_und = abs(costo_und)
             val_existencia = stock_nuevo * costo_und if stock_nuevo > 0 else Decimal('0')
         else:
             val_existencia = stock_nuevo * costo_und if stock_nuevo > 0 else Decimal('0')
 
-        valor_total = cant_m * (Decimal(str(m['valor_unitario'])) if m['valor_unitario'] is not None else costo_und)
+        # Para salidas, el valor total del movimiento se valora al costo promedio del inventario (o al costo unitario positivo)
+        costo_linea = vu if (m['tipo'] == 'entrada' and vu is not None) else costo_und
+        valor_total = abs(cant_m * (costo_linea or Decimal('0')))
 
         conn.execute("""
             UPDATE movimientos_inventario
             SET stock_anterior = %s,
                 stock_nuevo = %s,
                 costo_und = %s,
+                valor_unitario = %s,
                 valor_total = %s
             WHERE id = %s
-        """, (float(stock_ant), float(stock_nuevo), float(costo_und), float(valor_total), m['id']))
+        """, (float(stock_ant), float(stock_nuevo), float(costo_und), float(vu) if vu is not None else None, float(valor_total), m['id']))
 
         stock = stock_nuevo
 
@@ -5080,6 +5092,11 @@ def normalizar_numero(num_str):
         suffix = parts[-1].strip()
         if suffix:
             num_str = suffix
+    import re
+    # Limpiar espacios intermedios que a veces se cuelan en documentos (ej: '12  450' -> '12450')
+    num_clean = re.sub(r'\s+', '', num_str)
+    if num_clean.isdigit():
+        return str(int(num_clean))
     if num_str.isdigit():
         return str(int(num_str))
     return num_str
@@ -6690,6 +6707,110 @@ def api_anular_produccion(negocio_id, prod_token):
         conn.close()
 
 
+
+def _contabilizar_ajuste_item(conn, negocio_id, producto_id, diff, costo_unitario, comp_id,
+                              doc_num, tipo_documento_id, tipo_doc_code, desc_asiento=None,
+                              usuario_id=None, tercero_id=None, fecha_doc=None, origen_tipo='ajuste_inventario'):
+    """
+    Motor centralizado y unificado para la contabilización de ajustes de inventario.
+    Genera partida doble estricta en movimientos_contables:
+      - Sobrante (diff > 0): Débito a Inventario (140505), Crédito a Ajuste a Favor (414101).
+      - Faltante (diff < 0): Débito a Ajuste en Contra (614101), Crédito a Inventario (140505).
+    Resuelve cuentas según grupos_inventario con fallback automático a subcuentas estándar (140505/414101/614101).
+    """
+    if abs(float(diff or 0)) < 0.000001:
+        return True, "Diferencia cero"
+
+    prod = conn.execute(
+        "SELECT id, nombre, categoria FROM productos WHERE id=%s AND negocio_id=%s",
+        (producto_id, negocio_id)
+    ).fetchone()
+    if not prod:
+        return False, f"Producto ID {producto_id} no encontrado"
+
+    costo_u = abs(float(costo_unitario or 0))
+    monto_ajuste = round(abs(float(diff)) * costo_u, 2)
+    if monto_ajuste <= 0:
+        return True, "Monto cero"
+
+    cuenta_inve_id = None
+    cuenta_favor_id = None
+    cuenta_contra_id = None
+
+    if prod['categoria']:
+        gi = conn.execute("""
+            SELECT cuenta_inve_id, cuenta_ajuste_favor_id, cuenta_ajuste_contra_id
+            FROM grupos_inventario
+            WHERE negocio_id = %s AND LOWER(nombre) = LOWER(%s)
+        """, (negocio_id, prod['categoria'])).fetchone()
+        if gi:
+            cuenta_inve_id = gi['cuenta_inve_id']
+            cuenta_favor_id = gi['cuenta_ajuste_favor_id']
+            cuenta_contra_id = gi['cuenta_ajuste_contra_id']
+
+    # Fallback seguro a subcuentas estándar de la empresa si faltan en grupos_inventario
+    if not cuenta_inve_id:
+        c_inve = conn.execute("SELECT id FROM cuentas_puc WHERE codigo IN ('140505', '143505') AND acepta_movimiento=TRUE ORDER BY codigo LIMIT 1").fetchone()
+        cuenta_inve_id = c_inve['id'] if c_inve else None
+
+    if not cuenta_favor_id:
+        c_fav = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '414101' AND acepta_movimiento=TRUE LIMIT 1").fetchone()
+        cuenta_favor_id = c_fav['id'] if c_fav else None
+
+    if not cuenta_contra_id:
+        c_contra = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '614101' AND acepta_movimiento=TRUE LIMIT 1").fetchone()
+        cuenta_contra_id = c_contra['id'] if c_contra else None
+
+    if diff > 0:
+        db_id = cuenta_inve_id
+        cr_id = cuenta_favor_id
+        concepto = f"Ajuste entrada (+): {prod['nombre']}"
+    else:
+        db_id = cuenta_contra_id
+        cr_id = cuenta_inve_id
+        concepto = f"Ajuste salida (-): {prod['nombre']}"
+
+    if not db_id or not cr_id:
+        return False, f"No se pudieron resolver las cuentas PUC para el producto {prod['nombre']}"
+
+    db_cod = conn.execute("SELECT codigo FROM cuentas_puc WHERE id=%s", (db_id,)).fetchone()['codigo']
+    cr_cod = conn.execute("SELECT codigo FROM cuentas_puc WHERE id=%s", (cr_id,)).fetchone()['codigo']
+
+    fecha_asiento = fecha_doc or "CURRENT_DATE"
+    f_val = fecha_doc if fecha_doc else None
+
+    if f_val:
+        conn.execute("""
+            INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
+                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
+            VALUES (%s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (negocio_id, comp_id, db_id, db_cod, concepto, monto_ajuste, usuario_id, producto_id,
+              tipo_documento_id, str(doc_num), f_val, tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id))
+
+        conn.execute("""
+            INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
+                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
+            VALUES (%s, %s, %s, %s, %s, 'credito', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (negocio_id, comp_id, cr_id, cr_cod, concepto, monto_ajuste, usuario_id, producto_id,
+              tipo_documento_id, str(doc_num), f_val, tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id))
+    else:
+        conn.execute("""
+            INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
+                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
+            VALUES (%s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s, %s)
+        """, (negocio_id, comp_id, db_id, db_cod, concepto, monto_ajuste, usuario_id, producto_id,
+              tipo_documento_id, str(doc_num), tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id))
+
+        conn.execute("""
+            INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
+                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
+            VALUES (%s, %s, %s, %s, %s, 'credito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s, %s)
+        """, (negocio_id, comp_id, cr_id, cr_cod, concepto, monto_ajuste, usuario_id, producto_id,
+              tipo_documento_id, str(doc_num), tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id))
+
+    return True, None
+
+
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/ajuste-rapido', methods=['POST'])
 def api_tienda_ajuste_rapido(negocio_id):
     if 'usuario_id' not in session:
@@ -6731,12 +6852,15 @@ def api_tienda_ajuste_rapido(negocio_id):
         except (ValueError, TypeError):
             doc_num = str(res_num)
             
-        # 3. Apply adjustments
+        # 3. Preparar comprobante contable unificado para el documento
+        comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+        desc_asiento = f"Ajuste de inventario físico - {doc_num}"
+        
         adjusted_products = []
         for adj in adjustments:
             prod_id = int(adj.get('producto_id') or 0)
             qty_physical = float(adj.get('cantidad_fisica') or 0.0)
-            cost_unit = float(adj.get('costo_unitario') or 0.0)
+            cost_unit = abs(float(adj.get('costo_unitario') or 0.0))
             
             if not prod_id:
                 continue
@@ -6752,22 +6876,32 @@ def api_tienda_ajuste_rapido(negocio_id):
             if abs(diff) < 0.000001:
                 continue
                 
+            tipo_doc_code = td['codigo'] or 'AJUSTE ENTRADA'
             if diff > 0:
+                costo_definitivo = cost_unit
                 _mov_directo(conn, negocio_id, prod_id, diff, 'entrada', 'ajuste',
                              registrado_por=session.get('usuario_id'),
-                             valor_unitario=cost_unit,
+                             valor_unitario=costo_definitivo,
                              bodega=1,
-                             tipo_documento='AJUSTE_INV',
+                             tipo_documento=tipo_doc_code,
                              documento_numero=doc_num,
                              tipo_documento_id=td['id'])
             else:
+                costo_definitivo = abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else 0.0))
                 _mov_directo(conn, negocio_id, prod_id, abs(diff), 'salida', 'ajuste',
                              registrado_por=session.get('usuario_id'),
-                             valor_unitario=cost_unit,
+                             valor_unitario=costo_definitivo,
                              bodega=1,
-                             tipo_documento='AJUSTE_INV',
+                             tipo_documento=tipo_doc_code,
                              documento_numero=doc_num,
                              tipo_documento_id=td['id'])
+
+            # Contabilización automática mediante motor centralizado
+            _contabilizar_ajuste_item(
+                conn, negocio_id, prod_id, diff, costo_definitivo, comp_id,
+                doc_num, td['id'], tipo_doc_code, desc_asiento=desc_asiento,
+                usuario_id=session.get('usuario_id'), origen_tipo='ajuste_rapido'
+            )
                              
             adjusted_products.append(prod_id)
             
@@ -6960,13 +7094,20 @@ def api_ajuste_guardar_item(negocio_id):
             doc_num_final = str(int(res_num))
             desc_asiento = f"Ajuste físico de inventario - {doc_num_final}"
             comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
-            consecutivo_actualizado = True
-            
-        # 3. Registrar el movimiento en movimientos_inventario (Kardex)
+        # 3. Determinar costo unitario definitivo según tipo de movimiento
         tipo_mov = 'entrada' if diff > 0 else 'salida'
+        if tipo_mov == 'salida':
+            # Para salidas de inventario por ajuste (faltante), NUNCA se permite costo arbitrario.
+            # Siempre se liquida al costo promedio ponderado vigente en el sistema.
+            costo_definitivo = abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
+        else:
+            # Para entradas (sobrante), se permite el costo provisto o el base si no viene
+            costo_definitivo = abs(float(costo_unitario)) if costo_unitario is not None else abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
+
+        # Registrar el movimiento en movimientos_inventario (Kardex)
         _mov_directo(conn, negocio_id, producto_id, abs(diff), tipo_mov, 'ajuste',
                      registrado_por=session.get('usuario_id'),
-                     valor_unitario=float(costo_unitario),
+                     valor_unitario=costo_definitivo,
                      notas=notas,
                      bodega=1,
                      tipo_documento=tipo_code,
@@ -6979,16 +7120,16 @@ def api_ajuste_guardar_item(negocio_id):
         # 4. Recostear el producto
         _recostear_producto(conn, negocio_id, producto_id)
         
-        # 5. Auto-guardar cotización de compra si hay proveedor y costo
+        # 5. Auto-guardar cotización de compra si hay proveedor y costo en entrada
         cotizacion_creada = False
-        if tercero_id and costo_unitario and float(costo_unitario) > 0 and diff > 0:
+        if tercero_id and costo_definitivo > 0 and diff > 0:
             from datetime import timedelta
             f_cot = date.today()
             f_vence = f_cot + timedelta(days=180)
             # Buscar presentación "Unidad" por defecto
             pres_unidad = conn.execute("SELECT id FROM presentaciones WHERE LOWER(nombre) = 'unidad' LIMIT 1").fetchone()
             pres_id_default = pres_unidad['id'] if pres_unidad else None
-            precio_cot = float(costo_unitario)
+            precio_cot = float(costo_definitivo)
             
             cot_row = conn.execute("""
                 SELECT id FROM cotizaciones_compras
@@ -7014,83 +7155,16 @@ def api_ajuste_guardar_item(negocio_id):
                 """, (negocio_id, tercero_id, producto_id, f_cot, f_vence, precio_cot, pres_id_default))
             cotizacion_creada = True
         
-        # 6. Integración contable individualizada por producto
+        # 6. Integración contable individualizada mediante motor unificado (con costo definitivo)
         warnings = []
-        if prod['categoria']:
-            gi = conn.execute("""
-                SELECT cuenta_inve_id, cuenta_ajuste_favor_id, cuenta_ajuste_contra_id
-                FROM grupos_inventario
-                WHERE negocio_id = %s AND nombre = %s
-            """, (negocio_id, prod['categoria'])).fetchone()
-            
-            if gi:
-                cuenta_inve = gi['cuenta_inve_id']
-                cuenta_favor = gi['cuenta_ajuste_favor_id']
-                cuenta_contra = gi['cuenta_ajuste_contra_id']
-
-                # Validar que las cuentas existan, sean hoja (nivel >= 4) y acepten movimiento
-                for campo, val in [('cuenta_inve_id', cuenta_inve), ('cuenta_ajuste_favor_id', cuenta_favor), ('cuenta_ajuste_contra_id', cuenta_contra)]:
-                    if val:
-                        cta = conn.execute("SELECT codigo, nombre, nivel, acepta_movimiento FROM cuentas_puc WHERE id=%s", (val,)).fetchone()
-                        if not cta:
-                            conn.rollback(); conn.close()
-                            return jsonify({'ok': False, 'error': f'La {campo} (ID {val}) no existe en el PUC.'}), 400
-                        if cta['nivel'] < 4:
-                            conn.rollback(); conn.close()
-                            return jsonify({'ok': False, 'error': f'La {campo} apunta a "{cta["codigo"]} — {cta["nombre"]}" (nivel {cta["nivel"]}). Debe ser una subcuenta hoja (nivel ≥ 4). Corrija la configuración de Grupos de Inventario.'}), 400
-                        if not cta['acepta_movimiento']:
-                            conn.rollback(); conn.close()
-                            return jsonify({'ok': False, 'error': f'La {campo} "{cta["codigo"]} — {cta["nombre"]}" tiene acepta_movimiento=FALSE.'}), 400
-                    else:
-                        conn.rollback(); conn.close()
-                        return jsonify({'ok': False, 'error': f'Falta configurar la {campo} en Grupos de Inventario para la categoría "{prod["categoria"]}".'}), 400
-                
-                monto_ajuste = abs(diff) * float(costo_unitario)
-                
-                db_cuenta_id = None
-                cr_cuenta_id = None
-                
-                if diff > 0: # Sobrante (Ingreso / Ajuste en favor)
-                    if cuenta_inve and cuenta_favor:
-                        db_cuenta_id = cuenta_inve
-                        cr_cuenta_id = cuenta_favor
-                        concepto = f"Ajuste Físico (+): Insumo {prod['nombre']}"
-                    else:
-                        warnings.append("Falta configurar la cuenta de Inventario o de Ajuste a Favor para la categoría.")
-                else: # Faltante (Gasto / Ajuste en contra)
-                    if cuenta_contra and cuenta_inve:
-                        db_cuenta_id = cuenta_contra
-                        cr_cuenta_id = cuenta_inve
-                        concepto = f"Ajuste Físico (-): Insumo {prod['nombre']}"
-                    else:
-                        warnings.append("Falta configurar la cuenta de Inventario o de Ajuste en Contra para la categoría.")
-                        
-                if db_cuenta_id and cr_cuenta_id:
-                    # Resolver códigos de cuenta
-                    db_cod = conn.execute("SELECT codigo FROM cuentas_puc WHERE id=%s", (db_cuenta_id,)).fetchone()['codigo']
-                    cr_cod = conn.execute("SELECT codigo FROM cuentas_puc WHERE id=%s", (cr_cuenta_id,)).fetchone()['codigo']
-                    
-                    # Insertar Débito
-                    conn.execute("""
-                        INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
-                                                           tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
-                        VALUES (%s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'ajuste_inventario', %s, %s, %s)
-                    """, (negocio_id, comp_id, db_cuenta_id, db_cod, concepto, monto_ajuste, session.get('usuario_id'), producto_id,
-                          tipo_documento_id, doc_num_final, tipo_code, doc_num_final, desc_asiento, tercero_id))
-                    
-                    # Insertar Crédito
-                    conn.execute("""
-                        INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
-                                                           tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
-                        VALUES (%s, %s, %s, %s, %s, 'credito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'ajuste_inventario', %s, %s, %s)
-                    """, (negocio_id, comp_id, cr_cuenta_id, cr_cod, concepto, monto_ajuste, session.get('usuario_id'), producto_id,
-                          tipo_documento_id, doc_num_final, tipo_code, doc_num_final, desc_asiento, tercero_id))
-            else:
-                conn.rollback(); conn.close()
-                return jsonify({'ok': False, 'error': f'La categoría "{prod["categoria"]}" no está configurada en Grupos de Inventario. Debe configurar cuenta de Inventario, Ajuste a Favor y Ajuste en Contra.'}), 400
-        else:
+        ok_contab, err_contab = _contabilizar_ajuste_item(
+            conn, negocio_id, producto_id, diff, costo_definitivo, comp_id,
+            doc_num_final, tipo_documento_id, tipo_code, desc_asiento=desc_asiento,
+            usuario_id=session.get('usuario_id'), tercero_id=tercero_id, origen_tipo='ajuste_fisico'
+        )
+        if not ok_contab:
             conn.rollback(); conn.close()
-            return jsonify({'ok': False, 'error': 'El producto no tiene categoría asignada. Asigne una categoría antes de ajustar.'}), 400
+            return jsonify({'ok': False, 'error': f'Error en contabilización del ajuste: {err_contab}'}), 400
             
         conn.commit()
         return jsonify({
@@ -7732,10 +7806,10 @@ def _pdf_fila_wrap(pdf, col_w, field, aligns, wrap_cols, alto_linea=4.0):
 def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
                          stock_actual, costo_actual, valor_existencia, movimientos, usuario):
 
-    col_w = [24, 62, 15, 15, 15, 18, 18, 22]
+    col_w = [22, 54, 14, 14, 14, 16, 16, 20, 24]
     headers = ['Fecha', 'Documento / Proveedor', 'Entradas', 'Salidas',
-               'Saldo', 'C.Trans', 'C.Prom', 'Total Línea']
-    aligns = ['L', 'L', 'R', 'R', 'R', 'R', 'R', 'R']
+               'Saldo', 'Transac.', 'Promedio', 'Total Línea', 'Total Stock']
+    aligns = ['L', 'L', 'R', 'R', 'R', 'R', 'R', 'R', 'R']
     wrap_cols = {0, 1}
 
     class KardexPDF(FPDF):
@@ -7809,6 +7883,8 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
         entrada = f"{cant:,.0f}" if m['tipo'] == 'entrada' else '-'
         salida = f"{cant:,.0f}" if m['tipo'] == 'salida' else '-'
         saldo = m.get('stock_nuevo', 0)
+        costo_prom = float(m.get('costo_und') or 0)
+        total_stock = float(saldo or 0) * costo_prom
         field = [
             _pdf_sanitize(m.get('fecha') or ''),
             _pdf_sanitize(doc),
@@ -7818,6 +7894,7 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
             _pdf_money(m.get('valor_unitario')),
             _pdf_money(m.get('costo_und')),
             _pdf_money(m.get('valor_total')),
+            _pdf_money(total_stock),
         ]
         _pdf_fila_wrap(pdf, col_w, field, aligns, wrap_cols)
         segmentos = []
@@ -9339,64 +9416,25 @@ def inv_dist_conteo(negocio_id):
             conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (nuevo_consecutivo, tipo_doc_id))
             doc_num_final = str(nuevo_consecutivo)
             
+            # Obtener costo unitario ponderado real de bodega o catálogo
+            saldo_row = conn.execute("""
+                SELECT costo_und FROM saldos_inventario 
+                WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
+            """, (negocio_id, producto_id)).fetchone()
+            
             prod = conn.execute("SELECT id, nombre, categoria, costo FROM productos WHERE id = %s AND negocio_id = %s", (producto_id, negocio_id)).fetchone()
-            costo_unitario = float(prod['costo'] or 0) if prod else 0.0
+            costo_unitario = float(saldo_row['costo_und'] if saldo_row and saldo_row['costo_und'] else (prod['costo'] or 0.0))
             ajuste_monto = abs(diff) * costo_unitario
             
-            # Asiento contable de partida doble usando grupos_inventario (14x vs 4141x / 6141x)
-            comp_id = None
-            if prod and prod['categoria']:
-                gi = conn.execute("""
-                    SELECT cuenta_inve_id, cuenta_ajuste_favor_id, cuenta_ajuste_contra_id
-                    FROM grupos_inventario
-                    WHERE negocio_id = %s AND nombre = %s
-                """, (negocio_id, prod['categoria'])).fetchone()
-                
-                if gi:
-                    cuenta_inve = gi['cuenta_inve_id']
-                    cuenta_favor = gi['cuenta_ajuste_favor_id']
-                    cuenta_contra = gi['cuenta_ajuste_contra_id']
-                    
-                    db_cuenta_id = None
-                    cr_cuenta_id = None
-                    if diff > 0:  # Sobrante -> Ajuste a Favor (+)
-                        db_cuenta_id = cuenta_inve
-                        cr_cuenta_id = cuenta_favor
-                        concepto_asiento = f"Ajuste Físico Distribuido (+): {prod['nombre']}"
-                    else:  # Faltante -> Ajuste en Contra (-)
-                        db_cuenta_id = cuenta_contra
-                        cr_cuenta_id = cuenta_inve
-                        concepto_asiento = f"Ajuste Físico Distribuido (-): {prod['nombre']}"
-                        
-                    if db_cuenta_id and cr_cuenta_id and ajuste_monto > 0:
-                        comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
-                        
-                        db_cod = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s", (db_cuenta_id,)).fetchone()['codigo']
-                        cr_cod = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s", (cr_cuenta_id,)).fetchone()['codigo']
-                        
-                        # Débito
-                        conn.execute("""
-                            INSERT INTO movimientos_contables (
-                                negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
-                                registrado_por, producto_id, tipo_documento_id, numero_documento,
-                                fecha, tipo_documento, origen_tipo, origen_id, descripcion_general
-                            )
-                            VALUES (%s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'inventario_distribuido', %s, %s)
-                        """, (negocio_id, comp_id, db_cuenta_id, db_cod, concepto_asiento, ajuste_monto,
-                              usuario_id, producto_id, tipo_doc_id, doc_num_final, tipo_code,
-                              doc_num_final, f"Inventario Distribuido #{doc_num_final}"))
-                              
-                        # Crédito
-                        conn.execute("""
-                            INSERT INTO movimientos_contables (
-                                negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto,
-                                registrado_por, producto_id, tipo_documento_id, numero_documento,
-                                fecha, tipo_documento, origen_tipo, origen_id, descripcion_general
-                            )
-                            VALUES (%s, %s, %s, %s, %s, 'credito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'inventario_distribuido', %s, %s)
-                        """, (negocio_id, comp_id, cr_cuenta_id, cr_cod, concepto_asiento, ajuste_monto,
-                              usuario_id, producto_id, tipo_doc_id, doc_num_final, tipo_code,
-                              doc_num_final, f"Inventario Distribuido #{doc_num_final}"))
+            comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+            desc_asiento = f"Ajuste Físico Distribuido: {prod['nombre'] if prod else 'Insumo'}"
+            
+            # Contabilización mediante motor unificado
+            _contabilizar_ajuste_item(
+                conn, negocio_id, producto_id, diff, costo_unitario, comp_id,
+                doc_num_final, tipo_doc_id, tipo_code, desc_asiento=desc_asiento,
+                usuario_id=usuario_id, origen_tipo='inventario_distribuido'
+            )
                               
             # Movimiento en Kardex (movimientos_inventario)
             tipo_mov = 'entrada' if diff > 0 else 'salida'
@@ -9686,6 +9724,18 @@ def _obtener_huerfanos_por_producto(conn, negocio_id, prods):
                         matched_id = p['id']
                         break
 
+        # Si no hubo match por concepto, intentar asociar por número de documento cotejado con Kardex
+        if not matched_id and h.get('numero_documento'):
+            doc_norm = normalizar_numero(h['numero_documento'])
+            if doc_norm:
+                km = conn.execute("""
+                    SELECT producto_id FROM movimientos_inventario
+                    WHERE negocio_id = %s AND (documento_numero = %s OR regexp_replace(documento_numero, '^0+', '') = %s)
+                    LIMIT 1
+                """, (negocio_id, h['numero_documento'], doc_norm)).fetchone()
+                if km and km['producto_id'] in valid_prod_ids:
+                    matched_id = km['producto_id']
+
         if matched_id and matched_id in valid_prod_ids:
             if matched_id not in huerfanos_por_prod:
                 huerfanos_por_prod[matched_id] = []
@@ -9783,6 +9833,7 @@ def api_auditoria_productos(negocio_id):
 
             dif_stock = stock_tabla - stock_kardex
             dif_valor = neto_kardex - saldo_contab
+            dif_tabla_kardex = valor_tabla - neto_kardex
 
             estado = 'OK'
             if len(h_list) > 0:
@@ -9791,7 +9842,7 @@ def api_auditoria_productos(negocio_id):
                 estado = 'DOCS_SIN_ASIENTO'
             elif abs(dif_stock) >= Decimal('0.001'):
                 estado = 'DIF_STOCK'
-            elif abs(dif_valor) >= Decimal('1.0'):
+            elif abs(dif_valor) >= Decimal('1.0') or abs(dif_tabla_kardex) >= Decimal('1.0'):
                 estado = 'DIF_VALOR'
 
             items.append({
@@ -9806,6 +9857,8 @@ def api_auditoria_productos(negocio_id):
                 'saldo_contab': float(saldo_contab),
                 'dif_stock': float(dif_stock),
                 'dif_valor': float(dif_valor),
+                'dif_kardex_contab': float(dif_valor),
+                'dif_tabla_kardex': float(dif_tabla_kardex),
                 'lineas_sin_id': len(h_list),
                 'docs_sin_asiento': docs_sin_asiento,
                 'huerfanos': [{

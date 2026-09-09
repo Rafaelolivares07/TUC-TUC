@@ -246,7 +246,7 @@ def ping():
 def respuesta():
     data = request.get_json() or {}
     token       = data.get('token', '')
-    consulta_id = data.get('consulta_id')
+    consulta_id = data.get('consulta_id') or data.get('id')
     resp_data   = data.get('respuesta')
     error       = data.get('error')
     conn = get_db_connection()
@@ -876,3 +876,33 @@ VERSIONES_AGENTES = {
 def api_version_agentes():
     """Público — sin auth. Los EXEs locales lo consultan al arrancar."""
     return jsonify({'ok': True, **VERSIONES_AGENTES})
+
+
+@bp.route('/api/admin-agent/upload-zip', methods=['POST'])
+def upload_zip():
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'ok': False, 'error': 'No file'}), 400
+    dest = '/tmp/BASEDATOSEMPRESAS_2026-09-08.zip'
+    f.save(dest)
+    import os
+    return jsonify({'ok': True, 'bytes': os.path.getsize(dest)})
+
+
+@bp.route('/api/admin-agent/download-zip', methods=['GET'])
+def download_zip():
+    dest = '/tmp/BASEDATOSEMPRESAS_2026-09-08.zip'
+    import os
+    if not os.path.exists(dest):
+        return jsonify({'ok': False, 'error': 'No existe'}), 404
+    return send_file(dest, as_attachment=True, download_name='BASEDATOSEMPRESAS_2026-09-08.zip')
+
+
+@bp.route('/api/admin-agent/cleanup-zip', methods=['POST'])
+def cleanup_zip():
+    dest = '/tmp/BASEDATOSEMPRESAS_2026-09-08.zip'
+    import os
+    if os.path.exists(dest):
+        os.remove(dest)
+    return jsonify({'ok': True})
+

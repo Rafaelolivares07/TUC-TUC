@@ -872,7 +872,128 @@
 
 </div>
 
+<!-- ── MODAL SELECTOR / CARRUSEL CENTROS DE UTILIDAD ────────────────── -->
+<div id="overlay-centros-utilidad" class="overlay hidden" onclick="if(event.target===this)cerrarModalCentrosUtilidad()">
+  <div class="modal shadow-2xl border border-gray-100" style="max-width: 680px; max-height: 90vh; display: flex; flex-direction: column; position: relative;">
+    <div class="flex-shrink-0 flex items-center justify-between pb-3 border-b border-gray-100">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🏢</span>
+          <h3 class="text-base font-extrabold text-gray-800">Centros de Utilidad y Bodegas</h3>
+        </div>
+        <p class="text-xs text-gray-500 mt-0.5">Selecciona el punto de operación activo para inventario, kardex y ventas.</p>
+      </div>
+      <button onclick="cerrarModalCentrosUtilidad()" class="text-gray-400 hover:text-gray-600 p-1.5 rounded-xl hover:bg-gray-100 transition text-lg">&times;</button>
+    </div>
 
+    <div class="flex-1 overflow-y-auto py-4 space-y-3 custom-scrollbar">
+      <div id="cu-carrusel-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <!-- Rendered dynamically by JS -->
+      </div>
+
+      <!-- Dispositivo / Tablet info box -->
+      <div id="cu-dispositivo-box" class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl p-3.5 mt-4">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-lg shadow-inner">📱</div>
+            <div>
+              <p class="text-xs font-bold text-amber-900" id="cu-disp-titulo">Terminal / Dispositivo Actual</p>
+              <p class="text-[11px] text-amber-700" id="cu-disp-subtitulo">Detectando configuración del navegador...</p>
+            </div>
+          </div>
+          <button id="cu-btn-vincular-disp" onclick="abrirVincularDispositivo()" class="text-[11px] font-bold bg-white text-amber-900 px-3 py-1.5 rounded-xl border border-amber-300 shadow-sm hover:bg-amber-100 transition whitespace-nowrap">
+            ⚙️ Configurar Tablet
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex-shrink-0 flex items-center justify-between pt-3 border-t border-gray-100">
+      <button onclick="cerrarModalCentrosUtilidad(); mostrarTab('traslados');" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 py-1.5 px-3 rounded-xl hover:bg-indigo-50 transition">
+        🔄 Ir a Traslados entre Sedes
+      </button>
+      <button onclick="cerrarModalCentrosUtilidad()" class="px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-xs font-semibold text-gray-600 transition">
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL VINCULAR DISPOSITIVO / TABLET ────────────────────────────── -->
+<div id="overlay-vincular-dispositivo" class="overlay hidden" onclick="if(event.target===this)cerrarVincularDispositivo()">
+  <div class="modal shadow-2xl border border-gray-100" style="max-width: 460px;">
+    <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">📱</span>
+        <h3 class="text-sm font-bold text-gray-800">Configurar Terminal / Tablet</h3>
+      </div>
+      <button onclick="cerrarVincularDispositivo()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+    </div>
+    <div class="space-y-3">
+      <p class="text-xs text-gray-500">Vincula esta tablet al local para que todos los operadores inicien automáticamente en este Centro de Utilidad sin necesidad de seleccionarlo manualmente.</p>
+      <div>
+        <label class="block text-xs font-bold text-gray-700 mb-1">Nombre del Dispositivo</label>
+        <input type="text" id="disp-reg-nombre" placeholder="Ej: Tablet Mostrador Local" class="text-xs font-semibold">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-700 mb-1">Centro de Utilidad Predeterminado</label>
+        <select id="disp-reg-centro" class="text-xs font-semibold">
+          <!-- Loaded by JS -->
+        </select>
+      </div>
+      <div class="pt-2 flex justify-end gap-2">
+        <button onclick="cerrarVincularDispositivo()" class="px-3.5 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-xs font-semibold text-gray-600">Cancelar</button>
+        <button onclick="guardarRegistroDispositivo()" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm">Guardar y Vincular</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL EDITAR CENTRO DE UTILIDAD ───────────────────────────────── -->
+<div id="overlay-editar-centro" class="overlay hidden" onclick="if(event.target===this)cerrarModalEditarCentro()">
+  <div class="modal shadow-2xl border border-gray-100" style="max-width: 480px;">
+    <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">✏️</span>
+        <h3 class="text-sm font-bold text-gray-800">Modificar Centro de Utilidad</h3>
+      </div>
+      <button onclick="cerrarModalEditarCentro()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+    </div>
+    <form onsubmit="guardarEdicionCentro(event)" class="space-y-3">
+      <input type="hidden" id="edit-centro-id">
+      <div>
+        <label class="block text-xs font-bold text-gray-700 mb-1">Nombre del Centro de Utilidad</label>
+        <input type="text" id="edit-centro-nombre" required class="text-xs font-semibold" placeholder="Ej: Local Comercial / Sede Principal">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">Código</label>
+          <input type="text" id="edit-centro-codigo" required class="text-xs font-semibold uppercase" placeholder="Ej: LOC-01">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">Tipo de Operación</label>
+          <select id="edit-centro-tipo" class="text-xs font-semibold">
+            <option value="local">Sede Fija / Local Comercial</option>
+            <option value="movil">Operación Móvil / Neveras</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-700 mb-1">Color Distintivo</label>
+        <div class="flex items-center gap-2">
+          <input type="color" id="edit-centro-color" class="h-9 w-14 rounded-lg cursor-pointer border border-gray-200 p-1">
+          <span class="text-xs text-gray-500">Color de identificación en cabecera y reportes</span>
+        </div>
+      </div>
+      <div class="pt-3 flex justify-end gap-2 border-t border-gray-100">
+        <button type="button" onclick="cerrarModalEditarCentro()" class="px-3.5 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-xs font-semibold text-gray-600">Cancelar</button>
+        <button type="submit" id="btn-guardar-edit-centro" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5">
+          💾 Guardar Cambios
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- ── HEADER ───────────────────────────────────────────────────────── -->
 
@@ -882,11 +1003,35 @@
 
     <div class="flex items-center justify-between gap-4 flex-wrap">
 
-      <div>
+      <div class="flex items-center gap-4 flex-wrap">
 
-        <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Inventario</p>
+        <div>
+          <div class="flex items-center gap-2">
+            <p class="text-xs text-gray-400 font-semibold uppercase tracking-wide">Inventario</p>
+            <span class="bg-rose-100 text-rose-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-rose-200">{{ APP_VERSION|default('v2.4.2') }}</span>
+          </div>
+          <h1 class="text-xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
+        </div>
 
-        <h1 class="text-xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
+        <!-- ── CARD SELECTOR CENTRO DE UTILIDAD ACTIVO ── -->
+        <div id="btn-abrir-selector-centros" onclick="abrirModalCentrosUtilidad()" 
+             class="group flex items-center gap-3 bg-gradient-to-r from-slate-50 to-white hover:from-indigo-50/70 hover:to-white border border-slate-200 hover:border-indigo-400 p-2 pr-3.5 rounded-2xl shadow-sm hover:shadow transition-all cursor-pointer select-none"
+             title="Clic para cambiar de Centro de Utilidad o Bodega">
+          <div id="cu-header-icon-box" class="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-inner transition-transform group-hover:scale-105" style="background: {{ (centro_activo.color_badge if centro_activo else '#10b981') }}18; color: {{ centro_activo.color_badge if centro_activo else '#10b981' }}; border: 1px solid {{ centro_activo.color_badge if centro_activo else '#10b981' }}40;">
+            <span id="cu-header-icon">{% if centro_activo and centro_activo.tipo == 'movil' %}🛵{% else %}🏪{% endif %}</span>
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span id="cu-header-badge-tipo" class="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full text-white" style="background: {{ centro_activo.color_badge if centro_activo else '#10b981' }};">{{ centro_activo.tipo if centro_activo else 'Local' }}</span>
+              <span id="cu-header-codigo" class="text-xs font-mono text-gray-500 font-bold">{{ centro_activo.codigo if centro_activo else 'LOC-01' }}</span>
+              <span id="cu-header-dispositivo-tag" class="hidden text-[9px] bg-amber-100 text-amber-800 font-semibold px-1.5 py-0.5 rounded" title="Dispositivo reconocido">📱 Tablet</span>
+            </div>
+            <div class="text-xs sm:text-sm font-extrabold text-gray-800 group-hover:text-indigo-600 flex items-center gap-1.5 transition-colors">
+              <span id="cu-header-nombre">{{ centro_activo.nombre if centro_activo else 'Local Comercial / Sede Principal' }}</span>
+              <svg class="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-transform group-hover:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+          </div>
+        </div>
 
       </div>
 
@@ -926,6 +1071,8 @@
       <button class="tab-btn" onclick="mostrarTab('cotizaciones')">📋 Cotizaciones</button>
 
       <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
+
+      <button class="tab-btn" onclick="mostrarTab('traslados')">🔄 Traslados</button>
 
       <button class="tab-btn" onclick="mostrarTab('ensambles')">Ensambles</button>
 
@@ -1298,96 +1445,79 @@
 
   <div id="tab-entradas" class="hidden bg-white rounded-2xl shadow p-5">
 
-    <h2 class="font-bold text-gray-700 mb-3">Registrar entrada de mercancía</h2>
+    <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
+      <h2 class="font-bold text-gray-700">Registrar entrada de mercancía</h2>
+    </div>
+
+    <!-- Banner si está en modo Consolidado -->
+    <div id="banner-entrada-consolidado" class="hidden mb-3 p-3 bg-amber-50 border border-amber-300 rounded-xl flex items-center gap-2.5 text-amber-800 text-xs font-semibold shadow-xs">
+      <span class="text-base">⚠️</span>
+      <div>
+        <span class="font-bold">Modo Consolidado activo:</span> Como no existe una bodega física global, debes seleccionar abajo la <b>Sede / Bodega física receptora</b> para poder registrar el ingreso de mercancía.
+      </div>
+    </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-12 gap-x-3 gap-y-2 mb-3">
 
       <div class="sm:col-span-2">
-
         <label>Tipo doc.</label>
-
         <select id="entrada-tipo-doc">
-
           <option value="">Cargando tipos...</option>
-
         </select>
-
       </div>
 
       <div class="sm:col-span-2">
-
         <label>No. documento</label>
-
         <input id="entrada-num-doc" type="text" placeholder="FAC-0234">
-
       </div>
 
       <div class="sm:col-span-2">
-
         <label>Fecha documento</label>
-
         <input id="entrada-fecha-doc" type="date">
+      </div>
 
+      <div class="sm:col-span-3">
+        <label class="font-bold text-indigo-900 flex items-center gap-1">
+          <span>🏢 Sede / Bodega Destino</span>
+          <span class="text-rose-500 font-extrabold">*</span>
+        </label>
+        <select id="entrada-centro-utilidad" class="font-bold text-gray-800 border-indigo-300 bg-indigo-50/30 focus:ring-2 focus:ring-indigo-500">
+          <option value="">Cargando sedes...</option>
+        </select>
+      </div>
+
+      <div class="sm:col-span-3 flex items-end">
+        <button type="button" onclick="registrarEntrada()"
+                class="w-full py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 shadow-sm transition">
+          Registrar entrada
+        </button>
       </div>
 
       <div class="sm:col-span-2">
-
         <label>Método de Pago</label>
-
         <select id="entrada-metodo-pago">
-
           <!-- Cargado dinámicamente -->
-
         </select>
-
       </div>
 
-      <div class="sm:col-span-4 flex items-end">
-
-        <button type="button" onclick="registrarEntrada()"
-
-                class="w-full py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600">
-
-          Registrar entrada
-
-        </button>
-
-      </div>
-
-      <div class="sm:col-span-6 relative">
-
+      <div class="sm:col-span-5 relative">
         <label class="flex justify-between items-center">
-
           <span>Proveedor</span>
-
           <button type="button" id="btn-crear-proveedor" onclick="crearProveedorNuevo()" class="hidden text-xs text-rose-500 hover:text-rose-700 font-bold bg-transparent border-0 p-0 cursor-pointer">
-
             ➕ Crear proveedor
-
           </button>
-
           <span id="badge-proveedor-creado" class="hidden text-xs text-green-600 font-bold">
-
             ✅ ¡Creado!
-
           </span>
-
         </label>
-
         <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor" autocomplete="off" onfocus="this.select()">
-
         <div id="entrada-proveedor-list" class="ac-list hidden"></div>
-
         <input type="hidden" id="entrada-proveedor-id">
-
       </div>
 
-      <div class="sm:col-span-6">
-
+      <div class="sm:col-span-5">
         <label>Notas (opcional)</label>
-
         <input id="entrada-notas" type="text" placeholder="">
-
       </div>
 
     </div>
@@ -1689,8 +1819,15 @@
     </button>
 
     <div id="prod-preview" class="hidden mb-5">
-
-      <p id="prod-preview-titulo" class="text-sm font-semibold text-gray-600 mb-3"></p>
+      <div class="flex items-center justify-between gap-3 mb-3 bg-slate-50 border border-slate-200 p-3 rounded-xl flex-wrap">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs font-bold text-slate-500 uppercase">Centro / Sede de Producción:</span>
+          <span id="prod-preview-centro-badge" class="px-2.5 py-0.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 shadow-2xs">
+            <!-- loaded dynamically -->
+          </span>
+        </div>
+        <p id="prod-preview-titulo" class="text-xs font-semibold text-gray-700 m-0"></p>
+      </div>
 
       <div class="overflow-x-auto rounded-xl border border-gray-100">
 
@@ -1818,6 +1955,8 @@
 
               <th class="px-4 py-3 text-left">Fecha</th>
 
+              <th class="px-4 py-3 text-left">Responsable</th>
+
               <th class="px-4 py-3 text-left">Producto Terminado</th>
 
               <th class="px-4 py-3 text-right">Cantidad</th>
@@ -1834,7 +1973,7 @@
 
             <tr>
 
-              <td colspan="6" class="text-center py-4 text-gray-400 italic">Cargando historial...</td>
+              <td colspan="7" class="text-center py-4 text-gray-400 italic">Cargando historial...</td>
 
             </tr>
 
@@ -2095,8 +2234,8 @@
           </div>
           <!-- Unidades por presentación -->
           <div>
-            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Unidades por presentación</label>
-            <input id="cotz-unidades" type="number" step="0.01" min="1" value="1" placeholder="1"
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Unidades por presentación (Entero)</label>
+            <input id="cotz-unidades" type="number" step="1" min="1" value="1" placeholder="1"
                    class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400">
           </div>
           <!-- Vencimiento -->
@@ -2123,37 +2262,73 @@
     </details>
 
     <!-- Filtro y lista -->
-    <div class="flex items-center gap-3 mb-4">
+    <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
       <input type="text" id="cotz-filtro" placeholder="Buscar por producto, proveedor o presentación..."
-             oninput="cargarCotizaciones()" class="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-400">
+             oninput="cargarCotizaciones()" class="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-400 min-w-[220px]">
+      
+      <!-- Selectores independientes de decimales -->
+      <div class="flex items-center gap-3 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs flex-wrap">
+        <span class="text-[10px] font-extrabold text-indigo-900 uppercase tracking-wider select-none flex items-center gap-1">
+          <span>🔢 Decimales:</span>
+        </span>
+        
+        <div class="flex items-center gap-1.5">
+          <label for="cotz-decimales-empaque" class="text-[10px] font-bold text-slate-500 uppercase tracking-wide select-none">Empaque:</label>
+          <input id="cotz-decimales-empaque" type="number" min="0" max="6" step="1" value="2"
+                 oninput="cambiarDecimalesCotzEmpaque(this.value)" onblur="validarDecimalesCotzInput(this, 'empaque')"
+                 class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-400"
+                 title="Número de decimales para Precio de Empaque (0 a 6)">
+        </div>
+
+        <div class="h-4 w-px bg-slate-200"></div>
+
+        <div class="flex items-center gap-1.5">
+          <label for="cotz-decimales-unitario" class="text-[10px] font-bold text-slate-500 uppercase tracking-wide select-none">Unitario:</label>
+          <input id="cotz-decimales-unitario" type="number" min="0" max="6" step="1" value="2"
+                 oninput="cambiarDecimalesCotzUnitario(this.value)" onblur="validarDecimalesCotzInput(this, 'unitario')"
+                 class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-400"
+                 title="Número de decimales para Precio Unitario (0 a 6)">
+        </div>
+      </div>
     </div>
 
     <div class="overflow-x-auto max-h-[65vh] border border-slate-200 rounded-xl custom-scrollbar scroll-smooth">
       <table class="w-full text-xs">
         <thead class="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 select-none shadow-xs">
           <tr class="text-slate-600 uppercase text-[10px]">
-            <th onclick="ordenarCotizaciones('producto_nombre')" class="text-left px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+            <th rowspan="2" onclick="ordenarCotizaciones('producto_nombre')" class="text-left px-3 py-1.5 font-bold cursor-pointer hover:bg-slate-100 transition-colors align-middle">
               <span class="inline-flex items-center gap-1">Producto <span id="sort-icon-producto_nombre" class="text-slate-400">↕</span></span>
             </th>
-            <th onclick="ordenarCotizaciones('proveedor_nombre')" class="text-left px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+            <th rowspan="2" onclick="ordenarCotizaciones('proveedor_nombre')" class="text-left px-3 py-1.5 font-bold cursor-pointer hover:bg-slate-100 transition-colors align-middle">
               <span class="inline-flex items-center gap-1">Proveedor <span id="sort-icon-proveedor_nombre" class="text-slate-400">↕</span></span>
             </th>
-            <th onclick="ordenarCotizaciones('presentacion_nombre')" class="text-left px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+            <th rowspan="2" onclick="ordenarCotizaciones('presentacion_nombre')" class="text-left px-3 py-1.5 font-bold cursor-pointer hover:bg-slate-100 transition-colors align-middle">
               <span class="inline-flex items-center gap-1">Presentación <span id="sort-icon-presentacion_nombre" class="text-slate-400">↕</span></span>
             </th>
-            <th onclick="ordenarCotizaciones('unidades_item')" class="text-center px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+            <th rowspan="2" onclick="ordenarCotizaciones('unidades_item')" class="text-center px-3 py-1.5 font-bold cursor-pointer hover:bg-slate-100 transition-colors align-middle">
               <span class="inline-flex items-center gap-1">Unid./Pres. <span id="sort-icon-unidades_item" class="text-slate-400">↕</span></span>
             </th>
-            <th onclick="ordenarCotizaciones('precio')" class="text-right px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
-              <span class="inline-flex items-center gap-1 justify-end">Precio <span id="sort-icon-precio" class="text-slate-400">↕</span></span>
+            <th colspan="2" class="text-center px-3 py-1 font-extrabold text-indigo-900 bg-indigo-50/70 border-x border-slate-200 tracking-wider">
+              PRECIO
             </th>
-            <th onclick="ordenarCotizaciones('precio_unitario')" class="text-right px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
-              <span class="inline-flex items-center gap-1 justify-end">P. Unitario <span id="sort-icon-precio_unitario" class="text-slate-400">↕</span></span>
-            </th>
-            <th onclick="ordenarCotizaciones('vigente')" class="text-center px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors">
+            <th rowspan="2" onclick="ordenarCotizaciones('vigente')" class="text-center px-3 py-1.5 font-bold cursor-pointer hover:bg-slate-100 transition-colors align-middle">
               <span class="inline-flex items-center gap-1">Estado <span id="sort-icon-vigente" class="text-slate-400">↕</span></span>
             </th>
-            <th class="text-center px-3 py-1 font-bold">Acciones</th>
+            <th rowspan="2" class="text-center px-3 py-1.5 font-bold align-middle">Acciones</th>
+          </tr>
+          <tr class="text-slate-600 uppercase text-[9px] bg-slate-50/90 border-t border-slate-200">
+            <th onclick="ordenarCotizaciones('precio')" class="text-right px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors border-l border-slate-200">
+              <div class="inline-flex items-center gap-1.5 justify-end w-full">
+                <span>EMPAQUE</span>
+                <span id="sort-icon-precio" class="text-slate-400">↕</span>
+              </div>
+            </th>
+            <th onclick="ordenarCotizaciones('precio_unitario')" class="text-right px-3 py-1 font-bold cursor-pointer hover:bg-slate-100 transition-colors border-r border-slate-200">
+              <div class="inline-flex items-center gap-1.5 justify-end w-full">
+                <span>UNITARIO</span>
+                <span id="sort-icon-precio_unitario" class="text-slate-400">↕</span>
+              </div>
+            </th>
           </tr>
         </thead>
         <tbody id="cotz-body">
@@ -2377,7 +2552,132 @@
     </div>
   </div>
 
+  <!-- ── TAB TRASLADOS ENTRE CENTROS DE UTILIDAD ───────────────────── -->
+  <div id="tab-traslados" class="hidden bg-white rounded-2xl shadow p-5">
+    <div class="border-b border-gray-150 pb-4 mb-5 flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+          <span>🔄</span> Traslados entre Centros de Utilidad / Bodegas
+        </h2>
+        <p class="text-xs text-gray-400 mt-0.5">Mueve existencias de múltiples productos o insumos entre el Local Comercial y los Puntos Móviles en un solo documento.</p>
+      </div>
+      <button onclick="cargarHistorialTraslados()" class="px-3.5 py-1.5 border border-gray-200 rounded-xl hover:bg-gray-50 text-xs font-semibold text-gray-600 transition flex items-center gap-1.5">
+        🔄 Actualizar Historial
+      </button>
+    </div>
 
+    <!-- Formulario de Traslado Multi-Ítem -->
+    <div class="bg-gradient-to-r from-slate-50 to-indigo-50/40 border border-slate-200 rounded-2xl p-4 mb-6">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <h3 class="text-sm font-bold text-gray-800 flex items-center gap-2">
+          <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-black">+</span>
+          Registrar Documento de Traslado Interno
+        </h3>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[11px] font-bold text-gray-500 uppercase">Documento:</span>
+          <span class="px-2.5 py-0.5 bg-indigo-100/70 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold font-mono">
+            TRASLADO #<span id="traslado-consecutivo-disp">...</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Cabecera del Documento: Sedes, Fecha y Observaciones -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+        <div>
+          <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Bodega / Centro Origen (Salida)</label>
+          <select id="traslado-origen" onchange="cambiarSedeOrigenTraslado()" class="w-full text-xs font-semibold bg-white border border-slate-300 rounded-xl px-2.5 py-2 outline-none focus:border-indigo-500">
+            <!-- options loaded dynamically -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Bodega / Centro Destino (Entrada)</label>
+          <select id="traslado-destino" class="w-full text-xs font-semibold bg-white border border-slate-300 rounded-xl px-2.5 py-2 outline-none focus:border-indigo-500">
+            <!-- options loaded dynamically -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Fecha del Traslado</label>
+          <input type="date" id="traslado-fecha" class="w-full text-xs font-semibold bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Observaciones / Notas (Opcional)</label>
+          <input type="text" id="traslado-notas" placeholder="Motivo o referencia..." class="w-full text-xs bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 outline-none focus:border-indigo-500">
+        </div>
+      </div>
+
+      <!-- Tabla de Líneas de Productos / Insumos a Trasladar -->
+      <div class="bg-white rounded-xl border border-slate-200 p-3 mb-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
+            <span>📦</span> Ítems a Trasladar en este Documento
+          </span>
+          <button type="button" onclick="agregarLineaTraslado()" class="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1">
+            + Agregar Ítem
+          </button>
+        </div>
+
+        <!-- Encabezados de columnas -->
+        <div class="grid grid-cols-12 gap-2 px-2 py-1.5 bg-slate-50 rounded-lg text-[10px] font-bold uppercase text-slate-500 mb-1.5">
+          <div class="col-span-5">Producto o Insumo</div>
+          <div class="col-span-2 text-right">Stock en Origen</div>
+          <div class="col-span-2 text-right">Cantidad a Trasladar</div>
+          <div class="col-span-2 text-right">Subtotal Estimado</div>
+          <div class="col-span-1 text-center">Acción</div>
+        </div>
+
+        <!-- Contenedor dinámico de filas -->
+        <div id="traslado-lineas" class="space-y-1.5"></div>
+      </div>
+
+      <!-- Barra de Totales y Botón de Ejecución -->
+      <div class="flex items-center justify-between bg-white border border-slate-200 p-3 rounded-xl flex-wrap gap-3">
+        <div class="flex items-center gap-4 text-xs">
+          <span class="text-slate-600">Total Ítems: <b id="traslado-total-items" class="text-slate-900 font-mono">0</b></span>
+          <span class="text-slate-400">|</span>
+          <span class="text-slate-600">Total Unidades: <b id="traslado-total-unidades" class="text-slate-900 font-mono">0.00</b></span>
+          <span class="text-slate-400">|</span>
+          <span class="text-slate-600">Valor Total Traslado: <b id="traslado-total-valor" class="text-indigo-700 font-bold font-mono text-sm">$0.00</b></span>
+        </div>
+        <button type="button" onclick="ejecutarTrasladoInterno()" id="btn-ejecutar-traslado" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5">
+          <span>🔄 Confirmar y Trasladar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Historial de Traslados -->
+    <div>
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-bold text-gray-800 flex items-center gap-2">
+          <span>📜</span> Historial Reciente de Traslados
+        </h3>
+      </div>
+      <div class="overflow-x-auto rounded-xl border border-gray-150">
+        <table class="w-full text-xs text-left">
+          <thead class="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] border-b border-gray-200">
+            <tr>
+              <th class="p-3">Doc #</th>
+              <th class="p-3">Fecha / Hora</th>
+              <th class="p-3">Origen ➔ Destino</th>
+              <th class="p-3">Producto / Insumo</th>
+              <th class="p-3 text-right">Cantidad</th>
+              <th class="p-3 text-right">Costo Und</th>
+              <th class="p-3 text-right">Valor Total</th>
+              <th class="p-3">Responsable</th>
+              <th class="p-3 text-center">PDF</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-traslados-body" class="divide-y divide-gray-100 font-medium text-gray-700">
+            <tr>
+              <td colspan="9" class="p-4 text-center text-gray-400">Cargando traslados...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
   <!-- ── TAB ENSAMBLES PREDICTIVOS ─────────────────────────────── -->
 
@@ -2600,6 +2900,13 @@
 
         </div>
 
+        <div class="flex flex-col">
+          <label class="text-[10px] font-bold text-gray-400 uppercase mb-1">Centro de Utilidad</label>
+          <select id="vc-centro-utilidad" onchange="consultarVentasCostos()" class="border border-gray-200 rounded-xl px-3 py-2 bg-white font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-rose-500 shadow-xs">
+            <option value="">🏛️ Todos (Consolidado)</option>
+          </select>
+        </div>
+
         <button id="btn-consultar-vc" onclick="consultarVentasCostos()" class="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
 
           Filtrar
@@ -2790,6 +3097,10 @@
 
 const NEGOCIO_ID = {{ negocio_id }};
 
+let CENTROS_UTILIDAD = {{ centros_utilidad | tojson if centros_utilidad else '[]' }};
+let CENTRO_ACTIVO = {{ centro_activo | tojson if centro_activo else 'null' }};
+let DISPOSITIVO_ACTUAL = null;
+
 let productos = [];
 
 let tarjetaLineas = []; // {componente_id, nombre, cantidad}
@@ -2854,7 +3165,7 @@ function toast(msg, ok = true) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'cotizaciones', 'kardex', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'gastos', 'estado_resultados', 'recosteo'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'cotizaciones', 'kardex', 'traslados', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'gastos', 'estado_resultados', 'recosteo'];
 
 function mostrarTab(t) {
 
@@ -2888,12 +3199,22 @@ function mostrarTab(t) {
 
   document.title = `${cleanTabName} — Inventario`;
 
+  if (t === 'traslados') {
+    cargarCentrosParaTraslado();
+    cargarHistorialTraslados();
+    cargarInfoDocumentoTraslado();
+  }
+
   if (t === 'tarjetas') {
 
     cargarTarjetasResumen();
 
     cambiarVistaTarjetas('recetas');
 
+  }
+
+  if (t === 'entradas') {
+    actualizarHeaderCentroActivo();
   }
 
   if (t === 'ensambles') {
@@ -4063,7 +4384,9 @@ let prodSortAsc = true;
 
 async function cargarProductos() {
 
-  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos`);
+  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${CENTRO_ACTIVO.id}` : '';
+
+  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos${bodParam}`);
 
   const d = await r.json();
 
@@ -6185,6 +6508,18 @@ async function initDefaultProveedor() {
 
 
 async function registrarEntrada() {
+  const centroSel = document.getElementById('entrada-centro-utilidad');
+  const centroIdVal = centroSel ? centroSel.value : (CENTRO_ACTIVO && CENTRO_ACTIVO.id !== 'consolidado' ? CENTRO_ACTIVO.id : '');
+  if (!centroIdVal || centroIdVal === 'consolidado') {
+    toast('⚠️ Debe seleccionar una Sede / Bodega física de destino para registrar la entrada.', false);
+    if (centroSel) {
+      centroSel.focus();
+      centroSel.classList.add('ring-2', 'ring-rose-500');
+      setTimeout(() => centroSel.classList.remove('ring-2', 'ring-rose-500'), 3000);
+    }
+    return;
+  }
+  const centro_utilidad_id = parseInt(centroIdVal);
 
   const tipo_doc_id = parseInt(document.getElementById('entrada-tipo-doc').value) || null;
 
@@ -6325,13 +6660,11 @@ async function registrarEntrada() {
     method: 'POST', headers: {'Content-Type': 'application/json'},
 
     body: JSON.stringify({
-
       lineas, motivo, notas, tipo_documento_id: tipo_doc_id, tipo_documento: td ? td.nombre : null, numero_documento,
-
       fecha_documento, proveedor_nombre, proveedor_id, iva: ivaAcumulado,
-
-      metodo_pago, es_modificacion: esModificacionDoc
-
+      metodo_pago, es_modificacion: esModificacionDoc,
+      centro_utilidad_id: centro_utilidad_id,
+      bodega: centro_utilidad_id
     })
 
   });
@@ -6700,7 +7033,8 @@ async function cargarKardex(productoId) {
     summaryPanel.classList.add('hidden');
   }
 
-  const r = await fetch(`/api/inventario/producto/${productoId}/kardex`);
+  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${CENTRO_ACTIVO.id}` : '';
+  const r = await fetch(`/api/inventario/producto/${productoId}/kardex${bodParam}`);
   const d = await r.json();
   if (!d.ok) { toast(d.error, false); return; }
 
@@ -6738,7 +7072,8 @@ async function generarPdfKardex() {
   if (!_kardexPdfInfo) { toast('Selecciona un producto para generar el PDF', false); return; }
   toast('Generando PDF…');
   const pid = _kardexPdfInfo.producto_id;
-  window.open(`/api/inventario/producto/${pid}/kardex/pdf`, '_blank');
+  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+  window.open(`/api/inventario/producto/${pid}/kardex/pdf${bodParam}`, '_blank');
 }
 
 // ── Kardex Drag & Drop Handlers con Auto-Scroll Fluido ────────────────────────
@@ -8022,7 +8357,59 @@ function actualizarIconosOrdenCotz() {
   });
 }
 
+function cambiarDecimalesCotzEmpaque(val) {
+  if (val === '' || val === null || val === undefined) {
+    return;
+  }
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(d, 6));
+  localStorage.setItem('cotz_decimales_empaque', d);
+  renderCotizaciones();
+}
+
+function cambiarDecimalesCotzUnitario(val) {
+  if (val === '' || val === null || val === undefined) {
+    return;
+  }
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(d, 6));
+  localStorage.setItem('cotz_decimales_unitario', d);
+  renderCotizaciones();
+}
+
+function validarDecimalesCotzInput(inputEl, tipo) {
+  if (!inputEl) return;
+  let val = inputEl.value;
+  let d = parseInt(val, 10);
+  if (isNaN(d) || d < 0) {
+    d = 2;
+  } else if (d > 6) {
+    d = 6;
+  }
+  inputEl.value = d;
+  if (tipo === 'empaque') {
+    localStorage.setItem('cotz_decimales_empaque', d);
+  } else {
+    localStorage.setItem('cotz_decimales_unitario', d);
+  }
+  renderCotizaciones();
+}
+
 async function cargarCotizaciones() {
+  const decEmpStored = localStorage.getItem('cotz_decimales_empaque') || localStorage.getItem('cotz_decimales') || '2';
+  const decUniStored = localStorage.getItem('cotz_decimales_unitario') || localStorage.getItem('cotz_decimales') || '2';
+  
+  const inputEmp = document.getElementById('cotz-decimales-empaque');
+  if (inputEmp && document.activeElement !== inputEmp && inputEmp.value !== String(decEmpStored)) {
+    inputEmp.value = decEmpStored;
+  }
+  const inputUni = document.getElementById('cotz-decimales-unitario');
+  if (inputUni && document.activeElement !== inputUni && inputUni.value !== String(decUniStored)) {
+    inputUni.value = decUniStored;
+  }
+
   const filtro = (document.getElementById('cotz-filtro')?.value || '').trim();
   const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones?q=${encodeURIComponent(filtro)}`);
   const data = await resp.json();
@@ -8040,6 +8427,12 @@ function renderCotizaciones() {
     body.innerHTML = '<tr><td colspan="8" class="text-center text-slate-400 py-8 text-xs">No hay cotizaciones registradas</td></tr>';
     return;
   }
+
+  const decEmp = parseInt(localStorage.getItem('cotz_decimales_empaque') ?? (localStorage.getItem('cotz_decimales') ?? 2), 10);
+  const validDecEmp = isNaN(decEmp) || decEmp < 0 ? 2 : Math.min(decEmp, 6);
+
+  const decUni = parseInt(localStorage.getItem('cotz_decimales_unitario') ?? (localStorage.getItem('cotz_decimales') ?? 2), 10);
+  const validDecUni = isNaN(decUni) || decUni < 0 ? 2 : Math.min(decUni, 6);
 
   // Ordenar copia de los datos
   const dataOrdenada = [...COTZ_DATA].sort((a, b) => {
@@ -8060,8 +8453,8 @@ function renderCotizaciones() {
       valB = (b.presentacion_nombre || b.descripcion_presentacion || 'Unidad').toLowerCase();
       return cotzSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
     } else if (cotzSortCol === 'unidades_item') {
-      valA = parseFloat(a.unidades_item) || 0;
-      valB = parseFloat(b.unidades_item) || 0;
+      valA = Math.round(parseFloat(a.unidades_item) || 0);
+      valB = Math.round(parseFloat(b.unidades_item) || 0);
     } else if (cotzSortCol === 'precio') {
       valA = parseFloat(a.precio) || 0;
       valB = parseFloat(b.precio) || 0;
@@ -8082,18 +8475,30 @@ function renderCotizaciones() {
   });
 
   body.innerHTML = dataOrdenada.map(c => {
-    const precioUnit = c.unidades_item > 0 ? (c.precio / c.unidades_item) : c.precio;
+    const unidades = Math.round(parseFloat(c.unidades_item) || 1);
+    const precioUnit = unidades > 0 ? (parseFloat(c.precio || 0) / unidades) : parseFloat(c.precio || 0);
     const vigente = c.vigente;
     const badge = vigente
       ? '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Vigente</span>'
       : '<span class="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Vencida</span>';
+    
+    const precioEmpaqueFmt = parseFloat(c.precio || 0).toLocaleString('es-CO', {
+      minimumFractionDigits: validDecEmp,
+      maximumFractionDigits: validDecEmp
+    });
+    const precioUnitFmt = precioUnit.toLocaleString('es-CO', {
+      minimumFractionDigits: validDecUni,
+      maximumFractionDigits: validDecUni
+    });
+    const unidadesFmt = unidades.toLocaleString('es-CO');
+
     return `<tr class="border-b border-slate-100 hover:bg-slate-50/50">
       <td class="px-3 py-1.5 font-semibold text-slate-800">${c.producto_nombre}</td>
       <td class="px-3 py-1.5 text-slate-600">${c.proveedor_nombre}</td>
       <td class="px-3 py-1.5 text-slate-600">${c.presentacion_nombre || c.descripcion_presentacion || 'Unidad'}</td>
-      <td class="px-3 py-1.5 text-center font-mono">${c.unidades_item}</td>
-      <td class="px-3 py-1.5 text-right font-mono font-bold">$${parseFloat(c.precio).toLocaleString('es-CO', {minimumFractionDigits:2})}</td>
-      <td class="px-3 py-1.5 text-right font-mono text-indigo-600 font-bold">$${precioUnit.toLocaleString('es-CO', {minimumFractionDigits:2})}</td>
+      <td class="px-3 py-1.5 text-center font-mono font-medium">${unidadesFmt}</td>
+      <td class="px-3 py-1.5 text-right font-mono font-bold text-slate-800">$${precioEmpaqueFmt}</td>
+      <td class="px-3 py-1.5 text-right font-mono text-indigo-600 font-bold">$${precioUnitFmt}</td>
       <td class="px-3 py-1.5 text-center">${badge}</td>
       <td class="px-3 py-1.5 text-center">
         <button onclick="editarCotizacion(${c.id})" class="text-indigo-500 hover:text-indigo-700 text-xs font-bold mr-2" title="Editar">✏️</button>
@@ -8227,7 +8632,7 @@ async function guardarCotizacion(id) {
     item_id: parseInt(prodId),
     presentacion_id: presId ? parseInt(presId) : null,
     precio: parseFloat(precio),
-    unidades_item: parseFloat(unidades) || 1,
+    unidades_item: Math.round(parseFloat(unidades) || 1),
     descripcion_presentacion: presNombre || 'Unidad',
     observaciones: obs,
     fecha_vencimiento: vencimiento || null
@@ -8265,7 +8670,7 @@ async function editarCotizacion(id) {
   document.getElementById('cotz-presentacion-id').value = c.presentacion_id || '';
   document.getElementById('cotz-presentacion-search').value = c.presentacion_nombre || c.descripcion_presentacion || '';
   document.getElementById('cotz-precio').value = c.precio;
-  document.getElementById('cotz-unidades').value = c.unidades_item;
+  document.getElementById('cotz-unidades').value = Math.round(parseFloat(c.unidades_item) || 1);
   document.getElementById('cotz-vencimiento').value = c.fecha_vencimiento ? c.fecha_vencimiento.split('T')[0] : '';
   document.getElementById('cotz-observaciones').value = c.observaciones || '';
 
@@ -8849,41 +9254,34 @@ function limpiarPreview() {
 
 
 async function previsualizarProduccion() {
-
   const id  = document.getElementById('prod-ac-id').value;
-
   const qty = parseFloat(document.getElementById('prod-cantidad').value);
-
   if (!id) { toast('Selecciona un producto', false); return; }
-
   if (!qty || qty <= 0) { toast('Cantidad inválida', false); return; }
 
-
-
-  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/preview?producto_id=${id}&cantidad=${qty}`);
-
+  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/preview?producto_id=${id}&cantidad=${qty}${bodParam}`);
   const d = await r.json();
-
   if (!d.ok) { toast(d.error, false); return; }
 
-
-
   // Almacenar datos de previsualización en la variable global
-
   activePreviewData = d;
 
-
+  const centroBadge = document.getElementById('prod-preview-centro-badge');
+  if (centroBadge) {
+    const icon = d.centro_tipo === 'movil' ? '🛵' : '🏪';
+    const bgCol = d.centro_color || '#4f46e5';
+    centroBadge.style.backgroundColor = `${bgCol}18`;
+    centroBadge.style.color = bgCol;
+    centroBadge.style.border = `1px solid ${bgCol}50`;
+    centroBadge.innerHTML = `<span>${icon}</span> <span>${d.centro_nombre || 'Sede'} (${d.centro_codigo || 'LOC'})</span>`;
+  }
 
   document.getElementById('prod-preview-titulo').textContent =
-
     `Para producir ${qty} × ${d.producto} se consumirá:`;
 
-
-
   renderTablaPrevisualizacion();
-
   document.getElementById('prod-preview').classList.remove('hidden');
-
 }
 
 
@@ -9525,6 +9923,8 @@ function renderHistorialProduccion(historial) {
 
           <td class="px-4 py-3 text-xs text-gray-500">${h.fecha}</td>
 
+          <td class="px-4 py-3 text-xs text-gray-700 font-medium">${h.responsable || '—'}</td>
+
           <td class="px-4 py-3 font-semibold text-gray-800 text-xs">${h.producto_nombre}</td>
 
           <td class="px-4 py-3 text-right text-gray-600 font-medium">${h.cantidad.toLocaleString('es-CO')}</td>
@@ -10087,6 +10487,745 @@ function avisarMetodosSinCuentaEntrada(metodoCodigo) {
 
 
 
+// ── CENTROS DE UTILIDAD Y DISPOSITIVOS ──────────────────────────────────────
+
+async function inicializarCentrosUtilidad() {
+  let token = localStorage.getItem('tt_device_token');
+  if (!token) {
+    token = 'disp_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now().toString(36);
+    localStorage.setItem('tt_device_token', token);
+  }
+
+  try {
+    const rDisp = await fetch('/api/dispositivos/identificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token_dispositivo: token, negocio_id: NEGOCIO_ID })
+    });
+    const dDisp = await rDisp.json();
+    if (dDisp.ok && dDisp.registrado) {
+      DISPOSITIVO_ACTUAL = dDisp.dispositivo;
+      const tag = document.getElementById('cu-header-dispositivo-tag');
+      if (tag) {
+        tag.textContent = `📱 ${dDisp.dispositivo.nombre}`;
+        tag.classList.remove('hidden');
+      }
+    }
+  } catch (e) {
+    console.warn("Error identificando dispositivo:", e);
+  }
+
+  if (!CENTROS_UTILIDAD || !CENTROS_UTILIDAD.length) {
+    try {
+      const r = await fetch(`/api/centros_utilidad/${NEGOCIO_ID}`);
+      const d = await r.json();
+      if (d.ok) {
+        CENTROS_UTILIDAD = d.centros;
+        if (d.centro_activo) CENTRO_ACTIVO = d.centro_activo;
+      }
+    } catch (e) {
+      console.warn("Error cargando centros de utilidad:", e);
+    }
+  }
+
+  actualizarHeaderCentroActivo();
+}
+
+function actualizarHeaderCentroActivo() {
+  if (!CENTRO_ACTIVO) return;
+  const iconEl = document.getElementById('cu-header-icon');
+  const iconBox = document.getElementById('cu-header-icon-box');
+  const badgeTipo = document.getElementById('cu-header-badge-tipo');
+  const codEl = document.getElementById('cu-header-codigo');
+  const nomEl = document.getElementById('cu-header-nombre');
+
+  const color = CENTRO_ACTIVO.color_badge || '#10b981';
+  const esMovil = (CENTRO_ACTIVO.tipo === 'movil');
+  const esConsolidado = (CENTRO_ACTIVO.id === 'consolidado');
+
+  if (iconEl) iconEl.textContent = esConsolidado ? '📊' : (esMovil ? '🛵' : '🏪');
+  if (iconBox) {
+    iconBox.style.background = color + '18';
+    iconBox.style.color = color;
+    iconBox.style.borderColor = color + '40';
+  }
+  if (badgeTipo) {
+    badgeTipo.textContent = esConsolidado ? 'Multisede' : (esMovil ? 'Móvil' : 'Local');
+    badgeTipo.style.background = color;
+  }
+
+  const vcCu = document.getElementById('vc-centro-utilidad');
+  if (vcCu && CENTROS_UTILIDAD && CENTROS_UTILIDAD.length && vcCu.options.length <= 1) {
+    const curVal = vcCu.value;
+    vcCu.innerHTML = '<option value="">🏛️ Todos (Consolidado)</option>' + CENTROS_UTILIDAD.map(c => `
+      <option value="${c.id}">${c.tipo === 'movil' ? '🛵' : '🏪'} ${c.codigo} — ${c.nombre}</option>
+    `).join('');
+    if (curVal) vcCu.value = curVal;
+  }
+
+  // Actualizar selector de sede en formulario de entradas
+  const entCu = document.getElementById('entrada-centro-utilidad');
+  const entBanner = document.getElementById('banner-entrada-consolidado');
+  if (entCu && CENTROS_UTILIDAD && CENTROS_UTILIDAD.length) {
+    if (esConsolidado) {
+      entCu.innerHTML = '<option value="">-- Seleccione Sede de Destino (Obligatorio) --</option>' + CENTROS_UTILIDAD.map(c => `
+        <option value="${c.id}">${c.tipo === 'movil' ? '🛵' : '🏪'} ${c.codigo} — ${c.nombre}</option>
+      `).join('');
+      entCu.value = '';
+      if (entBanner) entBanner.classList.remove('hidden');
+    } else {
+      entCu.innerHTML = CENTROS_UTILIDAD.map(c => `
+        <option value="${c.id}" ${String(c.id) === String(CENTRO_ACTIVO.id) ? 'selected' : ''}>${c.tipo === 'movil' ? '🛵' : '🏪'} ${c.codigo} — ${c.nombre}</option>
+      `).join('');
+      entCu.value = String(CENTRO_ACTIVO.id);
+      if (entBanner) entBanner.classList.add('hidden');
+    }
+  }
+
+  if (codEl) codEl.textContent = CENTRO_ACTIVO.codigo || 'LOC-01';
+  if (nomEl) nomEl.textContent = CENTRO_ACTIVO.nombre || 'Local Comercial';
+}
+
+function abrirModalCentrosUtilidad() {
+  const cont = document.getElementById('cu-carrusel-container');
+  if (!cont) return;
+
+  let html = '';
+  const activoId = CENTRO_ACTIVO ? String(CENTRO_ACTIVO.id) : '1';
+
+  CENTROS_UTILIDAD.forEach(c => {
+    const esActivo = String(c.id) === activoId;
+    const esMovil = (c.tipo === 'movil');
+    const color = c.color_badge || (esMovil ? '#0284c7' : '#10b981');
+    const icon = esMovil ? '🛵' : '🏪';
+
+    html += `
+      <div class="relative flex flex-col justify-between p-4 rounded-2xl border-2 transition-all ${
+        esActivo 
+          ? 'border-indigo-600 bg-indigo-50/40 shadow-md ring-2 ring-indigo-200' 
+          : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
+      }">
+        <div>
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <span class="text-2xl p-2 rounded-xl" style="background: ${color}15; color: ${color};">${icon}</span>
+            <div class="flex items-center gap-1.5">
+              <button onclick="event.stopPropagation(); abrirModalEditarCentro(${c.id})" title="Modificar nombre y datos de este centro" class="p-1 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition">
+                ✏️
+              </button>
+              <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full text-white" style="background: ${color};">${c.codigo}</span>
+              <span class="text-[10px] font-bold text-gray-500 uppercase">${esMovil ? 'Operación Móvil' : 'Sede Fija'}</span>
+            </div>
+          </div>
+          <h4 class="text-sm font-extrabold text-gray-900 mb-1">${c.nombre}</h4>
+          <p class="text-xs text-gray-500 mb-3">${c.direccion || (esMovil ? 'Ruta de neveras móviles en puntos de venta' : 'Sede y cocina principal')}</p>
+        </div>
+
+        <div class="pt-2 border-t border-slate-150 flex items-center justify-between">
+          ${esActivo 
+            ? `<span class="inline-flex items-center gap-1 text-xs font-extrabold text-indigo-700 bg-indigo-100 px-3 py-1.5 rounded-xl">
+                 <span class="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span> Sede Activa
+               </span>`
+            : `<button onclick="cambiarCentroUtilidad(${c.id})" class="w-full text-xs font-bold bg-white hover:bg-slate-900 hover:text-white text-slate-800 py-2 px-3 rounded-xl border border-slate-300 transition-colors shadow-xs">
+                 Seleccionar este Centro
+               </button>`
+          }
+        </div>
+      </div>
+    `;
+  });
+
+  if (CENTROS_UTILIDAD.length > 1) {
+    const esActivoCons = activoId === 'consolidado';
+    html += `
+      <div class="relative flex flex-col justify-between p-4 rounded-2xl border-2 sm:col-span-2 transition-all ${
+        esActivoCons 
+          ? 'border-purple-600 bg-purple-50/40 shadow-md ring-2 ring-purple-200' 
+          : 'border-slate-200 bg-gradient-to-r from-slate-50 to-purple-50/20 hover:border-slate-300 hover:shadow-sm'
+      }">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl p-2 rounded-xl bg-purple-100 text-purple-700">📊</span>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white">TODAS</span>
+                <span class="text-[10px] font-bold text-purple-800 uppercase tracking-wider">Consolidado General</span>
+              </div>
+              <h4 class="text-sm font-extrabold text-gray-900 mt-0.5">Vista Consolidada (Suma de todas las Sedes)</h4>
+            </div>
+          </div>
+          ${esActivoCons 
+            ? `<span class="text-xs font-extrabold text-purple-700 bg-purple-100 px-3 py-1.5 rounded-xl">Activa</span>`
+            : `<button onclick="cambiarCentroUtilidad('consolidado')" class="text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-xl shadow-xs transition">
+                 Ver Consolidado
+               </button>`
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  cont.innerHTML = html;
+
+  const dispTit = document.getElementById('cu-disp-titulo');
+  const dispSub = document.getElementById('cu-disp-subtitulo');
+  if (DISPOSITIVO_ACTUAL) {
+    if (dispTit) dispTit.textContent = `Dispositivo Reconocido: ${DISPOSITIVO_ACTUAL.nombre}`;
+    if (dispSub) dispSub.textContent = `Vinculado permanentemente a: ${DISPOSITIVO_ACTUAL.centro_nombre} (${DISPOSITIVO_ACTUAL.centro_codigo})`;
+  } else {
+    if (dispTit) dispTit.textContent = `Dispositivo No Vinculado`;
+    if (dispSub) dispSub.textContent = `Puedes vincular este navegador como una tablet fija para este punto de venta.`;
+  }
+
+  const modal = document.getElementById('overlay-centros-utilidad');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function cerrarModalCentrosUtilidad() {
+  const modal = document.getElementById('overlay-centros-utilidad');
+  if (modal) modal.classList.add('hidden');
+}
+
+function abrirModalEditarCentro(centroId) {
+  const c = CENTROS_UTILIDAD.find(x => String(x.id) === String(centroId));
+  if (!c) return;
+  document.getElementById('edit-centro-id').value = c.id;
+  document.getElementById('edit-centro-nombre').value = c.nombre || '';
+  document.getElementById('edit-centro-codigo').value = c.codigo || '';
+  document.getElementById('edit-centro-tipo').value = c.tipo || 'local';
+  document.getElementById('edit-centro-color').value = c.color_badge || '#0284c7';
+
+  const modal = document.getElementById('overlay-editar-centro');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function cerrarModalEditarCentro() {
+  const modal = document.getElementById('overlay-editar-centro');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function guardarEdicionCentro(e) {
+  e.preventDefault();
+  const centroId = document.getElementById('edit-centro-id').value;
+  const nombre = document.getElementById('edit-centro-nombre').value.trim();
+  const codigo = document.getElementById('edit-centro-codigo').value.trim().toUpperCase();
+  const tipo = document.getElementById('edit-centro-tipo').value;
+  const color = document.getElementById('edit-centro-color').value;
+
+  if (!nombre || !codigo) {
+    toast('Nombre y código son obligatorios', false);
+    return;
+  }
+
+  const btn = document.getElementById('btn-guardar-edit-centro');
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/centros_utilidad/${centroId}/editar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        negocio_id: NEGOCIO_ID,
+        nombre: nombre,
+        codigo: codigo,
+        tipo: tipo,
+        color_badge: color
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast(data.mensaje || 'Centro de utilidad actualizado', true);
+      const idx = CENTROS_UTILIDAD.findIndex(x => String(x.id) === String(centroId));
+      if (idx !== -1) {
+        CENTROS_UTILIDAD[idx].nombre = nombre;
+        CENTROS_UTILIDAD[idx].codigo = codigo;
+        CENTROS_UTILIDAD[idx].tipo = tipo;
+        CENTROS_UTILIDAD[idx].color_badge = color;
+      }
+      if (CENTRO_ACTIVO && String(CENTRO_ACTIVO.id) === String(centroId)) {
+        CENTRO_ACTIVO.nombre = nombre;
+        CENTRO_ACTIVO.codigo = codigo;
+        CENTRO_ACTIVO.tipo = tipo;
+        CENTRO_ACTIVO.color_badge = color;
+        actualizarHeaderCentroActivo();
+      }
+      cerrarModalEditarCentro();
+      abrirModalCentrosUtilidad();
+    } else {
+      toast(data.error || 'Error al guardar cambios', false);
+    }
+  } catch (err) {
+    toast('Error de conexión al guardar centro', false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function cambiarCentroUtilidad(nuevoId) {
+  try {
+    const r = await fetch('/api/contexto/cambiar_centro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ negocio_id: NEGOCIO_ID, centro_utilidad_id: nuevoId })
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      toast(d.error || 'Error al cambiar centro', false);
+      return;
+    }
+    CENTRO_ACTIVO = d.centro;
+    actualizarHeaderCentroActivo();
+    cerrarModalCentrosUtilidad();
+    toast(`Centro activo cambiado a: ${d.centro.nombre}`);
+
+    await cargarProductos();
+    if (typeof recargarKardex === 'function') {
+      const pId = document.getElementById('kardex-prod-id')?.value;
+      if (pId) verKardex(pId);
+    }
+  } catch (e) {
+    toast('Error de conexión al cambiar centro', false);
+  }
+}
+
+// ── VINCULACIÓN DE TABLET / DISPOSITIVO ──────────────────────────────────────
+
+function abrirVincularDispositivo() {
+  const select = document.getElementById('disp-reg-centro');
+  if (select) {
+    select.innerHTML = CENTROS_UTILIDAD.map(c => `<option value="${c.id}">${c.codigo} - ${c.nombre}</option>`).join('');
+  }
+  const inputNom = document.getElementById('disp-reg-nombre');
+  if (inputNom && DISPOSITIVO_ACTUAL) {
+    inputNom.value = DISPOSITIVO_ACTUAL.nombre || '';
+  } else if (inputNom) {
+    inputNom.value = 'Tablet Mostrador Local';
+  }
+  const modal = document.getElementById('overlay-vincular-dispositivo');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function cerrarVincularDispositivo() {
+  const modal = document.getElementById('overlay-vincular-dispositivo');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function guardarRegistroDispositivo() {
+  const token = localStorage.getItem('tt_device_token');
+  const nombre = document.getElementById('disp-reg-nombre')?.value.trim();
+  const centroId = document.getElementById('disp-reg-centro')?.value;
+
+  if (!nombre || !centroId) {
+    toast('Por favor completa todos los campos', false);
+    return;
+  }
+
+  try {
+    const r = await fetch('/api/dispositivos/registrar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token_dispositivo: token,
+        negocio_id: NEGOCIO_ID,
+        centro_utilidad_id: Number(centroId),
+        nombre: nombre,
+        tipo_dispositivo: 'tablet'
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(d.mensaje || 'Dispositivo vinculado');
+      cerrarVincularDispositivo();
+      await inicializarCentrosUtilidad();
+      abrirModalCentrosUtilidad();
+    } else {
+      toast(d.error || 'Error al vincular dispositivo', false);
+    }
+  } catch (e) {
+    toast('Error de conexión', false);
+  }
+}
+
+// ── TRASLADOS ENTRE CENTROS (MULTI-ÍTEM) ────────────────────────────────────
+
+let trasladosLineas = [];
+
+function cargarCentrosParaTraslado() {
+  const orig = document.getElementById('traslado-origen');
+  const dest = document.getElementById('traslado-destino');
+  const fechaInp = document.getElementById('traslado-fecha');
+  if (!orig || !dest) return;
+
+  if (fechaInp && !fechaInp.value) {
+    fechaInp.value = new Date().toISOString().slice(0, 10);
+  }
+
+  const activoId = CENTRO_ACTIVO && CENTRO_ACTIVO.id !== 'consolidado' ? CENTRO_ACTIVO.id : (CENTROS_UTILIDAD[0]?.id || 1);
+
+  orig.innerHTML = CENTROS_UTILIDAD.map(c => 
+    `<option value="${c.id}" ${String(c.id) === String(activoId) ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`
+  ).join('');
+
+  const destinoDefecto = CENTROS_UTILIDAD.find(c => String(c.id) !== String(activoId))?.id || CENTROS_UTILIDAD[0]?.id;
+  dest.innerHTML = CENTROS_UTILIDAD.map(c => 
+    `<option value="${c.id}" ${String(c.id) === String(destinoDefecto) ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`
+  ).join('');
+
+  const cont = document.getElementById('traslado-lineas');
+  if (cont && !cont.children.length) {
+    trasladosLineas = [];
+    agregarLineaTraslado();
+  }
+
+  cargarInfoDocumentoTraslado();
+}
+
+function cambiarSedeOrigenTraslado() {
+  const origId = document.getElementById('traslado-origen')?.value;
+  const dest = document.getElementById('traslado-destino');
+  if (dest && origId) {
+    const destinoDefecto = CENTROS_UTILIDAD.find(c => String(c.id) !== String(origId))?.id;
+    if (destinoDefecto && String(dest.value) === String(origId)) {
+      dest.value = String(destinoDefecto);
+    }
+  }
+  // Actualizar stock de todas las líneas abiertas
+  const cont = document.getElementById('traslado-lineas');
+  if (!cont) return;
+  const rows = cont.querySelectorAll('.tras-fila');
+  rows.forEach((row, idx) => {
+    actualizarStockLineaTraslado(idx);
+  });
+}
+
+function agregarLineaTraslado(prodId = null, prodNombre = '', cant = 1) {
+  const cont = document.getElementById('traslado-lineas');
+  if (!cont) return;
+  const idx = trasladosLineas.length;
+
+  const div = document.createElement('div');
+  div.className = 'tras-fila grid grid-cols-12 gap-2 items-center bg-white p-2 rounded-xl border border-slate-200 hover:border-slate-300 transition shadow-2xs';
+  div.id = `tras-fila-${idx}`;
+
+  div.innerHTML = `
+    <div class="col-span-5 relative">
+      <input type="text" id="tras-ac-txt-${idx}" placeholder="Buscar producto o insumo..." autocomplete="off"
+             class="w-full text-xs font-semibold text-slate-800 bg-slate-50/50 border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:bg-white focus:border-indigo-500">
+      <input type="hidden" id="tras-prod-id-${idx}" value="${prodId || ''}">
+      <input type="hidden" id="tras-costo-und-${idx}" value="0">
+      <div id="tras-ac-list-${idx}" class="ac-list hidden"></div>
+    </div>
+
+    <div class="col-span-2 text-right">
+      <span id="tras-stock-lbl-${idx}" class="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg inline-block w-full text-right">0.00</span>
+    </div>
+
+    <div class="col-span-2 text-right">
+      <input type="number" id="tras-cant-${idx}" step="any" min="0.0001" placeholder="0.00" value="${cant > 0 ? cant : ''}"
+             oninput="recalcularFilaTraslado(${idx})"
+             class="w-full text-xs font-mono font-bold text-right bg-white border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500">
+    </div>
+
+    <div class="col-span-2 text-right">
+      <span id="tras-subtotal-lbl-${idx}" class="text-xs font-mono font-bold text-indigo-700">$0.00</span>
+    </div>
+
+    <div class="col-span-1 text-center">
+      <button type="button" onclick="eliminarLineaTraslado(${idx})" class="p-1 text-rose-400 hover:text-rose-600 font-extrabold text-sm hover:bg-rose-50 rounded-lg transition" title="Eliminar fila">
+        ✕
+      </button>
+    </div>
+  `;
+
+  cont.appendChild(div);
+  trasladosLineas.push(div);
+
+  setupACTrasladoFila(idx);
+  calcularTotalesTraslado();
+}
+
+function setupACTrasladoFila(idx) {
+  const inp = document.getElementById(`tras-ac-txt-${idx}`);
+  const list = document.getElementById(`tras-ac-list-${idx}`);
+  if (!inp || !list) return;
+
+  inp.oninput = () => {
+    const q = inp.value.trim().toLowerCase();
+    if (!q) { list.classList.add('hidden'); return; }
+    const matches = productos.filter(p => (p.nombre || '').toLowerCase().includes(q)).slice(0, 10);
+    if (!matches.length) {
+      list.innerHTML = `<div class="p-2 text-xs text-gray-400">Sin coincidencias</div>`;
+      list.classList.remove('hidden');
+      return;
+    }
+    list.innerHTML = matches.map(p => `
+      <div onclick="seleccionarProductoEnLineaTraslado(${idx}, ${p.id}, '${(p.nombre || '').replace(/'/g, "\\'")}', ${p.costo || 0})" class="ac-item flex justify-between cursor-pointer hover:bg-indigo-50 p-2 text-xs">
+        <span class="font-semibold text-slate-800">${p.nombre}</span>
+        <span class="text-slate-500 font-mono">$${(parseFloat(p.costo) || 0).toLocaleString('es-CO')}</span>
+      </div>
+    `).join('');
+    list.classList.remove('hidden');
+  };
+}
+
+function seleccionarProductoEnLineaTraslado(idx, id, nombre, costo) {
+  const inp = document.getElementById(`tras-ac-txt-${idx}`);
+  const hid = document.getElementById(`tras-prod-id-${idx}`);
+  const hidCost = document.getElementById(`tras-costo-und-${idx}`);
+  const list = document.getElementById(`tras-ac-list-${idx}`);
+
+  if (inp) inp.value = nombre;
+  if (hid) hid.value = id;
+  if (hidCost) hidCost.value = costo || 0;
+  if (list) list.classList.add('hidden');
+
+  actualizarStockLineaTraslado(idx);
+}
+
+async function actualizarStockLineaTraslado(idx) {
+  const origId = document.getElementById('traslado-origen')?.value;
+  const prodId = document.getElementById(`tras-prod-id-${idx}`)?.value;
+  const stockLbl = document.getElementById(`tras-stock-lbl-${idx}`);
+  const hidCost = document.getElementById(`tras-costo-und-${idx}`);
+
+  if (!origId || !prodId) {
+    if (stockLbl) stockLbl.textContent = '0.00';
+    recalcularFilaTraslado(idx);
+    return;
+  }
+
+  try {
+    const r = await fetch(`/api/inventario/producto/${prodId}/kardex?bodega=${origId}`);
+    const d = await r.json();
+    if (d.ok && stockLbl) {
+      const stockVal = Number(d.stock_actual || 0);
+      stockLbl.textContent = stockVal.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (d.costo_actual !== undefined && hidCost) {
+        hidCost.value = d.costo_actual;
+      }
+    }
+  } catch (e) {
+    console.warn("Error consultando stock de línea:", e);
+  }
+  recalcularFilaTraslado(idx);
+}
+
+function recalcularFilaTraslado(idx) {
+  const cantInp = document.getElementById(`tras-cant-${idx}`);
+  const stockLbl = document.getElementById(`tras-stock-lbl-${idx}`);
+  const subtotalLbl = document.getElementById(`tras-subtotal-lbl-${idx}`);
+  const hidCost = document.getElementById(`tras-costo-und-${idx}`);
+
+  const cant = parseFloat(cantInp?.value) || 0;
+  const costo = parseFloat(hidCost?.value) || 0;
+  const subtotal = cant * costo;
+
+  if (subtotalLbl) {
+    subtotalLbl.textContent = `$${subtotal.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
+  // Alerta visual de stock insuficiente
+  const stockVal = parseFloat((stockLbl?.textContent || '0').replace(/\./g, '').replace(',', '.')) || 0;
+  if (cant > stockVal) {
+    cantInp?.classList.add('border-rose-500', 'bg-rose-50', 'text-rose-700');
+    cantInp?.classList.remove('border-slate-200');
+  } else {
+    cantInp?.classList.remove('border-rose-500', 'bg-rose-50', 'text-rose-700');
+    cantInp?.classList.add('border-slate-200');
+  }
+
+  calcularTotalesTraslado();
+}
+
+function eliminarLineaTraslado(idx) {
+  const fila = document.getElementById(`tras-fila-${idx}`);
+  if (fila) fila.remove();
+
+  const cont = document.getElementById('traslado-lineas');
+  if (cont && !cont.children.length) {
+    trasladosLineas = [];
+    agregarLineaTraslado();
+  } else {
+    calcularTotalesTraslado();
+  }
+}
+
+function calcularTotalesTraslado() {
+  const cont = document.getElementById('traslado-lineas');
+  if (!cont) return;
+
+  const rows = cont.querySelectorAll('.tras-fila');
+  let totalItems = 0;
+  let totalUnits = 0;
+  let totalValue = 0;
+
+  rows.forEach(r => {
+    const prodId = r.querySelector('input[id^="tras-prod-id-"]')?.value;
+    const cant = parseFloat(r.querySelector('input[id^="tras-cant-"]')?.value) || 0;
+    const costo = parseFloat(r.querySelector('input[id^="tras-costo-und-"]')?.value) || 0;
+
+    if (prodId && cant > 0) {
+      totalItems++;
+      totalUnits += cant;
+      totalValue += (cant * costo);
+    }
+  });
+
+  const totItemsEl = document.getElementById('traslado-total-items');
+  const totUnitsEl = document.getElementById('traslado-total-unidades');
+  const totValEl = document.getElementById('traslado-total-valor');
+
+  if (totItemsEl) totItemsEl.textContent = totalItems;
+  if (totUnitsEl) totUnitsEl.textContent = totalUnits.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (totValEl) totValEl.textContent = `$${totalValue.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+async function ejecutarTrasladoInterno() {
+  const orig = document.getElementById('traslado-origen')?.value;
+  const dest = document.getElementById('traslado-destino')?.value;
+  const fecha = document.getElementById('traslado-fecha')?.value || null;
+  const notas = document.getElementById('traslado-notas')?.value.trim();
+
+  if (!orig || !dest) {
+    toast('Selecciona las sedes de origen y destino', false);
+    return;
+  }
+  if (orig === dest) {
+    toast('La bodega origen y destino no pueden ser la misma', false);
+    return;
+  }
+
+  const cont = document.getElementById('traslado-lineas');
+  const rows = cont ? [...cont.querySelectorAll('.tras-fila')] : [];
+  const lineas = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const pid = r.querySelector('input[id^="tras-prod-id-"]')?.value;
+    const cant = parseFloat(r.querySelector('input[id^="tras-cant-"]')?.value);
+    const nom = r.querySelector('input[id^="tras-ac-txt-"]')?.value || `Ítem #${i+1}`;
+
+    if (!pid || isNaN(cant) || cant <= 0) {
+      if (rows.length === 1) {
+        toast('Selecciona al menos un producto y una cantidad mayor a 0', false);
+        return;
+      }
+      continue; // Omitir filas vacías si hay varias
+    }
+
+    lineas.push({
+      producto_id: parseInt(pid),
+      cantidad: cant
+    });
+  }
+
+  if (!lineas.length) {
+    toast('Agrega al menos un producto con cantidad válida para trasladar', false);
+    return;
+  }
+
+  const btn = document.getElementById('btn-ejecutar-traslado');
+  if (btn) btn.disabled = true;
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/traslado`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bodega_origen_id: Number(orig),
+        bodega_destino_id: Number(dest),
+        fecha: fecha,
+        notas: notas,
+        lineas: lineas
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✅ ${d.mensaje || 'Traslado realizado exitosamente'}`);
+      if (cont) cont.innerHTML = '';
+      trasladosLineas = [];
+      document.getElementById('traslado-notas').value = '';
+      agregarLineaTraslado();
+
+      await cargarHistorialTraslados();
+      await cargarInfoDocumentoTraslado();
+      await cargarProductos();
+    } else {
+      toast(d.error || 'Error al ejecutar traslado', false);
+    }
+  } catch (e) {
+    toast('Error de conexión al trasladar', false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function imprimirPdfTraslado(docNum) {
+  if (!docNum) return;
+  window.open(`/api/inventario/${NEGOCIO_ID}/traslado/${encodeURIComponent(docNum)}/pdf`, '_blank');
+}
+
+async function cargarInfoDocumentoTraslado() {
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
+    const d = await r.json();
+    if (d.ok && d.tipos) {
+      const td = d.tipos.find(t => t.tipo_movimiento === 'traslado' || t.codigo === 'TRASLADO');
+      const badgeEl = document.getElementById('traslado-consecutivo-disp');
+      if (td && badgeEl) {
+        const nextNum = Math.max((td.consecutivo || 0) + 1, (td.numero_inicio || 1));
+        badgeEl.textContent = `${nextNum}`;
+      }
+    }
+  } catch (e) {
+    console.warn("Error consultando tipo doc traslado:", e);
+  }
+}
+
+async function cargarHistorialTraslados() {
+  const tbody = document.getElementById('tabla-traslados-body');
+  if (!tbody) return;
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/traslados`);
+    const d = await r.json();
+    if (!d.ok || !d.traslados || !d.traslados.length) {
+      tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-gray-400">No hay traslados registrados recientemente.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = d.traslados.map(t => {
+      const fecha = t.created_at ? new Date(t.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+      const docNum = t.documento_numero ? String(t.documento_numero) : String(t.id);
+      return `
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="p-3 font-mono font-bold text-indigo-600 text-xs">#${docNum}</td>
+          <td class="p-3 font-mono text-[11px] text-gray-500">${fecha}</td>
+          <td class="p-3">
+            <div class="flex items-center gap-1.5 text-xs font-semibold">
+              <span class="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold text-[10px]">${t.origen_codigo}</span>
+              <span class="text-indigo-500">➔</span>
+              <span class="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold text-[10px]">${t.destino_codigo}</span>
+            </div>
+            <div class="text-[10px] text-gray-400 mt-0.5">${t.origen_nombre} → ${t.destino_nombre}</div>
+          </td>
+          <td class="p-3 font-bold text-gray-800">${t.producto_nombre}</td>
+          <td class="p-3 text-right font-mono font-bold text-indigo-600">${Number(t.cantidad).toFixed(2)}</td>
+          <td class="p-3 text-right font-mono text-gray-500">${fmtPesos(Number(t.costo_und || 0))}</td>
+          <td class="p-3 text-right font-mono font-bold text-gray-900">${fmtPesos(Number(t.valor_total || 0))}</td>
+          <td class="p-3 text-gray-500 text-[11px]">${t.usuario_nombre || 'Sistema'}</td>
+          <td class="p-3 text-center">
+            <button onclick="imprimirPdfTraslado('${docNum}')" class="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition flex items-center gap-1 mx-auto" title="Descargar / Imprimir Remisión de Traslado">
+              📄 PDF
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-rose-500">Error al cargar historial de traslados.</td></tr>`;
+  }
+}
+
+
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -10104,6 +11243,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
 
+
+  await inicializarCentrosUtilidad();
 
   await fetchDefaultPresentacion();
 
@@ -11201,6 +12342,15 @@ function inicializarFechasVC() {
 
   }
 
+  const cuSel = document.getElementById('vc-centro-utilidad');
+  if (cuSel && typeof CENTROS_UTILIDAD !== 'undefined' && CENTROS_UTILIDAD.length && cuSel.options.length <= 1) {
+    const curVal = cuSel.value;
+    cuSel.innerHTML = '<option value="">🏛️ Todos (Consolidado)</option>' + CENTROS_UTILIDAD.map(c => `
+      <option value="${c.id}">${c.tipo === 'movil' ? '🛵' : '🏪'} ${c.codigo} — ${c.nombre}</option>
+    `).join('');
+    if (curVal) cuSel.value = curVal;
+  }
+
 }
 
 
@@ -11210,6 +12360,10 @@ async function consultarVentasCostos() {
   const desde = document.getElementById('vc-desde').value;
 
   const hasta = document.getElementById('vc-hasta').value;
+
+  const cuInp = document.getElementById('vc-centro-utilidad');
+
+  const centroId = cuInp ? cuInp.value : '';
 
   if (!desde || !hasta) return;
 
@@ -11229,7 +12383,9 @@ async function consultarVentasCostos() {
 
   try {
 
-    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos?desde=${desde}&hasta=${hasta}`);
+    let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos?desde=${desde}&hasta=${hasta}`;
+    if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
+    const r = await fetch(url);
 
     const d = await r.json();
 
@@ -11275,9 +12431,15 @@ function generarPdfVentasCostos() {
 
   const hasta = document.getElementById('vc-hasta').value;
 
+  const cuInp = document.getElementById('vc-centro-utilidad');
+
+  const centroId = cuInp ? cuInp.value : '';
+
   if (!desde || !hasta) { toast('Selecciona el rango de fechas primero', true); return; }
 
-  window.open(`/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/pdf?desde=${desde}&hasta=${hasta}`, '_blank');
+  let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/pdf?desde=${desde}&hasta=${hasta}`;
+  if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
+  window.open(url, '_blank');
 
 }
 
@@ -11441,9 +12603,13 @@ async function toggleDetalleVC(tr, productoId) {
 
   const desde = document.getElementById('vc-desde').value;
   const hasta = document.getElementById('vc-hasta').value;
+  const cuInp = document.getElementById('vc-centro-utilidad');
+  const centroId = cuInp ? cuInp.value : '';
 
   try {
-    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/detalle?desde=${desde}&hasta=${hasta}&producto_id=${productoId}`);
+    let url = `/api/inventario/${NEGOCIO_ID}/reporte-ventas-costos/detalle?desde=${desde}&hasta=${hasta}&producto_id=${productoId}`;
+    if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
+    const r = await fetch(url);
     const d = await r.json();
     if (!d.ok) { detailRow.innerHTML = `<td colspan="9" class="text-xs text-red-500 px-3">${d.error}</td>`; return; }
 

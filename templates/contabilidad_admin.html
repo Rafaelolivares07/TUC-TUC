@@ -51,7 +51,10 @@
       </a>
       <div>
         <h1 class="text-2xl font-extrabold text-gray-800">{{ negocio_nombre }}</h1>
-        <p class="text-sm text-gray-500">Contabilidad</p>
+        <div class="flex items-center gap-2">
+          <p class="text-sm text-gray-500">Contabilidad</p>
+          <span class="bg-blue-100 text-blue-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-blue-200">{{ APP_VERSION|default('v2.4.2') }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -328,12 +331,20 @@
     <!-- ═══ TAB: COMPROBANTE MANUAL ═══ -->
     <div id="panel-manual" class="p-5 hidden">
 
-      <!-- Selector de modo -->
-      <div class="flex gap-2 mb-4 pb-3 border-b">
-        <button id="btn-modo-libre" onclick="setModoComp('libre')"
-                class="px-4 py-1.5 rounded-full text-sm font-semibold bg-blue-600 text-white">✏️ Libre</button>
-        <button id="btn-modo-param" onclick="setModoComp('param')"
-                class="px-4 py-1.5 rounded-full text-sm font-semibold bg-gray-100 text-gray-700">⚙️ Desde parametrización</button>
+      <!-- Selector de modo y Centro de Utilidad -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b">
+        <div class="flex gap-2">
+          <button id="btn-modo-libre" onclick="setModoComp('libre')"
+                  class="px-4 py-1.5 rounded-full text-sm font-semibold bg-blue-600 text-white">✏️ Libre</button>
+          <button id="btn-modo-param" onclick="setModoComp('param')"
+                  class="px-4 py-1.5 rounded-full text-sm font-semibold bg-gray-100 text-gray-700">⚙️ Desde parametrización</button>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-bold text-gray-500 uppercase whitespace-nowrap">Centro de Utilidad:</label>
+          <select id="man-centro-id" class="border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-semibold bg-white text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none">
+            <!-- Cargado dinámicamente -->
+          </select>
+        </div>
       </div>
 
       <!-- Modo libre -->
@@ -384,6 +395,9 @@
       <div class="flex gap-3 mb-4 flex-col sm:flex-row">
         <input id="comp-desde" type="date" class="border rounded-lg px-3 py-2 text-sm">
         <input id="comp-hasta" type="date" class="border rounded-lg px-3 py-2 text-sm">
+        <select id="comp-centro-f" onchange="cargarComprobantes()" class="border rounded-lg px-3 py-2 text-sm bg-white font-medium text-gray-700">
+          <option value="">🏛️ Todos los Centros</option>
+        </select>
         <input id="comp-tipo-f" type="text" placeholder="Tipo (ej: VENTA_POS)"
                class="border rounded-lg px-3 py-2 text-sm flex-1">
         <button onclick="cargarComprobantes()"
@@ -425,6 +439,7 @@
             <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 sticky top-0 z-10 shadow-xs border-b border-gray-150">
               <th onclick="ordenarComprobantes('tipo')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Tipo <span id="sort-icon-tipo">↕</span></th>
               <th onclick="ordenarComprobantes('numero')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Número <span id="sort-icon-numero">↕</span></th>
+              <th class="px-3 py-2 text-left">Centro</th>
               <th onclick="ordenarComprobantes('fecha')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Fecha <span id="sort-icon-fecha">↕</span></th>
               <th onclick="ordenarComprobantes('tercero')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Tercero <span id="sort-icon-tercero">↕</span></th>
               <th onclick="ordenarComprobantes('fecha_grabacion')" class="px-3 py-2 cursor-pointer hover:bg-gray-150/50 select-none transition text-left">Fecha Registro <span id="sort-icon-fecha_grabacion">↕</span></th>
@@ -489,7 +504,7 @@
     <!-- ═══ TAB: CONSULTA MOVIMIENTOS ═══ -->
     <div id="panel-consulta" class="p-5 hidden">
       <!-- Filtros de Consulta -->
-      <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-5 items-end">
+      <div class="grid grid-cols-1 md:grid-cols-6 gap-3 mb-5 items-end">
         <div>
           <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha Desde</label>
           <input id="cons-desde" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
@@ -497,6 +512,12 @@
         <div>
           <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha Hasta</label>
           <input id="cons-hasta" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Centro de Utilidad</label>
+          <select id="cons-centro-id" class="border rounded-lg px-3 py-2 text-sm w-full bg-white">
+            <option value="">🏛️ Todos (Consolidado)</option>
+          </select>
         </div>
         <div class="relative">
           <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Cuenta PUC</label>
@@ -573,10 +594,16 @@
     <!-- ═══ TAB: BALANCE Y CIERRE ═══ -->
     <div id="panel-balance" class="p-5 hidden">
       <!-- Sección: Filtros y Acciones del Balance -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-6 items-end">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 mb-6 items-end">
         <div>
           <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Periodo Contable</label>
           <input id="bal-periodo-select" type="month" class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Centro de Utilidad</label>
+          <select id="bal-centro-id" onchange="cargarBalanceComprobacion()" class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full font-bold text-slate-800 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
+            <option value="">🏛️ Consolidado (Todos)</option>
+          </select>
         </div>
         <div>
           <label class="block text-xs font-semibold text-gray-400 uppercase mb-1.5">Fecha Inicial (Fija)</label>
@@ -589,7 +616,7 @@
         <div>
           <button onclick="cargarBalanceComprobacion()"
                   class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-lg text-xs md:text-sm transition shadow-md w-full flex items-center justify-center gap-1.5">
-            <span>🔄</span> Actualizar Balance
+            <span>🔄</span> Actualizar
           </button>
         </div>
         <div>
@@ -1352,6 +1379,9 @@ async function eliminarGrupo(id) {
 let manTimers = {};
 let modoComprobante = 'libre';
 let editComprobanteId = null;
+let editTipoDoc = null;
+let editNumDoc = null;
+let editTipoDocId = null;
 let editLineasOriginales = [];
 
 function setModoComp(modo) {
@@ -1518,17 +1548,28 @@ async function guardarComprobante() {
   const tipo       = esParam ? (selOpt?.dataset.codigo || '') : document.getElementById('man-tipo').value.trim().toUpperCase();
   const fecha      = document.getElementById(esParam ? 'man-fecha-p' : 'man-fecha').value || null;
   const descripcion= document.getElementById(esParam ? 'man-desc-p' : 'man-desc').value.trim() || null;
-  const tipo_doc_id= esParam ? (parseInt(document.getElementById('param-tipodoc').value) || null) : null;
+  const tipo_doc_id= esParam ? (parseInt(document.getElementById('param-tipodoc').value) || null) : (editTipoDocId || null);
+  const centro_utilidad_id = parseInt(document.getElementById('man-centro-id')?.value || '1');
+
   const lineas = [];
   for (const f of document.querySelectorAll('.linea-manual')) {
     const debito  = parseFloat(f.querySelector('.man-deb').value||0);
     const credito = parseFloat(f.querySelector('.man-cred').value||0);
-    if (debito > 0 || credito > 0) lineas.push({
-      cuenta_id:     parseInt(f.querySelector('.man-cta-id').value)||null,
-      cuenta_codigo: f.querySelector('.man-cta-cod').value||'',
-      concepto:      f.querySelector('.man-concepto').value.trim()||null,
-      debito, credito
-    });
+    if (debito > 0 || credito > 0) {
+      let ctaId = parseInt(f.querySelector('.man-cta-id').value) || null;
+      let ctaCod = (f.querySelector('.man-cta-cod').value || '').trim();
+      const ctaTxt = (f.querySelector('.man-cta-q').value || '').trim();
+      if (!ctaCod && ctaTxt) {
+        const match = ctaTxt.match(/^(\d+)/);
+        if (match) ctaCod = match[1];
+      }
+      lineas.push({
+        cuenta_id:     ctaId,
+        cuenta_codigo: ctaCod,
+        concepto:      f.querySelector('.man-concepto').value.trim()||null,
+        debito, credito
+      });
+    }
   }
   const deb  = Array.from(document.querySelectorAll('.man-deb')).reduce((a,e)  => a + parseFloat(e.value||0), 0);
   const cred = Array.from(document.querySelectorAll('.man-cred')).reduce((a,e) => a + parseFloat(e.value||0), 0);
@@ -1541,82 +1582,31 @@ async function guardarComprobante() {
     if (!confirmed) return;
   }
 
-  // ── MODO EDICIÓN: endpoints granulares ──
-  if (editComprobanteId) {
-    const limpiar = document.getElementById('man-limpiar-guardar').checked;
-    try {
-      // 1. Recolectar líneas actuales del DOM con sus IDs
-      const domLineas = [];
-      for (const f of document.querySelectorAll('.linea-manual')) {
-        const lineId = f.dataset.lineId ? parseInt(f.dataset.lineId) : null;
-        const debito  = parseFloat(f.querySelector('.man-deb').value||0);
-        const credito = parseFloat(f.querySelector('.man-cred').value||0);
-        if (debito > 0 || credito > 0) {
-          domLineas.push({
-            lineId,
-            cuenta_id: parseInt(f.querySelector('.man-cta-id').value)||null,
-            cuenta_codigo: f.querySelector('.man-cta-cod').value||'',
-            concepto: f.querySelector('.man-concepto').value.trim()||null,
-            monto: debito > 0 ? debito : credito,
-            tipo: debito > 0 ? 'debito' : 'credito'
-          });
-        }
-      }
+  const limpiar = document.getElementById('man-limpiar-guardar').checked;
+  const body = {
+    tipo, 
+    fecha, 
+    descripcion, 
+    lineas, 
+    centro_utilidad_id
+  };
+  if (editComprobanteId) body.comprobante_id = editComprobanteId;
+  if (editNumDoc) body.numero_documento = editNumDoc;
+  if (tipo_doc_id) body.tipo_doc_id = tipo_doc_id;
 
-      const origIds = new Set(editLineasOriginales.map(l => l.id));
-      const domIds  = new Set(domLineas.filter(l => l.lineId).map(l => l.lineId));
-
-      // 2. ELIMINAR líneas que ya no están en el DOM
-      for (const orig of editLineasOriginales) {
-        if (!domIds.has(orig.id)) {
-          await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante/${editComprobanteId}/linea/${orig.id}`, { method: 'DELETE' });
-        }
-      }
-
-      // 3. PATCH líneas existentes que cambiaron
-      for (const dl of domLineas) {
-        if (!dl.lineId) continue; // es nueva, se maneja abajo
-        const orig = editLineasOriginales.find(o => o.id === dl.lineId);
-        if (!orig) continue;
-        const cambia = orig.cuenta_id !== dl.cuenta_id
-                    || orig.cuenta_codigo !== dl.cuenta_codigo
-                    || orig.concepto !== dl.concepto
-                    || Math.abs(orig.monto - dl.monto) > 0.01
-                    || orig.tipo !== dl.tipo;
-        if (cambia) {
-          await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante/${editComprobanteId}/linea/${dl.lineId}`, {
-            method: 'PATCH',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-              cuenta_id: dl.cuenta_id,
-              cuenta: dl.cuenta_codigo,
-              concepto: dl.concepto,
-              tipo: dl.tipo,
-              monto: dl.monto
-            })
-          });
-        }
-      }
-
-      // 4. POST líneas nuevas (sin lineId)
-      const nuevas = domLineas.filter(l => !l.lineId);
-      if (nuevas.length > 0) {
-        await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante/${editComprobanteId}/lineas`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ lineas: nuevas.map(l => ({
-            cuenta_id: l.cuenta_id,
-            cuenta_codigo: l.cuenta_codigo,
-            concepto: l.concepto,
-            debito: l.tipo === 'debito' ? l.monto : 0,
-            credito: l.tipo === 'credito' ? l.monto : 0
-          }))})
-        });
-      }
-
-      toast('Comprobante actualizado');
+  try {
+    const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      toast(editComprobanteId ? '¡Comprobante actualizado exitosamente!' : '¡Comprobante guardado exitosamente!');
       editComprobanteId = null;
-      editLineasOriginales = [];
+      editTipoDoc = null;
+      editNumDoc = null;
+      editTipoDocId = null;
       const tabBtn = document.getElementById('tab-manual');
       if (tabBtn) tabBtn.innerHTML = '✏️ Comprobante';
       if (limpiar) {
@@ -1626,36 +1616,20 @@ async function guardarComprobante() {
         else { document.getElementById('man-tipo').value=''; document.getElementById('man-desc').value=''; }
       }
       calcBalance();
-    } catch(e) {
-      console.error(e);
-      toast('Error al actualizar comprobante', false);
+    } else {
+      toast(data.error || 'Error al guardar comprobante', false);
     }
-    return;
+  } catch(e) {
+    console.error(e);
+    toast('Error de conexión al guardar comprobante', false);
   }
-
-  // ── MODO CREACIÓN: flujo original ──
-  const limpiar = document.getElementById('man-limpiar-guardar').checked;
-  const body = {tipo, fecha, descripcion, lineas};
-  if (tipo_doc_id) body.tipo_doc_id = tipo_doc_id;
-  const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobante`, {
-    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-  });
-  const data = await resp.json();
-  if (data.ok) {
-    toast('Comprobante guardado');
-    if (limpiar) {
-      document.getElementById('man-lineas').innerHTML = '';
-      addLineaManual();
-      if (esParam) { document.getElementById('param-tipodoc').value=''; document.getElementById('param-vars').innerHTML=''; document.getElementById('man-desc-p').value=''; }
-      else { document.getElementById('man-tipo').value=''; document.getElementById('man-desc').value=''; }
-    }
-    calcBalance();
-  } else toast(data.error, false);
 }
 
-async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
+async function cargarDocumentoParaEdicion(tipoDoc, numDoc, compId = null) {
   try {
-    const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${numDoc}/lineas`);
+    let url = `/api/contabilidad/${NEGOCIO_ID}/documento/${encodeURIComponent(tipoDoc || 'doc')}/${encodeURIComponent(numDoc || '0')}/lineas`;
+    if (compId) url += `?comprobante_id=${compId}`;
+    const resp = await fetch(url);
     const data = await resp.json();
     if (!data.ok) {
       toast(data.error || 'Error al cargar comprobante', false);
@@ -1664,16 +1638,10 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
     
     if (data.lineas && data.lineas.length > 0) {
       const first = data.lineas[0];
-      editComprobanteId = first.comprobante_id;
-      
-      editLineasOriginales = data.lineas.map(l => ({
-        id: l.id,
-        cuenta_id: l.cuenta_id || null,
-        cuenta_codigo: l.cuenta_codigo || l.cuenta || '',
-        concepto: l.concepto || '',
-        monto: parseFloat(l.monto || 0),
-        tipo: l.tipo
-      }));
+      editComprobanteId = first.comprobante_id || compId || null;
+      editTipoDoc = first.tipo_documento || tipoDoc;
+      editNumDoc = first.numero_documento || numDoc;
+      editTipoDocId = first.tipo_documento_id || null;
       
       const tipoDocNombre = data.tipo_doc_nombre || tipoDoc;
       const tabBtn = document.getElementById('tab-manual');
@@ -1686,9 +1654,10 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
       if (first.fecha) {
         document.getElementById('man-fecha').value = first.fecha.split('T')[0];
       }
-      document.getElementById('man-desc').value = tipoDocNombre + ' #' + numDoc + (first.descripcion_general ? ' — ' + first.descripcion_general : '');
-      if (first.tipo_documento) {
-        document.getElementById('man-tipo').value = tipoDocNombre;
+      document.getElementById('man-desc').value = first.descripcion_general || (tipoDocNombre + ' #' + numDoc);
+      document.getElementById('man-tipo').value = tipoDocNombre;
+      if (first.centro_utilidad_id && document.getElementById('man-centro-id')) {
+        document.getElementById('man-centro-id').value = first.centro_utilidad_id;
       }
       
       for (const l of data.lineas) {
@@ -1711,6 +1680,12 @@ async function cargarDocumentoParaEdicion(tipoDoc, numDoc) {
     console.error(e);
     toast('Error de red al cargar comprobante', false);
   }
+}
+
+function abrirEdicionComprobante(tipoDoc, numDoc, compId = null) {
+  let url = `/admin/contabilidad/${NEGOCIO_ID}?tab=manual&tipo_documento=${encodeURIComponent(tipoDoc)}&documento_numero=${encodeURIComponent(numDoc)}`;
+  if (compId) url += `&comprobante_id=${compId}`;
+  window.open(url, '_blank');
 }
 
 // ── TAB: COMPROBANTES ─────────────────────────────────────────
@@ -1741,11 +1716,13 @@ async function cargarComprobantes() {
   const desde = document.getElementById('comp-desde').value;
   const hasta = document.getElementById('comp-hasta').value;
   const tipo  = document.getElementById('comp-tipo-f').value.trim();
+  const centro= document.getElementById('comp-centro-f')?.value || '';
   
   let qs = `?page=${currentCompPage}&limit=${compPageLimit}&solo_descuadrados=${compSoloDescuadrados}&sort_col=${compSortCol}&sort_dir=${compSortDir}&`;
   if (desde) qs += `desde=${desde}&`;
   if (hasta) qs += `hasta=${hasta}&`;
   if (tipo)  qs += `tipo=${encodeURIComponent(tipo)}&`;
+  if (centro) qs += `centro_utilidad_id=${encodeURIComponent(centro)}&`;
   
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobantes${qs}`);
   const data = await resp.json();
@@ -1776,7 +1753,7 @@ async function cargarComprobantes() {
   // Render Rows
   const tbody = document.getElementById('comps-body');
   if (!data.comprobantes || data.comprobantes.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-4 text-sm">Sin comprobantes.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4 text-sm">Sin comprobantes.</td></tr>';
     actualizarPaginacionUI(0, 0, 0);
     return;
   }
@@ -1814,6 +1791,11 @@ async function cargarComprobantes() {
           </a>
         </div>
       </td>
+      <td class="px-3 py-2.5 text-xs">
+        <span class="text-[10px] bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded font-mono" title="${c.centro_nombre || ''}">
+          ${c.centro_codigo || 'MOV-01'}
+        </span>
+      </td>
       <td class="px-3 py-2.5 text-xs text-gray-500 font-mono">${c.fecha}</td>
       <td class="px-3 py-2.5 text-xs text-gray-600 truncate max-w-[200px]" title="${c.tercero || ''}">${c.tercero || '—'}</td>
       <td class="px-3 py-2.5 text-xs text-gray-500 font-mono">${c.fecha_grabacion || '—'}</td>
@@ -1825,7 +1807,7 @@ async function cargarComprobantes() {
           <button onclick="imprimirComprobante('${c.tipo_documento}', '${c.numero_documento}')" class="text-blue-600 hover:text-blue-800 font-bold px-1.5 py-0.5 rounded hover:bg-blue-50/50 transition" title="Imprimir PDF">
             📄 PDF
           </button>
-          <button onclick="cargarDocumentoParaEdicion('${c.tipo_documento}', '${c.numero_documento}')" class="text-amber-650 hover:text-amber-800 font-bold px-1.5 py-0.5 rounded hover:bg-amber-50/50 transition" title="Editar / Ajustar Comprobante">
+          <button onclick="abrirEdicionComprobante('${c.tipo_documento}', '${c.numero_documento}', ${c.comprobante_id || 'null'})" class="text-amber-650 hover:text-amber-800 font-bold px-1.5 py-0.5 rounded hover:bg-amber-50/50 transition" title="Editar / Ajustar Comprobante en pestaña nueva">
             ✏️ Editar
           </button>
         </div>
@@ -2719,6 +2701,7 @@ function auditoriaFiltrarDocumento(tipoDoc, numDoc) {
 async function consultarMovimientos() {
   const desde = document.getElementById('cons-desde').value;
   const hasta = document.getElementById('cons-hasta').value;
+  const centroId = document.getElementById('cons-centro-id')?.value || '';
   const cuentaId = document.getElementById('cons-cuenta-id').value;
   const terceroId = document.getElementById('cons-tercero-id').value;
   const agrupar = document.getElementById('cons-agrupar').value;
@@ -2735,7 +2718,8 @@ async function consultarMovimientos() {
   loadingDiv.classList.remove('hidden');
 
   try {
-    const url = `/api/contabilidad/${NEGOCIO_ID}/reporte-movimientos?desde=${desde}&hasta=${hasta}&cuenta_id=${cuentaId}&tercero_id=${terceroId}&agrupar=${agrupar}`;
+    let url = `/api/contabilidad/${NEGOCIO_ID}/reporte-movimientos?desde=${desde}&hasta=${hasta}&cuenta_id=${cuentaId}&tercero_id=${terceroId}&agrupar=${agrupar}`;
+    if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
     const resp = await fetch(url);
     const data = await resp.json();
 
@@ -2776,6 +2760,9 @@ async function consultarMovimientos() {
                 🔍 ${l.numero_comprobante || ''}
               </a>
               <span class="text-gray-400 text-[10px] uppercase font-bold ml-1">(${l.tipo_comprobante || ''})</span>
+              <span class="text-[10px] bg-slate-100 text-slate-700 font-bold px-1.5 py-0.5 rounded font-mono ml-1.5" title="${l.centro_nombre || ''}">
+                ${l.centro_codigo || 'MOV-01'}
+              </span>
             </td>
             ${cuentaTd}
             ${terceroTd}
@@ -3171,6 +3158,7 @@ function renderizarTablaBalance() {
 async function cargarBalanceComprobacion() {
   const desde = document.getElementById('bal-desde').value;
   const hasta = document.getElementById('bal-hasta').value;
+  const centroId = document.getElementById('bal-centro-id')?.value || '';
   const tbody = document.getElementById('bal-tbody');
   const estadoDiv = document.getElementById('bal-periodo-estado');
   const cierresDiv = document.getElementById('bal-periodos-cerrados');
@@ -3190,7 +3178,9 @@ async function cargarBalanceComprobacion() {
   `;
   
   try {
-    const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/balance-comprobacion?desde=${desde}&hasta=${hasta}`);
+    let url = `/api/contabilidad/${NEGOCIO_ID}/balance-comprobacion?desde=${desde}&hasta=${hasta}`;
+    if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
+    const res = await fetch(url);
     const data = await res.json();
     if (!data.ok) {
       tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-red-600 font-semibold text-xs">Error: ${data.error}</td></tr>`;
@@ -3263,6 +3253,44 @@ async function ejecutarCierrePeriodo() {
   }
 }
 
+async function cargarCentrosUtilidadContabilidad() {
+  try {
+    const res = await fetch(`/api/centros_utilidad/${NEGOCIO_ID}`);
+    const data = await res.json();
+    if (!data.ok || !data.centros) return;
+    
+    const manSelect = document.getElementById('man-centro-id');
+    const compSelect = document.getElementById('comp-centro-f');
+    const consSelect = document.getElementById('cons-centro-id');
+    const balSelect = document.getElementById('bal-centro-id');
+
+    if (manSelect) {
+      manSelect.innerHTML = data.centros.map(c => 
+        `<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`
+      ).join('');
+    }
+
+    const optsFiltro = data.centros.map(c => 
+      `<option value="${c.id}">${c.codigo} — ${c.nombre}</option>`
+    ).join('');
+
+    if (compSelect) {
+      compSelect.innerHTML = `<option value="">🏛️ Todos los Centros</option>` + optsFiltro;
+    }
+    if (consSelect) {
+      consSelect.innerHTML = `<option value="">🏛️ Todos (Consolidado)</option>` + optsFiltro;
+    }
+    if (balSelect) {
+      balSelect.innerHTML = `<option value="">🏛️ Consolidado (Todos)</option>` + optsFiltro;
+    }
+  } catch (err) {
+    console.error('Error cargando centros de utilidad:', err);
+  }
+}
+
+// Inicializar centros de utilidad
+cargarCentrosUtilidadContabilidad();
+
 // Cargar el PUC de inmediato al iniciar o redirigir según query parameters
 const urlParams = new URLSearchParams(window.location.search);
 const activeTab = urlParams.get('tab');
@@ -3285,15 +3313,18 @@ if (activeTab && TABS.includes(activeTab)) {
     // Ejecutar consulta automáticamente
     setTimeout(consultarMovimientos, 150);
   } else if (activeTab === 'manual') {
-    const loadCompId = urlParams.get('comprobante_id');
-    if (loadCompId) {
-      setTimeout(() => cargarComprobanteParaEdicion(loadCompId), 150);
+    const compId = urlParams.get('comprobante_id');
+    const tipoDoc = urlParams.get('tipo_documento') || '';
+    const numDoc = urlParams.get('documento_numero') || '';
+    if (tipoDoc || numDoc || compId) {
+      setTimeout(() => cargarDocumentoParaEdicion(tipoDoc, numDoc, compId ? parseInt(compId) : null), 150);
     }
   } else if (activeTab === 'comps') {
-    const tipoDoc = urlParams.get('tipo_documento');
-    const numDoc = urlParams.get('documento_numero');
-    if (tipoDoc && numDoc) {
-      setTimeout(() => cargarDocumentoParaEdicion(tipoDoc, numDoc), 150);
+    const compId = urlParams.get('comprobante_id');
+    const tipoDoc = urlParams.get('tipo_documento') || '';
+    const numDoc = urlParams.get('documento_numero') || '';
+    if (tipoDoc || numDoc || compId) {
+      setTimeout(() => cargarDocumentoParaEdicion(tipoDoc, numDoc, compId ? parseInt(compId) : null), 150);
     }
   }
 } else {

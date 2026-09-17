@@ -167,4 +167,10 @@ def create_app():
             response.headers["Expires"] = "0"
         return response
 
+    @app.context_processor
+    def inject_global_vars():
+        return dict(
+            APP_VERSION="v2.4.2"
+        )
+
     return app

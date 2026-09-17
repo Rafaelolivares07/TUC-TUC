@@ -1510,7 +1510,10 @@ _HTML = r"""<!DOCTYPE html>
     <div class="flex items-center gap-3">
       <div class="text-2xl">🚗</div>
       <div>
-        <h1 class="text-lg font-extrabold tracking-tight">TUC TUC — Vendedor</h1>
+        <div class="flex items-center gap-2">
+          <h1 class="text-lg font-extrabold tracking-tight">TUC TUC — Vendedor</h1>
+          <span class="bg-indigo-900/60 text-indigo-100 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-400/40">{{ APP_VERSION|default('v2.4.2') }}</span>
+        </div>
         <p class="text-indigo-200 text-xs" id="txt-vendedor-nombre">Cargando...</p>
       </div>
     </div>

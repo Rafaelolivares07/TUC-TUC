@@ -64,7 +64,8 @@
         <img src="{{ tienda.imagen_header }}" class="h-16 w-auto mx-auto mb-4 rounded-xl object-cover" alt="">
         {% endif %}
         <h1 class="text-2xl font-bold text-gray-800 mb-1">{{ tienda.nombre }}</h1>
-        <p class="text-gray-500 mb-6">Caja — Ingresa tu PIN</p>
+        <p class="text-gray-500 mb-2">Caja — Ingresa tu PIN</p>
+        <span class="inline-block bg-indigo-100 text-indigo-800 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full border border-indigo-200 mb-6">v2.4.2 · 17-Sep</span>
         <div class="flex gap-3 justify-center mb-6">
             <input id="pin-input" type="password" inputmode="numeric" maxlength="10"
                    placeholder="••••"
@@ -87,6 +88,7 @@
         <div class="flex items-center gap-2">
             <h1 class="font-bold text-gray-800 text-lg">{{ tienda.nombre }}</h1>
             <span class="bg-green-100 text-green-700 text-xs font-semibold px-2 py-0.5 rounded-full">Caja</span>
+            <span class="bg-indigo-100 text-indigo-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-200">v2.4.2</span>
             <span id="badge-cajero" class="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full hidden"></span>
             <!-- Centro de Utilidad Selector Directo y Botón Sedes -->
             <div class="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 rounded-xl px-2.5 py-1 shadow-xs transition hover:bg-emerald-100/70">
@@ -129,6 +131,7 @@
                     <div class="flex items-center gap-2">
                         🛒 Carrito
                         <span id="carrito-count" class="bg-blue-100 text-blue-800 text-xs font-bold rounded-full px-2 py-0.5">0</span>
+                        <span class="bg-indigo-50 text-indigo-700 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border border-indigo-200" title="Versión de Caja POS">v2.4.2</span>
                     </div>
                     <button type="button" onclick="abrirModalImportarPedido()" 
                             class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 border border-blue-100">

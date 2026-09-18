@@ -765,6 +765,12 @@ input:checked + .slider:before {
       </ul>
     </div>
 
+    <div class="panel-box" style="border-color: rgba(255,77,109,.25); background: rgba(255,77,109,.04);">
+      <div class="panel-title" style="color: #ff4d6d;">Mantenimiento</div>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:10px; line-height:1.5;">Borra todas las canciones, listas y configuraciones guardadas en este navegador. Las canciones no se borran del disco del celular, solo de la rockola.</p>
+      <button class="q-remove" style="width:100%; padding:12px; font-size:13px;" onclick="limpiarLibreriaCompleta()">🗑️ Limpiar toda la librería de este navegador</button>
+      <div id="limpiar-msg" class="status-msg" style="margin-top:8px;"></div>
+    </div>
 
 
     <div class="queue-box">
@@ -1494,6 +1500,7 @@ async function indexarCarpetaFisica(dirHandle) {
       if (entry.kind === 'file' && /\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(entry.name)) {
         const file = await entry.getFile();
         const localId = 'local-' + hashTexto(entry.name.toLowerCase() + '-' + file.size);
+        const blob = file.slice ? file.slice(0) : file;
         const cancion = {
           id: localId,
           deviceId: getDeviceId(),
@@ -1501,7 +1508,8 @@ async function indexarCarpetaFisica(dirHandle) {
           tipo: file.type || 'audio/mpeg',
           size: file.size,
           actualizado: Date.now(),
-          esFisico: true
+          esFisico: true,
+          blob: blob
         };
         store.put(cancion);
         count++;
@@ -1761,6 +1769,7 @@ async function verificarPermisosDirectorio(handle, writeable = true) {
 
 async function guardarCancionLocal(file) {
   const db = await abrirDbLocal();
+  const blob = await file.slice ? file.slice(0) : file;
   const cancion = {
     id: idLocalArchivo(file),
     deviceId: getDeviceId(),
@@ -1768,7 +1777,8 @@ async function guardarCancionLocal(file) {
     tipo: file.type || 'audio/mpeg',
     size: file.size,
     actualizado: Date.now(),
-    esFisico: true
+    esFisico: true,
+    blob: blob
   };
   await new Promise((resolve, reject) => {
     const tx = db.transaction('songs', 'readwrite');
@@ -2754,6 +2764,45 @@ function setWaveActive(on) {
     }
   });
 }
+
+async function limpiarLibreriaCompleta() {
+  const msg = document.getElementById('limpiar-msg');
+  if (!confirm('¿Borrar TODAS las canciones, listas y configuraciones de la rockola en este navegador?\n\nLas canciones originales NO se borran del disco del celular.')) return;
+  
+  msg.textContent = 'Borrando IndexedDB...';
+  msg.className = 'status-msg';
+  
+  try {
+    indexedDB.deleteDatabase('rockola_local_library_v1');
+    cancionesLocales = [];
+    playlistsLocales = [];
+    directorioFisicoHandle = null;
+    localStorage.removeItem('rockola_device_id');
+    localStorage.removeItem('rockola_device_name');
+    
+    renderBibliotecaLocal();
+    renderListasLocales();
+    
+    if (localObjectUrl) { URL.revokeObjectURL(localObjectUrl); localObjectUrl = null; }
+    player.pause();
+    player.removeAttribute('src');
+    reproduciendo = false;
+    playPendiente = false;
+    cancionActual = null;
+    setVinylSpinning(false);
+    setWaveActive(false);
+    actualizarPlayPauseBtn(false);
+    nombreEl.textContent = 'Esperando canciones...';
+    
+    const msg2 = document.getElementById('limpiar-msg');
+    msg2.textContent = '✅ Librería limpiada. Recarga la página para empezar de cero.';
+    msg2.className = 'status-msg ok';
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message;
+    msg.className = 'status-msg error';
+  }
+}
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/rockola/pwa/sw.js', { scope: '/' }).catch(() => {});
 }

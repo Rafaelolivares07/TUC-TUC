@@ -76,7 +76,16 @@
             <h1 class="text-sm font-bold tracking-tight uppercase">{{ negocio_nombre }}</h1>
             <span class="bg-indigo-800 text-indigo-200 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-indigo-700">{{ APP_VERSION|default('v2.4.2') }}</span>
           </div>
-          <p class="text-10px text-indigo-200">Preventa Vendedor: <span class="font-bold">{{ vendedor_nombre }}</span></p>
+          <div class="flex items-center gap-1.5 mt-0.5">
+            <p class="text-10px text-indigo-200">
+              Vendedor: <span class="font-bold text-white" id="header-vendedor-nombre">{{ vendedor_nombre|default('Sin identificar', true) }}</span>
+            </p>
+            <button type="button" onclick="abrirModalIdentificacion(false)" 
+                    class="text-[9px] bg-indigo-800 hover:bg-indigo-700 text-indigo-200 hover:text-white px-2 py-0.5 rounded-full border border-indigo-600 transition flex items-center gap-0.5"
+                    title="Cambiar usuario o registrar celular">
+              <span>👤</span> Cambiar
+            </button>
+          </div>
         </div>
       </div>
       <a href="/vendedor" class="bg-indigo-800 text-indigo-100 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
@@ -269,6 +278,45 @@
 
   </main>
 
+  <!-- Modal de Identificación de Vendedor -->
+  <div id="modal-identificacion" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-gray-100 space-y-4">
+      <div class="text-center space-y-1">
+        <div class="w-12 h-12 bg-indigo-50 text-indigo-900 rounded-full flex items-center justify-center text-xl mx-auto font-bold border border-indigo-100">
+          👤
+        </div>
+        <h3 class="text-sm font-bold text-gray-800">Identificación de Vendedor</h3>
+        <p class="text-xs text-gray-500">Ingresa tu nombre y tu número de celular para registrar tus pedidos y mantener tu sesión activa en este dispositivo.</p>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-10px font-bold text-gray-500 uppercase mb-1">Tu Nombre o Alias *</label>
+          <input type="text" id="modal-id-nombre" placeholder="Ej. Rafael Olivares"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+        </div>
+
+        <div>
+          <label class="block text-10px font-bold text-gray-500 uppercase mb-1">Tu Número de Celular *</label>
+          <input type="tel" id="modal-id-telefono" placeholder="Ej. 3175718658 (10 dígitos)" inputmode="numeric"
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                 onkeydown="if(event.key==='Enter') ejecutarIdentificacionModal()">
+        </div>
+      </div>
+
+      <div class="space-y-2 pt-1">
+        <button type="button" onclick="ejecutarIdentificacionModal()" id="btn-modal-identificar"
+                class="w-full bg-indigo-900 hover:bg-indigo-950 active:bg-indigo-950 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5">
+          <span>🚀</span> Ingresar / Guardar
+        </button>
+        <button type="button" onclick="cerrarModalIdentificacion()" id="btn-modal-cerrar"
+                class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold py-2 px-4 rounded-xl text-xs transition-all hidden">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div id="toast" class="toast bg-gray-900 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border border-gray-800">
     <span id="toast-icon">✓</span>
@@ -277,7 +325,7 @@
 
   <script>
     const NEGOCIO_ID = parseInt("{{ negocio_id }}");
-    const VENDEDOR_TERCERO_ID = parseInt("{{ vendedor_tercero_id }}") || null;
+    let VENDEDOR_TERCERO_ID = parseInt("{{ vendedor_tercero_id }}") || null;
     let currentProducts = [];
     let carrito = [];
     let selectedProduct = null;
@@ -285,6 +333,85 @@
     let editingPedidoId = null;
     let activeFiltroHistorial = 'mis';
     let cachePedidosRecientes = [];
+
+    function abrirModalIdentificacion(esObligatorio = false) {
+      const modal = document.getElementById('modal-identificacion');
+      const inputNom = document.getElementById('modal-id-nombre');
+      const inputTel = document.getElementById('modal-id-telefono');
+      const btnCerrar = document.getElementById('btn-modal-cerrar');
+
+      inputNom.value = localStorage.getItem('vd_nombre') || '';
+      inputTel.value = localStorage.getItem('vd_tel') || '';
+
+      if (esObligatorio) {
+        btnCerrar.classList.add('hidden');
+      } else {
+        btnCerrar.classList.remove('hidden');
+      }
+
+      modal.classList.remove('hidden');
+      if (!inputNom.value) inputNom.focus();
+      else inputTel.focus();
+    }
+
+    function cerrarModalIdentificacion() {
+      document.getElementById('modal-identificacion').classList.add('hidden');
+    }
+
+    async function ejecutarIdentificacionModal() {
+      const nombre = document.getElementById('modal-id-nombre').value.trim();
+      const telefono = document.getElementById('modal-id-telefono').value.replace(/\D/g, '');
+
+      if (!nombre) {
+        toast("Por favor ingresa tu nombre", false);
+        document.getElementById('modal-id-nombre').focus();
+        return;
+      }
+      if (telefono.length < 10) {
+        toast("El número de celular debe tener al menos 10 dígitos", false);
+        document.getElementById('modal-id-telefono').focus();
+        return;
+      }
+
+      const btn = document.getElementById('btn-modal-identificar');
+      btn.disabled = true;
+      btn.textContent = "Guardando...";
+
+      try {
+        const resp = await fetch('/api/vendedor/identificar', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ nombre, telefono })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          localStorage.setItem('vd_nombre', data.nombre);
+          localStorage.setItem('vd_tel', data.telefono);
+          actualizarVendedorUI(data.nombre, data.tercero_id);
+          cerrarModalIdentificacion();
+          toast(`¡Identificado como ${data.nombre}!`);
+          cargarPedidosRecientes();
+        } else {
+          toast(data.error || "Error al identificarse", false);
+        }
+      } catch (err) {
+        console.error(err);
+        toast("Error de conexión al identificarse", false);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>🚀</span> Ingresar / Guardar';
+      }
+    }
+
+    function actualizarVendedorUI(nombre, terceroId) {
+      if (nombre) {
+        const el = document.getElementById('header-vendedor-nombre');
+        if (el) el.textContent = nombre;
+      }
+      if (terceroId) {
+        VENDEDOR_TERCERO_ID = terceroId;
+      }
+    }
 
     window.seleccionarCategoriaFiltro = function(cat) {
       if (activeCategoryFiltro === cat) {
@@ -311,24 +438,24 @@
       const tel = localStorage.getItem('vd_tel') || '';
       const nombre = localStorage.getItem('vd_nombre') || '';
       
-      if (!tel) {
-        window.location.href = '/vendedor';
-        return;
-      }
-      
-      try {
-        const resp = await fetch('/api/vendedor/identificar', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ nombre, telefono: tel })
-        });
-        const data = await resp.json();
-        if (!data.ok) {
-          window.location.href = '/vendedor';
-          return;
+      if (!tel || tel.length < 10) {
+        abrirModalIdentificacion(true);
+      } else {
+        try {
+          const resp = await fetch('/api/vendedor/identificar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ nombre, telefono: tel })
+          });
+          const data = await resp.json();
+          if (data.ok) {
+            actualizarVendedorUI(data.nombre, data.tercero_id);
+          } else {
+            abrirModalIdentificacion(true);
+          }
+        } catch (e) {
+          console.error("Error al sincronizar sesión", e);
         }
-      } catch (e) {
-        console.error("Error al sincronizar sesión", e);
       }
 
       cargarPedidosRecientes();
@@ -573,6 +700,14 @@
 
     // Seleccionar producto en el buscador
     function seleccionarProducto(prod) {
+      const clienteNombre = document.getElementById('cliente-nombre').value.trim();
+      if (!clienteNombre) {
+        toast("Debes ingresar primero el nombre del cliente", false);
+        document.getElementById('cliente-nombre').focus();
+        document.getElementById('buscar-producto').value = '';
+        return;
+      }
+
       selectedProduct = prod;
       document.getElementById('prod-sel-nombre').textContent = prod.nombre;
       document.getElementById('prod-sel-stock').textContent = `Stock: ${prod.stock}`;
@@ -592,6 +727,13 @@
 
     // Agregar producto al carrito local
     function agregarItemAlCarrito() {
+      const clienteNombre = document.getElementById('cliente-nombre').value.trim();
+      if (!clienteNombre) {
+        toast("Debes ingresar primero el nombre del cliente antes de agregar productos", false);
+        document.getElementById('cliente-nombre').focus();
+        return;
+      }
+
       if (!selectedProduct) return;
       const qtyInput = document.getElementById('prod-sel-cantidad');
       const priceInput = document.getElementById('prod-sel-precio');
@@ -696,6 +838,11 @@
             cambiarAVista('historial');
           }, 800);
         } else {
+          if (resp.status === 401 || (data && data.error === 'sin_sesion')) {
+            toast("Tu sesión requiere identificación para guardar pedidos", false);
+            abrirModalIdentificacion(true);
+            return;
+          }
           toast(data.error || "Error al guardar el pedido", false);
         }
       } catch (err) {

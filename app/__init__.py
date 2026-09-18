@@ -79,6 +79,38 @@ def create_app():
         print(f'[negocios] init: {_e}')
 
     @app.before_request
+    def _reconocer_dispositivo_global():
+        from flask import session
+        if session.get('usuario_id'):
+            return
+        dev = request.cookies.get('tuctuc_device', '')
+        if len(dev) < 8:
+            return
+        try:
+            from .db import get_db_connection
+            conn = get_db_connection()
+            row = conn.execute("""
+                SELECT d.tercero_id, t.nombre
+                FROM terceros_dispositivos d JOIN terceros t ON t.id = d.tercero_id
+                WHERE d.dispositivo_id = %s AND d.last_seen >= NOW() - INTERVAL '90 days'
+                LIMIT 1
+            """, (dev,)).fetchone()
+            if row:
+                conn.execute("UPDATE terceros_dispositivos SET last_seen = NOW() WHERE dispositivo_id = %s", (dev,))
+                conn.commit()
+                session['usuario_id'] = row['tercero_id']
+                session['chat_tercero_id'] = row['tercero_id']
+                session['nombre'] = row['nombre'] or ''
+                if not session.get('rol'):
+                    session['rol'] = 'Vendedor'
+                session['dispositivo_id'] = dev
+                session.permanent = True
+            conn.close()
+        except Exception:
+            try: conn.close()
+            except: pass
+
+    @app.before_request
     def _cliente_subdominio():
         host_limpio = (request.host or '').split(':')[0].strip().lower().rstrip('.')
         if host_limpio == 'rockola.tuc-tuc.co':

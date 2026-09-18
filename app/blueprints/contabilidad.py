@@ -5777,6 +5777,52 @@ def api_estado_resultados_get(negocio_id):
             GROUP BY p.id, p.codigo, p.nombre, p.naturaleza
             ORDER BY p.codigo ASC
         """, tuple(params_movs)).fetchall()
+
+        # 3.1 Consulta de detalle de movimientos (notas, comprobantes, terceros y valores)
+        movs_detalle = conn.execute(f"""
+            SELECT 
+                mc.id,
+                mc.cuenta AS cuenta_codigo,
+                p.id AS cuenta_id,
+                mc.fecha,
+                mc.numero_documento,
+                mc.concepto,
+                mc.descripcion_general,
+                mc.tipo,
+                mc.monto,
+                t.nombre AS tercero_nombre
+            FROM movimientos_contables mc
+            JOIN cuentas_puc p ON p.codigo = mc.cuenta
+            LEFT JOIN terceros t ON t.id = mc.tercero_id
+            WHERE mc.negocio_id = %s
+              AND mc.fecha >= %s AND mc.fecha <= %s
+              AND (mc.origen_tipo != 'cierre' OR mc.origen_tipo IS NULL)
+              AND SUBSTRING(mc.cuenta, 1, 1) IN ('4', '5', '6', '7')
+              {cond_cu}
+            ORDER BY mc.fecha DESC, mc.id DESC
+        """, tuple(params_movs)).fetchall()
+
+        detalles_por_cuenta = {}
+        for row in movs_detalle:
+            cid = row['cuenta_id']
+            if cid not in detalles_por_cuenta:
+                detalles_por_cuenta[cid] = []
+            
+            raw_concepto = (row['concepto'] or '').strip()
+            raw_desc = (row['descripcion_general'] or '').strip()
+            nota = raw_desc if raw_desc else raw_concepto
+
+            detalles_por_cuenta[cid].append({
+                'id': row['id'],
+                'fecha': row['fecha'].strftime('%Y-%m-%d') if row['fecha'] else '',
+                'documento': (row['numero_documento'] or '').strip(),
+                'tercero': (row['tercero_nombre'] or '').strip(),
+                'concepto': raw_concepto,
+                'descripcion': raw_desc,
+                'nota': nota,
+                'tipo': row['tipo'],
+                'monto': float(row['monto'] or 0)
+            })
         
         secciones = {
             'ingresos_ventas': [],
@@ -5805,8 +5851,10 @@ def api_estado_resultados_get(negocio_id):
                 
             item = {
                 'cuenta_id': m['cuenta_id'],
+                'codigo': cod,
                 'nombre': nom,
-                'monto': round(neto, 2)
+                'monto': round(neto, 2),
+                'detalles': detalles_por_cuenta.get(m['cuenta_id'], [])
             }
             
             if cod.startswith('4141'):

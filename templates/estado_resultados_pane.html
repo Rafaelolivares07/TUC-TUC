@@ -634,6 +634,29 @@
     }
   }
 
+  function toggleErDetalle(event, rowKey) {
+    if (event) {
+      event.stopPropagation();
+    }
+    const det = document.getElementById('det-' + rowKey);
+    const chev = document.getElementById('chev-' + rowKey);
+    if (!det) return;
+
+    if (det.classList.contains('hidden')) {
+      det.classList.remove('hidden');
+      if (chev) {
+        chev.classList.add('rotate-90');
+        chev.classList.add('text-rose-600');
+      }
+    } else {
+      det.classList.add('hidden');
+      if (chev) {
+        chev.classList.remove('rotate-90');
+        chev.classList.remove('text-rose-600');
+      }
+    }
+  }
+
   function renderDropZone(zoneId, items, badgeExtra = '') {
     const zone = document.getElementById(zoneId);
     if (!zone) return;
@@ -644,19 +667,116 @@
     }
 
     zone.innerHTML = items.map((it, idx) => {
+      const rowKey = `${zoneId}-${it.cuenta_id}`;
+      const detalles = it.detalles || [];
+      const numMovs = detalles.length;
+
       let badgeHtml = '';
       if (badgeExtra) {
-        badgeHtml = `<span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.2 rounded border border-gray-200 font-medium">${badgeExtra}</span>`;
+        badgeHtml = `<span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 font-medium">${badgeExtra}</span>`;
       }
-      return `
-        <div class="er-row flex items-center justify-between px-4 py-2 hover:bg-gray-50/80 cursor-grab active:cursor-grabbing transition group select-none"
-             draggable="true" data-id="${it.cuenta_id}" data-idx="${idx}">
-          <div class="flex items-center gap-2">
-            <span class="text-gray-300 group-hover:text-gray-500 font-mono text-xs select-none">⠿</span>
-            <span class="font-medium text-gray-800">${escapeErHtml(it.nombre)}</span>
-            ${badgeHtml}
+
+      const movsCountBadge = numMovs > 0 
+        ? `<span class="text-[10px] bg-slate-100 text-slate-600 hover:bg-slate-200 px-1.5 py-0.5 rounded-full font-mono font-bold transition" title="${numMovs} registros contables">${numMovs} mov${numMovs > 1 ? 's' : ''}</span>`
+        : '';
+
+      // Renderizar tabla interna de detalle
+      let detalleTableHtml = '';
+      if (numMovs > 0) {
+        const rowsHtml = detalles.map(d => {
+          const docBadge = d.documento 
+            ? `<span class="font-mono text-[10px] font-bold bg-white text-gray-700 px-1.5 py-0.5 rounded border border-gray-200 shadow-2xs">${escapeErHtml(d.documento)}</span>` 
+            : '<span class="text-gray-300">-</span>';
+          
+          const terceroHtml = d.tercero 
+            ? `<span class="text-gray-800 font-medium">${escapeErHtml(d.tercero)}</span>` 
+            : '<span class="text-gray-400 italic">No especificado</span>';
+
+          const esDebito = (d.tipo === 'debito' || d.tipo === 'D');
+          const tipoBadge = `<span class="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${esDebito ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">${esDebito ? 'Débito' : 'Crédito'}</span>`;
+
+          const montoStr = '$' + parseFloat(d.monto || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+          return `
+            <tr class="hover:bg-white/90 border-b border-gray-100/80 transition-colors">
+              <td class="py-2 px-3 whitespace-nowrap text-gray-600 font-mono text-[11px]">${escapeErHtml(d.fecha)}</td>
+              <td class="py-2 px-3 whitespace-nowrap">${docBadge}</td>
+              <td class="py-2 px-3 text-xs">${terceroHtml}</td>
+              <td class="py-2 px-3 text-xs text-gray-700">
+                <div class="font-normal text-gray-900">${escapeErHtml(d.nota || d.concepto)}</div>
+                ${d.descripcion && d.descripcion !== d.nota ? `<div class="text-[10px] text-gray-500 italic mt-0.5">${escapeErHtml(d.descripcion)}</div>` : ''}
+              </td>
+              <td class="py-2 px-3 text-center whitespace-nowrap">${tipoBadge}</td>
+              <td class="py-2 px-3 text-right whitespace-nowrap font-mono font-bold text-gray-800 text-xs">${montoStr}</td>
+            </tr>
+          `;
+        }).join('');
+
+        detalleTableHtml = `
+          <div class="overflow-x-auto rounded-xl border border-gray-200/80 bg-white/70 shadow-2xs">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-gray-100/80 text-gray-600 text-[10px] uppercase font-bold tracking-wider border-b border-gray-200">
+                <tr>
+                  <th class="py-1.5 px-3">Fecha</th>
+                  <th class="py-1.5 px-3">Soporte / Doc</th>
+                  <th class="py-1.5 px-3">Tercero / Proveedor</th>
+                  <th class="py-1.5 px-3">Concepto & Notas Explicativas</th>
+                  <th class="py-1.5 px-3 text-center">Tipo</th>
+                  <th class="py-1.5 px-3 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                ${rowsHtml}
+              </tbody>
+            </table>
           </div>
-          <span class="font-mono font-semibold text-gray-700">$${parseFloat(it.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+        `;
+      } else {
+        detalleTableHtml = `
+          <div class="p-3 text-center text-xs text-gray-400 italic bg-white/50 rounded-xl border border-gray-100">
+            No se registraron transacciones individuales directas para este rubro en el período consultado.
+          </div>
+        `;
+      }
+
+      return `
+        <div class="er-row group select-none transition border-b border-gray-100 last:border-b-0"
+             draggable="true" data-id="${it.cuenta_id}" data-idx="${idx}">
+          
+          <!-- Encabezado del Rubro (Colapsado por defecto) -->
+          <div class="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50/90 cursor-pointer transition"
+               onclick="toggleErDetalle(event, '${rowKey}')">
+            
+            <div class="flex items-center gap-2">
+              <span class="text-gray-300 group-hover:text-gray-500 font-mono text-xs select-none cursor-grab active:cursor-grabbing px-0.5" title="Arrastrar para reordenar">⠿</span>
+              
+              <button type="button" class="p-0.5 text-gray-400 hover:text-gray-700 transition focus:outline-none" title="Ver desglose y notas">
+                <svg id="chev-${rowKey}" class="w-3.5 h-3.5 transform transition-transform duration-200 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                </svg>
+              </button>
+
+              <span class="font-medium text-gray-800 text-xs md:text-sm hover:text-rose-600 transition-colors">${escapeErHtml(it.nombre)}</span>
+              ${badgeHtml}
+              ${movsCountBadge}
+            </div>
+
+            <div class="flex items-center gap-3">
+              <span class="font-mono font-semibold text-gray-800 text-xs md:text-sm">$${parseFloat(it.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+            </div>
+          </div>
+
+          <!-- Contenedor Desplegable con Detalle de Notas y Valores (Colapsado por Defecto) -->
+          <div id="det-${rowKey}" class="er-detalle-box hidden bg-slate-50/80 border-t border-dashed border-gray-200 px-3 md:px-5 py-3.5">
+            <div class="mb-2 flex items-center justify-between text-[11px] text-gray-500">
+              <span class="font-bold uppercase tracking-wider text-gray-600 flex items-center gap-1">
+                <span>📝</span> Desglose de Registros y Notas: <strong class="text-gray-800">${escapeErHtml(it.nombre)}</strong>
+              </span>
+              <span class="font-mono text-gray-600">Total: <strong>$${parseFloat(it.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</strong></span>
+            </div>
+            ${detalleTableHtml}
+          </div>
+
         </div>
       `;
     }).join('');
@@ -672,6 +792,10 @@
     const rows = container.querySelectorAll('.er-row');
     rows.forEach(row => {
       row.addEventListener('dragstart', e => {
+        if (e.target.closest('.er-detalle-box') || e.target.closest('table') || e.target.closest('button')) {
+          e.preventDefault();
+          return;
+        }
         _draggedElement = row;
         row.classList.add('opacity-40', 'bg-rose-50');
         e.dataTransfer.effectAllowed = 'move';

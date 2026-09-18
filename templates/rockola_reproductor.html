@@ -1276,6 +1276,10 @@ function escapeHtml(valor) {
   }[c]));
 }
 
+function escapeJs(valor) {
+  return String(valor || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
 function urlCliente() {
   return `https://rockola.tuc-tuc.co/rockola/${encodeURIComponent(SALA)}`;
 }
@@ -1996,7 +2000,7 @@ function renderBibliotecaLocal() {
         <div class="local-meta">${Math.max(1, Math.round((c.size || 0) / 1024 / 1024))} MB · este dispositivo</div>
       </div>
       <button class="playlist-mini" onclick="agregarCancionALista('${c.id}')">Lista</button>
-      <button class="library-btn" onclick="abrirModalPoner('${c.id}', '${escapeHtml(limpiarNombre(c.nombre))}')">Poner</button>
+      <button class="library-btn" onclick="abrirModalPoner('${c.id}', '${escapeJs(limpiarNombre(c.nombre))}')">Poner</button>
     </li>
   `).join('');
 }

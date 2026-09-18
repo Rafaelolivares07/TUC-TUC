@@ -11,7 +11,7 @@ import os
 import threading
 import uuid
 
-from flask import Blueprint, Response, jsonify, render_template, request, send_from_directory, session
+from flask import Blueprint, Response, jsonify, make_response, render_template, request, send_from_directory, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app.db import get_db_connection
@@ -591,7 +591,7 @@ def pwa_manifest():
 @bp.route('/pwa/sw.js')
 def pwa_sw():
     js = """
-const CACHE = 'rockola-pwa-v1';
+const CACHE = 'rockola-pwa-v2';
 const CORE = [
   '/rockola/',
   '/rockola/pwa/offline',
@@ -620,8 +620,6 @@ self.addEventListener('fetch', event => {
   if (req.mode === 'navigate') {
     event.respondWith(
       fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(cache => cache.put(req, copy));
         return res;
       }).catch(() => caches.match(req).then(hit => hit || caches.match('/rockola/pwa/offline')))
     );
@@ -848,7 +846,11 @@ def reproductor_sala(sala_id):
         sala = _get_sala(conn, sala_id)
     finally:
         conn.close()
-    return render_template('rockola_reproductor.html', sala_id=sala_id, admin_key=sala.get('admin_key', ''))
+    resp = make_response(render_template('rockola_reproductor.html', sala_id=sala_id, admin_key=sala.get('admin_key', '')))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 
 @bp.route('/<sala_id>/control')

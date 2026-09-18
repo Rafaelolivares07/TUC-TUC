@@ -6,6 +6,16 @@ from .db import init_db
 
 
 def create_app():
+    static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'static'))
+    for lower_dir, upper_dir in [('js', 'JS'), ('css', 'CSS')]:
+        l_path = os.path.join(static_dir, lower_dir)
+        u_path = os.path.join(static_dir, upper_dir)
+        if not os.path.exists(l_path) and os.path.exists(u_path):
+            try:
+                os.symlink(upper_dir, l_path)
+            except Exception:
+                pass
+
     app = Flask(
         __name__,
         template_folder='../templates',

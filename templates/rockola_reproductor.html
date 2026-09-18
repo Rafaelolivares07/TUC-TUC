@@ -541,14 +541,15 @@ input:checked + .slider:before {
   display: none;
   position: absolute;
   right: 0;
+  bottom: 100%;
   background-color: var(--surface2);
   min-width: 140px;
-  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.5);
+  box-shadow: 0px -8px 16px 0px rgba(0,0,0,0.5);
   z-index: 100;
   border-radius: 8px;
   border: 1px solid var(--border);
   overflow: hidden;
-  margin-top: 4px;
+  margin-bottom: 4px;
 }
 .dropdown-content a {
   color: var(--text);
@@ -734,7 +735,7 @@ input:checked + .slider:before {
       <div class="panel-title">Biblioteca de este dispositivo</div>
       <div class="local-actions">
         <button class="btn-control" onclick="abrirSelectorCarpeta()">Agregar carpeta</button>
-        <button class="btn-control" onclick="abrirSelectorAudios()">Agregar audios</button>
+        <button class="btn-control" onclick="abrirSelectorAudios()">Agregar canciones</button>
         <button class="btn-control" onclick="compartirMiBiblioteca()">Compartir</button>
       </div>
       <div class="share-panel" id="share-panel">
@@ -1128,10 +1129,10 @@ async function intentarReproducir(c) {
     setWaveActive(false);
     actualizarPlayPauseBtn(false);
     if (fallosPlay <= 3) {
-      estadoEl.textContent = 'Audio bloqueado — toca ▶ para iniciar';
+      estadoEl.textContent = 'Canción bloqueada — toca ▶ para iniciar';
     } else {
-      estadoEl.textContent = 'No se pudo reproducir este audio';
-      nombreEl.textContent = 'Error de audio — siguiente en ' + (fallosPlay <= 5 ? '5s' : '15s') + '...';
+      estadoEl.textContent = 'No se pudo reproducir esta canción';
+      nombreEl.textContent = 'Error de canción — siguiente en ' + (fallosPlay <= 5 ? '5s' : '15s') + '...';
       setTimeout(() => {
         if (!reproduciendo && cancionActual === c.id) {
           saltarActual();
@@ -1945,10 +1946,10 @@ async function indexarArchivosLocales(fileList) {
     (file.type || '').startsWith('audio/') || /\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(file.name)
   );
   if (!files.length) {
-    mostrarMensaje('No encontre audios en la seleccion', 'error');
+    mostrarMensaje('No encontré canciones en la selección', 'error');
     return;
   }
-  mostrarMensaje(`Guardando ${files.length} audio(s) en este dispositivo...`, '');
+  mostrarMensaje(`Guardando ${files.length} canción(es) en este dispositivo...`, '');
   let guardadas = 0;
   for (const file of files) {
     await guardarCancionLocal(file);
@@ -1957,7 +1958,7 @@ async function indexarArchivosLocales(fileList) {
   document.getElementById('folder-input').value = '';
   document.getElementById('local-files-input').value = '';
   await cargarBibliotecaLocal();
-  mostrarMensaje(`${guardadas} audio(s) disponibles en este dispositivo`, 'ok');
+  mostrarMensaje(`${guardadas} canción(es) disponibles en este dispositivo`, 'ok');
 }
 
 function renderBibliotecaLocal() {
@@ -2568,7 +2569,7 @@ async function togglePlayPause() {
     }).catch((err) => {
       console.warn('Play manual falló:', err.name || err.message);
       fallosPlay++;
-      estadoEl.textContent = 'Audio bloqueado — revisa el navegador';
+      estadoEl.textContent = 'Canción bloqueada — revisa el navegador';
     });
   } else {
     player.pause();

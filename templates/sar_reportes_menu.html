@@ -1,283 +1,143 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>Reportes SAR</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-<style>
-  body { background: #f4f7fb; font-size: 13px; }
-  .panel-fuente { background: #fff; border-radius: 8px; box-shadow: 0 1px 6px #0001; padding: 14px 20px; margin-bottom: 18px; }
-  .categoria-titulo { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
-    color: #003f7f; border-bottom: 2px solid #003f7f; padding-bottom: 4px; margin-bottom: 10px; }
-  .reporte-item { display: flex; align-items: center; gap: 8px; padding: 7px 12px;
-    background: #fff; border-radius: 6px; box-shadow: 0 1px 4px #0001;
-    text-decoration: none; color: #1a1a2e; margin-bottom: 6px; transition: box-shadow .12s; }
-  .reporte-item:hover { box-shadow: 0 3px 12px #003f7f22; color: #003f7f; }
-  .reporte-item .icon { color: #003f7f; font-size: 15px; flex-shrink: 0; }
-  .reporte-item .nombre { font-size: 13px; font-weight: 500; }
-  .fuente-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600; }
-  .fuente-local  { background: #d1e7dd; color: #0a3622; }
-  .fuente-remoto { background: #cfe2ff; color: #084298; }
-  h5 { color: #003f7f; }
-  #banner-update { display:none; background:#0a3622; color:#fff; border-radius:8px;
-    padding:14px 20px; margin-bottom:16px; }
-  #banner-update .titulo { font-weight:700; font-size:14px; margin-bottom:6px; }
-  #banner-update .barra-wrap { background:#ffffff33; border-radius:4px; height:10px; overflow:hidden; margin:8px 0; }
-  #banner-update .barra-fill { background:#4ade80; height:100%; width:0%; transition:width .3s; border-radius:4px; }
-  #banner-update .sub { font-size:12px; opacity:.85; }
-  #banner-update button { background:#4ade80; color:#0a3622; border:none; border-radius:5px;
-    padding:5px 16px; font-weight:700; font-size:12px; cursor:pointer; margin-top:4px; }
-  #banner-update button:hover { background:#22c55e; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Reportes SAR — Panel Móvil</title>
+    <script src="/static/js/tailwind.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .tap-highlight { -webkit-tap-highlight-color: transparent; }
+    </style>
 </head>
-<body>
+<body class="min-h-screen text-slate-800 antialiased selection:bg-indigo-500 selection:text-white pb-16">
 
-<nav style="background:#003F7F;padding:10px 24px;display:flex;align-items:center;gap:20px">
-  <span style="color:#fff;font-weight:700;font-size:.95rem">SAR Reportes</span>
-  <a href="/" style="color:#aad4ff;font-size:.85rem;text-decoration:none">📊 Reportes</a>
-  {% if sar_es_admin %}
-  <a href="/admin" style="color:#aad4ff;font-size:.85rem;text-decoration:none">⚙ Agente</a>
-  <a href="https://admin.tuc-tuc.co/admin/permisos-reportes" target="_blank"
-     style="color:#aad4ff;font-size:.85rem;text-decoration:none">🔑 Permisos</a>
-  {% endif %}
-  <span style="flex:1"></span>
-  {% if session.get('sar_nombre') %}
-  <span style="color:#cce5ff;font-size:.82rem">{{ session.get('sar_nombre') }}</span>
-  {% endif %}
-  <a href="/logout" style="color:#ffcccc;font-size:.82rem;text-decoration:none">✕ Salir</a>
-</nav>
-
-<div class="container-fluid py-4" style="max-width:900px">
-
-  <div class="d-flex align-items-center gap-3 mb-4">
-    <h5 class="mb-0 fw-bold"><i class="bi bi-bar-chart-fill me-2"></i>Reportes SAR</h5>
-    <span id="badge-fuente" class="fuente-badge {{ 'fuente-remoto' if fuente == 'remoto' else 'fuente-local' }}">
-      {{ 'REMOTO' if fuente == 'remoto' else 'LOCAL' }}
-    </span>
-  </div>
-
-  <!-- Banner auto-update -->
-  <div id="banner-update">
-    <div class="titulo" id="upd-titulo">🔄 Actualizando SAR Reportes…</div>
-    <div class="barra-wrap"><div class="barra-fill" id="upd-barra"></div></div>
-    <div class="sub" id="upd-msg"></div>
-  </div>
-
-  <!-- Selector de fuente -->
-  <div class="panel-fuente">
-    <div class="row g-3 align-items-end">
-      <div class="col-auto">
-        <label class="form-label mb-1 small fw-semibold">Fuente de datos</label>
-        <div class="d-flex gap-3 mt-1">
-          <div class="form-check">
-            <input class="form-check-input" type="radio" name="fuente" id="r-local" value="local"
-              {{ 'checked' if fuente != 'remoto' else '' }} onchange="onFuenteChange()">
-            <label class="form-check-label" for="r-local">Local</label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input" type="radio" name="fuente" id="r-remoto" value="remoto"
-              {{ 'checked' if fuente == 'remoto' else '' }} onchange="onFuenteChange()">
-            <label class="form-check-label" for="r-remoto">Remoto</label>
-          </div>
+    <!-- Header -->
+    <header class="bg-indigo-700 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/admin/area" class="text-indigo-200 hover:text-white transition flex items-center gap-1.5 text-sm font-semibold tap-highlight">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span>Panel Admin</span>
+                </a>
+                <span class="text-indigo-400 font-light">|</span>
+                <h1 class="text-base font-bold truncate">📊 Reportes SAR</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/admin/area" class="text-xs bg-indigo-800/80 hover:bg-indigo-600 text-indigo-100 font-medium px-2.5 py-1.5 rounded-lg border border-indigo-500/50 transition">
+                    Inicio
+                </a>
+            </div>
         </div>
-      </div>
-      <div class="col-auto" id="wrap-agente" style="display:{{ 'block' if fuente == 'remoto' else 'none' }}">
-        <label class="form-label mb-1 small fw-semibold">Agente</label>
-        <select id="sel-agente" class="form-select form-select-sm" style="min-width:220px" onchange="guardarFuente()">
-          <option value="">— cargando agentes —</option>
-        </select>
-        <small id="agente-estado" class="text-muted d-block mt-1"></small>
-      </div>
-      <div class="col-auto ms-auto">
-        <small id="msg-fuente" class="text-success fw-semibold"></small>
-      </div>
-    </div>
-  </div>
+    </header>
 
-  <!-- Reportes por categoría -->
-  {% for categoria, reportes in categorias.items() %}
-  <div class="mb-4">
-    <div class="categoria-titulo"><i class="bi bi-folder2-open me-1"></i>{{ categoria }}</div>
-    <div class="row g-0">
-      {% for r in reportes %}
-      <div class="col-md-6 pe-md-2">
-        <a href="/reporte/{{ r.id }}" class="reporte-item" target="_blank">
-          <i class="bi bi-file-earmark-bar-graph icon"></i>
-          <span class="nombre">{{ r.nombre }}</span>
-          <i class="bi bi-chevron-right ms-auto text-muted" style="font-size:11px"></i>
-        </a>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endfor %}
+    <main class="max-w-4xl mx-auto px-4 py-5 space-y-6">
 
-</div>
+        <!-- Selector de Agente Activo -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl flex-shrink-0">
+                    <i class="bi bi-hdd-network"></i>
+                </div>
+                <div>
+                    <label class="block text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400">Equipo / Agente Conectado</label>
+                    <span id="label-agente-activo" class="text-sm font-bold text-slate-800">
+                        {% if agentes %}{{ agentes[0].nombre }}{% else %}Conectando...{% endif %}
+                    </span>
+                </div>
+            </div>
+            <div class="w-full sm:w-64">
+                <select id="sel-agente-menu" onchange="onAgenteMenuChange()"
+                        class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
+                    {% for a in agentes %}
+                    <option value="{{ a.id }}" {% if a.online %}selected{% endif %}>
+                        {{ '🟢' if a.online else '⚪' }} {{ a.nombre }} ({{ a.ultimo }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
 
-<script>
-const CLIENTE_ID_ACTUAL = '{{ cliente_id }}';
-const RUTA_BD_LOCAL     = '{{ ruta_bd_local | replace("\\", "\\\\") }}';
+        <!-- Categorías y Reportes -->
+        {% for cat_nombre, items in categorias.items() %}
+        <div class="space-y-3">
+            <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
+                <span class="text-xs font-black uppercase tracking-wider text-indigo-700">{{ cat_nombre }}</span>
+                <span class="text-[10px] bg-indigo-50 text-indigo-600 font-bold px-2 py-0.5 rounded-full">{{ items|length }} reportes</span>
+            </div>
 
-const FUENTE_CARGADA = '{{ fuente }}';  // fuente con que se renderizó la página
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {% for r in items %}
+                <a href="/admin/reportes/{{ r.id }}" onclick="guardarAgenteYIr(event, '/admin/reportes/{{ r.id }}')"
+                   class="tap-highlight group block bg-white hover:bg-indigo-50/50 p-4 rounded-2xl shadow-sm hover:shadow-md border border-slate-200/80 hover:border-indigo-300 transition duration-150">
+                    <div class="flex items-start gap-3.5">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 group-hover:bg-indigo-600 text-indigo-600 group-hover:text-white flex items-center justify-center text-lg flex-shrink-0 transition-colors shadow-inner">
+                            <i class="bi {{ r.icono }}"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-1 mb-1">
+                                <h3 class="text-sm font-bold text-slate-800 group-hover:text-indigo-700 truncate transition-colors">{{ r.nombre }}</h3>
+                                <svg class="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </div>
+                            <p class="text-xs text-slate-500 line-clamp-2 leading-relaxed">{{ r.descripcion }}</p>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
 
-function onFuenteChange() {
-  const esRemoto = document.getElementById('r-remoto').checked;
-  document.getElementById('wrap-agente').style.display = esRemoto ? 'block' : 'none';
-  if (esRemoto) cargarAgentes();
-  else guardarFuente(true);  // local → guardar y recargar
-}
+    </main>
 
-function _etiquetaAgente(a) {
-  return a.alias ? a.alias : a.nombre;
-}
+    <script>
+        function getAgenteMenu() {
+            const sel = document.getElementById('sel-agente-menu');
+            return sel ? sel.value : (localStorage.getItem('sar_agente_favorito') || '');
+        }
 
-function _poblarSelect(agentes, recargar) {
-  const sel = document.getElementById('sel-agente');
-  if (!agentes.length) {
-    sel.innerHTML = '<option value="">— sin agentes conectados —</option>';
-    if (recargar) guardarFuente(true);
-    return;
-  }
-  sel.innerHTML = agentes.map(a => {
-    const estado   = a.conectado ? '🟢' : '🔴';
-    const selected = a.cliente_id === CLIENTE_ID_ACTUAL ? 'selected' : '';
-    return `<option value="${a.cliente_id}" data-ruta="${a.ruta_bd||''}" data-nombre="${_etiquetaAgente(a)}" ${selected}>${estado} ${_etiquetaAgente(a)}</option>`;
-  }).join('');
-  mostrarEstadoAgente();
-  if (recargar) guardarFuente(true);
-}
+        function onAgenteMenuChange() {
+            const sel = document.getElementById('sel-agente-menu');
+            if (sel && sel.value) {
+                localStorage.setItem('sar_agente_favorito', sel.value);
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+            }
+        }
 
-function cargarAgentes() {
-  document.getElementById('sel-agente').innerHTML = '<option value="">— cargando —</option>';
-  document.getElementById('agente-estado').textContent = '';
-  fetch('/api/agentes')
-    .then(r => r.json())
-    .then(data => _poblarSelect(data.ok ? data.agentes : [], true))
-    .catch(() => {
-      document.getElementById('sel-agente').innerHTML = '<option value="">— error conectando a AWS —</option>';
-    });
-}
+        function guardarAgenteYIr(e, url) {
+            e.preventDefault();
+            const ag = getAgenteMenu();
+            if (ag) {
+                localStorage.setItem('sar_agente_favorito', ag);
+                window.location.href = url + '?agente=' + encodeURIComponent(ag);
+            } else {
+                window.location.href = url;
+            }
+        }
 
-function mostrarEstadoAgente() {
-  const sel = document.getElementById('sel-agente');
-  const opt = sel.options[sel.selectedIndex];
-  if (opt) {
-    document.getElementById('agente-estado').textContent = opt.text.includes('🟢') ? 'Conectado' : 'Desconectado';
-  }
-}
-
-function guardarFuente(recargar) {
-  const fuente     = document.querySelector('input[name=fuente]:checked').value;
-  const sel        = document.getElementById('sel-agente');
-  const opt        = sel && sel.options[sel.selectedIndex];
-  const cliente_id = fuente === 'remoto' ? (sel ? sel.value : '') : '';
-  const ruta_bd    = fuente === 'remoto' ? (opt ? (opt.dataset.ruta || '') : '') : RUTA_BD_LOCAL;
-  const agente_nombre = fuente === 'remoto' ? (opt ? (opt.dataset.nombre || opt.text.replace(/^[🟢🔴]\s*/u, '')) : '') : '';
-  localStorage.setItem('sar_fuente',        fuente);
-  localStorage.setItem('sar_cliente_id',    cliente_id);
-  localStorage.setItem('sar_ruta_bd',       ruta_bd);
-  localStorage.setItem('sar_agente_nombre', agente_nombre);
-  fetch('/api/fuente', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({fuente, cliente_id})
-  })
-  .then(r => r.json())
-  .then(() => {
-    if (recargar && fuente !== FUENTE_CARGADA) {
-      // La fuente cambió — recargar para que el catálogo refleje los nuevos permisos
-      window.location.reload();
-      return;
-    }
-    const badge = document.getElementById('badge-fuente');
-    badge.textContent = fuente === 'remoto' ? 'REMOTO' : 'LOCAL';
-    badge.className = 'fuente-badge ' + (fuente === 'remoto' ? 'fuente-remoto' : 'fuente-local');
-    document.getElementById('msg-fuente').textContent = '✓ Guardado';
-    setTimeout(() => document.getElementById('msg-fuente').textContent = '', 2000);
-  });
-}
-
-// Si ya estaba en remoto al cargar, poblar el select y actualizar localStorage
-if (document.getElementById('r-remoto').checked) {
-  fetch('/api/agentes')
-    .then(r => r.json())
-    .then(data => _poblarSelect(data.ok ? data.agentes : [], false))
-    .then(() => guardarFuente(false))
-    .catch(() => {
-      document.getElementById('sel-agente').innerHTML = '<option value="">— error conectando a AWS —</option>';
-    });
-}
-
-// ── Auto-update ──────────────────────────────────────────────────────────────
-let _updPolling = null;
-
-function mostrarBanner(estado, version, msg, progreso) {
-  const banner = document.getElementById('banner-update');
-  const barra  = document.getElementById('upd-barra');
-  banner.style.display = 'block';
-
-  if (estado === 'disponible') {
-    document.getElementById('upd-titulo').innerHTML =
-      `⬆️ Actualización disponible — SAR Reportes v${version} &nbsp;` +
-      `<button onclick="aplicarUpdate()">Instalar ahora</button>`;
-    document.getElementById('upd-msg').textContent = 'Se instalará automáticamente y el sistema se reiniciará.';
-    barra.style.width = '0%';
-
-  } else if (estado === 'descargando') {
-    document.getElementById('upd-titulo').textContent = `🔄 Descargando SAR Reportes v${version}…`;
-    document.getElementById('upd-msg').textContent    = msg || '';
-    barra.style.width = (progreso || 0) + '%';
-
-  } else if (estado === 'listo') {
-    document.getElementById('upd-titulo').textContent = `✅ Actualizado a v${version} — reiniciando…`;
-    document.getElementById('upd-msg').textContent    = 'El sistema se reiniciará en unos segundos.';
-    barra.style.width = '100%';
-
-  } else if (estado === 'error') {
-    document.getElementById('upd-titulo').textContent = '❌ Error en actualización';
-    document.getElementById('upd-msg').textContent    = msg || '';
-  }
-}
-
-function chequearUpdate() {
-  fetch('/api/update/estado')
-    .then(r => r.json())
-    .then(d => {
-      if (d.estado === 'idle' || !d.disponible) return;
-      mostrarBanner(d.estado, d.version, d.mensaje, d.progreso);
-      // seguir polling mientras descarga
-      if (d.estado === 'descargando' && !_updPolling) {
-        _updPolling = setInterval(() => {
-          fetch('/api/update/estado').then(r=>r.json()).then(u => {
-            mostrarBanner(u.estado, u.version, u.mensaje, u.progreso);
-            if (u.estado !== 'descargando') { clearInterval(_updPolling); _updPolling = null; }
-          });
-        }, 800);
-      }
-    })
-    .catch(() => {});
-}
-
-function aplicarUpdate() {
-  fetch('/api/update/aplicar', {method:'POST'})
-    .then(r => r.json())
-    .then(d => {
-      if (d.ok) {
-        mostrarBanner('descargando', document.getElementById('upd-titulo').textContent.match(/v([\d.]+)/)?.[1] || '?', 'Iniciando descarga…', 0);
-        _updPolling = setInterval(() => {
-          fetch('/api/update/estado').then(r=>r.json()).then(u => {
-            mostrarBanner(u.estado, u.version, u.mensaje, u.progreso);
-            if (u.estado !== 'descargando') { clearInterval(_updPolling); _updPolling = null; }
-          });
-        }, 800);
-      }
-    });
-}
-
-// Chequear al cargar y luego cada 30s
-chequearUpdate();
-setInterval(chequearUpdate, 30000);
-</script>
+        (function initAgenteMenu() {
+            const sel = document.getElementById('sel-agente-menu');
+            const fav = localStorage.getItem('sar_agente_favorito');
+            if (fav && sel) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === fav) {
+                        sel.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (sel && sel.selectedIndex >= 0) {
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+            }
+        })();
+    </script>
 </body>
 </html>

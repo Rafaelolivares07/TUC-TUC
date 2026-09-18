@@ -1142,16 +1142,15 @@ async function intentarReproducir(c) {
     setVinylSpinning(false);
     setWaveActive(false);
     actualizarPlayPauseBtn(false);
-    if (fallosPlay <= 3) {
-      estadoEl.textContent = 'Canción bloqueada — toca ▶ para iniciar';
-    } else {
-      estadoEl.textContent = 'No se pudo reproducir esta canción';
-      nombreEl.textContent = 'Error de canción — siguiente en ' + (fallosPlay <= 5 ? '5s' : '15s') + '...';
+    if (err.name === 'NotSupportedError' || fallosPlay >= 3) {
+      nombreEl.textContent = 'Canción no disponible — saltando...';
       setTimeout(() => {
         if (!reproduciendo && cancionActual === c.id) {
           saltarActual();
         }
-      }, fallosPlay <= 5 ? 5000 : 15000);
+      }, 1500);
+    } else {
+      estadoEl.textContent = 'Canción bloqueada — toca ▶ para iniciar';
     }
   }
 }

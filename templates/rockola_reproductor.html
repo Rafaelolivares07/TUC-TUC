@@ -882,6 +882,7 @@ let reproduciendo = false;
 let cancionActual = null;
 let playPendiente = false;
 let fallosPlay = 0;
+let skipRemoteSkip = false;
 let volumenActual = 80;
 let guardandoVolumen = null;
 let tabActual = 'youtube';
@@ -1051,7 +1052,7 @@ function handlePlayerEnded(e) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: idTerminada })
-  });
+  }).then(() => verificarCola()).catch(() => verificarCola());
 }
 
 function handlePlayerTimeUpdate(e) {
@@ -1187,7 +1188,7 @@ async function verificarCola() {
 
     if (reproduciendo && cola.length > 0) {
       const c = cola[0];
-      if (c.id !== cancionActual) {
+      if (c.id !== cancionActual && !skipRemoteSkip) {
         console.log("Detección de salto remoto de canción:", c.nombre);
         const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
         const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
@@ -1200,6 +1201,7 @@ async function verificarCola() {
           await intentarReproducir(c);
         }
       }
+      skipRemoteSkip = false;
     }
 
     if (!reproduciendo && !playPendiente && cola.length > 0) {
@@ -1350,6 +1352,7 @@ function poner(modo = 'final') {
 function subirYoutube(modo = 'final') {
   const url = document.getElementById('yt-url').value.trim();
   if (!url) return;
+  if (modo === 'siguiente') skipRemoteSkip = true;
   btnPoner.disabled = true;
   progWrap.style.display = 'block';
   let avance = 0;
@@ -2319,6 +2322,7 @@ async function eliminarListaActual() {
 
 async function ponerLocal(id, modo = 'final') {
   console.log('[Rockola v3.1.0] ponerLocal called:', id, modo);
+  if (modo === 'siguiente') skipRemoteSkip = true;
   const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
   if (!cancion) {
     console.error('[Rockola] cancion no encontrada en memoria ni IndexedDB:', id);

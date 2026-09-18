@@ -858,6 +858,8 @@ const OWNER = 'reproductor';
 
 let reproduciendo = false;
 let cancionActual = null;
+let playPendiente = false;
+let fallosPlay = 0;
 let volumenActual = 80;
 let guardandoVolumen = null;
 let tabActual = 'youtube';
@@ -1018,6 +1020,7 @@ function handlePlayerEnded(e) {
   
   const idTerminada = cancionActual;
   reproduciendo = false;
+  playPendiente = false;
   cancionActual = null;
   setVinylSpinning(false);
   setWaveActive(false);
@@ -1078,6 +1081,60 @@ async function obtenerUrlDeAudio(c) {
   return { url: `/rockola/${SALA}/archivo/${c.id}`, esLocal: false };
 }
 
+async function intentarReproducir(c) {
+  if (!c || !c.id) return;
+  playPendiente = true;
+  nombreEl.textContent = limpiarNombre(c.nombre);
+  actualizarPlayPauseBtn(false);
+
+  if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
+  let resAudio;
+  try {
+    resAudio = await obtenerUrlDeAudio(c);
+  } catch(e) {
+    console.error('Error obteniendo audio URL:', e);
+    resAudio = { url: `/rockola/${SALA}/archivo/${c.id}`, esLocal: false };
+  }
+  localObjectUrl = resAudio.esLocal ? resAudio.url : null;
+
+  if (!resAudio.esLocal && !c.id.startsWith('local-')) {
+    guardarArchivoServidorEnBiblioteca(c);
+  }
+
+  player.src = resAudio.url;
+  player.load();
+
+  try {
+    await player.play();
+    reproduciendo = true;
+    playPendiente = false;
+    fallosPlay = 0;
+    setVinylSpinning(true);
+    setWaveActive(true);
+    actualizarPlayPauseBtn(true);
+    estadoEl.textContent = 'Reproduciendo ✓';
+  } catch(err) {
+    console.warn('Play falló (intento ' + (fallosPlay + 1) + '):', err.name || err.message);
+    fallosPlay++;
+    playPendiente = false;
+    reproduciendo = false;
+    setVinylSpinning(false);
+    setWaveActive(false);
+    actualizarPlayPauseBtn(false);
+    if (fallosPlay <= 3) {
+      estadoEl.textContent = 'Audio bloqueado — toca ▶ para iniciar';
+    } else {
+      estadoEl.textContent = 'No se pudo reproducir este audio';
+      nombreEl.textContent = 'Error de audio — siguiente en ' + (fallosPlay <= 5 ? '5s' : '15s') + '...';
+      setTimeout(() => {
+        if (!reproduciendo && cancionActual === c.id) {
+          saltarActual();
+        }
+      }, fallosPlay <= 5 ? 5000 : 15000);
+    }
+  }
+}
+
 async function verificarCola() {
   try {
     const res  = await fetch(`/rockola/${SALA}/cola`);
@@ -1118,40 +1175,22 @@ async function verificarCola() {
           return;
         } else {
           cancionActual = c.id;
-          if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
-          const resAudio = await obtenerUrlDeAudio(c);
-          localObjectUrl = resAudio.esLocal ? resAudio.url : null;
-          player.src = resAudio.url;
-          player.load();
-          player.play().catch(() => {});
+          reproduciendo = false;
+          await intentarReproducir(c);
         }
       }
     }
 
-    if (!reproduciendo && cola.length > 0) {
+    if (!reproduciendo && !playPendiente && cola.length > 0) {
       const c = cola[0];
       if (c.id !== cancionActual) {
         cancionActual = c.id;
-        reproduciendo = true;
-        nombreEl.textContent = limpiarNombre(c.nombre);
-        actualizarPlayPauseBtn(true);
-        if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
-        const resAudio = await obtenerUrlDeAudio(c);
-        localObjectUrl = resAudio.esLocal ? resAudio.url : null;
-        player.src = resAudio.url;
-        if (!resAudio.esLocal) {
-          guardarArchivoServidorEnBiblioteca(c);
-        }
-        player.load();
-        player.play().then(() => {
-          setVinylSpinning(true);
-          setWaveActive(true);
-          actualizarPlayPauseBtn(true);
-        }).catch(() => {});
+        fallosPlay = 0;
+        await intentarReproducir(c);
       }
     }
 
-    if (!reproduciendo && cola.length === 0) {
+    if (!reproduciendo && !playPendiente && cola.length === 0) {
       nombreEl.textContent = 'Esperando canciones...';
       actualizarPlayPauseBtn(false);
     }
@@ -2101,7 +2140,9 @@ async function limpiarColaActual() {
   player.pause();
   player.removeAttribute('src');
   reproduciendo = false;
+  playPendiente = false;
   cancionActual = null;
+  fallosPlay = 0;
   setVinylSpinning(false);
   setWaveActive(false);
 }
@@ -2313,17 +2354,6 @@ function renderCola(cola) {
   `).join('');
 }
 
-async function saltarActual() {
-  await fetch(`/rockola/${SALA}/saltar`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ modo:'reproductor' })
-  });
-  reproduciendo = false;
-  cancionActual = null;
-  verificarCola();
-}
-
 async function quitar(id) {
   await fetch(`/rockola/${SALA}/quitar`, {
     method:'POST',
@@ -2333,6 +2363,7 @@ async function quitar(id) {
   if (id === cancionActual) {
     player.pause();
     reproduciendo = false;
+    playPendiente = false;
     cancionActual = null;
   }
   verificarCola();
@@ -2495,12 +2526,25 @@ function initProgressBarDrag() {
 }
 
 async function togglePlayPause() {
-  if (!player.src) return;
+  if (!player.src && !cancionActual) return;
+
+  if (!reproduciendo && cancionActual) {
+    const c = currentCola && currentCola.find(s => s.id === cancionActual);
+    if (c) {
+      await intentarReproducir(c);
+      return;
+    }
+  }
+
   if (player.paused) {
     player.play().then(async () => {
+      reproduciendo = true;
+      playPendiente = false;
+      fallosPlay = 0;
       setVinylSpinning(true);
       setWaveActive(true);
       actualizarPlayPauseBtn(true);
+      estadoEl.textContent = 'Reproduciendo ✓';
       await fetch(`/rockola/${SALA}/sync_control`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2511,9 +2555,14 @@ async function togglePlayPause() {
           modo: 'reproductor'
         })
       });
-    }).catch(()=>{});
+    }).catch((err) => {
+      console.warn('Play manual falló:', err.name || err.message);
+      fallosPlay++;
+      estadoEl.textContent = 'Audio bloqueado — revisa el navegador';
+    });
   } else {
     player.pause();
+    reproduciendo = false;
     setVinylSpinning(false);
     setWaveActive(false);
     actualizarPlayPauseBtn(false);
@@ -2558,6 +2607,7 @@ async function saltarActual() {
 
   const idTerminada = cancionActual;
   reproduciendo = false;
+  playPendiente = false;
   cancionActual = null;
   player.pause();
   player.removeAttribute('src');
@@ -2567,6 +2617,7 @@ async function saltarActual() {
     transitioning = false;
   }
   actualizarPlayPauseBtn(false);
+  fallosPlay = 0;
   
   await fetch(`/rockola/${SALA}/saltar`, {
     method: 'POST',
@@ -2593,7 +2644,9 @@ async function anteriorCancion() {
       const data = await res.json();
       if (data.ok) {
         reproduciendo = false;
+        playPendiente = false;
         cancionActual = null;
+        fallosPlay = 0;
         player.pause();
         player.removeAttribute('src');
         if (transitioning) {
@@ -2657,6 +2710,8 @@ async function iniciarCrossfade(secs, targetSong = null) {
       
       cancionActual = nextSong.id;
       reproduciendo = true;
+      playPendiente = false;
+      fallosPlay = 0;
       nombreEl.textContent = limpiarNombre(nextSong.nombre);
       actualizarPlayPauseBtn(true);
       

@@ -1274,6 +1274,33 @@ def api_vendedor_pedido_guardar(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/vendedor/<int:negocio_id>/productos')
+def api_vendedor_productos(negocio_id):
+    try:
+        conn = get_db_connection()
+        rows = conn.execute("""
+            SELECT p.id, p.nombre, p.categoria, p.precio,
+                   p.codigo_barra, p.iva_pct, p.disponible, p.orden,
+                   COALESCE(s.stock, 0) AS stock
+            FROM productos p
+            LEFT JOIN (
+                SELECT producto_id, SUM(stock) AS stock
+                FROM saldos_inventario
+                WHERE negocio_id = %s
+                GROUP BY producto_id
+            ) s ON s.producto_id = p.id
+            WHERE p.negocio_id = %s AND p.disponible = TRUE AND p.precio > 0
+            ORDER BY p.categoria, p.orden, p.nombre
+        """, (negocio_id, negocio_id)).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'productos': [dict(r) for r in rows]})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+
 @bp.route('/api/vendedor/<int:negocio_id>/pedidos-recientes')
 def api_vendedor_pedidos_recientes(negocio_id):
     vendedor_id = session.get('chat_tercero_id')

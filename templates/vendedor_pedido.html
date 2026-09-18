@@ -414,19 +414,22 @@
     }
 
     window.seleccionarCategoriaFiltro = function(cat) {
-      if (activeCategoryFiltro === cat) {
+      if (activeCategoryFiltro === cat || cat === null || cat === 'Todos') {
         activeCategoryFiltro = null;
       } else {
         activeCategoryFiltro = cat;
       }
       
       const container = document.getElementById('categorias-pills-container');
-      container.querySelectorAll('button').forEach(btn => {
-        const isMe = btn.id === `pill-cat-${activeCategoryFiltro}`;
-        btn.className = isMe 
-          ? "bg-indigo-900 text-white border border-indigo-900 rounded-full px-3.5 py-1 text-xs font-bold shrink-0 transition-all shadow-sm"
-          : "bg-gray-50 text-gray-600 border border-gray-200 rounded-full px-3.5 py-1 text-xs font-semibold shrink-0 hover:bg-gray-100 transition-all";
-      });
+      if (container) {
+        container.querySelectorAll('button').forEach(btn => {
+          const isTodos = (activeCategoryFiltro === null && btn.id === 'pill-cat-Todos');
+          const isMe = (activeCategoryFiltro !== null && btn.id === `pill-cat-${activeCategoryFiltro}`);
+          btn.className = (isTodos || isMe) 
+            ? "bg-indigo-900 text-white border border-indigo-900 rounded-full px-3.5 py-1 text-xs font-bold shrink-0 transition-all shadow-sm"
+            : "bg-gray-50 text-gray-600 border border-gray-200 rounded-full px-3.5 py-1 text-xs font-semibold shrink-0 hover:bg-gray-100 transition-all";
+        });
+      }
       
       const pInput = document.getElementById('buscar-producto');
       pInput.focus();
@@ -674,7 +677,7 @@
     // Cargar catálogo de productos
     async function cargarCatalogoProductos() {
       try {
-        const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/productos?solo_venta=1`);
+        const resp = await fetch(`/api/vendedor/${NEGOCIO_ID}/productos`);
         const data = await resp.json();
         
         const rawProducts = data.productos || [];
@@ -686,12 +689,17 @@
         const cats = [...new Set(currentProducts.map(p => p.categoria).filter(Boolean))];
         const container = document.getElementById('categorias-pills-container');
         if (container) {
-          container.innerHTML = cats.map(c => {
+          const todosBtn = `<button type="button" id="pill-cat-Todos" onclick="seleccionarCategoriaFiltro('Todos')" 
+                            class="bg-indigo-900 text-white border border-indigo-900 rounded-full px-3.5 py-1 text-xs font-bold shrink-0 transition-all shadow-sm">
+                      Todos
+                    </button>`;
+          const otherBtns = cats.map(c => {
             return `<button type="button" id="pill-cat-${c}" onclick="seleccionarCategoriaFiltro('${c}')" 
                             class="bg-gray-50 text-gray-600 border border-gray-200 rounded-full px-3.5 py-1 text-xs font-semibold shrink-0 hover:bg-gray-100 transition-all">
                       ${c}
                     </button>`;
           }).join('');
+          container.innerHTML = todosBtn + otherBtns;
         }
       } catch (err) {
         console.error("Error al cargar catálogo de productos", err);

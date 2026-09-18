@@ -2363,8 +2363,9 @@ function cerrarModalPoner() {
 }
 function ejecutarPoner(modo) {
   if (!modalPonerCancionId) return;
+  const id = modalPonerCancionId;
   cerrarModalPoner();
-  ponerLocal(modalPonerCancionId, modo);
+  ponerLocal(id, modo);
 }
 
 function renderCola(cola) {

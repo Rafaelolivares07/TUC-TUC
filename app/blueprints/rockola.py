@@ -1238,7 +1238,7 @@ def admin_info(sala_id):
         autorizado=autorizado,
         cliente_url=f'https://rockola.tuc-tuc.co/rockola/{sala_id}',
         control_url=f'https://rockola.tuc-tuc.co/control/{sala_id}?key={key}' if key else '',
-        reproductor_url=f'https://rockola.tuc-tuc.co/reproductor/{sala_id}',
+        reproductor_url=f'https://rockola.tuc-tuc.co/reproductor2/{sala_id}',
     )
 
 

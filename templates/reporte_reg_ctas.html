@@ -520,51 +520,87 @@
             }, 1000);
 
             clearTimeout(_pollTimer);
+            _consecutiveErrors = 0;
+
+            const btnConsultar = document.getElementById('btn-consultar');
+            if (btnConsultar) {
+                btnConsultar.disabled = true;
+                btnConsultar.classList.add('opacity-75', 'cursor-not-allowed');
+            }
 
             fetch(`/admin/api/reporte/${REPORTE_ID}/iniciar`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(filtros)
             })
-            .then(r => r.json())
+            .then(async r => {
+                if (r.status === 401 || r.redirected || (r.headers.get('content-type') || '').includes('text/html')) {
+                    throw new Error('Sesión expirada. Por favor recarga o inicia sesión nuevamente.');
+                }
+                const data = await r.json();
+                if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+                return data;
+            })
             .then(data => {
-                if (!data.ok) throw new Error(data.error || 'Error al iniciar la consulta');
                 document.getElementById('spinner-status').textContent = 'Agente extrayendo movimientos de REG_CTAS...';
                 pollResultado(data.consulta_id);
             })
             .catch(err => {
                 detenerCarga();
-                alert('Error: ' + err.message);
+                alert('Error al iniciar: ' + err.message);
                 document.getElementById('estado-inicial').classList.remove('hidden');
             });
         }
 
+        let _consecutiveErrors = 0;
         function pollResultado(consultaId) {
+            const sec = Math.floor((Date.now() - _startTime) / 1000);
+            if (sec > 95) {
+                detenerCarga();
+                alert('La consulta superó el tiempo límite (90s). Verifica que el agente esté conectado y reintenta.');
+                document.getElementById('estado-inicial').classList.remove('hidden');
+                return;
+            }
+
             fetch(`/admin/api/reporte/resultado/${consultaId}?_ts=${Date.now()}`, { cache: 'no-store' })
-            .then(r => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}: Error en el servidor`);
-                return r.json();
+            .then(async r => {
+                if (r.status === 401 || (r.headers.get('content-type') || '').includes('text/html')) {
+                    throw new Error('Sesión expirada. Inicia sesión nuevamente.');
+                }
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return await r.json();
             })
             .then(data => {
-                if (!data.ok) throw new Error(data.error || 'Error en la respuesta del agente');
+                _consecutiveErrors = 0;
+                if (!data.ok) throw new Error(data.error || 'Error en la respuesta');
+                
                 if (data.estado === 'pendiente') {
-                    _pollTimer = setTimeout(() => pollResultado(consultaId), 700);
+                    _pollTimer = setTimeout(() => pollResultado(consultaId), 1000);
                     return;
                 }
-                if (data.estado === 'error') throw new Error(data.error || 'Error en el agente');
+                
+                if (data.estado === 'error') {
+                    throw new Error(data.error || 'Error en el agente');
+                }
+                
                 if (data.estado === 'lista') {
                     detenerCarga();
                     let rawRows = data.filas || data.rows || [];
-                    _rows = rawRows.filter(r => !('_saldo_inicial' in r));
+                    _rows = rawRows.filter(r => r && !('_saldo_inicial' in r));
                     _filteredRows = [..._rows];
                     renderResultados(data.elapsed || ((Date.now() - _startTime)/1000).toFixed(1));
                 }
             })
             .catch(err => {
-                detenerCarga();
-                console.error('Error al consultar resultados:', err);
-                alert('Error al consultar resultados: ' + err.message);
-                document.getElementById('estado-inicial').classList.remove('hidden');
+                _consecutiveErrors++;
+                console.warn(`[poll ${consultaId}] Reintento ${_consecutiveErrors}/12:`, err.message);
+                if (_consecutiveErrors < 12) {
+                    _pollTimer = setTimeout(() => pollResultado(consultaId), 1500);
+                } else {
+                    detenerCarga();
+                    alert('Error al obtener resultados: ' + err.message);
+                    document.getElementById('estado-inicial').classList.remove('hidden');
+                }
             });
         }
 
@@ -572,30 +608,41 @@
             clearTimeout(_pollTimer);
             clearInterval(_elapsedInterval);
             document.getElementById('spinner').classList.add('hidden');
+            const btnConsultar = document.getElementById('btn-consultar');
+            if (btnConsultar) {
+                btnConsultar.disabled = false;
+                btnConsultar.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
         }
 
         function renderResultados(elapsed) {
-            if (!_rows.length) {
-                alert('No se encontraron movimientos con los filtros seleccionados.');
-                document.getElementById('estado-inicial').classList.remove('hidden');
-                return;
+            try {
+                if (!_rows || !_rows.length) {
+                    alert('No se encontraron movimientos con los filtros seleccionados.');
+                    document.getElementById('estado-inicial').classList.remove('hidden');
+                    return;
+                }
+
+                mostrarTotales();
+                aplicarOrden();
+                construirCabeceraGrilla();
+                renderFilasGrilla();
+
+                document.getElementById('panel-totales').classList.remove('hidden');
+                document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
+                document.getElementById('vista-grilla').classList.remove('hidden');
+                document.getElementById('btn-excel').classList.remove('hidden');
+                document.getElementById('info-registros').textContent = `✅ ${_rows.length} registros cargados en ${elapsed}s`;
+            } catch (err) {
+                console.error('Error al renderizar resultados:', err);
+                alert('Error al mostrar la tabla: ' + err.message);
             }
-
-            mostrarTotales();
-            aplicarOrden();
-            construirCabeceraGrilla();
-            renderFilasGrilla();
-
-            document.getElementById('panel-totales').classList.remove('hidden');
-            document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
-            document.getElementById('vista-grilla').classList.remove('hidden');
-            document.getElementById('btn-excel').classList.remove('hidden');
-            document.getElementById('info-registros').textContent = `${_rows.length} registros en ${elapsed}s`;
         }
 
         function mostrarTotales() {
             let totDeb = 0, totCre = 0;
             _filteredRows.forEach(r => {
+                if (!r) return;
                 totDeb += Number(r.debito || 0);
                 totCre += Number(r.credito || 0);
             });

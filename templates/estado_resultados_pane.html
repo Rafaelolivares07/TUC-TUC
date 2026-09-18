@@ -684,13 +684,22 @@
       let detalleTableHtml = '';
       if (numMovs > 0) {
         const rowsHtml = detalles.map(d => {
-          const docBadge = d.documento 
-            ? `<span class="font-mono text-[10px] font-bold bg-white text-gray-700 px-1.5 py-0.5 rounded border border-gray-200 shadow-2xs">${escapeErHtml(d.documento)}</span>` 
+          const numSoporte = d.soporte || d.documento || '';
+          const docBadge = numSoporte
+            ? `<span class="font-mono text-[10px] font-bold bg-white text-gray-700 px-1.5 py-0.5 rounded border border-gray-200 shadow-2xs">${escapeErHtml(numSoporte)}</span>` 
             : '<span class="text-gray-300">-</span>';
           
           const terceroHtml = d.tercero 
             ? `<span class="text-gray-800 font-medium">${escapeErHtml(d.tercero)}</span>` 
-            : '<span class="text-gray-400 italic">No especificado</span>';
+            : '<span class="text-gray-300">-</span>';
+
+          const subrubroHtml = (d.subrubro && d.subrubro !== d.nota)
+            ? `<span class="font-bold text-gray-700 text-[11px] block">${escapeErHtml(d.subrubro)}</span>`
+            : '';
+
+          const notaHtml = d.nota 
+            ? `<span class="text-gray-900 font-medium">${escapeErHtml(d.nota)}</span>`
+            : '<span class="text-gray-400 italic">Sin nota explicativa</span>';
 
           const esDebito = (d.tipo === 'debito' || d.tipo === 'D');
           const tipoBadge = `<span class="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${esDebito ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">${esDebito ? 'Débito' : 'Crédito'}</span>`;
@@ -702,9 +711,9 @@
               <td class="py-2 px-3 whitespace-nowrap text-gray-600 font-mono text-[11px]">${escapeErHtml(d.fecha)}</td>
               <td class="py-2 px-3 whitespace-nowrap">${docBadge}</td>
               <td class="py-2 px-3 text-xs">${terceroHtml}</td>
-              <td class="py-2 px-3 text-xs text-gray-700">
-                <div class="font-normal text-gray-900">${escapeErHtml(d.nota || d.concepto)}</div>
-                ${d.descripcion && d.descripcion !== d.nota ? `<div class="text-[10px] text-gray-500 italic mt-0.5">${escapeErHtml(d.descripcion)}</div>` : ''}
+              <td class="py-2 px-3 text-xs">
+                ${subrubroHtml}
+                ${notaHtml}
               </td>
               <td class="py-2 px-3 text-center whitespace-nowrap">${tipoBadge}</td>
               <td class="py-2 px-3 text-right whitespace-nowrap font-mono font-bold text-gray-800 text-xs">${montoStr}</td>
@@ -718,9 +727,9 @@
               <thead class="bg-gray-100/80 text-gray-600 text-[10px] uppercase font-bold tracking-wider border-b border-gray-200">
                 <tr>
                   <th class="py-1.5 px-3">Fecha</th>
-                  <th class="py-1.5 px-3">Soporte / Doc</th>
+                  <th class="py-1.5 px-3">N° Soporte / Factura</th>
                   <th class="py-1.5 px-3">Tercero / Proveedor</th>
-                  <th class="py-1.5 px-3">Concepto & Notas Explicativas</th>
+                  <th class="py-1.5 px-3">Subrubro & Nota Explicativa</th>
                   <th class="py-1.5 px-3 text-center">Tipo</th>
                   <th class="py-1.5 px-3 text-right">Valor</th>
                 </tr>

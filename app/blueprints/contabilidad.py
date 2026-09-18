@@ -5802,6 +5802,7 @@ def api_estado_resultados_get(negocio_id):
             ORDER BY mc.fecha DESC, mc.id DESC
         """, tuple(params_movs)).fetchall()
 
+        import re
         detalles_por_cuenta = {}
         for row in movs_detalle:
             cid = row['cuenta_id']
@@ -5809,16 +5810,33 @@ def api_estado_resultados_get(negocio_id):
                 detalles_por_cuenta[cid] = []
             
             raw_concepto = (row['concepto'] or '').strip()
-            raw_desc = (row['descripcion_general'] or '').strip()
-            nota = raw_desc if raw_desc else raw_concepto
+            raw_doc = (row['numero_documento'] or '').strip()
+            
+            # 1. Extraer soporte si viene en [Soporte: ...]
+            soporte = raw_doc
+            match_soporte = re.search(r'\[Soporte:\s*([^\]]+)\]', raw_concepto, re.IGNORECASE)
+            if match_soporte:
+                soporte = match_soporte.group(1).strip()
+                concepto_clean = re.sub(r'\[Soporte:\s*[^\]]+\]', '', raw_concepto, flags=re.IGNORECASE).strip()
+            else:
+                concepto_clean = raw_concepto
+                
+            # 2. Extraer nota explicativa si viene entre paréntesis (Nota...)
+            match_nota = re.search(r'\(([^)]+)\)', concepto_clean)
+            if match_nota:
+                nota = match_nota.group(1).strip()
+                subrubro = re.sub(r'\([^)]+\)', '', concepto_clean).strip()
+            else:
+                nota = concepto_clean
+                subrubro = concepto_clean
 
             detalles_por_cuenta[cid].append({
                 'id': row['id'],
                 'fecha': row['fecha'].strftime('%Y-%m-%d') if row['fecha'] else '',
-                'documento': (row['numero_documento'] or '').strip(),
+                'soporte': soporte,
+                'documento': raw_doc,
                 'tercero': (row['tercero_nombre'] or '').strip(),
-                'concepto': raw_concepto,
-                'descripcion': raw_desc,
+                'subrubro': subrubro,
                 'nota': nota,
                 'tipo': row['tipo'],
                 'monto': float(row['monto'] or 0)

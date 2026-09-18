@@ -820,6 +820,17 @@ input:checked + .slider:before {
   </div>
 </div>
 
+<div id="modal-poner" style="display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.6); align-items:flex-end; justify-content:center;" onclick="if(event.target===this)cerrarModalPoner()">
+  <div style="width:100%; max-width:440px; background:var(--surface); border-radius:20px 20px 0 0; padding:20px 16px 32px; animation:fadeUp .2s ease;">
+    <div style="width:40px; height:4px; background:var(--muted2); border-radius:2px; margin:0 auto 16px;"></div>
+    <div id="modal-poner-titulo" style="font-size:15px; font-weight:800; color:var(--text); margin-bottom:14px; text-align:center;"></div>
+    <button onclick="ejecutarPoner('ya')" style="width:100%; padding:14px; margin-bottom:8px; border:none; border-radius:12px; background:var(--ac-grad); color:#00101b; font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:14px; cursor:pointer;">⚡ Sonar ahora</button>
+    <button onclick="ejecutarPoner('siguiente')" style="width:100%; padding:14px; margin-bottom:8px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:14px; cursor:pointer;">⏭️ Sonar después</button>
+    <button onclick="ejecutarPoner('final')" style="width:100%; padding:14px; margin-bottom:8px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:14px; cursor:pointer;">📝 Poner al final</button>
+    <button onclick="cerrarModalPoner()" style="width:100%; padding:12px; border:none; border-radius:12px; background:transparent; color:var(--muted); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; cursor:pointer; margin-top:4px;">Cancelar</button>
+  </div>
+</div>
+
 <script>
 const SALA = '{{ sala_id }}';
 const player1 = document.getElementById('player1');
@@ -1979,15 +1990,7 @@ function renderBibliotecaLocal() {
         <div class="local-meta">${Math.max(1, Math.round((c.size || 0) / 1024 / 1024))} MB · este dispositivo</div>
       </div>
       <button class="playlist-mini" onclick="agregarCancionALista('${c.id}')">Lista</button>
-      <div class="dropdown" id="dd-local-${c.id}">
-        <button class="library-btn" onclick="toggleDropdown(event, 'dd-local-${c.id}')">Poner ▾</button>
-        <div class="dropdown-content">
-          <a href="#" onclick="ponerLocal('${c.id}', 'ya')">⚡ Sonar ya</a>
-          <a href="#" onclick="ponerLocal('${c.id}', 'siguiente')">⏭️ Sonar después</a>
-          <a href="#" onclick="ponerLocal('${c.id}', 'final')">📝 Poner al final</a>
-          ${!c.id.startsWith('local-') ? `<a href="/rockola/${SALA}/archivo/${c.id}" download="${c.nombre}.mp3">📥 Descargar MP3</a>` : ''}
-        </div>
-      </div>
+      <button class="library-btn" onclick="abrirModalPoner('${c.id}', '${escapeHtml(limpiarNombre(c.nombre))}')">Poner</button>
     </li>
   `).join('');
 }
@@ -2347,6 +2350,22 @@ window.addEventListener('click', () => {
     d.classList.remove('show');
   });
 });
+
+let modalPonerCancionId = null;
+function abrirModalPoner(cancionId, nombre) {
+  modalPonerCancionId = cancionId;
+  document.getElementById('modal-poner-titulo').textContent = nombre;
+  document.getElementById('modal-poner').style.display = 'flex';
+}
+function cerrarModalPoner() {
+  document.getElementById('modal-poner').style.display = 'none';
+  modalPonerCancionId = null;
+}
+function ejecutarPoner(modo) {
+  if (!modalPonerCancionId) return;
+  cerrarModalPoner();
+  ponerLocal(modalPonerCancionId, modo);
+}
 
 function renderCola(cola) {
   queueLabel.textContent = 'Cola · ' + cola.length + (cola.length === 1 ? ' canción' : ' canciones');

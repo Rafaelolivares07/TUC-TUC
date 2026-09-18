@@ -69,7 +69,7 @@
         </div>
         <input id="gas-concept-txt" type="text" placeholder="Escriba para buscar o crear..."
                autocomplete="off"
-               class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+               class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none h-[38px]"
                oninput="onConceptInput()" onfocus="onConceptInput()" onkeydown="navConceptAC(event)">
         <button onclick="clearGasConcepto()" class="absolute right-2 top-[28px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
         <input type="hidden" id="gas-concept-id">
@@ -78,7 +78,7 @@
       </div>
       
       <!-- Tercero / Proveedor (Condicional) -->
-      <div class="md:col-span-4 relative" id="gas-tercero-container">
+      <div class="md:col-span-3 relative" id="gas-tercero-container">
         <div class="flex justify-between items-center mb-1">
           <label class="block text-xs font-semibold text-gray-500 uppercase">Tercero / Proveedor <span class="text-rose-500">*</span></label>
           <button type="button" onclick="abrirModalNuevoTercero(document.getElementById('gas-tercero-txt').value.trim())" class="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer" title="Crear un nuevo tercero o proveedor">
@@ -87,48 +87,59 @@
         </div>
         <input id="gas-tercero-txt" type="text" placeholder="Escriba para buscar o crear..."
                autocomplete="off"
-               class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+               class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none h-[38px]"
                oninput="onTerceroInput()" onfocus="onTerceroInput()" onkeydown="navTerceroAC(event)">
         <button onclick="clearGasTercero()" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
         <input type="hidden" id="gas-tercero-id">
         <div id="gas-tercero-ac" class="ac-drop hidden"></div>
+      </div>
+
+      <!-- Centro de Utilidad Imputable -->
+      <div class="md:col-span-3">
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">
+          🏢 Centro de Utilidad <span class="text-rose-500">*</span>
+        </label>
+        <select id="gas-centro-id"
+                class="border border-rose-200 bg-rose-50/20 rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none text-gray-800 h-[38px]">
+          <!-- Loaded by JS -->
+        </select>
       </div>
       
       <!-- Monto -->
       <div class="md:col-span-2">
         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Valor / Monto</label>
         <input id="gas-monto" type="text" inputmode="decimal" placeholder="0.00"
-               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono"
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono font-bold h-[38px]"
                onfocus="this.select()" onkeydown="navMonto(event)">
-      </div>
-      
-      <!-- Botón Agregar -->
-      <div class="md:col-span-2">
-        <button onclick="agregarLineaGasto()"
-                class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-sm w-full transition shadow-sm flex items-center justify-center gap-1 h-[38px]">
-          ➕ Agregar
-        </button>
       </div>
 
       <!-- N° Recibo / Factura Soporte (Opcional) -->
-      <div class="md:col-span-4 mt-1">
+      <div class="md:col-span-3 mt-1">
         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">
           N° Recibo / Factura Soporte <span class="text-gray-400 font-normal lowercase">(opcional)</span>
         </label>
         <input id="gas-soporte" type="text" placeholder="Ej. FAC-4589, REC-12, Vale 05..."
                autocomplete="off"
-               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono text-gray-700"
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono text-gray-700 h-[38px]"
                onkeydown="navSoporte(event)">
       </div>
 
       <!-- Nota Explicativa del Rubro (Opcional) -->
-      <div class="md:col-span-8 mt-1">
+      <div class="md:col-span-6 mt-1">
         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">
           📝 Nota Explicativa del Rubro <span class="text-gray-400 font-normal lowercase">(opcional)</span>
         </label>
         <input id="gas-nota" type="text" placeholder="Ej. Detalle puntual de la compra, destino del gasto o justificación"
-               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none h-[38px]"
                onkeydown="navNota(event)">
+      </div>
+
+      <!-- Botón Agregar -->
+      <div class="md:col-span-3 mt-1">
+        <button onclick="agregarLineaGasto()"
+                class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-sm w-full transition shadow-sm flex items-center justify-center gap-1.5 h-[38px]">
+          ➕ Agregar Gasto
+        </button>
       </div>
       
     </div>
@@ -143,6 +154,7 @@
       <table class="w-full text-sm">
         <thead>
           <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-100">
+            <th class="px-3 py-3 text-left">Centro</th>
             <th class="px-4 py-3 text-left">Concepto / Cuenta</th>
             <th class="px-4 py-3 text-left">Nota Explicativa</th>
             <th class="px-4 py-3 text-left">Tercero</th>
@@ -255,6 +267,42 @@
           Cancelar
         </button>
         <button id="btn-guardar-nota" onclick="guardarNotaGasto()" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1">
+          💾 Guardar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Reasignar Centro de Utilidad / Sede -->
+  <div id="modal-cambiar-centro-gasto" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-5 max-w-sm w-full animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2 text-gray-800">
+          <span class="text-lg">🏢</span>
+          <h4 class="text-sm font-bold">Reasignar Sede / Centro</h4>
+        </div>
+        <button onclick="cerrarModalCambiarCentroLinea()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+      </div>
+      
+      <div class="mb-3 p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+        <span class="text-gray-400 block text-[10px] uppercase font-bold">Concepto</span>
+        <span id="modal-centro-concepto" class="font-bold text-gray-800 block truncate"></span>
+      </div>
+
+      <input type="hidden" id="modal-cambiar-centro-linea-id">
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Centro de Utilidad Destino</label>
+        <select id="modal-cambiar-centro-select" class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-semibold text-gray-800">
+          <!-- Opciones dinámicas -->
+        </select>
+        <span class="text-[10px] text-gray-400 mt-1 block">El gasto se reclasificará contablemente bajo esta sede.</span>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="cerrarModalCambiarCentroLinea()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+          Cancelar
+        </button>
+        <button id="btn-guardar-cambio-centro" onclick="guardarCambioCentroLinea()" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1">
           💾 Guardar
         </button>
       </div>
@@ -402,6 +450,27 @@
   // Inicialización del panel de Gastos
   async function inicializarModuloGastos() {
     await cargarGastosDocumentos();
+    await cargarCentrosUtilidadGastos();
+  }
+
+  let listaCentrosGas = [];
+
+  async function cargarCentrosUtilidadGastos() {
+    try {
+      const sel = document.getElementById('gas-centro-id');
+      if (!sel) return;
+      const r = await fetch(`/api/centros_utilidad/${NEGOCIO_ID}`);
+      const d = await r.json();
+      if (!d.ok || !d.centros) return;
+      
+      listaCentrosGas = d.centros;
+      const activoId = d.centro_activo ? String(d.centro_activo.id) : (d.centros[0] ? String(d.centros[0].id) : '1');
+      sel.innerHTML = d.centros.map(c => 
+        `<option value="${c.id}" ${String(c.id) === activoId ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`
+      ).join('');
+    } catch(e) {
+      console.warn('Error cargando centros en gastos:', e);
+    }
   }
 
   // Carga las tipologías de documentos asignadas al módulo de Gastos
@@ -492,7 +561,7 @@
       tbody.innerHTML = '';
       
       if (!d.lineas || d.lineas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400 text-xs">No hay gastos agregados en esta relación.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-4 text-center text-gray-400 text-xs">No hay gastos agregados en esta relación.</td></tr>';
         document.getElementById('gas-total-gastos').textContent = '$0.00';
       } else {
         let total = 0.0;
@@ -526,7 +595,13 @@
             notaCell = `<button type="button" onclick="abrirModalEditarNota(${l.id}, '', '${escapeGasHtml(displayConcepto)}')" class="inline-flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-amber-700 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-dashed border-gray-250 font-sans" title="Añadir nota explicativa a este rubro">+ Nota</button>`;
           }
 
+          const cCod = l.centro_codigo || (l.centro_utilidad_id == 2 ? 'LOC-01' : 'MOV-01');
+          const cColor = l.centro_color || (l.centro_utilidad_id == 2 ? '#10b981' : '#0284c7');
+          const cNom = l.centro_nombre || (l.centro_utilidad_id == 2 ? 'Local Comercial' : 'Puntos Móviles');
+          const centroBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-xs cursor-pointer hover:opacity-85 hover:scale-105 transition" style="background: ${cColor};" onclick="abrirModalCambiarCentroLinea(${l.id}, ${l.centro_utilidad_id || 1}, '${escapeGasHtml(displayConcepto)}')" title="Haga clic para reasignar la sede: ${escapeGasHtml(cNom)}">${cCod} <span class="text-[9px] opacity-75">✏️</span></span>`;
+
           tr.innerHTML = `
+            <td class="px-3 py-2.5 text-xs whitespace-nowrap">${centroBadge}</td>
             <td class="px-4 py-2.5 text-xs font-semibold text-gray-700">
               <div class="flex items-center flex-wrap gap-1">${displayConcepto} ${soporteBadge}</div>
               <span class="text-[9px] text-gray-400 font-mono">${l.cuenta}</span>
@@ -933,6 +1008,7 @@
     const soporte = document.getElementById('gas-soporte').value.trim();
     const nota = document.getElementById('gas-nota').value.trim();
     const tercero_id = document.getElementById('gas-tercero-id').value || null;
+    const centro_utilidad_id = document.getElementById('gas-centro-id')?.value || null;
     
     if (!tipoDoc || !numDoc) {
       toast('Seleccione un tipo de documento de gastos', false);
@@ -944,6 +1020,11 @@
     }
     if (!cuenta_puc_id) {
       toast('Defina un concepto válido', false);
+      return;
+    }
+    if (!centro_utilidad_id) {
+      toast('Debe seleccionar el Centro de Utilidad para este gasto.', false);
+      document.getElementById('gas-centro-id')?.focus();
       return;
     }
     if (monto <= 0) {
@@ -975,7 +1056,8 @@
           cuenta_puc_id: parseInt(cuenta_puc_id),
           monto: monto,
           concepto: conceptoFinal,
-          tercero_id: tercero_id ? parseInt(tercero_id) : null
+          tercero_id: tercero_id ? parseInt(tercero_id) : null,
+          centro_utilidad_id: centro_utilidad_id ? parseInt(centro_utilidad_id) : null
         })
       });
       const d = await r.json();
@@ -1212,6 +1294,64 @@
     }
   }
 
+  // ═══ REASIGNAR CENTRO DE UTILIDAD EN LÍNEA DE GASTO ═══
+  let _lineaEditandoCentroId = null;
+
+  function abrirModalCambiarCentroLinea(lineId, currentCentroId, concepto) {
+    _lineaEditandoCentroId = lineId;
+    document.getElementById('modal-cambiar-centro-linea-id').value = lineId;
+    document.getElementById('modal-centro-concepto').textContent = concepto || ('Gasto #' + lineId);
+    const sel = document.getElementById('modal-cambiar-centro-select');
+    if (listaCentrosGas && listaCentrosGas.length > 0) {
+      sel.innerHTML = listaCentrosGas.map(c => 
+        `<option value="${c.id}" ${String(c.id) === String(currentCentroId) ? 'selected' : ''}>${c.codigo} - ${c.nombre}</option>`
+      ).join('');
+    } else {
+      const srcSel = document.getElementById('gas-centro-id');
+      sel.innerHTML = srcSel ? srcSel.innerHTML : '';
+      if (currentCentroId) sel.value = String(currentCentroId);
+    }
+    const modal = document.getElementById('modal-cambiar-centro-gasto');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function cerrarModalCambiarCentroLinea() {
+    _lineaEditandoCentroId = null;
+    const modal = document.getElementById('modal-cambiar-centro-gasto');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  async function guardarCambioCentroLinea() {
+    if (!_lineaEditandoCentroId) return;
+    const centroId = document.getElementById('modal-cambiar-centro-select').value;
+    if (!centroId) return;
+
+    const btn = document.getElementById('btn-guardar-cambio-centro');
+    if (btn) btn.disabled = true;
+
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea/${_lineaEditandoCentroId}/centro`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ centro_utilidad_id: parseInt(centroId) })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast('Sede / Centro de utilidad reasignado correctamente.');
+        cerrarModalCambiarCentroLinea();
+        await cargarRelacionGastoActiva();
+      } else {
+        toast(d.error || 'Error al cambiar sede', false);
+      }
+    } catch(e) {
+      toast('Error de red al reasignar centro', false);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   // ═══ CREAR NUEVO RUBRO DE GASTO EN CALIENTE ═══
   async function abrirModalNuevoGasto(nombreSugerido = '') {
     const tipoDoc = document.getElementById('gas-tipo-doc').value;
@@ -1410,6 +1550,9 @@
     }
     if (e.target.id === 'modal-editar-nota-gasto') {
       cerrarModalEditarNota();
+    }
+    if (e.target.id === 'modal-cambiar-centro-gasto') {
+      cerrarModalCambiarCentroLinea();
     }
     if (e.target.id === 'modal-nuevo-gasto') {
       cerrarModalNuevoGasto();

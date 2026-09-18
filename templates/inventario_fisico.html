@@ -122,17 +122,28 @@
           <p class="text-sm text-gray-500">Toma de Inventario Físico</p>
         </div>
       </div>
-      <div class="flex flex-col items-end">
-        <span class="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest">Documento Activo</span>
-        <div class="flex gap-2 mt-1">
-          <select id="select-tipo-doc" onchange="cambiarTipoDocumento()"
-                  class="w-64 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all">
-            {% for t in tipos_doc %}
-              <option value="{{ t.id }}" {% if t.predeterminado %}selected{% endif %}>{{ t.nombre }}</option>
+      <div class="flex items-center gap-3 flex-wrap">
+        <div>
+          <span class="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest block text-right">🏢 Sede / Bodega Física</span>
+          <select id="select-centro-utilidad" onchange="cambiarCentroUtilidad()"
+                  class="border border-indigo-200 bg-indigo-50/60 text-indigo-950 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+            {% for c in centros_utilidad %}
+              <option value="{{ c.id }}" {% if c.id == centro_activo_id %}selected{% endif %}>{{ c.codigo }} — {{ c.nombre }}</option>
             {% endfor %}
           </select>
-          <input id="doc-consecutivo-input" type="text" readonly value="Cargando..."
-                 class="w-24 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-mono font-extrabold text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-center">
+        </div>
+        <div class="flex flex-col items-end">
+          <span class="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest">Documento Activo</span>
+          <div class="flex gap-2 mt-0.5">
+            <select id="select-tipo-doc" onchange="cambiarTipoDocumento()"
+                    class="w-56 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all">
+              {% for t in tipos_doc %}
+                <option value="{{ t.id }}" {% if t.predeterminado %}selected{% endif %}>{{ t.nombre }}</option>
+              {% endfor %}
+            </select>
+            <input id="doc-consecutivo-input" type="text" readonly value="Cargando..."
+                   class="w-20 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-mono font-extrabold text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-center">
+          </div>
         </div>
       </div>
     </div>
@@ -316,7 +327,8 @@ async function inicializarSesion() {
 
 // Cargar todos los productos en caché local para velocidad instantánea
 async function cargarProductos() {
-  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/productos`);
+  const centroId = document.getElementById("select-centro-utilidad")?.value || 1;
+  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/productos?bodega=${centroId}`);
   const data = await resp.json();
   if (data.ok) {
     currentProducts = data.productos;
@@ -326,9 +338,31 @@ async function cargarProductos() {
     
     // Rellenar dropdown de categorías
     const sel = document.getElementById("select-categoria-filtro");
-    sel.innerHTML = '<option value="">-- Seleccionar Categoría --</option>' + 
-      cats.map(c => `<option value="${c}">${c}</option>`).join('');
+    const prevVal = sel ? sel.value : "";
+    if (sel) {
+      sel.innerHTML = '<option value="">-- Seleccionar Categoría --</option>' + 
+        cats.map(c => `<option value="${c}">${c}</option>`).join('');
+      if (prevVal && cats.includes(prevVal)) {
+        sel.value = prevVal;
+      }
+    }
   }
+}
+
+// Cambiar Centro de Utilidad / Sede
+function cambiarCentroUtilidad() {
+  cargarProductos().then(() => {
+    if (selectedProduct) {
+      seleccionarProductoLibre(selectedProduct.id);
+    }
+    const mod = document.getElementById("select-modalidad")?.value;
+    if (mod === "completo") {
+      cargarTablaCompleta();
+    } else if (mod === "categoria") {
+      filtrarPorCategoria();
+    }
+  });
+  cargarHistorial();
 }
 
 // Cambiar tipo de documento
@@ -733,6 +767,7 @@ async function guardarAjusteConfirmado() {
   const tipoDocId = document.getElementById("select-tipo-doc").value;
   const terceroId = document.getElementById("entrada-responsable-id").value;
   const terceroNombre = document.getElementById("entrada-responsable").value.trim();
+  const centroId = document.getElementById("select-centro-utilidad")?.value;
   const payload = {
     tipo_documento_id: parseInt(tipoDocId),
     documento_numero: activeDocNumber,
@@ -741,7 +776,8 @@ async function guardarAjusteConfirmado() {
     costo_unitario: Math.abs(parseFloat(activeAjustePayload.costo_unitario) || 0.0),
     notas: "Ajuste físico en caliente",
     tercero_id: parseInt(terceroId) || null,
-    tercero_nombre: terceroNombre || null
+    tercero_nombre: terceroNombre || null,
+    centro_utilidad_id: parseInt(centroId) || null
   };
   
   const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/guardar-item`, {
@@ -818,7 +854,9 @@ async function cargarItemsDocumento() {
 
 // Cargar historial de inventarios
 async function cargarHistorial() {
-  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/historial`);
+  const centroId = document.getElementById("select-centro-utilidad")?.value;
+  const url = centroId ? `/api/inventario/${NEGOCIO_ID}/ajuste-fisico/historial?centro_utilidad_id=${centroId}` : `/api/inventario/${NEGOCIO_ID}/ajuste-fisico/historial`;
+  const resp = await fetch(url);
   const data = await resp.json();
   const container = document.getElementById("historial-container");
   
@@ -829,16 +867,18 @@ async function cargarHistorial() {
       
       const fechaObj = new Date(h.fecha);
       const fechaStr = fechaObj.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const badgeSede = h.centro_codigo ? `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 font-bold text-[10px]">${h.centro_codigo}</span>` : '';
       
       return `
         <div class="border border-gray-100 rounded-2xl bg-white shadow-xs overflow-hidden">
           <!-- Acordeón Header -->
           <div class="flex items-center w-full">
             <button onclick="toggleHistorialDetalle('${h.documento_numero}')"
-                    class="flex-1 flex items-center justify-between px-5 py-3 hover:bg-gray-50/50 transition text-left">
-              <div>
+                    class="flex-1 flex items-center justify-between px-5 py-3 hover:bg-gray-50/50 transition text-left flex-wrap gap-2">
+              <div class="flex items-center gap-2">
+                ${badgeSede}
                 <span class="font-mono font-extrabold text-sm text-emerald-800">${numDocLimpio(h.documento_numero)}</span>
-                <span class="text-xs text-gray-400 ml-3">${fechaStr}</span>
+                <span class="text-xs text-gray-400 ml-2">${fechaStr}</span>
               </div>
               <div class="flex items-center gap-4">
                 <span class="text-xs text-gray-500 font-bold bg-emerald-50 px-2 py-0.5 rounded">${h.total_items} ítems</span>

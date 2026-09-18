@@ -404,16 +404,61 @@ def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo
                 chat_id = config['telegram_chat_id'] or None
         except Exception as _e:
             print(f'[telegram rest] chat global no disponible: {_e}')
-    if not chat_id:
+    # Resolver Centro de Utilidad / Sede
+    cu_info = None
+    cu_chat_id = None
+    try:
+        ped_row = conn.execute("SELECT centro_utilidad_id, numero_documento FROM pedidos WHERE id = %s", (pedido_id,)).fetchone()
+        cid_cu = ped_row['centro_utilidad_id'] if ped_row else None
+        if cid_cu:
+            try:
+                cu_row = conn.execute(
+                    "SELECT codigo, nombre, tipo, telegram_chat_id FROM centros_utilidad WHERE id = %s",
+                    (cid_cu,)
+                ).fetchone()
+            except Exception:
+                try:
+                    cu_row = conn.execute(
+                        "SELECT codigo, nombre, tipo FROM centros_utilidad WHERE id = %s",
+                        (cid_cu,)
+                    ).fetchone()
+                except Exception:
+                    cu_row = None
+            if cu_row:
+                tipo_icon = "🛵" if (cu_row.get('tipo') or '').lower() in ('domicilio', 'movil', 'bodega') else "🏪"
+                cod = (cu_row['codigo'] or '').strip()
+                nom = (cu_row['nombre'] or '').strip()
+                if cod and nom:
+                    cu_info = f"{tipo_icon} {cod} — {nom}"
+                elif nom or cod:
+                    cu_info = f"{tipo_icon} {nom or cod}"
+                try:
+                    cu_chat_id = cu_row['telegram_chat_id']
+                except Exception:
+                    cu_chat_id = None
+    except Exception:
+        pass
+
+    chats_a_notificar = set()
+    if chat_id:
+        chats_a_notificar.add(str(chat_id).strip())
+    if cu_chat_id:
+        chats_a_notificar.add(str(cu_chat_id).strip())
+
+    if not chats_a_notificar:
         print(f'[telegram rest] sin chat_id para restaurante {nombre_rest}')
         return
+
     items_txt = '\n'.join(f"  {item}" for item in items) or '  Pedido registrado'
     entrega = _telegram_detalle_entrega_restaurante(tipo_entrega, direccion, mesa)
     pago_txt = _telegram_label_pago(metodo_pago)
     if (metodo_pago or '').lower() == 'contraentrega':
         pago_txt += "\n⚠️ Contraentrega: cobrar efectivo al entregar."
+
+    cu_line = f"🏢 <b>Sede / Centro:</b> {cu_info}\n" if cu_info else ""
     msg = (
         f"🍽️ <b>Nuevo pedido en {nombre_rest}</b>\n"
+        f"{cu_line}"
         f"🧾 Pedido #{pedido_id}\n"
         f"👤 {cliente or 'Cliente'} - {telefono or 'Sin telefono'}\n"
         f"📦 Entrega: {entrega}\n"
@@ -421,7 +466,8 @@ def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo
         f"{items_txt}\n\n"
         f"💰 Total: ${total:,.0f}"
     )
-    _enviar_telegram(conn, chat_id, msg)
+    for cid in chats_a_notificar:
+        _enviar_telegram(conn, cid, msg)
 
 
 def _auth_rest(slug, conn):

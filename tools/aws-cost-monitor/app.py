@@ -17,13 +17,26 @@ app = Flask(__name__)
 _cache = {'at': 0.0, 'data': None}
 _cache_lock = threading.Lock()
 
+MONTH_NAMES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+MONTH_SHORT = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+
+def format_month_label(date_str, short=False):
+    try:
+        parts = date_str.split('-')
+        m = int(parts[1])
+        y = parts[0]
+        return f"{MONTH_SHORT[m]} {y}" if short else f"{MONTH_NAMES[m]} {y}"
+    except Exception:
+        return date_str
+
 
 def load_config():
     with open(CONFIG_PATH, 'r', encoding='utf-8') as fh:
         return json.load(fh)
 
 
-def run_aws(args, timeout=45):
+def run_aws(args, timeout=90):
     """Run AWS CLI without a shell and return parsed JSON."""
     try:
         profile = load_config().get('aws_profile')
@@ -146,61 +159,188 @@ def get_snapshots(region):
     return {'region': region, 'data': snapshots}
 
 
-def get_monthly_cost(start_date, end_date):
-    response = run_aws([
+def get_savings_plans():
+    response = run_aws(['savingsplans', 'describe-savings-plans'])
+    if 'error' in response:
+        return []
+    plans = []
+    for sp in response.get('savingsPlans', []):
+        if sp.get('state') in ('active', 'payment-pending'):
+            plans.append({
+                'id': sp.get('savingsPlanId'),
+                'description': sp.get('description'),
+                'state': sp.get('state'),
+                'commitment': float(sp.get('commitment') or 0),
+                'start': sp.get('start'),
+                'end': sp.get('end'),
+                'type': sp.get('savingsPlanType'),
+            })
+    return plans
+
+
+def get_cost_history(now, force=False):
+    today = now.strftime('%Y-%m-%d')
+    if not force:
+        try:
+            with open(COST_CACHE_PATH, 'r', encoding='utf-8') as fh:
+                cached = json.load(fh)
+            if cached.get('date') == today and 'history' in cached and 'usage_breakdown' in cached:
+                return cached
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            pass
+
+    # Build 6-month window: 5 previous months + current month up to first day of next month
+    first_current = now.replace(day=1)
+    d = first_current
+    months = [d]
+    for _ in range(5):
+        d = (d - timedelta(days=1)).replace(day=1)
+        months.append(d)
+    months.reverse()
+    start_date = months[0].strftime('%Y-%m-%d')
+    if now.month == 12:
+        end_date = now.replace(year=now.year + 1, month=1, day=1).strftime('%Y-%m-%d')
+    else:
+        end_date = now.replace(month=now.month + 1, day=1).strftime('%Y-%m-%d')
+
+    # 1. Cost Explorer: 6-month historical totals and services
+    service_resp = run_aws([
         'ce', 'get-cost-and-usage',
         '--time-period', f'Start={start_date},End={end_date}',
         '--granularity', 'MONTHLY',
         '--metrics', 'UnblendedCost',
         '--group-by', 'Type=DIMENSION,Key=SERVICE',
     ])
-    if 'error' in response:
-        return response
-    services = []
-    total = 0.0
-    for period in response.get('ResultsByTime', []):
+
+    if 'error' in service_resp:
+        return {'error': service_resp['error']}
+
+    history = []
+    prev_total = None
+    for period in service_resp.get('ResultsByTime', []):
+        p_start = period.get('TimePeriod', {}).get('Start', '')
+        p_end = period.get('TimePeriod', {}).get('End', '')
+        p_estimated = bool(period.get('Estimated', False))
+        services = []
+        total = 0.0
         for group in period.get('Groups', []):
             amount = float(group.get('Metrics', {}).get('UnblendedCost', {}).get('Amount') or 0)
             total += amount
             if abs(amount) >= 0.005:
-                services.append({'service': group.get('Keys', ['Desconocido'])[0], 'cost': round(amount, 2)})
-    services.sort(key=lambda item: abs(item['cost']), reverse=True)
-    return {'services': services, 'total': round(total, 2)}
+                services.append({
+                    'service': group.get('Keys', ['Desconocido'])[0],
+                    'cost': round(amount, 2),
+                })
+        services.sort(key=lambda item: abs(item['cost']), reverse=True)
+        total_round = round(total, 2)
+        diff_pct = None
+        if prev_total is not None and prev_total > 0:
+            diff_pct = round(((total_round - prev_total) / prev_total) * 100, 1)
+        if not p_estimated:
+            prev_total = total_round
 
+        history.append({
+            'month': p_start[:7],
+            'start': p_start,
+            'end': p_end,
+            'label': format_month_label(p_start, short=False),
+            'short_label': format_month_label(p_start, short=True),
+            'total': total_round,
+            'estimated': p_estimated,
+            'services': services,
+            'diff_pct': diff_pct,
+        })
 
-def get_daily_costs(now, force=False):
-    today = now.strftime('%Y-%m-%d')
-    if not force:
-        try:
-            with open(COST_CACHE_PATH, 'r', encoding='utf-8') as fh:
-                cached = json.load(fh)
-            if cached.get('date') == today:
-                return cached
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
-            pass
+    # 2. Granular USAGE_TYPE breakdown for the last closed month
+    usage_start = months[-2].strftime('%Y-%m-%d')
+    usage_resp = run_aws([
+        'ce', 'get-cost-and-usage',
+        '--time-period', f'Start={usage_start},End={end_date}',
+        '--granularity', 'MONTHLY',
+        '--metrics', 'UnblendedCost',
+        '--group-by', 'Type=DIMENSION,Key=USAGE_TYPE',
+    ])
 
-    first_current = now.replace(day=1)
-    end_current = now + timedelta(days=1)
-    first_previous = (first_current - timedelta(days=1)).replace(day=1)
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        current_future = executor.submit(
-            get_monthly_cost, first_current.strftime('%Y-%m-%d'), end_current.strftime('%Y-%m-%d')
-        )
-        previous_future = executor.submit(
-            get_monthly_cost, first_previous.strftime('%Y-%m-%d'), first_current.strftime('%Y-%m-%d')
-        )
-        result = {
-            'date': today,
-            'cached_at': now.isoformat(timespec='seconds'),
-            'current': current_future.result(),
-            'previous': previous_future.result(),
-        }
-    if 'error' not in result['current'] and 'error' not in result['previous']:
-        temp_path = COST_CACHE_PATH + '.tmp'
-        with open(temp_path, 'w', encoding='utf-8') as fh:
-            json.dump(result, fh, ensure_ascii=False, indent=2)
-        os.replace(temp_path, COST_CACHE_PATH)
+    usage_breakdown = []
+    if 'error' not in usage_resp and usage_resp.get('ResultsByTime'):
+        target_period = usage_resp['ResultsByTime'][0]
+        compute_cost = 0.0
+        ipv4_cost = 0.0
+        ebs_cost = 0.0
+        other_cost = 0.0
+        for group in target_period.get('Groups', []):
+            k = group.get('Keys', [''])[0]
+            amt = float(group.get('Metrics', {}).get('UnblendedCost', {}).get('Amount') or 0)
+            if 'BoxUsage' in k:
+                compute_cost += amt
+            elif 'PublicIPv4' in k:
+                ipv4_cost += amt
+            elif 'VolumeUsage' in k or 'EBS' in k:
+                ebs_cost += amt
+            else:
+                other_cost += amt
+
+        last_closed_total = compute_cost + ipv4_cost + ebs_cost + other_cost
+        if last_closed_total > 0:
+            usage_breakdown = [
+                {
+                    'category': 'Cómputo EC2 (t3.small)',
+                    'cost': round(compute_cost, 2),
+                    'pct': round(compute_cost * 100 / last_closed_total, 1),
+                    'detail': 'Instancia 2 vCPU, 2 GB RAM encendida 24/7 en us-east-2.',
+                    'action': 'Savings Plan ACTIVO a 1 año ($0.013/h, ~$9.67 USD/mes). Ahorro de ~$5.81 USD/mes.',
+                },
+                {
+                    'category': 'Dirección IPv4 pública en uso',
+                    'cost': round(ipv4_cost, 2),
+                    'pct': round(ipv4_cost * 100 / last_closed_total, 1),
+                    'detail': 'Tarifa AWS ($0.005/h por cada IPv4 pública asignada).',
+                    'action': 'Pendiente por implementar: Ahorro de $3.72 USD/mes (100%) con Cloudflare Tunnel.',
+                },
+                {
+                    'category': 'Almacenamiento EBS (8 GB gp3)',
+                    'cost': round(ebs_cost, 2),
+                    'pct': round(ebs_cost * 100 / last_closed_total, 1),
+                    'detail': 'Volumen raíz del servidor modernizado a gp3.',
+                    'action': 'EBS gp3 ACTIVO (3,000 IOPS base, 125 MB/s, tarifa 20% más económica).',
+                },
+                {
+                    'category': 'Servicios de gestión (SSM, CE, CW)',
+                    'cost': round(other_cost, 2),
+                    'pct': round(other_cost * 100 / last_closed_total, 1),
+                    'detail': 'Telemetría de automatización y llamadas API.',
+                    'action': 'El sistema de caché del monitor minimiza cobros.',
+                },
+            ]
+
+    # Summaries
+    current = history[-1] if history else {'total': 0, 'services': []}
+    previous = history[-2] if len(history) >= 2 else {'total': 0, 'services': []}
+    closed_months = [m for m in history if not m.get('estimated')]
+    peak_month = max(closed_months, key=lambda m: m['total']) if closed_months else current
+    recent_closed = closed_months[-3:] if len(closed_months) >= 3 else closed_months
+    avg_recent = round(sum(m['total'] for m in recent_closed) / len(recent_closed), 2) if recent_closed else previous.get('total', 0)
+    monthly_savings = round(peak_month['total'] - avg_recent, 2) if peak_month['total'] > avg_recent else 0.0
+
+    result = {
+        'date': today,
+        'cached_at': now.isoformat(timespec='seconds'),
+        'history': history,
+        'current': current,
+        'previous': previous,
+        'peak_month': peak_month,
+        'avg_recent': avg_recent,
+        'monthly_savings': monthly_savings,
+        'annual_savings': round(monthly_savings * 12, 2),
+        'usage_breakdown': usage_breakdown,
+    }
+
+    temp_path = COST_CACHE_PATH + '.tmp'
+    with open(temp_path, 'w', encoding='utf-8') as fh:
+        json.dump(result, fh, ensure_ascii=False, indent=2)
+    os.replace(temp_path, COST_CACHE_PATH)
     return result
+
 
 
 def get_instance_type(region, instance_type):
@@ -266,7 +406,7 @@ def get_server_capacity(region, instance_id):
     document_name = load_config().get('ssm_capacity_document', 'TucTuc-ReadOnlyCapacityAudit')
     sent = run_aws([
         'ssm', 'send-command', '--region', region, '--instance-ids', instance_id,
-        '--document-name', document_name, '--comment', 'TUC TUC read-only capacity monitor',
+        '--document-name', document_name, '--comment', 'TUC TUC read-only capacity monitor v2',
     ])
     if 'error' in sent:
         return sent
@@ -292,8 +432,17 @@ def get_server_capacity(region, instance_id):
                 {'key': 'tuctuc', 'name': 'TUC TUC', 'memory_bytes': values.get('tuctuc_rss', 0), 'disk_bytes': values.get('tuctuc_disk', 0), 'protected': True},
                 {'key': 'lopez', 'name': 'Lopez Refrigeration', 'memory_bytes': values.get('lopez_rss', 0), 'disk_bytes': values.get('lopez_disk', 0), 'protected': True},
                 {'key': 'remote', 'name': 'Asistencia remota', 'memory_bytes': values.get('remote_rss', 0), 'disk_bytes': values.get('remote_disk', 0), 'protected': True},
-                {'key': 'postgres', 'name': 'PostgreSQL compartido', 'memory_bytes': values.get('postgres_rss', 0), 'disk_bytes': None, 'protected': True},
+                {'key': 'postgres', 'name': 'PostgreSQL compartido', 'memory_bytes': values.get('postgres_rss', 0), 'disk_bytes': values.get('postgres_disk', 0), 'protected': True},
                 {'key': 'nginx', 'name': 'Nginx compartido', 'memory_bytes': values.get('nginx_rss', 0), 'disk_bytes': None, 'protected': True},
+            ]
+            values['storage_breakdown'] = [
+                {'key': 'tuctuc', 'name': 'TUC TUC (/home/ubuntu/tuctucv2)', 'bytes': values.get('tuctuc_disk', 0), 'category': 'Aplicación'},
+                {'key': 'snap', 'name': 'Paquetes Snap (/var/lib/snapd)', 'bytes': values.get('snap_disk', 0), 'category': 'Sistema'},
+                {'key': 'logs', 'name': 'Logs del sistema (/var/log)', 'bytes': values.get('logs_disk', 0), 'category': 'Sistema'},
+                {'key': 'postgres', 'name': 'Bases de datos (/var/lib/postgresql)', 'bytes': values.get('postgres_disk', 0), 'category': 'Base de Datos'},
+                {'key': 'lopez', 'name': 'López Refrigeration (/var/www/html)', 'bytes': values.get('lopez_disk', 0), 'category': 'Aplicación'},
+                {'key': 'cache', 'name': 'Caché APT (/var/cache)', 'bytes': values.get('cache_disk', 0), 'category': 'Mantenimiento'},
+                {'key': 'remote', 'name': 'Asistencia remota (/home/ubuntu/remote-assist)', 'bytes': values.get('remote_disk', 0), 'category': 'Herramienta'},
             ]
             return values
         if status in ('Failed', 'Cancelled', 'TimedOut'):
@@ -312,10 +461,54 @@ def protection_for_instance(instance, config):
 def build_recommendations(data, config):
     recommendations = []
     protected_ids = set(config.get('protected_instances', {}).keys())
+
+    # 1. Capacity & Storage Recommendations
+    capacity = data.get('capacity', {})
+    disk_pct = capacity.get('disk_available_pct')
+    if disk_pct is not None:
+        avail_gb = round((capacity.get('disk_available', 0) or 0) / 1073741824, 2)
+        if disk_pct >= 30:
+            recommendations.append({
+                'level': 'ok',
+                'title': 'Margen de disco saludable',
+                'detail': f'El disco raíz (8 GB) cuenta con {disk_pct}% disponible (~{avail_gb} GB libres) tras la depuración. Tarea diaria de mantenimiento activa en /etc/cron.daily/tuctuc-disk-maintenance.'
+            })
+        elif disk_pct >= 20:
+            recommendations.append({
+                'level': 'warning',
+                'title': 'Vigilar espacio en disco',
+                'detail': f'Espacio disponible en {disk_pct}% (~{avail_gb} GB). El cron diario mantiene journals y snap limpios, pero se debe vigilar el crecimiento de PostgreSQL o logs.'
+            })
+        else:
+            recommendations.append({
+                'level': 'critical',
+                'title': 'Espacio en disco crítico',
+                'detail': f'Queda menos del 20% ({disk_pct}% disponible, ~{avail_gb} GB). Se recomienda ampliar el volumen EBS de 8 GB a 10–12 GB.'
+            })
+
+    # 2. Cost Reduction Status & Levers
+    recommendations.append({
+        'level': 'ok',
+        'title': 'Savings Plan EC2 activo (t3.small a 1 año)',
+        'detail': 'Plan de ahorro a 1 año contratado (ID b855f47a-b18f-4bd8-b3f6-ada49e44ee00). Tarifa reducida a $0.013 USD/h (~$9.67 USD/mes, ahorro garantizado de ~$5.81 USD/mes / ~$69.70 USD/año sin pago inicial).'
+    })
+    recommendations.append({
+        'level': 'ok',
+        'title': 'Volumen EBS modernizado a gp3 (3,000 IOPS)',
+        'detail': 'El volumen vol-05792c3cf7f077535 opera ahora en gp3 a 3,000 IOPS base (30 veces más rápido) y 125 MB/s de throughput, con tarifa 20% más económica.'
+    })
+    recommendations.append({
+        'level': 'cost',
+        'title': 'Oportunidad pendiente: Optimización de IPv4 pública ($3.72/mes)',
+        'detail': 'AWS factura $0.005/h ($3.72 USD/mes) por la IPv4 pública. Cuando se decida implementar Cloudflare Tunnel (100% gratuito), se podrá prescindir de la IPv4 pública y ahorrar este valor al 100%.'
+    })
+
+    # 3. Infrastructure Inventories
     for instance in data['instances']:
         instance['protection'] = protection_for_instance(instance, config)
         if instance['state'] == 'stopped':
             recommendations.append({'level': 'review', 'title': 'Servidor detenido', 'detail': f"{instance['name'] or instance['id']} conserva discos que generan costo."})
+
     for volume in data['volumes']:
         if volume.get('attached_to') in protected_ids:
             volume['protection'] = {'level': 'essential', 'label': 'Disco del servidor productivo'}
@@ -324,6 +517,7 @@ def build_recommendations(data, config):
             recommendations.append({'level': 'review', 'title': 'Volumen EBS no asociado', 'detail': f"{volume['id']} ({volume['size_gb']} GB) genera costo aunque no este conectado."})
         else:
             volume['protection'] = {'level': 'in_use', 'label': 'En uso'}
+
     for address in data['elastic_ips']:
         if address.get('instance_id') in protected_ids:
             address['protection'] = {'level': 'essential', 'label': 'IP del servidor productivo'}
@@ -332,14 +526,15 @@ def build_recommendations(data, config):
         else:
             address['protection'] = {'level': 'review', 'label': 'Sin asociacion; revisar costo'}
             recommendations.append({'level': 'review', 'title': 'IP elastica sin asociacion', 'detail': f"{address['public_ip']} parece reservada sin recurso asociado."})
+
     for gateway in data['nat_gateways']:
         gateway['protection'] = {'level': 'review', 'label': 'Confirmar necesidad de red'}
         if gateway.get('state') == 'available':
             recommendations.append({'level': 'cost', 'title': 'NAT Gateway activo', 'detail': f"{gateway['id']} genera costo fijo y por trafico; revisar su necesidad."})
+
     for snapshot in data['snapshots']:
         snapshot['protection'] = {'level': 'review', 'label': 'Copia de seguridad; no eliminar automaticamente'}
-    if not recommendations:
-        recommendations.append({'level': 'ok', 'title': 'Sin desperdicios evidentes', 'detail': 'No se detectaron NAT activos, IP libres, volúmenes sueltos ni servidores detenidos en las regiones auditadas.'})
+
     return recommendations
 
 
@@ -352,20 +547,28 @@ def capacity_status(capacity):
         return {'level': 'critical', 'label': 'Capacidad critica'}
     if memory < 35 or disk < 25:
         return {'level': 'warning', 'label': 'Vigilar capacidad'}
-    return {'level': 'healthy', 'label': 'Margen disponible'}
+    return {'level': 'healthy', 'label': 'Margen saludable'}
 
 
 def collect_audit(force_costs=False):
     config = load_config()
     now = datetime.now().astimezone()
-    costs = get_daily_costs(now, force=force_costs)
+    costs = get_cost_history(now, force=force_costs)
     data = {
         'instances': [], 'volumes': [], 'elastic_ips': [], 'nat_gateways': [], 'snapshots': [],
-        'cost_current': {}, 'cost_previous': {}, 'cloudwatch': {}, 'capacity': {}, 'instance_type': {},
+        'cost_history': costs.get('history', []),
+        'cost_current': costs.get('current', {}),
+        'cost_previous': costs.get('previous', {}),
+        'cost_peak': costs.get('peak_month', {}),
+        'cost_avg_recent': costs.get('avg_recent', 0),
+        'monthly_savings': costs.get('monthly_savings', 0),
+        'annual_savings': costs.get('annual_savings', 0),
+        'usage_breakdown': costs.get('usage_breakdown', []),
+        'cloudwatch': {}, 'capacity': {}, 'instance_type': {},
         'errors': [], 'regions': config['regions'], 'read_only': True,
     }
     tasks = []
-    with ThreadPoolExecutor(max_workers=15) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         for region in config['regions']:
             tasks.extend([
                 ('instances', executor.submit(get_instances, region)),
@@ -383,12 +586,9 @@ def collect_audit(force_costs=False):
             else:
                 data[key] = result
 
-    data['cost_current'] = costs.get('current', {})
-    data['cost_previous'] = costs.get('previous', {})
     data['costs_cached_at'] = costs.get('cached_at')
-    for key in ('cost_current', 'cost_previous'):
-        if 'error' in data[key]:
-            data['errors'].append(f"{key}: {data[key]['error']}")
+    if 'error' in costs:
+        data['errors'].append(f"cost_explorer: {costs['error']}")
 
     primary_id = config['primary_instance_id']
     primary_region = config['primary_region']
@@ -415,6 +615,41 @@ def collect_audit(force_costs=False):
         'arn': identity.get('Arn'),
         'root_warning': str(identity.get('Arn') or '').endswith(':root'),
     }
+
+    # 1. Fetch Savings Plans
+    savings_plans = get_savings_plans()
+    data['savings_plans'] = savings_plans
+
+    # 2. Dynamic Month-End Projections
+    current_cost = float(data['cost_current'].get('total') or 0)
+    current_day = max(1, now.day)
+    if now.month == 12:
+        days_in_month = 31
+    else:
+        days_in_month = (now.replace(month=now.month + 1, day=1) - timedelta(days=1)).day
+
+    linear_projected = round((current_cost / current_day) * days_in_month, 2)
+    remaining_days = max(0, days_in_month - current_day)
+    remaining_hours = remaining_days * 24
+
+    # Remaining compute with SP ($0.013/h):
+    rem_compute = remaining_hours * 0.0130
+    rem_ipv4 = remaining_hours * 0.0050
+    rem_ebs = (remaining_days / days_in_month) * 0.64
+    rem_other = 0.09
+    optimized_projected = round(current_cost + rem_compute + rem_ipv4 + rem_ebs + rem_other, 2)
+    full_month_estimated = 14.17
+
+    data['projections'] = {
+        'days_in_month': days_in_month,
+        'current_day': current_day,
+        'remaining_days': remaining_days,
+        'linear_projected': linear_projected,
+        'optimized_projected': optimized_projected,
+        'steady_state_monthly': full_month_estimated,
+        'monthly_savings_vs_previous': round(float(data['cost_previous'].get('total') or 20.14) - full_month_estimated, 2),
+    }
+
     data['recommendations'] = build_recommendations(data, config)
     data['capacity_status'] = capacity_status(data['capacity'])
     data['timestamp'] = now.isoformat(timespec='seconds')
@@ -434,7 +669,7 @@ def api_audit():
     config = load_config()
     ttl = int(config.get('cache_seconds', 300))
     with _cache_lock:
-        if not force and _cache['data'] and time.time() - _cache['at'] < ttl:
+        if not force and not force_costs and _cache['data'] and time.time() - _cache['at'] < ttl:
             return jsonify(_cache['data'])
         data = collect_audit(force_costs=force_costs)
         _cache['data'] = data

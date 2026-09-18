@@ -188,7 +188,8 @@ def _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago):
     if tipo == 'tienda':
         row = conn.execute("""
             SELECT p.id, p.total, p.nombre_cliente, p.telefono_cliente, p.tipo_entrega,
-                   p.direccion_cliente, t.nombre AS negocio, t.telegram_chat_id, t.admin_id
+                   p.direccion_cliente, p.centro_utilidad_id, p.numero_documento,
+                   t.nombre AS negocio, t.telegram_chat_id, t.admin_id
             FROM pedidos p
             JOIN tiendas t ON t.id = p.tienda_id
             WHERE p.id = %s
@@ -201,7 +202,8 @@ def _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago):
         row = conn.execute("""
             SELECT p.id, COALESCE(p.precio, 0) + COALESCE(p.valor_domicilio, 0) AS total,
                    p.nombre_cliente, p.telefono_cliente, p.tipo_entrega, p.direccion_cliente,
-                   p.mesa_nombre, r.nombre AS negocio, r.admin_id
+                   p.mesa_nombre, p.centro_utilidad_id, p.numero_documento,
+                   r.nombre AS negocio, r.admin_id
             FROM pedidos p
             JOIN restaurantes r ON r.id = p.restaurante_id
             WHERE p.id = %s
@@ -216,19 +218,72 @@ def _notificar_pago_pedido(conn, tipo, pedido_id, pagos, metodo_pago):
     except Exception:
         chat_directo = None
     chat_id = _chat_id_negocio(conn, chat_directo, row['admin_id'])
-    if not chat_id:
+
+    # Resolver Centro de Utilidad / Sede
+    cu_info = None
+    cu_chat_id = None
+    cid_cu = None
+    try:
+        cid_cu = row['centro_utilidad_id']
+    except Exception:
+        pass
+    if cid_cu:
+        try:
+            cu_row = conn.execute(
+                "SELECT codigo, nombre, tipo, telegram_chat_id FROM centros_utilidad WHERE id = %s",
+                (cid_cu,)
+            ).fetchone()
+        except Exception:
+            try:
+                cu_row = conn.execute(
+                    "SELECT codigo, nombre, tipo FROM centros_utilidad WHERE id = %s",
+                    (cid_cu,)
+                ).fetchone()
+            except Exception:
+                cu_row = None
+        if cu_row:
+            tipo_icon = "🛵" if (cu_row.get('tipo') or '').lower() in ('domicilio', 'movil', 'bodega') else "🏪"
+            cod = (cu_row['codigo'] or '').strip()
+            nom = (cu_row['nombre'] or '').strip()
+            if cod and nom:
+                cu_info = f"{tipo_icon} {cod} — {nom}"
+            elif nom or cod:
+                cu_info = f"{tipo_icon} {nom or cod}"
+            try:
+                cu_chat_id = cu_row['telegram_chat_id']
+            except Exception:
+                cu_chat_id = None
+
+    chats_a_notificar = set()
+    if chat_id:
+        chats_a_notificar.add(str(chat_id).strip())
+    if cu_chat_id:
+        chats_a_notificar.add(str(cu_chat_id).strip())
+
+    if not chats_a_notificar:
         return
+
+    cu_line = f"🏢 <b>Sede / Centro:</b> {cu_info}\n" if cu_info else ""
+    doc_num = None
+    try:
+        doc_num = row['numero_documento']
+    except Exception:
+        pass
+    doc_str = f" ({doc_num})" if doc_num else ""
+
     pagos_txt = _telegram_resumen_pagos(pagos, metodo_pago, total)
     msg = (
         f"💳 <b>Pago / forma de pago registrada</b>\n"
         f"🏪 {row['negocio']}\n"
-        f"🧾 Pedido #{pedido_id}\n"
+        f"{cu_line}"
+        f"🧾 Pedido #{pedido_id}{doc_str}\n"
         f"👤 {row['nombre_cliente'] or 'Cliente'} - {row['telefono_cliente'] or 'Sin telefono'}\n"
         f"📦 Entrega: {entrega}\n"
         f"💳 Pago elegido: {pagos_txt}\n"
         f"💰 Total: ${total:,.0f}"
     )
-    _enviar_telegram_negocio(conn, chat_id, msg)
+    for cid in chats_a_notificar:
+        _enviar_telegram_negocio(conn, cid, msg)
 
 
 def _asegurar_domicilio_restaurante(conn):

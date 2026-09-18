@@ -164,18 +164,21 @@
       <table class="table table-bordered table-hover mb-0" id="tabla">
         <thead>
           <tr>
-            <th onclick="ordenar(0)" data-col="0">#<span class="sort-ico"></span></th>
-            <th onclick="ordenar(1)" data-col="1">Fecha<span class="sort-ico"></span></th>
-            <th onclick="ordenar(2)" data-col="2">Lapso<span class="sort-ico"></span></th>
-            <th onclick="ordenar(3)" data-col="3">Tipo<span class="sort-ico"></span></th>
-            <th onclick="ordenar(4)" data-col="4">Documento<span class="sort-ico"></span></th>
-            <th onclick="ordenar(5)" data-col="5">Cuenta<span class="sort-ico"></span></th>
-            <th onclick="ordenar(6)" data-col="6">NIT<span class="sort-ico"></span></th>
-            <th onclick="ordenar(7)" data-col="7">Tercero<span class="sort-ico"></span></th>
-            <th onclick="ordenar(8)" data-col="8" class="text-end">Débito<span class="sort-ico"></span></th>
-            <th onclick="ordenar(9)" data-col="9" class="text-end">Crédito<span class="sort-ico"></span></th>
-            <th>Detalle</th>
-            <th class="text-center">Anul.</th>
+            <th rowspan="2" onclick="ordenar(0)" data-col="0">#<span class="sort-ico"></span></th>
+            <th colspan="2" class="text-center" style="background:#e9ecef;font-weight:700;letter-spacing:.5px">FECHAS</th>
+            <th rowspan="2" onclick="ordenar(3)" data-col="3">Tipo<span class="sort-ico"></span></th>
+            <th rowspan="2" onclick="ordenar(4)" data-col="4">Documento<span class="sort-ico"></span></th>
+            <th rowspan="2" onclick="ordenar(5)" data-col="5">Cuenta<span class="sort-ico"></span></th>
+            <th rowspan="2" onclick="ordenar(6)" data-col="6">NIT<span class="sort-ico"></span></th>
+            <th rowspan="2" onclick="ordenar(7)" data-col="7">Tercero<span class="sort-ico"></span></th>
+            <th rowspan="2" onclick="ordenar(8)" data-col="8" class="text-end">Débito<span class="sort-ico"></span></th>
+            <th rowspan="2" onclick="ordenar(9)" data-col="9" class="text-end">Crédito<span class="sort-ico"></span></th>
+            <th rowspan="2">Detalle</th>
+            <th rowspan="2" class="text-center">Anul.</th>
+          </tr>
+          <tr>
+            <th onclick="ordenar(1)" data-col="1">Digitado<span class="sort-ico"></span></th>
+            <th onclick="ordenar(2)" data-col="2">Contable<span class="sort-ico"></span></th>
           </tr>
         </thead>
         <tbody id="tabla-body"></tbody>

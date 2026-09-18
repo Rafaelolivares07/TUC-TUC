@@ -2250,6 +2250,36 @@ def api_tienda_pedido_crear(slug):
         negocio = _obtener_negocio_por_slug(conn, slug)
         if not negocio:
             return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+
+        # Determinar centro_utilidad_id para inventario, bodega y pedidos
+        centro_utilidad_id = data.get('centro_utilidad_id')
+        if not centro_utilidad_id:
+            token_disp = data.get('token_dispositivo')
+            if token_disp:
+                row_disp = conn.execute(
+                    "SELECT centro_utilidad_id FROM dispositivos_pos WHERE token_dispositivo = %s AND activo = TRUE",
+                    (token_disp,)
+                ).fetchone()
+                if row_disp:
+                    centro_utilidad_id = row_disp['centro_utilidad_id']
+        if not centro_utilidad_id:
+            centro_utilidad_id = session.get('centro_utilidad_id')
+        if not centro_utilidad_id and negocio.get('tercero_id'):
+            try:
+                row_def_cu = conn.execute("""
+                    SELECT id FROM centros_utilidad 
+                    WHERE negocio_id = %s AND activo = TRUE 
+                    ORDER BY CASE WHEN tipo IN ('movil', 'domicilio', 'principal') THEN 0 ELSE 1 END, id ASC 
+                    LIMIT 1
+                """, (negocio['tercero_id'],)).fetchone()
+                if row_def_cu:
+                    centro_utilidad_id = row_def_cu['id']
+            except Exception:
+                pass
+        try:
+            centro_utilidad_id = int(centro_utilidad_id) if centro_utilidad_id else 1
+        except Exception:
+            centro_utilidad_id = 1
         
         if negocio.get('tercero_id'):
             try:
@@ -2362,8 +2392,8 @@ def api_tienda_pedido_crear(slug):
                 
                 # Obtener stock en base de datos
                 saldo = conn.execute(
-                    "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1",
-                    (negocio['tercero_id'], prod_id)
+                    "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = %s",
+                    (negocio['tercero_id'], prod_id, centro_utilidad_id)
                 ).fetchone()
                 qty_system = float(saldo['stock'] if saldo else 0.0)
                 diff = qty_physical - qty_system
@@ -2375,7 +2405,7 @@ def api_tienda_pedido_crear(slug):
                     conn, negocio['tercero_id'], prod_id, abs(diff), 'entrada' if diff > 0 else 'salida', 'ajuste',
                     registrado_por=session.get('usuario_id'),
                     valor_unitario=cost_unit,
-                    bodega=1,
+                    bodega=centro_utilidad_id,
                     tipo_documento=tipo_doc_codigo or 'Factura de Venta',
                     documento_numero=numero_documento,
                     documento_fecha=fecha_pedido,
@@ -2390,7 +2420,7 @@ def api_tienda_pedido_crear(slug):
         force_negative = data.get('force_negative_stock') == True
         excluir_componentes = data.get('excluir_componentes') or []
         if not force_negative:
-            shortages = _verificar_stock_pedido(conn, negocio['tercero_id'], items_validos, excluir_componentes)
+            shortages = _verificar_stock_pedido(conn, negocio['tercero_id'], items_validos, excluir_componentes, bodega=centro_utilidad_id)
             if shortages:
                 conn.close()
                 return jsonify({'ok': False, 'error': 'insufficient_stock', 'shortages': shortages}), 400
@@ -2454,8 +2484,8 @@ def api_tienda_pedido_crear(slug):
                 (tienda_id, restaurante_id, negocio_id, cliente_id, nombre_cliente, telefono_cliente, direccion_cliente,
                  tipo_entrega, total, notas, metodo_pago, id_cajero, nombre_cajero, id_tercero_cajero,
                  subtotal_productos, valor_domicilio, domicilio_estado, cliente_lat, cliente_lon,
-                 tipo_documento_id, numero_documento)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 tipo_documento_id, numero_documento, centro_utilidad_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             negocio['id'] if negocio['tipo_negocio'] == 'tienda' else None,
             negocio['id'] if negocio['tipo_negocio'] == 'restaurante' else None,
@@ -2463,7 +2493,7 @@ def api_tienda_pedido_crear(slug):
             direccion_cliente or None, tipo_entrega, total, notas or None, metodo_pago,
             id_cajero, nombre_cajero, id_tercero_cajero, subtotal_productos,
             float(valor_domicilio or 0), domicilio_estado, cliente_lat, cliente_lon,
-            tipo_doc_id, numero_documento
+            tipo_doc_id, numero_documento, centro_utilidad_id
         ))
         pedido_id = conn.execute(
             "SELECT currval(pg_get_serial_sequence('pedidos', 'id'))"
@@ -2478,23 +2508,23 @@ def api_tienda_pedido_crear(slug):
             """, (pedido_id, negocio['tercero_id'], numero_documento))
 
         for it in items_validos:
-            # Query the unit cost of the product right now
+            # Query the unit cost of the product right now in this bodega
             costo_row = conn.execute("""
                 SELECT COALESCE(
                     -- 1. Recipe product: sum of standard recipe components cost
                     (SELECT SUM(t.cantidad * COALESCE(s.costo_und, p_comp.costo, 0))
                      FROM tarjeta_estandar t
                      JOIN productos p_comp ON p_comp.id = t.componente_id
-                     LEFT JOIN saldos_inventario s ON s.producto_id = t.componente_id AND s.negocio_id = %s AND s.bodega = 1
+                     LEFT JOIN saldos_inventario s ON s.producto_id = t.componente_id AND s.negocio_id = %s AND s.bodega = %s
                      WHERE t.producto_id = %s
                      HAVING COUNT(*) > 0),
                     -- 2. Simple product
                     (SELECT COALESCE(s.costo_und, p.costo, 0)
                      FROM productos p
-                     LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
+                     LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = %s
                      WHERE p.id = %s)
                 ) AS costo_real
-            """, (negocio['tercero_id'], it['producto_id'], negocio['tercero_id'], it['producto_id'])).fetchone()
+            """, (negocio['tercero_id'], centro_utilidad_id, it['producto_id'], negocio['tercero_id'], centro_utilidad_id, it['producto_id'])).fetchone()
             costo_u = float(costo_row['costo_real']) if (costo_row and costo_row['costo_real'] is not None) else 0.0
 
             conn.execute("""
@@ -2518,6 +2548,7 @@ def api_tienda_pedido_crear(slug):
                         registrado_por = session.get('usuario_id'),
                         referencia_id  = pedido_id,
                         referencia_tipo= 'pedido_tienda',
+                        bodega         = centro_utilidad_id,
                         tipo_documento = tipo_doc['nombre'] if (tipo_doc_id and tipo_doc) else 'Venta POS',
                         documento_numero = numero_documento or str(pedido_id),
                         documento_fecha = fecha_pedido,
@@ -2568,7 +2599,8 @@ def api_tienda_pedido_crear(slug):
                               tercero_id=cliente_id,
                               tipo_documento_fisico=tipo_doc_codigo,
                               documento_numero_fisico=res_num,
-                              fecha=fecha_pedido)
+                              fecha=fecha_pedido,
+                              centro_utilidad_id=centro_utilidad_id)
             except Exception as _e:
                 print(f'[cont] venta tienda {slug}: {_e}')
         
@@ -2596,15 +2628,55 @@ def api_tienda_pedido_crear(slug):
                     chat_id = config['telegram_chat_id'] or None
             except Exception as _e:
                 print(f'[telegram tienda] chat global no disponible: {_e}')
+
+        # Información y chat específico del Centro de Utilidad / Sede
+        cu_info = None
+        cu_chat_id = None
+        if centro_utilidad_id:
+            try:
+                cu_row = conn.execute(
+                    "SELECT codigo, nombre, tipo, telegram_chat_id FROM centros_utilidad WHERE id = %s",
+                    (centro_utilidad_id,)
+                ).fetchone()
+            except Exception:
+                try:
+                    cu_row = conn.execute(
+                        "SELECT codigo, nombre, tipo FROM centros_utilidad WHERE id = %s",
+                        (centro_utilidad_id,)
+                    ).fetchone()
+                except Exception:
+                    cu_row = None
+            if cu_row:
+                tipo_icon = "🛵" if (cu_row.get('tipo') or '').lower() in ('domicilio', 'movil', 'bodega') else "🏪"
+                cod = (cu_row['codigo'] or '').strip()
+                nom = (cu_row['nombre'] or '').strip()
+                if cod and nom:
+                    cu_info = f"{tipo_icon} {cod} — {nom}"
+                elif nom or cod:
+                    cu_info = f"{tipo_icon} {nom or cod}"
+                try:
+                    cu_chat_id = cu_row['telegram_chat_id']
+                except Exception:
+                    cu_chat_id = None
+
+        chats_a_notificar = set()
         if chat_id:
+            chats_a_notificar.add(str(chat_id).strip())
+        if cu_chat_id:
+            chats_a_notificar.add(str(cu_chat_id).strip())
+
+        if chats_a_notificar:
             items_txt = '\n'.join([f"  {it['cantidad']}x {it['nombre_producto']} - ${it['precio_unitario'] * it['cantidad']:,.0f}" for it in items_validos])
             entrega = _telegram_detalle_entrega_tienda(tipo_entrega, direccion_cliente, nombre_cajero)
             pagos_txt = _telegram_resumen_pagos(pagos_validos, metodo_pago, total)
             cliente_txt = nombre_cliente or nombre_cajero or 'Cliente en local'
             telefono_txt = telefono_cliente or 'Sin telefono'
+            cu_line = f"🏢 <b>Sede / Centro:</b> {cu_info}\n" if cu_info else ""
+            doc_line = f" ({numero_documento})" if numero_documento else ""
             msg = (
                 f"🛒 <b>Nuevo pedido en {tienda['nombre']}</b>\n"
-                f"🧾 Pedido #{pedido_id}\n"
+                f"{cu_line}"
+                f"🧾 Pedido #{pedido_id}{doc_line}\n"
                 f"👤 {cliente_txt} - {telefono_txt}\n"
                 f"📦 Entrega: {entrega}\n"
                 f"💳 Pago elegido: {pagos_txt}\n\n"
@@ -2613,7 +2685,8 @@ def api_tienda_pedido_crear(slug):
                 f"Domicilio: {'por confirmar' if domicilio_estado == 'por_confirmar' else '$' + format(float(valor_domicilio or 0), ',.0f')}\n"
                 f"💰 Total: ${total:,.0f}"
             )
-            _enviar_telegram_tienda(conn, chat_id, msg)
+            for cid in chats_a_notificar:
+                _enviar_telegram_tienda(conn, cid, msg)
         else:
             print(f'[telegram tienda] sin chat_id para tienda {slug}')
         return jsonify({'ok': True, 'pedido_id': pedido_id, 'total': total, 'numero_documento': numero_documento})

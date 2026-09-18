@@ -1,6 +1,6 @@
 from flask import Blueprint, Response, jsonify, redirect, render_template, request, session, url_for
 from ..db import get_db_connection
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, timedelta
 
 try:
@@ -163,6 +163,25 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_inv_dist_negocio ON inventario_distribuido_estado(negocio_id)",
         "CREATE INDEX IF NOT EXISTS idx_inv_dist_producto ON inventario_distribuido_estado(producto_id)",
         "CREATE INDEX IF NOT EXISTS idx_inv_dist_estado ON inventario_distribuido_estado(estado)",
+        """CREATE TABLE IF NOT EXISTS traslados_inventario (
+            id                SERIAL PRIMARY KEY,
+            negocio_id        INTEGER NOT NULL,
+            bodega_origen_id  INTEGER NOT NULL,
+            bodega_destino_id INTEGER NOT NULL,
+            producto_id       INTEGER NOT NULL REFERENCES productos(id),
+            cantidad          NUMERIC(12,4) NOT NULL,
+            costo_und         NUMERIC(14,4) NOT NULL,
+            valor_total       NUMERIC(14,2) NOT NULL,
+            estado            VARCHAR(20) DEFAULT 'completado',
+            registrado_por    INTEGER,
+            notas             TEXT,
+            created_at        TIMESTAMP DEFAULT NOW()
+        )""",
+        "ALTER TABLE traslados_inventario ADD COLUMN IF NOT EXISTS tipo_documento_id INTEGER",
+        "ALTER TABLE traslados_inventario ADD COLUMN IF NOT EXISTS tipo_documento VARCHAR(50)",
+        "ALTER TABLE traslados_inventario ADD COLUMN IF NOT EXISTS documento_numero VARCHAR(50)",
+        "ALTER TABLE inventario_distribuido_estado ADD COLUMN IF NOT EXISTS centro_utilidad_id INTEGER DEFAULT 1",
+        "CREATE INDEX IF NOT EXISTS idx_inv_dist_centro ON inventario_distribuido_estado(negocio_id, centro_utilidad_id)",
     ]
     for sql in alters:
         try:
@@ -381,7 +400,7 @@ def _componentes_de(conn, producto_id):
 
 
 def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
-                 registrado_por, valor_unitario=None, notas=None, bodega=1,
+                 registrado_por, valor_unitario=None, notas=None, bodega=None,
                  referencia_id=None, referencia_tipo=None,
                  tipo_documento=None, documento_numero=None,
                  documento_fecha=None, proveedor_id=None,
@@ -392,6 +411,16 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
     """Movimiento directo sobre un producto, sin pasar por tarjeta estándar."""
     signo  = Decimal('1') if tipo == 'entrada' else Decimal('-1')
     cantidad = Decimal(str(cantidad))
+
+    if bodega is None:
+        try:
+            bodega = session.get('centro_utilidad_id') or 1
+        except Exception:
+            bodega = 1
+    try:
+        bodega = int(bodega)
+    except Exception:
+        bodega = 1
 
     saldo = conn.execute(
         "SELECT stock, costo_und, valor_existencia FROM saldos_inventario "
@@ -448,8 +477,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
              valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo,
              tipo_documento, documento_numero, numero_documento, documento_fecha, proveedor_id,
              proveedor_nombre, iva_total, documento_total, iva_pct, iva_valor,
-             producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id, bodega)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         negocio_id, producto_id,
         nombre_prod['nombre'] if nombre_prod else '',
@@ -466,7 +495,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         float(documento_total) if documento_total is not None else None,
         float(iva_pct) if iva_pct is not None else 0.0,
         float(iva_valor) if iva_valor is not None else 0.0,
-        producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id
+        producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id, bodega
     ))
 
     if saldo:
@@ -492,11 +521,12 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
 
 
 
-def _verificar_stock_pedido(conn, negocio_id, items, excluir_componentes=None):
+def _verificar_stock_pedido(conn, negocio_id, items, excluir_componentes=None, bodega=1):
     """
-    Verifica si hay stock suficiente en bodega 1 para procesar los items del pedido.
+    Verifica si hay stock suficiente en la bodega especificada (por defecto bodega 1) para procesar los items del pedido.
     excluir_componentes: lista de diccionarios/objetos [{'producto_id': ID, 'componente_id': ID}] 
                          que representa las exclusiones de la opción 4.
+    bodega: ID del Centro de Utilidad / Bodega a verificar.
     Retorna: lista de diccionarios con los insumos/productos faltantes.
     """
     from decimal import Decimal
@@ -551,8 +581,8 @@ def _verificar_stock_pedido(conn, negocio_id, items, excluir_componentes=None):
             continue
             
         saldo = conn.execute(
-            "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1",
-            (negocio_id, comp_id)
+            "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = %s",
+            (negocio_id, comp_id, bodega or 1)
         ).fetchone()
         
         stock_disp = Decimal(str(saldo['stock'] if saldo else 0.0))
@@ -584,7 +614,7 @@ def _verificar_stock_pedido(conn, negocio_id, items, excluir_componentes=None):
 
 
 def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
-                     registrado_por, valor_unitario=None, notas=None, bodega=1,
+                     registrado_por, valor_unitario=None, notas=None, bodega=None,
                      referencia_id=None, referencia_tipo=None,
                      tipo_documento=None, documento_numero=None,
                      documento_fecha=None, proveedor_id=None,
@@ -593,6 +623,16 @@ def _aplicar_tarjeta(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                      presentacion_id=None, metodo_pago=None, tipo_documento_id=None,
                      excluir_componentes_ids=None, valor_total=None):
     """Aplica entrada o salida según tarjeta estándar. Sin tarjeta → 1:1 sobre sí mismo."""
+    if bodega is None:
+        try:
+            bodega = session.get('centro_utilidad_id') or 1
+        except Exception:
+            bodega = 1
+    try:
+        bodega = int(bodega)
+    except Exception:
+        bodega = 1
+
     componentes = conn.execute(
         "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
         (producto_id,)
@@ -629,6 +669,36 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     notas = _txt(data.get('notes') or data.get('notas'))
     if not lineas:
         return {'ok': False, 'error': 'Debe agregar al menos una linea'}, 400
+
+    # Validación estricta de Sede / Bodega física receptora
+    bodega_raw = data.get('bodega') or data.get('centro_utilidad_id')
+    if not bodega_raw:
+        try:
+            bodega_raw = session.get('centro_utilidad_id')
+        except Exception:
+            bodega_raw = None
+
+    if not bodega_raw or str(bodega_raw).strip().lower() in ('consolidado', 'todas', 'all', 'none', ''):
+        return {
+            'ok': False,
+            'error': 'No es posible registrar una entrada de inventario en la vista Consolidada. Debe seleccionar una sede o bodega física específica (ej. Local Envigado o Sede Principal).'
+        }, 400
+
+    try:
+        bodega_entrada = int(bodega_raw)
+    except (ValueError, TypeError):
+        return {'ok': False, 'error': 'Centro de utilidad / bodega de destino inválida.'}, 400
+
+    cu_check = conn.execute("""
+        SELECT id, nombre, codigo 
+        FROM centros_utilidad 
+        WHERE id = %s AND negocio_id = %s AND activo = TRUE
+    """, (bodega_entrada, negocio_id)).fetchone()
+    if not cu_check:
+        return {
+            'ok': False,
+            'error': f'El centro de utilidad seleccionado (ID {bodega_entrada}) no existe o no pertenece a este negocio.'
+        }, 400
 
     metodo_pago = (_txt(data.get('metodo_pago')) or 'efectivo').lower()
 
@@ -879,6 +949,7 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
             registrado_por=usuario_id,
             valor_unitario=float(ln['valor_unitario']) if ln['valor_unitario'] else None,
             notas=notas,
+            bodega=bodega_entrada,
             referencia_id=data.get('referencia_id'),
             referencia_tipo=data.get('referencia_tipo'),
             tipo_documento=tipo_documento,
@@ -947,7 +1018,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                               metodo_pago=metodo_pago,
                               tercero_id=proveedor_id,
                               tipo_documento_fisico=tipo_documento,
-                              documento_numero_fisico=documento_numero)
+                              documento_numero_fisico=documento_numero,
+                              centro_utilidad_id=bodega_entrada)
         except Exception as _e:
             raise _e
 
@@ -1152,17 +1224,44 @@ def api_inventario_productos(negocio_id):
         solo_venta = request.args.get('solo_venta') == '1'
         extra_where = " AND p.disponible = TRUE AND p.precio > 0" if solo_venta else ""
 
-        rows = conn.execute(f"""
-            SELECT p.id, p.nombre, p.categoria, p.precio,
-                   COALESCE(s.costo_und, p.costo) AS costo,
-                   p.codigo_barra, p.iva_pct, p.disponible, p.orden,
-                   COALESCE(s.stock, 0) AS stock
-            FROM productos p
-            LEFT JOIN saldos_inventario s ON s.producto_id = p.id
-                AND s.negocio_id = p.negocio_id AND s.bodega = 1
-            WHERE p.negocio_id = %s{extra_where}
-            ORDER BY p.categoria, p.orden, p.nombre
-        """, (negocio_id,)).fetchall()
+        bodega_param = request.args.get('bodega')
+        if not bodega_param:
+            bodega_param = session.get('centro_utilidad_id') or 1
+            
+        es_consolidado = str(bodega_param).lower() in ('consolidado', 'todas', 'all')
+        if es_consolidado:
+            rows = conn.execute(f"""
+                SELECT p.id, p.nombre, p.categoria, p.precio,
+                       COALESCE(s.costo_und, p.costo) AS costo,
+                       p.codigo_barra, p.iva_pct, p.disponible, p.orden,
+                       COALESCE(s.stock, 0) AS stock
+                FROM productos p
+                LEFT JOIN (
+                    SELECT producto_id, negocio_id, SUM(stock) as stock, 
+                           CASE WHEN SUM(stock) > 0 THEN SUM(valor_existencia)/SUM(stock) ELSE AVG(costo_und) END as costo_und
+                    FROM saldos_inventario
+                    WHERE negocio_id = %s
+                    GROUP BY producto_id, negocio_id
+                ) s ON s.producto_id = p.id AND s.negocio_id = p.negocio_id
+                WHERE p.negocio_id = %s{extra_where}
+                ORDER BY p.categoria, p.orden, p.nombre
+            """, (negocio_id, negocio_id)).fetchall()
+        else:
+            try:
+                bodega_id = int(bodega_param)
+            except Exception:
+                bodega_id = 1
+            rows = conn.execute(f"""
+                SELECT p.id, p.nombre, p.categoria, p.precio,
+                       COALESCE(s.costo_und, p.costo) AS costo,
+                       p.codigo_barra, p.iva_pct, p.disponible, p.orden,
+                       COALESCE(s.stock, 0) AS stock
+                FROM productos p
+                LEFT JOIN saldos_inventario s ON s.producto_id = p.id
+                    AND s.negocio_id = p.negocio_id AND s.bodega = %s
+                WHERE p.negocio_id = %s{extra_where}
+                ORDER BY p.categoria, p.orden, p.nombre
+            """, (bodega_id, negocio_id)).fetchall()
         return jsonify({'ok': True, 'productos': [dict(r) for r in rows]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -1447,14 +1546,28 @@ def api_inventario_stock(negocio_id):
         _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
-        rows = conn.execute("""
+        bodega_param = request.args.get('bodega')
+        if not bodega_param:
+            bodega_param = session.get('centro_utilidad_id')
+
+        filtro_bodega = ""
+        params_stock = [negocio_id]
+        if bodega_param and str(bodega_param).lower() not in ('consolidado', 'todas', 'all'):
+            try:
+                bod_int = int(bodega_param)
+                filtro_bodega = " AND s.bodega = %s"
+                params_stock.append(bod_int)
+            except Exception:
+                pass
+
+        rows = conn.execute(f"""
             SELECT p.id, p.nombre, p.categoria, s.bodega,
                    s.stock, s.costo_und, s.valor_existencia, s.updated_at
             FROM saldos_inventario s
             JOIN productos p ON p.id = s.producto_id
-            WHERE s.negocio_id = %s
+            WHERE s.negocio_id = %s {filtro_bodega}
             ORDER BY p.categoria, p.nombre
-        """, (negocio_id,)).fetchall()
+        """, tuple(params_stock)).fetchall()
         return jsonify({'ok': True, 'saldos': [dict(r) for r in rows]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -1503,7 +1616,21 @@ def api_inventario_kardex(producto_id):
         _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
-        rows = conn.execute("""
+
+        bodega_kardex = request.args.get('bodega') or session.get('centro_utilidad_id') or 1
+        es_consolidado_k = str(bodega_kardex).lower() in ('consolidado', 'todas', 'all')
+
+        filtro_bodega_sql = ""
+        params_kardex = [producto_id]
+        if not es_consolidado_k:
+            try:
+                bod_int = int(bodega_kardex)
+                filtro_bodega_sql = " AND (m.bodega = %s OR m.bodega IS NULL) "
+                params_kardex.append(bod_int)
+            except Exception:
+                pass
+
+        rows = conn.execute(f"""
             SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
                    m.documento_numero, m.documento_fecha, m.tipo_documento_id, m.proveedor_id,
@@ -1512,27 +1639,52 @@ def api_inventario_kardex(producto_id):
                    TO_CHAR(m.created_at, 'HH24:MI') AS hora_documento,
                    TO_CHAR(m.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at_iso,
                    TO_CHAR(m.documento_fecha, 'YYYY-MM-DD') AS documento_fecha_iso,
-                   p_padre.nombre AS producto_padre_nombre
+                   p_padre.nombre AS producto_padre_nombre,
+                   m.bodega
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
-            WHERE m.producto_id = %s
+            WHERE m.producto_id = %s {filtro_bodega_sql}
             ORDER BY COALESCE(m.documento_fecha, m.created_at::date) DESC, m.created_at DESC, m.id DESC LIMIT 300
-        """, (producto_id,)).fetchall()
-        prod_info = conn.execute("""
-            SELECT p.costo, COALESCE(s.stock, 0.0) AS stock,
-                   COALESCE(s.valor_existencia, 0.0) AS valor_existencia
-            FROM productos p
-            LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = 1
-            WHERE p.id = %s
-        """, (producto_id,)).fetchone()
-        totales = conn.execute("""
-            SELECT
-                COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE 0 END), 0) AS entradas,
-                COALESCE(SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE 0 END), 0) AS salidas
-            FROM movimientos_inventario
-            WHERE negocio_id = %s AND producto_id = %s
-        """, (negocio_id, producto_id)).fetchone()
+        """, tuple(params_kardex)).fetchall()
+
+        if not es_consolidado_k:
+            try:
+                bod_int = int(bodega_kardex)
+            except Exception:
+                bod_int = 1
+            prod_info = conn.execute("""
+                SELECT p.costo, COALESCE(s.stock, 0.0) AS stock,
+                       COALESCE(s.valor_existencia, 0.0) AS valor_existencia
+                FROM productos p
+                LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = %s
+                WHERE p.id = %s
+            """, (bod_int, producto_id)).fetchone()
+
+            totales = conn.execute("""
+                SELECT
+                    COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE 0 END), 0) AS entradas,
+                    COALESCE(SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE 0 END), 0) AS salidas
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND producto_id = %s AND (bodega = %s OR bodega IS NULL)
+            """, (negocio_id, producto_id, bod_int)).fetchone()
+        else:
+            prod_info = conn.execute("""
+                SELECT p.costo, COALESCE(SUM(s.stock), 0.0) AS stock,
+                       COALESCE(SUM(s.valor_existencia), 0.0) AS valor_existencia
+                FROM productos p
+                LEFT JOIN saldos_inventario s ON s.producto_id = p.id
+                WHERE p.id = %s
+                GROUP BY p.id, p.costo
+            """, (producto_id,)).fetchone()
+
+            totales = conn.execute("""
+                SELECT
+                    COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE 0 END), 0) AS entradas,
+                    COALESCE(SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE 0 END), 0) AS salidas
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND producto_id = %s
+            """, (negocio_id, producto_id)).fetchone()
         
         costo_actual = float(prod_info['costo']) if prod_info and prod_info['costo'] is not None else 0.0
         stock_actual = float(prod_info['stock']) if prod_info and prod_info['stock'] is not None else 0.0
@@ -1583,7 +1735,20 @@ def api_inventario_kardex_pdf(producto_id):
         nombre_producto = prod_row['nombre'] if prod_row else 'Producto'
         codigo_producto = ''
 
-        rows = conn.execute("""
+        bodega_kardex = request.args.get('bodega') or session.get('centro_utilidad_id') or 1
+        es_consolidado_k = str(bodega_kardex).lower() in ('consolidado', 'todas', 'all')
+
+        filtro_bodega_sql = ""
+        params_kardex = [producto_id]
+        if not es_consolidado_k:
+            try:
+                bod_int = int(bodega_kardex)
+                filtro_bodega_sql = " AND (m.bodega = %s OR m.bodega IS NULL) "
+                params_kardex.append(bod_int)
+            except Exception:
+                bod_int = 1
+
+        rows = conn.execute(f"""
             SELECT m.id, m.tipo, m.motivo, m.cantidad, m.stock_anterior, m.stock_nuevo,
                    m.valor_unitario, m.costo_und, m.valor_total, m.notas, m.tipo_documento,
                    m.documento_numero, m.documento_fecha,
@@ -1594,17 +1759,31 @@ def api_inventario_kardex_pdf(producto_id):
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
-            WHERE m.producto_id = %s
+            WHERE m.producto_id = %s {filtro_bodega_sql}
             ORDER BY COALESCE(m.documento_fecha, m.created_at::date), m.created_at, m.id
-        """, (producto_id,)).fetchall()
+        """, tuple(params_kardex)).fetchall()
 
-        prod_info = conn.execute("""
-            SELECT p.costo, COALESCE(s.stock, 0.0) AS stock,
-                   COALESCE(s.valor_existencia, 0.0) AS valor_existencia
-            FROM productos p
-            LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = 1
-            WHERE p.id = %s
-        """, (producto_id,)).fetchone()
+        if not es_consolidado_k:
+            try:
+                bod_int = int(bodega_kardex)
+            except Exception:
+                bod_int = 1
+            prod_info = conn.execute("""
+                SELECT p.costo, COALESCE(s.stock, 0.0) AS stock,
+                       COALESCE(s.valor_existencia, 0.0) AS valor_existencia
+                FROM productos p
+                LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.bodega = %s
+                WHERE p.id = %s
+            """, (bod_int, producto_id)).fetchone()
+        else:
+            prod_info = conn.execute("""
+                SELECT p.costo, COALESCE(SUM(s.stock), 0.0) AS stock,
+                       COALESCE(SUM(s.valor_existencia), 0.0) AS valor_existencia
+                FROM productos p
+                LEFT JOIN saldos_inventario s ON s.producto_id = p.id
+                WHERE p.id = %s
+                GROUP BY p.id, p.costo
+            """, (producto_id,)).fetchone()
 
         stock_actual = float(prod_info['stock']) if prod_info and prod_info['stock'] is not None else 0.0
         costo_actual = float(prod_info['costo']) if prod_info and prod_info['costo'] is not None else 0.0
@@ -1620,10 +1799,22 @@ def api_inventario_kardex_pdf(producto_id):
             except Exception:
                 pass
 
+        sede_str = "Vista Consolidada (Todas las sedes)" if es_consolidado_k else None
+        if not es_consolidado_k:
+            try:
+                bod_int = int(bodega_kardex)
+                cu_row = conn.execute("SELECT nombre, codigo FROM centros_utilidad WHERE id = %s AND negocio_id = %s", (bod_int, negocio_id)).fetchone()
+                if cu_row:
+                    sede_str = f"{cu_row['nombre']} ({cu_row['codigo']})"
+                else:
+                    sede_str = f"Sede #{bod_int}"
+            except Exception:
+                sede_str = "Sede Principal"
+
         pdf = _pdf_kardex_producto(
             nombre_negocio, nombre_producto, codigo_producto,
             stock_actual, costo_actual, valor_existencia,
-            [dict(r) for r in rows], usuario
+            [dict(r) for r in rows], usuario, sede_str=sede_str
         )
         resp = Response(bytes(pdf.output()), mimetype='application/pdf')
         resp.headers['Content-Disposition'] = f"inline; filename=kardex_{producto_id}.pdf"
@@ -2132,15 +2323,21 @@ def api_reparar_costos_venta(negocio_id):
                     'costo_real_kardex': 0,
                 }
             ff = por_producto[ppid][doc]
+            raw_costo = s['costo_total'] if s['costo_total'] is not None else (s['cantidad'] * (s['costo_und'] or 0))
+            comp_costo_dec = Decimal(str(raw_costo)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            comp_costo_flt = float(comp_costo_dec)
             ff['componentes'].append({
                 'id': s['movimiento_id'],
                 'producto_id': s['producto_id'],
                 'nombre': s['nombre_producto'],
                 'cantidad': float(s['cantidad']),
                 'costo_und': float(s['costo_und'] or 0),
-                'costo_total': float(s['costo_total'] or 0),
+                'costo_total': comp_costo_flt,
             })
-            ff['costo_real_kardex'] += float(s['costo_total'] or 0)
+            if '_costo_real_dec' not in ff:
+                ff['_costo_real_dec'] = Decimal('0.00')
+            ff['_costo_real_dec'] += comp_costo_dec
+            ff['costo_real_kardex'] = float(ff['_costo_real_dec'])
         # 3. Para cada producto > factura: buscar costos actuales
         todos_resultados = []
         for ppid, docs in por_producto.items():
@@ -2219,7 +2416,7 @@ def api_reparar_costos_venta(negocio_id):
                     
                     pi_id = None
                     costo_actual_pi = costo_unitario_contable
-                    dif_pi = dif
+                    dif_pi = 0.0
                     dif_cogs = dif
                     cogs_monto = contab_monto
                     cogs_ids = contab_ids
@@ -2480,6 +2677,16 @@ def api_reparar_costos_venta(negocio_id):
                                 placeholders = ','.join(['%s'] * len(ids_borrar))
                                 conn.execute(f"DELETE FROM movimientos_contables WHERE id IN ({placeholders})", ids_borrar)
                             cambios_aplicados += 1
+                        for c in r.get('contrapartidas', []):
+                            for comp in r.get('componentes', []):
+                                if (c.get('producto_id') and c.get('producto_id') == comp.get('producto_id')) or (c.get('comp_nombre') == comp.get('nombre')):
+                                    if abs(c['monto_actual'] - comp['costo_total']) > 0.01:
+                                        conn.execute(
+                                            "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
+                                            (comp['costo_total'], c['id'])
+                                        )
+                                        cambios_aplicados += 1
+                                    break
             conn.commit()
         # 5. Resumen
         total_facturas = sum(len(pr['facturas']) for pr in todos_resultados)
@@ -2889,9 +3096,9 @@ def api_reparar_costos_documento(negocio_id):
             pares.append((prod_padre_id, numero_doc))
 
         elif prod_padre_id and not numero_doc:
-            # Nivel producto: todos los documentos de ese producto en rango
+            # Nivel producto: todos los documentos de ese producto en rango (tanto ventas como producciones)
             where_fechas = ""
-            params_k = [negocio_id, prod_padre_id]
+            params_k = [negocio_id, prod_padre_id, prod_padre_id, prod_padre_id]
             if fecha_desde:
                 where_fechas += " AND COALESCE(m.documento_fecha, m.created_at::date) >= %s"
                 params_k.append(fecha_desde)
@@ -2901,7 +3108,12 @@ def api_reparar_costos_documento(negocio_id):
             docs = conn.execute(f"""
                 SELECT DISTINCT m.documento_numero
                 FROM movimientos_inventario m
-                WHERE m.negocio_id = %s AND m.producto_padre_id = %s AND m.tipo = 'salida'
+                WHERE m.negocio_id = %s
+                  AND (
+                      (m.producto_padre_id = %s AND m.tipo = 'salida')
+                      OR (m.producto_id = %s AND m.tipo = 'entrada' AND m.referencia_tipo = 'produccion')
+                      OR (m.producto_padre_id = %s AND m.tipo = 'salida' AND m.referencia_tipo = 'produccion')
+                  )
                   {where_fechas}
             """, params_k).fetchall()
             for d in docs:
@@ -2909,13 +3121,17 @@ def api_reparar_costos_documento(negocio_id):
                     pares.append((prod_padre_id, str(d['documento_numero'])))
 
         elif fecha_desde and fecha_hasta:
-            # Nivel global: todos los productos con salidas en rango
+            # Nivel global: todos los productos con salidas o producciones en rango
             docs = conn.execute("""
-                SELECT DISTINCT producto_padre_id, documento_numero
-                FROM movimientos_inventario
-                WHERE negocio_id = %s
-                  AND tipo = 'salida'
-                  AND producto_padre_id IS NOT NULL
+                SELECT DISTINCT
+                    COALESCE(m.producto_padre_id, m.producto_id) AS producto_padre_id,
+                    m.documento_numero
+                FROM movimientos_inventario m
+                WHERE m.negocio_id = %s
+                  AND (
+                      (m.producto_padre_id IS NOT NULL AND m.tipo = 'salida')
+                      OR (m.tipo = 'entrada' AND m.referencia_tipo = 'produccion')
+                  )
                   AND COALESCE(documento_fecha, created_at::date) >= %s
                   AND COALESCE(documento_fecha, created_at::date) <= %s
             """, (negocio_id, fecha_desde, fecha_hasta)).fetchall()
@@ -2936,8 +3152,8 @@ def api_reparar_costos_documento(negocio_id):
 
         conn.commit()
 
-        total_cambios = sum(len(r['cambios_contables']) for r in resultados)
-        total_docs_modificados = sum(1 for r in resultados if r['cambios_contables'] or r['cogs_modificado'] or r['pedido_item_modificado'])
+        total_cambios = sum(len(r.get('cambios_contables', [])) for r in resultados)
+        total_docs_modificados = sum(1 for r in resultados if r.get('cambios_contables') or r.get('cogs_modificado') or r.get('pedido_item_modificado') or r.get('debito_modificado'))
 
         return jsonify({
             'ok': True,
@@ -2959,14 +3175,15 @@ def _reparar_un_documento(conn, negocio_id, prod_padre_id, numero_doc, td_codigo
     """Repara un par (producto_padre, documento) puntual.
     Detecta automaticamente si es grupo 2 (produccion) o grupo 3 (ventas).
     """
+    consecutive = str(numero_doc).split('-')[-1].strip() if '-' in str(numero_doc) else str(numero_doc)
     # Detectar tipo: buscar si hay entradas de produccion para este producto/documento
     es_produccion = conn.execute("""
         SELECT 1 FROM movimientos_inventario
         WHERE negocio_id = %s AND producto_id = %s
           AND tipo = 'entrada' AND referencia_tipo = 'produccion'
-          AND documento_numero = %s
+          AND (documento_numero = %s OR documento_numero = %s OR numero_documento = %s)
         LIMIT 1
-    """, (negocio_id, prod_padre_id, numero_doc)).fetchone()
+    """, (negocio_id, prod_padre_id, numero_doc, consecutive, consecutive)).fetchone()
 
     if es_produccion:
         return _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc)
@@ -2978,6 +3195,8 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
     """Repara un documento de produccion (grupo 2).
     Ajusta los asientos 14xx (debito=producto terminado, creditos=materias primas).
     """
+    consecutive = str(numero_doc).split('-')[-1].strip() if '-' in str(numero_doc) else str(numero_doc)
+
     # 1. Buscar entrada kardex del producto terminado
     kardex_prod = conn.execute("""
         SELECT id, cantidad, costo_und,
@@ -2986,9 +3205,9 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
         FROM movimientos_inventario
         WHERE negocio_id = %s AND producto_id = %s
           AND tipo = 'entrada' AND referencia_tipo = 'produccion'
-          AND documento_numero = %s
+          AND (documento_numero = %s OR documento_numero = %s OR numero_documento = %s)
         LIMIT 1
-    """, (negocio_id, prod_padre_id, numero_doc)).fetchone()
+    """, (negocio_id, prod_padre_id, numero_doc, consecutive, consecutive)).fetchone()
 
     if not kardex_prod:
         return {'numero_doc': numero_doc, 'producto_padre_id': prod_padre_id,
@@ -3004,27 +3223,49 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
     padre_nombre = padre_row['nombre'] if padre_row else ''
 
     contab_debito = conn.execute("""
-        SELECT id, monto, concepto
+        SELECT id, monto, concepto, comprobante_id, tipo_documento_id, tipo_documento, fecha
         FROM movimientos_contables
         WHERE negocio_id = %s
           AND cuenta LIKE '14%%' AND tipo = 'debito'
-          AND numero_documento = %s
+          AND (numero_documento = %s OR numero_documento = %s)
+          AND (
+              tipo_documento ILIKE '%%PRODUC%%'
+              OR tipo_documento ILIKE '%%REPORTE%%'
+              OR tipo_documento ILIKE '%%ENSAMBLE%%'
+              OR UPPER(concepto) LIKE '%%' || UPPER(%s) || '%%'
+              OR producto_id = %s
+          )
         ORDER BY id
         LIMIT 1
-    """, (negocio_id, numero_doc)).fetchone()
+    """, (negocio_id, numero_doc, consecutive, padre_nombre, prod_padre_id)).fetchone()
+
+    comp_id_deb = contab_debito['comprobante_id'] if contab_debito else None
 
     # 3. Buscar asientos 14xx credito (materias primas de produccion)
-    # Excluir BAJA INV (es de ventas) y COSTO (es de costo de venta)
-    contab_creditos = conn.execute("""
-        SELECT id, monto, concepto, cuenta, producto_id, producto_padre_id
+    # Excluir BAJA INV (es de ventas), COSTO (es de costo de venta) y AJUSTES (ajustes físicos)
+    where_comp_cred = ""
+    params_cred = [negocio_id, numero_doc, consecutive]
+    if comp_id_deb:
+        where_comp_cred = "AND comprobante_id = %s"
+        params_cred.append(comp_id_deb)
+    else:
+        where_comp_cred = """AND (
+            tipo_documento ILIKE '%%PRODUC%%'
+            OR tipo_documento ILIKE '%%REPORTE%%'
+            OR tipo_documento ILIKE '%%ENSAMBLE%%'
+            OR (producto_padre_id = %s)
+        ) AND UPPER(concepto) NOT LIKE '%%COSTO%%' AND UPPER(concepto) NOT LIKE '%%BAJA%%' AND UPPER(concepto) NOT LIKE '%%AJUSTE%%'"""
+        params_cred.append(prod_padre_id)
+
+    contab_creditos = conn.execute(f"""
+        SELECT id, monto, concepto, cuenta, producto_id, producto_padre_id, comprobante_id, tipo_documento_id, tipo_documento, fecha
         FROM movimientos_contables
         WHERE negocio_id = %s
           AND cuenta LIKE '14%%' AND tipo = 'credito'
-          AND numero_documento = %s
-          AND UPPER(concepto) NOT LIKE '%%COSTO%%'
-          AND UPPER(concepto) NOT LIKE '%%BAJA%%'
+          AND (numero_documento = %s OR numero_documento = %s)
+          {where_comp_cred}
         ORDER BY id
-    """, (negocio_id, numero_doc)).fetchall()
+    """, params_cred).fetchall()
 
     # 4. Buscar salidas kardex de materias primas
     if ref_id:
@@ -3034,10 +3275,12 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
             FROM movimientos_inventario
             WHERE negocio_id = %s
               AND tipo = 'salida'
-              AND (referencia_tipo = 'produccion' OR producto_padre_id = %s)
-              AND (referencia_id = %s OR documento_numero = %s)
+              AND (
+                  referencia_id = %s
+                  OR (producto_padre_id = %s AND (documento_numero = %s OR documento_numero = %s))
+              )
             ORDER BY nombre_producto
-        """, (negocio_id, prod_padre_id, ref_id, numero_doc)).fetchall()
+        """, (negocio_id, ref_id, prod_padre_id, numero_doc, consecutive)).fetchall()
     else:
         mp_kardex = conn.execute("""
             SELECT producto_id, nombre_producto,
@@ -3046,19 +3289,22 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
             WHERE negocio_id = %s
               AND tipo = 'salida'
               AND (producto_padre_id = %s OR referencia_tipo = 'produccion')
-              AND documento_numero = %s
+              AND (documento_numero = %s OR documento_numero = %s)
             ORDER BY nombre_producto
-        """, (negocio_id, prod_padre_id, numero_doc)).fetchall()
+        """, (negocio_id, prod_padre_id, numero_doc, consecutive)).fetchall()
 
     # Indexar kardex MP por nombre y por producto_id
     mp_por_nombre = {}
     mp_por_pid = {}
     for mp in mp_kardex:
         nombre = mp['nombre_producto'].strip().upper()
+        raw_t = mp['total'] if mp['total'] is not None else 0
+        dec_t = Decimal(str(raw_t)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         mp_data = {
             'producto_id': mp['producto_id'],
             'nombre': mp['nombre_producto'],
-            'total': float(mp['total']),
+            'total': float(dec_t),
+            'total_dec': dec_t,
         }
         mp_por_nombre[nombre] = mp_data
         if mp['producto_id']:
@@ -3066,8 +3312,39 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
 
     # 5. Emparejar y actualizar creditos (materias primas)
     cambios = []
-    total_nuevo_creditos = 0
+    total_nuevo_creditos_dec = Decimal('0.00')
     matched_kardex_pids = set()
+
+    # Resolver comprobante_id, tipo_documento_id y fecha_ref de forma robusta
+    comp_ref = contab_creditos[0] if contab_creditos else contab_debito
+    if not comp_ref:
+        consecutive_p = str(numero_doc).split('-')[-1].strip() if '-' in str(numero_doc) else str(numero_doc)
+        comp_ref = conn.execute("""
+            SELECT comprobante_id, tipo_documento_id, tipo_documento, fecha
+            FROM movimientos_contables
+            WHERE negocio_id = %s AND (numero_documento = %s OR numero_documento = %s)
+            LIMIT 1
+        """, (negocio_id, numero_doc, consecutive_p)).fetchone()
+
+    comprobante_id = None
+    tipo_doc_id = None
+    fecha_ref = None
+    if comp_ref:
+        comprobante_id = comp_ref['comprobante_id'] if 'comprobante_id' in comp_ref else comp_ref.get('comprobante_id')
+        tipo_doc_id = comp_ref['tipo_documento_id'] if 'tipo_documento_id' in comp_ref else comp_ref.get('tipo_documento_id')
+        fecha_ref = comp_ref['fecha'] if 'fecha' in comp_ref else comp_ref.get('fecha')
+
+    if not comprobante_id:
+        c_next = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()
+        comprobante_id = c_next[0] if c_next else None
+
+    if not tipo_doc_id:
+        td_prod = conn.execute("""
+            SELECT id FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND (codigo = 'PRODUCCION' OR UPPER(nombre) LIKE '%%PRODUCC%%')
+            LIMIT 1
+        """, (negocio_id,)).fetchone()
+        tipo_doc_id = td_prod['id'] if td_prod else None
 
     if contab_creditos:
         for c in contab_creditos:
@@ -3081,12 +3358,15 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
 
             if match:
                 matched_kardex_pids.add(match['producto_id'])
+                nuevo_monto_dec = match['total_dec']
                 nuevo_monto = match['total']
-                if abs(float(c['monto']) - nuevo_monto) > 0.01 or c['producto_id'] != match['producto_id'] or c.get('producto_padre_id') != prod_padre_id:
-                    conn.execute(
-                        "UPDATE movimientos_contables SET monto = %s, producto_id = %s, producto_padre_id = %s WHERE id = %s",
-                        (nuevo_monto, match['producto_id'], prod_padre_id, c['id'])
-                    )
+                monto_c_dec = Decimal(str(c['monto'] or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                if abs(monto_c_dec - nuevo_monto_dec) > Decimal('0.005') or c['producto_id'] != match['producto_id'] or c.get('producto_padre_id') != prod_padre_id or not c.get('comprobante_id'):
+                    conn.execute("""
+                        UPDATE movimientos_contables
+                        SET monto = %s, producto_id = %s, producto_padre_id = %s, comprobante_id = COALESCE(comprobante_id, %s)
+                        WHERE id = %s
+                    """, (nuevo_monto, match['producto_id'], prod_padre_id, comprobante_id, c['id']))
                     cambios.append({
                         'id': c['id'],
                         'concepto': c['concepto'],
@@ -3094,7 +3374,7 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
                         'monto_nuevo': nuevo_monto,
                         'componente': match['nombre'],
                     })
-                total_nuevo_creditos += nuevo_monto
+                total_nuevo_creditos_dec += nuevo_monto_dec
             else:
                 # Si es una fila duplicada o huérfana de este producto elaborado, eliminarla
                 if c.get('producto_padre_id') == prod_padre_id or (c_pid and c_pid in mp_por_pid):
@@ -3107,18 +3387,13 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
                         'componente': f"{c['concepto']} (Eliminado por duplicado)",
                     })
                 else:
-                    total_nuevo_creditos += float(c['monto'])
-
-        # Insertar insumos de Kardex que falten en los asientos de esta producción
-        comp_ref = contab_creditos[0] if contab_creditos else contab_debito
-        comprobante_id = comp_ref['comprobante_id'] if comp_ref else None
-        tipo_doc_id = comp_ref.get('tipo_documento_id') if comp_ref else None
-        fecha_ref = comp_ref.get('fecha') if comp_ref else None
+                    total_nuevo_creditos_dec += Decimal(str(c['monto'] or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
         for mp in mp_kardex:
             mp_pid = mp['producto_id']
             if mp_pid not in matched_kardex_pids:
-                monto_k = float(mp['total'])
+                monto_k_dec = Decimal(str(mp['total'] or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                monto_k = float(monto_k_dec)
                 c_res = conn.execute("""
                     INSERT INTO movimientos_contables (
                         negocio_id, comprobante_id, tipo_documento, tipo_documento_id,
@@ -3141,18 +3416,27 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
                     'monto_nuevo': monto_k,
                     'componente': f"{mp['nombre_producto']} (Creado)",
                 })
-                total_nuevo_creditos += monto_k
+                total_nuevo_creditos_dec += monto_k_dec
                 matched_kardex_pids.add(mp_pid)
 
     elif mp_kardex:
         # Si no habia creditos contables registrados, crearlos todos desde el Kardex
         for mp in mp_kardex:
-            monto_k = float(mp['total'])
+            monto_k_dec = Decimal(str(mp['total'] or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            monto_k = float(monto_k_dec)
             c_res = conn.execute("""
-                INSERT INTO movimientos_contables (negocio_id, tipo_documento, numero_documento, cuenta, concepto, tipo, monto, producto_id, producto_padre_id, created_at)
-                VALUES (%s, 'PRODUCCION', %s, '140505', %s, 'credito', %s, %s, %s, CURRENT_TIMESTAMP)
+                INSERT INTO movimientos_contables (
+                    negocio_id, comprobante_id, tipo_documento, tipo_documento_id,
+                    numero_documento, cuenta, concepto, tipo, monto,
+                    producto_id, producto_padre_id, fecha, created_at
+                )
+                VALUES (%s, %s, 'PRODUCCION', %s, %s, '140505', %s, 'credito', %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 RETURNING id
-            """, (negocio_id, numero_doc, mp['nombre_producto'], monto_k, mp['producto_id'], prod_padre_id)).fetchone()
+            """, (
+                negocio_id, comprobante_id, tipo_doc_id,
+                numero_doc, mp['nombre_producto'], monto_k,
+                mp['producto_id'], prod_padre_id, fecha_ref
+            )).fetchone()
             cambios.append({
                 'id': c_res['id'] if c_res else 0,
                 'concepto': mp['nombre_producto'],
@@ -3160,23 +3444,33 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
                 'monto_nuevo': monto_k,
                 'componente': mp['nombre_producto'],
             })
-            total_nuevo_creditos += monto_k
+            total_nuevo_creditos_dec += monto_k_dec
 
     # 6. Actualizar o crear debito (producto terminado) = suma de creditos
     debito_modificado = False
+    total_nuevo_creditos = float(total_nuevo_creditos_dec)
     if contab_debito:
-        monto_actual = float(contab_debito['monto'] or 0)
-        if abs(monto_actual - total_nuevo_creditos) > 0.01:
-            conn.execute(
-                "UPDATE movimientos_contables SET monto = %s WHERE id = %s",
-                (total_nuevo_creditos, contab_debito['id'])
-            )
+        monto_actual_dec = Decimal(str(contab_debito['monto'] or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        if abs(monto_actual_dec - total_nuevo_creditos_dec) > Decimal('0.005') or not contab_debito.get('comprobante_id'):
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET monto = %s, comprobante_id = COALESCE(comprobante_id, %s)
+                WHERE id = %s
+            """, (total_nuevo_creditos, comprobante_id, contab_debito['id']))
             debito_modificado = True
     elif total_nuevo_creditos > 0:
         conn.execute("""
-            INSERT INTO movimientos_contables (negocio_id, tipo_documento, numero_documento, cuenta, concepto, tipo, monto, producto_id, producto_padre_id, created_at)
-            VALUES (%s, 'PRODUCCION', %s, '140505', %s, 'debito', %s, %s, %s, CURRENT_TIMESTAMP)
-        """, (negocio_id, numero_doc, padre_nombre or 'PRODUCTO ELABORADO', total_nuevo_creditos, prod_padre_id, prod_padre_id))
+            INSERT INTO movimientos_contables (
+                negocio_id, comprobante_id, tipo_documento, tipo_documento_id,
+                numero_documento, cuenta, concepto, tipo, monto,
+                producto_id, producto_padre_id, fecha, created_at
+            )
+            VALUES (%s, %s, 'PRODUCCION', %s, %s, '140505', %s, 'debito', %s, %s, %s, %s, CURRENT_TIMESTAMP)
+        """, (
+            negocio_id, comprobante_id, tipo_doc_id,
+            numero_doc, padre_nombre or 'PRODUCTO ELABORADO', total_nuevo_creditos,
+            prod_padre_id, prod_padre_id, fecha_ref
+        ))
         debito_modificado = True
 
     return {
@@ -3185,6 +3479,8 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
         'tipo': 'produccion',
         'cambios_contables': cambios,
         'debito_modificado': debito_modificado,
+        'cogs_modificado': debito_modificado,
+        'pedido_item_modificado': False,
         'debito_id': contab_debito['id'] if contab_debito else None,
     }
 
@@ -3214,8 +3510,13 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
         return {'numero_doc': numero_doc, 'producto_padre_id': prod_padre_id,
                 'cambios_contables': [], 'tipo': 'venta', 'skip': True}
 
-    # Consolidar total del plato
-    total_kardex_padre = sum(float(k['total'] or 0) for k in kardex_rows)
+    # Consolidar total del plato con precisión Decimal
+    total_kardex_padre_dec = Decimal('0.00')
+    for k in kardex_rows:
+        raw_t = k['total'] if k['total'] is not None else 0
+        dec_t = Decimal(str(raw_t)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        total_kardex_padre_dec += dec_t
+    total_kardex_padre = float(total_kardex_padre_dec)
 
     # 2. Buscar entradas 14* vinculadas existentes (incluyendo producto_padre_id explícito)
     contab_rows = conn.execute("""
@@ -3243,12 +3544,26 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
             FROM movimientos_contables
             WHERE negocio_id = %s
               AND (numero_documento = %s OR numero_documento = %s)
+              AND (tipo_documento IS NULL OR UPPER(REPLACE(tipo_documento, '_', ' ')) LIKE '%%VENTA%%' OR UPPER(REPLACE(tipo_documento, '_', ' ')) LIKE '%%FACTURA%%')
+            ORDER BY id
             LIMIT 1
         """, (negocio_id, consecutive, numero_doc)).fetchone()
 
     comprobante_id = doc_ref_row['comprobante_id'] if doc_ref_row else None
+    if not comprobante_id:
+        c_next = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()
+        comprobante_id = c_next[0] if c_next else None
     tipo_doc_id = doc_ref_row['tipo_documento_id'] if doc_ref_row else None
-    tipo_doc_nombre = doc_ref_row['tipo_documento'] if doc_ref_row else 'FACTURA_DE_VENTA'
+    tipo_doc_nombre = doc_ref_row['tipo_documento'] if doc_ref_row else 'FACTURA DE VENTA'
+    if not tipo_doc_id:
+        td_v = conn.execute("""
+            SELECT id, codigo, nombre FROM tipos_documento_negocio
+            WHERE negocio_id = %s AND (codigo = 'FACTURA_DE_VENTA' OR codigo = 'VENTA' OR UPPER(nombre) LIKE '%%VENTA%%')
+            LIMIT 1
+        """, (negocio_id,)).fetchone()
+        if td_v:
+            tipo_doc_id = td_v['id']
+            tipo_doc_nombre = td_v['nombre']
     fecha_ref = doc_ref_row['fecha'] if doc_ref_row else None
     cta_140505_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '140505' LIMIT 1").fetchone()
     cta_140505_id = cta_140505_row['id'] if cta_140505_row else None
@@ -3288,7 +3603,9 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
         c_sorted = sorted(c_candidatos, key=lambda x: float(x['monto'] or 0))
 
         for idx, k in enumerate(k_sorted):
-            k_monto = float(k['total'] or 0)
+            raw_t = k['total'] if k['total'] is not None else 0
+            k_monto_dec = Decimal(str(raw_t)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            k_monto = float(k_monto_dec)
             if idx < len(c_sorted):
                 c = c_sorted[idx]
                 asientos_usados.add(c['id'])
@@ -3533,6 +3850,12 @@ def api_produccion_preview(negocio_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     producto_id = request.args.get('producto_id', type=int)
     cantidad    = request.args.get('cantidad', type=float, default=1)
+    bodega_param = request.args.get('bodega') or request.args.get('centro_utilidad_id') or session.get('centro_utilidad_id') or 1
+    try:
+        bodega_id = int(bodega_param)
+    except (ValueError, TypeError):
+        bodega_id = 1
+
     if not producto_id or cantidad <= 0:
         return jsonify({'ok': False, 'error': 'producto_id y cantidad requeridos'}), 400
     conn = get_db_connection()
@@ -3556,9 +3879,9 @@ def api_produccion_preview(negocio_id):
             JOIN productos p ON p.id = te.componente_id
             LEFT JOIN saldos_inventario s
                    ON s.producto_id = te.componente_id
-                  AND s.negocio_id  = %s AND s.bodega = 1
+                  AND s.negocio_id  = %s AND s.bodega = %s
             WHERE te.producto_id = %s
-        """, (negocio_id, producto_id)).fetchall()
+        """, (negocio_id, bodega_id, producto_id)).fetchall()
         if not componentes:
             return jsonify({'ok': False, 'error': 'Este producto no tiene tarjeta estándar definida'}), 400
         qty = Decimal(str(cantidad))
@@ -3587,11 +3910,28 @@ def api_produccion_preview(negocio_id):
             })
             
         costo_unitario_produccion = costo_total_produccion / qty if qty > 0 else Decimal('0')
+
+        cu_row = conn.execute("""
+            SELECT id, codigo, nombre, tipo, color_badge
+            FROM centros_utilidad
+            WHERE id = %s AND negocio_id = %s
+        """, (bodega_id, negocio_id)).fetchone()
+
+        centro_nombre = cu_row['nombre'] if cu_row else f"Bodega #{bodega_id}"
+        centro_codigo = cu_row['codigo'] if cu_row else f"LOC-{bodega_id}"
+        centro_tipo = cu_row['tipo'] if cu_row else "local"
+        centro_color = cu_row['color_badge'] if (cu_row and cu_row['color_badge']) else "#0284c7"
+
         return jsonify({
             'ok': True,
             'producto_id': producto_id,
             'producto': producto['nombre'],
             'cantidad': cantidad,
+            'bodega': bodega_id,
+            'centro_nombre': centro_nombre,
+            'centro_codigo': centro_codigo,
+            'centro_tipo': centro_tipo,
+            'centro_color': centro_color,
             'puede_producir': puede_producir,
             'costo_total_produccion': float(costo_total_produccion),
             'costo_unitario_produccion': float(costo_unitario_produccion),
@@ -3614,9 +3954,14 @@ def api_produccion_registrar(negocio_id):
     tipo_documento = (data.get('tipo_documento') or '').strip().upper() or None
     documento_numero = (data.get('documento_numero') or '').strip().upper() or None
     tercero_id  = _int_o_none(data.get('tercero_id'))
-    tercero_nombre = data.get('tercero_nombre') or None
+    tercero_nombre = (data.get('tercero_nombre') or '').strip() or None
     fecha_raw   = (_txt(data.get('fecha')) or '').strip()
     fecha_prod  = _fecha_o_none(fecha_raw) or date.today()
+    centro_utilidad_id = _int_o_none(data.get('centro_utilidad_id') or data.get('bodega')) or session.get('centro_utilidad_id') or 1
+    try:
+        centro_utilidad_id = int(centro_utilidad_id)
+    except (ValueError, TypeError):
+        centro_utilidad_id = 1
 
     if not producto_id or cantidad <= 0:
         return jsonify({'ok': False, 'error': 'producto_id y cantidad requeridos'}), 400
@@ -3629,6 +3974,63 @@ def api_produccion_registrar(negocio_id):
         _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
+
+        # ── Resolución robusta de tercero_id / responsable ──
+        if not tercero_id:
+            if tercero_nombre:
+                t_row = conn.execute(
+                    "SELECT id, nombre FROM terceros WHERE UPPER(TRIM(nombre)) = %s LIMIT 1",
+                    (tercero_nombre.upper(),)
+                ).fetchone()
+                if not t_row:
+                    t_row = conn.execute(
+                        "SELECT id, nombre FROM terceros WHERE nombre ILIKE %s LIMIT 1",
+                        (f"%{tercero_nombre}%",)
+                    ).fetchone()
+                if t_row:
+                    tercero_id = t_row['id']
+                    tercero_nombre = t_row['nombre']
+                else:
+                    t_new = conn.execute(
+                        "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'empleado') RETURNING id, nombre",
+                        (tercero_nombre,)
+                    ).fetchone()
+                    if t_new:
+                        tercero_id = t_new['id']
+                        tercero_nombre = t_new['nombre']
+            if not tercero_id and session.get('chat_tercero_id'):
+                t_row = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (session['chat_tercero_id'],)).fetchone()
+                if t_row:
+                    tercero_id = t_row['id']
+                    tercero_nombre = t_row['nombre']
+            if not tercero_id and session.get('usuario_id'):
+                # Buscar si el usuario_id coincide con un tercero
+                t_direct = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (session['usuario_id'],)).fetchone()
+                if t_direct:
+                    tercero_id = t_direct['id']
+                    tercero_nombre = t_direct['nombre']
+                else:
+                    u_row = conn.execute("SELECT id, nombre FROM usuarios WHERE id = %s", (session['usuario_id'],)).fetchone()
+                    if u_row:
+                        t_row = conn.execute(
+                            "SELECT id, nombre FROM terceros WHERE UPPER(TRIM(nombre)) = %s LIMIT 1",
+                            (u_row['nombre'].strip().upper(),)
+                        ).fetchone()
+                        if t_row:
+                            tercero_id = t_row['id']
+                            tercero_nombre = t_row['nombre']
+                        else:
+                            t_new = conn.execute(
+                                "INSERT INTO terceros (nombre, tipo_tercero) VALUES (%s, 'admin') RETURNING id, nombre",
+                                (u_row['nombre'],)
+                            ).fetchone()
+                            if t_new:
+                                tercero_id = t_new['id']
+                                tercero_nombre = t_new['nombre']
+        elif not tercero_nombre and tercero_id:
+            t_row = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (tercero_id,)).fetchone()
+            if t_row:
+                tercero_nombre = t_row['nombre']
 
         try:
             from .contabilidad import _verificar_periodo_cerrado
@@ -3724,9 +4126,9 @@ def api_produccion_registrar(negocio_id):
                 FROM productos p
                 LEFT JOIN saldos_inventario s
                        ON s.producto_id = p.id
-                      AND s.negocio_id  = %s AND s.bodega = 1
+                      AND s.negocio_id  = %s AND s.bodega = %s
                 WHERE p.id = %s AND p.negocio_id = %s
-            """, (negocio_id, c['componente_id'], negocio_id)).fetchone()
+            """, (negocio_id, centro_utilidad_id, c['componente_id'], negocio_id)).fetchone()
             stock_actual = Decimal(str(saldo['stock']))     if saldo else Decimal('0')
             costo_und    = Decimal(str(saldo['costo_und'])) if saldo else Decimal('0')
             if stock_actual < a_consumir:
@@ -3759,6 +4161,7 @@ def api_produccion_registrar(negocio_id):
             _mov_directo(conn, negocio_id, c['componente_id'], cant_comp,
                          'salida', 'produccion', session['usuario_id'],
                          valor_unitario=comp_cost,
+                         bodega=centro_utilidad_id,
                          notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
                          producto_padre_id=producto_id,
                          tipo_documento=tipo_documento, documento_numero=documento_numero,
@@ -3771,6 +4174,7 @@ def api_produccion_registrar(negocio_id):
         _mov_directo(conn, negocio_id, producto_id, cantidad,
                      'entrada', 'produccion', session['usuario_id'],
                      valor_unitario=costo_unitario,
+                     bodega=centro_utilidad_id,
                      notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
                      tipo_documento=tipo_documento, documento_numero=documento_numero,
                      documento_fecha=fecha_prod,
@@ -3791,18 +4195,25 @@ def api_produccion_registrar(negocio_id):
                     documento_numero=documento_numero,
                     tipo_documento_id=tipo_doc_id,
                     tercero_id=tercero_id,
-                    fecha=fecha_prod
+                    fecha=fecha_prod,
+                    centro_utilidad_id=centro_utilidad_id
                 )
             except Exception as _e:
                 print(f'[cont] produccion prod={producto_id}: {_e}')
 
+        # Recostear componentes y producto terminado en la bodega
+        for c in componentes_datos:
+            _recostear_producto(conn, negocio_id, c['componente_id'], bodega=centro_utilidad_id)
+        _recostear_producto(conn, negocio_id, producto_id, bodega=centro_utilidad_id)
+
         conn.commit()
         return jsonify({
             'ok': True,
-            'producido':      float(cantidad),
-            'producto':       producto['nombre'],
-            'costo_unitario': float(costo_unitario),
-            'costo_total':    float(costo_total),
+            'producido':          float(cantidad),
+            'producto':           producto['nombre'],
+            'costo_unitario':     float(costo_unitario),
+            'costo_total':        float(costo_total),
+            'centro_utilidad_id': centro_utilidad_id,
         })
     except Exception as e:
         conn.rollback()
@@ -3811,80 +4222,138 @@ def api_produccion_registrar(negocio_id):
         conn.close()
 
 
-def _recostear_producto(conn, negocio_id, producto_id):
+def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
     """
-    Recalcula cronológicamente los saldos de inventario y el costo promedio de un producto.
+    Recalcula cronológicamente los saldos de inventario y el costo promedio de un producto por bodega.
+    Si bodega es None, recostea todas las bodegas que tengan movimientos o saldos del producto.
     """
     from decimal import Decimal
-    movs = conn.execute("""
-        SELECT id, tipo, cantidad, valor_unitario
-        FROM movimientos_inventario
-        WHERE negocio_id = %s AND producto_id = %s
-        ORDER BY COALESCE(documento_fecha, created_at::date) ASC, created_at ASC, id ASC
-    """, (negocio_id, producto_id)).fetchall()
 
-    stock = Decimal('0')
-    val_existencia = Decimal('0')
-    costo_und = Decimal('0')
-
-    for m in movs:
-        cant_m = Decimal(str(m['cantidad']))
-        signo = Decimal('1') if m['tipo'] == 'entrada' else Decimal('-1')
-        stock_ant = stock
-        stock_nuevo = stock_ant + cant_m * signo
-
-        vu_raw = Decimal(str(m['valor_unitario'])) if m['valor_unitario'] is not None else None
-        vu = abs(vu_raw) if vu_raw is not None else None
-
-        if m['tipo'] == 'entrada' and vu is not None:
-            costo_und = (val_existencia + cant_m * vu) / stock_nuevo if stock_nuevo > 0 else vu
-            costo_und = abs(costo_und)
-            val_existencia = stock_nuevo * costo_und if stock_nuevo > 0 else Decimal('0')
-        else:
-            val_existencia = stock_nuevo * costo_und if stock_nuevo > 0 else Decimal('0')
-
-        # Para salidas, el valor total del movimiento se valora al costo promedio del inventario (o al costo unitario positivo)
-        costo_linea = vu if (m['tipo'] == 'entrada' and vu is not None) else costo_und
-        valor_total = abs(cant_m * (costo_linea or Decimal('0')))
-
-        conn.execute("""
-            UPDATE movimientos_inventario
-            SET stock_anterior = %s,
-                stock_nuevo = %s,
-                costo_und = %s,
-                valor_unitario = %s,
-                valor_total = %s
-            WHERE id = %s
-        """, (float(stock_ant), float(stock_nuevo), float(costo_und), float(vu) if vu is not None else None, float(valor_total), m['id']))
-
-        stock = stock_nuevo
-
-    saldo_final = conn.execute("""
-        SELECT id FROM saldos_inventario
-        WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
-    """, (negocio_id, producto_id)).fetchone()
-
-    if saldo_final:
-        conn.execute("""
-            UPDATE saldos_inventario
-            SET stock = %s, costo_und = %s, valor_existencia = %s, updated_at = NOW()
-            WHERE id = %s
-        """, (float(stock), float(costo_und), float(val_existencia), saldo_final['id']))
+    # Identificar las bodegas a recostear
+    if bodega is not None and str(bodega).strip().lower() not in ('consolidado', 'todas', 'all', 'none'):
+        try:
+            bodegas_a_procesar = [int(bodega)]
+        except Exception:
+            bodegas_a_procesar = [1]
     else:
+        # Obtener todas las bodegas con movimientos o saldos para este producto
+        b_movs = conn.execute("""
+            SELECT DISTINCT COALESCE(bodega, 1) AS b
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s
+        """, (negocio_id, producto_id)).fetchall()
+        
+        b_saldos = conn.execute("""
+            SELECT DISTINCT bodega AS b
+            FROM saldos_inventario
+            WHERE negocio_id = %s AND producto_id = %s
+        """, (negocio_id, producto_id)).fetchall()
+        
+        b_set = {r['b'] for r in b_movs} | {r['b'] for r in b_saldos}
+        if not b_set:
+            b_set = {1}
+        bodegas_a_procesar = sorted(b_set)
+
+    costos_bodegas = {}
+    stocks_bodegas = {}
+
+    for b_id in bodegas_a_procesar:
+        if b_id == 1:
+            where_b = "AND (bodega = 1 OR bodega IS NULL)"
+        else:
+            where_b = f"AND bodega = {b_id}"
+
+        movs = conn.execute(f"""
+            SELECT id, tipo, cantidad, valor_unitario
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s {where_b}
+            ORDER BY COALESCE(documento_fecha, created_at::date) ASC, created_at ASC, id ASC
+        """, (negocio_id, producto_id)).fetchall()
+
+        stock = Decimal('0')
+        val_existencia = Decimal('0')
+        costo_und = Decimal('0')
+
+        for m in movs:
+            cant_m = Decimal(str(m['cantidad']))
+            signo = Decimal('1') if m['tipo'] == 'entrada' else Decimal('-1')
+            stock_ant = stock
+            stock_nuevo = stock_ant + cant_m * signo
+
+            vu_raw = Decimal(str(m['valor_unitario'])) if m['valor_unitario'] is not None else None
+            vu = abs(vu_raw) if vu_raw is not None else None
+
+            if m['tipo'] == 'entrada' and vu is not None:
+                costo_und = (val_existencia + cant_m * vu) / stock_nuevo if stock_nuevo > 0 else vu
+                costo_und = abs(costo_und)
+                val_existencia = stock_nuevo * costo_und if stock_nuevo > 0 else Decimal('0')
+            else:
+                val_existencia = stock_nuevo * costo_und if stock_nuevo > 0 else Decimal('0')
+
+            # Para salidas, el valor total del movimiento se valora al costo promedio del inventario
+            costo_linea = vu if (m['tipo'] == 'entrada' and vu is not None) else costo_und
+            valor_total = abs(cant_m * (costo_linea or Decimal('0')))
+
+            conn.execute("""
+                UPDATE movimientos_inventario
+                SET stock_anterior = %s,
+                    stock_nuevo = %s,
+                    costo_und = %s,
+                    valor_unitario = %s,
+                    valor_total = %s,
+                    bodega = %s
+                WHERE id = %s
+            """, (float(stock_ant), float(stock_nuevo), float(costo_und), float(vu) if vu is not None else None, float(valor_total), b_id, m['id']))
+
+            stock = stock_nuevo
+
+        costos_bodegas[b_id] = costo_und
+        stocks_bodegas[b_id] = stock
+
+        saldo_row = conn.execute("""
+            SELECT id FROM saldos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND bodega = %s
+        """, (negocio_id, producto_id, b_id)).fetchone()
+
+        if saldo_row:
+            conn.execute("""
+                UPDATE saldos_inventario
+                SET stock = %s, costo_und = %s, valor_existencia = %s, updated_at = NOW()
+                WHERE id = %s
+            """, (float(stock), float(costo_und), float(val_existencia), saldo_row['id']))
+        elif float(stock) != 0 or float(val_existencia) != 0:
+            conn.execute("""
+                INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock, costo_und, valor_existencia)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (negocio_id, producto_id, b_id, float(stock), float(costo_und), float(val_existencia)))
+
+    # Actualizar catálogo general productos.costo con promedio ponderado de existencias o principal
+    total_val = Decimal('0')
+    total_stk = Decimal('0')
+    for b_id, stk in stocks_bodegas.items():
+        if stk > 0:
+            total_stk += stk
+            total_val += stk * costos_bodegas.get(b_id, Decimal('0'))
+
+    if total_stk > 0:
+        costo_catalogo = float(total_val / total_stk)
+    elif 1 in costos_bodegas and costos_bodegas[1] > 0:
+        costo_catalogo = float(costos_bodegas[1])
+    elif costos_bodegas:
+        costo_catalogo = float(max(costos_bodegas.values()))
+    else:
+        costo_catalogo = 0.0
+
+    if costo_catalogo > 0:
         conn.execute("""
-            INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock, costo_und, valor_existencia)
-            VALUES (%s, %s, 1, %s, %s, %s)
-        """, (negocio_id, producto_id, float(stock), float(costo_und), float(val_existencia)))
-
-    conn.execute("""
-        UPDATE productos
-        SET costo = %s
-        WHERE id = %s AND negocio_id = %s
-    """, (float(costo_und), producto_id, negocio_id))
+            UPDATE productos
+            SET costo = %s
+            WHERE id = %s AND negocio_id = %s
+        """, (costo_catalogo, producto_id, negocio_id))
 
 
-def _auditar_producto_recosteo(conn, negocio_id, producto_id):
-    """Reconstruye un producto sin modificarlo y devuelve sus inconsistencias."""
+def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
+    """Reconstruye un producto sin modificarlo y devuelve sus inconsistencias por bodega."""
     producto = conn.execute(
         "SELECT id, nombre FROM productos WHERE id = %s AND negocio_id = %s",
         (producto_id, negocio_id)
@@ -3892,11 +4361,17 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id):
     if not producto:
         return None
 
-    movimientos = conn.execute("""
+    b_id = int(bodega) if bodega is not None and str(bodega).isdigit() else None
+    if b_id:
+        where_b = f"AND (bodega = {b_id} OR (bodega IS NULL AND {b_id} = 1))"
+    else:
+        where_b = ""
+
+    movimientos = conn.execute(f"""
         SELECT id, tipo, cantidad, valor_unitario, stock_anterior,
-               stock_nuevo, costo_und, documento_fecha, created_at
+               stock_nuevo, costo_und, documento_fecha, created_at, COALESCE(bodega, 1) AS bodega
         FROM movimientos_inventario
-        WHERE negocio_id = %s AND producto_id = %s
+        WHERE negocio_id = %s AND producto_id = %s {where_b}
         ORDER BY COALESCE(documento_fecha, created_at::date) ASC,
                  created_at ASC, id ASC
     """, (negocio_id, producto_id)).fetchall()
@@ -3933,7 +4408,8 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id):
                 'movimiento_id': mov['id'],
                 'fecha': fecha_texto,
                 'tipo': mov['tipo'],
-                'stock': float(stock_nuevo)
+                'stock': float(stock_nuevo),
+                'bodega': mov['bodega']
             })
 
         if (diferente(mov['stock_anterior'], stock_anterior)
@@ -3944,19 +4420,28 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id):
                 'guardado_anterior': float(mov['stock_anterior'] or 0),
                 'calculado_anterior': float(stock_anterior),
                 'guardado_nuevo': float(mov['stock_nuevo'] or 0),
-                'calculado_nuevo': float(stock_nuevo)
+                'calculado_nuevo': float(stock_nuevo),
+                'bodega': mov['bodega']
             })
 
         stock = stock_nuevo
 
-    saldo = conn.execute("""
-        SELECT stock, costo_und, valor_existencia
-        FROM saldos_inventario
-        WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
-    """, (negocio_id, producto_id)).fetchone()
+    if b_id:
+        saldo = conn.execute("""
+            SELECT stock, costo_und, valor_existencia
+            FROM saldos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND bodega = %s
+        """, (negocio_id, producto_id, b_id)).fetchone()
+    else:
+        saldo = conn.execute("""
+            SELECT SUM(COALESCE(stock, 0)) AS stock,
+                   AVG(COALESCE(costo_und, 0)) AS costo_und,
+                   SUM(COALESCE(valor_existencia, 0)) AS valor_existencia
+            FROM saldos_inventario
+            WHERE negocio_id = %s AND producto_id = %s
+        """, (negocio_id, producto_id)).fetchone()
+
     stock_inconsistente = bool(saldo and diferente(saldo['stock'], stock))
-    # Cuando el stock es 0 (y el saldo guardado también es 0), el valor de inventario es $0
-    # por lo que no existe discrepancia de valor ni afectación contable.
     costo_inconsistente = bool(saldo and (stock > 0 or Decimal(str(saldo['stock'] or 0)) > 0) and diferente(saldo['costo_und'], costo_und))
     valor_inconsistente = bool(
         saldo and abs(Decimal(str(saldo['valor_existencia'] or 0)) - valor_existencia)
@@ -3966,14 +4451,15 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id):
     return {
         'producto_id': producto_id,
         'producto_nombre': producto['nombre'],
+        'bodega': b_id or 'consolidado',
         'movimientos': len(movimientos),
         'stock_final': float(stock),
         'costo_reconstruido': float(costo_und),
-        'stock_almacenado': float(saldo['stock']) if saldo else None,
-        'costo_almacenado': float(saldo['costo_und']) if saldo else None,
-        'valor_almacenado': float(saldo['valor_existencia']) if saldo else None,
+        'stock_almacenado': float(saldo['stock']) if saldo and saldo['stock'] is not None else None,
+        'costo_almacenado': float(saldo['costo_und']) if saldo and saldo['costo_und'] is not None else None,
+        'valor_almacenado': float(saldo['valor_existencia']) if saldo and saldo['valor_existencia'] is not None else None,
         'valor_reconstruido': float(valor_existencia),
-        'diferencia_valor': float((saldo['valor_existencia'] - valor_existencia) if saldo else 0),
+        'diferencia_valor': float((saldo['valor_existencia'] - valor_existencia) if saldo and saldo['valor_existencia'] is not None else 0),
         'stock_inconsistente': stock_inconsistente,
         'costo_inconsistente': costo_inconsistente,
         'valor_inconsistente': valor_inconsistente,
@@ -3998,6 +4484,8 @@ def api_auditoria_recosteo(negocio_id):
         if error:
             return error
         ids_raw = request.args.get('producto_ids', '').strip()
+        bodega_id = request.args.get('bodega', type=int) or request.args.get('centro_utilidad_id', type=int)
+
         if ids_raw:
             producto_ids = sorted({int(x) for x in ids_raw.split(',') if x.strip()})
         else:
@@ -4011,7 +4499,7 @@ def api_auditoria_recosteo(negocio_id):
 
         productos_auditados = []
         for producto_id in producto_ids:
-            resultado = _auditar_producto_recosteo(conn, negocio_id, producto_id)
+            resultado = _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=bodega_id)
             if resultado:
                 productos_auditados.append(resultado)
 
@@ -4049,6 +4537,8 @@ def api_ejecutar_recosteo(negocio_id):
         if error:
             return error
         producto_ids = data.get('producto_ids')
+        bodega_id = data.get('bodega') or data.get('centro_utilidad_id')
+
         if data.get('todos') or not producto_ids:
             rows = conn.execute("""
                 SELECT DISTINCT producto_id
@@ -4064,7 +4554,7 @@ def api_ejecutar_recosteo(negocio_id):
                 (producto_id, negocio_id)
             ).fetchone():
                 return jsonify({'ok': False, 'error': f'Producto no pertenece al negocio: {producto_id}'}), 400
-            _recostear_producto(conn, negocio_id, producto_id)
+            _recostear_producto(conn, negocio_id, producto_id, bodega=bodega_id)
 
         conn.commit()
         return jsonify({
@@ -5780,11 +6270,37 @@ def admin_inventario(negocio_id):
             return "Negocio no encontrado", 404
         if not _puede_gestionar_negocio(contexto):
             return "No autorizado para este negocio", 403
+
+        # Consultar centros de utilidad configurados
+        centros_rows = conn.execute("""
+            SELECT id, codigo, nombre, tipo, color_badge, imagen_url
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY id ASC
+        """, (negocio_id,)).fetchall()
+        
+        centros = [dict(c) for c in centros_rows]
+        centro_activo_id = session.get('centro_utilidad_id')
+        centro_activo = None
+        if centro_activo_id:
+            for c in centros:
+                if str(c['id']) == str(centro_activo_id):
+                    centro_activo = c
+                    break
+        if not centro_activo and centros:
+            centro_activo = centros[0]
+            session['centro_utilidad_id'] = centro_activo['id']
+            session['centro_utilidad_nombre'] = centro_activo['nombre']
+            session['centro_utilidad_codigo'] = centro_activo['codigo']
+            session['centro_utilidad_color'] = centro_activo.get('color_badge', '#10b981')
+
         return render_template('inventario_admin.html',
                                negocio_id=negocio_id,
                                negocio_nombre=contexto['negocio_nombre'],
                                volver_url=contexto['volver_url'],
-                               volver_label=contexto['volver_label'])
+                               volver_label=contexto['volver_label'],
+                               centros_utilidad=centros,
+                               centro_activo=centro_activo)
     except Exception as e:
         return f"Error: {e}", 500
     finally:
@@ -6554,9 +7070,13 @@ def api_produccion_historial(negocio_id):
         rows = conn.execute("""
             SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.valor_unitario, m.valor_total,
                    m.documento_numero, m.tipo_documento_id, tdn.nombre AS tipo_documento_nombre, 
-                   m.documento_fecha, m.created_at, m.referencia_id AS prod_token, m.notas
+                   m.documento_fecha, m.created_at, m.referencia_id AS prod_token, m.notas,
+                   COALESCE(t.nombre, m.proveedor_nombre, t_reg.nombre, u.nombre, '') AS responsable
             FROM movimientos_inventario m
             LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
+            LEFT JOIN terceros t ON t.id = m.proveedor_id
+            LEFT JOIN terceros t_reg ON t_reg.id = m.registrado_por
+            LEFT JOIN usuarios u ON u.id = m.registrado_por
             WHERE m.negocio_id = %s AND m.tipo = 'entrada' AND m.referencia_tipo = 'produccion'
             ORDER BY m.id DESC
             LIMIT %s OFFSET %s
@@ -6582,6 +7102,7 @@ def api_produccion_historial(negocio_id):
                 'tipo_documento_nombre': r['tipo_documento_nombre'] or 'PRODUCCIÓN',
                 'fecha': fecha_str,
                 'prod_token': r['prod_token'],
+                'responsable': r['responsable'] or '',
                 'notas': r['notes'] if 'notes' in r else r['notas']
             })
         total_paginas = (total + por_pagina - 1) // por_pagina if total else 1
@@ -6612,12 +7133,20 @@ def api_produccion_imprimir(negocio_id, prod_token):
         
         # 2. Buscar terminado
         terminado = conn.execute("""
-            SELECT m.*, tdn.nombre AS tipo_documento_nombre
+            SELECT m.*, tdn.nombre AS tipo_documento_nombre,
+                   t.nombre AS responsable_nombre,
+                   t_reg.nombre AS reg_tercero_nombre,
+                   u.nombre AS usuario_nombre,
+                   cu.codigo AS centro_codigo, cu.nombre AS centro_nombre
             FROM movimientos_inventario m
             LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
-            WHERE m.negocio_id = %s AND m.tipo = 'entrada' AND m.referencia_tipo = 'produccion' AND m.referencia_id = %s
+            LEFT JOIN terceros t ON t.id = m.proveedor_id
+            LEFT JOIN terceros t_reg ON t_reg.id = m.registrado_por
+            LEFT JOIN usuarios u ON u.id = m.registrado_por
+            LEFT JOIN centros_utilidad cu ON cu.id = m.bodega
+            WHERE m.negocio_id = %s AND m.tipo = 'entrada' AND m.referencia_tipo = 'produccion' AND (m.referencia_id = %s OR m.referencia_id = %s)
             LIMIT 1
-        """, (negocio_id, prod_token)).fetchone()
+        """, (negocio_id, str(prod_token), f"{prod_token}")).fetchone()
         
         if not terminado:
             return "No se encontró el registro de producción especificado.", 404
@@ -6626,9 +7155,9 @@ def api_produccion_imprimir(negocio_id, prod_token):
         componentes = conn.execute("""
             SELECT m.*
             FROM movimientos_inventario m
-            WHERE m.negocio_id = %s AND m.tipo = 'salida' AND m.referencia_tipo = 'produccion' AND m.referencia_id = %s
+            WHERE m.negocio_id = %s AND m.tipo = 'salida' AND m.referencia_tipo = 'produccion' AND (m.referencia_id = %s OR m.referencia_id = %s)
             ORDER BY m.id ASC
-        """, (negocio_id, prod_token)).fetchall()
+        """, (negocio_id, str(prod_token), f"{prod_token}")).fetchall()
         
         if terminado['documento_fecha']:
             fecha_doc = terminado['documento_fecha'].strftime('%Y-%m-%d')
@@ -6638,6 +7167,19 @@ def api_produccion_imprimir(negocio_id, prod_token):
             fecha_doc = ''
         total_insumos = sum(float(c['valor_total'] or 0) for c in componentes)
         
+        responsable_nombre = (
+            terminado['responsable_nombre'] or 
+            terminado['proveedor_nombre'] or 
+            terminado['usuario_nombre'] or 
+            'Operario de Producción'
+        )
+        usuario_registro = (
+            terminado['usuario_nombre'] or 
+            terminado['reg_tercero_nombre'] or 
+            session.get('nombre', 'Administrador')
+        )
+        centro_nombre = f"{terminado['centro_codigo']} — {terminado['centro_nombre']}" if terminado.get('centro_codigo') else None
+
         return render_template(
             'produccion_print.html',
             negocio_nombre=negocio_nombre,
@@ -6646,7 +7188,10 @@ def api_produccion_imprimir(negocio_id, prod_token):
             fecha_doc=fecha_doc,
             total_insumos=total_insumos,
             consecutivo=terminado['documento_numero'] or f"PROD-{prod_token}",
-            tipo_documento_nombre=terminado['tipo_documento_nombre'] or 'PRODUCCIÓN'
+            tipo_documento_nombre=terminado['tipo_documento_nombre'] or 'PRODUCCIÓN',
+            responsable_nombre=responsable_nombre,
+            usuario_registro=usuario_registro,
+            centro_nombre=centro_nombre
         )
     except Exception as e:
         import traceback
@@ -6710,7 +7255,8 @@ def api_anular_produccion(negocio_id, prod_token):
 
 def _contabilizar_ajuste_item(conn, negocio_id, producto_id, diff, costo_unitario, comp_id,
                               doc_num, tipo_documento_id, tipo_doc_code, desc_asiento=None,
-                              usuario_id=None, tercero_id=None, fecha_doc=None, origen_tipo='ajuste_inventario'):
+                              usuario_id=None, tercero_id=None, fecha_doc=None, origen_tipo='ajuste_inventario',
+                              centro_utilidad_id=None):
     """
     Motor centralizado y unificado para la contabilización de ajustes de inventario.
     Genera partida doble estricta en movimientos_contables:
@@ -6782,31 +7328,31 @@ def _contabilizar_ajuste_item(conn, negocio_id, producto_id, diff, costo_unitari
     if f_val:
         conn.execute("""
             INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
-                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
-            VALUES (%s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id, centro_utilidad_id)
+            VALUES (%s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (negocio_id, comp_id, db_id, db_cod, concepto, monto_ajuste, usuario_id, producto_id,
-              tipo_documento_id, str(doc_num), f_val, tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id))
+              tipo_documento_id, str(doc_num), f_val, tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id, centro_utilidad_id))
 
         conn.execute("""
             INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
-                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
-            VALUES (%s, %s, %s, %s, %s, 'credito', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id, centro_utilidad_id)
+            VALUES (%s, %s, %s, %s, %s, 'credito', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (negocio_id, comp_id, cr_id, cr_cod, concepto, monto_ajuste, usuario_id, producto_id,
-              tipo_documento_id, str(doc_num), f_val, tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id))
+              tipo_documento_id, str(doc_num), f_val, tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id, centro_utilidad_id))
     else:
         conn.execute("""
             INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
-                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
-            VALUES (%s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s, %s)
+                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id, centro_utilidad_id)
+            VALUES (%s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s, %s, %s)
         """, (negocio_id, comp_id, db_id, db_cod, concepto, monto_ajuste, usuario_id, producto_id,
-              tipo_documento_id, str(doc_num), tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id))
+              tipo_documento_id, str(doc_num), tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id, centro_utilidad_id))
 
         conn.execute("""
             INSERT INTO movimientos_contables (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, producto_id,
-                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id)
-            VALUES (%s, %s, %s, %s, %s, 'credito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s, %s)
+                                               tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general, tercero_id, centro_utilidad_id)
+            VALUES (%s, %s, %s, %s, %s, 'credito', %s, %s, %s, %s, %s, CURRENT_DATE, %s, %s, %s, %s, %s, %s)
         """, (negocio_id, comp_id, cr_id, cr_cod, concepto, monto_ajuste, usuario_id, producto_id,
-              tipo_documento_id, str(doc_num), tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id))
+              tipo_documento_id, str(doc_num), tipo_doc_code, origen_tipo, str(doc_num), desc_asiento, tercero_id, centro_utilidad_id))
 
     return True, None
 
@@ -6820,6 +7366,12 @@ def api_tienda_ajuste_rapido(negocio_id):
     adjustments = data.get('adjustments', [])
     if not adjustments:
         return jsonify({'ok': False, 'error': 'No se enviaron ajustes'}), 400
+
+    centro_utilidad_id = _int_o_none(data.get('centro_utilidad_id') or data.get('bodega')) or session.get('centro_utilidad_id') or 1
+    try:
+        centro_utilidad_id = int(centro_utilidad_id)
+    except (ValueError, TypeError):
+        centro_utilidad_id = 1
         
     conn = get_db_connection()
     try:
@@ -6867,8 +7419,8 @@ def api_tienda_ajuste_rapido(negocio_id):
                 
             # Get current stock
             saldo = conn.execute(
-                "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1",
-                (negocio_id, prod_id)
+                "SELECT stock, costo_und FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = %s",
+                (negocio_id, prod_id, centro_utilidad_id)
             ).fetchone()
             qty_system = float(saldo['stock'] if saldo else 0.0)
             
@@ -6882,7 +7434,7 @@ def api_tienda_ajuste_rapido(negocio_id):
                 _mov_directo(conn, negocio_id, prod_id, diff, 'entrada', 'ajuste',
                              registrado_por=session.get('usuario_id'),
                              valor_unitario=costo_definitivo,
-                             bodega=1,
+                             bodega=centro_utilidad_id,
                              tipo_documento=tipo_doc_code,
                              documento_numero=doc_num,
                              tipo_documento_id=td['id'])
@@ -6891,7 +7443,7 @@ def api_tienda_ajuste_rapido(negocio_id):
                 _mov_directo(conn, negocio_id, prod_id, abs(diff), 'salida', 'ajuste',
                              registrado_por=session.get('usuario_id'),
                              valor_unitario=costo_definitivo,
-                             bodega=1,
+                             bodega=centro_utilidad_id,
                              tipo_documento=tipo_doc_code,
                              documento_numero=doc_num,
                              tipo_documento_id=td['id'])
@@ -6900,17 +7452,18 @@ def api_tienda_ajuste_rapido(negocio_id):
             _contabilizar_ajuste_item(
                 conn, negocio_id, prod_id, diff, costo_definitivo, comp_id,
                 doc_num, td['id'], tipo_doc_code, desc_asiento=desc_asiento,
-                usuario_id=session.get('usuario_id'), origen_tipo='ajuste_rapido'
+                usuario_id=session.get('usuario_id'), origen_tipo='ajuste_rapido',
+                centro_utilidad_id=centro_utilidad_id
             )
                              
             adjusted_products.append(prod_id)
             
         # 4. Recalculate cost/stock for all affected products
         for p_id in adjusted_products:
-            _recostear_producto(conn, negocio_id, p_id)
+            _recostear_producto(conn, negocio_id, p_id, bodega=centro_utilidad_id)
             
         conn.commit()
-        return jsonify({'ok': True, 'mensaje': 'Ajuste de inventario realizado con éxito', 'numero_documento': doc_num})
+        return jsonify({'ok': True, 'mensaje': 'Ajuste de inventario realizado con éxito', 'numero_documento': doc_num, 'centro_utilidad_id': centro_utilidad_id})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -6931,9 +7484,29 @@ def admin_inventario_distribuido(negocio_id):
             return "Negocio no encontrado", 404
         if not _puede_gestionar_negocio(contexto):
             return "No autorizado para este negocio", 403
+
+        # Obtener centros de utilidad
+        centros = conn.execute("""
+            SELECT id, nombre, codigo, tipo
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY codigo ASC
+        """, (negocio_id,)).fetchall()
+        
+        centro_activo_id = session.get('centro_utilidad_id')
+        if not centro_activo_id or str(centro_activo_id).lower() in ('consolidado', 'todas', 'all', 'none'):
+            centro_activo_id = centros[0]['id'] if centros else 1
+        else:
+            try:
+                centro_activo_id = int(centro_activo_id)
+            except Exception:
+                centro_activo_id = centros[0]['id'] if centros else 1
+
         return render_template('inventario_distribuido.html',
                                negocio_id=negocio_id,
-                               negocio_nombre=contexto.get('negocio_nombre', ''))
+                               negocio_nombre=contexto.get('negocio_nombre', ''),
+                               centros_utilidad=[dict(c) for c in centros],
+                               centro_activo_id=centro_activo_id)
     finally:
         conn.close()
 
@@ -6979,13 +7552,32 @@ def admin_inventario_fisico(negocio_id):
                     LIMIT 1
                 """, (negocio_id,)).fetchone()
             tipos_doc = [td]
+
+        # Obtener los centros de utilidad del negocio
+        centros = conn.execute("""
+            SELECT id, nombre, codigo, tipo
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY codigo ASC
+        """, (negocio_id,)).fetchall()
+        
+        centro_activo_id = session.get('centro_utilidad_id')
+        if not centro_activo_id or str(centro_activo_id).lower() in ('consolidado', 'todas', 'all', 'none'):
+            centro_activo_id = centros[0]['id'] if centros else 1
+        else:
+            try:
+                centro_activo_id = int(centro_activo_id)
+            except Exception:
+                centro_activo_id = centros[0]['id'] if centros else 1
             
         return render_template('inventario_fisico.html',
                                negocio_id=negocio_id,
                                negocio_nombre=contexto['negocio_nombre'],
                                volver_url=url_for('inventarios.admin_inventario', negocio_id=negocio_id),
                                volver_label='Inventario',
-                               tipos_doc=[dict(t) for t in tipos_doc])
+                               tipos_doc=[dict(t) for t in tipos_doc],
+                               centros_utilidad=[dict(c) for c in centros],
+                               centro_activo_id=centro_activo_id)
     except Exception as e:
         return f"Error: {e}", 500
     finally:
@@ -7035,11 +7627,28 @@ def api_ajuste_guardar_item(negocio_id):
     tercero_id = _int_o_none(data.get('tercero_id'))
     tercero_nombre = data.get('tercero_nombre') or None
     
+    # Resolver y validar sede física (Centro de Utilidad)
+    centro_utilidad_id = data.get('centro_utilidad_id') or data.get('bodega') or session.get('centro_utilidad_id')
+    if not centro_utilidad_id or str(centro_utilidad_id).strip().lower() in ('consolidado', 'todas', 'all', 'none'):
+        return jsonify({
+            'ok': False,
+            'error': 'No se puede realizar un ajuste físico en la vista Consolidada. Seleccione una sede o bodega física específica.'
+        }), 400
+    try:
+        centro_utilidad_id = int(centro_utilidad_id)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Identificador de sede/centro inválido'}), 400
+    
     if not tipo_documento_id or not documento_numero or not producto_id or cantidad_fisica is None or costo_unitario is None:
         return jsonify({'ok': False, 'error': 'Todos los campos son requeridos'}), 400
         
     conn = get_db_connection()
     try:
+        # Validar existencia de la sede física
+        chk_cu = conn.execute("SELECT id, nombre, codigo FROM centros_utilidad WHERE id = %s AND negocio_id = %s AND activo = TRUE", (centro_utilidad_id, negocio_id)).fetchone()
+        if not chk_cu:
+            return jsonify({'ok': False, 'error': 'La sede seleccionada no existe o no pertenece a este negocio'}), 400
+
         # Normalizar documento_numero contra codigo del tipo doc
         td_raw = conn.execute("SELECT codigo FROM tipos_documento_negocio WHERE id=%s AND negocio_id=%s", (tipo_documento_id, negocio_id)).fetchone() if tipo_documento_id else None
         cod_t = (td_raw['codigo'] if td_raw and td_raw['codigo'] else 'AJUSTE_INV') or ''
@@ -7049,12 +7658,12 @@ def api_ajuste_guardar_item(negocio_id):
         elif s_doc.upper().startswith('AJUSTE_INV-'):
             documento_numero = s_doc[len('AJUSTE_INV'):].lstrip('-').strip()
     
-        # 1. Obtener producto y stock actual
+        # 1. Obtener producto y stock actual en la sede específica
         prod = conn.execute("SELECT nombre, categoria FROM productos WHERE id=%s AND negocio_id=%s", (producto_id, negocio_id)).fetchone()
         if not prod:
             return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
             
-        saldo = conn.execute("SELECT stock FROM saldos_inventario WHERE negocio_id=%s AND producto_id=%s AND bodega=1", (negocio_id, producto_id)).fetchone()
+        saldo = conn.execute("SELECT stock, costo_und, valor_existencia FROM saldos_inventario WHERE negocio_id=%s AND producto_id=%s AND bodega=%s", (negocio_id, producto_id, centro_utilidad_id)).fetchone()
         stock_sistema = float(saldo['stock'] if saldo else 0.0)
         diff = float(cantidad_fisica) - stock_sistema
         
@@ -7075,7 +7684,7 @@ def api_ajuste_guardar_item(negocio_id):
             SELECT DISTINCT comprobante_id AS id FROM movimientos_contables 
             WHERE negocio_id=%s AND numero_documento=%s AND tipo_documento=%s
             LIMIT 1
-        """, (negocio_id, documento_numero, tipo_code)).fetchone()
+        """, (negocio_id, str(documento_numero), tipo_code)).fetchone()
         
         doc_num_final = documento_numero
         comp_id = None
@@ -7083,7 +7692,7 @@ def api_ajuste_guardar_item(negocio_id):
         
         if comp:
             comp_id = comp['id']
-            desc_asiento = f"Ajuste físico de inventario - {documento_numero}"
+            desc_asiento = f"Ajuste físico de inventario - {documento_numero} ({chk_cu['codigo']})"
         else:
             # Es el primer item: consumimos el consecutivo en la base de datos de manera atómica
             res_num, _ = obtener_siguiente_consecutivo(conn, negocio_id, tipo_documento_id)
@@ -7092,24 +7701,26 @@ def api_ajuste_guardar_item(negocio_id):
                 conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (int(res_num), tipo_documento_id))
             
             doc_num_final = str(int(res_num))
-            desc_asiento = f"Ajuste físico de inventario - {doc_num_final}"
+            desc_asiento = f"Ajuste físico de inventario - {doc_num_final} ({chk_cu['codigo']})"
             comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+            consecutivo_actualizado = True
+
         # 3. Determinar costo unitario definitivo según tipo de movimiento
         tipo_mov = 'entrada' if diff > 0 else 'salida'
         if tipo_mov == 'salida':
             # Para salidas de inventario por ajuste (faltante), NUNCA se permite costo arbitrario.
-            # Siempre se liquida al costo promedio ponderado vigente en el sistema.
+            # Siempre se liquida al costo promedio ponderado vigente en la sede.
             costo_definitivo = abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
         else:
-            # Para entradas (sobrante), se permite el costo provisto o el base si no viene
+            # Para entradas (sobrante), se permite el costo provisto o el base de bodega si no viene
             costo_definitivo = abs(float(costo_unitario)) if costo_unitario is not None else abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
 
-        # Registrar el movimiento en movimientos_inventario (Kardex)
+        # Registrar el movimiento en movimientos_inventario (Kardex) asignando la bodega
         _mov_directo(conn, negocio_id, producto_id, abs(diff), tipo_mov, 'ajuste',
                      registrado_por=session.get('usuario_id'),
                      valor_unitario=costo_definitivo,
                      notas=notas,
-                     bodega=1,
+                     bodega=centro_utilidad_id,
                      tipo_documento=tipo_code,
                      documento_numero=doc_num_final,
                      documento_fecha=date.today(),
@@ -7155,12 +7766,13 @@ def api_ajuste_guardar_item(negocio_id):
                 """, (negocio_id, tercero_id, producto_id, f_cot, f_vence, precio_cot, pres_id_default))
             cotizacion_creada = True
         
-        # 6. Integración contable individualizada mediante motor unificado (con costo definitivo)
+        # 6. Integración contable individualizada mediante motor unificado (con centro_utilidad_id)
         warnings = []
         ok_contab, err_contab = _contabilizar_ajuste_item(
             conn, negocio_id, producto_id, diff, costo_definitivo, comp_id,
             doc_num_final, tipo_documento_id, tipo_code, desc_asiento=desc_asiento,
-            usuario_id=session.get('usuario_id'), tercero_id=tercero_id, origen_tipo='ajuste_fisico'
+            usuario_id=session.get('usuario_id'), tercero_id=tercero_id, origen_tipo='ajuste_fisico',
+            centro_utilidad_id=centro_utilidad_id
         )
         if not ok_contab:
             conn.rollback(); conn.close()
@@ -7169,11 +7781,12 @@ def api_ajuste_guardar_item(negocio_id):
         conn.commit()
         return jsonify({
             'ok': True,
-            'mensaje': 'Ajuste registrado y contabilizado con éxito',
+            'mensaje': f'Ajuste en {chk_cu["codigo"]} registrado y contabilizado con éxito',
             'documento_numero': doc_num_final,
             'consecutivo_actualizado': consecutivo_actualizado,
             'cotizacion_creada': cotizacion_creada,
-            'warnings': warnings
+            'warnings': warnings,
+            'centro_utilidad_id': centro_utilidad_id
         })
     except Exception as e:
         conn.rollback()
@@ -7190,9 +7803,12 @@ def api_ajuste_documento_items(negocio_id, documento_numero):
     try:
         rows = conn.execute("""
             SELECT m.id, m.producto_id, m.nombre_producto, m.cantidad, m.tipo, m.costo_und, m.valor_total,
-                   m.stock_anterior, m.stock_nuevo, m.created_at, p.categoria
+                   m.stock_anterior, m.stock_nuevo, m.created_at, m.bodega AS centro_utilidad_id,
+                   cu.nombre AS centro_nombre, cu.codigo AS centro_codigo,
+                   p.categoria
             FROM movimientos_inventario m
             JOIN productos p ON p.id = m.producto_id
+            LEFT JOIN centros_utilidad cu ON cu.id = m.bodega AND cu.negocio_id = m.negocio_id
             WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo = 'ajuste'
             ORDER BY m.id DESC
         """, (negocio_id, documento_numero)).fetchall()
@@ -7209,8 +7825,15 @@ def api_ajuste_historial(negocio_id):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     conn = get_db_connection()
     try:
+        centro_id_filtro = request.args.get('centro_utilidad_id')
+        where_extra = ""
+        params = [negocio_id, negocio_id]
+        if centro_id_filtro and str(centro_id_filtro).lower() not in ('consolidado', 'todas', 'all', 'none'):
+            where_extra = " AND m.bodega = %s"
+            params.append(int(centro_id_filtro))
+
         # Agrupar documentos de ajuste físico por número
-        rows = conn.execute("""
+        rows = conn.execute(f"""
             WITH cont AS (
                 SELECT numero_documento, comprobante_id,
                        SUM(CASE WHEN tipo IN ('debito', 'D') THEN monto ELSE 0 END) AS total_debitos
@@ -7221,13 +7844,16 @@ def api_ajuste_historial(negocio_id):
             SELECT m.documento_numero, MAX(m.created_at) AS fecha, 
                    c.comprobante_id,
                    COALESCE(MAX(c.total_debitos), 0) AS total_debitos, 
-                   COUNT(DISTINCT m.producto_id) AS total_items
+                   COUNT(DISTINCT m.producto_id) AS total_items,
+                   m.bodega AS centro_utilidad_id,
+                   cu.nombre AS centro_nombre, cu.codigo AS centro_codigo
             FROM movimientos_inventario m
             LEFT JOIN cont c ON c.numero_documento = m.documento_numero
-            WHERE m.negocio_id = %s AND m.motivo = 'ajuste'
-            GROUP BY m.documento_numero, c.comprobante_id
+            LEFT JOIN centros_utilidad cu ON cu.id = m.bodega AND cu.negocio_id = m.negocio_id
+            WHERE m.negocio_id = %s AND m.motivo = 'ajuste' {where_extra}
+            GROUP BY m.documento_numero, c.comprobante_id, m.bodega, cu.nombre, cu.codigo
             ORDER BY fecha DESC
-        """, (negocio_id, negocio_id)).fetchall()
+        """, tuple(params)).fetchall()
         return jsonify({'ok': True, 'historial': [dict(r) for r in rows]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -7244,19 +7870,24 @@ def api_ajuste_documento_detalles(negocio_id, documento_numero):
         # Obtener los items del Kardex
         items = conn.execute("""
             SELECT m.producto_id, m.nombre_producto, m.cantidad, m.tipo, m.costo_und, m.valor_total,
-                   m.stock_anterior, m.stock_nuevo, p.categoria
+                   m.stock_anterior, m.stock_nuevo, m.bodega AS centro_utilidad_id,
+                   cu.nombre AS centro_nombre, cu.codigo AS centro_codigo,
+                   p.categoria
             FROM movimientos_inventario m
             JOIN productos p ON p.id = m.producto_id
+            LEFT JOIN centros_utilidad cu ON cu.id = m.bodega AND cu.negocio_id = m.negocio_id
             WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo = 'ajuste'
             ORDER BY m.id
         """, (negocio_id, documento_numero)).fetchall()
         
         # Obtener el asiento contable individualizado
         asiento = conn.execute("""
-            SELECT mc.cuenta, c.nombre AS cuenta_nombre, mc.concepto, mc.tipo, mc.monto, p.nombre AS producto_nombre
+            SELECT mc.cuenta, c.nombre AS cuenta_nombre, mc.concepto, mc.tipo, mc.monto, p.nombre AS producto_nombre,
+                   mc.centro_utilidad_id, cu.nombre AS centro_nombre, cu.codigo AS centro_codigo
             FROM movimientos_contables mc
             JOIN cuentas_puc c ON c.id = mc.cuenta_id
             LEFT JOIN productos p ON p.id = mc.producto_id
+            LEFT JOIN centros_utilidad cu ON cu.id = mc.centro_utilidad_id AND cu.negocio_id = mc.negocio_id
             WHERE mc.negocio_id = %s AND mc.numero_documento = %s
             ORDER BY mc.id
         """, (negocio_id, documento_numero)).fetchall()
@@ -7305,7 +7936,7 @@ def _pdf_tabla(pdf, col_w, headers, filas, aligns=None, wrap_col=0, alto_linea=5
         pdf.set_xy(pdf.l_margin, y0 + alto_fila)
 
 
-def _pdf_documento_ajuste(nombre_negocio, doc_num, fecha_str, items, asiento):
+def _pdf_documento_ajuste(nombre_negocio, doc_num, fecha_str, items, asiento, sede_str=None):
     pdf = FPDF(format='letter', unit='mm')
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
@@ -7314,6 +7945,9 @@ def _pdf_documento_ajuste(nombre_negocio, doc_num, fecha_str, items, asiento):
     pdf.cell(0, 9, _pdf_sanitize(nombre_negocio), ln=1, align='C')
     pdf.set_font('Helvetica', 'B', 11)
     pdf.cell(0, 6, 'Inventario Físico', ln=1, align='C')
+    if sede_str:
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.cell(0, 5, f'Sede / Centro: {_pdf_sanitize(sede_str)}', ln=1, align='C')
     pdf.set_font('Helvetica', '', 9)
     pdf.cell(0, 5, f'Documento: {_pdf_sanitize(doc_num)}', ln=1, align='C')
     if fecha_str:
@@ -7389,10 +8023,14 @@ def api_ajuste_documento_pdf(negocio_id, documento_numero):
         contexto = _contexto_negocio(conn, negocio_id)
         nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
         fecha_row = conn.execute("""
-            SELECT MAX(created_at) AS fecha FROM movimientos_inventario
-            WHERE negocio_id = %s AND documento_numero = %s AND motivo = 'ajuste'
+            SELECT MAX(m.created_at) AS fecha, m.bodega, cu.nombre AS centro_nombre, cu.codigo AS centro_codigo
+            FROM movimientos_inventario m
+            LEFT JOIN centros_utilidad cu ON cu.id = m.bodega AND cu.negocio_id = m.negocio_id
+            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo = 'ajuste'
+            GROUP BY m.bodega, cu.nombre, cu.codigo
         """, (negocio_id, documento_numero)).fetchone()
         fecha_str = fecha_row['fecha'].strftime('%Y-%m-%d %H:%M') if fecha_row and fecha_row['fecha'] else ''
+        sede_str = f"{fecha_row['centro_codigo']} - {fecha_row['centro_nombre']}" if (fecha_row and fecha_row['centro_nombre']) else None
         items = conn.execute("""
             SELECT m.producto_id, m.nombre_producto, m.cantidad, m.tipo, m.costo_und, m.valor_total,
                    m.stock_anterior, m.stock_nuevo, p.categoria
@@ -7411,7 +8049,7 @@ def api_ajuste_documento_pdf(negocio_id, documento_numero):
         """, (negocio_id, documento_numero)).fetchall()
         pdf = _pdf_documento_ajuste(
             nombre_negocio, documento_numero, fecha_str,
-            [dict(i) for i in items], [dict(a) for a in asiento])
+            [dict(i) for i in items], [dict(a) for a in asiento], sede_str=sede_str)
         resp = Response(bytes(pdf.output()), mimetype='application/pdf')
         resp.headers['Content-Disposition'] = f"inline; filename=ajuste_fisico_{documento_numero}.pdf"
         return resp
@@ -7419,6 +8057,7 @@ def api_ajuste_documento_pdf(negocio_id, documento_numero):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
 def api_mantenimiento_modificar_documento(negocio_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
@@ -7618,12 +8257,13 @@ def api_reporte_ventas_costos(negocio_id):
     
     desde = request.args.get('desde')
     hasta = request.args.get('hasta')
+    centro_utilidad_id = request.args.get('centro_utilidad_id')
     if not desde or not hasta:
         return jsonify({'ok': False, 'error': 'Debe especificar las fechas desde y hasta'}), 400
         
     conn = get_db_connection()
     try:
-        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta)
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id)
         return jsonify({'ok': True, 'reporte': datos})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -7631,8 +8271,19 @@ def api_reporte_ventas_costos(negocio_id):
         conn.close()
 
 
-def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta):
-    rows = conn.execute("""
+def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=None):
+    cond_cu = ""
+    params = [negocio_id, desde, hasta]
+    if centro_utilidad_id is not None:
+        try:
+            c_id = int(centro_utilidad_id)
+            if c_id > 0:
+                cond_cu = " AND ped.centro_utilidad_id = %s"
+                params.append(c_id)
+        except (ValueError, TypeError):
+            pass
+
+    rows = conn.execute(f"""
         SELECT 
             pi.producto_id,
             p.nombre AS nombre_producto,
@@ -7647,9 +8298,10 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta):
           AND ped.numero_documento IS NOT NULL AND ped.numero_documento != ''
           AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date 
           AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
+          {cond_cu}
         GROUP BY pi.producto_id, p.nombre
         ORDER BY total_ventas_pesos DESC
-    """, (negocio_id, desde, hasta)).fetchall()
+    """, tuple(params)).fetchall()
 
     datos = []
     for r in rows:
@@ -7686,6 +8338,7 @@ def api_reporte_ventas_costos_detalle(negocio_id):
     desde = request.args.get('desde')
     hasta = request.args.get('hasta')
     producto_id = request.args.get('producto_id')
+    centro_utilidad_id = request.args.get('centro_utilidad_id')
     if not desde or not hasta or not producto_id:
         return jsonify({'ok': False, 'error': 'Fechas y producto_id requeridos'}), 400
     try:
@@ -7695,7 +8348,18 @@ def api_reporte_ventas_costos_detalle(negocio_id):
     from ..db import get_db_connection
     conn = get_db_connection()
     try:
-        rows = conn.execute("""
+        cond_cu = ""
+        params_det = [negocio_id, producto_id, desde, hasta]
+        if centro_utilidad_id:
+            try:
+                c_id = int(centro_utilidad_id)
+                if c_id > 0:
+                    cond_cu = " AND ped.centro_utilidad_id = %s"
+                    params_det.append(c_id)
+            except (ValueError, TypeError):
+                pass
+
+        rows = conn.execute(f"""
             SELECT 
                 ped.id AS pedido_id,
                 COALESCE(ped.fecha, ped.created_at::date) AS fecha,
@@ -7716,8 +8380,9 @@ def api_reporte_ventas_costos_detalle(negocio_id):
               AND ped.numero_documento IS NOT NULL AND ped.numero_documento != ''
               AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date
               AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
+              {cond_cu}
             ORDER BY COALESCE(ped.fecha, ped.created_at::date) DESC, ped.id DESC
-        """, (negocio_id, producto_id, desde, hasta)).fetchall()
+        """, tuple(params_det)).fetchall()
         documentos = []
         for r in rows:
             d = dict(r)
@@ -7804,7 +8469,7 @@ def _pdf_fila_wrap(pdf, col_w, field, aligns, wrap_cols, alto_linea=4.0):
 
 
 def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
-                         stock_actual, costo_actual, valor_existencia, movimientos, usuario):
+                         stock_actual, costo_actual, valor_existencia, movimientos, usuario, sede_str=None):
 
     col_w = [22, 54, 14, 14, 14, 16, 16, 20, 24]
     headers = ['Fecha', 'Documento / Proveedor', 'Entradas', 'Salidas',
@@ -7817,6 +8482,7 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
             super().__init__(*a, **k)
             self._pie_usuario = ''
             self._negocio_hdr = ''
+            self._sede_hdr = ''
             self._sub_hdr = ''
             self._col_w = []
             self._headers = []
@@ -7836,6 +8502,12 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
             self.set_font('Helvetica', '', 6.5)
             self.set_text_color(120, 120, 120)
             self.cell(34, 3.2, f'Página {self.page_no()} de {{nb}}', align='R', ln=1)
+
+            if self._sede_hdr:
+                self.set_font('Helvetica', 'B', 6.8)
+                self.set_text_color(30, 64, 175)
+                self.cell(w_util, 3.0, f"Sede / Centro de Utilidad: {_pdf_sanitize(self._sede_hdr)}", ln=1, align='L')
+
             self.set_font('Helvetica', 'B', 6.5)
             self.set_text_color(90, 90, 90)
             self.cell(w_util, 3.0, _pdf_sanitize(self._sub_hdr), ln=1, align='L')
@@ -7858,6 +8530,7 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
     pdf = KardexPDF(format='letter', unit='mm')
     pdf._pie_usuario = usuario
     pdf._negocio_hdr = nombre_negocio
+    pdf._sede_hdr = sede_str or ''
     titulo = nombre_producto + (f'  (Cód: {codigo_producto})' if codigo_producto else '')
     pdf._sub_hdr = (f'Kardex - {titulo}   Stock: {_pdf_money(stock_actual)}   '
                     f'C.Prom: ${_pdf_money(costo_actual)}   Valor: ${_pdf_money(valor_existencia)}   '
@@ -7933,7 +8606,7 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
     return pdf
 
 
-def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos):
+def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=None):
     pdf = FPDF(format='letter', unit='mm')
     pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
@@ -7941,7 +8614,8 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos):
     pdf.set_font('Helvetica', 'B', 15)
     pdf.cell(0, 9, _pdf_sanitize(nombre_negocio), ln=1, align='C')
     pdf.set_font('Helvetica', 'B', 11)
-    pdf.cell(0, 6, 'Informe de Ventas y Costos', ln=1, align='C')
+    sub_title = f"Informe de Ventas y Costos — {centro_info['codigo']} ({centro_info['nombre']})" if centro_info else "Informe de Ventas y Costos (Consolidado)"
+    pdf.cell(0, 6, _pdf_sanitize(sub_title), ln=1, align='C')
     pdf.set_font('Helvetica', '', 9)
     pdf.cell(0, 5, f'Rango: {desde} al {hasta}', ln=1, align='C')
 
@@ -8014,6 +8688,7 @@ def api_reporte_ventas_costos_pdf(negocio_id):
 
     desde = request.args.get('desde')
     hasta = request.args.get('hasta')
+    centro_utilidad_id = request.args.get('centro_utilidad_id')
     if not desde or not hasta:
         return jsonify({'ok': False, 'error': 'Debe especificar las fechas desde y hasta'}), 400
 
@@ -8021,11 +8696,24 @@ def api_reporte_ventas_costos_pdf(negocio_id):
     try:
         contexto = _contexto_negocio(conn, negocio_id)
         nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
-        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta)
+        datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id)
+        
+        centro_info = None
+        if centro_utilidad_id:
+            try:
+                c_id = int(centro_utilidad_id)
+                if c_id > 0:
+                    cu_row = conn.execute("SELECT id, codigo, nombre FROM centros_utilidad WHERE id = %s AND negocio_id = %s", (c_id, negocio_id)).fetchone()
+                    if cu_row:
+                        centro_info = dict(cu_row)
+            except (ValueError, TypeError):
+                pass
+
         conn.close()
-        pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos)
+        pdf = _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=centro_info)
         resp = Response(bytes(pdf.output()), mimetype='application/pdf')
-        resp.headers['Content-Disposition'] = 'inline; filename=reporte_ventas_costos.pdf'
+        filename = f"reporte_ventas_costos_{centro_info['codigo']}.pdf" if centro_info else "reporte_ventas_costos_consolidado.pdf"
+        resp.headers['Content-Disposition'] = f'inline; filename={filename}'
         return resp
     except Exception as e:
         try: conn.close()
@@ -9262,17 +9950,22 @@ def inv_dist_config_set(negocio_id):
 
 @bp.route('/api/inventario/<int:negocio_id>/inv-dist/siguiente', methods=['GET'])
 def inv_dist_siguiente(negocio_id):
-    """Retorna el siguiente ítem a contar según prioridad y filtro de catálogo."""
+    """Retorna el siguiente ítem a contar según prioridad y filtro de catálogo para la sede indicada."""
     try:
         conn = get_db_connection()
         usuario_id = request.args.get('usuario_id', type=int)
+        centro_id_raw = request.args.get('centro_utilidad_id') or request.args.get('bodega') or session.get('centro_utilidad_id') or 1
+        try:
+            centro_id = int(centro_id_raw)
+        except Exception:
+            centro_id = 1
 
-        # Obtener ciclo activo
+        # Obtener ciclo activo para este centro
         ciclo = conn.execute("""
             SELECT MIN(ciclo_inicio) AS inicio, MAX(ciclo_fin) AS fin
             FROM inventario_distribuido_estado
-            WHERE negocio_id = %s AND ciclo_inicio IS NOT NULL
-        """, (negocio_id,)).fetchone()
+            WHERE negocio_id = %s AND (centro_utilidad_id = %s OR centro_utilidad_id IS NULL) AND ciclo_inicio IS NOT NULL
+        """, (negocio_id, centro_id)).fetchone()
 
         ciclo_inicio = ciclo['inicio'] if ciclo and ciclo['inicio'] else None
 
@@ -9285,17 +9978,20 @@ def inv_dist_siguiente(negocio_id):
 
         # Construir ORDER BY
         order_sql = {
-            'valor_total': '(COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC',
-            'rotacion': '(SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.created_at >= NOW() - INTERVAL \'30 days\') DESC',
-            'costo_unitario': 'COALESCE(p.costo, p.precio, 0) DESC',
-            'valor_rotacion': '(COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) * (1 + (SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.created_at >= NOW() - INTERVAL \'30 days\')) DESC',
+            'valor_total': '(COALESCE(si.costo_und, p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC',
+            'rotacion': '(SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.bodega = %s AND m2.created_at >= NOW() - INTERVAL \'30 days\') DESC',
+            'costo_unitario': 'COALESCE(si.costo_und, p.costo, p.precio, 0) DESC',
+            'valor_rotacion': '(COALESCE(si.costo_und, p.costo, p.precio, 0) * COALESCE(si.stock, 0)) * (1 + (SELECT COUNT(*) FROM movimientos_inventario m2 WHERE m2.producto_id = p.id AND m2.bodega = %s AND m2.created_at >= NOW() - INTERVAL \'30 days\')) DESC',
             'alfabetico': 'p.nombre ASC',
-        }.get(orden, '(COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC')
+        }.get(orden, '(COALESCE(si.costo_und, p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC')
+
+        if '%s' in order_sql:
+            order_sql = order_sql.replace('%s', str(centro_id))
 
         # Filtro de productos aplicable (ej. con_kardex para excluir platos preparados)
         filtro_where, filtro_params = _obtener_filtro_productos_sql(conn, negocio_id, 'p')
 
-        query_params = []
+        query_params = [centro_id, centro_id]
         ciclo_join = ""
         if ciclo_inicio:
             ciclo_join = "AND est.ciclo_inicio IS NOT DISTINCT FROM %s"
@@ -9309,11 +10005,12 @@ def inv_dist_siguiente(negocio_id):
             query_params.extend([usuario_id, ciclo_inicio])
 
         row = conn.execute(f"""
-            SELECT p.id AS producto_id, p.nombre, p.categoria, p.precio, p.costo, p.codigo_barra,
+            SELECT p.id AS producto_id, p.nombre, p.categoria, p.precio,
+                   COALESCE(si.costo_und, p.costo, 0) AS costo, p.codigo_barra,
                    COALESCE(si.stock, 0) AS stock_sistema
             FROM productos p
-            LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = 1
-            LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id
+            LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = %s
+            LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id AND (est.centro_utilidad_id = %s OR est.centro_utilidad_id IS NULL)
                 {ciclo_join}
             WHERE {filtro_where}
                 AND (est.estado IS NULL OR est.estado = 'saltado')
@@ -9324,7 +10021,7 @@ def inv_dist_siguiente(negocio_id):
 
         conn.close()
         if not row:
-            return jsonify({'ok': True, 'item': None, 'mensaje': 'No hay ítems pendientes en este ciclo'})
+            return jsonify({'ok': True, 'item': None, 'mensaje': 'No hay ítems pendientes en este ciclo para esta sede'})
         return jsonify({
             'ok': True,
             'item': {
@@ -9335,18 +10032,7 @@ def inv_dist_siguiente(negocio_id):
                 'costo': float(row['costo'] or 0),
                 'stock_sistema': float(row['stock_sistema'] or 0),
                 'codigo_barra': row['codigo_barra'],
-            }
-        })
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-        return jsonify({
-            'ok': True,
-            'item': {
-                'producto_id': row['producto_id'],
-                'nombre': row['nombre'],
-                'categoria': row['categoria'],
-                'precio': float(row['precio'] or 0),
-                'codigo_barra': row['codigo_barra'],
+                'centro_utilidad_id': centro_id
             }
         })
     except Exception as e:
@@ -9362,31 +10048,36 @@ def inv_dist_conteo(negocio_id):
         cantidad_fisica = data.get('cantidad_fisica')
         usuario_id = data.get('usuario_id')
         usuario_nombre = data.get('usuario_nombre', '')
+        centro_id_raw = data.get('centro_utilidad_id') or data.get('bodega') or session.get('centro_utilidad_id') or 1
+        try:
+            centro_id = int(centro_id_raw)
+        except Exception:
+            centro_id = 1
 
         if not producto_id or cantidad_fisica is None:
             return jsonify({'ok': False, 'error': 'Faltan datos'}), 400
 
         conn = get_db_connection()
 
-        # Stock actual del sistema (NO se expone al operario)
+        # Stock actual del sistema en la sede (NO se expone al operario)
         sal = conn.execute(
-            "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1",
-            (negocio_id, producto_id)
+            "SELECT stock, costo_und FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = %s",
+            (negocio_id, producto_id, centro_id)
         ).fetchone()
         stock_sistema = float(sal['stock'] or 0) if sal else 0
         diff = float(cantidad_fisica) - stock_sistema
 
         # Obtener ciclo activo
         ciclo = conn.execute(
-            "SELECT MIN(ciclo_inicio) AS inicio FROM inventario_distribuido_estado WHERE negocio_id = %s AND ciclo_inicio IS NOT NULL",
-            (negocio_id,)
+            "SELECT MIN(ciclo_inicio) AS inicio FROM inventario_distribuido_estado WHERE negocio_id = %s AND (centro_utilidad_id = %s OR centro_utilidad_id IS NULL) AND ciclo_inicio IS NOT NULL",
+            (negocio_id, centro_id)
         ).fetchone()
         ciclo_inicio = ciclo['inicio'] if ciclo and ciclo['inicio'] else None
 
         # Upsert estado
         exists = conn.execute(
-            "SELECT id FROM inventario_distribuido_estado WHERE negocio_id = %s AND producto_id = %s AND ciclo_inicio IS NOT DISTINCT FROM %s",
-            (negocio_id, producto_id, ciclo_inicio)
+            "SELECT id FROM inventario_distribuido_estado WHERE negocio_id = %s AND producto_id = %s AND centro_utilidad_id = %s AND ciclo_inicio IS NOT DISTINCT FROM %s",
+            (negocio_id, producto_id, centro_id, ciclo_inicio)
         ).fetchone()
 
         if exists:
@@ -9398,9 +10089,9 @@ def inv_dist_conteo(negocio_id):
             """, (usuario_nombre, usuario_id, exists['id']))
         else:
             conn.execute("""
-                INSERT INTO inventario_distribuido_estado (negocio_id, producto_id, usuario_id, estado, fecha_ultimo_conteo, conteos_total, quién_contó, ciclo_inicio)
-                VALUES (%s, %s, %s, 'contado', NOW(), 1, %s, %s)
-            """, (negocio_id, producto_id, usuario_id, usuario_nombre, ciclo_inicio))
+                INSERT INTO inventario_distribuido_estado (negocio_id, producto_id, usuario_id, estado, fecha_ultimo_conteo, conteos_total, quién_contó, ciclo_inicio, centro_utilidad_id)
+                VALUES (%s, %s, %s, 'contado', NOW(), 1, %s, %s, %s)
+            """, (negocio_id, producto_id, usuario_id, usuario_nombre, ciclo_inicio, centro_id))
 
         # Si hay diferencia, registrar ajuste con consecutivo y contabilidad vía grupos_inventario
         ajuste_monto = 0
@@ -9416,33 +10107,28 @@ def inv_dist_conteo(negocio_id):
             conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (nuevo_consecutivo, tipo_doc_id))
             doc_num_final = str(nuevo_consecutivo)
             
-            # Obtener costo unitario ponderado real de bodega o catálogo
-            saldo_row = conn.execute("""
-                SELECT costo_und FROM saldos_inventario 
-                WHERE negocio_id = %s AND producto_id = %s AND bodega = 1
-            """, (negocio_id, producto_id)).fetchone()
-            
             prod = conn.execute("SELECT id, nombre, categoria, costo FROM productos WHERE id = %s AND negocio_id = %s", (producto_id, negocio_id)).fetchone()
-            costo_unitario = float(saldo_row['costo_und'] if saldo_row and saldo_row['costo_und'] else (prod['costo'] or 0.0))
+            costo_unitario = float(sal['costo_und'] if sal and sal['costo_und'] else (prod['costo'] or 0.0))
             ajuste_monto = abs(diff) * costo_unitario
             
             comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
             desc_asiento = f"Ajuste Físico Distribuido: {prod['nombre'] if prod else 'Insumo'}"
             
-            # Contabilización mediante motor unificado
+            # Contabilización mediante motor unificado con centro_utilidad_id
             _contabilizar_ajuste_item(
                 conn, negocio_id, producto_id, diff, costo_unitario, comp_id,
                 doc_num_final, tipo_doc_id, tipo_code, desc_asiento=desc_asiento,
-                usuario_id=usuario_id, origen_tipo='inventario_distribuido'
+                usuario_id=usuario_id, origen_tipo='inventario_distribuido',
+                centro_utilidad_id=centro_id
             )
                               
-            # Movimiento en Kardex (movimientos_inventario)
+            # Movimiento en Kardex (movimientos_inventario) con bodega=centro_id
             tipo_mov = 'entrada' if diff > 0 else 'salida'
             _mov_directo(conn, negocio_id, producto_id, abs(diff), tipo_mov, 'ajuste',
                          registrado_por=usuario_id,
                          valor_unitario=costo_unitario,
                          notas=f"Inventario Distribuido #{doc_num_final} - Contado por {usuario_nombre or 'Operario'}",
-                         bodega=1,
+                         bodega=centro_id,
                          tipo_documento=tipo_code,
                          documento_numero=doc_num_final,
                          documento_fecha=date.today(),
@@ -9457,7 +10143,8 @@ def inv_dist_conteo(negocio_id):
             'diferencia': diff,
             'ajuste_monto': round(ajuste_monto, 2),
             'consecutivo': doc_num_final,
-            'mensaje': msg
+            'mensaje': msg,
+            'centro_utilidad_id': centro_id
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -9472,20 +10159,25 @@ def inv_dist_saltar(negocio_id):
         usuario_id = data.get('usuario_id')
         usuario_nombre = data.get('usuario_nombre', '')
         motivo = data.get('motivo', '')
+        centro_id_raw = data.get('centro_utilidad_id') or data.get('bodega') or session.get('centro_utilidad_id') or 1
+        try:
+            centro_id = int(centro_id_raw)
+        except Exception:
+            centro_id = 1
 
         if not producto_id:
             return jsonify({'ok': False, 'error': 'Faltan datos'}), 400
 
         conn = get_db_connection()
         ciclo = conn.execute(
-            "SELECT MIN(ciclo_inicio) AS inicio FROM inventario_distribuido_estado WHERE negocio_id = %s AND ciclo_inicio IS NOT NULL",
-            (negocio_id,)
+            "SELECT MIN(ciclo_inicio) AS inicio FROM inventario_distribuido_estado WHERE negocio_id = %s AND (centro_utilidad_id = %s OR centro_utilidad_id IS NULL) AND ciclo_inicio IS NOT NULL",
+            (negocio_id, centro_id)
         ).fetchone()
         ciclo_inicio = ciclo['inicio'] if ciclo and ciclo['inicio'] else None
 
         exists = conn.execute(
-            "SELECT id FROM inventario_distribuido_estado WHERE negocio_id = %s AND producto_id = %s AND ciclo_inicio IS NOT DISTINCT FROM %s",
-            (negocio_id, producto_id, ciclo_inicio)
+            "SELECT id FROM inventario_distribuido_estado WHERE negocio_id = %s AND producto_id = %s AND centro_utilidad_id = %s AND ciclo_inicio IS NOT DISTINCT FROM %s",
+            (negocio_id, producto_id, centro_id, ciclo_inicio)
         ).fetchone()
 
         if exists:
@@ -9496,13 +10188,13 @@ def inv_dist_saltar(negocio_id):
             """, (usuario_id, usuario_nombre, exists['id']))
         else:
             conn.execute("""
-                INSERT INTO inventario_distribuido_estado (negocio_id, producto_id, usuario_id, estado, quién_contó, fecha_ultimo_conteo, ciclo_inicio)
-                VALUES (%s, %s, %s, 'saltado', %s, NOW(), %s)
-            """, (negocio_id, producto_id, usuario_id, usuario_nombre, ciclo_inicio))
+                INSERT INTO inventario_distribuido_estado (negocio_id, producto_id, usuario_id, estado, quién_contó, fecha_ultimo_conteo, ciclo_inicio, centro_utilidad_id)
+                VALUES (%s, %s, %s, 'saltado', %s, NOW(), %s, %s)
+            """, (negocio_id, producto_id, usuario_id, usuario_nombre, ciclo_inicio, centro_id))
 
         conn.commit()
         conn.close()
-        return jsonify({'ok': True, 'mensaje': 'Ítem saltado'})
+        return jsonify({'ok': True, 'mensaje': 'Ítem saltado', 'centro_utilidad_id': centro_id})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -9526,9 +10218,15 @@ def inv_dist_resumen(negocio_id):
     """Resumen del ciclo para el parametrizador."""
     try:
         conn = get_db_connection()
+        centro_id_raw = request.args.get('centro_utilidad_id') or request.args.get('bodega') or session.get('centro_utilidad_id') or 1
+        try:
+            centro_id = int(centro_id_raw)
+        except Exception:
+            centro_id = 1
+
         ciclo = conn.execute(
-            "SELECT MIN(ciclo_inicio) AS inicio FROM inventario_distribuido_estado WHERE negocio_id = %s AND ciclo_inicio IS NOT NULL",
-            (negocio_id,)
+            "SELECT MIN(ciclo_inicio) AS inicio FROM inventario_distribuido_estado WHERE negocio_id = %s AND (centro_utilidad_id = %s OR centro_utilidad_id IS NULL) AND ciclo_inicio IS NOT NULL",
+            (negocio_id, centro_id)
         ).fetchone()
         ciclo_inicio = ciclo['inicio'] if ciclo and ciclo['inicio'] else None
 
@@ -9541,13 +10239,13 @@ def inv_dist_resumen(negocio_id):
             tuple(filtro_params)
         ).fetchone()['n']
 
-        # Estados
+        # Estados en este centro
         estados = conn.execute("""
             SELECT estado, COUNT(*) AS n
             FROM inventario_distribuido_estado
-            WHERE negocio_id = %s AND ciclo_inicio IS NOT DISTINCT FROM %s
+            WHERE negocio_id = %s AND (centro_utilidad_id = %s OR centro_utilidad_id IS NULL) AND ciclo_inicio IS NOT DISTINCT FROM %s
             GROUP BY estado
-        """, (negocio_id, ciclo_inicio)).fetchall()
+        """, (negocio_id, centro_id, ciclo_inicio)).fetchall()
         resumen_estados = {r['estado']: r['n'] for r in estados}
 
         # Detalle items contados o pendientes que cumplen el filtro
@@ -9556,12 +10254,12 @@ def inv_dist_resumen(negocio_id):
                    est.estado, est.fecha_ultimo_conteo, est.quién_contó, est.conteos_total,
                    COALESCE(si.stock, 0) AS stock_sistema
             FROM productos p
-            LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = 1
-            LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id
+            LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = %s
+            LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id AND (est.centro_utilidad_id = %s OR est.centro_utilidad_id IS NULL)
                 {'AND est.ciclo_inicio IS NOT DISTINCT FROM %s' if ciclo_inicio else ''}
             WHERE {filtro_where}
             ORDER BY est.fecha_ultimo_conteo DESC NULLS LAST, (COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC
-        """, tuple(([ciclo_inicio] if ciclo_inicio else []) + filtro_params)).fetchall()
+        """, tuple([centro_id, centro_id] + ([ciclo_inicio] if ciclo_inicio else []) + filtro_params)).fetchall()
 
         # Configuración del ciclo
         dias_ciclo_row = conn.execute(
@@ -9627,13 +10325,13 @@ def inv_dist_resumen(negocio_id):
             SELECT p.id, p.nombre, p.categoria, p.precio, p.costo, p.codigo_barra,
                    COALESCE(si.stock, 0) AS stock_sistema
             FROM productos p
-            LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = 1
-            LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id
+            LEFT JOIN saldos_inventario si ON si.producto_id = p.id AND si.negocio_id = p.negocio_id AND si.bodega = %s
+            LEFT JOIN inventario_distribuido_estado est ON est.producto_id = p.id AND est.negocio_id = p.negocio_id AND (est.centro_utilidad_id = %s OR est.centro_utilidad_id IS NULL)
             WHERE {filtro_where}
                 AND (est.estado IS NULL OR est.estado = 'saltado')
             ORDER BY (COALESCE(p.costo, p.precio, 0) * COALESCE(si.stock, 0)) DESC
             LIMIT 1
-        """, tuple(filtro_params)).fetchone()
+        """, tuple([centro_id, centro_id] + filtro_params)).fetchone()
 
         sig_item = {
             'producto_id': sig_row['id'],
@@ -11063,5 +11761,682 @@ def api_auditoria_reparar_valores(negocio_id, producto_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+# ── CENTROS DE UTILIDAD, DISPOSITIVOS Y TRASLADOS ────────────────────────────
+
+@bp.route('/api/centros_utilidad/<int:negocio_id>', methods=['GET'])
+def api_listar_centros_utilidad(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        usuario_id = session.get('usuario_id')
+        es_admin = _puede_gestionar_negocio(_contexto)
+
+        centros_db = conn.execute("""
+            SELECT id, codigo, nombre, tipo, direccion, telefono, imagen_url, color_badge, activo, telegram_chat_id
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY id ASC
+        """, (negocio_id,)).fetchall()
+
+        if not centros_db:
+            conn.execute("""
+                INSERT INTO centros_utilidad (id, negocio_id, codigo, nombre, tipo, color_badge)
+                VALUES (1, %s, 'CENTRO-01', 'Principal / Bodega 1', 'local', '#0284c7')
+                ON CONFLICT (id) DO NOTHING
+            """, (negocio_id,))
+            conn.commit()
+            centros_db = conn.execute("""
+                SELECT id, codigo, nombre, tipo, direccion, telefono, imagen_url, color_badge, activo, telegram_chat_id
+                FROM centros_utilidad
+                WHERE negocio_id = %s AND activo = TRUE
+                ORDER BY id ASC
+            """, (negocio_id,)).fetchall()
+
+        permisos_rows = conn.execute("""
+            SELECT centro_utilidad_id, es_predeterminado, rol_en_centro
+            FROM usuarios_centros_utilidad
+            WHERE usuario_id = %s
+        """, (usuario_id,)).fetchall()
+        permisos_map = {r['centro_utilidad_id']: r for r in permisos_rows}
+
+        centro_sesion_id = session.get('centro_utilidad_id')
+        centros_res = []
+        centro_activo = None
+
+        for c in centros_db:
+            cid = c['id']
+            autorizado = es_admin or (cid in permisos_map)
+            item = dict(c)
+            item['autorizado'] = autorizado
+            item['es_predeterminado'] = permisos_map.get(cid, {}).get('es_predeterminado', False) if not es_admin else (cid == (centro_sesion_id or 1))
+            item['es_activo'] = (str(cid) == str(centro_sesion_id)) if centro_sesion_id else item['es_predeterminado']
+            if item['es_activo']:
+                centro_activo = item
+            centros_res.append(item)
+
+        if not centro_activo and centros_res:
+            for item in centros_res:
+                if item['autorizado']:
+                    item['es_activo'] = True
+                    centro_activo = item
+                    break
+
+        if centro_activo:
+            session['centro_utilidad_id'] = centro_activo['id']
+            session['centro_utilidad_nombre'] = centro_activo['nombre']
+            session['centro_utilidad_codigo'] = centro_activo['codigo']
+            session['centro_utilidad_color'] = centro_activo.get('color_badge', '#0284c7')
+
+        return jsonify({
+            'ok': True,
+            'centros': centros_res,
+            'centro_activo': centro_activo,
+            'es_multisede': len([c for c in centros_res if c['autorizado']]) > 1
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/contexto/cambiar_centro', methods=['POST'])
+def api_cambiar_centro_utilidad():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    negocio_id = data.get('negocio_id')
+    nuevo_id = data.get('centro_utilidad_id')
+
+    if not negocio_id:
+        return jsonify({'ok': False, 'error': 'negocio_id requerido'}), 400
+
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        usuario_id = session.get('usuario_id')
+        es_admin = _puede_gestionar_negocio(_contexto)
+
+        if str(nuevo_id).lower() == 'consolidado':
+            if not es_admin:
+                return jsonify({'ok': False, 'error': 'Solo administradores pueden ver consolidado'}), 403
+            session['centro_utilidad_id'] = 'consolidado'
+            session['centro_utilidad_nombre'] = 'Vista Consolidada'
+            session['centro_utilidad_codigo'] = 'TODAS'
+            session['centro_utilidad_color'] = '#6366f1'
+            return jsonify({
+                'ok': True,
+                'centro': {
+                    'id': 'consolidado',
+                    'codigo': 'TODAS',
+                    'nombre': 'Vista Consolidada',
+                    'color_badge': '#6366f1'
+                }
+            })
+
+        centro = conn.execute("""
+            SELECT id, codigo, nombre, tipo, color_badge, imagen_url
+            FROM centros_utilidad
+            WHERE id = %s AND negocio_id = %s AND activo = TRUE
+        """, (nuevo_id, negocio_id)).fetchone()
+
+        if not centro:
+            return jsonify({'ok': False, 'error': 'Centro de utilidad no encontrado'}), 404
+
+        if not es_admin:
+            tiene_permiso = conn.execute("""
+                SELECT 1 FROM usuarios_centros_utilidad
+                WHERE usuario_id = %s AND centro_utilidad_id = %s
+            """, (usuario_id, nuevo_id)).fetchone()
+            if not tiene_permiso:
+                return jsonify({'ok': False, 'error': 'No tiene permiso para este centro'}), 403
+
+        session['centro_utilidad_id'] = centro['id']
+        session['centro_utilidad_nombre'] = centro['nombre']
+        session['centro_utilidad_codigo'] = centro['codigo']
+        session['centro_utilidad_color'] = centro['color_badge']
+
+        return jsonify({
+            'ok': True,
+            'centro': dict(centro)
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/centros_utilidad/<int:centro_id>/editar', methods=['POST'])
+def api_editar_centro_utilidad(centro_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    negocio_id = data.get('negocio_id')
+    nombre = (data.get('nombre') or '').strip()
+    codigo = (data.get('codigo') or '').strip().upper()
+    tipo = (data.get('tipo') or 'local').strip().lower()
+    color_badge = (data.get('color_badge') or '').strip()
+    telegram_chat_id = (data.get('telegram_chat_id') or '').strip() or None
+
+    if not negocio_id or not nombre or not codigo:
+        return jsonify({'ok': False, 'error': 'Nombre y código son obligatorios'}), 400
+
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        if not _puede_gestionar_negocio(_contexto):
+            return jsonify({'ok': False, 'error': 'Solo administradores pueden editar centros de utilidad'}), 403
+
+        duplicado = conn.execute("""
+            SELECT id FROM centros_utilidad
+            WHERE negocio_id = %s AND UPPER(codigo) = %s AND id != %s
+        """, (negocio_id, codigo, centro_id)).fetchone()
+        if duplicado:
+            return jsonify({'ok': False, 'error': f'El código "{codigo}" ya está en uso por otro centro'}), 400
+
+        conn.execute("""
+            UPDATE centros_utilidad
+            SET nombre = %s,
+                codigo = %s,
+                tipo = %s,
+                color_badge = COALESCE(NULLIF(%s, ''), color_badge),
+                telegram_chat_id = %s
+            WHERE id = %s AND negocio_id = %s
+        """, (nombre, codigo, tipo, color_badge, telegram_chat_id, centro_id, negocio_id))
+        conn.commit()
+
+        if str(session.get('centro_utilidad_id')) == str(centro_id):
+            session['centro_utilidad_nombre'] = nombre
+            session['centro_utilidad_codigo'] = codigo
+            if color_badge:
+                session['centro_utilidad_color'] = color_badge
+
+        return jsonify({
+            'ok': True,
+            'mensaje': f'Centro de utilidad "{nombre}" actualizado exitosamente.',
+            'centro': {
+                'id': centro_id,
+                'nombre': nombre,
+                'codigo': codigo,
+                'tipo': tipo,
+                'color_badge': color_badge,
+                'telegram_chat_id': telegram_chat_id
+            }
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/dispositivos/identificar', methods=['POST'])
+def api_dispositivo_identificar():
+    data = request.get_json() or {}
+    token = (data.get('token_dispositivo') or '').strip()
+    negocio_id = data.get('negocio_id')
+
+    if not token or not negocio_id:
+        return jsonify({'ok': True, 'registrado': False})
+
+    conn = get_db_connection()
+    try:
+        disp = conn.execute("""
+            SELECT d.id, d.nombre, d.tipo_dispositivo, d.centro_utilidad_id,
+                   c.codigo as centro_codigo, c.nombre as centro_nombre, c.color_badge
+            FROM dispositivos_pos d
+            JOIN centros_utilidad c ON c.id = d.centro_utilidad_id
+            WHERE d.token_dispositivo = %s AND d.negocio_id = %s AND d.activo = TRUE
+        """, (token, negocio_id)).fetchone()
+
+        if not disp:
+            return jsonify({'ok': True, 'registrado': False})
+
+        usuario_id = session.get('usuario_id')
+        conn.execute("""
+            UPDATE dispositivos_pos 
+            SET ultimo_acceso = NOW(), ultimo_usuario_id = COALESCE(%s, ultimo_usuario_id)
+            WHERE id = %s
+        """, (usuario_id, disp['id']))
+        conn.commit()
+
+        if 'centro_utilidad_id' not in session:
+            session['centro_utilidad_id'] = disp['centro_utilidad_id']
+            session['centro_utilidad_nombre'] = disp['centro_nombre']
+            session['centro_utilidad_codigo'] = disp['centro_codigo']
+            session['centro_utilidad_color'] = disp['color_badge']
+
+        return jsonify({
+            'ok': True,
+            'registrado': True,
+            'dispositivo': dict(disp)
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/dispositivos/registrar', methods=['POST'])
+def api_dispositivo_registrar():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    negocio_id = data.get('negocio_id')
+    token = (data.get('token_dispositivo') or '').strip()
+    centro_id = data.get('centro_utilidad_id')
+    nombre = (data.get('nombre') or 'Tablet Mostrador').strip()
+    tipo = (data.get('tipo_dispositivo') or 'tablet').strip()
+
+    if not token or not negocio_id or not centro_id:
+        return jsonify({'ok': False, 'error': 'Faltan parámetros obligatorios'}), 400
+
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        if not _puede_gestionar_negocio(_contexto):
+            return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+
+        conn.execute("""
+            INSERT INTO dispositivos_pos (negocio_id, centro_utilidad_id, token_dispositivo, nombre, tipo_dispositivo, ultimo_usuario_id, ultimo_acceso)
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (token_dispositivo) DO UPDATE
+            SET centro_utilidad_id = EXCLUDED.centro_utilidad_id,
+                nombre = EXCLUDED.nombre,
+                tipo_dispositivo = EXCLUDED.tipo_dispositivo,
+                ultimo_usuario_id = EXCLUDED.ultimo_usuario_id,
+                ultimo_acceso = NOW(),
+                activo = TRUE
+        """, (negocio_id, centro_id, token, nombre, tipo, session.get('usuario_id')))
+        conn.commit()
+
+        return jsonify({'ok': True, 'mensaje': f'Dispositivo "{nombre}" vinculado exitosamente.'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/traslado', methods=['POST'])
+def api_inventario_traslado(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    bodega_origen = data.get('bodega_origen_id')
+    bodega_destino = data.get('bodega_destino_id')
+    notas = (data.get('notas') or '').strip()
+    fecha_raw = (_txt(data.get('fecha')) or '').strip()
+    fecha_traslado = _fecha_o_none(fecha_raw) or date.today()
+
+    try:
+        bodega_origen = int(bodega_origen)
+        bodega_destino = int(bodega_destino)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Bodegas origen y destino requeridas y numéricas'}), 400
+
+    if bodega_origen == bodega_destino:
+        return jsonify({'ok': False, 'error': 'La bodega origen y destino no pueden ser la misma'}), 400
+
+    lineas_raw = data.get('lineas')
+    if not lineas_raw:
+        # Fallback para soporte unitario
+        pid = data.get('producto_id')
+        cant = data.get('cantidad')
+        if pid is not None and cant is not None:
+            lineas_raw = [{'producto_id': pid, 'cantidad': cant}]
+        else:
+            return jsonify({'ok': False, 'error': 'Debe incluir al menos un producto a trasladar'}), 400
+
+    lineas = []
+    for idx, l in enumerate(lineas_raw):
+        try:
+            pid = int(l.get('producto_id'))
+            cant = Decimal(str(l.get('cantidad')))
+            if cant <= 0:
+                raise ValueError()
+            lineas.append({'producto_id': pid, 'cantidad': cant})
+        except Exception:
+            return jsonify({'ok': False, 'error': f'Línea {idx+1}: producto y cantidad válida mayor a 0 requeridos'}), 400
+
+    if not lineas:
+        return jsonify({'ok': False, 'error': 'Debe incluir al menos un producto a trasladar'}), 400
+
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        try:
+            from .contabilidad import _verificar_periodo_cerrado
+            _verificar_periodo_cerrado(conn, negocio_id, fecha_traslado)
+        except Exception as exc:
+            return jsonify({'ok': False, 'error': str(exc)}), 400
+
+        # Validar existencias de todas las líneas en origen
+        items_procesados = []
+        for l in lineas:
+            pid = l['producto_id']
+            cant = l['cantidad']
+
+            prod = conn.execute("SELECT id, nombre, costo FROM productos WHERE id = %s AND negocio_id = %s", (pid, negocio_id)).fetchone()
+            if not prod:
+                return jsonify({'ok': False, 'error': f'Producto ID {pid} no encontrado en este negocio'}), 404
+
+            saldo_orig = conn.execute("""
+                SELECT stock, costo_und, valor_existencia FROM saldos_inventario
+                WHERE negocio_id = %s AND producto_id = %s AND bodega = %s
+            """, (negocio_id, pid, bodega_origen)).fetchone()
+
+            stock_disponible = Decimal(str(saldo_orig['stock'])) if saldo_orig else Decimal('0')
+            costo_unitario = Decimal(str(saldo_orig['costo_und'])) if (saldo_orig and saldo_orig['costo_und']) else Decimal(str(prod['costo'] or '0'))
+
+            if stock_disponible < cant:
+                return jsonify({
+                    'ok': False,
+                    'error': f"Stock insuficiente en bodega origen para '{prod['nombre']}'. Disponible: {stock_disponible}, Solicitado: {cant}"
+                }), 400
+
+            valor_linea = cant * costo_unitario
+            items_procesados.append({
+                'producto_id': pid,
+                'producto_nombre': prod['nombre'],
+                'cantidad': cant,
+                'costo_unitario': costo_unitario,
+                'valor_total': valor_linea
+            })
+
+        # Resolver tipo de documento y consecutivo atómico único para todo el traslado
+        from .contabilidad import obtener_o_crear_tipo_doc_traslado
+        tipo_doc = obtener_o_crear_tipo_doc_traslado(conn, negocio_id)
+        tipo_doc_id = tipo_doc['id'] if tipo_doc else None
+        tipo_code = tipo_doc['codigo'] if tipo_doc else 'TRASLADO'
+
+        doc_num_final = None
+        if tipo_doc:
+            nuevo_consecutivo = max((tipo_doc['consecutivo'] or 0) + 1, (tipo_doc['numero_inicio'] or 1))
+            conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (nuevo_consecutivo, tipo_doc_id))
+            doc_num_final = str(nuevo_consecutivo)
+
+        # Registrar movimientos para cada ítem
+        for item in items_procesados:
+            pid = item['producto_id']
+            cant = item['cantidad']
+            cu = item['costo_unitario']
+            vt = item['valor_total']
+
+            # Salida en origen
+            _mov_directo(
+                conn, negocio_id, pid, cant,
+                tipo='salida', motivo='traslado_origen',
+                registrado_por=session['usuario_id'],
+                valor_unitario=float(cu),
+                notas=f"Traslado hacia bodega {bodega_destino}. {notas}".strip(),
+                bodega=bodega_origen,
+                referencia_tipo='traslado',
+                tipo_documento=tipo_code,
+                documento_numero=doc_num_final,
+                tipo_documento_id=tipo_doc_id,
+                documento_fecha=fecha_traslado
+            )
+
+            # Entrada en destino
+            _mov_directo(
+                conn, negocio_id, pid, cant,
+                tipo='entrada', motivo='traslado_destino',
+                registrado_por=session['usuario_id'],
+                valor_unitario=float(cu),
+                notas=f"Traslado desde bodega {bodega_origen}. {notas}".strip(),
+                bodega=bodega_destino,
+                referencia_tipo='traslado',
+                valor_total=float(vt),
+                tipo_documento=tipo_code,
+                documento_numero=doc_num_final,
+                tipo_documento_id=tipo_doc_id,
+                documento_fecha=fecha_traslado
+            )
+
+            # Guardar en traslados_inventario
+            conn.execute("""
+                INSERT INTO traslados_inventario (
+                    negocio_id, bodega_origen_id, bodega_destino_id, producto_id,
+                    cantidad, costo_und, valor_total, estado, registrado_por, notas,
+                    tipo_documento_id, tipo_documento, documento_numero
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'completado', %s, %s, %s, %s, %s)
+            """, (
+                negocio_id, bodega_origen, bodega_destino, pid,
+                float(cant), float(cu), float(vt),
+                session['usuario_id'], notas,
+                tipo_doc_id, tipo_code, doc_num_final
+            ))
+
+        conn.commit()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': f"Documento TRASLADO #{doc_num_final} con {len(items_procesados)} ítem(s) completado exitosamente.",
+            'documento_numero': doc_num_final,
+            'total_items': len(items_procesados)
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/traslados', methods=['GET'])
+def api_inventario_traslados_listar(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        rows = conn.execute("""
+            SELECT t.id, t.created_at, t.cantidad, t.costo_und, t.valor_total, t.notas,
+                   t.documento_numero, t.tipo_documento,
+                   p.nombre as producto_nombre,
+                   co.nombre as origen_nombre, co.codigo as origen_codigo,
+                   cd.nombre as destino_nombre, cd.codigo as destino_codigo,
+                   u.nombre as usuario_nombre
+            FROM traslados_inventario t
+            JOIN productos p ON p.id = t.producto_id
+            JOIN centros_utilidad co ON co.id = t.bodega_origen_id
+            JOIN centros_utilidad cd ON cd.id = t.bodega_destino_id
+            LEFT JOIN usuarios u ON u.id = t.registrado_por
+            WHERE t.negocio_id = %s
+            ORDER BY t.id DESC LIMIT 300
+        """, (negocio_id,)).fetchall()
+
+        return jsonify({
+            'ok': True,
+            'traslados': [dict(r) for r in rows]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+def _pdf_documento_traslado(nombre_negocio, doc_num, fecha_str, origen_str, destino_str, items, usuario, notas=None):
+    pdf = FPDF(format='letter', unit='mm')
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+
+    # Encabezado principal
+    pdf.set_font('Helvetica', 'B', 15)
+    pdf.cell(0, 9, _pdf_sanitize(nombre_negocio), ln=1, align='C')
+    pdf.set_font('Helvetica', 'B', 11)
+    pdf.set_text_color(79, 70, 229)
+    pdf.cell(0, 6, 'Remisión / Documento de Traslado Interno', ln=1, align='C')
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font('Helvetica', 'B', 9.5)
+    pdf.cell(0, 5, f'Documento: TRASLADO #{_pdf_sanitize(doc_num)}', ln=1, align='C')
+    if fecha_str:
+        pdf.set_font('Helvetica', '', 8.5)
+        pdf.cell(0, 5, f'Fecha: {_pdf_sanitize(fecha_str)}', ln=1, align='C')
+
+    pdf.ln(3)
+
+    # Cuadro informativo de sedes y responsable
+    pdf.set_fill_color(248, 250, 252)
+    pdf.set_draw_color(226, 232, 240)
+    w_util = pdf.w - pdf.l_margin - pdf.r_margin
+    y_box_start = pdf.get_y()
+    pdf.rect(pdf.l_margin, y_box_start, w_util, 18, style='DF')
+    
+    pdf.set_xy(pdf.l_margin + 3, y_box_start + 2.5)
+    pdf.set_font('Helvetica', 'B', 8.5)
+    pdf.cell(w_util/2 - 4, 4.5, f"Origen: {_pdf_sanitize(origen_str)}", ln=0)
+    pdf.cell(w_util/2 - 4, 4.5, f"Destino: {_pdf_sanitize(destino_str)}", ln=1)
+
+    pdf.set_xy(pdf.l_margin + 3, y_box_start + 8)
+    pdf.set_font('Helvetica', '', 8)
+    pdf.cell(w_util/2 - 4, 4.5, f"Responsable: {_pdf_sanitize(usuario)}", ln=0)
+    if notas:
+        pdf.cell(w_util/2 - 4, 4.5, f"Observaciones: {_pdf_sanitize(notas)[:65]}", ln=1)
+    else:
+        pdf.cell(w_util/2 - 4, 4.5, "Estado: Traslado Completado", ln=1)
+
+    pdf.set_xy(pdf.l_margin, y_box_start + 22)
+
+    # Tabla de productos trasladados
+    pdf.set_font('Helvetica', 'B', 9.5)
+    pdf.cell(0, 6, f"Ítems Trasladados ({len(items)} líneas)", ln=1)
+    
+    filas_tabla = []
+    total_cant = 0
+    total_valor = 0
+    for idx, it in enumerate(items, 1):
+        c = float(it['cantidad'] or 0)
+        cu = float(it['costo_und'] or 0)
+        vt = float(it['valor_total'] or (c * cu))
+        total_cant += c
+        total_valor += vt
+        filas_tabla.append([
+            str(idx),
+            _pdf_sanitize(it['producto_nombre']),
+            _pdf_money(c),
+            f"${_pdf_money(cu)}",
+            f"${_pdf_money(vt)}"
+        ])
+
+    _pdf_tabla(pdf, [12, 85, 25, 30, 38],
+               ['#', 'Producto / Insumo', 'Cantidad', 'Costo Und', 'Subtotal'],
+               filas_tabla, aligns=['C', 'L', 'R', 'R', 'R'])
+
+    pdf.ln(2)
+    pdf.set_font('Helvetica', 'B', 9)
+    pdf.cell(0, 6, f"Total Unidades: {_pdf_money(total_cant)}      Valor Total Traslado: ${_pdf_money(total_valor)}", ln=1, align='R')
+
+    # Firmas de Despacho y Recibo
+    pdf.ln(14)
+    y_sig = pdf.get_y()
+    w_sig = (w_util - 24) / 2
+    
+    pdf.line(pdf.l_margin, y_sig, pdf.l_margin + w_sig, y_sig)
+    pdf.line(pdf.l_margin + w_sig + 24, y_sig, pdf.l_margin + w_util, y_sig)
+    
+    pdf.set_xy(pdf.l_margin, y_sig + 1.5)
+    pdf.set_font('Helvetica', 'B', 8)
+    pdf.cell(w_sig, 4, "Despachado / Entregado por:", align='C')
+    pdf.set_xy(pdf.l_margin + w_sig + 24, y_sig + 1.5)
+    pdf.cell(w_sig, 4, "Recibido a Conformidad por:", align='C')
+
+    pdf.set_xy(pdf.l_margin, y_sig + 5.5)
+    pdf.set_font('Helvetica', '', 7.5)
+    pdf.cell(w_sig, 3.5, "Nombre y Firma / Cédula", align='C')
+    pdf.set_xy(pdf.l_margin + w_sig + 24, y_sig + 5.5)
+    pdf.cell(w_sig, 3.5, "Nombre y Firma / Cédula", align='C')
+
+    # Footer
+    pdf.set_y(-7)
+    pdf.set_font('Helvetica', '', 6.5)
+    pdf.set_text_color(130, 130, 130)
+    pdf.cell(0, 3.5, 'TUC TUC  ·  Impreso: ' + _pdf_sanitize(_timestamp_pdf()) + '  ·  Usuario: ' + _pdf_sanitize(usuario), align='C')
+
+    return pdf
+
+
+@bp.route('/api/inventario/<int:negocio_id>/traslado/<documento_numero>/pdf')
+def api_inventario_traslado_pdf(negocio_id, documento_numero):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    if FPDF is None:
+        return jsonify({'ok': False, 'error': 'PDF no disponible (falta fpdf2)'}), 500
+
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        contexto = _contexto_negocio(conn, negocio_id)
+        nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
+
+        rows = conn.execute("""
+            SELECT t.id, t.created_at, t.cantidad, t.costo_und, t.valor_total, t.notas,
+                   t.documento_numero, t.tipo_documento,
+                   p.nombre as producto_nombre,
+                   co.nombre as origen_nombre, co.codigo as origen_codigo,
+                   cd.nombre as destino_nombre, cd.codigo as destino_codigo,
+                   u.nombre as usuario_nombre
+            FROM traslados_inventario t
+            JOIN productos p ON p.id = t.producto_id
+            JOIN centros_utilidad co ON co.id = t.bodega_origen_id
+            JOIN centros_utilidad cd ON cd.id = t.bodega_destino_id
+            LEFT JOIN usuarios u ON u.id = t.registrado_por
+            WHERE t.negocio_id = %s AND (t.documento_numero = %s OR t.id::text = %s)
+            ORDER BY t.id ASC
+        """, (negocio_id, str(documento_numero), str(documento_numero))).fetchall()
+
+        if not rows:
+            return jsonify({'ok': False, 'error': f'Documento de traslado #{documento_numero} no encontrado'}), 404
+
+        first = rows[0]
+        fecha_str = first['created_at'].strftime('%d/%m/%Y %H:%M') if first['created_at'] else ''
+        origen_str = f"{first['origen_nombre']} ({first['origen_codigo']})"
+        destino_str = f"{first['destino_nombre']} ({first['destino_codigo']})"
+        usuario = first['usuario_nombre'] or session.get('nombre') or 'Usuario'
+        notas = first['notas'] or ''
+        doc_num_val = first['documento_numero'] or str(documento_numero)
+
+        pdf = _pdf_documento_traslado(
+            nombre_negocio=nombre_negocio,
+            doc_num=doc_num_val,
+            fecha_str=fecha_str,
+            origen_str=origen_str,
+            destino_str=destino_str,
+            items=[dict(r) for r in rows],
+            usuario=usuario,
+            notas=notas
+        )
+
+        resp = Response(bytes(pdf.output()), mimetype='application/pdf')
+        resp.headers['Content-Disposition'] = f"inline; filename=traslado_{doc_num_val}.pdf"
+        return resp
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
 
 

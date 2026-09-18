@@ -839,7 +839,7 @@ def cliente_sala(sala_id):
     return render_template('rockola_cliente.html', sala_id=sala_id, modo='restaurante')
 
 
-@bp.route('/<sala_id>/reproductor2')
+@bp.route('/<sala_id>/reproductor')
 def reproductor_sala(sala_id):
     conn = _connect()
     try:
@@ -1238,7 +1238,7 @@ def admin_info(sala_id):
         autorizado=autorizado,
         cliente_url=f'https://rockola.tuc-tuc.co/rockola/{sala_id}',
         control_url=f'https://rockola.tuc-tuc.co/control/{sala_id}?key={key}' if key else '',
-        reproductor_url=f'https://rockola.tuc-tuc.co/reproductor2/{sala_id}',
+        reproductor_url=f'https://rockola.tuc-tuc.co/reproductor/{sala_id}',
     )
 
 

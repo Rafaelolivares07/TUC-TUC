@@ -781,7 +781,7 @@ input:checked + .slider:before {
       </ul>
     </div>
 
-    <div id="estado">Activo ✓</div>
+    <div id="estado">Activo ✓ · v3.1.0</div>
   </div>
 </div>
 
@@ -2315,17 +2315,23 @@ async function eliminarListaActual() {
 }
 
 async function ponerLocal(id, modo = 'final') {
+  console.log('[Rockola v3.1.0] ponerLocal called:', id, modo);
   const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
   if (!cancion) {
+    console.error('[Rockola] cancion no encontrada en memoria ni IndexedDB:', id);
     mostrarMensaje('Esa cancion ya no esta disponible aqui', 'error');
     return;
   }
+  console.log('[Rockola] cancion encontrada:', cancion.nombre, 'enviando POST...');
+  const body = { local_id:idLocalCola(cancion.id), nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId(), modo: modo };
+  console.log('[Rockola] body:', JSON.stringify(body));
   const res = await fetch(`/rockola/${SALA}/local`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ local_id:idLocalCola(cancion.id), nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId(), modo: modo })
+    body: JSON.stringify(body)
   });
   const data = await res.json();
+  console.log('[Rockola] respuesta POST /local:', JSON.stringify(data));
   if (data.ok) {
     mostrarMensaje('Cancion local en cola', 'ok');
     verificarCola();
@@ -2362,9 +2368,11 @@ function cerrarModalPoner() {
   modalPonerCancionId = null;
 }
 function ejecutarPoner(modo) {
+  console.log('[Rockola] ejecutarPoner called:', modalPonerCancionId, modo);
   if (!modalPonerCancionId) return;
   const id = modalPonerCancionId;
   cerrarModalPoner();
+  console.log('[Rockola] calling ponerLocal with id:', id, modo);
   ponerLocal(id, modo);
 }
 

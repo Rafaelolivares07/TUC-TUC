@@ -1081,8 +1081,9 @@ def agregar_local(sala_id):
     local_id = (data.get('local_id') or '').strip()
     nombre = (data.get('nombre') or 'Cancion local').strip()
     modo = (data.get('modo') or 'final').strip().lower()
-    tercero_id = session.get('usuario_id')
-    owner_nombre = session.get('nombre', 'Anónimo')
+    owner_nombre = data.get('owner') or 'Anónimo'
+    device_id = (data.get('device_id') or '').strip()
+    tercero_id = None
     if not local_id.startswith('local-'):
         return jsonify(ok=False, error='Cancion local invalida'), 400
 

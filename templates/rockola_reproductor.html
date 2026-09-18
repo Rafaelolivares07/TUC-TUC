@@ -660,18 +660,19 @@ input:checked + .slider:before {
           
           <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
-              <span style="color:var(--muted); text-align:left;">Iniciar fundido a los:</span>
+              <span style="color:var(--muted); text-align:left;">Empezar a fundir cuando falten:</span>
               <span style="color:var(--ac1); font-weight:800;" id="fundido-sec-label">12s</span>
             </div>
-            <input type="range" id="fundido-segundos" min="2" max="60" value="12" style="width:100%; accent-color:var(--ac1);" oninput="document.getElementById('fundido-sec-label').textContent=this.value+'s'">
+            <input type="range" id="fundido-segundos" min="2" max="60" value="12" style="width:100%; accent-color:var(--ac1);" oninput="onAnticipacionChange(this.value)">
           </div>
 
           <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
-              <span style="color:var(--muted); text-align:left;">Duración del fundido/cruce:</span>
+              <span style="color:var(--muted); text-align:left;">Duración del cruce:</span>
               <span style="color:var(--ac1); font-weight:800;" id="fundido-dur-label">5s</span>
             </div>
-            <input type="range" id="fundido-duracion" min="1" max="20" value="5" style="width:100%; accent-color:var(--ac1);" oninput="document.getElementById('fundido-dur-label').textContent=this.value+'s'">
+            <input type="range" id="fundido-duracion" min="1" max="12" value="5" style="width:100%; accent-color:var(--ac1);" oninput="onDuracionChange(this.value)">
+            <div id="fundido-hint" style="font-size:9px; color:var(--muted); text-align:right; min-height:12px;"></div>
           </div>
         </div>
 
@@ -2419,6 +2420,34 @@ function entrarComoCliente() {
 }
 
 volumenEl.addEventListener('input', programarGuardarVolumen);
+
+function onAnticipacionChange(val) {
+  const anticipacion = parseInt(val) || 12;
+  document.getElementById('fundido-sec-label').textContent = anticipacion + 's';
+  const durSlider = document.getElementById('fundido-duracion');
+  const durLabel = document.getElementById('fundido-dur-label');
+  const hint = document.getElementById('fundido-hint');
+  durSlider.max = anticipacion;
+  if (parseInt(durSlider.value) > anticipacion) {
+    durSlider.value = anticipacion;
+    durLabel.textContent = anticipacion + 's';
+  }
+  hint.textContent = 'Máximo ' + anticipacion + 's (igual al tiempo de anticipación)';
+}
+
+function onDuracionChange(val) {
+  const dur = parseInt(val) || 5;
+  const anticipacion = parseInt(document.getElementById('fundido-segundos').value) || 12;
+  const hint = document.getElementById('fundido-hint');
+  if (dur >= anticipacion) {
+    hint.textContent = '⚡ Cruce hasta el final de la canción';
+    hint.style.color = 'var(--ac1)';
+  } else {
+    hint.textContent = '';
+    hint.style.color = 'var(--muted)';
+  }
+  document.getElementById('fundido-dur-label').textContent = dur + 's';
+}
 
 document.getElementById('fundido-toggle').addEventListener('change', guardarFundidoSettings);
 document.getElementById('fundido-segundos').addEventListener('change', guardarFundidoSettings);

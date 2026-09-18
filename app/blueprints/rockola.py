@@ -839,7 +839,7 @@ def cliente_sala(sala_id):
     return render_template('rockola_cliente.html', sala_id=sala_id, modo='restaurante')
 
 
-@bp.route('/<sala_id>/reproductor')
+@bp.route('/<sala_id>/reproductor2')
 def reproductor_sala(sala_id):
     conn = _connect()
     try:

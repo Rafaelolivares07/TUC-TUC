@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Matriz Terceros × Cuentas — SAR</title>
+    <script src="/static/js/tailwind.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .tap-highlight { -webkit-tap-highlight-color: transparent; }
+        .sticky-col-1 { position: sticky; left: 0; z-index: 5; }
+        .sticky-col-2 { position: sticky; left: 100px; z-index: 5; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 antialiased selection:bg-indigo-500 selection:text-white pb-16">
+
+    <!-- Header -->
+    <header class="bg-indigo-700 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/admin/reportes" class="text-indigo-200 hover:text-white transition flex items-center gap-1.5 text-sm font-semibold tap-highlight">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span>Reportes</span>
+                </a>
+                <span class="text-indigo-400 font-light">|</span>
+                <h1 class="text-sm sm:text-base font-bold truncate">Matriz Terceros × Cuentas</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/admin/area" class="text-xs bg-indigo-800/80 hover:bg-indigo-600 text-indigo-100 font-medium px-2.5 py-1.5 rounded-lg border border-indigo-500/50 transition">
+                    Admin
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-5 space-y-5">
+
+        <!-- Selector de Agente Activo -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg flex-shrink-0">
+                    <i class="bi bi-hdd-network"></i>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">Agente de consulta</label>
+                    <span id="label-agente-activo" class="text-xs sm:text-sm font-semibold text-slate-800">Cargando...</span>
+                </div>
+            </div>
+            <div class="w-full sm:w-64">
+                <div class="relative">
+                    <select id="sel-agente-top" onchange="onAgenteChange()"
+                            class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
+                        {% if agentes %}
+                            {% for a in agentes %}
+                                <option value="{{ a.id }}" {% if a.id == agente_actual %}selected{% endif %}>
+                                    {{ '🟢' if a.online else '⚪' }} {{ a.nombre }}
+                                </option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="">(Sin agentes)</option>
+                        {% endif %}
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario de Filtros -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <!-- Empresa -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Empresa</label>
+                    <div class="relative">
+                        <select id="f-empresa"
+                                class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2.5 px-3.5 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                            <option value="">Todas</option>
+                            {% for emp in empresas %}<option value="{{ emp }}">{{ emp }}</option>{% endfor %}
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fecha Desde -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Desde</label>
+                    <input type="date" id="f-desde" value="{{ desde }}"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+
+                <!-- Fecha Hasta -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Hasta</label>
+                    <input type="date" id="f-hasta" value="{{ hasta }}"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+            </div>
+
+            <!-- Tipos de Comprobante Dropdown Multi-select -->
+            <div class="relative">
+                <div class="flex items-center justify-between mb-1">
+                    <label class="text-xs font-bold uppercase tracking-wider text-slate-600">Tipos de Comprobante</label>
+                    <span id="tipos-label" class="text-xs font-semibold text-indigo-600">Todos</span>
+                </div>
+                <div class="relative">
+                    <button type="button" onclick="toggleMenuTipos()" id="btn-tipos"
+                            class="w-full bg-slate-50 border border-slate-300 text-slate-700 text-xs sm:text-sm font-medium py-2 px-3.5 rounded-xl flex items-center justify-between shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <span id="btn-tipos-text" class="truncate">Todos los tipos seleccionados</span>
+                        <i class="bi bi-chevron-down text-slate-400"></i>
+                    </button>
+                    <div id="tipos-menu" class="hidden absolute top-full left-0 right-0 z-30 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 max-h-60 overflow-y-auto space-y-2">
+                        <label class="flex items-center gap-2 pb-2 border-b border-slate-100 cursor-pointer text-xs font-bold text-slate-800">
+                            <input type="checkbox" id="tipos-todos" checked onchange="toggleTodos(this)" class="rounded text-indigo-600 focus:ring-indigo-500">
+                            <span>(Seleccionar Todos)</span>
+                        </label>
+                        <div id="tipos-lista" class="space-y-1.5 text-xs text-slate-700">
+                            <span class="text-slate-400">Cargando tipos...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <button type="button" onclick="consultar()" id="btn-consultar"
+                            class="tap-highlight w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <span id="txt-consultar">Consultar Matriz</span>
+                    </button>
+
+                    <button type="button" onclick="exportarExcel()" id="btn-excel"
+                            class="tap-highlight hidden w-full sm:w-auto px-4 py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                        <i class="bi bi-file-earmark-excel-fill text-base"></i>
+                        <span>Excel</span>
+                    </button>
+                </div>
+
+                <div id="info-registros" class="text-xs text-slate-500 font-medium text-center sm:text-right"></div>
+            </div>
+        </div>
+
+        <!-- Indicador de Carga -->
+        <div id="spinner" class="hidden bg-white rounded-2xl p-10 text-center shadow-sm border border-slate-200/80 space-y-3">
+            <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-600"></div>
+            <p class="text-sm font-semibold text-slate-700" id="spinner-status">Construyendo matriz cruzada en el agente...</p>
+            <p class="text-xs text-slate-400" id="spinner-timer">Tiempo transcurrido: 0s</p>
+        </div>
+
+        <!-- Estado Inicial -->
+        <div id="estado-inicial" class="bg-white rounded-2xl p-10 text-center shadow-sm border border-slate-200/80 space-y-2">
+            <div class="w-14 h-14 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl shadow-inner">
+                <i class="bi bi-grid-3x3"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-800">Matriz Terceros × Cuentas</h3>
+            <p class="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+                Cruza cada tercero con todas las cuentas contables afectadas en el rango de fechas para una vista consolidada en cuadrícula.
+            </p>
+        </div>
+
+        <!-- Métricas y Totales -->
+        <div id="panel-totales" class="hidden grid grid-cols-3 gap-3">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 text-center">
+                <span class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Terceros</span>
+                <span id="t-terceros" class="text-xl sm:text-2xl font-black text-slate-800">0</span>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100 bg-indigo-50/20 text-center">
+                <span class="block text-[11px] font-bold uppercase tracking-wider text-indigo-700 mb-1">Cuentas</span>
+                <span id="t-cuentas" class="text-xl sm:text-2xl font-black text-indigo-700">0</span>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-emerald-100 bg-emerald-50/20 text-center">
+                <span class="block text-[11px] font-bold uppercase tracking-wider text-emerald-700 mb-1">Celdas Activas</span>
+                <span id="t-celdas" class="text-xl sm:text-2xl font-black text-emerald-600">0</span>
+            </div>
+        </div>
+
+        <!-- Filtro Rápido en Vivo -->
+        <div id="wrap-filtro-vivo" class="hidden">
+            <input type="text" id="filtro-vivo" oninput="filtrarEnVivo()" placeholder="🔍 Buscar por nombre o NIT de tercero..."
+                   class="w-full bg-white border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium py-2.5 px-4 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+        </div>
+
+        <!-- Vista Móvil: Tarjetas (Pantallas pequeñas) -->
+        <div id="vista-movil" class="hidden sm:hidden space-y-3"></div>
+
+        <!-- Vista Escritorio: Tabla Matriz (Pantallas sm en adelante) -->
+        <div id="vista-escritorio" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div class="overflow-x-auto max-h-[600px] relative">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead class="bg-slate-100/90 text-slate-600 font-bold uppercase text-[11px] tracking-wider sticky top-0 z-20 backdrop-blur-sm shadow-sm border-b border-slate-200">
+                        <tr id="thead-row">
+                            <!-- Inyectado dinámicamente -->
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-escritorio" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const REPORTE_ID = 'matriz_terceros_cuentas';
+        let _rows = [], _filteredRows = [], _cuentas = [], _sortCol = 'nombre', _sortAsc = true;
+        let _pollTimer = null, _elapsedInterval = null, _startTime = 0;
+
+        function getAgenteActivo() {
+            const sel = document.getElementById('sel-agente-top');
+            return sel ? sel.value : (localStorage.getItem('sar_agente_favorito') || '');
+        }
+
+        function onAgenteChange() {
+            const sel = document.getElementById('sel-agente-top');
+            if (sel && sel.value) {
+                localStorage.setItem('sar_agente_favorito', sel.value);
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+                cargarTipos();
+            }
+        }
+
+        (function initAgente() {
+            const sel = document.getElementById('sel-agente-top');
+            const fav = localStorage.getItem('sar_agente_favorito');
+            if (fav && sel) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === fav) {
+                        sel.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (sel && sel.selectedIndex >= 0) {
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+            }
+        })();
+
+        const fmt = n => (n === null || n === undefined || n === '') ? '' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const fmtM = n => (n === null || n === undefined || n === '') ? '$ 0,00' : '$ ' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+        // Tipos multi-select
+        function toggleMenuTipos() {
+            const m = document.getElementById('tipos-menu');
+            m.classList.toggle('hidden');
+        }
+
+        document.addEventListener('click', e => {
+            const btn = document.getElementById('btn-tipos');
+            const menu = document.getElementById('tipos-menu');
+            if (btn && menu && !btn.contains(e.target) && !menu.contains(e.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        function toggleTodos(chk) {
+            document.querySelectorAll('.tipo-chk').forEach(c => { c.checked = chk.checked; });
+            actualizarLabelTipos();
+        }
+
+        function actualizarLabelTipos() {
+            const todos = document.querySelectorAll('.tipo-chk');
+            const marcados = [...todos].filter(c => c.checked);
+            document.getElementById('tipos-todos').checked = marcados.length === todos.length;
+            const lbl = (marcados.length === 0 || marcados.length === todos.length) ? 'Todos' : marcados.length + ' tipo' + (marcados.length > 1 ? 's' : '');
+            document.getElementById('tipos-label').textContent = lbl;
+            document.getElementById('btn-tipos-text').textContent = (marcados.length === 0 || marcados.length === todos.length) ? 'Todos los tipos seleccionados' : marcados.length + ' tipos seleccionados';
+        }
+
+        function getTiposSeleccionados() {
+            const todos = document.querySelectorAll('.tipo-chk');
+            const marcados = [...todos].filter(c => c.checked);
+            if (marcados.length === 0 || marcados.length === todos.length) return [];
+            return marcados.map(c => c.value);
+        }
+
+        function cargarTipos() {
+            const agente = getAgenteActivo();
+            if (!agente) return;
+            fetch(`/admin/api/reporte/${REPORTE_ID}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ agente: agente, tipos_init: true })
+            })
+            .then(r => r.json())
+            .then(data => {
+                const lista = document.getElementById('tipos-lista');
+                if (!data.ok || !data.rows || !data.rows.length) {
+                    lista.innerHTML = '<span class="text-slate-400">Sin tipos disponibles</span>';
+                    return;
+                }
+                lista.innerHTML = data.rows.map(t => `
+                    <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 rounded-lg">
+                        <input type="checkbox" class="tipo-chk rounded text-indigo-600 focus:ring-indigo-500"
+                               value="${esc(t.codigo)}" checked onchange="actualizarLabelTipos()">
+                        <span class="font-medium text-slate-800">${esc(t.codigo)}</span>
+                        <span class="text-slate-500 truncate">${esc(t.nombre || '')}</span>
+                    </label>
+                `).join('');
+                actualizarLabelTipos();
+            })
+            .catch(() => {});
+        }
+
+        // Consulta Asíncrona
+        function consultar() {
+            const agente = getAgenteActivo();
+            if (!agente) {
+                alert('Selecciona un agente de consulta.');
+                return;
+            }
+
+            const filtros = {
+                agente: agente,
+                empresa: document.getElementById('f-empresa').value,
+                desde: document.getElementById('f-desde').value,
+                hasta: document.getElementById('f-hasta').value,
+                tipos: getTiposSeleccionados()
+            };
+
+            document.getElementById('estado-inicial').classList.add('hidden');
+            document.getElementById('panel-totales').classList.add('hidden');
+            document.getElementById('wrap-filtro-vivo').classList.add('hidden');
+            document.getElementById('vista-movil').classList.add('hidden');
+            document.getElementById('vista-escritorio').classList.add('hidden');
+            document.getElementById('btn-excel').classList.add('hidden');
+            document.getElementById('info-registros').textContent = '';
+
+            const spinner = document.getElementById('spinner');
+            spinner.classList.remove('hidden');
+            document.getElementById('spinner-status').textContent = 'Enviando solicitud al agente ' + agente + '...';
+
+            _startTime = Date.now();
+            clearInterval(_elapsedInterval);
+            _elapsedInterval = setInterval(() => {
+                const sec = Math.floor((Date.now() - _startTime) / 1000);
+                document.getElementById('spinner-timer').textContent = `Tiempo transcurrido: ${sec}s`;
+            }, 1000);
+
+            clearTimeout(_pollTimer);
+
+            fetch(`/admin/api/reporte/${REPORTE_ID}/iniciar`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(filtros)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) throw new Error(data.error || 'Error al iniciar consulta');
+                document.getElementById('spinner-status').textContent = 'Construyendo matriz en el agente...';
+                pollResultado(data.consulta_id);
+            })
+            .catch(err => {
+                detenerCarga();
+                alert('Error: ' + err.message);
+                document.getElementById('estado-inicial').classList.remove('hidden');
+            });
+        }
+
+        function pollResultado(consultaId) {
+            fetch(`/admin/api/reporte/resultado/${consultaId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) throw new Error(data.error || 'Error en agente');
+                if (data.estado === 'pendiente') {
+                    _pollTimer = setTimeout(() => pollResultado(consultaId), 1000);
+                    return;
+                }
+                if (data.estado === 'error') throw new Error(data.error || 'Error reportado por el agente');
+                if (data.estado === 'lista') {
+                    detenerCarga();
+                    _rows = data.filas || data.rows || [];
+                    _cuentas = _rows.length ? (_rows[0].__cuentas || []) : [];
+                    _filteredRows = [..._rows];
+                    renderResultados(data.elapsed || ((Date.now() - _startTime)/1000).toFixed(1));
+                }
+            })
+            .catch(err => {
+                detenerCarga();
+                alert('Error al consultar resultados: ' + err.message);
+                document.getElementById('estado-inicial').classList.remove('hidden');
+            });
+        }
+
+        function detenerCarga() {
+            clearTimeout(_pollTimer);
+            clearInterval(_elapsedInterval);
+            document.getElementById('spinner').classList.add('hidden');
+        }
+
+        function renderResultados(elapsed) {
+            if (!_rows.length) {
+                alert('No se encontraron datos para la matriz con los filtros seleccionados.');
+                document.getElementById('estado-inicial').classList.remove('hidden');
+                return;
+            }
+
+            mostrarTotales(elapsed);
+            aplicarOrden();
+            renderVistas();
+
+            document.getElementById('panel-totales').classList.remove('hidden');
+            document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
+            document.getElementById('vista-movil').classList.remove('hidden');
+            document.getElementById('vista-escritorio').classList.remove('hidden');
+            document.getElementById('btn-excel').classList.remove('hidden');
+            document.getElementById('info-registros').textContent = `${_rows.length} terceros en ${elapsed}s`;
+        }
+
+        function mostrarTotales(elapsed) {
+            const celdas = _filteredRows.reduce((s, r) => s + Object.keys(r.valores || {}).length, 0);
+            document.getElementById('t-terceros').textContent = _filteredRows.length.toLocaleString('es-CO');
+            document.getElementById('t-cuentas').textContent = _cuentas.length.toLocaleString('es-CO');
+            document.getElementById('t-celdas').textContent = celdas.toLocaleString('es-CO');
+        }
+
+        function filtrarEnVivo() {
+            const q = (document.getElementById('filtro-vivo').value || '').toLowerCase().trim();
+            if (!q) {
+                _filteredRows = [..._rows];
+            } else {
+                _filteredRows = _rows.filter(r =>
+                    (r.nombre || '').toLowerCase().includes(q) ||
+                    (r.identificacion || '').toLowerCase().includes(q)
+                );
+            }
+            mostrarTotales();
+            aplicarOrden();
+            renderVistas();
+        }
+
+        function ordenar(col) {
+            if (_sortCol === col) {
+                _sortAsc = !_sortAsc;
+            } else {
+                _sortCol = col;
+                _sortAsc = true;
+            }
+            aplicarOrden();
+            renderVistas();
+        }
+
+        function colValue(row, col) {
+            if (col === 'identificacion' || col === 'nombre') return row[col] || '';
+            return (row.valores || {})[col] || 0;
+        }
+
+        function aplicarOrden() {
+            _filteredRows.sort((a, b) => {
+                let va = colValue(a, _sortCol), vb = colValue(b, _sortCol);
+                if (typeof va === 'string') {
+                    va = va.toLowerCase();
+                    vb = String(vb).toLowerCase();
+                }
+                return _sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+            });
+        }
+
+        function renderVistas() {
+            // 1. Vista Móvil (Cards con desglose de cuentas por tercero)
+            const movil = document.getElementById('vista-movil');
+            movil.innerHTML = _filteredRows.map(r => {
+                const cuentasConValor = _cuentas.map(c => ({
+                    codigo: c.codigo,
+                    nombre: c.nombre,
+                    valor: (r.valores || {})[c.codigo] || 0
+                })).filter(c => c.valor !== 0);
+
+                return `
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <h4 class="font-bold text-slate-800 text-sm leading-tight">${esc(r.nombre || '')}</h4>
+                                <span class="text-xs font-mono text-slate-400">NIT/ID: ${esc(r.identificacion || '')}</span>
+                            </div>
+                            <span class="text-xs font-semibold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-lg">
+                                ${cuentasConValor.length} cuenta${cuentasConValor.length !== 1 ? 's' : ''}
+                            </span>
+                        </div>
+
+                        <div class="divide-y divide-slate-100 text-xs pt-1">
+                            ${cuentasConValor.map(c => `
+                                <div class="py-1.5 flex items-center justify-between">
+                                    <span class="font-mono text-slate-600">${esc(c.codigo)} <span class="text-slate-400 font-sans text-[11px]">${esc(c.nombre || '')}</span></span>
+                                    <span class="font-bold ${c.valor < 0 ? 'text-rose-600' : 'text-emerald-600'}">${fmt(c.valor)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 2. Vista Escritorio (Tabla Matriz)
+            const thead = document.getElementById('thead-row');
+            thead.innerHTML = `
+                <th class="py-3 px-3 cursor-pointer select-none sticky-col-1 bg-slate-100 hover:text-indigo-600" onclick="ordenar('identificacion')">NIT/ID</th>
+                <th class="py-3 px-3 cursor-pointer select-none sticky-col-2 bg-slate-100 hover:text-indigo-600" onclick="ordenar('nombre')">Tercero</th>
+                ${_cuentas.map(c => `
+                    <th class="py-3 px-3 text-right cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap" onclick="ordenar('${esc(c.codigo)}')">
+                        <span class="block font-mono text-xs">${esc(c.codigo)}</span>
+                        <span class="block text-[10px] text-slate-400 font-normal max-w-[120px] truncate">${esc(c.nombre || '')}</span>
+                    </th>
+                `).join('')}
+            `;
+
+            const tbody = document.getElementById('tbody-escritorio');
+            tbody.innerHTML = _filteredRows.map((r, i) => `
+                <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-indigo-50/40 transition">
+                    <td class="py-2 px-3 font-mono text-slate-600 whitespace-nowrap sticky-col-1 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}">${esc(r.identificacion || '')}</td>
+                    <td class="py-2 px-3 font-semibold text-slate-800 whitespace-nowrap sticky-col-2 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}">${esc(r.nombre || '')}</td>
+                    ${_cuentas.map(c => {
+                        const val = (r.valores || {})[c.codigo] || 0;
+                        return `
+                            <td class="py-2 px-3 text-right font-medium whitespace-nowrap ${val < 0 ? 'text-rose-600 font-bold' : (val > 0 ? 'text-emerald-600' : 'text-slate-300')}">
+                                ${val !== 0 ? fmt(val) : '-'}
+                            </td>
+                        `;
+                    }).join('')}
+                </tr>
+            `).join('');
+        }
+
+        function exportarExcel() {
+            const agente = getAgenteActivo();
+            const btn = document.getElementById('btn-excel');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-spin mr-1">⏳</span> Generando...';
+
+            fetch(`/admin/api/reporte/${REPORTE_ID}/excel`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    agente: agente,
+                    empresa: document.getElementById('f-empresa').value,
+                    desde: document.getElementById('f-desde').value,
+                    hasta: document.getElementById('f-hasta').value,
+                    tipos: getTiposSeleccionados(),
+                    rows: _rows
+                })
+            })
+            .then(r => {
+                if (!r.ok) throw new Error('Error al generar Excel');
+                return r.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `matriz_terceros_cuentas_${new Date().toISOString().slice(0,10)}.xlsx`;
+                a.click();
+                URL.revokeObjectURL(url);
+            })
+            .catch(e => alert('Error al exportar: ' + e.message))
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-file-earmark-excel-fill text-base"></i> <span>Excel</span>';
+            });
+        }
+
+        cargarTipos();
+    </script>
+</body>
+</html>

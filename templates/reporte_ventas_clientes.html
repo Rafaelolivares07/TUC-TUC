@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ventas por Clientes — SAR</title>
+    <script src="/static/js/tailwind.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .tap-highlight { -webkit-tap-highlight-color: transparent; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 antialiased selection:bg-indigo-500 selection:text-white pb-16">
+
+    <!-- Top Header Bar -->
+    <header class="bg-indigo-700 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/admin/reportes" class="text-indigo-200 hover:text-white transition flex items-center gap-1.5 text-sm font-semibold tap-highlight">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span>Reportes</span>
+                </a>
+                <span class="text-indigo-400 font-light">|</span>
+                <h1 class="text-sm sm:text-base font-bold truncate">Ventas por Clientes</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/admin/area" class="text-xs bg-indigo-800/80 hover:bg-indigo-600 text-indigo-100 font-medium px-2.5 py-1.5 rounded-lg border border-indigo-500/50 transition">
+                    Admin
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-5 space-y-5">
+
+        <!-- Selector de Agente Activo -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg flex-shrink-0">
+                    <i class="bi bi-hdd-network"></i>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">Agente de consulta</label>
+                    <span id="label-agente-activo" class="text-xs sm:text-sm font-semibold text-slate-800">Cargando...</span>
+                </div>
+            </div>
+            <div class="w-full sm:w-64">
+                <div class="relative">
+                    <select id="sel-agente-top" onchange="onAgenteChange()"
+                            class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
+                        {% if agentes %}
+                            {% for a in agentes %}
+                                <option value="{{ a.id }}" {% if a.id == agente_actual %}selected{% endif %}>
+                                    {{ '🟢' if a.online else '⚪' }} {{ a.nombre }}
+                                </option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="">(Sin agentes)</option>
+                        {% endif %}
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario de Filtros -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <!-- Empresa -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Empresa</label>
+                    <div class="relative">
+                        <select id="f-empresa"
+                                class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2.5 px-3.5 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                            <option value="">Todas las empresas</option>
+                            {% for emp in empresas %}<option value="{{ emp }}">{{ emp }}</option>{% endfor %}
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fecha Desde -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Desde</label>
+                    <input type="date" id="f-desde" value="{{ desde }}"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+
+                <!-- Fecha Hasta -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Hasta</label>
+                    <input type="date" id="f-hasta" value="{{ hasta }}"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+            </div>
+
+            <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <button type="button" onclick="consultar()" id="btn-consultar"
+                            class="tap-highlight w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <span>Consultar Ventas</span>
+                    </button>
+
+                    <button type="button" onclick="exportarExcel()" id="btn-excel"
+                            class="tap-highlight hidden w-full sm:w-auto px-4 py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                        <i class="bi bi-file-earmark-excel-fill text-base"></i>
+                        <span>Excel</span>
+                    </button>
+                </div>
+
+                <div id="info-registros" class="text-xs text-slate-500 font-medium text-center sm:text-right"></div>
+            </div>
+        </div>
+
+        <!-- Indicador de Carga -->
+        <div id="spinner" class="hidden bg-white rounded-2xl p-10 text-center shadow-sm border border-slate-200/80 space-y-3">
+            <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-600"></div>
+            <p class="text-sm font-semibold text-slate-700">Procesando ventas en el agente remoto...</p>
+            <p class="text-xs text-slate-400">Calculando puestos y porcentajes de participación</p>
+        </div>
+
+        <!-- Estado Inicial -->
+        <div id="estado-inicial" class="bg-white rounded-2xl p-10 text-center shadow-sm border border-slate-200/80 space-y-2">
+            <div class="w-14 h-14 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl shadow-inner">
+                <i class="bi bi-cart-check"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-800">Reporte de Ventas</h3>
+            <p class="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+                Selecciona el rango de fechas y pulsa <b>Consultar Ventas</b> para generar el consolidado de facturación.
+            </p>
+        </div>
+
+        <!-- Métricas y Totales -->
+        <div id="panel-totales" class="hidden grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80">
+                <span class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Clientes</span>
+                <span id="t-clientes" class="text-xl sm:text-2xl font-black text-slate-800">0</span>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80">
+                <span class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Cant. Unidades</span>
+                <span id="t-cant" class="text-xl sm:text-2xl font-black text-slate-800">0</span>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-indigo-100 bg-indigo-50/20">
+                <span class="block text-[11px] font-bold uppercase tracking-wider text-indigo-700 mb-1">Total Subtotal</span>
+                <span id="t-subtotal" class="text-base sm:text-xl font-bold text-indigo-700">$ 0,00</span>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-emerald-100 bg-emerald-50/20">
+                <span class="block text-[11px] font-bold uppercase tracking-wider text-emerald-700 mb-1">Total IVA</span>
+                <span id="t-iva" class="text-base sm:text-xl font-bold text-emerald-600">$ 0,00</span>
+            </div>
+        </div>
+
+        <!-- Filtro Rápido en Vivo -->
+        <div id="wrap-filtro-vivo" class="hidden">
+            <input type="text" id="filtro-vivo" oninput="filtrarEnVivo()" placeholder="🔍 Buscar cliente por nombre o NIT..."
+                   class="w-full bg-white border border-slate-300 text-slate-800 text-xs sm:text-sm font-medium py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition">
+        </div>
+
+        <!-- Vista Móvil (Tarjetas para Celular) -->
+        <div id="vista-movil" class="hidden space-y-3 sm:hidden"></div>
+
+        <!-- Vista Desktop / Tablet (Tabla) -->
+        <div id="vista-desktop" class="hidden hidden sm:block bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs sm:text-sm">
+                    <thead class="bg-indigo-50/70 border-b border-indigo-100 text-indigo-900 font-bold uppercase text-[11px] tracking-wider">
+                        <tr>
+                            <th class="py-3 px-3 cursor-pointer" onclick="ordenar('identificacion')">NIT</th>
+                            <th class="py-3 px-3 cursor-pointer" onclick="ordenar('nombre')">Cliente</th>
+                            <th class="py-3 px-3 text-right cursor-pointer" onclick="ordenar('cantidad')">Cantidad</th>
+                            <th class="py-3 px-3 text-right cursor-pointer text-indigo-900" onclick="ordenar('subtotal')">Subtotal</th>
+                            <th class="py-3 px-3 text-right cursor-pointer text-emerald-700" onclick="ordenar('iva')">IVA</th>
+                            <th class="py-3 px-3 text-center cursor-pointer" onclick="ordenar('puesto_val')">Puesto</th>
+                            <th class="py-3 px-3 text-right cursor-pointer" onclick="ordenar('por_val')">% Part.</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-desktop" class="divide-y divide-slate-100 font-medium"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        let _rows = [];
+        let _sortCol = 'subtotal';
+        let _sortAsc = false;
+        const fmt = n => Number(n || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        function getAgenteActivo() {
+            const sel = document.getElementById('sel-agente-top');
+            if (sel && sel.value) return sel.value;
+            return new URLSearchParams(window.location.search).get('agente') || localStorage.getItem('sar_agente_favorito') || '';
+        }
+
+        function onAgenteChange() {
+            const sel = document.getElementById('sel-agente-top');
+            if (sel && sel.value) {
+                localStorage.setItem('sar_agente_favorito', sel.value);
+                const url = new URL(window.location.href);
+                url.searchParams.set('agente', sel.value);
+                window.history.replaceState({}, '', url);
+                actualizarLabelAgente();
+            }
+        }
+
+        function actualizarLabelAgente() {
+            const sel = document.getElementById('sel-agente-top');
+            const lbl = document.getElementById('label-agente-activo');
+            if (sel && sel.selectedOptions.length) {
+                lbl.textContent = sel.selectedOptions[0].text;
+            }
+        }
+
+        function consultar() {
+            const agente = getAgenteActivo();
+            if (!agente) {
+                alert('No hay un agente seleccionado.');
+                return;
+            }
+
+            const filtros = {
+                empresa: document.getElementById('f-empresa').value,
+                desde: document.getElementById('f-desde').value,
+                hasta: document.getElementById('f-hasta').value,
+                agente: agente,
+                cliente_id: agente,
+                fuente: 'remoto'
+            };
+
+            document.getElementById('estado-inicial').classList.add('hidden');
+            document.getElementById('spinner').classList.remove('hidden');
+            document.getElementById('panel-totales').classList.add('hidden');
+            document.getElementById('wrap-filtro-vivo').classList.add('hidden');
+            document.getElementById('vista-movil').classList.add('hidden');
+            document.getElementById('vista-desktop').classList.add('hidden');
+            document.getElementById('btn-excel').classList.add('hidden');
+            document.getElementById('btn-consultar').disabled = true;
+
+            fetch('/admin/api/reporte/ventas_clientes', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(filtros)
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('spinner').classList.add('hidden');
+                document.getElementById('btn-consultar').disabled = false;
+
+                if (!data.ok) {
+                    alert('Error: ' + (data.error || 'Desconocido'));
+                    document.getElementById('estado-inicial').classList.remove('hidden');
+                    return;
+                }
+
+                _rows = data.rows || data.filas || [];
+                if (_rows.length === 0) {
+                    alert('No se encontraron ventas para el período seleccionado.');
+                    document.getElementById('estado-inicial').classList.remove('hidden');
+                    return;
+                }
+
+                mostrarTotales(_rows);
+                renderDatos(_rows);
+                document.getElementById('btn-excel').classList.remove('hidden');
+                document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
+                document.getElementById('info-registros').textContent = `${_rows.length} clientes en ${data.elapsed || 0}s`;
+            })
+            .catch(err => {
+                document.getElementById('spinner').classList.add('hidden');
+                document.getElementById('btn-consultar').disabled = false;
+                document.getElementById('estado-inicial').classList.remove('hidden');
+                alert('Error de conexión: ' + err);
+            });
+        }
+
+        function mostrarTotales(rows) {
+            const totCant = rows.reduce((s, r) => s + (Number(r.cantidad) || 0), 0);
+            const totSub  = rows.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
+            const totIva  = rows.reduce((s, r) => s + (Number(r.iva) || 0), 0);
+
+            document.getElementById('t-clientes').textContent = rows.length;
+            document.getElementById('t-cant').textContent     = fmt(totCant);
+            document.getElementById('t-subtotal').textContent = '$ ' + fmt(totSub);
+            document.getElementById('t-iva').textContent      = '$ ' + fmt(totIva);
+            document.getElementById('panel-totales').classList.remove('hidden');
+        }
+
+        function renderDatos(rows) {
+            // Móvil (Cards)
+            const movilDiv = document.getElementById('vista-movil');
+            movilDiv.innerHTML = rows.map(r => `
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 space-y-2.5">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1">
+                            <h4 class="font-bold text-slate-800 text-sm leading-snug">${r.nombre || '—'}</h4>
+                            <span class="inline-block mt-1 text-[11px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                                NIT: ${r.identificacion || r.codigo || '—'}
+                            </span>
+                        </div>
+                        <span class="text-xs font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded-lg">
+                            #${r.puesto_val || '—'}
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
+                        <div>
+                            <span class="block text-[10px] uppercase font-bold text-slate-400">Cantidad</span>
+                            <span class="font-bold text-slate-700">${fmt(r.cantidad)} und</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="block text-[10px] uppercase font-bold text-slate-400">Part. Ventas</span>
+                            <span class="font-bold text-indigo-600">${r.por_val || 0}%</span>
+                        </div>
+                    </div>
+                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-500">Subtotal Facturado:</span>
+                        <span class="text-xs font-black px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800">
+                            $ ${fmt(r.subtotal)}
+                        </span>
+                    </div>
+                </div>`).join('');
+            movilDiv.classList.remove('hidden');
+
+            // Desktop (Table)
+            const tbody = document.getElementById('tbody-desktop');
+            tbody.innerHTML = rows.map((r, idx) => `
+                <tr class="${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-indigo-50/50 transition">
+                    <td class="py-3 px-3 font-mono text-slate-500 text-xs">${r.identificacion || r.codigo || '—'}</td>
+                    <td class="py-3 px-3 font-semibold text-slate-800">${r.nombre || '—'}</td>
+                    <td class="py-3 px-3 text-right font-medium text-slate-600">${fmt(r.cantidad)}</td>
+                    <td class="py-3 px-3 text-right font-bold text-indigo-700">$ ${fmt(r.subtotal)}</td>
+                    <td class="py-3 px-3 text-right font-medium text-emerald-600">$ ${fmt(r.iva)}</td>
+                    <td class="py-3 px-3 text-center font-bold text-slate-700">#${r.puesto_val || '—'}</td>
+                    <td class="py-3 px-3 text-right font-semibold text-indigo-600">${r.por_val || 0}%</td>
+                </tr>`).join('');
+            document.getElementById('vista-desktop').classList.remove('hidden');
+        }
+
+        function filtrarEnVivo() {
+            const query = (document.getElementById('filtro-vivo').value || '').toLowerCase().trim();
+            if (!query) { renderDatos(_rows); return; }
+            const filtered = _rows.filter(r => 
+                (r.nombre && r.nombre.toLowerCase().includes(query)) ||
+                (r.identificacion && r.identificacion.toLowerCase().includes(query))
+            );
+            renderDatos(filtered);
+        }
+
+        function ordenar(col) {
+            if (_sortCol === col) _sortAsc = !_sortAsc;
+            else { _sortCol = col; _sortAsc = true; }
+            _rows.sort((a, b) => {
+                let va = a[col] ?? '', vb = b[col] ?? '';
+                if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+                return _sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+            });
+            renderDatos(_rows);
+        }
+
+        function exportarExcel() {
+            const agente = getAgenteActivo();
+            const payload = {
+                empresa: document.getElementById('f-empresa').value,
+                desde: document.getElementById('f-desde').value,
+                hasta: document.getElementById('f-hasta').value,
+                agente: agente,
+                cliente_id: agente,
+                rows: _rows
+            };
+
+            fetch('/admin/api/reporte/ventas_clientes/excel', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.blob())
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ventas_clientes_${new Date().toISOString().slice(0,10)}.xlsx`;
+                a.click();
+                URL.revokeObjectURL(url);
+            })
+            .catch(e => alert('Error descargando Excel: ' + e));
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            actualizarLabelAgente();
+        });
+    </script>
+</body>
+</html>

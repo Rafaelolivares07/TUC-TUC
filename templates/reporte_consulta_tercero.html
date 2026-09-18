@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Consulta por Tercero — SAR</title>
+    <script src="/static/js/tailwind.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .tap-highlight { -webkit-tap-highlight-color: transparent; }
+        .ac-item:hover, .ac-item.activo { background-color: #e0e7ff; color: #3730a3; }
+        .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 antialiased selection:bg-indigo-500 selection:text-white pb-16">
+
+    <!-- Header -->
+    <header class="bg-indigo-700 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/admin/reportes" class="text-indigo-200 hover:text-white transition flex items-center gap-1.5 text-sm font-semibold tap-highlight">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span>Reportes</span>
+                </a>
+                <span class="text-indigo-400 font-light">|</span>
+                <h1 class="text-sm sm:text-base font-bold truncate">Consulta por Tercero</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/admin/area" class="text-xs bg-indigo-800/80 hover:bg-indigo-600 text-indigo-100 font-medium px-2.5 py-1.5 rounded-lg border border-indigo-500/50 transition">
+                    Admin
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-3 sm:px-4 py-4 space-y-4">
+
+        <!-- Selector de Agente Activo -->
+        <div class="bg-white rounded-2xl p-3.5 sm:p-4 shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg flex-shrink-0">
+                    <i class="bi bi-hdd-network"></i>
+                </div>
+                <div>
+                    <label class="block text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">Agente de consulta</label>
+                    <span id="label-agente-activo" class="text-xs sm:text-sm font-semibold text-slate-800">Cargando...</span>
+                </div>
+            </div>
+            <div class="w-full sm:w-64">
+                <div class="relative">
+                    <select id="sel-agente-top" onchange="onAgenteChange()"
+                            class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
+                        {% if agentes %}
+                            {% for a in agentes %}
+                                <option value="{{ a.id }}" {% if a.id == agente_actual %}selected{% endif %}>
+                                    {{ '🟢' if a.online else '⚪' }} {{ a.nombre }}
+                                </option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="">(Sin agentes)</option>
+                        {% endif %}
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario de Filtros -->
+        <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                
+                <!-- Autocomplete Tercero -->
+                <div class="relative sm:col-span-2 lg:col-span-1">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Tercero *</label>
+                    <div class="relative">
+                        <input type="text" id="f-tercero-display" placeholder="Escribe NIT o Nombre (min 2 letras)..."
+                               autocomplete="off"
+                               oninput="acInput(this)" onkeydown="acKeydown(event)"
+                               class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                        <input type="hidden" id="f-tercero" value="">
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                            <i class="bi bi-search text-xs"></i>
+                        </div>
+                    </div>
+                    <!-- Dropdown autocomplete -->
+                    <div id="ac-lista" class="hidden absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100 text-xs"></div>
+                </div>
+
+                <!-- Empresa (Cargada dinámicamente) -->
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Empresa</label>
+                    <div class="relative">
+                        <select id="f-empresa"
+                                class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition truncate">
+                            <option value="">Todas las empresas</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fecha Desde -->
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Desde</label>
+                    <input type="date" id="f-desde" value="{{ desde }}"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+
+                <!-- Fecha Hasta -->
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Hasta</label>
+                    <input type="date" id="f-hasta" value="{{ hasta }}"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+            </div>
+
+            <!-- Tipos de Comprobante Dropdown Multi-select -->
+            <div class="relative">
+                <div class="flex items-center justify-between mb-1">
+                    <label class="text-[11px] font-bold uppercase tracking-wider text-slate-600">Tipos de Comprobante</label>
+                    <span id="tipos-label" class="text-xs font-semibold text-indigo-600">Todos</span>
+                </div>
+                <div class="relative">
+                    <button type="button" onclick="toggleMenuTipos()" id="btn-tipos"
+                            class="w-full bg-slate-50 border border-slate-300 text-slate-700 text-xs sm:text-sm font-medium py-2 px-3.5 rounded-xl flex items-center justify-between shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <span id="btn-tipos-text" class="truncate">Todos los tipos seleccionados</span>
+                        <i class="bi bi-chevron-down text-slate-400"></i>
+                    </button>
+                    <div id="tipos-menu" class="hidden absolute top-full left-0 right-0 z-30 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 max-h-60 overflow-y-auto space-y-2">
+                        <label class="flex items-center gap-2 pb-2 border-b border-slate-100 cursor-pointer text-xs font-bold text-slate-800">
+                            <input type="checkbox" id="tipos-todos" checked onchange="toggleTodos(this)" class="rounded text-indigo-600 focus:ring-indigo-500">
+                            <span>(Seleccionar Todos)</span>
+                        </label>
+                        <div id="tipos-lista" class="space-y-1.5 text-xs text-slate-700">
+                            <span class="text-slate-400">Cargando tipos...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <button type="button" onclick="consultar()" id="btn-consultar"
+                            class="tap-highlight w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <span id="txt-consultar">Consultar Movimientos</span>
+                    </button>
+
+                    <button type="button" onclick="exportarExcel()" id="btn-excel"
+                            class="tap-highlight hidden w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                        <i class="bi bi-file-earmark-excel-fill text-base"></i>
+                        <span>Excel</span>
+                    </button>
+                </div>
+
+                <div id="info-registros" class="text-xs text-slate-500 font-medium text-center sm:text-right"></div>
+            </div>
+        </div>
+
+        <!-- Indicador de Carga -->
+        <div id="spinner" class="hidden bg-white rounded-2xl p-8 text-center shadow-sm border border-slate-200/80 space-y-3">
+            <div class="inline-block animate-spin rounded-full h-9 w-9 border-4 border-indigo-200 border-t-indigo-600"></div>
+            <p class="text-xs sm:text-sm font-semibold text-slate-700" id="spinner-status">Consultando movimientos del tercero en el agente...</p>
+            <p class="text-[11px] text-slate-400" id="spinner-timer">Tiempo transcurrido: 0s</p>
+        </div>
+
+        <!-- Estado Inicial -->
+        <div id="estado-inicial" class="bg-white rounded-2xl p-8 text-center shadow-sm border border-slate-200/80 space-y-2">
+            <div class="w-12 h-12 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shadow-inner">
+                <i class="bi bi-person-lines-fill"></i>
+            </div>
+            <h3 class="text-sm sm:text-base font-bold text-slate-800">Consulta de Movimientos por Tercero</h3>
+            <p class="text-xs text-slate-500 max-w-md mx-auto">
+                Busca un tercero y pulsa <b>Consultar Movimientos</b> para ver el listado detallado en cuadrícula continua.
+            </p>
+        </div>
+
+        <!-- Métricas y Totales -->
+        <div id="panel-totales" class="hidden grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200/80">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Registros</span>
+                <span id="t-registros" class="text-lg sm:text-2xl font-black text-slate-800">0</span>
+            </div>
+            <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-emerald-100 bg-emerald-50/20">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-0.5">Total Débito</span>
+                <span id="t-deb" class="text-sm sm:text-lg font-bold text-emerald-600">$ 0,00</span>
+            </div>
+            <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-rose-100 bg-rose-50/20">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-0.5">Total Crédito</span>
+                <span id="t-cre" class="text-sm sm:text-lg font-bold text-rose-600">$ 0,00</span>
+            </div>
+            <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-indigo-100 bg-indigo-50/20">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-indigo-700 mb-0.5">Saldo Neto</span>
+                <span id="t-saldo" class="text-sm sm:text-lg font-black text-indigo-700">$ 0,00</span>
+            </div>
+        </div>
+
+        <!-- Filtro Rápido en Vivo -->
+        <div id="wrap-filtro-vivo" class="hidden">
+            <input type="text" id="filtro-vivo" oninput="filtrarEnVivo()" placeholder="🔍 Buscar por comprobante, cuenta, documento o fecha..."
+                   class="w-full bg-white border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium py-2 px-3.5 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+        </div>
+
+        <!-- Grilla de Tabla Continua (Móvil y Escritorio con scroll suave) -->
+        <div id="vista-tabla" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div class="overflow-x-auto max-h-[620px] custom-scrollbar relative">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-slate-100/95 text-slate-600 font-bold uppercase text-[11px] tracking-wider sticky top-0 z-20 backdrop-blur-sm shadow-sm border-b border-slate-200">
+                        <tr>
+                            <th class="py-2.5 px-3 cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap" onclick="ordenar('fecha')">Fecha <span class="sort-ico" id="s-fecha"></span></th>
+                            <th class="py-2.5 px-3 cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap" onclick="ordenar('nombre_tipo')">Tipo Documento <span class="sort-ico" id="s-nombre_tipo"></span></th>
+                            <th class="py-2.5 px-3 cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap" onclick="ordenar('documento')">N° Documento <span class="sort-ico" id="s-documento"></span></th>
+                            <th class="py-2.5 px-3 cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap" onclick="ordenar('cuenta')">Cuenta <span class="sort-ico" id="s-cuenta"></span></th>
+                            <th class="py-2.5 px-3 text-right cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap" onclick="ordenar('debito')">Débito <span class="sort-ico" id="s-debito"></span></th>
+                            <th class="py-2.5 px-3 text-right cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap" onclick="ordenar('credito')">Crédito <span class="sort-ico" id="s-credito"></span></th>
+                            <th class="py-2.5 px-3 text-right cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap" onclick="ordenar('saldo')">Saldo <span class="sort-ico" id="s-saldo"></span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-registros" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                    <tfoot class="bg-slate-50 font-bold text-xs text-slate-800 border-t-2 border-slate-200 sticky bottom-0 z-10">
+                        <tr>
+                            <td colspan="4" class="py-2.5 px-3 text-right uppercase tracking-wider text-[11px]">Totales:</td>
+                            <td class="py-2.5 px-3 text-right text-emerald-600 whitespace-nowrap font-bold" id="ft-deb">$ 0,00</td>
+                            <td class="py-2.5 px-3 text-right text-rose-600 whitespace-nowrap font-bold" id="ft-cre">$ 0,00</td>
+                            <td class="py-2.5 px-3 text-right text-indigo-700 font-black whitespace-nowrap" id="ft-saldo">$ 0,00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const REPORTE_ID = 'consulta_tercero';
+        let _rows = [], _filteredRows = [], _sortCol = 'fecha', _sortAsc = false;
+        let _pollTimer = null, _elapsedInterval = null, _startTime = 0;
+        let _catalogoEmpresas = [];
+
+        function getAgenteActivo() {
+            const sel = document.getElementById('sel-agente-top');
+            return sel ? sel.value : (localStorage.getItem('sar_agente_favorito') || '');
+        }
+
+        function onAgenteChange() {
+            const sel = document.getElementById('sel-agente-top');
+            if (sel && sel.value) {
+                localStorage.setItem('sar_agente_favorito', sel.value);
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+                cargarTipos();
+                cargarCatalogos();
+            }
+        }
+
+        (function initAgente() {
+            const sel = document.getElementById('sel-agente-top');
+            const fav = localStorage.getItem('sar_agente_favorito');
+            if (fav && sel) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === fav) {
+                        sel.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (sel && sel.selectedIndex >= 0) {
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+            }
+            cargarTipos();
+            cargarCatalogos();
+        })();
+
+        const fmt = n => (n === null || n === undefined || n === '') ? '' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const fmtM = n => (n === null || n === undefined || n === '') ? '$ 0,00' : '$ ' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+        // Cargar empresas
+        function cargarCatalogos() {
+            const agente = getAgenteActivo();
+            if (!agente) return;
+            fetch(`/admin/api/reporte/reg_ctas`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ agente: agente, catalogos_init: true })
+            })
+            .then(r => r.json())
+            .then(data => {
+                const res = data.rows || data.filas || {};
+                _catalogoEmpresas = res.empresas || [];
+                const selEmp = document.getElementById('f-empresa');
+                if (selEmp) {
+                    let html = '<option value="">Todas las empresas</option>';
+                    _catalogoEmpresas.forEach(emp => {
+                        const lbl = emp.codigo + (emp.nombre ? ' — ' + emp.nombre : '');
+                        html += `<option value="${esc(emp.codigo)}">${esc(lbl)}</option>`;
+                    });
+                    selEmp.innerHTML = html;
+                }
+            })
+            .catch(() => {});
+        }
+
+        // Tipos multi-select
+        function toggleMenuTipos() {
+            const m = document.getElementById('tipos-menu');
+            m.classList.toggle('hidden');
+        }
+
+        document.addEventListener('click', e => {
+            const btn = document.getElementById('btn-tipos');
+            const menu = document.getElementById('tipos-menu');
+            if (btn && menu && !btn.contains(e.target) && !menu.contains(e.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        function toggleTodos(chk) {
+            document.querySelectorAll('.tipo-chk').forEach(c => { c.checked = chk.checked; });
+            actualizarLabelTipos();
+        }
+
+        function actualizarLabelTipos() {
+            const todos = document.querySelectorAll('.tipo-chk');
+            const marcados = [...todos].filter(c => c.checked);
+            document.getElementById('tipos-todos').checked = marcados.length === todos.length;
+            const lbl = (marcados.length === 0 || marcados.length === todos.length) ? 'Todos' : marcados.length + ' tipo' + (marcados.length > 1 ? 's' : '');
+            document.getElementById('tipos-label').textContent = lbl;
+            document.getElementById('btn-tipos-text').textContent = (marcados.length === 0 || marcados.length === todos.length) ? 'Todos los tipos seleccionados' : marcados.length + ' tipos seleccionados';
+        }
+
+        function getTiposSeleccionados() {
+            const todos = document.querySelectorAll('.tipo-chk');
+            const marcados = [...todos].filter(c => c.checked);
+            if (marcados.length === 0 || marcados.length === todos.length) return [];
+            return marcados.map(c => c.value);
+        }
+
+        function cargarTipos() {
+            const agente = getAgenteActivo();
+            if (!agente) return;
+            fetch(`/admin/api/reporte/${REPORTE_ID}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ agente: agente, tipos_init: true })
+            })
+            .then(r => r.json())
+            .then(data => {
+                const lista = document.getElementById('tipos-lista');
+                if (!data.ok || !data.rows || !data.rows.length) {
+                    lista.innerHTML = '<span class="text-slate-400">Sin tipos disponibles</span>';
+                    return;
+                }
+                lista.innerHTML = data.rows.map(t => `
+                    <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 rounded-lg">
+                        <input type="checkbox" class="tipo-chk rounded text-indigo-600 focus:ring-indigo-500"
+                                value="${esc(t.codigo)}" checked onchange="actualizarLabelTipos()">
+                        <span class="font-medium text-slate-800">${esc(t.codigo)}</span>
+                        <span class="text-slate-500 truncate">${esc(t.nombre || '')}</span>
+                    </label>
+                `).join('');
+                actualizarLabelTipos();
+            })
+            .catch(() => {});
+        }
+
+        // Autocomplete Tercero interactivo
+        let _acTimer = null, _acIdx = -1, _acItems = [];
+        function acInput(inp) {
+            document.getElementById('f-tercero').value = inp.value.trim();
+            clearTimeout(_acTimer);
+            const q = inp.value.trim();
+            if (q.length < 2) { acCerrar(); return; }
+            _acTimer = setTimeout(() => acBuscar(q), 200);
+        }
+
+        function acBuscar(q) {
+            const agente = getAgenteActivo();
+            fetch(`/admin/api/reporte/${REPORTE_ID}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ agente: agente, terceros_buscar: true, q: q })
+            })
+            .then(r => r.json())
+            .then(data => {
+                const lista = document.getElementById('ac-lista');
+                if (!data.ok || !data.rows || !data.rows.length) { acCerrar(); return; }
+                _acItems = data.rows;
+                _acIdx = -1;
+                lista.innerHTML = _acItems.map((t, i) => `
+                    <div class="ac-item p-2.5 cursor-pointer flex items-center justify-between gap-2 border-b border-slate-50 last:border-0 hover:bg-indigo-50/60" data-i="${i}">
+                        <div class="truncate">
+                            <span class="font-semibold text-slate-800 block truncate">${esc(t.nombre)}</span>
+                            <span class="text-[10px] text-slate-400 font-mono">${esc(t.nit || t.identifica || '')}</span>
+                        </div>
+                        <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded flex-shrink-0">COD: ${esc(t.cod_ter || '')}</span>
+                    </div>
+                `).join('');
+                lista.querySelectorAll('.ac-item').forEach(el => {
+                    el.addEventListener('mousedown', e => {
+                        e.preventDefault();
+                        acSeleccionar(parseInt(el.dataset.i));
+                    });
+                });
+                lista.classList.remove('hidden');
+            })
+            .catch(() => acCerrar());
+        }
+
+        function acSeleccionar(i) {
+            const t = _acItems[i];
+            if (!t) return;
+            const idVal = t.nit || t.identifica || '';
+            document.getElementById('f-tercero-display').value = t.nombre + (idVal ? '  (' + idVal + ')' : '');
+            document.getElementById('f-tercero').value = t.cod_ter || t.codigo || '';
+            acCerrar();
+        }
+
+        function acCerrar() {
+            const lista = document.getElementById('ac-lista');
+            lista.classList.add('hidden');
+            lista.innerHTML = '';
+            _acIdx = -1;
+        }
+
+        function acKeydown(e) {
+            const lista = document.getElementById('ac-lista');
+            if (lista.classList.contains('hidden')) return;
+            const items = lista.querySelectorAll('.ac-item');
+            if (!items.length) return;
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                _acIdx = Math.min(_acIdx + 1, items.length - 1);
+                items.forEach((el, i) => el.classList.toggle('activo', i === _acIdx));
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                _acIdx = Math.max(_acIdx - 1, 0);
+                items.forEach((el, i) => el.classList.toggle('activo', i === _acIdx));
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (_acIdx >= 0) acSeleccionar(_acIdx);
+                else acCerrar();
+            } else if (e.key === 'Escape') {
+                acCerrar();
+            }
+        }
+
+        document.addEventListener('click', e => {
+            if (!e.target.closest('#ac-lista') && e.target.id !== 'f-tercero-display') acCerrar();
+        });
+
+        // Consulta Asíncrona
+        function consultar() {
+            const tercero = document.getElementById('f-tercero').value.trim() || document.getElementById('f-tercero-display').value.trim();
+            if (!tercero) {
+                alert('Por favor selecciona o digita un tercero.');
+                document.getElementById('f-tercero-display').focus();
+                return;
+            }
+
+            const agente = getAgenteActivo();
+            if (!agente) {
+                alert('Selecciona un agente de consulta.');
+                return;
+            }
+
+            const filtros = {
+                agente: agente,
+                tercero: tercero,
+                empresa: document.getElementById('f-empresa').value,
+                desde: document.getElementById('f-desde').value,
+                hasta: document.getElementById('f-hasta').value,
+                tipos: getTiposSeleccionados()
+            };
+
+            // UI Loading
+            document.getElementById('estado-inicial').classList.add('hidden');
+            document.getElementById('panel-totales').classList.add('hidden');
+            document.getElementById('wrap-filtro-vivo').classList.add('hidden');
+            document.getElementById('vista-tabla').classList.add('hidden');
+            document.getElementById('btn-excel').classList.add('hidden');
+            document.getElementById('info-registros').textContent = '';
+
+            const spinner = document.getElementById('spinner');
+            spinner.classList.remove('hidden');
+            document.getElementById('spinner-status').textContent = 'Consultando movimientos del tercero en el agente...';
+
+            _startTime = Date.now();
+            clearInterval(_elapsedInterval);
+            _elapsedInterval = setInterval(() => {
+                const sec = Math.floor((Date.now() - _startTime) / 1000);
+                document.getElementById('spinner-timer').textContent = `Tiempo transcurrido: ${sec}s`;
+            }, 1000);
+
+            clearTimeout(_pollTimer);
+
+            fetch(`/admin/api/reporte/${REPORTE_ID}/iniciar`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(filtros)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) {
+                    throw new Error(data.error || 'Error al iniciar la consulta');
+                }
+                document.getElementById('spinner-status').textContent = 'Agente procesando movimientos contables...';
+                pollResultado(data.consulta_id);
+            })
+            .catch(err => {
+                detenerCarga();
+                alert('Error: ' + err.message);
+                document.getElementById('estado-inicial').classList.remove('hidden');
+            });
+        }
+
+        function pollResultado(consultaId) {
+            fetch(`/admin/api/reporte/resultado/${consultaId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) {
+                    throw new Error(data.error || 'Error en la respuesta del agente');
+                }
+                if (data.estado === 'pendiente') {
+                    _pollTimer = setTimeout(() => pollResultado(consultaId), 800);
+                    return;
+                }
+                if (data.estado === 'error') {
+                    throw new Error(data.error || 'El agente reportó un error al consultar');
+                }
+                if (data.estado === 'lista') {
+                    detenerCarga();
+                    _rows = data.filas || data.rows || [];
+                    _filteredRows = [..._rows];
+                    renderResultados(data.elapsed || ((Date.now() - _startTime)/1000).toFixed(1));
+                }
+            })
+            .catch(err => {
+                detenerCarga();
+                alert('Error al consultar resultados: ' + err.message);
+                document.getElementById('estado-inicial').classList.remove('hidden');
+            });
+        }
+
+        function detenerCarga() {
+            clearTimeout(_pollTimer);
+            clearInterval(_elapsedInterval);
+            document.getElementById('spinner').classList.add('hidden');
+        }
+
+        function renderResultados(elapsed) {
+            if (!_rows.length) {
+                alert('No se encontraron movimientos con los filtros seleccionados.');
+                document.getElementById('estado-inicial').classList.remove('hidden');
+                return;
+            }
+
+            mostrarTotales();
+            aplicarOrden();
+            renderGrilla();
+
+            document.getElementById('panel-totales').classList.remove('hidden');
+            document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
+            document.getElementById('vista-tabla').classList.remove('hidden');
+            document.getElementById('btn-excel').classList.remove('hidden');
+            document.getElementById('info-registros').textContent = `${_rows.length} registros en ${elapsed}s`;
+        }
+
+        function mostrarTotales() {
+            let totDeb = 0, totCre = 0;
+            _filteredRows.forEach(r => {
+                totDeb += Number(r.debito || 0);
+                totCre += Number(r.credito || 0);
+            });
+            const saldo = totDeb - totCre;
+
+            document.getElementById('t-registros').textContent = _filteredRows.length.toLocaleString('es-CO');
+            document.getElementById('t-deb').textContent = fmtM(totDeb);
+            document.getElementById('t-cre').textContent = fmtM(totCre);
+            document.getElementById('t-saldo').textContent = fmtM(saldo);
+
+            document.getElementById('ft-deb').textContent = fmtM(totDeb);
+            document.getElementById('ft-cre').textContent = fmtM(totCre);
+            document.getElementById('ft-saldo').textContent = fmtM(saldo);
+        }
+
+        function filtrarEnVivo() {
+            const q = (document.getElementById('filtro-vivo').value || '').toLowerCase().trim();
+            if (!q) {
+                _filteredRows = [..._rows];
+            } else {
+                _filteredRows = _rows.filter(r => 
+                    (r.comprobante || '').toLowerCase().includes(q) ||
+                    (r.nombre_tipo || '').toLowerCase().includes(q) ||
+                    (r.cuenta || '').toLowerCase().includes(q) ||
+                    (r.nombre_cuenta || '').toLowerCase().includes(q) ||
+                    (r.documento || '').toLowerCase().includes(q) ||
+                    (r.numero || '').toLowerCase().includes(q) ||
+                    (r.fecha || '').toLowerCase().includes(q)
+                );
+            }
+            mostrarTotales();
+            aplicarOrden();
+            renderGrilla();
+        }
+
+        function ordenar(col) {
+            if (_sortCol === col) {
+                _sortAsc = !_sortAsc;
+            } else {
+                _sortCol = col;
+                _sortAsc = false;
+            }
+            aplicarOrden();
+            renderGrilla();
+        }
+
+        function aplicarOrden() {
+            _filteredRows.sort((a, b) => {
+                let va = a[_sortCol] ?? '';
+                let vb = b[_sortCol] ?? '';
+                if (typeof va === 'number' && typeof vb === 'number') {
+                    return _sortAsc ? va - vb : vb - va;
+                }
+                va = String(va).toLowerCase();
+                vb = String(vb).toLowerCase();
+                return _sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+            });
+
+            document.querySelectorAll('.sort-ico').forEach(el => el.textContent = '');
+            const ico = document.getElementById('s-' + _sortCol);
+            if (ico) ico.textContent = _sortAsc ? ' ↑' : ' ↓';
+        }
+
+        function renderGrilla() {
+            const tbody = document.getElementById('tbody-registros');
+            let saldoAcum = 0;
+            tbody.innerHTML = _filteredRows.map((r, i) => {
+                const deb = Number(r.debito || 0);
+                const cre = Number(r.credito || 0);
+                saldoAcum += (deb - cre);
+                const tipoDesc = r.nombre_tipo || r.comprobante || '—';
+                const docNum = r.documento || r.numero || '—';
+
+                return `
+                    <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'} hover:bg-indigo-50/40 transition">
+                        <td class="py-2.5 px-3 font-medium whitespace-nowrap text-slate-500">${esc(r.fecha || '')}</td>
+                        <td class="py-2.5 px-3 whitespace-nowrap">
+                            <span class="font-semibold text-slate-800">${esc(tipoDesc)}</span>
+                            ${r.comprobante && r.comprobante !== tipoDesc ? `<span class="text-[10px] text-slate-400 font-mono block">Cod: ${esc(r.comprobante)}</span>` : ''}
+                        </td>
+                        <td class="py-2.5 px-3 font-bold text-slate-700 whitespace-nowrap">${esc(docNum)}</td>
+                        <td class="py-2.5 px-3 whitespace-nowrap">
+                            <span class="font-mono font-bold text-slate-700">${esc(r.cuenta || '')}</span>
+                            ${r.nombre_cuenta ? `<span class="text-slate-400 text-[11px] block truncate max-w-[180px]">${esc(r.nombre_cuenta)}</span>` : ''}
+                        </td>
+                        <td class="py-2.5 px-3 text-right font-semibold text-emerald-600 whitespace-nowrap">${deb ? fmt(deb) : ''}</td>
+                        <td class="py-2.5 px-3 text-right font-semibold text-rose-600 whitespace-nowrap">${cre ? fmt(cre) : ''}</td>
+                        <td class="py-2.5 px-3 text-right font-bold text-indigo-700 whitespace-nowrap">${fmt(saldoAcum)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function exportarExcel() {
+            const agente = getAgenteActivo();
+            const btn = document.getElementById('btn-excel');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-spin mr-1">⏳</span> Generando...';
+
+            fetch(`/admin/api/reporte/${REPORTE_ID}/excel`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    agente: agente,
+                    tercero: document.getElementById('f-tercero').value.trim(),
+                    empresa: document.getElementById('f-empresa').value,
+                    desde: document.getElementById('f-desde').value,
+                    hasta: document.getElementById('f-hasta').value,
+                    tipos: getTiposSeleccionados(),
+                    rows: _rows
+                })
+            })
+            .then(r => {
+                if (!r.ok) throw new Error('Error al generar Excel');
+                return r.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `consulta_tercero_${new Date().toISOString().slice(0,10)}.xlsx`;
+                a.click();
+                URL.revokeObjectURL(url);
+            })
+            .catch(e => alert('Error al exportar: ' + e.message))
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-file-earmark-excel-fill text-base"></i> <span>Excel</span>';
+            });
+        }
+
+        cargarTipos();
+        cargarCatalogos();
+    </script>
+</body>
+</html>

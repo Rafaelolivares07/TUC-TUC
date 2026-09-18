@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Inventario y Rotación — SAR</title>
+    <script src="/static/js/tailwind.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .tap-highlight { -webkit-tap-highlight-color: transparent; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 antialiased selection:bg-indigo-500 selection:text-white pb-16">
+
+    <!-- Header -->
+    <header class="bg-indigo-700 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/admin/reportes" class="text-indigo-200 hover:text-white transition flex items-center gap-1.5 text-sm font-semibold tap-highlight">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span>Reportes</span>
+                </a>
+                <span class="text-indigo-400 font-light">|</span>
+                <h1 class="text-sm sm:text-base font-bold truncate">Inventario y Rotación</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/admin/area" class="text-xs bg-indigo-800/80 hover:bg-indigo-600 text-indigo-100 font-medium px-2.5 py-1.5 rounded-lg border border-indigo-500/50 transition">
+                    Admin
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-5 space-y-5">
+
+        <!-- Selector de Agente Activo -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg flex-shrink-0">
+                    <i class="bi bi-hdd-network"></i>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">Agente de consulta</label>
+                    <span id="label-agente-activo" class="text-xs sm:text-sm font-semibold text-slate-800">Cargando...</span>
+                </div>
+            </div>
+            <div class="w-full sm:w-64">
+                <div class="relative">
+                    <select id="sel-agente-top" onchange="onAgenteChange()"
+                            class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
+                        {% if agentes %}
+                            {% for a in agentes %}
+                                <option value="{{ a.id }}" {% if a.id == agente_actual %}selected{% endif %}>
+                                    {{ '🟢' if a.online else '⚪' }} {{ a.nombre }}
+                                </option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="">(Sin agentes)</option>
+                        {% endif %}
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario de Filtros -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                <!-- Empresa -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Empresa</label>
+                    <div class="relative">
+                        <select id="f-empresa"
+                                class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2.5 px-3.5 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                            <option value="">Todas</option>
+                            {% for emp in empresas %}<option value="{{ emp }}">{{ emp }}</option>{% endfor %}
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fecha Desde -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Desde</label>
+                    <input type="date" id="f-desde" value="{{ desde }}"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+
+                <!-- Fecha Hasta -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Hasta</label>
+                    <input type="date" id="f-hasta" value="{{ hasta }}"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+
+                <!-- Días Min Sin Venta -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Días Mín. Sin Venta</label>
+                    <input type="number" id="f-dias-min" placeholder="0"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+
+                <!-- Días Max Para Vender -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Días Máx. Stock</label>
+                    <input type="number" id="f-dias-max" placeholder="Sin límite"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+            </div>
+
+            <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <button type="button" onclick="consultar()" id="btn-consultar"
+                            class="tap-highlight w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <span id="txt-consultar">Consultar Inventario</span>
+                    </button>
+
+                    <button type="button" onclick="exportarExcel()" id="btn-excel"
+                            class="tap-highlight hidden w-full sm:w-auto px-4 py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                        <i class="bi bi-file-earmark-excel-fill text-base"></i>
+                        <span>Excel</span>
+                    </button>
+                </div>
+
+                <div id="info-registros" class="text-xs text-slate-500 font-medium text-center sm:text-right"></div>
+            </div>
+        </div>
+
+        <!-- Indicador de Carga -->
+        <div id="spinner" class="hidden bg-white rounded-2xl p-10 text-center shadow-sm border border-slate-200/80 space-y-3">
+            <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-600"></div>
+            <p class="text-sm font-semibold text-slate-700" id="spinner-status">Consultando inventario y rotación en el agente...</p>
+            <p class="text-xs text-slate-400" id="spinner-timer">Tiempo transcurrido: 0s</p>
+        </div>
+
+        <!-- Estado Inicial -->
+        <div id="estado-inicial" class="bg-white rounded-2xl p-10 text-center shadow-sm border border-slate-200/80 space-y-2">
+            <div class="w-14 h-14 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl shadow-inner">
+                <i class="bi bi-box-seam"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-800">Inventario y Decisiones de Compra</h3>
+            <p class="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+                Consulta los niveles de stock, tendencias de venta, rotación y alertas de reposición o sobrestock.
+            </p>
+        </div>
+
+        <!-- Métricas y Totales -->
+        <div id="panel-totales" class="hidden grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200/80">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Productos</span>
+                <span id="t-productos" class="text-lg sm:text-xl font-black text-slate-800">0</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-indigo-100 bg-indigo-50/20">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-indigo-700 mb-1">Valor Total</span>
+                <span id="t-valor" class="text-sm sm:text-base font-bold text-indigo-700">$ 0</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-rose-100 bg-rose-50/20">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-1">Comprar Ya</span>
+                <span id="t-comprar" class="text-lg sm:text-xl font-bold text-rose-600">0</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-amber-100 bg-amber-50/20">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Exceso</span>
+                <span id="t-exceso" class="text-lg sm:text-xl font-bold text-amber-600">0</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Sin Ventas</span>
+                <span id="t-sin-venta" class="text-lg sm:text-xl font-bold text-slate-600">0</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-purple-100 bg-purple-50/20">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-purple-700 mb-1">Negativos</span>
+                <span id="t-negativos" class="text-lg sm:text-xl font-bold text-purple-600">0</span>
+            </div>
+        </div>
+
+        <!-- Filtro Rápido en Vivo -->
+        <div id="wrap-filtro-vivo" class="hidden">
+            <input type="text" id="filtro-vivo" oninput="filtrarEnVivo()" placeholder="🔍 Buscar por código, producto, grupo o decisión..."
+                   class="w-full bg-white border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium py-2.5 px-4 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+        </div>
+
+        <!-- Vista Móvil: Tarjetas (Pantallas pequeñas) -->
+        <div id="vista-movil" class="hidden sm:hidden space-y-3"></div>
+
+        <!-- Vista Escritorio: Tabla (Pantallas sm en adelante) -->
+        <div id="vista-escritorio" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div class="overflow-x-auto max-h-[600px] relative">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead class="bg-slate-100/90 text-slate-600 font-bold uppercase text-[10px] tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm border-b border-slate-200">
+                        <tr>
+                            <th class="py-2.5 px-3 cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('codigo')">Código <span class="sort-ico" id="s-codigo"></span></th>
+                            <th class="py-2.5 px-3 cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('nombre')">Producto <span class="sort-ico" id="s-nombre"></span></th>
+                            <th class="py-2.5 px-2 cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('und')">Und <span class="sort-ico" id="s-und"></span></th>
+                            <th class="py-2.5 px-3 text-right cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('saldo')">Saldo <span class="sort-ico" id="s-saldo"></span></th>
+                            <th class="py-2.5 px-3 text-right cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('valor_saldo')">Valor Saldo <span class="sort-ico" id="s-valor_saldo"></span></th>
+                            <th class="py-2.5 px-2 text-right cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('n_ventas')">Ventas <span class="sort-ico" id="s-n_ventas"></span></th>
+                            <th class="py-2.5 px-2 text-right cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('dias_sin_venta')">Días Sin V. <span class="sort-ico" id="s-dias_sin_venta"></span></th>
+                            <th class="py-2.5 px-2 text-right cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('dias_para_vender')">Días Stock <span class="sort-ico" id="s-dias_para_vender"></span></th>
+                            <th class="py-2.5 px-2 cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('tendencia')">Tendencia <span class="sort-ico" id="s-tendencia"></span></th>
+                            <th class="py-2.5 px-3 cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('decision')">Decisión <span class="sort-ico" id="s-decision"></span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-escritorio" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const REPORTE_ID = 'inventario';
+        let _rows = [], _filteredRows = [], _sortCol = 'decision', _sortAsc = true;
+        let _pollTimer = null, _elapsedInterval = null, _startTime = 0;
+
+        function getAgenteActivo() {
+            const sel = document.getElementById('sel-agente-top');
+            return sel ? sel.value : (localStorage.getItem('sar_agente_favorito') || '');
+        }
+
+        function onAgenteChange() {
+            const sel = document.getElementById('sel-agente-top');
+            if (sel && sel.value) {
+                localStorage.setItem('sar_agente_favorito', sel.value);
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+            }
+        }
+
+        (function initAgente() {
+            const sel = document.getElementById('sel-agente-top');
+            const fav = localStorage.getItem('sar_agente_favorito');
+            if (fav && sel) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === fav) {
+                        sel.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (sel && sel.selectedIndex >= 0) {
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+            }
+        })();
+
+        const fmt = (n, d=2) => (n === null || n === undefined || n === '') ? '' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: d, maximumFractionDigits: d});
+        const fmtM = n => (n === null || n === undefined || n === '') ? '$ 0' : '$ ' + Math.round(Number(n)).toLocaleString('es-CO');
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+        function decBadge(d) {
+            if (!d) return '';
+            let bg = 'bg-slate-100 text-slate-700 border-slate-200';
+            if (d.includes('COMPRAR YA')) bg = 'bg-rose-100 text-rose-800 border-rose-200 font-bold';
+            else if (d.includes('EXCESO')) bg = 'bg-amber-100 text-amber-800 border-amber-200 font-semibold';
+            else if (d.includes('NO VENDIDO')) bg = 'bg-slate-100 text-slate-600 border-slate-200';
+            else if (d.includes('STOCK OK')) bg = 'bg-emerald-100 text-emerald-800 border-emerald-200 font-semibold';
+            else if (d.includes('AJUSTAR')) bg = 'bg-purple-100 text-purple-800 border-purple-200';
+            return `<span class="inline-block px-2 py-0.5 text-[10px] rounded-md border ${bg} whitespace-nowrap">${esc(d)}</span>`;
+        }
+
+        function tendHtml(t) {
+            if (!t) return '-';
+            if (t.startsWith('SUBE')) return `<span class="text-emerald-600 font-bold text-xs">▲ ${esc(t)}</span>`;
+            if (t.startsWith('BAJA')) return `<span class="text-rose-600 font-bold text-xs">▼ ${esc(t)}</span>`;
+            if (t === 'ESTABLE') return `<span class="text-slate-500 font-medium text-xs">— ESTABLE</span>`;
+            return esc(t);
+        }
+
+        // Consulta Asíncrona
+        function consultar() {
+            const agente = getAgenteActivo();
+            if (!agente) {
+                alert('Selecciona un agente de consulta.');
+                return;
+            }
+
+            const filtros = {
+                agente: agente,
+                empresa: document.getElementById('f-empresa').value,
+                desde: document.getElementById('f-desde').value,
+                hasta: document.getElementById('f-hasta').value,
+                dias_min: document.getElementById('f-dias-min').value,
+                dias_max: document.getElementById('f-dias-max').value,
+            };
+
+            document.getElementById('estado-inicial').classList.add('hidden');
+            document.getElementById('panel-totales').classList.add('hidden');
+            document.getElementById('wrap-filtro-vivo').classList.add('hidden');
+            document.getElementById('vista-movil').classList.add('hidden');
+            document.getElementById('vista-escritorio').classList.add('hidden');
+            document.getElementById('btn-excel').classList.add('hidden');
+            document.getElementById('info-registros').textContent = '';
+
+            const spinner = document.getElementById('spinner');
+            spinner.classList.remove('hidden');
+            document.getElementById('spinner-status').textContent = 'Enviando solicitud al agente ' + agente + '...';
+
+            _startTime = Date.now();
+            clearInterval(_elapsedInterval);
+            _elapsedInterval = setInterval(() => {
+                const sec = Math.floor((Date.now() - _startTime) / 1000);
+                document.getElementById('spinner-timer').textContent = `Tiempo transcurrido: ${sec}s`;
+            }, 1000);
+
+            clearTimeout(_pollTimer);
+
+            fetch(`/admin/api/reporte/${REPORTE_ID}/iniciar`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(filtros)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) throw new Error(data.error || 'Error al iniciar consulta');
+                document.getElementById('spinner-status').textContent = 'Calculando rotación e inventario...';
+                pollResultado(data.consulta_id);
+            })
+            .catch(err => {
+                detenerCarga();
+                alert('Error: ' + err.message);
+                document.getElementById('estado-inicial').classList.remove('hidden');
+            });
+        }
+
+        function pollResultado(consultaId) {
+            fetch(`/admin/api/reporte/resultado/${consultaId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) throw new Error(data.error || 'Error en agente');
+                if (data.estado === 'pendiente') {
+                    _pollTimer = setTimeout(() => pollResultado(consultaId), 1000);
+                    return;
+                }
+                if (data.estado === 'error') throw new Error(data.error || 'Error reportado por el agente');
+                if (data.estado === 'lista') {
+                    detenerCarga();
+                    _rows = data.filas || data.rows || [];
+                    _filteredRows = [..._rows];
+                    renderResultados(data.elapsed || ((Date.now() - _startTime)/1000).toFixed(1));
+                }
+            })
+            .catch(err => {
+                detenerCarga();
+                alert('Error al consultar resultados: ' + err.message);
+                document.getElementById('estado-inicial').classList.remove('hidden');
+            });
+        }
+
+        function detenerCarga() {
+            clearTimeout(_pollTimer);
+            clearInterval(_elapsedInterval);
+            document.getElementById('spinner').classList.add('hidden');
+        }
+
+        function renderResultados(elapsed) {
+            if (!_rows.length) {
+                alert('No se encontraron productos con los filtros seleccionados.');
+                document.getElementById('estado-inicial').classList.remove('hidden');
+                return;
+            }
+
+            mostrarTotales();
+            aplicarOrden();
+            renderVistas();
+
+            document.getElementById('panel-totales').classList.remove('hidden');
+            document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
+            document.getElementById('vista-movil').classList.remove('hidden');
+            document.getElementById('vista-escritorio').classList.remove('hidden');
+            document.getElementById('btn-excel').classList.remove('hidden');
+            document.getElementById('info-registros').textContent = `${_rows.length} productos en ${elapsed}s`;
+        }
+
+        function mostrarTotales() {
+            const comprar = _filteredRows.filter(r => r.decision && r.decision.includes('COMPRAR YA')).length;
+            const exceso = _filteredRows.filter(r => r.decision && r.decision.includes('EXCESO')).length;
+            const sinVenta = _filteredRows.filter(r => r.decision && r.decision.includes('NO VENDIDO')).length;
+            const negativos = _filteredRows.filter(r => Number(r.saldo || 0) < 0).length;
+            const totValor = _filteredRows.reduce((s, r) => s + (Number(r.valor_saldo) || 0), 0);
+
+            document.getElementById('t-productos').textContent = _filteredRows.length.toLocaleString('es-CO');
+            document.getElementById('t-valor').textContent = fmtM(totValor);
+            document.getElementById('t-comprar').textContent = comprar;
+            document.getElementById('t-exceso').textContent = exceso;
+            document.getElementById('t-sin-venta').textContent = sinVenta;
+            document.getElementById('t-negativos').textContent = negativos;
+        }
+
+        function filtrarEnVivo() {
+            const q = (document.getElementById('filtro-vivo').value || '').toLowerCase().trim();
+            if (!q) {
+                _filteredRows = [..._rows];
+            } else {
+                _filteredRows = _rows.filter(r =>
+                    (r.codigo || '').toLowerCase().includes(q) ||
+                    (r.nombre || '').toLowerCase().includes(q) ||
+                    (r.grupo || '').toLowerCase().includes(q) ||
+                    (r.decision || '').toLowerCase().includes(q)
+                );
+            }
+            mostrarTotales();
+            aplicarOrden();
+            renderVistas();
+        }
+
+        function ordenar(col) {
+            if (_sortCol === col) {
+                _sortAsc = !_sortAsc;
+            } else {
+                _sortCol = col;
+                _sortAsc = false;
+            }
+            aplicarOrden();
+            renderVistas();
+        }
+
+        function aplicarOrden() {
+            _filteredRows.sort((a, b) => {
+                let va = a[_sortCol] ?? '';
+                let vb = b[_sortCol] ?? '';
+                if (typeof va === 'number' && typeof vb === 'number') {
+                    return _sortAsc ? va - vb : vb - va;
+                }
+                va = String(va).toLowerCase();
+                vb = String(vb).toLowerCase();
+                return _sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+            });
+
+            document.querySelectorAll('.sort-ico').forEach(el => el.textContent = '');
+            const ico = document.getElementById('s-' + _sortCol);
+            if (ico) ico.textContent = _sortAsc ? ' ↑' : ' ↓';
+        }
+
+        function renderVistas() {
+            // 1. Vista Móvil (Cards)
+            const movil = document.getElementById('vista-movil');
+            movil.innerHTML = _filteredRows.slice(0, 100).map(r => `
+                <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-2.5">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <span class="text-xs font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">${esc(r.codigo)}</span>
+                            <h4 class="font-bold text-slate-800 text-sm mt-1 leading-tight">${esc(r.nombre)}</h4>
+                            <span class="text-[11px] text-slate-400">${esc(r.grupo || '')} · Und: <b>${esc(r.und || '')}</b></span>
+                        </div>
+                        <div>${decBadge(r.decision)}</div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-center">
+                        <div class="bg-slate-50 p-2 rounded-xl">
+                            <span class="block text-[10px] uppercase font-bold text-slate-400">Saldo</span>
+                            <span class="text-xs font-bold ${Number(r.saldo) < 0 ? 'text-rose-600' : 'text-slate-800'}">${fmt(r.saldo)}</span>
+                        </div>
+                        <div class="bg-slate-50 p-2 rounded-xl">
+                            <span class="block text-[10px] uppercase font-bold text-slate-400">Valor</span>
+                            <span class="text-xs font-bold text-slate-800">${fmtM(r.valor_saldo)}</span>
+                        </div>
+                        <div class="bg-slate-50 p-2 rounded-xl">
+                            <span class="block text-[10px] uppercase font-bold text-slate-400">Días Stock</span>
+                            <span class="text-xs font-bold text-indigo-700">${fmt(r.dias_para_vender, 0)} d</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                        <span>Ventas: <b>${fmt(r.n_ventas, 0)}</b></span>
+                        <span>Tendencia: ${tendHtml(r.tendencia)}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            // 2. Vista Escritorio (Tabla)
+            const tbody = document.getElementById('tbody-escritorio');
+            tbody.innerHTML = _filteredRows.slice(0, 300).map((r, i) => `
+                <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-indigo-50/40 transition">
+                    <td class="py-2.5 px-3 font-mono font-bold text-indigo-700 whitespace-nowrap">${esc(r.codigo)}</td>
+                    <td class="py-2.5 px-3 font-semibold text-slate-800 max-w-xs truncate">${esc(r.nombre)}</td>
+                    <td class="py-2.5 px-2 text-slate-500 whitespace-nowrap">${esc(r.und || '')}</td>
+                    <td class="py-2.5 px-3 text-right font-bold ${Number(r.saldo) < 0 ? 'text-rose-600' : 'text-slate-800'} whitespace-nowrap">${fmt(r.saldo)}</td>
+                    <td class="py-2.5 px-3 text-right font-semibold text-slate-700 whitespace-nowrap">${fmtM(r.valor_saldo)}</td>
+                    <td class="py-2.5 px-2 text-right font-medium text-slate-600 whitespace-nowrap">${fmt(r.n_ventas, 0)}</td>
+                    <td class="py-2.5 px-2 text-right font-medium text-slate-500 whitespace-nowrap">${fmt(r.dias_sin_venta, 0)}</td>
+                    <td class="py-2.5 px-2 text-right font-bold text-indigo-700 whitespace-nowrap">${fmt(r.dias_para_vender, 0)}</td>
+                    <td class="py-2.5 px-2 whitespace-nowrap">${tendHtml(r.tendencia)}</td>
+                    <td class="py-2.5 px-3 whitespace-nowrap">${decBadge(r.decision)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function exportarExcel() {
+            const agente = getAgenteActivo();
+            const btn = document.getElementById('btn-excel');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="animate-spin mr-1">⏳</span> Generando...';
+
+            fetch(`/admin/api/reporte/${REPORTE_ID}/excel`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    agente: agente,
+                    empresa: document.getElementById('f-empresa').value,
+                    desde: document.getElementById('f-desde').value,
+                    hasta: document.getElementById('f-hasta').value,
+                    dias_min: document.getElementById('f-dias-min').value,
+                    dias_max: document.getElementById('f-dias-max').value,
+                    rows: _rows
+                })
+            })
+            .then(r => {
+                if (!r.ok) throw new Error('Error al generar Excel');
+                return r.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `inventario_${new Date().toISOString().slice(0,10)}.xlsx`;
+                a.click();
+                URL.revokeObjectURL(url);
+            })
+            .catch(e => alert('Error al exportar: ' + e.message))
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-file-earmark-excel-fill text-base"></i> <span>Excel</span>';
+            });
+        }
+    </script>
+</body>
+</html>

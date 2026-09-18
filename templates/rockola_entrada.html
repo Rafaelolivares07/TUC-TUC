@@ -328,7 +328,7 @@ document.addEventListener('keydown', e => {
 
 cargarSalas();
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/rockola/pwa/sw.js', { scope: '/' }).catch(() => {});
+  navigator.serviceWorker.register('/rockola/pwa/sw.js?v=3.1.0', { scope: '/' }).catch(() => {});
 }
 </script>
 </body>

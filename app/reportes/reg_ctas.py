@@ -17,6 +17,7 @@ EXCEL_COLS = [
     ('tercero_nom', 'Tercero'),
     ('debito',      'Débito'),
     ('credito',     'Crédito'),
+    ('saldo_acum',  'Saldo'),
     ('detalle',     'Detalle'),
     ('anulado',     'Anulado'),
     ('empresa',     'Empresa'),
@@ -90,8 +91,8 @@ def tablas_requeridas(filtros):
         },
     ]
 
-    # Para saldo_inicial: cargar REG_CTAS anterior a 'desde' solo si se solicita
-    if desde and filtros.get('incluir_saldo_inicial'):
+    # Para saldo_inicial: cargar REG_CTAS anterior a 'desde'
+    if desde and filtros.get('incluir_saldo_inicial', True):
         filtros_si = {}
         if empresa:
             filtros_si['EMPRESA'] = empresa
@@ -110,7 +111,7 @@ def tablas_requeridas(filtros):
         tablas.append({
             'tabla':   'REG_CTAS',
             'alias':   'REG_CTAS_SALDO',
-            'campos':  ['CUENTA', 'LAPSO', 'TOT_DEB', 'TOT_CRE', 'EMPRESA'],
+            'campos':  ['CUENTA', 'LAPSO', 'TOT_DEB', 'TOT_CRE', 'EMPRESA', 'TERCERO'],
             'filtros': filtros_si,
         })
 
@@ -284,9 +285,23 @@ def calcular(datos, filtros):
 
     saldo_inicial = 0.0
     for r in datos.get('REG_CTAS_SALDO', []):
+        if codigos_match is not None:
+            raw_t = r.get('TERCERO')
+            cod_ter = _fmt_id(raw_t)
+            if cod_ter not in codigos_match:
+                try:
+                    if str(int(float(raw_t))) not in codigos_match:
+                        continue
+                except Exception:
+                    continue
         saldo_inicial += float(r.get('TOT_DEB', 0) or 0)
         saldo_inicial -= float(r.get('TOT_CRE', 0) or 0)
     saldo_inicial = round(saldo_inicial, 2)
+
+    acumulado = saldo_inicial
+    for r in rows:
+        acumulado += (r['debito'] - r['credito'])
+        r['saldo_acum'] = round(acumulado, 2)
 
     rows.insert(0, {'_saldo_inicial': saldo_inicial})
     return rows

@@ -185,22 +185,26 @@
         </div>
 
         <!-- Métricas y Totales -->
-        <div id="panel-totales" class="hidden grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <div id="panel-totales" class="hidden grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3">
             <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200/80">
                 <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Registros</span>
-                <span id="t-registros" class="text-lg sm:text-xl font-black text-slate-800">0</span>
+                <span id="t-registros" class="text-base sm:text-lg font-black text-slate-800">0</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200/80 bg-slate-50/50">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Saldo Anterior</span>
+                <span id="t-anterior" class="text-xs sm:text-sm font-bold text-slate-700 font-mono">$ 0,00</span>
             </div>
             <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-emerald-100 bg-emerald-50/20">
                 <span class="block text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-0.5">Total Débito</span>
-                <span id="t-deb" class="text-sm sm:text-lg font-bold text-emerald-600">$ 0,00</span>
+                <span id="t-deb" class="text-xs sm:text-sm font-bold text-emerald-600 font-mono">$ 0,00</span>
             </div>
             <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-rose-100 bg-rose-50/20">
                 <span class="block text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-0.5">Total Crédito</span>
-                <span id="t-cre" class="text-sm sm:text-lg font-bold text-rose-600">$ 0,00</span>
+                <span id="t-cre" class="text-xs sm:text-sm font-bold text-rose-600 font-mono">$ 0,00</span>
             </div>
-            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-indigo-100 bg-indigo-50/20">
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-indigo-700 mb-0.5">Saldo Neto</span>
-                <span id="t-saldo" class="text-sm sm:text-lg font-black text-indigo-700">$ 0,00</span>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-indigo-200 bg-indigo-50/30 col-span-2 sm:col-span-1">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-indigo-700 mb-0.5">Saldo Final</span>
+                <span id="t-saldo" class="text-xs sm:text-sm font-black text-indigo-700 font-mono">$ 0,00</span>
             </div>
         </div>
 
@@ -232,6 +236,7 @@
     <script>
         const REPORTE_ID = 'reg_ctas';
         let _rows = [], _filteredRows = [], _sortCol = 'fecha', _sortAsc = false;
+        let _saldoInicial = 0;
         let _pollTimer = null, _elapsedInterval = null, _startTime = 0;
         let _modoFiltro = 'general'; // 'cuenta', 'tercero', o 'general'
         let _catalogoCuentas = []; // Precarga de todas las cuentas del agente
@@ -591,6 +596,7 @@
                 empresa: document.getElementById('f-empresa').value,
                 desde: document.getElementById('f-desde').value,
                 hasta: document.getElementById('f-hasta').value,
+                incluir_saldo_inicial: true
             };
 
             // UI Loading
@@ -682,6 +688,8 @@
                 if (data.estado === 'lista') {
                     detenerCarga();
                     let rawRows = data.filas || data.rows || [];
+                    const saldoObj = rawRows.find(r => r && ('_saldo_inicial' in r));
+                    _saldoInicial = saldoObj ? Number(saldoObj._saldo_inicial || 0) : 0;
                     _rows = rawRows.filter(r => r && !('_saldo_inicial' in r));
                     _filteredRows = [..._rows];
                     renderResultados(data.elapsed || ((Date.now() - _startTime)/1000).toFixed(1));
@@ -742,12 +750,13 @@
                 totDeb += Number(r.debito || 0);
                 totCre += Number(r.credito || 0);
             });
-            const saldo = totDeb - totCre;
+            const saldoFinal = _saldoInicial + totDeb - totCre;
 
             document.getElementById('t-registros').textContent = _filteredRows.length.toLocaleString('es-CO');
+            document.getElementById('t-anterior').textContent = fmtM(_saldoInicial);
             document.getElementById('t-deb').textContent = fmtM(totDeb);
             document.getElementById('t-cre').textContent = fmtM(totCre);
-            document.getElementById('t-saldo').textContent = fmtM(saldo);
+            document.getElementById('t-saldo').textContent = fmtM(saldoFinal);
         }
 
         function filtrarEnVivo() {
@@ -817,6 +826,7 @@
             colsHtml += `
                 <th class="py-2.5 px-3 text-right cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap" onclick="ordenar('debito')">Débito${ico('debito')}</th>
                 <th class="py-2.5 px-3 text-right cursor-pointer select-none hover:text-indigo-600 whitespace-nowrap" onclick="ordenar('credito')">Crédito${ico('credito')}</th>
+                <th class="py-2.5 px-3 text-right whitespace-nowrap">Saldo</th>
             `;
             thead.innerHTML = colsHtml;
         }
@@ -824,12 +834,35 @@
         function renderFilasGrilla() {
             const tbody = document.getElementById('tbody-grilla');
             let totDeb = 0, totCre = 0;
+            let colspan = 3;
+            if (_modoFiltro !== 'cuenta') colspan++;
+            if (_modoFiltro !== 'tercero') colspan++;
 
-            tbody.innerHTML = _filteredRows.map((r, i) => {
+            let anteriorHtml = '';
+            const desdeVal = document.getElementById('f-desde').value || '';
+            if (_saldoInicial !== 0 || _filteredRows.length > 0) {
+                anteriorHtml = `
+                    <tr class="bg-indigo-50/70 font-semibold border-b border-indigo-100 text-slate-700">
+                        <td colspan="${colspan}" class="py-2.5 px-3">
+                            <span class="inline-flex items-center gap-1.5 text-indigo-800 font-bold">
+                                <i class="bi bi-clock-history text-xs text-indigo-600"></i>
+                                <span>SALDO ANTERIOR ${desdeVal ? `(al inicio de ${desdeVal})` : ''}</span>
+                            </span>
+                        </td>
+                        <td class="py-2.5 px-3 text-right text-slate-300 font-mono text-[11px]">—</td>
+                        <td class="py-2.5 px-3 text-right text-slate-300 font-mono text-[11px]">—</td>
+                        <td class="py-2.5 px-3 text-right font-mono font-black text-indigo-900 whitespace-nowrap">${fmtM(_saldoInicial)}</td>
+                    </tr>
+                `;
+            }
+
+            let runningSaldo = _saldoInicial;
+            const filasHtml = _filteredRows.map((r, i) => {
                 const deb = Number(r.debito || 0);
                 const cre = Number(r.credito || 0);
                 totDeb += deb;
                 totCre += cre;
+                runningSaldo += (deb - cre);
 
                 let rowHtml = `
                     <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} hover:bg-indigo-50/40 transition">
@@ -860,22 +893,23 @@
                 }
 
                 rowHtml += `
-                        <td class="py-2 px-3 text-right font-semibold text-emerald-600 whitespace-nowrap">${deb ? fmt(deb) : ''}</td>
-                        <td class="py-2 px-3 text-right font-semibold text-rose-600 whitespace-nowrap">${cre ? fmt(cre) : ''}</td>
+                        <td class="py-2 px-3 text-right font-semibold text-emerald-600 font-mono whitespace-nowrap">${deb ? fmt(deb) : ''}</td>
+                        <td class="py-2 px-3 text-right font-semibold text-rose-600 font-mono whitespace-nowrap">${cre ? fmt(cre) : ''}</td>
+                        <td class="py-2 px-3 text-right font-mono font-bold ${runningSaldo >= 0 ? 'text-slate-800' : 'text-rose-600'} whitespace-nowrap">${fmtM(runningSaldo)}</td>
                     </tr>
                 `;
                 return rowHtml;
             }).join('');
 
-            let colspan = 3;
-            if (_modoFiltro !== 'cuenta') colspan++;
-            if (_modoFiltro !== 'tercero') colspan++;
+            tbody.innerHTML = anteriorHtml + filasHtml;
 
+            const saldoFinal = _saldoInicial + totDeb - totCre;
             document.getElementById('tfoot-grilla').innerHTML = `
-                <tr>
-                    <td colspan="${colspan}" class="py-2.5 px-3 text-right uppercase tracking-wider font-bold text-slate-700">Totales:</td>
-                    <td class="py-2.5 px-3 text-right text-emerald-600 font-bold whitespace-nowrap">${fmtM(totDeb)}</td>
-                    <td class="py-2.5 px-3 text-right text-rose-600 font-bold whitespace-nowrap">${fmtM(totCre)}</td>
+                <tr class="bg-slate-100 font-bold text-xs text-slate-800 border-t-2 border-slate-300">
+                    <td colspan="${colspan}" class="py-2.5 px-3 text-right uppercase tracking-wider font-bold text-slate-700">Totales & Saldo Final:</td>
+                    <td class="py-2.5 px-3 text-right text-emerald-700 font-bold font-mono whitespace-nowrap">${fmtM(totDeb)}</td>
+                    <td class="py-2.5 px-3 text-right text-rose-700 font-bold font-mono whitespace-nowrap">${fmtM(totCre)}</td>
+                    <td class="py-2.5 px-3 text-right font-black font-mono text-indigo-900 whitespace-nowrap bg-indigo-50/50">${fmtM(saldoFinal)}</td>
                 </tr>
             `;
         }

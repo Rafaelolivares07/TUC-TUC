@@ -87,8 +87,8 @@
                         <button type="button" onclick="limpiarCuenta()" class="text-[10px] text-indigo-600 hover:underline">Limpiar</button>
                     </div>
                     <div class="relative">
-                        <input type="text" id="f-cuenta" placeholder="Código o nombre (ej: 4135)..."
-                               autocomplete="off"
+                        <input type="text" id="f-cuenta" placeholder="⏳ Cargando cuentas..."
+                               autocomplete="off" disabled
                                onfocus="acCuentaInput(this)"
                                oninput="acCuentaInput(this)" onkeydown="acCuentaKeydown(event)"
                                class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 pr-7 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
@@ -103,9 +103,9 @@
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Empresa</label>
                     <div class="relative">
-                        <select id="f-empresa"
+                        <select id="f-empresa" disabled
                                 class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition truncate">
-                            <option value="">Todas las empresas</option>
+                            <option value="">⏳ Cargando empresas...</option>
                         </select>
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -130,7 +130,7 @@
 
             <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100">
                 <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <button type="button" onclick="consultar()" id="btn-consultar"
+                    <button type="button" onclick="consultar()" id="btn-consultar" disabled
                             class="tap-highlight w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -269,29 +269,65 @@
         // ── Precargar Cuentas y Empresas del Agente ───────────────────────────
         function cargarCatalogos() {
             const agente = getAgenteActivo();
-            if (!agente) return;
-            fetch(`/admin/api/reporte/reg_ctas`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ agente: agente, catalogos_init: true })
-            })
-            .then(r => r.json())
-            .then(data => {
-                const res = data.rows || data.filas || {};
-                _catalogoCuentas = res.cuentas || (Array.isArray(res) ? res : []);
-                _catalogoEmpresas = res.empresas || [];
+            const inpCta = document.getElementById('f-cuenta');
+            const selEmp = document.getElementById('f-empresa');
+            const btnCons = document.getElementById('btn-consultar');
 
-                const selEmp = document.getElementById('f-empresa');
-                if (selEmp && _catalogoEmpresas.length) {
-                    let html = '<option value="">Todas las empresas</option>';
-                    _catalogoEmpresas.forEach(emp => {
-                        const lbl = emp.codigo + (emp.nombre ? ' — ' + emp.nombre : '');
-                        html += `<option value="${esc(emp.codigo)}">${esc(lbl)}</option>`;
-                    });
-                    selEmp.innerHTML = html;
+            function activar(cuentas, empresas) {
+                _catalogoCuentas = cuentas || [];
+                _catalogoEmpresas = empresas || [];
+
+                if (inpCta) {
+                    inpCta.disabled = false;
+                    inpCta.placeholder = 'Código o nombre (ej: 4135)...';
                 }
-            })
-            .catch(err => console.warn('Error al cargar catálogos:', err));
+
+                if (selEmp) {
+                    let html = '<option value="">Todas las empresas</option>';
+                    if (_catalogoEmpresas.length) {
+                        _catalogoEmpresas.forEach(emp => {
+                            const cod = typeof emp === 'string' ? emp : (emp.codigo || emp);
+                            const nom = typeof emp === 'object' && emp.nombre ? ' — ' + emp.nombre : '';
+                            html += `<option value="${esc(cod)}">${esc(cod + nom)}</option>`;
+                        });
+                    }
+                    selEmp.innerHTML = html;
+                    selEmp.disabled = false;
+                }
+
+                if (btnCons) btnCons.disabled = false;
+            }
+
+            if (!agente) {
+                activar([], []);
+                return;
+            }
+
+            // 1. Intentar de caché local instantáneo (0ms)
+            const cachedCta = localStorage.getItem(`sar_cuentas_${agente}`);
+            const cachedEmp = localStorage.getItem(`sar_empresas_${agente}`);
+            if (cachedCta && cachedEmp) {
+                try {
+                    activar(JSON.parse(cachedCta), JSON.parse(cachedEmp));
+                    return;
+                } catch(e){}
+            }
+
+            // 2. Si no estaba precargado, consultar en paralelo
+            const pCuentas  = fetch(`/admin/api/cuentas?agente=${encodeURIComponent(agente)}`).then(r => r.json()).catch(() => ({ok: false}));
+            const pEmpresas = fetch(`/admin/api/empresas?agente=${encodeURIComponent(agente)}`).then(r => r.json()).catch(() => ({ok: false}));
+
+            Promise.all([pCuentas, pEmpresas]).then(([dCta, dEmp]) => {
+                const ctas = (dCta.ok && dCta.cuentas) ? dCta.cuentas : [];
+                const emps = (dEmp.ok && dEmp.empresas) ? dEmp.empresas : [];
+                if (dCta.ok && dCta.cuentas) {
+                    localStorage.setItem(`sar_cuentas_${agente}`, JSON.stringify(dCta.cuentas));
+                }
+                if (dEmp.ok && dEmp.empresas) {
+                    localStorage.setItem(`sar_empresas_${agente}`, JSON.stringify(dEmp.empresas));
+                }
+                activar(ctas, emps);
+            });
         }
 
         // ── Autocomplete Cuenta (Instantáneo 0ms) ─────────────────────────────

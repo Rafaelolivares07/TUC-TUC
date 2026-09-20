@@ -561,3 +561,65 @@ def exportar_excel_api(reporte_id):
         )
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/admin/api/cuentas', methods=['GET', 'POST'])
+@bp.route('/api/cuentas', methods=['GET', 'POST'])
+@admin_required
+def api_cuentas():
+    body = request.get_json(silent=True) or {}
+    agente = (request.args.get('agente') or body.get('agente') or request.args.get('cliente_id') or body.get('cliente_id') or '').strip()
+    conn = get_db_connection()
+    try:
+        if not agente:
+            agentes = _obtener_agentes_activos(conn, session.get('usuario_id'), session.get('rol', ''))
+            if agentes:
+                agente = agentes[0]['id']
+        if not agente:
+            return jsonify({'ok': False, 'error': 'Agente requerido', 'cuentas': []}), 400
+        
+        datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
+            'tablas': [{'tabla': 'CUENTAS', 'campos': ['CODIGO', 'NOMBRE'], 'filtros': {}}]
+        }, timeout=30)
+        
+        raw_cuentas = datos.get('CUENTAS', []) if isinstance(datos, dict) else []
+        cuentas = []
+        for r in raw_cuentas:
+            c = str(r.get('CODIGO', '') or '').strip()
+            n = str(r.get('NOMBRE', '') or '').strip()
+            if c:
+                cuentas.append({'codigo': c, 'nombre': n})
+        cuentas.sort(key=lambda x: x['codigo'])
+        return jsonify({'ok': True, 'cuentas': cuentas, 'total': len(cuentas)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'cuentas': []}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/admin/api/empresas', methods=['GET', 'POST'])
+@bp.route('/api/empresas', methods=['GET', 'POST'])
+@admin_required
+def api_empresas():
+    body = request.get_json(silent=True) or {}
+    agente = (request.args.get('agente') or body.get('agente') or request.args.get('cliente_id') or body.get('cliente_id') or '').strip()
+    conn = get_db_connection()
+    try:
+        if not agente:
+            agentes = _obtener_agentes_activos(conn, session.get('usuario_id'), session.get('rol', ''))
+            if agentes:
+                agente = agentes[0]['id']
+        if not agente:
+            return jsonify({'ok': False, 'error': 'Agente requerido', 'empresas': []}), 400
+        
+        datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
+            'tablas': [{'tabla': 'PROD_FACT1', 'campos': ['EMPRESA'], 'filtros': {}}]
+        }, timeout=30)
+        
+        raw_emp = datos.get('PROD_FACT1', []) if isinstance(datos, dict) else []
+        empresas = sorted(list({str(r.get('EMPRESA', '') or '').strip() for r in raw_emp if str(r.get('EMPRESA', '') or '').strip()}))
+        return jsonify({'ok': True, 'empresas': empresas, 'total': len(empresas)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'empresas': []}), 500
+    finally:
+        conn.close()

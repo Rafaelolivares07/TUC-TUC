@@ -44,7 +44,12 @@
                     <i class="bi bi-hdd-network"></i>
                 </div>
                 <div>
-                    <label class="block text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400">Equipo / Agente Conectado</label>
+                    <div class="flex items-center gap-2">
+                        <label class="block text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400">Equipo / Agente Conectado</label>
+                        <span id="catalogos-badge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                            <i class="bi bi-hourglass-split"></i> Verificando...
+                        </span>
+                    </div>
                     <span id="label-agente-activo" class="text-sm font-bold text-slate-800">
                         {% if agentes %}{{ agentes[0].nombre }}{% else %}Conectando...{% endif %}
                     </span>
@@ -102,12 +107,58 @@
             return sel ? sel.value : (localStorage.getItem('sar_agente_favorito') || '');
         }
 
+        let _precargaReqId = 0;
+        function precargarCatalogos() {
+            const ag = getAgenteMenu();
+            const badge = document.getElementById('catalogos-badge');
+            if (!ag) {
+                if (badge) {
+                    badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200';
+                    badge.innerHTML = '<i class="bi bi-pause-circle"></i> Sin agente';
+                }
+                return;
+            }
+
+            if (badge) {
+                badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200';
+                badge.innerHTML = '<span class="inline-block animate-spin mr-1">⏳</span> Consultando cuentas y empresas...';
+            }
+
+            const reqId = ++_precargaReqId;
+            const pCuentas  = fetch(`/admin/api/cuentas?agente=${encodeURIComponent(ag)}`).then(r => r.json()).catch(() => ({ok: false}));
+            const pEmpresas = fetch(`/admin/api/empresas?agente=${encodeURIComponent(ag)}`).then(r => r.json()).catch(() => ({ok: false}));
+
+            Promise.all([pCuentas, pEmpresas]).then(([dCta, dEmp]) => {
+                if (reqId !== _precargaReqId) return;
+                let nCta = 0, nEmp = 0;
+                if (dCta.ok && dCta.cuentas) {
+                    nCta = dCta.cuentas.length;
+                    localStorage.setItem(`sar_cuentas_${ag}`, JSON.stringify(dCta.cuentas));
+                }
+                if (dEmp.ok && dEmp.empresas) {
+                    nEmp = dEmp.empresas.length;
+                    localStorage.setItem(`sar_empresas_${ag}`, JSON.stringify(dEmp.empresas));
+                }
+
+                if (badge) {
+                    if (dCta.ok || dEmp.ok) {
+                        badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200';
+                        badge.innerHTML = `<i class="bi bi-check2-circle mr-1"></i> Empresas (${nEmp}) · Cuentas (${nCta}) listas`;
+                    } else {
+                        badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200';
+                        badge.innerHTML = '<i class="bi bi-exclamation-triangle mr-1"></i> Sin respuesta de BD';
+                    }
+                }
+            });
+        }
+
         function onAgenteMenuChange() {
             const sel = document.getElementById('sel-agente-menu');
             if (sel && sel.value) {
                 localStorage.setItem('sar_agente_favorito', sel.value);
                 const opt = sel.options[sel.selectedIndex];
                 document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+                precargarCatalogos();
             }
         }
 
@@ -137,6 +188,7 @@
                 const opt = sel.options[sel.selectedIndex];
                 document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
             }
+            precargarCatalogos();
         })();
     </script>
 </body>

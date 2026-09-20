@@ -613,11 +613,19 @@ def api_empresas():
             return jsonify({'ok': False, 'error': 'Agente requerido', 'empresas': []}), 400
         
         datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
-            'tablas': [{'tabla': 'PROD_FACT1', 'campos': ['EMPRESA'], 'filtros': {}}]
+            'tablas': [{'tabla': 'EMPRESAS', 'campos': ['COD_EMP', 'NOM_EMP', 'NIT'], 'filtros': {}}]
         }, timeout=30)
         
-        raw_emp = datos.get('PROD_FACT1', []) if isinstance(datos, dict) else []
-        empresas = sorted(list({str(r.get('EMPRESA', '') or '').strip() for r in raw_emp if str(r.get('EMPRESA', '') or '').strip()}))
+        raw_emp = datos.get('EMPRESAS', []) if isinstance(datos, dict) else []
+        empresas = []
+        for r in raw_emp:
+            cod = str(r.get('COD_EMP', '') or '').strip()
+            nom = str(r.get('NOM_EMP', '') or '').strip()
+            nit = str(r.get('NIT', '') or '').strip()
+            if cod or nom:
+                empresas.append({'codigo': cod, 'nombre': nom, 'nit': nit})
+        
+        empresas.sort(key=lambda x: x['codigo'] if x['codigo'] else x['nombre'])
         return jsonify({'ok': True, 'empresas': empresas, 'total': len(empresas)})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'empresas': []}), 500

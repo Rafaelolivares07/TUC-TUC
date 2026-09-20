@@ -59,7 +59,7 @@
                 <select id="sel-agente-menu" onchange="onAgenteMenuChange()"
                         class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
                     {% for a in agentes %}
-                    <option value="{{ a.id }}" {% if a.online %}selected{% endif %}>
+                    <option value="{{ a.id }}" data-online="{{ '1' if a.online else '0' }}" {% if a.online %}selected{% endif %}>
                         {{ '🟢' if a.online else '⚪' }} {{ a.nombre }} ({{ a.ultimo }})
                     </option>
                     {% endfor %}
@@ -107,6 +107,13 @@
             return sel ? sel.value : (localStorage.getItem('sar_agente_favorito') || '');
         }
 
+        function esAgenteMenuOnline() {
+            const sel = document.getElementById('sel-agente-menu');
+            if (!sel || sel.selectedIndex < 0) return false;
+            const opt = sel.options[sel.selectedIndex];
+            return opt && opt.dataset.online === '1';
+        }
+
         let _precargaReqId = 0;
         function precargarCatalogos() {
             const ag = getAgenteMenu();
@@ -115,6 +122,14 @@
                 if (badge) {
                     badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200';
                     badge.innerHTML = '<i class="bi bi-pause-circle"></i> Sin agente';
+                }
+                return;
+            }
+
+            if (!esAgenteMenuOnline()) {
+                if (badge) {
+                    badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-300';
+                    badge.innerHTML = '<span class="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1"></span> Desconectado';
                 }
                 return;
             }

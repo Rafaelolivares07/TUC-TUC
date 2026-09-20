@@ -59,7 +59,7 @@
                             class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
                         {% if agentes %}
                             {% for a in agentes %}
-                                <option value="{{ a.id }}" {% if a.id == agente_actual %}selected{% endif %}>
+                                <option value="{{ a.id }}" data-online="{{ '1' if a.online else '0' }}" {% if a.id == agente_actual %}selected{% endif %}>
                                     {{ '🟢' if a.online else '⚪' }} {{ a.nombre }}
                                 </option>
                             {% endfor %}
@@ -298,8 +298,17 @@
                 if (btnCons) btnCons.disabled = false;
             }
 
-            if (!agente) {
-                activar([], []);
+            function esAgenteActivoOnline() {
+                const sel = document.getElementById('sel-agente-top');
+                if (!sel || sel.selectedIndex < 0) return false;
+                const opt = sel.options[sel.selectedIndex];
+                return opt && opt.dataset.online === '1';
+            }
+
+            if (!agente || !esAgenteActivoOnline()) {
+                if (inpCta) { inpCta.disabled = true; inpCta.placeholder = '⚠️ Agente desconectado (equipo apagado)'; }
+                if (selEmp) { selEmp.disabled = true; selEmp.innerHTML = '<option value="">⚠️ Agente desconectado</option>'; }
+                if (btnCons) btnCons.disabled = true;
                 return;
             }
 

@@ -59,7 +59,7 @@
                 <select id="sel-agente-menu" onchange="onAgenteMenuChange()"
                         class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
                     {% for a in agentes %}
-                    <option value="{{ a.id }}" data-online="{{ '1' if a.online else '0' }}" {% if a.online %}selected{% endif %}>
+                    <option value="{{ a.id }}" data-online="{{ '1' if a.online else '0' }}" {% if a.id == agente_actual %}selected{% endif %}>
                         {{ '🟢' if a.online else '⚪' }} {{ a.nombre }} ({{ a.ultimo }})
                     </option>
                     {% endfor %}
@@ -190,18 +190,46 @@
 
         (function initAgenteMenu() {
             const sel = document.getElementById('sel-agente-menu');
+            if (!sel || !sel.options.length) return;
             const fav = localStorage.getItem('sar_agente_favorito');
-            if (fav && sel) {
+            let idxToSelect = -1;
+
+            if (fav) {
                 for (let i = 0; i < sel.options.length; i++) {
-                    if (sel.options[i].value === fav) {
-                        sel.selectedIndex = i;
+                    if (sel.options[i].value === fav && sel.options[i].dataset.online === '1') {
+                        idxToSelect = i;
                         break;
                     }
                 }
             }
-            if (sel && sel.selectedIndex >= 0) {
-                const opt = sel.options[sel.selectedIndex];
-                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+
+            if (idxToSelect === -1) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].dataset.online === '1') {
+                        idxToSelect = i;
+                        break;
+                    }
+                }
+            }
+
+            if (idxToSelect === -1 && fav) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === fav) {
+                        idxToSelect = i;
+                        break;
+                    }
+                }
+            }
+
+            if (idxToSelect === -1) {
+                idxToSelect = 0;
+            }
+
+            sel.selectedIndex = idxToSelect;
+            const opt = sel.options[sel.selectedIndex];
+            if (opt) {
+                document.getElementById('label-agente-activo').textContent = opt.text;
+                localStorage.setItem('sar_agente_favorito', opt.value);
             }
             precargarCatalogos();
         })();

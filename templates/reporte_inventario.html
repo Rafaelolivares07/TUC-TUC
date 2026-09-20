@@ -72,14 +72,13 @@
         <!-- Formulario de Filtros -->
         <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-                <!-- Empresa -->
+                <!-- Empresa (Cargada dinámicamente) -->
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Empresa</label>
                     <div class="relative">
-                        <select id="f-empresa"
+                        <select id="f-empresa" disabled
                                 class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2.5 px-3.5 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
-                            <option value="">Todas</option>
-                            {% for emp in empresas %}<option value="{{ emp }}">{{ emp }}</option>{% endfor %}
+                            <option value="">⏳ Cargando empresas...</option>
                         </select>
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -118,12 +117,12 @@
 
             <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100">
                 <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <button type="button" onclick="consultar()" id="btn-consultar"
+                    <button type="button" onclick="consultar()" id="btn-consultar" disabled
                             class="tap-highlight w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
-                        <span id="txt-consultar">Consultar Inventario</span>
+                        <span>Calcular Rotación</span>
                     </button>
 
                     <button type="button" onclick="exportarExcel()" id="btn-excel"
@@ -140,77 +139,79 @@
         <!-- Indicador de Carga -->
         <div id="spinner" class="hidden bg-white rounded-2xl p-10 text-center shadow-sm border border-slate-200/80 space-y-3">
             <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-600"></div>
-            <p class="text-sm font-semibold text-slate-700" id="spinner-status">Consultando inventario y rotación en el agente...</p>
+            <p class="text-sm font-semibold text-slate-700" id="spinner-status">Consultando inventario en el agente remoto...</p>
             <p class="text-xs text-slate-400" id="spinner-timer">Tiempo transcurrido: 0s</p>
         </div>
 
         <!-- Estado Inicial -->
         <div id="estado-inicial" class="bg-white rounded-2xl p-10 text-center shadow-sm border border-slate-200/80 space-y-2">
             <div class="w-14 h-14 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl shadow-inner">
-                <i class="bi bi-box-seam"></i>
+                <i class="bi bi-boxes"></i>
             </div>
-            <h3 class="text-base font-bold text-slate-800">Inventario y Decisiones de Compra</h3>
+            <h3 class="text-base font-bold text-slate-800">Reporte de Rotación de Inventario</h3>
             <p class="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
-                Consulta los niveles de stock, tendencias de venta, rotación y alertas de reposición o sobrestock.
+                Selecciona la empresa, rango de ventas y pulsa <b>Calcular Rotación</b> para obtener las decisiones de compra, excesos y tendencias.
             </p>
         </div>
 
-        <!-- Métricas y Totales -->
-        <div id="panel-totales" class="hidden grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200/80">
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Productos</span>
-                <span id="t-productos" class="text-lg sm:text-xl font-black text-slate-800">0</span>
+        <!-- Panel de Totales -->
+        <div id="panel-totales" class="hidden grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-600">Total Productos</div>
+                <div class="text-lg sm:text-xl font-black text-slate-800 truncate mt-1" id="tot-prod">0</div>
             </div>
-            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-indigo-100 bg-indigo-50/20">
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-indigo-700 mb-1">Valor Total</span>
-                <span id="t-valor" class="text-sm sm:text-base font-bold text-indigo-700">$ 0</span>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-600">Comprar Ya</div>
+                <div class="text-lg sm:text-xl font-black text-rose-600 truncate mt-1" id="tot-comprar">0</div>
             </div>
-            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-rose-100 bg-rose-50/20">
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-1">Comprar Ya</span>
-                <span id="t-comprar" class="text-lg sm:text-xl font-bold text-rose-600">0</span>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-600">En Exceso</div>
+                <div class="text-lg sm:text-xl font-black text-amber-600 truncate mt-1" id="tot-exceso">0</div>
             </div>
-            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-amber-100 bg-amber-50/20">
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Exceso</span>
-                <span id="t-exceso" class="text-lg sm:text-xl font-bold text-amber-600">0</span>
-            </div>
-            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200">
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Sin Ventas</span>
-                <span id="t-sin-venta" class="text-lg sm:text-xl font-bold text-slate-600">0</span>
-            </div>
-            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-purple-100 bg-purple-50/20">
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-purple-700 mb-1">Negativos</span>
-                <span id="t-negativos" class="text-lg sm:text-xl font-bold text-purple-600">0</span>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-slate-600">Valor Total Stock</div>
+                <div class="text-lg sm:text-xl font-black text-indigo-600 truncate mt-1" id="tot-valor">$ 0</div>
             </div>
         </div>
 
-        <!-- Filtro Rápido en Vivo -->
-        <div id="wrap-filtro-vivo" class="hidden">
-            <input type="text" id="filtro-vivo" oninput="filtrarEnVivo()" placeholder="🔍 Buscar por código, producto, grupo o decisión..."
-                   class="w-full bg-white border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium py-2.5 px-4 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+        <!-- Filtros Rápidos de Decisión y Búsqueda -->
+        <div id="wrap-filtro-vivo" class="hidden space-y-3">
+            <div class="flex flex-wrap items-center gap-1.5" id="decision-chips">
+                <button type="button" onclick="filtrarDecision('')" class="chip-btn px-3 py-1 text-xs rounded-xl font-semibold bg-indigo-600 text-white shadow-sm" data-dec="">Todos (<span id="cnt-todos">0</span>)</button>
+                <button type="button" onclick="filtrarDecision('COMPRAR YA')" class="chip-btn px-3 py-1 text-xs rounded-xl font-semibold bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-700" data-dec="COMPRAR YA">🚨 Comprar Ya (<span id="cnt-comprar">0</span>)</button>
+                <button type="button" onclick="filtrarDecision('EXCESO')" class="chip-btn px-3 py-1 text-xs rounded-xl font-semibold bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-700" data-dec="EXCESO">⚠️ Exceso (<span id="cnt-exceso">0</span>)</button>
+                <button type="button" onclick="filtrarDecision('STOCK OK')" class="chip-btn px-3 py-1 text-xs rounded-xl font-semibold bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700" data-dec="STOCK OK">✅ Stock OK (<span id="cnt-ok">0</span>)</button>
+                <button type="button" onclick="filtrarDecision('NO VENDIDO')" class="chip-btn px-3 py-1 text-xs rounded-xl font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200" data-dec="NO VENDIDO">💤 No Vendido (<span id="cnt-novendido">0</span>)</button>
+            </div>
+            <div class="relative">
+                <input type="text" id="filtro-vivo" oninput="filtrarEnVivo(this.value)" placeholder="Buscar por código, descripción o grupo..."
+                       class="w-full bg-white border border-slate-300 text-slate-800 text-xs sm:text-sm rounded-xl py-2 px-3.5 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm transition">
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                    <i class="bi bi-search text-xs"></i>
+                </div>
+            </div>
         </div>
 
-        <!-- Vista Móvil: Tarjetas (Pantallas pequeñas) -->
-        <div id="vista-movil" class="hidden sm:hidden space-y-3"></div>
+        <!-- Vista Móvil (Tarjetas) -->
+        <div id="vista-movil" class="hidden space-y-3 sm:hidden"></div>
 
-        <!-- Vista Escritorio: Tabla (Pantallas sm en adelante) -->
-        <div id="vista-escritorio" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
-            <div class="overflow-x-auto max-h-[600px] relative">
-                <table class="w-full text-left text-xs border-collapse">
-                    <thead class="bg-slate-100/90 text-slate-600 font-bold uppercase text-[10px] tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm border-b border-slate-200">
-                        <tr>
-                            <th class="py-2.5 px-3 cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('codigo')">Código <span class="sort-ico" id="s-codigo"></span></th>
-                            <th class="py-2.5 px-3 cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('nombre')">Producto <span class="sort-ico" id="s-nombre"></span></th>
-                            <th class="py-2.5 px-2 cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('und')">Und <span class="sort-ico" id="s-und"></span></th>
-                            <th class="py-2.5 px-3 text-right cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('saldo')">Saldo <span class="sort-ico" id="s-saldo"></span></th>
-                            <th class="py-2.5 px-3 text-right cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('valor_saldo')">Valor Saldo <span class="sort-ico" id="s-valor_saldo"></span></th>
-                            <th class="py-2.5 px-2 text-right cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('n_ventas')">Ventas <span class="sort-ico" id="s-n_ventas"></span></th>
-                            <th class="py-2.5 px-2 text-right cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('dias_sin_venta')">Días Sin V. <span class="sort-ico" id="s-dias_sin_venta"></span></th>
-                            <th class="py-2.5 px-2 text-right cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('dias_para_vender')">Días Stock <span class="sort-ico" id="s-dias_para_vender"></span></th>
-                            <th class="py-2.5 px-2 cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('tendencia')">Tendencia <span class="sort-ico" id="s-tendencia"></span></th>
-                            <th class="py-2.5 px-3 cursor-pointer select-none hover:text-indigo-600" onclick="ordenar('decision')">Decisión <span class="sort-ico" id="s-decision"></span></th>
+        <!-- Vista Escritorio (Tabla) -->
+        <div id="vista-escritorio" class="hidden hidden sm:block bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                            <th class="py-3 px-3">Código</th>
+                            <th class="py-3 px-3 cursor-pointer" onclick="ordenar('nombre')">Descripción <span id="s-nombre"></span></th>
+                            <th class="py-3 px-3 text-right cursor-pointer" onclick="ordenar('existencia')">Stock <span id="s-existencia"></span></th>
+                            <th class="py-3 px-3 text-right cursor-pointer" onclick="ordenar('prom_diario')">Vta/Día <span id="s-prom_diario"></span></th>
+                            <th class="py-3 px-3 text-right cursor-pointer" onclick="ordenar('dias_stock')">Días Stock <span id="s-dias_stock"></span></th>
+                            <th class="py-3 px-3 text-center">Tendencia</th>
+                            <th class="py-3 px-3 text-center cursor-pointer" onclick="ordenar('decision')">Decisión <span id="s-decision"></span></th>
+                            <th class="py-3 px-3 text-right cursor-pointer" onclick="ordenar('pedir')">Pedir <span id="s-pedir"></span></th>
                         </tr>
                     </thead>
-                    <tbody id="tbody-escritorio" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                    <tbody id="tbody-desktop" class="divide-y divide-slate-100 font-medium"></tbody>
                 </table>
             </div>
         </div>
@@ -219,12 +220,20 @@
 
     <script>
         const REPORTE_ID = 'inventario';
-        let _rows = [], _filteredRows = [], _sortCol = 'decision', _sortAsc = true;
+        let _rows = [], _filteredRows = [], _filtroDec = '', _sortCol = 'decision', _sortAsc = true;
         let _pollTimer = null, _elapsedInterval = null, _startTime = 0;
+        let _catalogoEmpresas = [];
 
         function getAgenteActivo() {
             const sel = document.getElementById('sel-agente-top');
             return sel ? sel.value : (localStorage.getItem('sar_agente_favorito') || '');
+        }
+
+        function esAgenteActivoOnline() {
+            const sel = document.getElementById('sel-agente-top');
+            if (!sel || sel.selectedIndex < 0) return false;
+            const opt = sel.options[sel.selectedIndex];
+            return opt && opt.dataset.online === '1';
         }
 
         function onAgenteChange() {
@@ -233,24 +242,64 @@
                 localStorage.setItem('sar_agente_favorito', sel.value);
                 const opt = sel.options[sel.selectedIndex];
                 document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+                cargarCatalogos();
             }
         }
 
         (function initAgente() {
             const sel = document.getElementById('sel-agente-top');
+            if (!sel || !sel.options.length) return;
+            const param = new URLSearchParams(window.location.search).get('agente');
             const fav = localStorage.getItem('sar_agente_favorito');
-            if (fav && sel) {
+            let idxToSelect = -1;
+
+            if (param) {
                 for (let i = 0; i < sel.options.length; i++) {
-                    if (sel.options[i].value === fav) {
-                        sel.selectedIndex = i;
+                    if (sel.options[i].value === param) {
+                        idxToSelect = i;
                         break;
                     }
                 }
             }
-            if (sel && sel.selectedIndex >= 0) {
-                const opt = sel.options[sel.selectedIndex];
-                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+
+            if (idxToSelect === -1 && fav) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === fav && sel.options[i].dataset.online === '1') {
+                        idxToSelect = i;
+                        break;
+                    }
+                }
             }
+
+            if (idxToSelect === -1) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].dataset.online === '1') {
+                        idxToSelect = i;
+                        break;
+                    }
+                }
+            }
+
+            if (idxToSelect === -1 && fav) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === fav) {
+                        idxToSelect = i;
+                        break;
+                    }
+                }
+            }
+
+            if (idxToSelect === -1) {
+                idxToSelect = 0;
+            }
+
+            sel.selectedIndex = idxToSelect;
+            const opt = sel.options[sel.selectedIndex];
+            if (opt) {
+                document.getElementById('label-agente-activo').textContent = opt.text;
+                localStorage.setItem('sar_agente_favorito', opt.value);
+            }
+            cargarCatalogos();
         })();
 
         const fmt = (n, d=2) => (n === null || n === undefined || n === '') ? '' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: d, maximumFractionDigits: d});
@@ -276,11 +325,61 @@
             return esc(t);
         }
 
+        function cargarCatalogos() {
+            const agente = getAgenteActivo();
+            const selEmp = document.getElementById('f-empresa');
+            const btnCons = document.getElementById('btn-consultar');
+
+            function activarEmpresas(empresas) {
+                _catalogoEmpresas = empresas || [];
+                if (selEmp) {
+                    let html = '<option value="">Todas las empresas</option>';
+                    _catalogoEmpresas.forEach(emp => {
+                        const cod = typeof emp === 'string' ? emp : (emp.codigo || emp);
+                        const nom = typeof emp === 'object' && emp.nombre ? ' — ' + emp.nombre : '';
+                        html += `<option value="${esc(cod)}">${esc(cod + nom)}</option>`;
+                    });
+                    selEmp.innerHTML = html;
+                    selEmp.disabled = false;
+                }
+                if (btnCons) btnCons.disabled = false;
+            }
+
+            if (!agente || !esAgenteActivoOnline()) {
+                if (selEmp) { selEmp.disabled = true; selEmp.innerHTML = '<option value="">⚠️ Agente desconectado</option>'; }
+                if (btnCons) btnCons.disabled = true;
+                return;
+            }
+
+            const cachedEmp = localStorage.getItem(`sar_empresas_${agente}`);
+            if (cachedEmp) {
+                try {
+                    activarEmpresas(JSON.parse(cachedEmp));
+                    return;
+                } catch(e){}
+            }
+
+            fetch(`/admin/api/empresas?agente=${encodeURIComponent(agente)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok && data.empresas) {
+                    localStorage.setItem(`sar_empresas_${agente}`, JSON.stringify(data.empresas));
+                    activarEmpresas(data.empresas);
+                }
+            })
+            .catch(() => {});
+        }
+
         // Consulta Asíncrona
         function consultar() {
             const agente = getAgenteActivo();
             if (!agente) {
                 alert('Selecciona un agente de consulta.');
+                return;
+            }
+
+            if (!esAgenteActivoOnline()) {
+                alert('El agente que tiene seleccionado se encuentra desconectado (equipo apagado). Encienda el equipo para realizar consultas.');
                 return;
             }
 

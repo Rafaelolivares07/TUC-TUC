@@ -304,13 +304,16 @@ def reportes_menu():
                 'descripcion': info.get('descripcion', ''),
             })
             
-        try:
-            return render_template('sar_reportes_menu.html',
-                                   categorias=categorias,
-                                   agentes=agentes,
-                                   nombre=session.get('nombre', ''))
-        except Exception:
-            return reporte_detalle('reg_ctas')
+        agente_param = request.args.get('agente', '').strip()
+        if not agente_param and agentes:
+            online_agents = [a for a in agentes if a['online']]
+            agente_param = online_agents[0]['id'] if online_agents else agentes[0]['id']
+
+        return render_template('sar_reportes_menu.html',
+                               categorias=categorias,
+                               agentes=agentes,
+                               agente_actual=agente_param,
+                               nombre=session.get('nombre', ''))
     finally:
         conn.close()
 
@@ -344,7 +347,6 @@ def reporte_detalle(reporte_id):
                                agente_actual=agente_param,
                                desde=hoy,
                                hasta=hoy,
-                               empresas=['MG', 'TP', 'VA', 'DI'],
                                sar_nombre=session.get('nombre', ''))
     finally:
         conn.close()

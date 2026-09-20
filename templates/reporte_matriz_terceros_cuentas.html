@@ -218,6 +218,13 @@
             return sel ? sel.value : (localStorage.getItem('sar_agente_favorito') || '');
         }
 
+        function esAgenteActivoOnline() {
+            const sel = document.getElementById('sel-agente-top');
+            if (!sel || sel.selectedIndex < 0) return false;
+            const opt = sel.options[sel.selectedIndex];
+            return opt && opt.dataset.online === '1';
+        }
+
         function onAgenteChange() {
             const sel = document.getElementById('sel-agente-top');
             if (sel && sel.value) {
@@ -225,32 +232,123 @@
                 const opt = sel.options[sel.selectedIndex];
                 document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
                 cargarTipos();
+                cargarCatalogos();
             }
         }
 
         (function initAgente() {
             const sel = document.getElementById('sel-agente-top');
+            if (!sel || !sel.options.length) return;
+            const param = new URLSearchParams(window.location.search).get('agente');
             const fav = localStorage.getItem('sar_agente_favorito');
-            if (fav && sel) {
+            let idxToSelect = -1;
+
+            if (param) {
                 for (let i = 0; i < sel.options.length; i++) {
-                    if (sel.options[i].value === fav) {
-                        sel.selectedIndex = i;
+                    if (sel.options[i].value === param) {
+                        idxToSelect = i;
                         break;
                     }
                 }
             }
-            if (sel && sel.selectedIndex >= 0) {
-                const opt = sel.options[sel.selectedIndex];
-                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+
+            if (idxToSelect === -1 && fav) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === fav && sel.options[i].dataset.online === '1') {
+                        idxToSelect = i;
+                        break;
+                    }
+                }
             }
+
+            if (idxToSelect === -1) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].dataset.online === '1') {
+                        idxToSelect = i;
+                        break;
+                    }
+                }
+            }
+
+            if (idxToSelect === -1 && fav) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === fav) {
+                        idxToSelect = i;
+                        break;
+                    }
+                }
+            }
+
+            if (idxToSelect === -1) {
+                idxToSelect = 0;
+            }
+
+            sel.selectedIndex = idxToSelect;
+            const opt = sel.options[sel.selectedIndex];
+            if (opt) {
+                document.getElementById('label-agente-activo').textContent = opt.text;
+                localStorage.setItem('sar_agente_favorito', opt.value);
+            }
+            cargarTipos();
+            cargarCatalogos();
         })();
 
         const fmt = n => (n === null || n === undefined || n === '') ? '' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         const fmtM = n => (n === null || n === undefined || n === '') ? '$ 0,00' : '$ ' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 
+        // Cargar empresas
+        function cargarCatalogos() {
+            const agente = getAgenteActivo();
+            const selEmp = document.getElementById('f-empresa');
+            const btnTip = document.getElementById('btn-tipos');
+            const btnCons = document.getElementById('btn-consultar');
+
+            function activarEmpresas(empresas) {
+                _catalogoEmpresas = empresas || [];
+                if (selEmp) {
+                    let html = '<option value="">Todas las empresas</option>';
+                    _catalogoEmpresas.forEach(emp => {
+                        const cod = typeof emp === 'string' ? emp : (emp.codigo || emp);
+                        const nom = typeof emp === 'object' && emp.nombre ? ' — ' + emp.nombre : '';
+                        html += `<option value="${esc(cod)}">${esc(cod + nom)}</option>`;
+                    });
+                    selEmp.innerHTML = html;
+                    selEmp.disabled = false;
+                }
+                if (btnTip) btnTip.disabled = false;
+                if (btnCons) btnCons.disabled = false;
+            }
+
+            if (!agente || !esAgenteActivoOnline()) {
+                if (selEmp) { selEmp.disabled = true; selEmp.innerHTML = '<option value="">⚠️ Agente desconectado</option>'; }
+                if (btnTip) btnTip.disabled = true;
+                if (btnCons) btnCons.disabled = true;
+                return;
+            }
+
+            const cachedEmp = localStorage.getItem(`sar_empresas_${agente}`);
+            if (cachedEmp) {
+                try {
+                    activarEmpresas(JSON.parse(cachedEmp));
+                    return;
+                } catch(e){}
+            }
+
+            fetch(`/admin/api/empresas?agente=${encodeURIComponent(agente)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok && data.empresas) {
+                    localStorage.setItem(`sar_empresas_${agente}`, JSON.stringify(data.empresas));
+                    activarEmpresas(data.empresas);
+                }
+            })
+            .catch(() => {});
+        }
+
         // Tipos multi-select
         function toggleMenuTipos() {
+            if (!esAgenteActivoOnline()) return;
             const m = document.getElementById('tipos-menu');
             m.classList.toggle('hidden');
         }
@@ -286,7 +384,11 @@
 
         function cargarTipos() {
             const agente = getAgenteActivo();
-            if (!agente) return;
+            if (!agente || !esAgenteActivoOnline()) {
+                const lista = document.getElementById('tipos-lista');
+                if (lista) lista.innerHTML = '<span class="text-slate-400">⚠️ Agente desconectado</span>';
+                return;
+            }
             fetch(`/admin/api/reporte/${REPORTE_ID}`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -317,6 +419,11 @@
             const agente = getAgenteActivo();
             if (!agente) {
                 alert('Selecciona un agente de consulta.');
+                return;
+            }
+
+            if (!esAgenteActivoOnline()) {
+                alert('El agente que tiene seleccionado se encuentra desconectado (equipo apagado). Encienda el equipo para realizar consultas.');
                 return;
             }
 

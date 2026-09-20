@@ -648,9 +648,9 @@
         let _consecutiveErrors = 0;
         function pollResultado(consultaId) {
             const sec = Math.floor((Date.now() - _startTime) / 1000);
-            if (sec > 95) {
+            if (sec > 120) {
                 detenerCarga();
-                alert('La consulta superó el tiempo límite (90s). Verifica que el agente esté conectado y reintenta.');
+                alert('La consulta superó el tiempo límite de tolerancia (120s). Verifica que el agente esté activo y reintenta.');
                 document.getElementById('estado-inicial').classList.remove('hidden');
                 return;
             }
@@ -667,8 +667,11 @@
                 _consecutiveErrors = 0;
                 if (!data.ok) throw new Error(data.error || 'Error en la respuesta');
                 
-                if (data.estado === 'pendiente') {
-                    _pollTimer = setTimeout(() => pollResultado(consultaId), 1000);
+                if (data.estado === 'pendiente' || data.estado === 'procesando') {
+                    if (data.estado === 'procesando') {
+                        document.getElementById('spinner-status').textContent = 'Agente procesando y extrayendo movimientos de REG_CTAS...';
+                    }
+                    _pollTimer = setTimeout(() => pollResultado(consultaId), 1500);
                     return;
                 }
                 

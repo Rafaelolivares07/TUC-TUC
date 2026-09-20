@@ -415,8 +415,22 @@ def api_reporte_resultado(consulta_id):
             return jsonify({'ok': False, 'error': 'Consulta no encontrada'}), 404
             
         estado = row['estado']
-        if estado == 'pendiente':
-            return jsonify({'ok': True, 'estado': 'pendiente'})
+        if estado in ('pendiente', 'procesando'):
+            if row['created_at']:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                created = row['created_at']
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                if (now - created).total_seconds() > 120:
+                    try:
+                        conn.execute("UPDATE admin_agent_consultas SET estado='error', respuesta=%s::jsonb, respondida_at=NOW() WHERE id=%s",
+                                     (json.dumps({'error': 'Tiempo de espera agotado (120s). La consulta en el agente no respondió a tiempo.'}), consulta_id))
+                        conn.commit()
+                    except Exception:
+                        pass
+                    return jsonify({'ok': False, 'estado': 'error', 'error': 'Tiempo de espera agotado (120s). La consulta tardó más de 2 minutos.'})
+            return jsonify({'ok': True, 'estado': estado})
             
         if estado == 'error':
             err = row.get('respuesta')

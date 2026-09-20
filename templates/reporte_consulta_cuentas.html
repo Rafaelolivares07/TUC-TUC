@@ -529,6 +529,14 @@
         }
 
         function pollResultado(consultaId) {
+            const sec = Math.floor((Date.now() - _startTime) / 1000);
+            if (sec > 120) {
+                detenerCarga();
+                alert('La consulta superó el tiempo límite de tolerancia (120s). Verifica que el agente esté activo y reintenta.');
+                document.getElementById('estado-inicial').classList.remove('hidden');
+                return;
+            }
+
             fetch(`/admin/api/reporte/resultado/${consultaId}?_ts=${Date.now()}`, { cache: 'no-store' })
             .then(r => {
                 if (!r.ok) throw new Error(`HTTP ${r.status}: Error en el servidor`);
@@ -536,8 +544,8 @@
             })
             .then(data => {
                 if (!data.ok) throw new Error(data.error || 'Error en la respuesta del agente');
-                if (data.estado === 'pendiente') {
-                    _pollTimer = setTimeout(() => pollResultado(consultaId), 700);
+                if (data.estado === 'pendiente' || data.estado === 'procesando') {
+                    _pollTimer = setTimeout(() => pollResultado(consultaId), 1000);
                     return;
                 }
                 if (data.estado === 'error') throw new Error(data.error || 'Error en el agente');

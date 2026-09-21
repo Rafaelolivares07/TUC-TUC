@@ -648,31 +648,35 @@ input:checked + .slider:before {
           </button>
         </div>
 
-        <!-- Toggle Switch para Fundido de Audio con Segundos Parametrizables -->
-        <div class="toggle-row" style="display:flex; flex-direction:column; gap:12px; width:100%; border-top:1px solid rgba(255,255,255,0.06); padding-top:12px; margin-top:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-            <span class="toggle-label" style="font-weight:700;">Fundido cruzado</span>
-            <label class="switch">
-              <input type="checkbox" id="fundido-toggle" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-          
-          <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
-              <span style="color:var(--muted); text-align:left;">Empezar a fundir cuando falten:</span>
-              <span style="color:var(--ac1); font-weight:800;" id="fundido-sec-label">12s</span>
+        <!-- Fundido cruzado - compacto -->
+        <div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:10px; margin-top:12px; width:100%;">
+          <div onclick="toggleFundidoPanel()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 0;">
+            <span style="font-size:12px; font-weight:700; color:var(--muted);">Fundido cruzado</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span id="fundido-status" style="font-size:10px; color:var(--ac1);">12s → 5s</span>
+              <label class="switch" style="margin:0;" onclick="event.stopPropagation()">
+                <input type="checkbox" id="fundido-toggle" checked onchange="guardarFundidoSettings()">
+                <span class="slider"></span>
+              </label>
+              <span id="fundido-arrow" style="font-size:10px; color:var(--muted); transition:transform .2s;">▸</span>
             </div>
-            <input type="range" id="fundido-segundos" min="2" max="60" value="12" style="width:100%; accent-color:var(--ac1);" oninput="onAnticipacionChange(this.value)">
           </div>
-
-          <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
-            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
-              <span style="color:var(--muted); text-align:left;">Duración del cruce:</span>
-              <span style="color:var(--ac1); font-weight:800;" id="fundido-dur-label">5s</span>
+          <div id="fundido-panel" style="display:none; flex-direction:column; gap:10px; padding:8px 0 4px;">
+            <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+                <span style="color:var(--muted);">Empezar cuando falten:</span>
+                <span style="color:var(--ac1); font-weight:800;" id="fundido-sec-label">12s</span>
+              </div>
+              <input type="range" id="fundido-segundos" min="2" max="60" value="12" style="width:100%; accent-color:var(--ac1);" oninput="onAnticipacionChange(this.value)">
             </div>
-            <input type="range" id="fundido-duracion" min="1" max="12" value="5" style="width:100%; accent-color:var(--ac1);" oninput="onDuracionChange(this.value)">
-            <div id="fundido-hint" style="font-size:9px; color:var(--muted); text-align:right; min-height:12px;"></div>
+            <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+              <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+                <span style="color:var(--muted);">Duración del cruce:</span>
+                <span style="color:var(--ac1); font-weight:800;" id="fundido-dur-label">5s</span>
+              </div>
+              <input type="range" id="fundido-duracion" min="1" max="12" value="5" style="width:100%; accent-color:var(--ac1);" oninput="onDuracionChange(this.value)">
+              <div id="fundido-hint" style="font-size:9px; color:var(--muted); text-align:right; min-height:12px;"></div>
+            </div>
           </div>
         </div>
 
@@ -2429,6 +2433,23 @@ function entrarComoCliente() {
 
 volumenEl.addEventListener('input', programarGuardarVolumen);
 
+function toggleFundidoPanel() {
+  const panel = document.getElementById('fundido-panel');
+  const arrow = document.getElementById('fundido-arrow');
+  const abierto = panel.style.display === 'flex';
+  panel.style.display = abierto ? 'none' : 'flex';
+  arrow.style.transform = abierto ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+
+function actualizarFundidoStatus() {
+  const sec = document.getElementById('fundido-segundos').value;
+  const dur = document.getElementById('fundido-duracion').value;
+  const on = document.getElementById('fundido-toggle').checked;
+  const el = document.getElementById('fundido-status');
+  el.textContent = on ? `${sec}s → ${dur}s` : 'OFF';
+  el.style.color = on ? 'var(--ac1)' : 'var(--muted2)';
+}
+
 function onAnticipacionChange(val) {
   const anticipacion = parseInt(val) || 12;
   document.getElementById('fundido-sec-label').textContent = anticipacion + 's';
@@ -2441,6 +2462,7 @@ function onAnticipacionChange(val) {
     durLabel.textContent = anticipacion + 's';
   }
   hint.textContent = 'Máximo ' + anticipacion + 's (igual al tiempo de anticipación)';
+  actualizarFundidoStatus();
 }
 
 function onDuracionChange(val) {
@@ -2455,6 +2477,7 @@ function onDuracionChange(val) {
     hint.style.color = 'var(--muted)';
   }
   document.getElementById('fundido-dur-label').textContent = dur + 's';
+  actualizarFundidoStatus();
 }
 
 document.getElementById('fundido-toggle').addEventListener('change', guardarFundidoSettings);
@@ -2462,6 +2485,7 @@ document.getElementById('fundido-segundos').addEventListener('change', guardarFu
 document.getElementById('fundido-duracion').addEventListener('change', guardarFundidoSettings);
 
 async function guardarFundidoSettings() {
+  actualizarFundidoStatus();
   const isCruzado = document.getElementById('fundido-toggle').checked;
   const secs = parseInt(document.getElementById('fundido-segundos').value) || 12;
   const dur = parseInt(document.getElementById('fundido-duracion').value) || 5;
@@ -2478,6 +2502,7 @@ async function guardarFundidoSettings() {
   });
 }
 aplicarVolumen(volumenEl.value);
+actualizarFundidoStatus();
 verificarDispositivoSala();
 initProgressBarDrag();
 

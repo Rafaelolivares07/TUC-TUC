@@ -2930,7 +2930,10 @@ let modoVisualizer = localStorage.getItem('rockola_viz_mode') || 'barras';
 let particlesArray = [];
 
 function initAudioContext() {
-  if (audioCtx) return;
+  if (audioCtx) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return;
+  }
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 256;
@@ -3156,6 +3159,7 @@ function cambiarModoVisualizer(modo) {
 function abrirVisualizerFullscreen() {
   if (!reproduciendo) return;
   try { initAudioContext(); } catch(e) {}
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   const fs = document.getElementById('visualizer-fullscreen');
   fs.style.display = 'flex';
   document.querySelectorAll('.viz-mode-btn').forEach(b => {

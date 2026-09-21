@@ -3206,24 +3206,79 @@ function abrirDebugPanel() {
   const info = document.getElementById('debug-info');
   if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
 
-  const cola = currentCola || [];
+  const c = document.getElementById('visualizer-canvas');
+  const hasCtx = !!audioCtx;
+  const ctxState = audioCtx ? audioCtx.state : 'N/A';
+  const hasAnalyser = !!analyser;
+  const connected = vizSourceConnected;
+
+  let dataCheck = 'N/A';
+  if (analyser) {
+    const tmp = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(tmp);
+    const max = Math.max(...tmp);
+    dataCheck = max > 0 ? `Activo (max: ${max})` : 'Silencioso (todos 0)';
+  }
+
   const lineas = [
-    `<div style="margin-bottom:6px;"><b>Sala:</b> ${SALA}</div>`,
-    `<div style="margin-bottom:6px;"><b>Reproduciendo:</b> ${reproduciendo ? 'Sí' : 'No'}</div>`,
-    `<div style="margin-bottom:6px;"><b>Canción actual:</b> ${cancionActual || 'Ninguna'}</div>`,
-    `<div style="margin-bottom:6px;"><b>Cola:</b> ${cola.length} canción(es)</div>`,
-    `<div style="margin-bottom:6px;"><b>Volume:</b> ${volumenActual}%</div>`,
-    `<div style="margin-bottom:6px;"><b>Fundido:</b> ${document.getElementById('fundido-toggle').checked ? 'ON' : 'OFF'}</div>`,
-    `<div style="margin-bottom:6px;"><b>Visualizer:</b> ${modoVisualizer}</div>`,
-    `<div style="margin-bottom:6px;"><b>AudioContext:</b> ${audioCtx ? audioCtx.state : 'No creado'}</div>`,
-    `<div style="margin-bottom:6px;"><b>Player src:</b> ${player.src ? 'Sí' : 'No'}</div>`,
-    `<div style="margin-bottom:6px;"><b>Transitioning:</b> ${transitioning ? 'Sí' : 'No'}</div>`,
-    `<div style="margin-bottom:6px;"><b>Play pendiente:</b> ${playPendiente ? 'Sí' : 'No'}</div>`,
-    `<div style="margin-bottom:6px;"><b>Fallos play:</b> ${fallosPlay}</div>`,
-    cola.length > 0 ? `<div style="margin-top:8px; border-top:1px solid var(--border); padding-top:8px;"><b>Cola:</b></div>` + cola.map((c,i) => `<div style="padding:2px 0; opacity:.7;">${i===0?'▶':'#'+(i+1)} ${limpiarNombre(c.nombre).substring(0,30)}</div>`).join('') : '',
+    `<div style="margin-bottom:8px; font-weight:700;">🔍 Diagnóstico Visualizer</div>`,
+    `<div style="margin-bottom:4px;"><b>Canvas:</b> ${c ? `${c.width}x${c.height}` : 'NO EXISTE'}</div>`,
+    `<div style="margin-bottom:4px;"><b>AudioContext:</b> ${hasCtx ? ctxState : '❌ No creado'}</div>`,
+    `<div style="margin-bottom:4px;"><b>Analyser:</b> ${hasAnalyser ? '✓ Conectado' : '❌ No creado'}</div>`,
+    `<div style="margin-bottom:4px;"><b>Source→Analyser:</b> ${connected ? '✓' : '❌ No conectado'}</div>`,
+    `<div style="margin-bottom:4px;"><b>Datos audio:</b> ${dataCheck}</div>`,
+    `<div style="margin-bottom:4px;"><b>Reproduciendo:</b> ${reproduciendo ? 'Sí' : 'No'}</div>`,
+    `<div style="margin-bottom:4px;"><b>Modo:</b> ${modoVisualizer}</div>`,
+    `<div style="margin-bottom:10px;"><b>Player paused:</b> ${player.paused}</div>`,
+    `<button onclick="probarCanvas()" style="width:100%;padding:8px;border-radius:8px;background:var(--accent);color:#fff;border:none;font-weight:700;cursor:pointer;margin-bottom:6px;">Probar canvas (verde)</button>`,
+    `<button onclick="forzarAudioContext()" style="width:100%;padding:8px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-weight:700;cursor:pointer;margin-bottom:6px;">Forzar AudioContext</button>`,
+    `<button onclick="forzarPlay()" style="width:100%;padding:8px;border-radius:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font-weight:700;cursor:pointer;">Forzar play + visualizer</button>`,
   ];
   info.innerHTML = lineas.join('');
   panel.style.display = 'block';
+}
+
+function probarCanvas() {
+  const c = document.getElementById('visualizer-canvas');
+  if (!c) return alert('Canvas no existe');
+  const ctx = c.getContext('2d');
+  c.width = c.clientWidth * (window.devicePixelRatio || 1);
+  c.height = c.clientHeight * (window.devicePixelRatio || 1);
+  ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+  ctx.fillStyle = '#00e1cf';
+  ctx.fillRect(0, 0, c.clientWidth, c.clientHeight);
+  setTimeout(() => dibujarIdle('visualizer-canvas'), 2000);
+}
+
+function forzarAudioContext() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      const source = audioCtx.createMediaElementSource(player);
+      source.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      vizSourceConnected = true;
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    alert('AudioContext: ' + audioCtx.state);
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+function forzarPlay() {
+  try {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    player.play().then(() => {
+      reproduciendo = true;
+      iniciarVisualizerCompacto();
+      alert('Play OK + visualizer iniciado');
+    }).catch(e => alert('Play falló: ' + e.message));
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
 }
 
 function cerrarDebugPanel() {

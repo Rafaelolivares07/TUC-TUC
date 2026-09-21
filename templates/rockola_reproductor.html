@@ -2798,12 +2798,13 @@ async function iniciarCrossfade(secs, targetSong = null) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: oldActiveSongId })
       }).then(() => {
+        transitioning = false;
         verificarCola();
       }).catch(() => {
+        transitioning = false;
         verificarCola();
       });
       
-      transitioning = false;
       return;
     }
     

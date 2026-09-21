@@ -138,7 +138,8 @@ body {
 .vinyl-wrap { display: flex; justify-content: center; margin-bottom: 28px; }
 .np-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
 .np-nombre { width: 100%; max-width: 100%; font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 16px; min-height: 28px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; white-space: normal; line-height: 1.3; }
-.wave-viz { display: flex; align-items: center; justify-content: center; gap: 3px; height: 28px; margin-bottom: 20px; }
+.wave-viz { display: block; margin-bottom: 20px; }
+.wave-viz canvas { width: 100%; height: 60px; border-radius: 8px; display: block; }
 .wave-bar { width: 3px; border-radius: 2px; background: var(--ac1); }
 audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .volume-box {
@@ -1163,7 +1164,8 @@ async function intentarReproducir(c) {
     playPendiente = false;
     reproduciendo = false;
     setVinylSpinning(false);
-    setWaveActive(false);
+    if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+    dibujarIdle('visualizer-canvas');
     actualizarPlayPauseBtn(false);
     if (err.name === 'NotSupportedError' || fallosPlay >= 3) {
       nombreEl.textContent = 'Canción no disponible — saltando...';
@@ -2663,7 +2665,7 @@ async function togglePlayPause() {
       playPendiente = false;
       fallosPlay = 0;
       setVinylSpinning(true);
-      setWaveActive(true);
+      iniciarVisualizerCompacto();
       actualizarPlayPauseBtn(true);
       estadoEl.textContent = 'Reproduciendo ✓';
       await fetch(`/rockola/${SALA}/sync_control`, {
@@ -2685,7 +2687,8 @@ async function togglePlayPause() {
     player.pause();
     reproduciendo = false;
     setVinylSpinning(false);
-    setWaveActive(false);
+    if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+    dibujarIdle('visualizer-canvas');
     actualizarPlayPauseBtn(false);
     await fetch(`/rockola/${SALA}/sync_control`, {
       method: 'POST',
@@ -2902,7 +2905,8 @@ async function limpiarLibreriaCompleta() {
     playPendiente = false;
     cancionActual = null;
     setVinylSpinning(false);
-    setWaveActive(false);
+    if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+    dibujarIdle('visualizer-canvas');
     actualizarPlayPauseBtn(false);
     nombreEl.textContent = 'Esperando canciones...';
     
@@ -2967,9 +2971,7 @@ function dibujarBarras(ctx, w, h, data) {
     gradient.addColorStop(0, 'rgba(0,225,207,.3)');
     gradient.addColorStop(1, 'rgba(0,225,207,.9)');
     ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.roundRect(x, h - barH, barW, barH, 2);
-    ctx.fill();
+    ctx.fillRect(x, h - barH, barW, barH);
   }
 }
 
@@ -3142,10 +3144,8 @@ function dibujarIdle(canvasId) {
   if (!info) return;
   const { ctx, w, h } = info;
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = 'rgba(0,225,207,.08)';
-  ctx.beginPath();
-  ctx.roundRect(0, h/2 - 1, w, 2, 1);
-  ctx.fill();
+  ctx.fillStyle = 'rgba(0,225,207,.12)';
+  ctx.fillRect(0, h/2 - 1, w, 2);
 }
 
 function cambiarModoVisualizer(modo) {
@@ -3174,20 +3174,6 @@ function cerrarVisualizerFullscreen() {
   fs.style.display = 'none';
   if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
   loopVisualizer('visualizer-canvas');
-}
-
-function togglePlayPause() {
-  if (reproduciendo) {
-    player.pause();
-    reproduciendo = false;
-    playPendiente = false;
-    actualizarPlayPauseBtn(false);
-    setVinylSpinning(false);
-    if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
-    dibujarIdle('visualizer-canvas');
-  } else {
-    intentarReproducir(currentCola && currentCola[0]);
-  }
 }
 
 function iniciarVisualizerCompacto() {

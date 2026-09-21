@@ -619,14 +619,8 @@ input:checked + .slider:before {
         <div class="np-label">Sonando ahora</div>
         <div class="np-nombre" id="nombre-actual">Esperando canciones...</div>
         
-        <div class="wave-viz" id="wave-viz">
-          <div class="wave-bar" style="height:5px;opacity:.25"></div>
-          <div class="wave-bar" style="height:5px;opacity:.25"></div>
-          <div class="wave-bar" style="height:5px;opacity:.25"></div>
-          <div class="wave-bar" style="height:5px;opacity:.25"></div>
-          <div class="wave-bar" style="height:5px;opacity:.25"></div>
-          <div class="wave-bar" style="height:5px;opacity:.25"></div>
-          <div class="wave-bar" style="height:5px;opacity:.25"></div>
+        <div class="wave-viz" id="wave-viz" onclick="abrirVisualizerFullscreen()" style="cursor:pointer;" title="Toca para pantalla completa">
+          <canvas id="visualizer-canvas" width="300" height="60" style="width:100%; height:60px; border-radius:8px;"></canvas>
         </div>
 
         <!-- Barra de Progreso Horizontal -->
@@ -839,6 +833,28 @@ input:checked + .slider:before {
   </div>
 </div>
 
+<div id="visualizer-fullscreen" style="display:none; position:fixed; inset:0; z-index:300; background:#000; flex-direction:column; align-items:center; justify-content:center;" onclick="cerrarVisualizerFullscreen()">
+  <canvas id="visualizer-fs-canvas" style="width:100%; height:100%;"></canvas>
+  <div id="visualizer-mode-bar" style="position:absolute; bottom:20px; display:flex; gap:8px; z-index:301;" onclick="event.stopPropagation()">
+    <button onclick="cambiarModoVisualizer('barras')" class="viz-mode-btn" data-mode="barras">Barras</button>
+    <button onclick="cambiarModoVisualizer('onda')" class="viz-mode-btn" data-mode="onda">Onda</button>
+    <button onclick="cambiarModoVisualizer('circular')" class="viz-mode-btn" data-mode="circular">Circular</button>
+    <button onclick="cambiarModoVisualizer('particulas')" class="viz-mode-btn" data-mode="particulas">Partículas</button>
+    <button onclick="cambiarModoVisualizer('gradiente')" class="viz-mode-btn" data-mode="gradiente">Gradiente</button>
+  </div>
+  <div style="position:absolute; top:16px; right:16px; z-index:301; font-size:12px; color:rgba(255,255,255,.5);" onclick="event.stopPropagation()">
+    Toca fuera para cerrar
+  </div>
+</div>
+<style>
+.viz-mode-btn {
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+  color: #fff; padding: 8px 14px; border-radius: 20px; font-size: 12px;
+  font-weight: 600; cursor: pointer; transition: all .2s;
+}
+.viz-mode-btn.active { background: var(--ac1); color: #00101b; border-color: var(--ac1); }
+</style>
+
 <script>
 const SALA = '{{ sala_id }}';
 const player1 = document.getElementById('player1');
@@ -1050,7 +1066,8 @@ function handlePlayerEnded(e) {
   playPendiente = false;
   cancionActual = null;
   setVinylSpinning(false);
-  setWaveActive(false);
+  if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+  dibujarIdle('visualizer-canvas');
   actualizarPlayPauseBtn(false);
   fetch(`/rockola/${SALA}/siguiente`, {
     method: 'POST',
@@ -1137,7 +1154,7 @@ async function intentarReproducir(c) {
     playPendiente = false;
     fallosPlay = 0;
     setVinylSpinning(true);
-    setWaveActive(true);
+    iniciarVisualizerCompacto();
     actualizarPlayPauseBtn(true);
     estadoEl.textContent = 'Reproduciendo ✓';
   } catch(err) {
@@ -2172,7 +2189,8 @@ async function limpiarColaActual() {
   cancionActual = null;
   fallosPlay = 0;
   setVinylSpinning(false);
-  setWaveActive(false);
+  if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+  dibujarIdle('visualizer-canvas');
 }
 
 async function ponerListaAhora(id) {
@@ -2900,6 +2918,281 @@ async function limpiarLibreriaCompleta() {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/rockola/pwa/sw.js?v=3.1.0', { scope: '/' }).catch(() => {});
 }
+
+/* ═══════════════════════════════════════════
+   VISUALIZADOR DE AUDIO - 5 modos + fullscreen
+   ═══════════════════════════════════════════ */
+let audioCtx = null;
+let analyser = null;
+let vizSourceConnected = false;
+let vizAnimFrame = null;
+let modoVisualizer = localStorage.getItem('rockola_viz_mode') || 'barras';
+let particlesArray = [];
+
+function initAudioContext() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  const source = audioCtx.createMediaElementSource(player);
+  source.connect(analyser);
+  analyser.connect(audioCtx.destination);
+  vizSourceConnected = true;
+}
+
+function getCanvasCtx(id) {
+  const c = document.getElementById(id);
+  if (!c) return null;
+  const ctx = c.getContext('2d');
+  c.width = c.clientWidth * (window.devicePixelRatio || 1);
+  c.height = c.clientHeight * (window.devicePixelRatio || 1);
+  ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+  return { ctx, w: c.clientWidth, h: c.clientHeight };
+}
+
+function dibujarBarras(ctx, w, h, data) {
+  ctx.clearRect(0, 0, w, h);
+  const barCount = 32;
+  const barW = (w / barCount) * 0.7;
+  const gap = (w / barCount) * 0.3;
+  const step = Math.floor(data.length / barCount);
+  for (let i = 0; i < barCount; i++) {
+    const val = data[i * step] / 255;
+    const barH = val * h * 0.9;
+    const x = i * (barW + gap);
+    const gradient = ctx.createLinearGradient(0, h, 0, h - barH);
+    gradient.addColorStop(0, 'rgba(0,225,207,.3)');
+    gradient.addColorStop(1, 'rgba(0,225,207,.9)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(x, h - barH, barW, barH, 2);
+    ctx.fill();
+  }
+}
+
+function dibujarOnda(ctx, w, h, data) {
+  ctx.clearRect(0, 0, w, h);
+  ctx.beginPath();
+  const sliceW = w / data.length;
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] / 128.0;
+    const y = (v * h) / 2;
+    if (i === 0) ctx.moveTo(0, y);
+    else ctx.lineTo(i * sliceW, y);
+  }
+  ctx.strokeStyle = 'rgba(0,225,207,.8)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.lineTo(w, h / 2);
+  ctx.lineTo(0, h / 2);
+  ctx.fillStyle = 'rgba(0,225,207,.08)';
+  ctx.fill();
+}
+
+function dibujarCircular(ctx, w, h, data) {
+  ctx.clearRect(0, 0, w, h);
+  const cx = w / 2;
+  const cy = h / 2;
+  const baseR = Math.min(w, h) * 0.25;
+  let avg = 0;
+  for (let i = 0; i < data.length; i++) avg += data[i];
+  avg /= data.length;
+  const pulse = (avg / 255) * baseR * 0.6;
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, baseR + pulse, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,225,207,.15)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,225,207,.6)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  const segments = 64;
+  const step = Math.floor(data.length / segments);
+  ctx.beginPath();
+  for (let i = 0; i <= segments; i++) {
+    const val = data[i * step] / 255;
+    const angle = (i / segments) * Math.PI * 2 - Math.PI / 2;
+    const r = baseR + pulse + val * baseR * 0.8;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(0,225,207,.9)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(0,225,207,.05)';
+  ctx.fill();
+}
+
+function initParticles(w, h) {
+  particlesArray = [];
+  for (let i = 0; i < 60; i++) {
+    particlesArray.push({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      r: Math.random() * 2 + 1,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: (Math.random() - 0.5) * 0.5,
+      life: Math.random()
+    });
+  }
+}
+
+function dibujarParticulas(ctx, w, h, data) {
+  ctx.clearRect(0, 0, w, h);
+  let avg = 0;
+  for (let i = 0; i < data.length; i++) avg += data[i];
+  avg /= data.length;
+  const energy = avg / 255;
+
+  if (particlesArray.length === 0) initParticles(w, h);
+
+  particlesArray.forEach(p => {
+    p.x += p.vx * (1 + energy * 4);
+    p.y += p.vy * (1 + energy * 4);
+    if (p.x < 0) p.x = w;
+    if (p.x > w) p.x = 0;
+    if (p.y < 0) p.y = h;
+    if (p.y > h) p.y = 0;
+    const alpha = 0.2 + energy * 0.7;
+    const radius = p.r + energy * 3;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(0,225,207,${alpha})`;
+    ctx.fill();
+  });
+
+  for (let i = 0; i < particlesArray.length; i++) {
+    for (let j = i + 1; j < particlesArray.length; j++) {
+      const dx = particlesArray[i].x - particlesArray[j].x;
+      const dy = particlesArray[i].y - particlesArray[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 60 + energy * 40) {
+        ctx.beginPath();
+        ctx.moveTo(particlesArray[i].x, particlesArray[i].y);
+        ctx.lineTo(particlesArray[j].x, particlesArray[j].y);
+        ctx.strokeStyle = `rgba(0,225,207,${0.1 + energy * 0.3})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+function dibujarGradiente(ctx, w, h, data) {
+  let low = 0, mid = 0, high = 0;
+  const third = Math.floor(data.length / 3);
+  for (let i = 0; i < third; i++) low += data[i];
+  for (let i = third; i < third * 2; i++) mid += data[i];
+  for (let i = third * 2; i < data.length; i++) high += data[i];
+  low /= third; mid /= third; high /= third;
+
+  const grd = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w,h)/1.5);
+  grd.addColorStop(0, `rgba(0,225,207,${low/255*0.4})`);
+  grd.addColorStop(0.4, `rgba(100,0,255,${mid/255*0.3})`);
+  grd.addColorStop(1, `rgba(255,0,100,${high/255*0.2})`);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.beginPath();
+  const sliceW = w / data.length;
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] / 128.0;
+    const y = (v * h) / 2;
+    if (i === 0) ctx.moveTo(0, y);
+    else ctx.lineTo(i * sliceW, y);
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.3)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function loopVisualizer(canvasId) {
+  if (!analyser) return;
+  const info = getCanvasCtx(canvasId);
+  if (!info) return;
+  const { ctx, w, h } = info;
+  const freqData = new Uint8Array(analyser.frequencyBinCount);
+  const timeData = new Uint8Array(analyser.fftSize);
+
+  function draw() {
+    vizAnimFrame = requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(freqData);
+    analyser.getByteTimeDomainData(timeData);
+    switch (modoVisualizer) {
+      case 'barras': dibujarBarras(ctx, w, h, freqData); break;
+      case 'onda': dibujarOnda(ctx, w, h, timeData); break;
+      case 'circular': dibujarCircular(ctx, w, h, freqData); break;
+      case 'particulas': dibujarParticulas(ctx, w, h, freqData); break;
+      case 'gradiente': dibujarGradiente(ctx, w, h, freqData); break;
+    }
+  }
+  draw();
+}
+
+function dibujarIdle(canvasId) {
+  const info = getCanvasCtx(canvasId);
+  if (!info) return;
+  const { ctx, w, h } = info;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(0,225,207,.08)';
+  ctx.beginPath();
+  ctx.roundRect(0, h/2 - 1, w, 2, 1);
+  ctx.fill();
+}
+
+function cambiarModoVisualizer(modo) {
+  modoVisualizer = modo;
+  localStorage.setItem('rockola_viz_mode', modo);
+  document.querySelectorAll('.viz-mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === modo);
+  });
+}
+
+function abrirVisualizerFullscreen() {
+  if (!reproduciendo) return;
+  try { initAudioContext(); } catch(e) {}
+  const fs = document.getElementById('visualizer-fullscreen');
+  fs.style.display = 'flex';
+  document.querySelectorAll('.viz-mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === modoVisualizer);
+  });
+  if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+  loopVisualizer('visualizer-fs-canvas');
+}
+
+function cerrarVisualizerFullscreen() {
+  const fs = document.getElementById('visualizer-fullscreen');
+  fs.style.display = 'none';
+  if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+  loopVisualizer('visualizer-canvas');
+}
+
+function togglePlayPause() {
+  if (reproduciendo) {
+    player.pause();
+    reproduciendo = false;
+    playPendiente = false;
+    actualizarPlayPauseBtn(false);
+    setVinylSpinning(false);
+    if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+    dibujarIdle('visualizer-canvas');
+  } else {
+    intentarReproducir(currentCola && currentCola[0]);
+  }
+}
+
+function iniciarVisualizerCompacto() {
+  try { initAudioContext(); } catch(e) {}
+  if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+  loopVisualizer('visualizer-canvas');
+}
+
+dibujarIdle('visualizer-canvas');
 </script>
 </body>
 </html>

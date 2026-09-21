@@ -620,8 +620,8 @@ input:checked + .slider:before {
         <div class="np-label">Sonando ahora</div>
         <div class="np-nombre" id="nombre-actual">Esperando canciones...</div>
         
-        <div class="wave-viz" id="wave-viz" onclick="abrirVisualizerFullscreen()" style="cursor:pointer;" title="Toca para pantalla completa">
-          <canvas id="visualizer-canvas" width="300" height="60" style="width:100%; height:60px; border-radius:8px;"></canvas>
+        <div class="wave-viz" id="wave-viz" onclick="abrirVisualizerFullscreen()" style="cursor:pointer; width:100%; height:60px; position:relative;" title="Toca para pantalla completa">
+          <canvas id="visualizer-canvas" style="width:100%; height:100%; border-radius:8px; display:block;"></canvas>
         </div>
 
         <!-- Barra de Progreso Horizontal -->
@@ -2964,11 +2964,14 @@ function initAudioContext() {
 function getCanvasCtx(id) {
   const c = document.getElementById(id);
   if (!c) return null;
+  const rect = c.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return null;
+  const dpr = window.devicePixelRatio || 1;
+  c.width = rect.width * dpr;
+  c.height = rect.height * dpr;
   const ctx = c.getContext('2d');
-  c.width = c.clientWidth * (window.devicePixelRatio || 1);
-  c.height = c.clientHeight * (window.devicePixelRatio || 1);
-  ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
-  return { ctx, w: c.clientWidth, h: c.clientHeight };
+  ctx.scale(dpr, dpr);
+  return { ctx, w: rect.width, h: rect.height };
 }
 
 function dibujarBarras(ctx, w, h, data) {
@@ -3240,14 +3243,14 @@ function abrirDebugPanel() {
 
 function probarCanvas() {
   const c = document.getElementById('visualizer-canvas');
-  if (!c) return alert('Canvas no existe');
-  const ctx = c.getContext('2d');
-  c.width = c.clientWidth * (window.devicePixelRatio || 1);
-  c.height = c.clientHeight * (window.devicePixelRatio || 1);
-  ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
-  ctx.fillStyle = '#00e1cf';
-  ctx.fillRect(0, 0, c.clientWidth, c.clientHeight);
+  if (!c) return alert('Canvas NO existe en el DOM');
+  const rect = c.getBoundingClientRect();
+  const info = getCanvasCtx('visualizer-canvas');
+  if (!info) return alert('Canvas existe pero getCanvasCtx falló — rect: ' + rect.width + 'x' + rect.height);
+  info.ctx.fillStyle = '#00e1cf';
+  info.ctx.fillRect(0, 0, info.w, info.h);
   setTimeout(() => dibujarIdle('visualizer-canvas'), 2000);
+  alert('Canvas pintado verde (' + info.w + 'x' + info.h + ')');
 }
 
 function forzarAudioContext() {

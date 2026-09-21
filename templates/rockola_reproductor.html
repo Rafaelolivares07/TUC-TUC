@@ -607,7 +607,7 @@ input:checked + .slider:before {
 
     <div class="header">
       <button class="header-back" onclick="window.location.href='/rockola/'">← Salir</button>
-      <div class="sala-badge">{{ sala_id | upper }} <span style="font-size:9px;opacity:0.5;margin-left:4px;">v3.1.0</span></div>
+      <div class="sala-badge">{{ sala_id | upper }} <span style="font-size:9px;opacity:0.5;margin-left:4px;">v3.3.0</span></div>
       <button class="btn-control" onclick="abrirControl()">Control</button>
     </div>
 
@@ -784,8 +784,22 @@ input:checked + .slider:before {
     </div>
 
 
-    <div id="estado">Activo ✓ · v3.1.0</div>
+    <div id="estado">Activo ✓ · v3.3.0</div>
   </div>
+</div>
+
+<!-- Botón flotante de estado/debug -->
+<div id="debug-fab" onclick="abrirDebugPanel()" style="position:fixed; bottom:16px; right:16px; z-index:250; width:40px; height:40px; border-radius:50%; background:var(--surface2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; box-shadow:0 2px 8px rgba(0,0,0,.3);" title="Estado / Debug">
+  <span id="debug-fab-icon">⚙</span>
+</div>
+
+<!-- Panel de debug -->
+<div id="debug-panel" style="display:none; position:fixed; bottom:64px; right:16px; z-index:251; width:280px; max-height:350px; overflow-y:auto; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px; box-shadow:0 4px 20px rgba(0,0,0,.5); font-size:11px; color:var(--text);">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+    <span style="font-weight:800; font-size:13px;">Estado Rockola</span>
+    <span style="cursor:pointer; opacity:.5;" onclick="cerrarDebugPanel()">✕</span>
+  </div>
+  <div id="debug-info"></div>
 </div>
 
 <div class="playlist-screen" id="playlist-screen">
@@ -2349,7 +2363,7 @@ async function eliminarListaActual() {
 }
 
 async function ponerLocal(id, modo = 'final') {
-  console.log('[Rockola v3.1.0] ponerLocal called:', id, modo);
+  console.log('[Rockola v3.3.0] ponerLocal called:', id, modo);
   if (modo === 'siguiente') skipRemoteSkip = true;
   const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
   if (!cancion) {
@@ -3183,6 +3197,38 @@ function iniciarVisualizerCompacto() {
 }
 
 dibujarIdle('visualizer-canvas');
+
+/* ═══════════════════════════════════════════
+   PANEL DE DEBUG / ESTADO
+   ═══════════════════════════════════════════ */
+function abrirDebugPanel() {
+  const panel = document.getElementById('debug-panel');
+  const info = document.getElementById('debug-info');
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+
+  const cola = currentCola || [];
+  const lineas = [
+    `<div style="margin-bottom:6px;"><b>Sala:</b> ${SALA}</div>`,
+    `<div style="margin-bottom:6px;"><b>Reproduciendo:</b> ${reproduciendo ? 'Sí' : 'No'}</div>`,
+    `<div style="margin-bottom:6px;"><b>Canción actual:</b> ${cancionActual || 'Ninguna'}</div>`,
+    `<div style="margin-bottom:6px;"><b>Cola:</b> ${cola.length} canción(es)</div>`,
+    `<div style="margin-bottom:6px;"><b>Volume:</b> ${volumenActual}%</div>`,
+    `<div style="margin-bottom:6px;"><b>Fundido:</b> ${document.getElementById('fundido-toggle').checked ? 'ON' : 'OFF'}</div>`,
+    `<div style="margin-bottom:6px;"><b>Visualizer:</b> ${modoVisualizer}</div>`,
+    `<div style="margin-bottom:6px;"><b>AudioContext:</b> ${audioCtx ? audioCtx.state : 'No creado'}</div>`,
+    `<div style="margin-bottom:6px;"><b>Player src:</b> ${player.src ? 'Sí' : 'No'}</div>`,
+    `<div style="margin-bottom:6px;"><b>Transitioning:</b> ${transitioning ? 'Sí' : 'No'}</div>`,
+    `<div style="margin-bottom:6px;"><b>Play pendiente:</b> ${playPendiente ? 'Sí' : 'No'}</div>`,
+    `<div style="margin-bottom:6px;"><b>Fallos play:</b> ${fallosPlay}</div>`,
+    cola.length > 0 ? `<div style="margin-top:8px; border-top:1px solid var(--border); padding-top:8px;"><b>Cola:</b></div>` + cola.map((c,i) => `<div style="padding:2px 0; opacity:.7;">${i===0?'▶':'#'+(i+1)} ${limpiarNombre(c.nombre).substring(0,30)}</div>`).join('') : '',
+  ];
+  info.innerHTML = lineas.join('');
+  panel.style.display = 'block';
+}
+
+function cerrarDebugPanel() {
+  document.getElementById('debug-panel').style.display = 'none';
+}
 </script>
 </body>
 </html>

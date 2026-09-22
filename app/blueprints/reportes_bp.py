@@ -610,7 +610,7 @@ def api_cuentas():
             return jsonify({'ok': False, 'error': 'Agente requerido', 'cuentas': []}), 400
         
         datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
-            'tablas': [{'tabla': 'CUENTAS', 'campos': ['CODIGO', 'NOMBRE'], 'filtros': {}}]
+            'tablas': [{'tabla': 'CUENTAS', 'campos': ['CODIGO', 'NOMBRE', 'TIPO'], 'filtros': {}}]
         }, timeout=30)
         
         raw_cuentas = datos.get('CUENTAS', []) if isinstance(datos, dict) else []
@@ -618,8 +618,9 @@ def api_cuentas():
         for r in raw_cuentas:
             c = str(r.get('CODIGO', '') or '').strip()
             n = str(r.get('NOMBRE', '') or '').strip()
+            t = str(r.get('TIPO', '') or '').strip().upper()
             if c:
-                cuentas.append({'codigo': c, 'nombre': n})
+                cuentas.append({'codigo': c, 'nombre': n, 'tipo': t, 'es_movimiento': (t == 'D')})
         cuentas.sort(key=lambda x: x['codigo'])
         return jsonify({'ok': True, 'cuentas': cuentas, 'total': len(cuentas)})
     except Exception as e:

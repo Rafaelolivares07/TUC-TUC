@@ -63,12 +63,20 @@ REPORTES_INFO = {
 }
 
 def _obtener_agentes_activos(conn, usuario_id, rol):
-    rows = conn.execute("""
-        SELECT cliente_id, nombre, alias, ultimo_ping
-        FROM admin_agent_sesiones
-        WHERE ultimo_ping > NOW() - INTERVAL '30 days'
-        ORDER BY ultimo_ping DESC, id DESC
-    """).fetchall()
+    try:
+        rows = conn.execute("""
+            SELECT cliente_id, nombre, alias, ultimo_ping, version
+            FROM admin_agent_sesiones
+            WHERE ultimo_ping > NOW() - INTERVAL '30 days'
+            ORDER BY ultimo_ping DESC, id DESC
+        """).fetchall()
+    except Exception:
+        rows = conn.execute("""
+            SELECT cliente_id, nombre, alias, ultimo_ping
+            FROM admin_agent_sesiones
+            WHERE ultimo_ping > NOW() - INTERVAL '30 days'
+            ORDER BY ultimo_ping DESC, id DESC
+        """).fetchall()
     
     permitidos = None
     if rol != 'Administrador':
@@ -97,6 +105,9 @@ def _obtener_agentes_activos(conn, usuario_id, rol):
         
         alias = (r['alias'] or '').strip()
         nombre = (r['nombre'] or '').strip()
+        ver = (r.get('version') or '').strip()
+        if ver and not ver.lower().startswith('v'):
+            ver = f'v{ver}'
         if nombre.endswith('(Daemon)'):
             nombre = nombre[:-8].strip()
             
@@ -107,6 +118,7 @@ def _obtener_agentes_activos(conn, usuario_id, rol):
                 'id': base_key,
                 'nombre': display_name,
                 'alias': alias,
+                'version': ver,
                 'online': online,
                 'max_up': up,
                 'min_diff': diff,
@@ -117,6 +129,8 @@ def _obtener_agentes_activos(conn, usuario_id, rol):
             if alias and not maquinas[base_key]['alias']:
                 maquinas[base_key]['alias'] = alias
                 maquinas[base_key]['nombre'] = alias
+            if ver and not maquinas[base_key]['version']:
+                maquinas[base_key]['version'] = ver
             if up and (maquinas[base_key]['max_up'] is None or up > maquinas[base_key]['max_up']):
                 maquinas[base_key]['max_up'] = up
                 maquinas[base_key]['min_diff'] = diff
@@ -136,6 +150,7 @@ def _obtener_agentes_activos(conn, usuario_id, rol):
             'id': m['id'],
             'nombre': m['nombre'],
             'alias': m['alias'],
+            'version': m['version'] or 'v1.2.3',
             'online': m['online'],
             'ultimo': ultimo,
             '_diff': diff

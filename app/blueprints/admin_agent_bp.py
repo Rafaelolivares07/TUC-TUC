@@ -70,6 +70,7 @@ def _crear_tablas(conn):
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS alias VARCHAR(200)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ip_local VARCHAR(50)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ruta_bd VARCHAR(500)',
+        'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS version VARCHAR(50)',
         'ALTER TABLE reporte_permisos ADD COLUMN IF NOT EXISTS usuario_id INTEGER',
         'ALTER TABLE reporte_permisos ALTER COLUMN cliente_id DROP NOT NULL',
     ]:
@@ -102,6 +103,7 @@ def checkin():
     nombre   = (data.get('nombre') or cliente_id).strip()
     ip_local = (data.get('ip_local') or '').strip()
     ruta_bd  = (data.get('ruta_bd') or '').strip()
+    version  = (data.get('version') or '').strip() or None
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
@@ -113,16 +115,16 @@ def checkin():
         if existing:
             token = existing['token']
             conn.execute(
-                "UPDATE admin_agent_sesiones SET nombre=%s, ip_local=%s, ruta_bd=%s, activo=TRUE, ultimo_ping=NOW() WHERE id=%s",
-                (nombre, ip_local, ruta_bd, existing['id'])
+                "UPDATE admin_agent_sesiones SET nombre=%s, ip_local=%s, ruta_bd=%s, version=COALESCE(%s, version), activo=TRUE, ultimo_ping=NOW() WHERE id=%s",
+                (nombre, ip_local, ruta_bd, version, existing['id'])
             )
             conn.commit()
             return jsonify({'ok': True, 'token': token, 'reused': True})
         # Agente nuevo — primera vez que se conecta
         token = secrets.token_hex(24)
         conn.execute(
-            "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd) VALUES (%s,%s,%s,%s,%s)",
-            (cliente_id, token, nombre, ip_local, ruta_bd)
+            "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd, version) VALUES (%s,%s,%s,%s,%s,%s)",
+            (cliente_id, token, nombre, ip_local, ruta_bd, version)
         )
         conn.commit()
         return jsonify({'ok': True, 'token': token})
@@ -211,13 +213,14 @@ def ping():
     token   = data.get('token', '')
     ruta_bd = (data.get('ruta_bd') or '').strip() or None
     nombre  = (data.get('nombre') or '').strip() or None
+    version = (data.get('version') or '').strip() or None
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
         sesion = conn.execute(
-            "UPDATE admin_agent_sesiones SET ultimo_ping=NOW(), ruta_bd=COALESCE(%s,ruta_bd), nombre=COALESCE(%s,nombre) "
+            "UPDATE admin_agent_sesiones SET ultimo_ping=NOW(), ruta_bd=COALESCE(%s,ruta_bd), nombre=COALESCE(%s,nombre), version=COALESCE(%s,version) "
             "WHERE token=%s AND activo=TRUE RETURNING id",
-            (ruta_bd, nombre, token)
+            (ruta_bd, nombre, version, token)
         ).fetchone()
         if not sesion:
             return jsonify({'ok': False, 'error': 'sesión inválida'}), 401

@@ -620,12 +620,16 @@ def api_cuentas():
             return jsonify({'ok': False, 'error': 'Agente requerido', 'cuentas': []}), 400
         
         ses_row = conn.execute(
-            "SELECT db_version FROM admin_agent_sesiones "
+            "SELECT db_version, cuentas_cache FROM admin_agent_sesiones "
             "WHERE LOWER(cliente_id) IN (LOWER(%s), LOWER(%s) || '_daemon') OR LOWER(cliente_id) = REPLACE(LOWER(%s), '_daemon', '') "
             "ORDER BY ultimo_ping DESC, id DESC LIMIT 1",
             (agente, agente, agente)
         ).fetchone()
         db_ver = (ses_row['db_version'] if ses_row and ses_row['db_version'] else '')
+        cached_cta = (ses_row['cuentas_cache'] if ses_row and ses_row['cuentas_cache'] else None)
+
+        if cached_cta and isinstance(cached_cta, list) and len(cached_cta) > 0:
+            return jsonify({'ok': True, 'cuentas': cached_cta, 'db_version': db_ver, 'total': len(cached_cta), 'origen': 'agente_cache'})
 
         datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
             'tablas': [{'tabla': 'CUENTAS', 'campos': ['CODIGO', 'NOMBRE', 'TIPO'], 'filtros': {}}]
@@ -640,6 +644,18 @@ def api_cuentas():
             if c:
                 cuentas.append({'codigo': c, 'nombre': n, 'tipo': t, 'es_movimiento': (t == 'D')})
         cuentas.sort(key=lambda x: x['codigo'])
+
+        if cuentas:
+            try:
+                conn.execute(
+                    "UPDATE admin_agent_sesiones SET cuentas_cache=%s::jsonb "
+                    "WHERE LOWER(cliente_id) IN (LOWER(%s), LOWER(%s) || '_daemon') OR LOWER(cliente_id) = REPLACE(LOWER(%s), '_daemon', '')",
+                    (json.dumps(cuentas), agente, agente, agente)
+                )
+                conn.commit()
+            except Exception:
+                pass
+
         return jsonify({'ok': True, 'cuentas': cuentas, 'db_version': db_ver, 'total': len(cuentas)})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'cuentas': []}), 500

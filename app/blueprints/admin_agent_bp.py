@@ -73,6 +73,7 @@ def _crear_tablas(conn):
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS version VARCHAR(50)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS db_version VARCHAR(50)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS empresas_cache JSONB',
+        'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS cuentas_cache JSONB',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ruta_modificada_at TIMESTAMPTZ',
         'ALTER TABLE reporte_permisos ADD COLUMN IF NOT EXISTS usuario_id INTEGER',
         'ALTER TABLE reporte_permisos ALTER COLUMN cliente_id DROP NOT NULL',
@@ -109,7 +110,9 @@ def checkin():
     version    = (data.get('version') or '').strip() or None
     db_version = (data.get('db_version') or '').strip() or None
     empresas   = data.get('empresas')
+    cuentas    = data.get('cuentas')
     empresas_json = json.dumps(empresas) if isinstance(empresas, list) else None
+    cuentas_json  = json.dumps(cuentas) if isinstance(cuentas, list) else None
 
     conn = get_db_connection()
     try:
@@ -127,9 +130,10 @@ def checkin():
                 "UPDATE admin_agent_sesiones SET nombre=%s, ip_local=%s, ruta_bd=%s, version=COALESCE(%s, version), "
                 "db_version=COALESCE(%s, db_version), "
                 "empresas_cache=COALESCE(%s::jsonb, empresas_cache), "
+                "cuentas_cache=COALESCE(%s::jsonb, cuentas_cache), "
                 "ruta_modificada_at=CASE WHEN %s::boolean THEN NOW() ELSE ruta_modificada_at END, "
                 "activo=TRUE, ultimo_ping=NOW() WHERE id=%s",
-                (nombre, ip_local, ruta_bd, version, final_db_ver, empresas_json, ruta_cambiada, existing['id'])
+                (nombre, ip_local, ruta_bd, version, final_db_ver, empresas_json, cuentas_json, ruta_cambiada, existing['id'])
             )
             conn.commit()
             return jsonify({'ok': True, 'token': token, 'reused': True, 'db_version': final_db_ver})
@@ -137,9 +141,9 @@ def checkin():
         token = secrets.token_hex(24)
         final_db_ver = db_version or datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
         conn.execute(
-            "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd, version, db_version, empresas_cache, ruta_modificada_at) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb, NOW())",
-            (cliente_id, token, nombre, ip_local, ruta_bd, version, final_db_ver, empresas_json)
+            "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd, version, db_version, empresas_cache, cuentas_cache, ruta_modificada_at) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb, NOW())",
+            (cliente_id, token, nombre, ip_local, ruta_bd, version, final_db_ver, empresas_json, cuentas_json)
         )
         conn.commit()
         return jsonify({'ok': True, 'token': token, 'db_version': final_db_ver})
@@ -231,8 +235,10 @@ def ping():
     version       = (data.get('version') or '').strip() or None
     db_version    = (data.get('db_version') or '').strip() or None
     empresas      = data.get('empresas')
+    cuentas       = data.get('cuentas')
     ruta_cambiada = bool(data.get('ruta_cambiada'))
     empresas_json = json.dumps(empresas) if isinstance(empresas, list) else None
+    cuentas_json  = json.dumps(cuentas) if isinstance(cuentas, list) else None
 
     conn = get_db_connection()
     try:
@@ -244,9 +250,10 @@ def ping():
             "version=COALESCE(%s, version), "
             "db_version=CASE WHEN %s::boolean OR %s IS NOT NULL THEN COALESCE(%s, TO_CHAR(NOW(), 'YYYYMMDDHH24MISS')) ELSE db_version END, "
             "empresas_cache=COALESCE(%s::jsonb, empresas_cache), "
+            "cuentas_cache=COALESCE(%s::jsonb, cuentas_cache), "
             "ruta_modificada_at=CASE WHEN %s::boolean THEN NOW() ELSE ruta_modificada_at END "
             "WHERE token=%s AND activo=TRUE RETURNING id, db_version",
-            (ruta_bd, nombre, version, ruta_cambiada, db_version, db_version, empresas_json, ruta_cambiada, token)
+            (ruta_bd, nombre, version, ruta_cambiada, db_version, db_version, empresas_json, cuentas_json, ruta_cambiada, token)
         ).fetchone()
         if not sesion:
             return jsonify({'ok': False, 'error': 'sesión inválida'}), 401

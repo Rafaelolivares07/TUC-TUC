@@ -88,7 +88,9 @@
                         <input type="text" id="f-cuenta-display" placeholder="Código o nombre (ej: 110505)..."
                                autocomplete="off"
                                onfocus="acCuentaInput(this)"
-                               oninput="acCuentaInput(this)" onkeydown="acCuentaKeydown(event)"
+                               oninput="acCuentaInput(this)"
+                               onblur="acCuentaBlur(this)"
+                               onkeydown="acCuentaKeydown(event)"
                                class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 pr-7 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
                         <input type="hidden" id="f-cuenta" value="">
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
@@ -413,19 +415,28 @@
         // ── Autocomplete Cuenta (Búsqueda Instantánea en Memoria 0ms) ──────────
         let _acCuentaIdx = -1, _acCuentasFiltradas = [];
         function acCuentaInput(inp) {
-            document.getElementById('f-cuenta').value = inp.value.trim();
+            let raw = inp.value.trim();
+            let codeOnly = raw;
+            let q = raw;
+            if (raw.includes(' — ')) {
+                const parts = raw.split(' — ');
+                codeOnly = parts[0].trim();
+                q = parts[0].trim();
+            }
+            document.getElementById('f-cuenta').value = codeOnly;
+
             if (!_catalogoCuentas.length) {
                 cargarCatalogos();
             }
-            const q = inp.value.trim().toUpperCase();
+            const qUpper = q.toUpperCase();
             const lista = document.getElementById('ac-cuenta-lista');
-            if (!q) {
-                _acCuentasFiltradas = _catalogoCuentas.slice(0, 20);
+            if (!qUpper) {
+                _acCuentasFiltradas = _catalogoCuentas.slice(0, 30);
             } else {
                 _acCuentasFiltradas = _catalogoCuentas.filter(c => 
-                    (c.codigo && c.codigo.toUpperCase().includes(q)) || 
-                    (c.nombre && c.nombre.toUpperCase().includes(q))
-                ).slice(0, 30);
+                    (c.codigo && c.codigo.toUpperCase().includes(qUpper)) || 
+                    (c.nombre && c.nombre.toUpperCase().includes(qUpper))
+                ).slice(0, 40);
             }
 
             if (!_acCuentasFiltradas.length) {
@@ -474,6 +485,24 @@
             document.getElementById('f-cuenta-display').value = c.codigo + (c.nombre ? ' — ' + c.nombre : '');
             document.getElementById('f-cuenta').value = c.codigo;
             acCuentaCerrar();
+        }
+
+        function acCuentaBlur(inp) {
+            setTimeout(() => {
+                const curCode = document.getElementById('f-cuenta').value.trim();
+                if (curCode && _catalogoCuentas.length) {
+                    const found = _catalogoCuentas.find(c => c.codigo === curCode);
+                    if (found) {
+                        const esMov = (found.tipo === 'D' || found.es_movimiento === true || (found.tipo !== 'T' && found.es_movimiento !== false));
+                        if (!esMov) {
+                            alert(`La cuenta ${found.codigo} (${found.nombre}) es de tipo Mayor/Título. En REG_CTAS sólo se pueden consultar cuentas de Movimiento.`);
+                            limpiarCuenta();
+                            return;
+                        }
+                        inp.value = found.codigo + (found.nombre ? ' — ' + found.nombre : '');
+                    }
+                }
+            }, 200);
         }
 
         function acCuentaCerrar() {

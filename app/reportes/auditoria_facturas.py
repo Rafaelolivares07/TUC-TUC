@@ -140,6 +140,17 @@ def calcular(datos, filtros):
         if t:
             tipos_map[t] = str(r.get('NOMBRE', '') or '').strip()
 
+    # Mapeo de Terceros resueltos por lote
+    terceros_map = dict(datos.get('TERCEROS_MAP', {}) or {})
+    if 'TERCEROS' in datos and isinstance(datos['TERCEROS'], list):
+        for t in datos['TERCEROS']:
+            c = str(t.get('COD_TER', '') or '').strip()
+            if c:
+                terceros_map[c] = {
+                    'nombre': str(t.get('NOMBRE', '') or '').strip(),
+                    'nit': str(t.get('IDENTIFICA') or t.get('NIT') or '').strip()
+                }
+
     # Tipos configurados en interfases
     interfaz_tipos = set()
     for r in datos.get('allegra_config', []):
@@ -188,8 +199,9 @@ def calcular(datos, filtros):
 
         detalle = str(r.get('DETALLE_CT', '') or '').strip()
         cod_ter = _fmt_id(r.get('TERCERO'))
-        nom_ter = detalle or (f"Tercero {cod_ter}" if cod_ter else '—')
-        nit_ter = cod_ter
+        ter_info = terceros_map.get(cod_ter, {}) if cod_ter else {}
+        nom_ter = ter_info.get('nombre') or (f"Tercero {cod_ter}" if cod_ter else '—')
+        nit_ter = ter_info.get('nit') or cod_ter
 
         cuenta_cod = str(r.get('CUENTA', '') or '').strip()
         cuenta_nom = cuentas_map.get(cuenta_cod, '')

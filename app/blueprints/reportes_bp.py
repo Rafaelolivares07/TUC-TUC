@@ -224,6 +224,89 @@ def _ejecutar_consulta_remota(conn, cliente_id, tipo, parametros, timeout=90):
                 raise RuntimeError(str(err or 'Error en el agente'))
     raise TimeoutError(f"El agente '{cliente_id}' tardó más de {timeout}s en responder.")
 
+def _resolver_terceros_lote(conn, agente, cod_ters):
+    """Resuelve en lote una lista de códigos de terceros (COD_TER) usando la caché en PostgreSQL.
+    Si la caché no existe o hay códigos faltantes, sincroniza la tabla TERCEROS desde el agente una sola vez."""
+    if not cod_ters:
+        return {}
+    clean_ids = list({str(c).strip() for c in cod_ters if str(c).strip() and str(c).strip() != '0'})
+    if not clean_ids:
+        return {}
+
+    agente_clean = agente.strip().lower().replace('_daemon', '')
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS admin_terceros_cache (
+                id SERIAL PRIMARY KEY,
+                cliente_id VARCHAR(100) NOT NULL,
+                cod_ter VARCHAR(50) NOT NULL,
+                nombre VARCHAR(250),
+                nit VARCHAR(50),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(cliente_id, cod_ter)
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_terceros_cache_lookup ON admin_terceros_cache (LOWER(cliente_id), cod_ter)
+        """)
+        conn.commit()
+
+        # 1. Buscar en cache local
+        rows = conn.execute("""
+            SELECT cod_ter, nombre, nit FROM admin_terceros_cache
+            WHERE LOWER(cliente_id) = LOWER(%s) AND cod_ter = ANY(%s)
+        """, (agente_clean, clean_ids)).fetchall()
+
+        mapa = {r['cod_ter']: {'nombre': r['nombre'] or '', 'nit': r['nit'] or ''} for r in rows}
+        faltantes = [cid for cid in clean_ids if cid not in mapa]
+
+        # 2. Si hay faltantes o la caché está vacía, consultar TERCEROS al agente y poblar la caché
+        cnt_row = conn.execute("SELECT COUNT(*) AS c FROM admin_terceros_cache WHERE LOWER(cliente_id)=LOWER(%s)", (agente_clean,)).fetchone()
+        total_en_cache = cnt_row['c'] if cnt_row else 0
+
+        if total_en_cache == 0 or len(faltantes) > 0:
+            try:
+                datos_ter = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
+                    'tablas': [{'tabla': 'TERCEROS', 'campos': ['COD_TER', 'NOMBRE', 'NIT', 'IDENTIFICA'], 'filtros': {}}]
+                }, timeout=90)
+                raw_ter = datos_ter.get('TERCEROS', []) if isinstance(datos_ter, dict) else []
+                if isinstance(raw_ter, list) and len(raw_ter) > 0:
+                    insert_tuples = []
+                    for r in raw_ter:
+                        c = str(r.get('COD_TER', '') or '').strip()
+                        n = str(r.get('NOMBRE', '') or '').strip()
+                        nit = str(r.get('IDENTIFICA') or r.get('NIT') or '').strip()
+                        if c:
+                            insert_tuples.append((agente_clean, c, n, nit))
+                            if c in clean_ids:
+                                mapa[c] = {'nombre': n, 'nit': nit}
+
+                    if insert_tuples:
+                        try:
+                            import psycopg2.extras
+                            raw_cur = conn._conn.cursor() if hasattr(conn, '_conn') else conn.cursor()
+                            psycopg2.extras.execute_values(
+                                raw_cur,
+                                """
+                                INSERT INTO admin_terceros_cache (cliente_id, cod_ter, nombre, nit, updated_at)
+                                VALUES %s
+                                ON CONFLICT (cliente_id, cod_ter)
+                                DO UPDATE SET nombre=EXCLUDED.nombre, nit=EXCLUDED.nit, updated_at=NOW()
+                                """,
+                                insert_tuples,
+                                page_size=2000
+                            )
+                            conn.commit()
+                        except Exception as e_ins:
+                            print(f"Fallback insert terceros cache: {e_ins}")
+            except Exception as ex:
+                print(f"Advertencia sincronizando terceros en cache desde agente: {ex}")
+
+        return mapa
+    except Exception as e:
+        print(f"Error en _resolver_terceros_lote: {e}")
+        return {}
+
 def _generar_excel_buffer(reporte_id, rows, filtros, modulo=None, fuente='remoto', cliente_id=''):
     if not HAS_OPENPYXL:
         raise RuntimeError('openpyxl no está instalado')
@@ -548,6 +631,16 @@ def ejecutar_reporte_api(reporte_id):
                 }, timeout=90)
                 if isinstance(datos, dict) and 'error' in datos:
                     return jsonify({'ok': False, 'error': datos['error'], 'filas': [], 'rows': []}), 400
+
+                # Resolver terceros en lote desde la cache central
+                if isinstance(datos, dict):
+                    if 'REG_CTAS' in datos and isinstance(datos['REG_CTAS'], list):
+                        cod_ters = {str(r.get('TERCERO', '') or '').strip() for r in datos['REG_CTAS']}
+                        datos['TERCEROS_MAP'] = _resolver_terceros_lote(conn, agente, cod_ters)
+                    elif 'PROD_FACT1' in datos and isinstance(datos['PROD_FACT1'], list):
+                        cod_ters = {str(r.get('CLIENTE', '') or '').strip() for r in datos['PROD_FACT1']}
+                        datos['TERCEROS_MAP'] = _resolver_terceros_lote(conn, agente, cod_ters)
+
                 filas = mod.calcular(datos, filtros)
             else:
                 return jsonify({'ok': False, 'error': f"Reporte '{reporte_id}' no pudo ser ejecutado", 'filas': [], 'rows': []}), 500
@@ -606,6 +699,13 @@ def exportar_excel_api(reporte_id):
                     if mod and hasattr(mod, 'tablas_requeridas') and hasattr(mod, 'calcular'):
                         tablas = mod.tablas_requeridas(filtros)
                         datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {'tablas': tablas}, timeout=90)
+                        if isinstance(datos, dict):
+                            if 'REG_CTAS' in datos and isinstance(datos['REG_CTAS'], list):
+                                cod_ters = {str(r.get('TERCERO', '') or '').strip() for r in datos['REG_CTAS']}
+                                datos['TERCEROS_MAP'] = _resolver_terceros_lote(conn, agente, cod_ters)
+                            elif 'PROD_FACT1' in datos and isinstance(datos['PROD_FACT1'], list):
+                                cod_ters = {str(r.get('CLIENTE', '') or '').strip() for r in datos['PROD_FACT1']}
+                                datos['TERCEROS_MAP'] = _resolver_terceros_lote(conn, agente, cod_ters)
                         filas = mod.calcular(datos, filtros)
                     else:
                         filas = []

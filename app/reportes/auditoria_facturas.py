@@ -68,7 +68,6 @@ def tablas_requeridas(filtros):
             {'tabla': 'EMPRESAS', 'campos': ['COD_EMP', 'NOM_EMP', 'NIT'], 'filtros': {}},
             {'tabla': 'TIPO_DOC', 'campos': ['CODIGO', 'NOMBRE'], 'filtros': {}},
             {'tabla': 'CUENTAS',  'campos': ['CODIGO', 'NOMBRE', 'TIPO'], 'filtros': {}},
-            {'tabla': 'TERCEROS', 'campos': ['COD_TER', 'NOMBRE', 'IDENTIFICA', 'NIT'], 'filtros': {}},
             {'tabla': 'allegra_config', 'campos': ['EMPRESA', 'TIP_DOC', 'NUM_INICIO'], 'filtros': {}},
             {'tabla': 'alegra_tiposdoc', 'campos': ['EMPRESA', 'TIP_ADMIN', 'TIP_ALEGRA'], 'filtros': {}},
         ]
@@ -83,6 +82,10 @@ def tablas_requeridas(filtros):
         filtros_rc['EMPRESA'] = empresa
     if tipo_doc:
         filtros_rc['TIPO'] = tipo_doc
+    elif empresa == '02':
+        filtros_rc['TIPO'] = '030'
+    elif empresa == 'LP':
+        filtros_rc['TIPO'] = '029'
 
     if desde or hasta:
         filtros_rc['FECHAHORA'] = {}
@@ -105,11 +108,6 @@ def tablas_requeridas(filtros):
         {
             'tabla':   'CUENTAS',
             'campos':  ['CODIGO', 'NOMBRE', 'TIPO'],
-            'filtros': {},
-        },
-        {
-            'tabla':   'TERCEROS',
-            'campos':  ['COD_TER', 'NOMBRE', 'IDENTIFICA', 'NIT'],
             'filtros': {},
         },
         {
@@ -138,14 +136,6 @@ def calcular(datos, filtros):
         t = str(r.get('CODIGO', '') or '').strip().upper()
         if t:
             tipos_map[t] = str(r.get('NOMBRE', '') or '').strip()
-
-    terceros_map = {}
-    for r in datos.get('TERCEROS', []):
-        cod = str(r.get('COD_TER', '') or '').strip()
-        nom = str(r.get('NOMBRE', '') or '').strip()
-        nit = str(r.get('NIT', '') or r.get('IDENTIFICA', '') or '').strip()
-        if cod:
-            terceros_map[cod] = {'nombre': nom, 'nit': nit}
 
     # Tipos configurados en interfases
     interfaz_tipos = set()
@@ -194,9 +184,8 @@ def calcular(datos, filtros):
             }
 
         cod_ter = _fmt_id(r.get('TERCERO'))
-        ter_info = terceros_map.get(cod_ter, {})
-        nom_ter = ter_info.get('nombre') or detalle or (f"Tercero {cod_ter}" if cod_ter else '—')
-        nit_ter = ter_info.get('nit') or cod_ter
+        nom_ter = detalle or (f"Tercero {cod_ter}" if cod_ter else '—')
+        nit_ter = cod_ter
 
         cuenta_cod = str(r.get('CUENTA', '') or '').strip()
         cuenta_nom = cuentas_map.get(cuenta_cod, '')

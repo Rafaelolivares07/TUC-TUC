@@ -254,19 +254,20 @@
         <div id="vista-grilla" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
             <div class="overflow-x-auto max-h-[700px] custom-scrollbar relative">
                 <table class="w-full text-left text-xs border-collapse">
-                    <thead class="bg-slate-100/95 text-slate-600 font-bold uppercase text-[10px] sm:text-[11px] tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm border-b border-slate-200">
+                    <thead class="bg-slate-100/95 text-slate-600 font-bold uppercase text-[10px] tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm border-b border-slate-200">
                         <tr>
-                            <th class="py-2.5 px-3 text-center w-10">Ver</th>
-                            <th class="py-2.5 px-3 text-center">Empresa</th>
-                            <th class="py-2.5 px-3 font-mono">Factura / Tipo</th>
-                            <th class="py-2.5 px-3">Fecha / Lapso</th>
-                            <th class="py-2.5 px-3">Cliente / Tercero</th>
-                            <th class="py-2.5 px-3 text-right">Total Débito</th>
-                            <th class="py-2.5 px-3 text-right">Total Crédito</th>
-                            <th class="py-2.5 px-3 text-right">Diferencia</th>
-                            <th class="py-2.5 px-3 text-center">Estado Auditoría</th>
-                            <th class="py-2.5 px-3">Diagnóstico / Inconsistencia</th>
-                            <th class="py-2.5 px-3 text-center">API Externa</th>
+                            <th class="py-1.5 px-2 text-center w-8">Ver</th>
+                            <th class="py-1.5 px-2 text-center w-10">Emp</th>
+                            <th class="py-1.5 px-2">Tipo Doc</th>
+                            <th class="py-1.5 px-2 font-mono">Factura</th>
+                            <th class="py-1.5 px-2">Fecha / Lapso</th>
+                            <th class="py-1.5 px-2">Cliente / Tercero</th>
+                            <th class="py-1.5 px-2 text-right">Total Débito</th>
+                            <th class="py-1.5 px-2 text-right">Total Crédito</th>
+                            <th class="py-1.5 px-2 text-right">Diferencia</th>
+                            <th class="py-1.5 px-2 text-center">Estado</th>
+                            <th class="py-1.5 px-2">Diagnóstico</th>
+                            <th class="py-1.5 px-2 text-center">API Externa</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-grilla" class="divide-y divide-slate-100 text-slate-700 font-normal"></tbody>
@@ -641,7 +642,7 @@
         function renderTabla() {
             const tbody = document.getElementById('tbody-grilla');
             if (!_filteredRows.length) {
-                tbody.innerHTML = `<tr><td colspan="11" class="py-8 text-center text-slate-400 font-medium">No se encontraron facturas con los filtros aplicados.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="12" class="py-8 text-center text-slate-400 font-medium">No se encontraron facturas con los filtros aplicados.</td></tr>`;
                 return;
             }
 
@@ -654,78 +655,98 @@
                 let rowClass = 'hover:bg-slate-50 transition';
 
                 if (f.estado === 'CUADRADA') {
-                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-700 border border-emerald-300 flex items-center justify-center gap-1"><i class="bi bi-check-circle-fill"></i> Cuadrada</span>`;
+                    badgeEstado = `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 text-emerald-700 border border-emerald-300 flex items-center justify-center gap-1"><i class="bi bi-check-circle-fill"></i> Cuadrada</span>`;
                 } else if (f.estado === 'DESCUADRADA') {
                     rowClass = 'row-descuadrada hover:bg-rose-100/60 transition';
-                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-700 border border-rose-300 flex items-center justify-center gap-1"><i class="bi bi-exclamation-octagon-fill"></i> Descuadrada</span>`;
+                    badgeEstado = `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-100 text-rose-700 border border-rose-300 flex items-center justify-center gap-1"><i class="bi bi-exclamation-octagon-fill"></i> Descuadrada</span>`;
                 } else if (f.estado === 'FALTANTE') {
                     rowClass = 'row-faltante hover:bg-amber-100/60 transition';
-                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 flex items-center justify-center gap-1"><i class="bi bi-dash-circle-dotted"></i> Faltante</span>`;
+                    badgeEstado = `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 flex items-center justify-center gap-1"><i class="bi bi-dash-circle-dotted"></i> Faltante</span>`;
                 } else if (f.estado === 'TERCERO_MULTIPLE') {
                     rowClass = 'row-alerta hover:bg-purple-100/60 transition';
-                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-100 text-purple-700 border border-purple-300 flex items-center justify-center gap-1"><i class="bi bi-people-fill"></i> Tercero Doble</span>`;
+                    badgeEstado = `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-purple-100 text-purple-700 border border-purple-300 flex items-center justify-center gap-1"><i class="bi bi-people-fill"></i> Tercero Doble</span>`;
                 } else if (f.estado === 'FECHA_DISCORDANTE') {
                     rowClass = 'row-alerta hover:bg-yellow-100/60 transition';
-                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-yellow-100 text-yellow-800 border border-yellow-300 flex items-center justify-center gap-1"><i class="bi bi-calendar2-range"></i> Fechas Varias</span>`;
+                    badgeEstado = `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-yellow-100 text-yellow-800 border border-yellow-300 flex items-center justify-center gap-1"><i class="bi bi-calendar2-range"></i> Fechas Varias</span>`;
                 } else if (f.estado === 'ANULADA') {
-                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-300 flex items-center justify-center">Anulada</span>`;
+                    badgeEstado = `<span class="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-300 flex items-center justify-center">Anulada</span>`;
                 }
 
-                let alegraBadge = '<span class="text-slate-300 text-[11px]">—</span>';
+                let alegraBadge = '<span class="text-slate-300 text-[10px]">—</span>';
                 if (_alegraCache[f.documento]) {
                     const al = _alegraCache[f.documento];
                     if (al.existe && al.alegra) {
-                        alegraBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300 cursor-pointer hover:bg-sky-200" title="En API Externa: ${fmtM(al.alegra.total)} | Cliente: ${esc(al.alegra.cliente)} | Estado: ${esc(al.alegra.estado)}">
-                            <i class="bi bi-check2-all"></i> API Externa (${fmtM(al.alegra.total)})
+                        alegraBadge = `<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-100 text-sky-800 border border-sky-300 cursor-pointer hover:bg-sky-200" title="En API Externa: ${fmtM(al.alegra.total)} | Cliente: ${esc(al.alegra.cliente)} | Estado: ${esc(al.alegra.estado)}">
+                            <i class="bi bi-check2-all"></i> API (${fmtM(al.alegra.total)})
                         </span>`;
                     } else {
-                        alegraBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200" title="No existe en la API Externa">
-                            No en API Externa
+                        alegraBadge = `<span class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-slate-100 text-slate-500 border border-slate-200" title="No existe en la API Externa">
+                            No en API
                         </span>`;
                     }
                 }
 
+                // Diagnóstico colapsado por defecto
+                let diagHtml = '';
+                if (f.inconsistencias && f.inconsistencias.length > 0) {
+                    diagHtml = `
+                    <div class="flex items-center gap-1 cursor-pointer max-w-[170px]" title="${esc(f.inconsistencias_s)}">
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200 truncate">
+                            <i class="bi bi-exclamation-triangle-fill text-rose-600 text-[9px] flex-shrink-0"></i>
+                            <span class="truncate">${esc(f.inconsistencias[0])}</span>
+                        </span>
+                        ${f.inconsistencias.length > 1 ? `<span class="text-[9px] font-bold bg-rose-200 text-rose-800 px-1 rounded-full flex-shrink-0">+${f.inconsistencias.length - 1}</span>` : ''}
+                    </div>`;
+                } else {
+                    diagHtml = `<span class="text-emerald-600 font-semibold text-[10px] flex items-center gap-1" title="Asiento balanceado"><i class="bi bi-check2"></i> Balanceado</span>`;
+                }
+
                 html += `
                 <tr class="${rowClass} cursor-pointer border-b border-slate-100" onclick="toggleExpandir('${esc(docKey)}')">
-                    <td class="py-2.5 px-3 text-center">
+                    <td class="py-1 px-1.5 text-center">
                         ${f.es_faltante ? '<span class="text-slate-300">•</span>' : `
-                        <button type="button" class="w-6 h-6 rounded-lg bg-slate-100 hover:bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold transition">
+                        <button type="button" class="w-5 h-5 rounded bg-slate-100 hover:bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold transition">
                             <i class="bi ${expandida ? 'bi-dash-lg' : 'bi-plus-lg'}"></i>
                         </button>`}
                     </td>
-                    <td class="py-2.5 px-3 text-center whitespace-nowrap">
-                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-black font-mono ${f.empresa === '02' ? 'bg-sky-100 text-sky-800 border border-sky-300' : (f.empresa === 'LP' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-700 border border-slate-300')}">
+                    <td class="py-1 px-1.5 text-center whitespace-nowrap w-10">
+                        <span class="px-1.5 py-0.2 rounded text-[10px] font-black font-mono ${f.empresa === '02' ? 'bg-sky-100 text-sky-800 border border-sky-300' : (f.empresa === 'LP' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-700 border border-slate-300')}">
                             ${esc(f.empresa || '—')}
                         </span>
                     </td>
-                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">
+                    <td class="py-1 px-2 text-slate-700 whitespace-nowrap text-[11px]">
+                        <div class="truncate max-w-[130px]" title="${esc(f.tipo)} — ${esc(f.tipo_nom || '')}">
+                            <span class="font-mono font-bold text-indigo-700">${esc(f.tipo)}</span>
+                            <span class="text-slate-500 text-[10px] ml-1">${esc(f.tipo_nom || '')}</span>
+                        </div>
+                    </td>
+                    <td class="py-1 px-2 font-mono font-black text-slate-900 whitespace-nowrap text-xs">
                         ${esc(f.documento)}
-                        <span class="text-[9px] font-semibold text-slate-500 block">${esc(f.tipo)} — ${esc(f.tipo_nom || '')}</span>
                     </td>
-                    <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">
+                    <td class="py-1 px-2 text-slate-600 whitespace-nowrap text-[11px]">
                         <span class="font-medium">${esc(f.fecha ? f.fecha.slice(0,10) : f.lapso || '—')}</span>
-                        ${f.fecha && f.fecha.length > 10 ? `<span class="text-[10px] text-slate-400 block">${esc(f.fecha.slice(11))}</span>` : ''}
+                        ${f.fecha && f.fecha.length > 10 ? `<span class="text-[9px] text-slate-400 block -mt-0.5">${esc(f.fecha.slice(11))}</span>` : ''}
                     </td>
-                    <td class="py-2.5 px-3">
-                        <span class="font-semibold text-slate-800 block truncate max-w-[200px]" title="${esc(f.tercero_nom)}">${esc(f.tercero_nom || '—')}</span>
-                        ${f.tercero ? `<span class="text-[10px] font-mono text-slate-400">${esc(f.tercero)}</span>` : ''}
+                    <td class="py-1 px-2 text-[11px]">
+                        <span class="font-semibold text-slate-800 block truncate max-w-[160px]" title="${esc(f.tercero_nom)}">${esc(f.tercero_nom || '—')}</span>
+                        ${f.tercero ? `<span class="text-[9px] font-mono text-slate-400 block -mt-0.5">${esc(f.tercero)}</span>` : ''}
                     </td>
-                    <td class="py-2.5 px-3 text-right font-mono font-semibold text-emerald-700">
+                    <td class="py-1 px-2 text-right font-mono font-semibold text-emerald-700 text-xs whitespace-nowrap">
                         ${fmtM(f.total_debito)}
                     </td>
-                    <td class="py-2.5 px-3 text-right font-mono font-semibold text-rose-700">
+                    <td class="py-1 px-2 text-right font-mono font-semibold text-rose-700 text-xs whitespace-nowrap">
                         ${fmtM(f.total_credito)}
                     </td>
-                    <td class="py-2.5 px-3 text-right font-mono font-black ${f.diferencia !== 0 ? 'text-rose-600 bg-rose-50/50' : 'text-slate-400'}">
+                    <td class="py-1 px-2 text-right font-mono font-black text-xs whitespace-nowrap ${f.diferencia !== 0 ? 'text-rose-600 bg-rose-50/50' : 'text-slate-400'}">
                         ${fmtM(f.diferencia)}
                     </td>
-                    <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                    <td class="py-1 px-2 text-center whitespace-nowrap">
                         ${badgeEstado}
                     </td>
-                    <td class="py-2.5 px-3 text-xs text-slate-600">
-                        ${f.inconsistencias.length ? `<span class="text-rose-600 font-medium">${esc(f.inconsistencias[0])}</span>` : '<span class="text-emerald-600 font-medium"><i class="bi bi-check2"></i> Asiento balanceado</span>'}
+                    <td class="py-1 px-2 text-xs">
+                        ${diagHtml}
                     </td>
-                    <td class="py-2.5 px-3 text-center whitespace-nowrap" onclick="event.stopPropagation()">
+                    <td class="py-1 px-1.5 text-center whitespace-nowrap" onclick="event.stopPropagation()">
                         ${alegraBadge}
                     </td>
                 </tr>`;
@@ -734,7 +755,7 @@
                 if (expandida && f.asientos && f.asientos.length > 0) {
                     html += `
                     <tr class="bg-indigo-50/40 border-b-2 border-indigo-100">
-                        <td colspan="11" class="p-3 sm:p-4">
+                        <td colspan="12" class="p-2 sm:p-3">
                             <div class="bg-white rounded-xl shadow-sm border border-indigo-100 overflow-hidden space-y-2 p-3">
                                 <div class="flex items-center justify-between border-b border-slate-100 pb-2">
                                     <div class="flex items-center gap-2">

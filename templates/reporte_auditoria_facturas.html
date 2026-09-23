@@ -797,53 +797,6 @@
 
             tbody.innerHTML = html;
         }
-                                        <i class="bi bi-journal-text text-indigo-600 font-bold"></i>
-                                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">
-                                            Asientos Contables Factura: <span class="font-mono text-indigo-700">${esc(f.documento)}</span> (${f.asientos.length} líneas)
-                                        </h4>
-                                    </div>
-                                    <span class="text-[11px] font-mono text-slate-400">Empresa: ${esc(f.empresa)} | Tipo: ${esc(f.tipo_nom)}</span>
-                                </div>
-                                <table class="w-full text-left text-[11px] border-collapse">
-                                    <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[9px] tracking-wider border-b border-slate-200">
-                                        <tr>
-                                            <th class="py-1.5 px-2 font-mono">Cuenta</th>
-                                            <th class="py-1.5 px-2">Nombre Cuenta</th>
-                                            <th class="py-1.5 px-2">Tercero / NIT</th>
-                                            <th class="py-1.5 px-2 text-right">Débito</th>
-                                            <th class="py-1.5 px-2 text-right">Crédito</th>
-                                            <th class="py-1.5 px-2">Detalle / Concepto</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-100">
-                                        ${f.asientos.map(a => `
-                                            <tr class="hover:bg-slate-50">
-                                                <td class="py-1.5 px-2 font-mono font-bold text-indigo-700">${esc(a.cuenta)}</td>
-                                                <td class="py-1.5 px-2 font-medium text-slate-700">${esc(a.cuenta_nom)}</td>
-                                                <td class="py-1.5 px-2 text-slate-600">${esc(a.tercero_nom)} <span class="text-slate-400 text-[9px]">(${esc(a.nit || a.tercero)})</span></td>
-                                                <td class="py-1.5 px-2 text-right font-mono text-emerald-700 font-semibold">${fmtM(a.debito)}</td>
-                                                <td class="py-1.5 px-2 text-right font-mono text-rose-700 font-semibold">${fmtM(a.credito)}</td>
-                                                <td class="py-1.5 px-2 text-slate-500 italic truncate max-w-[280px]" title="${esc(a.detalle)}">${esc(a.detalle)}</td>
-                                            </tr>
-                                        `).join('')}
-                                    </tbody>
-                                    <tfoot class="bg-slate-100/70 font-bold border-t border-slate-200 text-slate-800">
-                                        <tr>
-                                            <td colspan="3" class="py-1.5 px-2 text-right uppercase text-[9px]">Totales Factura:</td>
-                                            <td class="py-1.5 px-2 text-right font-mono text-emerald-700">${fmtM(f.total_debito)}</td>
-                                            <td class="py-1.5 px-2 text-right font-mono text-rose-700">${fmtM(f.total_credito)}</td>
-                                            <td class="py-1.5 px-2 font-mono ${f.diferencia !== 0 ? 'text-rose-600 font-bold' : 'text-slate-500'}">Dif: ${fmtM(f.diferencia)}</td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                        </td>
-                    </tr>`;
-                }
-            });
-
-            tbody.innerHTML = html;
-        }
 
         // ── Cruce Selectivo con API Alegra ───────────────────────────────────
         function ejecutarAuditoriaAlegra() {

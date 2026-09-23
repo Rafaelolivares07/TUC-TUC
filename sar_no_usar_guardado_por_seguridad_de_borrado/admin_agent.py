@@ -564,8 +564,17 @@ def _filtro_fila_gen(b, campos_map, filtros):
         raw = b[o:o+n]
         if t == 'C':
             val = raw.strip(b' ').decode(_ENC_GEN, 'replace').upper()
-            if val != str(valor_f).upper().strip():
-                return False
+            if isinstance(valor_f, (list, tuple, set)):
+                val_set = {str(x).upper().strip() for x in valor_f}
+                if val not in val_set:
+                    return False
+            elif isinstance(valor_f, dict) and 'in' in valor_f:
+                val_set = {str(x).upper().strip() for x in valor_f['in']}
+                if val not in val_set:
+                    return False
+            else:
+                if val != str(valor_f).upper().strip():
+                    return False
         elif t == 'N':
             try: fval = float(raw.strip()) if raw.strip() else 0.0
             except: fval = 0.0
@@ -601,8 +610,19 @@ def _aplicar_filtros_numpy_gen(arr, rec_size, campos_map, filtros):
             continue
         o, n, t = c['offset'], c['longitud'], c['tipo']
         if t == 'C':
-            val_b = str(valor_f).upper().encode(_ENC_GEN, 'replace').ljust(n)[:n]
-            mask &= np.all(arr[:, o:o+n] == np.frombuffer(val_b, dtype=np.uint8), axis=1)
+            if isinstance(valor_f, (list, tuple, set)) or (isinstance(valor_f, dict) and 'in' in valor_f):
+                in_list = valor_f['in'] if isinstance(valor_f, dict) else valor_f
+                in_set = [str(x).upper().encode(_ENC_GEN, 'replace').ljust(n)[:n] for x in in_list if str(x).strip()]
+                if in_set:
+                    c_mask = np.zeros(len(arr), dtype=bool)
+                    for item_b in in_set:
+                        c_mask |= np.all(arr[:, o:o+n] == np.frombuffer(item_b, dtype=np.uint8), axis=1)
+                    mask &= c_mask
+                else:
+                    mask &= False
+            else:
+                val_b = str(valor_f).upper().encode(_ENC_GEN, 'replace').ljust(n)[:n]
+                mask &= np.all(arr[:, o:o+n] == np.frombuffer(val_b, dtype=np.uint8), axis=1)
         elif t == 'N':
             raw_n = arr[:, o:o+n]
             vals = np.zeros(len(arr), dtype=np.float64)

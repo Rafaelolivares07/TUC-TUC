@@ -225,7 +225,9 @@ def _ejecutar_consulta_remota(conn, cliente_id, tipo, parametros, timeout=90):
     raise TimeoutError(f"El agente '{cliente_id}' tardó más de {timeout}s en responder.")
 
 def _resolver_terceros_lote(conn, agente, cod_ters):
-    """Resuelve en lote una lista de códigos de terceros (COD_TER) usando la tabla de caché en PostgreSQL."""
+    """Resuelve en lote una lista de códigos de terceros (COD_TER) en dos pasos:
+    1. Busca los IDs solicitados en la caché PostgreSQL.
+    2. Si hay IDs faltantes, solicita al agente ÚNICAMENTE esos IDs específicos con filtro IN [...] y los guarda en caché."""
     if not cod_ters:
         return {}
     clean_ids = list({str(c).strip() for c in cod_ters if str(c).strip() and str(c).strip() != '0'})
@@ -250,12 +252,60 @@ def _resolver_terceros_lote(conn, agente, cod_ters):
         """)
         conn.commit()
 
+        # 1. Buscar en caché central de PostgreSQL
         rows = conn.execute("""
             SELECT cod_ter, nombre, nit FROM admin_terceros_cache
             WHERE LOWER(cliente_id) = LOWER(%s) AND cod_ter = ANY(%s)
         """, (agente_clean, clean_ids)).fetchall()
 
-        return {r['cod_ter']: {'nombre': r['nombre'] or '', 'nit': r['nit'] or ''} for r in rows}
+        mapa = {r['cod_ter']: {'nombre': r['nombre'] or '', 'nit': r['nit'] or ''} for r in rows}
+        faltantes = [cid for cid in clean_ids if cid not in mapa]
+
+        # 2. Si hay IDs que no estaban en caché, consultar al agente SOLO por esos IDs específicos
+        if faltantes:
+            for chunk_i in range(0, len(faltantes), 1000):
+                chunk = faltantes[chunk_i:chunk_i+1000]
+                try:
+                    datos_ter = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
+                        'tablas': [{
+                            'tabla': 'TERCEROS',
+                            'campos': ['COD_TER', 'NOMBRE', 'NIT', 'IDENTIFICA'],
+                            'filtros': {'COD_TER': {'in': chunk}}
+                        }]
+                    }, timeout=30)
+                    raw_ter = datos_ter.get('TERCEROS', []) if isinstance(datos_ter, dict) else []
+                    if isinstance(raw_ter, list) and len(raw_ter) > 0:
+                        insert_tuples = []
+                        for r in raw_ter:
+                            c = str(r.get('COD_TER', '') or '').strip()
+                            n = str(r.get('NOMBRE', '') or '').strip()
+                            nit = str(r.get('IDENTIFICA') or r.get('NIT') or '').strip()
+                            if c:
+                                insert_tuples.append((agente_clean, c, n, nit))
+                                mapa[c] = {'nombre': n, 'nit': nit}
+                        
+                        if insert_tuples:
+                            try:
+                                import psycopg2.extras
+                                raw_cur = conn._conn.cursor() if hasattr(conn, '_conn') else conn.cursor()
+                                psycopg2.extras.execute_values(
+                                    raw_cur,
+                                    """
+                                    INSERT INTO admin_terceros_cache (cliente_id, cod_ter, nombre, nit, updated_at)
+                                    VALUES %s
+                                    ON CONFLICT (cliente_id, cod_ter)
+                                    DO UPDATE SET nombre=EXCLUDED.nombre, nit=EXCLUDED.nit, updated_at=NOW()
+                                    """,
+                                    insert_tuples,
+                                    page_size=2000
+                                )
+                                conn.commit()
+                            except Exception as e_ins:
+                                print(f"Fallback insert terceros: {e_ins}")
+                except Exception as e_chunk:
+                    print(f"Advertencia resolviendo lote puntual de terceros: {e_chunk}")
+
+        return mapa
     except Exception as e:
         print(f"Error en _resolver_terceros_lote: {e}")
         return {}

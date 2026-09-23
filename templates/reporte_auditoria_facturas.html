@@ -88,7 +88,7 @@
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Empresa</label>
                     <div class="relative">
-                        <select id="f-empresa"
+                        <select id="f-empresa" onchange="onEmpresaChange()"
                                 class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition truncate">
                             <option value="">Todas las empresas</option>
                         </select>
@@ -327,22 +327,83 @@
                 }).catch(() => {});
         }
 
+        let _catalogoTiposDoc = { tipos: [], por_empresa: {} };
+
+        function onEmpresaChange() {
+            const empVal = (document.getElementById('f-empresa').value || '').trim().toUpperCase();
+            renderizarTiposDoc(empVal);
+        }
+
         function cargarTiposDoc() {
             const agente = getAgenteActivo();
-            const selTipo = document.getElementById('f-tipo-doc');
-            if (!agente || !selTipo) return;
+            if (!agente) return;
             fetch(`/admin/api/tipos_doc?agente=${encodeURIComponent(agente)}`)
                 .then(r => r.json())
                 .then(d => {
-                    if (d.ok && d.tipos) {
-                        let html = '<option value="">Todos los tipos</option>';
-                        d.tipos.forEach(t => {
-                            const isFactura = t.nombre.toUpperCase().includes('FACTURA') || t.codigo.startsWith('01') || t.codigo.startsWith('02');
-                            html += `<option value="${esc(t.codigo)}" ${isFactura ? 'class="font-semibold text-indigo-700"' : ''}>${esc(t.codigo)} — ${esc(t.nombre)}</option>`;
-                        });
-                        selTipo.innerHTML = html;
+                    if (d.ok) {
+                        _catalogoTiposDoc = {
+                            tipos: d.tipos || [],
+                            por_empresa: d.por_empresa || {}
+                        };
+                        const empVal = (document.getElementById('f-empresa').value || '').trim().toUpperCase();
+                        renderizarTiposDoc(empVal);
                     }
                 }).catch(() => {});
+        }
+
+        function renderizarTiposDoc(empresa) {
+            const selTipo = document.getElementById('f-tipo-doc');
+            if (!selTipo) return;
+
+            const tipos = _catalogoTiposDoc.tipos || [];
+            const porEmp = _catalogoTiposDoc.por_empresa || {};
+            const empInfo = porEmp[empresa];
+
+            let html = '<option value="">Todos los tipos de documento</option>';
+            let preseleccion = '';
+
+            if (empresa && empInfo) {
+                const defTipo = empInfo.default_tipo;
+                const setInterfaz = new Set(empInfo.tipos_interfaz || []);
+                const setContables = new Set(empInfo.tipos_contables || []);
+
+                if (defTipo) {
+                    preseleccion = defTipo;
+                }
+
+                // 1. Tipos de Interfaz Alegra
+                if (setInterfaz.size > 0) {
+                    html += `<optgroup label="⚡ Configurados en Interfaz Alegra (${esc(empresa)})">`;
+                    tipos.forEach(t => {
+                        if (setInterfaz.has(t.codigo)) {
+                            const isDef = (t.codigo === defTipo);
+                            html += `<option value="${esc(t.codigo)}" ${isDef ? 'selected' : ''}>${isDef ? '★ ' : ''}${esc(t.codigo)} — ${esc(t.nombre)} (Interfaz)</option>`;
+                        }
+                    });
+                    html += `</optgroup>`;
+                }
+
+                // 2. Otros tipos contables de la empresa
+                const otrosContables = tipos.filter(t => setContables.has(t.codigo) && !setInterfaz.has(t.codigo));
+                if (otrosContables.length > 0) {
+                    html += `<optgroup label="📄 Otros Documentos de ${esc(empresa)}">`;
+                    otrosContables.forEach(t => {
+                        html += `<option value="${esc(t.codigo)}">${esc(t.codigo)} — ${esc(t.nombre)}</option>`;
+                    });
+                    html += `</optgroup>`;
+                }
+            } else {
+                // Sin empresa seleccionada: mostrar todos
+                tipos.forEach(t => {
+                    const isFactura = t.nombre.toUpperCase().includes('FACTURA') || t.codigo.startsWith('01') || t.codigo.startsWith('02') || t.codigo.startsWith('03');
+                    html += `<option value="${esc(t.codigo)}" ${isFactura ? 'class="font-semibold text-indigo-700"' : ''}>${esc(t.codigo)} — ${esc(t.nombre)}</option>`;
+                });
+            }
+
+            selTipo.innerHTML = html;
+            if (preseleccion) {
+                selTipo.value = preseleccion;
+            }
         }
 
         function setPresetFecha(preset) {

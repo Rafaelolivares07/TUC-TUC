@@ -758,24 +758,74 @@ def api_tipos_doc():
             if agentes:
                 agente = agentes[0]['id']
         if not agente:
-            return jsonify({'ok': False, 'error': 'Agente requerido', 'tipos': []}), 400
+            return jsonify({'ok': False, 'error': 'Agente requerido', 'tipos': [], 'por_empresa': {}}), 400
         
         datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
-            'tablas': [{'tabla': 'TIPO_DOC', 'campos': ['CODIGO', 'NOMBRE'], 'filtros': {}}]
+            'tablas': [
+                {'tabla': 'TIPO_DOC', 'campos': ['CODIGO', 'NOMBRE', 'TIPO_INVE', 'MANEJAINVE'], 'filtros': {}},
+                {'tabla': 'allegra_config', 'campos': ['EMPRESA', 'TIP_DOC', 'NUM_INICIO'], 'filtros': {}},
+                {'tabla': 'alegra_tiposdoc', 'campos': ['EMPRESA', 'TIP_ADMIN', 'TIP_ALEGRA'], 'filtros': {}},
+                {'tabla': 'contabilidad_documentos_contables_configurar', 'campos': ['EMPRESA', 'DOCUMENTO'], 'filtros': {}},
+            ]
         }, timeout=30)
         
-        raw_tipos = datos.get('TIPO_DOC', []) if isinstance(datos, dict) else []
+        raw_tipos   = datos.get('TIPO_DOC', []) if isinstance(datos, dict) else []
+        raw_cfg_al  = datos.get('allegra_config', []) if isinstance(datos, dict) and isinstance(datos.get('allegra_config'), list) else []
+        raw_td_al   = datos.get('alegra_tiposdoc', []) if isinstance(datos, dict) and isinstance(datos.get('alegra_tiposdoc'), list) else []
+        raw_cfg_ct  = datos.get('contabilidad_documentos_contables_configurar', []) if isinstance(datos, dict) and isinstance(datos.get('contabilidad_documentos_contables_configurar'), list) else []
+        
         tipos = []
+        tipos_dict = {}
         for r in raw_tipos:
             cod = str(r.get('CODIGO', '') or '').strip().upper()
             nom = str(r.get('NOMBRE', '') or '').strip()
+            tip_inv = str(r.get('TIPO_INVE', '') or '').strip()
+            man_inv = str(r.get('MANEJAINVE', '') or '').strip()
             if cod or nom:
-                tipos.append({'codigo': cod, 'nombre': nom})
+                t_obj = {'codigo': cod, 'nombre': nom, 'tipo_inve': tip_inv, 'maneja_inve': man_inv}
+                tipos.append(t_obj)
+                tipos_dict[cod] = t_obj
         
         tipos.sort(key=lambda x: x['codigo'])
-        return jsonify({'ok': True, 'tipos': tipos, 'total': len(tipos)})
+
+        # Mapeo dinámico por empresa
+        por_empresa = {}
+        for r in raw_cfg_al:
+            emp = str(r.get('EMPRESA', '') or '').strip().upper()
+            tip = str(r.get('TIP_DOC', '') or '').strip().upper()
+            num_ini = str(r.get('NUM_INICIO', '') or '').strip()
+            if emp:
+                if emp not in por_empresa:
+                    por_empresa[emp] = {'default_tipo': '', 'num_inicio': '', 'tipos_interfaz': set(), 'tipos_contables': set()}
+                if tip:
+                    por_empresa[emp]['default_tipo'] = tip
+                    por_empresa[emp]['tipos_interfaz'].add(tip)
+                if num_ini:
+                    por_empresa[emp]['num_inicio'] = num_ini
+
+        for r in raw_td_al:
+            emp = str(r.get('EMPRESA', '') or '').strip().upper()
+            tip = str(r.get('TIP_ADMIN', '') or '').strip().upper()
+            if emp and tip:
+                if emp not in por_empresa:
+                    por_empresa[emp] = {'default_tipo': '', 'num_inicio': '', 'tipos_interfaz': set(), 'tipos_contables': set()}
+                por_empresa[emp]['tipos_interfaz'].add(tip)
+
+        for r in raw_cfg_ct:
+            emp = str(r.get('EMPRESA', '') or '').strip().upper()
+            doc = str(r.get('DOCUMENTO', '') or '').strip().upper()
+            if emp and doc:
+                if emp not in por_empresa:
+                    por_empresa[emp] = {'default_tipo': '', 'num_inicio': '', 'tipos_interfaz': set(), 'tipos_contables': set()}
+                por_empresa[emp]['tipos_contables'].add(doc)
+
+        for emp, d in por_empresa.items():
+            d['tipos_interfaz'] = sorted(list(d['tipos_interfaz']))
+            d['tipos_contables'] = sorted(list(d['tipos_contables']))
+
+        return jsonify({'ok': True, 'tipos': tipos, 'por_empresa': por_empresa, 'total': len(tipos)})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e), 'tipos': []}), 500
+        return jsonify({'ok': False, 'error': str(e), 'tipos': [], 'por_empresa': {}}), 500
     finally:
         conn.close()
 

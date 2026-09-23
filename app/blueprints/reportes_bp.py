@@ -178,7 +178,7 @@ def _obtener_agentes_activos(conn, usuario_id, rol):
         a.pop('_diff', None)
     return agentes
 
-def _ejecutar_consulta_remota(conn, cliente_id, tipo, parametros, timeout=45):
+def _ejecutar_consulta_remota(conn, cliente_id, tipo, parametros, timeout=90):
     row = conn.execute("""
         INSERT INTO admin_agent_consultas (sesion_id, tipo, parametros, estado)
         SELECT id, %s, %s::jsonb, 'pendiente'
@@ -545,7 +545,7 @@ def ejecutar_reporte_api(reporte_id):
                 tablas = mod.tablas_requeridas(filtros)
                 datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
                     'tablas': tablas
-                }, timeout=35)
+                }, timeout=90)
                 if isinstance(datos, dict) and 'error' in datos:
                     return jsonify({'ok': False, 'error': datos['error'], 'filas': [], 'rows': []}), 400
                 filas = mod.calcular(datos, filtros)
@@ -605,7 +605,7 @@ def exportar_excel_api(reporte_id):
                 if filas is None or not isinstance(filas, list):
                     if mod and hasattr(mod, 'tablas_requeridas') and hasattr(mod, 'calcular'):
                         tablas = mod.tablas_requeridas(filtros)
-                        datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {'tablas': tablas}, timeout=35)
+                        datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {'tablas': tablas}, timeout=90)
                         filas = mod.calcular(datos, filtros)
                     else:
                         filas = []

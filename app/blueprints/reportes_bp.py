@@ -60,6 +60,13 @@ REPORTES_INFO = {
         'descripcion': 'Existencias, costos y saldos de productos.',
         'template': 'reporte_inventario.html',
     },
+    'auditoria_facturas': {
+        'nombre': 'Auditoría de Facturas',
+        'categoria': 'Contabilidad',
+        'icono': 'bi-shield-check',
+        'descripcion': 'Auditoría de asientos por factura, detección de faltantes, descuadres y cruce con Alegra.',
+        'template': 'reporte_auditoria_facturas.html',
+    },
 }
 
 def _obtener_agentes_activos(conn, usuario_id, rol):
@@ -721,3 +728,75 @@ def api_empresas():
         return jsonify({'ok': False, 'error': str(e), 'empresas': []}), 500
     finally:
         conn.close()
+
+
+@bp.route('/admin/api/reporte/auditoria_facturas/alegra_check', methods=['POST'])
+@bp.route('/api/reporte/auditoria_facturas/alegra_check', methods=['POST'])
+@admin_required
+def api_alegra_check():
+    """Consulta facturas puntuales en la API de Alegra para diagnosticar inconsistencias o faltantes."""
+    import requests, base64
+    body = request.get_json(force=True) or {}
+    numeros = body.get('numeros') or []
+    empresa = str(body.get('empresa', '') or '').strip().upper()
+
+    ALEGRA_CREDS = {
+        'LP': {
+            'email': 'electronicajyp@hotmail.com',
+            'token': 'aabde447e95a29efb773',
+            'nombre': 'ELECTRONICAS J&P',
+        },
+        '02': {
+            'email': 'electronicastvyvideo@hotmail.com',
+            'token': 'ade8e319ce85985fb47c',
+            'nombre': 'ELECTRONICAS TV & VIDEO',
+        },
+    }
+
+    creds_list = [ALEGRA_CREDS[empresa]] if empresa in ALEGRA_CREDS else list(ALEGRA_CREDS.values())
+
+    resultados = {}
+    for num in numeros[:50]:
+        num_str = str(num).strip()
+        if not num_str:
+            continue
+        encontrado = None
+        for cred in creds_list:
+            auth_str = base64.b64encode(f"{cred['email']}:{cred['token']}".encode()).decode()
+            headers = {
+                'Authorization': f'Basic {auth_str}',
+                'Accept': 'application/json',
+            }
+            try:
+                url = f"https://api.alegra.com/api/v1/invoices?number={num_str}&limit=5"
+                r = requests.get(url, headers=headers, timeout=8)
+                if r.ok:
+                    items = r.json()
+                    for inv in items:
+                        num_doc = str(inv.get('numberTemplate', {}).get('fullNumber') or inv.get('id') or inv.get('number') or '')
+                        if num_str in num_doc or str(inv.get('number', '')) == num_str:
+                            encontrado = {
+                                'id': inv.get('id'),
+                                'numero': num_doc or inv.get('number'),
+                                'fecha': inv.get('date'),
+                                'cliente': (inv.get('client', {}) or {}).get('name'),
+                                'cliente_nit': (inv.get('client', {}) or {}).get('identification'),
+                                'total': float(inv.get('total', 0) or 0),
+                                'subtotal': float(inv.get('subtotal', 0) or 0),
+                                'total_pagado': float(inv.get('totalPaid', 0) or 0),
+                                'estado': inv.get('status'),
+                                'empresa_alegra': cred['nombre'],
+                                'items_count': len(inv.get('items', [])),
+                            }
+                            break
+                if encontrado:
+                    break
+            except Exception:
+                pass
+
+        if encontrado:
+            resultados[num_str] = {'ok': True, 'existe': True, 'alegra': encontrado}
+        else:
+            resultados[num_str] = {'ok': True, 'existe': False, 'mensaje': 'No encontrada en Alegra'}
+
+    return jsonify({'ok': True, 'resultados': resultados})

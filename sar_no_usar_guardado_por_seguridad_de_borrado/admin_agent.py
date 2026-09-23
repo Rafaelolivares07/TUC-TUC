@@ -612,11 +612,11 @@ def _aplicar_filtros_numpy_gen(arr, rec_size, campos_map, filtros):
         if t == 'C':
             if isinstance(valor_f, (list, tuple, set)) or (isinstance(valor_f, dict) and 'in' in valor_f):
                 in_list = valor_f['in'] if isinstance(valor_f, dict) else valor_f
-                in_set = [str(x).upper().encode(_ENC_GEN, 'replace').ljust(n)[:n] for x in in_list if str(x).strip()]
-                if in_set:
-                    c_mask = np.zeros(len(arr), dtype=bool)
-                    for item_b in in_set:
-                        c_mask |= np.all(arr[:, o:o+n] == np.frombuffer(item_b, dtype=np.uint8), axis=1)
+                clean_set = {str(x).upper().strip() for x in in_list if str(x).strip()}
+                if clean_set:
+                    raw_col = arr[:, o:o+n]
+                    str_vals = [raw_col[i].tobytes().strip(b' \x00').decode(_ENC_GEN, 'replace').upper() for i in range(len(arr))]
+                    c_mask = np.array([v in clean_set for v in str_vals], dtype=bool)
                     mask &= c_mask
                 else:
                     mask &= False

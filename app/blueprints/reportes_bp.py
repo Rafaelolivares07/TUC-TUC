@@ -265,12 +265,20 @@ def _resolver_terceros_lote(conn, agente, cod_ters):
         if faltantes:
             for chunk_i in range(0, len(faltantes), 1000):
                 chunk = faltantes[chunk_i:chunk_i+1000]
+                expanded_in = set()
+                for cid in chunk:
+                    c_str = str(cid).strip()
+                    if c_str:
+                        expanded_in.add(c_str)
+                        expanded_in.add(c_str.ljust(10))
+                        expanded_in.add(c_str.rjust(10))
+                        expanded_in.add(c_str.zfill(10))
                 try:
                     datos_ter = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
                         'tablas': [{
                             'tabla': 'TERCEROS',
                             'campos': ['COD_TER', 'NOMBRE', 'NIT', 'IDENTIFICA'],
-                            'filtros': {'COD_TER': {'in': chunk}}
+                            'filtros': {'COD_TER': {'in': list(expanded_in)}}
                         }]
                     }, timeout=30)
                     raw_ter = datos_ter.get('TERCEROS', []) if isinstance(datos_ter, dict) else []

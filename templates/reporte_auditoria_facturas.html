@@ -85,12 +85,26 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                 
                 <!-- Empresa -->
-                <div class="lg:col-span-2">
+                <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Empresa</label>
                     <div class="relative">
                         <select id="f-empresa"
                                 class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition truncate">
                             <option value="">Todas las empresas</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tipo de Documento -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Tipo Documento</label>
+                    <div class="relative">
+                        <select id="f-tipo-doc"
+                                class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition truncate">
+                            <option value="">Todos los tipos</option>
                         </select>
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -125,6 +139,16 @@
                     <input type="text" id="f-hasta-num" placeholder="Ej: 1050"
                            class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition font-mono">
                 </div>
+            </div>
+
+            <!-- Presets rápidos de fechas -->
+            <div class="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                <span class="font-bold text-[11px] uppercase tracking-wider text-slate-400 mr-1">Rango rápido:</span>
+                <button type="button" onclick="setPresetFecha('hoy')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium transition">Hoy</button>
+                <button type="button" onclick="setPresetFecha('mes')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium transition">Este Mes</button>
+                <button type="button" onclick="setPresetFecha('mes_ant')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium transition">Mes Anterior</button>
+                <button type="button" onclick="setPresetFecha('ult_30')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium transition">Últimos 30 días</button>
+                <button type="button" onclick="setPresetFecha('ano')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium transition">Año en Curso</button>
             </div>
 
             <!-- Opciones y Botones de Acción -->
@@ -259,6 +283,7 @@
                 const opt = sel.options[sel.selectedIndex];
                 document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
                 cargarEmpresas();
+                cargarTiposDoc();
             }
         }
 
@@ -276,6 +301,7 @@
             const opt = sel.options[idx];
             if (opt) document.getElementById('label-agente-activo').textContent = opt.text;
             cargarEmpresas();
+            cargarTiposDoc();
         })();
 
         const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -301,6 +327,49 @@
                 }).catch(() => {});
         }
 
+        function cargarTiposDoc() {
+            const agente = getAgenteActivo();
+            const selTipo = document.getElementById('f-tipo-doc');
+            if (!agente || !selTipo) return;
+            fetch(`/admin/api/tipos_doc?agente=${encodeURIComponent(agente)}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.ok && d.tipos) {
+                        let html = '<option value="">Todos los tipos</option>';
+                        d.tipos.forEach(t => {
+                            const isFactura = t.nombre.toUpperCase().includes('FACTURA') || t.codigo.startsWith('01') || t.codigo.startsWith('02');
+                            html += `<option value="${esc(t.codigo)}" ${isFactura ? 'class="font-semibold text-indigo-700"' : ''}>${esc(t.codigo)} — ${esc(t.nombre)}</option>`;
+                        });
+                        selTipo.innerHTML = html;
+                    }
+                }).catch(() => {});
+        }
+
+        function setPresetFecha(preset) {
+            const hoy = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+            let dDesde = new Date(hoy), dHasta = new Date(hoy);
+            if (preset === 'hoy') {
+                // hoy
+            } else if (preset === 'mes') {
+                dDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                dHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+            } else if (preset === 'mes_ant') {
+                dDesde = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+                dHasta = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+            } else if (preset === 'ult_30') {
+                dDesde.setDate(hoy.getDate() - 30);
+            } else if (preset === 'ano') {
+                dDesde = new Date(hoy.getFullYear(), 0, 1);
+                dHasta = new Date(hoy.getFullYear(), 11, 31);
+            }
+
+            document.getElementById('f-desde').value = fmt(dDesde);
+            document.getElementById('f-hasta').value = fmt(dHasta);
+        }
+
         // ── Consulta al Backend ──────────────────────────────────────────────
         function consultarAuditoria() {
             const agente = getAgenteActivo();
@@ -310,6 +379,7 @@
             const filtros = {
                 agente: agente,
                 empresa: document.getElementById('f-empresa').value,
+                tipo_doc: document.getElementById('f-tipo-doc').value,
                 desde: document.getElementById('f-desde').value,
                 hasta: document.getElementById('f-hasta').value,
                 desde_num: document.getElementById('f-desde-num').value.trim(),
@@ -603,6 +673,7 @@
                 agente: agente,
                 cliente_id: agente,
                 empresa: document.getElementById('f-empresa').value,
+                tipo_doc: document.getElementById('f-tipo-doc') ? document.getElementById('f-tipo-doc').value : '',
                 desde: document.getElementById('f-desde').value,
                 hasta: document.getElementById('f-hasta').value,
                 filas: _filteredRows,

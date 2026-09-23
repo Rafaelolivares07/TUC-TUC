@@ -745,6 +745,41 @@ def api_empresas():
         conn.close()
 
 
+@bp.route('/admin/api/tipos_doc', methods=['GET', 'POST'])
+@bp.route('/api/tipos_doc', methods=['GET', 'POST'])
+@admin_required
+def api_tipos_doc():
+    body = request.get_json(silent=True) or {}
+    agente = (request.args.get('agente') or body.get('agente') or request.args.get('cliente_id') or body.get('cliente_id') or '').strip()
+    conn = get_db_connection()
+    try:
+        if not agente:
+            agentes = _obtener_agentes_activos(conn, session.get('usuario_id'), session.get('rol', ''))
+            if agentes:
+                agente = agentes[0]['id']
+        if not agente:
+            return jsonify({'ok': False, 'error': 'Agente requerido', 'tipos': []}), 400
+        
+        datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
+            'tablas': [{'tabla': 'TIPO_DOC', 'campos': ['CODIGO', 'NOMBRE'], 'filtros': {}}]
+        }, timeout=30)
+        
+        raw_tipos = datos.get('TIPO_DOC', []) if isinstance(datos, dict) else []
+        tipos = []
+        for r in raw_tipos:
+            cod = str(r.get('CODIGO', '') or '').strip().upper()
+            nom = str(r.get('NOMBRE', '') or '').strip()
+            if cod or nom:
+                tipos.append({'codigo': cod, 'nombre': nom})
+        
+        tipos.sort(key=lambda x: x['codigo'])
+        return jsonify({'ok': True, 'tipos': tipos, 'total': len(tipos)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'tipos': []}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/admin/api/reporte/auditoria_facturas/alegra_check', methods=['POST'])
 @bp.route('/api/reporte/auditoria_facturas/alegra_check', methods=['POST'])
 @admin_required

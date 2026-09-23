@@ -98,8 +98,8 @@ def tablas_requeridas(filtros):
             'filtros': filtros_rc,
         },
         {
-            'tabla':   'TERCEROS',
-            'campos':  ['COD_TER', 'NOMBRE', 'IDENTIFICA', 'NIT'],
+            'tabla':   'TIPO_DOC',
+            'campos':  ['CODIGO', 'NOMBRE'],
             'filtros': {},
         },
         {
@@ -107,24 +107,11 @@ def tablas_requeridas(filtros):
             'campos':  ['CODIGO', 'NOMBRE', 'TIPO'],
             'filtros': {},
         },
-        {
-            'tabla':   'TIPO_DOC',
-            'campos':  ['CODIGO', 'NOMBRE'],
-            'filtros': {},
-        },
     ]
 
 
 def calcular(datos, filtros):
     # 1. Mapeo de catálogos
-    terceros_map = {}
-    for r in datos.get('TERCEROS', []):
-        cod = _fmt_id(r.get('COD_TER'))
-        if cod:
-            nom = str(r.get('NOMBRE', '') or '').strip()
-            nit = str(r.get('NIT', '') or r.get('IDENTIFICA', '') or '').strip()
-            terceros_map[cod] = {'nombre': nom, 'nit': nit, 'cod_ter': cod}
-
     cuentas_map = {}
     for r in datos.get('CUENTAS', []):
         c = str(r.get('CODIGO', '') or '').strip()
@@ -162,9 +149,9 @@ def calcular(datos, filtros):
             }
 
         cod_ter = _fmt_id(r.get('TERCERO'))
-        ter_info = terceros_map.get(cod_ter, {'nombre': cod_ter, 'nit': '', 'cod_ter': cod_ter})
         cuenta_cod = str(r.get('CUENTA', '') or '').strip()
         cuenta_nom = cuentas_map.get(cuenta_cod, '')
+        detalle = str(r.get('DETALLE_CT', '') or '').strip()
 
         deb = float(r.get('TOT_DEB', 0) or 0)
         cre = float(r.get('TOT_CRE', 0) or 0)
@@ -184,11 +171,11 @@ def calcular(datos, filtros):
             'cuenta':      cuenta_cod,
             'cuenta_nom':  cuenta_nom,
             'tercero':     cod_ter,
-            'tercero_nom': ter_info['nombre'],
-            'nit':         ter_info['nit'],
+            'tercero_nom': detalle or f"Tercero {cod_ter}",
+            'nit':         cod_ter,
             'debito':      round(deb, 2),
             'credito':     round(cre, 2),
-            'detalle':     str(r.get('DETALLE_CT', '') or '').strip(),
+            'detalle':     detalle,
             'anulado':     anulado,
             'fecha':       fecha_str,
             'lapso':       lapso,

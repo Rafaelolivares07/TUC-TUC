@@ -349,7 +349,12 @@
                     alert('Error: ' + (data.error || 'No se pudo consultar'));
                     return;
                 }
-                _rows = data.filas || data.rows || [];
+                const rawRows = data.filas || data.rows;
+                if (!Array.isArray(rawRows)) {
+                    alert('Error: ' + (data.error || (typeof rawRows === 'object' && rawRows && rawRows.error) || 'Respuesta inesperada del servidor'));
+                    return;
+                }
+                _rows = rawRows;
                 aplicarFiltrosLocales();
                 document.getElementById('panel-kpi').classList.remove('hidden');
                 document.getElementById('wrap-filtro-vivo').classList.remove('hidden');

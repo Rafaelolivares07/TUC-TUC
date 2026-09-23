@@ -517,32 +517,39 @@ def ejecutar_reporte_api(reporte_id):
         filtros = {k: v for k, v in body.items() if k not in ('agente', 'cliente_id', 'fuente')}
         t0 = time.time()
         mod = CATALOGO.get(reporte_id)
+        filas = None
         
+        # 1. Intentar ejecución remota compilada en el agente
         try:
             resp = _ejecutar_consulta_remota(conn, agente, 'ejecutar_reporte', {
                 'reporte_id': reporte_id,
                 'filtros': filtros
             }, timeout=45)
             if isinstance(resp, dict):
-                if 'filas' in resp:
-                    filas = resp['filas']
-                elif 'rows' in resp:
-                    filas = resp['rows']
-                else:
-                    filas = resp
+                if 'error' not in resp:
+                    if 'filas' in resp:
+                        filas = resp['filas']
+                    elif 'rows' in resp:
+                        filas = resp['rows']
+                    else:
+                        filas = [resp]
             elif isinstance(resp, list):
                 filas = resp
-            else:
-                filas = []
-        except Exception as e_direct:
+        except Exception:
+            filas = None
+
+        # 2. Si el agente no tiene el reporte o devolvió error, ejecutar vía multi_tabla en el servidor
+        if filas is None or not isinstance(filas, list):
             if mod and hasattr(mod, 'tablas_requeridas') and hasattr(mod, 'calcular'):
                 tablas = mod.tablas_requeridas(filtros)
                 datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
                     'tablas': tablas
                 }, timeout=45)
+                if isinstance(datos, dict) and 'error' in datos:
+                    return jsonify({'ok': False, 'error': datos['error'], 'filas': [], 'rows': []}), 400
                 filas = mod.calcular(datos, filtros)
             else:
-                return jsonify({'ok': False, 'error': str(e_direct)}), 500
+                return jsonify({'ok': False, 'error': f"Reporte '{reporte_id}' no pudo ser ejecutado", 'filas': [], 'rows': []}), 500
                 
         elapsed = round(time.time() - t0, 2)
         total_cnt = len(filas) if hasattr(filas, '__len__') else 0
@@ -555,7 +562,7 @@ def ejecutar_reporte_api(reporte_id):
             'agente': agente
         })
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+        return jsonify({'ok': False, 'error': str(e), 'filas': [], 'rows': []}), 500
     finally:
         conn.close()
 
@@ -572,7 +579,7 @@ def exportar_excel_api(reporte_id):
         
         conn = get_db_connection()
         try:
-            if not filas:
+            if not filas or not isinstance(filas, list):
                 if not agente:
                     agentes = _obtener_agentes_activos(conn, session.get('usuario_id'), session.get('rol', ''))
                     if agentes:
@@ -584,8 +591,16 @@ def exportar_excel_api(reporte_id):
                         'reporte_id': reporte_id,
                         'filtros': filtros
                     }, timeout=45)
-                    filas = resp.get('filas', []) if isinstance(resp, dict) else (resp if isinstance(resp, list) else [])
+                    if isinstance(resp, dict) and 'error' not in resp:
+                        filas = resp.get('filas') or resp.get('rows') or [resp]
+                    elif isinstance(resp, list):
+                        filas = resp
+                    else:
+                        filas = None
                 except Exception:
+                    filas = None
+
+                if filas is None or not isinstance(filas, list):
                     if mod and hasattr(mod, 'tablas_requeridas') and hasattr(mod, 'calcular'):
                         tablas = mod.tablas_requeridas(filtros)
                         datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {'tablas': tablas}, timeout=45)

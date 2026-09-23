@@ -11,7 +11,7 @@ import datetime, struct, mmap, socket, configparser, subprocess
 import requests
 import dbf
 
-VERSION     = '1.2.2'
+VERSION     = '1.2.8'
 _BASE_URL   = ''   # se setea en main() antes de lanzar el thread de update
 _CLIENTE_ID = ''   # ídem
 

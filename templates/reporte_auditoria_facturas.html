@@ -225,6 +225,25 @@
             </div>
         </div>
 
+        <!-- Cuadrícula de Tipos de Documento Detectados en la Auditoría -->
+        <div id="panel-tipos-grid" class="hidden bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs">
+                        <i class="bi bi-grid-fill"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Tipos de Documento en esta Auditoría</h4>
+                        <p class="text-[10px] text-slate-400">Haz clic en cualquier tipo para filtrar los resultados al instante</p>
+                    </div>
+                </div>
+                <div id="label-tipo-filtro-activo" class="text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg self-start sm:self-auto">
+                    Mostrando todos los tipos
+                </div>
+            </div>
+            <div id="contenedor-chips-tipos" class="flex flex-wrap gap-2"></div>
+        </div>
+
         <!-- Filtro Rápido en Vivo -->
         <div id="wrap-filtro-vivo" class="hidden">
             <input type="text" id="filtro-vivo" oninput="aplicarFiltrosLocales()" placeholder="🔍 Filtrar en vivo por factura, cliente, NIT, estado o diagnóstico..."
@@ -238,7 +257,8 @@
                     <thead class="bg-slate-100/95 text-slate-600 font-bold uppercase text-[10px] sm:text-[11px] tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm border-b border-slate-200">
                         <tr>
                             <th class="py-2.5 px-3 text-center w-10">Ver</th>
-                            <th class="py-2.5 px-3 font-mono">Factura</th>
+                            <th class="py-2.5 px-3 text-center">Empresa</th>
+                            <th class="py-2.5 px-3 font-mono">Factura / Tipo</th>
                             <th class="py-2.5 px-3">Fecha / Lapso</th>
                             <th class="py-2.5 px-3">Cliente / Tercero</th>
                             <th class="py-2.5 px-3 text-right">Total Débito</th>
@@ -509,16 +529,27 @@
             });
         }
 
+        let _tipoChipFiltro = ''; // '' = Todos
+
+        function setFiltroTipoChip(tipoKey) {
+            _tipoChipFiltro = tipoKey;
+            aplicarFiltrosLocales();
+        }
+
         // ── Filtrado Local y Render de Tabla ─────────────────────────────────
         function aplicarFiltrosLocales() {
             const q = (document.getElementById('filtro-vivo').value || '').trim().toUpperCase();
             const soloInc = document.getElementById('f-solo-inc').checked;
 
             _filteredRows = _rows.filter(r => {
+                if (_tipoChipFiltro && r.tipo !== _tipoChipFiltro) return false;
                 if (soloInc && r.estado === 'CUADRADA') return false;
                 if (!q) return true;
                 return (
                     (r.documento && r.documento.toUpperCase().includes(q)) ||
+                    (r.empresa && r.empresa.toUpperCase().includes(q)) ||
+                    (r.tipo && r.tipo.toUpperCase().includes(q)) ||
+                    (r.tipo_nom && r.tipo_nom.toUpperCase().includes(q)) ||
                     (r.tercero_nom && r.tercero_nom.toUpperCase().includes(q)) ||
                     (r.tercero && r.tercero.toUpperCase().includes(q)) ||
                     (r.estado && r.estado.toUpperCase().includes(q)) ||
@@ -541,7 +572,73 @@
 
             document.getElementById('info-registros').textContent = `Mostrando ${_filteredRows.length} de ${total} facturas`;
 
+            renderizarChipsTipos();
             renderTabla();
+        }
+
+        function renderizarChipsTipos() {
+            const cont = document.getElementById('contenedor-chips-tipos');
+            const panel = document.getElementById('panel-tipos-grid');
+            const lbl = document.getElementById('label-tipo-filtro-activo');
+            if (!cont || !panel) return;
+
+            if (!_rows.length) {
+                panel.classList.add('hidden');
+                return;
+            }
+            panel.classList.remove('hidden');
+
+            // Agrupar conteos por tipo
+            const mapaTipos = {};
+            _rows.forEach(r => {
+                const t = r.tipo || 'S/T';
+                if (!mapaTipos[t]) {
+                    mapaTipos[t] = {
+                        tipo: t,
+                        tipo_nom: r.tipo_nom || t,
+                        empresa: r.empresa || '',
+                        conteo: 0,
+                        descuadradas: 0,
+                    };
+                }
+                mapaTipos[t].conteo++;
+                if (r.estado !== 'CUADRADA') mapaTipos[t].descuadradas++;
+            });
+
+            const tiposArr = Object.values(mapaTipos).sort((a, b) => b.conteo - a.conteo);
+
+            if (_tipoChipFiltro && mapaTipos[_tipoChipFiltro]) {
+                const cur = mapaTipos[_tipoChipFiltro];
+                lbl.innerHTML = `Filtrado por: <span class="font-bold font-mono">${esc(cur.tipo)}</span> — ${esc(cur.tipo_nom)} (${cur.conteo})`;
+            } else {
+                lbl.textContent = `Mostrando todos los tipos (${tiposArr.length} tipos en total)`;
+            }
+
+            let chipsHtml = `
+            <button type="button" onclick="setFiltroTipoChip('')"
+                    class="tap-highlight px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${_tipoChipFiltro === '' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'}">
+                <span>★ Todos los tipos</span>
+                <span class="px-1.5 py-0.2 text-[10px] rounded-full ${_tipoChipFiltro === '' ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700'}">${_rows.length}</span>
+            </button>`;
+
+            tiposArr.forEach(t => {
+                const activo = (_tipoChipFiltro === t.tipo);
+                const isAlegra = (t.tipo === '030' || t.tipo === '029' || t.tipo === '015' || t.tipo === '016');
+                
+                chipsHtml += `
+                <button type="button" onclick="setFiltroTipoChip('${esc(t.tipo)}')"
+                        class="tap-highlight px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center gap-2 border ${activo ? 'bg-indigo-600 text-white border-indigo-600 shadow-md font-bold' : 'bg-white text-slate-800 hover:bg-slate-50 border-slate-200 shadow-sm'}">
+                    <span class="font-bold font-mono ${activo ? 'text-white' : (isAlegra ? 'text-indigo-600' : 'text-slate-900')}">
+                        ${isAlegra ? '⚡ ' : ''}${esc(t.tipo)}
+                    </span>
+                    <span class="truncate max-w-[160px]">${esc(t.tipo_nom)}</span>
+                    ${t.empresa ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-black ${activo ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-600'}">${esc(t.empresa)}</span>` : ''}
+                    <span class="px-1.5 py-0.2 text-[10px] rounded-full font-bold ${activo ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-700'}">${t.conteo}</span>
+                    ${t.descuadradas > 0 ? `<span class="w-2 h-2 rounded-full bg-rose-500" title="${t.descuadradas} inconsistencias"></span>` : ''}
+                </button>`;
+            });
+
+            cont.innerHTML = chipsHtml;
         }
 
         function toggleExpandir(docKey) {
@@ -556,7 +653,7 @@
         function renderTabla() {
             const tbody = document.getElementById('tbody-grilla');
             if (!_filteredRows.length) {
-                tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-slate-400 font-medium">No se encontraron facturas con los filtros aplicados.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="11" class="py-8 text-center text-slate-400 font-medium">No se encontraron facturas con los filtros aplicados.</td></tr>`;
                 return;
             }
 
@@ -608,9 +705,14 @@
                             <i class="bi ${expandida ? 'bi-dash-lg' : 'bi-plus-lg'}"></i>
                         </button>`}
                     </td>
+                    <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-black font-mono ${f.empresa === '02' ? 'bg-sky-100 text-sky-800 border border-sky-300' : (f.empresa === 'LP' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-700 border border-slate-300')}">
+                            ${esc(f.empresa || '—')}
+                        </span>
+                    </td>
                     <td class="py-2.5 px-3 font-mono font-bold text-slate-900">
                         ${esc(f.documento)}
-                        ${f.tipo ? `<span class="text-[9px] font-normal text-slate-400 block">${esc(f.tipo)}</span>` : ''}
+                        <span class="text-[9px] font-semibold text-slate-500 block">${esc(f.tipo)} — ${esc(f.tipo_nom || '')}</span>
                     </td>
                     <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">
                         <span class="font-medium">${esc(f.fecha ? f.fecha.slice(0,10) : f.lapso || '—')}</span>
@@ -644,10 +746,57 @@
                 if (expandida && f.asientos && f.asientos.length > 0) {
                     html += `
                     <tr class="bg-indigo-50/40 border-b-2 border-indigo-100">
-                        <td colspan="10" class="p-3 sm:p-4">
+                        <td colspan="11" class="p-3 sm:p-4">
                             <div class="bg-white rounded-xl shadow-sm border border-indigo-100 overflow-hidden space-y-2 p-3">
                                 <div class="flex items-center justify-between border-b border-slate-100 pb-2">
                                     <div class="flex items-center gap-2">
+                                        <i class="bi bi-journal-text text-indigo-600 font-bold"></i>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">
+                                            Asientos Contables Factura: <span class="font-mono text-indigo-700">${esc(f.documento)}</span> (${f.asientos.length} líneas)
+                                        </h4>
+                                    </div>
+                                    <span class="text-[11px] font-mono text-slate-400">Empresa: ${esc(f.empresa)} | Tipo: ${esc(f.tipo)} (${esc(f.tipo_nom)})</span>
+                                </div>
+                                <table class="w-full text-left text-[11px] border-collapse">
+                                    <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[9px] tracking-wider border-b border-slate-200">
+                                        <tr>
+                                            <th class="py-1.5 px-2 font-mono">Cuenta</th>
+                                            <th class="py-1.5 px-2">Nombre Cuenta</th>
+                                            <th class="py-1.5 px-2">Tercero / NIT</th>
+                                            <th class="py-1.5 px-2 text-right">Débito</th>
+                                            <th class="py-1.5 px-2 text-right">Crédito</th>
+                                            <th class="py-1.5 px-2">Detalle / Concepto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        ${f.asientos.map(a => `
+                                            <tr class="hover:bg-slate-50">
+                                                <td class="py-1.5 px-2 font-mono font-bold text-indigo-700">${esc(a.cuenta)}</td>
+                                                <td class="py-1.5 px-2 font-medium text-slate-700">${esc(a.cuenta_nom)}</td>
+                                                <td class="py-1.5 px-2 text-slate-600">${esc(a.tercero_nom)} <span class="text-slate-400 text-[9px]">(${esc(a.nit || a.tercero)})</span></td>
+                                                <td class="py-1.5 px-2 text-right font-mono text-emerald-700 font-semibold">${fmtM(a.debito)}</td>
+                                                <td class="py-1.5 px-2 text-right font-mono text-rose-700 font-semibold">${fmtM(a.credito)}</td>
+                                                <td class="py-1.5 px-2 text-slate-500 italic truncate max-w-[280px]" title="${esc(a.detalle)}">${esc(a.detalle)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                    <tfoot class="bg-slate-100/70 font-bold border-t border-slate-200 text-slate-800">
+                                        <tr>
+                                            <td colspan="3" class="py-1.5 px-2 text-right uppercase text-[9px]">Totales Factura:</td>
+                                            <td class="py-1.5 px-2 text-right font-mono text-emerald-700">${fmtM(f.total_debito)}</td>
+                                            <td class="py-1.5 px-2 text-right font-mono text-rose-700">${fmtM(f.total_credito)}</td>
+                                            <td class="py-1.5 px-2 font-mono ${f.diferencia !== 0 ? 'text-rose-600 font-bold' : 'text-slate-500'}">Dif: ${fmtM(f.diferencia)}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>`;
+                }
+            });
+
+            tbody.innerHTML = html;
+        }
                                         <i class="bi bi-journal-text text-indigo-600 font-bold"></i>
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">
                                             Asientos Contables Factura: <span class="font-mono text-indigo-700">${esc(f.documento)}</span> (${f.asientos.length} líneas)

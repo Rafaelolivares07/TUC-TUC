@@ -126,11 +126,23 @@ def calcular(datos, filtros):
 
     # 2. Agrupación por Documento/Factura
     raw_rc = datos.get('REG_CTAS', [])
+    tipo_filtro_exacto = str(filtros.get('tipo_doc', '') or '').strip().upper()
     grupos = {}
 
     for r in raw_rc:
         emp = str(r.get('EMPRESA', '') or '').strip().upper()
         tipo = str(r.get('TIPO', '') or '').strip().upper()
+        
+        # Si el usuario no especificó un tipo concreto, ignorar documentos que no sean de facturación/venta/devolución (ej: 111 inventario físico, 03 compras, 04 egresos)
+        if not tipo_filtro_exacto:
+            nom_t = tipos_map.get(tipo, '').upper()
+            es_factura = (
+                tipo in ('01', '011', '012', '013', '014', '015', '016', '017', '018', '019', '020', '021', '022', '023', '024', '025', '026', '027', '029', '030', '12', '02')
+                or any(k in nom_t for k in ('FACTURA', 'POS', 'ELECTRONICA', 'ALEGRA', 'VENTA', 'DEVOLUCION'))
+            )
+            if not es_factura:
+                continue
+
         doc = str(r.get('DOCUMENTO', '') or '').strip()
         consec = _fmt_id(r.get('CONSECUTIV'))
 

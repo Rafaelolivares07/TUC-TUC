@@ -236,27 +236,37 @@ def _resolver_terceros_lote(conn, agente, cod_ters):
 
     agente_clean = agente.strip().lower().replace('_daemon', '')
     try:
+        sesion = conn.execute(
+            "SELECT ruta_bd FROM admin_agent_sesiones WHERE LOWER(cliente_id)=LOWER(%s) ORDER BY ultimo_ping DESC LIMIT 1",
+            (agente_clean,)
+        ).fetchone()
+        ruta_bd_clean = (sesion['ruta_bd'] or '').strip().lower() if sesion else ''
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS admin_terceros_cache (
                 id SERIAL PRIMARY KEY,
                 cliente_id VARCHAR(100) NOT NULL,
+                ruta_bd VARCHAR(500) NOT NULL DEFAULT '',
                 cod_ter VARCHAR(50) NOT NULL,
                 nombre VARCHAR(250),
                 nit VARCHAR(50),
                 updated_at TIMESTAMPTZ DEFAULT NOW(),
-                UNIQUE(cliente_id, cod_ter)
+                UNIQUE(cliente_id, ruta_bd, cod_ter)
             )
         """)
         conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_terceros_cache_lookup ON admin_terceros_cache (LOWER(cliente_id), cod_ter)
+            ALTER TABLE admin_terceros_cache ADD COLUMN IF NOT EXISTS ruta_bd VARCHAR(500) NOT NULL DEFAULT ''
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_terceros_cache_lookup ON admin_terceros_cache (LOWER(cliente_id), LOWER(ruta_bd), cod_ter)
         """)
         conn.commit()
 
-        # 1. Buscar en caché central de PostgreSQL
+        # 1. Buscar en caché central de PostgreSQL aislado por agente y ruta_bd
         rows = conn.execute("""
             SELECT cod_ter, nombre, nit FROM admin_terceros_cache
-            WHERE LOWER(cliente_id) = LOWER(%s) AND cod_ter = ANY(%s)
-        """, (agente_clean, clean_ids)).fetchall()
+            WHERE LOWER(cliente_id) = LOWER(%s) AND LOWER(ruta_bd) = LOWER(%s) AND cod_ter = ANY(%s)
+        """, (agente_clean, ruta_bd_clean, clean_ids)).fetchall()
 
         mapa = {r['cod_ter']: {'nombre': r['nombre'] or '', 'nit': r['nit'] or ''} for r in rows}
         faltantes = [cid for cid in clean_ids if cid not in mapa]
@@ -270,6 +280,10 @@ def _resolver_terceros_lote(conn, agente, cod_ters):
                     c_str = str(cid).strip()
                     if c_str:
                         expanded_in.add(c_str)
+                        try:
+                            expanded_in.add(int(c_str))
+                        except Exception:
+                            pass
                         expanded_in.add(c_str.ljust(10))
                         expanded_in.add(c_str.rjust(10))
                         expanded_in.add(c_str.zfill(10))
@@ -285,11 +299,15 @@ def _resolver_terceros_lote(conn, agente, cod_ters):
                     if isinstance(raw_ter, list) and len(raw_ter) > 0:
                         insert_tuples = []
                         for r in raw_ter:
-                            c = str(r.get('COD_TER', '') or '').strip()
+                            c_raw = r.get('COD_TER')
+                            if isinstance(c_raw, float):
+                                c = str(int(c_raw)) if c_raw == int(c_raw) else str(c_raw)
+                            else:
+                                c = str(c_raw or '').strip()
                             n = str(r.get('NOMBRE', '') or '').strip()
                             nit = str(r.get('IDENTIFICA') or r.get('NIT') or '').strip()
                             if c:
-                                insert_tuples.append((agente_clean, c, n, nit))
+                                insert_tuples.append((agente_clean, ruta_bd_clean, c, n, nit))
                                 mapa[c] = {'nombre': n, 'nit': nit}
                         
                         if insert_tuples:
@@ -299,9 +317,9 @@ def _resolver_terceros_lote(conn, agente, cod_ters):
                                 psycopg2.extras.execute_values(
                                     raw_cur,
                                     """
-                                    INSERT INTO admin_terceros_cache (cliente_id, cod_ter, nombre, nit, updated_at)
+                                    INSERT INTO admin_terceros_cache (cliente_id, ruta_bd, cod_ter, nombre, nit, updated_at)
                                     VALUES %s
-                                    ON CONFLICT (cliente_id, cod_ter)
+                                    ON CONFLICT (cliente_id, ruta_bd, cod_ter)
                                     DO UPDATE SET nombre=EXCLUDED.nombre, nit=EXCLUDED.nit, updated_at=NOW()
                                     """,
                                     insert_tuples,

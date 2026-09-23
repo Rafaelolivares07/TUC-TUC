@@ -578,14 +578,20 @@ def _filtro_fila_gen(b, campos_map, filtros):
         elif t == 'N':
             try: fval = float(raw.strip()) if raw.strip() else 0.0
             except: fval = 0.0
-            if isinstance(valor_f, dict):
+            if isinstance(valor_f, (list, tuple, set)) or (isinstance(valor_f, dict) and 'in' in valor_f):
+                in_list = valor_f['in'] if isinstance(valor_f, dict) else valor_f
+                in_set = set()
+                for x in in_list:
+                    try: in_set.add(float(x))
+                    except: pass
+                if fval not in in_set:
+                    return False
+            elif isinstance(valor_f, dict):
                 if 'min' in valor_f and fval < valor_f['min']: return False
                 if 'max' in valor_f and fval > valor_f['max']: return False
             else:
                 if fval != float(valor_f): return False
         elif t == 'D':
-            dstr = raw.decode('ascii', 'replace').strip()
-            dint = int(dstr) if dstr.isdigit() else 0
             def _dval(s): s = str(s).replace('-', ''); return int(s) if len(s) == 8 else 0
             if isinstance(valor_f, dict):
                 if 'desde' in valor_f and dint < _dval(valor_f['desde']): return False
@@ -625,17 +631,36 @@ def _aplicar_filtros_numpy_gen(arr, rec_size, campos_map, filtros):
                 mask &= np.all(arr[:, o:o+n] == np.frombuffer(val_b, dtype=np.uint8), axis=1)
         elif t == 'N':
             raw_n = arr[:, o:o+n]
-            vals = np.zeros(len(arr), dtype=np.float64)
-            for i in range(len(arr)):
-                v = raw_n[i].tobytes().strip()
-                try: vals[i] = float(v) if v else 0.0
-                except: pass
-            if isinstance(valor_f, dict):
-                if 'min' in valor_f: mask &= vals >= valor_f['min']
-                if 'max' in valor_f: mask &= vals <= valor_f['max']
+            if isinstance(valor_f, (list, tuple, set)) or (isinstance(valor_f, dict) and 'in' in valor_f):
+                in_list = valor_f['in'] if isinstance(valor_f, dict) else valor_f
+                clean_set = set()
+                for x in in_list:
+                    try:
+                        clean_set.add(float(x))
+                    except Exception:
+                        pass
+                if clean_set:
+                    vals = np.zeros(len(arr), dtype=np.float64)
+                    for i in range(len(arr)):
+                        v = raw_n[i].tobytes().strip()
+                        try: vals[i] = float(v) if v else 0.0
+                        except: pass
+                    c_mask = np.isin(vals, list(clean_set))
+                    mask &= c_mask
+                else:
+                    mask &= False
             else:
-                try: mask &= vals == float(valor_f)
-                except Exception: pass
+                vals = np.zeros(len(arr), dtype=np.float64)
+                for i in range(len(arr)):
+                    v = raw_n[i].tobytes().strip()
+                    try: vals[i] = float(v) if v else 0.0
+                    except: pass
+                if isinstance(valor_f, dict):
+                    if 'min' in valor_f: mask &= vals >= valor_f['min']
+                    if 'max' in valor_f: mask &= vals <= valor_f['max']
+                else:
+                    try: mask &= vals == float(valor_f)
+                    except Exception: pass
         elif t == 'D':
             def _dval(s): s = str(s).replace('-', ''); return int(s) if len(s) == 8 else 0
             yr = (arr[:,o  ].astype(np.int64)-48)*1000 + (arr[:,o+1].astype(np.int64)-48)*100 + (arr[:,o+2].astype(np.int64)-48)*10 + (arr[:,o+3].astype(np.int64)-48)

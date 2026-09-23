@@ -142,10 +142,11 @@
             const reqId = ++_precargaReqId;
             const pCuentas  = fetch(`/admin/api/cuentas?agente=${encodeURIComponent(ag)}`).then(r => r.json()).catch(() => ({ok: false}));
             const pEmpresas = fetch(`/admin/api/empresas?agente=${encodeURIComponent(ag)}`).then(r => r.json()).catch(() => ({ok: false}));
+            const pTerceros = fetch(`/admin/api/terceros/stats?agente=${encodeURIComponent(ag)}`).then(r => r.json()).catch(() => ({ok: false, total: 0}));
 
-            Promise.all([pCuentas, pEmpresas]).then(([dCta, dEmp]) => {
+            Promise.all([pCuentas, pEmpresas, pTerceros]).then(([dCta, dEmp, dTer]) => {
                 if (reqId !== _precargaReqId) return;
-                let nCta = 0, nEmp = 0;
+                let nCta = 0, nEmp = 0, nTer = 0;
                 if (dCta.ok && dCta.cuentas) {
                     nCta = dCta.cuentas.length;
                     localStorage.setItem(`sar_cuentas_${ag}`, JSON.stringify(dCta.cuentas));
@@ -154,11 +155,14 @@
                     nEmp = dEmp.empresas.length;
                     localStorage.setItem(`sar_empresas_${ag}`, JSON.stringify(dEmp.empresas));
                 }
+                if (dTer.ok && typeof dTer.total === 'number') {
+                    nTer = dTer.total;
+                }
 
                 if (badge) {
-                    if (dCta.ok || dEmp.ok) {
+                    if (dCta.ok || dEmp.ok || dTer.ok) {
                         badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200';
-                        badge.innerHTML = `<i class="bi bi-check2-circle mr-1"></i> Empresas (${nEmp}) · Cuentas (${nCta}) listas`;
+                        badge.innerHTML = `<i class="bi bi-check2-circle mr-1"></i> Empresas (${nEmp}) · Cuentas (${nCta})${nTer > 0 ? ` · Terceros (${nTer.toLocaleString('es-CO')})` : ''} listos`;
                     } else {
                         badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200';
                         badge.innerHTML = '<i class="bi bi-exclamation-triangle mr-1"></i> Sin respuesta de BD';

@@ -1002,3 +1002,67 @@ def api_alegra_check():
             resultados[num_str] = {'ok': True, 'existe': False, 'mensaje': 'No encontrada en Alegra'}
 
     return jsonify({'ok': True, 'resultados': resultados})
+
+
+@bp.route('/admin/api/terceros/stats', methods=['GET', 'POST'])
+@bp.route('/api/terceros/stats', methods=['GET', 'POST'])
+@admin_required
+def api_terceros_stats():
+    body = request.get_json(silent=True) or {}
+    agente = (request.args.get('agente') or body.get('agente') or request.args.get('cliente_id') or body.get('cliente_id') or '').strip()
+    conn = get_db_connection()
+    try:
+        if not agente:
+            agentes = _obtener_agentes_activos(conn, session.get('usuario_id'), session.get('rol', ''))
+            if agentes:
+                agente = agentes[0]['id']
+        agente_clean = agente.strip().lower().replace('_daemon', '')
+        
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS admin_terceros_cache (
+                id SERIAL PRIMARY KEY,
+                cliente_id VARCHAR(100) NOT NULL,
+                cod_ter VARCHAR(50) NOT NULL,
+                nombre VARCHAR(250),
+                nit VARCHAR(50),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(cliente_id, cod_ter)
+            )
+        """)
+        conn.commit()
+
+        row = conn.execute("SELECT COUNT(*) AS total FROM admin_terceros_cache WHERE LOWER(cliente_id) = LOWER(%s)", (agente_clean,)).fetchone()
+        total = row['total'] if row else 0
+        return jsonify({'ok': True, 'total': total, 'cliente_id': agente_clean})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'total': 0}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/admin/api/terceros/sync', methods=['POST'])
+@bp.route('/api/terceros/sync', methods=['POST'])
+@admin_required
+def api_terceros_sync():
+    body = request.get_json(silent=True) or {}
+    agente = (request.args.get('agente') or body.get('agente') or request.args.get('cliente_id') or body.get('cliente_id') or '').strip()
+    conn = get_db_connection()
+    try:
+        if not agente:
+            agentes = _obtener_agentes_activos(conn, session.get('usuario_id'), session.get('rol', ''))
+            if agentes:
+                agente = agentes[0]['id']
+        if not agente:
+            return jsonify({'ok': False, 'error': 'Agente requerido'}), 400
+        
+        # Forzar sincronización completa de la tabla TERCEROS
+        res = _resolver_terceros_lote(conn, agente, ['_FORCE_ALL_SYNC_'])
+        agente_clean = agente.strip().lower().replace('_daemon', '')
+        row = conn.execute("SELECT COUNT(*) AS total FROM admin_terceros_cache WHERE LOWER(cliente_id) = LOWER(%s)", (agente_clean,)).fetchone()
+        total = row['total'] if row else 0
+        return jsonify({'ok': True, 'total': total, 'cliente_id': agente_clean})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+

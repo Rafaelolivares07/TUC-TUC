@@ -162,13 +162,58 @@
                 if (badge) {
                     if (dCta.ok || dEmp.ok || dTer.ok) {
                         badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200';
-                        badge.innerHTML = `<i class="bi bi-check2-circle mr-1"></i> Empresas (${nEmp}) · Cuentas (${nCta})${nTer > 0 ? ` · Terceros (${nTer.toLocaleString('es-CO')})` : ''} listos`;
+                        if (nTer > 0) {
+                            badge.innerHTML = `<i class="bi bi-check2-circle mr-1"></i> Empresas (${nEmp}) · Cuentas (${nCta}) · Terceros (${nTer.toLocaleString('es-CO')}) listos`;
+                        } else {
+                            badge.innerHTML = `<i class="bi bi-check2-circle mr-1"></i> Empresas (${nEmp}) · Cuentas (${nCta}) <span class="text-indigo-600 font-bold ml-1 cursor-pointer" onclick="sincronizarTercerosManual()"><i class="bi bi-arrow-repeat animate-spin"></i> Sincronizando Terceros...</span>`;
+                            sincronizarTercerosEnFondo(ag, reqId, nEmp, nCta);
+                        }
                     } else {
                         badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200';
                         badge.innerHTML = '<i class="bi bi-exclamation-triangle mr-1"></i> Sin respuesta de BD';
                     }
                 }
             });
+        }
+
+        let _syncingTerceros = false;
+        function sincronizarTercerosEnFondo(ag, reqId, nEmp, nCta) {
+            if (_syncingTerceros) return;
+            _syncingTerceros = true;
+            fetch(`/admin/api/terceros/sync?agente=${encodeURIComponent(ag)}`, { method: 'POST' })
+                .then(r => r.json())
+                .then(d => {
+                    _syncingTerceros = false;
+                    if (reqId !== _precargaReqId) return;
+                    const badge = document.getElementById('catalogos-badge');
+                    if (badge && d.ok && d.total > 0) {
+                        badge.innerHTML = `<i class="bi bi-check2-circle mr-1"></i> Empresas (${nEmp}) · Cuentas (${nCta}) · Terceros (${d.total.toLocaleString('es-CO')}) listos`;
+                    }
+                })
+                .catch(() => { _syncingTerceros = false; });
+        }
+
+        function sincronizarTercerosManual() {
+            const ag = getAgenteMenu();
+            if (!ag) return;
+            const badge = document.getElementById('catalogos-badge');
+            if (badge) {
+                badge.innerHTML = `<span class="inline-block animate-spin mr-1">⏳</span> Sincronizando Terceros desde agente...`;
+            }
+            fetch(`/admin/api/terceros/sync?agente=${encodeURIComponent(ag)}`, { method: 'POST' })
+                .then(r => r.json())
+                .then(d => {
+                    precargarCatalogos();
+                    if (d.ok) {
+                        alert(`Sincronización exitosa: ${d.total.toLocaleString('es-CO')} terceros en caché.`);
+                    } else {
+                        alert(`Error sincronizando terceros: ${d.error || 'Desconocido'}`);
+                    }
+                })
+                .catch(e => {
+                    precargarCatalogos();
+                    alert(`Error: ${e}`);
+                });
         }
 
         function onAgenteMenuChange() {

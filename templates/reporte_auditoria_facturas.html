@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Auditoría de Facturas — SAR</title>
+    <script src="/static/js/tailwind.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .tap-highlight { -webkit-tap-highlight-color: transparent; }
+        .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .row-expandida { background-color: #f0fdf4; border-left: 4px solid #16a34a; }
+        .row-descuadrada { background-color: #fef2f2; border-left: 4px solid #dc2626; }
+        .row-faltante { background-color: #fffbeb; border-left: 4px solid #d97706; }
+        .row-alerta { background-color: #faf5ff; border-left: 4px solid #9333ea; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 antialiased selection:bg-indigo-500 selection:text-white pb-16">
+
+    <!-- Header Principal -->
+    <header class="bg-indigo-700 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="/admin/reportes" class="text-indigo-200 hover:text-white transition flex items-center gap-1.5 text-sm font-semibold tap-highlight">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span>Reportes</span>
+                </a>
+                <span class="text-indigo-400 font-light">|</span>
+                <div class="flex items-center gap-2">
+                    <i class="bi bi-shield-check text-indigo-300"></i>
+                    <h1 class="text-sm sm:text-base font-bold truncate">Auditoría de Facturas y Asientos</h1>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <a href="/admin/area" class="text-xs bg-indigo-800/80 hover:bg-indigo-600 text-indigo-100 font-medium px-2.5 py-1.5 rounded-lg border border-indigo-500/50 transition">
+                    Admin
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-3 sm:px-4 py-4 space-y-4">
+
+        <!-- Selector de Agente Activo -->
+        <div class="bg-white rounded-2xl p-3.5 sm:p-4 shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg flex-shrink-0">
+                    <i class="bi bi-hdd-network"></i>
+                </div>
+                <div>
+                    <label class="block text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">Agente de consulta</label>
+                    <span id="label-agente-activo" class="text-xs sm:text-sm font-semibold text-slate-800">Cargando...</span>
+                </div>
+            </div>
+            <div class="w-full sm:w-64">
+                <div class="relative">
+                    <select id="sel-agente-top" onchange="onAgenteChange()"
+                            class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
+                        {% if agentes %}
+                            {% for a in agentes %}
+                                <option value="{{ a.id }}" data-online="{{ '1' if a.online else '0' }}" data-dbver="{{ a.db_version }}" {% if a.id == agente_actual %}selected{% endif %}>
+                                    {{ '🟢' if a.online else '⚪' }} {{ a.nombre }}
+                                </option>
+                            {% endfor %}
+                        {% else %}
+                            <option value="">(Sin agentes)</option>
+                        {% endif %}
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario de Filtros de Auditoría -->
+        <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                
+                <!-- Empresa -->
+                <div class="lg:col-span-2">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Empresa</label>
+                    <div class="relative">
+                        <select id="f-empresa"
+                                class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition truncate">
+                            <option value="">Todas las empresas</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fecha Desde -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Desde</label>
+                    <input type="date" id="f-desde" value="{{ desde }}"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+
+                <!-- Fecha Hasta -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Hasta</label>
+                    <input type="date" id="f-hasta" value="{{ hasta }}"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                </div>
+
+                <!-- Consecutivo Desde -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Factura Desde (#)</label>
+                    <input type="text" id="f-desde-num" placeholder="Ej: 1001"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition font-mono">
+                </div>
+
+                <!-- Consecutivo Hasta -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Factura Hasta (#)</label>
+                    <input type="text" id="f-hasta-num" placeholder="Ej: 1050"
+                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition font-mono">
+                </div>
+            </div>
+
+            <!-- Opciones y Botones de Acción -->
+            <div class="pt-3 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100">
+                <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <button type="button" onclick="consultarAuditoria()" id="btn-consultar"
+                            class="tap-highlight px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                        <i class="bi bi-search"></i>
+                        <span>Auditar Facturas</span>
+                    </button>
+
+                    <button type="button" onclick="ejecutarAuditoriaAlegra()" id="btn-alegra"
+                            class="tap-highlight hidden px-4 py-2.5 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                        <i class="bi bi-cloud-check-fill text-base"></i>
+                        <span>Cruce con Alegra</span>
+                    </button>
+
+                    <button type="button" onclick="exportarExcel()" id="btn-excel"
+                            class="tap-highlight hidden px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                        <i class="bi bi-file-earmark-excel-fill text-base"></i>
+                        <span>Excel</span>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-4 text-xs font-medium text-slate-600">
+                    <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                        <input type="checkbox" id="f-solo-inc" onchange="aplicarFiltrosLocales()" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                        <span class="text-rose-600 font-bold">Solo Inconsistencias / Faltantes</span>
+                    </label>
+                    <div id="info-registros" class="text-slate-500"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Indicador de Carga -->
+        <div id="spinner" class="hidden bg-white rounded-2xl p-8 text-center shadow-sm border border-slate-200/80 space-y-3">
+            <div class="inline-block animate-spin rounded-full h-9 w-9 border-4 border-indigo-200 border-t-indigo-600"></div>
+            <p class="text-sm font-semibold text-slate-700" id="spinner-status">Auditando asientos contables y correlativos en el agente...</p>
+            <p class="text-xs text-slate-400" id="spinner-timer">Tiempo transcurrido: 0s</p>
+        </div>
+
+        <!-- Estado Inicial -->
+        <div id="estado-inicial" class="bg-white rounded-2xl p-8 text-center shadow-sm border border-slate-200/80 space-y-2">
+            <div class="w-12 h-12 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shadow-inner">
+                <i class="bi bi-shield-check"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-800">Auditoría Contable de Facturación</h3>
+            <p class="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+                Selecciona rango de fechas o consecutivos de factura para verificar que cada asiento esté cuadrado, homogéneo y sin huecos en la numeración correlativa.
+            </p>
+        </div>
+
+        <!-- Métricas y Tarjetas KPI de Auditoría -->
+        <div id="panel-kpi" class="hidden grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3">
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200/80">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Total Auditadas</span>
+                <span id="kpi-total" class="text-lg font-black text-slate-800">0</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-emerald-100 bg-emerald-50/20">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-0.5">Cuadradas OK</span>
+                <span id="kpi-cuadradas" class="text-lg font-black text-emerald-600">0</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-rose-100 bg-rose-50/20">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-rose-700 mb-0.5">Descuadradas</span>
+                <span id="kpi-descuadradas" class="text-lg font-black text-rose-600">0</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-amber-100 bg-amber-50/20">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-0.5">Faltantes (Huecos)</span>
+                <span id="kpi-faltantes" class="text-lg font-black text-amber-600">0</span>
+            </div>
+            <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-purple-100 bg-purple-50/20 col-span-2 sm:col-span-1">
+                <span class="block text-[10px] font-bold uppercase tracking-wider text-purple-700 mb-0.5">Tercero Múltiple / Alertas</span>
+                <span id="kpi-alertas" class="text-lg font-black text-purple-700">0</span>
+            </div>
+        </div>
+
+        <!-- Filtro Rápido en Vivo -->
+        <div id="wrap-filtro-vivo" class="hidden">
+            <input type="text" id="filtro-vivo" oninput="aplicarFiltrosLocales()" placeholder="🔍 Filtrar en vivo por factura, cliente, NIT, estado o diagnóstico..."
+                   class="w-full bg-white border border-slate-200 text-slate-800 text-xs sm:text-sm font-medium py-2 px-3.5 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+        </div>
+
+        <!-- Grilla de Auditoría con Filas Acordeón Expandibles -->
+        <div id="vista-grilla" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div class="overflow-x-auto max-h-[700px] custom-scrollbar relative">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead class="bg-slate-100/95 text-slate-600 font-bold uppercase text-[10px] sm:text-[11px] tracking-wider sticky top-0 z-10 backdrop-blur-sm shadow-sm border-b border-slate-200">
+                        <tr>
+                            <th class="py-2.5 px-3 text-center w-10">Ver</th>
+                            <th class="py-2.5 px-3 font-mono">Factura</th>
+                            <th class="py-2.5 px-3">Fecha / Lapso</th>
+                            <th class="py-2.5 px-3">Cliente / Tercero</th>
+                            <th class="py-2.5 px-3 text-right">Total Débito</th>
+                            <th class="py-2.5 px-3 text-right">Total Crédito</th>
+                            <th class="py-2.5 px-3 text-right">Diferencia</th>
+                            <th class="py-2.5 px-3 text-center">Estado Auditoría</th>
+                            <th class="py-2.5 px-3">Diagnóstico / Inconsistencia</th>
+                            <th class="py-2.5 px-3 text-center">Alegra API</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-grilla" class="divide-y divide-slate-100 text-slate-700 font-normal"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const REPORTE_ID = 'auditoria_facturas';
+        let _rows = [], _filteredRows = [];
+        let _catalogoEmpresas = [];
+        let _expandidas = new Set();
+        let _alegraCache = {}; // { '1045': { existe: true, ... } }
+        let _startTime = 0, _elapsedInterval = null;
+
+        function getAgenteActivo() {
+            const sel = document.getElementById('sel-agente-top');
+            return sel ? sel.value : (localStorage.getItem('sar_agente_favorito') || '');
+        }
+
+        function esAgenteActivoOnline() {
+            const sel = document.getElementById('sel-agente-top');
+            if (!sel || sel.selectedIndex < 0) return false;
+            const opt = sel.options[sel.selectedIndex];
+            return opt && opt.dataset.online === '1';
+        }
+
+        function onAgenteChange() {
+            const sel = document.getElementById('sel-agente-top');
+            if (sel && sel.value) {
+                localStorage.setItem('sar_agente_favorito', sel.value);
+                const opt = sel.options[sel.selectedIndex];
+                document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
+                cargarEmpresas();
+            }
+        }
+
+        (function initAgente() {
+            const sel = document.getElementById('sel-agente-top');
+            if (!sel || !sel.options.length) return;
+            const fav = localStorage.getItem('sar_agente_favorito');
+            let idx = 0;
+            if (fav) {
+                for (let i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === fav) { idx = i; break; }
+                }
+            }
+            sel.selectedIndex = idx;
+            const opt = sel.options[idx];
+            if (opt) document.getElementById('label-agente-activo').textContent = opt.text;
+            cargarEmpresas();
+        })();
+
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+        const fmtM = n => (n === null || n === undefined || n === '') ? '$ 0,00' : '$ ' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        function cargarEmpresas() {
+            const agente = getAgenteActivo();
+            const selEmp = document.getElementById('f-empresa');
+            if (!agente) return;
+            fetch(`/admin/api/empresas?agente=${encodeURIComponent(agente)}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.ok && d.empresas) {
+                        _catalogoEmpresas = d.empresas;
+                        let html = '<option value="">Todas las empresas</option>';
+                        _catalogoEmpresas.forEach(emp => {
+                            const cod = typeof emp === 'string' ? emp : emp.codigo;
+                            const nom = typeof emp === 'object' && emp.nombre ? ' — ' + emp.nombre : '';
+                            html += `<option value="${esc(cod)}">${esc(cod + nom)}</option>`;
+                        });
+                        selEmp.innerHTML = html;
+                    }
+                }).catch(() => {});
+        }
+
+        // ── Consulta al Backend ──────────────────────────────────────────────
+        function consultarAuditoria() {
+            const agente = getAgenteActivo();
+            if (!agente) { alert('Selecciona un agente.'); return; }
+            if (!esAgenteActivoOnline()) { alert('El agente está desconectado.'); return; }
+
+            const filtros = {
+                agente: agente,
+                empresa: document.getElementById('f-empresa').value,
+                desde: document.getElementById('f-desde').value,
+                hasta: document.getElementById('f-hasta').value,
+                desde_num: document.getElementById('f-desde-num').value.trim(),
+                hasta_num: document.getElementById('f-hasta-num').value.trim(),
+                solo_inconsistencias: document.getElementById('f-solo-inc').checked,
+            };
+
+            document.getElementById('estado-inicial').classList.add('hidden');
+            document.getElementById('panel-kpi').classList.add('hidden');
+            document.getElementById('wrap-filtro-vivo').classList.add('hidden');
+            document.getElementById('vista-grilla').classList.add('hidden');
+            document.getElementById('btn-excel').classList.add('hidden');
+            document.getElementById('btn-alegra').classList.add('hidden');
+            document.getElementById('info-registros').textContent = '';
+
+            const spinner = document.getElementById('spinner');
+            spinner.classList.remove('hidden');
+            _startTime = Date.now();
+            _elapsedInterval = setInterval(() => {
+                const s = ((Date.now() - _startTime) / 1000).toFixed(1);
+                document.getElementById('spinner-timer').textContent = `Tiempo transcurrido: ${s}s`;
+            }, 200);
+
+            _alegraCache = {};
+            _expandidas.clear();
+
+            fetch(`/admin/api/reporte/${REPORTE_ID}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(filtros)
+            })
+            .then(r => r.json())
+            .then(data => {
+                clearInterval(_elapsedInterval);
+                spinner.classList.add('hidden');
+                if (!data.ok) {
+                    alert('Error: ' + (data.error || 'No se pudo consultar'));
+                    return;
+                }
+                _rows = data.filas || data.rows || [];
+                aplicarFiltrosLocales();
+                document.getElementById('panel-kpi').classList.remove('hidden');
+                document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
+                document.getElementById('vista-grilla').classList.remove('hidden');
+                document.getElementById('btn-excel').classList.remove('hidden');
+                document.getElementById('btn-alegra').classList.remove('hidden');
+            })
+            .catch(err => {
+                clearInterval(_elapsedInterval);
+                spinner.classList.add('hidden');
+                alert('Error en la consulta: ' + err);
+            });
+        }
+
+        // ── Filtrado Local y Render de Tabla ─────────────────────────────────
+        function aplicarFiltrosLocales() {
+            const q = (document.getElementById('filtro-vivo').value || '').trim().toUpperCase();
+            const soloInc = document.getElementById('f-solo-inc').checked;
+
+            _filteredRows = _rows.filter(r => {
+                if (soloInc && r.estado === 'CUADRADA') return false;
+                if (!q) return true;
+                return (
+                    (r.documento && r.documento.toUpperCase().includes(q)) ||
+                    (r.tercero_nom && r.tercero_nom.toUpperCase().includes(q)) ||
+                    (r.tercero && r.tercero.toUpperCase().includes(q)) ||
+                    (r.estado && r.estado.toUpperCase().includes(q)) ||
+                    (r.inconsistencias_s && r.inconsistencias_s.toUpperCase().includes(q))
+                );
+            });
+
+            // Actualizar KPIs
+            const total = _rows.length;
+            const cuadradas = _rows.filter(r => r.estado === 'CUADRADA').length;
+            const descuadradas = _rows.filter(r => r.estado === 'DESCUADRADA').length;
+            const faltantes = _rows.filter(r => r.estado === 'FALTANTE').length;
+            const alertas = _rows.filter(r => r.estado === 'TERCERO_MULTIPLE' || r.estado === 'FECHA_DISCORDANTE').length;
+
+            document.getElementById('kpi-total').textContent = total;
+            document.getElementById('kpi-cuadradas').textContent = cuadradas;
+            document.getElementById('kpi-descuadradas').textContent = descuadradas;
+            document.getElementById('kpi-faltantes').textContent = faltantes;
+            document.getElementById('kpi-alertas').textContent = alertas;
+
+            document.getElementById('info-registros').textContent = `Mostrando ${_filteredRows.length} de ${total} facturas`;
+
+            renderTabla();
+        }
+
+        function toggleExpandir(docKey) {
+            if (_expandidas.has(docKey)) {
+                _expandidas.delete(docKey);
+            } else {
+                _expandidas.add(docKey);
+            }
+            renderTabla();
+        }
+
+        function renderTabla() {
+            const tbody = document.getElementById('tbody-grilla');
+            if (!_filteredRows.length) {
+                tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-slate-400 font-medium">No se encontraron facturas con los filtros aplicados.</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            _filteredRows.forEach(f => {
+                const docKey = `${f.empresa}_${f.tipo}_${f.documento}`;
+                const expandida = _expandidas.has(docKey);
+
+                let badgeEstado = '';
+                let rowClass = 'hover:bg-slate-50 transition';
+
+                if (f.estado === 'CUADRADA') {
+                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-700 border border-emerald-300 flex items-center justify-center gap-1"><i class="bi bi-check-circle-fill"></i> Cuadrada</span>`;
+                } else if (f.estado === 'DESCUADRADA') {
+                    rowClass = 'row-descuadrada hover:bg-rose-100/60 transition';
+                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-700 border border-rose-300 flex items-center justify-center gap-1"><i class="bi bi-exclamation-octagon-fill"></i> Descuadrada</span>`;
+                } else if (f.estado === 'FALTANTE') {
+                    rowClass = 'row-faltante hover:bg-amber-100/60 transition';
+                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300 flex items-center justify-center gap-1"><i class="bi bi-dash-circle-dotted"></i> Faltante</span>`;
+                } else if (f.estado === 'TERCERO_MULTIPLE') {
+                    rowClass = 'row-alerta hover:bg-purple-100/60 transition';
+                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-100 text-purple-700 border border-purple-300 flex items-center justify-center gap-1"><i class="bi bi-people-fill"></i> Tercero Doble</span>`;
+                } else if (f.estado === 'FECHA_DISCORDANTE') {
+                    rowClass = 'row-alerta hover:bg-yellow-100/60 transition';
+                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-yellow-100 text-yellow-800 border border-yellow-300 flex items-center justify-center gap-1"><i class="bi bi-calendar2-range"></i> Fechas Varias</span>`;
+                } else if (f.estado === 'ANULADA') {
+                    badgeEstado = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-300 flex items-center justify-center">Anulada</span>`;
+                }
+
+                let alegraBadge = '<span class="text-slate-300 text-[11px]">—</span>';
+                if (_alegraCache[f.documento]) {
+                    const al = _alegraCache[f.documento];
+                    if (al.existe && al.alegra) {
+                        alegraBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300 cursor-pointer hover:bg-sky-200" title="En Alegra: ${fmtM(al.alegra.total)} | Cliente: ${esc(al.alegra.cliente)} | Estado: ${esc(al.alegra.estado)}">
+                            <i class="bi bi-check2-all"></i> Alegra (${fmtM(al.alegra.total)})
+                        </span>`;
+                    } else {
+                        alegraBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200" title="No existe en Alegra">
+                            No en Alegra
+                        </span>`;
+                    }
+                }
+
+                html += `
+                <tr class="${rowClass} cursor-pointer border-b border-slate-100" onclick="toggleExpandir('${esc(docKey)}')">
+                    <td class="py-2.5 px-3 text-center">
+                        ${f.es_faltante ? '<span class="text-slate-300">•</span>' : `
+                        <button type="button" class="w-6 h-6 rounded-lg bg-slate-100 hover:bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold transition">
+                            <i class="bi ${expandida ? 'bi-dash-lg' : 'bi-plus-lg'}"></i>
+                        </button>`}
+                    </td>
+                    <td class="py-2.5 px-3 font-mono font-bold text-slate-900">
+                        ${esc(f.documento)}
+                        ${f.tipo ? `<span class="text-[9px] font-normal text-slate-400 block">${esc(f.tipo)}</span>` : ''}
+                    </td>
+                    <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap">
+                        <span class="font-medium">${esc(f.fecha ? f.fecha.slice(0,10) : f.lapso || '—')}</span>
+                        ${f.fecha && f.fecha.length > 10 ? `<span class="text-[10px] text-slate-400 block">${esc(f.fecha.slice(11))}</span>` : ''}
+                    </td>
+                    <td class="py-2.5 px-3">
+                        <span class="font-semibold text-slate-800 block truncate max-w-[200px]" title="${esc(f.tercero_nom)}">${esc(f.tercero_nom || '—')}</span>
+                        ${f.tercero ? `<span class="text-[10px] font-mono text-slate-400">${esc(f.tercero)}</span>` : ''}
+                    </td>
+                    <td class="py-2.5 px-3 text-right font-mono font-semibold text-emerald-700">
+                        ${fmtM(f.total_debito)}
+                    </td>
+                    <td class="py-2.5 px-3 text-right font-mono font-semibold text-rose-700">
+                        ${fmtM(f.total_credito)}
+                    </td>
+                    <td class="py-2.5 px-3 text-right font-mono font-black ${f.diferencia !== 0 ? 'text-rose-600 bg-rose-50/50' : 'text-slate-400'}">
+                        ${fmtM(f.diferencia)}
+                    </td>
+                    <td class="py-2.5 px-3 text-center whitespace-nowrap">
+                        ${badgeEstado}
+                    </td>
+                    <td class="py-2.5 px-3 text-xs text-slate-600">
+                        ${f.inconsistencias.length ? `<span class="text-rose-600 font-medium">${esc(f.inconsistencias[0])}</span>` : '<span class="text-emerald-600 font-medium"><i class="bi bi-check2"></i> Asiento balanceado</span>'}
+                    </td>
+                    <td class="py-2.5 px-3 text-center whitespace-nowrap" onclick="event.stopPropagation()">
+                        ${alegraBadge}
+                    </td>
+                </tr>`;
+
+                // Fila Desplegable con Asientos Detallados
+                if (expandida && f.asientos && f.asientos.length > 0) {
+                    html += `
+                    <tr class="bg-indigo-50/40 border-b-2 border-indigo-100">
+                        <td colspan="10" class="p-3 sm:p-4">
+                            <div class="bg-white rounded-xl shadow-sm border border-indigo-100 overflow-hidden space-y-2 p-3">
+                                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                                    <div class="flex items-center gap-2">
+                                        <i class="bi bi-journal-text text-indigo-600 font-bold"></i>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">
+                                            Asientos Contables Factura: <span class="font-mono text-indigo-700">${esc(f.documento)}</span> (${f.asientos.length} líneas)
+                                        </h4>
+                                    </div>
+                                    <span class="text-[11px] font-mono text-slate-400">Empresa: ${esc(f.empresa)} | Tipo: ${esc(f.tipo_nom)}</span>
+                                </div>
+                                <table class="w-full text-left text-[11px] border-collapse">
+                                    <thead class="bg-slate-50 text-slate-500 font-bold uppercase text-[9px] tracking-wider border-b border-slate-200">
+                                        <tr>
+                                            <th class="py-1.5 px-2 font-mono">Cuenta</th>
+                                            <th class="py-1.5 px-2">Nombre Cuenta</th>
+                                            <th class="py-1.5 px-2">Tercero / NIT</th>
+                                            <th class="py-1.5 px-2 text-right">Débito</th>
+                                            <th class="py-1.5 px-2 text-right">Crédito</th>
+                                            <th class="py-1.5 px-2">Detalle / Concepto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        ${f.asientos.map(a => `
+                                            <tr class="hover:bg-slate-50">
+                                                <td class="py-1.5 px-2 font-mono font-bold text-indigo-700">${esc(a.cuenta)}</td>
+                                                <td class="py-1.5 px-2 font-medium text-slate-700">${esc(a.cuenta_nom)}</td>
+                                                <td class="py-1.5 px-2 text-slate-600">${esc(a.tercero_nom)} <span class="text-slate-400 text-[9px]">(${esc(a.nit || a.tercero)})</span></td>
+                                                <td class="py-1.5 px-2 text-right font-mono text-emerald-700 font-semibold">${fmtM(a.debito)}</td>
+                                                <td class="py-1.5 px-2 text-right font-mono text-rose-700 font-semibold">${fmtM(a.credito)}</td>
+                                                <td class="py-1.5 px-2 text-slate-500 italic truncate max-w-[280px]" title="${esc(a.detalle)}">${esc(a.detalle)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                    <tfoot class="bg-slate-100/70 font-bold border-t border-slate-200 text-slate-800">
+                                        <tr>
+                                            <td colspan="3" class="py-1.5 px-2 text-right uppercase text-[9px]">Totales Factura:</td>
+                                            <td class="py-1.5 px-2 text-right font-mono text-emerald-700">${fmtM(f.total_debito)}</td>
+                                            <td class="py-1.5 px-2 text-right font-mono text-rose-700">${fmtM(f.total_credito)}</td>
+                                            <td class="py-1.5 px-2 font-mono ${f.diferencia !== 0 ? 'text-rose-600 font-bold' : 'text-slate-500'}">Dif: ${fmtM(f.diferencia)}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>`;
+                }
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        // ── Cruce Selectivo con API Alegra ───────────────────────────────────
+        function ejecutarAuditoriaAlegra() {
+            // Recolectar números de facturas que tengan inconsistencias o faltantes
+            const sospechosas = _rows.filter(r => r.estado !== 'CUADRADA' && r.documento).map(r => r.documento);
+            if (!sospechosas.length) {
+                alert('¡Excelente! No hay facturas con inconsistencias o faltantes para auditar en Alegra.');
+                return;
+            }
+
+            const btn = document.getElementById('btn-alegra');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span> Cruzando con Alegra (${sospechosas.length})...`;
+
+            fetch('/admin/api/reporte/auditoria_facturas/alegra_check', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    numeros: sospechosas,
+                    empresa: document.getElementById('f-empresa').value,
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="bi bi-cloud-check-fill text-base"></i> <span>Cruce con Alegra</span>`;
+                if (data.ok && data.resultados) {
+                    _alegraCache = Object.assign(_alegraCache, data.resultados);
+                    renderTabla();
+                    const encontrados = Object.values(data.resultados).filter(x => x.existe).length;
+                    alert(`Cruce completado: Se consultaron ${sospechosas.length} facturas con inconsistencias.\n${encontrados} encontradas en Alegra.`);
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="bi bi-cloud-check-fill text-base"></i> <span>Cruce con Alegra</span>`;
+                alert('Error al consultar Alegra: ' + err);
+            });
+        }
+
+        // ── Exportar a Excel ──────────────────────────────────────────────────
+        function exportarExcel() {
+            const agente = getAgenteActivo();
+            if (!_rows.length) { alert('No hay datos para exportar.'); return; }
+            const filtros = {
+                agente: agente,
+                cliente_id: agente,
+                empresa: document.getElementById('f-empresa').value,
+                desde: document.getElementById('f-desde').value,
+                hasta: document.getElementById('f-hasta').value,
+                filas: _filteredRows,
+            };
+
+            const btn = document.getElementById('btn-excel');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span> Generando...`;
+
+            fetch(`/admin/api/reporte/${REPORTE_ID}/excel`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(filtros)
+            })
+            .then(r => {
+                if (!r.ok) throw new Error('Error al generar Excel');
+                return r.blob();
+            })
+            .then(blob => {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="bi bi-file-earmark-excel-fill text-base"></i> <span>Excel</span>`;
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `auditoria_facturas_${new Date().toISOString().slice(0,10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="bi bi-file-earmark-excel-fill text-base"></i> <span>Excel</span>`;
+                alert(err.message);
+            });
+        }
+    </script>
+</body>
+</html>

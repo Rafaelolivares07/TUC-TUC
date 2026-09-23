@@ -186,13 +186,13 @@ def calcular(datos, filtros):
                 'asientos':  [],
             }
 
+        detalle = str(r.get('DETALLE_CT', '') or '').strip()
         cod_ter = _fmt_id(r.get('TERCERO'))
         nom_ter = detalle or (f"Tercero {cod_ter}" if cod_ter else '—')
         nit_ter = cod_ter
 
         cuenta_cod = str(r.get('CUENTA', '') or '').strip()
         cuenta_nom = cuentas_map.get(cuenta_cod, '')
-        detalle = str(r.get('DETALLE_CT', '') or '').strip()
 
         deb = float(r.get('TOT_DEB', 0) or 0)
         cre = float(r.get('TOT_CRE', 0) or 0)

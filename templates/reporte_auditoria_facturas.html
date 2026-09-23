@@ -56,10 +56,7 @@
                 </div>
                 <div>
                     <label class="block text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">Agente de consulta</label>
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        <span id="label-agente-activo" class="text-xs sm:text-sm font-semibold text-slate-800">Cargando...</span>
-                        <span id="badge-terceros-agente" class="hidden"></span>
-                    </div>
+                    <span id="label-agente-activo" class="text-xs sm:text-sm font-semibold text-slate-800">Cargando...</span>
                 </div>
             </div>
             <div class="w-full sm:w-64">
@@ -308,7 +305,6 @@
                 document.getElementById('label-agente-activo').textContent = opt ? opt.text : sel.value;
                 cargarEmpresas();
                 cargarTiposDoc();
-                cargarTercerosStats();
             }
         }
 
@@ -327,36 +323,7 @@
             if (opt) document.getElementById('label-agente-activo').textContent = opt.text;
             cargarEmpresas();
             cargarTiposDoc();
-            cargarTercerosStats();
         })();
-
-        function cargarTercerosStats() {
-            const agente = getAgenteActivo();
-            const badge = document.getElementById('badge-terceros-agente');
-            if (!agente || !badge) return;
-            badge.classList.remove('hidden');
-            fetch(`/admin/api/terceros/stats?agente=${encodeURIComponent(agente)}`)
-                .then(r => r.json())
-                .then(d => {
-                    if (d.ok) {
-                        if (d.total > 0) {
-                            badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200';
-                            badge.innerHTML = `<i class="bi bi-people-fill mr-1"></i> ${d.total.toLocaleString('es-CO')} Terceros en caché`;
-                        } else {
-                            badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200';
-                            badge.innerHTML = `<span class="inline-block animate-spin mr-1">⏳</span> Sincronizando Terceros...`;
-                            fetch(`/admin/api/terceros/sync?agente=${encodeURIComponent(agente)}`, { method: 'POST' })
-                                .then(r => r.json())
-                                .then(d2 => {
-                                    if (d2.ok && d2.total > 0) {
-                                        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200';
-                                        badge.innerHTML = `<i class="bi bi-people-fill mr-1"></i> ${d2.total.toLocaleString('es-CO')} Terceros en caché`;
-                                    }
-                                }).catch(() => {});
-                        }
-                    }
-                }).catch(() => {});
-        }
 
         const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
         const fmtM = n => (n === null || n === undefined || n === '') ? '$ 0,00' : '$ ' + Number(n).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});

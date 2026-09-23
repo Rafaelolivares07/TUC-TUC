@@ -4,7 +4,7 @@ import datetime
 import io
 import re
 
-NOMBRE    = 'Auditoría de Facturas'
+NOMBRE    = 'Auditoría de Documentos de Interfase'
 ID        = 'auditoria_facturas'
 CATEGORIA = 'Contabilidad'
 
@@ -68,15 +68,15 @@ def tablas_requeridas(filtros):
             {'tabla': 'EMPRESAS', 'campos': ['COD_EMP', 'NOM_EMP', 'NIT'], 'filtros': {}},
             {'tabla': 'TIPO_DOC', 'campos': ['CODIGO', 'NOMBRE'], 'filtros': {}},
             {'tabla': 'CUENTAS',  'campos': ['CODIGO', 'NOMBRE', 'TIPO'], 'filtros': {}},
+            {'tabla': 'TERCEROS', 'campos': ['COD_TER', 'NOMBRE', 'IDENTIFICA', 'NIT'], 'filtros': {}},
+            {'tabla': 'allegra_config', 'campos': ['EMPRESA', 'TIP_DOC', 'NUM_INICIO'], 'filtros': {}},
+            {'tabla': 'alegra_tiposdoc', 'campos': ['EMPRESA', 'TIP_ADMIN', 'TIP_ALEGRA'], 'filtros': {}},
         ]
 
     empresa  = str(filtros.get('empresa', '') or '').strip().upper()
     tipo_doc = str(filtros.get('tipo_doc', '') or '').strip().upper()
     desde    = filtros.get('desde', '')
     hasta    = filtros.get('hasta', '')
-
-    def a_lapso(f):
-        return f.replace('-', '') if f else ''
 
     filtros_rc = {}
     if empresa:
@@ -85,9 +85,9 @@ def tablas_requeridas(filtros):
         filtros_rc['TIPO'] = tipo_doc
 
     if desde or hasta:
-        filtros_rc['LAPSO'] = {}
-        if desde: filtros_rc['LAPSO']['desde'] = a_lapso(desde)
-        if hasta: filtros_rc['LAPSO']['hasta'] = a_lapso(hasta)
+        filtros_rc['FECHAHORA'] = {}
+        if desde: filtros_rc['FECHAHORA']['desde'] = desde
+        if hasta: filtros_rc['FECHAHORA']['hasta'] = hasta
 
     return [
         {
@@ -107,6 +107,21 @@ def tablas_requeridas(filtros):
             'campos':  ['CODIGO', 'NOMBRE', 'TIPO'],
             'filtros': {},
         },
+        {
+            'tabla':   'TERCEROS',
+            'campos':  ['COD_TER', 'NOMBRE', 'IDENTIFICA', 'NIT'],
+            'filtros': {},
+        },
+        {
+            'tabla':   'allegra_config',
+            'campos':  ['EMPRESA', 'TIP_DOC', 'NUM_INICIO'],
+            'filtros': {},
+        },
+        {
+            'tabla':   'alegra_tiposdoc',
+            'campos':  ['EMPRESA', 'TIP_ADMIN', 'TIP_ALEGRA'],
+            'filtros': {},
+        },
     ]
 
 
@@ -124,6 +139,27 @@ def calcular(datos, filtros):
         if t:
             tipos_map[t] = str(r.get('NOMBRE', '') or '').strip()
 
+    terceros_map = {}
+    for r in datos.get('TERCEROS', []):
+        cod = str(r.get('COD_TER', '') or '').strip()
+        nom = str(r.get('NOMBRE', '') or '').strip()
+        nit = str(r.get('NIT', '') or r.get('IDENTIFICA', '') or '').strip()
+        if cod:
+            terceros_map[cod] = {'nombre': nom, 'nit': nit}
+
+    # Tipos configurados en interfases
+    interfaz_tipos = set()
+    for r in datos.get('allegra_config', []):
+        t = str(r.get('TIP_DOC', '') or '').strip().upper()
+        if t:
+            interfaz_tipos.add(t)
+    for r in datos.get('alegra_tiposdoc', []):
+        t = str(r.get('TIP_ADMIN', '') or '').strip().upper()
+        if t:
+            interfaz_tipos.add(t)
+    if not interfaz_tipos:
+        interfaz_tipos = {'030', '029', '015', '016', '020', '021', '022', '023', '024'}
+
     # 2. Agrupación por Documento/Factura
     raw_rc = datos.get('REG_CTAS', [])
     tipo_filtro_exacto = str(filtros.get('tipo_doc', '') or '').strip().upper()
@@ -133,14 +169,11 @@ def calcular(datos, filtros):
         emp = str(r.get('EMPRESA', '') or '').strip().upper()
         tipo = str(r.get('TIPO', '') or '').strip().upper()
         
-        # Si el usuario no especificó un tipo concreto, ignorar documentos que no sean de facturación/venta/devolución (ej: 111 inventario físico, 03 compras, 04 egresos)
-        if not tipo_filtro_exacto:
-            nom_t = tipos_map.get(tipo, '').upper()
-            es_factura = (
-                tipo in ('01', '011', '012', '013', '014', '015', '016', '017', '018', '019', '020', '021', '022', '023', '024', '025', '026', '027', '029', '030', '12', '02')
-                or any(k in nom_t for k in ('FACTURA', 'POS', 'ELECTRONICA', 'ALEGRA', 'VENTA', 'DEVOLUCION'))
-            )
-            if not es_factura:
+        if tipo_filtro_exacto:
+            if tipo != tipo_filtro_exacto:
+                continue
+        else:
+            if tipo not in interfaz_tipos:
                 continue
 
         doc = str(r.get('DOCUMENTO', '') or '').strip()
@@ -161,6 +194,10 @@ def calcular(datos, filtros):
             }
 
         cod_ter = _fmt_id(r.get('TERCERO'))
+        ter_info = terceros_map.get(cod_ter, {})
+        nom_ter = ter_info.get('nombre') or detalle or (f"Tercero {cod_ter}" if cod_ter else '—')
+        nit_ter = ter_info.get('nit') or cod_ter
+
         cuenta_cod = str(r.get('CUENTA', '') or '').strip()
         cuenta_nom = cuentas_map.get(cuenta_cod, '')
         detalle = str(r.get('DETALLE_CT', '') or '').strip()
@@ -183,8 +220,8 @@ def calcular(datos, filtros):
             'cuenta':      cuenta_cod,
             'cuenta_nom':  cuenta_nom,
             'tercero':     cod_ter,
-            'tercero_nom': detalle or f"Tercero {cod_ter}",
-            'nit':         cod_ter,
+            'tercero_nom': nom_ter,
+            'nit':         nit_ter,
             'debito':      round(deb, 2),
             'credito':     round(cre, 2),
             'detalle':     detalle,

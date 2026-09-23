@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Auditoría de Facturas — SAR</title>
+    <title>Auditoría de Documentos de Interfase — SAR</title>
     <script src="/static/js/tailwind.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
@@ -35,7 +35,7 @@
                 <span class="text-indigo-400 font-light">|</span>
                 <div class="flex items-center gap-2">
                     <i class="bi bi-shield-check text-indigo-300"></i>
-                    <h1 class="text-sm sm:text-base font-bold truncate">Auditoría de Facturas y Asientos</h1>
+                    <h1 class="text-sm sm:text-base font-bold truncate">Auditoría de Facturas y Documentos de Interfase</h1>
                 </div>
             </div>
             <div class="flex items-center gap-2">
@@ -163,7 +163,7 @@
                     <button type="button" onclick="ejecutarAuditoriaAlegra()" id="btn-alegra"
                             class="tap-highlight hidden px-4 py-2.5 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
                         <i class="bi bi-cloud-check-fill text-base"></i>
-                        <span>Cruce con Alegra</span>
+                        <span>Validar con API Externa</span>
                     </button>
 
                     <button type="button" onclick="exportarExcel()" id="btn-excel"
@@ -186,7 +186,7 @@
         <!-- Indicador de Carga -->
         <div id="spinner" class="hidden bg-white rounded-2xl p-8 text-center shadow-sm border border-slate-200/80 space-y-3">
             <div class="inline-block animate-spin rounded-full h-9 w-9 border-4 border-indigo-200 border-t-indigo-600"></div>
-            <p class="text-sm font-semibold text-slate-700" id="spinner-status">Auditando asientos contables y correlativos en el agente...</p>
+            <p class="text-sm font-semibold text-slate-700" id="spinner-status">Auditando asientos contables y correlativos de documentos de interfase...</p>
             <p class="text-xs text-slate-400" id="spinner-timer">Tiempo transcurrido: 0s</p>
         </div>
 
@@ -195,9 +195,9 @@
             <div class="w-12 h-12 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shadow-inner">
                 <i class="bi bi-shield-check"></i>
             </div>
-            <h3 class="text-base font-bold text-slate-800">Auditoría Contable de Facturación</h3>
+            <h3 class="text-base font-bold text-slate-800">Auditoría Contable de Documentos de Interfase</h3>
             <p class="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
-                Selecciona rango de fechas o consecutivos de factura para verificar que cada asiento esté cuadrado, homogéneo y sin huecos en la numeración correlativa.
+                Auditoría, validación contable de partida doble y verificación de documentos y facturas generadas mediante interfases con otros programas.
             </p>
         </div>
 
@@ -233,7 +233,7 @@
                         <i class="bi bi-grid-fill"></i>
                     </div>
                     <div>
-                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Tipos de Documento en esta Auditoría</h4>
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Tipos de Documento de Interfase</h4>
                         <p class="text-[10px] text-slate-400">Haz clic en cualquier tipo para filtrar los resultados al instante</p>
                     </div>
                 </div>
@@ -266,7 +266,7 @@
                             <th class="py-2.5 px-3 text-right">Diferencia</th>
                             <th class="py-2.5 px-3 text-center">Estado Auditoría</th>
                             <th class="py-2.5 px-3">Diagnóstico / Inconsistencia</th>
-                            <th class="py-2.5 px-3 text-center">Alegra API</th>
+                            <th class="py-2.5 px-3 text-center">API Externa</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-grilla" class="divide-y divide-slate-100 text-slate-700 font-normal"></tbody>
@@ -377,48 +377,36 @@
 
             const tipos = _catalogoTiposDoc.tipos || [];
             const porEmp = _catalogoTiposDoc.por_empresa || {};
-            const empInfo = porEmp[empresa];
+            const tiposMap = {};
+            tipos.forEach(t => { tiposMap[t.codigo] = t; });
 
-            let html = '<option value="">Todos los tipos de documento</option>';
+            let codigosInterfaz = [];
             let preseleccion = '';
 
-            if (empresa && empInfo) {
-                const defTipo = empInfo.default_tipo;
-                const setInterfaz = new Set(empInfo.tipos_interfaz || []);
-                const setContables = new Set(empInfo.tipos_contables || []);
-
-                if (defTipo) {
-                    preseleccion = defTipo;
-                }
-
-                // 1. Tipos de Interfaz Alegra
-                if (setInterfaz.size > 0) {
-                    html += `<optgroup label="⚡ Configurados en Interfaz Alegra (${esc(empresa)})">`;
-                    tipos.forEach(t => {
-                        if (setInterfaz.has(t.codigo)) {
-                            const isDef = (t.codigo === defTipo);
-                            html += `<option value="${esc(t.codigo)}" ${isDef ? 'selected' : ''}>${isDef ? '★ ' : ''}${esc(t.codigo)} — ${esc(t.nombre)} (Interfaz)</option>`;
-                        }
-                    });
-                    html += `</optgroup>`;
-                }
-
-                // 2. Otros tipos contables de la empresa
-                const otrosContables = tipos.filter(t => setContables.has(t.codigo) && !setInterfaz.has(t.codigo));
-                if (otrosContables.length > 0) {
-                    html += `<optgroup label="📄 Otros Documentos de ${esc(empresa)}">`;
-                    otrosContables.forEach(t => {
-                        html += `<option value="${esc(t.codigo)}">${esc(t.codigo)} — ${esc(t.nombre)}</option>`;
-                    });
-                    html += `</optgroup>`;
-                }
+            if (empresa && porEmp[empresa]) {
+                const empInfo = porEmp[empresa];
+                codigosInterfaz = empInfo.tipos_interfaz || [];
+                preseleccion = empInfo.default_tipo || '';
             } else {
-                // Sin empresa seleccionada: mostrar todos
-                tipos.forEach(t => {
-                    const isFactura = t.nombre.toUpperCase().includes('FACTURA') || t.codigo.startsWith('01') || t.codigo.startsWith('02') || t.codigo.startsWith('03');
-                    html += `<option value="${esc(t.codigo)}" ${isFactura ? 'class="font-semibold text-indigo-700"' : ''}>${esc(t.codigo)} — ${esc(t.nombre)}</option>`;
+                // Sin empresa: obtener la unión de todos los tipos de interfase configurados
+                const setUnion = new Set();
+                Object.values(porEmp).forEach(empInfo => {
+                    (empInfo.tipos_interfaz || []).forEach(c => setUnion.add(c));
                 });
+                codigosInterfaz = Array.from(setUnion).sort();
+                if (!codigosInterfaz.length) {
+                    codigosInterfaz = ['030', '029', '015', '016', '020', '021'];
+                }
             }
+
+            let html = `<option value="">Todos los tipos de interfase${empresa ? ' (' + esc(empresa) + ')' : ''}</option>`;
+
+            codigosInterfaz.forEach(cod => {
+                const t = tiposMap[cod];
+                const nom = t ? t.nombre : cod;
+                const isDef = (cod === preseleccion);
+                html += `<option value="${esc(cod)}" ${isDef ? 'selected' : ''}>${isDef ? '★ ' : ''}${esc(cod)} — ${esc(nom)}</option>`;
+            });
 
             selTipo.innerHTML = html;
             if (preseleccion) {
@@ -623,13 +611,13 @@
 
             tiposArr.forEach(t => {
                 const activo = (_tipoChipFiltro === t.tipo);
-                const isAlegra = (t.tipo === '030' || t.tipo === '029' || t.tipo === '015' || t.tipo === '016');
+                const isInterfaz = (t.tipo === '030' || t.tipo === '029' || t.tipo === '015' || t.tipo === '016' || t.tipo === '020' || t.tipo === '021');
                 
                 chipsHtml += `
                 <button type="button" onclick="setFiltroTipoChip('${esc(t.tipo)}')"
                         class="tap-highlight px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center gap-2 border ${activo ? 'bg-indigo-600 text-white border-indigo-600 shadow-md font-bold' : 'bg-white text-slate-800 hover:bg-slate-50 border-slate-200 shadow-sm'}">
-                    <span class="font-bold font-mono ${activo ? 'text-white' : (isAlegra ? 'text-indigo-600' : 'text-slate-900')}">
-                        ${isAlegra ? '⚡ ' : ''}${esc(t.tipo)}
+                    <span class="font-bold font-mono ${activo ? 'text-white' : (isInterfaz ? 'text-indigo-600' : 'text-slate-900')}">
+                        ${isInterfaz ? '⚡ ' : ''}${esc(t.tipo)}
                     </span>
                     <span class="truncate max-w-[160px]">${esc(t.tipo_nom)}</span>
                     ${t.empresa ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-black ${activo ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-600'}">${esc(t.empresa)}</span>` : ''}
@@ -687,12 +675,12 @@
                 if (_alegraCache[f.documento]) {
                     const al = _alegraCache[f.documento];
                     if (al.existe && al.alegra) {
-                        alegraBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300 cursor-pointer hover:bg-sky-200" title="En Alegra: ${fmtM(al.alegra.total)} | Cliente: ${esc(al.alegra.cliente)} | Estado: ${esc(al.alegra.estado)}">
-                            <i class="bi bi-check2-all"></i> Alegra (${fmtM(al.alegra.total)})
+                        alegraBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300 cursor-pointer hover:bg-sky-200" title="En API Externa: ${fmtM(al.alegra.total)} | Cliente: ${esc(al.alegra.cliente)} | Estado: ${esc(al.alegra.estado)}">
+                            <i class="bi bi-check2-all"></i> API Externa (${fmtM(al.alegra.total)})
                         </span>`;
                     } else {
-                        alegraBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200" title="No existe en Alegra">
-                            No en Alegra
+                        alegraBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200" title="No existe en la API Externa">
+                            No en API Externa
                         </span>`;
                     }
                 }
@@ -798,18 +786,18 @@
             tbody.innerHTML = html;
         }
 
-        // ── Cruce Selectivo con API Alegra ───────────────────────────────────
+        // ── Cruce Selectivo con API Externa ──────────────────────────────────
         function ejecutarAuditoriaAlegra() {
             // Recolectar números de facturas que tengan inconsistencias o faltantes
             const sospechosas = _rows.filter(r => r.estado !== 'CUADRADA' && r.documento).map(r => r.documento);
             if (!sospechosas.length) {
-                alert('¡Excelente! No hay facturas con inconsistencias o faltantes para auditar en Alegra.');
+                alert('¡Excelente! No hay facturas con inconsistencias o faltantes para validar con la API externa.');
                 return;
             }
 
             const btn = document.getElementById('btn-alegra');
             btn.disabled = true;
-            btn.innerHTML = `<span class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span> Cruzando con Alegra (${sospechosas.length})...`;
+            btn.innerHTML = `<span class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span> Validando (${sospechosas.length})...`;
 
             fetch('/admin/api/reporte/auditoria_facturas/alegra_check', {
                 method: 'POST',
@@ -822,18 +810,18 @@
             .then(r => r.json())
             .then(data => {
                 btn.disabled = false;
-                btn.innerHTML = `<i class="bi bi-cloud-check-fill text-base"></i> <span>Cruce con Alegra</span>`;
+                btn.innerHTML = `<i class="bi bi-cloud-check-fill text-base"></i> <span>Validar con API Externa</span>`;
                 if (data.ok && data.resultados) {
                     _alegraCache = Object.assign(_alegraCache, data.resultados);
                     renderTabla();
                     const encontrados = Object.values(data.resultados).filter(x => x.existe).length;
-                    alert(`Cruce completado: Se consultaron ${sospechosas.length} facturas con inconsistencias.\n${encontrados} encontradas en Alegra.`);
+                    alert(`Validación completada: Se consultaron ${sospechosas.length} facturas con inconsistencias.\n${encontrados} verificadas en la API externa.`);
                 }
             })
             .catch(err => {
                 btn.disabled = false;
-                btn.innerHTML = `<i class="bi bi-cloud-check-fill text-base"></i> <span>Cruce con Alegra</span>`;
-                alert('Error al consultar Alegra: ' + err);
+                btn.innerHTML = `<i class="bi bi-cloud-check-fill text-base"></i> <span>Validar con API Externa</span>`;
+                alert('Error al consultar API externa: ' + err);
             });
         }
 

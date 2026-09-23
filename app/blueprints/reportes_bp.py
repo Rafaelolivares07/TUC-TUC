@@ -61,10 +61,10 @@ REPORTES_INFO = {
         'template': 'reporte_inventario.html',
     },
     'auditoria_facturas': {
-        'nombre': 'Auditoría de Facturas',
+        'nombre': 'Auditoría de Documentos de Interfase',
         'categoria': 'Contabilidad',
         'icono': 'bi-shield-check',
-        'descripcion': 'Auditoría de asientos por factura, detección de faltantes, descuadres y cruce con Alegra.',
+        'descripcion': 'Auditoría y validación contable de documentos y facturas generadas mediante interfases con otros sistemas.',
         'template': 'reporte_auditoria_facturas.html',
     },
 }

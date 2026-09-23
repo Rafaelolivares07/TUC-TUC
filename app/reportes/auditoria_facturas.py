@@ -88,9 +88,6 @@ def tablas_requeridas(filtros):
         filtros_rc['TIPO'] = '029'
 
     if desde or hasta:
-        filtros_rc['FECHAHORA'] = {}
-        if desde: filtros_rc['FECHAHORA']['desde'] = desde
-        if hasta: filtros_rc['FECHAHORA']['hasta'] = hasta
         filtros_rc['LAPSO'] = {}
         if desde: filtros_rc['LAPSO']['desde'] = desde
         if hasta: filtros_rc['LAPSO']['hasta'] = hasta

@@ -250,13 +250,16 @@ def _resolver_terceros_lote(conn, agente, cod_ters):
                 cod_ter VARCHAR(50) NOT NULL,
                 nombre VARCHAR(250),
                 nit VARCHAR(50),
-                updated_at TIMESTAMPTZ DEFAULT NOW(),
-                UNIQUE(cliente_id, ruta_bd, cod_ter)
+                updated_at TIMESTAMPTZ DEFAULT NOW()
             )
         """)
-        conn.execute("""
-            ALTER TABLE admin_terceros_cache ADD COLUMN IF NOT EXISTS ruta_bd VARCHAR(500) NOT NULL DEFAULT ''
-        """)
+        try:
+            conn.execute("ALTER TABLE admin_terceros_cache ADD COLUMN IF NOT EXISTS ruta_bd VARCHAR(500) NOT NULL DEFAULT ''")
+            conn.execute("ALTER TABLE admin_terceros_cache DROP CONSTRAINT IF EXISTS admin_terceros_cache_cliente_id_cod_ter_key")
+            conn.execute("ALTER TABLE admin_terceros_cache DROP CONSTRAINT IF EXISTS admin_terceros_cache_cliente_id_ruta_bd_cod_ter_key")
+            conn.execute("ALTER TABLE admin_terceros_cache ADD CONSTRAINT admin_terceros_cache_cliente_id_ruta_bd_cod_ter_key UNIQUE (cliente_id, ruta_bd, cod_ter)")
+        except Exception:
+            pass
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_terceros_cache_lookup ON admin_terceros_cache (LOWER(cliente_id), LOWER(ruta_bd), cod_ter)
         """)

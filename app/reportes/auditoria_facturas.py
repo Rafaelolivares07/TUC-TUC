@@ -158,7 +158,7 @@ def calcular(datos, filtros):
         if t:
             interfaz_tipos.add(t)
     if not interfaz_tipos:
-        interfaz_tipos = {'030', '029', '015', '016', '020', '021', '022', '023', '024'}
+        interfaz_tipos = {'030', '029'}
 
     # 2. Agrupación por Documento/Factura
     raw_rc = datos.get('REG_CTAS', [])

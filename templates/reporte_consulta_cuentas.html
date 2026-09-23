@@ -59,7 +59,7 @@
                             class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
                         {% if agentes %}
                             {% for a in agentes %}
-                                <option value="{{ a.id }}" data-online="{{ '1' if a.online else '0' }}" {% if a.id == agente_actual %}selected{% endif %}>
+                                <option value="{{ a.id }}" data-online="{{ '1' if a.online else '0' }}" data-dbver="{{ a.db_version }}" {% if a.id == agente_actual %}selected{% endif %}>
                                     {{ '🟢' if a.online else '⚪' }} {{ a.nombre }}
                                 </option>
                             {% endfor %}
@@ -352,27 +352,40 @@
             }
 
             // 1. Intentar de caché local instantáneo (0ms)
-            const cachedCta = localStorage.getItem(`sar_cuentas_${agente}`);
-            const cachedEmp = localStorage.getItem(`sar_empresas_${agente}`);
+            const sel = document.getElementById('sel-agente-top');
+            const opt = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+            const currentDbVer = opt ? (opt.dataset.dbver || '') : '';
+
+            const cachedDbVer = localStorage.getItem(`sar_dbver_${agente}`);
+            const cachedCta   = localStorage.getItem(`sar_cuentas_${agente}`);
+            const cachedEmp   = localStorage.getItem(`sar_empresas_${agente}`);
+
             if (cachedCta && cachedEmp) {
-                try {
-                    activar(JSON.parse(cachedCta), JSON.parse(cachedEmp));
-                    return;
-                } catch(e){}
+                // Si la versión del agente en el servidor cambió respecto al caché local, invalidar
+                if (!currentDbVer || !cachedDbVer || currentDbVer === cachedDbVer) {
+                    try {
+                        activar(JSON.parse(cachedCta), JSON.parse(cachedEmp));
+                    } catch(e){}
+                }
             }
 
-            // 2. Si no estaba precargado, consultar en paralelo
+            // 2. Consultar al backend y actualizar caché con la db_version
             const pCuentas  = fetch(`/admin/api/cuentas?agente=${encodeURIComponent(agente)}`).then(r => r.json()).catch(() => ({ok: false}));
             const pEmpresas = fetch(`/admin/api/empresas?agente=${encodeURIComponent(agente)}`).then(r => r.json()).catch(() => ({ok: false}));
 
             Promise.all([pCuentas, pEmpresas]).then(([dCta, dEmp]) => {
                 const ctas = (dCta.ok && dCta.cuentas) ? dCta.cuentas : [];
                 const emps = (dEmp.ok && dEmp.empresas) ? dEmp.empresas : [];
+                const newDbVer = dEmp.db_version || dCta.db_version || currentDbVer;
+
                 if (dCta.ok && dCta.cuentas) {
                     localStorage.setItem(`sar_cuentas_${agente}`, JSON.stringify(dCta.cuentas));
                 }
                 if (dEmp.ok && dEmp.empresas) {
                     localStorage.setItem(`sar_empresas_${agente}`, JSON.stringify(dEmp.empresas));
+                }
+                if (newDbVer) {
+                    localStorage.setItem(`sar_dbver_${agente}`, newDbVer);
                 }
                 activar(ctas, emps);
             });

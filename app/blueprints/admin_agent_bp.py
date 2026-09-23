@@ -71,6 +71,9 @@ def _crear_tablas(conn):
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ip_local VARCHAR(50)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ruta_bd VARCHAR(500)',
         'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS version VARCHAR(50)',
+        'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS db_version VARCHAR(50)',
+        'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS empresas_cache JSONB',
+        'ALTER TABLE admin_agent_sesiones ADD COLUMN IF NOT EXISTS ruta_modificada_at TIMESTAMPTZ',
         'ALTER TABLE reporte_permisos ADD COLUMN IF NOT EXISTS usuario_id INTEGER',
         'ALTER TABLE reporte_permisos ALTER COLUMN cliente_id DROP NOT NULL',
     ]:
@@ -100,34 +103,46 @@ def checkin():
     cliente_id = data.get('cliente_id', '').strip()
     if not cliente_id:
         return jsonify({'ok': False, 'error': 'cliente_id requerido'}), 400
-    nombre   = (data.get('nombre') or cliente_id).strip()
-    ip_local = (data.get('ip_local') or '').strip()
-    ruta_bd  = (data.get('ruta_bd') or '').strip()
-    version  = (data.get('version') or '').strip() or None
+    nombre     = (data.get('nombre') or cliente_id).strip()
+    ip_local   = (data.get('ip_local') or '').strip()
+    ruta_bd    = (data.get('ruta_bd') or '').strip()
+    version    = (data.get('version') or '').strip() or None
+    db_version = (data.get('db_version') or '').strip() or None
+    empresas   = data.get('empresas')
+    empresas_json = json.dumps(empresas) if isinstance(empresas, list) else None
+
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
         # Si ya existe un registro para este agente → actualizar, nunca insertar de nuevo
         existing = conn.execute(
-            "SELECT id, token FROM admin_agent_sesiones WHERE cliente_id=%s ORDER BY ultimo_ping DESC, id DESC LIMIT 1",
+            "SELECT id, token, ruta_bd, db_version FROM admin_agent_sesiones WHERE cliente_id=%s ORDER BY ultimo_ping DESC, id DESC LIMIT 1",
             (cliente_id,)
         ).fetchone()
         if existing:
             token = existing['token']
+            ruta_cambiada = bool(ruta_bd and existing['ruta_bd'] and existing['ruta_bd'].lower() != ruta_bd.lower())
+            final_db_ver = db_version or (datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S') if ruta_cambiada else existing['db_version'])
             conn.execute(
-                "UPDATE admin_agent_sesiones SET nombre=%s, ip_local=%s, ruta_bd=%s, version=COALESCE(%s, version), activo=TRUE, ultimo_ping=NOW() WHERE id=%s",
-                (nombre, ip_local, ruta_bd, version, existing['id'])
+                "UPDATE admin_agent_sesiones SET nombre=%s, ip_local=%s, ruta_bd=%s, version=COALESCE(%s, version), "
+                "db_version=COALESCE(%s, db_version), "
+                "empresas_cache=COALESCE(%s::jsonb, empresas_cache), "
+                "ruta_modificada_at=CASE WHEN %s::boolean THEN NOW() ELSE ruta_modificada_at END, "
+                "activo=TRUE, ultimo_ping=NOW() WHERE id=%s",
+                (nombre, ip_local, ruta_bd, version, final_db_ver, empresas_json, ruta_cambiada, existing['id'])
             )
             conn.commit()
-            return jsonify({'ok': True, 'token': token, 'reused': True})
+            return jsonify({'ok': True, 'token': token, 'reused': True, 'db_version': final_db_ver})
         # Agente nuevo — primera vez que se conecta
         token = secrets.token_hex(24)
+        final_db_ver = db_version or datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')
         conn.execute(
-            "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd, version) VALUES (%s,%s,%s,%s,%s,%s)",
-            (cliente_id, token, nombre, ip_local, ruta_bd, version)
+            "INSERT INTO admin_agent_sesiones (cliente_id, token, nombre, ip_local, ruta_bd, version, db_version, empresas_cache, ruta_modificada_at) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb, NOW())",
+            (cliente_id, token, nombre, ip_local, ruta_bd, version, final_db_ver, empresas_json)
         )
         conn.commit()
-        return jsonify({'ok': True, 'token': token})
+        return jsonify({'ok': True, 'token': token, 'db_version': final_db_ver})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
@@ -209,18 +224,29 @@ def checkout():
 
 @bp.route('/api/admin-agent/ping', methods=['POST'])
 def ping():
-    data    = request.get_json() or {}
-    token   = data.get('token', '')
-    ruta_bd = (data.get('ruta_bd') or '').strip() or None
-    nombre  = (data.get('nombre') or '').strip() or None
-    version = (data.get('version') or '').strip() or None
+    data          = request.get_json() or {}
+    token         = data.get('token', '')
+    ruta_bd       = (data.get('ruta_bd') or '').strip() or None
+    nombre        = (data.get('nombre') or '').strip() or None
+    version       = (data.get('version') or '').strip() or None
+    db_version    = (data.get('db_version') or '').strip() or None
+    empresas      = data.get('empresas')
+    ruta_cambiada = bool(data.get('ruta_cambiada'))
+    empresas_json = json.dumps(empresas) if isinstance(empresas, list) else None
+
     conn = get_db_connection()
     try:
         _crear_tablas(conn)
         sesion = conn.execute(
-            "UPDATE admin_agent_sesiones SET ultimo_ping=NOW(), ruta_bd=COALESCE(%s,ruta_bd), nombre=COALESCE(%s,nombre), version=COALESCE(%s,version) "
-            "WHERE token=%s AND activo=TRUE RETURNING id",
-            (ruta_bd, nombre, version, token)
+            "UPDATE admin_agent_sesiones SET ultimo_ping=NOW(), "
+            "ruta_bd=COALESCE(%s, ruta_bd), "
+            "nombre=COALESCE(%s, nombre), "
+            "version=COALESCE(%s, version), "
+            "db_version=CASE WHEN %s::boolean OR %s IS NOT NULL THEN COALESCE(%s, TO_CHAR(NOW(), 'YYYYMMDDHH24MISS')) ELSE db_version END, "
+            "empresas_cache=COALESCE(%s::jsonb, empresas_cache), "
+            "ruta_modificada_at=CASE WHEN %s::boolean THEN NOW() ELSE ruta_modificada_at END "
+            "WHERE token=%s AND activo=TRUE RETURNING id, db_version",
+            (ruta_bd, nombre, version, ruta_cambiada, db_version, db_version, empresas_json, ruta_cambiada, token)
         ).fetchone()
         if not sesion:
             return jsonify({'ok': False, 'error': 'sesión inválida'}), 401
@@ -232,13 +258,13 @@ def ping():
         if consulta:
             conn.execute("UPDATE admin_agent_consultas SET estado='procesando' WHERE id=%s", (consulta['id'],))
             conn.commit()
-            return jsonify({'ok': True, 'consulta': {
+            return jsonify({'ok': True, 'db_version': sesion['db_version'], 'consulta': {
                 'id': consulta['id'],
                 'tipo': consulta['tipo'],
                 'parametros': consulta['parametros'],
             }})
         conn.commit()
-        return jsonify({'ok': True, 'consulta': None})
+        return jsonify({'ok': True, 'db_version': sesion['db_version'], 'consulta': None})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
@@ -869,7 +895,7 @@ VERSIONES_AGENTES = {
         'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/agentes/SarReportes.exe',
     },
     'admin_agent': {
-        'version': '1.2.4',
+        'version': '1.2.8',
         'url': 'https://github.com/Rafaelolivares07/TUC-TUC/releases/download/agentes/AdminAgent.exe',
     },
 }

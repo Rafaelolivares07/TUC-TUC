@@ -65,14 +65,14 @@ REPORTES_INFO = {
 def _obtener_agentes_activos(conn, usuario_id, rol):
     try:
         rows = conn.execute("""
-            SELECT cliente_id, nombre, alias, ultimo_ping, version
+            SELECT cliente_id, nombre, alias, ultimo_ping, version, db_version, ruta_bd
             FROM admin_agent_sesiones
             WHERE ultimo_ping > NOW() - INTERVAL '30 days'
             ORDER BY ultimo_ping DESC, id DESC
         """).fetchall()
     except Exception:
         rows = conn.execute("""
-            SELECT cliente_id, nombre, alias, ultimo_ping
+            SELECT cliente_id, nombre, alias, ultimo_ping, version
             FROM admin_agent_sesiones
             WHERE ultimo_ping > NOW() - INTERVAL '30 days'
             ORDER BY ultimo_ping DESC, id DESC
@@ -106,6 +106,8 @@ def _obtener_agentes_activos(conn, usuario_id, rol):
         alias = (r['alias'] or '').strip()
         nombre = (r['nombre'] or '').strip()
         ver = (r.get('version') or '').strip()
+        db_ver = (r.get('db_version') or '').strip()
+        ruta_bd = (r.get('ruta_bd') or '').strip()
         if ver and not ver.lower().startswith('v'):
             ver = f'v{ver}'
         if nombre.endswith('(Daemon)'):
@@ -119,6 +121,8 @@ def _obtener_agentes_activos(conn, usuario_id, rol):
                 'nombre': display_name,
                 'alias': alias,
                 'version': ver,
+                'db_version': db_ver,
+                'ruta_bd': ruta_bd,
                 'online': online,
                 'max_up': up,
                 'min_diff': diff,
@@ -131,6 +135,10 @@ def _obtener_agentes_activos(conn, usuario_id, rol):
                 maquinas[base_key]['nombre'] = alias
             if ver and not maquinas[base_key]['version']:
                 maquinas[base_key]['version'] = ver
+            if db_ver and not maquinas[base_key].get('db_version'):
+                maquinas[base_key]['db_version'] = db_ver
+            if ruta_bd and not maquinas[base_key].get('ruta_bd'):
+                maquinas[base_key]['ruta_bd'] = ruta_bd
             if up and (maquinas[base_key]['max_up'] is None or up > maquinas[base_key]['max_up']):
                 maquinas[base_key]['max_up'] = up
                 maquinas[base_key]['min_diff'] = diff
@@ -151,6 +159,8 @@ def _obtener_agentes_activos(conn, usuario_id, rol):
             'nombre': m['nombre'],
             'alias': m['alias'],
             'version': m['version'] or 'v1.2.3',
+            'db_version': m.get('db_version') or '',
+            'ruta_bd': m.get('ruta_bd') or '',
             'online': m['online'],
             'ultimo': ultimo,
             '_diff': diff
@@ -609,6 +619,14 @@ def api_cuentas():
         if not agente:
             return jsonify({'ok': False, 'error': 'Agente requerido', 'cuentas': []}), 400
         
+        ses_row = conn.execute(
+            "SELECT db_version FROM admin_agent_sesiones "
+            "WHERE LOWER(cliente_id) IN (LOWER(%s), LOWER(%s) || '_daemon') OR LOWER(cliente_id) = REPLACE(LOWER(%s), '_daemon', '') "
+            "ORDER BY ultimo_ping DESC, id DESC LIMIT 1",
+            (agente, agente, agente)
+        ).fetchone()
+        db_ver = (ses_row['db_version'] if ses_row and ses_row['db_version'] else '')
+
         datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
             'tablas': [{'tabla': 'CUENTAS', 'campos': ['CODIGO', 'NOMBRE', 'TIPO'], 'filtros': {}}]
         }, timeout=30)
@@ -622,7 +640,7 @@ def api_cuentas():
             if c:
                 cuentas.append({'codigo': c, 'nombre': n, 'tipo': t, 'es_movimiento': (t == 'D')})
         cuentas.sort(key=lambda x: x['codigo'])
-        return jsonify({'ok': True, 'cuentas': cuentas, 'total': len(cuentas)})
+        return jsonify({'ok': True, 'cuentas': cuentas, 'db_version': db_ver, 'total': len(cuentas)})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'cuentas': []}), 500
     finally:
@@ -644,6 +662,18 @@ def api_empresas():
         if not agente:
             return jsonify({'ok': False, 'error': 'Agente requerido', 'empresas': []}), 400
         
+        ses_row = conn.execute(
+            "SELECT db_version, empresas_cache FROM admin_agent_sesiones "
+            "WHERE LOWER(cliente_id) IN (LOWER(%s), LOWER(%s) || '_daemon') OR LOWER(cliente_id) = REPLACE(LOWER(%s), '_daemon', '') "
+            "ORDER BY ultimo_ping DESC, id DESC LIMIT 1",
+            (agente, agente, agente)
+        ).fetchone()
+        db_ver = (ses_row['db_version'] if ses_row and ses_row['db_version'] else '')
+        cached_emp = (ses_row['empresas_cache'] if ses_row and ses_row['empresas_cache'] else None)
+        
+        if cached_emp and isinstance(cached_emp, list) and len(cached_emp) > 0:
+            return jsonify({'ok': True, 'empresas': cached_emp, 'db_version': db_ver, 'total': len(cached_emp), 'origen': 'agente_cache'})
+
         datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
             'tablas': [{'tabla': 'EMPRESAS', 'campos': ['COD_EMP', 'NOM_EMP', 'NIT'], 'filtros': {}}]
         }, timeout=30)
@@ -658,7 +688,19 @@ def api_empresas():
                 empresas.append({'codigo': cod, 'nombre': nom, 'nit': nit})
         
         empresas.sort(key=lambda x: x['codigo'] if x['codigo'] else x['nombre'])
-        return jsonify({'ok': True, 'empresas': empresas, 'total': len(empresas)})
+        
+        if empresas:
+            try:
+                conn.execute(
+                    "UPDATE admin_agent_sesiones SET empresas_cache=%s::jsonb "
+                    "WHERE LOWER(cliente_id) IN (LOWER(%s), LOWER(%s) || '_daemon') OR LOWER(cliente_id) = REPLACE(LOWER(%s), '_daemon', '')",
+                    (json.dumps(empresas), agente, agente, agente)
+                )
+                conn.commit()
+            except Exception:
+                pass
+                
+        return jsonify({'ok': True, 'empresas': empresas, 'db_version': db_ver, 'total': len(empresas)})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'empresas': []}), 500
     finally:

@@ -1231,20 +1231,29 @@ async function verificarCola() {
 
     if (reproduciendo && cola.length > 0) {
       const c = cola[0];
-      if (c.id !== cancionActual && !skipRemoteSkip) {
-        console.log("Detección de salto remoto de canción:", c.nombre);
-        const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
-        const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
-        if (crossfadeEnabled) {
-          iniciarCrossfade(crossfadeDuration, c);
-          return;
+      if (c.id !== cancionActual) {
+        if (skipRemoteSkip) {
+          // El reproductor local acaba de agregar una cancion en modo 'siguiente',
+          // la cancion actual sigue en posicion 0 del backend, no hacer nada.
+          console.log('[Rockola] skipRemoteSkip activo, ignorando cambio de cola[0]');
+          skipRemoteSkip = false;
         } else {
-          cancionActual = c.id;
-          reproduciendo = false;
-          await intentarReproducir(c);
+          console.log("Deteccion de salto remoto de cancion:", c.nombre);
+          const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
+          const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
+          if (crossfadeEnabled) {
+            iniciarCrossfade(crossfadeDuration, c);
+            return;
+          } else {
+            cancionActual = c.id;
+            reproduciendo = false;
+            await intentarReproducir(c);
+          }
         }
+      } else {
+        // cola[0] sigue siendo la cancion actual, resetear flag
+        skipRemoteSkip = false;
       }
-      skipRemoteSkip = false;
     }
 
     if (!reproduciendo && !playPendiente && cola.length > 0) {
@@ -1270,7 +1279,10 @@ async function verificarCola() {
 function aplicarVolumen(volumen) {
   const normalizado = Math.max(0, Math.min(100, parseInt(volumen ?? volumenActual, 10) || 0));
   volumenActual = normalizado;
-  player.volume = normalizado / 100;
+  // No modificar el volumen del player durante un fundido cruzado
+  if (!transitioning) {
+    player.volume = normalizado / 100;
+  }
   if (document.activeElement !== volumenEl) volumenEl.value = normalizado;
   volumenValorEl.textContent = normalizado + '%';
 }
@@ -1399,7 +1411,8 @@ function poner(modo = 'final') {
 function subirYoutube(modo = 'final') {
   const url = document.getElementById('yt-url').value.trim();
   if (!url) return;
-  if (modo === 'siguiente') skipRemoteSkip = true;
+  // Para modos 'siguiente' y 'final', marcar para no confundir con salto remoto
+  if (modo !== 'ya') skipRemoteSkip = true;
   btnPoner.disabled = true;
   progWrap.style.display = 'block';
   let avance = 0;
@@ -2370,7 +2383,8 @@ async function eliminarListaActual() {
 
 async function ponerLocal(id, modo = 'final') {
   console.log('[Rockola v3.3.0] ponerLocal called:', id, modo);
-  if (modo === 'siguiente') skipRemoteSkip = true;
+  // Para modos 'siguiente' y 'final', marcar para no confundir con salto remoto
+  if (modo !== 'ya') skipRemoteSkip = true;
   const cancion = cancionesLocales.find(c => c.id === id) || await obtenerCancionLocal(id);
   if (!cancion) {
     console.error('[Rockola] cancion no encontrada en memoria ni IndexedDB:', id);

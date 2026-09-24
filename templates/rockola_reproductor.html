@@ -1228,6 +1228,7 @@ async function verificarCola() {
       const durLabel = document.getElementById('fundido-dur-label');
       if (durLabel) durLabel.textContent = data.fundido_duracion + 's';
     }
+    actualizarFundidoStatus();
     renderCola(cola);
 
     if (transitioning) return;
@@ -2398,10 +2399,11 @@ async function ponerLocal(id, modo = 'final') {
     return;
   }
   console.log('[Rockola] cancion encontrada:', cancion.nombre, 'enviando POST...');
+  const localIdCola = idLocalCola(cancion.id);
   // UI: reordenar la cola antes de enviar la petición cuando el modo es 'siguiente'
   if (modo === 'siguiente') {
     const nuevo = {
-      id: idLocalCola(cancion.id),
+      id: localIdCola,
       nombre: cancion.nombre,
       owner: OWNER,
       tercero_id: null
@@ -2412,7 +2414,7 @@ async function ponerLocal(id, modo = 'final') {
     currentCola.splice(1, 0, nuevo);
     renderCola(currentCola);
   }
-  const body = { local_id:idLocalCola(cancion.id), nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId(), modo: modo };
+  const body = { local_id: localIdCola, nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId(), modo: modo };
   console.log('[Rockola] body:', JSON.stringify(body));
   const res = await fetch(`/rockola/${SALA}/local`, {
     method:'POST',

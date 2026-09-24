@@ -196,7 +196,7 @@ def _get_item_cola(conn, sala_id, archivo_id):
 
 def _max_pos(conn, sala_id):
     row = conn.execute(
-        "SELECT COALESCE(MAX(posicion), -1) AS m FROM rockola_cola WHERE sala_id = %s",
+        "SELECT COALESCE(MAX(posicion), -1) AS m FROM rockola_cola WHERE sala_id = %s AND reproducida = FALSE",
         (sala_id,),
     ).fetchone()
     return row['m'] if row else -1
@@ -222,26 +222,31 @@ def _agregar_a_cola(conn, sala_id, archivo_id, nombre, tercero_id, lista_envio=N
     tid = int(tercero_id) if tercero_id else None
     
     if modo == 'ya':
-        # Shift all items up by 1
+        row = conn.execute(
+            "SELECT MIN(posicion) FROM rockola_cola WHERE sala_id = %s AND reproducida = FALSE",
+            (sala_id,)
+        ).fetchone()
+        min_pos = row[0] if row and row[0] is not None else 0
         conn.execute(
-            "UPDATE rockola_cola SET posicion = posicion + 1 WHERE sala_id = %s",
+            "UPDATE rockola_cola SET posicion = posicion + 1 WHERE sala_id = %s AND reproducida = FALSE",
             (sala_id,)
         )
-        pos_actual = 0
+        pos_actual = min_pos
     elif modo == 'siguiente':
-        # Find the currently playing song's position (lowest position)
         row = conn.execute(
-            "SELECT MIN(posicion) FROM rockola_cola WHERE sala_id = %s",
+            "SELECT MIN(posicion) FROM rockola_cola WHERE sala_id = %s AND reproducida = FALSE",
             (sala_id,)
         ).fetchone()
         current_pos = row[0] if row and row[0] is not None else -1
         
-        # Shift items with position greater than current_pos
-        conn.execute(
-            "UPDATE rockola_cola SET posicion = posicion + 1 WHERE sala_id = %s AND posicion > %s",
-            (sala_id, current_pos)
-        )
-        pos_actual = current_pos + 1
+        if current_pos == -1:
+            pos_actual = 0
+        else:
+            conn.execute(
+                "UPDATE rockola_cola SET posicion = posicion + 1 WHERE sala_id = %s AND reproducida = FALSE AND posicion > %s",
+                (sala_id, current_pos)
+            )
+            pos_actual = current_pos + 1
     else:
         # 'final'
         pos_actual = _max_pos(conn, sala_id) + 1

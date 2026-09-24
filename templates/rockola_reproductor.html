@@ -841,9 +841,9 @@ input:checked + .slider:before {
   <div style="width:100%; max-width:440px; background:var(--surface); border-radius:20px 20px 0 0; padding:20px 16px 32px; animation:fadeUp .2s ease;">
     <div style="width:40px; height:4px; background:var(--muted2); border-radius:2px; margin:0 auto 16px;"></div>
     <div id="modal-poner-titulo" style="font-size:15px; font-weight:800; color:var(--text); margin-bottom:14px; text-align:center;"></div>
-    <button onclick="ejecutarPoner('ya')" style="width:100%; padding:14px; margin-bottom:8px; border:none; border-radius:12px; background:var(--ac-grad); color:#00101b; font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:14px; cursor:pointer;">⚡ Sonar ahora</button>
-    <button onclick="ejecutarPoner('siguiente')" style="width:100%; padding:14px; margin-bottom:8px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:14px; cursor:pointer;">⏭️ Sonar después</button>
-    <button onclick="ejecutarPoner('final')" style="width:100%; padding:14px; margin-bottom:8px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:14px; cursor:pointer;">📝 Poner al final</button>
+    <button onclick="ejecutarPoner(MODO.REEMPLAZAR)" style="width:100%; padding:14px; margin-bottom:8px; border:none; border-radius:12px; background:var(--ac-grad); color:#00101b; font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:14px; cursor:pointer;">⚡ Sonar ahora</button>
+    <button onclick="ejecutarPoner(MODO.DESPUES)" style="width:100%; padding:14px; margin-bottom:8px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:14px; cursor:pointer;">⏭️ Sonar después</button>
+    <button onclick="ejecutarPoner(MODO.FINAL)" style="width:100%; padding:14px; margin-bottom:8px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:14px; cursor:pointer;">📝 Poner al final</button>
     <button onclick="cerrarModalPoner()" style="width:100%; padding:12px; border:none; border-radius:12px; background:transparent; color:var(--muted); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; cursor:pointer; margin-top:4px;">Cancelar</button>
   </div>
 </div>
@@ -887,6 +887,12 @@ const queueLabel  = document.getElementById('queue-label');
 const volumenEl   = document.getElementById('volumen');
 const volumenValorEl = document.getElementById('volumen-valor');
 const btnPoner = document.getElementById('btn-poner');
+// Enum para los modos de agregar canciones a la cola
+const MODO = {
+  REEMPLAZAR: 'ya',      // reproducir ahora, reemplaza la pista actual
+  DESPUES:    'siguiente', // sonar después de la pista actual
+  FINAL:      'final'      // añadir al final de la cola
+};
 const uploadMsg = document.getElementById('upload-msg');
 const progWrap = document.getElementById('prog-wrap');
 const progFill = document.getElementById('prog-fill');
@@ -2372,6 +2378,20 @@ async function ponerLocal(id, modo = 'final') {
     return;
   }
   console.log('[Rockola] cancion encontrada:', cancion.nombre, 'enviando POST...');
+  // UI: reordenar la cola antes de enviar la petición cuando el modo es 'siguiente'
+  if (modo === 'siguiente') {
+    const nuevo = {
+      id: idLocalCola(cancion.id),
+      nombre: cancion.nombre,
+      owner: OWNER,
+      tercero_id: null
+    };
+    // Eliminar posibles duplicados visuales
+    currentCola = currentCola.filter(item => item.id !== nuevo.id);
+    // Insertar justo después de la canción actual (posición 1)
+    currentCola.splice(1, 0, nuevo);
+    renderCola(currentCola);
+  }
   const body = { local_id:idLocalCola(cancion.id), nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId(), modo: modo };
   console.log('[Rockola] body:', JSON.stringify(body));
   const res = await fetch(`/rockola/${SALA}/local`, {
@@ -2409,6 +2429,13 @@ window.addEventListener('click', () => {
 let modalPonerCancionId = null;
 function abrirModalPoner(cancionId, nombre) {
   modalPonerCancionId = cancionId;
+
+  // Si la cola está vacía, reproducir inmediatamente sin mostrar el modal
+  if (Array.isArray(currentCola) && currentCola.length === 0) {
+    console.log('[Rockola] Cola vacía, reproduciendo inmediatamente');
+    ponerLocal(cancionId, MODO.REEMPLAZAR);
+    return;
+  }
   document.getElementById('modal-poner-titulo').textContent = nombre;
   document.getElementById('modal-poner').style.display = 'flex';
 }
@@ -2549,10 +2576,13 @@ if (window.Sortable) {
     touchStartThreshold: 5,
     onEnd: async () => {
       const orden = [...listaCola.querySelectorAll('.queue-item')].map(el => el.dataset.id);
+      // Excluir la cancion que esta reproduciendose (primer elemento de la cola)
+      const playingId = currentCola[0]?.id || orden[0];
+      const ordenSinPlaying = playingId ? orden.filter(id => id !== playingId) : orden;
       await fetch(`/rockola/${SALA}/reordenar`, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ orden, modo:'reproductor' })
+        body: JSON.stringify({ orden: ordenSinPlaying, modo:'reproductor' })
       });
       verificarCola();
     }

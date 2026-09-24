@@ -989,29 +989,83 @@ def api_alegra_check():
 
     creds_list = [ALEGRA_CREDS[empresa]] if empresa in ALEGRA_CREDS else list(ALEGRA_CREDS.values())
 
+    # 1. Pre-cargar facturas recientes de Alegra (hasta 120 facturas por empresa)
+    alegra_cache = {}  # { (cred_nombre, fullNumber_upper): inv_dict }
+    for cred in creds_list:
+        auth_str = base64.b64encode(f"{cred['email']}:{cred['token']}".encode()).decode()
+        headers = {
+            'Authorization': f'Basic {auth_str}',
+            'Accept': 'application/json',
+        }
+        try:
+            start = 0
+            for _ in range(4):  # 4 páginas * 30 = 120 facturas más recientes
+                r = requests.get(f"https://api.alegra.com/api/v1/invoices?limit=30&start={start}", headers=headers, timeout=10)
+                if not r.ok:
+                    break
+                items = r.json()
+                if not items:
+                    break
+                for inv in items:
+                    fid = str(inv.get('id', '') or '').strip().upper()
+                    fnum = str((inv.get('numberTemplate') or {}).get('fullNumber') or inv.get('number') or '').strip().upper()
+                    inv_data = {
+                        'id': inv.get('id'),
+                        'numero': (inv.get('numberTemplate') or {}).get('fullNumber') or inv.get('number'),
+                        'fecha': inv.get('date'),
+                        'cliente': (inv.get('client', {}) or {}).get('name'),
+                        'cliente_nit': (inv.get('client', {}) or {}).get('identification'),
+                        'total': float(inv.get('total', 0) or 0),
+                        'subtotal': float(inv.get('subtotal', 0) or 0),
+                        'total_pagado': float(inv.get('totalPaid', 0) or 0),
+                        'estado': inv.get('status'),
+                        'empresa_alegra': cred['nombre'],
+                        'items_count': len(inv.get('items', [])),
+                    }
+                    if fnum:
+                        alegra_cache[(cred['nombre'], fnum)] = inv_data
+                    if fid:
+                        alegra_cache[(cred['nombre'], fid)] = inv_data
+                if len(items) < 30:
+                    break
+                start += 30
+        except Exception:
+            pass
+
     resultados = {}
     for num in numeros[:50]:
         num_str = str(num).strip()
         if not num_str:
             continue
+        num_upper = num_str.upper()
         encontrado = None
+
+        # 1. Buscar en cache cargado
         for cred in creds_list:
-            auth_str = base64.b64encode(f"{cred['email']}:{cred['token']}".encode()).decode()
-            headers = {
-                'Authorization': f'Basic {auth_str}',
-                'Accept': 'application/json',
-            }
-            try:
-                url = f"https://api.alegra.com/api/v1/invoices?number={num_str}&limit=5"
-                r = requests.get(url, headers=headers, timeout=8)
-                if r.ok:
-                    items = r.json()
-                    for inv in items:
-                        num_doc = str(inv.get('numberTemplate', {}).get('fullNumber') or inv.get('id') or inv.get('number') or '')
-                        if num_str in num_doc or str(inv.get('number', '')) == num_str:
+            cname = cred['nombre']
+            for (cn, fn), data in alegra_cache.items():
+                if cn == cname and (num_upper == fn or num_upper in fn or fn.endswith(num_upper) or num_upper == str(data.get('id', '')).upper()):
+                    encontrado = data
+                    break
+            if encontrado:
+                break
+
+        # 2. Si no se encontró en las 120 recientes y es un ID numérico o UUID, consultar /invoices/{id}
+        if not encontrado:
+            for cred in creds_list:
+                auth_str = base64.b64encode(f"{cred['email']}:{cred['token']}".encode()).decode()
+                headers = {
+                    'Authorization': f'Basic {auth_str}',
+                    'Accept': 'application/json',
+                }
+                try:
+                    r = requests.get(f"https://api.alegra.com/api/v1/invoices/{num_str}", headers=headers, timeout=6)
+                    if r.ok:
+                        inv = r.json()
+                        if isinstance(inv, dict) and inv.get('id'):
                             encontrado = {
                                 'id': inv.get('id'),
-                                'numero': num_doc or inv.get('number'),
+                                'numero': (inv.get('numberTemplate') or {}).get('fullNumber') or inv.get('number'),
                                 'fecha': inv.get('date'),
                                 'cliente': (inv.get('client', {}) or {}).get('name'),
                                 'cliente_nit': (inv.get('client', {}) or {}).get('identification'),
@@ -1023,10 +1077,8 @@ def api_alegra_check():
                                 'items_count': len(inv.get('items', [])),
                             }
                             break
-                if encontrado:
-                    break
-            except Exception:
-                pass
+                except Exception:
+                    pass
 
         if encontrado:
             resultados[num_str] = {'ok': True, 'existe': True, 'alegra': encontrado}

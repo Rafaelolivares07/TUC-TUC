@@ -86,11 +86,16 @@ def tablas_requeridas(filtros):
         filtros_rc['TIPO'] = '030'
     elif empresa == 'LP':
         filtros_rc['TIPO'] = '029'
+    else:
+        filtros_rc['TIPO'] = {'in': ['029', '030']}
 
     if desde or hasta:
         filtros_rc['LAPSO'] = {}
         if desde: filtros_rc['LAPSO']['desde'] = desde
         if hasta: filtros_rc['LAPSO']['hasta'] = hasta
+    else:
+        d_def = (datetime.date.today() - datetime.timedelta(days=60)).strftime('%Y-%m-%d')
+        filtros_rc['LAPSO'] = {'desde': d_def}
 
     return [
         {

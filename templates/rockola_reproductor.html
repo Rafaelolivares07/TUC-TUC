@@ -648,7 +648,7 @@ input:checked + .slider:before {
           <div onclick="toggleFundidoPanel()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 0;">
             <span style="font-size:12px; font-weight:700; color:var(--muted);">Fundido cruzado</span>
             <div style="display:flex; align-items:center; gap:8px;">
-              <span id="fundido-status" style="font-size:10px; color:var(--ac1);">12s → 5s</span>
+              <span id="fundido-status" style="font-size:10px; color:var(--ac1);"></span>
               <label class="switch" style="margin:0;" onclick="event.stopPropagation()">
                 <input type="checkbox" id="fundido-toggle" checked onchange="guardarFundidoSettings()">
                 <span class="slider"></span>
@@ -924,6 +924,7 @@ let cancionActual = null;
 let playPendiente = false;
 let fallosPlay = 0;
 let skipRemoteSkip = false;
+let ultimaCancionAgregadaTs = 0; // timestamp de cuando se agrego la ultima cancion a la cola
 let volumenActual = 80;
 let guardandoVolumen = null;
 let tabActual = 'youtube';
@@ -1106,7 +1107,9 @@ function handlePlayerTimeUpdate(e) {
   const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
   const crossfadeAnticipation = parseInt(document.getElementById('fundido-segundos').value) || 12;
   const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
-  if (crossfadeEnabled && p.duration && (p.duration - p.currentTime <= crossfadeAnticipation) && !transitioning) {
+  // No disparar crossfade automatico si se acaba de agregar una cancion a la cola (esperar 5s)
+  const recienAgregada = (Date.now() - ultimaCancionAgregadaTs) < 5000;
+  if (crossfadeEnabled && p.duration && (p.duration - p.currentTime <= crossfadeAnticipation) && !transitioning && !recienAgregada) {
     iniciarCrossfade(crossfadeDuration);
   }
 }
@@ -1412,7 +1415,10 @@ function subirYoutube(modo = 'final') {
   const url = document.getElementById('yt-url').value.trim();
   if (!url) return;
   // Para modos 'siguiente' y 'final', marcar para no confundir con salto remoto
-  if (modo !== 'ya') skipRemoteSkip = true;
+  if (modo !== 'ya') {
+    skipRemoteSkip = true;
+    ultimaCancionAgregadaTs = Date.now();
+  }
   btnPoner.disabled = true;
   progWrap.style.display = 'block';
   let avance = 0;

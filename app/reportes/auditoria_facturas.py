@@ -77,6 +77,11 @@ def tablas_requeridas(filtros):
     desde    = filtros.get('desde', '')
     hasta    = filtros.get('hasta', '')
 
+    # Si no se especifica rango de fecha, default al inicio del mes actual para respuesta instantánea
+    if not desde and not hasta:
+        hoy = datetime.date.today()
+        desde = hoy.replace(day=1).strftime('%Y-%m-%d')
+
     filtros_rc = {}
     if empresa:
         filtros_rc['EMPRESA'] = empresa

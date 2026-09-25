@@ -634,13 +634,12 @@ def ejecutar_reporte_api(reporte_id):
         mod = CATALOGO.get(reporte_id)
         filas = None
         
-        # 1. Intentar ejecución remota compilada en el agente solo para reportes estándar
-        if reporte_id != 'auditoria_facturas':
-            try:
-                resp = _ejecutar_consulta_remota(conn, agente, 'ejecutar_reporte', {
-                    'reporte_id': reporte_id,
-                    'filtros': filtros
-                }, timeout=5)
+        # 1. Intentar ejecución remota compilada en el agente
+        try:
+            resp = _ejecutar_consulta_remota(conn, agente, 'ejecutar_reporte', {
+                'reporte_id': reporte_id,
+                'filtros': filtros
+            }, timeout=25)
                 if isinstance(resp, dict):
                     if 'error' not in resp:
                         if 'filas' in resp:
@@ -712,12 +711,11 @@ def exportar_excel_api(reporte_id):
                         agente = agentes[0]['id']
                 if not agente:
                     return 'Agente requerido', 400
-                if reporte_id != 'auditoria_facturas':
-                    try:
-                        resp = _ejecutar_consulta_remota(conn, agente, 'ejecutar_reporte', {
-                            'reporte_id': reporte_id,
-                            'filtros': filtros
-                        }, timeout=5)
+                try:
+                    resp = _ejecutar_consulta_remota(conn, agente, 'ejecutar_reporte', {
+                        'reporte_id': reporte_id,
+                        'filtros': filtros
+                    }, timeout=25)
                         if isinstance(resp, dict) and 'error' not in resp:
                             filas = resp.get('filas') or resp.get('rows') or [resp]
                         elif isinstance(resp, list):

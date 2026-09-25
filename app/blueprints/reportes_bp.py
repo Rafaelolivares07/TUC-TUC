@@ -640,18 +640,18 @@ def ejecutar_reporte_api(reporte_id):
                 'reporte_id': reporte_id,
                 'filtros': filtros
             }, timeout=25)
-                if isinstance(resp, dict):
-                    if 'error' not in resp:
-                        if 'filas' in resp:
-                            filas = resp['filas']
-                        elif 'rows' in resp:
-                            filas = resp['rows']
-                        else:
-                            filas = [resp]
-                elif isinstance(resp, list):
-                    filas = resp
-            except Exception:
-                filas = None
+            if isinstance(resp, dict):
+                if 'error' not in resp:
+                    if 'filas' in resp:
+                        filas = resp['filas']
+                    elif 'rows' in resp:
+                        filas = resp['rows']
+                    else:
+                        filas = [resp]
+            elif isinstance(resp, list):
+                filas = resp
+        except Exception:
+            filas = None
 
         # 2. Si el agente no tiene el reporte compilado o es dinámico, ejecutar vía multi_tabla en el servidor
         if filas is None or not isinstance(filas, list):
@@ -716,14 +716,14 @@ def exportar_excel_api(reporte_id):
                         'reporte_id': reporte_id,
                         'filtros': filtros
                     }, timeout=25)
-                        if isinstance(resp, dict) and 'error' not in resp:
-                            filas = resp.get('filas') or resp.get('rows') or [resp]
-                        elif isinstance(resp, list):
-                            filas = resp
-                        else:
-                            filas = None
-                    except Exception:
+                    if isinstance(resp, dict) and 'error' not in resp:
+                        filas = resp.get('filas') or resp.get('rows') or [resp]
+                    elif isinstance(resp, list):
+                        filas = resp
+                    else:
                         filas = None
+                except Exception:
+                    filas = None
 
                 if filas is None or not isinstance(filas, list):
                     if mod and hasattr(mod, 'tablas_requeridas') and hasattr(mod, 'calcular'):

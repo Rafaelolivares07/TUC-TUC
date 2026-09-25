@@ -1060,6 +1060,14 @@ def api_inventario_producto_crear():
         _contexto, error = _validar_negocio_json(conn, int(negocio_id))
         if error:
             return error
+
+        dup = conn.execute(
+            "SELECT id FROM productos WHERE negocio_id = %s AND LOWER(TRIM(nombre)) = LOWER(TRIM(%s)) LIMIT 1",
+            (int(negocio_id), nombre)
+        ).fetchone()
+        if dup:
+            return jsonify({'ok': False, 'error': f'Ya existe un producto con el nombre "{nombre}" en este negocio. Los nombres de productos deben ser únicos.'}), 400
+
         row = conn.execute("""
             INSERT INTO productos (negocio_id, nombre, categoria, precio, costo,
                                    descripcion, codigo_barra, iva_pct, orden)
@@ -1196,6 +1204,8 @@ def api_inventario_producto_eliminar(producto_id):
             }), 400
 
         # All checks passed! Delete product dependent sub-records and product
+        conn.execute("DELETE FROM precios WHERE producto_id = %s", (producto_id,))
+        conn.execute("DELETE FROM inventario_distribuido_estado WHERE producto_id = %s", (producto_id,))
         conn.execute("DELETE FROM saldos_inventario WHERE producto_id = %s", (producto_id,))
         conn.execute("DELETE FROM producto_atributos WHERE producto_id = %s", (producto_id,))
         conn.execute("DELETE FROM producto_variantes WHERE producto_id = %s", (producto_id,))
@@ -3817,13 +3827,25 @@ def api_inventario_producto_editar(producto_id):
         _contexto, error = _validar_negocio_json(conn, negocio_id)
         if error:
             return error
+
+        nombre = (data.get('nombre') or '').strip()
+        if not nombre:
+            return jsonify({'ok': False, 'error': 'El nombre del producto es requerido'}), 400
+
+        dup = conn.execute(
+            "SELECT id FROM productos WHERE negocio_id = %s AND LOWER(TRIM(nombre)) = LOWER(TRIM(%s)) AND id != %s LIMIT 1",
+            (negocio_id, nombre, producto_id)
+        ).fetchone()
+        if dup:
+            return jsonify({'ok': False, 'error': f'Ya existe otro producto con el nombre "{nombre}" en este negocio. Los nombres de productos deben ser únicos.'}), 400
+
         conn.execute("""
             UPDATE productos SET
                 nombre=%s, categoria=%s, precio=%s, costo=%s,
                 descripcion=%s, codigo_barra=%s, iva_pct=%s, disponible=%s
             WHERE id=%s
         """, (
-            (data.get('nombre') or '').strip(),
+            nombre,
             data.get('categoria') or None,
             float(data.get('precio') or 0),
             float(data.get('costo') or 0),

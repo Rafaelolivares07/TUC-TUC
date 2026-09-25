@@ -1428,6 +1428,13 @@ def api_tienda_producto_crear(slug):
                 ).fetchone()
                 catalogo_id = cat_row['id']
                 conn.commit()
+        dup = conn.execute(
+            "SELECT id FROM productos WHERE negocio_id = %s AND LOWER(TRIM(nombre)) = LOWER(TRIM(%s)) AND id != %s LIMIT 1",
+            (tienda['tercero_id'], nombre, producto_id or 0)
+        ).fetchone()
+        if dup:
+            return jsonify({'ok': False, 'error': f'Ya existe un producto con el nombre "{nombre}". Los nombres deben ser únicos.'}), 400
+
         if producto_id:
             conn.execute(
                 "UPDATE productos SET nombre=%s, categoria=%s, precio=%s, descripcion=%s, catalogo_id=%s, codigo_barra=%s, iva_pct=%s WHERE id=%s AND negocio_id=%s",
@@ -1481,6 +1488,12 @@ def api_tienda_producto_eliminar(slug, producto_id):
         tienda = conn.execute("SELECT id, tercero_id FROM tiendas WHERE slug = %s", (slug,)).fetchone()
         if not tienda:
             return jsonify({'ok': False, 'error': 'Tienda no encontrada'}), 404
+        conn.execute("DELETE FROM precios WHERE producto_id = %s", (producto_id,))
+        conn.execute("DELETE FROM inventario_distribuido_estado WHERE producto_id = %s", (producto_id,))
+        conn.execute("DELETE FROM saldos_inventario WHERE producto_id = %s", (producto_id,))
+        conn.execute("DELETE FROM producto_atributos WHERE producto_id = %s", (producto_id,))
+        conn.execute("DELETE FROM producto_variantes WHERE producto_id = %s", (producto_id,))
+        conn.execute("DELETE FROM producto_imagenes WHERE producto_id = %s", (producto_id,))
         conn.execute("DELETE FROM productos WHERE id = %s AND negocio_id = %s", (producto_id, tienda['tercero_id']))
         conn.commit()
         return jsonify({'ok': True})

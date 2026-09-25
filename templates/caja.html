@@ -165,12 +165,6 @@
                             <option value="">-- Sin documento contable --</option>
                         </select>
                     </div>
-
-                    <!-- Fecha de la Venta -->
-                    <div>
-                        <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Fecha de la venta</label>
-                        <input id="fecha-documento" type="date" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 font-semibold text-gray-700">
-                    </div>
                 </div>
 
                 <!-- Items carrito -->
@@ -926,10 +920,6 @@ function actualizarConsecutivoDisplay() {
 
 async function cargarTiposDocumento() {
     try {
-        const fechaEl = document.getElementById('fecha-documento');
-        if (fechaEl && !fechaEl.value) {
-            fechaEl.value = new Date().toISOString().split('T')[0];
-        }
         const r = await fetch(`/api/caja/${SLUG}/tipos-doc?_=${Date.now()}`);
         const d = await r.json();
         if (d.ok && d.tipos) {
@@ -1035,7 +1025,7 @@ async function cobrar() {
 
     const nombre = document.getElementById('nombre-cliente').value.trim();
     const telefono = document.getElementById('tel-cliente').value.trim();
-    const fecha = (document.getElementById('fecha-documento')?.value || '').trim() || null;
+    const fecha = null; // Fecha y hora automáticas del servidor (inmutable)
     const tipoDocId = document.getElementById('tipo-documento')?.value || null;
     const clienteId = document.getElementById('cliente-id')?.value || null;
     const chkCrear = document.getElementById('chk-crear-cliente');
@@ -1419,8 +1409,6 @@ function nuevaVenta() {
     document.getElementById('modal-cliente').classList.add('hidden');
     document.getElementById('nombre-cliente').value = '';
     document.getElementById('tel-cliente').value = '';
-    const fechaEl = document.getElementById('fecha-documento');
-    if (fechaEl) fechaEl.value = new Date().toISOString().split('T')[0];
     
     // Reset autocomplete client fields to default "Tercero Ocasional"
     initDefaultTercero();

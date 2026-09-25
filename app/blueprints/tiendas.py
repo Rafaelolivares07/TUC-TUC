@@ -2236,7 +2236,10 @@ def api_tienda_pedido_crear(slug):
     id_tercero_cajero = data.get('id_tercero_cajero')
     pedido_premontado_id = data.get('pedido_premontado_id')
     fecha_raw        = (data.get('fecha') or '').strip()
-    fecha_pedido     = _fecha_o_none(fecha_raw) or date.today()
+    if tipo_entrega == 'caja':
+        fecha_pedido = date.today()
+    else:
+        fecha_pedido = _fecha_o_none(fecha_raw) or date.today()
     if not items:
         return jsonify({'ok': False, 'error': 'El carrito esta vacio'}), 400
     if not nombre_cliente and tipo_entrega != 'caja':

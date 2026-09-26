@@ -115,15 +115,33 @@
                 <!-- Fecha Desde -->
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Desde</label>
-                    <input type="date" id="f-desde" value="{{ desde }}"
-                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                    <div class="relative flex items-center">
+                        <input type="text" id="f-desde" value="{{ desde }}" placeholder="YYYY-MM-DD"
+                               oninput="sincronizarFechaPicker('f-desde', 'f-desde-picker')"
+                               class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 pl-3 pr-9 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition font-mono">
+                        <input type="date" id="f-desde-picker" value="{{ desde }}" tabindex="-1"
+                               onchange="sincronizarFechaTexto('f-desde-picker', 'f-desde')"
+                               class="absolute right-2.5 w-6 h-6 opacity-0 cursor-pointer z-10">
+                        <div class="pointer-events-none absolute right-2.5 text-slate-400 hover:text-indigo-600 transition">
+                            <i class="bi bi-calendar3 text-sm"></i>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Fecha Hasta -->
                 <div>
                     <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Fecha Hasta</label>
-                    <input type="date" id="f-hasta" value="{{ hasta }}"
-                           class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition">
+                    <div class="relative flex items-center">
+                        <input type="text" id="f-hasta" value="{{ hasta }}" placeholder="YYYY-MM-DD"
+                               oninput="sincronizarFechaPicker('f-hasta', 'f-hasta-picker')"
+                               class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm font-semibold py-2 pl-3 pr-9 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white shadow-inner transition font-mono">
+                        <input type="date" id="f-hasta-picker" value="{{ hasta }}" tabindex="-1"
+                               onchange="sincronizarFechaTexto('f-hasta-picker', 'f-hasta')"
+                               class="absolute right-2.5 w-6 h-6 opacity-0 cursor-pointer z-10">
+                        <div class="pointer-events-none absolute right-2.5 text-slate-400 hover:text-indigo-600 transition">
+                            <i class="bi bi-calendar3 text-sm"></i>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Consecutivo Desde -->
@@ -415,6 +433,44 @@
             }
         }
 
+        function _normalizarFechaStr(val) {
+            if (!val) return '';
+            const s = val.trim();
+            // Si viene en formato DD/MM/YYYY o DD-MM-YYYY
+            const matchLat = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+            if (matchLat) {
+                const dia = matchLat[1].padStart(2, '0');
+                const mes = matchLat[2].padStart(2, '0');
+                const ano = matchLat[3];
+                return `${ano}-${mes}-${dia}`;
+            }
+            // Si viene en formato YYYYMMDD
+            const matchNum = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+            if (matchNum) {
+                return `${matchNum[1]}-${matchNum[2]}-${matchNum[3]}`;
+            }
+            return s;
+        }
+
+        function sincronizarFechaPicker(txtId, pickerId) {
+            const txt = document.getElementById(txtId);
+            const picker = document.getElementById(pickerId);
+            if (!txt || !picker) return;
+            const norm = _normalizarFechaStr(txt.value);
+            if (norm && /^\d{4}-\d{2}-\d{2}$/.test(norm)) {
+                picker.value = norm;
+            }
+        }
+
+        function sincronizarFechaTexto(pickerId, txtId) {
+            const picker = document.getElementById(pickerId);
+            const txt = document.getElementById(txtId);
+            if (!picker || !txt) return;
+            if (picker.value) {
+                txt.value = picker.value;
+            }
+        }
+
         function setPresetFecha(preset) {
             const hoy = new Date();
             const pad = n => String(n).padStart(2, '0');
@@ -436,8 +492,14 @@
                 dHasta = new Date(hoy.getFullYear(), 11, 31);
             }
 
-            document.getElementById('f-desde').value = fmt(dDesde);
-            document.getElementById('f-hasta').value = fmt(dHasta);
+            const valD = fmt(dDesde);
+            const valH = fmt(dHasta);
+            document.getElementById('f-desde').value = valD;
+            document.getElementById('f-hasta').value = valH;
+            const pD = document.getElementById('f-desde-picker');
+            const pH = document.getElementById('f-hasta-picker');
+            if (pD) pD.value = valD;
+            if (pH) pH.value = valH;
         }
 
         // ── Consulta al Backend ──────────────────────────────────────────────
@@ -446,12 +508,15 @@
             if (!agente) { alert('Selecciona un agente.'); return; }
             if (!esAgenteActivoOnline()) { alert('El agente está desconectado.'); return; }
 
+            const fDesdeVal = _normalizarFechaStr(document.getElementById('f-desde').value);
+            const fHastaVal = _normalizarFechaStr(document.getElementById('f-hasta').value);
+
             const filtros = {
                 agente: agente,
                 empresa: document.getElementById('f-empresa').value,
                 tipo_doc: document.getElementById('f-tipo-doc').value,
-                desde: document.getElementById('f-desde').value,
-                hasta: document.getElementById('f-hasta').value,
+                desde: fDesdeVal,
+                hasta: fHastaVal,
                 desde_num: document.getElementById('f-desde-num').value.trim(),
                 hasta_num: document.getElementById('f-hasta-num').value.trim(),
                 solo_inconsistencias: document.getElementById('f-solo-inc').checked,

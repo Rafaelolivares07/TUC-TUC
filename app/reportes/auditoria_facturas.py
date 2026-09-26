@@ -224,18 +224,13 @@ def calcular(datos, filtros):
                 fecha_str = fec[:19].replace('T', ' ')
 
         asiento = {
-            'consecutivo': consec,
             'cuenta':      cuenta_cod,
             'cuenta_nom':  cuenta_nom,
-            'tercero':     cod_ter,
             'tercero_nom': nom_ter,
             'nit':         nit_ter,
             'debito':      round(deb, 2),
             'credito':     round(cre, 2),
-            'detalle':     detalle,
-            'anulado':     anulado,
-            'fecha':       fecha_str,
-            'lapso':       lapso,
+            'detalle':     detalle[:100] if detalle else '',
         }
         grupos[grupo_key]['asientos'].append(asiento)
 

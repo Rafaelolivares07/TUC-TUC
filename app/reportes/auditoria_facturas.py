@@ -226,11 +226,15 @@ def calcular(datos, filtros):
         asiento = {
             'cuenta':      cuenta_cod,
             'cuenta_nom':  cuenta_nom,
+            'tercero':     cod_ter,
             'tercero_nom': nom_ter,
             'nit':         nit_ter,
             'debito':      round(deb, 2),
             'credito':     round(cre, 2),
             'detalle':     detalle[:100] if detalle else '',
+            'anulado':     anulado,
+            'fecha':       fecha_str,
+            'lapso':       lapso,
         }
         grupos[grupo_key]['asientos'].append(asiento)
 
@@ -240,19 +244,20 @@ def calcular(datos, filtros):
 
     for (emp, tipo, doc), g in grupos.items():
         asientos = g['asientos']
-        total_deb = round(sum(a['debito'] for a in asientos), 2)
-        total_cre = round(sum(a['credito'] for a in asientos), 2)
+        total_deb = round(sum(a.get('debito', 0) for a in asientos), 2)
+        total_cre = round(sum(a.get('credito', 0) for a in asientos), 2)
         diferencia = round(total_deb - total_cre, 2)
         esta_cuadrada = abs(diferencia) < 0.01
 
         terceros_distintos = {}
         for a in asientos:
-            if a['tercero']:
-                terceros_distintos[a['tercero']] = a['tercero_nom'] or a['tercero']
+            t_cod = a.get('tercero') or ''
+            if t_cod:
+                terceros_distintos[t_cod] = a.get('tercero_nom') or t_cod
 
-        lapsos_distintos = {a['lapso'] for a in asientos if a['lapso']}
-        fechas_distintas = {a['fecha'][:10] for a in asientos if a['fecha']}
-        anulados_count = sum(1 for a in asientos if a['anulado'])
+        lapsos_distintos = {a.get('lapso') for a in asientos if a.get('lapso')}
+        fechas_distintas = {a.get('fecha', '')[:10] for a in asientos if a.get('fecha')}
+        anulados_count = sum(1 for a in asientos if a.get('anulado'))
         es_anulada = anulados_count > 0 and (anulados_count == len(asientos))
 
         # Diagnóstico de inconsistencias

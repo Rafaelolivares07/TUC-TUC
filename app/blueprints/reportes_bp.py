@@ -188,7 +188,10 @@ def _ejecutar_consulta_remota(conn, cliente_id, tipo, parametros, timeout=50, co
         FROM admin_agent_sesiones
         WHERE LOWER(cliente_id) IN (LOWER(%s), LOWER(%s) || '_daemon')
            OR LOWER(cliente_id) = REPLACE(LOWER(%s), '_daemon', '')
-        ORDER BY ultimo_ping DESC, id DESC
+        ORDER BY 
+           CASE WHEN LOWER(cliente_id) NOT LIKE '%%_daemon' AND ultimo_ping > NOW() - INTERVAL '3 minutes' THEN 0 ELSE 1 END,
+           ultimo_ping DESC, 
+           id DESC
         LIMIT 1
         RETURNING id
     """, (tipo, json.dumps(parametros), cliente_id, cliente_id, cliente_id)).fetchone()
@@ -200,7 +203,9 @@ def _ejecutar_consulta_remota(conn, cliente_id, tipo, parametros, timeout=50, co
             FROM admin_agent_sesiones
             WHERE LOWER(cliente_id) IN (LOWER(%s), LOWER(%s) || '_daemon')
                OR LOWER(cliente_id) = REPLACE(LOWER(%s), '_daemon', '')
-            ORDER BY id DESC
+            ORDER BY 
+               CASE WHEN LOWER(cliente_id) NOT LIKE '%%_daemon' THEN 0 ELSE 1 END,
+               id DESC
             LIMIT 1
             RETURNING id
         """, (tipo, json.dumps(parametros), cliente_id, cliente_id, cliente_id)).fetchone()
@@ -555,7 +560,10 @@ def api_reporte_iniciar(reporte_id):
             FROM admin_agent_sesiones
             WHERE LOWER(cliente_id) IN (LOWER(%s), LOWER(%s) || '_daemon')
                OR LOWER(cliente_id) = REPLACE(LOWER(%s), '_daemon', '')
-            ORDER BY ultimo_ping DESC, id DESC
+            ORDER BY 
+               CASE WHEN LOWER(cliente_id) NOT LIKE '%%_daemon' AND ultimo_ping > NOW() - INTERVAL '3 minutes' THEN 0 ELSE 1 END,
+               ultimo_ping DESC, 
+               id DESC
             LIMIT 1
             RETURNING id
         """, (json.dumps({'reporte_id': reporte_id, 'filtros': filtros}), agente, agente, agente)).fetchone()
@@ -567,7 +575,9 @@ def api_reporte_iniciar(reporte_id):
                 FROM admin_agent_sesiones
                 WHERE LOWER(cliente_id) IN (LOWER(%s), LOWER(%s) || '_daemon')
                    OR LOWER(cliente_id) = REPLACE(LOWER(%s), '_daemon', '')
-                ORDER BY id DESC
+                ORDER BY 
+                   CASE WHEN LOWER(cliente_id) NOT LIKE '%%_daemon' THEN 0 ELSE 1 END,
+                   id DESC
                 LIMIT 1
                 RETURNING id
             """, (json.dumps({'reporte_id': reporte_id, 'filtros': filtros}), agente, agente, agente)).fetchone()

@@ -219,6 +219,78 @@
             </p>
         </div>
 
+        <!-- Barra y Panel de Telemetría E2E (Tres Logs de Seguimiento) -->
+        <div id="panel-telemetria" class="hidden bg-white rounded-2xl p-4 shadow-sm border border-indigo-100 bg-gradient-to-r from-indigo-50/50 via-slate-50 to-white space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-600 text-white text-xs font-bold shadow-sm">
+                        <i class="bi bi-stopwatch-fill"></i>
+                    </span>
+                    <div>
+                        <h4 class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                            <span>Métricas de Rendimiento y Telemetría E2E (3 Tiempos)</span>
+                            <span id="badge-total-tiempo" class="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-300">0.0s</span>
+                        </h4>
+                        <p class="text-[11px] text-slate-500" id="subtitulo-telemetria">Desglose exacto: Frontend ➔ Servidor ➔ Agente Local ➔ Red</p>
+                    </div>
+                </div>
+                <button type="button" onclick="toggleDetalleLogs()" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 self-start sm:self-auto bg-white px-2.5 py-1 rounded-lg border border-indigo-200 shadow-sm transition">
+                    <i class="bi bi-terminal-fill"></i>
+                    <span id="btn-logs-label">Ver Detalle de los 3 Logs</span>
+                    <i id="btn-logs-icono" class="bi bi-chevron-down text-[10px]"></i>
+                </button>
+            </div>
+
+            <!-- Resumen de 3 bloques -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                <!-- Log 1: Frontend -->
+                <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="font-bold text-sky-700 flex items-center gap-1"><i class="bi bi-window"></i> 1. Frontend UI</span>
+                        <span id="t-front-ms" class="font-mono font-bold text-slate-700">-- ms</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 truncate" id="t-front-desc">Petición HTTP & Renderizado</p>
+                </div>
+                <!-- Log 2: Servidor Web -->
+                <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="font-bold text-indigo-700 flex items-center gap-1"><i class="bi bi-cloud-arrow-up"></i> 2. Servidor Web</span>
+                        <span id="t-serv-ms" class="font-mono font-bold text-slate-700">-- ms</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 truncate" id="t-serv-desc">Cola & Orquestación API</p>
+                </div>
+                <!-- Log 3: Agente Local -->
+                <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="font-bold text-emerald-700 flex items-center gap-1"><i class="bi bi-cpu-fill"></i> 3. Agente Local</span>
+                        <span id="t-agent-ms" class="font-mono font-bold text-slate-700">-- ms</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 truncate" id="t-agent-desc">Lectura DBF & Cálculo Inconsistencias</p>
+                </div>
+            </div>
+
+            <!-- Detalle Desplegable de los 3 Logs -->
+            <div id="box-detalle-logs" class="hidden bg-slate-900 text-slate-200 rounded-xl p-3 font-mono text-[11px] space-y-2 border border-slate-800">
+                <div class="text-sky-400 font-bold border-b border-slate-800 pb-1 flex items-center justify-between">
+                    <span>🚀 [LOG 1 - FRONTEND]</span>
+                    <span id="log1-ts" class="text-slate-500 font-normal"></span>
+                </div>
+                <div id="log1-content" class="text-slate-300 space-y-0.5 text-[10.5px]"></div>
+
+                <div class="text-indigo-400 font-bold border-b border-slate-800 pb-1 pt-1 flex items-center justify-between">
+                    <span>🌐 [LOG 2 - SERVIDOR WEB]</span>
+                    <span id="log2-ts" class="text-slate-500 font-normal"></span>
+                </div>
+                <div id="log2-content" class="text-slate-300 space-y-0.5 text-[10.5px]"></div>
+
+                <div class="text-emerald-400 font-bold border-b border-slate-800 pb-1 pt-1 flex items-center justify-between">
+                    <span>💻 [LOG 3 - AGENTE LOCAL]</span>
+                    <span id="log3-ts" class="text-slate-500 font-normal"></span>
+                </div>
+                <div id="log3-content" class="text-slate-300 space-y-0.5 text-[10.5px]"></div>
+            </div>
+        </div>
+
         <!-- Métricas y Tarjetas KPI de Auditoría -->
         <div id="panel-kpi" class="hidden grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3">
             <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200/80">
@@ -502,6 +574,83 @@
             if (pH) pH.value = valH;
         }
 
+        let _mostrarLogsDetalle = false;
+        function toggleDetalleLogs() {
+            _mostrarLogsDetalle = !_mostrarLogsDetalle;
+            const box = document.getElementById('box-detalle-logs');
+            const lbl = document.getElementById('btn-logs-label');
+            const ico = document.getElementById('btn-logs-icono');
+            if (_mostrarLogsDetalle) {
+                box.classList.remove('hidden');
+                lbl.textContent = 'Ocultar Detalle';
+                ico.className = 'bi bi-chevron-up text-[10px]';
+            } else {
+                box.classList.add('hidden');
+                lbl.textContent = 'Ver Detalle de los 3 Logs';
+                ico.className = 'bi bi-chevron-down text-[10px]';
+            }
+        }
+
+        function renderizarTelemetria(data, tFrontTotalMs, filtros) {
+            const panel = document.getElementById('panel-telemetria');
+            if (!panel) return;
+            panel.classList.remove('hidden');
+
+            const tele = data._telemetry || {};
+            const srv = tele.server || {};
+            const agt = tele.agent || {};
+
+            const tTotalSec = (tFrontTotalMs / 1000).toFixed(2);
+            document.getElementById('badge-total-tiempo').textContent = `${tTotalSec}s`;
+
+            // Card 1: Frontend
+            document.getElementById('t-front-ms').textContent = `${tFrontTotalMs} ms`;
+            document.getElementById('t-front-desc').textContent = `Red + Roundtrip + Render (${_rows.length} facturas)`;
+
+            // Card 2: Server
+            const srvMs = srv.server_total_ms != null ? `${srv.server_total_ms} ms` : (data.elapsed ? `${(data.elapsed * 1000).toFixed(0)} ms` : '-- ms');
+            document.getElementById('t-serv-ms').textContent = srvMs;
+            const pickupTxt = srv.agent_pickup_ms != null ? `Cola: ${srv.agent_pickup_ms}ms` : 'Cola';
+            document.getElementById('t-serv-desc').textContent = `Consulta #${srv.consulta_id || '?'} | ${pickupTxt}`;
+
+            // Card 3: Agent
+            const agtMs = agt.agent_total_ms != null ? `${agt.agent_total_ms} ms` : (srv.agent_exec_ms != null ? `${srv.agent_exec_ms} ms` : '-- ms');
+            document.getElementById('t-agent-ms').textContent = agtMs;
+            const calcTxt = agt.calc_ms != null ? `Cálculo: ${agt.calc_ms}ms` : 'Cálculo';
+            document.getElementById('t-agent-desc').textContent = `DBF + ${calcTxt} (${agt.agent_version ? 'v' + agt.agent_version : 'Agente'})`;
+
+            // Logs text content
+            document.getElementById('log1-ts').textContent = new Date().toLocaleTimeString();
+            document.getElementById('log1-content').innerHTML = `
+                <div>➔ Agente Destino: <span class="text-white font-bold">${filtros.agente}</span></div>
+                <div>➔ Parámetros: <span class="text-slate-400">empresa=${filtros.empresa || 'TODAS'}, tipo=${filtros.tipo_doc || 'AUTO'}, desde=${filtros.desde || 'N/A'}, hasta=${filtros.hasta || 'N/A'}</span></div>
+                <div>➔ Tiempo Total Percibido en Navegador: <span class="text-emerald-400 font-bold">${tFrontTotalMs} ms</span> (${tTotalSec} segundos)</div>
+                <div>➔ Registros / Facturas Recibidas: <span class="text-white font-bold">${_rows.length}</span></div>
+            `;
+
+            document.getElementById('log2-ts').textContent = srv.timestamp_server || new Date().toLocaleTimeString();
+            document.getElementById('log2-content').innerHTML = `
+                <div>➔ ID Consulta Servidor: <span class="text-white font-bold">#${srv.consulta_id || '?'}</span> | Tipo: <span class="text-amber-300">ejecutar_reporte</span></div>
+                <div>➔ Tiempo en Cola antes de que el Agente la tomara: <span class="text-indigo-300 font-bold">${srv.agent_pickup_ms != null ? srv.agent_pickup_ms + ' ms' : 'Inmediato'}</span></div>
+                <div>➔ Tiempo de Ejecución en Agente (reportado a Servidor): <span class="text-indigo-300 font-bold">${srv.agent_exec_ms != null ? srv.agent_exec_ms + ' ms' : '--'}</span></div>
+                <div>➔ Tiempo Total en Backend: <span class="text-emerald-400 font-bold">${srv.server_total_ms != null ? srv.server_total_ms + ' ms' : '--'}</span></div>
+            `;
+
+            document.getElementById('log3-ts').textContent = agt.timestamp_agent || new Date().toLocaleTimeString();
+            let dbfHtml = '';
+            if (agt.timings_dbf) {
+                dbfHtml = Object.entries(agt.timings_dbf).map(([t, info]) => {
+                    return `<div>&nbsp;&nbsp;• <span class="text-amber-200">${t}</span>: ${info.rows} filas leídas en <span class="text-emerald-300 font-bold">${info.ms} ms</span></div>`;
+                }).join('');
+            }
+            document.getElementById('log3-content').innerHTML = `
+                <div>➔ Agente: <span class="text-white font-bold">${filtros.agente}</span> (Versión ${agt.agent_version || '1.2.9'})</div>
+                ${dbfHtml ? '<div>➔ Lecturas de Tablas DBF Locales:</div>' + dbfHtml : ''}
+                <div>➔ Algoritmo de Detección de Inconsistencias & Huecos (calcular): <span class="text-emerald-300 font-bold">${agt.calc_ms != null ? agt.calc_ms + ' ms' : '--'}</span></div>
+                <div>➔ Tiempo Total Procesamiento Local Agente: <span class="text-emerald-400 font-bold">${agt.agent_total_ms != null ? agt.agent_total_ms + ' ms' : '--'}</span></div>
+            `;
+        }
+
         // ── Consulta al Backend ──────────────────────────────────────────────
         function consultarAuditoria() {
             const agente = getAgenteActivo();
@@ -522,8 +671,17 @@
                 solo_inconsistencias: document.getElementById('f-solo-inc').checked,
             };
 
+            const tStartFrontend = Date.now();
+            const tsInicioStr = new Date().toLocaleTimeString();
+            console.group('%c[LOG 1 - FRONTEND] Enviando Solicitud de Auditoría', 'color: #0284c7; font-weight: bold;');
+            console.log('Agente:', agente);
+            console.log('Filtros:', filtros);
+            console.log('Hora Envío:', tsInicioStr);
+            console.groupEnd();
+
             document.getElementById('estado-inicial').classList.add('hidden');
             document.getElementById('panel-kpi').classList.add('hidden');
+            document.getElementById('panel-telemetria').classList.add('hidden');
             document.getElementById('wrap-filtro-vivo').classList.add('hidden');
             document.getElementById('vista-grilla').classList.add('hidden');
             document.getElementById('btn-excel').classList.add('hidden');
@@ -557,8 +715,11 @@
                 return data;
             })
             .then(data => {
+                const tEndFrontend = Date.now();
+                const tFrontTotalMs = tEndFrontend - tStartFrontend;
                 clearInterval(_elapsedInterval);
                 spinner.classList.add('hidden');
+                
                 if (!data.ok) {
                     alert('Error: ' + (data.error || 'No se pudo consultar'));
                     return;
@@ -569,6 +730,26 @@
                     return;
                 }
                 _rows = rawRows;
+
+                const tele = data._telemetry || {};
+                const srv = tele.server || {};
+                const agt = tele.agent || {};
+
+                console.group('%c[LOG 2 - SERVIDOR] Telemetría admin.tuc-tuc.co', 'color: #6366f1; font-weight: bold;');
+                console.log('Consulta ID:', srv.consulta_id);
+                console.log('Tiempo Total Servidor:', srv.server_total_ms != null ? srv.server_total_ms + ' ms' : '--');
+                console.log('Tiempo en Cola (Pickup):', srv.agent_pickup_ms != null ? srv.agent_pickup_ms + ' ms' : '--');
+                console.log('Tiempo Ejecución Agente:', srv.agent_exec_ms != null ? srv.agent_exec_ms + ' ms' : '--');
+                console.groupEnd();
+
+                console.group('%c[LOG 3 - AGENTE LOCAL] Telemetría ' + agente, 'color: #10b981; font-weight: bold;');
+                console.log('Versión Agente:', agt.agent_version);
+                console.log('Lecturas DBF:', agt.timings_dbf);
+                console.log('Tiempo Cálculo:', agt.calc_ms != null ? agt.calc_ms + ' ms' : '--');
+                console.log('Tiempo Total Agente:', agt.agent_total_ms != null ? agt.agent_total_ms + ' ms' : '--');
+                console.groupEnd();
+
+                renderizarTelemetria(data, tFrontTotalMs, filtros);
                 aplicarFiltrosLocales();
                 document.getElementById('panel-kpi').classList.remove('hidden');
                 document.getElementById('wrap-filtro-vivo').classList.remove('hidden');

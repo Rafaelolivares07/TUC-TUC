@@ -178,7 +178,10 @@ def _obtener_agentes_activos(conn, usuario_id, rol):
         a.pop('_diff', None)
     return agentes
 
-def _ejecutar_consulta_remota(conn, cliente_id, tipo, parametros, timeout=90):
+def _ejecutar_consulta_remota(conn, cliente_id, tipo, parametros, timeout=50, con_telemetria=False):
+    t0 = time.time()
+    ts_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    
     row = conn.execute("""
         INSERT INTO admin_agent_consultas (sesion_id, tipo, parametros, estado)
         SELECT id, %s, %s::jsonb, 'pendiente'
@@ -207,22 +210,51 @@ def _ejecutar_consulta_remota(conn, cliente_id, tipo, parametros, timeout=90):
         
     conn.commit()
     consulta_id = row['id']
+    print(f"[{ts_str}] [SERVER] [REQ #{consulta_id}] Encolada consulta tipo='{tipo}' para agente='{cliente_id}'")
     
-    t0 = time.time()
+    t_pickup = None
     while time.time() - t0 < timeout:
-        time.sleep(0.5)
+        time.sleep(0.2)
         c = conn.execute("""
-            SELECT estado, respuesta FROM admin_agent_consultas WHERE id=%s
+            SELECT estado, respuesta, created_at, respondida_at FROM admin_agent_consultas WHERE id=%s
         """, (consulta_id,)).fetchone()
         if c:
+            if c['estado'] == 'procesando' and t_pickup is None:
+                t_pickup = time.time()
+                pickup_ms = round((t_pickup - t0) * 1000, 1)
+                ts_p = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                print(f"[{ts_p}] [SERVER] [POLL #{consulta_id}] Agente '{cliente_id}' tomó consulta (cola: {pickup_ms}ms)")
+                
             if c['estado'] == 'lista':
-                return c['respuesta']
+                t_end = time.time()
+                total_srv_ms = round((t_end - t0) * 1000, 1)
+                pickup_ms = round((t_pickup - t0) * 1000, 1) if t_pickup else 0.0
+                agent_exec_ms = round((t_end - t_pickup) * 1000, 1) if t_pickup else total_srv_ms
+                ts_d = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                print(f"[{ts_d}] [SERVER] [DONE #{consulta_id}] Respondida en {total_srv_ms}ms (cola={pickup_ms}ms, agente={agent_exec_ms}ms)")
+                
+                resp = c['respuesta']
+                if con_telemetria:
+                    telemetria_srv = {
+                        'consulta_id': consulta_id,
+                        'agente': cliente_id,
+                        'tipo': tipo,
+                        'server_total_ms': total_srv_ms,
+                        'agent_pickup_ms': pickup_ms,
+                        'agent_exec_ms': agent_exec_ms,
+                        'timestamp_server': datetime.datetime.now().isoformat()
+                    }
+                    return resp, telemetria_srv
+                return resp
+                
             if c['estado'] == 'error':
                 err = c.get('respuesta')
-                if isinstance(err, dict):
-                    raise RuntimeError(err.get('error', 'Error en el agente'))
-                raise RuntimeError(str(err or 'Error en el agente'))
-    raise TimeoutError(f"El agente '{cliente_id}' tardó más de {timeout}s en responder.")
+                err_msg = err.get('error', 'Error en el agente') if isinstance(err, dict) else str(err or 'Error en el agente')
+                ts_e = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+                print(f"[{ts_e}] [SERVER] [ERROR #{consulta_id}] Agente '{cliente_id}' reportó error: {err_msg}")
+                raise RuntimeError(err_msg)
+                
+    raise TimeoutError(f"El agente '{cliente_id}' tardó más de {timeout}s en responder a la consulta #{consulta_id}.")
 
 def _resolver_terceros_lote(conn, agente, cod_ters):
     """Resuelve en lote una lista de códigos de terceros (COD_TER) en dos pasos:
@@ -635,31 +667,37 @@ def ejecutar_reporte_api(reporte_id):
         filas = None
         
         # 1. Intentar ejecución remota compilada en el agente
+        telemetria_srv = {}
+        telemetria_agent = {}
         try:
-            resp = _ejecutar_consulta_remota(conn, agente, 'ejecutar_reporte', {
+            resp, telemetria_srv = _ejecutar_consulta_remota(conn, agente, 'ejecutar_reporte', {
                 'reporte_id': reporte_id,
                 'filtros': filtros
-            }, timeout=25)
+            }, timeout=45, con_telemetria=True)
             if isinstance(resp, dict):
                 if 'error' not in resp:
+                    telemetria_agent = resp.get('_telemetry', {})
                     if 'filas' in resp:
                         filas = resp['filas']
                     elif 'rows' in resp:
                         filas = resp['rows']
                     else:
                         filas = [resp]
+                else:
+                    return jsonify({'ok': False, 'error': resp['error'], 'filas': [], 'rows': []}), 400
             elif isinstance(resp, list):
                 filas = resp
-        except Exception:
+        except Exception as e_remoto:
+            print(f"[SERVER] [WARN] ejecutar_reporte falló: {e_remoto}, intentando multi_tabla...")
             filas = None
 
         # 2. Si el agente no tiene el reporte compilado o es dinámico, ejecutar vía multi_tabla en el servidor
         if filas is None or not isinstance(filas, list):
             if mod and hasattr(mod, 'tablas_requeridas') and hasattr(mod, 'calcular'):
                 tablas = mod.tablas_requeridas(filtros)
-                datos = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
+                datos, telemetria_srv = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
                     'tablas': tablas
-                }, timeout=90)
+                }, timeout=60, con_telemetria=True)
                 if isinstance(datos, dict) and 'error' in datos:
                     return jsonify({'ok': False, 'error': datos['error'], 'filas': [], 'rows': []}), 400
 
@@ -678,13 +716,23 @@ def ejecutar_reporte_api(reporte_id):
                 
         elapsed = round(time.time() - t0, 2)
         total_cnt = len(filas) if hasattr(filas, '__len__') else 0
+
+        telemetria_total = {
+            'server': telemetria_srv,
+            'agent': telemetria_agent,
+            'server_total_sec': elapsed,
+            'agente': agente,
+            'reporte_id': reporte_id
+        }
+
         return jsonify({
             'ok': True,
             'rows': filas,
             'filas': filas,
             'total': total_cnt,
             'elapsed': elapsed,
-            'agente': agente
+            'agente': agente,
+            '_telemetry': telemetria_total
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'filas': [], 'rows': []}), 500

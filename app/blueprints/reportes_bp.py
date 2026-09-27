@@ -532,8 +532,62 @@ def reporte_detalle(reporte_id):
                                desde=hoy,
                                hasta=hoy,
                                sar_nombre=session.get('nombre', ''))
+@bp.route('/admin/api/agente-test-salud/<agente>', methods=['GET'])
+@admin_required
+def api_agente_test_salud(agente):
+    conn = get_db_connection()
+    try:
+        t0 = time.time()
+        agente_clean = agente.strip()
+        sesion = conn.execute("""
+            SELECT id, cliente_id, nombre, version, ruta_bd, ultimo_ping 
+            FROM admin_agent_sesiones 
+            WHERE LOWER(cliente_id) IN (LOWER(%s), LOWER(%s) || '_daemon')
+               OR LOWER(cliente_id) = REPLACE(LOWER(%s), '_daemon', '')
+            ORDER BY CASE WHEN LOWER(cliente_id) NOT LIKE '%%_daemon' AND ultimo_ping > NOW() - INTERVAL '3 minutes' THEN 0 ELSE 1 END,
+                     ultimo_ping DESC, id DESC
+            LIMIT 1
+        """, (agente_clean, agente_clean, agente_clean)).fetchone()
+        
+        if not sesion:
+            return jsonify({'ok': False, 'error': f"Agente '{agente}' no registrado"}), 404
+            
+        now = datetime.datetime.now(datetime.timezone.utc)
+        up = sesion['ultimo_ping']
+        if up and up.tzinfo is None:
+            up = up.replace(tzinfo=datetime.timezone.utc)
+        diff_sec = (now - up).total_seconds() if up else 999999
+        
+        if diff_sec > 180:
+            return jsonify({
+                'ok': False, 
+                'online': False,
+                'error': f"Agente '{agente}' desconectado (último ping hace {int(diff_sec)}s)",
+                'diff_sec': diff_sec
+            })
+            
+        try:
+            resp, tele = _ejecutar_consulta_remota(conn, agente_clean, 'test_salud', {}, timeout=8, con_telemetria=True)
+            t_total_ms = round((time.time() - t0) * 1000, 1)
+            return jsonify({
+                'ok': True,
+                'online': True,
+                'latencia_ms': t_total_ms,
+                'telemetria': tele,
+                'version': resp.get('agente_version') or sesion['version'] or 'v1.3.0',
+                'ruta_bd': resp.get('ruta_bd') or sesion['ruta_bd'] or '',
+                'ultimo_ping_sec': int(diff_sec)
+            })
+        except Exception as e_ping:
+            return jsonify({
+                'ok': False,
+                'online': False,
+                'error': f"Test de red falló: {e_ping}",
+                'ultimo_ping_sec': int(diff_sec)
+            })
     finally:
         conn.close()
+
 
 @bp.route('/admin/api/reporte/<reporte_id>/iniciar', methods=['POST'])
 @admin_required

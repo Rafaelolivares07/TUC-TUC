@@ -48,35 +48,45 @@
 
     <main class="max-w-7xl mx-auto px-3 sm:px-4 py-4 space-y-4">
 
-        <!-- Selector de Agente Activo -->
+        <!-- Selector de Agente Activo con Test de Red -->
         <div class="bg-white rounded-2xl p-3.5 sm:p-4 shadow-sm border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div class="flex items-center gap-2.5">
                 <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg flex-shrink-0">
                     <i class="bi bi-hdd-network"></i>
                 </div>
                 <div>
-                    <label class="block text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">Agente de consulta</label>
+                    <div class="flex items-center gap-2">
+                        <label class="block text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">Agente de consulta</label>
+                        <span id="badge-latencia" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"></span>
+                    </div>
                     <span id="label-agente-activo" class="text-xs sm:text-sm font-semibold text-slate-800">Cargando...</span>
                 </div>
             </div>
-            <div class="w-full sm:w-64">
-                <div class="relative">
-                    <select id="sel-agente-top" onchange="onAgenteChange()"
-                            class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
-                        {% if agentes %}
-                            {% for a in agentes %}
-                                <option value="{{ a.id }}" data-online="{{ '1' if a.online else '0' }}" data-dbver="{{ a.db_version }}" {% if a.id == agente_actual %}selected{% endif %}>
-                                    {{ '🟢' if a.online else '⚪' }} {{ a.nombre }}
-                                </option>
-                            {% endfor %}
-                        {% else %}
-                            <option value="">(Sin agentes)</option>
-                        {% endif %}
-                    </select>
-                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                <div class="w-full sm:w-64">
+                    <div class="relative">
+                        <select id="sel-agente-top" onchange="onAgenteChange()"
+                                class="w-full appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm font-semibold py-2 px-3 pr-8 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner transition">
+                            {% if agentes %}
+                                {% for a in agentes %}
+                                    <option value="{{ a.id }}" data-online="{{ '1' if a.online else '0' }}" data-dbver="{{ a.db_version }}" {% if a.id == agente_actual %}selected{% endif %}>
+                                        {{ '🟢' if a.online else '⚪' }} {{ a.nombre }}
+                                    </option>
+                                {% endfor %}
+                            {% else %}
+                                <option value="">(Sin agentes)</option>
+                            {% endif %}
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
                     </div>
                 </div>
+                <button type="button" onclick="testearRendimientoAgente()" id="btn-test-red" title="Testear latencia y canal de subida del agente"
+                        class="flex-shrink-0 px-3 py-2 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs">
+                    <i class="bi bi-lightning-charge-fill text-amber-500"></i>
+                    <span>Test Red</span>
+                </button>
             </div>
         </div>
 
@@ -288,6 +298,13 @@
                     <span id="log3-ts" class="text-slate-500 font-normal"></span>
                 </div>
                 <div id="log3-content" class="text-slate-300 space-y-0.5 text-[10.5px]"></div>
+
+                <div class="pt-2 border-t border-slate-800 flex justify-end">
+                    <button type="button" onclick="copiarLogsDiagnostico()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-sans font-bold flex items-center gap-1.5 transition">
+                        <i class="bi bi-clipboard"></i>
+                        <span id="btn-copiar-logs-txt">Copiar Diagnóstico de Logs</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -591,6 +608,63 @@
             }
         }
 
+        let _ultimoLogDiagnostico = '';
+
+        function copiarLogsDiagnostico() {
+            if (!_ultimoLogDiagnostico) {
+                _ultimoLogDiagnostico = `[LOGS DE AUDITORIA Y TELEMETRIA]\n` +
+                    `1. FRONTEND: ${document.getElementById('log1-content')?.innerText || 'N/A'}\n` +
+                    `2. SERVIDOR: ${document.getElementById('log2-content')?.innerText || 'N/A'}\n` +
+                    `3. AGENTE: ${document.getElementById('log3-content')?.innerText || 'N/A'}`;
+            }
+            navigator.clipboard.writeText(_ultimoLogDiagnostico).then(() => {
+                const btn = document.getElementById('btn-copiar-logs-txt');
+                if (btn) {
+                    btn.textContent = '¡Copiado al portapapeles!';
+                    setTimeout(() => { btn.textContent = 'Copiar Diagnóstico de Logs'; }, 2000);
+                }
+            }).catch(() => {
+                alert('No se pudo copiar automáticamente. Puedes seleccionar el texto de los logs manualmente.');
+            });
+        }
+
+        async function testearRendimientoAgente() {
+            const agente = getAgenteActivo();
+            if (!agente) { alert('Selecciona un agente primero.'); return; }
+            
+            const btn = document.getElementById('btn-test-red');
+            const badge = document.getElementById('badge-latencia');
+            if (btn) btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin text-amber-500"></i><span>Midiendo...</span>';
+            
+            try {
+                const t0 = Date.now();
+                const r = await fetch(`/admin/api/agente-test-salud/${encodeURIComponent(agente)}`);
+                const data = await r.json();
+                const ms = data.latencia_ms || (Date.now() - t0);
+                
+                if (data.ok && data.online) {
+                    let colorCls = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                    let estadoTxt = 'Excelente';
+                    if (ms > 300) { colorCls = 'bg-amber-50 text-amber-700 border-amber-200'; estadoTxt = 'Aceptable'; }
+                    if (ms > 800) { colorCls = 'bg-rose-50 text-rose-700 border-rose-200'; estadoTxt = 'Lento'; }
+                    
+                    badge.className = `text-[10px] font-bold px-2 py-0.5 rounded-full border ${colorCls}`;
+                    badge.innerHTML = `🟢 ${ms} ms (${estadoTxt}) • v${data.version || '1.3.0'}`;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200';
+                    badge.innerHTML = `🔴 Desconectado (${data.error || 'Sin ping'})`;
+                    badge.classList.remove('hidden');
+                }
+            } catch (e) {
+                badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full border bg-rose-50 text-rose-700 border-rose-200';
+                badge.innerHTML = `⚠️ Error probando red: ${e.message}`;
+                badge.classList.remove('hidden');
+            } finally {
+                if (btn) btn.innerHTML = '<i class="bi bi-lightning-charge-fill text-amber-500"></i><span>Test Red</span>';
+            }
+        }
+
         function renderizarTelemetria(data, tFrontTotalMs, filtros) {
             const panel = document.getElementById('panel-telemetria');
             if (!panel) return;
@@ -601,7 +675,9 @@
             const agt = tele.agent || {};
 
             const tTotalSec = (tFrontTotalMs / 1000).toFixed(2);
-            document.getElementById('badge-total-tiempo').textContent = `${tTotalSec}s`;
+            const badgeTotal = document.getElementById('badge-total-tiempo');
+            badgeTotal.className = 'bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-300';
+            badgeTotal.textContent = `${tTotalSec}s`;
 
             // Card 1: Frontend
             document.getElementById('t-front-ms').textContent = `${tFrontTotalMs} ms`;
@@ -644,11 +720,69 @@
                 }).join('');
             }
             document.getElementById('log3-content').innerHTML = `
-                <div>➔ Agente: <span class="text-white font-bold">${filtros.agente}</span> (Versión ${agt.agent_version || '1.2.9'})</div>
+                <div>➔ Agente: <span class="text-white font-bold">${filtros.agente}</span> (Versión ${agt.agent_version || '1.3.0'})</div>
                 ${dbfHtml ? '<div>➔ Lecturas de Tablas DBF Locales:</div>' + dbfHtml : ''}
                 <div>➔ Algoritmo de Detección de Inconsistencias & Huecos (calcular): <span class="text-emerald-300 font-bold">${agt.calc_ms != null ? agt.calc_ms + ' ms' : '--'}</span></div>
                 <div>➔ Tiempo Total Procesamiento Local Agente: <span class="text-emerald-400 font-bold">${agt.agent_total_ms != null ? agt.agent_total_ms + ' ms' : '--'}</span></div>
             `;
+
+            _ultimoLogDiagnostico = `[TELEMETRIA EXITOSA]\n` +
+                `FECHA: ${new Date().toISOString()}\n` +
+                `AGENTE: ${filtros.agente} (v${agt.agent_version || '1.3.0'})\n` +
+                `TIEMPOS: Frontend=${tFrontTotalMs}ms | Servidor=${srv.server_total_ms || '--'}ms | Agente=${agt.agent_total_ms || '--'}ms (Calc=${agt.calc_ms || '--'}ms)\n` +
+                `TOTAL FACTURAS: ${_rows.length}`;
+        }
+
+        function renderizarErrorTelemetria(errMsg, tFrontTotalMs, filtros) {
+            const panel = document.getElementById('panel-telemetria');
+            if (!panel) return;
+            panel.classList.remove('hidden');
+
+            const tTotalSec = (tFrontTotalMs / 1000).toFixed(2);
+            const badgeTotal = document.getElementById('badge-total-tiempo');
+            badgeTotal.className = 'bg-rose-100 text-rose-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-rose-300';
+            badgeTotal.textContent = `Error (${tTotalSec}s)`;
+
+            document.getElementById('t-front-ms').textContent = `${tFrontTotalMs} ms`;
+            document.getElementById('t-front-desc').textContent = 'Petición detenida por error / timeout';
+
+            document.getElementById('t-serv-ms').textContent = '⚠️ Error';
+            document.getElementById('t-serv-desc').textContent = 'Fallo en la comunicación con el agente';
+
+            document.getElementById('t-agent-ms').textContent = '⚠️ No completó';
+            document.getElementById('t-agent-desc').textContent = 'Tiempo excedido o canal no respondió';
+
+            document.getElementById('log1-ts').textContent = new Date().toLocaleTimeString();
+            document.getElementById('log1-content').innerHTML = `
+                <div>➔ Agente: <span class="text-white font-bold">${filtros.agente}</span></div>
+                <div>➔ Error Reportado: <span class="text-rose-400 font-bold">${errMsg}</span></div>
+                <div>➔ Tiempo Transcurrido antes de la alerta: <span class="text-rose-300 font-bold">${tFrontTotalMs} ms</span> (${tTotalSec}s)</div>
+            `;
+
+            document.getElementById('log2-ts').textContent = new Date().toLocaleTimeString();
+            document.getElementById('log2-content').innerHTML = `
+                <div>➔ Estado Backend: <span class="text-rose-400 font-bold">Interrumpido por Timeout / Error</span></div>
+                <div>➔ Causa común: El agente tardó más de 60s en subir el paquete de datos tras arranque o la red tuvo fluctuación.</div>
+            `;
+
+            document.getElementById('log3-ts').textContent = new Date().toLocaleTimeString();
+            document.getElementById('log3-content').innerHTML = `
+                <div>➔ Diagnóstico y Recomendación:</div>
+                <div class="text-amber-300">&nbsp;&nbsp;1. Haz clic en el botón <span class="text-white font-bold bg-slate-800 px-1 rounded">⚡ Test Red</span> arriba para probar la conexión con el agente.</div>
+                <div class="text-amber-300">&nbsp;&nbsp;2. Si el test de red da OK (verde), reintenta la consulta ahora que el canal TLS está caliente.</div>
+                <div class="text-amber-300">&nbsp;&nbsp;3. Si el agente está desconectado, verifica que AdminAgent.exe esté ejecutándose en el equipo local.</div>
+            `;
+
+            _mostrarLogsDetalle = true;
+            document.getElementById('box-detalle-logs').classList.remove('hidden');
+            document.getElementById('btn-logs-label').textContent = 'Ocultar Detalle';
+            document.getElementById('btn-logs-icono').className = 'bi bi-chevron-up text-[10px]';
+
+            _ultimoLogDiagnostico = `[ERROR DE CONSULTA / TIMEOUT]\n` +
+                `FECHA: ${new Date().toISOString()}\n` +
+                `AGENTE: ${filtros.agente}\n` +
+                `TIEMPO TRANSCURRIDO: ${tFrontTotalMs}ms (${tTotalSec}s)\n` +
+                `MENSAJE: ${errMsg}`;
         }
 
         // ── Consulta al Backend ──────────────────────────────────────────────
@@ -721,12 +855,16 @@
                 spinner.classList.add('hidden');
                 
                 if (!data.ok) {
-                    alert('Error: ' + (data.error || 'No se pudo consultar'));
+                    const errMsg = data.error || 'No se pudo consultar';
+                    renderizarErrorTelemetria(errMsg, tFrontTotalMs, filtros);
+                    alert('Aviso: ' + errMsg);
                     return;
                 }
                 const rawRows = data.filas || data.rows;
                 if (!Array.isArray(rawRows)) {
-                    alert('Error: ' + (data.error || (typeof rawRows === 'object' && rawRows && rawRows.error) || 'Respuesta inesperada del servidor'));
+                    const errMsg = (typeof rawRows === 'object' && rawRows && rawRows.error) || 'Respuesta inesperada del servidor';
+                    renderizarErrorTelemetria(errMsg, tFrontTotalMs, filtros);
+                    alert('Aviso: ' + errMsg);
                     return;
                 }
                 _rows = rawRows;
@@ -758,9 +896,12 @@
                 document.getElementById('btn-alegra').classList.remove('hidden');
             })
             .catch(err => {
+                const tEndFrontend = Date.now();
+                const tFrontTotalMs = tEndFrontend - tStartFrontend;
                 clearInterval(_elapsedInterval);
                 spinner.classList.add('hidden');
-                alert('Error en la consulta: ' + err);
+                renderizarErrorTelemetria(err.message || String(err), tFrontTotalMs, filtros);
+                alert('Aviso: ' + (err.message || err));
             });
         }
 

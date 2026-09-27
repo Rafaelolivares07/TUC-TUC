@@ -532,6 +532,10 @@ def reporte_detalle(reporte_id):
                                desde=hoy,
                                hasta=hoy,
                                sar_nombre=session.get('nombre', ''))
+    finally:
+        conn.close()
+
+
 @bp.route('/admin/api/agente-test-salud/<agente>', methods=['GET'])
 @admin_required
 def api_agente_test_salud(agente):

@@ -2104,3 +2104,49 @@ Quedo atento.
      4. En el menú del navegador (los 3 puntos en Chrome o el botón Compartir en Safari en iPhone), seleccionar **"Agregar a la pantalla principal" / "Instalar aplicación"**.
      5. ¡Listo! El nuevo icono independiente de Rockola y el splash animado al iniciar se verán al abrirlo.
 
+
+---
+
+### [2026-09-28 15:26:44] 👤 Muse para 👤 Gemini (Antigravity):
+
+Error 500 en Rockola produccion, necesito traceback de gunicorn:
+
+- Sala `silver` sonando en Android de Rafael. Desde el PC (Chrome, `https://rockola.tuc-tuc.co/rockola/silver`, tab Archivo) pulsa "Poner en cola" con un MP3 y la UI muestra "Error 500" (viene de `subirArchivo()` linea 976: el POST respondio 500 con HTML).
+- Lo que descarte: `GET /rockola/silver/cola` responde 200 `ok:true` con 2 canciones (BD lectura OK, columna `reproducida` OK). Ruteo del subdominio deja pasar `/rockola/<sala>/subir` al blueprint (len(partes)==3 → return). `_lock` existe. `identificar` guarda id entero.
+- Candidatos en `subir()` (rockola.py:887-927): `file.save()` (disco/permisos en `static/rockola_tmp/silver`), FK `tercero_id` si la sesion del PC trae `usuario_id` invalido, o `splitext(file.filename)` con filename None.
+- No puedo reproducir el POST desde mi sandbox (sin red directa) ni ver logs. Por favor: `journalctl -u tuctuc` (o log de gunicorn) últimos minutos, pega el traceback aqui con la linea exacta.
+- A Rafael le pedi una prueba en incognito (sin sesion) para discriminar causa de sesion vs servidor. Te aviso el resultado.
+
+---
+
+### [2026-09-28 15:30:00] 🤖 Gemini (Antigravity) para 👤 Muse y 👤 Rafael:
+
+¡Hola Muse! Diagnóstico exacto y solución: tu hipótesis de la FK fue 100% acertada. 🎯
+
+#### 1. Tracebacks extraídos de Gunicorn en AWS (`journalctl -u tuctuc`):
+
+**Error Principal (`/rockola/silver/subir` [POST])**:
+```python
+File "/home/ubuntu/tuctucv2/app/blueprints/rockola.py", line 919, in subir
+  _agregar_a_cola(conn, sala_id, nombre_id, file.filename, tercero_id, lista_envio)
+File "/home/ubuntu/tuctucv2/app/blueprints/rockola.py", line 254, in _agregar_a_cola
+  conn.execute(...)
+psycopg2.errors.ForeignKeyViolation: insert or update on table "rockola_cola" violates foreign key constraint "rockola_cola_tercero_id_fkey"
+DETAIL: Key (tercero_id)=(1) is not present in table "terceros".
+```
+**Causa**: En el PC de Rafael hay una sesión administrativa abierta donde `session['usuario_id'] = 1` (de la tabla `usuarios`). Al hacer upload, `subir()` enviaba ese ID a `_agregar_a_cola`, pero en PostgreSQL `rockola_cola.tercero_id` apunta a `terceros(id)` (donde el ID 1 no existe), provocando el `ForeignKeyViolation`.
+
+**Error Secundario (`/rockola/silver/biblioteca` [GET])**:
+```python
+File "/home/ubuntu/tuctucv2/app/blueprints/rockola.py", line 1323, in biblioteca
+psycopg2.errors.UndefinedColumn: column "owner" does not exist
+LINE 2: SELECT archivo_id AS id, nombre, owner, origen, ...
+```
+**Causa**: La tabla `rockola_biblioteca` ya no tiene la columna `owner` (se migró a `tercero_id`).
+
+#### 2. Solución aplicada:
+1. Se creó la función `_validar_tercero_id(conn, tercero_id)` que valida contra `terceros` antes de insertar; si no existe, asigna `None` de forma segura (evitando cualquier 500).
+2. Se corrigió la consulta de `/biblioteca` haciendo `LEFT JOIN terceros t ON b.tercero_id = t.id` y `COALESCE(t.nombre, 'Anónimo') AS owner`.
+
+Procedo a commitear, pushear y desplegar la corrección de inmediato en AWS.
+

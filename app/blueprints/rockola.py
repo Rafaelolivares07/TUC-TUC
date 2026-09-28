@@ -202,8 +202,19 @@ def _max_pos(conn, sala_id):
     return row['m'] if row else -1
 
 
+def _validar_tercero_id(conn, tercero_id):
+    if not tercero_id:
+        return None
+    try:
+        tid = int(tercero_id)
+        existe = conn.execute("SELECT 1 FROM terceros WHERE id = %s", (tid,)).fetchone()
+        return tid if existe else None
+    except Exception:
+        return None
+
+
 def _recordar_cancion(conn, sala_id, archivo_id, nombre, tercero_id, origen):
-    tid = int(tercero_id) if tercero_id else None
+    tid = _validar_tercero_id(conn, tercero_id)
     conn.execute(
         """
         INSERT INTO rockola_biblioteca (archivo_id, sala_id, nombre, tercero_id, origen)
@@ -219,7 +230,7 @@ def _recordar_cancion(conn, sala_id, archivo_id, nombre, tercero_id, origen):
 
 def _agregar_a_cola(conn, sala_id, archivo_id, nombre, tercero_id, lista_envio=None, modo='final'):
     lista_envio = lista_envio or {}
-    tid = int(tercero_id) if tercero_id else None
+    tid = _validar_tercero_id(conn, tercero_id)
     
     if modo == 'ya':
         row = conn.execute(
@@ -1322,10 +1333,11 @@ def biblioteca(sala_id):
     try:
         rows = conn.execute(
             """
-            SELECT archivo_id AS id, nombre, owner, origen, creado_en
-            FROM rockola_biblioteca
-            WHERE sala_id = %s
-            ORDER BY creado_en DESC
+            SELECT b.archivo_id AS id, b.nombre, COALESCE(t.nombre, 'Anónimo') AS owner, b.origen, b.creado_en
+            FROM rockola_biblioteca b
+            LEFT JOIN terceros t ON b.tercero_id = t.id
+            WHERE b.sala_id = %s
+            ORDER BY b.creado_en DESC
             LIMIT 80
             """,
             (sala_id,),

@@ -125,14 +125,21 @@ def create_app():
             partes = [p for p in request.path.strip('/').split('/') if p]
             if not partes:
                 return entrada()
+
+            RUTAS_FIJAS_ROCKOLA = {
+                'verificar-telefono', 'identificar', 'actualizar-perfil', 'salas',
+                'pwa', 'compartir', 'catalogo', 'admin'
+            }
+
             if partes[0] == 'rockola':
                 if len(partes) == 1:
                     return entrada()
-                if len(partes) == 2 and partes[1] == 'salas':
+                if len(partes) >= 2 and partes[1] in RUTAS_FIJAS_ROCKOLA:
                     return
                 if len(partes) == 2:
                     return cliente_sala(partes[1])
                 return
+
             if partes[0] in ('emisora', 'sync') and len(partes) >= 2:
                 return sync(partes[1])
             if partes[0] == 'cliente' and len(partes) >= 2:
@@ -141,6 +148,9 @@ def create_app():
                 return reproductor_sala(partes[1])
             if partes[0] == 'control' and len(partes) >= 2:
                 return control_sala(partes[1])
+            if partes[0] in RUTAS_FIJAS_ROCKOLA:
+                return
+
             return entrada()
 
         from .dominios_negocio import resolver_negocio_por_host

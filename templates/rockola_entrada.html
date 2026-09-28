@@ -72,11 +72,11 @@ input[type=text]:focus { border-color:var(--ac1); }
   justify-content: center;
   background: radial-gradient(circle at center, #091325 0%, #03060c 100%);
   overflow: hidden;
-  transition: opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1), transform 0.55s ease;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s ease;
 }
 #rk-splash.hide {
   opacity: 0;
-  transform: scale(1.08);
+  transform: scale(1.06);
   pointer-events: none;
 }
 .rk-splash-wrap {
@@ -87,14 +87,13 @@ input[type=text]:focus { border-color:var(--ac1); }
   align-items: center;
   justify-content: center;
 }
-/* 1. Vinilo gigante que se apodera de la pantalla */
 .rk-vinyl-disc {
-  width: min(88vw, 88vh);
-  height: min(88vw, 88vh);
-  max-width: 450px;
-  max-height: 450px;
+  width: min(90vw, 90vh);
+  height: min(90vw, 90vh);
+  max-width: 480px;
+  max-height: 480px;
   border-radius: 50%;
-  box-shadow: 0 0 70px rgba(0, 212, 255, 0.35), 0 25px 60px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 80px rgba(0, 212, 255, 0.4), 0 25px 60px rgba(0, 0, 0, 0.9);
   animation: rk-vinyl-enter-and-spin 2.6s cubic-bezier(0.25, 1, 0.3, 1) forwards;
   transform-origin: center center;
   position: absolute;
@@ -102,12 +101,12 @@ input[type=text]:focus { border-color:var(--ac1); }
 .rk-vinyl-svg {
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 0 15px rgba(0, 212, 255, 0.25));
+  filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.3));
 }
 @keyframes rk-vinyl-enter-and-spin {
   0% {
     opacity: 0;
-    transform: scale(0.2) rotate(-180deg);
+    transform: scale(0.25) rotate(-180deg);
   }
   28% {
     opacity: 1;
@@ -115,10 +114,10 @@ input[type=text]:focus { border-color:var(--ac1); }
   }
   60% {
     opacity: 1;
-    transform: scale(1.03) rotate(360deg);
+    transform: scale(1.02) rotate(360deg);
   }
   78% {
-    opacity: 0.6;
+    opacity: 0.5;
     transform: scale(1.15) rotate(450deg);
   }
   100% {
@@ -126,26 +125,25 @@ input[type=text]:focus { border-color:var(--ac1); }
     transform: scale(1.35) rotate(500deg);
   }
 }
-/* 2. Las dos palabras 'Mi Rockola' saliendo del vinilo y apoderandose del ancho de la pantalla */
 .rk-logo-reveal {
   position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 95vw;
-  max-width: 650px;
+  max-width: 680px;
   opacity: 0;
-  transform: scale(0.4);
+  transform: scale(0.35);
   animation: rk-words-takeover 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   pointer-events: none;
   text-align: center;
 }
 .rk-logo-title {
-  font-size: clamp(38px, 12vw, 68px);
+  font-size: clamp(40px, 13vw, 72px);
   font-weight: 900;
   letter-spacing: -1px;
   color: #ffffff;
-  text-shadow: 0 0 45px rgba(0, 212, 255, 0.85), 0 0 90px rgba(0, 102, 255, 0.5), 0 4px 20px rgba(0, 0, 0, 0.9);
+  text-shadow: 0 0 45px rgba(0, 212, 255, 0.9), 0 0 90px rgba(0, 102, 255, 0.6), 0 4px 20px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
   line-height: 1.1;
 }
@@ -197,11 +195,11 @@ input[type=text]:focus { border-color:var(--ac1); }
             <stop offset="100%" stop-color="#05070c" />
           </radialGradient>
           <linearGradient id="rk-vinyl-sheen" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="rgba(0,212,255,0.25)" />
-            <stop offset="25%" stop-color="rgba(255,255,255,0.03)" />
-            <stop offset="50%" stop-color="rgba(0,212,255,0.3)" />
-            <stop offset="75%" stop-color="rgba(255,255,255,0.03)" />
-            <stop offset="100%" stop-color="rgba(0,212,255,0.25)" />
+            <stop offset="0%" stop-color="rgba(0,212,255,0.28)" />
+            <stop offset="25%" stop-color="rgba(255,255,255,0.04)" />
+            <stop offset="50%" stop-color="rgba(0,212,255,0.32)" />
+            <stop offset="75%" stop-color="rgba(255,255,255,0.04)" />
+            <stop offset="100%" stop-color="rgba(0,212,255,0.28)" />
           </linearGradient>
           <linearGradient id="rk-label-grad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stop-color="#00e5ff" />
@@ -211,37 +209,37 @@ input[type=text]:focus { border-color:var(--ac1); }
         </defs>
 
         <!-- Base y brillo del vinilo -->
-        <circle cx="200" cy="200" r="196" fill="url(#rk-vinyl-body)" stroke="rgba(0,212,255,0.4)" stroke-width="2" />
+        <circle cx="200" cy="200" r="196" fill="url(#rk-vinyl-body)" stroke="rgba(0,212,255,0.45)" stroke-width="2" />
         <circle cx="200" cy="200" r="196" fill="url(#rk-vinyl-sheen)" />
 
         <!-- Surcos y Linecitas de separacion entre pistas (visibles y nitidas) -->
         <!-- Pistas exteriores -->
-        <circle cx="200" cy="200" r="186" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.75" />
-        <circle cx="200" cy="200" r="176" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
-        <circle cx="200" cy="200" r="168" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.75" />
+        <circle cx="200" cy="200" r="186" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.8" />
+        <circle cx="200" cy="200" r="176" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
+        <circle cx="200" cy="200" r="168" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="0.8" />
         <!-- Banda de separacion Pista 1 -->
-        <circle cx="200" cy="200" r="160" fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="1.5" stroke-dasharray="8 3" />
+        <circle cx="200" cy="200" r="160" fill="none" stroke="rgba(0,212,255,0.6)" stroke-width="1.8" stroke-dasharray="8 3" />
         
         <!-- Pistas medias -->
-        <circle cx="200" cy="200" r="150" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="0.5" />
-        <circle cx="200" cy="200" r="142" fill="none" stroke="rgba(255,255,255,0.13)" stroke-width="0.75" />
-        <circle cx="200" cy="200" r="134" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+        <circle cx="200" cy="200" r="150" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" />
+        <circle cx="200" cy="200" r="142" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="0.8" />
+        <circle cx="200" cy="200" r="134" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
         <!-- Banda de separacion Pista 2 -->
-        <circle cx="200" cy="200" r="126" fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="1.5" stroke-dasharray="10 4" />
+        <circle cx="200" cy="200" r="126" fill="none" stroke="rgba(0,212,255,0.6)" stroke-width="1.8" stroke-dasharray="10 4" />
 
         <!-- Pistas interiores -->
-        <circle cx="200" cy="200" r="118" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
-        <circle cx="200" cy="200" r="110" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.75" />
-        <circle cx="200" cy="200" r="102" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+        <circle cx="200" cy="200" r="118" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.5" />
+        <circle cx="200" cy="200" r="110" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.8" />
+        <circle cx="200" cy="200" r="102" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
         <!-- Banda de separacion Pista 3 -->
-        <circle cx="200" cy="200" r="94" fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="1.5" stroke-dasharray="6 3" />
+        <circle cx="200" cy="200" r="94" fill="none" stroke="rgba(0,212,255,0.6)" stroke-width="1.8" stroke-dasharray="6 3" />
 
         <!-- Galleta / Etiqueta central amplia -->
         <circle cx="200" cy="200" r="84" fill="url(#rk-label-grad)" stroke="#00d4ff" stroke-width="2.5" />
-        <circle cx="200" cy="200" r="76" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1" />
+        <circle cx="200" cy="200" r="76" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1" />
 
         <!-- Texto grande centrado 'Mi Rockola' en el vinilo -->
-        <text x="200" y="210" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="28" text-anchor="middle" fill="#ffffff" letter-spacing="-0.5" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.9))">
+        <text x="200" y="211" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="29" text-anchor="middle" fill="#ffffff" letter-spacing="-0.5" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.95))">
           Mi <tspan fill="#00d4ff">Rockola</tspan>
         </text>
 

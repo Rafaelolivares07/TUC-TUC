@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#00d4ff">
 <link rel="manifest" href="/rockola/pwa/manifest.json">
+<link rel="apple-touch-icon" href="/static/rockola-apple-touch-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Tuc Tuc Rockola</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -55,9 +59,20 @@ input[type=text]:focus { border-color:var(--ac1); }
 .room-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .empty { color:var(--muted2); font-size:13px; text-align:center; padding:12px 0 2px; }
 .footer { margin-top:18px; color:var(--muted2); font-size:11px; text-align:center; }
+#rk-splash { position:fixed; inset:0; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:var(--bg); transition:opacity .45s ease; }
+#rk-splash img { width:128px; height:128px; border-radius:28px; animation:rk-pop .7s ease both; }
+#rk-splash .rk-splash-name { font-size:22px; font-weight:900; letter-spacing:-.4px; animation:rk-pop .7s .1s ease both; }
+#rk-splash .rk-splash-name span { color:var(--ac1); }
+#rk-splash.hide { opacity:0; pointer-events:none; }
+@keyframes rk-pop { from { opacity:0; transform:scale(.6); } to { opacity:1; transform:scale(1); } }
+@media (prefers-reduced-motion:reduce) { #rk-splash img, #rk-splash .rk-splash-name { animation:none; } #rk-splash { transition:none; } }
 </style>
 </head>
 <body>
+<div id="rk-splash" aria-hidden="true">
+  <img src="/static/rockola-icon-512.png" alt="" width="128" height="128">
+  <div class="rk-splash-name">Tu <span>Rockola</span></div>
+</div>
 <div class="wrap">
   <div class="top">
     <div class="brand">Tu <span>Rockola</span></div>
@@ -121,6 +136,7 @@ input[type=text]:focus { border-color:var(--ac1); }
 </div>
 
 <script>
+(function(){var sp=document.getElementById('rk-splash');if(!sp)return;var done=function(){sp.classList.add('hide');setTimeout(function(){sp.remove();},500);};if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches){done();return;}setTimeout(done,1400);})();
 const DEVICE_KEY = 'rockola_device_id';
 const DEVICE_NAME_KEY = 'rockola_device_name';
 let modoActual = 'rockola';

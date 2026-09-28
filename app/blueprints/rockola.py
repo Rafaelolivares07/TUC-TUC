@@ -586,8 +586,9 @@ def pwa_manifest():
         "background_color": "#060c18",
         "theme_color": "#00d4ff",
         "icons": [
-            {"src": "/static/TUCTUC%20192X192.png", "sizes": "192x192", "type": "image/png"},
-            {"src": "/static/TUCTUC%20512X512.png", "sizes": "512x512", "type": "image/png"},
+            {"src": "/static/rockola-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/static/rockola-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/static/rockola-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
         ],
     }
     return Response(json.dumps(manifest), mimetype='application/manifest+json')
@@ -596,13 +597,14 @@ def pwa_manifest():
 @bp.route('/pwa/sw.js')
 def pwa_sw():
     js = """
-const CACHE = 'rockola-pwa-v2';
+const CACHE = 'rockola-pwa-v3';
 const CORE = [
   '/rockola/',
   '/rockola/pwa/offline',
   '/rockola/pwa/manifest.json',
-  '/static/TUCTUC%20192X192.png',
-  '/static/TUCTUC%20512X512.png'
+  '/static/rockola-icon-192.png',
+  '/static/rockola-icon-512.png',
+  '/static/rockola-icon-maskable-512.png'
 ];
 
 self.addEventListener('install', event => {

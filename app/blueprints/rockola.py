@@ -577,11 +577,12 @@ def entrada():
 @bp.route('/pwa/manifest.json')
 def pwa_manifest():
     manifest = {
+        "id": "/rockola/",
         "name": "Tu Rockola",
         "short_name": "Rockola",
         "description": "Rockola Tuc Tuc con biblioteca local y modo offline",
         "start_url": "/rockola/",
-        "scope": "/",
+        "scope": "/rockola/",
         "display": "standalone",
         "background_color": "#060c18",
         "theme_color": "#00d4ff",
@@ -597,7 +598,7 @@ def pwa_manifest():
 @bp.route('/pwa/sw.js')
 def pwa_sw():
     js = """
-const CACHE = 'rockola-pwa-v3';
+const CACHE = 'rockola-pwa-v4';
 const CORE = [
   '/rockola/',
   '/rockola/pwa/offline',

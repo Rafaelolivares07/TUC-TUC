@@ -62,19 +62,215 @@ input[type=text]:focus { border-color:var(--ac1); }
 .room-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .empty { color:var(--muted2); font-size:13px; text-align:center; padding:12px 0 2px; }
 .footer { margin-top:18px; color:var(--muted2); font-size:11px; text-align:center; }
-#rk-splash { position:fixed; inset:0; z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:var(--bg); transition:opacity .45s ease; }
-#rk-splash img { width:128px; height:128px; border-radius:28px; animation:rk-pop .7s ease both; }
-#rk-splash .rk-splash-name { font-size:22px; font-weight:900; letter-spacing:-.4px; animation:rk-pop .7s .1s ease both; }
-#rk-splash .rk-splash-name span { color:var(--ac1); }
-#rk-splash.hide { opacity:0; pointer-events:none; }
-@keyframes rk-pop { from { opacity:0; transform:scale(.6); } to { opacity:1; transform:scale(1); } }
-@media (prefers-reduced-motion:reduce) { #rk-splash img, #rk-splash .rk-splash-name { animation:none; } #rk-splash { transition:none; } }
+/* Splash Cinematografico Rockola */
+#rk-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #0a1324 0%, #03060c 100%);
+  overflow: hidden;
+  transition: opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1), transform 0.55s ease;
+}
+#rk-splash.hide {
+  opacity: 0;
+  transform: scale(1.06);
+  pointer-events: none;
+}
+.rk-splash-wrap {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 1. Vinilo gigante que se apodera de la pantalla */
+.rk-vinyl-disc {
+  width: min(88vw, 88vh);
+  height: min(88vw, 88vh);
+  max-width: 440px;
+  max-height: 440px;
+  border-radius: 50%;
+  box-shadow: 0 0 60px rgba(0, 212, 255, 0.35), 0 25px 60px rgba(0, 0, 0, 0.85);
+  animation: rk-vinyl-enter-and-spin 2.6s cubic-bezier(0.25, 1, 0.3, 1) forwards;
+  transform-origin: center center;
+  position: absolute;
+}
+.rk-vinyl-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 15px rgba(0, 212, 255, 0.2));
+}
+@keyframes rk-vinyl-enter-and-spin {
+  0% {
+    opacity: 0;
+    transform: scale(0.25) rotate(-180deg);
+  }
+  28% {
+    opacity: 1;
+    transform: scale(1) rotate(60deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04) rotate(360deg);
+  }
+  80% {
+    opacity: 0.75;
+    transform: scale(1.18) rotate(460deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4) rotate(520deg);
+  }
+}
+/* 2. Logo que emerge, deja de girar y se apodera del ancho de la pantalla */
+.rk-logo-reveal {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 90vw;
+  max-width: 440px;
+  opacity: 0;
+  transform: scale(0.4);
+  animation: rk-logo-takeover 2.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: none;
+}
+.rk-logo-img {
+  width: min(50vw, 210px);
+  height: min(50vw, 210px);
+  border-radius: 36px;
+  box-shadow: 0 0 50px rgba(0, 212, 255, 0.65), 0 15px 40px rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(0, 212, 255, 0.6);
+}
+.rk-logo-title {
+  font-size: clamp(28px, 8vw, 42px);
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: #e2eeff;
+  text-shadow: 0 0 35px rgba(0, 212, 255, 0.7);
+  white-space: nowrap;
+}
+.rk-logo-title span {
+  color: var(--ac1, #00d4ff);
+}
+@keyframes rk-logo-takeover {
+  0%, 42% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  58% {
+    opacity: 1;
+    transform: scale(0.85);
+  }
+  78% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  92% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rk-vinyl-disc, .rk-logo-reveal { animation: none; }
+  #rk-splash { transition: none; }
+}
 </style>
 </head>
 <body>
 <div id="rk-splash" aria-hidden="true">
-  <img src="/static/rockola-icon-512.png" alt="" width="128" height="128">
-  <div class="rk-splash-name">Tu <span>Rockola</span></div>
+  <div class="rk-splash-wrap">
+    <!-- Vinilo gigante con pistas y surcos de alta definicion -->
+    <div class="rk-vinyl-disc">
+      <svg class="rk-vinyl-svg" viewBox="0 0 400 400" width="100%" height="100%">
+        <defs>
+          <radialGradient id="rk-vinyl-body" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#080c14" />
+            <stop offset="38%" stop-color="#121824" />
+            <stop offset="42%" stop-color="#0a0e17" />
+            <stop offset="68%" stop-color="#151c2b" />
+            <stop offset="72%" stop-color="#090d16" />
+            <stop offset="96%" stop-color="#182030" />
+            <stop offset="100%" stop-color="#05070c" />
+          </radialGradient>
+          <linearGradient id="rk-vinyl-sheen" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="rgba(0,212,255,0.25)" />
+            <stop offset="25%" stop-color="rgba(255,255,255,0.03)" />
+            <stop offset="50%" stop-color="rgba(0,212,255,0.3)" />
+            <stop offset="75%" stop-color="rgba(255,255,255,0.03)" />
+            <stop offset="100%" stop-color="rgba(0,212,255,0.25)" />
+          </linearGradient>
+          <linearGradient id="rk-label-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00e5ff" />
+            <stop offset="50%" stop-color="#0066ff" />
+            <stop offset="100%" stop-color="#002266" />
+          </linearGradient>
+          <path id="rk-text-arc-top" d="M 120,200 A 80,80 0 0,1 280,200" fill="none" />
+          <path id="rk-text-arc-bottom" d="M 280,200 A 80,80 0 0,1 120,200" fill="none" />
+        </defs>
+
+        <!-- Base y brillo del vinilo -->
+        <circle cx="200" cy="200" r="196" fill="url(#rk-vinyl-body)" stroke="rgba(0,212,255,0.4)" stroke-width="2" />
+        <circle cx="200" cy="200" r="196" fill="url(#rk-vinyl-sheen)" />
+
+        <!-- Surcos y Linecitas de separacion entre pistas (visibles y nitidas) -->
+        <!-- Pistas exteriores -->
+        <circle cx="200" cy="200" r="186" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.75" />
+        <circle cx="200" cy="200" r="176" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+        <circle cx="200" cy="200" r="168" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.75" />
+        <!-- Banda de separacion Pista 1 -->
+        <circle cx="200" cy="200" r="160" fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="1.5" stroke-dasharray="8 3" />
+        
+        <!-- Pistas medias -->
+        <circle cx="200" cy="200" r="150" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="0.5" />
+        <circle cx="200" cy="200" r="142" fill="none" stroke="rgba(255,255,255,0.13)" stroke-width="0.75" />
+        <circle cx="200" cy="200" r="134" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+        <!-- Banda de separacion Pista 2 -->
+        <circle cx="200" cy="200" r="126" fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="1.5" stroke-dasharray="10 4" />
+
+        <!-- Pistas interiores -->
+        <circle cx="200" cy="200" r="118" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
+        <circle cx="200" cy="200" r="110" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.75" />
+        <circle cx="200" cy="200" r="102" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+        <!-- Banda de separacion Pista 3 -->
+        <circle cx="200" cy="200" r="94" fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="1.5" stroke-dasharray="6 3" />
+
+        <!-- Galleta / Etiqueta central -->
+        <circle cx="200" cy="200" r="76" fill="url(#rk-label-grad)" stroke="#00d4ff" stroke-width="2.5" />
+        <circle cx="200" cy="200" r="68" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1" />
+
+        <!-- Letras de ROCKOLA en el vinilo -->
+        <g>
+          <text font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="16" fill="#ffffff" letter-spacing="6">
+            <textPath href="#rk-text-arc-top" startOffset="50%" text-anchor="middle">ROCKOLA</textPath>
+          </text>
+          <text font-family="'Space Grotesk', sans-serif" font-weight="800" font-size="11" fill="rgba(255,255,255,0.85)" letter-spacing="4">
+            <textPath href="#rk-text-arc-bottom" startOffset="50%" text-anchor="middle">TUCTUC • STEREO</textPath>
+          </text>
+        </g>
+
+        <!-- Orificio central del eje -->
+        <circle cx="200" cy="200" r="16" fill="#060c18" stroke="#00d4ff" stroke-width="2" />
+        <circle cx="200" cy="200" r="6" fill="#ffffff" opacity="0.9" />
+      </svg>
+    </div>
+
+    <!-- Logo que se apodera del ancho de la pantalla -->
+    <div class="rk-logo-reveal">
+      <img src="/static/rockola-icon-512.png" alt="Rockola" class="rk-logo-img">
+      <div class="rk-logo-title">Tu <span>Rockola</span></div>
+    </div>
+  </div>
 </div>
 <div class="wrap">
   <div class="top">
@@ -139,7 +335,7 @@ input[type=text]:focus { border-color:var(--ac1); }
 </div>
 
 <script>
-(function(){var sp=document.getElementById('rk-splash');if(!sp)return;var done=function(){sp.classList.add('hide');setTimeout(function(){sp.remove();},500);};if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches){done();return;}setTimeout(done,1400);})();
+(function(){var sp=document.getElementById('rk-splash');if(!sp)return;var done=function(){sp.classList.add('hide');setTimeout(function(){sp.remove();},600);};if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches){done();return;}setTimeout(done,2600);})();
 const DEVICE_KEY = 'rockola_device_id';
 const DEVICE_NAME_KEY = 'rockola_device_name';
 let modoActual = 'rockola';

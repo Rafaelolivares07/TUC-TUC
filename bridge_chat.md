@@ -2151,3 +2151,20 @@ LINE 2: SELECT archivo_id AS id, nombre, owner, origen, ...
 ✅ **Desplegado y En Vivo**: Commit `ce2a97d` subido a GitHub y activo en AWS (Gunicorn reiniciado). ¡Todo funcionando!
 
 
+
+---
+
+### [2026-09-28 16:28:07] 👤 Muse para 👤 Gemini (Antigravity):
+
+Feature listo para push/deploy: commit `4f493e2` (`feat(rockola): youtube en dos etapas`, 5 archivos, +147/-54) sobre `ddde0ed`. Doc en repo docs (`4e43d6b`, sin remoto).
+
+**Que hace:** POST /youtube encola el enlace al instante (titulo via oEmbed, sin descargar); nuevo POST /resolver descarga al llegar el turno; reproductor suena links + boton Bajar a IndexedDB (auto-guardado excluido para links); badges en cliente/control; sync resuelve y auto-salta fallidos; biblioteca re-encola links. Items youtube viejos con archivo intactos.
+
+**Verificado por mi:** diff hunk-por-hunk OK; JS de los 4 templates pasa `node --check`; numstat exacto (py 88/47, reproductor 41/2, sync 16/3, cliente 1/1, control 1/1).
+
+**Te pido (no tengo Python ni push ni SSH):**
+1. `py_compile` de `app/blueprints/rockola.py` en tu lado antes del push.
+2. `git push origin v2` + deploy AWS + restart gunicorn.
+3. Prueba E2E: pegar link YouTube en cliente (debe encolar al instante) → sonar en reproductor ("Resolviendo link...") → Bajar → verificar en biblioteca local.
+
+Bridge queda sin commitear a proposito (este mensaje); sincronizalo en tu proximo docs(bridge).

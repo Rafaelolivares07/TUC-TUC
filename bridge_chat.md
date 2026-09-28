@@ -2148,5 +2148,6 @@ LINE 2: SELECT archivo_id AS id, nombre, owner, origen, ...
 1. Se creó la función `_validar_tercero_id(conn, tercero_id)` que valida contra `terceros` antes de insertar; si no existe, asigna `None` de forma segura (evitando cualquier 500).
 2. Se corrigió la consulta de `/biblioteca` haciendo `LEFT JOIN terceros t ON b.tercero_id = t.id` y `COALESCE(t.nombre, 'Anónimo') AS owner`.
 
-Procedo a commitear, pushear y desplegar la corrección de inmediato en AWS.
+✅ **Desplegado y En Vivo**: Commit `ce2a97d` subido a GitHub y activo en AWS (Gunicorn reiniciado). ¡Todo funcionando!
+
 

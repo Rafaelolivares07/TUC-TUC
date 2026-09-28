@@ -1153,6 +1153,14 @@ async function obtenerUrlDeAudio(c) {
       }
     }
   }
+  if (c.youtube_url) {
+    estadoEl.textContent = 'Resolviendo link...';
+    const rr = await fetch(`/rockola/${SALA}/resolver`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: c.id}) });
+    const dd = await rr.json();
+    if (dd.ok && dd.url) return { url: dd.url, esLocal: false };
+    estadoEl.textContent = 'Link no disponible - saltando...';
+    throw new Error(dd.error || 'link sin audio');
+  }
   return { url: `/rockola/${SALA}/archivo/${c.id}`, esLocal: false };
 }
 
@@ -1172,7 +1180,7 @@ async function intentarReproducir(c) {
   }
   localObjectUrl = resAudio.esLocal ? resAudio.url : null;
 
-  if (!resAudio.esLocal && !c.id.startsWith('local-')) {
+  if (!resAudio.esLocal && !c.id.startsWith('local-') && !c.youtube_url) {
     guardarArchivoServidorEnBiblioteca(c);
   }
 
@@ -2492,10 +2500,41 @@ function renderCola(cola) {
       <span class="handle">⠿</span>
       <span class="q-num">${i === 0 ? '▶' : '#'+(i + 1)}</span>
       <span class="q-nombre">${limpiarNombre(c.nombre)}</span>
-      ${!c.id.startsWith('local-') ? `<a href="/rockola/${SALA}/archivo/${c.id}" download="${c.nombre}.mp3" class="q-download-btn" title="Descargar MP3">📥</a>` : ''}
+      ${c.youtube_url ? `<span class="q-link" title="Enlace de YouTube: suena al llegar su turno">🔗</span><button class="q-download-btn" onclick="bajarLink('${c.id}', this)" title="Bajar a este dispositivo">⬇</button>` : (!c.id.startsWith('local-') ? `<a href="/rockola/${SALA}/archivo/${c.id}" download="${c.nombre}.mp3" class="q-download-btn" title="Descargar MP3">📥</a>` : '')}
       <button class="q-remove" onclick="quitar('${c.id}')">Quitar</button>
     </li>
   `).join('');
+}
+
+async function bajarLink(id, btn) {
+  const item = (currentCola || []).find(x => x.id === id);
+  if (!item || !item.youtube_url) return;
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '...'; btn.disabled = true; }
+  estadoEl.textContent = 'Bajando link...';
+  try {
+    const r = await fetch(`/rockola/${SALA}/resolver`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+    const d = await r.json();
+    if (!d.ok || !d.url) throw new Error(d.error || 'sin audio');
+    const br = await fetch(d.url);
+    if (!br.ok) throw new Error('descarga fallo');
+    const blob = await br.blob();
+    const db = await abrirDbLocal();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('songs', 'readwrite');
+      tx.objectStore('songs').put({ id: item.id, deviceId: getDeviceId(), nombre: item.nombre, tipo: blob.type || 'audio/mpeg', size: blob.size, actualizado: Date.now(), blob: blob });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    await cargarBibliotecaLocal();
+    sincronizarCatalogoLocal();
+    estadoEl.textContent = 'Guardada en este dispositivo';
+  } catch(e) {
+    estadoEl.textContent = 'No se pudo bajar: ' + (e.message || 'error');
+  } finally {
+    if (btn) { btn.textContent = label; btn.disabled = false; }
+  }
 }
 
 async function quitar(id) {

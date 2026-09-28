@@ -1194,7 +1194,7 @@ function renderCola(cola) {
     return `<li class="queue-item ${playing?'playing':''} ${mia?'mia':''}" data-id="${c.id}">
       <span class="handle ${mia?'':'locked'}">⠿</span>
       <div class="q-info">
-        <div class="q-nombre">${c.nombre.replace(/\.[^.]+$/,'')}</div>
+        <div class="q-nombre">${c.nombre.replace(/\.[^.]+$/,'')}${c.youtube_url ? ' <span class="q-link" title="Enlace de YouTube">🔗</span>' : ''}</div>
         <div class="q-sub">${mia ? 'Tu canción' : (c.owner ? 'Puesta por: ' + c.owner : 'Anónimo')}</div>
       </div>
       <span class="q-pos">${playing

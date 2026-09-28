@@ -175,7 +175,7 @@ function renderCola(cola) {
       <span class="handle">⠿</span>
       <div class="song">
         <div class="song-name">${limpiarNombre(c.nombre)}</div>
-        <div class="song-sub">${i === 0 ? 'Sonando ahora' : '#' + (i + 1)}</div>
+        <div class="song-sub">${i === 0 ? 'Sonando ahora' : '#' + (i + 1)}${c.youtube_url ? ' · 🔗 link' : ''}</div>
       </div>
       <button class="mini danger" onclick="quitar('${c.id}')">Quitar</button>
     </li>

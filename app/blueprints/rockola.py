@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS rockola_cola (
     posicion  INTEGER NOT NULL DEFAULT 0,
     lista_envio_id TEXT,
     lista_envio_nombre TEXT,
-    lista_envio_posicion INTEGER
+    lista_envio_posicion INTEGER,
+    youtube_url TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_cola_sala ON rockola_cola(sala_id, posicion);
 CREATE TABLE IF NOT EXISTS rockola_biblioteca (
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS rockola_biblioteca (
     nombre     TEXT NOT NULL,
     tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL,
     origen     TEXT NOT NULL DEFAULT 'archivo',
+    youtube_url TEXT,
     creado_en  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_biblioteca_sala ON rockola_biblioteca(sala_id, creado_en DESC);
@@ -120,6 +122,8 @@ def _ensure_db():
             conn.execute("ALTER TABLE rockola_biblioteca ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id) ON DELETE SET NULL;")
             conn.execute("ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS reproducida BOOLEAN DEFAULT FALSE;")
             conn.execute("ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS reproducida_en TIMESTAMP;")
+            conn.execute("ALTER TABLE rockola_cola ADD COLUMN IF NOT EXISTS youtube_url TEXT;")
+            conn.execute("ALTER TABLE rockola_biblioteca ADD COLUMN IF NOT EXISTS youtube_url TEXT;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_cruzado BOOLEAN DEFAULT TRUE;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_segundos INTEGER DEFAULT 12;")
             conn.execute("ALTER TABLE rockola_salas ADD COLUMN IF NOT EXISTS fundido_duracion INTEGER DEFAULT 5;")
@@ -170,7 +174,7 @@ def _get_sala(conn, sala_id):
 def _get_cola(conn, sala_id):
     rows = conn.execute(
         """
-        SELECT c.id, c.nombre, c.tercero_id, t.nombre AS owner, c.lista_envio_id, c.lista_envio_nombre, c.lista_envio_posicion
+        SELECT c.id, c.nombre, c.tercero_id, t.nombre AS owner, c.lista_envio_id, c.lista_envio_nombre, c.lista_envio_posicion, c.youtube_url
         FROM rockola_cola c
         LEFT JOIN terceros t ON c.tercero_id = t.id
         WHERE c.sala_id = %s AND c.reproducida = FALSE
@@ -184,7 +188,7 @@ def _get_cola(conn, sala_id):
 def _get_item_cola(conn, sala_id, archivo_id):
     row = conn.execute(
         """
-        SELECT c.id, c.nombre, c.tercero_id, t.nombre AS owner
+        SELECT c.id, c.nombre, c.tercero_id, t.nombre AS owner, c.youtube_url
         FROM rockola_cola c
         LEFT JOIN terceros t ON c.tercero_id = t.id
         WHERE c.sala_id = %s AND c.id = %s
@@ -213,22 +217,23 @@ def _validar_tercero_id(conn, tercero_id):
         return None
 
 
-def _recordar_cancion(conn, sala_id, archivo_id, nombre, tercero_id, origen):
+def _recordar_cancion(conn, sala_id, archivo_id, nombre, tercero_id, origen, youtube_url=None):
     tid = _validar_tercero_id(conn, tercero_id)
     conn.execute(
         """
-        INSERT INTO rockola_biblioteca (archivo_id, sala_id, nombre, tercero_id, origen)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO rockola_biblioteca (archivo_id, sala_id, nombre, tercero_id, origen, youtube_url)
+        VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT (archivo_id) DO UPDATE
         SET nombre = EXCLUDED.nombre,
             tercero_id = EXCLUDED.tercero_id,
-            origen = EXCLUDED.origen
+            origen = EXCLUDED.origen,
+            youtube_url = EXCLUDED.youtube_url
         """,
-        (archivo_id, sala_id, nombre, tid, origen),
+        (archivo_id, sala_id, nombre, tid, origen, youtube_url),
     )
 
 
-def _agregar_a_cola(conn, sala_id, archivo_id, nombre, tercero_id, lista_envio=None, modo='final'):
+def _agregar_a_cola(conn, sala_id, archivo_id, nombre, tercero_id, lista_envio=None, modo='final', youtube_url=None):
     lista_envio = lista_envio or {}
     tid = _validar_tercero_id(conn, tercero_id)
     
@@ -265,8 +270,8 @@ def _agregar_a_cola(conn, sala_id, archivo_id, nombre, tercero_id, lista_envio=N
     conn.execute(
         """
         INSERT INTO rockola_cola
-            (id, sala_id, nombre, tercero_id, posicion, lista_envio_id, lista_envio_nombre, lista_envio_posicion)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            (id, sala_id, nombre, tercero_id, posicion, lista_envio_id, lista_envio_nombre, lista_envio_posicion, youtube_url)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             archivo_id,
@@ -277,6 +282,7 @@ def _agregar_a_cola(conn, sala_id, archivo_id, nombre, tercero_id, lista_envio=N
             lista_envio.get('id'),
             lista_envio.get('nombre'),
             lista_envio.get('posicion'),
+            youtube_url,
         ),
     )
 
@@ -1059,45 +1065,76 @@ def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
 @bp.route('/<sala_id>/youtube', methods=['POST'])
 def youtube(sala_id):
     data = request.get_json(silent=True) or {}
-    url = data.get('url', '').strip()
+    url = (data.get('url') or '').strip()
     tercero_id = session.get('usuario_id')
     owner_nombre = session.get('nombre', 'Anónimo')
 
     if not url or ('youtube.com' not in url and 'youtu.be' not in url):
         return jsonify(ok=False, error='URL de YouTube invalida'), 400
 
-    upload_dir = _upload_dir(sala_id)
-    nombre_id = str(uuid.uuid4())
-    tmp_path = os.path.join(upload_dir, nombre_id + '.mp3')
-
-    descarga, error_cobalt = _descargar_youtube_con_cobalt(url, tmp_path)
-    if not descarga:
-        descarga, error_ytdlp = _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id)
-        if not descarga:
-            if 'api.auth.jwt.missing' in (error_cobalt or ''):
-                return jsonify(ok=False, error='YouTube no esta disponible: Cobalt ahora exige token y yt-dlp no pudo resolver la descarga.'), 502
-            return jsonify(ok=False, error=error_ytdlp or error_cobalt or 'No se pudo descargar el audio'), 502
-
-    archivo_final = os.path.basename(descarga['path'])
-    nombre_display = descarga['nombre']
-
-    modo = data.get('modo', 'final').strip()
+    modo = (data.get('modo') or 'final').strip().lower()
+    nombre_display = _titulo_youtube(url)
+    item_id = 'yt-' + uuid.uuid4().hex[:12]
     conn = _connect()
     try:
         with _lock:
-            _agregar_a_cola(conn, sala_id, archivo_final, nombre_display, tercero_id, modo=modo)
-            _recordar_cancion(conn, sala_id, archivo_final, nombre_display, tercero_id, 'youtube')
-            _limpiar_archivos_antiguos(upload_dir)
+            _agregar_a_cola(conn, sala_id, item_id, nombre_display, tercero_id, youtube_url=url, modo=modo)
+            _recordar_cancion(conn, sala_id, item_id, nombre_display, tercero_id, 'youtube-link', youtube_url=url)
             conn.commit()
     finally:
         conn.close()
 
     return jsonify(ok=True, agregadas=[{
-        'id': archivo_final,
+        'id': item_id,
         'nombre': nombre_display,
         'owner': owner_nombre,
         'tercero_id': tercero_id,
+        'youtube_url': url,
+        'origen': 'youtube-link',
     }])
+
+
+def _titulo_youtube(url):
+    import urllib.parse
+    import urllib.request
+    import json as _json
+    try:
+        oembed = 'https://www.youtube.com/oembed?url=' + urllib.parse.quote(url, safe='') + '&format=json'
+        req = urllib.request.Request(oembed, headers={'User-Agent': COBALT_HEADERS['User-Agent']})
+        with urllib.request.urlopen(req, timeout=8) as response:
+            return _json.loads(response.read()).get('title') or 'Video de YouTube'
+    except Exception:
+        return 'Video de YouTube'
+
+
+@bp.route('/<sala_id>/resolver', methods=['POST'])
+def resolver(sala_id):
+    data = request.get_json(silent=True) or {}
+    item_id = (data.get('id') or '').strip()
+    if not item_id or '/' in item_id or '\\' in item_id:
+        return jsonify(ok=False, error='Id invalido'), 400
+    upload_dir = _upload_dir(sala_id)
+    for candidato in (item_id, item_id + '.mp3', item_id + '.m4a', item_id + '.webm'):
+        if os.path.isfile(os.path.join(upload_dir, candidato)):
+            return jsonify(ok=True, url=f'/rockola/{sala_id}/archivo/{candidato}', cache=True)
+    conn = _connect()
+    try:
+        item = _get_item_cola(conn, sala_id, item_id)
+    finally:
+        conn.close()
+    if not item or not item.get('youtube_url'):
+        return jsonify(ok=False, error='Sin audio disponible para este item'), 404
+    destino = os.path.join(upload_dir, item_id + '.mp3')
+    try:
+        descarga, error_cobalt = _descargar_youtube_con_cobalt(item['youtube_url'], destino)
+        if not descarga:
+            descarga, error_ytdlp = _descargar_youtube_con_ytdlp(item['youtube_url'], upload_dir, item_id)
+            if not descarga:
+                return jsonify(ok=False, error=error_ytdlp or error_cobalt or 'No se pudo resolver el audio'), 502
+        _limpiar_archivos_antiguos(upload_dir)
+    except Exception as error:
+        return jsonify(ok=False, error=f'No se pudo resolver el audio: {error}'), 502
+    return jsonify(ok=True, url=f'/rockola/{sala_id}/archivo/{os.path.basename(descarga["path"])}')
 
 
 @bp.route('/<sala_id>/local', methods=['POST'])
@@ -1333,7 +1370,7 @@ def biblioteca(sala_id):
     try:
         rows = conn.execute(
             """
-            SELECT b.archivo_id AS id, b.nombre, COALESCE(t.nombre, 'Anónimo') AS owner, b.origen, b.creado_en
+            SELECT b.archivo_id AS id, b.nombre, COALESCE(t.nombre, 'Anónimo') AS owner, b.origen, b.youtube_url, b.creado_en
             FROM rockola_biblioteca b
             LEFT JOIN terceros t ON b.tercero_id = t.id
             WHERE b.sala_id = %s
@@ -1360,7 +1397,7 @@ def poner_desde_biblioteca(sala_id, archivo_id):
         with _lock:
             row = conn.execute(
                 """
-                SELECT archivo_id, nombre
+                SELECT archivo_id, nombre, youtube_url, origen
                 FROM rockola_biblioteca
                 WHERE sala_id = %s AND archivo_id = %s
                 """,
@@ -1370,20 +1407,24 @@ def poner_desde_biblioteca(sala_id, archivo_id):
                 return jsonify(ok=False, error='Cancion no encontrada'), 404
 
             nombre = row['nombre']
-            nuevo_id = str(uuid.uuid4()) + os.path.splitext(archivo_id)[1]
-            origen = os.path.join(_upload_dir(sala_id), archivo_id)
-            destino = os.path.join(_upload_dir(sala_id), nuevo_id)
-            if not os.path.exists(origen):
+            yt_url = row.get('youtube_url')
+            upload = _upload_dir(sala_id)
+            origen = os.path.join(upload, archivo_id)
+            if os.path.exists(origen):
+                nuevo_id = str(uuid.uuid4()) + os.path.splitext(archivo_id)[1]
+                destino = os.path.join(upload, nuevo_id)
+                with open(origen, 'rb') as src, open(destino, 'wb') as dst:
+                    while True:
+                        chunk = src.read(65536)
+                        if not chunk:
+                            break
+                        dst.write(chunk)
+                _agregar_a_cola(conn, sala_id, nuevo_id, nombre, tercero_id, modo=modo)
+            elif yt_url:
+                nuevo_id = 'yt-' + uuid.uuid4().hex[:12]
+                _agregar_a_cola(conn, sala_id, nuevo_id, nombre, tercero_id, youtube_url=yt_url, modo=modo)
+            else:
                 return jsonify(ok=False, error='Archivo no disponible en el servidor'), 404
-
-            with open(origen, 'rb') as src, open(destino, 'wb') as dst:
-                while True:
-                    chunk = src.read(65536)
-                    if not chunk:
-                        break
-                    dst.write(chunk)
-
-            _agregar_a_cola(conn, sala_id, nuevo_id, nombre, tercero_id, modo=modo)
             conn.commit()
     finally:
         conn.close()

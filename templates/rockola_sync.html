@@ -1041,8 +1041,10 @@ async function verificarCola() {
       if (c.id !== cancionActual) {
         cancionActual = c.id; reproduciendo = true;
         nombreEl.textContent = c.nombre.replace(/\.[^.]+$/,'');
-        player.src = `/rockola/${SALA}/archivo/${c.id}`;
-        player.load();
+        urlAudioPara(c).then(u => {
+          if (u) { player.src = u; player.load(); }
+          else fetch(`/rockola/${SALA}/siguiente`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: c.id}) }).catch(()=>{});
+        });
         
         actualizarPlayPauseBtn(data.sync_estado !== 'pause');
 
@@ -1599,6 +1601,15 @@ async function anteriorCancion() {
   }
 }
 
+async function urlAudioPara(c) {
+  if (!c.youtube_url) return `/rockola/${SALA}/archivo/${c.id}`;
+  try {
+    const r = await fetch(`/rockola/${SALA}/resolver`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: c.id}) });
+    const d = await r.json();
+    return (d.ok && d.url) ? d.url : null;
+  } catch(e) { return null; }
+}
+
 async function iniciarCrossfade(secs) {
   if (transitioning) return;
   if (currentCola.length < 2) return;
@@ -1609,7 +1620,9 @@ async function iniciarCrossfade(secs) {
   
   console.log(`Iniciando fundido cruzado de ${secs}s para:`, nextSong.nombre);
   
-  standbyPlayer.src = `/rockola/${SALA}/archivo/${nextSong.id}`;
+  const nextUrl = await urlAudioPara(nextSong);
+  if (!nextUrl) { transitioning = false; return; }
+  standbyPlayer.src = nextUrl;
   standbyPlayer.load();
   standbyPlayer.volume = 0;
   

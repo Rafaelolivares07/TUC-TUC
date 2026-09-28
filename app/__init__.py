@@ -114,10 +114,14 @@ def create_app():
     def _cliente_subdominio():
         host_limpio = (request.host or '').split(':')[0].strip().lower().rstrip('.')
         if host_limpio == 'rockola.tuc-tuc.co':
-            from .blueprints.rockola import entrada, sync, cliente_sala, reproductor_sala, control_sala
+            from .blueprints.rockola import entrada, sync, cliente_sala, reproductor_sala, control_sala, pwa_manifest, pwa_sw
 
             if request.path.startswith('/api/') or request.path.startswith('/static/'):
                 return
+            if request.path in ('/manifest.json', '/rockola/pwa/manifest.json', '/pwa/manifest.json'):
+                return pwa_manifest()
+            if request.path in ('/sw.js', '/rockola/pwa/sw.js', '/pwa/sw.js'):
+                return pwa_sw()
             partes = [p for p in request.path.strip('/').split('/') if p]
             if not partes:
                 return entrada()

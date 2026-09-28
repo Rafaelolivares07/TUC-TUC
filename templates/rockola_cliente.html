@@ -347,10 +347,10 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
     </div>
 
     <div id="ident-step-registrado" style="display: none;">
-      <p class="modal-status">✓ Hola <strong id="ident-nombre-usuario"></strong>. Tu número ya está registrado en TUC TUC.</p>
-      <label for="ident-pin">Ingresa tu PIN de 4 dígitos</label>
+      <p class="modal-status" id="ident-status-registrado">✓ Hola <strong id="ident-nombre-usuario"></strong>. Tu número ya está registrado en TUC TUC.</p>
+      <label for="ident-pin" id="ident-label-pin">Ingresa tu PIN de 4 dígitos</label>
       <input type="password" id="ident-pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" style="-webkit-text-security: disc; text-align: center; font-size: 24px; letter-spacing: 10px;">
-      <button class="modal-btn" onclick="iniciarSesionPIN()">Ingresar</button>
+      <button class="modal-btn" id="ident-btn-ingresar" onclick="iniciarSesionPIN()">Ingresar</button>
       <button class="modal-btn btn-secondary" onclick="volverPaso1()">← Cambiar número</button>
     </div>
 
@@ -1311,7 +1311,18 @@ async function verificarTelefono() {
 
     document.getElementById('ident-step-1').style.display = 'none';
     if (data.existe) {
-      document.getElementById('ident-nombre-usuario').textContent = data.nombre || '';
+      const statusEl = document.getElementById('ident-status-registrado');
+      const labelEl = document.getElementById('ident-label-pin');
+      const btnEl = document.getElementById('ident-btn-ingresar');
+      if (!data.tiene_pin) {
+        statusEl.innerHTML = `✨ ¡Hola <strong>${data.nombre || ''}</strong>! Como es tu primera vez en la Rockola, crea tu PIN personal de 4 dígitos.`;
+        if (labelEl) labelEl.textContent = 'Crea tu PIN personal de 4 dígitos';
+        if (btnEl) btnEl.textContent = 'Guardar PIN e Ingresar';
+      } else {
+        statusEl.innerHTML = `✓ Hola <strong>${data.nombre || ''}</strong>. Ingresa tu PIN de 4 dígitos.`;
+        if (labelEl) labelEl.textContent = 'Ingresa tu PIN de 4 dígitos';
+        if (btnEl) btnEl.textContent = 'Ingresar';
+      }
       document.getElementById('ident-step-registrado').style.display = 'block';
       setTimeout(() => document.getElementById('ident-pin').focus(), 100);
     } else {

@@ -2168,3 +2168,22 @@ Feature listo para push/deploy: commit `4f493e2` (`feat(rockola): youtube en dos
 3. Prueba E2E: pegar link YouTube en cliente (debe encolar al instante) → sonar en reproductor ("Resolviendo link...") → Bajar → verificar en biblioteca local.
 
 Bridge queda sin commitear a proposito (este mensaje); sincronizalo en tu proximo docs(bridge).
+
+---
+
+### [2026-09-28 16:40:00] 🤖 Gemini (Antigravity) para 👤 Muse y 👤 Rafael:
+
+¡Despliegue y Animación Cinematográfica Completados! 🚀
+
+1. **Feature YouTube en dos etapas (`4f493e2`)**:
+   - `py_compile` validado con 0 errores.
+   - Pushed a `origin/v2` y desplegado en AWS.
+2. **Nueva Animación Cinematográfica Splash (`f8e17c6`)**:
+   - Implementado el vinilo gigante de alta definición que se apodera de la pantalla:
+     - Surcos finos y bandas/linecitas de separación entre pistas nítidas.
+     - Reflejo cónico de luz de acetato y rotación suave.
+     - Letras de **`ROCKOLA`** girando en la galleta central.
+     - Transición en desaceleración donde las letras se convierten en el logo oficial, dejan de girar y se apoderan de todo el ancho de la pantalla con aura de resplandor neón.
+3. **Estado en AWS**:
+   - Commit activo en vivo: **`f8e17c6`** (incluye `4f493e2`). Gunicorn reiniciado y operativo.
+

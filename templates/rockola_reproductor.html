@@ -967,9 +967,10 @@ input:checked + .slider:before {
     <div class="panel-box">
       <div class="panel-title">Biblioteca de este dispositivo</div>
       <div class="local-actions">
-        <button class="btn-control" onclick="abrirSelectorCarpeta()">Agregar carpeta</button>
-        <button class="btn-control" onclick="abrirSelectorAudios()">Agregar canciones</button>
+        <button class="btn-control" onclick="abrirSelectorCarpeta()" title="Importar carpeta y auto-organizar listas por género">📁 Agregar carpeta</button>
+        <button class="btn-control" onclick="abrirSelectorAudios()" title="Agregar canciones individuales">🎵 Agregar canciones</button>
         <button class="btn-control" onclick="compartirMiBiblioteca()">Compartir</button>
+        <button class="btn-control" onclick="window.location.href='/rockola/pwa/offline'" style="border-color:rgba(0,212,255,0.4);" title="Abrir reproductor sin internet">📴 Modo offline</button>
       </div>
       <div class="share-panel" id="share-panel">
         <div class="library-origin">Enlace temporal para que otro dispositivo guarde canciones de esta biblioteca</div>
@@ -2047,6 +2048,50 @@ async function procesarCarpetaNativa(files) {
   }
 }
 
+function esArchivoAudio(nombre, tipo) {
+  if (!nombre) return false;
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|nfo|ini|db|txt|cue|log|pdf|url|lnk|zip|rar|tar|gz|exe|bat|doc|docx|m3u|m3u8|sfv|md5)$/i.test(nombre)) {
+    return false;
+  }
+  if (/\.(mp3|m4a|aac|wav|ogg|oga|flac|opus|wma|webm|mid|midi|aiff|ape)$/i.test(nombre)) {
+    return true;
+  }
+  return !!(tipo && tipo.startsWith('audio/'));
+}
+
+function extraerGeneroDePath(relativePath) {
+  if (!relativePath) return null;
+  const parts = relativePath.split('/').filter(Boolean);
+  if (parts.length >= 3) {
+    return parts[parts.length - 2];
+  } else if (parts.length === 2) {
+    return parts[0];
+  }
+  return null;
+}
+
+async function scanDirectoryEntries(dirHandle, pathPrefix = '') {
+  const results = [];
+  try {
+    for await (const entry of dirHandle.values()) {
+      if (entry.kind === 'file') {
+        if (esArchivoAudio(entry.name, '')) {
+          try {
+            const file = await entry.getFile();
+            results.push({ file, genero: pathPrefix || dirHandle.name });
+          } catch(e) {}
+        }
+      } else if (entry.kind === 'directory') {
+        const sub = await scanDirectoryEntries(entry, entry.name);
+        results.push(...sub);
+      }
+    }
+  } catch(e) {
+    console.warn('Error escaneando directorio:', e);
+  }
+  return results;
+}
+
 async function indexarCarpetaFisica(dirHandle) {
   if (!dirHandle) return;
   const permiso = await verificarPermisosDirectorio(dirHandle, true);
@@ -2057,39 +2102,76 @@ async function indexarCarpetaFisica(dirHandle) {
   }
   mostrarBannerPermiso(false);
   
-  mostrarMensaje('Escaneando archivos de la carpeta...', '');
-  let count = 0;
+  mostrarMensaje('Escaneando música en carpeta y subcarpetas...', '');
   try {
+    const audioFiles = await scanDirectoryEntries(dirHandle, '');
+    if (!audioFiles.length) {
+      mostrarMensaje('No se encontraron archivos de música (se ignoraron imágenes/carátulas)', 'error');
+      return;
+    }
+    
+    mostrarMensaje(`Guardando ${audioFiles.length} canción(es)...`, '');
     const db = await abrirDbLocal();
     const tx = db.transaction('songs', 'readwrite');
     const store = tx.objectStore('songs');
+    const listasMap = {};
+    let count = 0;
     
-    for await (const entry of dirHandle.values()) {
-      if (entry.kind === 'file' && /\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(entry.name)) {
-        const file = await entry.getFile();
-        const localId = 'local-' + hashTexto(entry.name.toLowerCase() + '-' + file.size);
-        const blob = file.slice ? file.slice(0) : file;
-        const cancion = {
-          id: localId,
-          deviceId: getDeviceId(),
-          nombre: entry.name,
-          tipo: file.type || 'audio/mpeg',
-          size: file.size,
-          actualizado: Date.now(),
-          esFisico: true,
-          blob: blob
-        };
-        store.put(cancion);
-        count++;
+    for (const item of audioFiles) {
+      const file = item.file;
+      const localId = 'local-' + hashTexto(file.name.toLowerCase() + '-' + file.size);
+      const blob = file.slice ? file.slice(0) : file;
+      const cancion = {
+        id: localId,
+        deviceId: getDeviceId(),
+        nombre: file.name,
+        tipo: file.type || 'audio/mpeg',
+        size: file.size,
+        actualizado: Date.now(),
+        esFisico: true,
+        blob: blob
+      };
+      store.put(cancion);
+      count++;
+      
+      if (item.genero && item.genero.trim().length >= 2) {
+        const gNorm = item.genero.trim();
+        if (!listasMap[gNorm]) listasMap[gNorm] = [];
+        listasMap[gNorm].push(localId);
       }
     }
+    
     await new Promise((resolve) => {
       tx.oncomplete = resolve;
     });
     db.close();
     
+    const generosCreados = Object.keys(listasMap);
+    for (const genero of generosCreados) {
+      const listaId = idLista(genero);
+      let lista = playlistsLocales.find(p => p.nombre.toLowerCase() === genero.toLowerCase());
+      if (!lista) {
+        lista = {
+          id: listaId,
+          deviceId: getDeviceId(),
+          nombre: genero,
+          canciones: [],
+          actualizado: Date.now()
+        };
+      }
+      for (const sid of listasMap[genero]) {
+        if (!lista.canciones.includes(sid)) {
+          lista.canciones.push(sid);
+        }
+      }
+      lista.actualizado = Date.now();
+      await guardarLista(lista);
+    }
+    
     await cargarBibliotecaLocal();
-    mostrarMensaje(`${count} canción(es) disponible(s) en tu carpeta física`, 'ok');
+    await cargarListasLocales();
+    const extraMsg = generosCreados.length > 0 ? ` organizadas en ${generosCreados.length} lista(s)/género(s)` : '';
+    mostrarMensaje(`${count} canción(es) disponible(s) en tu carpeta física${extraMsg}`, 'ok');
   } catch(e) {
     console.error(e);
     mostrarMensaje('Error al indexar archivos: ' + e.message, 'error');
@@ -2509,23 +2591,54 @@ async function cargarBibliotecaLocal() {
 }
 
 async function indexarArchivosLocales(fileList) {
-  const files = [...(fileList || [])].filter(file =>
-    (file.type || '').startsWith('audio/') || /\.(mp3|m4a|aac|wav|ogg|flac)$/i.test(file.name)
-  );
+  const allFiles = [...(fileList || [])];
+  const files = allFiles.filter(file => esArchivoAudio(file.name, file.type));
   if (!files.length) {
-    mostrarMensaje('No encontré canciones en la selección', 'error');
+    mostrarMensaje('No encontré canciones de audio válidas (se descartaron imágenes/carátulas)', 'error');
     return;
   }
   mostrarMensaje(`Guardando ${files.length} canción(es) en este dispositivo...`, '');
+  const listasMap = {};
   let guardadas = 0;
   for (const file of files) {
-    await guardarCancionLocal(file);
+    const cancion = await guardarCancionLocal(file);
     guardadas++;
+    const genero = extraerGeneroDePath(file.webkitRelativePath);
+    if (genero && genero.trim().length >= 2) {
+      const gNorm = genero.trim();
+      if (!listasMap[gNorm]) listasMap[gNorm] = [];
+      listasMap[gNorm].push(cancion.id);
+    }
   }
+
+  const generosCreados = Object.keys(listasMap);
+  for (const genero of generosCreados) {
+    const listaId = idLista(genero);
+    let lista = playlistsLocales.find(p => p.nombre.toLowerCase() === genero.toLowerCase());
+    if (!lista) {
+      lista = {
+        id: listaId,
+        deviceId: getDeviceId(),
+        nombre: genero,
+        canciones: [],
+        actualizado: Date.now()
+      };
+    }
+    for (const sid of listasMap[genero]) {
+      if (!lista.canciones.includes(sid)) {
+        lista.canciones.push(sid);
+      }
+    }
+    lista.actualizado = Date.now();
+    await guardarLista(lista);
+  }
+
   document.getElementById('folder-input').value = '';
   document.getElementById('local-files-input').value = '';
   await cargarBibliotecaLocal();
-  mostrarMensaje(`${guardadas} canción(es) disponibles en este dispositivo`, 'ok');
+  await cargarListasLocales();
+  const extraMsg = generosCreados.length > 0 ? ` (organizadas en ${generosCreados.length} lista(s)/género(s))` : '';
+  mostrarMensaje(`${guardadas} canción(es) disponibles en este dispositivo${extraMsg}`, 'ok');
 }
 
 function renderBibliotecaLocal() {

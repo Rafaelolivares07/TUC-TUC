@@ -1600,7 +1600,7 @@ def reordenar(sala_id):
             for id_ in nuevo_orden:
                 if id_ in por_id:
                     item = por_id[id_]
-                    if es_admin or modo == 'sync' or (
+                    if es_admin or modo in ('sync', 'reproductor') or (
                         session_tercero_id is not None and item.get('tercero_id') == session_tercero_id
                     ):
                         nueva_cola.append(item)

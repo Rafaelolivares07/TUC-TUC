@@ -2970,15 +2970,18 @@ function ejecutarPoner(modo) {
   }
 }
 
+let isDraggingQueue = false;
+
 function renderCola(cola) {
   queueLabel.textContent = 'Cola · ' + cola.length + (cola.length === 1 ? ' canción' : ' canciones');
+  if (isDraggingQueue) return;
   if (cola.length === 0) {
     listaCola.innerHTML = '<li class="queue-empty">Cola vacía</li>';
     return;
   }
   listaCola.innerHTML = cola.map((c, i) => `
-    <li class="queue-item" data-id="${c.id}">
-      <span class="handle">⠿</span>
+    <li class="queue-item ${i === 0 ? 'is-playing' : ''}" data-id="${c.id}">
+      <span class="handle" style="${i === 0 ? 'visibility:hidden;pointer-events:none;' : ''}">⠿</span>
       <span class="q-num">${i === 0 ? '▶' : '#'+(i + 1)}</span>
       <span class="q-nombre">${limpiarNombre(c.nombre)}</span>
       ${c.youtube_url ? `<span class="q-link" title="Enlace de YouTube: suena al llegar su turno">🔗</span><button class="q-download-btn" onclick="bajarLink('${c.id}', this)" title="Bajar a este dispositivo">⬇</button>` : (!c.id.startsWith('local-') ? `<a href="/rockola/${SALA}/archivo/${c.id}" download="${c.nombre}.mp3" class="q-download-btn" title="Descargar MP3">📥</a>` : '')}
@@ -3120,20 +3123,32 @@ if (window.Sortable) {
   Sortable.create(listaCola, {
     animation: 150,
     handle: '.handle',
+    filter: '.is-playing',
     delay: 50,
     delayOnTouchOnly: true,
     touchStartThreshold: 5,
+    onStart: () => {
+      isDraggingQueue = true;
+    },
     onEnd: async () => {
       const orden = [...listaCola.querySelectorAll('.queue-item')].map(el => el.dataset.id);
-      // Excluir la cancion que esta reproduciendose (primer elemento de la cola)
-      const playingId = currentCola[0]?.id || orden[0];
-      const ordenSinPlaying = playingId ? orden.filter(id => id !== playingId) : orden;
-      await fetch(`/rockola/${SALA}/reordenar`, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ orden: ordenSinPlaying, modo:'reproductor' })
-      });
-      verificarCola();
+      const playingId = currentCola[0]?.id;
+      let ordenCompleto = orden;
+      if (playingId) {
+        ordenCompleto = [playingId, ...orden.filter(id => id !== playingId)];
+      }
+      try {
+        await fetch(`/rockola/${SALA}/reordenar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orden: ordenCompleto, modo: 'reproductor', admin_key: ADMIN_KEY })
+        });
+      } catch (err) {
+        console.warn('Error al reordenar cola:', err);
+      } finally {
+        isDraggingQueue = false;
+        verificarCola();
+      }
     }
   });
   Sortable.create(playlistSongList, {

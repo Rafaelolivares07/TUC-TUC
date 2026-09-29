@@ -1373,23 +1373,37 @@ function showToast(message, type = 'ok') {
 }
 
 /* ── Sortable ── */
+let isDraggingClientQueue = false;
 Sortable.create(listaCola, {
   animation: 150,
-  handle: '.handle',
+  handle: '.handle:not(.locked)',
   filter: '.locked',
-  onEnd: () => {
+  delay: 50,
+  delayOnTouchOnly: true,
+  touchStartThreshold: 5,
+  onStart: () => {
+    isDraggingClientQueue = true;
+  },
+  onEnd: async () => {
     const orden = [...listaCola.querySelectorAll('.queue-item')].map(el => el.dataset.id);
-    fetch(`/rockola/${SALA}/reordenar`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orden, modo: 'restaurante' })
-    });
+    try {
+      await fetch(`/rockola/${SALA}/reordenar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orden, modo: 'restaurante' })
+      });
+    } catch(e) {}
+    finally {
+      isDraggingClientQueue = false;
+      actualizarCola();
+    }
   }
 });
 
 /* ── Render cola ── */
 function renderCola(cola) {
   queueLabel.textContent = `Cola · ${cola.length} canción${cola.length!==1?'es':''}`;
+  if (isDraggingClientQueue) return;
   if (!cola.length) {
     listaCola.innerHTML = '<li class="queue-empty">Sin canciones en cola</li>';
     return;

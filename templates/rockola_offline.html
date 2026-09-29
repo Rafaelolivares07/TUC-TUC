@@ -482,7 +482,7 @@ body {
   <div class="top">
     <div class="brand">Mi <span>Rockola</span></div>
     <div class="top-actions">
-      <button class="btn-nav" id="btn-install-app" style="display:none; background:linear-gradient(135deg,#00d4ff,#0066ff); color:#00101b; font-weight:800;" onclick="instalarPwaApp()">📲 Instalar App</button>
+      <button class="btn-nav" id="btn-install-app" style="background:linear-gradient(135deg,#00d4ff,#0066ff); color:#00101b; font-weight:800; display:inline-flex; align-items:center; gap:4px;" onclick="instalarPwaApp()">📲 Instalar App</button>
       <div class="state-badge" id="net-state">Modo Offline</div>
       <a class="btn-nav" href="/rockola" title="Ir a la sala online de rockola">🌐 Sala Online</a>
     </div>
@@ -603,6 +603,28 @@ body {
       <button class="btn-action" style="flex:1;" onclick="cerrarModalAddPlaylist()">Cancelar</button>
       <button class="btn-action primary" style="flex:1;" onclick="crearYAgregarLista()">+ Nueva Lista</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal Guía de Instalación PWA -->
+<div id="modal-install-guide" class="modal-overlay" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-title">📲 Instalar Mi Rockola en tu Dispositivo</div>
+    <div style="font-size:13px; color:var(--text); line-height:1.6; margin-bottom:16px;">
+      <div style="margin-bottom:12px; padding:10px; background:var(--surface2); border-radius:10px; border:1px solid var(--border);">
+        <strong style="color:var(--ac1);">📱 En Android (Chrome / Edge / Samsung):</strong><br>
+        Toca los 3 puntos <strong>⋮</strong> arriba a la derecha en tu navegador y selecciona <strong>"Instalar aplicación"</strong> o <strong>"Agregar a la pantalla principal"</strong>.
+      </div>
+      <div style="margin-bottom:12px; padding:10px; background:var(--surface2); border-radius:10px; border:1px solid var(--border);">
+        <strong style="color:var(--ac1);">🍏 En iPhone / iPad (Safari):</strong><br>
+        Toca el botón <strong>Compartir</strong> (icono de cuadrado con flecha hacia arriba) y selecciona <strong>"Agregar al inicio"</strong>.
+      </div>
+      <div style="padding:10px; background:var(--surface2); border-radius:10px; border:1px solid var(--border);">
+        <strong style="color:var(--ac1);">💻 En Computador (PC / Mac):</strong><br>
+        Haz clic en el icono de instalación <strong>⊕</strong> o <strong>⬇</strong> en la barra de direcciones arriba.
+      </div>
+    </div>
+    <button class="btn-action primary" style="width:100%;" onclick="cerrarModalInstallGuide()">Entendido ✓</button>
   </div>
 </div>
 
@@ -1379,13 +1401,20 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 
 async function instalarPwaApp() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
-  if (outcome === 'accepted') {
-    if (btnInstallApp) btnInstallApp.style.display = 'none';
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      mostrarMensaje('¡Aplicación instalada con éxito!', 'ok');
+    }
+    deferredPrompt = null;
+  } else {
+    document.getElementById('modal-install-guide').style.display = 'flex';
   }
-  deferredPrompt = null;
+}
+
+function cerrarModalInstallGuide() {
+  document.getElementById('modal-install-guide').style.display = 'none';
 }
 
 if ('serviceWorker' in navigator) {

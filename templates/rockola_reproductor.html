@@ -2078,11 +2078,12 @@ async function scanDirectoryEntries(dirHandle, pathPrefix = '') {
         if (esArchivoAudio(entry.name, '')) {
           try {
             const file = await entry.getFile();
-            results.push({ file, genero: pathPrefix || dirHandle.name });
+            results.push({ file, genero: pathPrefix });
           } catch(e) {}
         }
       } else if (entry.kind === 'directory') {
-        const sub = await scanDirectoryEntries(entry, entry.name);
+        const generoSub = pathPrefix || entry.name;
+        const sub = await scanDirectoryEntries(entry, generoSub);
         results.push(...sub);
       }
     }

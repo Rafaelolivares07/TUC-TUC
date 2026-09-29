@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#00d4ff">
 <link rel="manifest" href="/rockola/pwa/manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="/static/rockola-icon-192.png">
@@ -31,6 +31,7 @@ body {
   padding: 16px 14px 60px;
   display: flex;
   justify-content: center;
+  overscroll-behavior-y: contain; /* Evita que el swipe hacia abajo recargue la página */
 }
 .wrap {
   width: 100%;
@@ -140,6 +141,14 @@ body {
   background: var(--ac-grad);
   color: #00101b;
   border: none;
+}
+.btn-action.danger {
+  color: var(--danger);
+  border-color: rgba(255,77,109,0.3);
+}
+.btn-action.danger:hover {
+  background: rgba(255,77,109,0.15);
+  border-color: var(--danger);
 }
 .hidden-input {
   position: absolute;
@@ -288,6 +297,7 @@ body {
   margin-bottom: 12px;
   border-bottom: 1px solid rgba(0,212,255,0.12);
   padding-bottom: 8px;
+  overflow-x: auto;
 }
 .tab-btn {
   background: transparent;
@@ -300,6 +310,7 @@ body {
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 .tab-btn.active {
   background: var(--ac1-bg);
@@ -419,30 +430,31 @@ body {
   gap: 6px;
 }
 
-/* Modal simple */
+/* Modal simple y de Progreso */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(4px);
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
   padding: 16px;
 }
 .modal-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 18px;
-  padding: 20px;
+  padding: 22px;
   width: 100%;
-  max-width: 400px;
+  max-width: 440px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
 }
 .modal-title {
   font-size: 16px;
   font-weight: 800;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   color: var(--ac1);
 }
 .status-msg {
@@ -518,12 +530,13 @@ body {
     <div class="box-header">
       <div class="title">Agregar Música Local</div>
     </div>
-    <p class="subtitle">Importa música de tu equipo. Si seleccionas una carpeta con subcarpetas (géneros), se organizarán automáticamente en listas.</p>
+    <p class="subtitle">Selecciona tu carpeta principal de música. Las subcarpetas (ej. <em>Salsa, Rock, Vallenato</em>) se organizarán automáticamente en listas sin duplicar canciones.</p>
     
     <div class="action-grid">
       <button class="btn-action primary" onclick="abrirSelectorCarpetaOffline()">📁 Agregar carpeta</button>
       <button class="btn-action" onclick="abrirSelectorAudiosOffline()">🎵 Agregar canciones</button>
       <button class="btn-action" onclick="abrirModalCrearLista()">➕ Nueva lista</button>
+      <button class="btn-action danger" onclick="limpiarTodaBiblioteca()" title="Borra las canciones guardadas en este navegador">🧹 Limpiar</button>
     </div>
 
     <input class="hidden-input" id="folder-input-offline" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" webkitdirectory directory multiple onchange="indexarArchivosOffline(this.files)">
@@ -564,6 +577,22 @@ body {
   </div>
 </div>
 
+<!-- Modal de Progreso de Indexación -->
+<div id="modal-index-progress" class="modal-overlay" style="display:none;">
+  <div class="modal-card" style="text-align:center;">
+    <div style="font-size:36px; margin-bottom:8px; animation:spin 2s linear infinite; display:inline-block;">⚡</div>
+    <div class="modal-title" id="idx-modal-title">Organizando tu música...</div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;" id="idx-modal-sub">Escaneando archivos y creando listas por género...</p>
+    <div class="progress-track" style="margin-bottom:12px; height:8px;">
+      <div class="progress-fill" id="idx-progress-fill" style="width:0%;"></div>
+    </div>
+    <div style="font-size:13px; color:var(--text); font-weight:700;" id="idx-modal-detail">0 / 0 canciones</div>
+    <div style="font-size:11px; color:#ffc107; margin-top:14px; background:rgba(255,193,7,0.1); border:1px solid rgba(255,193,7,0.3); border-radius:8px; padding:8px 10px;">
+      ⚠️ Por favor no recargues la página mientras se procesan los archivos.
+    </div>
+  </div>
+</div>
+
 <!-- Modal para Agregar a Lista -->
 <div id="modal-add-playlist" class="modal-overlay" style="display:none;">
   <div class="modal-card">
@@ -600,6 +629,12 @@ const countSongsEl = document.getElementById('count-songs');
 const countPlaylistsEl = document.getElementById('count-playlists');
 const countQueueEl = document.getElementById('count-queue');
 
+const modalIndex = document.getElementById('modal-index-progress');
+const idxProgressFill = document.getElementById('idx-progress-fill');
+const idxModalTitle = document.getElementById('idx-modal-title');
+const idxModalSub = document.getElementById('idx-modal-sub');
+const idxModalDetail = document.getElementById('idx-modal-detail');
+
 let allSongs = [];
 let allPlaylists = [];
 let currentQueue = [];
@@ -608,6 +643,16 @@ let currentObjectUrl = null;
 let isShuffle = false;
 let isRepeat = false;
 let songToAddId = null;
+let isIndexingActive = false;
+
+// Protección contra recarga accidental durante indexación
+window.addEventListener('beforeunload', (e) => {
+  if (isIndexingActive) {
+    e.preventDefault();
+    e.returnValue = 'La música se está procesando. ¿Seguro que deseas salir?';
+    return e.returnValue;
+  }
+});
 
 function getDeviceId() {
   let id = localStorage.getItem(DEVICE_KEY);
@@ -651,7 +696,7 @@ function mostrarMensaje(texto, tipo = '') {
     if (statusOffline.textContent === texto) {
       statusOffline.style.display = 'none';
     }
-  }, 5000);
+  }, 6000);
 }
 
 /* ── Base de Datos IndexedDB ── */
@@ -713,9 +758,11 @@ async function cargarBibliotecaCompleta() {
 /* ── Filtro de archivos y carpetas ── */
 function esArchivoAudio(nombre, tipo) {
   if (!nombre) return false;
+  // Descartar portadas, imágenes, texto, carátulas y no-audio
   if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|nfo|ini|db|txt|cue|log|pdf|url|lnk|zip|rar|tar|gz|exe|bat|doc|docx|m3u|m3u8|sfv|md5)$/i.test(nombre)) {
     return false;
   }
+  // Formatos válidos de música
   if (/\.(mp3|m4a|aac|wav|ogg|oga|flac|opus|wma|webm|mid|midi|aiff|ape)$/i.test(nombre)) {
     return true;
   }
@@ -726,8 +773,10 @@ function extraerGeneroDePath(relativePath) {
   if (!relativePath) return null;
   const parts = relativePath.split('/').filter(Boolean);
   if (parts.length >= 3) {
-    return parts[parts.length - 2];
+    // Carpeta de género (ej. Musica/Salsa/Cancion.mp3 -> Salsa)
+    return parts[1];
   } else if (parts.length === 2) {
+    // (ej. Salsa/Cancion.mp3 -> Salsa)
     return parts[0];
   }
   return null;
@@ -748,14 +797,24 @@ function abrirSelectorAudiosOffline() {
 async function abrirDirectoryPickerOffline() {
   try {
     const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    mostrarMensaje('Escaneando música en carpeta y subcarpetas...', '');
+    isIndexingActive = true;
+    modalIndex.style.display = 'flex';
+    idxModalTitle.textContent = 'Escaneando carpeta...';
+    idxModalSub.textContent = 'Buscando archivos de audio y subcarpetas de géneros...';
+    idxProgressFill.style.width = '10%';
+    idxModalDetail.textContent = 'Explorando...';
+
     const audioFiles = await scanDirectoryEntriesOffline(handle, '');
     if (!audioFiles.length) {
-      mostrarMensaje('No se encontraron archivos de música válidos', 'error');
+      modalIndex.style.display = 'none';
+      isIndexingActive = false;
+      mostrarMensaje('No se encontraron archivos de música válidos en la carpeta', 'error');
       return;
     }
-    await guardarArchivosOffline(audioFiles);
+    await guardarArchivosOfflineProgresivo(audioFiles);
   } catch (err) {
+    modalIndex.style.display = 'none';
+    isIndexingActive = false;
     if (err.name !== 'AbortError') {
       console.error(err);
       mostrarMensaje('No se pudo abrir la carpeta: ' + err.message, 'error');
@@ -771,11 +830,13 @@ async function scanDirectoryEntriesOffline(dirHandle, pathPrefix = '') {
         if (esArchivoAudio(entry.name, '')) {
           try {
             const file = await entry.getFile();
-            results.push({ file, genero: pathPrefix || dirHandle.name });
+            results.push({ file, genero: pathPrefix });
           } catch(e) {}
         }
       } else if (entry.kind === 'directory') {
-        const sub = await scanDirectoryEntriesOffline(entry, entry.name);
+        // Asignar el nombre del subdirectorio como género
+        const generoSub = pathPrefix || entry.name;
+        const sub = await scanDirectoryEntriesOffline(entry, generoSub);
         results.push(...sub);
       }
     }
@@ -795,76 +856,122 @@ async function indexarArchivosOffline(fileList) {
     mostrarMensaje('No se encontraron canciones válidas (se ignoraron imágenes/carátulas)', 'error');
     return;
   }
-  await guardarArchivosOffline(audioFiles);
+  isIndexingActive = true;
+  modalIndex.style.display = 'flex';
+  await guardarArchivosOfflineProgresivo(audioFiles);
 }
 
-async function guardarArchivosOffline(audioFiles) {
-  mostrarMensaje(`Guardando ${audioFiles.length} canciones...`, '');
+// Guardado progresivo por lotes con protección y creación inmediata de listas
+async function guardarArchivosOfflineProgresivo(audioFiles) {
+  const total = audioFiles.length;
+  idxModalTitle.textContent = 'Guardando música local...';
+  idxModalSub.textContent = `Procesando ${total} canciones y organizando géneros...`;
+  
+  const listasMap = {}; // { 'Salsa': Set(ids), 'Rock': Set(ids) }
+  let procesadas = 0;
+  const BATCH_SIZE = 35;
+
   try {
     const db = await abrirDb();
-    const tx = db.transaction('songs', 'readwrite');
-    const store = tx.objectStore('songs');
-    const listasMap = {};
-    let guardadas = 0;
 
-    for (const item of audioFiles) {
-      const file = item.file;
-      const localId = 'local-' + hashTexto(file.name.toLowerCase() + '-' + file.size);
-      const blob = file.slice ? file.slice(0) : file;
-      const cancion = {
-        id: localId,
-        deviceId: getDeviceId(),
-        nombre: file.name,
-        tipo: file.type || 'audio/mpeg',
-        size: file.size,
-        actualizado: Date.now(),
-        esFisico: true,
-        blob: blob
-      };
-      store.put(cancion);
-      guardadas++;
+    for (let i = 0; i < total; i += BATCH_SIZE) {
+      const batch = audioFiles.slice(i, i + BATCH_SIZE);
+      
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('songs', 'readwrite');
+        const store = tx.objectStore('songs');
+        
+        for (const item of batch) {
+          const file = item.file;
+          // ID determinístico para evitar duplicados
+          const localId = 'local-' + hashTexto(file.name.toLowerCase() + '-' + file.size);
+          const blob = file.slice ? file.slice(0) : file;
+          const cancion = {
+            id: localId,
+            deviceId: getDeviceId(),
+            nombre: file.name,
+            tipo: file.type || 'audio/mpeg',
+            size: file.size,
+            actualizado: Date.now(),
+            esFisico: true,
+            blob: blob
+          };
+          store.put(cancion);
 
-      if (item.genero && item.genero.trim().length >= 2) {
-        const gNorm = item.genero.trim();
-        if (!listasMap[gNorm]) listasMap[gNorm] = [];
-        listasMap[gNorm].push(localId);
-      }
-    }
-
-    await new Promise(resolve => tx.oncomplete = resolve);
-    db.close();
-
-    // Guardar listas por carpetas
-    const generosCreados = Object.keys(listasMap);
-    for (const genero of generosCreados) {
-      const listaId = idLista(genero);
-      let lista = allPlaylists.find(p => p.nombre.toLowerCase() === genero.toLowerCase());
-      if (!lista) {
-        lista = {
-          id: listaId,
-          deviceId: getDeviceId(),
-          nombre: genero,
-          canciones: [],
-          actualizado: Date.now()
-        };
-      }
-      for (const sid of listasMap[genero]) {
-        if (!lista.canciones.includes(sid)) {
-          lista.canciones.push(sid);
+          if (item.genero && item.genero.trim().length >= 2) {
+            const gNorm = item.genero.trim();
+            if (!listasMap[gNorm]) listasMap[gNorm] = new Set();
+            listasMap[gNorm].add(localId);
+          }
         }
-      }
-      lista.actualizado = Date.now();
-      await guardarListaEnDb(lista);
+        
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+
+      procesadas += batch.length;
+      const pct = Math.round((procesadas / total) * 100);
+      idxProgressFill.style.width = pct + '%';
+      idxModalDetail.textContent = `${procesadas} / ${total} canciones guardadas (${pct}%)`;
+
+      // Ceder el hilo para refrescar UI
+      await new Promise(r => setTimeout(r, 0));
     }
+
+    // Guardar / Actualizar todas las listas de géneros creadas
+    idxModalSub.textContent = 'Guardando listas de reproducción y géneros...';
+    const generos = Object.keys(listasMap);
+    if (generos.length > 0) {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction('playlists', 'readwrite');
+        const pStore = tx.objectStore('playlists');
+        const req = pStore.getAll();
+        
+        req.onsuccess = () => {
+          const existentes = req.result || [];
+          for (const genero of generos) {
+            const listaId = idLista(genero);
+            let lista = existentes.find(p => p.nombre.toLowerCase() === genero.toLowerCase());
+            if (!lista) {
+              lista = {
+                id: listaId,
+                deviceId: getDeviceId(),
+                nombre: genero,
+                canciones: [],
+                actualizado: Date.now()
+              };
+            }
+            const nuevosIds = Array.from(listasMap[genero]);
+            for (const sid of nuevosIds) {
+              if (!lista.canciones.includes(sid)) {
+                lista.canciones.push(sid);
+              }
+            }
+            lista.actualizado = Date.now();
+            pStore.put(lista);
+          }
+        };
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    db.close();
 
     document.getElementById('folder-input-offline').value = '';
     document.getElementById('files-input-offline').value = '';
+    
     await cargarBibliotecaCompleta();
-    const msgExtra = generosCreados.length > 0 ? ` (organizadas en ${generosCreados.length} lista(s)/género(s))` : '';
-    mostrarMensaje(`${guardadas} canción(es) disponibles offline${msgExtra}`, 'ok');
-  } catch (e) {
-    console.error(e);
-    mostrarMensaje('Error al guardar canciones: ' + e.message, 'error');
+    modalIndex.style.display = 'none';
+    isIndexingActive = false;
+
+    const extraMsg = generos.length > 0 ? ` organizadas en ${generos.length} lista(s)/género(s)` : '';
+    mostrarMensaje(`✓ ${total} canción(es) indexadas con éxito${extraMsg}`, 'ok');
+  } catch (err) {
+    console.error('Error en guardado progresivo:', err);
+    modalIndex.style.display = 'none';
+    isIndexingActive = false;
+    mostrarMensaje('Ocurrió un error durante el guardado: ' + err.message, 'error');
   }
 }
 
@@ -918,7 +1025,7 @@ function renderSongs() {
 
 function renderPlaylists() {
   if (!allPlaylists.length) {
-    playlistListEl.innerHTML = '<div class="empty-state">No hay listas creadas. Las carpetas agregadas crean listas automáticamente.</div>';
+    playlistListEl.innerHTML = '<div class="empty-state">No hay listas creadas. Las subcarpetas agregadas crean listas de géneros automáticamente.</div>';
     return;
   }
 
@@ -992,7 +1099,7 @@ function sonarLista(idListaSel, aleatorio = false) {
   currentIndex = 0;
   renderQueue();
   reproducirIndiceActual();
-  mostrarMensaje(`Reproduciendo lista: ${lista.nombre} (${canciones.length} canciones)`, 'ok');
+  mostrarMensaje(`Reproduciendo: ${lista.nombre} (${canciones.length} canciones)`, 'ok');
 }
 
 function reproducirIndiceActual() {
@@ -1194,7 +1301,7 @@ async function crearYAgregarLista() {
 
 async function eliminarCancion(id) {
   const s = allSongs.find(x => x.id === id);
-  if (!s || !confirm(`¿Eliminar "${limpiarNombre(s.nombre)}" de la memoria de este dispositivo?`)) return;
+  if (!s || !confirm(`¿Eliminar "${limpiarNombre(s.nombre)}" de este navegador?`)) return;
 
   const db = await abrirDb();
   await new Promise(resolve => {
@@ -1215,12 +1322,12 @@ async function eliminarCancion(id) {
   });
   db.close();
   await cargarBibliotecaCompleta();
-  mostrarMensaje('Canción eliminada del almacenamiento local', 'ok');
+  mostrarMensaje('Canción eliminada de la memoria local', 'ok');
 }
 
 async function eliminarLista(id) {
   const l = allPlaylists.find(x => x.id === id);
-  if (!l || !confirm(`¿Eliminar la lista "${l.nombre}"? (Las canciones seguirán en tu biblioteca)`)) return;
+  if (!l || !confirm(`¿Eliminar la lista "${l.nombre}"? (Las canciones continuarán en tu biblioteca)`)) return;
 
   const db = await abrirDb();
   await new Promise(resolve => {
@@ -1231,6 +1338,32 @@ async function eliminarLista(id) {
   db.close();
   await cargarBibliotecaCompleta();
   mostrarMensaje(`Lista "${l.nombre}" eliminada`, 'ok');
+}
+
+async function limpiarTodaBiblioteca() {
+  if (!confirm('¿Deseas BORRAR TODAS las canciones y listas guardadas en este navegador para volver a escanear desde cero?\n\n(Los archivos originales de tu equipo NO se borrarán).')) return;
+  try {
+    const db = await abrirDb();
+    await new Promise(resolve => {
+      const tx = db.transaction(['songs', 'playlists'], 'readwrite');
+      tx.objectStore('songs').clear();
+      tx.objectStore('playlists').clear();
+      tx.oncomplete = resolve;
+    });
+    db.close();
+    currentQueue = [];
+    currentIndex = -1;
+    if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+    audioEngine.pause();
+    nowTitle.textContent = 'Biblioteca vacía';
+    nowSub.textContent = 'Agrega una carpeta para comenzar';
+    btnPlayPause.textContent = '▶';
+    vinylDisc.classList.remove('spin');
+    await cargarBibliotecaCompleta();
+    mostrarMensaje('Biblioteca limpiada. Lista para nuevo escaneo.', 'ok');
+  } catch(e) {
+    mostrarMensaje('Error al limpiar biblioteca: ' + e.message, 'error');
+  }
 }
 
 /* ── Estado de red y arranque ── */

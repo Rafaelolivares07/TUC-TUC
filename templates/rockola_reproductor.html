@@ -563,11 +563,12 @@ input:checked + .slider:before {
   position: fixed !important;
   width: 240px !important;
   height: 240px !important;
-  left: -9999px !important;
-  top: -9999px !important;
-  opacity: 0.01 !important;
+  top: 0 !important;
+  left: 0 !important;
+  opacity: 0.001 !important;
   pointer-events: none !important;
-  z-index: -999 !important;
+  overflow: hidden !important;
+  z-index: -10 !important;
 }
 /* Dropdown de Opciones de Poner */
 .dropdown {
@@ -1350,9 +1351,10 @@ function handlePlayerTimeUpdate(e) {
   const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
   const crossfadeAnticipation = parseInt(document.getElementById('fundido-segundos').value) || 12;
   const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
-  // No disparar crossfade automatico si se acaba de agregar una cancion a la cola (esperar 5s)
+  const nextSong = currentCola && currentCola[1];
   const recienAgregada = (Date.now() - ultimaCancionAgregadaTs) < 5000;
-  if (crossfadeEnabled && p.duration && (p.duration - p.currentTime <= crossfadeAnticipation) && !transitioning && !recienAgregada) {
+  // Solo aplicar fundido cruzado automático entre archivos de audio locales
+  if (crossfadeEnabled && !esYouTubeActual && nextSong && !nextSong.youtube_url && p.duration && (p.duration - p.currentTime <= crossfadeAnticipation) && !transitioning && !recienAgregada) {
     iniciarCrossfade(crossfadeDuration);
   }
 }
@@ -1407,7 +1409,9 @@ async function obtenerUrlDeAudio(c) {
 
 function extractYouTubeId(url) {
   if (!url) return null;
-  const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|v\/)([^&?\/]{11})/);
+  const trimmed = String(url).trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  const m = trimmed.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/|v\/|watch\?.*v=)([^&?\/#\s]{11})/i);
   return m ? m[1] : null;
 }
 
@@ -1819,7 +1823,7 @@ function urlCliente() {
 function copiarCliente() {
   const url = urlCliente();
   if (navigator.share) {
-    navigator.share({ title:'Tu Rockola', text:`Sala ${SALA.toUpperCase()}`, url }).catch(() => {});
+    navigator.share({ title:'Mi Rockola', text:`Sala ${SALA.toUpperCase()}`, url }).catch(() => {});
   } else {
     navigator.clipboard.writeText(url).then(() => mostrarMensaje('Enlace copiado', 'ok'));
   }
@@ -3331,14 +3335,6 @@ async function saltarActual() {
   if (esYouTubeActual) {
     detenerVideoYouTube();
     esYouTubeActual = false;
-  }
-
-  const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
-  const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
-  
-  if (crossfadeEnabled && currentCola && currentCola.length >= 2 && !transitioning && !esYouTubeActual) {
-    iniciarCrossfade(crossfadeDuration);
-    return;
   }
 
   const idTerminada = cancionActual;

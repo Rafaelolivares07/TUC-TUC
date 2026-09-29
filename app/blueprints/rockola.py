@@ -600,7 +600,7 @@ def pwa_manifest():
 
     manifest = {
         "id": "/rockola/",
-        "name": "Tu Rockola",
+        "name": "Mi Rockola",
         "short_name": "Rockola",
         "description": "Rockola Tuc Tuc con biblioteca local y modo offline",
         "start_url": start_url,

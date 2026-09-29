@@ -843,7 +843,7 @@ function urlSala() {
 function compartirSala() {
   const url = urlSala();
   if (navigator.share) {
-    navigator.share({ title: 'Tu Rockola', text: `Rockola ${SALA.toUpperCase()}`, url });
+    navigator.share({ title: 'Mi Rockola', text: `Rockola ${SALA.toUpperCase()}`, url });
   } else {
     navigator.clipboard.writeText(url).then(() => {
       uploadMsg.textContent = 'Enlace copiado';

@@ -620,9 +620,9 @@ def pwa_manifest():
 @bp.route('/pwa/sw.js')
 def pwa_sw():
     js = """
-const CACHE = 'rockola-pwa-v4';
+const CACHE = 'rockola-pwa-v6';
 const CORE = [
-  '/',
+  '/rockola',
   '/rockola/',
   '/rockola/pwa/offline',
   '/rockola/pwa/manifest.json',
@@ -632,7 +632,17 @@ const CORE = [
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(CACHE).then(async cache => {
+      for (const url of CORE) {
+        try {
+          await cache.add(url);
+        } catch (e) {
+          console.warn('[SW] No se pudo precachear:', url, e);
+        }
+      }
+    }).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', event => {
@@ -646,24 +656,42 @@ self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;
 
+  // Fallback offline para navegación
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).then(res => {
-        return res;
-      }).catch(() => caches.match(req).then(hit => hit || caches.match('/rockola/pwa/offline')))
+      fetch(req)
+        .then(res => {
+          if (res && res.status === 200) {
+            const copy = res.clone();
+            caches.open(CACHE).then(cache => cache.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(async () => {
+          const hit = await caches.match(req);
+          if (hit) return hit;
+          const offlinePage = await caches.match('/rockola/pwa/offline');
+          if (offlinePage) return offlinePage;
+          return caches.match('/rockola/');
+        })
     );
     return;
   }
 
+  // Caché de estáticos
   if (url.pathname.startsWith('/static/') || url.pathname.startsWith('/rockola/pwa/')) {
     event.respondWith(
-      caches.match(req).then(hit => hit || fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(cache => cache.put(req, copy));
-        return res;
-      }))
+      caches.match(req).then(hit => {
+        if (hit) return hit;
+        return fetch(req).then(res => {
+          if (res && res.status === 200) {
+            const copy = res.clone();
+            caches.open(CACHE).then(cache => cache.put(req, copy)).catch(() => {});
+          }
+          return res;
+        }).catch(() => null);
+      })
     );
   }
 });

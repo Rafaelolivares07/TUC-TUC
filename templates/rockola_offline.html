@@ -482,6 +482,7 @@ body {
   <div class="top">
     <div class="brand">Mi <span>Rockola</span></div>
     <div class="top-actions">
+      <button class="btn-nav" id="btn-install-app" style="display:none; background:linear-gradient(135deg,#00d4ff,#0066ff); color:#00101b; font-weight:800;" onclick="instalarPwaApp()">📲 Instalar App</button>
       <div class="state-badge" id="net-state">Modo Offline</div>
       <a class="btn-nav" href="/rockola" title="Ir a la sala online de rockola">🌐 Sala Online</a>
     </div>
@@ -1367,8 +1368,39 @@ async function limpiarTodaBiblioteca() {
 }
 
 /* ── Estado de red y arranque ── */
+/* ── PWA Install & Service Worker ── */
+let deferredPrompt = null;
+const btnInstallApp = document.getElementById('btn-install-app');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (btnInstallApp) btnInstallApp.style.display = 'inline-flex';
+});
+
+async function instalarPwaApp() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') {
+    if (btnInstallApp) btnInstallApp.style.display = 'none';
+  }
+  deferredPrompt = null;
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/rockola/pwa/sw.js?v=6.0.0', { scope: '/' })
+    .then(reg => {
+      console.log('[SW] ServiceWorker offline registrado correctamente:', reg.scope);
+    })
+    .catch(err => {
+      console.warn('[SW] Error al registrar ServiceWorker:', err);
+    });
+}
+
 function actualizarEstadoRed() {
   const st = document.getElementById('net-state');
+  if (!st) return;
   if (navigator.onLine) {
     st.textContent = 'Local (Online)';
     st.style.borderColor = 'rgba(0,230,118,0.4)';

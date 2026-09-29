@@ -19,6 +19,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -823,6 +824,10 @@ input:checked + .slider:before {
           <div class="vinyl-play-icon" id="vinyl-play-icon"><svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
         </div>
 
+        <div id="yt-player-wrap" style="display:none; width:100%; max-width:340px; aspect-ratio:16/9; border-radius:14px; overflow:hidden; margin:0 auto 12px; background:#000; box-shadow:0 0 25px rgba(0,212,255,0.25);">
+          <div id="yt-iframe-player"></div>
+        </div>
+
         <!-- Barra de Progreso Horizontal -->
         <div class="progress-container">
           <span class="time-label" id="time-current">0:00</span>
@@ -929,14 +934,7 @@ input:checked + .slider:before {
         <div class="progress-track"><div class="progress-fill" id="prog-fill"></div></div>
       </div>
 
-      <div class="dropdown" id="dd-youtube" style="width: 100%;">
-        <button class="action-btn" id="btn-poner" onclick="toggleDropdown(event, 'dd-youtube')" disabled style="width: 100%;">Pega un link de YouTube ▾</button>
-        <div class="dropdown-content" style="left: 0; right: 0; width: 100%; box-sizing: border-box;">
-          <a href="#" onclick="poner('ya')">⚡ Sonar ya</a>
-          <a href="#" onclick="poner('siguiente')">⏭️ Sonar después</a>
-          <a href="#" onclick="poner('final')">📝 Poner al final</a>
-        </div>
-      </div>
+      <button class="action-btn" id="btn-poner" onclick="abrirModalPonerYoutube()" disabled style="width: 100%;">Pega un link de YouTube</button>
       <div class="status-msg" id="upload-msg"></div>
     </div>
 
@@ -1146,6 +1144,10 @@ let cancionesLocales = [];
 let playlistsLocales = [];
 let localObjectUrl = null;
 let playlistActualId = null;
+let ytPlayer = null;
+let ytPlayerReady = false;
+let esYouTubeActual = false;
+let ytProgresoInterval = null;
 
 function mostrarCargando(titulo, subtitulo) {
   let overlay = document.getElementById('loading-overlay');
@@ -1358,24 +1360,211 @@ async function obtenerUrlDeAudio(c) {
       }
     }
   }
-  if (c.youtube_url) {
-    estadoEl.textContent = 'Resolviendo link...';
-    const rr = await fetch(`/rockola/${SALA}/resolver`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: c.id}) });
-    const dd = await rr.json();
-    if (dd.ok && dd.url) return { url: dd.url, esLocal: false };
-    estadoEl.textContent = 'Link no disponible - saltando...';
-    throw new Error(dd.error || 'link sin audio');
-  }
   return { url: `/rockola/${SALA}/archivo/${c.id}`, esLocal: false };
+}
+
+function extractYouTubeId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|v\/)([^&?\/]{11})/);
+  return m ? m[1] : null;
+}
+
+window.onYouTubeIframeAPIReady = function() {
+  ytPlayerReady = false;
+  crearYtPlayer(window._pendingYtVideoId || null);
+};
+
+function crearYtPlayer(initialVideoId) {
+  if (!window.YT || !window.YT.Player) {
+    window._pendingYtVideoId = initialVideoId;
+    return;
+  }
+  try {
+    ytPlayer = new YT.Player('yt-iframe-player', {
+      height: '100%',
+      width: '100%',
+      videoId: initialVideoId || undefined,
+      playerVars: {
+        'autoplay': 1,
+        'controls': 1,
+        'disablekb': 0,
+        'enablejsapi': 1,
+        'fs': 1,
+        'modestbranding': 1,
+        'playsinline': 1,
+        'rel': 0
+      },
+      events: {
+        'onReady': function(event) {
+          ytPlayerReady = true;
+          try { event.target.setVolume(volumenActual); } catch(e) {}
+          if (window._pendingYtVideoId) {
+            try {
+              event.target.loadVideoById(window._pendingYtVideoId);
+              event.target.playVideo();
+            } catch(e) {}
+            window._pendingYtVideoId = null;
+          }
+        },
+        'onStateChange': onYtPlayerStateChange,
+        'onError': onYtPlayerError
+      }
+    });
+  } catch(err) {
+    console.warn('Error inicializando YT.Player:', err);
+  }
+}
+
+function reproducirVideoYouTube(vidId, c) {
+  estadoEl.textContent = 'Cargando YouTube...';
+  const verVideo = document.getElementById('yt-ver-video') ? document.getElementById('yt-ver-video').checked : false;
+  const wrap = document.getElementById('yt-player-wrap');
+  const vinylBtn = document.getElementById('vinyl-btn');
+  
+  if (verVideo && wrap) {
+    wrap.style.display = 'block';
+    if (vinylBtn) vinylBtn.style.display = 'none';
+  } else {
+    if (wrap) wrap.style.display = 'none';
+    if (vinylBtn) vinylBtn.style.display = 'flex';
+  }
+
+  if (ytPlayer && ytPlayerReady && typeof ytPlayer.loadVideoById === 'function') {
+    try {
+      ytPlayer.loadVideoById(vidId);
+      ytPlayer.setVolume(volumenActual);
+      ytPlayer.playVideo();
+    } catch(err) {
+      console.warn('Error en loadVideoById:', err);
+      crearYtPlayer(vidId);
+    }
+  } else {
+    window._pendingYtVideoId = vidId;
+    crearYtPlayer(vidId);
+  }
+}
+
+function onYtPlayerStateChange(event) {
+  if (event.data === YT.PlayerState.PLAYING) {
+    reproduciendo = true;
+    playPendiente = false;
+    fallosPlay = 0;
+    setVinylSpinning(true);
+    actualizarPlayPauseBtn(true);
+    estadoEl.textContent = 'Reproduciendo (YouTube) ✓';
+    iniciarYtProgresoTimer();
+  } else if (event.data === YT.PlayerState.PAUSED) {
+    reproduciendo = false;
+    setVinylSpinning(false);
+    actualizarPlayPauseBtn(false);
+    estadoEl.textContent = 'En pausa (YouTube)';
+    detenerYtProgresoTimer();
+  } else if (event.data === YT.PlayerState.ENDED) {
+    detenerYtProgresoTimer();
+    console.log('[YouTube] Video terminado, pasando a siguiente cancion');
+    saltarActual();
+  } else if (event.data === YT.PlayerState.BUFFERING) {
+    estadoEl.textContent = 'Cargando YouTube...';
+  }
+}
+
+function onYtPlayerError(event) {
+  console.warn('[YouTube] Error reproduciendo video:', event.data);
+  detenerYtProgresoTimer();
+  estadoEl.textContent = 'Video no reproducible en YouTube — saltando...';
+  setTimeout(() => {
+    if (cancionActual) {
+      saltarActual();
+    }
+  }, 1500);
+}
+
+function iniciarYtProgresoTimer() {
+  detenerYtProgresoTimer();
+  ytProgresoInterval = setInterval(() => {
+    if (!esYouTubeActual || !ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+    try {
+      const curr = ytPlayer.getCurrentTime() || 0;
+      const dur = ytPlayer.getDuration() || 0;
+      if (dur > 0) {
+        const pct = (curr / dur) * 100;
+        const fill = document.getElementById('progress-fill');
+        if (fill) fill.style.width = pct + '%';
+        const tCur = document.getElementById('time-current');
+        if (tCur) tCur.textContent = formatTime(curr);
+        const tTot = document.getElementById('time-total');
+        if (tTot) tTot.textContent = formatTime(dur);
+      }
+    } catch(e) {}
+  }, 500);
+}
+
+function detenerYtProgresoTimer() {
+  if (ytProgresoInterval) {
+    clearInterval(ytProgresoInterval);
+    ytProgresoInterval = null;
+  }
+}
+
+function detenerVideoYouTube() {
+  detenerYtProgresoTimer();
+  if (ytPlayer && ytPlayerReady && typeof ytPlayer.stopVideo === 'function') {
+    try { ytPlayer.stopVideo(); } catch(e) {}
+  }
+  const wrap = document.getElementById('yt-player-wrap');
+  if (wrap) wrap.style.display = 'none';
+  const vinylBtn = document.getElementById('vinyl-btn');
+  if (vinylBtn) vinylBtn.style.display = 'flex';
+}
+
+function ytVerVideoChange() {
+  const verVideo = document.getElementById('yt-ver-video') ? document.getElementById('yt-ver-video').checked : false;
+  const wrap = document.getElementById('yt-player-wrap');
+  const vinylBtn = document.getElementById('vinyl-btn');
+  if (esYouTubeActual) {
+    if (verVideo && wrap) {
+      wrap.style.display = 'block';
+      if (vinylBtn) vinylBtn.style.display = 'none';
+    } else {
+      if (wrap) wrap.style.display = 'none';
+      if (vinylBtn) vinylBtn.style.display = 'flex';
+    }
+  }
 }
 
 async function intentarReproducir(c) {
   if (!c || !c.id) return;
   playPendiente = true;
+  cancionActual = c.id;
   nombreEl.textContent = limpiarNombre(c.nombre);
   actualizarPlayPauseBtn(false);
 
-  if (localObjectUrl) URL.revokeObjectURL(localObjectUrl);
+  if (localObjectUrl) {
+    URL.revokeObjectURL(localObjectUrl);
+    localObjectUrl = null;
+  }
+
+  if (c.youtube_url) {
+    const vidId = extractYouTubeId(c.youtube_url);
+    if (!vidId) {
+      console.warn('URL de YouTube no valida:', c.youtube_url);
+      nombreEl.textContent = 'Link no valido — saltando...';
+      setTimeout(saltarActual, 1500);
+      return;
+    }
+
+    esYouTubeActual = true;
+    player.pause();
+    player.removeAttribute('src');
+
+    reproducirVideoYouTube(vidId, c);
+    return;
+  }
+
+  // Cancion de archivo / local
+  esYouTubeActual = false;
+  detenerVideoYouTube();
+
   let resAudio;
   try {
     resAudio = await obtenerUrlDeAudio(c);
@@ -1385,7 +1574,7 @@ async function intentarReproducir(c) {
   }
   localObjectUrl = resAudio.esLocal ? resAudio.url : null;
 
-  if (!resAudio.esLocal && !c.id.startsWith('local-') && !c.youtube_url) {
+  if (!resAudio.esLocal && !c.id.startsWith('local-')) {
     guardarArchivoServidorEnBiblioteca(c);
   }
 
@@ -1402,7 +1591,7 @@ async function intentarReproducir(c) {
     actualizarPlayPauseBtn(true);
     estadoEl.textContent = 'Reproduciendo ✓';
   } catch(err) {
-    console.warn('Play falló (intento ' + (fallosPlay + 1) + '):', err.name || err.message);
+    console.warn('Play fallo (intento ' + (fallosPlay + 1) + '):', err.name || err.message);
     fallosPlay++;
     playPendiente = false;
     reproduciendo = false;
@@ -1411,14 +1600,14 @@ async function intentarReproducir(c) {
     dibujarIdle('visualizer-canvas');
     actualizarPlayPauseBtn(false);
     if (err.name === 'NotSupportedError' || fallosPlay >= 3) {
-      nombreEl.textContent = 'Canción no disponible — saltando...';
+      nombreEl.textContent = 'Cancion no disponible — saltando...';
       setTimeout(() => {
         if (!reproduciendo && cancionActual === c.id) {
           saltarActual();
         }
       }, 1500);
     } else {
-      estadoEl.textContent = 'Canción bloqueada — toca ▶ para iniciar';
+      estadoEl.textContent = 'Cancion bloqueada — toca ▶ para iniciar';
     }
   }
 }
@@ -1506,6 +1695,9 @@ function aplicarVolumen(volumen) {
   // No modificar el volumen del player durante un fundido cruzado
   if (!transitioning) {
     player.volume = normalizado / 100;
+    if (ytPlayer && ytPlayerReady && typeof ytPlayer.setVolume === 'function') {
+      try { ytPlayer.setVolume(normalizado); } catch(e) {}
+    }
   }
   if (document.activeElement !== volumenEl) volumenEl.value = normalizado;
   volumenValorEl.textContent = normalizado + '%';
@@ -1588,7 +1780,7 @@ function toggleQR() {
 
 function resetAgregar() {
   btnPoner.disabled = true;
-  btnPoner.textContent = 'Pega un link de YouTube ▾';
+  btnPoner.textContent = 'Pega un link de YouTube';
   uploadMsg.textContent = '';
   uploadMsg.className = 'status-msg';
   progWrap.style.display = 'none';
@@ -1599,33 +1791,35 @@ function ytInputChange() {
   const url = document.getElementById('yt-url').value.trim();
   const esYt = url.includes('youtube.com') || url.includes('youtu.be');
   btnPoner.disabled = !esYt;
-  btnPoner.textContent = esYt ? 'Poner en cola ▾' : 'Pega un link de YouTube ▾';
+  btnPoner.textContent = esYt ? 'Poner en cola' : 'Pega un link de YouTube';
   
   const preview = document.getElementById('yt-preview');
-  const verVideo = document.getElementById('yt-ver-video').checked;
-  const videoContainer = document.getElementById('yt-video-container');
   const thumb = document.getElementById('yt-thumb');
+  const titulo = document.getElementById('yt-titulo');
   
   if (esYt) {
-    const vidId = url.match(/(?:v=|youtu\.be\/)([^&?\/]{11})/)?.[1];
+    const vidId = extractYouTubeId(url);
     if (vidId) {
       thumb.src = `https://img.youtube.com/vi/${vidId}/mqdefault.jpg`;
-      if (verVideo) {
-        videoContainer.innerHTML = `<iframe style="width:100%; height:180px; border:none;" src="https://www.youtube.com/embed/${vidId}?autoplay=1&mute=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
-        videoContainer.style.display = 'block';
-        thumb.style.display = 'none';
-      } else {
-        videoContainer.innerHTML = '';
-        videoContainer.style.display = 'none';
-        thumb.style.display = 'block';
-      }
+      thumb.style.display = 'block';
+      fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vidId}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.title) titulo.textContent = d.title;
+        })
+        .catch(() => {});
     }
     preview.className = 'yt-preview visible';
   } else {
     preview.className = 'yt-preview';
-    videoContainer.innerHTML = '';
-    videoContainer.style.display = 'none';
   }
+}
+
+function abrirModalPonerYoutube() {
+  const url = document.getElementById('yt-url').value.trim();
+  if (!url) return;
+  const titulo = document.getElementById('yt-titulo').textContent || 'Video de YouTube';
+  abrirModalPoner(url, titulo, true);
 }
 
 function poner(modo = 'final') {
@@ -1644,9 +1838,9 @@ function subirYoutube(modo = 'final') {
   progWrap.style.display = 'block';
   let avance = 0;
   const timer = setInterval(() => {
-    avance = Math.min(avance + Math.random() * 4, 85);
+    avance = Math.min(avance + Math.random() * 10, 85);
     progFill.style.width = avance + '%';
-  }, 400);
+  }, 200);
   fetch(`/rockola/${SALA}/youtube`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -1662,7 +1856,7 @@ function subirYoutube(modo = 'final') {
       document.getElementById('yt-preview').className = 'yt-preview';
       onAgregarOk(1);
     } else {
-      mostrarMensaje(res.error || 'No se pudo descargar', 'error');
+      mostrarMensaje(res.error || 'No se pudo agregar', 'error');
       btnPoner.disabled = false;
     }
   })
@@ -1684,11 +1878,6 @@ function onAgregarOk(cantidad) {
     videoContainer.innerHTML = '';
     videoContainer.style.display = 'none';
   }
-  const check = document.getElementById('yt-ver-video');
-  if (check) check.checked = false;
-  
-  const ddYt = document.getElementById('dd-youtube');
-  if (ddYt) ddYt.classList.remove('show');
   
   resetAgregar();
   mostrarMensaje(texto, 'ok');
@@ -2669,13 +2858,19 @@ window.addEventListener('click', () => {
 });
 
 let modalPonerCancionId = null;
-function abrirModalPoner(cancionId, nombre) {
+let modalPonerEsYt = false;
+function abrirModalPoner(cancionId, nombre, esYt = false) {
   modalPonerCancionId = cancionId;
+  modalPonerEsYt = !!esYt;
 
   // Si la cola está vacía, reproducir inmediatamente sin mostrar el modal
   if (Array.isArray(currentCola) && currentCola.length === 0) {
     console.log('[Rockola] Cola vacía, reproduciendo inmediatamente');
-    ponerLocal(cancionId, MODO.REEMPLAZAR);
+    if (modalPonerEsYt) {
+      subirYoutube(MODO.REEMPLAZAR);
+    } else {
+      ponerLocal(cancionId, MODO.REEMPLAZAR);
+    }
     return;
   }
   document.getElementById('modal-poner-titulo').textContent = nombre;
@@ -2684,14 +2879,21 @@ function abrirModalPoner(cancionId, nombre) {
 function cerrarModalPoner() {
   document.getElementById('modal-poner').style.display = 'none';
   modalPonerCancionId = null;
+  modalPonerEsYt = false;
 }
 function ejecutarPoner(modo) {
-  console.log('[Rockola] ejecutarPoner called:', modalPonerCancionId, modo);
+  console.log('[Rockola] ejecutarPoner called:', modalPonerCancionId, modo, 'esYt:', modalPonerEsYt);
   if (!modalPonerCancionId) return;
   const id = modalPonerCancionId;
+  const esYt = modalPonerEsYt;
   cerrarModalPoner();
-  console.log('[Rockola] calling ponerLocal with id:', id, modo);
-  ponerLocal(id, modo);
+  if (esYt) {
+    console.log('[Rockola] calling subirYoutube with modo:', modo);
+    subirYoutube(modo);
+  } else {
+    console.log('[Rockola] calling ponerLocal with id:', id, modo);
+    ponerLocal(id, modo);
+  }
 }
 
 function renderCola(cola) {
@@ -2907,7 +3109,7 @@ function initProgressBarDrag() {
   const progressBar = document.getElementById('progress-bar');
   const progressFill = document.getElementById('progress-fill');
   const timeCurrent = document.getElementById('time-current');
-  if (!progressBar || !player) return;
+  if (!progressBar) return;
   
   function getPercent(e) {
     const rect = progressBar.getBoundingClientRect();
@@ -2922,37 +3124,51 @@ function initProgressBarDrag() {
     return Math.max(0, Math.min(1, x / rect.width));
   }
   
+  function getDur() {
+    if (esYouTubeActual && ytPlayer && ytPlayerReady && typeof ytPlayer.getDuration === 'function') {
+      return ytPlayer.getDuration() || 0;
+    }
+    return player ? (player.duration || 0) : 0;
+  }
+
   function handleStart(e) {
-    if (!player.duration) return;
+    if (!getDur()) return;
     isDraggingProgress = true;
     handleMove(e);
   }
   
   function handleMove(e) {
-    if (!isDraggingProgress || !player.duration) return;
+    const dur = getDur();
+    if (!isDraggingProgress || !dur) return;
     const percent = getPercent(e);
     progressFill.style.width = (percent * 100) + '%';
-    timeCurrent.textContent = formatTime(percent * player.duration);
+    timeCurrent.textContent = formatTime(percent * dur);
   }
   
   async function handleEnd(e) {
-    if (!isDraggingProgress || !player.duration) return;
+    const dur = getDur();
+    if (!isDraggingProgress || !dur) return;
     const percent = getPercent(e);
-    const targetTime = percent * player.duration;
-    player.currentTime = targetTime;
+    const targetTime = percent * dur;
     isDraggingProgress = false;
-    actualizarProgreso();
     
-    await fetch(`/rockola/${SALA}/sync_control`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        estado: player.paused ? 'pause' : 'play',
-        pos: targetTime,
-        ts: Date.now() / 1000,
-        modo: 'reproductor'
-      })
-    });
+    if (esYouTubeActual && ytPlayer && ytPlayerReady && typeof ytPlayer.seekTo === 'function') {
+      ytPlayer.seekTo(targetTime, true);
+    } else if (player) {
+      player.currentTime = targetTime;
+      actualizarProgreso();
+      
+      await fetch(`/rockola/${SALA}/sync_control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          estado: player.paused ? 'pause' : 'play',
+          pos: targetTime,
+          ts: Date.now() / 1000,
+          modo: 'reproductor'
+        })
+      });
+    }
   }
   
   progressBar.addEventListener('mousedown', handleStart);
@@ -2966,6 +3182,18 @@ function initProgressBarDrag() {
 }
 
 async function togglePlayPause() {
+  if (esYouTubeActual) {
+    if (ytPlayer && ytPlayerReady && typeof ytPlayer.getPlayerState === 'function') {
+      const state = ytPlayer.getPlayerState();
+      if (state === YT.PlayerState.PLAYING) {
+        ytPlayer.pauseVideo();
+      } else {
+        ytPlayer.playVideo();
+      }
+    }
+    return;
+  }
+
   if (!player.src && !cancionActual) return;
 
   if (!reproduciendo && cancionActual) {
@@ -3038,10 +3266,15 @@ function actualizarPlayPauseBtn(isPlaying) {
 }
 
 async function saltarActual() {
+  if (esYouTubeActual) {
+    detenerVideoYouTube();
+    esYouTubeActual = false;
+  }
+
   const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
   const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
   
-  if (crossfadeEnabled && currentCola && currentCola.length >= 2 && !transitioning) {
+  if (crossfadeEnabled && currentCola && currentCola.length >= 2 && !transitioning && !esYouTubeActual) {
     iniciarCrossfade(crossfadeDuration);
     return;
   }
@@ -3070,37 +3303,49 @@ async function saltarActual() {
 }
 
 async function anteriorCancion() {
-  if (!player.src) return;
-  
-  if (player.currentTime > 3) {
-    player.currentTime = 0;
-    actualizarProgreso();
-  } else {
-    try {
-      const res = await fetch(`/rockola/${SALA}/anterior`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ admin_key: ADMIN_KEY, modo: 'reproductor' })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        reproduciendo = false;
-        playPendiente = false;
-        cancionActual = null;
-        fallosPlay = 0;
-        player.pause();
-        player.removeAttribute('src');
-        if (transitioning) {
-          standbyPlayer.pause();
-          standbyPlayer.removeAttribute('src');
-          transitioning = false;
-        }
-        actualizarPlayPauseBtn(false);
-        verificarCola();
+  if (esYouTubeActual) {
+    if (ytPlayer && ytPlayerReady && typeof ytPlayer.getCurrentTime === 'function') {
+      const cur = ytPlayer.getCurrentTime() || 0;
+      if (cur > 3) {
+        ytPlayer.seekTo(0, true);
+        return;
       }
-    } catch(e) {
-      console.error(e);
     }
+    detenerVideoYouTube();
+    esYouTubeActual = false;
+  } else {
+    if (!player.src) return;
+    if (player.currentTime > 3) {
+      player.currentTime = 0;
+      actualizarProgreso();
+      return;
+    }
+  }
+
+  try {
+    const res = await fetch(`/rockola/${SALA}/anterior`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ admin_key: ADMIN_KEY, modo: 'reproductor' })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      reproduciendo = false;
+      playPendiente = false;
+      cancionActual = null;
+      fallosPlay = 0;
+      player.pause();
+      player.removeAttribute('src');
+      if (transitioning) {
+        standbyPlayer.pause();
+        standbyPlayer.removeAttribute('src');
+        transitioning = false;
+      }
+      actualizarPlayPauseBtn(false);
+      verificarCola();
+    }
+  } catch(e) {
+    console.error(e);
   }
 }
 

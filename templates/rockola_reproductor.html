@@ -1353,8 +1353,7 @@ function handlePlayerTimeUpdate(e) {
   const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
   const nextSong = currentCola && currentCola[1];
   const recienAgregada = (Date.now() - ultimaCancionAgregadaTs) < 5000;
-  // Solo aplicar fundido cruzado automático entre archivos de audio locales
-  if (crossfadeEnabled && !esYouTubeActual && nextSong && !nextSong.youtube_url && p.duration && (p.duration - p.currentTime <= crossfadeAnticipation) && !transitioning && !recienAgregada) {
+  if (crossfadeEnabled && nextSong && p.duration && (p.duration - p.currentTime <= crossfadeAnticipation) && !transitioning && !recienAgregada) {
     iniciarCrossfade(crossfadeDuration);
   }
 }
@@ -1557,6 +1556,16 @@ function iniciarYtProgresoTimer() {
         if (tCur) tCur.textContent = formatTime(curr);
         const tTot = document.getElementById('time-total');
         if (tTot) tTot.textContent = formatTime(dur);
+
+        const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
+        const crossfadeAnticipation = parseInt(document.getElementById('fundido-segundos').value) || 12;
+        const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
+        const nextSong = currentCola && currentCola[1];
+        const recienAgregada = (Date.now() - ultimaCancionAgregadaTs) < 5000;
+
+        if (crossfadeEnabled && nextSong && (dur - curr <= crossfadeAnticipation) && !transitioning && !recienAgregada) {
+          iniciarCrossfade(crossfadeDuration);
+        }
       }
     } catch(e) {}
   }, 500);
@@ -3414,26 +3423,39 @@ async function iniciarCrossfade(secs, targetSong = null) {
   
   transitioning = true;
   const oldActiveSongId = cancionActual;
+  const actualEsYt = esYouTubeActual;
+  const siguienteEsYt = !!nextSong.youtube_url;
   
-  console.log(`Iniciando fundido cruzado de ${secs}s para:`, nextSong.nombre);
+  console.log(`Iniciando fundido cruzado híbrido de ${secs}s para:`, nextSong.nombre, { actualEsYt, siguienteEsYt });
   
-  const resAudio = await obtenerUrlDeAudio(nextSong);
-  standbyPlayer.src = resAudio.url;
-  
-  standbyPlayer.load();
-  standbyPlayer.volume = 0;
-  
-  try {
-    await standbyPlayer.play();
-  } catch(err) {
-    console.error("Error al reproducir standby player:", err);
-    transitioning = false;
-    return;
+  if (siguienteEsYt) {
+    const nextVidId = extractYouTubeId(nextSong.youtube_url);
+    if (!nextVidId) {
+      console.warn('ID de YouTube inválido para fundido cruzado');
+      transitioning = false;
+      return;
+    }
+    reproducirVideoYouTube(nextVidId, nextSong);
+    if (ytPlayer && ytPlayerReady && typeof ytPlayer.setVolume === 'function') {
+      try { ytPlayer.setVolume(0); } catch(e) {}
+    }
+  } else {
+    try {
+      const resAudio = await obtenerUrlDeAudio(nextSong);
+      standbyPlayer.src = resAudio.url;
+      standbyPlayer.load();
+      standbyPlayer.volume = 0;
+      await standbyPlayer.play();
+    } catch(err) {
+      console.error("Error al reproducir standby player en fundido cruzado:", err);
+      transitioning = false;
+      return;
+    }
   }
   
   let fadeProgress = 0;
-  const startVol = volumenActual / 100;
-  const stepMs = (secs * 1000) / 20;
+  const maxLocalVol = volumenActual / 100;
+  const stepMs = Math.max(50, Math.floor((secs * 1000) / 20));
   
   const fadeInterval = setInterval(() => {
     fadeProgress += 0.05;
@@ -3441,16 +3463,28 @@ async function iniciarCrossfade(secs, targetSong = null) {
       fadeProgress = 1;
       clearInterval(fadeInterval);
       
-      // Asegurar volúmenes finales antes del swap y limpieza
-      player.volume = 0;
-      standbyPlayer.volume = startVol;
+      // Limpieza de la pista saliente
+      if (actualEsYt && !siguienteEsYt) {
+        detenerVideoYouTube();
+      } else if (!actualEsYt) {
+        player.volume = 0;
+        player.pause();
+        player.removeAttribute('src');
+      }
       
-      player.pause();
-      player.removeAttribute('src');
-      
-      const oldPlayer = player;
-      player = standbyPlayer;
-      standbyPlayer = oldPlayer;
+      // Ajuste final de la pista entrante
+      if (siguienteEsYt) {
+        esYouTubeActual = true;
+        if (ytPlayer && ytPlayerReady && typeof ytPlayer.setVolume === 'function') {
+          try { ytPlayer.setVolume(volumenActual); } catch(e) {}
+        }
+      } else {
+        esYouTubeActual = false;
+        standbyPlayer.volume = maxLocalVol;
+        const oldPlayer = player;
+        player = standbyPlayer;
+        standbyPlayer = oldPlayer;
+      }
       
       cancionActual = nextSong.id;
       reproduciendo = true;
@@ -3474,8 +3508,23 @@ async function iniciarCrossfade(secs, targetSong = null) {
       return;
     }
     
-    if (player) player.volume = startVol * (1 - fadeProgress);
-    if (standbyPlayer) standbyPlayer.volume = startVol * fadeProgress;
+    // Rampa de volumen para la pista saliente
+    if (actualEsYt) {
+      if (ytPlayer && ytPlayerReady && typeof ytPlayer.setVolume === 'function') {
+        try { ytPlayer.setVolume(Math.round(volumenActual * (1 - fadeProgress))); } catch(e) {}
+      }
+    } else {
+      if (player) player.volume = Math.max(0, maxLocalVol * (1 - fadeProgress));
+    }
+    
+    // Rampa de volumen para la pista entrante
+    if (siguienteEsYt) {
+      if (ytPlayer && ytPlayerReady && typeof ytPlayer.setVolume === 'function') {
+        try { ytPlayer.setVolume(Math.round(volumenActual * fadeProgress)); } catch(e) {}
+      }
+    } else {
+      if (standbyPlayer) standbyPlayer.volume = Math.min(maxLocalVol, maxLocalVol * fadeProgress);
+    }
   }, stepMs);
 }
 

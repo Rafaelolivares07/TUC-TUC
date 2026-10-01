@@ -476,7 +476,138 @@
 
 </div>
 
+<!-- ── OVERLAY GESTOR UNIDADES DE EMPAQUE / PRESENTACIONES ────────── -->
+<div id="overlay-presentaciones" class="overlay hidden" onclick="if(event.target===this)cerrarModalGestionPresentaciones()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:760px; width:95%; max-height:90vh; padding:22px; overflow:hidden; position:relative; box-sizing:border-box;">
+    <!-- Header -->
+    <div class="flex-shrink-0 flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">📦</span>
+        <div>
+          <h3 class="text-base sm:text-lg font-bold text-gray-800">Catálogo de Unidades de Empaque / Presentaciones</h3>
+          <p class="text-xs text-gray-400">Administra factores de conversión para tarros, bolsas, paquetes y embalajes.</p>
+        </div>
+      </div>
+      <button onclick="cerrarModalGestionPresentaciones()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none">&times;</button>
+    </div>
 
+    <!-- Barra de búsqueda y botón nuevo -->
+    <div class="flex-shrink-0 flex items-center justify-between gap-3 mb-3">
+      <input id="filtro-presentaciones-txt" type="text" placeholder="Buscar presentación o equivalencia..."
+             oninput="filtrarTablaPresentaciones()"
+             class="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64">
+      <button type="button" onclick="abrirModalCrearPresentacion()"
+              class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 shrink-0">
+        <span>+</span> Nueva Presentación
+      </button>
+    </div>
+
+    <!-- Tabla de presentaciones -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl bg-gray-50/50 p-1 mb-3" style="min-height:160px; max-height:50vh;">
+      <table class="w-full text-xs">
+        <thead class="sticky top-0 bg-gray-100/90 backdrop-blur-xs text-gray-600 uppercase text-[10px] select-none border-b border-gray-200 z-10">
+          <tr>
+            <th class="py-2 px-3 text-left">Presentación / Nombre</th>
+            <th class="py-2 px-3 text-right">Equivalencia (Unidades Base)</th>
+            <th class="py-2 px-3 text-center">Usos</th>
+            <th class="py-2 px-3 text-center" style="width:110px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-presentaciones-body">
+          <tr><td colspan="4" class="text-center py-6 text-gray-400">Cargando catálogo...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex-shrink-0 flex justify-end pt-2 border-t border-gray-100 mt-auto">
+      <button onclick="cerrarModalGestionPresentaciones()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── OVERLAY CREAR / EDITAR PRESENTACIÓN INTELIGENTE ────────────── -->
+<div id="overlay-crear-presentacion" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this)cerrarModalCrearPresentacion()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:500px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
+      <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5" id="modal-pres-form-titulo">
+        <span>📦 Nueva Unidad de Empaque</span>
+      </h3>
+      <button onclick="cerrarModalCrearPresentacion()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none">&times;</button>
+    </div>
+
+    <input type="hidden" id="modal-pres-id">
+    <input type="hidden" id="modal-pres-target-idx">
+
+    <div class="space-y-3 mb-4">
+      <div>
+        <label class="text-xs font-bold text-gray-700 block mb-1">Nombre o Descripción del Empaque *</label>
+        <input id="modal-pres-nombre" type="text" placeholder="Ej: Tarro x 1810 grs, Bolsa x 500, Paquete x 24"
+               oninput="onInputNombrePresentacion(this.value)"
+               class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500">
+        <p class="text-[11px] text-gray-400 mt-1">Tip: Si incluyes el número (ej: <code>x 1810</code> o <code>x 500</code>), el sistema lo extraerá automáticamente.</p>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-gray-700 block mb-1">Equivalencia / Contenido en Unidades Base *</label>
+        <div class="flex items-center gap-2">
+          <input id="modal-pres-equiv" type="number" min="0.0001" step="any" placeholder="1810"
+                 oninput="onInputEquivPresentacion()"
+                 class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-indigo-700 focus:ring-2 focus:ring-indigo-500">
+          <span class="text-xs font-semibold text-gray-500 shrink-0">unidades base (g, ml, u)</span>
+        </div>
+      </div>
+
+      <!-- Tarjeta de vista previa matemática -->
+      <div id="modal-pres-preview-box" class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 text-xs text-indigo-900 flex items-start gap-2">
+        <span class="text-base leading-none">⚖️</span>
+        <div>
+          <div class="font-bold mb-0.5">Fórmula de Conversión:</div>
+          <div id="modal-pres-preview-txt" class="font-mono text-indigo-800">1 Tarro x 1810 grs = 1.810 unidades base en inventario</div>
+        </div>
+      </div>
+
+      <!-- Alerta dinámica de equivalencia = 1 -->
+      <div id="modal-pres-alerta-uno" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2">
+        <span class="text-base leading-none">⚠️</span>
+        <div>
+          <span class="font-bold">¿Seguro que equivale a 1?</span> Estás asignando equivalencia 1. Si este tarro o paquete contiene varios gramos o unidades, ingresa el contenido real para que el costo y stock no se distorsionen.
+        </div>
+      </div>
+
+      <!-- Alerta si el nombre tiene un número que difiere -->
+      <div id="modal-pres-alerta-discrepancia" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-800 flex items-start justify-between gap-2">
+        <div class="flex items-start gap-2">
+          <span class="text-base leading-none">💡</span>
+          <div>
+            <span>El nombre menciona <b id="modal-pres-num-detectado">1810</b> pero la equivalencia dice <b id="modal-pres-num-ingresado">1</b>.</span>
+          </div>
+        </div>
+        <button type="button" onclick="aplicarNumeroDetectadoPresentacion()" class="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[10px] shrink-0">
+          Usar valor detectado
+        </button>
+      </div>
+
+      <!-- Opción de recálculo si está editando una presentación con movimientos -->
+      <div id="modal-pres-recalc-box" class="hidden bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900">
+        <label class="flex items-start gap-2 cursor-pointer select-none">
+          <input type="checkbox" id="modal-pres-recalcular-check" class="w-4 h-4 accent-emerald-600 rounded cursor-pointer mt-0.5" checked>
+          <div>
+            <span class="font-bold">Recalcular automáticamente compras y saldos históricos:</span>
+            <p class="text-[11px] text-emerald-700 mt-0.5">Ajusta las cantidades de entrada, Kardex y costo promedio de los productos que hayan utilizado esta presentación.</p>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex gap-3 justify-end pt-2 border-t border-gray-100">
+      <button onclick="cerrarModalCrearPresentacion()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+      <button onclick="guardarModalPresentacion()" id="btn-guardar-modal-pres" class="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-xs">Guardar Presentación</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── OVERLAY MODAL TARJETA ESTÁNDAR ──────────────────────────────── -->
 
@@ -1212,6 +1343,11 @@
           <span id="prod-total-inventario-val" class="font-mono font-bold text-sm text-rose-700">$0.00</span>
         </div>
 
+        <button type="button" onclick="abrirModalGestionPresentaciones()"
+                class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs md:text-sm rounded-xl border border-slate-200 transition shadow-2xs flex items-center gap-1.5">
+          <span>📦</span> Unidades de Empaque
+        </button>
+
         <button onclick="abrirModalProducto()"
                 class="px-4 py-2 bg-rose-500 text-white text-xs md:text-sm font-bold rounded-xl hover:bg-rose-600 transition shadow-xs flex items-center gap-1">
           <span>+</span> Producto
@@ -1451,6 +1587,10 @@
 
     <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
       <h2 class="font-bold text-gray-700">Registrar entrada de mercancía</h2>
+      <button type="button" onclick="abrirModalGestionPresentaciones()"
+              class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 flex items-center gap-1.5 transition shadow-2xs">
+        <span>📦</span> Unidades de Empaque / Presentaciones
+      </button>
     </div>
 
     <!-- Banner si está en modo Consolidado -->
@@ -4228,13 +4368,13 @@ function setupPresentacionAC(idx) {
 
       let html = d.presentaciones.map(p => `
 
-        <div class="ac-item text-left px-3 py-1.5 hover:bg-rose-50 cursor-pointer text-xs"
+        <div class="ac-item text-left px-3 py-1.5 hover:bg-indigo-50 cursor-pointer text-xs"
 
              data-id="${p.id}" data-nombre="${p.nombre.replace(/"/g,'&quot;')}" data-equiv="${p.equivalencia}">
 
           <div class="font-semibold text-gray-800">${p.nombre}</div>
 
-          <div class="text-[10px] text-gray-400">Equivale a: ${fmt(p.equivalencia)} unidades base</div>
+          <div class="text-[10px] text-indigo-600 font-mono">Equivale a: ${fmt(p.equivalencia)} unidades base</div>
 
         </div>
 
@@ -4248,7 +4388,15 @@ function setupPresentacionAC(idx) {
 
              data-crear="true" data-nombre="${q.replace(/"/g,'&quot;')}">
 
-          <span>➕ Crear:</span> <span class="italic text-gray-700">"${q}"</span>
+          <span>➕ Crear nueva presentación:</span> <span class="italic text-gray-700">"${q}"</span>
+
+        </div>
+
+        <div class="ac-item text-left px-3 py-1.5 hover:bg-indigo-50 cursor-pointer text-indigo-600 font-semibold border-t border-gray-100 text-xs flex items-center gap-1"
+
+             data-administrar="true">
+
+          <span>⚙️ Administrar unidades de empaque...</span>
 
         </div>
 
@@ -4268,74 +4416,21 @@ function setupPresentacionAC(idx) {
 
 
 
+          if (el.dataset.administrar) {
+
+            abrirModalGestionPresentaciones();
+
+            return;
+
+          }
+
+
+
           if (el.dataset.crear) {
 
             const nombre = el.dataset.nombre;
 
-            const equivStr = prompt(`Definir equivalencia para "${nombre}":\n\n¿A cuántas unidades base (gramos, mililitros, unidades) equivale esta presentación?`, "1");
-
-            if (equivStr === null) return;
-
-            const equiv = parseFloat(equivStr);
-
-            if (isNaN(equiv) || equiv <= 0) {
-
-              toast('Equivalencia inválida', false);
-
-              return;
-
-            }
-
-
-
-            try {
-
-              const res = await fetch('/api/inventario/presentaciones/crear', {
-
-                method: 'POST',
-
-                headers: {'Content-Type': 'application/json'},
-
-                body: JSON.stringify({ nombre, equivalencia: equiv })
-
-              });
-
-              const data = await res.json();
-
-              if (data.ok) {
-
-                hid.value = data.presentacion.id;
-
-                inp.value = data.presentacion.nombre;
-
-                const equivEl = document.getElementById(`ent-pres-equiv-${idx}`);
-
-                if (equivEl) {
-
-                  equivEl.value = data.presentacion.equivalencia || '1.0';
-
-                }
-
-                calcularCostoFilaEmpaque(idx, 'equiv');
-
-                toast(`✅ Creado: ${data.presentacion.nombre} (${data.presentacion.equivalencia})`);
-
-                // Auto-buscar cotización para este producto + proveedor + presentación
-                buscarCotizacionParaLinea(idx);
-
-              } else {
-
-                toast(data.error || 'Error al crear presentación', false);
-
-              }
-
-            } catch (err) {
-
-              console.error(err);
-
-              toast('Error de red al crear presentación', false);
-
-            }
+            abrirModalCrearPresentacion(nombre, idx);
 
             return;
 
@@ -4357,7 +4452,6 @@ function setupPresentacionAC(idx) {
 
           calcularCostoFilaEmpaque(idx, 'equiv');
 
-          // Auto-buscar cotización para este producto + proveedor + presentación
           buscarCotizacionParaLinea(idx);
 
         });
@@ -4371,6 +4465,632 @@ function setupPresentacionAC(idx) {
       console.error(err);
 
     }
+
+  }
+
+}
+
+
+
+// ── GESTIÓN DE UNIDADES DE EMPAQUE / PRESENTACIONES ─────────────────────────
+
+let catalogoPresentaciones = [];
+
+let detectedNumberInPresentation = null;
+
+
+
+async function abrirModalGestionPresentaciones() {
+
+  document.getElementById('overlay-presentaciones')?.classList.remove('hidden');
+
+  await cargarCatalogoPresentaciones();
+
+}
+
+
+
+function cerrarModalGestionPresentaciones() {
+
+  document.getElementById('overlay-presentaciones')?.classList.add('hidden');
+
+}
+
+
+
+async function cargarCatalogoPresentaciones() {
+
+  const tbody = document.getElementById('tabla-presentaciones-body');
+
+  if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400">Cargando presentaciones...</td></tr>';
+
+  try {
+
+    const r = await fetch('/api/inventario/presentaciones/todas');
+
+    const d = await r.json();
+
+    if (!d.ok) {
+
+      if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-rose-500">${d.error || 'Error al cargar'}</td></tr>`;
+
+      return;
+
+    }
+
+    catalogoPresentaciones = d.presentaciones || [];
+
+    renderTablaPresentaciones(catalogoPresentaciones);
+
+  } catch(e) {
+
+    console.error(e);
+
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-rose-500">Error de red al cargar presentaciones</td></tr>';
+
+  }
+
+}
+
+
+
+function renderTablaPresentaciones(lista) {
+
+  const tbody = document.getElementById('tabla-presentaciones-body');
+
+  if (!tbody) return;
+
+  if (!lista.length) {
+
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400">No se encontraron unidades de empaque.</td></tr>';
+
+    return;
+
+  }
+
+
+
+  tbody.innerHTML = lista.map(p => {
+
+    const isUnidad = p.nombre.toLowerCase() === 'unidad';
+
+    const usosBadge = p.total_usos > 0 
+
+      ? `<span class="px-2.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 font-semibold rounded-full text-[11px]" title="${p.uso_movimientos} movimientos, ${p.uso_cotizaciones} cotizaciones">${p.total_usos} uso${p.total_usos === 1 ? '' : 's'}</span>`
+
+      : `<span class="px-2.5 py-0.5 bg-gray-100 text-gray-400 rounded-full text-[11px]">Sin uso</span>`;
+
+
+
+    const equivFmt = Number(p.equivalencia).toLocaleString('es-CO', {maximumFractionDigits: 4});
+
+
+
+    return `
+
+      <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+
+        <td class="py-2.5 px-3 text-left">
+
+          <div class="font-bold text-gray-800">${p.nombre}</div>
+
+          ${isUnidad ? '<span class="text-[10px] text-emerald-600 font-bold">Unidad Base del Sistema</span>' : ''}
+
+        </td>
+
+        <td class="py-2.5 px-3 text-right font-mono font-bold text-indigo-700">
+
+          ${equivFmt}
+
+        </td>
+
+        <td class="py-2.5 px-3 text-center">
+
+          ${usosBadge}
+
+        </td>
+
+        <td class="py-2.5 px-3 text-center">
+
+          <div class="flex items-center justify-center gap-1.5">
+
+            <button type="button" onclick="editarPresentacionDesdeModal(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.equivalencia}, ${p.uso_movimientos})"
+
+                    class="p-1.5 hover:bg-indigo-50 text-indigo-600 rounded-lg transition" title="Editar presentación">
+
+              ✏️
+
+            </button>
+
+            ${!isUnidad ? `
+
+              <button type="button" onclick="eliminarPresentacion(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.total_usos})"
+
+                      class="p-1.5 hover:bg-rose-50 text-rose-600 rounded-lg transition" title="Eliminar presentación">
+
+                🗑️
+
+              </button>
+
+            ` : ''}
+
+          </div>
+
+        </td>
+
+      </tr>
+
+    `;
+
+  }).join('');
+
+}
+
+
+
+function filtrarTablaPresentaciones() {
+
+  const q = (document.getElementById('filtro-presentaciones-txt')?.value || '').toLowerCase().trim();
+
+  if (!q) {
+
+    renderTablaPresentaciones(catalogoPresentaciones);
+
+    return;
+
+  }
+
+  const filtradas = catalogoPresentaciones.filter(p => 
+
+    p.nombre.toLowerCase().includes(q) || p.equivalencia.toString().includes(q)
+
+  );
+
+  renderTablaPresentaciones(filtradas);
+
+}
+
+
+
+function parseNumeroPresentacion(nombre) {
+
+  if (!nombre) return null;
+
+  const m = nombre.match(/(?:x|\*|por|de|\/)?\s*([0-9]+(?:[\.,][0-9]+)?)\s*(?:grs?|g|kg|kilos?|ml|lts?|litros?|mg|mlgrs?|unid|und|u|unidades)?/i);
+
+  if (m && m[1]) {
+
+    const numStr = m[1].replace(',', '.');
+
+    const val = parseFloat(numStr);
+
+    if (!isNaN(val) && val > 0) return val;
+
+  }
+
+  const m2 = nombre.match(/([0-9]+(?:[\.,][0-9]+)?)/);
+
+  if (m2 && m2[1]) {
+
+    const val = parseFloat(m2[1].replace(',', '.'));
+
+    if (!isNaN(val) && val > 0) return val;
+
+  }
+
+  return null;
+
+}
+
+
+
+function abrirModalCrearPresentacion(nombreInicial = '', targetIdx = null, presId = null, equivInicial = null, usoMovimientos = 0) {
+
+  const modal = document.getElementById('overlay-crear-presentacion');
+
+  if (!modal) return;
+
+
+
+  document.getElementById('modal-pres-id').value = presId || '';
+
+  document.getElementById('modal-pres-target-idx').value = targetIdx !== null && targetIdx !== undefined ? targetIdx : '';
+
+  
+
+  const titulo = document.getElementById('modal-pres-form-titulo');
+
+  if (titulo) {
+
+    titulo.innerHTML = presId ? '<span>✏️ Editar Unidad de Empaque</span>' : '<span>📦 Nueva Unidad de Empaque</span>';
+
+  }
+
+
+
+  const nombreEl = document.getElementById('modal-pres-nombre');
+
+  const equivEl = document.getElementById('modal-pres-equiv');
+
+  
+
+  nombreEl.value = nombreInicial || '';
+
+  
+
+  if (equivInicial !== null && equivInicial > 0) {
+
+    equivEl.value = equivInicial;
+
+  } else if (nombreInicial) {
+
+    const autoNum = parseNumeroPresentacion(nombreInicial);
+
+    equivEl.value = autoNum !== null ? autoNum : '1';
+
+  } else {
+
+    equivEl.value = '';
+
+  }
+
+
+
+  const recalcBox = document.getElementById('modal-pres-recalc-box');
+
+  if (recalcBox) {
+
+    if (presId && usoMovimientos > 0) {
+
+      recalcBox.classList.remove('hidden');
+
+      document.getElementById('modal-pres-recalcular-check').checked = true;
+
+    } else {
+
+      recalcBox.classList.add('hidden');
+
+      document.getElementById('modal-pres-recalcular-check').checked = false;
+
+    }
+
+  }
+
+
+
+  actualizarEstadoFormularioPresentacion();
+
+  modal.classList.remove('hidden');
+
+  nombreEl.focus();
+
+}
+
+
+
+function cerrarModalCrearPresentacion() {
+
+  document.getElementById('overlay-crear-presentacion')?.classList.add('hidden');
+
+}
+
+
+
+function onInputNombrePresentacion(val) {
+
+  const equivEl = document.getElementById('modal-pres-equiv');
+
+  const autoNum = parseNumeroPresentacion(val);
+
+  detectedNumberInPresentation = autoNum;
+
+  
+
+  if (autoNum !== null && (!equivEl.value || equivEl.value === '1')) {
+
+    equivEl.value = autoNum;
+
+  }
+
+  actualizarEstadoFormularioPresentacion();
+
+}
+
+
+
+function onInputEquivPresentacion() {
+
+  actualizarEstadoFormularioPresentacion();
+
+}
+
+
+
+function aplicarNumeroDetectadoPresentacion() {
+
+  if (detectedNumberInPresentation !== null) {
+
+    document.getElementById('modal-pres-equiv').value = detectedNumberInPresentation;
+
+    actualizarEstadoFormularioPresentacion();
+
+  }
+
+}
+
+
+
+function actualizarEstadoFormularioPresentacion() {
+
+  const nombre = (document.getElementById('modal-pres-nombre')?.value || '').trim();
+
+  const equivVal = parseFloat(document.getElementById('modal-pres-equiv')?.value || 0);
+
+  
+
+  const previewTxt = document.getElementById('modal-pres-preview-txt');
+
+  if (previewTxt) {
+
+    const equivFmt = isNaN(equivVal) || equivVal <= 0 ? '?' : equivVal.toLocaleString('es-CO', {maximumFractionDigits: 4});
+
+    previewTxt.textContent = `1 ${nombre || 'Empaque'} = ${equivFmt} unidades base en inventario`;
+
+  }
+
+
+
+  const alertaUno = document.getElementById('modal-pres-alerta-uno');
+
+  if (alertaUno) {
+
+    if (equivVal === 1 && nombre.toLowerCase() !== 'unidad' && nombre.length > 0) {
+
+      alertaUno.classList.remove('hidden');
+
+    } else {
+
+      alertaUno.classList.add('hidden');
+
+    }
+
+  }
+
+
+
+  const autoNum = parseNumeroPresentacion(nombre);
+
+  detectedNumberInPresentation = autoNum;
+
+  const alertaDiscrepancia = document.getElementById('modal-pres-alerta-discrepancia');
+
+  if (alertaDiscrepancia) {
+
+    if (autoNum !== null && equivVal > 0 && Math.abs(autoNum - equivVal) > 0.001) {
+
+      alertaDiscrepancia.classList.remove('hidden');
+
+      document.getElementById('modal-pres-num-detectado').textContent = autoNum.toLocaleString('es-CO');
+
+      document.getElementById('modal-pres-num-ingresado').textContent = equivVal.toLocaleString('es-CO');
+
+    } else {
+
+      alertaDiscrepancia.classList.add('hidden');
+
+    }
+
+  }
+
+}
+
+
+
+async function guardarModalPresentacion() {
+
+  const presId = document.getElementById('modal-pres-id')?.value;
+
+  const targetIdx = document.getElementById('modal-pres-target-idx')?.value;
+
+  const nombre = (document.getElementById('modal-pres-nombre')?.value || '').trim();
+
+  const equiv = parseFloat(document.getElementById('modal-pres-equiv')?.value || 0);
+
+  const recalcular = document.getElementById('modal-pres-recalcular-check')?.checked || false;
+
+
+
+  if (!nombre) {
+
+    toast('El nombre de la presentación es requerido', false);
+
+    return;
+
+  }
+
+  if (isNaN(equiv) || equiv <= 0) {
+
+    toast('La equivalencia debe ser un número mayor a cero', false);
+
+    return;
+
+  }
+
+
+
+  const btn = document.getElementById('btn-guardar-modal-pres');
+
+  if (btn) btn.disabled = true;
+
+
+
+  try {
+
+    let res, data;
+
+    if (presId) {
+
+      res = await fetch(`/api/inventario/presentaciones/${presId}/editar`, {
+
+        method: 'POST',
+
+        headers: {'Content-Type': 'application/json'},
+
+        body: JSON.stringify({ nombre, equivalencia: equiv, recalcular_movimientos: recalcular })
+
+      });
+
+    } else {
+
+      res = await fetch('/api/inventario/presentaciones/crear', {
+
+        method: 'POST',
+
+        headers: {'Content-Type': 'application/json'},
+
+        body: JSON.stringify({ nombre, equivalencia: equiv })
+
+      });
+
+    }
+
+    data = await res.json();
+
+    if (!data.ok) {
+
+      toast(data.error || 'Error al guardar presentación', false);
+
+      if (btn) btn.disabled = false;
+
+      return;
+
+    }
+
+
+
+    toast(`✅ Presentación ${presId ? 'actualizada' : 'creada'}: ${data.presentacion.nombre} (${data.presentacion.equivalencia})`);
+
+    cerrarModalCrearPresentacion();
+
+
+
+    if (targetIdx !== '' && targetIdx !== null && targetIdx !== undefined) {
+
+      const hid = document.getElementById(`ent-pres-id-${targetIdx}`);
+
+      const inp = document.getElementById(`ent-pres-${targetIdx}`);
+
+      const equivEl = document.getElementById(`ent-pres-equiv-${targetIdx}`);
+
+      if (hid) hid.value = data.presentacion.id;
+
+      if (inp) inp.value = data.presentacion.nombre;
+
+      if (equivEl) equivEl.value = data.presentacion.equivalencia;
+
+      calcularCostoFilaEmpaque(targetIdx, 'equiv');
+
+      buscarCotizacionParaLinea(targetIdx);
+
+    }
+
+
+
+    if (!document.getElementById('overlay-presentaciones')?.classList.contains('hidden')) {
+
+      await cargarCatalogoPresentaciones();
+
+    }
+
+    if (presId && recalcular) {
+
+      cargarProductos();
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    toast('Error de red al procesar presentación', false);
+
+  } finally {
+
+    if (btn) btn.disabled = false;
+
+  }
+
+}
+
+
+
+function editarPresentacionDesdeModal(id, nombre, equiv, usoMovimientos) {
+
+  abrirModalCrearPresentacion(nombre, null, id, equiv, usoMovimientos);
+
+}
+
+
+
+async function eliminarPresentacion(id, nombre, totalUsos) {
+
+  if (totalUsos > 0) {
+
+    if (!confirm(`La presentación "${nombre}" está en uso en compras o cotizaciones.\n\n¿Deseas reemplazarla por la "Unidad" base y eliminarla?`)) {
+
+      return;
+
+    }
+
+  } else {
+
+    if (!confirm(`¿Estás seguro de eliminar la presentación "${nombre}"?`)) {
+
+      return;
+
+    }
+
+  }
+
+
+
+  try {
+
+    const uPres = catalogoPresentaciones.find(p => p.nombre.toLowerCase() === 'unidad');
+
+    const reemplazar_por_id = totalUsos > 0 ? (uPres ? uPres.id : 1) : null;
+
+
+
+    const res = await fetch(`/api/inventario/presentaciones/${id}/eliminar`, {
+
+      method: 'POST',
+
+      headers: {'Content-Type': 'application/json'},
+
+      body: JSON.stringify({ reemplazar_por_id })
+
+    });
+
+    const d = await res.json();
+
+    if (d.ok) {
+
+      toast('Presentación eliminada correctamente');
+
+      await cargarCatalogoPresentaciones();
+
+    } else {
+
+      toast(d.error || 'No se pudo eliminar la presentación', false);
+
+    }
+
+  } catch(e) {
+
+    console.error(e);
+
+    toast('Error de red al eliminar presentación', false);
 
   }
 

@@ -6813,6 +6813,195 @@ def api_presentaciones_crear():
         conn.close()
 
 
+@bp.route('/api/inventario/presentaciones/todas')
+def api_presentaciones_todas():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        rows = conn.execute("""
+            SELECT p.id, p.nombre, p.equivalencia, p.created_at,
+                   COALESCE((SELECT COUNT(*) FROM movimientos_inventario m WHERE m.presentacion_id = p.id), 0) as uso_movimientos,
+                   COALESCE((SELECT COUNT(*) FROM cotizaciones_compras c WHERE c.presentacion_id = p.id), 0) as uso_cotizaciones
+            FROM presentaciones p
+            ORDER BY p.nombre ASC
+        """).fetchall()
+
+        return jsonify({
+            'ok': True,
+            'presentaciones': [{
+                'id': r['id'],
+                'nombre': r['nombre'],
+                'equivalencia': float(r['equivalencia']),
+                'uso_movimientos': int(r['uso_movimientos']),
+                'uso_cotizaciones': int(r['uso_cotizaciones']),
+                'total_usos': int(r['uso_movimientos']) + int(r['uso_cotizaciones'])
+            } for r in rows]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/presentaciones/<int:pres_id>/editar', methods=['POST', 'PUT'])
+def api_presentaciones_editar(pres_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    nombre = (data.get('nombre') or '').strip()
+    try:
+        equivalencia = Decimal(str(data.get('equivalencia') or 1.0))
+    except Exception:
+        equivalencia = Decimal('1.0')
+    recalcular = bool(data.get('recalcular_movimientos', False))
+
+    if not nombre or equivalencia <= 0:
+        return jsonify({'ok': False, 'error': 'Nombre y equivalencia válidos requeridos'}), 400
+
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        old_pres = conn.execute("SELECT id, nombre, equivalencia FROM presentaciones WHERE id = %s", (pres_id,)).fetchone()
+        if not old_pres:
+            return jsonify({'ok': False, 'error': 'Presentación no encontrada'}), 404
+
+        old_equiv = Decimal(str(old_pres['equivalencia']))
+
+        conn.execute("""
+            UPDATE presentaciones
+            SET nombre = %s, equivalencia = %s
+            WHERE id = %s
+        """, (nombre, float(equivalencia), pres_id))
+
+        prods_recalculados = []
+        if recalcular and old_equiv != equivalencia and old_equiv > 0:
+            movs = conn.execute("""
+                SELECT id, producto_id, cantidad, valor_total, valor_unitario
+                FROM movimientos_inventario
+                WHERE presentacion_id = %s AND LOWER(tipo) = 'entrada'
+            """, (pres_id,)).fetchall()
+
+            ratio = equivalencia / old_equiv
+            affected_prods = set()
+            for m in movs:
+                affected_prods.add(m['producto_id'])
+                new_cant = Decimal(str(m['cantidad'])) * ratio
+                v_tot = Decimal(str(m['valor_total'] or 0))
+                new_vu = (v_tot / new_cant) if new_cant > 0 else Decimal('0')
+                conn.execute("""
+                    UPDATE movimientos_inventario
+                    SET cantidad = %s, valor_unitario = %s
+                    WHERE id = %s
+                """, (float(new_cant), float(new_vu), m['id']))
+
+            for pid in affected_prods:
+                p_movs = conn.execute("""
+                    SELECT id, tipo, motivo, cantidad, valor_unitario, valor_total
+                    FROM movimientos_inventario
+                    WHERE producto_id = %s
+                    ORDER BY id ASC
+                """, (pid,)).fetchall()
+
+                c_stock = Decimal('0')
+                c_cost = Decimal('0')
+                for pm in p_movs:
+                    pm_tipo = (pm['tipo'] or '').lower()
+                    pm_motivo = (pm['motivo'] or '').lower()
+                    pm_cant = Decimal(str(pm['cantidad'] or 0))
+                    s_ant = c_stock
+                    if pm_tipo == 'entrada' or (pm_tipo == 'ajuste' and pm_motivo != 'ajuste_negativo'):
+                        pm_tot = Decimal(str(pm['valor_total'] or (pm_cant * Decimal(str(pm['valor_unitario'] or 0)))))
+                        pm_vu = pm_tot / pm_cant if pm_cant > 0 else Decimal('0')
+                        tot_before = c_stock * c_cost
+                        new_s = c_stock + pm_cant
+                        c_cost = ((tot_before + pm_tot) / new_s) if new_s > 0 else pm_vu
+                        c_stock = new_s
+                        conn.execute("""
+                            UPDATE movimientos_inventario
+                            SET stock_anterior = %s, stock_nuevo = %s, costo_und = %s, valor_unitario = %s, valor_total = %s
+                            WHERE id = %s
+                        """, (float(s_ant), float(c_stock), float(c_cost), float(pm_vu), float(pm_tot), pm['id']))
+                    else:
+                        c_stock = c_stock - pm_cant
+                        s_vu = c_cost
+                        s_tot = pm_cant * s_vu
+                        conn.execute("""
+                            UPDATE movimientos_inventario
+                            SET stock_anterior = %s, stock_nuevo = %s, costo_und = %s, valor_unitario = %s, valor_total = %s
+                            WHERE id = %s
+                        """, (float(s_ant), float(c_stock), float(c_cost), float(s_vu), float(s_tot), pm['id']))
+
+                val_exist = c_stock * c_cost
+                conn.execute("""
+                    UPDATE saldos_inventario
+                    SET stock = %s, costo_und = %s, valor_existencia = %s, updated_at = NOW()
+                    WHERE producto_id = %s
+                """, (float(c_stock), float(c_cost), float(val_exist), pid))
+                conn.execute("""
+                    UPDATE productos
+                    SET costo = %s
+                    WHERE id = %s
+                """, (float(c_cost), pid))
+                prods_recalculados.append(pid)
+
+        conn.commit()
+        return jsonify({
+            'ok': True,
+            'presentacion': {'id': pres_id, 'nombre': nombre, 'equivalencia': float(equivalencia)},
+            'recalculados': len(prods_recalculados)
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/presentaciones/<int:pres_id>/eliminar', methods=['POST', 'DELETE'])
+def api_presentaciones_eliminar(pres_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    reemplazar_por_id = _int_o_none(data.get('reemplazar_por_id'))
+
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        p = conn.execute("SELECT id, nombre FROM presentaciones WHERE id = %s", (pres_id,)).fetchone()
+        if not p:
+            return jsonify({'ok': False, 'error': 'Presentación no encontrada'}), 404
+
+        if p['nombre'].lower() == 'unidad':
+            return jsonify({'ok': False, 'error': 'La presentación "Unidad" base del sistema no puede eliminarse'}), 400
+
+        uso_m = conn.execute("SELECT COUNT(*) as c FROM movimientos_inventario WHERE presentacion_id = %s", (pres_id,)).fetchone()['c']
+        uso_c = conn.execute("SELECT COUNT(*) as c FROM cotizaciones_compras WHERE presentacion_id = %s", (pres_id,)).fetchone()['c']
+
+        if (uso_m > 0 or uso_c > 0) and not reemplazar_por_id:
+            return jsonify({
+                'ok': False,
+                'en_uso': True,
+                'uso_movimientos': uso_m,
+                'uso_cotizaciones': uso_c,
+                'error': f'Esta presentación está en uso en {uso_m} movimientos y {uso_c} cotizaciones. Debes seleccionar otra presentación para reemplazarla o reasignarla.'
+            }), 400
+
+        if reemplazar_por_id:
+            conn.execute("UPDATE movimientos_inventario SET presentacion_id = %s WHERE presentacion_id = %s", (reemplazar_por_id, pres_id))
+            conn.execute("UPDATE cotizaciones_compras SET presentacion_id = %s WHERE presentacion_id = %s", (reemplazar_por_id, pres_id))
+
+        conn.execute("DELETE FROM presentaciones WHERE id = %s", (pres_id,))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/producto/<int:producto_id>/proveedor/<int:proveedor_id>/ultima-presentacion')
 def api_ultima_presentacion(negocio_id, producto_id, proveedor_id):
     if 'usuario_id' not in session:

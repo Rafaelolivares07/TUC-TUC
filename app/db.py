@@ -103,6 +103,11 @@ def init_db(app):
     _db_url = os.environ.get('DATABASE_URL', '')
     if _db_url.startswith('postgres://'):
         _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+    if 'localhost' in _db_url:
+        _db_url = _db_url.replace('localhost', '127.0.0.1')
+    if ('127.0.0.1' in _db_url or 'localhost' in _db_url) and 'sslmode' not in _db_url:
+        separator = '&' if '?' in _db_url else '?'
+        _db_url = f"{_db_url}{separator}sslmode=disable"
 
 
 def get_db_connection():

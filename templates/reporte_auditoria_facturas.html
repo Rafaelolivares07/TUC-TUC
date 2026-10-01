@@ -785,7 +785,10 @@
                 `MENSAJE: ${errMsg}`;
         }
 
-        // ── Consulta al Backend ──────────────────────────────────────────────
+        // ── Consulta al Backend (Flujo Asíncrono no bloqueante) ──────────────
+        let _pollTimer = null;
+        let _consecutiveErrors = 0;
+
         function consultarAuditoria() {
             const agente = getAgenteActivo();
             if (!agente) { alert('Selecciona un agente.'); return; }
@@ -824,6 +827,10 @@
 
             const spinner = document.getElementById('spinner');
             spinner.classList.remove('hidden');
+            document.getElementById('spinner-status').textContent = 'Iniciando auditoría en el agente...';
+            
+            if (_pollTimer) clearTimeout(_pollTimer);
+            if (_elapsedInterval) clearInterval(_elapsedInterval);
             _startTime = Date.now();
             _elapsedInterval = setInterval(() => {
                 const s = ((Date.now() - _startTime) / 1000).toFixed(1);
@@ -833,75 +840,140 @@
             _alegraCache = {};
             _expandidas.clear();
 
-            fetch(`/admin/api/reporte/${REPORTE_ID}`, {
+            const btnConsultar = document.getElementById('btn-consultar');
+            if (btnConsultar) {
+                btnConsultar.disabled = true;
+                btnConsultar.classList.add('opacity-75', 'cursor-not-allowed');
+            }
+
+            fetch(`/admin/api/reporte/${REPORTE_ID}/iniciar`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(filtros)
             })
             .then(async r => {
-                const text = await r.text();
-                let data;
-                try {
-                    data = JSON.parse(text);
-                } catch (e) {
-                    throw new Error(`Error en el servidor (${r.status} ${r.statusText || 'Timeout / Inesperado'})`);
+                if (r.status === 401 || r.redirected || (r.headers.get('content-type') || '').includes('text/html')) {
+                    throw new Error('Sesión expirada. Por favor recarga o inicia sesión nuevamente.');
                 }
+                const data = await r.json();
+                if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
                 return data;
             })
             .then(data => {
-                const tEndFrontend = Date.now();
-                const tFrontTotalMs = tEndFrontend - tStartFrontend;
-                clearInterval(_elapsedInterval);
-                spinner.classList.add('hidden');
-                
-                if (!data.ok) {
-                    const errMsg = data.error || 'No se pudo consultar';
-                    renderizarErrorTelemetria(errMsg, tFrontTotalMs, filtros);
-                    alert('Aviso: ' + errMsg);
-                    return;
-                }
-                const rawRows = data.filas || data.rows;
-                if (!Array.isArray(rawRows)) {
-                    const errMsg = (typeof rawRows === 'object' && rawRows && rawRows.error) || 'Respuesta inesperada del servidor';
-                    renderizarErrorTelemetria(errMsg, tFrontTotalMs, filtros);
-                    alert('Aviso: ' + errMsg);
-                    return;
-                }
-                _rows = rawRows;
-
-                const tele = data._telemetry || {};
-                const srv = tele.server || {};
-                const agt = tele.agent || {};
-
-                console.group('%c[LOG 2 - SERVIDOR] Telemetría admin.tuc-tuc.co', 'color: #6366f1; font-weight: bold;');
-                console.log('Consulta ID:', srv.consulta_id);
-                console.log('Tiempo Total Servidor:', srv.server_total_ms != null ? srv.server_total_ms + ' ms' : '--');
-                console.log('Tiempo en Cola (Pickup):', srv.agent_pickup_ms != null ? srv.agent_pickup_ms + ' ms' : '--');
-                console.log('Tiempo Ejecución Agente:', srv.agent_exec_ms != null ? srv.agent_exec_ms + ' ms' : '--');
-                console.groupEnd();
-
-                console.group('%c[LOG 3 - AGENTE LOCAL] Telemetría ' + agente, 'color: #10b981; font-weight: bold;');
-                console.log('Versión Agente:', agt.agent_version);
-                console.log('Lecturas DBF:', agt.timings_dbf);
-                console.log('Tiempo Cálculo:', agt.calc_ms != null ? agt.calc_ms + ' ms' : '--');
-                console.log('Tiempo Total Agente:', agt.agent_total_ms != null ? agt.agent_total_ms + ' ms' : '--');
-                console.groupEnd();
-
-                renderizarTelemetria(data, tFrontTotalMs, filtros);
-                aplicarFiltrosLocales();
-                document.getElementById('panel-kpi').classList.remove('hidden');
-                document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
-                document.getElementById('vista-grilla').classList.remove('hidden');
-                document.getElementById('btn-excel').classList.remove('hidden');
-                document.getElementById('btn-alegra').classList.remove('hidden');
+                document.getElementById('spinner-status').textContent = 'Agente analizando asientos y comprobantes de facturas...';
+                _consecutiveErrors = 0;
+                pollResultadoAuditoria(data.consulta_id, filtros, tStartFrontend);
             })
             .catch(err => {
                 const tEndFrontend = Date.now();
                 const tFrontTotalMs = tEndFrontend - tStartFrontend;
                 clearInterval(_elapsedInterval);
                 spinner.classList.add('hidden');
+                if (btnConsultar) {
+                    btnConsultar.disabled = false;
+                    btnConsultar.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
                 renderizarErrorTelemetria(err.message || String(err), tFrontTotalMs, filtros);
                 alert('Aviso: ' + (err.message || err));
+            });
+        }
+
+        function pollResultadoAuditoria(consultaId, filtros, tStartFrontend) {
+            const sec = Math.floor((Date.now() - _startTime) / 1000);
+            const spinner = document.getElementById('spinner');
+            const btnConsultar = document.getElementById('btn-consultar');
+            if (sec > 120) {
+                clearInterval(_elapsedInterval);
+                spinner.classList.add('hidden');
+                if (btnConsultar) {
+                    btnConsultar.disabled = false;
+                    btnConsultar.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
+                const tFrontTotalMs = Date.now() - tStartFrontend;
+                const errMsg = 'La consulta superó el tiempo límite de tolerancia (120s). Verifica que el agente esté activo y reintenta.';
+                renderizarErrorTelemetria(errMsg, tFrontTotalMs, filtros);
+                alert(errMsg);
+                return;
+            }
+
+            fetch(`/admin/api/reporte/resultado/${consultaId}?_ts=${Date.now()}`, { cache: 'no-store' })
+            .then(async r => {
+                if (r.status === 401 || (r.headers.get('content-type') || '').includes('text/html')) {
+                    throw new Error('Sesión expirada. Inicia sesión nuevamente.');
+                }
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return await r.json();
+            })
+            .then(data => {
+                _consecutiveErrors = 0;
+                if (!data.ok) throw new Error(data.error || 'Error en la respuesta');
+
+                if (data.estado === 'pendiente' || data.estado === 'procesando') {
+                    if (data.estado === 'procesando') {
+                        document.getElementById('spinner-status').textContent = 'Agente procesando y auditando facturas...';
+                    }
+                    _pollTimer = setTimeout(() => pollResultadoAuditoria(consultaId, filtros, tStartFrontend), 1500);
+                    return;
+                }
+
+                if (data.estado === 'error') {
+                    throw new Error(data.error || 'Error en el agente');
+                }
+
+                if (data.estado === 'lista') {
+                    const tEndFrontend = Date.now();
+                    const tFrontTotalMs = tEndFrontend - tStartFrontend;
+                    clearInterval(_elapsedInterval);
+                    spinner.classList.add('hidden');
+                    if (btnConsultar) {
+                        btnConsultar.disabled = false;
+                        btnConsultar.classList.remove('opacity-75', 'cursor-not-allowed');
+                    }
+
+                    const rawRows = data.filas || data.rows || [];
+                    if (!Array.isArray(rawRows)) {
+                        const errMsg = (typeof rawRows === 'object' && rawRows && rawRows.error) || 'Respuesta inesperada del servidor';
+                        renderizarErrorTelemetria(errMsg, tFrontTotalMs, filtros);
+                        alert('Aviso: ' + errMsg);
+                        return;
+                    }
+                    _rows = rawRows;
+
+                    const tele = data._telemetry || {};
+                    const srv = tele.server || {};
+                    const agt = tele.agent || {};
+
+                    console.group('%c[LOG 2 - SERVIDOR] Telemetría admin.tuc-tuc.co', 'color: #6366f1; font-weight: bold;');
+                    console.log('Consulta ID:', consultaId);
+                    console.log('Tiempo Total Servidor:', data.elapsed != null ? (data.elapsed * 1000).toFixed(0) + ' ms' : '--');
+                    console.groupEnd();
+
+                    renderizarTelemetria(data, tFrontTotalMs, filtros);
+                    aplicarFiltrosLocales();
+                    document.getElementById('panel-kpi').classList.remove('hidden');
+                    document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
+                    document.getElementById('vista-grilla').classList.remove('hidden');
+                    document.getElementById('btn-excel').classList.remove('hidden');
+                    document.getElementById('btn-alegra').classList.remove('hidden');
+                }
+            })
+            .catch(err => {
+                _consecutiveErrors++;
+                console.warn(`[poll ${consultaId}] Reintento ${_consecutiveErrors}/12:`, err.message);
+                if (_consecutiveErrors < 12) {
+                    _pollTimer = setTimeout(() => pollResultadoAuditoria(consultaId, filtros, tStartFrontend), 1500);
+                } else {
+                    const tEndFrontend = Date.now();
+                    const tFrontTotalMs = tEndFrontend - tStartFrontend;
+                    clearInterval(_elapsedInterval);
+                    spinner.classList.add('hidden');
+                    if (btnConsultar) {
+                        btnConsultar.disabled = false;
+                        btnConsultar.classList.remove('opacity-75', 'cursor-not-allowed');
+                    }
+                    renderizarErrorTelemetria(err.message || String(err), tFrontTotalMs, filtros);
+                    alert('Aviso: ' + (err.message || err));
+                }
             });
         }
 

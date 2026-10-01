@@ -357,6 +357,17 @@
                 return;
             }
 
+        let _pollTimer = null;
+        let _consecutiveErrors = 0;
+        let _startTime = 0;
+
+        function consultarVentas() {
+            const agente = getAgenteActivo();
+            if (!agente) {
+                alert('Selecciona un agente.');
+                return;
+            }
+
             const filtros = {
                 empresa: document.getElementById('f-empresa').value,
                 desde: document.getElementById('f-desde').value,
@@ -375,40 +386,93 @@
             document.getElementById('btn-excel').classList.add('hidden');
             document.getElementById('btn-consultar').disabled = true;
 
-            fetch('/admin/api/reporte/ventas_clientes', {
+            if (_pollTimer) clearTimeout(_pollTimer);
+            _startTime = Date.now();
+            _consecutiveErrors = 0;
+
+            fetch('/admin/api/reporte/ventas_clientes/iniciar', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(filtros)
             })
-            .then(r => r.json())
+            .then(async r => {
+                if (r.status === 401 || r.redirected || (r.headers.get('content-type') || '').includes('text/html')) {
+                    throw new Error('Sesión expirada. Por favor recarga o inicia sesión nuevamente.');
+                }
+                const data = await r.json();
+                if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+                return data;
+            })
             .then(data => {
-                document.getElementById('spinner').classList.add('hidden');
-                document.getElementById('btn-consultar').disabled = false;
-
-                if (!data.ok) {
-                    alert('Error: ' + (data.error || 'Desconocido'));
-                    document.getElementById('estado-inicial').classList.remove('hidden');
-                    return;
-                }
-
-                _rows = data.rows || data.filas || [];
-                if (_rows.length === 0) {
-                    alert('No se encontraron ventas para el período seleccionado.');
-                    document.getElementById('estado-inicial').classList.remove('hidden');
-                    return;
-                }
-
-                mostrarTotales(_rows);
-                renderDatos(_rows);
-                document.getElementById('btn-excel').classList.remove('hidden');
-                document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
-                document.getElementById('info-registros').textContent = `${_rows.length} clientes en ${data.elapsed || 0}s`;
+                pollResultadoVentas(data.consulta_id);
             })
             .catch(err => {
                 document.getElementById('spinner').classList.add('hidden');
                 document.getElementById('btn-consultar').disabled = false;
                 document.getElementById('estado-inicial').classList.remove('hidden');
-                alert('Error de conexión: ' + err);
+                alert('Error al iniciar consulta: ' + (err.message || err));
+            });
+        }
+
+        function pollResultadoVentas(consultaId) {
+            const sec = Math.floor((Date.now() - _startTime) / 1000);
+            if (sec > 120) {
+                document.getElementById('spinner').classList.add('hidden');
+                document.getElementById('btn-consultar').disabled = false;
+                document.getElementById('estado-inicial').classList.remove('hidden');
+                alert('La consulta superó el tiempo límite de espera (120s).');
+                return;
+            }
+
+            fetch(`/admin/api/reporte/resultado/${consultaId}?_ts=${Date.now()}`, { cache: 'no-store' })
+            .then(async r => {
+                if (r.status === 401 || (r.headers.get('content-type') || '').includes('text/html')) {
+                    throw new Error('Sesión expirada. Inicia sesión nuevamente.');
+                }
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return await r.json();
+            })
+            .then(data => {
+                _consecutiveErrors = 0;
+                if (!data.ok) throw new Error(data.error || 'Error en la respuesta');
+
+                if (data.estado === 'pendiente' || data.estado === 'procesando') {
+                    _pollTimer = setTimeout(() => pollResultadoVentas(consultaId), 1500);
+                    return;
+                }
+
+                if (data.estado === 'error') {
+                    throw new Error(data.error || 'Error en el agente');
+                }
+
+                if (data.estado === 'lista') {
+                    document.getElementById('spinner').classList.add('hidden');
+                    document.getElementById('btn-consultar').disabled = false;
+
+                    _rows = data.rows || data.filas || [];
+                    if (_rows.length === 0) {
+                        alert('No se encontraron ventas para el período seleccionado.');
+                        document.getElementById('estado-inicial').classList.remove('hidden');
+                        return;
+                    }
+
+                    mostrarTotales(_rows);
+                    renderDatos(_rows);
+                    document.getElementById('btn-excel').classList.remove('hidden');
+                    document.getElementById('wrap-filtro-vivo').classList.remove('hidden');
+                    document.getElementById('info-registros').textContent = `${_rows.length} clientes en ${data.elapsed || 0}s`;
+                }
+            })
+            .catch(err => {
+                _consecutiveErrors++;
+                if (_consecutiveErrors < 12) {
+                    _pollTimer = setTimeout(() => pollResultadoVentas(consultaId), 1500);
+                } else {
+                    document.getElementById('spinner').classList.add('hidden');
+                    document.getElementById('btn-consultar').disabled = false;
+                    document.getElementById('estado-inicial').classList.remove('hidden');
+                    alert('Error en consulta: ' + (err.message || err));
+                }
             });
         }
 

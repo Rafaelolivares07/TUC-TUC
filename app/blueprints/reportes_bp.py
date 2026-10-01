@@ -220,6 +220,10 @@ def _ejecutar_consulta_remota(conn, cliente_id, tipo, parametros, timeout=50, co
     t_pickup = None
     while time.time() - t0 < timeout:
         time.sleep(0.2)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         c = conn.execute("""
             SELECT estado, respuesta, created_at, respondida_at FROM admin_agent_consultas WHERE id=%s
         """, (consulta_id,)).fetchone()
@@ -686,8 +690,10 @@ def api_reporte_resultado(consulta_id):
             
         if estado == 'lista':
             ans = row['respuesta']
+            telemetry = {}
             if isinstance(ans, dict):
                 filas = ans.get('filas') if 'filas' in ans else ans.get('rows', [])
+                telemetry = ans.get('_telemetry', {})
             elif isinstance(ans, list):
                 filas = ans
             else:
@@ -703,7 +709,8 @@ def api_reporte_resultado(consulta_id):
                 'filas': filas,
                 'rows': filas,
                 'total': len(filas),
-                'elapsed': elapsed
+                'elapsed': elapsed,
+                '_telemetry': telemetry
             })
             
         return jsonify({'ok': True, 'estado': estado})
@@ -741,7 +748,7 @@ def ejecutar_reporte_api(reporte_id):
             resp, telemetria_srv = _ejecutar_consulta_remota(conn, agente, 'ejecutar_reporte', {
                 'reporte_id': reporte_id,
                 'filtros': filtros
-            }, timeout=45, con_telemetria=True)
+            }, timeout=25, con_telemetria=True)
             if isinstance(resp, dict):
                 if 'error' not in resp:
                     telemetria_agent = resp.get('_telemetry', {})
@@ -765,7 +772,7 @@ def ejecutar_reporte_api(reporte_id):
                 tablas = mod.tablas_requeridas(filtros)
                 datos, telemetria_srv = _ejecutar_consulta_remota(conn, agente, 'multi_tabla', {
                     'tablas': tablas
-                }, timeout=60, con_telemetria=True)
+                }, timeout=30, con_telemetria=True)
                 if isinstance(datos, dict) and 'error' in datos:
                     return jsonify({'ok': False, 'error': datos['error'], 'filas': [], 'rows': []}), 400
 

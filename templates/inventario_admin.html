@@ -1326,7 +1326,7 @@
     <!-- ── BARRA DE CONTROLES: FILTROS, TOTAL Y NUEVO PRODUCTO EN UNA SOLA LÍNEA ── -->
     <div class="flex items-center gap-3 mb-4 w-full">
       <!-- Filtros a la izquierda -->
-      <div class="flex items-center gap-3 shrink-0">
+      <div class="flex items-center gap-3 shrink-0 flex-wrap">
         <input id="filtro-productos" type="text" placeholder="Filtrar por nombre o categoría…"
                oninput="filtrarTablaProductos()"
                class="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500 w-64">
@@ -1337,6 +1337,17 @@
           <option value="activos" selected>Solo Activos 🟢</option>
           <option value="inactivos">Solo Inactivos 🔴</option>
         </select>
+
+        <!-- Selector interactivo de decimales para Productos -->
+        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs">
+          <label for="prod-decimales-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1">
+            <span>🔢 Decimales:</span>
+          </label>
+          <input id="prod-decimales-input" type="number" min="0" max="6" step="1" value="2"
+                 oninput="cambiarDecimalesProductos(this.value)" onblur="validarDecimalesProductosInput(this)"
+                 class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                 title="Número de decimales visibles para precios, costos y totales en Productos (0 a 6)">
+        </div>
       </div>
 
       <!-- A la derecha: Valor Total (alineado con la columna Costo Total) y Botón + Producto (alineado con Acciones) -->
@@ -1471,12 +1482,22 @@
 
         </div>
 
-        <div class="w-full sm:w-64">
+        <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+          <!-- Selector interactivo de decimales para Tarjetas Estándar -->
+          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
+            <label for="tarjetas-decimales-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1">
+              <span>🔢 Decimales:</span>
+            </label>
+            <input id="tarjetas-decimales-input" type="number" min="0" max="6" step="1" value="2"
+                   oninput="cambiarDecimalesTarjetas(this.value)" onblur="validarDecimalesTarjetasInput(this)"
+                   class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                   title="Número de decimales visibles para costos, precios y márgenes en Tarjetas Estándar (0 a 6)">
+          </div>
 
-          <input id="tarjetas-filtro" type="text" placeholder="Buscar producto o categoría…" oninput="filtrarTarjetas()"
-
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
-
+          <div class="w-full sm:w-64">
+            <input id="tarjetas-filtro" type="text" placeholder="Buscar producto o categoría…" oninput="filtrarTarjetas()"
+                   class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
+          </div>
         </div>
 
       </div>
@@ -1572,9 +1593,22 @@
           <h2 class="font-bold text-gray-700 text-lg">Relación de Insumos y dónde se utilizan</h2>
           <p class="text-xs text-gray-500 mt-0.5">Costo unitario por insumo. Clic para ver cantidad y costo en cada receta.</p>
         </div>
-        <div class="w-full sm:w-64">
-          <input id="insumos-filtro" type="text" placeholder="Buscar insumo o categoría…" oninput="filtrarInsumos()"
-                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
+        <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
+          <!-- Selector interactivo de decimales para Vista Insumos -->
+          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
+            <label for="insumos-decimales-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1">
+              <span>🔢 Decimales:</span>
+            </label>
+            <input id="insumos-decimales-input" type="number" min="0" max="6" step="1" value="2"
+                   oninput="cambiarDecimalesTarjetas(this.value)" onblur="validarDecimalesTarjetasInput(this)"
+                   class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                   title="Número de decimales visibles para costos unitarios y totales en Insumos (0 a 6)">
+          </div>
+
+          <div class="w-full sm:w-64">
+            <input id="insumos-filtro" type="text" placeholder="Buscar insumo o categoría…" oninput="filtrarInsumos()"
+                   class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-rose-400">
+          </div>
         </div>
       </div>
       <div id="lista-insumos" class="space-y-2"></div>
@@ -3360,12 +3394,14 @@ function mostrarTab(t) {
     cargarInfoDocumentoTraslado();
   }
 
+  if (t === 'productos') {
+    inicializarDecimalesProductos();
+  }
+
   if (t === 'tarjetas') {
-
+    inicializarDecimalesTarjetas();
     cargarTarjetasResumen();
-
     cambiarVistaTarjetas('recetas');
-
   }
 
   if (t === 'entradas') {
@@ -5263,103 +5299,92 @@ function filtrarTablaProductos() {
 
 
 
+let _prodDecimales = parseInt(localStorage.getItem('prod_decimales_moneda') ?? '2', 10);
+if (isNaN(_prodDecimales) || _prodDecimales < 0) _prodDecimales = 2;
+if (_prodDecimales > 6) _prodDecimales = 6;
+
+function _fmtProdMon(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  return '$' + val.toLocaleString('es-CO', { 
+    minimumFractionDigits: _prodDecimales, 
+    maximumFractionDigits: _prodDecimales 
+  });
+}
+
+function cambiarDecimalesProductos(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(6, d));
+  _prodDecimales = d;
+  try { localStorage.setItem('prod_decimales_moneda', d); } catch(e) {}
+  const inp = document.getElementById('prod-decimales-input');
+  if (inp && parseInt(inp.value, 10) !== d) inp.value = d;
+  renderTablaProductos(productosFiltrados.length ? productosFiltrados : productos);
+}
+
+function validarDecimalesProductosInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 6) d = 6;
+  inputEl.value = d;
+  cambiarDecimalesProductos(d);
+}
+
+function inicializarDecimalesProductos() {
+  const inp = document.getElementById('prod-decimales-input');
+  if (inp) inp.value = _prodDecimales;
+}
+
 function renderTablaProductos(lista) {
-
   const tb = document.getElementById('tabla-productos');
-
   
-
   // Calcular el valor total de la lista actual de productos
-
   let totalVal = 0;
-
   lista.forEach(p => {
-
     totalVal += Number(p.costo || 0) * Number(p.stock || 0);
-
   });
-
   const totalValEl = document.getElementById('prod-total-inventario-val');
-
   if (totalValEl) {
-
-    totalValEl.textContent = fmtMon(totalVal);
-
+    totalValEl.textContent = _fmtProdMon(totalVal);
   }
-
   
-
   // Update sort icons
-
   ['nombre', 'categoria', 'precio', 'costo', 'stock', 'costo_total'].forEach(col => {
-
     const el = document.getElementById(`sort-prod-${col}`);
-
     if (el) {
-
       if (prodSortCol === col) {
-
         el.textContent = prodSortAsc ? '▲' : '▼';
-
         el.className = 'text-rose-500 font-bold';
-
       } else {
-
         el.textContent = '↕';
-
         el.className = 'text-gray-400';
-
       }
-
     }
-
   });
-
-
 
   if (!lista.length) {
-
     tb.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">Sin productos</td></tr>';
-
     return;
-
   }
-
   
-
   tb.innerHTML = lista.map(p => {
-
     const safeNombre = (p.nombre || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
     const estadoBtn = p.disponible 
-
       ? `<button onclick="toggleEstadoProducto(${p.id}, false)" title="Haz clic para inactivar producto" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition">🟢 Activo</button>`
-
       : `<button onclick="toggleEstadoProducto(${p.id}, true)" title="Haz clic para activar producto" class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition">🔴 Inactivo</button>`;
 
-
-
     return `
-
       <tr class="hover:bg-gray-50 border-b border-gray-100 transition-colors ${!p.disponible ? 'bg-gray-50/70' : ''}">
-
         <td class="px-3 py-2.5 font-semibold text-gray-800 flex items-center gap-2">
-
           <span>${p.nombre}</span>
-
           ${estadoBtn}
-
         </td>
-
         <td class="px-3 py-2.5 text-gray-500 text-xs">${p.categoria || '—'}</td>
-
-        <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${fmtMon(p.precio)}</td>
-
-        <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${fmtMon(p.costo)}</td>
-
+        <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${_fmtProdMon(p.precio)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${_fmtProdMon(p.costo)}</td>
         <td class="px-3 py-2.5 text-right num font-mono font-bold ${Number(p.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${fmt(p.stock)}</td>
-
-        <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-700">${fmtMon(Number(p.costo || 0) * Number(p.stock || 0))}</td>
+        <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-700">${_fmtProdMon(Number(p.costo || 0) * Number(p.stock || 0))}</td>
 
         <td class="px-3 py-2.5">
 
@@ -12057,6 +12082,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 
+  inicializarDecimalesProductos();
+  inicializarDecimalesTarjetas();
+
   await inicializarCentrosUtilidad();
 
   await fetchDefaultPresentacion();
@@ -12352,14 +12380,64 @@ document.addEventListener('visibilitychange', () => {
 // ── Tarjetas Estándar sub-tab ──────────────────────────────────────────────────
 
 let tarjetasData = [];
-
 let tarjetasFiltradas = [];
-
 let sortColumna = 'nombre';
-
 let sortAscendente = true;
-
 let expandedRecetas = new Set();
+
+let _tarjetasDecimales = parseInt(localStorage.getItem('tarjetas_decimales_moneda') ?? '2', 10);
+if (isNaN(_tarjetasDecimales) || _tarjetasDecimales < 0) _tarjetasDecimales = 2;
+if (_tarjetasDecimales > 6) _tarjetasDecimales = 6;
+
+function _fmtTarjetasMon(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  return '$ ' + val.toLocaleString('es-CO', { 
+    minimumFractionDigits: _tarjetasDecimales, 
+    maximumFractionDigits: _tarjetasDecimales 
+  });
+}
+
+function _fmtTarjetasPct(n) {
+  if (n == null || isNaN(n)) return '—';
+  const val = Number(n);
+  return val.toLocaleString('es-CO', { 
+    minimumFractionDigits: Math.min(_tarjetasDecimales, 2), 
+    maximumFractionDigits: Math.max(_tarjetasDecimales, 1) 
+  }) + ' %';
+}
+
+function cambiarDecimalesTarjetas(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(6, d));
+  _tarjetasDecimales = d;
+  try { localStorage.setItem('tarjetas_decimales_moneda', d); } catch(e) {}
+  
+  // Sincronizar inputs en vista recetas y vista insumos
+  const inpRec = document.getElementById('tarjetas-decimales-input');
+  const inpIns = document.getElementById('insumos-decimales-input');
+  if (inpRec && parseInt(inpRec.value, 10) !== d) inpRec.value = d;
+  if (inpIns && parseInt(inpIns.value, 10) !== d) inpIns.value = d;
+  
+  renderTarjetasTable();
+  renderInsumosTable();
+}
+
+function validarDecimalesTarjetasInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 6) d = 6;
+  inputEl.value = d;
+  cambiarDecimalesTarjetas(d);
+}
+
+function inicializarDecimalesTarjetas() {
+  const inpRec = document.getElementById('tarjetas-decimales-input');
+  const inpIns = document.getElementById('insumos-decimales-input');
+  if (inpRec) inpRec.value = _tarjetasDecimales;
+  if (inpIns) inpIns.value = _tarjetasDecimales;
+}
 
 
 
@@ -12596,7 +12674,7 @@ function renderInsumosTable() {
     let recetasHtml = '';
     ins.recetas.forEach(rec => {
       const costoReceta = (rec.cantidad || 0) * ins.costo_und;
-      recetasHtml += '<div class="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0"><span class="text-gray-700 text-sm">' + rec.nombre + '</span><div class="flex items-center gap-4 text-sm"><span class="text-gray-500">' + fmt(rec.cantidad) + '</span><span class="font-mono font-semibold text-gray-800">$' + fmt(costoReceta) + '</span></div></div>';
+      recetasHtml += '<div class="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0"><span class="text-gray-700 text-sm">' + rec.nombre + '</span><div class="flex items-center gap-4 text-sm"><span class="text-gray-500">' + fmt(rec.cantidad) + '</span><span class="font-mono font-semibold text-gray-800">' + _fmtTarjetasMon(costoReceta) + '</span></div></div>';
     });
     html += '<div class="border border-gray-200 rounded-xl overflow-hidden bg-white">'
       + '<button onclick="toggleInsumo(\'' + uid + '\')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left">'
@@ -12606,7 +12684,7 @@ function renderInsumosTable() {
       + '<span class="text-xs text-gray-400 hidden sm:inline">' + ins.categoria + '</span>'
       + '</div>'
       + '<div class="flex items-center gap-4 flex-shrink-0">'
-      + '<span class="text-sm font-mono text-gray-600">$' + fmt(ins.costo_und) + '</span>'
+      + '<span class="text-sm font-mono text-gray-600">' + _fmtTarjetasMon(ins.costo_und) + '</span>'
       + '<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">' + ins.recetas.length + ' recetas</span>'
       + '</div></button>'
       + '<div id="' + uid + '" class="hidden px-4 pb-3">'
@@ -12856,203 +12934,104 @@ function renderTarjetasTable() {
         <td class="px-3 py-3 text-center">${caretIcon}</td>
 
         <td class="px-3 py-3 font-semibold text-gray-800 flex items-center">
-
           ${p.nombre} ${badgeTarjeta}
-
         </td>
-
         <td class="px-3 py-3 text-gray-500">${p.categoria || 'Sin Categoría'}</td>
-
-        <td class="px-3 py-3 text-right num font-mono text-gray-700">$ ${fmt(p.costo_total)}</td>
-
-        <td class="px-3 py-3 text-right num font-mono text-gray-700">$ ${fmt(p.precio)}</td>
-
-        <td class="px-3 py-3 text-right num font-mono ${colorMargen}">$ ${fmt(p.margen_usd)}</td>
-
-        <td class="px-3 py-3 text-right num font-mono ${colorMargen}">${fmt(p.margen_pct)} %</td>
-
+        <td class="px-3 py-3 text-right num font-mono text-gray-700">${_fmtTarjetasMon(p.costo_total)}</td>
+        <td class="px-3 py-3 text-right num font-mono text-gray-700">${_fmtTarjetasMon(p.precio)}</td>
+        <td class="px-3 py-3 text-right num font-mono ${colorMargen}">${_fmtTarjetasMon(p.margen_usd)}</td>
+        <td class="px-3 py-3 text-right num font-mono ${colorMargen}">${_fmtTarjetasPct(p.margen_pct)}</td>
         <td class="px-3 py-3 text-center">
-
           <div class="flex items-center justify-center gap-1.5 mx-auto">
-
             <button onclick="abrirModalTarjeta(${p.id}, '${safeNombre}')"
-
                     class="px-2.5 py-1 text-xs bg-gray-100 hover:bg-rose-50 hover:text-rose-600 text-gray-700 rounded-lg font-medium transition-all shadow-xs flex items-center justify-center gap-1"
-
                     title="Editar tarjeta estándar">
-
               ✏️ Tarjeta
-
             </button>
-
             ${p.tiene_tarjeta ? `
-
               <button onclick="eliminarTarjetaDirecta(${p.id}, '${safeNombre}')"
-
                       class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-
                       title="Eliminar tarjeta estándar (receta)">
-
                 🗑️
-
               </button>
-
             ` : ''}
-
           </div>
-
         </td>
-
       </tr>
-
     `;
-
     
-
     if (isExpanded && p.tiene_tarjeta) {
-
       // Sort components for this product
-
       let compList = [...p.componentes];
-
       const st = compSortStates[p.id] || { col: 'nombre', asc: true };
-
       compList.sort((a, b) => {
-
         let valA, valB;
-
         if (st.col === 'nombre') {
-
           valA = a.nombre || '';
-
           valB = b.nombre || '';
-
           return st.asc ? valA.localeCompare(valB, 'es') : valB.localeCompare(valA, 'es');
-
         } else if (st.col === 'cantidad') {
-
           valA = parseFloat(a.cantidad || 0);
-
           valB = parseFloat(b.cantidad || 0);
-
         } else if (st.col === 'costo_und') {
-
           valA = parseFloat(a.costo_und || 0);
-
           valB = parseFloat(b.costo_und || 0);
-
         } else if (st.col === 'costo_total') {
-
           valA = parseFloat(a.costo_total || 0);
-
           valB = parseFloat(b.costo_total || 0);
-
         }
-
         return st.asc ? (valA - valB) : (valB - valA);
-
       });
 
-
-
       const getCompSortIcon = col => (st.col === col ? (st.asc ? '▲' : '▼') : '↕');
-
       const getCompSortClass = col => (st.col === col ? 'text-rose-500 font-bold' : 'text-gray-400');
 
-
-
       html += `
-
         <tr class="bg-rose-50/10 border-b-2 border-gray-400">
-
           <td></td>
-
           <td colspan="7" class="px-4 py-3.5">
-
             <div class="bg-white rounded-xl border border-rose-300 p-3.5 shadow-sm max-w-4xl">
-
               <div class="flex items-center justify-between mb-3 border-b border-gray-300 pb-2">
-
                 <div class="flex items-center gap-2">
-
                   <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">Detalle de Componentes</span>
-
                   <span class="text-[11px] bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full font-semibold">${p.componentes.length} item${p.componentes.length === 1 ? '' : 's'}</span>
-
                 </div>
-
                 <div class="flex items-center gap-3">
-
-                  <span class="text-xs font-mono font-bold text-gray-800">Total Receta: $ ${fmt(p.costo_total)}</span>
-
+                  <span class="text-xs font-mono font-bold text-gray-800">Total Receta: ${_fmtTarjetasMon(p.costo_total)}</span>
                   <button onclick="abrirModalTarjeta(${p.id}, '${safeNombre}')" 
-
                           class="px-2.5 py-1 text-xs bg-rose-500 hover:bg-rose-600 text-white rounded-lg font-semibold shadow-xs transition-all flex items-center gap-1">
-
                     ✏️ Editar Receta
-
                   </button>
-
                 </div>
-
               </div>
-
               
-
               <div class="max-h-[600px] overflow-y-auto custom-scrollbar border border-gray-300 rounded-lg bg-gray-50/30">
-
                 <table class="w-full text-xs">
-
                   <thead class="sticky top-0 bg-white shadow-xs z-10 select-none">
-
                     <tr class="text-gray-600 border-b-2 border-gray-300">
-
                       <th onclick="ordenarComponentesReporte(${p.id}, 'nombre')" class="text-left py-1.5 px-2 font-semibold cursor-pointer hover:bg-gray-100 transition-colors">
-
                         Insumo / Materia Prima <span class="${getCompSortClass('nombre')}">${getCompSortIcon('nombre')}</span>
-
                       </th>
-
                       <th onclick="ordenarComponentesReporte(${p.id}, 'cantidad')" class="text-right py-1.5 px-2 font-semibold cursor-pointer hover:bg-gray-100 transition-colors">
-
                         Cantidad <span class="${getCompSortClass('cantidad')}">${getCompSortIcon('cantidad')}</span>
-
                       </th>
-
                       <th onclick="ordenarComponentesReporte(${p.id}, 'costo_und')" class="text-right py-1.5 px-2 font-semibold cursor-pointer hover:bg-gray-100 transition-colors">
-
                         Costo Unit. <span class="${getCompSortClass('costo_und')}">${getCompSortIcon('costo_und')}</span>
-
                       </th>
-
                       <th onclick="ordenarComponentesReporte(${p.id}, 'costo_total')" class="text-right py-1.5 px-2 font-semibold cursor-pointer hover:bg-gray-100 transition-colors">
-
                         Subtotal <span class="${getCompSortClass('costo_total')}">${getCompSortIcon('costo_total')}</span>
-
                       </th>
-
                     </tr>
-
                   </thead>
-
                   <tbody>
-
                     ${compList.map(c => `
-
                       <tr class="border-b border-gray-200 last:border-0 hover:bg-white transition-colors">
-
                         <td class="py-1.5 px-2 text-left font-medium text-gray-700">${c.nombre}</td>
-
                         <td class="py-1.5 px-2 text-right num text-gray-600 font-mono">${Math.round(parseFloat(c.cantidad) || 0)}</td>
-
-                        <td class="py-1.5 px-2 text-right num font-mono text-gray-500">$ ${fmt(c.costo_und)}</td>
-
-                        <td class="py-1.5 px-2 text-right num font-mono font-semibold text-gray-800">$ ${fmt(c.costo_total)}</td>
-
+                        <td class="py-1.5 px-2 text-right num font-mono text-gray-500">${_fmtTarjetasMon(c.costo_und)}</td>
+                        <td class="py-1.5 px-2 text-right num font-mono font-semibold text-gray-800">${_fmtTarjetasMon(c.costo_total)}</td>
                       </tr>
-
                     `).join('')}
-
                   </tbody>
 
                 </table>

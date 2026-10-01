@@ -5312,6 +5312,15 @@ function _fmtProdMon(n) {
   });
 }
 
+function _fmtProdNum(n) {
+  if (n == null || isNaN(n)) return '0';
+  const val = Number(n);
+  return val.toLocaleString('es-CO', { 
+    minimumFractionDigits: _prodDecimales, 
+    maximumFractionDigits: _prodDecimales 
+  });
+}
+
 function cambiarDecimalesProductos(val) {
   let d = parseInt(val, 10);
   if (isNaN(d)) return;
@@ -5383,7 +5392,7 @@ function renderTablaProductos(lista) {
         <td class="px-3 py-2.5 text-gray-500 text-xs">${p.categoria || '—'}</td>
         <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${_fmtProdMon(p.precio)}</td>
         <td class="px-3 py-2.5 text-right num font-mono text-gray-700">${_fmtProdMon(p.costo)}</td>
-        <td class="px-3 py-2.5 text-right num font-mono font-bold ${Number(p.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${fmt(p.stock)}</td>
+        <td class="px-3 py-2.5 text-right num font-mono font-bold ${Number(p.stock) <= 0 ? 'text-red-400' : 'text-green-600'}">${_fmtProdNum(p.stock)}</td>
         <td class="px-3 py-2.5 text-right num font-mono font-semibold text-gray-700">${_fmtProdMon(Number(p.costo || 0) * Number(p.stock || 0))}</td>
 
         <td class="px-3 py-2.5">
@@ -12407,6 +12416,15 @@ function _fmtTarjetasPct(n) {
   }) + ' %';
 }
 
+function _fmtTarjetasNum(n) {
+  if (n == null || isNaN(n)) return '0';
+  const val = Number(n);
+  return val.toLocaleString('es-CO', { 
+    minimumFractionDigits: _tarjetasDecimales, 
+    maximumFractionDigits: _tarjetasDecimales 
+  });
+}
+
 function cambiarDecimalesTarjetas(val) {
   let d = parseInt(val, 10);
   if (isNaN(d)) return;
@@ -12674,7 +12692,7 @@ function renderInsumosTable() {
     let recetasHtml = '';
     ins.recetas.forEach(rec => {
       const costoReceta = (rec.cantidad || 0) * ins.costo_und;
-      recetasHtml += '<div class="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0"><span class="text-gray-700 text-sm">' + rec.nombre + '</span><div class="flex items-center gap-4 text-sm"><span class="text-gray-500">' + fmt(rec.cantidad) + '</span><span class="font-mono font-semibold text-gray-800">' + _fmtTarjetasMon(costoReceta) + '</span></div></div>';
+      recetasHtml += '<div class="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0"><span class="text-gray-700 text-sm">' + rec.nombre + '</span><div class="flex items-center gap-4 text-sm"><span class="text-gray-500">' + _fmtTarjetasNum(rec.cantidad) + '</span><span class="font-mono font-semibold text-gray-800">' + _fmtTarjetasMon(costoReceta) + '</span></div></div>';
     });
     html += '<div class="border border-gray-200 rounded-xl overflow-hidden bg-white">'
       + '<button onclick="toggleInsumo(\'' + uid + '\')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left">'
@@ -13027,7 +13045,7 @@ function renderTarjetasTable() {
                     ${compList.map(c => `
                       <tr class="border-b border-gray-200 last:border-0 hover:bg-white transition-colors">
                         <td class="py-1.5 px-2 text-left font-medium text-gray-700">${c.nombre}</td>
-                        <td class="py-1.5 px-2 text-right num text-gray-600 font-mono">${Math.round(parseFloat(c.cantidad) || 0)}</td>
+                        <td class="py-1.5 px-2 text-right num text-gray-600 font-mono">${_fmtTarjetasNum(c.cantidad)}</td>
                         <td class="py-1.5 px-2 text-right num font-mono text-gray-500">${_fmtTarjetasMon(c.costo_und)}</td>
                         <td class="py-1.5 px-2 text-right num font-mono font-semibold text-gray-800">${_fmtTarjetasMon(c.costo_total)}</td>
                       </tr>

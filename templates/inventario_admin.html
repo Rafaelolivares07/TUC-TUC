@@ -1344,7 +1344,7 @@
             <span>🔢 Decimales:</span>
           </label>
           <input id="prod-decimales-input" type="number" min="0" max="6" step="1" value="2"
-                 oninput="cambiarDecimalesProductos(this.value)" onblur="validarDecimalesProductosInput(this)"
+                 oninput="cambiarDecimalesProductos(this.value)" onchange="cambiarDecimalesProductos(this.value)" onblur="validarDecimalesProductosInput(this)"
                  class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
                  title="Número de decimales visibles para precios, costos y totales en Productos (0 a 6)">
         </div>
@@ -1489,7 +1489,7 @@
               <span>🔢 Decimales:</span>
             </label>
             <input id="tarjetas-decimales-input" type="number" min="0" max="6" step="1" value="2"
-                   oninput="cambiarDecimalesTarjetas(this.value)" onblur="validarDecimalesTarjetasInput(this)"
+                   oninput="cambiarDecimalesTarjetas(this.value)" onchange="cambiarDecimalesTarjetas(this.value)" onblur="validarDecimalesTarjetasInput(this)"
                    class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
                    title="Número de decimales visibles para costos, precios y márgenes en Tarjetas Estándar (0 a 6)">
           </div>
@@ -1600,7 +1600,7 @@
               <span>🔢 Decimales:</span>
             </label>
             <input id="insumos-decimales-input" type="number" min="0" max="6" step="1" value="2"
-                   oninput="cambiarDecimalesTarjetas(this.value)" onblur="validarDecimalesTarjetasInput(this)"
+                   oninput="cambiarDecimalesTarjetas(this.value)" onchange="cambiarDecimalesTarjetas(this.value)" onblur="validarDecimalesTarjetasInput(this)"
                    class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
                    title="Número de decimales visibles para costos unitarios y totales en Insumos (0 a 6)">
           </div>
@@ -5320,7 +5320,7 @@ function cambiarDecimalesProductos(val) {
   try { localStorage.setItem('prod_decimales_moneda', d); } catch(e) {}
   const inp = document.getElementById('prod-decimales-input');
   if (inp && parseInt(inp.value, 10) !== d) inp.value = d;
-  renderTablaProductos(productosFiltrados.length ? productosFiltrados : productos);
+  filtrarTablaProductos();
 }
 
 function validarDecimalesProductosInput(inputEl) {

@@ -180,6 +180,7 @@ def _crear_tablas(conn):
         "ALTER TABLE traslados_inventario ADD COLUMN IF NOT EXISTS tipo_documento_id INTEGER",
         "ALTER TABLE traslados_inventario ADD COLUMN IF NOT EXISTS tipo_documento VARCHAR(50)",
         "ALTER TABLE traslados_inventario ADD COLUMN IF NOT EXISTS documento_numero VARCHAR(50)",
+        "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS bodega INTEGER DEFAULT 1",
         "ALTER TABLE inventario_distribuido_estado ADD COLUMN IF NOT EXISTS centro_utilidad_id INTEGER DEFAULT 1",
         "CREATE INDEX IF NOT EXISTS idx_inv_dist_centro ON inventario_distribuido_estado(negocio_id, centro_utilidad_id)",
     ]
@@ -8043,26 +8044,27 @@ def api_ajuste_historial(negocio_id):
             where_extra = " AND m.bodega = %s"
             params.append(int(centro_id_filtro))
 
-        # Agrupar documentos de ajuste físico por número
+        # Agrupar documentos de ajuste físico estrictamente por número de documento
         rows = conn.execute(f"""
             WITH cont AS (
-                SELECT numero_documento, comprobante_id,
+                SELECT numero_documento,
                        SUM(CASE WHEN tipo IN ('debito', 'D') THEN monto ELSE 0 END) AS total_debitos
                 FROM movimientos_contables
-                WHERE negocio_id = %s
-                GROUP BY numero_documento, comprobante_id
+                WHERE negocio_id = %s AND (origen_tipo IN ('ajuste_fisico', 'ajuste_inventario') OR concepto ILIKE '%%ajuste%%')
+                GROUP BY numero_documento
             )
-            SELECT m.documento_numero, MAX(m.created_at) AS fecha, 
-                   c.comprobante_id,
-                   COALESCE(MAX(c.total_debitos), 0) AS total_debitos, 
+            SELECT m.documento_numero, 
+                   MAX(m.created_at) AS fecha, 
+                   COALESCE(MAX(c.total_debitos), SUM(m.valor_total), 0) AS total_debitos, 
                    COUNT(DISTINCT m.producto_id) AS total_items,
                    m.bodega AS centro_utilidad_id,
-                   cu.nombre AS centro_nombre, cu.codigo AS centro_codigo
+                   cu.nombre AS centro_nombre, 
+                   cu.codigo AS centro_codigo
             FROM movimientos_inventario m
             LEFT JOIN cont c ON c.numero_documento = m.documento_numero
             LEFT JOIN centros_utilidad cu ON cu.id = m.bodega AND cu.negocio_id = m.negocio_id
             WHERE m.negocio_id = %s AND m.motivo = 'ajuste' {where_extra}
-            GROUP BY m.documento_numero, c.comprobante_id, m.bodega, cu.nombre, cu.codigo
+            GROUP BY m.documento_numero, m.bodega, cu.nombre, cu.codigo
             ORDER BY fecha DESC
         """, tuple(params)).fetchall()
         return jsonify({'ok': True, 'historial': [dict(r) for r in rows]})
@@ -8091,7 +8093,7 @@ def api_ajuste_documento_detalles(negocio_id, documento_numero):
             ORDER BY m.id
         """, (negocio_id, documento_numero)).fetchall()
         
-        # Obtener el asiento contable individualizado
+        # Obtener el asiento contable individualizado filtrado por ajuste
         asiento = conn.execute("""
             SELECT mc.cuenta, c.nombre AS cuenta_nombre, mc.concepto, mc.tipo, mc.monto, p.nombre AS producto_nombre,
                    mc.centro_utilidad_id, cu.nombre AS centro_nombre, cu.codigo AS centro_codigo
@@ -8100,6 +8102,7 @@ def api_ajuste_documento_detalles(negocio_id, documento_numero):
             LEFT JOIN productos p ON p.id = mc.producto_id
             LEFT JOIN centros_utilidad cu ON cu.id = mc.centro_utilidad_id AND cu.negocio_id = mc.negocio_id
             WHERE mc.negocio_id = %s AND mc.numero_documento = %s
+              AND (mc.origen_tipo IN ('ajuste_fisico', 'ajuste_inventario') OR mc.concepto ILIKE '%%ajuste%%')
             ORDER BY mc.id
         """, (negocio_id, documento_numero)).fetchall()
         
@@ -8256,6 +8259,7 @@ def api_ajuste_documento_pdf(negocio_id, documento_numero):
             JOIN cuentas_puc c ON c.id = mc.cuenta_id
             LEFT JOIN productos p ON p.id = mc.producto_id
             WHERE mc.negocio_id = %s AND mc.numero_documento = %s
+              AND (mc.origen_tipo IN ('ajuste_fisico', 'ajuste_inventario') OR mc.concepto ILIKE '%%ajuste%%')
             ORDER BY mc.id
         """, (negocio_id, documento_numero)).fetchall()
         pdf = _pdf_documento_ajuste(

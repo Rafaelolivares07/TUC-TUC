@@ -996,7 +996,7 @@ async function toggleHistorialDetalle(docNum) {
               <span class="text-[9px] text-gray-400 block">Concepto: ${a.concepto}</span>
             </td>
             <td class="px-2 py-1.5 text-center">
-              <span class="font-bold text-xs ${a.tipo==='D'?'text-blue-600':'text-purple-600'}">${a.tipo}</span>
+              <span class="font-bold text-xs ${((a.tipo||'').toUpperCase().startsWith('D'))?'text-blue-600':'text-purple-600'}">${((a.tipo||'').toUpperCase().startsWith('D'))?'D':'C'}</span>
             </td>
             <td class="px-2 py-1.5 text-right font-mono">$${parseFloat(a.monto||0).toLocaleString('es-CO', { maximumFractionDigits: 0 })}</td>
           </tr>

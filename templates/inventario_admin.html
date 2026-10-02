@@ -673,36 +673,95 @@
 
       </div>
 
-      <div class="flex items-center justify-between mt-1 pt-1.5 border-t border-gray-50">
-
-        <p id="tarjeta-nombre-prod" class="text-sm text-gray-500 font-medium truncate max-w-[320px]"></p>
-
-        <button type="button" onclick="mostrarProcedimiento()" class="text-[11px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-100 transition-colors flex items-center gap-1">
-
-          🧪 Calcular desde Lote
-
-        </button>
-
+      <div class="flex items-center justify-between mt-1 pt-1.5 border-t border-gray-50 flex-wrap gap-2">
+        <p id="tarjeta-nombre-prod" class="text-sm text-gray-500 font-medium truncate max-w-[260px]"></p>
+        <div class="flex items-center gap-1.5">
+          <button type="button" onclick="toggleClonarEscalarPanel()" id="btn-toggle-clonar" class="text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200 transition-colors flex items-center gap-1">
+            📋 Clonar / Multiplicar
+          </button>
+          <button type="button" onclick="mostrarProcedimiento()" class="text-[11px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-100 transition-colors flex items-center gap-1">
+            🧪 Calcular desde Lote
+          </button>
+        </div>
       </div>
-
       <input type="hidden" id="tarjeta-prod-id">
-
     </div>
 
-
-
-    <!-- Informational Legend -->
-
-    <div class="flex-shrink-0 bg-blue-50/70 border border-blue-100 rounded-xl p-2.5 mb-2.5 flex items-start gap-2 text-xs text-blue-800">
-
-      <span class="text-base leading-none">💡</span>
-
-      <div>
-
-        <span class="font-bold">Modo borrador:</span> Las cantidades ingresadas pueden ser <strong>números decimales</strong>. Los cambios en insumos o cantidades se aplicarán permanentemente <strong>únicamente al presionar "Guardar tarjeta"</strong>.
-
+    <!-- Panel Clonar / Multiplicar / Escalar -->
+    <div id="panel-clonar-escalar" class="hidden flex-shrink-0 bg-gradient-to-br from-amber-50/90 to-amber-100/50 border border-amber-200 rounded-xl p-3 mb-2.5 text-xs shadow-xs">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-bold text-amber-900 flex items-center gap-1 text-xs">
+          <span>📋</span> Clonar / Escalar Receta con Multiplicador
+        </span>
+        <button type="button" onclick="toggleClonarEscalarPanel(false)" class="text-amber-700 hover:text-amber-900 font-bold text-sm leading-none">✕</button>
+      </div>
+      
+      <!-- Selector de Destino (Clonar a otro producto) -->
+      <div class="mb-2 bg-white/90 p-2 rounded-lg border border-amber-200/80">
+        <label class="text-[11px] font-bold text-gray-700 block mb-1">
+          🎯 Producto Destino (opcional, para guardar como copia en otro producto):
+        </label>
+        <div class="relative">
+          <input id="clonar-dest-input" type="text" placeholder="Buscar nuevo producto destino (ej: Porción 50g)…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs">
+          <div id="clonar-dest-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:180px; z-index: 60;"></div>
+          <input type="hidden" id="clonar-dest-id">
+          
+          <div id="clonar-dest-chip" class="hidden absolute left-0 right-0 bottom-0 top-0 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1 text-xs flex items-center justify-between text-emerald-800 font-semibold">
+            <div class="flex items-center gap-1 truncate">
+              <span class="text-emerald-600 font-bold">✓ Destino:</span>
+              <span id="clonar-dest-name" class="truncate font-bold"></span>
+            </div>
+            <button type="button" onclick="clearSelectedClonarDest()" class="text-emerald-700 hover:text-emerald-900 font-bold ml-2">✕</button>
+          </div>
+        </div>
       </div>
 
+      <!-- Multiplicador / Factor de Escala -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white/90 p-2 rounded-lg border border-amber-200/80 items-end">
+        <div>
+          <label class="text-[11px] font-bold text-gray-700 block mb-1">
+            ✖ Multiplicador / Factor (ej: 0.05 ó 2.0):
+          </label>
+          <div class="flex items-center gap-1">
+            <input id="tarjeta-multiplicador-factor" type="number" step="any" min="0.00001" placeholder="Ej: 0.05" class="w-full bg-white border border-amber-300 rounded-lg px-2 py-1 text-xs font-mono font-bold text-amber-900">
+            <button type="button" onclick="aplicarMultiplicadorTarjeta()" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition-colors whitespace-nowrap shadow-xs">
+              Aplicar ✖
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[11px] font-bold text-gray-700 block mb-1">
+            ⚖️ Calculadora rápida (Gramos Base ➔ Porción):
+          </label>
+          <div class="flex items-center gap-1">
+            <input id="calc-gramos-base" type="number" step="any" placeholder="Base (ej: 1000)" class="w-1/2 bg-white border border-gray-200 rounded-lg px-2 py-1 text-[11px] font-mono text-center" oninput="calcularFactorDesdeGramos()">
+            <span class="text-gray-400 font-bold">➔</span>
+            <input id="calc-gramos-target" type="number" step="any" placeholder="Porción (ej: 50)" class="w-1/2 bg-white border border-gray-200 rounded-lg px-2 py-1 text-[11px] font-mono text-center" oninput="calcularFactorDesdeGramos()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-amber-200/70">
+        <div class="flex gap-1 flex-wrap">
+          <button type="button" onclick="setMultiplicadorRapido(0.05)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x0.05 (50g/1kg)</button>
+          <button type="button" onclick="setMultiplicadorRapido(0.07)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x0.07 (70g/1kg)</button>
+          <button type="button" onclick="setMultiplicadorRapido(0.5)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x0.5</button>
+          <button type="button" onclick="setMultiplicadorRapido(2)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x2.0</button>
+        </div>
+        <button type="button" onclick="restaurarLineasOriginalesTarjeta()" id="btn-restaurar-tarjeta" class="text-[10px] text-gray-500 hover:text-gray-800 underline font-semibold hidden">
+          ↺ Restaurar originales
+        </button>
+      </div>
+    </div>
+
+    <!-- Informational Legend -->
+    <div class="flex-shrink-0 bg-blue-50/70 border border-blue-100 rounded-xl p-2.5 mb-2.5 flex items-start gap-2 text-xs text-blue-800">
+      <span class="text-base leading-none">💡</span>
+      <div>
+        <span class="font-bold">Modo borrador:</span> Las cantidades ingresadas pueden ser <strong>números decimales</strong>. Los cambios en insumos o cantidades se aplicarán permanentemente <strong>únicamente al presionar "Guardar tarjeta"</strong>.
+      </div>
     </div>
 
 
@@ -5862,87 +5921,152 @@ async function guardarProducto() {
 
 
 // ── Modal tarjeta estándar ────────────────────────────────────────────────────
+let tarjetaLineasOriginales = [];
 
-function abrirModalTarjeta(productoId, nombre) {
-
-  tarjetaLineas = [];
-
-  document.getElementById('tarjeta-prod-id').value = productoId;
-
-  document.getElementById('tarjeta-nombre-prod').textContent = nombre;
-
-  document.getElementById('tarjeta-ac-input').value = '';
-
-  document.getElementById('tarjeta-ac-id').value = '';
-
-  document.getElementById('tarjeta-ac-cant').value = '1';
-
-  document.getElementById('tarjeta-ac-list').classList.add('hidden');
-
-  document.getElementById('tarjeta-ac-input').classList.remove('hidden');
-
-  document.getElementById('tarjeta-selected-chip').classList.add('hidden');
-
-  
-
-  const btnEliminar = document.getElementById('btn-eliminar-tarjeta');
-
-  if (btnEliminar) btnEliminar.classList.add('hidden');
-
-
-
-  document.getElementById('overlay-tarjeta').classList.remove('hidden');
-
-  cargarTarjeta(productoId);
-
+function toggleClonarEscalarPanel(forzar) {
+  const p = document.getElementById('panel-clonar-escalar');
+  if (!p) return;
+  if (forzar !== undefined) {
+    if (forzar) p.classList.remove('hidden');
+    else p.classList.add('hidden');
+  } else {
+    p.classList.toggle('hidden');
+  }
+  if (!p.classList.contains('hidden')) {
+    if (!tarjetaLineasOriginales.length && tarjetaLineas.length) {
+      tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
+    }
+  }
 }
 
-function cerrarModalTarjeta() {
-
-  document.getElementById('overlay-tarjeta').classList.add('hidden');
-
+function clearSelectedClonarDest() {
+  const idEl = document.getElementById('clonar-dest-id');
+  const inputEl = document.getElementById('clonar-dest-input');
+  const chipEl = document.getElementById('clonar-dest-chip');
+  if (idEl) idEl.value = '';
+  if (inputEl) {
+    inputEl.value = '';
+    inputEl.classList.remove('hidden');
+  }
+  if (chipEl) chipEl.classList.add('hidden');
 }
 
-async function cargarTarjeta(productoId) {
+function calcularFactorDesdeGramos() {
+  const base = parseFloat(document.getElementById('calc-gramos-base')?.value);
+  const target = parseFloat(document.getElementById('calc-gramos-target')?.value);
+  if (!isNaN(base) && base > 0 && !isNaN(target) && target > 0) {
+    const factor = target / base;
+    const factorInput = document.getElementById('tarjeta-multiplicador-factor');
+    if (factorInput) {
+      factorInput.value = Number(factor.toFixed(6));
+    }
+  }
+}
 
-  const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`);
+function setMultiplicadorRapido(factor) {
+  const factorInput = document.getElementById('tarjeta-multiplicador-factor');
+  if (factorInput) {
+    factorInput.value = factor;
+    aplicarMultiplicadorTarjeta();
+  }
+}
 
-  const d = await r.json();
+function aplicarMultiplicadorTarjeta() {
+  const factorVal = parseFloat(document.getElementById('tarjeta-multiplicador-factor')?.value);
+  if (isNaN(factorVal) || factorVal <= 0) {
+    toast('Ingresa un factor multiplicador válido mayor a 0', false);
+    return;
+  }
+  if (!tarjetaLineas.length) {
+    toast('No hay componentes en la tarjeta para multiplicar', false);
+    return;
+  }
+  if (!tarjetaLineasOriginales.length) {
+    tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
+  }
 
-  if (!d.ok) return;
-
-  tarjetaLineas = d.componentes.map(c => ({
-
-    componente_id: c.componente_id, 
-
-    nombre: c.nombre, 
-
-    cantidad: parseFloat(c.cantidad) || 0,
-
-    costo_und: c.costo_und || 0
-
+  tarjetaLineas = tarjetaLineasOriginales.map(ln => ({
+    componente_id: ln.componente_id,
+    nombre: ln.nombre,
+    cantidad: Number((ln.cantidad * factorVal).toFixed(6)),
+    costo_und: ln.costo_und
   }));
 
   renderLineasTarjeta();
+  document.getElementById('btn-restaurar-tarjeta')?.classList.remove('hidden');
+  toast(`Factor x${factorVal} aplicado a todos los insumos`);
+}
 
+function restaurarLineasOriginalesTarjeta() {
+  if (tarjetaLineasOriginales && tarjetaLineasOriginales.length) {
+    tarjetaLineas = JSON.parse(JSON.stringify(tarjetaLineasOriginales));
+    renderLineasTarjeta();
+    const facInput = document.getElementById('tarjeta-multiplicador-factor');
+    if (facInput) facInput.value = '';
+    document.getElementById('btn-restaurar-tarjeta')?.classList.add('hidden');
+    toast('Cantidades originales restauradas');
+  }
+}
 
+function abrirModalClonarTarjeta(productoId, nombre) {
+  abrirModalTarjeta(productoId, nombre);
+  toggleClonarEscalarPanel(true);
+}
+
+function abrirModalTarjeta(productoId, nombre) {
+  tarjetaLineas = [];
+  tarjetaLineasOriginales = [];
+  document.getElementById('tarjeta-prod-id').value = productoId;
+  document.getElementById('tarjeta-nombre-prod').textContent = nombre;
+  document.getElementById('tarjeta-ac-input').value = '';
+  document.getElementById('tarjeta-ac-id').value = '';
+  document.getElementById('tarjeta-ac-cant').value = '1';
+  document.getElementById('tarjeta-ac-list').classList.add('hidden');
+  document.getElementById('tarjeta-ac-input').classList.remove('hidden');
+  document.getElementById('tarjeta-selected-chip').classList.add('hidden');
+  
+  toggleClonarEscalarPanel(false);
+  clearSelectedClonarDest();
+  const facInput = document.getElementById('tarjeta-multiplicador-factor');
+  if (facInput) facInput.value = '';
+  const baseInput = document.getElementById('calc-gramos-base');
+  if (baseInput) baseInput.value = '';
+  const tgtInput = document.getElementById('calc-gramos-target');
+  if (tgtInput) tgtInput.value = '';
+  document.getElementById('btn-restaurar-tarjeta')?.classList.add('hidden');
 
   const btnEliminar = document.getElementById('btn-eliminar-tarjeta');
+  if (btnEliminar) btnEliminar.classList.add('hidden');
 
+  document.getElementById('overlay-tarjeta').classList.remove('hidden');
+  cargarTarjeta(productoId);
+}
+
+function cerrarModalTarjeta() {
+  document.getElementById('overlay-tarjeta').classList.add('hidden');
+}
+
+async function cargarTarjeta(productoId) {
+  const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`);
+  const d = await r.json();
+  if (!d.ok) return;
+  tarjetaLineas = d.componentes.map(c => ({
+    componente_id: c.componente_id, 
+    nombre: c.nombre, 
+    cantidad: parseFloat(c.cantidad) || 0,
+    costo_und: c.costo_und || 0
+  }));
+  tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
+  renderLineasTarjeta();
+
+  const btnEliminar = document.getElementById('btn-eliminar-tarjeta');
   if (btnEliminar) {
-
     if (tarjetaLineas.length > 0) {
-
       btnEliminar.classList.remove('hidden');
-
     } else {
-
       btnEliminar.classList.add('hidden');
-
     }
-
   }
-
 }
 
 let modalSortCol = 'nombre';
@@ -6290,47 +6414,39 @@ function agregarLineaTarjeta() {
 }
 
 async function guardarTarjeta() {
-
-  const productoId = document.getElementById('tarjeta-prod-id').value;
+  const prodOrigenId = document.getElementById('tarjeta-prod-id').value;
+  const prodDestinoId = document.getElementById('clonar-dest-id')?.value;
+  const targetId = prodDestinoId ? prodDestinoId : prodOrigenId;
+  const esClonado = Boolean(prodDestinoId && prodDestinoId !== prodOrigenId);
+  const nombreDestino = document.getElementById('clonar-dest-name')?.textContent || '';
 
   const lineas = tarjetaLineas.map(l => ({componente_id: l.componente_id, cantidad: l.cantidad}));
 
   if (!lineas.length) {
-
     if (confirm('Al guardar la tarjeta sin componentes, se eliminará la receta por completo y el producto volverá a ser Directo (sin receta). ¿Deseas continuar?')) {
-
-      await ejecutarEliminacionTarjeta(productoId, true);
-
+      await ejecutarEliminacionTarjeta(targetId, true);
     }
-
     return;
-
   }
 
-  const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`, {
-
+  const r = await fetch(`/api/inventario/producto/${targetId}/tarjeta`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-
     body: JSON.stringify({lineas})
-
   });
 
   const d = await r.json();
-
   if (d.ok) {
-
-    toast('Tarjeta guardada');
-
+    if (esClonado) {
+      toast(`¡Receta clonada y guardada exitosamente para "${nombreDestino}"!`);
+    } else {
+      toast('Tarjeta guardada');
+    }
     cerrarModalTarjeta();
-
     cargarProductos();
-
     cargarTarjetasResumen();
-
+  } else {
+    toast(d.error || 'Error al guardar tarjeta', false);
   }
-
-  else toast(d.error, false);
-
 }
 
 
@@ -12280,17 +12396,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
   // AC tarjeta (usa productos cargados)
-
   setupAC('tarjeta-ac-input', 'tarjeta-ac-list', 'tarjeta-ac-id', () => productos, (item) => {
-
     document.getElementById('tarjeta-selected-name').textContent = item.nombre;
-
     document.getElementById('tarjeta-ac-input').classList.add('hidden');
-
     document.getElementById('tarjeta-selected-chip').classList.remove('hidden');
-
     document.getElementById('tarjeta-ac-cant').focus();
+  });
 
+  // AC clonar producto destino
+  setupAC('clonar-dest-input', 'clonar-dest-list', 'clonar-dest-id', () => productos, (item) => {
+    document.getElementById('clonar-dest-name').textContent = item.nombre;
+    document.getElementById('clonar-dest-input').classList.add('hidden');
+    document.getElementById('clonar-dest-chip').classList.remove('hidden');
+    document.getElementById('tarjeta-multiplicador-factor').focus();
   });
 
 
@@ -13112,13 +13230,18 @@ function renderTarjetasTable() {
         <td class="px-3 py-3 text-right num font-mono ${colorMargen}">${_fmtTarjetasMon(p.margen_usd)}</td>
         <td class="px-3 py-3 text-right num font-mono ${colorMargen}">${_fmtTarjetasPct(p.margen_pct)}</td>
         <td class="px-3 py-3 text-center">
-          <div class="flex items-center justify-center gap-1.5 mx-auto">
+          <div class="flex items-center justify-center gap-1.5 mx-auto flex-wrap">
             <button onclick="abrirModalTarjeta(${p.id}, '${safeNombre}')"
                     class="px-2.5 py-1 text-xs bg-gray-100 hover:bg-rose-50 hover:text-rose-600 text-gray-700 rounded-lg font-medium transition-all shadow-xs flex items-center justify-center gap-1"
                     title="Editar tarjeta estándar">
               ✏️ Tarjeta
             </button>
             ${p.tiene_tarjeta ? `
+              <button onclick="abrirModalClonarTarjeta(${p.id}, '${safeNombre}')"
+                      class="px-2 py-1 text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg font-medium transition-all shadow-xs flex items-center justify-center gap-1"
+                      title="Clonar / Escalar esta receta a otro producto">
+                📋 Clonar
+              </button>
               <button onclick="eliminarTarjetaDirecta(${p.id}, '${safeNombre}')"
                       class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
                       title="Eliminar tarjeta estándar (receta)">

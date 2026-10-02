@@ -216,6 +216,13 @@ def _crear_tablas(conn):
             updated_at TIMESTAMP DEFAULT NOW(),
             UNIQUE(tienda_id, categoria)
         )""",
+        """CREATE TABLE IF NOT EXISTS negocio_categorias_adiciones (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            categoria VARCHAR(150) NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(negocio_id, categoria)
+        )""",
         """CREATE TABLE IF NOT EXISTS tienda_experiencia_bloques (
             id SERIAL PRIMARY KEY,
             tienda_id INTEGER NOT NULL REFERENCES tiendas(id) ON DELETE CASCADE,
@@ -1373,6 +1380,21 @@ def api_tienda_productos(slug):
                     'cantidad': float(r['cantidad'])
                 })
 
+        # Categorías configuradas como adición
+        ad_rows = conn.execute("""
+            SELECT categoria 
+            FROM negocio_categorias_adiciones 
+            WHERE negocio_id = %s
+        """, (negocio['tercero_id'],)).fetchall()
+        ad_cats = [r['categoria'] for r in ad_rows]
+        if not ad_cats:
+            ad_cats = [
+                c['categoria'] for c in conn.execute(
+                    "SELECT DISTINCT categoria FROM productos WHERE negocio_id = %s AND (UPPER(categoria) LIKE '%%ADICI%%' OR UPPER(categoria) LIKE '%%EXTRA%%' OR UPPER(categoria) LIKE '%%TOPPING%%' OR UPPER(categoria) LIKE '%%SALSA%%')",
+                    (negocio['tercero_id'],)
+                ).fetchall()
+            ]
+
         resultado = []
         for p in productos:
             pid = p['id']
@@ -1381,8 +1403,9 @@ def api_tienda_productos(slug):
             nd = nd_dict.get(pid, 0)
             doc = doc_dict.get(pid)
             comps = te_dict.get(pid, [])
+            cat_p = p['categoria'] or ''
             resultado.append({
-                'id': pid, 'nombre': p['nombre'], 'categoria': p['categoria'] or '',
+                'id': pid, 'nombre': p['nombre'], 'categoria': cat_p,
                 'precio': float(p['precio']), 'costo': float(p['costo'] or 0), 'imagen': p['imagen'] or '',
                 'disponible': p['disponible'], 'orden': p['orden'],
                 'descripcion': p['descripcion'] or '',
@@ -1395,6 +1418,7 @@ def api_tienda_productos(slug):
                 'ficha_tecnica_id': doc['id'] if doc else None,
                 'ficha_tecnica_nombre': doc['nombre'] if doc else '',
                 'es_receta': len(comps) > 0,
+                'es_adicion': cat_p in ad_cats,
                 'componentes': comps
             })
         categorias = []
@@ -1408,7 +1432,12 @@ def api_tienda_productos(slug):
                 'nombre': categoria,
                 'imagen': media_por_categoria.get(categoria) or '',
             })
-        return jsonify({'ok': True, 'productos': resultado, 'categorias': categorias})
+        return jsonify({
+            'ok': True,
+            'productos': resultado,
+            'categorias': categorias,
+            'categorias_adiciones': ad_cats
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

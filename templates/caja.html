@@ -748,12 +748,15 @@ async function publicarPantallaCliente(estado = 'activa', recibo = null) {
     }
 }
 
+let categoriasAdiciones = [];
+
 async function cargarProductos() {
     try {
         const r = await fetch(`/api/caja/${SLUG}/productos?_=${Date.now()}`);
         const d = await r.json();
         if (d.ok) {
             productos = d.productos.filter(p => p.disponible);
+            categoriasAdiciones = d.categorias_adiciones || [];
             renderCategorias();
             renderProductos(productos);
         }
@@ -987,13 +990,13 @@ function toggleIngredienteCustomizar(compId) {
 }
 
 function getListaAdicionesDisponibles() {
+    if (categoriasAdiciones && categoriasAdiciones.length > 0) {
+        return productos.filter(p => categoriasAdiciones.includes(p.categoria) && p.precio > 0);
+    }
     let adicProds = productos.filter(p => {
         const cat = (p.categoria || '').toUpperCase();
-        return cat.includes('ADICI') || cat.includes('EXTRA') || cat.includes('TOPPING') || cat.includes('SALSA') || cat.includes('GUARNICION');
+        return (cat.includes('ADICI') || cat.includes('EXTRA') || cat.includes('TOPPING') || cat.includes('SALSA') || cat.includes('GUARNICION')) && p.precio > 0;
     });
-    if (!adicProds.length) {
-        adicProds = productos.filter(p => p.precio > 0);
-    }
     return adicProds;
 }
 
@@ -1016,7 +1019,7 @@ function renderAdicionesCustomizar(filtro = '') {
     let adicProds = getListaAdicionesDisponibles();
     if (filtro && filtro.trim()) {
         const ql = filtro.trim().toLowerCase();
-        adicProds = productos.filter(p => 
+        adicProds = adicProds.filter(p => 
             p.nombre.toLowerCase().includes(ql) || 
             (p.categoria && p.categoria.toLowerCase().includes(ql))
         );

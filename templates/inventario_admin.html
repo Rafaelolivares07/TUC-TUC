@@ -479,6 +479,49 @@
 
 </div>
 
+<!-- ── OVERLAY CONFIGURAR CATEGORÍAS DE ADICIONES / EXTRAS POS ────────── -->
+<div id="overlay-categorias-adiciones" class="overlay hidden" style="z-index: 55;" onclick="if(event.target===this)cerrarModalCategoriasAdiciones()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:580px; width:95%; max-height:90vh; padding:22px; overflow:hidden; position:relative; box-sizing:border-box;">
+    <!-- Header -->
+    <div class="flex-shrink-0 flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
+      <div class="flex items-center gap-2.5">
+        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xl shadow-inner shrink-0">🍔</div>
+        <div>
+          <h3 class="text-base sm:text-lg font-extrabold text-gray-800">Categorías de Adiciones / Extras</h3>
+          <p class="text-xs text-gray-500">Define qué categorías se comportarán como adiciones en la caja POS.</p>
+        </div>
+      </div>
+      <button onclick="cerrarModalCategoriasAdiciones()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none">&times;</button>
+    </div>
+
+    <!-- Informational Note -->
+    <div class="flex-shrink-0 bg-amber-50/80 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-900 leading-relaxed">
+      <span>💡</span> <strong>¿Cómo funciona?</strong> Al personalizar un producto en la caja POS, la pestaña <strong>"➕ Agregar Adiciones"</strong> mostrará <em>únicamente</em> los productos de las categorías marcadas aquí (ej. Salsas, Quesos, Toppings), evitando que se mezclen platos principales.
+    </div>
+
+    <!-- Search / Filter -->
+    <div class="flex-shrink-0 mb-3">
+      <input type="text" id="filtro-modal-cat-adiciones" placeholder="🔍 Buscar categoría..."
+             oninput="filtrarModalCategoriasAdiciones(this.value)"
+             class="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-amber-500 w-full">
+    </div>
+
+    <!-- Category Checkbox List -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl bg-gray-50/50 p-2 space-y-1.5 mb-3" style="min-height:180px; max-height:45vh;" id="modal-cat-adiciones-list">
+      <p class="text-center text-gray-400 py-8 text-xs">Cargando categorías...</p>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex-shrink-0 flex items-center justify-between pt-3 border-t border-gray-100 mt-auto">
+      <span id="modal-cat-adiciones-count" class="text-xs font-bold text-amber-800">0 seleccionadas</span>
+      <div class="flex gap-2">
+        <button onclick="cerrarModalCategoriasAdiciones()" class="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+        <button onclick="guardarCategoriasAdiciones()" class="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition">Guardar Configuración</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── OVERLAY GESTOR UNIDADES DE EMPAQUE / PRESENTACIONES ────────── -->
 <div id="overlay-presentaciones" class="overlay hidden" onclick="if(event.target===this)cerrarModalGestionPresentaciones()">
   <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:760px; width:95%; max-height:90vh; padding:22px; overflow:hidden; position:relative; box-sizing:border-box;">
@@ -1356,6 +1399,12 @@
           <span>VALOR TOTAL DE INVENTARIO:</span>
           <span id="prod-total-inventario-val" class="font-mono font-bold text-sm text-rose-700">$0.00</span>
         </div>
+
+        <button type="button" onclick="abrirModalCategoriasAdiciones()"
+                class="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs md:text-sm rounded-xl border border-amber-300 transition shadow-2xs flex items-center gap-1.5"
+                title="Configurar qué categorías de productos se comportan como adiciones/extras en la caja POS">
+          <span>🍔</span> Categorías de Adición
+        </button>
 
         <button type="button" onclick="abrirModalGestionPresentaciones()"
                 class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs md:text-sm rounded-xl border border-slate-200 transition shadow-2xs flex items-center gap-1.5">
@@ -5529,9 +5578,106 @@ async function eliminarProducto(id, nombre) {
 
   }
 
+// ── Configuración de Categorías de Adición / Extras POS ─────────────────────
+
+let _catAdicionesData = [];
+
+async function abrirModalCategoriasAdiciones() {
+  const overlay = document.getElementById('overlay-categorias-adiciones');
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  
+  const listEl = document.getElementById('modal-cat-adiciones-list');
+  listEl.innerHTML = '<p class="text-center text-gray-400 py-8 text-xs font-semibold">Cargando categorías...</p>';
+  document.getElementById('filtro-modal-cat-adiciones').value = '';
+
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/categorias-adiciones?_=${Date.now()}`);
+    const d = await r.json();
+    if (d.ok) {
+      _catAdicionesData = d.categorias || [];
+      renderModalCategoriasAdiciones('');
+    } else {
+      listEl.innerHTML = `<p class="text-center text-rose-500 py-6 text-xs font-semibold">${d.error || 'Error al cargar categorías'}</p>`;
+    }
+  } catch (err) {
+    listEl.innerHTML = '<p class="text-center text-rose-500 py-6 text-xs font-semibold">Error de conexión al cargar categorías</p>';
+  }
 }
 
+function cerrarModalCategoriasAdiciones() {
+  const overlay = document.getElementById('overlay-categorias-adiciones');
+  if (overlay) overlay.classList.add('hidden');
+}
 
+function renderModalCategoriasAdiciones(filtro = '') {
+  const listEl = document.getElementById('modal-cat-adiciones-list');
+  const countEl = document.getElementById('modal-cat-adiciones-count');
+  
+  const totalSelected = _catAdicionesData.filter(c => c.es_adicion).length;
+  if (countEl) countEl.textContent = `${totalSelected} categoría${totalSelected === 1 ? '' : 's'} de adición seleccionada${totalSelected === 1 ? '' : 's'}`;
+
+  let list = _catAdicionesData;
+  if (filtro && filtro.trim()) {
+    const ql = filtro.trim().toLowerCase();
+    list = list.filter(c => c.categoria.toLowerCase().includes(ql));
+  }
+
+  if (!list.length) {
+    listEl.innerHTML = '<p class="text-center text-gray-400 py-8 text-xs font-semibold">No se encontraron categorías</p>';
+    return;
+  }
+
+  listEl.innerHTML = list.map((c, idx) => {
+    const safeCat = c.categoria.replace(/"/g, '&quot;');
+    return `
+      <label class="flex items-center justify-between p-2.5 rounded-xl border ${c.es_adicion ? 'border-amber-400 bg-amber-50/80 shadow-2xs' : 'border-gray-200 bg-white'} hover:border-amber-400 transition cursor-pointer select-none">
+        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+          <input type="checkbox" ${c.es_adicion ? 'checked' : ''} 
+                 id="chk-cat-adicion-${idx}"
+                 onchange="toggleCategoriaAdicionByIndex(${idx}, this.checked)"
+                 class="w-4 h-4 accent-amber-600 rounded cursor-pointer shrink-0">
+          <span class="text-xs font-bold ${c.es_adicion ? 'text-amber-900' : 'text-gray-700'} truncate">${safeCat}</span>
+        </div>
+        <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-md shrink-0 ml-2 ${c.es_adicion ? 'bg-amber-200 text-amber-900' : 'bg-gray-100 text-gray-400'}">
+          ${c.es_adicion ? '🍔 Adición POS' : 'Normal'}
+        </span>
+      </label>
+    `;
+  }).join('');
+}
+
+function toggleCategoriaAdicionByIndex(idx, checked) {
+  if (_catAdicionesData[idx]) {
+    _catAdicionesData[idx].es_adicion = checked;
+    const q = document.getElementById('filtro-modal-cat-adiciones')?.value || '';
+    renderModalCategoriasAdiciones(q);
+  }
+}
+
+function filtrarModalCategoriasAdiciones(q) {
+  renderModalCategoriasAdiciones(q);
+}
+
+async function guardarCategoriasAdiciones() {
+  const seleccionadas = _catAdicionesData.filter(c => c.es_adicion).map(c => c.categoria);
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/categorias-adiciones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categorias_adiciones: seleccionadas })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Categorías de adiciones guardadas correctamente');
+      cerrarModalCategoriasAdiciones();
+    } else {
+      toast(d.error || 'Error al guardar categorías', false);
+    }
+  } catch (err) {
+    toast('Error de conexión al guardar', false);
+  }
+}
 
 // ── Modal producto ────────────────────────────────────────────────────────────
 

@@ -88,6 +88,13 @@ def _crear_tablas(conn):
             referencia_tipo  VARCHAR(50),
             created_at       TIMESTAMP DEFAULT NOW()
         )""",
+        """CREATE TABLE IF NOT EXISTS negocio_categorias_adiciones (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            categoria VARCHAR(150) NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(negocio_id, categoria)
+        )""",
         """CREATE TABLE IF NOT EXISTS presentaciones (
             id           SERIAL PRIMARY KEY,
             nombre       VARCHAR(100) NOT NULL,
@@ -1305,6 +1312,73 @@ def api_inventario_productos(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/categorias-adiciones', methods=['GET', 'POST'])
+def api_inventario_categorias_adiciones(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        if request.method == 'POST':
+            data = request.get_json() or {}
+            cats_adiciones = data.get('categorias_adiciones') or []
+            
+            conn.execute("DELETE FROM negocio_categorias_adiciones WHERE negocio_id = %s", (negocio_id,))
+            for cat in cats_adiciones:
+                cat_clean = (cat or '').strip()
+                if cat_clean:
+                    conn.execute("""
+                        INSERT INTO negocio_categorias_adiciones (negocio_id, categoria)
+                        VALUES (%s, %s)
+                        ON CONFLICT (negocio_id, categoria) DO NOTHING
+                    """, (negocio_id, cat_clean))
+            return jsonify({'ok': True, 'mensaje': 'Categorías de adición guardadas correctamente'})
+
+        # GET: obtener todas las categorías existentes y cuáles están marcadas como adición
+        all_cats_rows = conn.execute("""
+            SELECT DISTINCT categoria 
+            FROM productos 
+            WHERE negocio_id = %s AND categoria IS NOT NULL AND TRIM(categoria) != ''
+            ORDER BY categoria ASC
+        """, (negocio_id,)).fetchall()
+        
+        ad_rows = conn.execute("""
+            SELECT categoria 
+            FROM negocio_categorias_adiciones 
+            WHERE negocio_id = %s
+        """, (negocio_id,)).fetchall()
+        ad_set = set(r['categoria'] for r in ad_rows)
+        
+        if not ad_rows:
+            ad_set = set(
+                r['categoria'] for r in all_cats_rows 
+                if any(x in (r['categoria'] or '').upper() for x in ['ADICI', 'EXTRA', 'TOPPING', 'SALSA'])
+            )
+
+        res_cats = [
+            {
+                'categoria': r['categoria'],
+                'es_adicion': r['categoria'] in ad_set
+            }
+            for r in all_cats_rows
+        ]
+        
+        return jsonify({
+            'ok': True,
+            'categorias': res_cats,
+            'categorias_adiciones': [r['categoria'] for r in res_cats if r['es_adicion']]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
 
 
 # ── Tarjeta estándar ───────────────────────────────────────────────────────────

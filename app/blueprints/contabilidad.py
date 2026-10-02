@@ -885,7 +885,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                 if not puc_14_default:
                     rp_14 = conn.execute("""
                         SELECT id, codigo FROM cuentas_puc 
-                        WHERE (negocio_id = %s OR negocio_id IS NULL) AND codigo LIKE '1405%%'
+                        WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '1405%%'
                         ORDER BY codigo ASC LIMIT 1
                     """, (negocio_id,)).fetchone()
                     puc_14_default = rp_14 if rp_14 else {'id': 131, 'codigo': '140505'}
@@ -975,7 +975,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                             if not puc_14_default:
                                 rp_14 = conn.execute("""
                                     SELECT id, codigo, nombre FROM cuentas_puc 
-                                    WHERE (negocio_id = %s OR negocio_id IS NULL) AND codigo LIKE '1405%%'
+                                    WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '1405%%'
                                     ORDER BY codigo ASC LIMIT 1
                                 """, (negocio_id,)).fetchone()
                                 puc_14_default = rp_14 if rp_14 else {'id': 131, 'codigo': '140505', 'nombre': 'Materias primas'}
@@ -1012,7 +1012,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                             if not puc_61_default:
                                 rp_61 = conn.execute("""
                                     SELECT id, codigo, nombre FROM cuentas_puc 
-                                    WHERE (negocio_id = %s OR negocio_id IS NULL) AND codigo LIKE '6140%%'
+                                    WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '6140%%'
                                     ORDER BY codigo ASC LIMIT 1
                                 """, (negocio_id,)).fetchone()
                                 puc_61_default = rp_61 if rp_61 else {'id': 136, 'codigo': '614005', 'nombre': 'Costo de ventas restaurantes'}

@@ -8,7 +8,14 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
+        html, body {
+            font-family: 'Inter', sans-serif;
+            background: #f3f4f6;
+            overscroll-behavior: none;
+            overscroll-behavior-y: none;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+        }
         .toast {
             position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
             max-width: 92vw; width: max-content;
@@ -20,32 +27,36 @@
         .toast.show { opacity: 1; pointer-events: auto; }
         .toast-ok { background: #059669; }
         .toast-err { background: #b91c1c; border: 1px solid #7f1d1d; }
-        #lista-productos { max-height: 55vh; overflow-y: auto; }
-        #carrito-items { max-height: 40vh; overflow-y: auto; }
-        .prod-btn { transition: transform 0.1s; }
-        .prod-btn:active { transform: scale(0.95); }
+        #lista-productos { max-height: 62vh; overflow-y: auto; overscroll-behavior: contain; }
+        #carrito-items { max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; }
+        .prod-btn { transition: transform 0.1s, box-shadow 0.15s; }
+        .prod-btn:active { transform: scale(0.96); }
         @media (min-width: 768px) {
-            #layout { display: grid; grid-template-columns: 1fr 380px; gap: 1rem; }
-            #lista-productos { max-height: 75vh; }
-            #carrito-items { max-height: 50vh; }
+            #layout { display: grid; grid-template-columns: 1fr 390px; gap: 0.75rem; }
+            #lista-productos { max-height: 78vh; }
+            #carrito-items { max-height: 42vh; }
         }
 
-        /* ── Ticket de impresión ── */
+        /* ── Ticket de impresión térmico ── */
         #ticket-print { display: none; }
         @media print {
+            @page { margin: 0; size: auto; }
             body > *:not(#ticket-print) { display: none !important; }
             #ticket-print {
                 display: block !important;
-                font-family: 'Courier New', monospace;
-                font-size: 13px;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 12px;
                 width: 280px;
                 margin: 0 auto;
-                padding: 8px;
+                padding: 6px 2px;
                 color: #000;
             }
-            #ticket-print .sep { border-top: 1px dashed #000; margin: 6px 0; }
+            #ticket-print .sep { border-top: 1px dashed #000; margin: 5px 0; }
+            #ticket-print .sep-bold { border-top: 2px solid #000; margin: 6px 0; }
+            #ticket-print .sep-cut { border-top: 2px dashed #000; margin: 10px 0 6px 0; text-align: center; }
+            #ticket-print .page-break { page-break-before: always; break-before: page; }
             #ticket-print .linea { display: flex; justify-content: space-between; }
-            #ticket-print .total-line { font-size: 16px; font-weight: bold; }
+            #ticket-print .total-line { font-size: 15px; font-weight: bold; }
             #ticket-print .centro { text-align: center; }
         }
     </style>
@@ -121,99 +132,106 @@
             <div id="categorias" class="flex gap-2 overflow-x-auto pb-1 mb-2 text-sm"></div>
 
             <!-- Grid productos -->
-            <div id="lista-productos" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>
+            <div id="lista-productos" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2"></div>
         </div>
 
         <!-- ── Panel derecho: carrito ── -->
-        <div class="mt-4 md:mt-0">
-            <div class="bg-white rounded-2xl shadow p-4 sticky top-3">
-                <h2 class="font-bold text-gray-700 mb-3 flex items-center justify-between">
+        <div class="mt-3 md:mt-0 flex flex-col">
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-150 p-3.5 sticky top-2 flex flex-col max-h-[92vh]">
+                <!-- Header del carrito -->
+                <div class="flex items-center justify-between pb-2 border-b border-gray-150 mb-2">
                     <div class="flex items-center gap-2">
-                        🛒 Carrito
-                        <span id="carrito-count" class="bg-blue-100 text-blue-800 text-xs font-bold rounded-full px-2 py-0.5">0</span>
-                        <span class="bg-indigo-50 text-indigo-700 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border border-indigo-200" title="Versión de Caja POS">{{ APP_VERSION|default('v2.4.2') }}</span>
+                        <span class="font-extrabold text-gray-800 text-sm flex items-center gap-1.5">
+                            🛒 Carrito
+                        </span>
+                        <span id="carrito-count" class="bg-blue-100 text-blue-800 text-xs font-black rounded-full px-2 py-0.5">0</span>
                     </div>
-                    <button type="button" onclick="abrirModalImportarPedido()" 
-                            class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1 border border-blue-100">
-                        📥 Importar
-                    </button>
-                </h2>
-
-                <!-- Cliente y Documento -->
-                <div class="mb-3 space-y-2.5">
-                    <div class="relative">
-                        <input id="nombre-cliente" type="text" placeholder="Nombre cliente (opcional)"
-                               autocomplete="off"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white">
-                        <div id="ac-cliente-list" class="absolute left-0 right-0 top-[40px] z-50 bg-white border border-gray-200 rounded-lg shadow-lg hidden max-h-48 overflow-y-auto"></div>
-                        <input type="hidden" id="cliente-id" value="">
-                    </div>
-
-                    <div>
-                        <input id="tel-cliente" type="tel" placeholder="Teléfono (opcional)"
-                               class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white">
-                        <div id="cliente-status-badge" class="hidden"></div>
-                    </div>
-                    
-                    <!-- Tipo de Documento -->
-                    <div class="pt-1">
-                        <div class="flex justify-between items-center mb-1">
-                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Tipo de Documento</label>
-                            <span id="consecutivo-documento-lbl" class="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full hidden"></span>
-                        </div>
-                        <select id="tipo-documento" onchange="actualizarConsecutivoDisplay()" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400 font-semibold text-gray-700">
-                            <option value="">-- Sin documento contable --</option>
-                        </select>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button" onclick="abrirModalImportarPedido()" 
+                                class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-lg transition-all flex items-center gap-1 border border-blue-100"
+                                title="Importar pedido de vendedor">
+                            📥 Importar
+                        </button>
+                        <button type="button" onclick="vaciarCarrito()" 
+                                class="text-xs text-gray-400 hover:text-red-500 font-bold px-1.5 py-1 rounded hover:bg-red-50 transition"
+                                title="Vaciar todos los items del carrito">
+                            🗑️
+                        </button>
                     </div>
                 </div>
 
-                <!-- Items carrito -->
-                <div id="carrito-items" class="space-y-2 mb-3"></div>
+                <!-- Datos de Cliente y Documento (Compactos) -->
+                <div class="mb-2 bg-slate-50/80 p-2 rounded-xl border border-slate-200 space-y-1.5">
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <div class="relative">
+                            <input id="nombre-cliente" type="text" placeholder="Cliente (opcional)"
+                                   autocomplete="off"
+                                   class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-400 bg-white">
+                            <div id="ac-cliente-list" class="absolute left-0 right-0 top-[32px] z-50 bg-white border border-gray-200 rounded-lg shadow-lg hidden max-h-40 overflow-y-auto"></div>
+                            <input type="hidden" id="cliente-id" value="">
+                        </div>
 
-                <!-- Total -->
-                <div class="border-t pt-3 mb-3">
-                    <p id="iva-display" class="text-xs text-gray-400 text-right mb-1 hidden"></p>
-                    <div class="flex justify-between items-center text-lg font-bold">
-                        <span>Total</span>
-                        <span id="total-display" class="text-blue-700">$0</span>
+                        <div>
+                            <input id="tel-cliente" type="tel" placeholder="Teléfono"
+                                   class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-400 bg-white">
+                            <div id="cliente-status-badge" class="hidden"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tipo de Documento -->
+                    <div class="flex items-center gap-1.5">
+                        <select id="tipo-documento" onchange="actualizarConsecutivoDisplay()" class="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:border-blue-400 font-semibold text-gray-700">
+                            <option value="">-- Sin documento contable --</option>
+                        </select>
+                        <span id="consecutivo-documento-lbl" class="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded shrink-0 hidden"></span>
+                    </div>
+                </div>
+
+                <!-- Items carrito (Área scrollable con altura dinámica) -->
+                <div id="carrito-items" class="space-y-1.5 overflow-y-auto flex-1 pr-1 custom-scrollbar min-h-[120px] max-h-[38vh]"></div>
+
+                <!-- Total e IVA -->
+                <div class="border-t border-gray-150 pt-2 mt-2">
+                    <p id="iva-display" class="text-[11px] text-gray-400 text-right mb-0.5 hidden"></p>
+                    <div class="flex justify-between items-center font-black">
+                        <span class="text-xs text-gray-600 uppercase tracking-wide">TOTAL</span>
+                        <span id="total-display" class="text-xl text-blue-700 font-mono">$0</span>
                     </div>
                 </div>
 
                 <!-- Métodos de pago -->
-                <div class="mb-3">
-                    <p class="text-xs text-gray-500 font-semibold mb-1">Métodos de pago</p>
-                    <div id="metodos-pago-inputs" class="space-y-1.5"></div>
-                    <p id="pago-alerta" class="hidden text-xs text-red-500 font-semibold mt-1"></p>
+                <div class="my-2">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Métodos de pago</span>
+                    </div>
+                    <div id="metodos-pago-inputs" class="space-y-1 max-h-28 overflow-y-auto pr-0.5"></div>
+                    <p id="pago-alerta" class="hidden text-[11px] text-red-500 font-semibold mt-1"></p>
                 </div>
 
-                <!-- Alerta persistente en caja (persiste hasta que el usuario la cierre) -->
-                <div id="caja-error-box" class="hidden mb-3 p-3.5 bg-red-50 border-2 border-red-500 rounded-xl text-red-900 text-xs font-bold shadow-md">
-                    <div class="flex items-start justify-between gap-2.5">
-                        <div class="flex items-start gap-2">
-                            <span class="text-base leading-none shrink-0">⚠️</span>
-                            <div id="caja-error-texto" class="leading-snug break-words"></div>
+                <!-- Alerta persistente en caja -->
+                <div id="caja-error-box" class="hidden mb-2 p-2.5 bg-red-50 border border-red-300 rounded-xl text-red-900 text-xs font-bold">
+                    <div class="flex items-start justify-between gap-1.5">
+                        <div class="flex items-start gap-1.5">
+                            <span class="text-sm shrink-0">⚠️</span>
+                            <div id="caja-error-texto" class="leading-tight break-words"></div>
                         </div>
-                        <button type="button" onclick="limpiarErrorCaja()" class="text-red-700 hover:text-red-900 font-extrabold text-lg leading-none p-1 shrink-0" title="Cerrar aviso">&times;</button>
+                        <button type="button" onclick="limpiarErrorCaja()" class="text-red-700 hover:text-red-900 font-extrabold text-base leading-none p-0.5" title="Cerrar">&times;</button>
                     </div>
                 </div>
 
-                <!-- Cobrar -->
-                <button onclick="cobrar()" id="btn-cobrar"
-                        class="w-full bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white font-bold py-3 rounded-xl text-base"
-                        disabled>
-                    Cobrar
-                </button>
+                <!-- Botones de Acción -->
+                <div class="space-y-1.5 pt-1">
+                    <button onclick="cobrar()" id="btn-cobrar"
+                            class="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-extrabold py-2.5 rounded-xl text-base shadow-sm transition active:scale-98 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            disabled>
+                        <span>💵</span> Cobrar
+                    </button>
 
-                <button onclick="abrirPantallaCliente()"
-                        class="w-full mt-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 font-bold py-2.5 rounded-xl text-sm">
-                    Pantalla cliente
-                </button>
-
-                <!-- Vaciar -->
-                <button onclick="vaciarCarrito()"
-                        class="w-full mt-2 text-xs text-gray-400 hover:text-red-500">
-                    Vaciar carrito
-                </button>
+                    <button onclick="abrirPantallaCliente()"
+                            class="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 font-bold py-1.5 rounded-xl text-xs transition">
+                        🖥️ Pantalla cliente
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -290,17 +308,31 @@
 
         <!-- Botones -->
         <div class="space-y-2">
-            <div class="grid grid-cols-2 gap-2">
-                <button onclick="imprimirTicket()"
-                        class="flex items-center justify-center gap-1.5 border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-xl hover:bg-gray-50 text-sm">
-                    🖨️ Imprimir
+            <!-- Botón principal: Imprimir Todo (Factura + Cocina) -->
+            <button onclick="imprimirTicket('ambos')"
+                    class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3 rounded-xl text-sm md:text-base shadow-sm transition active:scale-98">
+                <span>🖨️</span> Imprimir Todo (Factura + Cocina)
+            </button>
+
+            <!-- Opciones individuales y WhatsApp -->
+            <div class="grid grid-cols-3 gap-2">
+                <button onclick="imprimirTicket('factura')"
+                        class="flex items-center justify-center gap-1 border border-gray-300 text-gray-700 font-bold py-2 rounded-xl hover:bg-gray-50 text-xs transition"
+                        title="Imprimir únicamente la factura del cliente">
+                    <span>🧾</span> Factura
+                </button>
+                <button onclick="imprimirTicket('cocina')"
+                        class="flex items-center justify-center gap-1 border border-amber-300 bg-amber-50 text-amber-900 font-bold py-2 rounded-xl hover:bg-amber-100 text-xs transition"
+                        title="Imprimir únicamente la orden para cocina">
+                    <span>🍳</span> Cocina
                 </button>
                 <button id="btn-wa-recibo" onclick="compartirWhatsApp()"
-                        class="flex items-center justify-center gap-1.5 bg-green-500 hover:bg-green-600 text-white font-semibold py-2.5 rounded-xl text-sm">
-                    📲 WhatsApp
+                        class="flex items-center justify-center gap-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 rounded-xl text-xs transition">
+                    <span>📲</span> WhatsApp
                 </button>
             </div>
-            <button onclick="nuevaVenta()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-lg">
+
+            <button onclick="nuevaVenta()" class="w-full bg-slate-900 hover:bg-black text-white font-extrabold py-3 rounded-xl text-base transition active:scale-98 mt-1">
                 Nueva venta
             </button>
         </div>
@@ -748,6 +780,42 @@ async function publicarPantallaCliente(estado = 'activa', recibo = null) {
     }
 }
 
+const CART_STORAGE_KEY = `tuctuc_caja_carrito_${TIENDA_ID}`;
+
+function guardarCarritoStorage() {
+    try {
+        if (carrito && carrito.length > 0) {
+            localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(carrito));
+        } else {
+            localStorage.removeItem(CART_STORAGE_KEY);
+        }
+    } catch (e) {
+        console.warn('Error guardando carrito:', e);
+    }
+}
+
+function cargarCarritoStorage() {
+    try {
+        const raw = localStorage.getItem(CART_STORAGE_KEY);
+        if (raw) {
+            const data = JSON.parse(raw);
+            if (Array.isArray(data) && data.length > 0) {
+                carrito = data;
+                renderCarrito();
+            }
+        }
+    } catch (e) {
+        console.warn('Error restaurando carrito:', e);
+    }
+}
+
+// Prevenir pérdida accidental por recarga o gestos en tablet
+window.addEventListener('beforeunload', () => {
+    if (carrito && carrito.length > 0) {
+        guardarCarritoStorage();
+    }
+});
+
 let categoriasAdiciones = [];
 
 async function cargarProductos() {
@@ -759,6 +827,9 @@ async function cargarProductos() {
             categoriasAdiciones = d.categorias_adiciones || [];
             renderCategorias();
             renderProductos(productos);
+            if (!carrito || carrito.length === 0) {
+                cargarCarritoStorage();
+            }
         }
     } catch {
         toast('Error al cargar productos', true);
@@ -802,16 +873,23 @@ function filtrarProductos(q) {
 function renderProductos(lista) {
     const cont = document.getElementById('lista-productos');
     if (!lista.length) {
-        cont.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8 text-sm">Sin resultados</p>';
+        cont.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8 text-xs font-semibold">Sin resultados</p>';
         return;
     }
     cont.innerHTML = lista.map(p => `
-        <button onclick="agregarAlCarrito(${p.id})"
-                class="prod-btn bg-white rounded-xl shadow-sm p-3 text-left hover:shadow-md active:bg-blue-50">
-            ${p.imagen ? `<img src="${p.imagen}" class="w-full h-24 object-cover rounded-lg mb-2" alt="">` : '<div class="w-full h-16 bg-gray-100 rounded-lg mb-2 flex items-center justify-center text-2xl">🛍️</div>'}
-            <p class="font-semibold text-gray-800 text-sm leading-tight">${p.nombre}</p>
-            ${p.categoria ? `<p class="text-xs text-gray-400 mt-0.5">${p.categoria}</p>` : ''}
-            <p class="font-bold text-blue-700 mt-1">$${p.precio.toLocaleString('es-CO')}</p>
+        <button type="button" onclick="agregarAlCarrito(${p.id})"
+                class="prod-btn bg-white rounded-xl shadow-2xs border border-gray-150 p-2 text-left hover:shadow-md hover:border-blue-300 active:bg-blue-50 transition flex flex-col justify-between select-none group">
+            ${p.imagen 
+                ? `<img src="${p.imagen}" class="w-full h-14 sm:h-16 object-cover rounded-lg mb-1.5" alt="">` 
+                : '<div class="w-full h-11 sm:h-12 bg-slate-100 rounded-lg mb-1.5 flex items-center justify-center text-xl group-hover:bg-blue-100/50 transition">🛍️</div>'
+            }
+            <div class="w-full min-w-0 flex-1 flex flex-col justify-between">
+                <div>
+                    <p class="font-bold text-gray-800 text-xs leading-snug line-clamp-2" title="${p.nombre.replace(/"/g, '&quot;')}">${p.nombre}</p>
+                    ${p.categoria ? `<p class="text-[10px] text-gray-400 truncate mt-0.5">${p.categoria}</p>` : ''}
+                </div>
+                <p class="font-black text-blue-700 text-xs mt-1">$${p.precio.toLocaleString('es-CO')}</p>
+            </div>
         </button>
     `).join('');
 }
@@ -1170,6 +1248,11 @@ function guardarCustomizacionIngredientes() {
 function cambiarCantidad(rowId, delta) {
     const idx = carrito.findIndex(i => i.row_id === rowId);
     if (idx === -1) return;
+    if (delta < 0 && carrito[idx].cantidad <= 1) {
+        if (!confirm(`¿Deseas quitar "${carrito[idx].nombre}" del carrito?`)) {
+            return;
+        }
+    }
     carrito[idx].cantidad += delta;
     if (carrito[idx].cantidad <= 0) carrito.splice(idx, 1);
     renderCarrito();
@@ -1187,6 +1270,7 @@ function establecerCantidad(rowId, valorStr) {
         }
         const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
         document.getElementById('total-display').textContent = `$${total.toLocaleString('es-CO')}`;
+        guardarCarritoStorage();
     }
 }
 
@@ -1199,19 +1283,25 @@ function validarYRenderCarrito() {
     renderCarrito();
 }
 
-function vaciarCarrito() {
+function vaciarCarrito(silent = false) {
+    if (!carrito.length) return;
+    if (!silent && !confirm('¿Estás seguro de que deseas vaciar todos los productos del carrito?')) {
+        return;
+    }
     carrito = [];
     renderCarrito();
+    toast('Carrito vaciado');
 }
 
 function renderCarrito() {
+    guardarCarritoStorage();
     const cont = document.getElementById('carrito-items');
-    const count = carrito.reduce((s, i) => s + i.cantidad, 0);
+    const count = carrito.reduce((s, i) => s + (parseFloat(i.cantidad) || 0), 0);
     const countBadge = document.getElementById('carrito-count');
     if (countBadge) countBadge.textContent = count;
 
     if (!carrito.length) {
-        cont.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">Carrito vacío</p>';
+        cont.innerHTML = '<p class="text-xs text-gray-400 font-semibold text-center py-6">Carrito vacío</p>';
         document.getElementById('total-display').textContent = '$0';
         const ivaElEmpty = document.getElementById('iva-display');
         if (ivaElEmpty) ivaElEmpty.classList.add('hidden');
@@ -1221,7 +1311,6 @@ function renderCarrito() {
     }
 
     cont.innerHTML = carrito.map(i => {
-        const tieneReceta = i.componentes && i.componentes.length > 0;
         const tieneExclusiones = i.excluidos && i.excluidos.length > 0;
         const tieneAdiciones = i.adiciones && i.adiciones.length > 0;
         const estaPersonalizado = tieneExclusiones || tieneAdiciones;
@@ -1229,7 +1318,7 @@ function renderCarrito() {
         let badgesHtml = '';
         if (tieneExclusiones) {
             badgesHtml += `
-                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md leading-tight">
+                <span class="inline-flex items-center gap-1 text-[10px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-md leading-tight">
                     <span>🚫 Sin:</span> <span class="break-words">${i.excluidos_nombres.join(', ')}</span>
                 </span>
             `;
@@ -1237,7 +1326,7 @@ function renderCarrito() {
         if (tieneAdiciones) {
             const adicText = i.adiciones.map(a => `${a.cantidad > 1 ? a.cantidad + 'x ' : ''}${a.nombre} (+$${(a.precio * a.cantidad).toLocaleString('es-CO')})`).join(', ');
             badgesHtml += `
-                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md leading-tight">
+                <span class="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md leading-tight">
                     <span>➕ Con:</span> <span class="break-words">${adicText}</span>
                 </span>
             `;
@@ -1246,10 +1335,10 @@ function renderCarrito() {
         let customBtnHtml = '';
         if (estaPersonalizado) {
             customBtnHtml = `
-                <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <div class="mt-1 flex flex-wrap items-center gap-1">
                     ${badgesHtml}
                     <button type="button" onclick="abrirModalCustomizarIngredientes('${i.row_id}')"
-                            class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 transition cursor-pointer active:scale-95 shadow-2xs"
+                            class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 transition cursor-pointer active:scale-95 shadow-2xs"
                             title="Editar ingredientes y adiciones">
                         <span>✏️ Editar</span>
                     </button>
@@ -1257,11 +1346,11 @@ function renderCarrito() {
             `;
         } else {
             customBtnHtml = `
-                <div class="mt-1">
+                <div class="mt-0.5">
                     <button type="button" onclick="abrirModalCustomizarIngredientes('${i.row_id}')"
-                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 border border-gray-200 transition cursor-pointer active:scale-95 shadow-2xs"
+                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 border border-gray-200 transition cursor-pointer active:scale-95 shadow-2xs"
                             title="Personalizar ingredientes y adiciones">
-                        <span class="text-sm">⚙️</span>
+                        <span class="text-xs">⚙️</span>
                         <span>Personalizar</span>
                     </button>
                 </div>
@@ -1269,32 +1358,32 @@ function renderCarrito() {
         }
 
         return `
-            <div class="py-2.5 border-b border-gray-100 last:border-0">
-                <div class="flex items-start gap-2">
+            <div class="py-2 border-b border-gray-100 last:border-0">
+                <div class="flex items-start gap-1.5 justify-between">
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-bold text-gray-900 break-words leading-tight">${i.nombre}</p>
+                        <p class="text-xs font-bold text-gray-900 break-words leading-tight">${i.nombre}</p>
                         ${customBtnHtml}
-                        <div class="text-[11px] text-gray-400 flex items-center gap-1.5 mt-1.5">
+                        <div class="text-[10px] text-gray-400 flex items-center gap-1 mt-1">
                             <span>$</span>
                             <input type="number" value="${i.precio}" min="0" step="any"
                                    oninput="cambiarPrecioUnitario('${i.row_id}', this.value)"
                                    onblur="renderCarrito()"
-                                   class="w-16 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white"
-                                   style="height: 22px;">
-                            <span class="text-gray-400">Total:</span>
-                            <span id="subtotal-${i.row_id}" class="font-bold text-gray-700">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
+                                   class="w-14 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white text-[11px]"
+                                   style="height: 20px;">
+                            <span class="text-gray-400 font-semibold">Tot:</span>
+                            <span id="subtotal-${i.row_id}" class="font-bold text-gray-700 text-xs">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
                         </div>
                     </div>
                     <div class="flex items-center gap-1 shrink-0 mt-0.5">
-                        <button onclick="cambiarCantidad('${i.row_id}', -1)"
-                                class="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-red-100 hover:text-red-600 text-lg leading-none">−</button>
+                        <button type="button" onclick="cambiarCantidad('${i.row_id}', -1)"
+                                class="w-6 h-6 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-red-100 hover:text-red-600 text-sm flex items-center justify-center cursor-pointer active:scale-95 leading-none">−</button>
                         <input type="number" value="${i.cantidad}" min="0" step="any"
                                oninput="establecerCantidad('${i.row_id}', this.value)"
                                onblur="validarYRenderCarrito()"
-                               class="w-14 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white text-xs"
-                               style="height: 28px;">
-                        <button onclick="cambiarCantidad('${i.row_id}', 1)"
-                                class="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-green-100 hover:text-green-600 text-lg leading-none">+</button>
+                               class="w-11 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white text-xs"
+                               style="height: 24px;">
+                        <button type="button" onclick="cambiarCantidad('${i.row_id}', 1)"
+                                class="w-6 h-6 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-green-100 hover:text-green-600 text-sm flex items-center justify-center cursor-pointer active:scale-95 leading-none">+</button>
                     </div>
                 </div>
             </div>
@@ -1843,41 +1932,109 @@ function mostrarRecibo() {
     document.getElementById('modal-recibo').classList.remove('hidden');
 }
 
-// ── Ticket impresión ─────────────────────────────────────────────────────────
+// ── Ticket impresión: Factura & Orden de Cocina ─────────────────────────────
 
-function imprimirTicket() {
-    const r = ultimoRecibo;
-    if (!r) return;
-    const ahora = new Date().toLocaleString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
-
+function generarHtmlTicketFactura(r, ahora) {
     let lineasItems = r.items.map(i => {
         const total = `$${(i.precio * i.cantidad).toLocaleString('es-CO')}`;
         const desc = `${i.cantidad}x ${i.nombre}`;
         const excluidosTxt = (i.excluidos_nombres && i.excluidos_nombres.length)
-            ? `<div style="font-size:10px; font-weight:bold; color:#000; padding-left:10px;">* SIN ${i.excluidos_nombres.join(', ').toUpperCase()} *</div>`
+            ? `<div style="font-size:11px; font-weight:bold; color:#000; padding-left:8px;">* SIN: ${i.excluidos_nombres.join(', ').toUpperCase()} *</div>`
             : '';
         const adicionesTxt = (i.adiciones && i.adiciones.length)
-            ? i.adiciones.map(a => `<div style="font-size:10px; font-weight:bold; color:#000; padding-left:10px;">+ ${a.cantidad > 1 ? a.cantidad + 'x ' : ''}${a.nombre.toUpperCase()} (+$${(a.precio * a.cantidad).toLocaleString('es-CO')})</div>`).join('')
+            ? i.adiciones.map(a => `<div style="font-size:11px; font-weight:bold; color:#000; padding-left:8px;">+ ${a.cantidad > 1 ? a.cantidad + 'x ' : ''}${a.nombre.toUpperCase()} (+$${(a.precio * a.cantidad).toLocaleString('es-CO')})</div>`).join('')
             : '';
         return `<div class="linea"><span>${desc}</span><span>${total}</span></div>${excluidosTxt}${adicionesTxt}`;
     }).join('');
 
-    document.getElementById('ticket-print').innerHTML = `
-        <div class="centro"><strong>${TIENDA_NOMBRE}</strong></div>
-        <div class="centro" style="font-size:11px;">${ahora}</div>
-        ${r.numero_documento ? `<div class="centro" style="font-size:12px; font-weight:bold; margin-top:2px;">Doc: ${r.numero_documento}</div>` : `<div class="centro" style="font-size:11px;">Pedido: #${r.pedido_id}</div>`}
-        ${r.cajero ? `<div class="centro" style="font-size:11px;">Cajero: ${r.cajero}</div>` : ''}
-        ${r.cliente ? `<div class="centro" style="font-size:11px;">Cliente: ${r.cliente}</div>` : ''}
-        <div class="sep"></div>
-        ${lineasItems}
-        <div class="sep"></div>
-        ${r.iva > 0 ? `<div class="linea" style="font-size:11px;"><span>Subtotal</span><span>$${r.subtotal.toLocaleString('es-CO')}</span></div>
-        <div class="linea" style="font-size:11px;"><span>IVA incluido</span><span>$${r.iva.toLocaleString('es-CO')}</span></div>` : ''}
-        <div class="linea total-line"><span>TOTAL</span><span>$${r.total.toLocaleString('es-CO')}</span></div>
-        <div style="font-size:11px;">${r.pagos && r.pagos.length > 1 ? r.pagos.map(p=>`${p.nombre}: $${p.monto.toLocaleString('es-CO')}`).join(' | ') : `Pago: ${r.metodo}`}</div>
-        <div class="sep"></div>
-        <div class="centro" style="font-size:11px; margin-top:8px;">¡Gracias por su compra!</div>
+    return `
+        <div class="ticket-seccion ticket-factura">
+            <div class="centro"><strong>${TIENDA_NOMBRE}</strong></div>
+            <div class="centro" style="font-size:11px;">${ahora}</div>
+            ${r.numero_documento ? `<div class="centro" style="font-size:12px; font-weight:bold; margin-top:2px;">Doc: ${r.numero_documento}</div>` : `<div class="centro" style="font-size:11px;">Pedido: #${r.pedido_id}</div>`}
+            ${r.cajero ? `<div class="centro" style="font-size:11px;">Cajero: ${r.cajero}</div>` : ''}
+            ${r.cliente ? `<div class="centro" style="font-size:11px;">Cliente: ${r.cliente}</div>` : ''}
+            <div class="sep"></div>
+            ${lineasItems}
+            <div class="sep"></div>
+            ${r.iva > 0 ? `<div class="linea" style="font-size:11px;"><span>Subtotal</span><span>$${r.subtotal.toLocaleString('es-CO')}</span></div>
+            <div class="linea" style="font-size:11px;"><span>IVA incluido</span><span>$${r.iva.toLocaleString('es-CO')}</span></div>` : ''}
+            <div class="linea total-line"><span>TOTAL</span><span>$${r.total.toLocaleString('es-CO')}</span></div>
+            <div style="font-size:11px; margin-top:2px;">${r.pagos && r.pagos.length > 1 ? r.pagos.map(p=>`${p.nombre}: $${p.monto.toLocaleString('es-CO')}`).join(' | ') : `Pago: ${r.metodo}`}</div>
+            <div class="sep"></div>
+            <div class="centro" style="font-size:11px; margin-top:6px;">¡Gracias por su compra!</div>
+        </div>
     `;
+}
+
+function generarHtmlTicketCocina(r, ahora) {
+    const totalCant = r.items.reduce((s, i) => s + (parseFloat(i.cantidad) || 0), 0);
+    
+    let lineasCocina = r.items.map(i => {
+        const excluidosTxt = (i.excluidos_nombres && i.excluidos_nombres.length)
+            ? `<div style="font-size:12px; font-weight:900; color:#000; padding:2px 4px; margin-top:2px; border:1px solid #000; background:#f0f0f0;">>>> SIN: ${i.excluidos_nombres.join(', ').toUpperCase()} <<<</div>`
+            : '';
+        const adicionesTxt = (i.adiciones && i.adiciones.length)
+            ? i.adiciones.map(a => `<div style="font-size:12px; font-weight:900; color:#000; padding-left:6px; margin-top:2px;">➕ CON: ${a.cantidad > 1 ? a.cantidad + 'x ' : ''}${a.nombre.toUpperCase()}</div>`).join('')
+            : '';
+            
+        return `
+            <div style="margin: 6px 0; padding-bottom: 4px; border-bottom: 1px dotted #666;">
+                <div style="font-size:14px; font-weight:900; letter-spacing:0.3px;">
+                    ${i.cantidad}x ${i.nombre.toUpperCase()}
+                </div>
+                ${excluidosTxt}
+                ${adicionesTxt}
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="ticket-seccion ticket-cocina">
+            <div class="centro" style="font-size:15px; font-weight:900; border:2px solid #000; padding:4px; margin-bottom:6px;">
+                🍳 ORDEN DE COCINA
+            </div>
+            <div class="linea" style="font-size:11px; font-weight:bold;">
+                <span>${ahora}</span>
+                <span>${r.numero_documento ? 'Doc: ' + r.numero_documento : 'Ped: #' + r.pedido_id}</span>
+            </div>
+            ${r.cliente ? `<div style="font-size:12px; font-weight:bold; margin-top:2px;">Cliente: ${r.cliente}</div>` : ''}
+            ${r.cajero ? `<div style="font-size:11px;">Cajero: ${r.cajero}</div>` : ''}
+            <div class="sep-bold"></div>
+            ${lineasCocina}
+            <div class="sep"></div>
+            <div class="linea" style="font-size:12px; font-weight:bold;">
+                <span>TOTAL ITEMS:</span>
+                <span>${totalCant} unds</span>
+            </div>
+            <div class="centro" style="font-size:11px; margin-top:8px; font-weight:bold;">*** FIN ORDEN COCINA ***</div>
+        </div>
+    `;
+}
+
+function imprimirTicket(modo = 'ambos') {
+    const r = ultimoRecibo;
+    if (!r) return;
+    const ahora = new Date().toLocaleString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+
+    let html = '';
+    if (modo === 'ambos') {
+        html = `
+            ${generarHtmlTicketFactura(r, ahora)}
+            <div class="page-break sep-cut">
+                - - - - - - - - - - - - - - - -<br>
+                ✂️ CORTE / COCINA<br>
+                - - - - - - - - - - - - - - - -
+            </div>
+            ${generarHtmlTicketCocina(r, ahora)}
+        `;
+    } else if (modo === 'cocina') {
+        html = generarHtmlTicketCocina(r, ahora);
+    } else {
+        html = generarHtmlTicketFactura(r, ahora);
+    }
+
+    document.getElementById('ticket-print').innerHTML = html;
     window.print();
 }
 

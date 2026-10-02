@@ -578,6 +578,30 @@ def _verificar_stock_pedido(conn, negocio_id, items, excluir_componentes=None, b
                     'nombre': prod_name if comp_id != prod_id else "Venta Directa"
                 })
 
+        for ad in (item.get('adiciones') or []):
+            ad_id = int(ad.get('producto_id') or 0)
+            ad_cant = Decimal(str(ad.get('cantidad') or 1)) * cantidad
+            if not ad_id or ad_cant <= 0:
+                continue
+            ad_comps = conn.execute(
+                "SELECT componente_id, cantidad FROM tarjeta_estandar WHERE producto_id = %s",
+                (ad_id,)
+            ).fetchall()
+            if not ad_comps:
+                ad_comps = [{'componente_id': ad_id, 'cantidad': Decimal('1')}]
+            ad_name = ad.get('nombre') or f"Adición #{ad_id}"
+            for comp in ad_comps:
+                cid = comp['componente_id']
+                needed = Decimal(str(comp['cantidad'])) * ad_cant
+                if cid not in required_map:
+                    required_map[cid] = {'requerido': Decimal('0'), 'final_products': []}
+                required_map[cid]['requerido'] += needed
+                if not any(fp['id'] == ad_id for fp in required_map[cid]['final_products']):
+                    required_map[cid]['final_products'].append({
+                        'id': ad_id,
+                        'nombre': f"Adición ({ad_name})"
+                    })
+
     shortages = []
     for comp_id, info in required_map.items():
         req_qty = info['requerido']

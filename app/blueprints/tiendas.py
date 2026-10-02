@@ -2373,7 +2373,10 @@ def api_tienda_pedido_crear(slug):
             items_validos.append({
                 'producto_id': producto['id'], 'nombre_producto': producto['nombre'],
                 'cantidad': cantidad, 'precio_unitario': precio_u,
-                'iva_pct': float(producto['iva_pct'] or 0)
+                'iva_pct': float(producto['iva_pct'] or 0),
+                'excluir_componentes_ids': item.get('excluir_componentes_ids', []),
+                'excluidos_nombres': item.get('excluidos_nombres', []),
+                'adiciones': item.get('adiciones', [])
             })
         if not items_validos:
             return jsonify({'ok': False, 'error': 'Ningun producto valido en el carrito'}), 400
@@ -2573,8 +2576,17 @@ def api_tienda_pedido_crear(slug):
 
             nombre_prod_item = it['nombre_producto']
             excluidos_nombres = it.get('excluidos_nombres') or []
-            if excluidos_nombres and not any(f"Sin" in nombre_prod_item for _ in [0]):
-                nombre_prod_item = f"{nombre_prod_item} (Sin: {', '.join(excluidos_nombres)})"
+            adiciones_list = it.get('adiciones') or []
+            
+            detalles_cust = []
+            if excluidos_nombres:
+                detalles_cust.append(f"Sin: {', '.join(excluidos_nombres)}")
+            if adiciones_list:
+                adic_desc = ", ".join(f"{int(a.get('cantidad') or 1)}x {a.get('nombre')}" if int(a.get('cantidad') or 1) > 1 else str(a.get('nombre')) for a in adiciones_list)
+                detalles_cust.append(f"Con: {adic_desc}")
+            
+            if detalles_cust and not any("Sin:" in nombre_prod_item or "Con:" in nombre_prod_item for _ in [0]):
+                nombre_prod_item = f"{nombre_prod_item} ({' | '.join(detalles_cust)})"
 
             conn.execute("""
                 INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, costo_unitario)
@@ -2601,6 +2613,30 @@ def api_tienda_pedido_crear(slug):
                         excluir_componentes_ids = excluded_ids,
                         proveedor_id   = cliente_id
                     )
+                    
+                    # Descargar stock de cada adición agregada
+                    for ad in adiciones_list:
+                        ad_id = int(ad.get('producto_id') or 0)
+                        ad_cant = float(ad.get('cantidad') or 1) * it['cantidad']
+                        if ad_id and ad_cant > 0:
+                            _aplicar_tarjeta(
+                                conn, negocio['tercero_id'],
+                                producto_id    = ad_id,
+                                cantidad       = ad_cant,
+                                tipo           = 'salida',
+                                motivo         = 'venta',
+                                registrado_por = session.get('usuario_id'),
+                                referencia_id  = pedido_id,
+                                referencia_tipo= 'pedido_tienda',
+                                bodega         = centro_utilidad_id,
+                                tipo_documento = tipo_doc['nombre'] if (tipo_doc_id and tipo_doc) else 'Venta POS',
+                                documento_numero = numero_documento or str(pedido_id),
+                                documento_fecha = fecha_pedido,
+                                proveedor_nombre = nombre_cliente or None,
+                                tipo_documento_id = tipo_doc_id,
+                                proveedor_id   = cliente_id
+                            )
+
                     conn.execute("RELEASE SAVEPOINT sp_inv_tienda")
                 except Exception as _e:
                     print(f'[inv] salida tienda {it["producto_id"]}: {_e}')

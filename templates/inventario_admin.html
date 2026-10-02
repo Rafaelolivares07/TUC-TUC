@@ -1366,53 +1366,55 @@
       </div>
     </div>
 
-    <!-- ── BARRA DE CONTROLES: FILTROS, TOTAL Y NUEVO PRODUCTO EN UNA SOLA LÍNEA ── -->
-    <div class="flex items-center gap-3 mb-4 w-full">
+    <!-- ── BARRA DE CONTROLES: FILTROS, TOTAL Y NUEVO PRODUCTO ── -->
+    <div class="flex flex-wrap items-center justify-between gap-2.5 mb-3 w-full">
       <!-- Filtros a la izquierda -->
-      <div class="flex items-center gap-3 shrink-0 flex-wrap">
-        <input id="filtro-productos" type="text" placeholder="Filtrar por nombre o categoría…"
+      <div class="flex items-center gap-2 flex-wrap shrink-0">
+        <input id="filtro-productos" type="text" placeholder="🔍 Buscar producto o categoría…"
                oninput="filtrarTablaProductos()"
-               class="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500 w-64">
+               class="text-xs border border-gray-200 rounded-xl px-2.5 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500 w-48 sm:w-56">
 
         <select id="filtro-estado-productos" onchange="filtrarTablaProductos()"
-                class="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-rose-500">
-          <option value="todos">Todos los estados</option>
-          <option value="activos" selected>Solo Activos 🟢</option>
-          <option value="inactivos">Solo Inactivos 🔴</option>
+                class="w-28 text-xs border border-gray-200 rounded-xl px-2 py-1.5 bg-gray-50 font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-rose-500 truncate"
+                title="Filtrar por estado del producto">
+          <option value="activos" selected>🟢 Activos</option>
+          <option value="inactivos">🔴 Inactivos</option>
+          <option value="todos">Todos</option>
         </select>
 
         <!-- Selector interactivo de decimales para Productos -->
-        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs">
-          <label for="prod-decimales-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1">
-            <span>🔢 Decimales:</span>
+        <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-1 rounded-xl shadow-2xs">
+          <label for="prod-decimales-input" class="text-[11px] font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-0.5" title="Número de decimales visibles para precios y costos en Productos (0 a 6)">
+            <span>🔢</span><span>Dec:</span>
           </label>
           <input id="prod-decimales-input" type="number" min="0" max="6" step="1" value="2"
                  oninput="cambiarDecimalesProductos(this.value)" onchange="cambiarDecimalesProductos(this.value)" onblur="validarDecimalesProductosInput(this)"
-                 class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                 class="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
                  title="Número de decimales visibles para precios, costos y totales en Productos (0 a 6)">
         </div>
       </div>
 
-      <!-- A la derecha: Valor Total (alineado con la columna Costo Total) y Botón + Producto (alineado con Acciones) -->
-      <div class="ml-auto flex items-center gap-3 shrink-0">
-        <div class="px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-2 text-xs font-semibold text-rose-700 shadow-2xs">
-          <span>VALOR TOTAL DE INVENTARIO:</span>
-          <span id="prod-total-inventario-val" class="font-mono font-bold text-sm text-rose-700">$0.00</span>
+      <!-- A la derecha: Valor Total de Inventario y Botones de Acción -->
+      <div class="flex items-center gap-2 flex-wrap shrink-0 ml-auto">
+        <div class="px-2.5 py-1 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-1.5 text-xs font-semibold text-rose-700 shadow-2xs whitespace-nowrap">
+          <span>Total Inv:</span>
+          <span id="prod-total-inventario-val" class="font-mono font-bold text-xs md:text-sm text-rose-700">$0.00</span>
         </div>
 
         <button type="button" onclick="abrirModalCategoriasAdiciones()"
-                class="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs md:text-sm rounded-xl border border-amber-300 transition shadow-2xs flex items-center gap-1.5"
+                class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-300 transition shadow-2xs flex items-center gap-1 whitespace-nowrap"
                 title="Configurar qué categorías de productos se comportan como adiciones/extras en la caja POS">
-          <span>🍔</span> Categorías de Adición
+          <span>🍔</span> Cat. Adiciones
         </button>
 
         <button type="button" onclick="abrirModalGestionPresentaciones()"
-                class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs md:text-sm rounded-xl border border-slate-200 transition shadow-2xs flex items-center gap-1.5">
-          <span>📦</span> Unidades de Empaque
+                class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition shadow-2xs flex items-center gap-1 whitespace-nowrap"
+                title="Catálogo de unidades de empaque / presentaciones">
+          <span>📦</span> Empaques
         </button>
 
         <button onclick="abrirModalProducto()"
-                class="px-4 py-2 bg-rose-500 text-white text-xs md:text-sm font-bold rounded-xl hover:bg-rose-600 transition shadow-xs flex items-center gap-1">
+                class="px-3.5 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1 whitespace-nowrap">
           <span>+</span> Producto
         </button>
       </div>
@@ -5578,6 +5580,8 @@ async function eliminarProducto(id, nombre) {
 
   }
 
+}
+
 // ── Configuración de Categorías de Adición / Extras POS ─────────────────────
 
 let _catAdicionesData = [];
@@ -5630,12 +5634,13 @@ function renderModalCategoriasAdiciones(filtro = '') {
 
   listEl.innerHTML = list.map((c, idx) => {
     const safeCat = c.categoria.replace(/"/g, '&quot;');
+    const jsCat = c.categoria.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     return `
       <label class="flex items-center justify-between p-2.5 rounded-xl border ${c.es_adicion ? 'border-amber-400 bg-amber-50/80 shadow-2xs' : 'border-gray-200 bg-white'} hover:border-amber-400 transition cursor-pointer select-none">
         <div class="flex items-center gap-2.5 min-w-0 flex-1">
           <input type="checkbox" ${c.es_adicion ? 'checked' : ''} 
                  id="chk-cat-adicion-${idx}"
-                 onchange="toggleCategoriaAdicionByIndex(${idx}, this.checked)"
+                 onchange="toggleCategoriaAdicion('${jsCat}', this.checked)"
                  class="w-4 h-4 accent-amber-600 rounded cursor-pointer shrink-0">
           <span class="text-xs font-bold ${c.es_adicion ? 'text-amber-900' : 'text-gray-700'} truncate">${safeCat}</span>
         </div>
@@ -5647,9 +5652,10 @@ function renderModalCategoriasAdiciones(filtro = '') {
   }).join('');
 }
 
-function toggleCategoriaAdicionByIndex(idx, checked) {
-  if (_catAdicionesData[idx]) {
-    _catAdicionesData[idx].es_adicion = checked;
+function toggleCategoriaAdicion(catName, checked) {
+  const item = _catAdicionesData.find(c => c.categoria === catName);
+  if (item) {
+    item.es_adicion = checked;
     const q = document.getElementById('filtro-modal-cat-adiciones')?.value || '';
     renderModalCategoriasAdiciones(q);
   }

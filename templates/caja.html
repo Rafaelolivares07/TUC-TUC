@@ -1679,9 +1679,20 @@ async function cobrar() {
                 tienda: TIENDA_NOMBRE,
                 items: carrito.map(i => ({...i}))
             };
+
+            // Inmediatamente vaciar y limpiar storage para evitar pedidos residuales al imprimir
+            carrito = [];
+            guardarCarritoStorage();
+            renderCarrito();
+            limpiarPagos();
+            btn.textContent = 'Cobrar';
+            btn.disabled = false;
+
             publicarPantallaCliente('cobrada', {...ultimoRecibo, telefono: ''});
             mostrarRecibo();
             avisarMetodosSinCuenta(pagos);
+            cargarProductos(); // Actualizar stock de inmediato
+            cargarTiposDocumento(); // Actualizar consecutivo
         } else if (d.error === 'insufficient_stock') {
             shortagesList = d.shortages;
             document.getElementById('modal-alerta-stock').classList.remove('hidden');

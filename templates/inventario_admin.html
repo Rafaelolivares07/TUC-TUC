@@ -659,22 +659,22 @@
 
 <div id="overlay-tarjeta" class="overlay hidden" onclick="if(event.target===this)cerrarModalTarjeta()">
 
-  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:600px; width:95%; max-height:90vh; padding:20px; overflow:hidden; position:relative; box-sizing:border-box;">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col bg-white rounded-2xl" style="max-width:760px; width:96%; max-height:92vh; height:auto; padding:16px 20px; overflow:hidden; position:relative; box-sizing:border-box;">
 
     <!-- Fixed Header -->
-
-    <div class="flex-shrink-0 mb-3 border-b border-gray-100 pb-2">
-
+    <div class="flex-shrink-0 mb-2 border-b border-gray-100 pb-2">
       <div class="flex items-center justify-between mb-1">
-
-        <h3 class="text-lg font-bold text-gray-800">Tarjeta estándar</h3>
-
+        <h3 class="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
+          <span>📋</span> Tarjeta Estándar (Ficha Técnica)
+        </h3>
         <span id="tarjeta-items-count" class="text-xs bg-rose-50 text-rose-700 px-2.5 py-0.5 rounded-full font-semibold">0 componentes</span>
-
       </div>
 
       <div class="flex items-center justify-between mt-1 pt-1.5 border-t border-gray-50 flex-wrap gap-2">
-        <p id="tarjeta-nombre-prod" class="text-sm text-gray-500 font-medium truncate max-w-[260px]"></p>
+        <div class="flex items-center gap-1.5 truncate max-w-[320px]">
+          <span class="text-xs font-semibold text-gray-400">Producto:</span>
+          <p id="tarjeta-nombre-prod" class="text-sm font-bold text-gray-800 truncate"></p>
+        </div>
         <div class="flex items-center gap-1.5">
           <button type="button" onclick="toggleClonarEscalarPanel()" id="btn-toggle-clonar" class="text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200 transition-colors flex items-center gap-1">
             📋 Clonar / Multiplicar
@@ -687,165 +687,134 @@
       <input type="hidden" id="tarjeta-prod-id">
     </div>
 
-    <!-- Panel Clonar / Multiplicar / Escalar -->
-    <div id="panel-clonar-escalar" class="hidden flex-shrink-0 bg-gradient-to-br from-amber-50/90 to-amber-100/50 border border-amber-200 rounded-xl p-3 mb-2.5 text-xs shadow-xs">
-      <div class="flex items-center justify-between mb-2">
-        <span class="font-bold text-amber-900 flex items-center gap-1 text-xs">
-          <span>📋</span> Clonar / Escalar Receta con Multiplicador
-        </span>
-        <button type="button" onclick="toggleClonarEscalarPanel(false)" class="text-amber-700 hover:text-amber-900 font-bold text-sm leading-none">✕</button>
-      </div>
-      
-      <!-- Selector de Destino (Clonar a otro producto) -->
-      <div class="mb-2 bg-white/90 p-2 rounded-lg border border-amber-200/80">
-        <label class="text-[11px] font-bold text-gray-700 block mb-1">
-          🎯 Producto Destino (opcional, para guardar como copia en otro producto):
-        </label>
-        <div class="relative">
-          <input id="clonar-dest-input" type="text" placeholder="Buscar nuevo producto destino (ej: Porción 50g)…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs">
-          <div id="clonar-dest-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:180px; z-index: 60;"></div>
-          <input type="hidden" id="clonar-dest-id">
-          
-          <div id="clonar-dest-chip" class="hidden absolute left-0 right-0 bottom-0 top-0 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1 text-xs flex items-center justify-between text-emerald-800 font-semibold">
-            <div class="flex items-center gap-1 truncate">
-              <span class="text-emerald-600 font-bold">✓ Destino:</span>
-              <span id="clonar-dest-name" class="truncate font-bold"></span>
+    <!-- Scrollable Middle Body Area -->
+    <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 space-y-2">
+
+      <!-- Panel Clonar / Multiplicar / Escalar -->
+      <div id="panel-clonar-escalar" class="hidden bg-gradient-to-br from-amber-50/90 to-amber-100/40 border border-amber-200 rounded-xl p-2.5 text-xs shadow-xs">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="font-bold text-amber-900 flex items-center gap-1 text-xs">
+            <span>📋</span> Clonar / Escalar Receta con Multiplicador
+          </span>
+          <button type="button" onclick="toggleClonarEscalarPanel(false)" class="text-amber-700 hover:text-amber-900 font-bold text-sm leading-none px-1">✕</button>
+        </div>
+        
+        <!-- Selector de Destino (Clonar a otro producto) -->
+        <div class="mb-2 bg-white/95 p-2 rounded-lg border border-amber-200/80">
+          <label class="text-[11px] font-bold text-gray-700 block mb-1">
+            🎯 Producto Destino (opcional, para guardar como copia en otro producto):
+          </label>
+          <div class="relative">
+            <input id="clonar-dest-input" type="text" placeholder="Buscar nuevo producto destino (ej: Porción 50g)…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs">
+            <div id="clonar-dest-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:180px; z-index: 60;"></div>
+            <input type="hidden" id="clonar-dest-id">
+            
+            <div id="clonar-dest-chip" class="hidden absolute inset-0 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1 text-xs flex items-center justify-between text-emerald-800 font-semibold z-10">
+              <div class="flex items-center gap-1 truncate">
+                <span class="text-emerald-600 font-bold">✓ Destino:</span>
+                <span id="clonar-dest-name" class="truncate font-bold"></span>
+              </div>
+              <button type="button" onclick="clearSelectedClonarDest()" class="text-emerald-700 hover:text-emerald-900 font-bold ml-2">✕</button>
             </div>
-            <button type="button" onclick="clearSelectedClonarDest()" class="text-emerald-700 hover:text-emerald-900 font-bold ml-2">✕</button>
           </div>
+        </div>
+
+        <!-- Multiplicador / Factor de Escala -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white/95 p-2 rounded-lg border border-amber-200/80 items-end">
+          <div>
+            <label class="text-[11px] font-bold text-gray-700 block mb-1">
+              ✖ Multiplicador / Factor (ej: 0.05 ó 2.0):
+            </label>
+            <div class="flex items-center gap-1">
+              <input id="tarjeta-multiplicador-factor" type="number" step="any" min="0.00001" placeholder="Ej: 0.05" class="w-full bg-white border border-amber-300 rounded-lg px-2 py-1 text-xs font-mono font-bold text-amber-900">
+              <button type="button" onclick="aplicarMultiplicadorTarjeta()" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition-colors whitespace-nowrap shadow-xs">
+                Aplicar ✖
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-[11px] font-bold text-gray-700 block mb-1">
+              ⚖️ Calculadora rápida (Gramos Base ➔ Porción):
+            </label>
+            <div class="flex items-center gap-1">
+              <input id="calc-gramos-base" type="number" step="any" placeholder="Base (ej: 1000)" class="w-1/2 bg-white border border-gray-200 rounded-lg px-2 py-1 text-[11px] font-mono text-center" oninput="calcularFactorDesdeGramos()">
+              <span class="text-gray-400 font-bold">➔</span>
+              <input id="calc-gramos-target" type="number" step="any" placeholder="Porción (ej: 50)" class="w-1/2 bg-white border border-gray-200 rounded-lg px-2 py-1 text-[11px] font-mono text-center" oninput="calcularFactorDesdeGramos()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Action Buttons -->
+        <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-amber-200/70 flex-wrap gap-1">
+          <div class="flex gap-1 flex-wrap">
+            <button type="button" onclick="setMultiplicadorRapido(0.05)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x0.05 (50g/1kg)</button>
+            <button type="button" onclick="setMultiplicadorRapido(0.07)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x0.07 (70g/1kg)</button>
+            <button type="button" onclick="setMultiplicadorRapido(0.5)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x0.5</button>
+            <button type="button" onclick="setMultiplicadorRapido(2)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x2.0</button>
+          </div>
+          <button type="button" onclick="restaurarLineasOriginalesTarjeta()" id="btn-restaurar-tarjeta" class="text-[10px] text-gray-500 hover:text-gray-800 underline font-semibold hidden ml-auto">
+            ↺ Restaurar originales
+          </button>
         </div>
       </div>
 
-      <!-- Multiplicador / Factor de Escala -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white/90 p-2 rounded-lg border border-amber-200/80 items-end">
-        <div>
-          <label class="text-[11px] font-bold text-gray-700 block mb-1">
-            ✖ Multiplicador / Factor (ej: 0.05 ó 2.0):
-          </label>
-          <div class="flex items-center gap-1">
-            <input id="tarjeta-multiplicador-factor" type="number" step="any" min="0.00001" placeholder="Ej: 0.05" class="w-full bg-white border border-amber-300 rounded-lg px-2 py-1 text-xs font-mono font-bold text-amber-900">
-            <button type="button" onclick="aplicarMultiplicadorTarjeta()" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition-colors whitespace-nowrap shadow-xs">
-              Aplicar ✖
-            </button>
+      <!-- Compact Add Component Form -->
+      <div class="flex gap-2 items-end bg-gray-50 p-2 rounded-xl border border-gray-100 relative z-20">
+        <div class="flex-1 relative">
+          <label class="text-xs font-semibold text-gray-600 mb-1 block">Agregar componente / insumo</label>
+          <input id="tarjeta-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs">
+          <div id="tarjeta-ac-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:200px; z-index: 50;"></div>
+          <input type="hidden" id="tarjeta-ac-id">
+
+          <!-- Visual selection chip -->
+          <div id="tarjeta-selected-chip" class="hidden absolute inset-0 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1 text-xs flex items-center justify-between text-emerald-800 font-semibold z-10">
+            <div class="flex items-center gap-1.5 truncate">
+              <span class="text-emerald-500 font-bold">✓</span>
+              <span id="tarjeta-selected-name" class="truncate text-xs">Producto seleccionado</span>
+            </div>
+            <button type="button" onclick="clearSelectedComponent()" class="text-emerald-600 hover:text-emerald-800 font-bold ml-2 focus:outline-none">✕</button>
           </div>
         </div>
 
-        <div>
-          <label class="text-[11px] font-bold text-gray-700 block mb-1">
-            ⚖️ Calculadora rápida (Gramos Base ➔ Porción):
-          </label>
-          <div class="flex items-center gap-1">
-            <input id="calc-gramos-base" type="number" step="any" placeholder="Base (ej: 1000)" class="w-1/2 bg-white border border-gray-200 rounded-lg px-2 py-1 text-[11px] font-mono text-center" oninput="calcularFactorDesdeGramos()">
-            <span class="text-gray-400 font-bold">➔</span>
-            <input id="calc-gramos-target" type="number" step="any" placeholder="Porción (ej: 50)" class="w-1/2 bg-white border border-gray-200 rounded-lg px-2 py-1 text-[11px] font-mono text-center" oninput="calcularFactorDesdeGramos()">
-          </div>
+        <div style="width:85px">
+          <label class="text-xs font-semibold text-gray-600 mb-1 block text-center">Cant.</label>
+          <input id="tarjeta-ac-cant" type="number" min="0.0001" step="any" value="1" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-center font-mono font-bold">
         </div>
+
+        <button onclick="agregarLineaTarjeta()" class="px-3.5 py-1.5 rounded-lg bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 transition-colors shadow-xs" title="Agregar a la receta">+</button>
       </div>
 
-      <!-- Quick Action Buttons -->
-      <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-amber-200/70">
-        <div class="flex gap-1 flex-wrap">
-          <button type="button" onclick="setMultiplicadorRapido(0.05)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x0.05 (50g/1kg)</button>
-          <button type="button" onclick="setMultiplicadorRapido(0.07)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x0.07 (70g/1kg)</button>
-          <button type="button" onclick="setMultiplicadorRapido(0.5)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x0.5</button>
-          <button type="button" onclick="setMultiplicadorRapido(2)" class="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-800 hover:bg-amber-50 font-mono">x2.0</button>
+      <!-- Table of added components (scrolls inside body area) -->
+      <div id="tarjeta-lineas" class="space-y-1.5 border border-gray-100 rounded-xl p-1 bg-gray-50/60 min-h-[140px]"></div>
+
+    </div>
+
+    <!-- Fixed Bottom Sticky Area (Totals & Actions - Always Visible) -->
+    <div class="flex-shrink-0 mt-2 pt-2 border-t border-gray-100 bg-white">
+      
+      <!-- Summary Total Box -->
+      <div id="tarjeta-total-box" class="flex justify-between items-center bg-rose-50 border border-rose-100 rounded-xl px-3 py-1.5 mb-2">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-rose-800">Costo total de receta:</span>
+          <span class="text-[10px] text-gray-500 font-normal hidden sm:inline">(Se actualiza al guardar)</span>
         </div>
-        <button type="button" onclick="restaurarLineasOriginalesTarjeta()" id="btn-restaurar-tarjeta" class="text-[10px] text-gray-500 hover:text-gray-800 underline font-semibold hidden">
-          ↺ Restaurar originales
+        <span id="tarjeta-total-val" class="text-sm sm:text-base font-extrabold text-rose-900 font-mono">$0.00</span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex gap-2 justify-between items-center">
+        <button id="btn-eliminar-tarjeta" onclick="eliminarTarjetaDesdeModal()" class="px-3 py-1.5 rounded-xl bg-red-50 text-red-600 border border-red-100 text-xs font-semibold hover:bg-red-100 hover:text-red-700 transition-colors hidden">
+          🗑️ Eliminar receta
         </button>
-      </div>
-    </div>
-
-    <!-- Informational Legend -->
-    <div class="flex-shrink-0 bg-blue-50/70 border border-blue-100 rounded-xl p-2.5 mb-2.5 flex items-start gap-2 text-xs text-blue-800">
-      <span class="text-base leading-none">💡</span>
-      <div>
-        <span class="font-bold">Modo borrador:</span> Las cantidades ingresadas pueden ser <strong>números decimales</strong>. Los cambios en insumos o cantidades se aplicarán permanentemente <strong>únicamente al presionar "Guardar tarjeta"</strong>.
-      </div>
-    </div>
-
-
-
-    <!-- Fixed Add Component Form (Top positioned with dropdown clearance) -->
-
-    <div class="flex-shrink-0 flex gap-2 items-end mb-2.5 bg-gray-50 p-2.5 rounded-xl border border-gray-100 relative z-30">
-
-      <div class="flex-1 relative">
-
-        <label class="text-xs font-semibold text-gray-600 mb-1 block">Agregar componente</label>
-
-        <input id="tarjeta-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
-
-        <div id="tarjeta-ac-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:240px;"></div>
-
-        <input type="hidden" id="tarjeta-ac-id">
-
-        <!-- Visual selection chip -->
-
-        <div id="tarjeta-selected-chip" class="hidden absolute left-0 right-0 bottom-0 top-6 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 text-sm flex items-center justify-between text-emerald-800 font-semibold">
-
-          <div class="flex items-center gap-1.5 truncate">
-
-            <span class="text-emerald-500 font-bold">✓</span>
-
-            <span id="tarjeta-selected-name" class="truncate text-xs">Producto seleccionado</span>
-
-          </div>
-
-          <button type="button" onclick="clearSelectedComponent()" class="text-emerald-600 hover:text-emerald-800 font-bold ml-2 focus:outline-none">✕</button>
-
+        <div class="flex gap-2 ml-auto">
+          <button onclick="cerrarModalTarjeta()" class="px-4 py-1.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+            Cancelar
+          </button>
+          <button onclick="guardarTarjeta()" class="px-5 py-1.5 rounded-xl bg-rose-500 text-white font-bold text-xs sm:text-sm hover:bg-rose-600 shadow-xs transition-colors flex items-center gap-1">
+            <span>💾</span> Guardar tarjeta
+          </button>
         </div>
-
-      </div>
-
-      <div style="width:80px">
-
-        <label class="text-xs font-semibold text-gray-600 mb-1 block">Cant.</label>
-
-        <input id="tarjeta-ac-cant" type="number" min="0.0001" step="any" value="1" class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center">
-
-      </div>
-
-      <button onclick="agregarLineaTarjeta()" class="px-3 py-1.5 rounded-lg bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 transition-colors shadow-xs">+</button>
-
-    </div>
-
-
-
-    <!-- Table of added components -->
-
-    <div id="tarjeta-lineas" class="flex-1 space-y-2 mb-2.5 overflow-y-auto custom-scrollbar pr-1 border border-gray-100 rounded-xl p-2 bg-gray-50/50" style="min-height:110px; max-height:38vh;"></div>
-
-    
-
-    <!-- Fixed Summary Total Box -->
-
-    <div id="tarjeta-total-box" class="flex-shrink-0 flex justify-between items-center bg-rose-50 border border-rose-100 rounded-xl px-4 py-2 mb-2.5">
-
-      <span class="text-xs font-bold text-rose-800">Costo total de receta:</span>
-
-      <span id="tarjeta-total-val" class="text-sm font-extrabold text-rose-900">$0.00</span>
-
-    </div>
-
-
-
-    <!-- Fixed Modal Footer -->
-
-    <div class="flex-shrink-0 flex gap-3 justify-between pt-2.5 border-t border-gray-100 mt-auto">
-
-      <button id="btn-eliminar-tarjeta" onclick="eliminarTarjetaDesdeModal()" class="px-4 py-2 rounded-xl bg-red-50 text-red-600 border border-red-100 text-sm font-semibold hover:bg-red-100 hover:text-red-700 transition-colors hidden">
-
-        Eliminar receta
-
-      </button>
-
-      <div class="flex gap-3 ml-auto">
-
-        <button onclick="cerrarModalTarjeta()" class="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
-
-        <button onclick="guardarTarjeta()" class="px-5 py-2 rounded-xl bg-rose-500 text-white font-bold text-sm hover:bg-rose-600 shadow-xs">Guardar tarjeta</button>
-
       </div>
 
     </div>
@@ -6249,10 +6218,8 @@ function renderLineasTarjeta() {
 
       <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
 
-        <td class="py-2 px-2 text-left font-semibold text-gray-700 truncate max-w-[160px]" title="${ln.nombre}">
-
+        <td class="py-2 px-2 text-left font-semibold text-gray-700 truncate max-w-[240px] sm:max-w-[320px]" title="${ln.nombre}">
           ${ln.nombre}
-
         </td>
 
         <td class="py-2 px-1 text-center">

@@ -965,6 +965,152 @@
 
 </div>
 
+<!-- ── OVERLAY MODAL REEMPLAZAR INSUMO EN RECETAS ──────────────────── -->
+<div id="overlay-reemplazar-insumo" class="overlay hidden" onclick="if(event.target===this)cerrarModalReemplazarInsumo()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col bg-white rounded-2xl" style="max-width:760px; width:96%; max-height:92vh; height:auto; padding:16px 20px; overflow:hidden; position:relative; box-sizing:border-box;">
+    
+    <!-- Fixed Header -->
+    <div class="flex-shrink-0 mb-2 border-b border-gray-100 pb-2">
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
+          <span>🔄</span> Reemplazo Masivo de Insumo en Recetas
+        </h3>
+        <button onclick="cerrarModalReemplazarInsumo()" class="text-gray-400 hover:text-gray-600 font-bold text-lg leading-none">✕</button>
+      </div>
+      <p class="text-xs text-gray-500">
+        Reemplaza un ingrediente por otro nuevo en todas las recetas seleccionadas en 1 solo clic.
+      </p>
+    </div>
+
+    <!-- Scrollable Body -->
+    <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 space-y-3">
+      
+      <!-- Selectores de Insumos (Origen y Destino) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gradient-to-r from-gray-50 to-blue-50/40 p-3 rounded-xl border border-gray-200">
+        
+        <!-- Insumo Actual (Origen) -->
+        <div class="relative">
+          <label class="text-[11px] font-bold text-gray-700 block mb-1">
+            ❌ Insumo a Reemplazar (Actual):
+          </label>
+          <input id="reemp-orig-input" type="text" placeholder="Buscar insumo actual…" autocomplete="off" class="w-full bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold">
+          <div id="reemp-orig-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:180px; z-index: 60;"></div>
+          <input type="hidden" id="reemp-orig-id">
+          
+          <div id="reemp-orig-chip" class="hidden absolute inset-0 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1 text-xs flex items-center justify-between text-red-800 font-semibold z-10">
+            <div class="flex items-center gap-1.5 truncate">
+              <span class="text-red-500 font-bold">❌</span>
+              <span id="reemp-orig-name" class="truncate font-bold"></span>
+            </div>
+            <button type="button" onclick="clearSelectedReempOrig()" class="text-red-600 hover:text-red-800 font-bold ml-2">✕</button>
+          </div>
+        </div>
+
+        <!-- Insumo Nuevo (Destino) -->
+        <div class="relative">
+          <label class="text-[11px] font-bold text-gray-700 block mb-1">
+            ✨ Nuevo Insumo / Porción:
+          </label>
+          <input id="reemp-dest-input" type="text" placeholder="Buscar nuevo insumo (ej: Porción 50g)…" autocomplete="off" class="w-full bg-white border border-blue-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold">
+          <div id="reemp-dest-list" class="ac-list hidden shadow-xl border border-gray-200 rounded-xl" style="max-height:180px; z-index: 60;"></div>
+          <input type="hidden" id="reemp-dest-id">
+          
+          <div id="reemp-dest-chip" class="hidden absolute inset-0 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1 text-xs flex items-center justify-between text-emerald-800 font-semibold z-10">
+            <div class="flex items-center gap-1.5 truncate">
+              <span class="text-emerald-600 font-bold">✨</span>
+              <span id="reemp-dest-name" class="truncate font-bold"></span>
+            </div>
+            <button type="button" onclick="clearSelectedReempDest()" class="text-emerald-700 hover:text-emerald-900 font-bold ml-2">✕</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Configuración de Cantidad / Conversión -->
+      <div class="bg-amber-50/70 border border-amber-200 rounded-xl p-3 text-xs">
+        <label class="font-bold text-amber-900 block mb-1.5">⚖️ Regla de Asignación de la Nueva Cantidad:</label>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+          <label class="flex items-center gap-1.5 bg-white p-2 rounded-lg border border-amber-200 cursor-pointer">
+            <input type="radio" name="reemp-modo-cant" value="fija" checked onchange="cambiarModoCantReemplazo()" class="text-amber-600 focus:ring-0">
+            <div>
+              <span class="font-bold text-gray-800 block text-[11px]">Cantidad Fija</span>
+              <span class="text-[10px] text-gray-500">Ej: 1 porción en todas</span>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-1.5 bg-white p-2 rounded-lg border border-amber-200 cursor-pointer">
+            <input type="radio" name="reemp-modo-cant" value="factor" onchange="cambiarModoCantReemplazo()" class="text-amber-600 focus:ring-0">
+            <div>
+              <span class="font-bold text-gray-800 block text-[11px]">Factor / Proporción</span>
+              <span class="text-[10px] text-gray-500">Ej: Cant. actual × Factor</span>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-1.5 bg-white p-2 rounded-lg border border-amber-200 cursor-pointer">
+            <input type="radio" name="reemp-modo-cant" value="mantener" onchange="cambiarModoCantReemplazo()" class="text-amber-600 focus:ring-0">
+            <div>
+              <span class="font-bold text-gray-800 block text-[11px]">Mantener Cantidad</span>
+              <span class="text-[10px] text-gray-500">Mismo valor numérico</span>
+            </div>
+          </label>
+        </div>
+
+        <!-- Input dinámico según modo -->
+        <div id="reemp-input-container" class="mt-2.5 flex items-center gap-2 bg-white p-2 rounded-lg border border-amber-200">
+          <span id="reemp-input-label" class="text-[11px] font-bold text-gray-700">Nueva Cantidad para cada receta:</span>
+          <input id="reemp-valor-cant" type="number" step="any" min="0.0001" value="1" class="w-28 bg-amber-50/50 border border-amber-300 rounded px-2 py-1 text-xs font-mono font-bold text-center" oninput="aplicarReglaRecetasReemplazo()">
+          <button type="button" onclick="aplicarReglaRecetasReemplazo()" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded text-[11px] transition-colors ml-auto shadow-xs">
+            Aplicar a la tabla
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabla de Recetas Afectadas -->
+      <div class="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-xs">
+        <div class="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between text-xs">
+          <label class="flex items-center gap-2 font-bold text-gray-700 cursor-pointer">
+            <input type="checkbox" id="reemp-check-all" checked onchange="toggleSelectAllRecetasReemplazo(this.checked)" class="rounded text-rose-500">
+            <span>Seleccionar todas (<span id="reemp-total-recetas-count">0</span> recetas encontradas)</span>
+          </label>
+          <span class="text-[11px] text-gray-500" id="reemp-selected-count">0 seleccionadas</span>
+        </div>
+
+        <div class="max-h-[35vh] overflow-y-auto custom-scrollbar">
+          <table class="w-full text-xs">
+            <thead class="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase text-[10px] sticky top-0">
+              <tr>
+                <th class="py-1.5 px-3 w-10 text-center">Sel.</th>
+                <th class="py-1.5 px-3 text-left">Receta / Producto</th>
+                <th class="py-1.5 px-3 text-center">Cant. Actual</th>
+                <th class="py-1.5 px-3 text-center">Nueva Cantidad</th>
+              </tr>
+            </thead>
+            <tbody id="reemp-tabla-recetas-body">
+              <tr>
+                <td colspan="4" class="text-center text-gray-400 py-6 text-xs italic">
+                  Selecciona el insumo actual para listar las recetas donde se utiliza.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Fixed Footer -->
+    <div class="flex-shrink-0 mt-3 pt-2.5 border-t border-gray-100 bg-white flex justify-between items-center">
+      <button onclick="cerrarModalReemplazarInsumo()" class="px-4 py-1.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+        Cancelar
+      </button>
+      <button onclick="ejecutarReemplazoInsumoMasivo()" id="btn-ejecutar-reemplazo" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-1.5">
+        <span>🚀</span> Reemplazar en <span id="btn-reemp-count">0</span> Recetas
+      </button>
+    </div>
+
+  </div>
+</div>
+
 
 
 <!-- Modal Ajuste Permanente de Receta -->
@@ -1683,6 +1829,13 @@
                    class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
                    title="Número de decimales visibles para costos unitarios y totales en Insumos (0 a 6)">
           </div>
+
+          <!-- Botón Reemplazo Masivo de Insumos -->
+          <button type="button" onclick="abrirModalReemplazarInsumo()"
+                  class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition-colors shadow-2xs shrink-0"
+                  title="Reemplazar un insumo por otro en múltiples recetas al mismo tiempo">
+            <span>🔄</span> Reemplazo Masivo
+          </button>
 
           <div class="w-full sm:w-64">
             <input id="insumos-filtro" type="text" placeholder="Buscar insumo o categoría…" oninput="filtrarInsumos()"
@@ -12378,6 +12531,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('tarjeta-multiplicador-factor').focus();
   });
 
+  // AC reemplazo masivo: insumo origen
+  setupAC('reemp-orig-input', 'reemp-orig-list', 'reemp-orig-id', () => productos, (item) => {
+    document.getElementById('reemp-orig-name').textContent = item.nombre;
+    document.getElementById('reemp-orig-input').classList.add('hidden');
+    document.getElementById('reemp-orig-chip').classList.remove('hidden');
+    cargarRecetasParaReemplazo(item.id);
+  });
+
+  // AC reemplazo masivo: insumo destino
+  setupAC('reemp-dest-input', 'reemp-dest-list', 'reemp-dest-id', () => productos, (item) => {
+    document.getElementById('reemp-dest-name').textContent = item.nombre;
+    document.getElementById('reemp-dest-input').classList.add('hidden');
+    document.getElementById('reemp-dest-chip').classList.remove('hidden');
+  });
+
 
 
   // AC kardex
@@ -12927,25 +13095,30 @@ function renderInsumosTable() {
   insumosFiltrados.forEach((ins, idx) => {
     const uid = 'ins-' + idx;
     let recetasHtml = '';
+    const safeNombre = (ins.nombre || '').replace(/'/g, "\\'");
     ins.recetas.forEach(rec => {
       const costoReceta = (rec.cantidad || 0) * ins.costo_und;
       recetasHtml += '<div class="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0"><span class="text-gray-700 text-sm">' + rec.nombre + '</span><div class="flex items-center gap-4 text-sm"><span class="text-gray-500">' + _fmtTarjetasNum(rec.cantidad) + '</span><span class="font-mono font-semibold text-gray-800">' + _fmtTarjetasMon(costoReceta) + '</span></div></div>';
     });
-    html += '<div class="border border-gray-200 rounded-xl overflow-hidden bg-white">'
+    html += '<div class="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">'
       + '<button onclick="toggleInsumo(\'' + uid + '\')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left">'
       + '<div class="flex items-center gap-3 min-w-0">'
       + '<svg class="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ins-arrow" id="arrow-' + uid + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>'
       + '<span class="font-semibold text-gray-800 truncate">' + ins.nombre + '</span>'
       + '<span class="text-xs text-gray-400 hidden sm:inline">' + ins.categoria + '</span>'
       + '</div>'
-      + '<div class="flex items-center gap-4 flex-shrink-0">'
+      + '<div class="flex items-center gap-2 sm:gap-4 flex-shrink-0">'
       + '<span class="text-sm font-mono text-gray-600">' + _fmtTarjetasMon(ins.costo_und) + '</span>'
       + '<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">' + ins.recetas.length + ' recetas</span>'
+      + '<button type="button" onclick="event.stopPropagation(); abrirModalReemplazarInsumo(' + ins.id + ', \'' + safeNombre + '\')" class="px-2.5 py-1 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg transition-colors border border-indigo-200 flex items-center gap-1 shadow-2xs" title="Reemplazar este insumo en todas las recetas donde se usa"><span>🔄</span> <span class="hidden sm:inline">Reemplazar</span></button>'
       + '</div></button>'
-      + '<div id="' + uid + '" class="hidden px-4 pb-3">'
-      + '<div class="ml-7 text-xs text-gray-400 font-bold uppercase mb-1">Receta / Ensamble</div>'
+      + '<div id="' + uid + '" class="hidden px-4 pb-3 bg-gray-50/50 border-t border-gray-100">'
+      + '<div class="ml-7 text-xs text-gray-400 font-bold uppercase mb-1 pt-2">Recetas donde se utiliza</div>'
       + '<div class="ml-7 grid grid-cols-2 text-xs text-gray-400 font-bold uppercase mb-1"><span>Producto</span><span class="text-right">Cant x Unit = Total</span></div>'
-      + recetasHtml + '</div></div>';
+      + recetasHtml
+      + '<div class="mt-2.5 pt-2 border-t border-gray-200/60 flex justify-end">'
+      + '<button type="button" onclick="abrirModalReemplazarInsumo(' + ins.id + ', \'' + safeNombre + '\')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"><span>🔄</span> Reemplazar en estas ' + ins.recetas.length + ' recetas</button>'
+      + '</div></div></div>';
   });
   cont.innerHTML = html;
 }
@@ -12957,6 +13130,280 @@ function toggleInsumo(id) {
   const isOpen = !el.classList.contains('hidden');
   el.classList.toggle('hidden');
   if (arrow) arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+
+// ── Reemplazo Masivo de Insumos en Recetas ────────────────────────────────────
+let reempRecetasAfectadas = [];
+
+function abrirModalReemplazarInsumo(insumoId, insumoNombre) {
+  clearSelectedReempOrig();
+  clearSelectedReempDest();
+  reempRecetasAfectadas = [];
+
+  const checkAllEl = document.getElementById('reemp-check-all');
+  if (checkAllEl) checkAllEl.checked = true;
+
+  const rdoFija = document.querySelector('input[name="reemp-modo-cant"][value="fija"]');
+  if (rdoFija) rdoFija.checked = true;
+  cambiarModoCantReemplazo();
+
+  if (insumoId) {
+    const prod = (typeof productos !== 'undefined' && productos) ? productos.find(p => p.id === insumoId) : null;
+    const nombre = insumoNombre || (prod ? prod.nombre : 'Insumo seleccionado');
+    
+    document.getElementById('reemp-orig-id').value = insumoId;
+    document.getElementById('reemp-orig-name').textContent = nombre;
+    document.getElementById('reemp-orig-input').classList.add('hidden');
+    document.getElementById('reemp-orig-chip').classList.remove('hidden');
+
+    cargarRecetasParaReemplazo(insumoId);
+  } else {
+    renderTablaRecetasReemplazo();
+  }
+
+  document.getElementById('overlay-reemplazar-insumo').classList.remove('hidden');
+}
+
+function cerrarModalReemplazarInsumo() {
+  document.getElementById('overlay-reemplazar-insumo').classList.add('hidden');
+}
+
+function clearSelectedReempOrig() {
+  const idEl = document.getElementById('reemp-orig-id');
+  const inputEl = document.getElementById('reemp-orig-input');
+  const chipEl = document.getElementById('reemp-orig-chip');
+  if (idEl) idEl.value = '';
+  if (inputEl) {
+    inputEl.value = '';
+    inputEl.classList.remove('hidden');
+  }
+  if (chipEl) chipEl.classList.add('hidden');
+  reempRecetasAfectadas = [];
+  renderTablaRecetasReemplazo();
+}
+
+function clearSelectedReempDest() {
+  const idEl = document.getElementById('reemp-dest-id');
+  const inputEl = document.getElementById('reemp-dest-input');
+  const chipEl = document.getElementById('reemp-dest-chip');
+  if (idEl) idEl.value = '';
+  if (inputEl) {
+    inputEl.value = '';
+    inputEl.classList.remove('hidden');
+  }
+  if (chipEl) chipEl.classList.add('hidden');
+}
+
+function cargarRecetasParaReemplazo(insumoId) {
+  reempRecetasAfectadas = [];
+  if (typeof tarjetasData !== 'undefined' && tarjetasData) {
+    tarjetasData.forEach(p => {
+      if (p.tiene_tarjeta && p.componentes) {
+        const comp = p.componentes.find(c => c.componente_id === insumoId);
+        if (comp) {
+          reempRecetasAfectadas.push({
+            producto_id: p.id,
+            nombre: p.nombre,
+            categoria: p.categoria || 'Sin categoría',
+            cant_actual: parseFloat(comp.cantidad || 0),
+            nueva_cant: 1.0,
+            seleccionado: true
+          });
+        }
+      }
+    });
+  }
+  aplicarReglaRecetasReemplazo();
+}
+
+function cambiarModoCantReemplazo() {
+  const modo = document.querySelector('input[name="reemp-modo-cant"]:checked')?.value || 'fija';
+  const labelEl = document.getElementById('reemp-input-label');
+  const inputEl = document.getElementById('reemp-valor-cant');
+  const contEl = document.getElementById('reemp-input-container');
+
+  if (modo === 'fija') {
+    if (contEl) contEl.classList.remove('hidden');
+    if (labelEl) labelEl.textContent = 'Nueva Cantidad para cada receta:';
+    if (inputEl) {
+      inputEl.value = '1';
+      inputEl.placeholder = '1';
+    }
+  } else if (modo === 'factor') {
+    if (contEl) contEl.classList.remove('hidden');
+    if (labelEl) labelEl.textContent = 'Multiplicar cantidad actual por:';
+    if (inputEl) {
+      inputEl.value = '0.05';
+      inputEl.placeholder = '0.05';
+    }
+  } else if (modo === 'mantener') {
+    if (contEl) contEl.classList.add('hidden');
+  }
+  aplicarReglaRecetasReemplazo();
+}
+
+function aplicarReglaRecetasReemplazo() {
+  const modo = document.querySelector('input[name="reemp-modo-cant"]:checked')?.value || 'fija';
+  const valNum = parseFloat(document.getElementById('reemp-valor-cant')?.value) || 1;
+
+  reempRecetasAfectadas.forEach(r => {
+    if (modo === 'fija') {
+      r.nueva_cant = Math.max(0.0001, valNum);
+    } else if (modo === 'factor') {
+      r.nueva_cant = Number((r.cant_actual * valNum).toFixed(6));
+    } else if (modo === 'mantener') {
+      r.nueva_cant = r.cant_actual;
+    }
+  });
+
+  renderTablaRecetasReemplazo();
+}
+
+function renderTablaRecetasReemplazo() {
+  const tbody = document.getElementById('reemp-tabla-recetas-body');
+  const totalCountEl = document.getElementById('reemp-total-recetas-count');
+  if (!tbody) return;
+
+  if (totalCountEl) totalCountEl.textContent = reempRecetasAfectadas.length;
+
+  if (!reempRecetasAfectadas.length) {
+    const origId = document.getElementById('reemp-orig-id')?.value;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4" class="text-center text-gray-400 py-6 text-xs italic">
+          ${origId ? 'No se encontraron recetas que utilicen este insumo.' : 'Selecciona el insumo actual para listar las recetas donde se utiliza.'}
+        </td>
+      </tr>
+    `;
+    actualizarContadoresReemplazo();
+    return;
+  }
+
+  let html = '';
+  reempRecetasAfectadas.forEach((rec, idx) => {
+    html += `
+      <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors ${rec.seleccionado ? '' : 'opacity-50'}">
+        <td class="py-2 px-3 text-center">
+          <input type="checkbox" ${rec.seleccionado ? 'checked' : ''} onchange="toggleRecetaReemplazo(${idx}, this.checked)" class="rounded text-rose-500 cursor-pointer">
+        </td>
+        <td class="py-2 px-3 text-left">
+          <div class="font-bold text-gray-800 text-xs">${rec.nombre}</div>
+          <div class="text-[10px] text-gray-400">${rec.categoria}</div>
+        </td>
+        <td class="py-2 px-3 text-center font-mono font-semibold text-gray-500 text-xs">
+          ${_fmtTarjetasNum(rec.cant_actual)}
+        </td>
+        <td class="py-2 px-3 text-center">
+          <input type="number" step="any" min="0.0001" value="${Number(rec.nueva_cant.toFixed(4))}"
+                 oninput="actualizarNuevaCantReceta(${idx}, this.value)"
+                 class="w-20 text-center px-1.5 py-1 border border-gray-200 rounded-lg text-xs font-mono font-bold bg-white text-indigo-700">
+        </td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+  actualizarContadoresReemplazo();
+}
+
+function toggleRecetaReemplazo(idx, checked) {
+  if (reempRecetasAfectadas[idx]) {
+    reempRecetasAfectadas[idx].seleccionado = checked;
+    actualizarContadoresReemplazo();
+  }
+}
+
+function toggleSelectAllRecetasReemplazo(checked) {
+  reempRecetasAfectadas.forEach(r => r.seleccionado = checked);
+  renderTablaRecetasReemplazo();
+}
+
+function actualizarNuevaCantReceta(idx, valStr) {
+  let val = parseFloat(valStr);
+  if (isNaN(val) || val <= 0) val = 0.0001;
+  if (reempRecetasAfectadas[idx]) {
+    reempRecetasAfectadas[idx].nueva_cant = val;
+  }
+}
+
+function actualizarContadoresReemplazo() {
+  const selCount = reempRecetasAfectadas.filter(r => r.seleccionado).length;
+  const selEl = document.getElementById('reemp-selected-count');
+  const btnCountEl = document.getElementById('btn-reemp-count');
+  const checkAllEl = document.getElementById('reemp-check-all');
+
+  if (selEl) selEl.textContent = `${selCount} seleccionadas`;
+  if (btnCountEl) btnCountEl.textContent = selCount;
+  if (checkAllEl) checkAllEl.checked = Boolean(reempRecetasAfectadas.length && selCount === reempRecetasAfectadas.length);
+}
+
+async function ejecutarReemplazoInsumoMasivo() {
+  const origId = parseInt(document.getElementById('reemp-orig-id')?.value || 0);
+  const destId = parseInt(document.getElementById('reemp-dest-id')?.value || 0);
+  const origName = document.getElementById('reemp-orig-name')?.textContent || 'Insumo origen';
+  const destName = document.getElementById('reemp-dest-name')?.textContent || 'Insumo destino';
+
+  if (!origId) {
+    toast('Selecciona el insumo actual que deseas reemplazar', false);
+    return;
+  }
+  if (!destId) {
+    toast('Selecciona el nuevo insumo / porción de reemplazo', false);
+    return;
+  }
+  if (origId === destId) {
+    toast('El insumo de reemplazo debe ser diferente al original', false);
+    return;
+  }
+
+  const seleccionados = reempRecetasAfectadas.filter(r => r.seleccionado && r.nueva_cant > 0);
+  if (!seleccionados.length) {
+    toast('Debes seleccionar al menos una receta para actualizar', false);
+    return;
+  }
+
+  const confirmMsg = `¿Estás seguro de reemplazar "${origName}" por "${destName}" en ${seleccionados.length} receta(s)?\n\nEsta acción actualizará las fichas técnicas y recalculará los costos automáticamente.`;
+  if (!confirm(confirmMsg)) return;
+
+  const btn = document.getElementById('btn-ejecutar-reemplazo');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> Actualizando recetas…';
+  }
+
+  try {
+    const payload = {
+      componente_origen_id: origId,
+      componente_destino_id: destId,
+      reemplazos: seleccionados.map(r => ({
+        producto_id: r.producto_id,
+        nueva_cantidad: r.nueva_cant
+      }))
+    };
+
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/tarjetas/reemplazar-componente`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+
+    const d = await r.json();
+    if (d.ok) {
+      toast(`🎉 ¡Insumo reemplazado con éxito en ${d.actualizados || seleccionados.length} receta(s)!`);
+      cerrarModalReemplazarInsumo();
+      await cargarProductos();
+      await cargarTarjetasResumen();
+    } else {
+      toast(d.error || 'Error al reemplazar insumo en las recetas', false);
+    }
+  } catch (e) {
+    toast('Error de red al ejecutar reemplazo masivo', false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🚀</span> Reemplazar en <span id="btn-reemp-count">' + seleccionados.length + '</span> Recetas';
+    }
+  }
 }
 
 

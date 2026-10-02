@@ -123,6 +123,7 @@
                 <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                         <p class="font-bold leading-tight">${item.nombre}</p>
+                        ${(item.excluidos_nombres && item.excluidos_nombres.length) ? `<p class="mt-0.5 text-xs font-bold text-rose-600">🚫 Sin: ${item.excluidos_nombres.join(', ')}</p>` : ''}
                         <p class="mt-1 text-sm text-gray-500">${item.cantidad} x ${money(item.precio)}</p>
                     </div>
                     <p class="shrink-0 text-lg font-black">${money(item.precio * item.cantidad)}</p>
@@ -146,10 +147,11 @@
         document.getElementById('ticket-pedido').textContent = r.pedido_id ? `Pedido #${r.pedido_id}` : '';
 
         document.getElementById('ticket-items').innerHTML = (r.items || []).map(item => `
-            <div class="flex items-start justify-between gap-3 text-sm">
+            <div class="flex items-start justify-between gap-3 text-sm py-1 border-b border-gray-100 last:border-0">
                 <div class="min-w-0">
                     <p class="font-bold">${item.nombre}</p>
-                    <p class="text-gray-500">${item.cantidad} x ${money(item.precio)}</p>
+                    ${(item.excluidos_nombres && item.excluidos_nombres.length) ? `<p class="text-xs font-bold text-rose-600">🚫 Sin: ${item.excluidos_nombres.join(', ')}</p>` : ''}
+                    <p class="text-gray-500 text-xs">${item.cantidad} x ${money(item.precio)}</p>
                 </div>
                 <p class="shrink-0 font-black">${money(item.precio * item.cantidad)}</p>
             </div>

@@ -1357,6 +1357,22 @@ def api_tienda_productos(slug):
             ).fetchall()
             doc_dict = {r['producto_id']: {'id': r['id'], 'nombre': r['nombre']} for r in doc_rows}
 
+            # 5. Recipe components / Tarjeta estándar
+            te_rows = conn.execute("""
+                SELECT te.producto_id, te.componente_id, te.cantidad, p.nombre AS componente_nombre
+                FROM tarjeta_estandar te
+                JOIN productos p ON p.id = te.componente_id
+                WHERE te.producto_id IN %s
+                ORDER BY te.producto_id, p.nombre
+            """, (tuple(p_ids),)).fetchall()
+            te_dict = {}
+            for r in te_rows:
+                te_dict.setdefault(r['producto_id'], []).append({
+                    'id': r['componente_id'],
+                    'nombre': r['componente_nombre'],
+                    'cantidad': float(r['cantidad'])
+                })
+
         resultado = []
         for p in productos:
             pid = p['id']
@@ -1364,6 +1380,7 @@ def api_tienda_productos(slug):
             nf = nf_dict.get(pid, 0)
             nd = nd_dict.get(pid, 0)
             doc = doc_dict.get(pid)
+            comps = te_dict.get(pid, [])
             resultado.append({
                 'id': pid, 'nombre': p['nombre'], 'categoria': p['categoria'] or '',
                 'precio': float(p['precio']), 'costo': float(p['costo'] or 0), 'imagen': p['imagen'] or '',
@@ -1377,6 +1394,8 @@ def api_tienda_productos(slug):
                 'n_documentos': nd,
                 'ficha_tecnica_id': doc['id'] if doc else None,
                 'ficha_tecnica_nombre': doc['nombre'] if doc else '',
+                'es_receta': len(comps) > 0,
+                'componentes': comps
             })
         categorias = []
         vistas = set()
@@ -2543,16 +2562,25 @@ def api_tienda_pedido_crear(slug):
             """, (negocio['tercero_id'], centro_utilidad_id, it['producto_id'], negocio['tercero_id'], centro_utilidad_id, it['producto_id'])).fetchone()
             costo_u = float(costo_row['costo_real']) if (costo_row and costo_row['costo_real'] is not None) else 0.0
 
-            conn.execute("""
-                INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, costo_unitario)
-                VALUES (%s,%s,%s,%s,%s,%s)
-            """, (pedido_id, it['producto_id'], it['nombre_producto'], it['cantidad'], it['precio_unitario'], costo_u))
-            if negocio['tercero_id']:
+            # Excluded components per item or from global list
+            excluded_ids = [int(cid) for cid in (it.get('excluir_componentes_ids') or []) if cid]
+            if not excluded_ids and excluir_componentes:
                 excluded_ids = [
                     int(exc['componente_id']) 
                     for exc in excluir_componentes 
                     if int(exc.get('producto_id') or 0) == it['producto_id']
                 ]
+
+            nombre_prod_item = it['nombre_producto']
+            excluidos_nombres = it.get('excluidos_nombres') or []
+            if excluidos_nombres and not any(f"Sin" in nombre_prod_item for _ in [0]):
+                nombre_prod_item = f"{nombre_prod_item} (Sin: {', '.join(excluidos_nombres)})"
+
+            conn.execute("""
+                INSERT INTO pedido_items (pedido_id, producto_id, nombre_producto, cantidad, precio_unitario, costo_unitario)
+                VALUES (%s,%s,%s,%s,%s,%s)
+            """, (pedido_id, it['producto_id'], nombre_prod_item, it['cantidad'], it['precio_unitario'], costo_u))
+            if negocio['tercero_id']:
                 try:
                     conn.execute("SAVEPOINT sp_inv_tienda")
                     _aplicar_tarjeta(

@@ -361,6 +361,60 @@
                     ⚠️ Forzar (Permitir Negativos)
                 </button>
             </div>
+</div>
+
+<!-- Modal: Customizar / Quitar Ingredientes de un Item -->
+<div id="modal-customizar-ingredientes" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" onclick="if(event.target===this)cerrarModalCustomizarIngredientes()">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-150">
+        <!-- Encabezado -->
+        <div class="flex items-start justify-between gap-3 border-b border-gray-150 pb-3">
+            <div class="flex items-center gap-2.5">
+                <span class="text-2xl p-1.5 bg-rose-50 text-rose-600 rounded-xl">🍔</span>
+                <div>
+                    <h2 id="modal-cust-prod-nombre" class="font-extrabold text-base text-gray-900 leading-tight">Personalizar Producto</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Toca los ingredientes que el cliente desea <strong>omitir / quitar</strong>.</p>
+                </div>
+            </div>
+            <button onclick="cerrarModalCustomizarIngredientes()" class="text-gray-400 hover:text-gray-700 p-1 text-lg leading-none rounded-lg hover:bg-gray-100">✕</button>
+        </div>
+
+        <!-- Selector de unidades si cantidad > 1 -->
+        <div id="modal-cust-scope-container" class="hidden my-3 p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl text-xs space-y-2">
+            <div class="font-bold text-amber-900 flex items-center gap-1.5">
+                <span>🔢</span>
+                <span>Este renglón tiene <strong id="modal-cust-cant-total">2</strong> unidades en el carrito:</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="flex items-center gap-2 p-2 bg-white rounded-lg border border-amber-200 cursor-pointer font-medium text-gray-700 hover:border-rose-400 transition">
+                    <input type="radio" name="cust-scope" id="cust-scope-single" value="1" checked class="text-rose-600 focus:ring-rose-500">
+                    <span>Personalizar 1 unidad</span>
+                </label>
+                <label class="flex items-center gap-2 p-2 bg-white rounded-lg border border-amber-200 cursor-pointer font-medium text-gray-700 hover:border-rose-400 transition">
+                    <input type="radio" name="cust-scope" id="cust-scope-all" value="all" class="text-rose-600 focus:ring-rose-500">
+                    <span>A todas (<span id="modal-cust-cant-all-lbl">2</span>)</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Lista de ingredientes interactivos -->
+        <div class="flex-1 overflow-y-auto py-3 space-y-2 max-h-[50vh] custom-scrollbar">
+            <div class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                <span>Ingredientes de la Receta</span>
+                <span id="modal-cust-count-badge" class="text-rose-600 font-bold text-xs">0 omitidos</span>
+            </div>
+            <div id="modal-cust-ingredientes-list" class="space-y-1.5">
+                <!-- Se llena dinámicamente con chips/botones -->
+            </div>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="pt-3 border-t border-gray-150 flex items-center gap-2.5">
+            <button onclick="cerrarModalCustomizarIngredientes()" class="flex-1 py-2.5 px-3 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 text-sm transition">
+                Cancelar
+            </button>
+            <button onclick="guardarCustomizacionIngredientes()" class="flex-1 py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-sm shadow-xs transition flex items-center justify-center gap-1.5">
+                <span>✓ Guardar Cambios</span>
+            </button>
         </div>
     </div>
 </div>
@@ -601,7 +655,8 @@ function resumenCarrito(estado = 'activa', recibo = null) {
             nombre: i.nombre,
             precio: i.precio,
             cantidad: i.cantidad,
-            iva_pct: i.iva_pct || 0
+            iva_pct: i.iva_pct || 0,
+            excluidos_nombres: i.excluidos_nombres || []
         })),
         recibo
     };
@@ -722,21 +777,158 @@ function renderProductos(lista) {
     `).join('');
 }
 
-// ── Carrito ──────────────────────────────────────────────────────────────────
+// ── Carrito & Personalización de Ingredientes ──────────────────────────────────
+
+let _custRowId = null;
+let _custExcluidosTemp = new Set();
 
 function agregarAlCarrito(productoId) {
     const prod = productos.find(p => p.id === productoId);
     if (!prod) return;
-    // Merge only if same product ID and same price
-    const existente = carrito.find(i => i.producto_id === productoId && i.precio === prod.precio);
+    // Merge only if same product ID, same price, AND neither has custom ingredient exclusions
+    const existente = carrito.find(i => i.producto_id === productoId && i.precio === prod.precio && (!i.excluidos || i.excluidos.length === 0));
     if (existente) {
         existente.cantidad++;
     } else {
         const rowId = 'row-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-        carrito.push({row_id: rowId, producto_id: prod.id, nombre: prod.nombre, precio: prod.precio, cantidad: 1, iva_pct: prod.iva_pct || 0});
+        carrito.push({
+            row_id: rowId,
+            producto_id: prod.id,
+            nombre: prod.nombre,
+            precio: prod.precio,
+            cantidad: 1,
+            iva_pct: prod.iva_pct || 0,
+            componentes: (prod.componentes && prod.componentes.length) ? prod.componentes : [],
+            excluidos: [],
+            excluidos_nombres: []
+        });
     }
     renderCarrito();
     toast(`${prod.nombre} agregado`);
+}
+
+function abrirModalCustomizarIngredientes(rowId) {
+    const item = carrito.find(i => i.row_id === rowId);
+    if (!item) return;
+    if (!item.componentes || !item.componentes.length) {
+        toast('Este producto no tiene ingredientes/receta asociada', true);
+        return;
+    }
+    _custRowId = rowId;
+    _custExcluidosTemp = new Set(item.excluidos || []);
+
+    document.getElementById('modal-cust-prod-nombre').textContent = item.nombre;
+    
+    // Selector de unidades si la cantidad es mayor a 1
+    const scopeContainer = document.getElementById('modal-cust-scope-container');
+    if (item.cantidad > 1) {
+        document.getElementById('modal-cust-cant-total').textContent = item.cantidad;
+        document.getElementById('modal-cust-cant-all-lbl').textContent = item.cantidad;
+        const singleRadio = document.getElementById('cust-scope-single');
+        if (singleRadio) singleRadio.checked = true;
+        scopeContainer.classList.remove('hidden');
+    } else {
+        scopeContainer.classList.add('hidden');
+    }
+
+    renderIngredientesCustomizar(item.componentes);
+    document.getElementById('modal-customizar-ingredientes').classList.remove('hidden');
+}
+
+function cerrarModalCustomizarIngredientes() {
+    document.getElementById('modal-customizar-ingredientes').classList.add('hidden');
+    _custRowId = null;
+    _custExcluidosTemp.clear();
+}
+
+function renderIngredientesCustomizar(componentes) {
+    const listEl = document.getElementById('modal-cust-ingredientes-list');
+    const badgeEl = document.getElementById('modal-cust-count-badge');
+    if (badgeEl) {
+        badgeEl.textContent = `${_custExcluidosTemp.size} omitido${_custExcluidosTemp.size === 1 ? '' : 's'}`;
+    }
+
+    listEl.innerHTML = componentes.map(c => {
+        const isExcluded = _custExcluidosTemp.has(c.id);
+        if (isExcluded) {
+            return `
+                <button type="button" onclick="toggleIngredienteCustomizar(${c.id})"
+                        class="w-full flex items-center justify-between p-3 rounded-xl border-2 border-rose-400 bg-rose-50/80 text-rose-900 font-bold transition-all shadow-2xs text-left cursor-pointer hover:bg-rose-100">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="w-6 h-6 rounded-full bg-rose-200 text-rose-700 flex items-center justify-center text-xs font-black shrink-0">🚫</span>
+                        <span class="line-through decoration-rose-500 decoration-2 text-rose-700 truncate">${c.nombre}</span>
+                    </div>
+                    <span class="text-[11px] uppercase font-black text-rose-700 bg-rose-200/80 px-2 py-0.5 rounded-md shrink-0">Omitido</span>
+                </button>
+            `;
+        } else {
+            return `
+                <button type="button" onclick="toggleIngredienteCustomizar(${c.id})"
+                        class="w-full flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-white hover:bg-slate-50 text-gray-800 font-semibold transition-all text-left cursor-pointer hover:border-slate-300">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold shrink-0">✓</span>
+                        <span class="truncate">${c.nombre}</span>
+                    </div>
+                    <span class="text-xs text-gray-400 font-medium shrink-0">Incluido</span>
+                </button>
+            `;
+        }
+    }).join('');
+}
+
+function toggleIngredienteCustomizar(compId) {
+    if (_custExcluidosTemp.has(compId)) {
+        _custExcluidosTemp.delete(compId);
+    } else {
+        _custExcluidosTemp.add(compId);
+    }
+    const item = carrito.find(i => i.row_id === _custRowId);
+    if (item && item.componentes) {
+        renderIngredientesCustomizar(item.componentes);
+    }
+}
+
+function guardarCustomizacionIngredientes() {
+    const item = carrito.find(i => i.row_id === _custRowId);
+    if (!item) return;
+
+    const excluidos = Array.from(_custExcluidosTemp);
+    const excluidosNombres = (item.componentes || [])
+        .filter(c => excluidos.includes(c.id))
+        .map(c => c.nombre);
+
+    const scopeRadio = document.querySelector('input[name="cust-scope"]:checked');
+    const scope = scopeRadio ? scopeRadio.value : '1';
+
+    if (item.cantidad > 1 && scope === '1') {
+        // Reducir la cantidad del item base
+        item.cantidad--;
+        // Crear un nuevo renglón con la unidad personalizada
+        const newRowId = 'row-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+        carrito.push({
+            row_id: newRowId,
+            producto_id: item.producto_id,
+            nombre: item.nombre,
+            precio: item.precio,
+            cantidad: 1,
+            iva_pct: item.iva_pct || 0,
+            componentes: item.componentes,
+            excluidos: excluidos,
+            excluidos_nombres: excluidosNombres
+        });
+    } else {
+        // Aplicar a este renglón directamente
+        item.excluidos = excluidos;
+        item.excluidos_nombres = excluidosNombres;
+    }
+
+    cerrarModalCustomizarIngredientes();
+    renderCarrito();
+    if (excluidosNombres.length) {
+        toast(`Personalizado: Sin ${excluidosNombres.join(', ')}`);
+    } else {
+        toast('Ingredientes restaurados');
+    }
 }
 
 function cambiarCantidad(rowId, delta) {
@@ -753,12 +945,10 @@ function establecerCantidad(rowId, valorStr) {
     const existente = carrito.find(i => i.row_id === rowId);
     if (existente) {
         existente.cantidad = cant;
-        // Update subtotal display in real-time
         const subtotalEl = document.getElementById(`subtotal-${rowId}`);
         if (subtotalEl) {
             subtotalEl.textContent = `$${(existente.precio * cant).toLocaleString('es-CO')}`;
         }
-        // Also update total display
         const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
         document.getElementById('total-display').textContent = `$${total.toLocaleString('es-CO')}`;
     }
@@ -793,34 +983,68 @@ function renderCarrito() {
         return;
     }
 
-    cont.innerHTML = carrito.map(i => `
-        <div class="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0">
-            <div class="flex-1 min-w-0">
-                <p class="text-sm font-semibold text-gray-700 truncate">${i.nombre}</p>
-                <div class="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
-                    <span>$</span>
-                    <input type="number" value="${i.precio}" min="0" step="any"
-                           oninput="cambiarPrecioUnitario('${i.row_id}', this.value)"
-                           onblur="renderCarrito()"
-                           class="w-16 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white"
-                           style="height: 20px;">
-                    <span class="text-gray-400">Total:</span>
-                    <span id="subtotal-${i.row_id}" class="font-semibold text-gray-600">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
+    cont.innerHTML = carrito.map(i => {
+        const tieneReceta = i.componentes && i.componentes.length > 0;
+        const tieneExclusiones = i.excluidos && i.excluidos.length > 0;
+        
+        let customBadge = '';
+        if (tieneReceta) {
+            if (tieneExclusiones) {
+                customBadge = `
+                    <div class="mt-1">
+                        <button type="button" onclick="abrirModalCustomizarIngredientes('${i.row_id}')"
+                                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition text-left cursor-pointer"
+                                title="Haz clic para modificar ingredientes">
+                            <span>🚫 Sin: ${i.excluidos_nombres.join(', ')}</span>
+                            <span class="text-rose-400 text-[10px]">✏️</span>
+                        </button>
+                    </div>
+                `;
+            } else {
+                customBadge = `
+                    <div class="mt-0.5">
+                        <button type="button" onclick="abrirModalCustomizarIngredientes('${i.row_id}')"
+                                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium text-slate-500 bg-slate-50 hover:bg-slate-100 border border-slate-200 transition cursor-pointer"
+                                title="Personalizar o quitar ingredientes de este producto">
+                            <span>⚙️ Quitar ingredientes</span>
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        return `
+            <div class="py-2 border-b border-gray-100 last:border-0">
+                <div class="flex items-start gap-2">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-gray-700 truncate">${i.nombre}</p>
+                        ${customBadge}
+                        <div class="text-[11px] text-gray-400 flex items-center gap-1 mt-1">
+                            <span>$</span>
+                            <input type="number" value="${i.precio}" min="0" step="any"
+                                   oninput="cambiarPrecioUnitario('${i.row_id}', this.value)"
+                                   onblur="renderCarrito()"
+                                   class="w-16 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white"
+                                   style="height: 20px;">
+                            <span class="text-gray-400">Total:</span>
+                            <span id="subtotal-${i.row_id}" class="font-semibold text-gray-600">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0 mt-0.5">
+                        <button onclick="cambiarCantidad('${i.row_id}', -1)"
+                                class="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-red-100 hover:text-red-600 text-lg leading-none">−</button>
+                        <input type="number" value="${i.cantidad}" min="0" step="any"
+                               oninput="establecerCantidad('${i.row_id}', this.value)"
+                               onblur="validarYRenderCarrito()"
+                               class="w-14 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white text-xs"
+                               style="height: 28px;">
+                        <button onclick="cambiarCantidad('${i.row_id}', 1)"
+                                class="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-green-100 hover:text-green-600 text-lg leading-none">+</button>
+                    </div>
                 </div>
             </div>
-            <div class="flex items-center gap-1 shrink-0">
-                <button onclick="cambiarCantidad('${i.row_id}', -1)"
-                        class="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-red-100 hover:text-red-600 text-lg leading-none">−</button>
-                <input type="number" value="${i.cantidad}" min="0" step="any"
-                       oninput="establecerCantidad('${i.row_id}', this.value)"
-                       onblur="validarYRenderCarrito()"
-                       class="w-14 text-center px-1 py-0.5 border border-gray-200 rounded font-mono font-bold text-gray-800 bg-white text-xs"
-                       style="height: 28px;">
-                <button onclick="cambiarCantidad('${i.row_id}', 1)"
-                        class="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-green-100 hover:text-green-600 text-lg leading-none">+</button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 
     const total = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
     const ivaTotal = carrito.reduce((s, i) => {
@@ -837,7 +1061,7 @@ function renderCarrito() {
             ivaEl.classList.add('hidden');
         }
     }
-    validarPagos();  // delegar al validador de pagos
+    validarPagos();
     publicarPantallaCliente();
 }
 
@@ -1049,8 +1273,11 @@ async function cobrar() {
     const payload = {
         items: carrito.map(i => ({
             producto_id: i.producto_id,
+            nombre_producto: i.nombre,
             cantidad: i.cantidad,
-            precio_unitario: i.precio
+            precio_unitario: i.precio,
+            excluir_componentes_ids: i.excluidos || [],
+            excluidos_nombres: i.excluidos_nombres || []
         })),
         tipo_entrega: 'caja',
         fecha,
@@ -1327,12 +1554,22 @@ function mostrarRecibo() {
             <span>IVA incluido</span>
             <span>$${r.iva.toLocaleString('es-CO')}</span>
         </div>` : '';
-    itemsEl.innerHTML = r.items.map(i => `
-        <div class="flex justify-between text-gray-700">
-            <span>${i.cantidad}x ${i.nombre}${i.iva_pct > 0 ? ` <span class="text-xs text-gray-400">(+IVA ${i.iva_pct}%)</span>` : ''}</span>
-            <span class="font-semibold">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
-        </div>
-    `).join('') + `
+    itemsEl.innerHTML = r.items.map(i => {
+        const excluidosHtml = (i.excluidos_nombres && i.excluidos_nombres.length)
+            ? `<span class="block text-[11px] font-bold text-rose-600">🚫 Sin: ${i.excluidos_nombres.join(', ')}</span>`
+            : '';
+        return `
+            <div class="py-1 border-b border-gray-100 last:border-0">
+                <div class="flex justify-between text-gray-700">
+                    <div>
+                        <span>${i.cantidad}x ${i.nombre}${i.iva_pct > 0 ? ` <span class="text-xs text-gray-400">(+IVA ${i.iva_pct}%)</span>` : ''}</span>
+                        ${excluidosHtml}
+                    </div>
+                    <span class="font-semibold">$${(i.precio * i.cantidad).toLocaleString('es-CO')}</span>
+                </div>
+            </div>
+        `;
+    }).join('') + `
         <div class="border-t mt-2 pt-2"></div>
         ${ivaLines}
         <div class="flex justify-between font-bold text-gray-900">
@@ -1356,9 +1593,10 @@ function imprimirTicket() {
     let lineasItems = r.items.map(i => {
         const total = `$${(i.precio * i.cantidad).toLocaleString('es-CO')}`;
         const desc = `${i.cantidad}x ${i.nombre}`;
-        // Alinear precio a la derecha en 32 chars
-        const spaces = Math.max(1, 32 - desc.length - total.length);
-        return `<div class="linea"><span>${desc}</span><span>${total}</span></div>`;
+        const excluidosTxt = (i.excluidos_nombres && i.excluidos_nombres.length)
+            ? `<div style="font-size:10px; font-weight:bold; color:#000; padding-left:10px;">* SIN ${i.excluidos_nombres.join(', ').toUpperCase()} *</div>`
+            : '';
+        return `<div class="linea"><span>${desc}</span><span>${total}</span></div>${excluidosTxt}`;
     }).join('');
 
     document.getElementById('ticket-print').innerHTML = `
@@ -1385,7 +1623,13 @@ function imprimirTicket() {
 function compartirWhatsApp() {
     const r = ultimoRecibo;
     if (!r || !r.telefono) return;
-    const lineas = r.items.map(i => `  ${i.cantidad}x ${i.nombre} — $${(i.precio * i.cantidad).toLocaleString('es-CO')}`).join('\n');
+    const lineas = r.items.map(i => {
+        let l = `  ${i.cantidad}x ${i.nombre} — $${(i.precio * i.cantidad).toLocaleString('es-CO')}`;
+        if (i.excluidos_nombres && i.excluidos_nombres.length) {
+            l += `\n     ↳ (Sin: ${i.excluidos_nombres.join(', ')})`;
+        }
+        return l;
+    }).join('\n');
     const resumenIva = r.iva > 0
         ? `Subtotal: $${r.subtotal.toLocaleString('es-CO')}\nIVA incluido: $${r.iva.toLocaleString('es-CO')}\n`
         : '';

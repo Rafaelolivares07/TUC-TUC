@@ -558,8 +558,11 @@ def _verificar_stock_pedido(conn, negocio_id, items, excluir_componentes=None, b
         if not componentes:
             componentes = [{'componente_id': prod_id, 'cantidad': Decimal('1')}]
             
+        item_exclusions = set(int(cid) for cid in (item.get('excluir_componentes_ids') or []) if cid)
         for comp in componentes:
             comp_id = comp['componente_id']
+            if comp_id in item_exclusions:
+                continue
             if prod_id in exclusions_set and comp_id in exclusions_set[prod_id]:
                 continue
                 

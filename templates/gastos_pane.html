@@ -126,11 +126,15 @@
 
       <!-- Nota Explicativa del Rubro (Opcional) -->
       <div class="md:col-span-6 mt-1">
-        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">
-          📝 Nota Explicativa del Rubro <span class="text-gray-400 font-normal lowercase">(opcional)</span>
-        </label>
-        <input id="gas-nota" type="text" placeholder="Ej. Detalle puntual de la compra, destino del gasto o justificación"
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-semibold text-gray-500 uppercase">
+            📝 Nota Explicativa del Rubro <span class="text-gray-400 font-normal lowercase">(opcional)</span>
+          </label>
+          <span id="gas-nota-counter" class="text-[10px] font-mono text-gray-400 font-medium">0 / 220</span>
+        </div>
+        <input id="gas-nota" type="text" maxlength="220" placeholder="Ej. Detalle puntual de la compra, destino del gasto o justificación"
                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none h-[38px]"
+               oninput="actualizarContadorNotaCreacion()"
                onkeydown="navNota(event)">
       </div>
 
@@ -254,12 +258,16 @@
       </div>
 
       <div class="mb-4">
-        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nota / Observación</label>
-        <textarea id="modal-nota-input" rows="4" placeholder="Ej. Detalle puntual de la compra, destino del gasto o justificación..."
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-semibold text-gray-600 uppercase">Nota / Observación</label>
+          <span id="modal-nota-counter" class="text-[11px] font-mono font-bold text-gray-400">0 / 220</span>
+        </div>
+        <textarea id="modal-nota-input" rows="4" maxlength="220" placeholder="Ej. Detalle puntual de la compra, destino del gasto o justificación..."
                class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none text-gray-800 resize-y font-sans leading-relaxed"
+               oninput="actualizarContadorNotaModal()"
                onkeydown="if((event.ctrlKey || event.metaKey) && event.key==='Enter') guardarNotaGasto(); if(event.key==='Escape') cerrarModalEditarNota();"></textarea>
         <div class="flex justify-between items-center text-[10px] text-gray-400 mt-1">
-          <span>Deje en blanco si desea eliminar la nota.</span>
+          <span id="modal-nota-status-msg">Deje en blanco si desea eliminar la nota.</span>
           <span class="text-gray-400 font-medium">Ctrl + Enter para guardar</span>
         </div>
       </div>
@@ -1248,14 +1256,66 @@
   // ═══ GESTIÓN DE NOTA EXPLICATIVA DE LÍNEA ═══
   let _lineaEditandoNotaId = null;
 
+  function actualizarContadorNotaModal() {
+    const inp = document.getElementById('modal-nota-input');
+    const counterEl = document.getElementById('modal-nota-counter');
+    const statusEl = document.getElementById('modal-nota-status-msg');
+    if (!inp || !counterEl) return;
+
+    const maxChars = parseInt(inp.getAttribute('maxlength') || '220');
+    const currentLen = inp.value.length;
+    const remaining = Math.max(0, maxChars - currentLen);
+    const words = inp.value.trim() ? inp.value.trim().split(/\s+/).length : 0;
+
+    counterEl.textContent = `${currentLen} / ${maxChars} car. (quedan ${remaining})`;
+
+    if (remaining === 0) {
+      counterEl.className = 'text-[11px] font-mono font-extrabold text-red-600 animate-pulse';
+      if (statusEl) statusEl.innerHTML = '<span class="text-red-600 font-bold">⚠️ Has alcanzado el límite máximo disponible.</span>';
+    } else if (remaining <= 25) {
+      counterEl.className = 'text-[11px] font-mono font-bold text-amber-600';
+      if (statusEl) statusEl.innerHTML = `<span class="text-amber-700 font-medium">Quedan ${remaining} caracteres (${words} palabra${words === 1 ? '' : 's'}).</span>`;
+    } else {
+      counterEl.className = 'text-[11px] font-mono font-medium text-gray-400';
+      if (statusEl) statusEl.textContent = `${words} palabra${words === 1 ? '' : 's'} (${remaining} caracteres disponibles)`;
+    }
+  }
+
+  function actualizarContadorNotaCreacion() {
+    const inp = document.getElementById('gas-nota');
+    const counterEl = document.getElementById('gas-nota-counter');
+    if (!inp || !counterEl) return;
+    const maxChars = parseInt(inp.getAttribute('maxlength') || '220');
+    const currentLen = inp.value.length;
+    const remaining = Math.max(0, maxChars - currentLen);
+    
+    if (remaining === 0) {
+      counterEl.className = 'text-[10px] font-mono font-bold text-red-600';
+      counterEl.textContent = `Límite alcanzado (${maxChars}/${maxChars})`;
+    } else if (remaining <= 25) {
+      counterEl.className = 'text-[10px] font-mono font-bold text-amber-600';
+      counterEl.textContent = `${currentLen}/${maxChars} (quedan ${remaining})`;
+    } else {
+      counterEl.className = 'text-[10px] font-mono text-gray-400 font-medium';
+      counterEl.textContent = `${currentLen} / ${maxChars}`;
+    }
+  }
+
   function abrirModalEditarNota(lineaId, notaActual, conceptoNombre) {
     _lineaEditandoNotaId = lineaId;
     document.getElementById('modal-nota-concepto').textContent = conceptoNombre || 'Gasto';
     const inp = document.getElementById('modal-nota-input');
     inp.value = notaActual || '';
+    
+    // Calcular límite dinámico según el largo del nombre del concepto
+    const conceptLen = (conceptoNombre || '').length;
+    const maxChars = Math.max(80, Math.min(220, 250 - conceptLen));
+    inp.setAttribute('maxlength', maxChars);
+    
     const modal = document.getElementById('modal-editar-nota-gasto');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+    actualizarContadorNotaModal();
     setTimeout(() => {
       inp.focus();
       const len = inp.value.length;

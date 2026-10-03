@@ -585,10 +585,10 @@
           const matchSoporte = displayConcepto.match(/\[Soporte:\s*([^\]]+)\]/i);
           if (matchSoporte) {
             const soporteValor = matchSoporte[1].trim();
-            soporteBadge = `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition" onclick="abrirModalEditarSoporte(${l.id}, '${escapeGasHtml(soporteValor)}', '${escapeGasHtml(displayConcepto)}')" title="Haga clic para modificar el N° de recibo/factura">🧾 ${escapeGasHtml(soporteValor)} <span class="text-[9px] text-amber-600 opacity-70">✏️</span></span>`;
+            soporteBadge = `<button type="button" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition shadow-2xs" onclick="abrirModalEditarSoporte(${l.id}, '${escapeJsString(soporteValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para modificar el N° de recibo/factura">🧾 ${escapeGasHtml(soporteValor)} <span class="text-[9px] text-amber-600 opacity-70">✏️</span></button>`;
             displayConcepto = displayConcepto.replace(/\[Soporte:\s*[^\]]+\]/i, '').trim();
           } else {
-            soporteBadge = `<button type="button" onclick="abrirModalEditarSoporte(${l.id}, '', '${escapeGasHtml(displayConcepto)}')" class="inline-flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-amber-700 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-dashed border-gray-250 ml-1 font-mono" title="Asociar número de recibo o factura a este gasto">+ Soporte</button>`;
+            soporteBadge = `<button type="button" onclick="abrirModalEditarSoporte(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-amber-700 bg-gray-50 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-gray-200 ml-1 font-mono" title="Asociar número de recibo o factura a este gasto">🧾 + Soporte</button>`;
           }
 
           let notaValor = '';
@@ -600,24 +600,24 @@
 
           let notaCell = '';
           if (notaValor) {
-            notaCell = `<div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs bg-gray-50 text-gray-700 border border-gray-200 cursor-pointer hover:bg-amber-50 hover:border-amber-200 hover:text-amber-800 transition max-w-xs truncate" onclick="abrirModalEditarNota(${l.id}, '${escapeGasHtml(notaValor)}', '${escapeGasHtml(displayConcepto)}')" title="Haga clic para editar la nota explicativa"><span>📝</span> <span class="italic truncate">${escapeGasHtml(notaValor)}</span> <span class="text-[9px] text-gray-400">✏️</span></div>`;
+            notaCell = `<button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-amber-50/70 text-amber-900 border border-amber-200/90 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition max-w-xs text-left shadow-2xs group" onclick="abrirModalEditarNota(${l.id}, '${escapeJsString(notaValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para editar la nota explicativa"><span class="text-amber-600">📝</span> <span class="italic truncate max-w-[180px]">${escapeGasHtml(notaValor)}</span> <span class="text-[9px] text-amber-500 opacity-60 group-hover:opacity-100 transition">✏️</span></button>`;
           } else {
-            notaCell = `<button type="button" onclick="abrirModalEditarNota(${l.id}, '', '${escapeGasHtml(displayConcepto)}')" class="inline-flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-amber-700 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-dashed border-gray-250 font-sans" title="Añadir nota explicativa a este rubro">+ Nota</button>`;
+            notaCell = `<button type="button" onclick="abrirModalEditarNota(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 active:scale-95 border border-amber-200/80 rounded-lg transition shadow-2xs" title="Añadir nota explicativa a este gasto"><span>📝</span> <span>+ Añadir Nota</span></button>`;
           }
 
           const cCod = l.centro_codigo || (l.centro_utilidad_id == 2 ? 'LOC-01' : 'MOV-01');
           const cColor = l.centro_color || (l.centro_utilidad_id == 2 ? '#10b981' : '#0284c7');
           const cNom = l.centro_nombre || (l.centro_utilidad_id == 2 ? 'Local Comercial' : 'Puntos Móviles');
-          const centroBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-xs cursor-pointer hover:opacity-85 hover:scale-105 transition" style="background: ${cColor};" onclick="abrirModalCambiarCentroLinea(${l.id}, ${l.centro_utilidad_id || 1}, '${escapeGasHtml(displayConcepto)}')" title="Haga clic para reasignar la sede: ${escapeGasHtml(cNom)}">${cCod} <span class="text-[9px] opacity-75">✏️</span></span>`;
+          const centroBadge = `<button type="button" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-xs cursor-pointer hover:opacity-85 hover:scale-105 transition" style="background: ${cColor};" onclick="abrirModalCambiarCentroLinea(${l.id}, ${l.centro_utilidad_id || 1}, '${escapeJsString(displayConcepto)}')" title="Haga clic para reasignar la sede: ${escapeGasHtml(cNom)}">${cCod} <span class="text-[9px] opacity-75">✏️</span></button>`;
 
           tr.innerHTML = `
             <td class="px-3 py-2.5 text-xs whitespace-nowrap">${centroBadge}</td>
             <td class="px-4 py-2.5 text-xs font-semibold text-gray-700">
-              <div class="flex items-center flex-wrap gap-1">${displayConcepto} ${soporteBadge}</div>
-              <span class="text-[9px] text-gray-400 font-mono">${l.cuenta}</span>
+              <div class="flex items-center flex-wrap gap-1">${escapeGasHtml(displayConcepto)} ${soporteBadge}</div>
+              <span class="text-[9px] text-gray-400 font-mono">${escapeGasHtml(l.cuenta || '')}</span>
             </td>
             <td class="px-4 py-2.5 text-xs text-gray-600">${notaCell}</td>
-            <td class="px-4 py-2.5 text-xs text-gray-600">${l.tercero_nombre || 'N/A'}</td>
+            <td class="px-4 py-2.5 text-xs text-gray-600">${escapeGasHtml(l.tercero_nombre || 'N/A')}</td>
             <td class="px-4 py-2.5 text-right font-mono text-xs text-rose-700 font-bold">$${parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             <td class="px-4 py-2.5 text-center">
               <button onclick="eliminarLineaGasto(${l.id})" class="text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2 py-1 rounded transition text-xs" title="Eliminar este gasto">
@@ -1200,7 +1200,22 @@
 
   function escapeGasHtml(str) {
     if (!str) return '';
-    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function escapeJsString(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '&quot;')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '');
   }
 
   let _lineaEditandoSoporteId = null;

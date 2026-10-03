@@ -239,7 +239,7 @@
 
   <!-- Modal Editar Nota Explicativa -->
   <div id="modal-editar-nota-gasto" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
-    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-5 max-w-sm w-full animate-in fade-in zoom-in-95 duration-150">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-5 max-w-md w-full animate-in fade-in zoom-in-95 duration-150">
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2 text-gray-800">
           <span class="text-lg">📝</span>
@@ -255,19 +255,21 @@
 
       <div class="mb-4">
         <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nota / Observación</label>
-        <input id="modal-nota-input" type="text" placeholder="Ej. Pago de 5 escobas y desinfectante..."
-               autocomplete="off"
-               class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none text-gray-800"
-               onkeydown="if(event.key==='Enter') guardarNotaGasto(); if(event.key==='Escape') cerrarModalEditarNota();">
-        <span class="text-[10px] text-gray-400 mt-1 block">Deje en blanco si desea eliminar la nota de este rubro.</span>
+        <textarea id="modal-nota-input" rows="4" placeholder="Ej. Detalle puntual de la compra, destino del gasto o justificación..."
+               class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none text-gray-800 resize-y font-sans leading-relaxed"
+               onkeydown="if((event.ctrlKey || event.metaKey) && event.key==='Enter') guardarNotaGasto(); if(event.key==='Escape') cerrarModalEditarNota();"></textarea>
+        <div class="flex justify-between items-center text-[10px] text-gray-400 mt-1">
+          <span>Deje en blanco si desea eliminar la nota.</span>
+          <span class="text-gray-400 font-medium">Ctrl + Enter para guardar</span>
+        </div>
       </div>
 
       <div class="flex justify-end gap-2">
-        <button onclick="cerrarModalEditarNota()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+        <button onclick="cerrarModalEditarNota()" class="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
           Cancelar
         </button>
-        <button id="btn-guardar-nota" onclick="guardarNotaGasto()" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1">
-          💾 Guardar
+        <button id="btn-guardar-nota" onclick="guardarNotaGasto()" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5">
+          <span>💾</span> Guardar Nota
         </button>
       </div>
     </div>
@@ -1256,7 +1258,8 @@
     modal.classList.add('flex');
     setTimeout(() => {
       inp.focus();
-      inp.select();
+      const len = inp.value.length;
+      inp.setSelectionRange(len, len);
     }, 60);
   }
 

@@ -676,21 +676,59 @@
       </div>
 
       <!-- Selector Método de Pago -->
-      <div class="mb-5">
+      <div class="mb-3">
         <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">
           💳 Salida de Dinero / Medio de Pago <span class="text-rose-500">*</span>
         </label>
-        <select id="modal-cierre-ind-metodo"
+        <select id="modal-cierre-ind-metodo" onchange="alCambiarMetodoCierreInd()"
                 class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none font-semibold text-gray-800">
           <!-- Opciones dinámicas -->
         </select>
-        <p class="text-[10px] text-gray-400 mt-1">
-          Se emitirá el comprobante oficial para este ítem y las demás líneas abiertas avanzarán al siguiente consecutivo.
+        <div class="text-[11px] text-gray-500 mt-1 font-mono flex items-center justify-between">
+          <span id="modal-cierre-ind-cuenta-lbl"></span>
+        </div>
+      </div>
+
+      <!-- Indicadores dinámicos de la Cuenta Mapeada -->
+      <div id="modal-cierre-ind-badges" class="mb-3 flex flex-wrap gap-1.5">
+        <!-- Badges generados dinámicamente -->
+      </div>
+
+      <!-- Campo Dinámico: Tercero / Proveedor (si la cuenta lo exige) -->
+      <div id="modal-cierre-ind-tercero-container" class="mb-3 relative hidden">
+        <div class="flex justify-between items-center mb-1">
+          <label class="block text-xs font-semibold text-gray-700 uppercase">
+            👤 Tercero / Proveedor <span id="modal-cierre-ind-tercero-req" class="text-rose-500">*</span>
+          </label>
+          <button type="button" onclick="abrirModalNuevoTercero(document.getElementById('modal-cierre-ind-tercero-txt').value.trim())" 
+                  class="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer">
+            <span>👤+</span> Nuevo
+          </button>
+        </div>
+        <input id="modal-cierre-ind-tercero-txt" type="text" placeholder="Escriba para buscar tercero..."
+               autocomplete="off"
+               class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-xs w-full bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none h-[36px]"
+               oninput="onCierreIndTerceroInput()" onfocus="onCierreIndTerceroInput()">
+        <button onclick="clearCierreIndTercero()" class="absolute right-2 top-[25px] text-gray-400 hover:text-gray-600 text-base cursor-pointer">&times;</button>
+        <input type="hidden" id="modal-cierre-ind-tercero-id">
+        <div id="modal-cierre-ind-tercero-ac" class="ac-drop hidden"></div>
+        <p class="text-[10px] text-gray-400 mt-0.5">La cuenta contable de este método exige identificar el tercero beneficiario/acreedor.</p>
+      </div>
+
+      <!-- Campo Dinámico: Documento Cruce / Soporte (si la cuenta maneja saldo por documento / CxP) -->
+      <div id="modal-cierre-ind-doc-container" class="mb-3.5 hidden">
+        <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">
+          📑 Documento Cruce / Factura Soporte <span class="text-rose-500">*</span>
+        </label>
+        <input id="modal-cierre-ind-doc" type="text" placeholder="Ej: FAC-1024, REC-9821..."
+               class="border border-gray-200 rounded-xl px-3 py-2 text-xs w-full bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none h-[36px] font-mono">
+        <p class="text-[10px] text-purple-700 mt-0.5 flex items-center gap-1 font-semibold">
+          <span>ℹ️</span> Esta cuenta maneja <strong>Saldo por Documento</strong>. Se creará una obligación en Saldos x Documento (CxP).
         </p>
       </div>
 
-      <div class="flex justify-end gap-2">
-        <button onclick="cerrarModalCierreIndividual()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+      <div class="flex justify-end gap-2 pt-2 border-t border-gray-100">
+        <button onclick="cerrarModalCierreIndividual()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
           Cancelar
         </button>
         <button id="btn-confirmar-cierre-ind" onclick="ejecutarCierreIndividualLinea()"
@@ -1162,7 +1200,7 @@
                         title="Reclasificar este desembolso (Gasto / Activo / Diferido y plazo)">
                   <span>🔄</span> Reclasificar
                 </button>
-                <button onclick="abrirModalCierreIndividual(${l.id}, '${escapeJsString(displayConcepto)}', ${parseFloat(l.monto)}, ${duracion})"
+                <button onclick="abrirModalCierreIndividual(${l.id}, '${escapeJsString(displayConcepto)}', ${parseFloat(l.monto)}, ${duracion}, ${l.tercero_id || 'null'}, '${escapeJsString(l.tercero_nombre || '')}', '${escapeJsString(notaValor || '')}')"
                         class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
                         title="Liquidar individualmente esta erogación con el consecutivo actual">
                   <span>⚡</span> Liquidar
@@ -1186,6 +1224,8 @@
     }
   }
 
+  let _metodosPagoGastos = [];
+
   // Carga los métodos de pago con cuenta_gastos_id asociada
   async function cargarMetodosPagoGastos() {
     try {
@@ -1193,12 +1233,12 @@
       const d = await r.json();
       if (!d.ok) return;
       
-      const filtrados = (d.metodos || []).filter(m => (m.activo !== false) && (m.activo_desembolsos !== false) && (m.cuenta_id || m.cuenta_gastos_id));
+      _metodosPagoGastos = (d.metodos || []).filter(m => (m.activo !== false) && (m.activo_desembolsos !== false) && (m.cuenta_id || m.cuenta_gastos_id));
       const sel = document.getElementById('gas-metodo-pago');
-      if (filtrados.length === 0) {
+      if (_metodosPagoGastos.length === 0) {
         sel.innerHTML = '<option value="">— Ningún método habilitado para desembolsos —</option>';
       } else {
-        sel.innerHTML = filtrados.map(m => 
+        sel.innerHTML = _metodosPagoGastos.map(m => 
           `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}</option>`
         ).join('');
       }
@@ -1720,8 +1760,9 @@
 
   // ═══ GESTIÓN DE CIERRE INDIVIDUAL DE LÍNEA ═══
   let _lineaIdCierreInd = null;
+  let _cierreIndTerceroTimer = null;
 
-  function abrirModalCierreIndividual(lineId, concepto, monto, duracionMeses) {
+  function abrirModalCierreIndividual(lineId, concepto, monto, duracionMeses, terceroId, terceroNombre, soporte) {
     _lineaIdCierreInd = lineId;
     document.getElementById('modal-cierre-ind-linea-id').value = lineId;
     document.getElementById('modal-cierre-ind-concepto').textContent = concepto || 'Desembolso';
@@ -1735,16 +1776,142 @@
       document.getElementById('modal-cierre-ind-plazo').textContent = 'Gasto del Mes (100% corriente)';
     }
 
-    // Clonar métodos de pago disponibles
-    const srcSel = document.getElementById('gas-metodo-pago');
+    // Prellenar tercero
+    document.getElementById('modal-cierre-ind-tercero-id').value = (terceroId && terceroId !== 'null') ? terceroId : '';
+    document.getElementById('modal-cierre-ind-tercero-txt').value = terceroNombre || '';
+    const acTercero = document.getElementById('modal-cierre-ind-tercero-ac');
+    if (acTercero) acTercero.classList.add('hidden');
+
+    // Prellenar documento soporte
+    document.getElementById('modal-cierre-ind-doc').value = soporte || '';
+
+    // Llenar selector de métodos de pago desde los métodos habilitados
     const targetSel = document.getElementById('modal-cierre-ind-metodo');
-    if (srcSel && targetSel) {
-      targetSel.innerHTML = srcSel.innerHTML;
+    if (targetSel && _metodosPagoGastos.length > 0) {
+      targetSel.innerHTML = _metodosPagoGastos.map(m => 
+        `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}</option>`
+      ).join('');
+    } else if (targetSel) {
+      targetSel.innerHTML = '<option value="">— Sin métodos configurados —</option>';
     }
+
+    alCambiarMetodoCierreInd();
 
     const modal = document.getElementById('modal-cierre-individual-linea');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+  }
+
+  function alCambiarMetodoCierreInd() {
+    const sel = document.getElementById('modal-cierre-ind-metodo');
+    const metodoCod = sel ? sel.value : null;
+    const metodo = _metodosPagoGastos.find(m => m.codigo === metodoCod);
+    
+    const lblCuenta = document.getElementById('modal-cierre-ind-cuenta-lbl');
+    const badgesCont = document.getElementById('modal-cierre-ind-badges');
+    const tercCont = document.getElementById('modal-cierre-ind-tercero-container');
+    const docCont = document.getElementById('modal-cierre-ind-doc-container');
+
+    if (!metodo) {
+      if (lblCuenta) lblCuenta.textContent = '';
+      if (badgesCont) badgesCont.innerHTML = '';
+      if (tercCont) tercCont.classList.add('hidden');
+      if (docCont) docCont.classList.add('hidden');
+      return;
+    }
+
+    const codCta = metodo.gastos_codigo || metodo.cuenta_codigo || '';
+    const nomCta = metodo.gastos_nombre || metodo.cuenta_nombre || '';
+    if (lblCuenta) {
+      lblCuenta.textContent = codCta ? `Cuenta PUC: ${codCta} - ${nomCta}` : 'Sin cuenta PUC asociada';
+    }
+
+    const manejaTerceros = Boolean(metodo.maneja_terceros || metodo.gastos_maneja_terceros);
+    const manejaDocs = Boolean(metodo.maneja_documentos || metodo.gastos_maneja_documentos);
+
+    let badges = [];
+    if (manejaTerceros) {
+      badges.push('<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">👤 Requiere Tercero</span>');
+    }
+    if (manejaDocs) {
+      badges.push('<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">📑 Saldo x Documento (CxP)</span>');
+    }
+    if (!manejaTerceros && !manejaDocs) {
+      badges.push('<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">💵 Salida Directa Inmediata</span>');
+    }
+    if (badgesCont) badgesCont.innerHTML = badges.join('');
+
+    // Toggle visibilidad Tercero
+    if (tercCont) {
+      if (manejaTerceros) {
+        tercCont.classList.remove('hidden');
+      } else {
+        tercCont.classList.add('hidden');
+      }
+    }
+
+    // Toggle visibilidad Documento Cruce
+    if (docCont) {
+      if (manejaDocs) {
+        docCont.classList.remove('hidden');
+      } else {
+        docCont.classList.add('hidden');
+      }
+    }
+  }
+
+  function onCierreIndTerceroInput() {
+    clearTimeout(_cierreIndTerceroTimer);
+    _cierreIndTerceroTimer = setTimeout(() => {
+      const txt = document.getElementById('modal-cierre-ind-tercero-txt').value.trim();
+      const ac = document.getElementById('modal-cierre-ind-tercero-ac');
+      if (!ac) return;
+      if (!txt) {
+        document.getElementById('modal-cierre-ind-tercero-id').value = '';
+        ac.classList.add('hidden');
+        return;
+      }
+      fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(txt)}`)
+        .then(r => r.json())
+        .then(list => {
+          if (!Array.isArray(list) || list.length === 0) {
+            ac.innerHTML = `
+              <div class="p-2.5 text-xs text-gray-500 flex justify-between items-center">
+                <span>No se encontró "${escapeGasHtml(txt)}"</span>
+                <button type="button" onclick="abrirModalNuevoTercero('${escapeJsString(txt)}')" class="text-rose-600 font-bold underline cursor-pointer">Crear</button>
+              </div>
+            `;
+            ac.classList.remove('hidden');
+            return;
+          }
+          ac.innerHTML = list.map(t => `
+            <div class="ac-item p-2 hover:bg-rose-50 cursor-pointer text-xs border-b border-gray-100 flex justify-between items-center"
+                 onmousedown="selectCierreIndTercero(${t.id}, '${escapeJsString(t.nombre)}')">
+              <div>
+                <strong class="text-gray-800">${escapeGasHtml(t.nombre)}</strong>
+                <span class="text-gray-400 block text-[10px]">${escapeGasHtml(t.numero_documento || '')}</span>
+              </div>
+              <span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">${escapeGasHtml(t.tipo || 'Tercero')}</span>
+            </div>
+          `).join('');
+          ac.classList.remove('hidden');
+        })
+        .catch(() => ac.classList.add('hidden'));
+    }, 250);
+  }
+
+  function selectCierreIndTercero(id, nombre) {
+    document.getElementById('modal-cierre-ind-tercero-id').value = id;
+    document.getElementById('modal-cierre-ind-tercero-txt').value = nombre;
+    const ac = document.getElementById('modal-cierre-ind-tercero-ac');
+    if (ac) ac.classList.add('hidden');
+  }
+
+  function clearCierreIndTercero() {
+    document.getElementById('modal-cierre-ind-tercero-id').value = '';
+    document.getElementById('modal-cierre-ind-tercero-txt').value = '';
+    const ac = document.getElementById('modal-cierre-ind-tercero-ac');
+    if (ac) ac.classList.add('hidden');
   }
 
   function cerrarModalCierreIndividual() {
@@ -1762,6 +1929,26 @@
       return;
     }
 
+    const metodo = _metodosPagoGastos.find(m => m.codigo === metodoPago);
+    const terceroId = document.getElementById('modal-cierre-ind-tercero-id').value;
+    const documentoCruce = document.getElementById('modal-cierre-ind-doc').value.trim();
+
+    if (metodo && (metodo.maneja_terceros || metodo.gastos_maneja_terceros)) {
+      if (!terceroId) {
+        toast('Debe seleccionar un tercero / proveedor para este método de pago.', false);
+        document.getElementById('modal-cierre-ind-tercero-txt').focus();
+        return;
+      }
+    }
+
+    if (metodo && (metodo.maneja_documentos || metodo.gastos_maneja_documentos)) {
+      if (!documentoCruce) {
+        toast('Debe indicar el número de documento cruce / factura soporte para registrar en Saldos x Documento.', false);
+        document.getElementById('modal-cierre-ind-doc').focus();
+        return;
+      }
+    }
+
     const tipoDoc = document.getElementById('gas-tipo-doc').value;
     const numDoc = document.getElementById('gas-num-doc').value;
     const btn = document.getElementById('btn-confirmar-cierre-ind');
@@ -1771,7 +1958,11 @@
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea/${_lineaIdCierreInd}/cierre-individual`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ metodo_pago: metodoPago })
+        body: JSON.stringify({
+          metodo_pago: metodoPago,
+          tercero_id: terceroId ? parseInt(terceroId) : null,
+          documento_cruce: documentoCruce
+        })
       });
       const d = await r.json();
       if (d.ok) {

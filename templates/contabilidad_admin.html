@@ -467,7 +467,7 @@
 
     <!-- TAB: MÉTODOS DE PAGO Y TESORERÍA -->
     <div id="panel-pago_metodos" class="p-5 hidden">
-      <!-- Sección Superior: Creación de Nuevos Métodos (Colapsable) -->
+      <!-- ═══ SECCIÓN SUPERIOR: ADMINISTRACIÓN Y ASIGNACIÓN DE CUENTAS (COLAPSABLE) ═══ -->
       <div class="w-full bg-slate-50/80 rounded-2xl border border-slate-200/80 mb-6 overflow-hidden transition-all duration-200 shadow-xs">
         <!-- Header del Acordeón -->
         <button type="button" 
@@ -475,14 +475,14 @@
                 class="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-100/70 transition-colors text-left focus:outline-none cursor-pointer">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-base shadow-xs">
-              💳
+              ⚙️
             </div>
             <div>
               <span class="text-sm font-bold text-slate-800 flex items-center gap-2">
-                ➕ Crear Nuevo Método de Pago
-                <span class="text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60 px-2 py-0.5 rounded-full">Tesorería Dinámica</span>
+                ⚙️ Configuración y Catálogo de Métodos de Pago
+                <span class="text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60 px-2 py-0.5 rounded-full">Catálogo & Cuentas PUC</span>
               </span>
-              <p class="text-xs text-slate-500">Registre canales de cobro y pago personalizados para su negocio (Bold, Wompi, Cajas Menores, etc.).</p>
+              <p class="text-xs text-slate-500">Cree nuevos canales de cobro y asigne a cada método su cuenta contable de Caja o Banco.</p>
             </div>
           </div>
           <div class="flex items-center gap-2 text-slate-400">
@@ -494,77 +494,107 @@
         </button>
 
         <!-- Contenido del Acordeón (Colapsado por defecto) -->
-        <div id="contenido-nuevo-metodo" class="hidden border-t border-slate-200/70 p-5 bg-white space-y-4">
-          <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-start">
-            <!-- Nombre -->
-            <div class="sm:col-span-4">
-              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nombre del Método *</label>
-              <input type="text" id="nuevo-metodo-nombre" placeholder="Ej. Datafono Bold, Caja Menor..." 
-                     class="border border-slate-200 rounded-xl px-3 py-2 text-sm w-full bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
-            </div>
-            
-            <!-- Emoji / Ícono -->
-            <div class="sm:col-span-2">
-              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Ícono / Emoji</label>
-              <select id="nuevo-metodo-icono" class="border border-slate-200 rounded-xl px-3 py-2 text-sm w-full bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
-                <option value="💳">💳 Tarjeta / Datafono</option>
-                <option value="💵">💵 Efectivo / Caja</option>
-                <option value="🏦">🏦 Banco / Transferencia</option>
-                <option value="📱">📱 Nequi / Móvil</option>
-                <option value="📲">📲 QR / Llave</option>
-                <option value="🧾">🧾 Bono / Vale</option>
-              </select>
-            </div>
+        <div id="contenido-nuevo-metodo" class="hidden border-t border-slate-200/70 p-5 bg-white space-y-5">
+          <!-- 1. Formulario Rápido de Nuevo Método -->
+          <div class="bg-slate-50/60 p-4 rounded-xl border border-slate-200/60">
+            <h3 class="text-xs font-bold text-slate-700 uppercase mb-3 flex items-center gap-1.5">
+              <span>➕</span> Registrar Nuevo Método de Pago
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <!-- Nombre -->
+              <div class="sm:col-span-4">
+                <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Nombre del Método *</label>
+                <input type="text" id="nuevo-metodo-nombre" placeholder="Ej. Datafono Bold, Caja Menor..." 
+                       class="border border-slate-200 rounded-xl px-3 py-1.5 text-xs w-full bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+              </div>
+              
+              <!-- Emoji / Ícono -->
+              <div class="sm:col-span-2">
+                <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Ícono</label>
+                <select id="nuevo-metodo-icono" class="border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs w-full bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                  <option value="💳">💳 Datafono / Tarjeta</option>
+                  <option value="💵">💵 Efectivo / Caja</option>
+                  <option value="🏦">🏦 Banco / Transferencia</option>
+                  <option value="📱">📱 Nequi / Celular</option>
+                  <option value="📲">📲 QR / Llave</option>
+                  <option value="📦">📦 Contraentrega</option>
+                  <option value="🧾">🧾 Bono / Vale</option>
+                </select>
+              </div>
 
-            <!-- Cuenta Contable Principal -->
-            <div class="sm:col-span-6 relative">
-              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Cuenta Contable (Caja / Banco) *</label>
-              <div class="relative flex items-center">
-                <input type="text" id="nuevo-metodo-cuenta-txt" placeholder="Buscar cuenta PUC (ej: 110505 o 111005)..."
-                       class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-8"
-                       oninput="buscarPUCNuevoMetodo(this)">
-                <span id="nuevo-metodo-cuenta-status" class="absolute right-2.5 text-green-500 hidden text-sm">✅</span>
-                <input type="hidden" id="nuevo-metodo-cuenta-id" value="">
-                <div id="nuevo-metodo-cuenta-ac" class="ac-drop hidden"></div>
+              <!-- Cuenta Contable Principal -->
+              <div class="sm:col-span-4 relative">
+                <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Cuenta Contable (Caja / Banco)</label>
+                <div class="relative flex items-center">
+                  <input type="text" id="nuevo-metodo-cuenta-txt" placeholder="Buscar cuenta PUC..."
+                         class="w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-8"
+                         oninput="buscarPUCNuevoMetodo(this)">
+                  <span id="nuevo-metodo-cuenta-status" class="absolute right-2.5 text-green-500 hidden text-xs">✅</span>
+                  <input type="hidden" id="nuevo-metodo-cuenta-id" value="">
+                  <div id="nuevo-metodo-cuenta-ac" class="ac-drop hidden"></div>
+                </div>
+              </div>
+
+              <!-- Botón Crear -->
+              <div class="sm:col-span-2">
+                <button onclick="crearNuevoMetodoPago()" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-1.5 rounded-xl text-xs w-full transition shadow-sm flex items-center justify-center gap-1.5 h-[34px] cursor-pointer">
+                  ➕ Crear
+                </button>
               </div>
             </div>
           </div>
 
-          <!-- Pie de Creación -->
-          <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-wrap items-center justify-between gap-4">
-            <p class="text-xs text-slate-500">Al guardar, el método se creará con su cuenta contable asociada y podrá ajustar sus interruptores de módulo directamente en la tabla inferior.</p>
-            <button onclick="crearNuevoMetodoPago()" 
-                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded-xl text-sm transition shadow-sm flex items-center gap-2 cursor-pointer">
-              ➕ Guardar y Habilitar Método
-            </button>
+          <!-- 2. Lista de Todos los Métodos Existentes para Asignación de Cuentas -->
+          <div>
+            <div class="flex items-center justify-between mb-2.5">
+              <h3 class="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
+                <span>📋</span> Catálogo de Métodos y Asignación de Cuentas PUC
+              </h3>
+              <span class="text-[11px] text-slate-400">Asigne la cuenta contable a cada método y guarde los cambios</span>
+            </div>
+            <div class="overflow-x-auto border border-slate-100 rounded-xl shadow-xs">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="bg-slate-50 text-[10px] uppercase text-slate-500 border-b border-slate-100">
+                    <th class="px-4 py-2.5 text-left w-60">Método de Pago</th>
+                    <th class="px-3 py-2.5 text-left">Cuenta Contable de Tesorería (Caja / Bancos / PUC)</th>
+                    <th class="px-3 py-2.5 text-center w-28">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="pago_metodos-admin-body" class="divide-y divide-slate-100 bg-white">
+                  <!-- Dinámico -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Título de la tabla y resumen -->
-      <div class="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+      <!-- ═══ SECCIÓN INFERIOR: MATRIZ OPERATIVA Y ACTIVACIÓN POR MÓDULOS ═══ -->
+      <div class="mb-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <div>
-          <h2 class="text-lg font-bold text-gray-800">Cuentas Contables y Activación por Módulo</h2>
-          <p class="text-xs text-gray-500">Asigne la cuenta de tesorería y use los interruptores para activar o desactivar cada método en los módulos del sistema.</p>
+          <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
+            <span>🎛️</span> Matriz de Disponibilidad y Activación por Módulo
+          </h2>
+          <p class="text-xs text-gray-500">Active o desactive en qué módulos del sistema opera cada método de pago. Los métodos requieren tener una cuenta contable asignada arriba para poder habilitar sus módulos.</p>
         </div>
       </div>
 
-      <!-- Tabla de Métodos -->
-      <div class="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
+      <!-- Tabla de Matriz de Toggles -->
+      <div class="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm bg-white">
         <table class="w-full text-sm">
           <thead>
             <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-100">
-              <th class="px-4 py-3 text-left">Método de Pago</th>
-              <th class="px-4 py-3 text-left min-w-[260px]">Cuenta Contable (Caja / Bancos)</th>
+              <th class="px-4 py-3 text-left">Método de Pago y Cuenta PUC</th>
               <th class="px-3 py-3 text-center">🛒 Ventas POS</th>
               <th class="px-3 py-3 text-center">📦 Compras Inv.</th>
               <th class="px-3 py-3 text-center">💸 Desembolsos</th>
               <th class="px-3 py-3 text-center">📑 Saldos CxC/CxP</th>
               <th class="px-3 py-3 text-center">Estado General</th>
-              <th class="px-3 py-3 text-center w-28">Acciones</th>
             </tr>
           </thead>
-          <tbody id="pago_metodos-body" class="divide-y divide-gray-100">
+          <tbody id="pago_metodos-matrix-body" class="divide-y divide-gray-100">
             <!-- Dinámico -->
           </tbody>
         </table>
@@ -2415,112 +2445,164 @@ async function crearNuevoMetodoPago() {
 }
 
 async function cargarPagoMetodos() {
-  const tbody = document.getElementById('pago_metodos-body');
-  tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">Cargando métodos de pago...</td></tr>';
+  const adminBody = document.getElementById('pago_metodos-admin-body');
+  const matrixBody = document.getElementById('pago_metodos-matrix-body');
+  
+  if (adminBody) adminBody.innerHTML = '<tr><td colspan="3" class="px-4 py-6 text-center text-gray-400">Cargando catálogo de métodos...</td></tr>';
+  if (matrixBody) matrixBody.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">Cargando matriz de módulos...</td></tr>';
+  
   try {
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`);
     const d = await r.json();
     if (!d.ok) {
-      tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-4 text-center text-red-500">${d.error}</td></tr>`;
+      if (adminBody) adminBody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-red-500">${d.error}</td></tr>`;
+      if (matrixBody) matrixBody.innerHTML = `<tr><td colspan="6" class="px-4 py-4 text-center text-red-500">${d.error}</td></tr>`;
       return;
     }
     
     metodosConfigurados = d.metodos || [];
-    tbody.innerHTML = '';
-    if (metodosConfigurados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">No hay métodos de pago registrados. Cree uno en la parte superior.</td></tr>';
-      return;
+    
+    // 1. Render Sección 1: Catálogo Superior en Acordeón (TODOS los métodos del negocio)
+    if (adminBody) {
+      adminBody.innerHTML = '';
+      if (metodosConfigurados.length === 0) {
+        adminBody.innerHTML = '<tr><td colspan="3" class="px-4 py-6 text-center text-gray-400">No hay métodos registrados. Cree uno nuevo en el formulario superior.</td></tr>';
+      } else {
+        metodosConfigurados.forEach((m, idx) => {
+          const ctaText = (m.cuenta_codigo && m.cuenta_nombre) ? `${m.cuenta_codigo} — ${m.cuenta_nombre}` : '';
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-50/60 transition-colors';
+          tr.innerHTML = `
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2.5">
+                <span class="text-xl shrink-0">${m.icono || '💳'}</span>
+                <div>
+                  <span class="font-bold text-gray-800 text-xs block">${m.nombre}</span>
+                  <span class="text-[10px] text-gray-400 font-mono block">(${m.codigo})</span>
+                </div>
+              </div>
+            </td>
+            <td class="px-3 py-3 relative">
+              <div class="relative flex items-center">
+                <input type="text" id="cta-admin-input-${idx}" placeholder="Buscar cuenta PUC (Caja / Bancos)..." 
+                       class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
+                       value="${ctaText}"
+                       oninput="buscarPUCAdminInput(this, ${idx})">
+                <span id="cta-admin-status-${idx}" class="absolute right-2 text-green-500 ${m.cuenta_id ? '' : 'hidden'} text-[11px]" title="Cuenta contable validada y guardada">✅</span>
+                <span id="cta-admin-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta modificada (pendiente guardar)">⚠️</span>
+                <input type="hidden" id="cta-admin-id-${idx}" value="${m.cuenta_id || ''}">
+                <div class="ac-drop hidden"></div>
+              </div>
+            </td>
+            <td class="px-3 py-3 text-center">
+              <div class="flex items-center justify-center gap-1.5">
+                <button id="btn-admin-save-${idx}" onclick="guardarFilaMetodo(${idx})" title="Guardar cuenta contable asignada"
+                        class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm cursor-pointer">
+                  💾 Guardar
+                </button>
+                <button onclick="eliminarMetodoPago(${idx})" title="Eliminar método de pago"
+                        class="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer">
+                  🗑️
+                </button>
+              </div>
+            </td>
+          `;
+          adminBody.appendChild(tr);
+        });
+      }
     }
     
-    metodosConfigurados.forEach((m, idx) => {
-      const ctaText = (m.cuenta_codigo && m.cuenta_nombre) ? `${m.cuenta_codigo} — ${m.cuenta_nombre}` : '';
-      const actVentas = m.activo_ventas !== false;
-      const actCompras = m.activo_compras !== false;
-      const actDesembolsos = m.activo_desembolsos !== false;
-      const actSaldos = m.activo_saldos !== false;
-      const actGen = m.activo !== false;
+    // 2. Render Sección 2: Matriz Operativa Inferior (SOLO métodos con cuenta contable asignada)
+    if (matrixBody) {
+      matrixBody.innerHTML = '';
+      const metodosConCuenta = metodosConfigurados
+        .map((m, idx) => ({ ...m, originalIdx: idx }))
+        .filter(m => !!m.cuenta_id);
       
-      const tr = document.createElement('tr');
-      tr.className = 'hover:bg-slate-50/60 transition-colors';
-      tr.innerHTML = `
-        <td class="px-4 py-3">
-          <div class="flex items-center gap-2.5">
-            <span class="text-xl shrink-0">${m.icono || '💳'}</span>
-            <div>
-              <span class="font-bold text-gray-800 text-xs block">${m.nombre}</span>
-              <span class="text-[10px] text-gray-400 font-mono block">(${m.codigo})</span>
-            </div>
-          </div>
-        </td>
-        <td class="px-3 py-3 relative">
-          <div class="relative flex items-center">
-            <input type="text" id="cta-input-${idx}" placeholder="Buscar cuenta PUC..." 
-                   class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
-                   value="${ctaText}"
-                   oninput="buscarPUCInput(this, ${idx})">
-            <span id="cta-status-${idx}" class="absolute right-2 text-green-500 ${m.cuenta_id ? '' : 'hidden'} text-[11px]" title="Cuenta contable validada y guardada">✅</span>
-            <span id="cta-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta modificada (pendiente guardar)">⚠️</span>
-            <input type="hidden" id="cta-id-${idx}" value="${m.cuenta_id || ''}">
-            <div class="ac-drop hidden"></div>
-          </div>
-        </td>
-        <!-- Switch Ventas -->
-        <td class="px-3 py-3 text-center">
-          <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_ventas')" 
-                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actVentas ? 'bg-emerald-500' : 'bg-gray-300'}" 
-                  id="sw-ventas-${idx}" title="${actVentas ? 'Habilitado en Ventas POS' : 'Deshabilitado en Ventas POS'}">
-            <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actVentas ? 'translate-x-4' : 'translate-x-0'}"></span>
-          </button>
-        </td>
-        <!-- Switch Compras -->
-        <td class="px-3 py-3 text-center">
-          <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_compras')" 
-                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actCompras ? 'bg-emerald-500' : 'bg-gray-300'}" 
-                  id="sw-compras-${idx}" title="${actCompras ? 'Habilitado en Compras de Inventario' : 'Deshabilitado en Compras'}">
-            <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actCompras ? 'translate-x-4' : 'translate-x-0'}"></span>
-          </button>
-        </td>
-        <!-- Switch Desembolsos -->
-        <td class="px-3 py-3 text-center">
-          <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_desembolsos')" 
-                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actDesembolsos ? 'bg-emerald-500' : 'bg-gray-300'}" 
-                  id="sw-desembolsos-${idx}" title="${actDesembolsos ? 'Habilitado en Cierres de Desembolsos' : 'Deshabilitado en Desembolsos'}">
-            <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actDesembolsos ? 'translate-x-4' : 'translate-x-0'}"></span>
-          </button>
-        </td>
-        <!-- Switch Saldos -->
-        <td class="px-3 py-3 text-center">
-          <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_saldos')" 
-                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actSaldos ? 'bg-emerald-500' : 'bg-gray-300'}" 
-                  id="sw-saldos-${idx}" title="${actSaldos ? 'Habilitado en Saldos por Documento' : 'Deshabilitado en Saldos'}">
-            <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actSaldos ? 'translate-x-4' : 'translate-x-0'}"></span>
-          </button>
-        </td>
-        <!-- Switch Estado General -->
-        <td class="px-3 py-3 text-center">
-          <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo')" 
-                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actGen ? 'bg-blue-600' : 'bg-gray-300'}" 
-                  id="sw-gen-${idx}" title="${actGen ? 'Método Activo Global' : 'Método Inactivo'}">
-            <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actGen ? 'translate-x-4' : 'translate-x-0'}"></span>
-          </button>
-        </td>
-        <td class="px-3 py-3 text-center">
-          <div class="flex items-center justify-center gap-1.5">
-            <button id="btn-save-${idx}" onclick="guardarFilaMetodo(${idx})" title="Guardar cuenta contable asignada"
-                    class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm cursor-pointer">
-              💾 Guardar
-            </button>
-            <button onclick="eliminarMetodoPago(${idx})" title="Eliminar método de pago"
-                    class="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer">
-              🗑️
-            </button>
-          </div>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
+      if (metodosConCuenta.length === 0) {
+        matrixBody.innerHTML = `
+          <tr>
+            <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+              <div class="max-w-md mx-auto">
+                <span class="text-2xl block mb-1.5">🏛️</span>
+                <span class="font-bold text-gray-700 block text-xs">No hay métodos con cuenta contable asignada</span>
+                <p class="text-[11px] text-gray-400 mt-1">
+                  Despliegue la sección superior <b>"⚙️ Configuración y Catálogo de Métodos de Pago"</b> y asigne una cuenta PUC a cada método para habilitar su disponibilidad en los módulos.
+                </p>
+              </div>
+            </td>
+          </tr>`;
+      } else {
+        metodosConCuenta.forEach(m => {
+          const idx = m.originalIdx;
+          const actVentas = m.activo_ventas !== false;
+          const actCompras = m.activo_compras !== false;
+          const actDesembolsos = m.activo_desembolsos !== false;
+          const actSaldos = m.activo_saldos !== false;
+          const actGen = m.activo !== false;
+          
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-slate-50/60 transition-colors';
+          tr.innerHTML = `
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2.5">
+                <span class="text-xl shrink-0">${m.icono || '💳'}</span>
+                <div>
+                  <span class="font-bold text-gray-800 text-xs block">${m.nombre}</span>
+                  <span class="text-[11px] text-blue-600 font-mono font-medium flex items-center gap-1 mt-0.5">
+                    <span>🏛️</span> ${m.cuenta_codigo} — ${m.cuenta_nombre}
+                  </span>
+                </div>
+              </div>
+            </td>
+            <!-- Switch Ventas -->
+            <td class="px-3 py-3 text-center">
+              <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_ventas')" 
+                      class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actVentas ? 'bg-emerald-500' : 'bg-gray-300'}" 
+                      id="sw-ventas-${idx}" title="${actVentas ? 'Habilitado en Ventas POS' : 'Deshabilitado en Ventas POS'}">
+                <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actVentas ? 'translate-x-4' : 'translate-x-0'}"></span>
+              </button>
+            </td>
+            <!-- Switch Compras -->
+            <td class="px-3 py-3 text-center">
+              <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_compras')" 
+                      class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actCompras ? 'bg-emerald-500' : 'bg-gray-300'}" 
+                      id="sw-compras-${idx}" title="${actCompras ? 'Habilitado en Compras de Inventario' : 'Deshabilitado en Compras'}">
+                <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actCompras ? 'translate-x-4' : 'translate-x-0'}"></span>
+              </button>
+            </td>
+            <!-- Switch Desembolsos -->
+            <td class="px-3 py-3 text-center">
+              <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_desembolsos')" 
+                      class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actDesembolsos ? 'bg-emerald-500' : 'bg-gray-300'}" 
+                      id="sw-desembolsos-${idx}" title="${actDesembolsos ? 'Habilitado en Cierres de Desembolsos' : 'Deshabilitado en Desembolsos'}">
+                <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actDesembolsos ? 'translate-x-4' : 'translate-x-0'}"></span>
+              </button>
+            </td>
+            <!-- Switch Saldos -->
+            <td class="px-3 py-3 text-center">
+              <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_saldos')" 
+                      class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actSaldos ? 'bg-emerald-500' : 'bg-gray-300'}" 
+                      id="sw-saldos-${idx}" title="${actSaldos ? 'Habilitado en Saldos por Documento' : 'Deshabilitado en Saldos'}">
+                <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actSaldos ? 'translate-x-4' : 'translate-x-0'}"></span>
+              </button>
+            </td>
+            <!-- Switch Estado General -->
+            <td class="px-3 py-3 text-center">
+              <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo')" 
+                      class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actGen ? 'bg-blue-600' : 'bg-gray-300'}" 
+                      id="sw-gen-${idx}" title="${actGen ? 'Método Activo Global' : 'Método Inactivo'}">
+                <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actGen ? 'translate-x-4' : 'translate-x-0'}"></span>
+              </button>
+            </td>
+          `;
+          matrixBody.appendChild(tr);
+        });
+      }
+    }
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
+    if (adminBody) adminBody.innerHTML = `<tr><td colspan="3" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
+    if (matrixBody) matrixBody.innerHTML = `<tr><td colspan="6" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
   }
 }
 
@@ -2583,12 +2665,12 @@ async function toggleMetodoModulo(idx, campo) {
   }
 }
 
-function buscarPUCInput(input, idx) {
+function buscarPUCAdminInput(input, idx) {
   const container = input.closest('.relative');
   const listEl = container.querySelector('.ac-drop');
-  const idInput = container.querySelector('input[type="hidden"]');
-  const statusEl = document.getElementById(`cta-status-${idx}`);
-  const warnEl = document.getElementById(`cta-warn-${idx}`);
+  const idInput = document.getElementById(`cta-admin-id-${idx}`);
+  const statusEl = document.getElementById(`cta-admin-status-${idx}`);
+  const warnEl = document.getElementById(`cta-admin-warn-${idx}`);
   
   idInput.value = '';
   if (statusEl) statusEl.classList.add('hidden');
@@ -2620,8 +2702,8 @@ async function guardarFilaMetodo(idx) {
     const m = metodosConfigurados[idx];
     if (!m) return;
     
-    const ctaId = document.getElementById(`cta-id-${idx}`).value || null;
-    const ctaInput = document.getElementById(`cta-input-${idx}`).value.trim();
+    const ctaId = document.getElementById(`cta-admin-id-${idx}`).value || null;
+    const ctaInput = document.getElementById(`cta-admin-input-${idx}`).value.trim();
     
     if (ctaInput && !ctaId) {
       toast('Debe seleccionar la cuenta contable del buscador interactivo', false);
@@ -2634,19 +2716,13 @@ async function guardarFilaMetodo(idx) {
       body: JSON.stringify({
         action: 'guardar_fila',
         metodo_codigo: m.codigo,
-        cuenta_id: ctaId
+        cuenta_id: ctaId ? parseInt(ctaId) : null
       })
     });
     const d = await r.json();
     if (d.ok) {
-      m.cuenta_id = ctaId;
-      const statusEl = document.getElementById(`cta-status-${idx}`);
-      const warnEl = document.getElementById(`cta-warn-${idx}`);
-      if (ctaId) {
-        if (statusEl) statusEl.classList.remove('hidden');
-        if (warnEl) warnEl.classList.add('hidden');
-      }
       toast(`Cuenta de "${m.nombre}" guardada`);
+      await cargarPagoMetodos();
     } else {
       toast(d.error, false);
     }

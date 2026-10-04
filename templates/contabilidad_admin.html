@@ -2420,10 +2420,10 @@ async function crearNuevoMetodoPago() {
         nombre,
         icono,
         cuenta_id: cuentaId || null,
-        activo_ventas: true,
-        activo_compras: true,
-        activo_desembolsos: true,
-        activo_saldos: true
+        activo_ventas: false,
+        activo_compras: false,
+        activo_desembolsos: false,
+        activo_saldos: false
       })
     });
     const d = await r.json();
@@ -2535,10 +2535,10 @@ async function cargarPagoMetodos() {
       } else {
         metodosConCuenta.forEach(m => {
           const idx = m.originalIdx;
-          const actVentas = m.activo_ventas !== false;
-          const actCompras = m.activo_compras !== false;
-          const actDesembolsos = m.activo_desembolsos !== false;
-          const actSaldos = m.activo_saldos !== false;
+          const actVentas = m.activo_ventas === true;
+          const actCompras = m.activo_compras === true;
+          const actDesembolsos = m.activo_desembolsos === true;
+          const actSaldos = m.activo_saldos === true;
           const actGen = m.activo !== false;
           
           const tr = document.createElement('tr');
@@ -2610,7 +2610,7 @@ async function toggleMetodoModulo(idx, campo) {
   const m = metodosConfigurados[idx];
   if (!m) return;
   
-  const currentVal = m[campo] !== false;
+  const currentVal = campo === 'activo' ? (m[campo] !== false) : (m[campo] === true);
   const newVal = !currentVal;
   m[campo] = newVal;
   

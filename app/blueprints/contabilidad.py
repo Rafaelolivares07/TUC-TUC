@@ -297,10 +297,10 @@ def _asegurar_tablas(conn):
         "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS icono VARCHAR(20) DEFAULT '💳'",
         "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS cuenta_id INTEGER REFERENCES cuentas_puc(id)",
         "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS cuenta_gastos_id INTEGER REFERENCES cuentas_puc(id)",
-        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_ventas BOOLEAN DEFAULT TRUE",
-        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_compras BOOLEAN DEFAULT TRUE",
-        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_desembolsos BOOLEAN DEFAULT TRUE",
-        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_saldos BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_ventas BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_compras BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_desembolsos BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_saldos BOOLEAN DEFAULT FALSE",
         "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE",
         "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS orden INTEGER DEFAULT 0"
     ]:
@@ -4002,7 +4002,7 @@ def api_contabilidad_config_metodos(negocio_id):
             conn.execute("""
                 INSERT INTO parametros_metodos_pago_negocio 
                 (negocio_id, metodo_codigo, nombre, icono, orden, activo, activo_ventas, activo_compras, activo_desembolsos, activo_saldos)
-                VALUES (%s, %s, %s, %s, %s, TRUE, TRUE, TRUE, TRUE, TRUE)
+                VALUES (%s, %s, %s, %s, %s, TRUE, FALSE, FALSE, FALSE, FALSE)
                 ON CONFLICT (negocio_id, metodo_codigo) DO UPDATE SET
                     nombre = COALESCE(parametros_metodos_pago_negocio.nombre, EXCLUDED.nombre),
                     icono = COALESCE(parametros_metodos_pago_negocio.icono, EXCLUDED.icono),
@@ -4036,10 +4036,10 @@ def api_contabilidad_config_metodos(negocio_id):
                 nombre = (data.get('nombre') or '').strip()
                 icono = (data.get('icono') or '💳').strip()
                 cuenta_id = data.get('cuenta_id')
-                activo_ventas = bool(data.get('activo_ventas', True))
-                activo_compras = bool(data.get('activo_compras', True))
-                activo_desembolsos = bool(data.get('activo_desembolsos', True))
-                activo_saldos = bool(data.get('activo_saldos', True))
+                activo_ventas = bool(data.get('activo_ventas', False))
+                activo_compras = bool(data.get('activo_compras', False))
+                activo_desembolsos = bool(data.get('activo_desembolsos', False))
+                activo_saldos = bool(data.get('activo_saldos', False))
 
                 if not nombre:
                     return jsonify({'ok': False, 'error': 'El nombre del método de pago es obligatorio'}), 400
@@ -4128,10 +4128,10 @@ def api_contabilidad_config_metodos(negocio_id):
                    COALESCE(pm.icono, c.icono, '💳') AS icono,
                    COALESCE(pm.cuenta_id, pm.cuenta_gastos_id, pm.cuenta_recaudo_id, pm.cuenta_pago_id) AS cuenta_id,
                    cpuc.codigo AS cuenta_codigo, cpuc.nombre AS cuenta_nombre,
-                   COALESCE(pm.activo_ventas, TRUE) AS activo_ventas,
-                   COALESCE(pm.activo_compras, TRUE) AS activo_compras,
-                   COALESCE(pm.activo_desembolsos, TRUE) AS activo_desembolsos,
-                   COALESCE(pm.activo_saldos, TRUE) AS activo_saldos,
+                   COALESCE(pm.activo_ventas, FALSE) AS activo_ventas,
+                   COALESCE(pm.activo_compras, FALSE) AS activo_compras,
+                   COALESCE(pm.activo_desembolsos, FALSE) AS activo_desembolsos,
+                   COALESCE(pm.activo_saldos, FALSE) AS activo_saldos,
                    COALESCE(pm.activo, TRUE) AS activo,
                    pm.cuenta_gastos_id, pm.cuenta_recaudo_id, pm.cuenta_pago_id,
                    pm.cuenta_recaudo_saldos_id, pm.cuenta_pago_saldos_id,

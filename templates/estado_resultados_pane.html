@@ -351,26 +351,47 @@
         </div>
       </div>
 
-      <!-- Selección de Nueva Categoría (Tarjetas compactas en 2 columnas) -->
-      <div class="mb-2.5">
-        <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Nueva Clasificación Contable</label>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="flex items-start gap-2 p-2 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer transition has-checked:border-blue-500 has-checked:bg-blue-50/50">
-            <input type="radio" name="modal_reproc_cat" value="activo" checked onchange="recalcularPreviewReproceso()"
-                   class="mt-0.5 text-blue-600 focus:ring-blue-500">
-            <div class="text-xs">
-              <span class="font-bold text-gray-800 block text-[11px] leading-tight">🏭 Planta y Equipo</span>
-              <span class="text-[10px] text-gray-500 block leading-tight mt-0.5">Maquinaria, mobiliario, equipos.</span>
+      <!-- Selección de Nueva Categoría (Tarjetas generosas con Toggle Verde) -->
+      <div class="mb-3">
+        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Nueva Clasificación Contable</label>
+        <div class="grid grid-cols-1 gap-2.5">
+          
+          <label id="card-reproc-activo" class="relative flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-emerald-50/40 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs" onclick="seleccionarCatReproceso('activo')">
+            <input type="radio" name="modal_reproc_cat" value="activo" checked class="sr-only">
+            <div class="flex items-center gap-3.5 flex-1 min-w-0 pr-3">
+              <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center text-xl flex-shrink-0 shadow-xs border border-blue-200">
+                🏭
+              </div>
+              <div class="flex-1 min-w-0">
+                <span class="text-sm font-extrabold text-gray-800 block leading-tight">Propiedad, Planta y Equipo</span>
+                <span class="text-xs text-gray-500 block leading-relaxed mt-0.5">Maquinaria, mobiliario, adecuaciones o herramientas duraderas.</span>
+              </div>
+            </div>
+            <div class="flex-shrink-0 pl-1">
+              <div class="toggle-track w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 bg-emerald-500 shadow-inner">
+                <div class="toggle-knob w-5 h-5 bg-white rounded-full transition-transform translate-x-5 shadow-sm"></div>
+              </div>
             </div>
           </label>
-          <label class="flex items-start gap-2 p-2 rounded-xl border border-gray-200 hover:border-purple-300 hover:bg-purple-50/30 cursor-pointer transition has-checked:border-purple-500 has-checked:bg-purple-50/50">
-            <input type="radio" name="modal_reproc_cat" value="diferido" onchange="recalcularPreviewReproceso()"
-                   class="mt-0.5 text-purple-600 focus:ring-purple-500">
-            <div class="text-xs">
-              <span class="font-bold text-gray-800 block text-[11px] leading-tight">⏳ Diferidos / Anticipos</span>
-              <span class="text-[10px] text-gray-500 block leading-tight mt-0.5">Arriendos, seguros, pólizas.</span>
+
+          <label id="card-reproc-diferido" class="relative flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-white border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/20" onclick="seleccionarCatReproceso('diferido')">
+            <input type="radio" name="modal_reproc_cat" value="diferido" class="sr-only">
+            <div class="flex items-center gap-3.5 flex-1 min-w-0 pr-3">
+              <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center text-xl flex-shrink-0 shadow-xs border border-purple-200">
+                ⏳
+              </div>
+              <div class="flex-1 min-w-0">
+                <span class="text-sm font-extrabold text-gray-800 block leading-tight">Gastos Pagados por Anticipado / Diferidos</span>
+                <span class="text-xs text-gray-500 block leading-relaxed mt-0.5">Arriendos por adelantado, pólizas de seguro anuales o licencias.</span>
+              </div>
+            </div>
+            <div class="flex-shrink-0 pl-1">
+              <div class="toggle-track w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 bg-gray-200 shadow-inner">
+                <div class="toggle-knob w-5 h-5 bg-white rounded-full transition-transform translate-x-0 shadow-sm"></div>
+              </div>
             </div>
           </label>
+
         </div>
       </div>
 
@@ -1057,6 +1078,35 @@
   }
 
   // ═══ GESTIÓN REPROCESAMIENTO HISTÓRICO ═══
+  function seleccionarCatReproceso(cat) {
+    const cards = {
+      'activo': document.getElementById('card-reproc-activo'),
+      'diferido': document.getElementById('card-reproc-diferido')
+    };
+
+    ['activo', 'diferido'].forEach(c => {
+      const card = cards[c];
+      if (!card) return;
+      const radio = card.querySelector('input[type="radio"]');
+      const track = card.querySelector('.toggle-track');
+      const knob = card.querySelector('.toggle-knob');
+
+      if (c === cat) {
+        if (radio) radio.checked = true;
+        card.className = 'relative flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-emerald-50/40 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs';
+        if (track) { track.className = 'toggle-track w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 bg-emerald-500 shadow-inner'; }
+        if (knob) { knob.className = 'toggle-knob w-5 h-5 bg-white rounded-full transition-transform translate-x-5 shadow-sm'; }
+      } else {
+        if (radio) radio.checked = false;
+        card.className = 'relative flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-white border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/20';
+        if (track) { track.className = 'toggle-track w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 bg-gray-200 shadow-inner'; }
+        if (knob) { knob.className = 'toggle-knob w-5 h-5 bg-white rounded-full transition-transform translate-x-0 shadow-sm'; }
+      }
+    });
+
+    recalcularPreviewReproceso(true);
+  }
+
   function abrirModalReprocesarDesembolso(movId, concepto, fecha, doc, monto) {
     document.getElementById('modal-reproc-id').value = movId;
     document.getElementById('modal-reproc-monto-val').value = monto;
@@ -1067,8 +1117,7 @@
     document.getElementById('modal-reproc-concepto').textContent = concepto || 'Desembolso';
     document.getElementById('modal-reproc-monto').textContent = '$' + parseFloat(monto || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
 
-    const radios = document.querySelectorAll('input[name="modal_reproc_cat"]');
-    radios.forEach(r => { r.checked = (r.value === 'activo'); });
+    seleccionarCatReproceso('activo');
     document.getElementById('modal-reproc-duracion').value = '12';
 
     const prorrateoChk = document.getElementById('modal-reproc-prorrateo');

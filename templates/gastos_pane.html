@@ -2771,10 +2771,9 @@
     }
 
     try {
-      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/terceros/buscar?q=${encodeURIComponent(txt)}`);
-      const d = await r.json();
-      const list = d.terceros || [];
-      if (list.length === 0) {
+      const r = await fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(txt)}`);
+      const list = await r.json();
+      if (!Array.isArray(list) || list.length === 0) {
         ac.innerHTML = `
           <div class="p-2.5 text-xs text-gray-500 flex justify-between items-center">
             <span>No se encontró "${escapeHtml(txt)}"</span>
@@ -2789,7 +2788,7 @@
         <div class="p-2 hover:bg-indigo-50 cursor-pointer text-xs border-b border-gray-100 last:border-b-0"
              onclick="seleccionarSuscripcionTercero(${t.id}, '${escapeJsString(t.nombre)}')">
           <span class="font-bold text-gray-800">${escapeHtml(t.nombre)}</span>
-          ${t.identificacion ? `<span class="text-[10px] text-gray-400 block">${escapeHtml(t.identificacion)}</span>` : ''}
+          ${t.telefono ? `<span class="text-[10px] text-gray-400 block">📞 ${escapeHtml(t.telefono)}</span>` : ''}
         </div>
       `).join('');
       ac.classList.remove('hidden');

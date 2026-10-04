@@ -3725,7 +3725,8 @@ def api_suscripciones_gastos(negocio_id):
             """, (negocio_id,)).fetchall()
 
             # Enriquecer con nombres de terceros y centros de utilidad
-            terceros_map = {r['id']: r['nombre'] for r in conn.execute("SELECT id, nombre FROM terceros WHERE negocio_id = %s OR id = %s", (negocio_id, negocio_id)).fetchall()}
+            terceros_rows = conn.execute("SELECT id, nombre FROM terceros").fetchall()
+            terceros_map = {r['id']: r['nombre'] for r in terceros_rows}
             centros_map = {r['id']: r['nombre'] for r in conn.execute("SELECT id, nombre FROM centros_utilidad WHERE negocio_id = %s", (negocio_id,)).fetchall()}
 
             suscripciones = []

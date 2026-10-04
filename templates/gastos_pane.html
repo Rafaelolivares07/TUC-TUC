@@ -51,7 +51,7 @@
     </div>
   </div>
 
-  <!-- Sub-sección Colapsable: Suscripciones y Gastos Fijos Recurrentes (Causaciones sin desembolso) -->
+  <!-- Sub-sección Colapsable: Suscripciones y Gastos Fijos Recurrentes (Sin desembolso previo) -->
   <div class="w-full bg-slate-50/80 rounded-2xl border border-slate-200/80 mb-6 overflow-hidden transition-all duration-200 shadow-xs">
     <!-- Header del Acordeón (Colapsado por defecto) -->
     <div onclick="toggleSeccionSuscripciones()" class="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-100/70 transition select-none">
@@ -64,7 +64,7 @@
             <h3 class="text-sm font-bold text-gray-800">Suscripciones y Gastos Fijos Recurrentes</h3>
             <span id="badge-suscripciones-count" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">0 activas</span>
           </div>
-          <p class="text-[11px] text-gray-500">Compromisos periódicos que se causan automáticamente a Cuentas por Pagar en su fecha programada sin desembolso previo de caja.</p>
+          <p class="text-[11px] text-gray-500">Compromisos periódicos que se registran automáticamente como Cuentas por Pagar en su fecha programada sin desembolso previo de caja.</p>
         </div>
       </div>
       
@@ -93,7 +93,7 @@
               <th class="px-3 py-2.5">Sede / Centro</th>
               <th class="px-3 py-2.5">Frecuencia / Día</th>
               <th class="px-3 py-2.5 text-right">Monto Cuota</th>
-              <th class="px-3 py-2.5 text-center">Próxima Causación</th>
+              <th class="px-3 py-2.5 text-center">Próximo Vencimiento</th>
               <th class="px-3 py-2.5 text-center">Estado</th>
               <th class="px-3 py-2.5 text-center w-32">Acciones</th>
             </tr>
@@ -537,7 +537,7 @@
           </div>
           <div>
             <h4 class="text-sm font-bold text-gray-800" id="modal-suscripcion-titulo">Programar Suscripción / Gasto Fijo</h4>
-            <p class="text-[11px] text-gray-500">Se causará automáticamente en cada ciclo a Cuentas por Pagar para liquidar cuando corresponda.</p>
+            <p class="text-[11px] text-gray-500">Se registrará automáticamente en cada fecha como Cuenta por Pagar para liquidar cuando corresponda.</p>
           </div>
         </div>
         <button onclick="cerrarModalNuevaSuscripcion()" class="text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer">&times;</button>
@@ -593,7 +593,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <!-- Frecuencia -->
           <div>
-            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Frecuencia de Causación <span class="text-rose-500">*</span></label>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">¿Cada cuánto se repite? <span class="text-rose-500">*</span></label>
             <select id="modal-suscripcion-frecuencia"
                     class="border border-gray-200 bg-white rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 h-[38px]">
               <option value="mensual" selected>🗓️ Cada mes (Mensual)</option>
@@ -606,7 +606,7 @@
 
           <!-- Día del Mes -->
           <div>
-            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Día del Mes para Causar <span class="text-rose-500">*</span></label>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Día del mes programado <span class="text-rose-500">*</span></label>
             <select id="modal-suscripcion-dia-mes"
                     class="border border-gray-200 bg-white rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 h-[38px]">
               <option value="1">Día 1 de cada mes</option>
@@ -2701,7 +2701,7 @@
             <td class="px-3 py-2.5 text-center">
               <div class="flex items-center justify-center gap-1.5">
                 <button onclick="ejecutarSuscripcionAhora(${p.id}, '${escapeJsString(p.concepto)}')"
-                        class="p-1 rounded-lg text-emerald-600 hover:bg-emerald-50 transition cursor-pointer" title="Causar a CxP Ahora">
+                        class="p-1 rounded-lg text-emerald-600 hover:bg-emerald-50 transition cursor-pointer" title="Registrar a Cuentas por Pagar Ahora">
                   ▶️
                 </button>
                 <button onclick="toggleSuscripcionGasto(${p.id})"
@@ -2878,7 +2878,7 @@
   }
 
   async function eliminarSuscripcionGasto(pid, concepto) {
-    if (!confirm(`¿Está seguro de eliminar la programación para "${concepto}"? Ya no se generarán causaciones automáticas.`)) {
+    if (!confirm(`¿Está seguro de eliminar la programación para "${concepto}"? Ya no se generarán registros automáticos.`)) {
       return;
     }
     try {
@@ -2896,17 +2896,17 @@
   }
 
   async function ejecutarSuscripcionAhora(pid, concepto) {
-    if (!confirm(`¿Desea asentar ahora mismo la causación contable para "${concepto}" a Cuentas por Pagar?`)) {
+    if (!confirm(`¿Desea registrar ahora mismo "${concepto}" en Cuentas por Pagar?`)) {
       return;
     }
     try {
       const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/suscripciones/${pid}/ejecutar`, { method: 'POST' });
       const data = await res.json();
       if (data.ok) {
-        toast(data.mensaje || 'Causación generada y registrada en Cartera/Saldos x Doc.');
+        toast(data.mensaje || 'Compromiso registrado en Cuentas por Pagar exitosamente.');
         cargarSuscripcionesGastos();
       } else {
-        toast(data.error || 'Error al ejecutar causación', false);
+        toast(data.error || 'Error al procesar el registro', false);
       }
     } catch(e) {
       toast('Error de red', false);

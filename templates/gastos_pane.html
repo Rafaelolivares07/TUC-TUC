@@ -1,4 +1,4 @@
-<!-- ═══ COMPONENTE GASTOS (OPERATIVO) ═══ -->
+<!-- ═══ COMPONENTE DESEMBOLSOS (OPERATIVO & CONTROL MULTI-MES) ═══ -->
 <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 max-w-5xl mx-auto my-4">
   
   <!-- Cabecera de la Relación -->
@@ -10,8 +10,8 @@
         </svg>
       </div>
       <div>
-        <h2 class="text-lg font-bold text-gray-800">Relación de Gastos</h2>
-        <p class="text-xs text-gray-500">Relacione individualmente los gastos del período por medio de pago o fondo (ej. Efectivo, Bancolombia, etc.). Cada gasto se asienta contablemente bajo la fecha de la relación (no se permite mezclar meses diferentes en un mismo documento). La relación permanecerá abierta hasta definir el método de pago y efectuar el registro del desembolso final.</p>
+        <h2 class="text-lg font-bold text-gray-800">Relación de Desembolsos</h2>
+        <p class="text-xs text-gray-500">Capture y controle las salidas de dinero de la operación (gastos diarios, compras de equipos e inversiones multi-mes). Cada erogación se asienta en la fecha de la relación y se liquida contra el medio de pago o fondo al cerrar el documento.</p>
       </div>
     </div>
     
@@ -38,7 +38,7 @@
       </div>
       
       <div class="sm:col-span-2 flex flex-col justify-end bg-rose-50/50 rounded-xl p-3 border border-rose-100/50 text-right h-[54px]">
-        <span class="text-[9px] text-rose-700 font-bold uppercase tracking-wider">Total Gastos</span>
+        <span class="text-[9px] text-rose-700 font-bold uppercase tracking-wider">Total Desembolsos</span>
         <span class="text-base font-mono font-bold text-rose-800" id="gas-total-gastos">$0.00</span>
       </div>
 
@@ -51,18 +51,23 @@
     </div>
   </div>
 
-  <!-- Formulario de Línea de Gasto -->
+  <!-- Formulario de Línea de Desembolso -->
   <div id="gas-form-container" class="bg-gray-50/50 rounded-2xl p-5 border border-gray-100 mb-6">
-    <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
-      <span>✏️</span> Registrar Nuevo Ítem de Gasto
-    </h3>
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+        <span>✏️</span> Registrar Nuevo Desembolso
+      </h3>
+      <span id="gas-badge-tipo-detectado" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200 hidden">
+        🧾 Gasto del Mes
+      </span>
+    </div>
     
     <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
       
       <!-- Concepto -->
       <div class="md:col-span-4 relative">
         <div class="flex items-center justify-between mb-1">
-          <label class="block text-xs font-semibold text-gray-500 uppercase">Concepto / Cuenta</label>
+          <label class="block text-xs font-semibold text-gray-500 uppercase">Concepto / Destino</label>
           <button type="button" onclick="abrirModalNuevoGasto()" class="text-[10px] text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer inline-flex items-center gap-0.5">
             <span>✨</span> + Crear Nuevo
           </button>
@@ -74,6 +79,7 @@
         <button onclick="clearGasConcepto()" class="absolute right-2 top-[28px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
         <input type="hidden" id="gas-concept-id">
         <input type="hidden" id="gas-concept-tercero">
+        <input type="hidden" id="gas-concept-cat" value="gasto">
         <div id="gas-concept-ac" class="ac-drop hidden"></div>
       </div>
       
@@ -105,12 +111,43 @@
         </select>
       </div>
       
-      <!-- Monto -->
+      <!-- Monto Total Desembolsado -->
       <div class="md:col-span-2">
-        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Valor / Monto</label>
+        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Valor Total Pagado</label>
         <input id="gas-monto" type="text" inputmode="decimal" placeholder="0.00"
                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono font-bold h-[38px]"
-               onfocus="this.select()" onkeydown="navMonto(event)">
+               oninput="recalcularCuotaMensualEnVivo()" onfocus="this.select()" onkeydown="navMonto(event)">
+      </div>
+
+      <!-- Plazo / Duración Progresiva (Solo visible para Activo o Diferido) -->
+      <div id="gas-duracion-container" class="md:col-span-12 bg-amber-50/80 rounded-xl p-3.5 border border-amber-250 hidden transition-all">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex-1">
+            <label class="block text-xs font-bold text-amber-950 uppercase tracking-wide mb-1">
+              ⏱️ ¿En cuánto tiempo se reparte este desembolso?
+            </label>
+            <select id="gas-duracion-meses" onchange="recalcularCuotaMensualEnVivo()"
+                    class="border-2 border-amber-400 bg-white rounded-xl px-3 py-1.5 text-xs font-bold w-full sm:w-72 focus:ring-2 focus:ring-amber-500 text-amber-950 outline-none h-[38px]">
+              <option value="2">2 meses</option>
+              <option value="3">3 meses</option>
+              <option value="4">4 meses</option>
+              <option value="5">5 meses</option>
+              <option value="6">6 meses</option>
+              <option value="9">9 meses</option>
+              <option value="12" selected>1 año (12 meses)</option>
+              <option value="18">1.5 años (18 meses)</option>
+              <option value="24">2 años (24 meses)</option>
+              <option value="36">3 años (36 meses)</option>
+              <option value="48">4 años (48 meses)</option>
+              <option value="60">5 años (60 meses)</option>
+            </select>
+          </div>
+          <div class="bg-white rounded-xl px-4 py-2 border border-amber-200 shadow-2xs text-right sm:min-w-[220px]">
+            <div class="text-[10px] uppercase font-bold text-gray-400">Gasto mensual reconocido:</div>
+            <div class="text-sm font-black text-emerald-700 font-mono" id="gas-cuota-preview">$0.00 / mes</div>
+            <div class="text-[10px] text-gray-500" id="gas-cuota-subtexto">Sin golpear el estado de resultados actual</div>
+          </div>
+        </div>
       </div>
 
       <!-- N° Recibo / Factura Soporte (Opcional) -->
@@ -142,7 +179,7 @@
       <div class="md:col-span-3 mt-1">
         <button onclick="agregarLineaGasto()"
                 class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-sm w-full transition shadow-sm flex items-center justify-center gap-1.5 h-[38px]">
-          ➕ Agregar Gasto
+          ➕ Agregar Desembolso
         </button>
       </div>
       
@@ -152,18 +189,19 @@
   <!-- Detalle / Grilla de Gastos Agregados -->
   <div class="mb-6">
     <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
-      <span>📋</span> Detalle de la Relación Actual
+      <span>📋</span> Detalle de Desembolsos en esta Relación
     </h3>
     <div class="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
       <table class="w-full text-sm">
         <thead>
           <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-100">
             <th class="px-3 py-3 text-left">Centro</th>
-            <th class="px-4 py-3 text-left">Concepto / Cuenta</th>
+            <th class="px-4 py-3 text-left">Concepto / Destino</th>
+            <th class="px-3 py-3 text-center">Tipo / Plazo</th>
             <th class="px-4 py-3 text-left">Nota Explicativa</th>
             <th class="px-4 py-3 text-left">Tercero</th>
             <th class="px-4 py-3 text-right">Monto</th>
-            <th class="px-4 py-3 text-center w-24">Acción</th>
+            <th class="px-4 py-3 text-center w-36">Acciones</th>
           </tr>
         </thead>
         <tbody id="gas-lineas-body" class="divide-y divide-gray-100">
@@ -319,36 +357,65 @@
     </div>
   </div>
 
-  <!-- Modal Crear Nuevo Rubro de Gasto / Costo -->
+  <!-- Modal Crear Nuevo Rubro / Desembolso en Lenguaje Natural -->
   <div id="modal-nuevo-gasto" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
-    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-5 max-w-md w-full animate-in fade-in zoom-in-95 duration-150">
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-2 text-gray-800">
-          <span class="text-xl">✨</span>
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2.5 text-gray-800">
+          <div class="p-2 bg-rose-50 text-rose-600 rounded-xl">
+            <span class="text-xl">✨</span>
+          </div>
           <div>
-            <h4 class="text-sm font-bold text-gray-800">Crear Nuevo Rubro de Gasto / Costo</h4>
-            <p class="text-[11px] text-gray-500">Se creará la cuenta en el PUC y se añadirá a la tipología activa.</p>
+            <h4 class="text-sm font-bold text-gray-800">Crear Nuevo Destino de Desembolso</h4>
+            <p class="text-[11px] text-gray-500">Defina el tipo y nombre del rubro. El sistema asigna los registros contables automáticamente.</p>
           </div>
         </div>
-        <button onclick="cerrarModalNuevoGasto()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+        <button onclick="cerrarModalNuevoGasto()" class="text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer">&times;</button>
       </div>
       
-      <div class="space-y-3 mb-4">
-        <!-- Código Consecutivo -->
+      <div class="space-y-4 mb-5">
+        
+        <!-- Selector Amigable de Tipo de Desembolso (Cero Códigos) -->
         <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-semibold text-gray-600 uppercase">Código Contable PUC</label>
-            <span id="modal-nuevo-gasto-badge" class="text-[10px] bg-rose-100 text-rose-800 font-mono font-bold px-1.5 py-0.5 rounded">Siguiente en secuencia</span>
+          <label class="block text-xs font-semibold text-gray-600 uppercase mb-2">Tipo de Desembolso</label>
+          <div class="grid grid-cols-1 gap-2">
+            
+            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-200 hover:border-rose-300 hover:bg-rose-50/30 cursor-pointer transition has-checked:border-rose-500 has-checked:bg-rose-50/50">
+              <input type="radio" name="modal_tipo_cat" value="gasto" checked onchange="alCambiarCategoriaModal('gasto')"
+                     class="mt-0.5 text-rose-600 focus:ring-rose-500">
+              <div class="text-xs">
+                <span class="font-bold text-gray-800 block">🧾 Gasto del Día a Día</span>
+                <span class="text-[11px] text-gray-500">Gasto operativo normal del mes (entregas, aseo, servicios, insumos directos).</span>
+              </div>
+            </label>
+
+            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer transition has-checked:border-blue-500 has-checked:bg-blue-50/50">
+              <input type="radio" name="modal_tipo_cat" value="activo" onchange="alCambiarCategoriaModal('activo')"
+                     class="mt-0.5 text-blue-600 focus:ring-blue-500">
+              <div class="text-xs">
+                <span class="font-bold text-gray-800 block">🏭 Propiedad, Planta y Equipo</span>
+                <span class="text-[11px] text-gray-500">Maquinaria, equipos, mobiliario, herramientas o mejoras de larga duración.</span>
+              </div>
+            </label>
+
+            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-200 hover:border-purple-300 hover:bg-purple-50/30 cursor-pointer transition has-checked:border-purple-500 has-checked:bg-purple-50/50">
+              <input type="radio" name="modal_tipo_cat" value="diferido" onchange="alCambiarCategoriaModal('diferido')"
+                     class="mt-0.5 text-purple-600 focus:ring-purple-500">
+              <div class="text-xs">
+                <span class="font-bold text-gray-800 block">⏳ Gastos Pagados por Anticipado / Diferidos</span>
+                <span class="text-[11px] text-gray-500">Arriendos por adelantado, pólizas de seguro anuales, licencias de software.</span>
+              </div>
+            </label>
+
           </div>
-          <input id="modal-nuevo-gasto-codigo" type="text"
-                 class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-gray-50 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono font-bold text-gray-700">
-          <span id="modal-nuevo-gasto-padre" class="text-[10px] text-gray-400 mt-0.5 block"></span>
+          <input type="hidden" id="modal-nuevo-gasto-cat" value="gasto">
+          <input type="hidden" id="modal-nuevo-gasto-codigo" value="">
         </div>
 
         <!-- Nombre del Rubro -->
         <div>
-          <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nombre del Rubro / Concepto <span class="text-rose-500">*</span></label>
-          <input id="modal-nuevo-gasto-nombre" type="text" placeholder="Ej. INSUMOS DE CAFETERÍA, PUBLICIDAD..."
+          <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nombre o Descripción <span class="text-rose-500">*</span></label>
+          <input id="modal-nuevo-gasto-nombre" type="text" placeholder="Ej. CAFETERA INDUSTRIAL, ARRIENDO LOCAL, PUBLICIDAD..."
                  autocomplete="off"
                  class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none uppercase font-semibold text-gray-800"
                  onkeydown="if(event.key==='Enter') guardarNuevoGasto(); if(event.key==='Escape') cerrarModalNuevoGasto();">
@@ -360,7 +427,7 @@
                  class="mt-0.5 h-4 w-4 rounded border-gray-300 text-rose-600 focus:ring-rose-500 cursor-pointer">
           <label for="modal-nuevo-gasto-terceros" class="text-xs text-gray-700 cursor-pointer leading-tight">
             <strong>Exigir Tercero / Proveedor</strong>
-            <span class="block text-[11px] text-gray-500 mt-0.5">Requerir registrar a qué persona o empresa se le pagó este gasto al asentarlo.</span>
+            <span class="block text-[11px] text-gray-500 mt-0.5">Requerir asociar a qué persona o empresa se le realiza este desembolso.</span>
           </label>
         </div>
       </div>
@@ -371,6 +438,66 @@
         </button>
         <button id="btn-guardar-nuevo-gasto" onclick="guardarNuevoGasto()" class="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer">
           <span>💾</span> Guardar y Seleccionar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Liquidar / Cerrar Individualmente una Línea de Desembolso -->
+  <div id="modal-cierre-individual-linea" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2.5 text-gray-800">
+          <div class="p-2 bg-amber-50 text-amber-600 rounded-xl">
+            <span class="text-xl">⚡</span>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-gray-800">Liquidar Esta Línea Individualmente</h4>
+            <p class="text-[11px] text-gray-500">Asienta y cierra solo esta erogación con el consecutivo actual.</p>
+          </div>
+        </div>
+        <button onclick="cerrarModalCierreIndividual()" class="text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer">&times;</button>
+      </div>
+
+      <input type="hidden" id="modal-cierre-ind-linea-id">
+
+      <!-- Resumen del Registro -->
+      <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 mb-4 space-y-2 text-xs">
+        <div class="flex justify-between">
+          <span class="text-gray-500">Concepto / Destino:</span>
+          <strong id="modal-cierre-ind-concepto" class="text-gray-800 text-right"></strong>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-500">Plazo / Reconocimiento:</span>
+          <span id="modal-cierre-ind-plazo" class="font-bold text-blue-700"></span>
+        </div>
+        <div class="flex justify-between border-t border-gray-200 pt-1.5">
+          <span class="text-gray-600 font-bold uppercase text-[10px]">Monto Total Pagado:</span>
+          <strong id="modal-cierre-ind-monto" class="font-mono text-sm text-rose-700"></strong>
+        </div>
+      </div>
+
+      <!-- Selector Método de Pago -->
+      <div class="mb-5">
+        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">
+          💳 Salida de Dinero / Medio de Pago <span class="text-rose-500">*</span>
+        </label>
+        <select id="modal-cierre-ind-metodo"
+                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none font-semibold text-gray-800">
+          <!-- Opciones dinámicas -->
+        </select>
+        <p class="text-[10px] text-gray-400 mt-1">
+          Se emitirá el comprobante oficial para este ítem y las demás líneas abiertas avanzarán al siguiente consecutivo.
+        </p>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="cerrarModalCierreIndividual()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+          Cancelar
+        </button>
+        <button id="btn-confirmar-cierre-ind" onclick="ejecutarCierreIndividualLinea()"
+                class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+          <span>⚡</span> Confirmar y Liquidar
         </button>
       </div>
     </div>
@@ -559,11 +686,22 @@
       }
       
       // Guardar conceptos en variable local para autocomplete
-      gasConceptos = (d.conceptos || []).map(c => ({
-        cuenta_puc_id: c.cuenta_puc_id,
-        cuenta_nombre: c.cuenta_nombre,
-        maneja_terceros: c.maneja_terceros === true || c.maneja_terceros === 'true'
-      }));
+      gasConceptos = (d.conceptos || []).map(c => {
+        const cod = String(c.cuenta_codigo || '');
+        let cat = c.categoria_tipo;
+        if (!cat) {
+          if (cod.startsWith('6143') || cod.startsWith('1505')) cat = 'activo';
+          else if (cod.startsWith('6144') || cod.startsWith('1705')) cat = 'diferido';
+          else cat = 'gasto';
+        }
+        return {
+          cuenta_puc_id: c.cuenta_puc_id,
+          cuenta_codigo: c.cuenta_codigo,
+          cuenta_nombre: c.cuenta_nombre,
+          categoria_tipo: cat,
+          maneja_terceros: c.maneja_terceros === true || c.maneja_terceros === 'true'
+        };
+      });
       clearGasConcepto();
       
       // Renderizar Líneas
@@ -571,7 +709,7 @@
       tbody.innerHTML = '';
       
       if (!d.lineas || d.lineas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-4 text-center text-gray-400 text-xs">No hay gastos agregados en esta relación.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-gray-400 text-xs">No hay desembolsos agregados en esta relación.</td></tr>';
         document.getElementById('gas-total-gastos').textContent = '$0.00';
       } else {
         let total = 0.0;
@@ -588,7 +726,7 @@
             soporteBadge = `<button type="button" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition shadow-2xs" onclick="abrirModalEditarSoporte(${l.id}, '${escapeJsString(soporteValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para modificar el N° de recibo/factura">🧾 ${escapeGasHtml(soporteValor)} <span class="text-[9px] text-amber-600 opacity-70">✏️</span></button>`;
             displayConcepto = displayConcepto.replace(/\[Soporte:\s*[^\]]+\]/i, '').trim();
           } else {
-            soporteBadge = `<button type="button" onclick="abrirModalEditarSoporte(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-amber-700 bg-gray-50 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-gray-200 ml-1 font-mono" title="Asociar número de recibo o factura a este gasto">🧾 + Soporte</button>`;
+            soporteBadge = `<button type="button" onclick="abrirModalEditarSoporte(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-amber-700 bg-gray-50 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-gray-200 ml-1 font-mono" title="Asociar número de recibo o factura a este desembolso">🧾 + Soporte</button>`;
           }
 
           let notaValor = '';
@@ -602,7 +740,7 @@
           if (notaValor) {
             notaCell = `<button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-amber-50/70 text-amber-900 border border-amber-200/90 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition max-w-xs text-left shadow-2xs group" onclick="abrirModalEditarNota(${l.id}, '${escapeJsString(notaValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para editar la nota explicativa"><span class="text-amber-600">📝</span> <span class="italic truncate max-w-[180px]">${escapeGasHtml(notaValor)}</span> <span class="text-[9px] text-amber-500 opacity-60 group-hover:opacity-100 transition">✏️</span></button>`;
           } else {
-            notaCell = `<button type="button" onclick="abrirModalEditarNota(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 active:scale-95 border border-amber-200/80 rounded-lg transition shadow-2xs" title="Añadir nota explicativa a este gasto"><span>📝</span> <span>+ Añadir Nota</span></button>`;
+            notaCell = `<button type="button" onclick="abrirModalEditarNota(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 active:scale-95 border border-amber-200/80 rounded-lg transition shadow-2xs" title="Añadir nota explicativa a este desembolso"><span>📝</span> <span>+ Añadir Nota</span></button>`;
           }
 
           const cCod = l.centro_codigo || (l.centro_utilidad_id == 2 ? 'LOC-01' : 'MOV-01');
@@ -610,19 +748,50 @@
           const cNom = l.centro_nombre || (l.centro_utilidad_id == 2 ? 'Local Comercial' : 'Puntos Móviles');
           const centroBadge = `<button type="button" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-xs cursor-pointer hover:opacity-85 hover:scale-105 transition" style="background: ${cColor};" onclick="abrirModalCambiarCentroLinea(${l.id}, ${l.centro_utilidad_id || 1}, '${escapeJsString(displayConcepto)}')" title="Haga clic para reasignar la sede: ${escapeGasHtml(cNom)}">${cCod} <span class="text-[9px] opacity-75">✏️</span></button>`;
 
+          // Badge Tipo / Plazo
+          let tipoPlazoBadge = '';
+          const duracion = parseInt(l.meses_duracion || 1);
+          const ctaCod = String(l.cuenta || '');
+          const esActivo = ctaCod.startsWith('6143') || ctaCod.startsWith('1505');
+          const esDiferido = ctaCod.startsWith('6144') || ctaCod.startsWith('1705');
+
+          if (duracion > 1) {
+            const cuotaMes = (parseFloat(l.monto) / duracion).toLocaleString('es-CO', {minimumFractionDigits:0, maximumFractionDigits:0});
+            const icono = esActivo ? '🏭' : (esDiferido ? '⏳' : '⏱️');
+            const catColor = esActivo ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-purple-50 text-purple-800 border-purple-200';
+            tipoPlazoBadge = `
+              <div class="inline-flex flex-col items-center">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${catColor} border shadow-2xs">
+                  <span>${icono}</span> ${duracion} meses
+                </span>
+                <span class="text-[9px] text-gray-500 font-mono mt-0.5 font-semibold">$${cuotaMes}/mes</span>
+              </div>
+            `;
+          } else {
+            tipoPlazoBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200">🧾 Gasto Mes</span>`;
+          }
+
           tr.innerHTML = `
             <td class="px-3 py-2.5 text-xs whitespace-nowrap">${centroBadge}</td>
             <td class="px-4 py-2.5 text-xs font-semibold text-gray-700">
               <div class="flex items-center flex-wrap gap-1">${escapeGasHtml(displayConcepto)} ${soporteBadge}</div>
               <span class="text-[9px] text-gray-400 font-mono">${escapeGasHtml(l.cuenta || '')}</span>
             </td>
+            <td class="px-3 py-2.5 text-center whitespace-nowrap">${tipoPlazoBadge}</td>
             <td class="px-4 py-2.5 text-xs text-gray-600">${notaCell}</td>
             <td class="px-4 py-2.5 text-xs text-gray-600">${escapeGasHtml(l.tercero_nombre || 'N/A')}</td>
             <td class="px-4 py-2.5 text-right font-mono text-xs text-rose-700 font-bold">$${parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-            <td class="px-4 py-2.5 text-center">
-              <button onclick="eliminarLineaGasto(${l.id})" class="text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2 py-1 rounded transition text-xs" title="Eliminar este gasto">
-                ❌
-              </button>
+            <td class="px-4 py-2.5 text-center whitespace-nowrap">
+              <div class="inline-flex items-center gap-1.5 justify-center">
+                <button onclick="abrirModalCierreIndividual(${l.id}, '${escapeJsString(displayConcepto)}', ${parseFloat(l.monto)}, ${duracion})"
+                        class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                        title="Liquidar individualmente esta erogación con el consecutivo actual">
+                  <span>⚡</span> Liquidar
+                </button>
+                <button onclick="eliminarLineaGasto(${l.id})" class="text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2 py-1 rounded transition text-xs cursor-pointer" title="Eliminar este desembolso">
+                  ❌
+                </button>
+              </div>
             </td>
           `;
           tbody.appendChild(tr);
@@ -675,6 +844,7 @@
       if (rawQ.length === 0) {
         document.getElementById('gas-concept-id').value = '';
         document.getElementById('gas-concept-tercero').value = '';
+        document.getElementById('gas-concept-cat').value = 'gasto';
       }
       list.classList.add('hidden');
       return;
@@ -688,7 +858,7 @@
           <span class="flex items-center gap-1.5">
             <span>✨</span> Crear como nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(inp.value.trim())}</strong>
           </span>
-          <span class="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-mono font-bold">+ Siguiente cuenta</span>
+          <span class="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
         </div>
       `;
       list.classList.remove('hidden');
@@ -709,7 +879,7 @@
           <span class="flex items-center gap-1.5">
             <span>✨</span> Crear como nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(inp.value.trim())}</strong>
           </span>
-          <span class="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-mono font-bold">+ Siguiente cuenta</span>
+          <span class="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
         </div>
       `;
       list.classList.remove('hidden');
@@ -717,12 +887,20 @@
     }
 
     gasConceptoIdx = -1;
-    let html = matches.map((c, i) =>
-      `<div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs" data-i="${i}"
-            data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}">
-        <span class="font-semibold text-gray-700">${c.cuenta_nombre}</span>
-      </div>`
-    ).join('');
+    let html = matches.map((c, i) => {
+      const cat = c.categoria_tipo || 'gasto';
+      let tagHtml = '';
+      if (cat === 'activo') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">🏭 Activo</span>';
+      else if (cat === 'diferido') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold">⏳ Diferido</span>';
+      
+      return `
+        <div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs flex items-center justify-between" data-i="${i}"
+              data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}" data-cat="${cat}">
+          <span class="font-semibold text-gray-700">${c.cuenta_nombre}</span>
+          ${tagHtml}
+        </div>
+      `;
+    }).join('');
 
     html += `
       <div class="p-2.5 border-t border-gray-100 bg-rose-50/70 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition"
@@ -730,7 +908,7 @@
         <span class="flex items-center gap-1.5">
           <span>✨</span> Crear nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(inp.value.trim())}</strong>
         </span>
-        <span class="text-[10px] bg-rose-200/80 text-rose-800 px-1.5 py-0.5 rounded font-mono font-bold">+ Siguiente cuenta</span>
+        <span class="text-[10px] bg-rose-200/80 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
       </div>
     `;
 
@@ -785,6 +963,7 @@
     inp.value = el.querySelector('.font-semibold').textContent;
     document.getElementById('gas-concept-id').value = el.dataset.id;
     document.getElementById('gas-concept-tercero').value = el.dataset.tercero;
+    document.getElementById('gas-concept-cat').value = el.dataset.cat || 'gasto';
     list.classList.add('hidden');
     onConceptChange();
     if (el.dataset.tercero === 'true') {
@@ -798,19 +977,64 @@
     document.getElementById('gas-concept-txt').value = '';
     document.getElementById('gas-concept-id').value = '';
     document.getElementById('gas-concept-tercero').value = '';
+    document.getElementById('gas-concept-cat').value = 'gasto';
     document.getElementById('gas-concept-ac').classList.add('hidden');
     onConceptChange();
   }
 
-  // Controla la visibilidad del Tercero según la cuenta seleccionada
+  // Controla la visibilidad del Tercero y del Plazo Multi-mes
   function onConceptChange() {
     const requiereTercero = document.getElementById('gas-concept-tercero').value === 'true';
-    const container = document.getElementById('gas-tercero-container');
+    const containerTercero = document.getElementById('gas-tercero-container');
     if (requiereTercero) {
-      container.classList.remove('hidden');
+      containerTercero.classList.remove('hidden');
     } else {
-      container.classList.add('hidden');
+      containerTercero.classList.add('hidden');
       clearGasTercero();
+    }
+
+    const cat = document.getElementById('gas-concept-cat').value || 'gasto';
+    const durContainer = document.getElementById('gas-duracion-container');
+    const badgeTipo = document.getElementById('gas-badge-tipo-detectado');
+    
+    if (cat === 'activo') {
+      durContainer.classList.remove('hidden');
+      badgeTipo.classList.remove('hidden');
+      badgeTipo.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200';
+      badgeTipo.innerHTML = '🏭 Propiedad, Planta y Equipo';
+    } else if (cat === 'diferido') {
+      durContainer.classList.remove('hidden');
+      badgeTipo.classList.remove('hidden');
+      badgeTipo.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200';
+      badgeTipo.innerHTML = '⏳ Pagos Anticipados / Diferidos';
+    } else {
+      durContainer.classList.add('hidden');
+      badgeTipo.classList.remove('hidden');
+      badgeTipo.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200';
+      badgeTipo.innerHTML = '🧾 Gasto del Día a Día';
+    }
+    recalcularCuotaMensualEnVivo();
+  }
+
+  function recalcularCuotaMensualEnVivo() {
+    const montoRaw = (document.getElementById('gas-monto')?.value || '').replace(/[$\s.]/g, '').replace(',', '.');
+    const monto = parseFloat(montoRaw || 0);
+    const cat = document.getElementById('gas-concept-cat')?.value || 'gasto';
+    const durSel = document.getElementById('gas-duracion-meses');
+    const meses = (cat !== 'gasto' && durSel) ? parseInt(durSel.value || 12) : 1;
+    const cuota = meses > 0 ? (monto / meses) : monto;
+    
+    const prevEl = document.getElementById('gas-cuota-preview');
+    const subEl = document.getElementById('gas-cuota-subtexto');
+    if (prevEl) {
+      prevEl.textContent = '$' + cuota.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' / mes';
+    }
+    if (subEl) {
+      if (meses > 1) {
+        subEl.textContent = `Cuota 1 de ${meses} se asienta hoy. Saldo restante diferido en activo.`;
+      } else {
+        subEl.textContent = `Gasto 100% imputado al período actual.`;
+      }
     }
   }
 
@@ -1055,6 +1279,11 @@
       conceptoFinal += ` (${nota})`;
     }
     
+    const durSel = document.getElementById('gas-duracion-meses');
+    const durContainer = document.getElementById('gas-duracion-container');
+    const cat = document.getElementById('gas-concept-cat')?.value || 'gasto';
+    const meses_duracion = (!durContainer.classList.contains('hidden') && cat !== 'gasto' && durSel) ? parseInt(durSel.value || 12) : 1;
+    
     try {
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea`, {
         method: 'POST',
@@ -1067,12 +1296,13 @@
           monto: monto,
           concepto: conceptoFinal,
           tercero_id: tercero_id ? parseInt(tercero_id) : null,
-          centro_utilidad_id: centro_utilidad_id ? parseInt(centro_utilidad_id) : null
+          centro_utilidad_id: centro_utilidad_id ? parseInt(centro_utilidad_id) : null,
+          meses_duracion: meses_duracion
         })
       });
       const d = await r.json();
       if (d.ok) {
-        toast('Línea de gasto agregada.');
+        toast('Línea de desembolso agregada con éxito.');
         clearGasConcepto();
         document.getElementById('gas-monto').value = '';
         document.getElementById('gas-soporte').value = '';
@@ -1087,13 +1317,13 @@
       }
     } catch(e) {
       console.error(e);
-      toast('Error de red al registrar el gasto', false);
+      toast('Error de red al registrar el desembolso', false);
     }
   }
 
   // Elimina una línea de la relación activa
   async function eliminarLineaGasto(id) {
-    if (!confirm('¿Desea eliminar esta línea de gasto de la relación?')) return;
+    if (!confirm('¿Desea eliminar este desembolso de la relación?')) return;
     try {
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea/${id}`, { method: 'DELETE' });
       const d = await r.json();
@@ -1109,7 +1339,84 @@
     }
   }
 
-  // Ejecuta el cierre de la relación añadiendo la contrapartida de crédito
+  // ═══ GESTIÓN DE CIERRE INDIVIDUAL DE LÍNEA ═══
+  let _lineaIdCierreInd = null;
+
+  function abrirModalCierreIndividual(lineId, concepto, monto, duracionMeses) {
+    _lineaIdCierreInd = lineId;
+    document.getElementById('modal-cierre-ind-linea-id').value = lineId;
+    document.getElementById('modal-cierre-ind-concepto').textContent = concepto || 'Desembolso';
+    document.getElementById('modal-cierre-ind-monto').textContent = '$' + parseFloat(monto || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    
+    const dMeses = parseInt(duracionMeses || 1);
+    if (dMeses > 1) {
+      const cuota = (parseFloat(monto || 0) / dMeses).toLocaleString('es-CO', {minimumFractionDigits:0, maximumFractionDigits:0});
+      document.getElementById('modal-cierre-ind-plazo').textContent = `Diferido en ${dMeses} meses ($${cuota}/mes)`;
+    } else {
+      document.getElementById('modal-cierre-ind-plazo').textContent = 'Gasto del Mes (100% corriente)';
+    }
+
+    // Clonar métodos de pago disponibles
+    const srcSel = document.getElementById('gas-metodo-pago');
+    const targetSel = document.getElementById('modal-cierre-ind-metodo');
+    if (srcSel && targetSel) {
+      targetSel.innerHTML = srcSel.innerHTML;
+    }
+
+    const modal = document.getElementById('modal-cierre-individual-linea');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function cerrarModalCierreIndividual() {
+    _lineaIdCierreInd = null;
+    const modal = document.getElementById('modal-cierre-individual-linea');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  async function ejecutarCierreIndividualLinea() {
+    if (!_lineaIdCierreInd) return;
+    const metodoPago = document.getElementById('modal-cierre-ind-metodo').value;
+    if (!metodoPago) {
+      toast('Seleccione un método de pago válido para liquidar', false);
+      return;
+    }
+
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    const numDoc = document.getElementById('gas-num-doc').value;
+    const btn = document.getElementById('btn-confirmar-cierre-ind');
+    if (btn) btn.disabled = true;
+
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea/${_lineaIdCierreInd}/cierre-individual`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ metodo_pago: metodoPago })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast(d.mensaje || 'Línea liquidada con éxito.');
+        cerrarModalCierreIndividual();
+        
+        // Abrir comprobante PDF del documento cerrado
+        if (tipoDoc && numDoc) {
+          window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${numDoc}/pdf`, '_blank');
+        }
+        
+        await cargarGastosDocumentos();
+      } else {
+        toast(d.error || 'Error al liquidar la línea', false);
+      }
+    } catch(e) {
+      console.error(e);
+      toast('Error de red al procesar la liquidación individual', false);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  // Ejecuta el cierre global de la relación añadiendo la contrapartida de crédito
   async function cerrarRelacionGasto() {
     const tipoDoc = document.getElementById('gas-tipo-doc').value;
     const numDoc = document.getElementById('gas-num-doc').value;
@@ -1121,7 +1428,7 @@
       return;
     }
     
-    if (!confirm(`¿Está seguro de cerrar la relación de gastos ${tipoDoc} #${numDoc}?\nEsto registrará el egreso final acumulado con el método de pago seleccionado y no podrá añadir más registros en este consecutivo.`)) {
+    if (!confirm(`¿Está seguro de cerrar la relación de desembolsos ${tipoDoc} #${numDoc}?\nEsto registrará el egreso final acumulado con el método de pago seleccionado y no podrá añadir más registros en este consecutivo.`)) {
       return;
     }
     
@@ -1137,7 +1444,7 @@
       });
       const d = await r.json();
       if (d.ok) {
-        toast('¡Relación de gastos cerrada con éxito!');
+        toast('¡Relación de desembolsos cerrada con éxito!');
         closedTipoDoc = tipoDoc;
         closedNumDoc = numDoc;
         try { localStorage.removeItem(`gas_fecha_${NEGOCIO_ID}_${tipoDoc}`); } catch(e){}
@@ -1222,7 +1529,7 @@
 
   function abrirModalEditarSoporte(lineaId, soporteActual, conceptoNombre) {
     _lineaEditandoSoporteId = lineaId;
-    document.getElementById('modal-soporte-concepto').textContent = conceptoNombre || 'Gasto';
+    document.getElementById('modal-soporte-concepto').textContent = conceptoNombre || 'Desembolso';
     const inp = document.getElementById('modal-soporte-input');
     inp.value = soporteActual || '';
     const modal = document.getElementById('modal-editar-soporte-gasto');
@@ -1318,7 +1625,7 @@
 
   function abrirModalEditarNota(lineaId, notaActual, conceptoNombre) {
     _lineaEditandoNotaId = lineaId;
-    document.getElementById('modal-nota-concepto').textContent = conceptoNombre || 'Gasto';
+    document.getElementById('modal-nota-concepto').textContent = conceptoNombre || 'Desembolso';
     const inp = document.getElementById('modal-nota-input');
     inp.value = notaActual || '';
     
@@ -1378,7 +1685,7 @@
   function abrirModalCambiarCentroLinea(lineId, currentCentroId, concepto) {
     _lineaEditandoCentroId = lineId;
     document.getElementById('modal-cambiar-centro-linea-id').value = lineId;
-    document.getElementById('modal-centro-concepto').textContent = concepto || ('Gasto #' + lineId);
+    document.getElementById('modal-centro-concepto').textContent = concepto || ('Desembolso #' + lineId);
     const sel = document.getElementById('modal-cambiar-centro-select');
     if (listaCentrosGas && listaCentrosGas.length > 0) {
       sel.innerHTML = listaCentrosGas.map(c => 
@@ -1430,11 +1737,25 @@
     }
   }
 
-  // ═══ CREAR NUEVO RUBRO DE GASTO EN CALIENTE ═══
+  // ═══ CREAR NUEVO RUBRO DE DESEMBOLSO EN LENGUAJE NATURAL ═══
+  async function alCambiarCategoriaModal(cat) {
+    document.getElementById('modal-nuevo-gasto-cat').value = cat;
+    const tipoDoc = document.getElementById('gas-tipo-doc').value || 'GAS';
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/siguiente-codigo?tipo_doc=${encodeURIComponent(tipoDoc)}&categoria_tipo=${encodeURIComponent(cat)}`);
+      const d = await r.json();
+      if (d.ok) {
+        document.getElementById('modal-nuevo-gasto-codigo').value = d.siguiente_codigo;
+      }
+    } catch(e) {
+      console.warn('Error al calcular siguiente código:', e);
+    }
+  }
+
   async function abrirModalNuevoGasto(nombreSugerido = '') {
     const tipoDoc = document.getElementById('gas-tipo-doc').value;
     if (!tipoDoc) {
-      toast('Seleccione una tipología de gasto activa', false);
+      toast('Seleccione una tipología activa', false);
       return;
     }
 
@@ -1442,27 +1763,16 @@
     inpNombre.value = nombreSugerido.toUpperCase();
     document.getElementById('modal-nuevo-gasto-terceros').checked = true;
 
-    // Consultar el siguiente código sugerido
-    const inpCodigo = document.getElementById('modal-nuevo-gasto-codigo');
-    inpCodigo.value = 'Calculando...';
-    document.getElementById('modal-nuevo-gasto-padre').textContent = '';
+    // Resetear a gasto por defecto
+    const radios = document.querySelectorAll('input[name="modal_tipo_cat"]');
+    radios.forEach(r => { r.checked = (r.value === 'gasto'); });
+    document.getElementById('modal-nuevo-gasto-cat').value = 'gasto';
 
     const modal = document.getElementById('modal-nuevo-gasto');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
 
-    try {
-      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/siguiente-codigo?tipo_doc=${encodeURIComponent(tipoDoc)}`);
-      const d = await r.json();
-      if (d.ok) {
-        inpCodigo.value = d.siguiente_codigo;
-        document.getElementById('modal-nuevo-gasto-padre').textContent = `Pertenece a grupo: ${d.padre_codigo} - ${d.padre_nombre || 'Costos'}`;
-      } else {
-        inpCodigo.value = '614207';
-      }
-    } catch(e) {
-      inpCodigo.value = '614207';
-    }
+    await alCambiarCategoriaModal('gasto');
 
     setTimeout(() => {
       inpNombre.focus();
@@ -1480,10 +1790,11 @@
     const tipoDoc = document.getElementById('gas-tipo-doc').value;
     const nombre = document.getElementById('modal-nuevo-gasto-nombre').value.trim().toUpperCase();
     const codigo = document.getElementById('modal-nuevo-gasto-codigo').value.trim();
+    const categoriaTipo = document.getElementById('modal-nuevo-gasto-cat').value || 'gasto';
     const manejaTerceros = document.getElementById('modal-nuevo-gasto-terceros').checked;
 
     if (!nombre) {
-      toast('El nombre del rubro es obligatorio', false);
+      toast('El nombre o descripción es obligatorio', false);
       return;
     }
 
@@ -1498,26 +1809,34 @@
           tipo_doc: tipoDoc,
           nombre: nombre,
           codigo: codigo,
+          categoria_tipo: categoriaTipo,
           maneja_terceros: manejaTerceros
         })
       });
       const d = await r.json();
       if (d.ok) {
-        toast(`Rubro "${d.cuenta_nombre}" (${d.cuenta_codigo}) creado y asociado con éxito.`);
+        toast(`Rubro "${d.cuenta_nombre}" creado y seleccionado.`);
         
-        // Agregar a la lista local de conceptos si no existe
-        if (!gasConceptos.some(c => c.cuenta_puc_id === d.cuenta_puc_id)) {
-          gasConceptos.push({
-            cuenta_puc_id: d.cuenta_puc_id,
-            cuenta_nombre: d.cuenta_nombre,
-            maneja_terceros: d.maneja_terceros
-          });
+        // Agregar a la lista local de conceptos
+        const existingIdx = gasConceptos.findIndex(c => c.cuenta_puc_id === d.cuenta_puc_id);
+        const itemConcepto = {
+          cuenta_puc_id: d.cuenta_puc_id,
+          cuenta_codigo: d.cuenta_codigo,
+          cuenta_nombre: d.cuenta_nombre,
+          categoria_tipo: d.categoria_tipo || categoriaTipo,
+          maneja_terceros: d.maneja_terceros
+        };
+        if (existingIdx >= 0) {
+          gasConceptos[existingIdx] = itemConcepto;
+        } else {
+          gasConceptos.push(itemConcepto);
         }
 
         // Seleccionarlo inmediatamente en el formulario
         document.getElementById('gas-concept-txt').value = d.cuenta_nombre;
         document.getElementById('gas-concept-id').value = d.cuenta_puc_id;
         document.getElementById('gas-concept-tercero').value = d.maneja_terceros ? 'true' : 'false';
+        document.getElementById('gas-concept-cat').value = d.categoria_tipo || categoriaTipo;
         document.getElementById('gas-concept-ac').classList.add('hidden');
 
         onConceptChange();
@@ -1530,7 +1849,7 @@
           document.getElementById('gas-monto').focus();
         }
       } else {
-        toast(d.error || 'Error al crear rubro de gasto', false);
+        toast(d.error || 'Error al crear rubro', false);
       }
     } catch(e) {
       console.error(e);
@@ -1634,6 +1953,9 @@
     }
     if (e.target.id === 'modal-nuevo-gasto') {
       cerrarModalNuevoGasto();
+    }
+    if (e.target.id === 'modal-cierre-individual-linea') {
+      cerrarModalCierreIndividual();
     }
     if (e.target.id === 'modal-nuevo-tercero') {
       cerrarModalNuevoTercero();

@@ -5037,7 +5037,8 @@ def api_gastos_lineas(negocio_id, tipo_doc, num_doc):
         # Fetch current registered debits
         rows = conn.execute("""
             SELECT m.id, m.cuenta, m.concepto, m.monto, m.fecha, m.tercero_id, t.nombre AS tercero_nombre, m.comprobante_id,
-                   m.centro_utilidad_id, cu.codigo AS centro_codigo, cu.nombre AS centro_nombre, cu.color_badge AS centro_color
+                   m.centro_utilidad_id, cu.codigo AS centro_codigo, cu.nombre AS centro_nombre, cu.color_badge AS centro_color,
+                   COALESCE(m.meses_duracion, 1) AS meses_duracion, COALESCE(m.cuota_numero, 1) AS cuota_numero, COALESCE(m.cuota_total, 1) AS cuota_total
             FROM movimientos_contables m
             LEFT JOIN terceros t ON t.id = m.tercero_id
             LEFT JOIN centros_utilidad cu ON cu.id = m.centro_utilidad_id
@@ -5059,11 +5060,26 @@ def api_gastos_lineas(negocio_id, tipo_doc, num_doc):
             ORDER BY plc.orden ASC, plc.id ASC
         """, (negocio_id, negocio_id, tipo_doc)).fetchall()
         
+        concepts_list = []
+        for c in concepts:
+            cdict = dict(c)
+            cod = str(c['cuenta_codigo'] or '').strip()
+            if cod.startswith('6143') or cod.startswith('1505'):
+                cdict['categoria_tipo'] = 'activo'
+                cdict['categoria_label'] = 'Propiedad, Planta y Equipo'
+            elif cod.startswith('6144') or cod.startswith('1705'):
+                cdict['categoria_tipo'] = 'diferido'
+                cdict['categoria_label'] = 'Gastos Anticipados / Diferidos'
+            else:
+                cdict['categoria_tipo'] = 'gasto'
+                cdict['categoria_label'] = 'Gasto del Mes'
+            concepts_list.append(cdict)
+        
         conn.close()
         return jsonify({
             'ok': True,
             'lineas': [dict(r) for r in rows],
-            'conceptos': [dict(c) for c in concepts]
+            'conceptos': concepts_list
         })
     except Exception as e:
         try: conn.close()
@@ -5083,6 +5099,12 @@ def api_gastos_linea_post(negocio_id):
     monto = float(data.get('monto') or 0)
     concepto = (data.get('concepto') or '').strip()
     tercero_id = data.get('tercero_id') or None
+    try:
+        meses_duracion = int(data.get('meses_duracion') or 1)
+    except (ValueError, TypeError):
+        meses_duracion = 1
+    if meses_duracion < 1:
+        meses_duracion = 1
     
     if not tipo_doc or not num_doc or not fecha or not cuenta_puc_id or monto <= 0 or not concepto:
         return jsonify({'ok': False, 'error': 'Faltan campos requeridos'}), 400
@@ -5146,10 +5168,12 @@ def api_gastos_linea_post(negocio_id):
         conn.execute("""
             INSERT INTO movimientos_contables
                 (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
-                 tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
+                 meses_duracion, cuota_numero, cuota_total)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (negocio_id, comp_id, cuenta_puc_id, acc['codigo'], concepto, 'debito', monto, uid, tercero_id,
-              tipo_doc_id, num_doc, fecha, tipo_doc, 'Relación de Gastos', 'gasto', centro_utilidad_id))
+              tipo_doc_id, num_doc, fecha, tipo_doc, 'Relación de Desembolsos', 'gasto', centro_utilidad_id,
+              meses_duracion, 1, meses_duracion))
               
         conn.commit()
         conn.close()
@@ -5337,62 +5361,52 @@ def api_gastos_siguiente_codigo(negocio_id):
     if not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     tipo_doc = request.args.get('tipo_doc', '').strip()
+    categoria_tipo = (request.args.get('categoria_tipo') or 'gasto').strip().lower()
     
     from ..db import get_db_connection
     try:
         conn = get_db_connection()
         
-        # Consultar cuentas existentes asociadas a este tipo de documento
-        cuentas = conn.execute("""
-            SELECT p.codigo, p.codigo_padre, p.nombre
-            FROM parametros_lineas_contables plc
-            JOIN cuentas_puc p ON p.id = plc.cuenta_puc_id
-            WHERE plc.parametro_id = (
-                SELECT id FROM parametros_contables_negocio 
-                WHERE negocio_id = %s AND tipo_doc_id = (
-                    SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND codigo = %s LIMIT 1
-                ) AND activo = true LIMIT 1
-            ) AND plc.tipo_mov = 'D' AND plc.activo = true
-            ORDER BY p.codigo ASC
-        """, (negocio_id, negocio_id, tipo_doc)).fetchall()
-        
-        prefijo = "6142"
-        padre_codigo = "6142"
-        padre_nombre = "Costos Indirectos"
-        max_num = 0
-        
-        if cuentas:
-            prefijos = {}
-            for c in cuentas:
-                cod = str(c['codigo']).strip()
-                if len(cod) >= 4:
-                    pref = cod[:4]
-                    prefijos[pref] = prefijos.get(pref, 0) + 1
-            if prefijos:
-                prefijo = max(prefijos, key=prefijos.get)
-                padre_codigo = prefijo
-                
-            for c in cuentas:
-                cod = str(c['codigo']).strip()
-                if cod.startswith(prefijo) and len(cod) > len(prefijo):
-                    try:
-                        sufijo_int = int(cod[len(prefijo):])
-                        if sufijo_int > max_num:
-                            max_num = sufijo_int
-                    except ValueError:
-                        pass
+        if categoria_tipo == 'activo':
+            prefijo = "6143"
+            padre_codigo = "6143"
+            padre_nombre = "Amortización Equipos y Planta"
+            prefijo_activo = "1505"
+        elif categoria_tipo == 'diferido':
+            prefijo = "6144"
+            padre_codigo = "6144"
+            padre_nombre = "Amortización Gastos Anticipados y Diferidos"
+            prefijo_activo = "1705"
         else:
-            row_puc = conn.execute("""
-                SELECT codigo FROM cuentas_puc
-                WHERE creada_por_negocio_id = %s AND codigo LIKE '6142%'
-                ORDER BY codigo DESC LIMIT 1
-            """, (negocio_id,)).fetchone()
-            if row_puc:
-                cod = row_puc['codigo']
+            prefijo = "6142"
+            padre_codigo = "6142"
+            padre_nombre = "Costos de Funcionamiento"
+            prefijo_activo = None
+
+        # Consultar cuentas existentes que inicien con el prefijo en cuentas_puc
+        cuentas = conn.execute("""
+            SELECT codigo FROM cuentas_puc
+            WHERE codigo LIKE %s OR (codigo LIKE %s AND %s IS NOT NULL)
+            ORDER BY codigo ASC
+        """, (f"{prefijo}%", f"{prefijo_activo}%" if prefijo_activo else f"{prefijo}%", prefijo_activo)).fetchall()
+        
+        max_num = 0
+        for c in cuentas:
+            cod = str(c['codigo']).strip()
+            if cod.startswith(prefijo) and len(cod) > len(prefijo):
                 try:
-                    max_num = int(cod[4:])
+                    sufijo_int = int(cod[len(prefijo):])
+                    if sufijo_int > max_num:
+                        max_num = sufijo_int
                 except ValueError:
-                    max_num = 0
+                    pass
+            if prefijo_activo and cod.startswith(prefijo_activo) and len(cod) > len(prefijo_activo):
+                try:
+                    sufijo_int = int(cod[len(prefijo_activo):])
+                    if sufijo_int > max_num:
+                        max_num = sufijo_int
+                except ValueError:
+                    pass
                     
         siguiente_int = max_num + 1
         siguiente_codigo = f"{prefijo}{siguiente_int:02d}"
@@ -5409,9 +5423,12 @@ def api_gastos_siguiente_codigo(negocio_id):
         return jsonify({
             'ok': True,
             'siguiente_codigo': siguiente_codigo,
+            'siguiente_num': siguiente_int,
             'prefijo': prefijo,
+            'prefijo_activo': prefijo_activo,
             'padre_codigo': padre_codigo,
-            'padre_nombre': padre_nombre
+            'padre_nombre': padre_nombre,
+            'categoria_tipo': categoria_tipo
         })
     except Exception as e:
         try: conn.close()
@@ -5426,13 +5443,14 @@ def api_gastos_concepto_nuevo_post(negocio_id):
     data = request.get_json() or {}
     tipo_doc = (data.get('tipo_doc') or '').strip()
     nombre = (data.get('nombre') or '').strip().upper()
+    categoria_tipo = (data.get('categoria_tipo') or 'gasto').strip().lower()
     codigo = (data.get('codigo') or '').strip()
     maneja_terceros = bool(data.get('maneja_terceros', True))
     
     if not tipo_doc:
         return jsonify({'ok': False, 'error': 'Tipo de documento requerido'}), 400
     if not nombre:
-        return jsonify({'ok': False, 'error': 'El nombre del rubro o gasto es requerido'}), 400
+        return jsonify({'ok': False, 'error': 'El nombre del rubro o desembolso es requerido'}), 400
         
     from ..db import get_db_connection
     try:
@@ -5450,38 +5468,54 @@ def api_gastos_concepto_nuevo_post(negocio_id):
             
         param_id = param['id']
         
-        # Si no especificaron código, calcular el siguiente en la secuencia
+        if categoria_tipo == 'activo':
+            pref_costo = "6143"
+            pref_activo = "1505"
+        elif categoria_tipo == 'diferido':
+            pref_costo = "6144"
+            pref_activo = "1705"
+        else:
+            pref_costo = "6142"
+            pref_activo = None
+
+        # Determinar número consecutivo disponible
         if not codigo:
             cuentas = conn.execute("""
-                SELECT p.codigo FROM parametros_lineas_contables plc
-                JOIN cuentas_puc p ON p.id = plc.cuenta_puc_id
-                WHERE plc.parametro_id = %s AND plc.tipo_mov = 'D' AND plc.activo = true
-                ORDER BY p.codigo ASC
-            """, (param_id,)).fetchall()
+                SELECT codigo FROM cuentas_puc
+                WHERE codigo LIKE %s OR (codigo LIKE %s AND %s IS NOT NULL)
+                ORDER BY codigo ASC
+            """, (f"{pref_costo}%", f"{pref_activo}%" if pref_activo else f"{pref_costo}%", pref_activo)).fetchall()
             
-            prefijo = "6142"
             max_num = 0
             for c in cuentas:
                 cod = str(c['codigo']).strip()
-                if cod.startswith(prefijo):
+                if cod.startswith(pref_costo) and len(cod) > len(pref_costo):
                     try:
-                        n = int(cod[len(prefijo):])
-                        if n > max_num:
-                            max_num = n
-                    except ValueError:
-                        pass
+                        n = int(cod[len(pref_costo):])
+                        if n > max_num: max_num = n
+                    except ValueError: pass
+                if pref_activo and cod.startswith(pref_activo) and len(cod) > len(pref_activo):
+                    try:
+                        n = int(cod[len(pref_activo):])
+                        if n > max_num: max_num = n
+                    except ValueError: pass
+            
             siguiente_int = max_num + 1
-            codigo = f"{prefijo}{siguiente_int:02d}"
+            codigo = f"{pref_costo}{siguiente_int:02d}"
             while conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (codigo,)).fetchone():
                 siguiente_int += 1
-                codigo = f"{prefijo}{siguiente_int:02d}"
-                
-        # Verificar si la cuenta ya existe en cuentas_puc
-        existente = conn.execute("SELECT id, codigo, nombre, maneja_terceros FROM cuentas_puc WHERE codigo = %s", (codigo,)).fetchone()
-        if existente:
-            cuenta_id = existente['id']
+                codigo = f"{pref_costo}{siguiente_int:02d}"
         else:
-            codigo_padre = codigo[:4] if len(codigo) >= 6 else (codigo[:2] if len(codigo) >= 4 else None)
+            try:
+                siguiente_int = int(codigo[-2:])
+            except:
+                siguiente_int = 1
+
+        # 1. Crear Cuenta de Costo en Clase 6 (6142 / 6143 / 6144)
+        existente_costo = conn.execute("SELECT id, codigo, nombre, maneja_terceros FROM cuentas_puc WHERE codigo = %s", (codigo,)).fetchone()
+        if existente_costo:
+            cuenta_id = existente_costo['id']
+        else:
             row_ins = conn.execute("""
                 INSERT INTO cuentas_puc
                     (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento,
@@ -5489,10 +5523,29 @@ def api_gastos_concepto_nuevo_post(negocio_id):
                 VALUES
                     (%s, %s, 3, %s, 'debito', true, %s, false, %s, false, true)
                 RETURNING id
-            """, (codigo, nombre, codigo_padre, maneja_terceros, negocio_id)).fetchone()
+            """, (codigo, nombre, pref_costo, maneja_terceros, negocio_id)).fetchone()
             cuenta_id = row_ins['id']
+
+        # 2. Si es Activo o Diferido, crear Cuenta Espejo de Balance (1505XX / 1705XX)
+        cuenta_activo_id = None
+        cuenta_activo_cod = None
+        if pref_activo:
+            cuenta_activo_cod = f"{pref_activo}{siguiente_int:02d}"
+            existente_act = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (cuenta_activo_cod,)).fetchone()
+            if existente_act:
+                cuenta_activo_id = existente_act['id']
+            else:
+                row_act = conn.execute("""
+                    INSERT INTO cuentas_puc
+                        (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento,
+                         maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                    VALUES
+                        (%s, %s, 3, %s, 'debito', true, %s, false, %s, false, true)
+                    RETURNING id
+                """, (cuenta_activo_cod, f"{nombre} (Activo)", pref_activo, maneja_terceros, negocio_id)).fetchone()
+                cuenta_activo_id = row_act['id']
             
-        # Asociar a parametros_lineas_contables si aún no está asociada
+        # 3. Asociar Cuenta de Costo a parametros_lineas_contables
         linea_existente = conn.execute("""
             SELECT id FROM parametros_lineas_contables
             WHERE parametro_id = %s AND cuenta_puc_id = %s AND activo = true
@@ -5516,6 +5569,9 @@ def api_gastos_concepto_nuevo_post(negocio_id):
             'cuenta_puc_id': cuenta_id,
             'cuenta_codigo': codigo,
             'cuenta_nombre': nombre,
+            'cuenta_activo_id': cuenta_activo_id,
+            'cuenta_activo_codigo': cuenta_activo_cod,
+            'categoria_tipo': categoria_tipo,
             'maneja_terceros': maneja_terceros
         })
     except Exception as e:
@@ -5578,6 +5634,8 @@ def api_gastos_cierre_post(negocio_id):
         return jsonify({'ok': False, 'error': 'Faltan campos requeridos'}), 400
         
     from ..db import get_db_connection
+    from datetime import datetime, date
+    import json
     try:
         conn = get_db_connection()
         
@@ -5591,9 +5649,11 @@ def api_gastos_cierre_post(negocio_id):
         
         if not rows or not rows['total_deb'] or float(rows['total_deb']) <= 0:
             conn.close()
-            return jsonify({'ok': False, 'error': 'La relación de gastos no contiene líneas contables a cerrar.'}), 400
+            return jsonify({'ok': False, 'error': 'La relación de desembolsos no contiene líneas contables a cerrar.'}), 400
             
         fecha = rows['fecha']
+        comp_id = rows['comprobante_id']
+        tipo_doc_id = rows['tipo_doc_id']
         _verificar_periodo_cerrado(conn, negocio_id, fecha)
         
         # Check payment method specific account for gastos
@@ -5604,7 +5664,7 @@ def api_gastos_cierre_post(negocio_id):
         
         if not pm or not pm['cuenta_gastos_id']:
             conn.close()
-            return jsonify({'ok': False, 'error': f"El método de pago '{metodo_pago_codigo}' no tiene configurada una cuenta contable de egreso de gastos en los parámetros."}), 400
+            return jsonify({'ok': False, 'error': f"El método de pago '{metodo_pago_codigo}' no tiene configurada una cuenta contable de egreso en los parámetros."}), 400
             
         cuenta_puc_id = pm['cuenta_gastos_id']
         acc = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s", (cuenta_puc_id,)).fetchone()
@@ -5612,7 +5672,96 @@ def api_gastos_cierre_post(negocio_id):
             conn.close()
             return jsonify({'ok': False, 'error': 'Cuenta PUC de egreso no encontrada'}), 400
             
-        # Obtener centro_utilidad_id predominante de esta relación de gastos
+        # Obtener todas las líneas de débito de esta relación para procesar amortizaciones multi-mes
+        lineas_deb = conn.execute("""
+            SELECT id, cuenta, cuenta_id, concepto, monto, COALESCE(meses_duracion, 1) AS meses_duracion,
+                   tercero_id, centro_utilidad_id, fecha
+            FROM movimientos_contables
+            WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s AND tipo IN ('debito', 'D')
+            ORDER BY id ASC
+        """, (negocio_id, tipo_doc, num_doc)).fetchall()
+
+        uid = session['usuario_id']
+        parsed_fecha = datetime.strptime(str(fecha)[:10], '%Y-%m-%d').date() if isinstance(fecha, str) else fecha
+
+        for l in lineas_deb:
+            meses = int(l['meses_duracion'])
+            if meses > 1:
+                monto_total = float(l['monto'])
+                cuota_1 = round(monto_total / meses, 2)
+                saldo_activo = round(monto_total - cuota_1, 2)
+                cod_str = str(l['cuenta']).strip()
+                
+                # Determinar cuenta de activo correspondiente (1505XX / 1705XX)
+                if cod_str.startswith('6143') and len(cod_str) >= 6:
+                    cod_activo = f"1505{cod_str[4:]}"
+                elif cod_str.startswith('6144') and len(cod_str) >= 6:
+                    cod_activo = f"1705{cod_str[4:]}"
+                elif cod_str.startswith('1505'):
+                    cod_activo = cod_str
+                elif cod_str.startswith('1705'):
+                    cod_activo = cod_str
+                else:
+                    cod_activo = "150501"
+
+                # Obtener cuenta_activo_id
+                cta_act_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (cod_activo,)).fetchone()
+                if not cta_act_row:
+                    row_act_new = conn.execute("""
+                        INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                        VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true) RETURNING id
+                    """, (cod_activo, f"Activo {cod_activo}", cod_activo[:4], negocio_id)).fetchone()
+                    cuenta_activo_id = row_act_new['id']
+                else:
+                    cuenta_activo_id = cta_act_row['id']
+
+                # 1. Ajustar movimiento original para que solo guarde la Cuota 1 en la 6
+                conn.execute("""
+                    UPDATE movimientos_contables
+                    SET monto = %s, cuota_numero = 1, cuota_total = %s, metodo_desembolso = %s
+                    WHERE id = %s
+                """, (cuota_1, meses, metodo_pago_codigo, l['id']))
+
+                # 2. Insertar línea de Saldo de Activo (1505 / 1705)
+                conn.execute("""
+                    INSERT INTO movimientos_contables
+                        (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                         tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
+                         meses_duracion, cuota_numero, cuota_total, movimiento_origen_id, metodo_desembolso)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (negocio_id, comp_id, cuenta_activo_id, cod_activo, f"Saldo por amortizar - {l['concepto']}", 'debito',
+                      saldo_activo, uid, l['tercero_id'], tipo_doc_id, num_doc, fecha, tipo_doc,
+                      'Relación de Desembolsos - Saldo Activo', 'gasto', l['centro_utilidad_id'],
+                      meses, 1, meses, l['id'], metodo_pago_codigo))
+
+                # 3. Crear Programación Recurrente para los meses 2..N
+                dia_c = parsed_fecha.day
+                cuotas_restantes = meses - 1
+                hora_ejec = '08:00'
+                proximo_ejec = _calcular_proximo('mensual', None, dia_c, hora_ejec, desde=datetime.combine(parsed_fecha, datetime.min.time()))
+                
+                prog_vars = {
+                    'cuenta_debito': cod_str,
+                    'cuenta_credito': cod_activo,
+                    'monto_cuota': cuota_1,
+                    'cuotas_restantes': cuotas_restantes,
+                    'cuota_total': meses,
+                    'concepto': l['concepto'],
+                    'tercero_id': l['tercero_id'],
+                    'centro_utilidad_id': l['centro_utilidad_id'],
+                    'doc_origen': f"{tipo_doc}-{num_doc}",
+                    'movimiento_origen_id': l['id']
+                }
+
+                conn.execute("""
+                    INSERT INTO programaciones_contables
+                        (negocio_id, tipo_doc_id, descripcion, frecuencia, dia_mes, hora, variables_h, activo, proximo_ejecutado)
+                    VALUES (%s, %s, %s, 'mensual', %s, %s, %s, TRUE, %s)
+                """, (negocio_id, tipo_doc_id, f"Amortización mensual {l['concepto']} ({meses} meses)", dia_c, hora_ejec, json.dumps(prog_vars), proximo_ejec))
+            else:
+                conn.execute("UPDATE movimientos_contables SET metodo_desembolso = %s WHERE id = %s", (metodo_pago_codigo, l['id']))
+
+        # Obtener centro_utilidad_id predominante de esta relación
         row_cu = conn.execute("""
             SELECT centro_utilidad_id FROM movimientos_contables
             WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s AND centro_utilidad_id IS NOT NULL
@@ -5620,15 +5769,14 @@ def api_gastos_cierre_post(negocio_id):
         """, (negocio_id, tipo_doc, num_doc)).fetchone()
         centro_id_cierre = row_cu['centro_utilidad_id'] if row_cu and row_cu['centro_utilidad_id'] else 1
 
-        # Add Credit Contrapartida line
-        uid = session['usuario_id']
+        # Add Credit Contrapartida line for total amount
         conn.execute("""
             INSERT INTO movimientos_contables
                 (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por,
-                 tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (negocio_id, rows['comprobante_id'], cuenta_puc_id, acc['codigo'], 'Cierre relación gastos - Contrapartida ' + metodo_pago_codigo, 'credito',
-              float(rows['total_deb']), uid, rows['tipo_doc_id'], num_doc, fecha, tipo_doc, 'Relación de Gastos cerrada', 'gasto', centro_id_cierre))
+                 tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id, metodo_desembolso)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (negocio_id, comp_id, cuenta_puc_id, acc['codigo'], 'Cierre relación desembolsos - Contrapartida ' + metodo_pago_codigo, 'credito',
+              float(rows['total_deb']), uid, tipo_doc_id, num_doc, fecha, tipo_doc, 'Relación de Desembolsos cerrada', 'gasto', centro_id_cierre, metodo_pago_codigo))
               
         # Increment consecutive number of the document type
         conn.execute("""
@@ -5640,6 +5788,367 @@ def api_gastos_cierre_post(negocio_id):
         conn.commit()
         conn.close()
         return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/gastos/linea/<int:line_id>/cierre-individual', methods=['POST'])
+def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    metodo_pago_codigo = (data.get('metodo_pago') or '').strip()
+    
+    if not metodo_pago_codigo:
+        return jsonify({'ok': False, 'error': 'Método de pago/desembolso requerido'}), 400
+        
+    from ..db import get_db_connection
+    from datetime import datetime
+    import json
+    try:
+        conn = get_db_connection()
+        
+        # 1. Obtener la línea a liquidar
+        line = conn.execute("""
+            SELECT m.*, tdn.codigo AS tipo_doc_codigo, tdn.id AS tdn_id, COALESCE(tdn.consecutivo, 0) AS consecutivo_actual
+            FROM movimientos_contables m
+            JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
+            WHERE m.id = %s AND m.negocio_id = %s
+        """, (line_id, negocio_id)).fetchone()
+        
+        if not line:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Línea de desembolso no encontrada'}), 404
+            
+        _verificar_periodo_cerrado(conn, negocio_id, line['fecha'])
+        
+        tipo_doc = line['tipo_documento']
+        num_doc_actual = line['numero_documento']
+        comp_id_actual = line['comprobante_id']
+        tipo_doc_id = line['tipo_documento_id']
+        monto_linea = float(line['monto'])
+        fecha = line['fecha']
+        parsed_fecha = datetime.strptime(str(fecha)[:10], '%Y-%m-%d').date() if isinstance(fecha, str) else fecha
+        meses = int(line['meses_duracion'] or 1)
+        uid = session['usuario_id']
+
+        # 2. Obtener cuenta PUC del método de pago
+        pm = conn.execute("""
+            SELECT cuenta_gastos_id FROM parametros_metodos_pago_negocio 
+            WHERE negocio_id = %s AND metodo_codigo = %s
+        """, (negocio_id, metodo_pago_codigo)).fetchone()
+        
+        if not pm or not pm['cuenta_gastos_id']:
+            conn.close()
+            return jsonify({'ok': False, 'error': f"El método de pago '{metodo_pago_codigo}' no tiene cuenta configurada."}), 400
+            
+        cuenta_puc_id = pm['cuenta_gastos_id']
+        acc = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s", (cuenta_puc_id,)).fetchone()
+        if not acc:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Cuenta PUC de pago no encontrada'}), 400
+
+        # 3. Procesar multi-mes si aplica
+        if meses > 1:
+            cuota_1 = round(monto_linea / meses, 2)
+            saldo_activo = round(monto_linea - cuota_1, 2)
+            cod_str = str(line['cuenta']).strip()
+            
+            if cod_str.startswith('6143') and len(cod_str) >= 6:
+                cod_activo = f"1505{cod_str[4:]}"
+            elif cod_str.startswith('6144') and len(cod_str) >= 6:
+                cod_activo = f"1705{cod_str[4:]}"
+            else:
+                cod_activo = "150501"
+
+            cta_act_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (cod_activo,)).fetchone()
+            if not cta_act_row:
+                row_act_new = conn.execute("""
+                    INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                    VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true) RETURNING id
+                """, (cod_activo, f"Activo {cod_activo}", cod_activo[:4], negocio_id)).fetchone()
+                cuenta_activo_id = row_act_new['id']
+            else:
+                cuenta_activo_id = cta_act_row['id']
+
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET monto = %s, cuota_numero = 1, cuota_total = %s, metodo_desembolso = %s
+                WHERE id = %s
+            """, (cuota_1, meses, metodo_pago_codigo, line_id))
+
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                     tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
+                     meses_duracion, cuota_numero, cuota_total, movimiento_origen_id, metodo_desembolso)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (negocio_id, comp_id_actual, cuenta_activo_id, cod_activo, f"Saldo por amortizar - {line['concepto']}", 'debito',
+                  saldo_activo, uid, line['tercero_id'], tipo_doc_id, num_doc_actual, fecha, tipo_doc,
+                  'Liquidación Individual - Saldo Activo', 'gasto', line['centro_utilidad_id'],
+                  meses, 1, meses, line_id, metodo_pago_codigo))
+
+            # Programación recurrente
+            dia_c = parsed_fecha.day
+            hora_ejec = '08:00'
+            proximo_ejec = _calcular_proximo('mensual', None, dia_c, hora_ejec, desde=datetime.combine(parsed_fecha, datetime.min.time()))
+            prog_vars = {
+                'cuenta_debito': cod_str,
+                'cuenta_credito': cod_activo,
+                'monto_cuota': cuota_1,
+                'cuotas_restantes': meses - 1,
+                'cuota_total': meses,
+                'concepto': line['concepto'],
+                'tercero_id': line['tercero_id'],
+                'centro_utilidad_id': line['centro_utilidad_id'],
+                'doc_origen': f"{tipo_doc}-{num_doc_actual}",
+                'movimiento_origen_id': line_id
+            }
+            conn.execute("""
+                INSERT INTO programaciones_contables
+                    (negocio_id, tipo_doc_id, descripcion, frecuencia, dia_mes, hora, variables_h, activo, proximo_ejecutado)
+                VALUES (%s, %s, %s, 'mensual', %s, %s, %s, TRUE, %s)
+            """, (negocio_id, tipo_doc_id, f"Amortización mensual {line['concepto']} ({meses} meses)", dia_c, hora_ejec, json.dumps(prog_vars), proximo_ejec))
+        else:
+            conn.execute("UPDATE movimientos_contables SET metodo_desembolso = %s WHERE id = %s", (metodo_pago_codigo, line_id))
+
+        # 4. Asentar Crédito de Pago por el monto total de esta línea
+        conn.execute("""
+            INSERT INTO movimientos_contables
+                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por,
+                 tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id, metodo_desembolso)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (negocio_id, comp_id_actual, cuenta_puc_id, acc['codigo'], f"Liquidación Individual - Contrapartida {metodo_pago_codigo}", 'credito',
+              monto_linea, uid, tipo_doc_id, num_doc_actual, fecha, tipo_doc, 'Liquidación Individual Desembolso', 'gasto', line['centro_utilidad_id'] or 1, metodo_pago_codigo))
+
+        # 5. Incrementar consecutivo general
+        consecutivo_actual = int(line['consecutivo_actual'] or 0)
+        nuevo_consecutivo = str(consecutivo_actual + 1)
+        conn.execute("""
+            UPDATE tipos_documento_negocio SET consecutivo = consecutivo + 1 WHERE negocio_id = %s AND codigo = %s
+        """, (negocio_id, tipo_doc))
+
+        # 6. Reasignar las demás líneas abiertas restantes a un nuevo comprobante_id y nuevo_consecutivo
+        resto_abiertas = conn.execute("""
+            SELECT id FROM movimientos_contables
+            WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s AND comprobante_id = %s
+              AND id != %s AND tipo IN ('debito', 'D') AND (origen_tipo != 'cierre' OR origen_tipo IS NULL)
+        """, (negocio_id, tipo_doc, num_doc_actual, comp_id_actual, line_id)).fetchall()
+
+        if resto_abiertas:
+            nuevo_comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+            ids_resto = tuple(r['id'] for r in resto_abiertas)
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET numero_documento = %s, comprobante_id = %s
+                WHERE id IN %s
+            """, (nuevo_consecutivo, nuevo_comp_id, ids_resto))
+
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'mensaje': f'Línea liquidada exitosamente bajo {tipo_doc} #{num_doc_actual}. Relación activa avanzada a #{nuevo_consecutivo}.',
+            'nuevo_num_doc': nuevo_consecutivo
+        })
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/gastos/reprocesar-historico', methods=['POST'])
+def api_gastos_reprocesar_historico_post(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    movimiento_id = data.get('movimiento_id')
+    categoria_tipo = (data.get('categoria_tipo') or 'activo').strip().lower()
+    try:
+        meses = int(data.get('meses_duracion') or 12)
+    except:
+        meses = 12
+    if meses < 2:
+        return jsonify({'ok': False, 'error': 'El plazo de redistribución debe ser de mínimo 2 meses'}), 400
+        
+    metodo_desembolso = data.get('nuevo_metodo_desembolso') or None
+    
+    from ..db import get_db_connection
+    from datetime import datetime, date
+    from dateutil.relativedelta import relativedelta
+    import json
+    try:
+        conn = get_db_connection()
+        
+        # 1. Obtener el movimiento histórico a reprocesar
+        mc = conn.execute("""
+            SELECT m.*, p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre
+            FROM movimientos_contables m
+            JOIN cuentas_puc p ON p.id = m.cuenta_id
+            WHERE m.id = %s AND m.negocio_id = %s
+        """, (movimiento_id, negocio_id)).fetchone()
+        
+        if not mc:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Movimiento contable no encontrado'}), 404
+            
+        monto_total = float(mc['monto'])
+        fecha_orig = mc['fecha']
+        parsed_fecha_orig = datetime.strptime(str(fecha_orig)[:10], '%Y-%m-%d').date() if isinstance(fecha_orig, str) else fecha_orig
+        tipo_doc_orig = mc['tipo_documento'] or 'GAS'
+        num_doc_orig = str(mc['numero_documento'] or '1')
+        comp_id_orig = mc['comprobante_id']
+        tipo_doc_id = mc['tipo_documento_id']
+        uid = session['usuario_id']
+        concepto_orig = mc['concepto'] or 'Desembolso'
+
+        # 2. Determinar cuentas simétricas (6143 / 1505 o 6144 / 1705)
+        if categoria_tipo == 'diferido':
+            pref_costo, pref_activo = '6144', '1705'
+            nombre_cat = 'Diferidos'
+        else:
+            pref_costo, pref_activo = '6143', '1505'
+            nombre_cat = 'Equipos'
+
+        # Buscar el siguiente consecutivo de subcuenta libre
+        cuentas_exist = conn.execute("""
+            SELECT codigo FROM cuentas_puc WHERE codigo LIKE %s OR codigo LIKE %s ORDER BY codigo ASC
+        """, (f"{pref_costo}%", f"{pref_activo}%")).fetchall()
+        
+        max_num = 0
+        for c in cuentas_exist:
+            cod = str(c['codigo']).strip()
+            if cod.startswith(pref_costo) and len(cod) > len(pref_costo):
+                try:
+                    n = int(cod[len(pref_costo):])
+                    if n > max_num: max_num = n
+                except: pass
+        siguiente_int = max_num + 1
+        cod_costo = f"{pref_costo}{siguiente_int:02d}"
+        cod_activo = f"{pref_activo}{siguiente_int:02d}"
+
+        # Crear cuenta costo si no existe
+        row_c = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (cod_costo,)).fetchone()
+        if not row_c:
+            row_c_new = conn.execute("""
+                INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true) RETURNING id
+            """, (cod_costo, concepto_orig, pref_costo, negocio_id)).fetchone()
+            cuenta_costo_id = row_c_new['id']
+        else:
+            cuenta_costo_id = row_c['id']
+
+        # Crear cuenta activo si no existe
+        row_a = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (cod_activo,)).fetchone()
+        if not row_a:
+            row_a_new = conn.execute("""
+                INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true) RETURNING id
+            """, (cod_activo, f"{concepto_orig} (Activo)", pref_activo, negocio_id)).fetchone()
+            cuenta_activo_id = row_a_new['id']
+        else:
+            cuenta_activo_id = row_a['id']
+
+        # 3. Cálculos de amortización
+        cuota_mensual = round(monto_total / meses, 2)
+        saldo_activo_inicial = round(monto_total - cuota_mensual, 2)
+
+        # 4. Ajustar el movimiento original en la fecha de compra (solo Cuota 1)
+        conn.execute("""
+            UPDATE movimientos_contables
+            SET cuenta_id = %s, cuenta = %s, monto = %s, meses_duracion = %s, cuota_numero = 1, cuota_total = %s
+            WHERE id = %s
+        """, (cuenta_costo_id, cod_costo, cuota_mensual, meses, meses, movimiento_id))
+
+        # 5. Insertar saldo de activo en el comprobante original
+        conn.execute("""
+            INSERT INTO movimientos_contables
+                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                 tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
+                 meses_duracion, cuota_numero, cuota_total, movimiento_origen_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (negocio_id, comp_id_orig, cuenta_activo_id, cod_activo, f"Saldo activo por amortizar - {concepto_orig}", 'debito',
+              saldo_activo_inicial, uid, mc['tercero_id'], tipo_doc_id, num_doc_orig, fecha_orig, tipo_doc_orig,
+              'Reprocesamiento Histórico - Saldo Activo', 'gasto', mc['centro_utilidad_id'],
+              meses, 1, meses, movimiento_id))
+
+        # 6. Calcular meses transcurridos entre la fecha de compra y hoy
+        hoy = date.today()
+        cuotas_generadas = 1
+        sufijo_idx = 1
+        proxima_fecha = parsed_fecha_orig + relativedelta(months=1)
+
+        while proxima_fecha <= hoy and cuotas_generadas < meses:
+            cuotas_generadas += 1
+            doc_versionado = f"{num_doc_orig}-{sufijo_idx}"
+            while conn.execute("SELECT 1 FROM movimientos_contables WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s LIMIT 1", (negocio_id, tipo_doc_orig, doc_versionado)).fetchone():
+                sufijo_idx += 1
+                doc_versionado = f"{num_doc_orig}-{sufijo_idx}"
+            sufijo_idx += 1
+
+            new_comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+
+            # Débito: Gasto Clase 6
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                     tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
+                     meses_duracion, cuota_numero, cuota_total, movimiento_origen_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (negocio_id, new_comp_id, cuenta_costo_id, cod_costo, f"Amortización Cuota {cuotas_generadas}/{meses} - {concepto_orig}", 'debito',
+                  cuota_mensual, uid, mc['tercero_id'], tipo_doc_id, doc_versionado, proxima_fecha, tipo_doc_orig,
+                  f"Amortización Cuota {cuotas_generadas}", 'amortizacion', mc['centro_utilidad_id'],
+                  meses, cuotas_generadas, meses, movimiento_id))
+
+            # Crédito: Reducción de Activo
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                     tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
+                     meses_duracion, cuota_numero, cuota_total, movimiento_origen_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (negocio_id, new_comp_id, cuenta_activo_id, cod_activo, f"Amortización Cuota {cuotas_generadas}/{meses} - {concepto_orig}", 'credito',
+                  cuota_mensual, uid, mc['tercero_id'], tipo_doc_id, doc_versionado, proxima_fecha, tipo_doc_orig,
+                  f"Amortización Cuota {cuotas_generadas}", 'amortizacion', mc['centro_utilidad_id'],
+                  meses, cuotas_generadas, meses, movimiento_id))
+
+            proxima_fecha = proxima_fecha + relativedelta(months=1)
+
+        # 7. Si quedan cuotas futuras pendientes, programar en programaciones_contables
+        cuotas_restantes = meses - cuotas_generadas
+        if cuotas_restantes > 0:
+            dia_c = parsed_fecha_orig.day
+            hora_ejec = '08:00'
+            proximo_ejec_dt = datetime.combine(proxima_fecha, datetime.min.time().replace(hour=8))
+            prog_vars = {
+                'cuenta_debito': cod_costo,
+                'cuenta_credito': cod_activo,
+                'monto_cuota': cuota_mensual,
+                'cuotas_restantes': cuotas_restantes,
+                'cuota_total': meses,
+                'concepto': concepto_orig,
+                'tercero_id': mc['tercero_id'],
+                'centro_utilidad_id': mc['centro_utilidad_id'],
+                'doc_origen': f"{tipo_doc_orig}-{num_doc_orig}",
+                'movimiento_origen_id': movimiento_id
+            }
+            conn.execute("""
+                INSERT INTO programaciones_contables
+                    (negocio_id, tipo_doc_id, descripcion, frecuencia, dia_mes, hora, variables_h, activo, proximo_ejecutado)
+                VALUES (%s, %s, %s, 'mensual', %s, %s, %s, TRUE, %s)
+            """, (negocio_id, tipo_doc_id, f"Amortización mensual {concepto_orig} ({meses} meses)", dia_c, hora_ejec, json.dumps(prog_vars), proximo_ejec_dt))
+
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'mensaje': f'Gasto histórico redistribuido exitosamente a {meses} meses ({cuotas_generadas} cuota(s) asentadas hasta la fecha).',
+            'cuotas_asentadas': cuotas_generadas,
+            'cuotas_restantes': cuotas_restantes,
+            'doc_base': f"{tipo_doc_orig} #{num_doc_orig}"
+        })
     except Exception as e:
         try: conn.rollback(); conn.close()
         except: pass
@@ -5786,10 +6295,15 @@ def api_estado_resultados_get(negocio_id):
                 p.id AS cuenta_id,
                 mc.fecha,
                 mc.numero_documento,
+                mc.tipo_documento,
                 mc.concepto,
                 mc.descripcion_general,
                 mc.tipo,
                 mc.monto,
+                mc.meses_duracion,
+                mc.cuota_numero,
+                mc.cuota_total,
+                mc.movimiento_origen_id,
                 t.nombre AS tercero_nombre
             FROM movimientos_contables mc
             JOIN cuentas_puc p ON p.codigo = mc.cuenta
@@ -5835,11 +6349,18 @@ def api_estado_resultados_get(negocio_id):
                 'fecha': row['fecha'].strftime('%Y-%m-%d') if row['fecha'] else '',
                 'soporte': soporte,
                 'documento': raw_doc,
+                'tipo_documento': row['tipo_documento'],
                 'tercero': (row['tercero_nombre'] or '').strip(),
                 'subrubro': subrubro,
                 'nota': nota,
+                'concepto_raw': raw_concepto,
                 'tipo': row['tipo'],
-                'monto': float(row['monto'] or 0)
+                'monto': float(row['monto'] or 0),
+                'meses_duracion': row['meses_duracion'],
+                'cuota_numero': row['cuota_numero'],
+                'cuota_total': row['cuota_total'],
+                'movimiento_origen_id': row['movimiento_origen_id'],
+                'cuenta_codigo': row['cuenta_codigo']
             })
         
         secciones = {

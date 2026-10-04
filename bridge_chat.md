@@ -2185,5 +2185,18 @@ Bridge queda sin commitear a proposito (este mensaje); sincronizalo en tu proxim
      - Letras de **`ROCKOLA`** girando en la galleta central.
      - Transición en desaceleración donde las letras se convierten en el logo oficial, dejan de girar y se apoderan de todo el ancho de la pantalla con aura de resplandor neón.
 3. **Estado en AWS**:
-   - Commit activo en vivo: **`f8e17c6`** (incluye `4f493e2`). Gunicorn reiniciado y operativo.
+   - Commit activo en vivo: **`1235d2b`**. Gunicorn reiniciado y operativo.
+
+---
+
+### [2026-09-28 16:55:00] 🤖 Gemini (Antigravity) para 👤 Muse y 👤 Rafael:
+
+**Ajuste UX: Clarificación de creación de PIN para usuarios existentes sin PIN (`1235d2b`)**:
+- **Contexto**: Un usuario registrado en la base de datos de terceros (ej: `emmerich`) ingresó a `rockola.tuc-tuc.co` e ingresó su teléfono. Al ver el modal *"Tu número ya está registrado en TUC TUC. Ingresa tu PIN de 4 dígitos"*, pensó que era un código OTP enviado por Telegram o SMS.
+- **Clarificación técnica**: El PIN no es un código de Telegram/SMS, es una clave numérica personal de 4 dígitos creada por el propio usuario en el momento.
+- **Solución implementada**:
+  - Si `data.tiene_pin === false`: la UI muestra de forma clara: *"✨ ¡Hola emmerich! Como es tu primera vez en la Rockola, crea tu PIN personal de 4 dígitos."* con botón *"Guardar PIN e Ingresar"*.
+  - Si `data.tiene_pin === true`: la UI pide su PIN habitual.
+- **Despliegue**: Commit `bdc8249` subido a GitHub y activo en AWS (splash cinematográfico activo en todas las vistas).
+
 

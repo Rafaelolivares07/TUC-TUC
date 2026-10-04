@@ -356,8 +356,8 @@
         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Nueva Clasificación Contable</label>
         <div class="grid grid-cols-1 gap-2.5">
           
-          <label id="card-reproc-activo" class="relative flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-emerald-50/40 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs" onclick="seleccionarCatReproceso('activo')">
-            <input type="radio" name="modal_reproc_cat" value="activo" checked class="sr-only">
+          <label id="card-reproc-activo" class="relative flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-white border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/20" onclick="seleccionarCatReproceso('activo')">
+            <input type="radio" name="modal_reproc_cat" value="activo" class="sr-only">
             <div class="flex items-center gap-3.5 flex-1 min-w-0 pr-3">
               <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center text-xl flex-shrink-0 shadow-xs border border-blue-200">
                 🏭
@@ -368,8 +368,8 @@
               </div>
             </div>
             <div class="flex-shrink-0 pl-1">
-              <div class="toggle-track w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 bg-emerald-500 shadow-inner">
-                <div class="toggle-knob w-5 h-5 bg-white rounded-full transition-transform translate-x-5 shadow-sm"></div>
+              <div class="toggle-track w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5 bg-gray-200 shadow-inner">
+                <div class="toggle-knob w-5 h-5 bg-white rounded-full transition-transform translate-x-0 shadow-sm"></div>
               </div>
             </div>
           </label>
@@ -1117,7 +1117,8 @@
     document.getElementById('modal-reproc-concepto').textContent = concepto || 'Desembolso';
     document.getElementById('modal-reproc-monto').textContent = '$' + parseFloat(monto || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
 
-    seleccionarCatReproceso('activo');
+    // Ninguna tarjeta preseleccionada por defecto para que el usuario elija conscientemente
+    seleccionarCatReproceso(null);
     document.getElementById('modal-reproc-duracion').value = '12';
 
     const prorrateoChk = document.getElementById('modal-reproc-prorrateo');
@@ -1292,9 +1293,12 @@
     const movId = document.getElementById('modal-reproc-id')?.value;
     if (!movId) return;
 
-    let cat = 'activo';
     const checkedRadio = document.querySelector('input[name="modal_reproc_cat"]:checked');
-    if (checkedRadio) cat = checkedRadio.value;
+    if (!checkedRadio) {
+      toast('⚠️ Por favor seleccione si el desembolso corresponde a "Planta y Equipo" o "Diferidos / Anticipos".', false);
+      return;
+    }
+    const cat = checkedRadio.value;
 
     const durSel = document.getElementById('modal-reproc-duracion');
     const meses = durSel ? parseInt(durSel.value || 12) : 12;

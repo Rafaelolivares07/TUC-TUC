@@ -799,11 +799,94 @@ def _ejecutar_asiento_amortizacion(conn, prog_row, vars_dict):
     return new_comp_id
 
 
+def _ejecutar_asiento_gasto_recurrente(conn, prog_row, vars_dict):
+    """
+    Ejecuta la causación periódica de un gasto fijo / suscripción sin desembolso previo.
+    Genera:
+    - Asiento contable: Débito Gasto (51/52) vs Crédito Cuenta por Pagar (2335/2205).
+    - Registro vivo en saldo_por_documentos para control de cartera/pago posterior.
+    """
+    from datetime import date
+    negocio_id = prog_row['negocio_id']
+    monto = float(vars_dict.get('monto_recurrente') or vars_dict.get('monto') or 0.0)
+    if monto <= 0:
+        return None
+
+    cod_deb = vars_dict.get('cuenta_debito') or '513535'
+    cod_cred = vars_dict.get('cuenta_credito') or '233525'
+    
+    cta_deb = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cod_deb, negocio_id)).fetchone()
+    if not cta_deb:
+        cta_deb = conn.execute("SELECT id FROM cuentas_puc WHERE codigo LIKE '51%%' AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) ORDER BY codigo ASC LIMIT 1", (negocio_id,)).fetchone()
+        
+    cta_cred = conn.execute("SELECT id, maneja_documentos FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cod_cred, negocio_id)).fetchone()
+    if not cta_cred:
+        cta_cred = conn.execute("SELECT id, maneja_documentos FROM cuentas_puc WHERE codigo LIKE '2335%%' AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) ORDER BY codigo ASC LIMIT 1", (negocio_id,)).fetchone()
+
+    if not cta_deb or not cta_cred:
+        return None
+
+    tipo_doc_id = prog_row['tipo_doc_id']
+    td_row = conn.execute("SELECT id, codigo, consecutivo, numero_inicio FROM tipos_documento_negocio WHERE id = %s", (tipo_doc_id,)).fetchone()
+    if not td_row:
+        td_row = conn.execute("SELECT id, codigo, consecutivo, numero_inicio FROM tipos_documento_negocio WHERE negocio_id = %s AND codigo = 'CAU'", (negocio_id,)).fetchone()
+    if not td_row:
+        td_row = conn.execute("SELECT id, codigo, consecutivo, numero_inicio FROM tipos_documento_negocio WHERE negocio_id = %s LIMIT 1", (negocio_id,)).fetchone()
+    
+    tipo_doc_codigo = td_row['codigo'] if td_row else 'CAU'
+    num_doc = max((td_row['consecutivo'] or 0) + 1, (td_row['numero_inicio'] or 1)) if td_row else 1
+    if td_row:
+        conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (num_doc, td_row['id']))
+
+    numero_documento_str = f"{tipo_doc_codigo}-{num_doc}"
+    new_comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+    
+    hoy = date.today()
+    concepto = vars_dict.get('concepto') or prog_row['descripcion'] or 'Gasto Fijo Recurrente'
+    tercero_id = vars_dict.get('tercero_id')
+    centro_utilidad_id = vars_dict.get('centro_utilidad_id') or 1
+    desc_gen = f"Causación periódica: {concepto}"
+
+    # Asiento Débito (Gasto)
+    conn.execute("""
+        INSERT INTO movimientos_contables
+            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+             tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (negocio_id, new_comp_id, cta_deb['id'], cod_deb, f"Gasto - {concepto}", 'debito',
+          monto, 1, tercero_id, td_row['id'] if td_row else None, numero_documento_str, hoy, tipo_doc_codigo,
+          desc_gen, 'causacion_recurrente', centro_utilidad_id))
+
+    # Asiento Crédito (Cuenta por Pagar)
+    conn.execute("""
+        INSERT INTO movimientos_contables
+            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+             tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (negocio_id, new_comp_id, cta_cred['id'], cod_cred, f"CxP - {concepto}", 'credito',
+          monto, 1, tercero_id, td_row['id'] if td_row else None, numero_documento_str, hoy, tipo_doc_codigo,
+          desc_gen, 'causacion_recurrente', centro_utilidad_id))
+
+    # Registrar en saldo_por_documentos si la cuenta o el tercero aplican
+    if tercero_id and cta_cred:
+        conn.execute("""
+            INSERT INTO saldo_por_documentos
+                (negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento,
+                 monto_original, saldo, usuario_id, fecha_hora, tipo_documento_id, notas)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s)
+            ON CONFLICT (negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento)
+            DO UPDATE SET saldo = saldo_por_documentos.saldo + EXCLUDED.saldo, updated_at = NOW()
+        """, (negocio_id, tercero_id, cta_cred['id'], tipo_doc_codigo, str(num_doc),
+              monto, monto, 1, td_row['id'] if td_row else None, concepto))
+
+    return new_comp_id
+
+
 _last_prog_check_time = 0
 
 def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
     """
-    Verifica y ejecuta de forma segura e idempotente las amortizaciones y asientos automáticos programados.
+    Verifica y ejecuta de forma segura e idempotente las amortizaciones, suscripciones recurrentes y asientos programados.
     Se ejecuta tanto desde llamadas reactivas (al cargar reportes o módulos de contabilidad/inventarios)
     como desde el scheduler / cron en segundo plano.
     """
@@ -850,6 +933,10 @@ def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
                     comp_id = _ejecutar_asiento_amortizacion(conn, p, vars_dict)
                     conn.commit()
                     resultado = f'ok comp={comp_id}' if comp_id else 'amortizacion_completada'
+                elif vars_dict.get('tipo_programacion') == 'gasto_fijo_recurrente' or vars_dict.get('monto_recurrente'):
+                    comp_id = _ejecutar_asiento_gasto_recurrente(conn, p, vars_dict)
+                    conn.commit()
+                    resultado = f'ok comp={comp_id}' if comp_id else 'causacion_ejecutada'
                 else:
                     comp_id = _ejecutar_asiento_automatico(
                         conn, p['negocio_id'], p['tipo_codigo'],
@@ -3606,6 +3693,207 @@ def api_programaciones_ejecutar(negocio_id, pid):
         conn.commit(); conn.close()
         return jsonify({'ok': True, 'resultado': resultado,
                         'proximo_ejecutado': proximo.isoformat()})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+# ── API: Suscripciones y Gastos Fijos Recurrentes ───────────────
+
+@bp.route('/api/contabilidad/<int:negocio_id>/suscripciones', methods=['GET', 'POST'])
+def api_suscripciones_gastos(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    import json as _json
+    import datetime as _datetime
+    conn = get_db_connection()
+    try:
+        _asegurar_tablas(conn)
+        if request.method == 'GET':
+            rows = conn.execute("""
+                SELECT p.id, p.tipo_doc_id, t.codigo AS tipo_doc_codigo, t.nombre AS tipo_doc_nombre,
+                       p.descripcion, p.frecuencia, p.dia_semana, p.dia_mes,
+                       p.hora::text AS hora, p.variables_h, p.activo,
+                       p.ultimo_ejecutado, p.proximo_ejecutado, p.ultimo_resultado
+                FROM programaciones_contables p
+                JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
+                WHERE p.negocio_id = %s
+                  AND (
+                    (p.variables_h->>'tipo_programacion') = 'gasto_fijo_recurrente'
+                    OR (p.variables_h->>'monto_recurrente') IS NOT NULL
+                  )
+                ORDER BY p.id DESC
+            """, (negocio_id,)).fetchall()
+
+            # Enriquecer con nombres de terceros y centros de utilidad
+            terceros_map = {r['id']: r['nombre'] for r in conn.execute("SELECT id, nombre FROM terceros WHERE negocio_id = %s OR id = %s", (negocio_id, negocio_id)).fetchall()}
+            centros_map = {r['id']: r['nombre'] for r in conn.execute("SELECT id, nombre FROM centros_utilidad WHERE negocio_id = %s", (negocio_id,)).fetchall()}
+
+            suscripciones = []
+            for r in rows:
+                d = dict(r)
+                vars_h = d.get('variables_h') or {}
+                t_id = vars_h.get('tercero_id')
+                cu_id = vars_h.get('centro_utilidad_id') or 1
+                d['tercero_nombre'] = terceros_map.get(t_id, vars_h.get('tercero_nombre') or 'Sin tercero')
+                d['centro_nombre'] = centros_map.get(cu_id, f'Sede #{cu_id}')
+                d['monto_recurrente'] = float(vars_h.get('monto_recurrente') or vars_h.get('monto') or 0.0)
+                d['concepto'] = vars_h.get('concepto') or d['descripcion'] or 'Gasto Fijo'
+                d['nota'] = vars_h.get('nota') or ''
+                for k in ('ultimo_ejecutado', 'proximo_ejecutado'):
+                    if d[k]:
+                        d[k] = d[k].isoformat()
+                suscripciones.append(d)
+
+            conn.close()
+            return jsonify({'ok': True, 'suscripciones': suscripciones})
+
+        else: # POST: Crear nueva suscripción / gasto fijo
+            data = request.get_json() or {}
+            concepto = (data.get('concepto') or '').strip().upper()
+            monto = float(data.get('monto') or 0.0)
+            frecuencia = data.get('frecuencia') or 'mensual'
+            dia_mes = int(data.get('dia_mes') or 5)
+            tercero_id = data.get('tercero_id')
+            centro_utilidad_id = data.get('centro_utilidad_id') or 1
+            nota = (data.get('nota') or '').strip()
+
+            if not concepto:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'El concepto o nombre del gasto es obligatorio'}), 400
+            if monto <= 0:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'El monto por período debe ser mayor a cero'}), 400
+            if not tercero_id:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Debe seleccionar un proveedor / beneficiario'}), 400
+
+            # Resolver tipo_doc_id (buscar CAU o GAS)
+            td = conn.execute("SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND codigo IN ('CAU', 'CXP') LIMIT 1", (negocio_id,)).fetchone()
+            if not td:
+                td = conn.execute("SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND codigo = 'GAS' LIMIT 1", (negocio_id,)).fetchone()
+            if not td:
+                td = conn.execute("SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s LIMIT 1", (negocio_id,)).fetchone()
+            
+            tipo_doc_id = td['id'] if td else 1
+
+            # Resolver cuentas PUC sugeridas
+            cta_deb_cod = '513535' # Servicios generales / arriendos por defecto
+            if 'ARRIEND' in concepto or 'LOCAL' in concepto:
+                cta_deb_cod = '512010'
+            elif 'SEGURO' in concepto or 'POLIZA' in concepto:
+                cta_deb_cod = '513005'
+            elif 'INTERNET' in concepto or 'TELEFON' in concepto or 'CELULAR' in concepto:
+                cta_deb_cod = '513535'
+            elif 'HONORAR' in concepto or 'ASESOR' in concepto:
+                cta_deb_cod = '511010'
+
+            cta_cred_cod = '233525' # Costos y Gastos por Pagar
+
+            vars_h = {
+                'tipo_programacion': 'gasto_fijo_recurrente',
+                'concepto': concepto,
+                'monto_recurrente': monto,
+                'tercero_id': int(tercero_id),
+                'centro_utilidad_id': int(centro_utilidad_id),
+                'cuenta_debito': cta_deb_cod,
+                'cuenta_credito': cta_cred_cod,
+                'nota': nota
+            }
+
+            hora_val = _datetime.time(8, 0)
+            proximo = _calcular_proximo(frecuencia, None, dia_mes, hora_val)
+
+            row = conn.execute("""
+                INSERT INTO programaciones_contables
+                    (negocio_id, tipo_doc_id, descripcion, frecuencia, dia_semana, dia_mes,
+                     hora, variables_h, activo, proximo_ejecutado)
+                VALUES (%s, %s, %s, %s, NULL, %s, '08:00', %s, TRUE, %s)
+                RETURNING id
+            """, (negocio_id, tipo_doc_id, f"Gasto Fijo: {concepto}", frecuencia, dia_mes,
+                  _json.dumps(vars_h), proximo)).fetchone()
+
+            conn.commit()
+            conn.close()
+            return jsonify({'ok': True, 'id': row['id'], 'mensaje': 'Suscripción o gasto fijo programado con éxito.', 'proximo_ejecutado': proximo.isoformat()})
+
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/suscripciones/<int:pid>/toggle', methods=['POST', 'PATCH'])
+def api_suscripciones_toggle(negocio_id, pid):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT activo FROM programaciones_contables WHERE id = %s AND negocio_id = %s", (pid, negocio_id)).fetchone()
+        if not row:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Programación no encontrada'}), 404
+        nuevo_estado = not bool(row['activo'])
+        conn.execute("UPDATE programaciones_contables SET activo = %s WHERE id = %s AND negocio_id = %s", (nuevo_estado, pid, negocio_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'activo': nuevo_estado})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/suscripciones/<int:pid>', methods=['DELETE'])
+def api_suscripciones_delete(negocio_id, pid):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM programaciones_contables WHERE id = %s AND negocio_id = %s", (pid, negocio_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'mensaje': 'Programación eliminada'})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/suscripciones/<int:pid>/ejecutar', methods=['POST'])
+def api_suscripciones_ejecutar_ahora(negocio_id, pid):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        prog = conn.execute("""
+            SELECT p.*, t.codigo AS tipo_codigo
+            FROM programaciones_contables p
+            JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
+            WHERE p.id = %s AND p.negocio_id = %s
+        """, (pid, negocio_id)).fetchone()
+        if not prog:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Programación no encontrada'}), 404
+        
+        vars_dict = dict(prog['variables_h'] or {})
+        comp_id = _ejecutar_asiento_gasto_recurrente(conn, prog, vars_dict)
+        if comp_id:
+            ahora = _dt.now()
+            proximo = _calcular_proximo(prog['frecuencia'], prog['dia_semana'], prog['dia_mes'], prog['hora'], desde=ahora)
+            conn.execute("""
+                UPDATE programaciones_contables
+                SET ultimo_ejecutado = %s, proximo_ejecutado = %s, ultimo_resultado = 'ok ejecutado manual'
+                WHERE id = %s
+            """, (ahora, proximo, pid))
+            conn.commit()
+            conn.close()
+            return jsonify({'ok': True, 'comprobante_id': comp_id, 'mensaje': 'Gasto recurrente causado a Cuentas por Pagar exitosamente.'})
+        else:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No fue posible generar el comprobante. Verifique el monto y cuentas.'}), 400
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass

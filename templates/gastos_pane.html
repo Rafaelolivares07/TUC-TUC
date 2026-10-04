@@ -51,6 +51,63 @@
     </div>
   </div>
 
+  <!-- Sub-sección Colapsable: Suscripciones y Gastos Fijos Recurrentes (Causaciones sin desembolso) -->
+  <div class="w-full bg-slate-50/80 rounded-2xl border border-slate-200/80 mb-6 overflow-hidden transition-all duration-200 shadow-xs">
+    <!-- Header del Acordeón (Colapsado por defecto) -->
+    <div onclick="toggleSeccionSuscripciones()" class="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-100/70 transition select-none">
+      <div class="flex items-center gap-3">
+        <div class="p-2.5 bg-indigo-100/80 text-indigo-700 rounded-xl text-lg shadow-xs">
+          📅
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="text-sm font-bold text-gray-800">Suscripciones y Gastos Fijos Recurrentes</h3>
+            <span id="badge-suscripciones-count" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">0 activas</span>
+          </div>
+          <p class="text-[11px] text-gray-500">Compromisos periódicos que se causan automáticamente a Cuentas por Pagar en su fecha programada sin desembolso previo de caja.</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-3 self-end sm:self-auto">
+        <div class="text-right hidden sm:block">
+          <span class="text-[9px] text-gray-400 uppercase font-bold block">Compromiso Mensual</span>
+          <span id="tot-suscripciones-mensual" class="text-xs font-mono font-bold text-indigo-900">$0.00</span>
+        </div>
+        <button type="button" onclick="event.stopPropagation(); abrirModalNuevaSuscripcion();" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1 cursor-pointer">
+          <span>+</span> Programar Gasto Fijo
+        </button>
+        <svg id="chevron-suscripciones" class="w-5 h-5 text-gray-400 transform transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Cuerpo del Acordeón (Oculto por defecto) -->
+    <div id="cuerpo-suscripciones" class="hidden border-t border-slate-200/60 bg-white p-4">
+      <div class="overflow-x-auto custom-scrollbar">
+        <table class="w-full text-xs text-left">
+          <thead>
+            <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-100 font-semibold">
+              <th class="px-3 py-2.5">Concepto / Gasto</th>
+              <th class="px-3 py-2.5">Proveedor / Beneficiario</th>
+              <th class="px-3 py-2.5">Sede / Centro</th>
+              <th class="px-3 py-2.5">Frecuencia / Día</th>
+              <th class="px-3 py-2.5 text-right">Monto Cuota</th>
+              <th class="px-3 py-2.5 text-center">Próxima Causación</th>
+              <th class="px-3 py-2.5 text-center">Estado</th>
+              <th class="px-3 py-2.5 text-center w-32">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="suscripciones-body" class="divide-y divide-gray-100">
+            <tr>
+              <td colspan="8" class="text-center text-gray-400 py-6">Cargando compromisos recurrentes...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- Formulario de Línea de Desembolso -->
   <div id="gas-form-container" class="bg-gray-50/50 rounded-2xl p-5 border border-gray-100 mb-6">
     <div class="flex items-center justify-between mb-3">
@@ -470,6 +527,120 @@
     </div>
   </div>
 
+  <!-- Modal Crear / Editar Suscripción o Gasto Fijo Recurrente -->
+  <div id="modal-nueva-suscripcion" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-6 max-w-lg w-full max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2.5 text-gray-800">
+          <div class="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+            <span class="text-xl">📅</span>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-gray-800" id="modal-suscripcion-titulo">Programar Suscripción / Gasto Fijo</h4>
+            <p class="text-[11px] text-gray-500">Se causará automáticamente en cada ciclo a Cuentas por Pagar para liquidar cuando corresponda.</p>
+          </div>
+        </div>
+        <button onclick="cerrarModalNuevaSuscripcion()" class="text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer">&times;</button>
+      </div>
+
+      <input type="hidden" id="modal-suscripcion-id">
+      
+      <div class="space-y-3.5 mb-5 text-xs">
+        
+        <!-- Concepto -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nombre o Concepto del Gasto <span class="text-rose-500">*</span></label>
+          <input id="modal-suscripcion-concepto" type="text" placeholder="Ej. ARRIENDO LOCAL PRINCIPAL, INTERNET, POLIZA SEGURO..."
+                 autocomplete="off"
+                 class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none uppercase font-semibold text-gray-800">
+        </div>
+
+        <!-- Proveedor / Tercero -->
+        <div class="relative">
+          <div class="flex justify-between items-center mb-1">
+            <label class="block text-xs font-semibold text-gray-600 uppercase">Proveedor / Beneficiario <span class="text-rose-500">*</span></label>
+            <button type="button" onclick="abrirModalNuevoTercero(document.getElementById('modal-suscripcion-tercero-txt').value.trim())" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer">
+              <span>👤+</span> Nuevo Proveedor
+            </button>
+          </div>
+          <input id="modal-suscripcion-tercero-txt" type="text" placeholder="Escriba para buscar o crear tercero..."
+                 autocomplete="off"
+                 class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                 oninput="onSuscripcionTerceroInput()" onfocus="onSuscripcionTerceroInput()">
+          <button onclick="clearSuscripcionTercero()" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg">&times;</button>
+          <input type="hidden" id="modal-suscripcion-tercero-id">
+          <div id="modal-suscripcion-tercero-ac" class="ac-drop hidden"></div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Monto Cuota -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Monto por Período ($) <span class="text-rose-500">*</span></label>
+            <input id="modal-suscripcion-monto" type="text" inputmode="decimal" placeholder="0.00"
+                   class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none font-mono font-bold text-gray-800">
+          </div>
+
+          <!-- Sede / Centro de Utilidad -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Centro de Utilidad / Sede <span class="text-rose-500">*</span></label>
+            <select id="modal-suscripcion-centro-id"
+                    class="border border-gray-200 bg-white rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 h-[38px]">
+              <!-- Dinámico -->
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Frecuencia -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Frecuencia de Causación <span class="text-rose-500">*</span></label>
+            <select id="modal-suscripcion-frecuencia"
+                    class="border border-gray-200 bg-white rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 h-[38px]">
+              <option value="mensual" selected>🗓️ Cada mes (Mensual)</option>
+              <option value="bimestral">🗓️ Cada 2 meses (Bimestral)</option>
+              <option value="trimestral">🗓️ Cada 3 meses (Trimestral)</option>
+              <option value="semestral">🗓️ Cada 6 meses (Semestral)</option>
+              <option value="anual">🗓️ Cada año (Anual)</option>
+            </select>
+          </div>
+
+          <!-- Día del Mes -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Día del Mes para Causar <span class="text-rose-500">*</span></label>
+            <select id="modal-suscripcion-dia-mes"
+                    class="border border-gray-200 bg-white rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 h-[38px]">
+              <option value="1">Día 1 de cada mes</option>
+              <option value="5" selected>Día 5 de cada mes</option>
+              <option value="10">Día 10 de cada mes</option>
+              <option value="15">Día 15 de cada mes</option>
+              <option value="20">Día 20 de cada mes</option>
+              <option value="25">Día 25 de cada mes</option>
+              <option value="28">Día 28 (Fin de mes)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Nota / Observación -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nota o Detalle Opcional</label>
+          <input id="modal-suscripcion-nota" type="text" placeholder="Ej. Contrato a 1 año, vence en Diciembre..."
+                 class="border border-gray-200 rounded-xl px-3 py-2 text-xs w-full bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700">
+        </div>
+
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
+        <button onclick="cerrarModalNuevaSuscripcion()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
+          Cancelar
+        </button>
+        <button id="btn-guardar-suscripcion" onclick="guardarSuscripcionGasto()"
+                class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+          <span>💾</span> Guardar Programación
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Liquidar / Cerrar Individualmente una Línea de Desembolso -->
   <div id="modal-cierre-individual-linea" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-150">
@@ -831,6 +1002,7 @@
       if (pred) sel.value = pred.codigo;
       
       cargarRelacionGastoActiva();
+      cargarSuscripcionesGastos();
     } catch(e) {
       console.error(e);
       toast('Error al conectar con la API de documentos', false);
@@ -2423,12 +2595,335 @@
     }
   }
 
+  // ═══ GESTIÓN SUSCRIPCIONES Y GASTOS FIJOS RECURRENTES ═══
+  let _suscripcionesAbierta = false;
+
+  function toggleSeccionSuscripciones() {
+    _suscripcionesAbierta = !_suscripcionesAbierta;
+    const cuerpo = document.getElementById('cuerpo-suscripciones');
+    const chevron = document.getElementById('chevron-suscripciones');
+    if (cuerpo && chevron) {
+      if (_suscripcionesAbierta) {
+        cuerpo.classList.remove('hidden');
+        chevron.classList.add('rotate-180');
+        cargarSuscripcionesGastos();
+      } else {
+        cuerpo.classList.add('hidden');
+        chevron.classList.remove('rotate-180');
+      }
+    }
+  }
+
+  async function cargarSuscripcionesGastos() {
+    const tb = document.getElementById('suscripciones-body');
+    const badge = document.getElementById('badge-suscripciones-count');
+    const totMensual = document.getElementById('tot-suscripciones-mensual');
+    if (!tb) return;
+
+    try {
+      const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/suscripciones`);
+      const data = await res.json();
+      if (!data.ok) {
+        tb.innerHTML = `<tr><td colspan="8" class="text-center text-rose-500 py-4">${data.error || 'Error al cargar'}</td></tr>`;
+        return;
+      }
+
+      const progs = data.suscripciones || [];
+      const activas = progs.filter(p => p.activo);
+      if (badge) badge.textContent = `${activas.length} activa${activas.length === 1 ? '' : 's'}`;
+
+      let sumaMensual = 0;
+      activas.forEach(p => {
+        let m = parseFloat(p.monto_recurrente || 0);
+        if (p.frecuencia === 'bimestral') m /= 2;
+        else if (p.frecuencia === 'trimestral') m /= 3;
+        else if (p.frecuencia === 'semestral') m /= 6;
+        else if (p.frecuencia === 'anual') m /= 12;
+        sumaMensual += m;
+      });
+
+      if (totMensual) {
+        totMensual.textContent = '$' + sumaMensual.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      }
+
+      if (progs.length === 0) {
+        tb.innerHTML = `
+          <tr>
+            <td colspan="8" class="text-center text-gray-400 py-6">
+              No tiene suscripciones o gastos fijos programados. Haga clic en <strong>"+ Programar Gasto Fijo"</strong> para agregar arriendos, servicios, seguros, etc.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tb.innerHTML = progs.map(p => {
+        const proxStr = p.proximo_ejecutado ? p.proximo_ejecutado.split('T')[0] : 'Pendiente';
+        const freqLbl = {
+          'mensual': 'Cada mes',
+          'bimestral': 'Cada 2 meses',
+          'trimestral': 'Cada 3 meses',
+          'semestral': 'Cada 6 meses',
+          'anual': 'Cada año'
+        }[p.frecuencia] || p.frecuencia;
+
+        return `
+          <tr class="hover:bg-gray-50/50 transition">
+            <td class="px-3 py-2.5 font-bold text-gray-800">
+              ${escapeHtml(p.concepto)}
+              ${p.nota ? `<span class="block text-[10px] text-gray-400 font-normal italic">${escapeHtml(p.nota)}</span>` : ''}
+            </td>
+            <td class="px-3 py-2.5 text-gray-700">
+              <span class="inline-flex items-center gap-1 font-semibold">
+                <span>👤</span> ${escapeHtml(p.tercero_nombre)}
+              </span>
+            </td>
+            <td class="px-3 py-2.5 text-gray-600 font-medium">
+              ${escapeHtml(p.centro_nombre || 'Sede Principal')}
+            </td>
+            <td class="px-3 py-2.5 text-gray-600">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                ${freqLbl} (Día ${p.dia_mes})
+              </span>
+            </td>
+            <td class="px-3 py-2.5 text-right font-mono font-bold text-rose-700">
+              $${parseFloat(p.monto_recurrente || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            </td>
+            <td class="px-3 py-2.5 text-center font-mono text-gray-600 text-[11px]">
+              ${proxStr}
+            </td>
+            <td class="px-3 py-2.5 text-center">
+              ${p.activo
+                ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">🟢 Activa</span>`
+                : `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">⏸️ Pausada</span>`
+              }
+            </td>
+            <td class="px-3 py-2.5 text-center">
+              <div class="flex items-center justify-center gap-1.5">
+                <button onclick="ejecutarSuscripcionAhora(${p.id}, '${escapeJsString(p.concepto)}')"
+                        class="p-1 rounded-lg text-emerald-600 hover:bg-emerald-50 transition cursor-pointer" title="Causar a CxP Ahora">
+                  ▶️
+                </button>
+                <button onclick="toggleSuscripcionGasto(${p.id})"
+                        class="p-1 rounded-lg text-amber-600 hover:bg-amber-50 transition cursor-pointer" title="${p.activo ? 'Pausar' : 'Reanudar'}">
+                  ${p.activo ? '⏸️' : '▶️'}
+                </button>
+                <button onclick="eliminarSuscripcionGasto(${p.id}, '${escapeJsString(p.concepto)}')"
+                        class="p-1 rounded-lg text-rose-600 hover:bg-rose-50 transition cursor-pointer" title="Eliminar">
+                  🗑️
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+    } catch (e) {
+      console.error(e);
+      if (tb) tb.innerHTML = `<tr><td colspan="8" class="text-center text-rose-500 py-4">Error de conexión al cargar</td></tr>`;
+    }
+  }
+
+  function abrirModalNuevaSuscripcion() {
+    document.getElementById('modal-suscripcion-id').value = '';
+    document.getElementById('modal-suscripcion-concepto').value = '';
+    document.getElementById('modal-suscripcion-tercero-txt').value = '';
+    document.getElementById('modal-suscripcion-tercero-id').value = '';
+    document.getElementById('modal-suscripcion-monto').value = '';
+    document.getElementById('modal-suscripcion-frecuencia').value = 'mensual';
+    document.getElementById('modal-suscripcion-dia-mes').value = '5';
+    document.getElementById('modal-suscripcion-nota').value = '';
+
+    // Poblar centros de utilidad en el select de suscripciones
+    const selCentro = document.getElementById('modal-suscripcion-centro-id');
+    const mainCentroSel = document.getElementById('gas-centro-id');
+    if (selCentro && mainCentroSel) {
+      selCentro.innerHTML = mainCentroSel.innerHTML;
+      selCentro.value = mainCentroSel.value;
+    }
+
+    const modal = document.getElementById('modal-nueva-suscripcion');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => document.getElementById('modal-suscripcion-concepto')?.focus(), 50);
+  }
+
+  function cerrarModalNuevaSuscripcion() {
+    const modal = document.getElementById('modal-nueva-suscripcion');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function clearSuscripcionTercero() {
+    document.getElementById('modal-suscripcion-tercero-txt').value = '';
+    document.getElementById('modal-suscripcion-tercero-id').value = '';
+    document.getElementById('modal-suscripcion-tercero-ac').classList.add('hidden');
+  }
+
+  async function onSuscripcionTerceroInput() {
+    const txt = document.getElementById('modal-suscripcion-tercero-txt').value.trim();
+    const ac = document.getElementById('modal-suscripcion-tercero-ac');
+    if (!ac) return;
+
+    if (!txt) {
+      ac.classList.add('hidden');
+      return;
+    }
+
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/terceros/buscar?q=${encodeURIComponent(txt)}`);
+      const d = await r.json();
+      const list = d.terceros || [];
+      if (list.length === 0) {
+        ac.innerHTML = `
+          <div class="p-2.5 text-xs text-gray-500 flex justify-between items-center">
+            <span>No se encontró "${escapeHtml(txt)}"</span>
+            <button type="button" onclick="abrirModalNuevoTercero('${escapeJsString(txt)}')" class="text-indigo-600 font-bold underline cursor-pointer">Crear</button>
+          </div>
+        `;
+        ac.classList.remove('hidden');
+        return;
+      }
+
+      ac.innerHTML = list.map(t => `
+        <div class="p-2 hover:bg-indigo-50 cursor-pointer text-xs border-b border-gray-100 last:border-b-0"
+             onclick="seleccionarSuscripcionTercero(${t.id}, '${escapeJsString(t.nombre)}')">
+          <span class="font-bold text-gray-800">${escapeHtml(t.nombre)}</span>
+          ${t.identificacion ? `<span class="text-[10px] text-gray-400 block">${escapeHtml(t.identificacion)}</span>` : ''}
+        </div>
+      `).join('');
+      ac.classList.remove('hidden');
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function seleccionarSuscripcionTercero(id, nombre) {
+    document.getElementById('modal-suscripcion-tercero-id').value = id;
+    document.getElementById('modal-suscripcion-tercero-txt').value = nombre;
+    document.getElementById('modal-suscripcion-tercero-ac').classList.add('hidden');
+  }
+
+  async function guardarSuscripcionGasto() {
+    const concepto = document.getElementById('modal-suscripcion-concepto').value.trim();
+    const terceroId = document.getElementById('modal-suscripcion-tercero-id').value;
+    const montoRaw = document.getElementById('modal-suscripcion-monto').value.replace(/[^0-9.]/g, '');
+    const monto = parseFloat(montoRaw || 0);
+    const frecuencia = document.getElementById('modal-suscripcion-frecuencia').value;
+    const diaMes = parseInt(document.getElementById('modal-suscripcion-dia-mes').value || 5);
+    const centroId = document.getElementById('modal-suscripcion-centro-id').value || 1;
+    const nota = document.getElementById('modal-suscripcion-nota').value.trim();
+
+    if (!concepto) {
+      toast('Por favor ingrese el nombre o concepto del gasto', false);
+      return;
+    }
+    if (!terceroId) {
+      toast('Por favor seleccione un proveedor / beneficiario', false);
+      return;
+    }
+    if (monto <= 0) {
+      toast('Por favor ingrese un monto válido mayor a 0', false);
+      return;
+    }
+
+    const btn = document.getElementById('btn-guardar-suscripcion');
+    if (btn) btn.disabled = true;
+
+    try {
+      const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/suscripciones`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          concepto,
+          tercero_id: parseInt(terceroId),
+          monto,
+          frecuencia,
+          dia_mes: diaMes,
+          centro_utilidad_id: parseInt(centroId),
+          nota
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast('Gasto fijo programado exitosamente.');
+        cerrarModalNuevaSuscripcion();
+        if (!_suscripcionesAbierta) {
+          toggleSeccionSuscripciones();
+        } else {
+          cargarSuscripcionesGastos();
+        }
+      } else {
+        toast(data.error || 'Error al guardar la programación', false);
+      }
+    } catch(e) {
+      toast('Error de red al programar el gasto', false);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function toggleSuscripcionGasto(pid) {
+    try {
+      const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/suscripciones/${pid}/toggle`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        toast(data.activo ? 'Programación reanudada' : 'Programación pausada');
+        cargarSuscripcionesGastos();
+      } else {
+        toast(data.error || 'Error al cambiar estado', false);
+      }
+    } catch (e) {
+      toast('Error de red', false);
+    }
+  }
+
+  async function eliminarSuscripcionGasto(pid, concepto) {
+    if (!confirm(`¿Está seguro de eliminar la programación para "${concepto}"? Ya no se generarán causaciones automáticas.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/suscripciones/${pid}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.ok) {
+        toast('Programación eliminada');
+        cargarSuscripcionesGastos();
+      } else {
+        toast(data.error || 'Error al eliminar', false);
+      }
+    } catch(e) {
+      toast('Error de red', false);
+    }
+  }
+
+  async function ejecutarSuscripcionAhora(pid, concepto) {
+    if (!confirm(`¿Desea asentar ahora mismo la causación contable para "${concepto}" a Cuentas por Pagar?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/suscripciones/${pid}/ejecutar`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        toast(data.mensaje || 'Causación generada y registrada en Cartera/Saldos x Doc.');
+        cargarSuscripcionesGastos();
+      } else {
+        toast(data.error || 'Error al ejecutar causación', false);
+      }
+    } catch(e) {
+      toast('Error de red', false);
+    }
+  }
+
   document.addEventListener('click', e => {
     if (!e.target.closest('#gas-concept-txt') && !e.target.closest('#gas-concept-ac')) {
       document.getElementById('gas-concept-ac').classList.add('hidden');
     }
     if (!e.target.closest('#gas-tercero-txt') && !e.target.closest('#gas-tercero-ac')) {
       document.getElementById('gas-tercero-ac').classList.add('hidden');
+    }
+    if (!e.target.closest('#modal-suscripcion-tercero-txt') && !e.target.closest('#modal-suscripcion-tercero-ac')) {
+      const ac = document.getElementById('modal-suscripcion-tercero-ac');
+      if (ac) ac.classList.add('hidden');
     }
     if (e.target.id === 'modal-editar-soporte-gasto') {
       cerrarModalEditarSoporte();
@@ -2441,6 +2936,9 @@
     }
     if (e.target.id === 'modal-nuevo-gasto') {
       cerrarModalNuevoGasto();
+    }
+    if (e.target.id === 'modal-nueva-suscripcion') {
+      cerrarModalNuevaSuscripcion();
     }
     if (e.target.id === 'modal-cierre-individual-linea') {
       cerrarModalCierreIndividual();

@@ -375,11 +375,11 @@
       </div>
 
       <!-- Selección de Plazo Multi-mes -->
-      <div class="mb-2.5">
+      <div class="mb-2">
         <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
           ⏱️ Plazo de Distribución / Reconocimiento
         </label>
-        <select id="modal-reproc-duracion" onchange="recalcularPreviewReproceso()"
+        <select id="modal-reproc-duracion" onchange="alCambiarDuracionReproceso()"
                 class="border border-amber-300 bg-white rounded-xl px-3 py-1.5 text-xs font-bold w-full focus:ring-2 focus:ring-amber-500 text-amber-950 outline-none">
           <option value="2">2 meses</option>
           <option value="3">3 meses</option>
@@ -396,10 +396,39 @@
         </select>
       </div>
 
+      <!-- Opción de Prorrateo por días de mes calendario -->
+      <div class="mb-2.5 p-2 bg-blue-50/50 rounded-xl border border-blue-200/70">
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" id="modal-reproc-prorrateo" checked onchange="alToggleProrrateoReproceso()"
+                 class="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500">
+          <span class="text-[11px] font-bold text-blue-900">Prorratear días del mes inicial (causación por días)</span>
+        </label>
+        
+        <!-- Desglose de cuotas cuando está activo el prorrateo -->
+        <div id="modal-reproc-desglose-prorrateo" class="mt-2 pt-2 border-t border-blue-200/50 space-y-1.5 text-[11px]">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-gray-600 font-medium">🗓️ Cuota 1 (Mes inicial):</span>
+            <div class="flex items-center gap-1">
+              <span class="font-bold text-gray-500">$</span>
+              <input type="number" step="0.01" id="modal-reproc-cuota1-input" oninput="alEditarCuota1Reproceso()"
+                     class="w-28 text-right font-mono font-bold text-xs bg-white border border-blue-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 text-blue-950 outline-none">
+            </div>
+          </div>
+          <div class="flex justify-between text-gray-600">
+            <span id="modal-reproc-lbl-intermedias">🗓️ Cuotas ordinarias (meses completos):</span>
+            <strong id="modal-reproc-val-intermedias" class="font-mono text-gray-800">$0.00 / mes</strong>
+          </div>
+          <div id="modal-reproc-row-residuo" class="flex justify-between text-indigo-900 font-semibold bg-indigo-50/60 p-1.5 rounded-lg border border-indigo-100">
+            <span id="modal-reproc-lbl-residuo">🗓️ Cuota final (Residuo de cierre):</span>
+            <strong id="modal-reproc-val-residuo" class="font-mono text-indigo-700">$0.00</strong>
+          </div>
+        </div>
+      </div>
+
       <!-- Preview de Cuota y Efecto Contable -->
       <div class="p-2.5 bg-amber-50/80 rounded-xl border border-amber-200 mb-3.5 text-xs space-y-1">
         <div class="flex justify-between items-center">
-          <span class="text-amber-900 font-medium text-[11px]">Cuota mensual:</span>
+          <span class="text-amber-900 font-medium text-[11px]">Amortización base:</span>
           <strong id="modal-reproc-cuota-preview" class="font-mono text-xs sm:text-sm text-emerald-800 font-black">$0.00 / mes</strong>
         </div>
         <p id="modal-reproc-info-cuotas" class="text-[10px] text-amber-800 pt-1 border-t border-amber-200/60 leading-tight">
@@ -1042,7 +1071,12 @@
     radios.forEach(r => { r.checked = (r.value === 'activo'); });
     document.getElementById('modal-reproc-duracion').value = '12';
 
-    recalcularPreviewReproceso();
+    const prorrateoChk = document.getElementById('modal-reproc-prorrateo');
+    if (prorrateoChk) prorrateoChk.checked = true;
+    const cuota1Inp = document.getElementById('modal-reproc-cuota1-input');
+    if (cuota1Inp) cuota1Inp.value = '';
+
+    recalcularPreviewReproceso(true);
 
     const modal = document.getElementById('modal-reprocesar-desembolso');
     modal.classList.remove('hidden');
@@ -1055,18 +1089,137 @@
     modal.classList.remove('flex');
   }
 
-  function recalcularPreviewReproceso() {
+  function alCambiarDuracionReproceso() {
+    const cuota1Inp = document.getElementById('modal-reproc-cuota1-input');
+    if (cuota1Inp) cuota1Inp.value = '';
+    recalcularPreviewReproceso(true);
+  }
+
+  function alToggleProrrateoReproceso() {
+    const cuota1Inp = document.getElementById('modal-reproc-cuota1-input');
+    if (cuota1Inp) cuota1Inp.value = '';
+    recalcularPreviewReproceso(true);
+  }
+
+  function alEditarCuota1Reproceso() {
+    recalcularPreviewReproceso(false);
+  }
+
+  function calcularCronogramaJs(monto, fechaStr, meses, esProrrateado, cuota1Override = null) {
+    monto = parseFloat(monto || 0);
+    meses = parseInt(meses || 12);
+    if (meses <= 1) {
+      return { esProrrateado: false, cuotasTotal: 1, cuota1: monto, cuotaIntermedia: 0, cuotaFinal: 0, numIntermedias: 0 };
+    }
+
+    const cuotaMensualBase = Math.round((monto / meses) * 100) / 100;
+    let diaInicio = 1;
+    let diasEnMes1 = 30;
+
+    if (fechaStr) {
+      try {
+        const parts = fechaStr.split('-');
+        const y = parseInt(parts[0]), m = parseInt(parts[1]), d = parseInt(parts[2]);
+        diaInicio = d;
+        diasEnMes1 = new Date(y, m, 0).getDate();
+      } catch(e){}
+    }
+
+    const tieneOverride = (cuota1Override !== null && cuota1Override !== '' && !isNaN(cuota1Override) && parseFloat(cuota1Override) > 0);
+    const usarProrrateo = esProrrateado && (diaInicio > 1 || tieneOverride);
+
+    if (usarProrrateo || tieneOverride) {
+      let cuota1 = 0;
+      if (tieneOverride) {
+        cuota1 = Math.round(parseFloat(cuota1Override) * 100) / 100;
+      } else {
+        const diasRestantes = Math.max(diasEnMes1 - diaInicio + 1, 1);
+        const cuotaDia = cuotaMensualBase / diasEnMes1;
+        cuota1 = Math.round(cuotaDia * diasRestantes * 100) / 100;
+      }
+
+      const numIntermedias = meses - 1;
+      const cuotaIntermedia = cuotaMensualBase;
+      const acumulado = cuota1 + Math.round((cuotaIntermedia * numIntermedias) * 100) / 100;
+      let cuotaFinal = Math.round((monto - acumulado) * 100) / 100;
+      let cuotasTotal = meses + (cuotaFinal > 0 ? 1 : 0);
+
+      return {
+        esProrrateado: true,
+        cuotasTotal: cuotasTotal,
+        cuota1: cuota1,
+        cuotaIntermedia: cuotaIntermedia,
+        cuotaFinal: Math.max(0, cuotaFinal),
+        numIntermedias: numIntermedias,
+        diaInicio: diaInicio,
+        diasEnMes1: diasEnMes1
+      };
+    } else {
+      return {
+        esProrrateado: false,
+        cuotasTotal: meses,
+        cuota1: cuotaMensualBase,
+        cuotaIntermedia: cuotaMensualBase,
+        cuotaFinal: 0,
+        numIntermedias: meses - 1,
+        diaInicio: diaInicio,
+        diasEnMes1: diasEnMes1
+      };
+    }
+  }
+
+  function recalcularPreviewReproceso(resetCuota1Input = false) {
     const monto = parseFloat(document.getElementById('modal-reproc-monto-val')?.value || 0);
     const durSel = document.getElementById('modal-reproc-duracion');
     const meses = durSel ? parseInt(durSel.value || 12) : 12;
-    const cuota = meses > 0 ? (monto / meses) : monto;
+    const fechaStr = document.getElementById('modal-reproc-fecha-val')?.value || '';
+    const prorrateoChk = document.getElementById('modal-reproc-prorrateo');
+    const esProrrateado = prorrateoChk ? prorrateoChk.checked : true;
+
+    const cuota1Inp = document.getElementById('modal-reproc-cuota1-input');
+    const cuota1Override = (cuota1Inp && !resetCuota1Input && cuota1Inp.value !== '') ? parseFloat(cuota1Inp.value) : null;
+
+    const cron = calcularCronogramaJs(monto, fechaStr, meses, esProrrateado, cuota1Override);
+    _reprocCronogramaActual = cron;
+
+    const desgloseEl = document.getElementById('modal-reproc-desglose-prorrateo');
+    if (desgloseEl) {
+      if (esProrrateado) {
+        desgloseEl.classList.remove('hidden');
+      } else {
+        desgloseEl.classList.add('hidden');
+      }
+    }
+
+    if (resetCuota1Input && cuota1Inp) {
+      cuota1Inp.value = cron.cuota1.toFixed(2);
+    }
+
+    const lblIntermedias = document.getElementById('modal-reproc-lbl-intermedias');
+    const valIntermedias = document.getElementById('modal-reproc-val-intermedias');
+    if (lblIntermedias && valIntermedias) {
+      lblIntermedias.textContent = `🗓️ Cuotas ordinarias (${cron.numIntermedias} meses):`;
+      valIntermedias.textContent = '$' + cron.cuotaIntermedia.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' / mes';
+    }
+
+    const rowResiduo = document.getElementById('modal-reproc-row-residuo');
+    const lblResiduo = document.getElementById('modal-reproc-lbl-residuo');
+    const valResiduo = document.getElementById('modal-reproc-val-residuo');
+    if (rowResiduo && lblResiduo && valResiduo) {
+      if (cron.cuotaFinal > 0) {
+        rowResiduo.classList.remove('hidden');
+        lblResiduo.textContent = `🗓️ Cuota final (Mes ${cron.cuotasTotal} / Residuo):`;
+        valResiduo.textContent = '$' + cron.cuotaFinal.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+      } else {
+        rowResiduo.classList.add('hidden');
+      }
+    }
 
     const prevEl = document.getElementById('modal-reproc-cuota-preview');
     if (prevEl) {
-      prevEl.textContent = '$' + cuota.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' / mes';
+      prevEl.textContent = '$' + cron.cuotaIntermedia.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' / mes';
     }
 
-    const fechaStr = document.getElementById('modal-reproc-fecha-val')?.value || '';
     const infoEl = document.getElementById('modal-reproc-info-cuotas');
     if (fechaStr && infoEl) {
       try {
@@ -1074,14 +1227,14 @@
         const hoy = new Date();
         let mesesPasados = (hoy.getFullYear() - fechaOrig.getFullYear()) * 12 + (hoy.getMonth() - fechaOrig.getMonth());
         if (hoy.getDate() >= fechaOrig.getDate()) mesesPasados += 1;
-        mesesPasados = Math.max(1, Math.min(meses, mesesPasados));
-        const restantes = meses - mesesPasados;
+        mesesPasados = Math.max(1, Math.min(cron.cuotasTotal, mesesPasados));
+        const restantes = cron.cuotasTotal - mesesPasados;
 
         infoEl.innerHTML = `
-          <strong>Efecto en cascada:</strong> Se asentarán <strong>${mesesPasados} cuota(s)</strong> hasta la fecha (con comprobantes versionados) y se programarán <strong>${restantes} cuota(s) futuras</strong> en su respectivo día calendario.
+          <strong>Efecto en cascada:</strong> Se asentarán <strong>${mesesPasados} cuota(s)</strong> hasta la fecha (con comprobantes versionados) y se programarán <strong>${restantes} cuota(s) futuras</strong> en su respectivo día calendario para un total de <strong>${cron.cuotasTotal} períodos</strong>.
         `;
       } catch(e) {
-        infoEl.textContent = 'Se generarán las cuotas mensuales proporcionales en el sistema.';
+        infoEl.textContent = `Se distribuirá en un cronograma total de ${cron.cuotasTotal} cuotas con cuadre exacto al 100%.`;
       }
     }
   }
@@ -1097,6 +1250,12 @@
     const durSel = document.getElementById('modal-reproc-duracion');
     const meses = durSel ? parseInt(durSel.value || 12) : 12;
 
+    const prorrateoChk = document.getElementById('modal-reproc-prorrateo');
+    const esProrrateado = prorrateoChk ? prorrateoChk.checked : true;
+
+    const cuota1Inp = document.getElementById('modal-reproc-cuota1-input');
+    const cuota1Val = (cuota1Inp && cuota1Inp.value !== '') ? parseFloat(cuota1Inp.value) : null;
+
     const btn = document.getElementById('btn-ejecutar-reproceso');
     if (btn) btn.disabled = true;
 
@@ -1107,7 +1266,9 @@
         body: JSON.stringify({
           movimiento_id: parseInt(movId),
           categoria_tipo: cat,
-          meses_duracion: meses
+          meses_duracion: meses,
+          es_prorrateado: esProrrateado,
+          cuota_1: cuota1Val
         })
       });
       const d = await r.json();

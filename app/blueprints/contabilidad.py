@@ -597,6 +597,207 @@ def _calcular_proximo(frecuencia, dia_semana, dia_mes, hora_val, desde=None):
     return p
 
 
+def _calcular_cronograma_amortizacion(monto_total, fecha_inicio, meses_duracion, es_prorrateado=True, cuota_1_override=None):
+    """
+    Calcula el cronograma de cuotas para amortización de diferidos o propiedad, planta y equipo.
+    Soporta:
+    - Cuotas uniformes (es_prorrateado=False).
+    - Causación por días proporcionales del mes de entrada (es_prorrateado=True), cuotas intermedias de mes completo y residuo final.
+    - Cuota 1 personalizada por el usuario.
+    """
+    import calendar
+    from datetime import datetime, date
+    monto_total = float(monto_total or 0.0)
+    meses_duracion = max(int(meses_duracion or 1), 1)
+
+    if isinstance(fecha_inicio, str):
+        try:
+            parsed_fecha = datetime.strptime(str(fecha_inicio)[:10], '%Y-%m-%d').date()
+        except:
+            parsed_fecha = date.today()
+    elif isinstance(fecha_inicio, datetime):
+        parsed_fecha = fecha_inicio.date()
+    elif isinstance(fecha_inicio, date):
+        parsed_fecha = fecha_inicio
+    else:
+        parsed_fecha = date.today()
+
+    if meses_duracion <= 1:
+        return {
+            'es_prorrateado': False,
+            'cuotas_total_conteo': 1,
+            'cuota_1': monto_total,
+            'cuota_intermedia': 0.0,
+            'cuota_final': 0.0,
+            'total_cuotas_intermedias': 0,
+            'saldo_activo_inicial': 0.0,
+            'cronograma': [{'numero': 1, 'monto': monto_total, 'tipo': 'unico'}]
+        }
+
+    cuota_mensual_base = round(monto_total / meses_duracion, 2)
+    dia_inicio = parsed_fecha.day
+    _, dias_en_mes_1 = calendar.monthrange(parsed_fecha.year, parsed_fecha.month)
+
+    tiene_override = (cuota_1_override is not None and float(cuota_1_override) > 0)
+    usar_prorrateo = es_prorrateado and (dia_inicio > 1 or tiene_override)
+
+    if usar_prorrateo or tiene_override:
+        if tiene_override:
+            cuota_1 = round(float(cuota_1_override), 2)
+        else:
+            dias_restantes = max(dias_en_mes_1 - dia_inicio + 1, 1)
+            cuota_dia = cuota_mensual_base / dias_en_mes_1
+            cuota_1 = round(cuota_dia * dias_restantes, 2)
+
+        num_intermedias = meses_duracion - 1
+        cuota_intermedia = cuota_mensual_base
+
+        # Residuo final en el mes N + 1
+        acumulado = cuota_1 + round(cuota_intermedia * num_intermedias, 2)
+        cuota_final = round(monto_total - acumulado, 2)
+
+        cronograma = []
+        cronograma.append({'numero': 1, 'monto': cuota_1, 'tipo': 'fraccion_inicial'})
+
+        for i in range(2, meses_duracion + 1):
+            cronograma.append({'numero': i, 'monto': cuota_intermedia, 'tipo': 'intermedia'})
+
+        if cuota_final > 0:
+            cronograma.append({'numero': meses_duracion + 1, 'monto': cuota_final, 'tipo': 'residuo_final'})
+            total_conteo = meses_duracion + 1
+        else:
+            total_conteo = meses_duracion
+            if cuota_final != 0:
+                cronograma[-1]['monto'] = round(cronograma[-1]['monto'] + cuota_final, 2)
+            cuota_final = 0.0
+
+        saldo_activo_inicial = round(monto_total - cuota_1, 2)
+
+        return {
+            'es_prorrateado': True,
+            'cuotas_total_conteo': total_conteo,
+            'cuota_1': cuota_1,
+            'cuota_intermedia': cuota_intermedia,
+            'cuota_final': cuota_final,
+            'total_cuotas_intermedias': num_intermedias,
+            'saldo_activo_inicial': saldo_activo_inicial,
+            'cronograma': cronograma
+        }
+    else:
+        cronograma = []
+        saldo_acum = 0.0
+        for i in range(1, meses_duracion):
+            cronograma.append({'numero': i, 'monto': cuota_mensual_base, 'tipo': 'uniforme'})
+            saldo_acum += cuota_mensual_base
+
+        cuota_ult = round(monto_total - saldo_acum, 2)
+        cronograma.append({'numero': meses_duracion, 'monto': cuota_ult, 'tipo': 'uniforme'})
+
+        return {
+            'es_prorrateado': False,
+            'cuotas_total_conteo': meses_duracion,
+            'cuota_1': cuota_mensual_base,
+            'cuota_intermedia': cuota_mensual_base,
+            'cuota_final': 0.0,
+            'total_cuotas_intermedias': meses_duracion - 1,
+            'saldo_activo_inicial': round(monto_total - cuota_mensual_base, 2),
+            'cronograma': cronograma
+        }
+
+
+def _ejecutar_asiento_amortizacion(conn, prog_row, vars_dict):
+    """
+    Ejecuta una cuota de amortización programada para diferidos o propiedad, planta y equipo.
+    """
+    from datetime import date
+    import json
+    negocio_id = prog_row['negocio_id']
+    cuotas_restantes = vars_dict.get('cuotas_restantes', 0)
+    if cuotas_restantes <= 0:
+        conn.execute("UPDATE programaciones_contables SET activo = FALSE WHERE id = %s", (prog_row['id'],))
+        return None
+
+    cronograma = vars_dict.get('cronograma') or []
+    cuota_total = vars_dict.get('cuota_total', 1)
+
+    if cronograma:
+        cuota_item = cronograma.pop(0)
+        monto_cuota = float(cuota_item['monto'])
+        cuota_numero = cuota_item['numero']
+    else:
+        cuota_numero = cuota_total - cuotas_restantes + 1
+        if cuotas_restantes == 1 and vars_dict.get('cuota_final'):
+            monto_cuota = float(vars_dict['cuota_final'])
+        else:
+            monto_cuota = float(vars_dict.get('monto_cuota', 0.0))
+
+    if monto_cuota <= 0:
+        conn.execute("UPDATE programaciones_contables SET activo = FALSE WHERE id = %s", (prog_row['id'],))
+        return None
+
+    cod_deb = vars_dict.get('cuenta_debito')
+    cod_cred = vars_dict.get('cuenta_credito')
+    cta_deb = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cod_deb, negocio_id)).fetchone()
+    cta_cred = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cod_cred, negocio_id)).fetchone()
+
+    if not cta_deb or not cta_cred:
+        return None
+
+    new_comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+    tipo_doc_id = prog_row['tipo_doc_id']
+    td_row = conn.execute("SELECT codigo FROM tipos_documento_negocio WHERE id = %s", (tipo_doc_id,)).fetchone()
+    tipo_doc = td_row['codigo'] if td_row else 'GAS'
+    doc_origen = vars_dict.get('doc_origen', 'GAS-1')
+
+    base_num = doc_origen.split('-')[-1] if '-' in doc_origen else '1'
+    sufijo_idx = cuota_numero - 1
+    doc_versionado = f"{base_num}-{sufijo_idx}"
+    while conn.execute("SELECT 1 FROM movimientos_contables WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s LIMIT 1", (negocio_id, tipo_doc, doc_versionado)).fetchone():
+        sufijo_idx += 1
+        doc_versionado = f"{base_num}-{sufijo_idx}"
+
+    hoy = date.today()
+    concepto = vars_dict.get('concepto', 'Amortización')
+    tercero_id = vars_dict.get('tercero_id')
+    centro_utilidad_id = vars_dict.get('centro_utilidad_id') or 1
+    mov_origen_id = vars_dict.get('movimiento_origen_id')
+
+    # Asiento Débito (Gasto)
+    conn.execute("""
+        INSERT INTO movimientos_contables
+            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+             tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
+             meses_duracion, cuota_numero, cuota_total, movimiento_origen_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (negocio_id, new_comp_id, cta_deb['id'], cod_deb, f"Amortización Cuota {cuota_numero}/{cuota_total} - {concepto}", 'debito',
+          monto_cuota, 1, tercero_id, tipo_doc_id, doc_versionado, hoy, tipo_doc,
+          f"Amortización Cuota {cuota_numero}", 'amortizacion', centro_utilidad_id,
+          cuota_total, cuota_numero, cuota_total, mov_origen_id))
+
+    # Asiento Crédito (Activo)
+    conn.execute("""
+        INSERT INTO movimientos_contables
+            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+             tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
+             meses_duracion, cuota_numero, cuota_total, movimiento_origen_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (negocio_id, new_comp_id, cta_cred['id'], cod_cred, f"Amortización Cuota {cuota_numero}/{cuota_total} - {concepto}", 'credito',
+          monto_cuota, 1, tercero_id, tipo_doc_id, doc_versionado, hoy, tipo_doc,
+          f"Amortización Cuota {cuota_numero}", 'amortizacion', centro_utilidad_id,
+          cuota_total, cuota_numero, cuota_total, mov_origen_id))
+
+    nuevas_restantes = cuotas_restantes - 1
+    vars_dict['cuotas_restantes'] = nuevas_restantes
+    vars_dict['cronograma'] = cronograma
+
+    if nuevas_restantes <= 0:
+        conn.execute("UPDATE programaciones_contables SET activo = FALSE, variables_h = %s WHERE id = %s", (json.dumps(vars_dict), prog_row['id']))
+    else:
+        conn.execute("UPDATE programaciones_contables SET variables_h = %s WHERE id = %s", (json.dumps(vars_dict), prog_row['id']))
+
+    return new_comp_id
+
+
 def ejecutar_programaciones_job(app):
     with app.app_context():
         from app.db import get_db_connection
@@ -614,13 +815,19 @@ def ejecutar_programaciones_job(app):
             for p in progs:
                 resultado = 'ok'
                 try:
-                    comp_id = _ejecutar_asiento_automatico(
-                        conn, p['negocio_id'], p['tipo_codigo'],
-                        dict(p['variables_h'] or {}),
-                        descripcion_override=p['descripcion']
-                    )
-                    conn.commit()
-                    resultado = f'ok comp={comp_id}' if comp_id else 'sin_parametrizacion'
+                    vars_dict = dict(p['variables_h'] or {})
+                    if vars_dict.get('cuenta_debito') and vars_dict.get('cuenta_credito') and vars_dict.get('movimiento_origen_id'):
+                        comp_id = _ejecutar_asiento_amortizacion(conn, p, vars_dict)
+                        conn.commit()
+                        resultado = f'ok comp={comp_id}' if comp_id else 'amortizacion_completada'
+                    else:
+                        comp_id = _ejecutar_asiento_automatico(
+                            conn, p['negocio_id'], p['tipo_codigo'],
+                            vars_dict,
+                            descripcion_override=p['descripcion']
+                        )
+                        conn.commit()
+                        resultado = f'ok comp={comp_id}' if comp_id else 'sin_parametrizacion'
                 except Exception as e:
                     try: conn.rollback()
                     except Exception: pass
@@ -5804,8 +6011,10 @@ def api_gastos_cierre_post(negocio_id):
             meses = int(l['meses_duracion'])
             if meses > 1:
                 monto_total = float(l['monto'])
-                cuota_1 = round(monto_total / meses, 2)
-                saldo_activo = round(monto_total - cuota_1, 2)
+                cronograma_info = _calcular_cronograma_amortizacion(monto_total, parsed_fecha, meses, es_prorrateado=True)
+                cuota_1 = cronograma_info['cuota_1']
+                saldo_activo = cronograma_info['saldo_activo_inicial']
+                total_cuotas_conteo = cronograma_info['cuotas_total_conteo']
                 cod_str = str(l['cuenta']).strip()
                 
                 # Determinar cuenta de activo correspondiente (1505XX / 1705XX)
@@ -5821,7 +6030,7 @@ def api_gastos_cierre_post(negocio_id):
                     cod_activo = "150501"
 
                 # Obtener cuenta_activo_id
-                cta_act_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (cod_activo,)).fetchone()
+                cta_act_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cod_activo, negocio_id)).fetchone()
                 if not cta_act_row:
                     row_act_new = conn.execute("""
                         INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
@@ -5836,7 +6045,7 @@ def api_gastos_cierre_post(negocio_id):
                     UPDATE movimientos_contables
                     SET monto = %s, cuota_numero = 1, cuota_total = %s, metodo_desembolso = %s
                     WHERE id = %s
-                """, (cuota_1, meses, metodo_pago_codigo, l['id']))
+                """, (cuota_1, total_cuotas_conteo, metodo_pago_codigo, l['id']))
 
                 # 2. Insertar línea de Saldo de Activo (1505 / 1705)
                 conn.execute("""
@@ -5848,20 +6057,22 @@ def api_gastos_cierre_post(negocio_id):
                 """, (negocio_id, comp_id, cuenta_activo_id, cod_activo, f"Saldo por amortizar - {l['concepto']}", 'debito',
                       saldo_activo, uid, l['tercero_id'], tipo_doc_id, num_doc, fecha, tipo_doc,
                       'Relación de Desembolsos - Saldo Activo', 'gasto', l['centro_utilidad_id'],
-                      meses, 1, meses, l['id'], metodo_pago_codigo))
+                      meses, 1, total_cuotas_conteo, l['id'], metodo_pago_codigo))
 
                 # 3. Crear Programación Recurrente para los meses 2..N
                 dia_c = parsed_fecha.day
-                cuotas_restantes = meses - 1
+                cuotas_restantes = total_cuotas_conteo - 1
                 hora_ejec = '08:00'
                 proximo_ejec = _calcular_proximo('mensual', None, dia_c, hora_ejec, desde=datetime.combine(parsed_fecha, datetime.min.time()))
                 
                 prog_vars = {
                     'cuenta_debito': cod_str,
                     'cuenta_credito': cod_activo,
-                    'monto_cuota': cuota_1,
+                    'monto_cuota': cronograma_info['cuota_intermedia'],
+                    'cuota_final': cronograma_info['cuota_final'],
                     'cuotas_restantes': cuotas_restantes,
-                    'cuota_total': meses,
+                    'cuota_total': total_cuotas_conteo,
+                    'cronograma': cronograma_info['cronograma'][1:],
                     'concepto': l['concepto'],
                     'tercero_id': l['tercero_id'],
                     'centro_utilidad_id': l['centro_utilidad_id'],
@@ -5968,8 +6179,10 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
 
         # 3. Procesar multi-mes si aplica
         if meses > 1:
-            cuota_1 = round(monto_linea / meses, 2)
-            saldo_activo = round(monto_linea - cuota_1, 2)
+            cronograma_info = _calcular_cronograma_amortizacion(monto_linea, parsed_fecha, meses, es_prorrateado=True)
+            cuota_1 = cronograma_info['cuota_1']
+            saldo_activo = cronograma_info['saldo_activo_inicial']
+            total_cuotas_conteo = cronograma_info['cuotas_total_conteo']
             cod_str = str(line['cuenta']).strip()
             
             if cod_str.startswith('6143') and len(cod_str) >= 6:
@@ -5979,7 +6192,7 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
             else:
                 cod_activo = "150501"
 
-            cta_act_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (cod_activo,)).fetchone()
+            cta_act_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cod_activo, negocio_id)).fetchone()
             if not cta_act_row:
                 row_act_new = conn.execute("""
                     INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
@@ -5993,7 +6206,7 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
                 UPDATE movimientos_contables
                 SET monto = %s, cuota_numero = 1, cuota_total = %s, metodo_desembolso = %s
                 WHERE id = %s
-            """, (cuota_1, meses, metodo_pago_codigo, line_id))
+            """, (cuota_1, total_cuotas_conteo, metodo_pago_codigo, line_id))
 
             conn.execute("""
                 INSERT INTO movimientos_contables
@@ -6004,18 +6217,21 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
             """, (negocio_id, comp_id_actual, cuenta_activo_id, cod_activo, f"Saldo por amortizar - {line['concepto']}", 'debito',
                   saldo_activo, uid, line['tercero_id'], tipo_doc_id, num_doc_actual, fecha, tipo_doc,
                   'Liquidación Individual - Saldo Activo', 'gasto', line['centro_utilidad_id'],
-                  meses, 1, meses, line_id, metodo_pago_codigo))
+                  meses, 1, total_cuotas_conteo, line_id, metodo_pago_codigo))
 
             # Programación recurrente
             dia_c = parsed_fecha.day
+            cuotas_restantes = total_cuotas_conteo - 1
             hora_ejec = '08:00'
             proximo_ejec = _calcular_proximo('mensual', None, dia_c, hora_ejec, desde=datetime.combine(parsed_fecha, datetime.min.time()))
             prog_vars = {
                 'cuenta_debito': cod_str,
                 'cuenta_credito': cod_activo,
-                'monto_cuota': cuota_1,
-                'cuotas_restantes': meses - 1,
-                'cuota_total': meses,
+                'monto_cuota': cronograma_info['cuota_intermedia'],
+                'cuota_final': cronograma_info['cuota_final'],
+                'cuotas_restantes': cuotas_restantes,
+                'cuota_total': total_cuotas_conteo,
+                'cronograma': cronograma_info['cronograma'][1:],
                 'concepto': line['concepto'],
                 'tercero_id': line['tercero_id'],
                 'centro_utilidad_id': line['centro_utilidad_id'],
@@ -6168,15 +6384,24 @@ def api_gastos_reprocesar_historico_post(negocio_id):
             cuenta_activo_id = row_a['id']
 
         # 3. Cálculos de amortización
-        cuota_mensual = round(monto_total / meses, 2)
-        saldo_activo_inicial = round(monto_total - cuota_mensual, 2)
+        es_prorrateado = bool(data.get('es_prorrateado', True))
+        cuota_1_override = data.get('cuota_1')
+        cronograma_info = _calcular_cronograma_amortizacion(
+            monto_total, parsed_fecha_orig, meses,
+            es_prorrateado=es_prorrateado,
+            cuota_1_override=cuota_1_override
+        )
+        cuota_1 = cronograma_info['cuota_1']
+        saldo_activo_inicial = cronograma_info['saldo_activo_inicial']
+        total_cuotas_conteo = cronograma_info['cuotas_total_conteo']
+        cronograma_lista = cronograma_info['cronograma']
 
         # 4. Ajustar el movimiento original en la fecha de compra (solo Cuota 1)
         conn.execute("""
             UPDATE movimientos_contables
             SET cuenta_id = %s, cuenta = %s, monto = %s, meses_duracion = %s, cuota_numero = 1, cuota_total = %s
             WHERE id = %s
-        """, (cuenta_costo_id, cod_costo, cuota_mensual, meses, meses, movimiento_id))
+        """, (cuenta_costo_id, cod_costo, cuota_1, meses, total_cuotas_conteo, movimiento_id))
 
         # 5. Insertar saldo de activo en el comprobante original
         conn.execute("""
@@ -6188,7 +6413,7 @@ def api_gastos_reprocesar_historico_post(negocio_id):
         """, (negocio_id, comp_id_orig, cuenta_activo_id, cod_activo, f"Saldo activo por amortizar - {concepto_orig}", 'debito',
               saldo_activo_inicial, uid, mc['tercero_id'], tipo_doc_id, num_doc_orig, fecha_orig, tipo_doc_orig,
               'Reprocesamiento Histórico - Saldo Activo', 'gasto', mc['centro_utilidad_id'],
-              meses, 1, meses, movimiento_id))
+              meses, 1, total_cuotas_conteo, movimiento_id))
 
         # 6. Calcular meses transcurridos entre la fecha de compra y hoy
         hoy = date.today()
@@ -6196,8 +6421,12 @@ def api_gastos_reprocesar_historico_post(negocio_id):
         sufijo_idx = 1
         proxima_fecha = parsed_fecha_orig + relativedelta(months=1)
 
-        while proxima_fecha <= hoy and cuotas_generadas < meses:
+        for item_cuota in cronograma_lista[1:]:
+            if proxima_fecha > hoy:
+                break
             cuotas_generadas += 1
+            monto_cuota_actual = item_cuota['monto']
+            num_cuota_actual = item_cuota['numero']
             doc_versionado = f"{num_doc_orig}-{sufijo_idx}"
             while conn.execute("SELECT 1 FROM movimientos_contables WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s LIMIT 1", (negocio_id, tipo_doc_orig, doc_versionado)).fetchone():
                 sufijo_idx += 1
@@ -6213,10 +6442,10 @@ def api_gastos_reprocesar_historico_post(negocio_id):
                      tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
                      meses_duracion, cuota_numero, cuota_total, movimiento_origen_id)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (negocio_id, new_comp_id, cuenta_costo_id, cod_costo, f"Amortización Cuota {cuotas_generadas}/{meses} - {concepto_orig}", 'debito',
-                  cuota_mensual, uid, mc['tercero_id'], tipo_doc_id, doc_versionado, proxima_fecha, tipo_doc_orig,
-                  f"Amortización Cuota {cuotas_generadas}", 'amortizacion', mc['centro_utilidad_id'],
-                  meses, cuotas_generadas, meses, movimiento_id))
+            """, (negocio_id, new_comp_id, cuenta_costo_id, cod_costo, f"Amortización Cuota {num_cuota_actual}/{total_cuotas_conteo} - {concepto_orig}", 'debito',
+                  monto_cuota_actual, uid, mc['tercero_id'], tipo_doc_id, doc_versionado, proxima_fecha, tipo_doc_orig,
+                  f"Amortización Cuota {num_cuota_actual}", 'amortizacion', mc['centro_utilidad_id'],
+                  meses, num_cuota_actual, total_cuotas_conteo, movimiento_id))
 
             # Crédito: Reducción de Activo
             conn.execute("""
@@ -6225,15 +6454,15 @@ def api_gastos_reprocesar_historico_post(negocio_id):
                      tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
                      meses_duracion, cuota_numero, cuota_total, movimiento_origen_id)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """, (negocio_id, new_comp_id, cuenta_activo_id, cod_activo, f"Amortización Cuota {cuotas_generadas}/{meses} - {concepto_orig}", 'credito',
-                  cuota_mensual, uid, mc['tercero_id'], tipo_doc_id, doc_versionado, proxima_fecha, tipo_doc_orig,
-                  f"Amortización Cuota {cuotas_generadas}", 'amortizacion', mc['centro_utilidad_id'],
-                  meses, cuotas_generadas, meses, movimiento_id))
+            """, (negocio_id, new_comp_id, cuenta_activo_id, cod_activo, f"Amortización Cuota {num_cuota_actual}/{total_cuotas_conteo} - {concepto_orig}", 'credito',
+                  monto_cuota_actual, uid, mc['tercero_id'], tipo_doc_id, doc_versionado, proxima_fecha, tipo_doc_orig,
+                  f"Amortización Cuota {num_cuota_actual}", 'amortizacion', mc['centro_utilidad_id'],
+                  meses, num_cuota_actual, total_cuotas_conteo, movimiento_id))
 
             proxima_fecha = proxima_fecha + relativedelta(months=1)
 
         # 7. Si quedan cuotas futuras pendientes, programar en programaciones_contables
-        cuotas_restantes = meses - cuotas_generadas
+        cuotas_restantes = total_cuotas_conteo - cuotas_generadas
         if cuotas_restantes > 0:
             dia_c = parsed_fecha_orig.day
             hora_ejec = '08:00'
@@ -6241,9 +6470,11 @@ def api_gastos_reprocesar_historico_post(negocio_id):
             prog_vars = {
                 'cuenta_debito': cod_costo,
                 'cuenta_credito': cod_activo,
-                'monto_cuota': cuota_mensual,
+                'monto_cuota': cronograma_info['cuota_intermedia'],
+                'cuota_final': cronograma_info['cuota_final'],
                 'cuotas_restantes': cuotas_restantes,
-                'cuota_total': meses,
+                'cuota_total': total_cuotas_conteo,
+                'cronograma': cronograma_lista[cuotas_generadas:],
                 'concepto': concepto_orig,
                 'tercero_id': mc['tercero_id'],
                 'centro_utilidad_id': mc['centro_utilidad_id'],

@@ -570,11 +570,11 @@
       </div>
 
       <!-- Selector de Plazo (Oculto si es Gasto) -->
-      <div id="modal-reclass-duracion-container" class="mb-2.5 hidden">
+      <div id="modal-reclass-duracion-container" class="mb-2 hidden">
         <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
           ⏱️ Plazo de Distribución / Reconocimiento
         </label>
-        <select id="modal-reclass-duracion" onchange="recalcularPreviewReclasificarLinea()"
+        <select id="modal-reclass-duracion" onchange="alCambiarDuracionReclass()"
                 class="border border-amber-300 bg-white rounded-xl px-3 py-1.5 text-xs font-bold w-full focus:ring-2 focus:ring-amber-500 text-amber-950 outline-none">
           <option value="2">2 meses</option>
           <option value="3">3 meses</option>
@@ -589,6 +589,35 @@
           <option value="48">4 años (48 meses)</option>
           <option value="60">5 años (60 meses)</option>
         </select>
+      </div>
+
+      <!-- Opción de Prorrateo por días de mes calendario (Oculto si es Gasto) -->
+      <div id="modal-reclass-prorrateo-container" class="mb-2.5 p-2 bg-blue-50/50 rounded-xl border border-blue-200/70 hidden">
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" id="modal-reclass-prorrateo" checked onchange="alToggleProrrateoReclass()"
+                 class="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500">
+          <span class="text-[11px] font-bold text-blue-900">Prorratear días del mes inicial</span>
+        </label>
+        
+        <!-- Desglose de cuotas cuando está activo el prorrateo -->
+        <div id="modal-reclass-desglose-prorrateo" class="mt-2 pt-2 border-t border-blue-200/50 space-y-1.5 text-[11px]">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-gray-600 font-medium">🗓️ Cuota 1 (Mes inicial):</span>
+            <div class="flex items-center gap-1">
+              <span class="font-bold text-gray-500">$</span>
+              <input type="number" step="0.01" id="modal-reclass-cuota1-input" oninput="alEditarCuota1Reclass()"
+                     class="w-28 text-right font-mono font-bold text-xs bg-white border border-blue-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 text-blue-950 outline-none">
+            </div>
+          </div>
+          <div class="flex justify-between text-gray-600">
+            <span id="modal-reclass-lbl-intermedias">🗓️ Cuotas ordinarias (meses completos):</span>
+            <strong id="modal-reclass-val-intermedias" class="font-mono text-gray-800">$0.00 / mes</strong>
+          </div>
+          <div id="modal-reclass-row-residuo" class="flex justify-between text-indigo-900 font-semibold bg-indigo-50/60 p-1.5 rounded-lg border border-indigo-100">
+            <span id="modal-reclass-lbl-residuo">🗓️ Cuota final (Residuo de cierre):</span>
+            <strong id="modal-reclass-val-residuo" class="font-mono text-indigo-700">$0.00</strong>
+          </div>
+        </div>
       </div>
 
       <!-- Preview de Cuota -->
@@ -2057,6 +2086,8 @@
   }
 
   // ═══ GESTIÓN RECLASIFICAR LÍNEA EN RELACIÓN ABIERTA ═══
+  let _reclassCronogramaActual = null;
+
   function abrirModalReclasificarLinea(lineId, concepto, cat, duracion, monto) {
     document.getElementById('modal-reclass-linea-id').value = lineId;
     document.getElementById('modal-reclass-monto-val').value = monto;
@@ -2066,6 +2097,11 @@
     const radios = document.querySelectorAll('input[name="modal_reclass_cat"]');
     radios.forEach(r => { r.checked = (r.value === cat); });
     
+    const prorrateoChk = document.getElementById('modal-reclass-prorrateo');
+    if (prorrateoChk) prorrateoChk.checked = true;
+    const cuota1Inp = document.getElementById('modal-reclass-cuota1-input');
+    if (cuota1Inp) cuota1Inp.value = '';
+
     alCambiarCatReclasificarModal(cat, duracion);
     
     const modal = document.getElementById('modal-reclasificar-linea-gasto');
@@ -2081,18 +2117,37 @@
 
   function alCambiarCatReclasificarModal(cat, duracionPrevia = null) {
     const durContainer = document.getElementById('modal-reclass-duracion-container');
+    const proContainer = document.getElementById('modal-reclass-prorrateo-container');
     const durSel = document.getElementById('modal-reclass-duracion');
     if (duracionPrevia && durSel) durSel.value = String(duracionPrevia > 1 ? duracionPrevia : 12);
     
     if (cat === 'gasto') {
       durContainer.classList.add('hidden');
+      if (proContainer) proContainer.classList.add('hidden');
     } else {
       durContainer.classList.remove('hidden');
+      if (proContainer) proContainer.classList.remove('hidden');
     }
-    recalcularPreviewReclasificarLinea();
+    recalcularPreviewReclasificarLinea(true);
   }
 
-  function recalcularPreviewReclasificarLinea() {
+  function alCambiarDuracionReclass() {
+    const cuota1Inp = document.getElementById('modal-reclass-cuota1-input');
+    if (cuota1Inp) cuota1Inp.value = '';
+    recalcularPreviewReclasificarLinea(true);
+  }
+
+  function alToggleProrrateoReclass() {
+    const cuota1Inp = document.getElementById('modal-reclass-cuota1-input');
+    if (cuota1Inp) cuota1Inp.value = '';
+    recalcularPreviewReclasificarLinea(true);
+  }
+
+  function alEditarCuota1Reclass() {
+    recalcularPreviewReclasificarLinea(false);
+  }
+
+  function recalcularPreviewReclasificarLinea(resetCuota1Input = false) {
     const monto = parseFloat(document.getElementById('modal-reclass-monto-val')?.value || 0);
     let cat = 'gasto';
     const checkedRadio = document.querySelector('input[name="modal_reclass_cat"]:checked');
@@ -2100,14 +2155,98 @@
     
     const durSel = document.getElementById('modal-reclass-duracion');
     const meses = (cat !== 'gasto' && durSel) ? parseInt(durSel.value || 12) : 1;
-    const cuota = meses > 0 ? (monto / meses) : monto;
-    
+    const fechaStr = document.getElementById('gas-fecha')?.value || '';
+
+    const prorrateoChk = document.getElementById('modal-reclass-prorrateo');
+    const esProrrateado = (cat !== 'gasto' && prorrateoChk) ? prorrateoChk.checked : false;
+
+    const cuota1Inp = document.getElementById('modal-reclass-cuota1-input');
+    const cuota1Override = (cuota1Inp && !resetCuota1Input && cuota1Inp.value !== '') ? parseFloat(cuota1Inp.value) : null;
+
+    let diaInicio = 1, diasEnMes1 = 30;
+    if (fechaStr) {
+      try {
+        const parts = fechaStr.split('-');
+        const y = parseInt(parts[0]), m = parseInt(parts[1]), d = parseInt(parts[2]);
+        diaInicio = d;
+        diasEnMes1 = new Date(y, m, 0).getDate();
+      } catch(e){}
+    }
+
+    const cuotaMensualBase = meses > 0 ? Math.round((monto / meses) * 100) / 100 : monto;
+    let cuota1 = cuotaMensualBase;
+    let cuotaIntermedia = cuotaMensualBase;
+    let cuotaFinal = 0;
+    let numIntermedias = Math.max(0, meses - 1);
+    let cuotasTotal = meses;
+
+    const tieneOverride = (cuota1Override !== null && !isNaN(cuota1Override) && parseFloat(cuota1Override) > 0);
+    const usarProrrateo = esProrrateado && (diaInicio > 1 || tieneOverride);
+
+    if (cat !== 'gasto' && (usarProrrateo || tieneOverride)) {
+      if (tieneOverride) {
+        cuota1 = Math.round(parseFloat(cuota1Override) * 100) / 100;
+      } else {
+        const diasRestantes = Math.max(diasEnMes1 - diaInicio + 1, 1);
+        const cuotaDia = cuotaMensualBase / diasEnMes1;
+        cuota1 = Math.round(cuotaDia * diasRestantes * 100) / 100;
+      }
+      const acumulado = cuota1 + Math.round((cuotaIntermedia * numIntermedias) * 100) / 100;
+      cuotaFinal = Math.round((monto - acumulado) * 100) / 100;
+      if (cuotaFinal > 0) cuotasTotal = meses + 1;
+    }
+
+    _reclassCronogramaActual = {
+      esProrrateado: usarProrrateo,
+      cuotasTotal: cuotasTotal,
+      cuota1: cuota1,
+      cuotaIntermedia: cuotaIntermedia,
+      cuotaFinal: Math.max(0, cuotaFinal),
+      numIntermedias: numIntermedias
+    };
+
+    if (resetCuota1Input && cuota1Inp) {
+      cuota1Inp.value = cuota1.toFixed(2);
+    }
+
+    const desgloseEl = document.getElementById('modal-reclass-desglose-prorrateo');
+    if (desgloseEl) {
+      if (cat !== 'gasto' && esProrrateado) {
+        desgloseEl.classList.remove('hidden');
+      } else {
+        desgloseEl.classList.add('hidden');
+      }
+    }
+
+    const lblIntermedias = document.getElementById('modal-reclass-lbl-intermedias');
+    const valIntermedias = document.getElementById('modal-reclass-val-intermedias');
+    if (lblIntermedias && valIntermedias) {
+      lblIntermedias.textContent = `🗓️ Cuotas ordinarias (${numIntermedias} meses):`;
+      valIntermedias.textContent = '$' + cuotaIntermedia.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' / mes';
+    }
+
+    const rowResiduo = document.getElementById('modal-reclass-row-residuo');
+    const lblResiduo = document.getElementById('modal-reclass-lbl-residuo');
+    const valResiduo = document.getElementById('modal-reclass-val-residuo');
+    if (rowResiduo && lblResiduo && valResiduo) {
+      if (cuotaFinal > 0) {
+        rowResiduo.classList.remove('hidden');
+        lblResiduo.textContent = `🗓️ Cuota final (Mes ${cuotasTotal} / Residuo):`;
+        valResiduo.textContent = '$' + cuotaFinal.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+      } else {
+        rowResiduo.classList.add('hidden');
+      }
+    }
+
     const prevEl = document.getElementById('modal-reclass-cuota-preview');
     const infoEl = document.getElementById('modal-reclass-cuota-info');
-    if (prevEl) prevEl.textContent = '$' + cuota.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' / mes';
+    if (prevEl) {
+      const valShow = (cat === 'gasto') ? monto : cuotaIntermedia;
+      prevEl.textContent = '$' + valShow.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + (cat !== 'gasto' ? ' / mes' : '');
+    }
     if (infoEl) {
-      if (meses > 1) {
-        infoEl.textContent = `Cuota 1 de ${meses} se asienta al cerrar. Saldo restante diferido en activo.`;
+      if (cat !== 'gasto' && meses > 1) {
+        infoEl.textContent = `Cuota 1 ($${cuota1.toLocaleString('es-CO', {minimumFractionDigits:2})}) se asienta al cerrar. Saldo restante diferido en activo por ${cuotasTotal - 1} cuotas adicionales.`;
       } else {
         infoEl.textContent = '100% asumido en el período actual.';
       }

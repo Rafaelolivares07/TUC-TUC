@@ -530,27 +530,9 @@
             </div>
           </div>
 
-          <!-- Activación por Módulos al Crear -->
+          <!-- Pie de Creación -->
           <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-wrap items-center justify-between gap-4">
-            <div class="flex items-center gap-6 flex-wrap">
-              <span class="text-xs font-bold text-slate-700 uppercase">Activar disponible en:</span>
-              <label class="inline-flex items-center gap-1.5 text-xs text-slate-700 font-medium cursor-pointer">
-                <input type="checkbox" id="nuevo-metodo-ventas" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
-                🛒 Ventas POS
-              </label>
-              <label class="inline-flex items-center gap-1.5 text-xs text-slate-700 font-medium cursor-pointer">
-                <input type="checkbox" id="nuevo-metodo-compras" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
-                📦 Compras Inv.
-              </label>
-              <label class="inline-flex items-center gap-1.5 text-xs text-slate-700 font-medium cursor-pointer">
-                <input type="checkbox" id="nuevo-metodo-desembolsos" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
-                💸 Desembolsos
-              </label>
-              <label class="inline-flex items-center gap-1.5 text-xs text-slate-700 font-medium cursor-pointer">
-                <input type="checkbox" id="nuevo-metodo-saldos" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
-                📑 Saldos CxC/CxP
-              </label>
-            </div>
+            <p class="text-xs text-slate-500">Al guardar, el método se creará con su cuenta contable asociada y podrá ajustar sus interruptores de módulo directamente en la tabla inferior.</p>
             <button onclick="crearNuevoMetodoPago()" 
                     class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded-xl text-sm transition shadow-sm flex items-center gap-2 cursor-pointer">
               ➕ Guardar y Habilitar Método
@@ -2389,11 +2371,6 @@ async function crearNuevoMetodoPago() {
   const cuentaId = document.getElementById('nuevo-metodo-cuenta-id').value;
   const cuentaTxt = document.getElementById('nuevo-metodo-cuenta-txt').value.trim();
   
-  const activoVentas = document.getElementById('nuevo-metodo-ventas').checked;
-  const activoCompras = document.getElementById('nuevo-metodo-compras').checked;
-  const activoDesembolsos = document.getElementById('nuevo-metodo-desembolsos').checked;
-  const activoSaldos = document.getElementById('nuevo-metodo-saldos').checked;
-  
   if (!nombre) {
     toast('Ingrese el nombre del método de pago', false);
     document.getElementById('nuevo-metodo-nombre').focus();
@@ -2413,10 +2390,10 @@ async function crearNuevoMetodoPago() {
         nombre,
         icono,
         cuenta_id: cuentaId || null,
-        activo_ventas: activoVentas,
-        activo_compras: activoCompras,
-        activo_desembolsos: activoDesembolsos,
-        activo_saldos: activoSaldos
+        activo_ventas: true,
+        activo_compras: true,
+        activo_desembolsos: true,
+        activo_saldos: true
       })
     });
     const d = await r.json();

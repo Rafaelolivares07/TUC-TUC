@@ -3982,32 +3982,41 @@ def api_contabilidad_config_metodos(negocio_id):
         _asegurar_tablas(conn)
         import json
         
-        # 1. Sembrar registros base si el negocio aún no tiene ninguno en parametros_metodos_pago_negocio
-        count_exist = conn.execute("SELECT COUNT(*) as n FROM parametros_metodos_pago_negocio WHERE negocio_id = %s", (negocio_id,)).fetchone()['n']
-        if count_exist == 0:
-            cfg = conn.execute("SELECT metodos_pago FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
-            activos = []
-            if cfg and cfg['metodos_pago']:
-                activos = cfg['metodos_pago']
-                if isinstance(activos, str):
-                    try: activos = json.loads(activos)
-                    except Exception: activos = []
-            if not isinstance(activos, list) or not activos:
-                activos = ['efectivo', 'credito', 'bancolombia_qr', 'nequi_qr', 'nequi_movil']
-            if 'credito' not in activos:
-                activos.append('credito')
-            
-            for idx, m_cod in enumerate(activos):
-                row_cat = conn.execute("SELECT nombre, icono FROM metodos_pago_catalogo WHERE codigo = %s", (m_cod,)).fetchone()
-                nom = row_cat['nombre'] if row_cat and row_cat['nombre'] else m_cod.replace('_', ' ').capitalize()
-                ico = row_cat['icono'] if row_cat and row_cat['icono'] else '💳'
-                conn.execute("""
-                    INSERT INTO parametros_metodos_pago_negocio 
-                    (negocio_id, metodo_codigo, nombre, icono, orden, activo, activo_ventas, activo_compras, activo_desembolsos, activo_saldos)
-                    VALUES (%s, %s, %s, %s, %s, TRUE, TRUE, TRUE, TRUE, TRUE)
-                    ON CONFLICT (negocio_id, metodo_codigo) DO NOTHING
-                """, (negocio_id, m_cod, nom, ico, idx))
-            conn.commit()
+        # 1. Asegurar que todos los métodos activos del negocio existan en parametros_metodos_pago_negocio
+        cfg = conn.execute("SELECT metodos_pago FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        activos = []
+        if cfg and cfg['metodos_pago']:
+            activos = cfg['metodos_pago']
+            if isinstance(activos, str):
+                try: activos = json.loads(activos)
+                except Exception: activos = []
+        if not isinstance(activos, list) or not activos:
+            activos = ['efectivo', 'credito', 'bancolombia', 'bancolombia_qr', 'nequi_qr', 'nequi_movil', 'daviplata', 'transferencia']
+        if 'credito' not in activos:
+            activos.append('credito')
+        
+        for idx, m_cod in enumerate(activos):
+            row_cat = conn.execute("SELECT nombre, icono FROM metodos_pago_catalogo WHERE codigo = %s", (m_cod,)).fetchone()
+            nom = row_cat['nombre'] if row_cat and row_cat['nombre'] else m_cod.replace('_', ' ').capitalize()
+            ico = row_cat['icono'] if row_cat and row_cat['icono'] else '💳'
+            conn.execute("""
+                INSERT INTO parametros_metodos_pago_negocio 
+                (negocio_id, metodo_codigo, nombre, icono, orden, activo, activo_ventas, activo_compras, activo_desembolsos, activo_saldos)
+                VALUES (%s, %s, %s, %s, %s, TRUE, TRUE, TRUE, TRUE, TRUE)
+                ON CONFLICT (negocio_id, metodo_codigo) DO UPDATE SET
+                    nombre = COALESCE(parametros_metodos_pago_negocio.nombre, EXCLUDED.nombre),
+                    icono = COALESCE(parametros_metodos_pago_negocio.icono, EXCLUDED.icono),
+                    cuenta_id = COALESCE(parametros_metodos_pago_negocio.cuenta_id, parametros_metodos_pago_negocio.cuenta_gastos_id, parametros_metodos_pago_negocio.cuenta_recaudo_id, parametros_metodos_pago_negocio.cuenta_pago_id)
+            """, (negocio_id, m_cod, nom, ico, idx))
+        
+        conn.execute("""
+            UPDATE parametros_metodos_pago_negocio
+            SET nombre = COALESCE(nombre, INITCAP(REPLACE(metodo_codigo, '_', ' '))),
+                icono = COALESCE(icono, '💳'),
+                cuenta_id = COALESCE(cuenta_id, cuenta_gastos_id, cuenta_recaudo_id, cuenta_pago_id, cuenta_recaudo_saldos_id, cuenta_pago_saldos_id)
+            WHERE negocio_id = %s AND (nombre IS NULL OR cuenta_id IS NULL)
+        """, (negocio_id,))
+        conn.commit()
 
         if request.method == 'DELETE':
             data = request.get_json() or {}

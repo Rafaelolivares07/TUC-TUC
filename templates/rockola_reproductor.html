@@ -946,7 +946,7 @@ input:checked + .slider:before {
 
       <div class="sec visible" id="sec-youtube">
         <div class="yt-box">
-          <input class="yt-input" id="yt-url" type="url" placeholder="https://youtube.com/watch?v=..." oninput="ytInputChange()" onpaste="setTimeout(ytInputChange,50)">
+          <input class="yt-input" id="yt-url" type="text" inputmode="url" placeholder="Pega el enlace de YouTube aquí..." oninput="ytInputChange()" onpaste="setTimeout(ytInputChange,50); setTimeout(ytInputChange,250);" onchange="ytInputChange()" onkeyup="ytInputChange()">
           <div class="yt-preview" id="yt-preview">
             <!-- Selector para Ver Video o Solo Audio -->
             <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; cursor: pointer; color: var(--ac1);">
@@ -1428,10 +1428,18 @@ async function obtenerUrlDeAudio(c) {
 
 function extractYouTubeId(url) {
   if (!url) return null;
-  const trimmed = String(url).trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
-  const m = trimmed.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/|v\/|watch\?.*v=)([^&?\/#\s]{11})/i);
-  return m ? m[1] : null;
+  const str = String(url).trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+  const regex = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([a-zA-Z0-9_-]{11})/i;
+  const match = str.match(regex);
+  if (match && match[1]) return match[1];
+  const vMatch = str.match(/[?&]v=([a-zA-Z0-9_-]{11})/i);
+  if (vMatch && vMatch[1]) return vMatch[1];
+  const endMatch = str.match(/([a-zA-Z0-9_-]{11})(?:[?&#\s]|$)/);
+  if (endMatch && endMatch[1] && (str.includes('youtube') || str.includes('youtu.be'))) {
+    return endMatch[1];
+  }
+  return null;
 }
 
 window.onYouTubeIframeAPIReady = function() {
@@ -1592,10 +1600,74 @@ function onYtPlayerStateChange(index, event) {
   }
 }
 
-function onYtPlayerError(index, event) {
+let ytWatchdogTimer = null;
+
+function actualizarMediaSession(nombre, artista = 'TucTuc Rockola') {
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: limpiarNombre(nombre),
+        artist: artista,
+        album: `Sala ${SALA.toUpperCase()}`,
+        artwork: [
+          { src: '/static/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/static/icons/icon-512.png', sizes: '512x512', type: 'image/png' }
+        ]
+      });
+      navigator.mediaSession.setActionHandler('play', () => { togglePlayPause(); });
+      navigator.mediaSession.setActionHandler('pause', () => { togglePlayPause(); });
+      navigator.mediaSession.setActionHandler('nexttrack', () => { saltarActual(); });
+      navigator.mediaSession.setActionHandler('previoustrack', () => { anteriorCancion(); });
+      navigator.mediaSession.playbackState = reproduciendo ? 'playing' : 'paused';
+    } catch(e) {}
+  }
+}
+
+async function resolverAudioEnServidor(cancionId) {
+  try {
+    const res = await fetch(`/rockola/${SALA}/resolver`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: cancionId })
+    });
+    const data = await res.json();
+    if (data.ok && data.url) {
+      return data.url;
+    }
+  } catch(err) {
+    console.warn('[Resolver Fallback] Error en llamada a /resolver:', err);
+  }
+  return null;
+}
+
+async function onYtPlayerError(index, event) {
   console.warn(`[YouTube ${index}] Error reproduciendo video:`, event.data);
   if (index === activeYtIndex) {
     detenerYtProgresoTimer();
+    if (ytWatchdogTimer) { clearTimeout(ytWatchdogTimer); ytWatchdogTimer = null; }
+    const cancion = currentCola && currentCola.find(s => s.id === cancionActual);
+    if (cancion && cancion.youtube_url) {
+      console.log('[YouTube Fallback] Error en reproductor YouTube, resolviendo audio nativo en backend para:', cancion.nombre);
+      estadoEl.textContent = 'Audio con restricción de YouTube — descargando...';
+      const audioUrl = await resolverAudioEnServidor(cancion.id);
+      if (audioUrl) {
+        console.log('[YouTube Fallback] Audio resuelto con éxito:', audioUrl);
+        detenerVideoYouTube();
+        esYouTubeActual = false;
+        player.src = audioUrl;
+        player.load();
+        try {
+          await player.play();
+          reproduciendo = true;
+          actualizarPlayPauseBtn(true);
+          estadoEl.textContent = 'Reproduciendo (Audio) ✓';
+          actualizarMediaSession(cancion.nombre);
+          return;
+        } catch(playErr) {
+          console.warn('[YouTube Fallback] Error al reproducir audio resuelto:', playErr);
+        }
+      }
+    }
     estadoEl.textContent = 'Video no reproducible en YouTube — saltando...';
     setTimeout(() => {
       if (cancionActual && !transitioning) {
@@ -1707,6 +1779,32 @@ async function intentarReproducir(c) {
     player.removeAttribute('src');
 
     reproducirVideoYouTube(vidId, c);
+    actualizarMediaSession(c.nombre);
+
+    // Watchdog: si en 5 segundos no arranca (bloqueo de autoplay en Safari/iPhone), activar fallback a /resolver
+    if (ytWatchdogTimer) clearTimeout(ytWatchdogTimer);
+    ytWatchdogTimer = setTimeout(async () => {
+      if (!reproduciendo && cancionActual === c.id && esYouTubeActual && !transitioning) {
+        console.log('[Watchdog YouTube] No arrancó en 5s (posible bloqueo autoplay en iPhone/Safari), activando fallback...');
+        estadoEl.textContent = 'Activando audio nativo para este enlace...';
+        const audioUrl = await resolverAudioEnServidor(c.id);
+        if (audioUrl && cancionActual === c.id) {
+          detenerVideoYouTube();
+          esYouTubeActual = false;
+          player.src = audioUrl;
+          player.load();
+          try {
+            await player.play();
+            reproduciendo = true;
+            actualizarPlayPauseBtn(true);
+            estadoEl.textContent = 'Reproduciendo (Audio) ✓';
+            actualizarMediaSession(c.nombre);
+          } catch(err) {
+            console.warn('[Watchdog YouTube] Error al reproducir audio nativo:', err);
+          }
+        }
+      }
+    }, 5000);
     return;
   }
 
@@ -1739,6 +1837,7 @@ async function intentarReproducir(c) {
     iniciarVisualizerCompacto();
     actualizarPlayPauseBtn(true);
     estadoEl.textContent = 'Reproduciendo ✓';
+    actualizarMediaSession(c.nombre);
   } catch(err) {
     console.warn('Play fallo (intento ' + (fallosPlay + 1) + '):', err.name || err.message);
     fallosPlay++;
@@ -1942,27 +2041,32 @@ function resetAgregar() {
 }
 
 function ytInputChange() {
-  const url = document.getElementById('yt-url').value.trim();
-  const esYt = url.includes('youtube.com') || url.includes('youtu.be');
+  const inputEl = document.getElementById('yt-url');
+  if (!inputEl) return;
+  const rawValue = inputEl.value;
+  const vidId = extractYouTubeId(rawValue);
+  const esYt = !!vidId;
+
   btnPoner.disabled = !esYt;
   btnPoner.textContent = esYt ? 'Poner en cola' : 'Pega un link de YouTube';
-  
+
   const preview = document.getElementById('yt-preview');
   const thumb = document.getElementById('yt-thumb');
   const titulo = document.getElementById('yt-titulo');
-  
-  if (esYt) {
-    const vidId = extractYouTubeId(url);
-    if (vidId) {
-      thumb.src = `https://img.youtube.com/vi/${vidId}/mqdefault.jpg`;
-      thumb.style.display = 'block';
-      fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vidId}`)
-        .then(r => r.json())
-        .then(d => {
-          if (d.title) titulo.textContent = d.title;
-        })
-        .catch(() => {});
-    }
+
+  if (esYt && vidId) {
+    thumb.src = `https://img.youtube.com/vi/${vidId}/mqdefault.jpg`;
+    thumb.style.display = 'block';
+    titulo.textContent = 'Cargando título...';
+    fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vidId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.title) titulo.textContent = d.title;
+        else titulo.textContent = 'Video de YouTube';
+      })
+      .catch(() => {
+        titulo.textContent = 'Video de YouTube';
+      });
     preview.className = 'yt-preview visible';
   } else {
     preview.className = 'yt-preview';

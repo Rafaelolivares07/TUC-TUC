@@ -849,7 +849,7 @@ function cambiarTab(t) {
   // Dynamic width control for Consulta / Balance / Estado de Resultados tabs
   const container = document.getElementById('main-container');
   if (container) {
-    if (t === 'consulta' || t === 'balance' || t === 'estado_resultados') {
+    if (t === 'consulta' || t === 'balance' || t === 'estado_resultados' || t === 'desembolsos') {
       container.classList.remove('max-w-5xl');
       container.classList.add('w-full', 'max-w-none', 'px-4');
     } else {

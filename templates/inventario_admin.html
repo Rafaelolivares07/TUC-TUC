@@ -1352,7 +1352,7 @@
 
 <!-- ── HEADER ───────────────────────────────────────────────────────── -->
 
-<div class="max-w-screen-xl mx-auto">
+<div id="main-container" class="max-w-screen-xl mx-auto transition-all duration-150">
 
   <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-rose-500">
 
@@ -3438,10 +3438,8 @@
 
   <!-- ── TAB DESEMBOLSOS ────────────────────────────────────────────── -->
 
-  <div id="tab-desembolsos" class="hidden bg-white rounded-2xl shadow p-5">
-
+  <div id="tab-desembolsos" class="hidden">
     {% include 'gastos_pane.html' %}
-
   </div>
 
   <!-- ── TAB ESTADO DE RESULTADOS ──────────────────────────────────── -->
@@ -3625,6 +3623,18 @@ function mostrarTab(t) {
   const cleanTabName = t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ');
 
   document.title = `${cleanTabName} — Inventario`;
+
+  // Dynamic width control for Desembolsos / Estado de Resultados / Recosteo tabs
+  const container = document.getElementById('main-container');
+  if (container) {
+    if (t === 'desembolsos' || t === 'estado_resultados' || t === 'recosteo') {
+      container.classList.remove('max-w-screen-xl');
+      container.classList.add('w-full', 'max-w-none', 'px-2', 'sm:px-4');
+    } else {
+      container.classList.remove('w-full', 'max-w-none', 'px-2', 'sm:px-4');
+      container.classList.add('max-w-screen-xl');
+    }
+  }
 
   if (t === 'traslados') {
     cargarCentrosParaTraslado();

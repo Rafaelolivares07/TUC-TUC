@@ -292,7 +292,17 @@ def _asegurar_tablas(conn):
         "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS tercero_id INTEGER REFERENCES terceros(id)",
         "ALTER TABLE saldo_por_documentos ADD COLUMN IF NOT EXISTS notas TEXT DEFAULT NULL",
         "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS cuenta_recaudo_saldos_id INTEGER REFERENCES cuentas_puc(id)",
-        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS cuenta_pago_saldos_id INTEGER REFERENCES cuentas_puc(id)"
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS cuenta_pago_saldos_id INTEGER REFERENCES cuentas_puc(id)",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS nombre VARCHAR(100)",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS icono VARCHAR(20) DEFAULT '💳'",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS cuenta_id INTEGER REFERENCES cuentas_puc(id)",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS cuenta_gastos_id INTEGER REFERENCES cuentas_puc(id)",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_ventas BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_compras BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_desembolsos BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo_saldos BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE parametros_metodos_pago_negocio ADD COLUMN IF NOT EXISTS orden INTEGER DEFAULT 0"
     ]:
         try:
             conn.execute(sql)
@@ -3942,7 +3952,27 @@ def api_contabilidad_config(negocio_id):
         conn.close()
 
 
-@bp.route('/api/contabilidad/<int:negocio_id>/config-metodos', methods=['GET', 'POST'])
+def _sincronizar_config_negocio_metodos(conn, negocio_id):
+    try:
+        rows = conn.execute("""
+            SELECT metodo_codigo FROM parametros_metodos_pago_negocio 
+            WHERE negocio_id = %s AND (activo IS NULL OR activo = TRUE)
+            ORDER BY orden ASC, id ASC
+        """, (negocio_id,)).fetchall()
+        cods = [r['metodo_codigo'] for r in rows]
+        if 'credito' not in cods:
+            cods.append('credito')
+        import json
+        conn.execute("""
+            UPDATE config_negocio 
+            SET metodos_pago = %s::jsonb 
+            WHERE tercero_id = %s
+        """, (json.dumps(cods), negocio_id))
+    except Exception:
+        pass
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/config-metodos', methods=['GET', 'POST', 'DELETE'])
 def api_contabilidad_config_metodos(negocio_id):
     if not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
@@ -3950,107 +3980,191 @@ def api_contabilidad_config_metodos(negocio_id):
     conn = get_db_connection()
     try:
         _asegurar_tablas(conn)
+        import json
         
-        if request.method == 'POST':
+        # 1. Sembrar registros base si el negocio aún no tiene ninguno en parametros_metodos_pago_negocio
+        count_exist = conn.execute("SELECT COUNT(*) as n FROM parametros_metodos_pago_negocio WHERE negocio_id = %s", (negocio_id,)).fetchone()['n']
+        if count_exist == 0:
+            cfg = conn.execute("SELECT metodos_pago FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
+            activos = []
+            if cfg and cfg['metodos_pago']:
+                activos = cfg['metodos_pago']
+                if isinstance(activos, str):
+                    try: activos = json.loads(activos)
+                    except Exception: activos = []
+            if not isinstance(activos, list) or not activos:
+                activos = ['efectivo', 'credito', 'bancolombia_qr', 'nequi_qr', 'nequi_movil']
+            if 'credito' not in activos:
+                activos.append('credito')
+            
+            for idx, m_cod in enumerate(activos):
+                row_cat = conn.execute("SELECT nombre, icono FROM metodos_pago_catalogo WHERE codigo = %s", (m_cod,)).fetchone()
+                nom = row_cat['nombre'] if row_cat and row_cat['nombre'] else m_cod.replace('_', ' ').capitalize()
+                ico = row_cat['icono'] if row_cat and row_cat['icono'] else '💳'
+                conn.execute("""
+                    INSERT INTO parametros_metodos_pago_negocio 
+                    (negocio_id, metodo_codigo, nombre, icono, orden, activo, activo_ventas, activo_compras, activo_desembolsos, activo_saldos)
+                    VALUES (%s, %s, %s, %s, %s, TRUE, TRUE, TRUE, TRUE, TRUE)
+                    ON CONFLICT (negocio_id, metodo_codigo) DO NOTHING
+                """, (negocio_id, m_cod, nom, ico, idx))
+            conn.commit()
+
+        if request.method == 'DELETE':
             data = request.get_json() or {}
             metodo_codigo = (data.get('metodo_codigo') or '').strip()
-            cuenta_recaudo_id = data.get('cuenta_recaudo_id')
-            cuenta_pago_id = data.get('cuenta_pago_id')
-            cuenta_recaudo_saldos_id = data.get('cuenta_recaudo_saldos_id')
-            cuenta_pago_saldos_id = data.get('cuenta_pago_saldos_id')
-            cuenta_gastos_id = data.get('cuenta_gastos_id')
-            
             if not metodo_codigo:
                 return jsonify({'ok': False, 'error': 'Código de método requerido'}), 400
-                
-            recaudo_id = int(cuenta_recaudo_id) if cuenta_recaudo_id else None
-            pago_id = int(cuenta_pago_id) if cuenta_pago_id else None
-            recaudo_saldos_id = int(cuenta_recaudo_saldos_id) if cuenta_recaudo_saldos_id else None
-            pago_saldos_id = int(cuenta_pago_saldos_id) if cuenta_pago_saldos_id else None
-            gastos_id = int(cuenta_gastos_id) if cuenta_gastos_id else None
-            
-            conn.execute("""
-                INSERT INTO parametros_metodos_pago_negocio 
-                (negocio_id, metodo_codigo, cuenta_recaudo_id, cuenta_pago_id, cuenta_recaudo_saldos_id, cuenta_pago_saldos_id, cuenta_gastos_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (negocio_id, metodo_codigo) 
-                DO UPDATE SET 
-                    cuenta_recaudo_id = EXCLUDED.cuenta_recaudo_id,
-                    cuenta_pago_id = EXCLUDED.cuenta_pago_id,
-                    cuenta_recaudo_saldos_id = EXCLUDED.cuenta_recaudo_saldos_id,
-                    cuenta_pago_saldos_id = EXCLUDED.cuenta_pago_saldos_id,
-                    cuenta_gastos_id = EXCLUDED.cuenta_gastos_id
-            """, (negocio_id, metodo_codigo, recaudo_id, pago_id, recaudo_saldos_id, pago_saldos_id, gastos_id))
+            conn.execute("DELETE FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s", (negocio_id, metodo_codigo))
+            _sincronizar_config_negocio_metodos(conn, negocio_id)
             conn.commit()
             return jsonify({'ok': True})
-            
-        # GET: list active payment methods
-        cfg = conn.execute("SELECT metodos_pago FROM config_negocio WHERE tercero_id = %s", (negocio_id,)).fetchone()
-        activos = []
-        if cfg and cfg['metodos_pago']:
-            activos = cfg['metodos_pago']
-            if isinstance(activos, str):
-                import json
-                try: activos = json.loads(activos)
-                except Exception: activos = []
-        
-        if not isinstance(activos, list):
-            activos = []
-            
-        if 'credito' not in activos:
-            activos.append('credito')
-            
-        catalogo = []
-        if activos:
-            placeholders = ', '.join(['%s'] * len(activos))
-            catalogo = conn.execute(f"""
-                SELECT nombre, codigo 
-                FROM metodos_pago_catalogo 
-                WHERE codigo IN ({placeholders}) AND activo = TRUE
-                ORDER BY orden, nombre
-            """, tuple(activos)).fetchall()
-        
-        mappings = conn.execute("""
-            SELECT pm.metodo_codigo, 
-                   pm.cuenta_recaudo_id, cr.codigo AS recaudo_codigo, cr.nombre AS recaudo_nombre,
-                   pm.cuenta_pago_id, cp.codigo AS pago_codigo, cp.nombre AS pago_nombre,
-                   pm.cuenta_recaudo_saldos_id, crs.codigo AS recaudo_saldos_codigo, crs.nombre AS recaudo_saldos_nombre,
-                   pm.cuenta_pago_saldos_id, cps.codigo AS pago_saldos_codigo, cps.nombre AS pago_saldos_nombre,
-                   pm.cuenta_gastos_id, cg.codigo AS gastos_codigo, cg.nombre AS gastos_nombre
+
+        if request.method == 'POST':
+            data = request.get_json() or {}
+            action = data.get('action') or 'guardar_fila'
+
+            if action == 'crear':
+                nombre = (data.get('nombre') or '').strip()
+                icono = (data.get('icono') or '💳').strip()
+                cuenta_id = data.get('cuenta_id')
+                activo_ventas = bool(data.get('activo_ventas', True))
+                activo_compras = bool(data.get('activo_compras', True))
+                activo_desembolsos = bool(data.get('activo_desembolsos', True))
+                activo_saldos = bool(data.get('activo_saldos', True))
+
+                if not nombre:
+                    return jsonify({'ok': False, 'error': 'El nombre del método de pago es obligatorio'}), 400
+
+                import re, unicodedata
+                base_slug = unicodedata.normalize('NFKD', nombre).encode('ascii', 'ignore').decode('ascii').lower()
+                base_slug = re.sub(r'[^a-z0-9_]+', '_', base_slug).strip('_')
+                if not base_slug:
+                    base_slug = 'metodo'
+
+                metodo_codigo = base_slug
+                idx_slug = 1
+                while True:
+                    exists = conn.execute("SELECT 1 FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s", (negocio_id, metodo_codigo)).fetchone()
+                    if not exists:
+                        break
+                    idx_slug += 1
+                    metodo_codigo = f"{base_slug}_{idx_slug}"
+
+                c_id = int(cuenta_id) if cuenta_id else None
+
+                conn.execute("""
+                    INSERT INTO parametros_metodos_pago_negocio 
+                    (negocio_id, metodo_codigo, nombre, icono, cuenta_id, cuenta_gastos_id, cuenta_recaudo_id, cuenta_pago_id, cuenta_recaudo_saldos_id, cuenta_pago_saldos_id, activo_ventas, activo_compras, activo_desembolsos, activo_saldos, activo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                """, (negocio_id, metodo_codigo, nombre, icono, c_id, c_id, c_id, c_id, c_id, c_id, activo_ventas, activo_compras, activo_desembolsos, activo_saldos))
+                _sincronizar_config_negocio_metodos(conn, negocio_id)
+                conn.commit()
+                return jsonify({'ok': True, 'metodo_codigo': metodo_codigo})
+
+            elif action == 'toggle':
+                metodo_codigo = (data.get('metodo_codigo') or '').strip()
+                campo = (data.get('campo') or '').strip()
+                valor = bool(data.get('valor'))
+                if campo not in ('activo_ventas', 'activo_compras', 'activo_desembolsos', 'activo_saldos', 'activo'):
+                    return jsonify({'ok': False, 'error': 'Campo de activación no válido'}), 400
+
+                conn.execute(f"""
+                    UPDATE parametros_metodos_pago_negocio 
+                    SET {campo} = %s 
+                    WHERE negocio_id = %s AND metodo_codigo = %s
+                """, (valor, negocio_id, metodo_codigo))
+                _sincronizar_config_negocio_metodos(conn, negocio_id)
+                conn.commit()
+                return jsonify({'ok': True})
+
+            elif action == 'guardar_fila':
+                metodo_codigo = (data.get('metodo_codigo') or '').strip()
+                cuenta_id = data.get('cuenta_id')
+                nombre = data.get('nombre')
+                icono = data.get('icono')
+
+                if not metodo_codigo:
+                    return jsonify({'ok': False, 'error': 'Código de método requerido'}), 400
+
+                c_id = int(cuenta_id) if cuenta_id else None
+                cuenta_recaudo_id = int(data.get('cuenta_recaudo_id')) if data.get('cuenta_recaudo_id') else c_id
+                cuenta_pago_id = int(data.get('cuenta_pago_id')) if data.get('cuenta_pago_id') else c_id
+                cuenta_recaudo_saldos_id = int(data.get('cuenta_recaudo_saldos_id')) if data.get('cuenta_recaudo_saldos_id') else c_id
+                cuenta_pago_saldos_id = int(data.get('cuenta_pago_saldos_id')) if data.get('cuenta_pago_saldos_id') else c_id
+                cuenta_gastos_id = int(data.get('cuenta_gastos_id')) if data.get('cuenta_gastos_id') else c_id
+
+                conn.execute("""
+                    INSERT INTO parametros_metodos_pago_negocio 
+                    (negocio_id, metodo_codigo, nombre, icono, cuenta_id, cuenta_recaudo_id, cuenta_pago_id, cuenta_recaudo_saldos_id, cuenta_pago_saldos_id, cuenta_gastos_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (negocio_id, metodo_codigo) 
+                    DO UPDATE SET 
+                        nombre = COALESCE(EXCLUDED.nombre, parametros_metodos_pago_negocio.nombre),
+                        icono = COALESCE(EXCLUDED.icono, parametros_metodos_pago_negocio.icono),
+                        cuenta_id = EXCLUDED.cuenta_id,
+                        cuenta_recaudo_id = EXCLUDED.cuenta_recaudo_id,
+                        cuenta_pago_id = EXCLUDED.cuenta_pago_id,
+                        cuenta_recaudo_saldos_id = EXCLUDED.cuenta_recaudo_saldos_id,
+                        cuenta_pago_saldos_id = EXCLUDED.cuenta_pago_saldos_id,
+                        cuenta_gastos_id = EXCLUDED.cuenta_gastos_id
+                """, (negocio_id, metodo_codigo, nombre, icono, c_id, cuenta_recaudo_id, cuenta_pago_id, cuenta_recaudo_saldos_id, cuenta_pago_saldos_id, cuenta_gastos_id))
+                _sincronizar_config_negocio_metodos(conn, negocio_id)
+                conn.commit()
+                return jsonify({'ok': True})
+
+        # GET: list all payment methods
+        rows = conn.execute("""
+            SELECT pm.id, pm.metodo_codigo, 
+                   COALESCE(pm.nombre, c.nombre, INITCAP(REPLACE(pm.metodo_codigo, '_', ' '))) AS nombre,
+                   COALESCE(pm.icono, c.icono, '💳') AS icono,
+                   COALESCE(pm.cuenta_id, pm.cuenta_gastos_id, pm.cuenta_recaudo_id, pm.cuenta_pago_id) AS cuenta_id,
+                   cpuc.codigo AS cuenta_codigo, cpuc.nombre AS cuenta_nombre,
+                   COALESCE(pm.activo_ventas, TRUE) AS activo_ventas,
+                   COALESCE(pm.activo_compras, TRUE) AS activo_compras,
+                   COALESCE(pm.activo_desembolsos, TRUE) AS activo_desembolsos,
+                   COALESCE(pm.activo_saldos, TRUE) AS activo_saldos,
+                   COALESCE(pm.activo, TRUE) AS activo,
+                   pm.cuenta_gastos_id, pm.cuenta_recaudo_id, pm.cuenta_pago_id,
+                   pm.cuenta_recaudo_saldos_id, pm.cuenta_pago_saldos_id,
+                   cg.codigo AS gastos_codigo, cg.nombre AS gastos_nombre,
+                   cr.codigo AS recaudo_codigo, cr.nombre AS recaudo_nombre,
+                   cp.codigo AS pago_codigo, cp.nombre AS pago_nombre
             FROM parametros_metodos_pago_negocio pm
+            LEFT JOIN metodos_pago_catalogo c ON c.codigo = pm.metodo_codigo
+            LEFT JOIN cuentas_puc cpuc ON cpuc.id = COALESCE(pm.cuenta_id, pm.cuenta_gastos_id, pm.cuenta_recaudo_id, pm.cuenta_pago_id)
+            LEFT JOIN cuentas_puc cg ON cg.id = pm.cuenta_gastos_id
             LEFT JOIN cuentas_puc cr ON cr.id = pm.cuenta_recaudo_id
             LEFT JOIN cuentas_puc cp ON cp.id = pm.cuenta_pago_id
-            LEFT JOIN cuentas_puc crs ON crs.id = pm.cuenta_recaudo_saldos_id
-            LEFT JOIN cuentas_puc cps ON cps.id = pm.cuenta_pago_saldos_id
-            LEFT JOIN cuentas_puc cg ON cg.id = pm.cuenta_gastos_id
             WHERE pm.negocio_id = %s
+            ORDER BY pm.orden ASC, pm.id ASC
         """, (negocio_id,)).fetchall()
-        
-        mapping_dict = {m['metodo_codigo']: dict(m) for m in mappings}
-        
+
         result = []
-        for c in catalogo:
-            m = mapping_dict.get(c['codigo'], {})
+        for r in rows:
             result.append({
-                'codigo': c['codigo'],
-                'nombre': c['nombre'],
-                'cuenta_recaudo_id': m.get('cuenta_recaudo_id'),
-                'recaudo_codigo': m.get('recaudo_codigo'),
-                'recaudo_nombre': m.get('recaudo_nombre'),
-                'cuenta_pago_id': m.get('cuenta_pago_id'),
-                'pago_codigo': m.get('pago_codigo'),
-                'pago_nombre': m.get('pago_nombre'),
-                'cuenta_recaudo_saldos_id': m.get('cuenta_recaudo_saldos_id'),
-                'recaudo_saldos_codigo': m.get('recaudo_saldos_codigo'),
-                'recaudo_saldos_nombre': m.get('recaudo_saldos_nombre'),
-                'cuenta_pago_saldos_id': m.get('cuenta_pago_saldos_id'),
-                'pago_saldos_codigo': m.get('pago_saldos_codigo'),
-                'pago_saldos_nombre': m.get('pago_saldos_nombre'),
-                'cuenta_gastos_id': m.get('cuenta_gastos_id'),
-                'gastos_codigo': m.get('gastos_codigo'),
-                'gastos_nombre': m.get('gastos_nombre'),
+                'id': r['id'],
+                'codigo': r['metodo_codigo'],
+                'nombre': r['nombre'],
+                'icono': r['icono'],
+                'cuenta_id': r['cuenta_id'],
+                'cuenta_codigo': r['cuenta_codigo'],
+                'cuenta_nombre': r['cuenta_nombre'],
+                'activo_ventas': r['activo_ventas'],
+                'activo_compras': r['activo_compras'],
+                'activo_desembolsos': r['activo_desembolsos'],
+                'activo_saldos': r['activo_saldos'],
+                'activo': r['activo'],
+                'cuenta_gastos_id': r['cuenta_gastos_id'] or r['cuenta_id'],
+                'gastos_codigo': r['gastos_codigo'] or r['cuenta_codigo'],
+                'gastos_nombre': r['gastos_nombre'] or r['cuenta_nombre'],
+                'cuenta_recaudo_id': r['cuenta_recaudo_id'] or r['cuenta_id'],
+                'recaudo_codigo': r['recaudo_codigo'] or r['cuenta_codigo'],
+                'recaudo_nombre': r['recaudo_nombre'] or r['cuenta_nombre'],
+                'cuenta_pago_id': r['cuenta_pago_id'] or r['cuenta_id'],
+                'pago_codigo': r['pago_codigo'] or r['cuenta_codigo'],
+                'pago_nombre': r['pago_nombre'] or r['cuenta_nombre'],
             })
-            
+
         return jsonify({'ok': True, 'metodos': result})
     except Exception as e:
         try: conn.rollback()

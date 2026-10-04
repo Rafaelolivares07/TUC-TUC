@@ -1193,13 +1193,13 @@
       const d = await r.json();
       if (!d.ok) return;
       
-      const filtrados = (d.metodos || []).filter(m => m.cuenta_gastos_id);
+      const filtrados = (d.metodos || []).filter(m => (m.activo !== false) && (m.activo_desembolsos !== false) && (m.cuenta_id || m.cuenta_gastos_id));
       const sel = document.getElementById('gas-metodo-pago');
       if (filtrados.length === 0) {
-        sel.innerHTML = '<option value="">— Ningún método tiene cuenta de gastos —</option>';
+        sel.innerHTML = '<option value="">— Ningún método habilitado para desembolsos —</option>';
       } else {
         sel.innerHTML = filtrados.map(m => 
-          `<option value="${m.codigo}">${m.nombre} (${m.codigo})</option>`
+          `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}</option>`
         ).join('');
       }
     } catch(e) {

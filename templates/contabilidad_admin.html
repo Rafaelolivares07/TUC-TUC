@@ -465,23 +465,121 @@
       </div>
     </div>
 
-    <!-- TAB: MÉTODOS DE PAGO -->
+    <!-- TAB: MÉTODOS DE PAGO Y TESORERÍA -->
     <div id="panel-pago_metodos" class="p-5 hidden">
-      <div class="mb-4">
-        <h2 class="text-lg font-bold text-gray-800">Cuentas Contables por Método de Pago</h2>
-        <p class="text-sm text-gray-500">Asigne las cuentas de recaudo (ventas/débito) y pago (compras/crédito) para cada uno de los métodos de pago configurados en su negocio.</p>
+      <!-- Sección Superior: Creación de Nuevos Métodos (Colapsable) -->
+      <div class="w-full bg-slate-50/80 rounded-2xl border border-slate-200/80 mb-6 overflow-hidden transition-all duration-200 shadow-xs">
+        <!-- Header del Acordeón -->
+        <button type="button" 
+                onclick="toggleAcordeonNuevoMetodo()"
+                class="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-100/70 transition-colors text-left focus:outline-none cursor-pointer">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-base shadow-xs">
+              💳
+            </div>
+            <div>
+              <span class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                ➕ Crear Nuevo Método de Pago
+                <span class="text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60 px-2 py-0.5 rounded-full">Tesorería Dinámica</span>
+              </span>
+              <p class="text-xs text-slate-500">Registre canales de cobro y pago personalizados para su negocio (Bold, Wompi, Cajas Menores, etc.).</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 text-slate-400">
+            <span id="txt-toggle-nuevo-metodo" class="text-xs font-semibold text-slate-500 hidden sm:inline">Desplegar</span>
+            <svg id="chevron-nuevo-metodo" class="w-5 h-5 transform transition-transform duration-200 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </div>
+        </button>
+
+        <!-- Contenido del Acordeón (Colapsado por defecto) -->
+        <div id="contenido-nuevo-metodo" class="hidden border-t border-slate-200/70 p-5 bg-white space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-start">
+            <!-- Nombre -->
+            <div class="sm:col-span-4">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Nombre del Método *</label>
+              <input type="text" id="nuevo-metodo-nombre" placeholder="Ej. Datafono Bold, Caja Menor..." 
+                     class="border border-slate-200 rounded-xl px-3 py-2 text-sm w-full bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+            </div>
+            
+            <!-- Emoji / Ícono -->
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Ícono / Emoji</label>
+              <select id="nuevo-metodo-icono" class="border border-slate-200 rounded-xl px-3 py-2 text-sm w-full bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="💳">💳 Tarjeta / Datafono</option>
+                <option value="💵">💵 Efectivo / Caja</option>
+                <option value="🏦">🏦 Banco / Transferencia</option>
+                <option value="📱">📱 Nequi / Móvil</option>
+                <option value="📲">📲 QR / Llave</option>
+                <option value="🧾">🧾 Bono / Vale</option>
+              </select>
+            </div>
+
+            <!-- Cuenta Contable Principal -->
+            <div class="sm:col-span-6 relative">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Cuenta Contable (Caja / Banco) *</label>
+              <div class="relative flex items-center">
+                <input type="text" id="nuevo-metodo-cuenta-txt" placeholder="Buscar cuenta PUC (ej: 110505 o 111005)..."
+                       class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-8"
+                       oninput="buscarPUCNuevoMetodo(this)">
+                <span id="nuevo-metodo-cuenta-status" class="absolute right-2.5 text-green-500 hidden text-sm">✅</span>
+                <input type="hidden" id="nuevo-metodo-cuenta-id" value="">
+                <div id="nuevo-metodo-cuenta-ac" class="ac-drop hidden"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Activación por Módulos al Crear -->
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-6 flex-wrap">
+              <span class="text-xs font-bold text-slate-700 uppercase">Activar disponible en:</span>
+              <label class="inline-flex items-center gap-1.5 text-xs text-slate-700 font-medium cursor-pointer">
+                <input type="checkbox" id="nuevo-metodo-ventas" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                🛒 Ventas POS
+              </label>
+              <label class="inline-flex items-center gap-1.5 text-xs text-slate-700 font-medium cursor-pointer">
+                <input type="checkbox" id="nuevo-metodo-compras" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                📦 Compras Inv.
+              </label>
+              <label class="inline-flex items-center gap-1.5 text-xs text-slate-700 font-medium cursor-pointer">
+                <input type="checkbox" id="nuevo-metodo-desembolsos" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                💸 Desembolsos
+              </label>
+              <label class="inline-flex items-center gap-1.5 text-xs text-slate-700 font-medium cursor-pointer">
+                <input type="checkbox" id="nuevo-metodo-saldos" checked class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                📑 Saldos CxC/CxP
+              </label>
+            </div>
+            <button onclick="crearNuevoMetodoPago()" 
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded-xl text-sm transition shadow-sm flex items-center gap-2 cursor-pointer">
+              ➕ Guardar y Habilitar Método
+            </button>
+          </div>
+        </div>
       </div>
+
+      <!-- Título de la tabla y resumen -->
+      <div class="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <div>
+          <h2 class="text-lg font-bold text-gray-800">Cuentas Contables y Activación por Módulo</h2>
+          <p class="text-xs text-gray-500">Asigne la cuenta de tesorería y use los interruptores para activar o desactivar cada método en los módulos del sistema.</p>
+        </div>
+      </div>
+
+      <!-- Tabla de Métodos -->
       <div class="overflow-x-auto border border-gray-100 rounded-2xl shadow-sm">
         <table class="w-full text-sm">
           <thead>
             <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-100">
               <th class="px-4 py-3 text-left">Método de Pago</th>
-              <th class="px-4 py-3 text-left">Cuenta de Recaudo (Débito en Ventas)</th>
-              <th class="px-4 py-3 text-left">Cuenta de Pago (Crédito en Compras)</th>
-              <th class="px-4 py-3 text-left">Cuenta Recaudo (Saldos)</th>
-              <th class="px-4 py-3 text-left">Cuenta Pago (Saldos)</th>
-              <th class="px-4 py-3 text-left">Cuenta Contrapartida (Desembolsos)</th>
-              <th class="px-4 py-3 text-center w-28">Acciones</th>
+              <th class="px-4 py-3 text-left min-w-[260px]">Cuenta Contable (Caja / Bancos)</th>
+              <th class="px-3 py-3 text-center">🛒 Ventas POS</th>
+              <th class="px-3 py-3 text-center">📦 Compras Inv.</th>
+              <th class="px-3 py-3 text-center">💸 Desembolsos</th>
+              <th class="px-3 py-3 text-center">📑 Saldos CxC/CxP</th>
+              <th class="px-3 py-3 text-center">Estado General</th>
+              <th class="px-3 py-3 text-center w-28">Acciones</th>
             </tr>
           </thead>
           <tbody id="pago_metodos-body" class="divide-y divide-gray-100">
@@ -2243,127 +2341,286 @@ function acPUCGenerico(input, callback) {
   }, 280);
 }
 
+// ── TAB: MÉTODOS DE PAGO Y TESORERÍA ──────────────────────────
+let metodosConfigurados = [];
+let nuevoMetodoCuentaTimer = null;
+
+function toggleAcordeonNuevoMetodo() {
+  const content = document.getElementById('contenido-nuevo-metodo');
+  const chevron = document.getElementById('chevron-nuevo-metodo');
+  const txtToggle = document.getElementById('txt-toggle-nuevo-metodo');
+  
+  if (content.classList.contains('hidden')) {
+    content.classList.remove('hidden');
+    chevron.classList.add('rotate-180');
+    if (txtToggle) txtToggle.textContent = 'Ocultar';
+    document.getElementById('nuevo-metodo-nombre').focus();
+  } else {
+    content.classList.add('hidden');
+    chevron.classList.remove('rotate-180');
+    if (txtToggle) txtToggle.textContent = 'Desplegar';
+  }
+}
+
+function buscarPUCNuevoMetodo(input) {
+  const listEl = document.getElementById('nuevo-metodo-cuenta-ac');
+  const idInput = document.getElementById('nuevo-metodo-cuenta-id');
+  const statusEl = document.getElementById('nuevo-metodo-cuenta-status');
+  
+  idInput.value = '';
+  statusEl.classList.add('hidden');
+  
+  clearTimeout(nuevoMetodoCuentaTimer);
+  nuevoMetodoCuentaTimer = setTimeout(async () => {
+    const q = input.value.trim();
+    if (q.length < 2) { listEl.classList.add('hidden'); return; }
+    const cuentas = await fetchPUC(q);
+    renderAC(listEl, cuentas, c => {
+      input.value = `${c.codigo} — ${c.nombre}`;
+      idInput.value = c.id;
+      statusEl.classList.remove('hidden');
+      listEl.classList.add('hidden');
+    });
+  }, 280);
+}
+
+async function crearNuevoMetodoPago() {
+  const nombre = (document.getElementById('nuevo-metodo-nombre').value || '').trim();
+  const icono = document.getElementById('nuevo-metodo-icono').value || '💳';
+  const cuentaId = document.getElementById('nuevo-metodo-cuenta-id').value;
+  const cuentaTxt = document.getElementById('nuevo-metodo-cuenta-txt').value.trim();
+  
+  const activoVentas = document.getElementById('nuevo-metodo-ventas').checked;
+  const activoCompras = document.getElementById('nuevo-metodo-compras').checked;
+  const activoDesembolsos = document.getElementById('nuevo-metodo-desembolsos').checked;
+  const activoSaldos = document.getElementById('nuevo-metodo-saldos').checked;
+  
+  if (!nombre) {
+    toast('Ingrese el nombre del método de pago', false);
+    document.getElementById('nuevo-metodo-nombre').focus();
+    return;
+  }
+  if (cuentaTxt && !cuentaId) {
+    toast('Seleccione una cuenta contable válida del buscador interactivo', false);
+    return;
+  }
+  
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        action: 'crear',
+        nombre,
+        icono,
+        cuenta_id: cuentaId || null,
+        activo_ventas: activoVentas,
+        activo_compras: activoCompras,
+        activo_desembolsos: activoDesembolsos,
+        activo_saldos: activoSaldos
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`¡Método "${nombre}" creado exitosamente!`);
+      // Reset form
+      document.getElementById('nuevo-metodo-nombre').value = '';
+      document.getElementById('nuevo-metodo-cuenta-txt').value = '';
+      document.getElementById('nuevo-metodo-cuenta-id').value = '';
+      document.getElementById('nuevo-metodo-cuenta-status').classList.add('hidden');
+      toggleAcordeonNuevoMetodo();
+      await cargarPagoMetodos();
+    } else {
+      toast(d.error, false);
+    }
+  } catch(e) {
+    toast('Error de red al crear método de pago', false);
+  }
+}
+
 async function cargarPagoMetodos() {
   const tbody = document.getElementById('pago_metodos-body');
-  tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-gray-400">Cargando métodos de pago...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">Cargando métodos de pago...</td></tr>';
   try {
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`);
     const d = await r.json();
     if (!d.ok) {
-      tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-center text-red-500">${d.error}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-4 text-center text-red-500">${d.error}</td></tr>`;
       return;
     }
     
     metodosConfigurados = d.metodos || [];
     tbody.innerHTML = '';
     if (metodosConfigurados.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-gray-400">No se encontraron métodos de pago habilitados. Habilítelos primero en la configuración del negocio.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">No hay métodos de pago registrados. Cree uno en la parte superior.</td></tr>';
       return;
     }
     
     metodosConfigurados.forEach((m, idx) => {
-      const recText = m.recaudo_codigo ? `${m.recaudo_codigo} — ${m.recaudo_nombre}` : '';
-      const pagText = m.pago_codigo ? `${m.pago_codigo} — ${m.pago_nombre}` : '';
-      const recSaldosText = m.recaudo_saldos_codigo ? `${m.recaudo_saldos_codigo} — ${m.recaudo_saldos_nombre}` : '';
-      const pagSaldosText = m.pago_saldos_codigo ? `${m.pago_saldos_codigo} — ${m.pago_saldos_nombre}` : '';
-      const gasText = (m.gastos_codigo && m.gastos_nombre) ? `${m.gastos_codigo} — ${m.gastos_nombre}` : (m.cuenta_gastos_codigo ? `${m.cuenta_gastos_codigo} — ${m.cuenta_gastos_nombre}` : '');
+      const ctaText = (m.cuenta_codigo && m.cuenta_nombre) ? `${m.cuenta_codigo} — ${m.cuenta_nombre}` : '';
+      const actVentas = m.activo_ventas !== false;
+      const actCompras = m.activo_compras !== false;
+      const actDesembolsos = m.activo_desembolsos !== false;
+      const actSaldos = m.activo_saldos !== false;
+      const actGen = m.activo !== false;
       
       const tr = document.createElement('tr');
-      tr.className = 'hover:bg-gray-50';
+      tr.className = 'hover:bg-slate-50/60 transition-colors';
       tr.innerHTML = `
-        <td class="px-4 py-3 font-semibold text-gray-700 text-xs">
-          ${m.nombre} 
-          <span class="text-[10px] text-gray-400 font-mono block">(${m.codigo})</span>
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl shrink-0">${m.icono || '💳'}</span>
+            <div>
+              <span class="font-bold text-gray-800 text-xs block">${m.nombre}</span>
+              <span class="text-[10px] text-gray-400 font-mono block">(${m.codigo})</span>
+            </div>
+          </div>
         </td>
-        <td class="px-2 py-3 relative">
+        <td class="px-3 py-3 relative">
           <div class="relative flex items-center">
-            <input type="text" id="rec-input-${idx}" placeholder="Buscar cuenta..." 
+            <input type="text" id="cta-input-${idx}" placeholder="Buscar cuenta PUC..." 
                    class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
-                   value="${recText}"
-                   oninput="buscarPUCInput(this, ${idx}, 'recaudo')">
-            <span id="rec-status-${idx}" class="absolute right-2 text-green-500 hidden text-[11px]" title="Cuenta contable validada y guardada">✅</span>
-            <span id="rec-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
-            <input type="hidden" id="rec-id-${idx}" value="${m.cuenta_recaudo_id || ''}">
+                   value="${ctaText}"
+                   oninput="buscarPUCInput(this, ${idx})">
+            <span id="cta-status-${idx}" class="absolute right-2 text-green-500 ${m.cuenta_id ? '' : 'hidden'} text-[11px]" title="Cuenta contable validada y guardada">✅</span>
+            <span id="cta-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta modificada (pendiente guardar)">⚠️</span>
+            <input type="hidden" id="cta-id-${idx}" value="${m.cuenta_id || ''}">
             <div class="ac-drop hidden"></div>
           </div>
         </td>
-        <td class="px-2 py-3 relative">
-          <div class="relative flex items-center">
-            <input type="text" id="pag-input-${idx}" placeholder="Buscar cuenta..." 
-                   class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
-                   value="${pagText}"
-                   oninput="buscarPUCInput(this, ${idx}, 'pago')">
-            <span id="pag-status-${idx}" class="absolute right-2 text-green-500 hidden text-[11px]" title="Cuenta contable validada y guardada">✅</span>
-            <span id="pag-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
-            <input type="hidden" id="pag-id-${idx}" value="${m.cuenta_pago_id || ''}">
-            <div class="ac-drop hidden"></div>
-          </div>
-        </td>
-        <td class="px-2 py-3 relative">
-          <div class="relative flex items-center">
-            <input type="text" id="rec-saldos-input-${idx}" placeholder="Buscar cuenta..." 
-                   class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
-                   value="${recSaldosText}"
-                   oninput="buscarPUCInput(this, ${idx}, 'recaudo-saldos')">
-            <span id="rec-saldos-status-${idx}" class="absolute right-2 text-green-500 hidden text-[11px]" title="Cuenta contable validada y guardada">✅</span>
-            <span id="rec-saldos-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
-            <input type="hidden" id="rec-saldos-id-${idx}" value="${m.cuenta_recaudo_saldos_id || ''}">
-            <div class="ac-drop hidden"></div>
-          </div>
-        </td>
-        <td class="px-2 py-3 relative">
-          <div class="relative flex items-center">
-            <input type="text" id="pag-saldos-input-${idx}" placeholder="Buscar cuenta..." 
-                   class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
-                   value="${pagSaldosText}"
-                   oninput="buscarPUCInput(this, ${idx}, 'pago-saldos')">
-            <span id="pag-saldos-status-${idx}" class="absolute right-2 text-green-500 hidden text-[11px]" title="Cuenta contable validada y guardada">✅</span>
-            <span id="pag-saldos-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
-            <input type="hidden" id="pag-saldos-id-${idx}" value="${m.cuenta_pago_saldos_id || ''}">
-            <div class="ac-drop hidden"></div>
-          </div>
-        </td>
-        <td class="px-2 py-3 relative">
-          <div class="relative flex items-center">
-            <input type="text" id="gas-input-${idx}" placeholder="Buscar cuenta..." 
-                   class="w-full border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none pr-7"
-                   value="${gasText}"
-                   oninput="buscarPUCInput(this, ${idx}, 'gastos')">
-            <span id="gas-status-${idx}" class="absolute right-2 text-green-500 hidden text-[11px]" title="Cuenta contable validada y guardada">✅</span>
-            <span id="gas-warn-${idx}" class="absolute right-2 text-orange-500 hidden text-[11px]" title="Cuenta no seleccionada del buscador o modificada (pendiente guardar)">⚠️</span>
-            <input type="hidden" id="gas-id-${idx}" value="${m.cuenta_gastos_id || ''}">
-            <div class="ac-drop hidden"></div>
-          </div>
-        </td>
-        <td class="px-4 py-3 text-center">
-          <button id="btn-save-${idx}" onclick="guardarFilaMetodo(${idx})"
-                  class="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 mx-auto shadow-sm">
-            💾 Guardar
+        <!-- Switch Ventas -->
+        <td class="px-3 py-3 text-center">
+          <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_ventas')" 
+                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actVentas ? 'bg-emerald-500' : 'bg-gray-300'}" 
+                  id="sw-ventas-${idx}" title="${actVentas ? 'Habilitado en Ventas POS' : 'Deshabilitado en Ventas POS'}">
+            <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actVentas ? 'translate-x-4' : 'translate-x-0'}"></span>
           </button>
+        </td>
+        <!-- Switch Compras -->
+        <td class="px-3 py-3 text-center">
+          <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_compras')" 
+                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actCompras ? 'bg-emerald-500' : 'bg-gray-300'}" 
+                  id="sw-compras-${idx}" title="${actCompras ? 'Habilitado en Compras de Inventario' : 'Deshabilitado en Compras'}">
+            <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actCompras ? 'translate-x-4' : 'translate-x-0'}"></span>
+          </button>
+        </td>
+        <!-- Switch Desembolsos -->
+        <td class="px-3 py-3 text-center">
+          <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_desembolsos')" 
+                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actDesembolsos ? 'bg-emerald-500' : 'bg-gray-300'}" 
+                  id="sw-desembolsos-${idx}" title="${actDesembolsos ? 'Habilitado en Cierres de Desembolsos' : 'Deshabilitado en Desembolsos'}">
+            <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actDesembolsos ? 'translate-x-4' : 'translate-x-0'}"></span>
+          </button>
+        </td>
+        <!-- Switch Saldos -->
+        <td class="px-3 py-3 text-center">
+          <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo_saldos')" 
+                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actSaldos ? 'bg-emerald-500' : 'bg-gray-300'}" 
+                  id="sw-saldos-${idx}" title="${actSaldos ? 'Habilitado en Saldos por Documento' : 'Deshabilitado en Saldos'}">
+            <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actSaldos ? 'translate-x-4' : 'translate-x-0'}"></span>
+          </button>
+        </td>
+        <!-- Switch Estado General -->
+        <td class="px-3 py-3 text-center">
+          <button type="button" onclick="toggleMetodoModulo(${idx}, 'activo')" 
+                  class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${actGen ? 'bg-blue-600' : 'bg-gray-300'}" 
+                  id="sw-gen-${idx}" title="${actGen ? 'Método Activo Global' : 'Método Inactivo'}">
+            <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${actGen ? 'translate-x-4' : 'translate-x-0'}"></span>
+          </button>
+        </td>
+        <td class="px-3 py-3 text-center">
+          <div class="flex items-center justify-center gap-1.5">
+            <button id="btn-save-${idx}" onclick="guardarFilaMetodo(${idx})" title="Guardar cuenta contable asignada"
+                    class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 shadow-sm cursor-pointer">
+              💾 Guardar
+            </button>
+            <button onclick="eliminarMetodoPago(${idx})" title="Eliminar método de pago"
+                    class="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer">
+              🗑️
+            </button>
+          </div>
         </td>
       `;
       tbody.appendChild(tr);
-      actualizarIndicadoresFila(idx);
     });
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-4 text-center text-red-500">Error de conexión: ${e.message}</td></tr>`;
   }
 }
 
-function buscarPUCInput(input, idx, tipo) {
+async function toggleMetodoModulo(idx, campo) {
+  const m = metodosConfigurados[idx];
+  if (!m) return;
+  
+  const currentVal = m[campo] !== false;
+  const newVal = !currentVal;
+  m[campo] = newVal;
+  
+  // Optimistic UI update
+  let swBtnId = '';
+  if (campo === 'activo_ventas') swBtnId = `sw-ventas-${idx}`;
+  else if (campo === 'activo_compras') swBtnId = `sw-compras-${idx}`;
+  else if (campo === 'activo_desembolsos') swBtnId = `sw-desembolsos-${idx}`;
+  else if (campo === 'activo_saldos') swBtnId = `sw-saldos-${idx}`;
+  else if (campo === 'activo') swBtnId = `sw-gen-${idx}`;
+  
+  const swBtn = document.getElementById(swBtnId);
+  if (swBtn) {
+    const isBlue = campo === 'activo';
+    const activeBg = isBlue ? 'bg-blue-600' : 'bg-emerald-500';
+    if (newVal) {
+      swBtn.classList.remove('bg-gray-300');
+      swBtn.classList.add(activeBg);
+      swBtn.querySelector('span').classList.remove('translate-x-0');
+      swBtn.querySelector('span').classList.add('translate-x-4');
+    } else {
+      swBtn.classList.remove(activeBg);
+      swBtn.classList.add('bg-gray-300');
+      swBtn.querySelector('span').classList.remove('translate-x-4');
+      swBtn.querySelector('span').classList.add('translate-x-0');
+    }
+  }
+  
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        action: 'toggle',
+        metodo_codigo: m.codigo,
+        campo: campo,
+        valor: newVal
+      })
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      toast(d.error, false);
+      m[campo] = currentVal;
+      await cargarPagoMetodos();
+    } else {
+      toast(`Estado de "${m.nombre}" actualizado`);
+    }
+  } catch(e) {
+    toast('Error de red al actualizar estado', false);
+    m[campo] = currentVal;
+    await cargarPagoMetodos();
+  }
+}
+
+function buscarPUCInput(input, idx) {
   const container = input.closest('.relative');
   const listEl = container.querySelector('.ac-drop');
   const idInput = container.querySelector('input[type="hidden"]');
-  const statusEl = container.querySelector('[id$="-status-' + idx + '"]');
-  const warnEl = container.querySelector('[id$="-warn-' + idx + '"]');
+  const statusEl = document.getElementById(`cta-status-${idx}`);
+  const warnEl = document.getElementById(`cta-warn-${idx}`);
   
   idInput.value = '';
-  statusEl.classList.add('hidden');
+  if (statusEl) statusEl.classList.add('hidden');
   
   if (input.value.trim() === '') {
-    warnEl.classList.add('hidden');
+    if (warnEl) warnEl.classList.add('hidden');
   } else {
-    warnEl.classList.remove('hidden');
+    if (warnEl) warnEl.classList.remove('hidden');
   }
   
   const timerKey = input.id || Math.random().toString();
@@ -2375,72 +2632,11 @@ function buscarPUCInput(input, idx, tipo) {
     renderAC(listEl, cuentas, c => {
       input.value = `${c.codigo} — ${c.nombre}`;
       idInput.value = c.id;
-      statusEl.classList.remove('hidden');
-      warnEl.classList.add('hidden');
+      if (statusEl) statusEl.classList.remove('hidden');
+      if (warnEl) warnEl.classList.add('hidden');
       listEl.classList.add('hidden');
     });
   }, 280);
-}
-
-function actualizarIndicadoresFila(idx) {
-  const recId = document.getElementById(`rec-id-${idx}`).value;
-  const pagId = document.getElementById(`pag-id-${idx}`).value;
-  const recSaldosId = document.getElementById(`rec-saldos-id-${idx}`).value;
-  const pagSaldosId = document.getElementById(`pag-saldos-id-${idx}`).value;
-  const gasId = document.getElementById(`gas-id-${idx}`).value;
-  
-  const recStatus = document.getElementById(`rec-status-${idx}`);
-  const recWarn = document.getElementById(`rec-warn-${idx}`);
-  const pagStatus = document.getElementById(`pag-status-${idx}`);
-  const pagWarn = document.getElementById(`pag-warn-${idx}`);
-  
-  const recSaldosStatus = document.getElementById(`rec-saldos-status-${idx}`);
-  const recSaldosWarn = document.getElementById(`rec-saldos-warn-${idx}`);
-  const pagSaldosStatus = document.getElementById(`pag-saldos-status-${idx}`);
-  const pagSaldosWarn = document.getElementById(`pag-saldos-warn-${idx}`);
-
-  const gasStatus = document.getElementById(`gas-status-${idx}`);
-  const gasWarn = document.getElementById(`gas-warn-${idx}`);
-  
-  if (recId) {
-    recStatus.classList.remove('hidden');
-    recWarn.classList.add('hidden');
-  } else {
-    recStatus.classList.add('hidden');
-    recWarn.classList.add('hidden');
-  }
-  
-  if (pagId) {
-    pagStatus.classList.remove('hidden');
-    pagWarn.classList.add('hidden');
-  } else {
-    pagStatus.classList.add('hidden');
-    pagWarn.classList.add('hidden');
-  }
-
-  if (recSaldosId) {
-    recSaldosStatus.classList.remove('hidden');
-    recSaldosWarn.classList.add('hidden');
-  } else {
-    recSaldosStatus.classList.add('hidden');
-    recSaldosWarn.classList.add('hidden');
-  }
-
-  if (pagSaldosId) {
-    pagSaldosStatus.classList.remove('hidden');
-    pagSaldosWarn.classList.add('hidden');
-  } else {
-    pagSaldosStatus.classList.add('hidden');
-    pagSaldosWarn.classList.add('hidden');
-  }
-
-  if (gasId) {
-    gasStatus.classList.remove('hidden');
-    gasWarn.classList.add('hidden');
-  } else {
-    gasStatus.classList.add('hidden');
-    gasWarn.classList.add('hidden');
-  }
 }
 
 async function guardarFilaMetodo(idx) {
@@ -2448,36 +2644,11 @@ async function guardarFilaMetodo(idx) {
     const m = metodosConfigurados[idx];
     if (!m) return;
     
-    const recId = document.getElementById(`rec-id-${idx}`).value || null;
-    const pagId = document.getElementById(`pag-id-${idx}`).value || null;
-    const recSaldosId = document.getElementById(`rec-saldos-id-${idx}`).value || null;
-    const pagSaldosId = document.getElementById(`pag-saldos-id-${idx}`).value || null;
-    const gasId = document.getElementById(`gas-id-${idx}`).value || null;
+    const ctaId = document.getElementById(`cta-id-${idx}`).value || null;
+    const ctaInput = document.getElementById(`cta-input-${idx}`).value.trim();
     
-    const recInput = document.getElementById(`rec-input-${idx}`).value.trim();
-    const pagInput = document.getElementById(`pag-input-${idx}`).value.trim();
-    const recSaldosInput = document.getElementById(`rec-saldos-input-${idx}`).value.trim();
-    const pagSaldosInput = document.getElementById(`pag-saldos-input-${idx}`).value.trim();
-    const gasInput = document.getElementById(`gas-input-${idx}`).value.trim();
-    
-    if (recInput && !recId) {
-      toast('Debe seleccionar la cuenta de recaudo del buscador interactivo', false);
-      return;
-    }
-    if (pagInput && !pagId) {
-      toast('Debe seleccionar la cuenta de pago del buscador interactivo', false);
-      return;
-    }
-    if (recSaldosInput && !recSaldosId) {
-      toast('Debe seleccionar la cuenta de recaudo de saldos del buscador interactivo', false);
-      return;
-    }
-    if (pagSaldosInput && !pagSaldosId) {
-      toast('Debe seleccionar la cuenta de pago de saldos del buscador interactivo', false);
-      return;
-    }
-    if (gasInput && !gasId) {
-      toast('Debe seleccionar la cuenta de gastos del buscador interactivo', false);
+    if (ctaInput && !ctaId) {
+      toast('Debe seleccionar la cuenta contable del buscador interactivo', false);
       return;
     }
     
@@ -2485,28 +2656,54 @@ async function guardarFilaMetodo(idx) {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
+        action: 'guardar_fila',
         metodo_codigo: m.codigo,
-        cuenta_recaudo_id: recId,
-        cuenta_pago_id: pagId,
-        cuenta_recaudo_saldos_id: recSaldosId,
-        cuenta_pago_saldos_id: pagSaldosId,
-        cuenta_gastos_id: gasId
+        cuenta_id: ctaId
       })
     });
     const d = await r.json();
     if (d.ok) {
-      m.cuenta_recaudo_id = recId;
-      m.cuenta_pago_id = pagId;
-      m.cuenta_recaudo_saldos_id = recSaldosId;
-      m.cuenta_pago_saldos_id = pagSaldosId;
-      m.cuenta_gastos_id = gasId;
-      actualizarIndicadoresFila(idx);
-      toast(`Configuración de "${m.nombre}" guardada`);
+      m.cuenta_id = ctaId;
+      const statusEl = document.getElementById(`cta-status-${idx}`);
+      const warnEl = document.getElementById(`cta-warn-${idx}`);
+      if (ctaId) {
+        if (statusEl) statusEl.classList.remove('hidden');
+        if (warnEl) warnEl.classList.add('hidden');
+      }
+      toast(`Cuenta de "${m.nombre}" guardada`);
     } else {
       toast(d.error, false);
     }
   } catch(e) {
     toast('Error de red al guardar cuenta', false);
+  }
+}
+
+async function eliminarMetodoPago(idx) {
+  const m = metodosConfigurados[idx];
+  if (!m) return;
+  
+  if (!confirm(`¿Está seguro de eliminar o retirar el método de pago "${m.nombre}"?`)) {
+    return;
+  }
+  
+  try {
+    const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`, {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        metodo_codigo: m.codigo
+      })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`Método "${m.nombre}" eliminado`);
+      await cargarPagoMetodos();
+    } else {
+      toast(d.error, false);
+    }
+  } catch(e) {
+    toast('Error de red al eliminar método', false);
   }
 }
 

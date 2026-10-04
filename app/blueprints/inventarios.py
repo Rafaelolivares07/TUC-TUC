@@ -25,6 +25,16 @@ except ImportError:
 
 bp = Blueprint('inventarios', __name__)
 
+
+@bp.before_request
+def _check_programaciones_inventarios():
+    if request.method == 'GET' and not request.path.startswith('/static/'):
+        try:
+            from .contabilidad import verificar_y_ejecutar_programaciones
+            verificar_y_ejecutar_programaciones()
+        except Exception:
+            pass
+
 _tablas_listas = False
 
 

@@ -17,6 +17,16 @@ except ImportError:
 
 bp = Blueprint('reportes', __name__)
 
+
+@bp.before_request
+def _check_programaciones_reportes():
+    if request.method == 'GET' and not request.path.startswith('/static/'):
+        try:
+            from .contabilidad import verificar_y_ejecutar_programaciones
+            verificar_y_ejecutar_programaciones()
+        except Exception:
+            pass
+
 REPORTES_INFO = {
     'consulta_cuentas': {
         'nombre': 'Consulta de Cuentas',

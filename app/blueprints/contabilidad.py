@@ -165,6 +165,7 @@ def _asegurar_tablas(conn):
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_prog_neg ON programaciones_contables(negocio_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_prog_activo_prox ON programaciones_contables(activo, proximo_ejecutado)")
     conn.commit()
 
     # config_contabilidad_negocio: global switches for automated accounting settings
@@ -798,51 +799,100 @@ def _ejecutar_asiento_amortizacion(conn, prog_row, vars_dict):
     return new_comp_id
 
 
-def ejecutar_programaciones_job(app):
-    with app.app_context():
-        from app.db import get_db_connection
-        try:
-            conn = get_db_connection()
-            _asegurar_tablas(conn)
-            ahora = _dt.now()
-            progs = conn.execute("""
-                SELECT p.*, t.codigo AS tipo_codigo
-                FROM programaciones_contables p
-                JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
-                WHERE p.activo = TRUE
-                  AND (p.proximo_ejecutado IS NULL OR p.proximo_ejecutado <= %s)
-            """, (ahora,)).fetchall()
-            for p in progs:
-                resultado = 'ok'
-                try:
-                    vars_dict = dict(p['variables_h'] or {})
-                    if vars_dict.get('cuenta_debito') and vars_dict.get('cuenta_credito') and vars_dict.get('movimiento_origen_id'):
-                        comp_id = _ejecutar_asiento_amortizacion(conn, p, vars_dict)
-                        conn.commit()
-                        resultado = f'ok comp={comp_id}' if comp_id else 'amortizacion_completada'
-                    else:
-                        comp_id = _ejecutar_asiento_automatico(
-                            conn, p['negocio_id'], p['tipo_codigo'],
-                            vars_dict,
-                            descripcion_override=p['descripcion']
-                        )
-                        conn.commit()
-                        resultado = f'ok comp={comp_id}' if comp_id else 'sin_parametrizacion'
-                except Exception as e:
-                    try: conn.rollback()
-                    except Exception: pass
-                    resultado = f'error: {str(e)[:80]}'
-                proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
-                conn.execute(
-                    "UPDATE programaciones_contables "
-                    "SET ultimo_ejecutado=%s, proximo_ejecutado=%s, ultimo_resultado=%s WHERE id=%s",
-                    (ahora, proximo, resultado, p['id'])
-                )
-                conn.commit()
-            conn.close()
-        except Exception:
+_last_prog_check_time = 0
+
+def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
+    """
+    Verifica y ejecuta de forma segura e idempotente las amortizaciones y asientos automáticos programados.
+    Se ejecuta tanto desde llamadas reactivas (al cargar reportes o módulos de contabilidad/inventarios)
+    como desde el scheduler / cron en segundo plano.
+    """
+    global _last_prog_check_time
+    import time
+    ahora_ts = time.time()
+    if not forzar and (ahora_ts - _last_prog_check_time < 30) and conn is None:
+        return
+
+    should_close = False
+    if conn is None:
+        if app is not None:
+            with app.app_context():
+                from app.db import get_db_connection
+                conn = get_db_connection()
+                should_close = True
+        else:
+            try:
+                from app.db import get_db_connection
+                conn = get_db_connection()
+                should_close = True
+            except Exception:
+                return
+
+    try:
+        _asegurar_tablas(conn)
+        ahora = _dt.now()
+        # Usamos FOR UPDATE OF p SKIP LOCKED para concurrencia limpia entre workers/threads
+        progs = conn.execute("""
+            SELECT p.*, t.codigo AS tipo_codigo
+            FROM programaciones_contables p
+            JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
+            WHERE p.activo = TRUE
+              AND (p.proximo_ejecutado IS NULL OR p.proximo_ejecutado <= %s)
+            ORDER BY p.id ASC
+            FOR UPDATE OF p SKIP LOCKED
+        """, (ahora,)).fetchall()
+
+        for p in progs:
+            resultado = 'ok'
+            try:
+                vars_dict = dict(p['variables_h'] or {})
+                if vars_dict.get('cuenta_debito') and vars_dict.get('cuenta_credito') and vars_dict.get('movimiento_origen_id'):
+                    comp_id = _ejecutar_asiento_amortizacion(conn, p, vars_dict)
+                    conn.commit()
+                    resultado = f'ok comp={comp_id}' if comp_id else 'amortizacion_completada'
+                else:
+                    comp_id = _ejecutar_asiento_automatico(
+                        conn, p['negocio_id'], p['tipo_codigo'],
+                        vars_dict,
+                        descripcion_override=p['descripcion']
+                    )
+                    conn.commit()
+                    resultado = f'ok comp={comp_id}' if comp_id else 'sin_parametrizacion'
+            except Exception as e:
+                try: conn.rollback()
+                except Exception: pass
+                resultado = f'error: {str(e)[:80]}'
+
+            proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
+            conn.execute(
+                "UPDATE programaciones_contables "
+                "SET ultimo_ejecutado=%s, proximo_ejecutado=%s, ultimo_resultado=%s WHERE id=%s",
+                (ahora, proximo, resultado, p['id'])
+            )
+            conn.commit()
+
+        _last_prog_check_time = ahora_ts
+    except Exception as e:
+        print(f"[programaciones_contables] error en ejecucion: {e}")
+    finally:
+        if should_close and conn:
             try: conn.close()
             except Exception: pass
+
+
+def ejecutar_programaciones_job(app=None):
+    verificar_y_ejecutar_programaciones(app=app, forzar=True)
+
+
+def job_verificar_programaciones():
+    verificar_y_ejecutar_programaciones(forzar=True)
+
+
+@bp.before_request
+def _check_programaciones_contabilidad():
+    if request.method == 'GET' and not request.path.startswith('/static/'):
+        verificar_y_ejecutar_programaciones()
+
 
 
 def obtener_siguiente_consecutivo(conn, negocio_id, tipo_doc_identificador):

@@ -78,6 +78,14 @@ def create_app():
     except Exception as _e:
         print(f'[negocios] init: {_e}')
 
+    # Inicializar APScheduler para tareas en segundo plano (amortizaciones, domótica, crm)
+    try:
+        from .scheduler import init_scheduler
+        init_scheduler(app)
+    except Exception as _e:
+        print(f'[scheduler] init error: {_e}')
+
+
     @app.before_request
     def _reconocer_dispositivo_global():
         from flask import session

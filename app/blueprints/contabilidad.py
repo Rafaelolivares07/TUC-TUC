@@ -5356,6 +5356,122 @@ def api_gastos_linea_centro_put(negocio_id, line_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/contabilidad/<int:negocio_id>/gastos/linea/<int:line_id>/reclasificar', methods=['PUT', 'PATCH'])
+def api_gastos_linea_reclasificar_put(negocio_id, line_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    data = request.get_json() or {}
+    categoria_tipo = (data.get('categoria_tipo') or 'gasto').strip().lower()
+    try:
+        meses_duracion = int(data.get('meses_duracion') or (1 if categoria_tipo == 'gasto' else 12))
+    except:
+        meses_duracion = 1 if categoria_tipo == 'gasto' else 12
+    if categoria_tipo == 'gasto':
+        meses_duracion = 1
+    elif meses_duracion < 2:
+        meses_duracion = 2
+
+    from ..db import get_db_connection
+    try:
+        conn = get_db_connection()
+        line = conn.execute("""
+            SELECT m.*, p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre
+            FROM movimientos_contables m
+            JOIN cuentas_puc p ON p.id = m.cuenta_id
+            WHERE m.id = %s AND m.negocio_id = %s
+        """, (line_id, negocio_id)).fetchone()
+        
+        if not line:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Registro de desembolso no encontrado'}), 404
+            
+        _verificar_periodo_cerrado(conn, negocio_id, line['fecha'])
+        
+        # Determinar nueva cuenta PUC si cambió de categoría
+        cuenta_id_final = line['cuenta_id']
+        cuenta_cod_final = str(line['cuenta_codigo']).strip()
+        
+        if categoria_tipo == 'activo':
+            pref_costo = '6143'
+            pref_act = '1505'
+        elif categoria_tipo == 'diferido':
+            pref_costo = '6144'
+            pref_act = '1705'
+        else:
+            pref_costo = '6142'
+            pref_act = None
+            
+        # Si la cuenta actual no coincide con el prefijo de la nueva categoría, reasignar / crear subcuenta correspondiente
+        if not cuenta_cod_final.startswith(pref_costo):
+            concepto_raw = line['concepto'] or 'Desembolso'
+            import re
+            concepto_base = re.sub(r'\[Soporte:\s*[^\]]+\]', '', concepto_raw)
+            concepto_base = re.sub(r'\([^)]+\)$', '', concepto_base).strip()
+            
+            # Buscar si ya existe una cuenta con ese nombre bajo el nuevo prefijo
+            cta_existente = conn.execute("""
+                SELECT id, codigo FROM cuentas_puc 
+                WHERE codigo LIKE %s AND UPPER(nombre) = %s AND activo = true
+                LIMIT 1
+            """, (f"{pref_costo}%", concepto_base.upper())).fetchone()
+            
+            if cta_existente:
+                cuenta_id_final = cta_existente['id']
+                cuenta_cod_final = cta_existente['codigo']
+            else:
+                # Buscar siguiente código
+                cuentas = conn.execute("""
+                    SELECT codigo FROM cuentas_puc WHERE codigo LIKE %s ORDER BY codigo ASC
+                """, (f"{pref_costo}%",)).fetchall()
+                max_num = 0
+                for c in cuentas:
+                    cod = str(c['codigo']).strip()
+                    if cod.startswith(pref_costo) and len(cod) > len(pref_costo):
+                        try:
+                            n = int(cod[len(pref_costo):])
+                            if n > max_num: max_num = n
+                        except: pass
+                siguiente_int = max_num + 1
+                nuevo_cod = f"{pref_costo}{siguiente_int:02d}"
+                
+                # Crear cuenta de costo
+                row_c = conn.execute("""
+                    INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                    VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true) RETURNING id
+                """, (nuevo_cod, concepto_base, pref_costo, negocio_id)).fetchone()
+                cuenta_id_final = row_c['id']
+                cuenta_cod_final = nuevo_cod
+                
+                # Si es activo o diferido, crear cuenta espejo
+                if pref_act:
+                    cod_act = f"{pref_act}{siguiente_int:02d}"
+                    if not conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (cod_act,)).fetchone():
+                        conn.execute("""
+                            INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                            VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true)
+                        """, (cod_act, f"{concepto_base} (Activo)", pref_act, negocio_id))
+
+        conn.execute("""
+            UPDATE movimientos_contables
+            SET cuenta_id = %s, cuenta = %s, meses_duracion = %s, cuota_total = %s
+            WHERE id = %s AND negocio_id = %s
+        """, (cuenta_id_final, cuenta_cod_final, meses_duracion, meses_duracion, line_id, negocio_id))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'cuenta_id': cuenta_id_final,
+            'cuenta_codigo': cuenta_cod_final,
+            'meses_duracion': meses_duracion,
+            'categoria_tipo': categoria_tipo
+        })
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/contabilidad/<int:negocio_id>/gastos/siguiente-codigo', methods=['GET'])
 def api_gastos_siguiente_codigo(negocio_id):
     if not session.get('usuario_id'):

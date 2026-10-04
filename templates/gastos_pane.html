@@ -503,6 +503,115 @@
     </div>
   </div>
 
+  <!-- Modal Reclasificar Tipo / Plazo de Línea de Desembolso -->
+  <div id="modal-reclasificar-linea-gasto" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2.5 text-gray-800">
+          <div class="p-2 bg-blue-50 text-blue-600 rounded-xl">
+            <span class="text-xl">🔄</span>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-gray-800">Reclasificar Tipo y Plazo</h4>
+            <p class="text-[11px] text-gray-500">Cambie si este desembolso es gasto del mes, activo fijo o diferido.</p>
+          </div>
+        </div>
+        <button onclick="cerrarModalReclasificarLinea()" class="text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer">&times;</button>
+      </div>
+
+      <input type="hidden" id="modal-reclass-linea-id">
+      <input type="hidden" id="modal-reclass-monto-val">
+
+      <!-- Resumen del Registro -->
+      <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 mb-4 space-y-1.5 text-xs">
+        <div class="flex justify-between">
+          <span class="text-gray-500">Concepto / Destino:</span>
+          <strong id="modal-reclass-concepto" class="text-gray-800 text-right truncate max-w-[240px]"></strong>
+        </div>
+        <div class="flex justify-between border-t border-gray-200 pt-1.5">
+          <span class="text-gray-600 font-bold uppercase text-[10px]">Monto Total:</span>
+          <strong id="modal-reclass-monto" class="font-mono text-sm text-rose-700"></strong>
+        </div>
+      </div>
+
+      <!-- Selector de Categoría -->
+      <div class="mb-4">
+        <label class="block text-xs font-semibold text-gray-600 uppercase mb-2">Clasificación Contable</label>
+        <div class="grid grid-cols-1 gap-2">
+          
+          <label class="flex items-start gap-3 p-2.5 rounded-xl border border-gray-200 hover:border-rose-300 hover:bg-rose-50/30 cursor-pointer transition has-checked:border-rose-500 has-checked:bg-rose-50/50">
+            <input type="radio" name="modal_reclass_cat" value="gasto" checked onchange="alCambiarCatReclasificarModal('gasto')"
+                   class="mt-0.5 text-rose-600 focus:ring-rose-500">
+            <div class="text-xs">
+              <span class="font-bold text-gray-800 block">🧾 Gasto del Día a Día</span>
+              <span class="text-[11px] text-gray-500">Gasto operativo 100% corriente del mes actual.</span>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-3 p-2.5 rounded-xl border border-gray-200 hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer transition has-checked:border-blue-500 has-checked:bg-blue-50/50">
+            <input type="radio" name="modal_reclass_cat" value="activo" onchange="alCambiarCatReclasificarModal('activo')"
+                   class="mt-0.5 text-blue-600 focus:ring-blue-500">
+            <div class="text-xs">
+              <span class="font-bold text-gray-800 block">🏭 Propiedad, Planta y Equipo</span>
+              <span class="text-[11px] text-gray-500">Maquinaria, mobiliario, equipos o herramientas de larga duración.</span>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-3 p-2.5 rounded-xl border border-gray-200 hover:border-purple-300 hover:bg-purple-50/30 cursor-pointer transition has-checked:border-purple-500 has-checked:bg-purple-50/50">
+            <input type="radio" name="modal_reclass_cat" value="diferido" onchange="alCambiarCatReclasificarModal('diferido')"
+                   class="mt-0.5 text-purple-600 focus:ring-purple-500">
+            <div class="text-xs">
+              <span class="font-bold text-gray-800 block">⏳ Gastos Pagados por Anticipado / Diferidos</span>
+              <span class="text-[11px] text-gray-500">Arriendos por anticipado, pólizas de seguro, licencias o inversiones.</span>
+            </div>
+          </label>
+
+        </div>
+      </div>
+
+      <!-- Selector de Plazo (Oculto si es Gasto) -->
+      <div id="modal-reclass-duracion-container" class="mb-4 hidden">
+        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">
+          ⏱️ Plazo de Distribución / Reconocimiento
+        </label>
+        <select id="modal-reclass-duracion" onchange="recalcularPreviewReclasificarLinea()"
+                class="border-2 border-amber-300 bg-white rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-amber-500 text-amber-950 outline-none">
+          <option value="2">2 meses</option>
+          <option value="3">3 meses</option>
+          <option value="4">4 meses</option>
+          <option value="5">5 meses</option>
+          <option value="6">6 meses</option>
+          <option value="9">9 meses</option>
+          <option value="12" selected>1 año (12 meses)</option>
+          <option value="18">1.5 años (18 meses)</option>
+          <option value="24">2 años (24 meses)</option>
+          <option value="36">3 años (36 meses)</option>
+          <option value="48">4 años (48 meses)</option>
+          <option value="60">5 años (60 meses)</option>
+        </select>
+      </div>
+
+      <!-- Preview de Cuota -->
+      <div class="p-3 bg-amber-50/80 rounded-xl border border-amber-200 mb-5 text-xs space-y-1">
+        <div class="flex justify-between items-center">
+          <span class="text-amber-900 font-medium">Reconocimiento mensual:</span>
+          <strong id="modal-reclass-cuota-preview" class="font-mono text-sm text-emerald-800 font-black">$0.00 / mes</strong>
+        </div>
+        <p id="modal-reclass-cuota-info" class="text-[10px] text-amber-700">100% asumido en el período actual.</p>
+      </div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="cerrarModalReclasificarLinea()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition">
+          Cancelar
+        </button>
+        <button id="btn-guardar-reclass-linea" onclick="guardarReclasificacionLinea()"
+                class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+          <span>💾</span> Guardar Cambios
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Crear Nuevo Tercero / Proveedor -->
   <div id="modal-nuevo-tercero" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-150">
@@ -754,21 +863,28 @@
           const ctaCod = String(l.cuenta || '');
           const esActivo = ctaCod.startsWith('6143') || ctaCod.startsWith('1505');
           const esDiferido = ctaCod.startsWith('6144') || ctaCod.startsWith('1705');
+          const catStr = esActivo ? 'activo' : (esDiferido ? 'diferido' : 'gasto');
 
           if (duracion > 1) {
             const cuotaMes = (parseFloat(l.monto) / duracion).toLocaleString('es-CO', {minimumFractionDigits:0, maximumFractionDigits:0});
             const icono = esActivo ? '🏭' : (esDiferido ? '⏳' : '⏱️');
-            const catColor = esActivo ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-purple-50 text-purple-800 border-purple-200';
+            const catColor = esActivo ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100' : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100';
             tipoPlazoBadge = `
-              <div class="inline-flex flex-col items-center">
+              <button type="button" onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)})"
+                      class="inline-flex flex-col items-center p-1 rounded-lg hover:shadow-2xs transition cursor-pointer" title="Haga clic para cambiar la clasificación o plazo">
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${catColor} border shadow-2xs">
-                  <span>${icono}</span> ${duracion} meses
+                  <span>${icono}</span> ${duracion} meses <span class="text-[9px] opacity-70">✏️</span>
                 </span>
                 <span class="text-[9px] text-gray-500 font-mono mt-0.5 font-semibold">$${cuotaMes}/mes</span>
-              </div>
+              </button>
             `;
           } else {
-            tipoPlazoBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200">🧾 Gasto Mes</span>`;
+            tipoPlazoBadge = `
+              <button type="button" onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', 1, ${parseFloat(l.monto)})"
+                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 transition cursor-pointer shadow-2xs" title="Haga clic para clasificar como activo o diferido">
+                <span>🧾 Gasto Mes</span> <span class="text-[9px] text-gray-400">✏️</span>
+              </button>
+            `;
           }
 
           tr.innerHTML = `
@@ -783,6 +899,11 @@
             <td class="px-4 py-2.5 text-right font-mono text-xs text-rose-700 font-bold">$${parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             <td class="px-4 py-2.5 text-center whitespace-nowrap">
               <div class="inline-flex items-center gap-1.5 justify-center">
+                <button onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)})"
+                        class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg border border-blue-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                        title="Reclasificar este desembolso (Gasto / Activo / Diferido y plazo)">
+                  <span>🔄</span> Reclasificar
+                </button>
                 <button onclick="abrirModalCierreIndividual(${l.id}, '${escapeJsString(displayConcepto)}', ${parseFloat(l.monto)}, ${duracion})"
                         class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
                         title="Liquidar individualmente esta erogación con el consecutivo actual">
@@ -1935,6 +2056,99 @@
     }
   }
 
+  // ═══ GESTIÓN RECLASIFICAR LÍNEA EN RELACIÓN ABIERTA ═══
+  function abrirModalReclasificarLinea(lineId, concepto, cat, duracion, monto) {
+    document.getElementById('modal-reclass-linea-id').value = lineId;
+    document.getElementById('modal-reclass-monto-val').value = monto;
+    document.getElementById('modal-reclass-concepto').textContent = concepto || 'Desembolso';
+    document.getElementById('modal-reclass-monto').textContent = '$' + parseFloat(monto || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+    
+    const radios = document.querySelectorAll('input[name="modal_reclass_cat"]');
+    radios.forEach(r => { r.checked = (r.value === cat); });
+    
+    alCambiarCatReclasificarModal(cat, duracion);
+    
+    const modal = document.getElementById('modal-reclasificar-linea-gasto');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function cerrarModalReclasificarLinea() {
+    const modal = document.getElementById('modal-reclasificar-linea-gasto');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function alCambiarCatReclasificarModal(cat, duracionPrevia = null) {
+    const durContainer = document.getElementById('modal-reclass-duracion-container');
+    const durSel = document.getElementById('modal-reclass-duracion');
+    if (duracionPrevia && durSel) durSel.value = String(duracionPrevia > 1 ? duracionPrevia : 12);
+    
+    if (cat === 'gasto') {
+      durContainer.classList.add('hidden');
+    } else {
+      durContainer.classList.remove('hidden');
+    }
+    recalcularPreviewReclasificarLinea();
+  }
+
+  function recalcularPreviewReclasificarLinea() {
+    const monto = parseFloat(document.getElementById('modal-reclass-monto-val')?.value || 0);
+    let cat = 'gasto';
+    const checkedRadio = document.querySelector('input[name="modal_reclass_cat"]:checked');
+    if (checkedRadio) cat = checkedRadio.value;
+    
+    const durSel = document.getElementById('modal-reclass-duracion');
+    const meses = (cat !== 'gasto' && durSel) ? parseInt(durSel.value || 12) : 1;
+    const cuota = meses > 0 ? (monto / meses) : monto;
+    
+    const prevEl = document.getElementById('modal-reclass-cuota-preview');
+    const infoEl = document.getElementById('modal-reclass-cuota-info');
+    if (prevEl) prevEl.textContent = '$' + cuota.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' / mes';
+    if (infoEl) {
+      if (meses > 1) {
+        infoEl.textContent = `Cuota 1 de ${meses} se asienta al cerrar. Saldo restante diferido en activo.`;
+      } else {
+        infoEl.textContent = '100% asumido en el período actual.';
+      }
+    }
+  }
+
+  async function guardarReclasificacionLinea() {
+    const lineId = document.getElementById('modal-reclass-linea-id')?.value;
+    if (!lineId) return;
+    
+    let cat = 'gasto';
+    const checkedRadio = document.querySelector('input[name="modal_reclass_cat"]:checked');
+    if (checkedRadio) cat = checkedRadio.value;
+    
+    const durSel = document.getElementById('modal-reclass-duracion');
+    const meses = (cat !== 'gasto' && durSel) ? parseInt(durSel.value || 12) : 1;
+    
+    const btn = document.getElementById('btn-guardar-reclass-linea');
+    if (btn) btn.disabled = true;
+    
+    try {
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea/${lineId}/reclasificar`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ categoria_tipo: cat, meses_duracion: meses })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast('Desembolso reclasificado con éxito.');
+        cerrarModalReclasificarLinea();
+        await cargarRelacionGastoActiva();
+      } else {
+        toast(d.error || 'Error al reclasificar desembolso', false);
+      }
+    } catch(e) {
+      toast('Error de red al guardar reclasificación', false);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   document.addEventListener('click', e => {
     if (!e.target.closest('#gas-concept-txt') && !e.target.closest('#gas-concept-ac')) {
       document.getElementById('gas-concept-ac').classList.add('hidden');
@@ -1956,6 +2170,9 @@
     }
     if (e.target.id === 'modal-cierre-individual-linea') {
       cerrarModalCierreIndividual();
+    }
+    if (e.target.id === 'modal-reclasificar-linea-gasto') {
+      cerrarModalReclasificarLinea();
     }
     if (e.target.id === 'modal-nuevo-tercero') {
       cerrarModalNuevoTercero();

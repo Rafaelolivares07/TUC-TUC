@@ -1435,7 +1435,7 @@
 
       <button class="tab-btn" onclick="mostrarTab('ventas_costos')">Ventas/Costos</button>
 
-      <button class="tab-btn" onclick="mostrarTab('gastos')">💸 Desembolsos</button>
+      <button class="tab-btn" onclick="mostrarTab('desembolsos')">💸 Desembolsos</button>
 
       <button class="tab-btn" onclick="mostrarTab('estado_resultados')">📊 Estado de Resultados</button>
 
@@ -3436,9 +3436,9 @@
 
 
 
-  <!-- ── TAB GASTOS ────────────────────────────────────────────────── -->
+  <!-- ── TAB DESEMBOLSOS ────────────────────────────────────────────── -->
 
-  <div id="tab-gastos" class="hidden bg-white rounded-2xl shadow p-5">
+  <div id="tab-desembolsos" class="hidden bg-white rounded-2xl shadow p-5">
 
     {% include 'gastos_pane.html' %}
 
@@ -3517,6 +3517,7 @@
 <script>
 
 const NEGOCIO_ID = {{ negocio_id }};
+const TAB_INICIAL_SERVER = {{ (tab_inicial or '') | tojson }};
 
 let CENTROS_UTILIDAD = {{ centros_utilidad | tojson if centros_utilidad else '[]' }};
 let CENTRO_ACTIVO = {{ centro_activo | tojson if centro_activo else 'null' }};
@@ -3586,9 +3587,10 @@ function toast(msg, ok = true) {
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'cotizaciones', 'kardex', 'traslados', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'gastos', 'estado_resultados', 'recosteo'];
+const TABS = ['productos', 'tarjetas', 'entradas', 'produccion', 'compras_sugerencias', 'cotizaciones', 'kardex', 'traslados', 'ensambles', 'ensambles_historicos', 'ventas_costos', 'desembolsos', 'estado_resultados', 'recosteo'];
 
 function mostrarTab(t) {
+  if (t === 'gastos') t = 'desembolsos';
 
   TABS.forEach(id => {
 
@@ -3610,9 +3612,13 @@ function mostrarTab(t) {
 
     const url = new URL(window.location.href);
 
-    url.searchParams.set('tab', t);
-
-    history.replaceState(null, '', url.pathname + url.search);
+    if (window.location.pathname.match(/\/admin\/inventario\/\d+\/[a-zA-Z0-9_-]+/)) {
+      const basePath = window.location.pathname.replace(/\/[a-zA-Z0-9_-]+$/, '');
+      history.replaceState(null, '', `${basePath}/${t}${url.search}`);
+    } else {
+      url.searchParams.set('tab', t);
+      history.replaceState(null, '', url.pathname + url.search);
+    }
 
   }
 
@@ -12469,7 +12475,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const initUrlParams = new URLSearchParams(window.location.search);
 
-  const activeTab = initUrlParams.get('tab');
+  let activeTab = TAB_INICIAL_SERVER || initUrlParams.get('tab');
+  if (activeTab === 'gastos') activeTab = 'desembolsos';
 
   if (activeTab && TABS.includes(activeTab)) {
 

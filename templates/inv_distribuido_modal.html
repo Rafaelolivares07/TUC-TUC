@@ -203,10 +203,10 @@ let _invDistModalidad = 'rafaga';
       moduloActual = 'dashboard';
     }
 
-    // Comprobar panel gastos
-    const panelGastos = document.getElementById('panel-gastos') || document.getElementById('tab-gastos');
+    // Comprobar panel desembolsos / gastos
+    const panelGastos = document.getElementById('panel-desembolsos') || document.getElementById('tab-desembolsos') || document.getElementById('panel-gastos') || document.getElementById('tab-gastos');
     if (panelGastos && panelGastos.offsetParent !== null) {
-      if (modulosHabilitados.includes('gastos')) moduloActual = 'gastos';
+      if (modulosHabilitados.includes('desembolsos') || modulosHabilitados.includes('gastos')) moduloActual = 'desembolsos';
     }
 
     if (!moduloActual || !modulosHabilitados.includes(moduloActual)) return;

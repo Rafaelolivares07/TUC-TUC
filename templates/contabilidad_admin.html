@@ -66,7 +66,7 @@
       <button onclick="cambiarTab('tipos')"  id="tab-tipos"  class="tab-btn">📄 Tipos Doc</button>
       <button onclick="cambiarTab('params')" id="tab-params" class="tab-btn">⚙️ Parametrización</button>
       <button onclick="cambiarTab('pago_metodos')" id="tab-pago_metodos" class="tab-btn">💳 Métodos de Pago</button>
-      <button onclick="cambiarTab('gastos')" id="tab-gastos" class="tab-btn">💸 Desembolsos</button>
+      <button onclick="cambiarTab('desembolsos')" id="tab-desembolsos" class="tab-btn">💸 Desembolsos</button>
       <button onclick="cambiarTab('estado_resultados')" id="tab-estado_resultados" class="tab-btn">📊 Estado de Resultados</button>
       <button onclick="cambiarTab('grupos')" id="tab-grupos" class="tab-btn">🗂️ Grupos Inv.</button>
       <button onclick="cambiarTab('manual')" id="tab-manual" class="tab-btn">✏️ Comprobante</button>
@@ -491,8 +491,8 @@
       </div>
     </div>
 
-    <!-- TAB: GASTOS -->
-    <div id="panel-gastos" class="p-5 hidden">
+    <!-- TAB: DESEMBOLSOS -->
+    <div id="panel-desembolsos" class="p-5 hidden">
       {% include "gastos_pane.html" %}
     </div>
 
@@ -815,7 +815,8 @@
 
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
-const TABS = ['puc','tipos','params','pago_metodos','gastos','estado_resultados','grupos','progs','manual','comps', 'consulta', 'balance'];
+const TAB_INICIAL_SERVER = {{ (tab_inicial or '') | tojson }};
+const TABS = ['puc','tipos','params','pago_metodos','desembolsos','estado_resultados','grupos','progs','manual','comps', 'consulta', 'balance'];
 let tiposDocs = [];
 let variablesModulo = [];
 let paramActivo = null;
@@ -824,6 +825,7 @@ let acTimers = {};
 
 // ── Tabs ──────────────────────────────────────────────────────
 function cambiarTab(t) {
+  if (t === 'gastos') t = 'desembolsos';
   TABS.forEach(x => {
     const el = document.getElementById(`panel-${x}`);
     if (el) el.classList.toggle('hidden', x !== t);
@@ -833,8 +835,13 @@ function cambiarTab(t) {
 
   if (history.replaceState) {
     const url = new URL(window.location.href);
-    url.searchParams.set('tab', t);
-    history.replaceState(null, '', url.pathname + url.search);
+    if (window.location.pathname.match(/\/admin\/contabilidad\/\d+\/[a-zA-Z0-9_-]+/)) {
+      const basePath = window.location.pathname.replace(/\/[a-zA-Z0-9_-]+$/, '');
+      history.replaceState(null, '', `${basePath}/${t}${url.search}`);
+    } else {
+      url.searchParams.set('tab', t);
+      history.replaceState(null, '', url.pathname + url.search);
+    }
   }
   const cleanTabName = t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ');
   document.title = `${cleanTabName} — Contabilidad`;
@@ -3291,9 +3298,9 @@ async function cargarCentrosUtilidadContabilidad() {
 // Inicializar centros de utilidad
 cargarCentrosUtilidadContabilidad();
 
-// Cargar el PUC de inmediato al iniciar o redirigir según query parameters
 const urlParams = new URLSearchParams(window.location.search);
-const activeTab = urlParams.get('tab');
+let activeTab = TAB_INICIAL_SERVER || urlParams.get('tab');
+if (activeTab === 'gastos') activeTab = 'desembolsos';
 if (activeTab && TABS.includes(activeTab)) {
   cambiarTab(activeTab);
   if (activeTab === 'consulta') {

@@ -6450,7 +6450,8 @@ def api_anular_documento(negocio_id):
 
 
 @bp.route('/admin/inventario/<int:negocio_id>')
-def admin_inventario(negocio_id):
+@bp.route('/admin/inventario/<int:negocio_id>/<tab_name>')
+def admin_inventario(negocio_id, tab_name=None):
     if 'usuario_id' not in session:
         return redirect(url_for('auth.admin_login'))
     conn = get_db_connection()
@@ -6461,6 +6462,14 @@ def admin_inventario(negocio_id):
             return "Negocio no encontrado", 404
         if not _puede_gestionar_negocio(contexto):
             return "No autorizado para este negocio", 403
+
+        # Si tab_name es 'gastos', mapear a 'desembolsos'
+        if tab_name == 'gastos':
+            tab_name = 'desembolsos'
+        elif not tab_name:
+            tab_name = request.args.get('tab', '')
+            if tab_name == 'gastos':
+                tab_name = 'desembolsos'
 
         # Consultar centros de utilidad configurados
         centros_rows = conn.execute("""
@@ -6491,7 +6500,8 @@ def admin_inventario(negocio_id):
                                volver_url=contexto['volver_url'],
                                volver_label=contexto['volver_label'],
                                centros_utilidad=centros,
-                               centro_activo=centro_activo)
+                               centro_activo=centro_activo,
+                               tab_inicial=tab_name)
     except Exception as e:
         return f"Error: {e}", 500
     finally:

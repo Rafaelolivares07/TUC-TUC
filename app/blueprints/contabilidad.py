@@ -1770,7 +1770,8 @@ def contabilidad_por_slug(tipo, slug):
 
 
 @bp.route('/admin/contabilidad/<int:negocio_id>')
-def admin_contabilidad(negocio_id):
+@bp.route('/admin/contabilidad/<int:negocio_id>/<tab_name>')
+def admin_contabilidad(negocio_id, tab_name=None):
     if not session.get('usuario_id'):
         return __import__('flask').redirect('/login')
     from ..db import get_db_connection
@@ -1784,9 +1785,18 @@ def admin_contabilidad(negocio_id):
         conn.close()
         if not negocio:
             return "Negocio no encontrado", 404
+
+        if tab_name == 'gastos':
+            tab_name = 'desembolsos'
+        elif not tab_name:
+            tab_name = request.args.get('tab', '')
+            if tab_name == 'gastos':
+                tab_name = 'desembolsos'
+
         return render_template('contabilidad_admin.html',
                                negocio_id=negocio_id,
-                               negocio_nombre=negocio['nombre'])
+                               negocio_nombre=negocio['nombre'],
+                               tab_inicial=tab_name)
     except Exception as e:
         try: conn.close()
         except Exception: pass

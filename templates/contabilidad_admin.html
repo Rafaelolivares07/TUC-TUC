@@ -480,7 +480,7 @@
               <th class="px-4 py-3 text-left">Cuenta de Pago (Crédito en Compras)</th>
               <th class="px-4 py-3 text-left">Cuenta Recaudo (Saldos)</th>
               <th class="px-4 py-3 text-left">Cuenta Pago (Saldos)</th>
-              <th class="px-4 py-3 text-left">Cuenta Gastos (Egresos Gastos)</th>
+              <th class="px-4 py-3 text-left">Cuenta Contrapartida (Desembolsos)</th>
               <th class="px-4 py-3 text-center w-28">Acciones</th>
             </tr>
           </thead>
@@ -2266,7 +2266,7 @@ async function cargarPagoMetodos() {
       const pagText = m.pago_codigo ? `${m.pago_codigo} — ${m.pago_nombre}` : '';
       const recSaldosText = m.recaudo_saldos_codigo ? `${m.recaudo_saldos_codigo} — ${m.recaudo_saldos_nombre}` : '';
       const pagSaldosText = m.pago_saldos_codigo ? `${m.pago_saldos_codigo} — ${m.pago_saldos_nombre}` : '';
-      const gasText = m.cuenta_gastos_codigo ? `${m.cuenta_gastos_codigo} — ${m.cuenta_gastos_nombre}` : '';
+      const gasText = (m.gastos_codigo && m.gastos_nombre) ? `${m.gastos_codigo} — ${m.gastos_nombre}` : (m.cuenta_gastos_codigo ? `${m.cuenta_gastos_codigo} — ${m.cuenta_gastos_nombre}` : '');
       
       const tr = document.createElement('tr');
       tr.className = 'hover:bg-gray-50';

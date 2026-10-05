@@ -2955,14 +2955,15 @@
         
         if (Array.isArray(terceros) && terceros.length > 0) {
           html = terceros.slice(0, 15).map(t => {
-            const docInfo = t.numero_documento ? ` · Doc: ${escapeGasHtml(t.numero_documento)}` : '';
-            const telInfo = t.telefono ? ` · 📞 ${escapeGasHtml(t.telefono)}` : '';
+            const telInfo = t.telefono ? `📞 ${escapeGasHtml(t.telefono)}` : '';
+            const dirInfo = t.direccion ? ` · 📍 ${escapeGasHtml(t.direccion)}` : '';
+            const sub = (telInfo || dirInfo) ? `<span class="text-[10px] text-gray-500 font-mono">${telInfo}${dirInfo}</span>` : '';
             return `
               <div class="ac-item px-3 py-2.5 hover:bg-indigo-50 cursor-pointer text-xs border-b border-gray-100 last:border-b-0 flex justify-between items-center transition"
                    data-id="${t.id}" data-nombre="${t.nombre.replace(/"/g, '&quot;')}">
                 <div>
                   <span class="font-bold text-gray-800 block">${escapeGasHtml(t.nombre)}</span>
-                  <span class="text-[10px] text-gray-500 font-mono">${docInfo}${telInfo}</span>
+                  ${sub}
                 </div>
                 <span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold border border-indigo-100">Seleccionar</span>
               </div>

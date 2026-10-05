@@ -5277,20 +5277,20 @@ def api_buscar_terceros():
     try:
         if q:
             rows = conn.execute("""
-                SELECT id, nombre, telefono, numero_documento 
+                SELECT id, nombre, telefono, direccion 
                 FROM terceros 
-                WHERE nombre ILIKE %s OR COALESCE(numero_documento, '') ILIKE %s
+                WHERE nombre ILIKE %s OR COALESCE(telefono, '') ILIKE %s
                 ORDER BY nombre 
                 LIMIT 50
             """, (f'%{q}%', f'%{q}%')).fetchall()
         else:
             rows = conn.execute("""
-                SELECT id, nombre, telefono, numero_documento 
+                SELECT id, nombre, telefono, direccion 
                 FROM terceros 
                 ORDER BY nombre 
                 LIMIT 50
             """).fetchall()
-        return jsonify([{'id': r['id'], 'nombre': r['nombre'], 'telefono': r['telefono'], 'numero_documento': r['numero_documento']} for r in rows])
+        return jsonify([{'id': r['id'], 'nombre': r['nombre'], 'telefono': r['telefono'], 'direccion': r['direccion']} for r in rows])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:

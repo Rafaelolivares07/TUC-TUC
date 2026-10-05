@@ -845,64 +845,121 @@
         </div>
       </div>
 
-      <!-- Selector de Plazo (Oculto si es Gasto) -->
-      <div id="modal-reclass-duracion-container" class="mb-2 hidden">
-        <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-          ⏱️ Plazo de Distribución / Reconocimiento
-        </label>
-        <select id="modal-reclass-duracion" onchange="alCambiarDuracionReclass()"
-                class="border border-amber-300 bg-white rounded-xl px-3 py-1.5 text-xs font-bold w-full focus:ring-2 focus:ring-amber-500 text-amber-950 outline-none">
-          <option value="2">2 meses</option>
-          <option value="3">3 meses</option>
-          <option value="4">4 meses</option>
-          <option value="5">5 meses</option>
-          <option value="6">6 meses</option>
-          <option value="9">9 meses</option>
-          <option value="12" selected>1 año (12 meses)</option>
-          <option value="18">1.5 años (18 meses)</option>
-          <option value="24">2 años (24 meses)</option>
-          <option value="36">3 años (36 meses)</option>
-          <option value="48">4 años (48 meses)</option>
-          <option value="60">5 años (60 meses)</option>
-        </select>
-      </div>
+      <!-- Configuración de Plazo y Modalidad de Amortización (Oculto si es Gasto) -->
+      <div id="modal-reclass-duracion-container" class="mb-3 space-y-3 hidden">
+        <!-- Selector de Plazo -->
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+            ⏱️ Plazo Total de Amortización
+          </label>
+          <select id="modal-reclass-duracion" onchange="alCambiarDuracionReclass()"
+                  class="border border-indigo-200 bg-white rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-indigo-500 text-gray-800 outline-none h-[38px]">
+            <option value="2">2 meses</option>
+            <option value="3">3 meses</option>
+            <option value="4">4 meses</option>
+            <option value="5">5 meses</option>
+            <option value="6">6 meses</option>
+            <option value="9">9 meses</option>
+            <option value="12" selected>1 año (12 meses)</option>
+            <option value="18">1.5 años (18 meses)</option>
+            <option value="24">2 años (24 meses)</option>
+            <option value="36">3 años (36 meses)</option>
+            <option value="48">4 años (48 meses)</option>
+            <option value="60">5 años (60 meses)</option>
+          </select>
+        </div>
 
-      <!-- Opción de Prorrateo por días de mes calendario (Oculto si es Gasto) -->
-      <div id="modal-reclass-prorrateo-container" class="mb-2.5 p-2 bg-blue-50/50 rounded-xl border border-blue-200/70 hidden">
-        <label class="flex items-center gap-2 cursor-pointer select-none">
-          <input type="checkbox" id="modal-reclass-prorrateo" checked onchange="alToggleProrrateoReclass()"
-                 class="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500">
-          <span class="text-[11px] font-bold text-blue-900">Prorratear días del mes inicial</span>
-        </label>
-        
-        <!-- Desglose de cuotas cuando está activo el prorrateo -->
-        <div id="modal-reclass-desglose-prorrateo" class="mt-2 pt-2 border-t border-blue-200/50 space-y-1.5 text-[11px]">
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-gray-600 font-medium">🗓️ Cuota 1 (Mes inicial):</span>
-            <div class="flex items-center gap-1">
-              <span class="font-bold text-gray-500">$</span>
-              <input type="number" step="0.01" id="modal-reclass-cuota1-input" oninput="alEditarCuota1Reclass()"
-                     class="w-28 text-right font-mono font-bold text-xs bg-white border border-blue-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 text-blue-950 outline-none">
+        <!-- Selector de Modalidad (2 Tarjetas Claras con Radio Button / Toggle) -->
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+            📊 Modalidad de Amortización (Seleccione una opción)
+          </label>
+          
+          <div class="space-y-2.5">
+            <!-- Modalidad 1: Cuotas Fijas Mensuales -->
+            <div id="card-reclass-modalidad-fija" onclick="seleccionarModalidadReclass('fija')"
+                 class="relative flex flex-col p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-white border-gray-200 hover:border-gray-300">
+              <input type="radio" name="modal_reclass_modalidad" value="fija" class="sr-only">
+              <div class="flex items-center justify-between mb-1.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">⚖️</span>
+                  <span class="text-xs font-extrabold text-gray-800">Opción 1: Cuotas Fijas / Uniformes</span>
+                  <span class="reclass-mod-badge hidden text-[9px] bg-blue-600 text-white font-bold px-2 py-0.5 rounded-full">SELECCIONADA</span>
+                </div>
+                <div class="toggle-track w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 bg-gray-200 shadow-inner">
+                  <div class="toggle-knob w-4 h-4 bg-white rounded-full transition-transform translate-x-0 shadow-sm"></div>
+                </div>
+              </div>
+              <p class="text-[11px] text-gray-500 leading-relaxed mb-2">
+                Divide el valor total en partes exactamente iguales todos los meses (sin importar el día de la compra).
+              </p>
+              <div class="bg-gray-50/80 rounded-xl p-2.5 border border-gray-100 flex items-center justify-between text-xs">
+                <div>
+                  <span class="text-[10px] text-gray-400 block uppercase font-semibold">Valor mensual:</span>
+                  <strong id="modal-reclass-val-fija-cuota1" class="font-mono text-xs font-bold text-gray-800">$0.00 / mes</strong>
+                </div>
+                <div class="text-right">
+                  <span class="text-[10px] text-gray-400 block uppercase font-semibold">Distribución:</span>
+                  <span id="modal-reclass-val-fija-total" class="text-xs font-bold text-gray-700">12 cuotas idénticas</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Modalidad 2: Prorrateo Calendario -->
+            <div id="card-reclass-modalidad-prorrateo" onclick="seleccionarModalidadReclass('prorrateo')"
+                 class="relative flex flex-col p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-blue-50/40 border-blue-500 shadow-xs">
+              <input type="radio" name="modal_reclass_modalidad" value="prorrateo" checked class="sr-only">
+              <div class="flex items-center justify-between mb-1.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">🗓️</span>
+                  <span class="text-xs font-extrabold text-blue-950">Opción 2: Prorrateo por Días Calendario</span>
+                  <span class="reclass-mod-badge text-[9px] bg-blue-600 text-white font-bold px-2 py-0.5 rounded-full">SELECCIONADA</span>
+                </div>
+                <div class="toggle-track w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 bg-blue-600 shadow-inner">
+                  <div class="toggle-knob w-4 h-4 bg-white rounded-full transition-transform translate-x-5 shadow-sm"></div>
+                </div>
+              </div>
+              <p class="text-[11px] text-gray-600 leading-relaxed mb-2.5">
+                Calcula la 1ª cuota según los días restantes desde la fecha de compra hasta fin de mes. Los meses siguientes son completos y el último mes absorbe el saldo restante.
+              </p>
+              
+              <!-- Desglose interactivo del prorrateo -->
+              <div class="bg-white/90 rounded-xl p-2.5 border border-blue-200/70 space-y-2 text-xs">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-gray-700 font-bold text-[11px]">🗓️ Cuota 1 (Mes inicial):</span>
+                  <div class="flex items-center gap-1">
+                    <span class="font-bold text-gray-500 text-xs">$</span>
+                    <input type="number" step="0.01" id="modal-reclass-cuota1-input" oninput="alEditarCuota1Reclass()"
+                           onclick="event.stopPropagation()"
+                           class="w-28 text-right font-mono font-black text-xs bg-white border border-blue-300 rounded-lg px-2 py-1 focus:ring-2 focus:ring-blue-500 text-blue-950 outline-none">
+                  </div>
+                </div>
+                <div class="flex justify-between items-center text-gray-600 text-[11px] border-t border-blue-100 pt-1.5">
+                  <span id="modal-reclass-lbl-intermedias">🗓️ Cuotas ordinarias intermedias:</span>
+                  <strong id="modal-reclass-val-intermedias" class="font-mono text-gray-800 font-bold">$0.00 / mes</strong>
+                </div>
+                <div id="modal-reclass-row-residuo" class="flex justify-between items-center text-indigo-900 bg-indigo-50/70 px-2 py-1 rounded-lg border border-indigo-100 text-[11px]">
+                  <span id="modal-reclass-lbl-residuo">🗓️ Cuota final (Mes 13 / Residuo):</span>
+                  <strong id="modal-reclass-val-residuo" class="font-mono text-indigo-700 font-black">$0.00</strong>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="flex justify-between text-gray-600">
-            <span id="modal-reclass-lbl-intermedias">🗓️ Cuotas ordinarias (meses completos):</span>
-            <strong id="modal-reclass-val-intermedias" class="font-mono text-gray-800">$0.00 / mes</strong>
-          </div>
-          <div id="modal-reclass-row-residuo" class="flex justify-between text-indigo-900 font-semibold bg-indigo-50/60 p-1.5 rounded-lg border border-indigo-100">
-            <span id="modal-reclass-lbl-residuo">🗓️ Cuota final (Residuo de cierre):</span>
-            <strong id="modal-reclass-val-residuo" class="font-mono text-indigo-700">$0.00</strong>
-          </div>
         </div>
       </div>
 
-      <!-- Preview de Cuota -->
-      <div class="p-2.5 bg-amber-50/80 rounded-xl border border-amber-200 mb-3.5 text-xs space-y-1">
+      <!-- Resumen de Impacto Contable y Cuota 1 Inmediata -->
+      <div class="p-3 bg-indigo-50/80 rounded-2xl border border-indigo-200/80 mb-3.5 text-xs space-y-2">
         <div class="flex justify-between items-center">
-          <span class="text-amber-900 font-medium text-[11px]">Reconocimiento mensual:</span>
-          <strong id="modal-reclass-cuota-preview" class="font-mono text-xs sm:text-sm text-emerald-800 font-black">$0.00 / mes</strong>
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs font-bold text-indigo-950">Modalidad Activa:</span>
+            <span id="modal-reclass-modo-badge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">🗓️ Prorrateo Calendario</span>
+          </div>
+          <strong id="modal-reclass-cuota-preview" class="font-mono text-xs sm:text-sm text-indigo-900 font-black">$0.00 (Cuota 1)</strong>
         </div>
-        <p id="modal-reclass-cuota-info" class="text-[10px] text-amber-700">100% asumido en el período actual.</p>
+        <p id="modal-reclass-cuota-info" class="text-[11px] text-indigo-800/90 leading-relaxed">
+          100% asumido en el período actual.
+        </p>
       </div>
 
       <div class="flex justify-end gap-2">
@@ -2632,14 +2689,62 @@
     alCambiarCatReclasificarModal(cat);
   }
 
+  let _reclassModalidad = 'prorrateo'; // 'fija' | 'prorrateo'
+
+  function seleccionarModalidadReclass(modalidad) {
+    _reclassModalidad = modalidad;
+    const cardFija = document.getElementById('card-reclass-modalidad-fija');
+    const cardProrrateo = document.getElementById('card-reclass-modalidad-prorrateo');
+    const radioFija = document.querySelector('input[name="modal_reclass_modalidad"][value="fija"]');
+    const radioProrrateo = document.querySelector('input[name="modal_reclass_modalidad"][value="prorrateo"]');
+
+    if (modalidad === 'fija') {
+      if (radioFija) radioFija.checked = true;
+      if (cardFija) {
+        cardFija.className = 'relative flex flex-col p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-blue-50/40 border-blue-500 shadow-xs';
+        cardFija.querySelector('.reclass-mod-badge')?.classList.remove('hidden');
+        cardFija.querySelector('.toggle-track')?.classList.add('bg-blue-600');
+        cardFija.querySelector('.toggle-track')?.classList.remove('bg-gray-200');
+        cardFija.querySelector('.toggle-knob')?.classList.add('translate-x-5');
+        cardFija.querySelector('.toggle-knob')?.classList.remove('translate-x-0');
+      }
+      if (cardProrrateo) {
+        cardProrrateo.className = 'relative flex flex-col p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-white border-gray-200 hover:border-gray-300 opacity-80';
+        cardProrrateo.querySelector('.reclass-mod-badge')?.classList.add('hidden');
+        cardProrrateo.querySelector('.toggle-track')?.classList.remove('bg-blue-600');
+        cardProrrateo.querySelector('.toggle-track')?.classList.add('bg-gray-200');
+        cardProrrateo.querySelector('.toggle-knob')?.classList.remove('translate-x-5');
+        cardProrrateo.querySelector('.toggle-knob')?.classList.add('translate-x-0');
+      }
+    } else {
+      if (radioProrrateo) radioProrrateo.checked = true;
+      if (cardProrrateo) {
+        cardProrrateo.className = 'relative flex flex-col p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-blue-50/40 border-blue-500 shadow-xs';
+        cardProrrateo.querySelector('.reclass-mod-badge')?.classList.remove('hidden');
+        cardProrrateo.querySelector('.toggle-track')?.classList.add('bg-blue-600');
+        cardProrrateo.querySelector('.toggle-track')?.classList.remove('bg-gray-200');
+        cardProrrateo.querySelector('.toggle-knob')?.classList.add('translate-x-5');
+        cardProrrateo.querySelector('.toggle-knob')?.classList.remove('translate-x-0');
+      }
+      if (cardFija) {
+        cardFija.className = 'relative flex flex-col p-3.5 rounded-2xl border-2 transition-all duration-150 cursor-pointer select-none bg-white border-gray-200 hover:border-gray-300 opacity-80';
+        cardFija.querySelector('.reclass-mod-badge')?.classList.add('hidden');
+        cardFija.querySelector('.toggle-track')?.classList.remove('bg-blue-600');
+        cardFija.querySelector('.toggle-track')?.classList.add('bg-gray-200');
+        cardFija.querySelector('.toggle-knob')?.classList.remove('translate-x-5');
+        cardFija.querySelector('.toggle-knob')?.classList.add('translate-x-0');
+      }
+    }
+
+    recalcularPreviewReclasificarLinea(true);
+  }
+
   function abrirModalReclasificarLinea(lineId, concepto, cat, duracion, monto) {
     document.getElementById('modal-reclass-linea-id').value = lineId;
     document.getElementById('modal-reclass-monto-val').value = monto;
     document.getElementById('modal-reclass-concepto').textContent = concepto || 'Desembolso';
     document.getElementById('modal-reclass-monto').textContent = '$' + parseFloat(monto || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
     
-    const prorrateoChk = document.getElementById('modal-reclass-prorrateo');
-    if (prorrateoChk) prorrateoChk.checked = true;
     const cuota1Inp = document.getElementById('modal-reclass-cuota1-input');
     if (cuota1Inp) cuota1Inp.value = '';
 
@@ -2647,6 +2752,7 @@
     if (durSel) durSel.value = String(duracion > 1 ? duracion : 12);
 
     seleccionarCatReclass(cat || 'gasto');
+    seleccionarModalidadReclass('prorrateo');
     
     const modal = document.getElementById('modal-reclasificar-linea-gasto');
     modal.classList.remove('hidden');
@@ -2661,27 +2767,18 @@
 
   function alCambiarCatReclasificarModal(cat, duracionPrevia = null) {
     const durContainer = document.getElementById('modal-reclass-duracion-container');
-    const proContainer = document.getElementById('modal-reclass-prorrateo-container');
     const durSel = document.getElementById('modal-reclass-duracion');
     if (duracionPrevia && durSel) durSel.value = String(duracionPrevia > 1 ? duracionPrevia : 12);
     
     if (cat === 'gasto') {
       durContainer.classList.add('hidden');
-      if (proContainer) proContainer.classList.add('hidden');
     } else {
       durContainer.classList.remove('hidden');
-      if (proContainer) proContainer.classList.remove('hidden');
     }
     recalcularPreviewReclasificarLinea(true);
   }
 
   function alCambiarDuracionReclass() {
-    const cuota1Inp = document.getElementById('modal-reclass-cuota1-input');
-    if (cuota1Inp) cuota1Inp.value = '';
-    recalcularPreviewReclasificarLinea(true);
-  }
-
-  function alToggleProrrateoReclass() {
     const cuota1Inp = document.getElementById('modal-reclass-cuota1-input');
     if (cuota1Inp) cuota1Inp.value = '';
     recalcularPreviewReclasificarLinea(true);
@@ -2701,8 +2798,7 @@
     const meses = (cat !== 'gasto' && durSel) ? parseInt(durSel.value || 12) : 1;
     const fechaStr = document.getElementById('gas-fecha')?.value || '';
 
-    const prorrateoChk = document.getElementById('modal-reclass-prorrateo');
-    const esProrrateado = (cat !== 'gasto' && prorrateoChk) ? prorrateoChk.checked : false;
+    const esProrrateado = (cat !== 'gasto') && (_reclassModalidad === 'prorrateo');
 
     const cuota1Inp = document.getElementById('modal-reclass-cuota1-input');
     const cuota1Override = (cuota1Inp && !resetCuota1Input && cuota1Inp.value !== '') ? parseFloat(cuota1Inp.value) : null;
@@ -2725,23 +2821,29 @@
     let cuotasTotal = meses;
 
     const tieneOverride = (cuota1Override !== null && !isNaN(cuota1Override) && parseFloat(cuota1Override) > 0);
-    const usarProrrateo = esProrrateado && (diaInicio > 1 || tieneOverride);
 
-    if (cat !== 'gasto' && (usarProrrateo || tieneOverride)) {
-      if (tieneOverride) {
-        cuota1 = Math.round(parseFloat(cuota1Override) * 100) / 100;
+    if (cat !== 'gasto') {
+      if (esProrrateado) {
+        if (tieneOverride) {
+          cuota1 = Math.round(parseFloat(cuota1Override) * 100) / 100;
+        } else {
+          const diasRestantes = Math.max(diasEnMes1 - diaInicio + 1, 1);
+          const cuotaDia = cuotaMensualBase / diasEnMes1;
+          cuota1 = Math.round(cuotaDia * diasRestantes * 100) / 100;
+        }
+        const acumulado = cuota1 + Math.round((cuotaIntermedia * numIntermedias) * 100) / 100;
+        cuotaFinal = Math.round((monto - acumulado) * 100) / 100;
+        if (cuotaFinal > 0) cuotasTotal = meses + 1;
       } else {
-        const diasRestantes = Math.max(diasEnMes1 - diaInicio + 1, 1);
-        const cuotaDia = cuotaMensualBase / diasEnMes1;
-        cuota1 = Math.round(cuotaDia * diasRestantes * 100) / 100;
+        cuota1 = cuotaMensualBase;
+        cuotaIntermedia = cuotaMensualBase;
+        cuotaFinal = 0;
+        cuotasTotal = meses;
       }
-      const acumulado = cuota1 + Math.round((cuotaIntermedia * numIntermedias) * 100) / 100;
-      cuotaFinal = Math.round((monto - acumulado) * 100) / 100;
-      if (cuotaFinal > 0) cuotasTotal = meses + 1;
     }
 
     _reclassCronogramaActual = {
-      esProrrateado: usarProrrateo,
+      esProrrateado: esProrrateado,
       cuotasTotal: cuotasTotal,
       cuota1: cuota1,
       cuotaIntermedia: cuotaIntermedia,
@@ -2753,15 +2855,13 @@
       cuota1Inp.value = cuota1.toFixed(2);
     }
 
-    const desgloseEl = document.getElementById('modal-reclass-desglose-prorrateo');
-    if (desgloseEl) {
-      if (cat !== 'gasto' && esProrrateado) {
-        desgloseEl.classList.remove('hidden');
-      } else {
-        desgloseEl.classList.add('hidden');
-      }
-    }
+    // Actualizar valores en Tarjeta 1 (Fija)
+    const valFijaCuota1 = document.getElementById('modal-reclass-val-fija-cuota1');
+    const valFijaTotal = document.getElementById('modal-reclass-val-fija-total');
+    if (valFijaCuota1) valFijaCuota1.textContent = '$' + cuotaMensualBase.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' / mes';
+    if (valFijaTotal) valFijaTotal.textContent = `${meses} cuotas idénticas`;
 
+    // Actualizar valores en Tarjeta 2 (Prorrateo)
     const lblIntermedias = document.getElementById('modal-reclass-lbl-intermedias');
     const valIntermedias = document.getElementById('modal-reclass-val-intermedias');
     if (lblIntermedias && valIntermedias) {
@@ -2782,15 +2882,30 @@
       }
     }
 
+    // Actualizar caja de resumen inferior
     const prevEl = document.getElementById('modal-reclass-cuota-preview');
     const infoEl = document.getElementById('modal-reclass-cuota-info');
+    const modoBadge = document.getElementById('modal-reclass-modo-badge');
     if (prevEl) {
-      const valShow = (cat === 'gasto') ? monto : cuotaIntermedia;
-      prevEl.textContent = '$' + valShow.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + (cat !== 'gasto' ? ' / mes' : '');
+      const valShow = (cat === 'gasto') ? monto : (esProrrateado ? cuota1 : cuotaMensualBase);
+      prevEl.textContent = '$' + valShow.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + (cat !== 'gasto' && !esProrrateado ? ' / mes' : ' (Cuota 1)');
+    }
+    if (modoBadge) {
+      if (cat === 'gasto') {
+        modoBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200';
+        modoBadge.textContent = '🧾 Gasto Corriente';
+      } else if (esProrrateado) {
+        modoBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200';
+        modoBadge.textContent = '🗓️ Prorrateo Calendario';
+      } else {
+        modoBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200';
+        modoBadge.textContent = '⚖️ Cuotas Fijas Iguales';
+      }
     }
     if (infoEl) {
       if (cat !== 'gasto' && meses > 1) {
-        infoEl.textContent = `Cuota 1 ($${cuota1.toLocaleString('es-CO', {minimumFractionDigits:2})}) se asienta al cerrar. Saldo restante diferido en activo por ${cuotasTotal - 1} cuotas adicionales.`;
+        const saldoActivo = Math.max(0, monto - cuota1);
+        infoEl.innerHTML = `Cuota 1 (<strong>$${cuota1.toLocaleString('es-CO', {minimumFractionDigits:2})}</strong>) se imputa al gasto en este período. El saldo restante (<strong>$${saldoActivo.toLocaleString('es-CO', {minimumFractionDigits:2})}</strong>) queda diferido en activo para amortizarse en <strong>${cuotasTotal - 1}</strong> cuotas mensuales.`;
       } else {
         infoEl.textContent = '100% asumido en el período actual.';
       }

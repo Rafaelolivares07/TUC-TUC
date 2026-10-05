@@ -594,12 +594,12 @@
         <div class="bg-gray-50/70 p-3 rounded-2xl border border-gray-200 space-y-2.5">
           <div class="flex items-center justify-between">
             <label class="text-xs font-bold text-gray-700 uppercase">Centro de Utilidad / Sede <span class="text-rose-500">*</span></label>
-            <label class="flex items-center gap-1.5 cursor-pointer select-none">
-              <input type="checkbox" id="modal-suscripcion-toggle-multicentro" onchange="toggleSuscripcionMultiCentro()" class="sr-only">
-              <div class="toggle-track w-8 h-4.5 rounded-full transition-colors relative flex items-center p-0.5 bg-gray-200 shadow-inner">
-                <div class="toggle-knob w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm"></div>
+            <label class="flex items-center gap-2 cursor-pointer select-none group">
+              <input type="checkbox" id="modal-suscripcion-toggle-multicentro" onchange="toggleSuscripcionMultiCentro()" class="sr-only peer">
+              <div id="modal-suscripcion-toggle-track" class="w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 bg-gray-200 peer-checked:bg-indigo-600 shadow-inner">
+                <div id="modal-suscripcion-toggle-knob" class="w-4 h-4 bg-white rounded-full transition-transform translate-x-0 peer-checked:translate-x-4 shadow-sm"></div>
               </div>
-              <span class="text-[11px] font-bold text-indigo-700">🔀 Distribuir en Varias Sedes</span>
+              <span class="text-xs font-bold text-indigo-700 group-hover:text-indigo-900 transition">🔀 Distribuir en Varias Sedes</span>
             </label>
           </div>
 
@@ -3461,9 +3461,22 @@
   }
 
   function toggleSuscripcionMultiCentro() {
-    const isMulti = document.getElementById('modal-suscripcion-toggle-multicentro')?.checked;
+    const chk = document.getElementById('modal-suscripcion-toggle-multicentro');
+    const isMulti = !!chk?.checked;
     const singleWrap = document.getElementById('modal-suscripcion-single-centro-wrap');
     const multiWrap = document.getElementById('modal-suscripcion-multicentro-wrap');
+    const track = document.getElementById('modal-suscripcion-toggle-track');
+    const knob = document.getElementById('modal-suscripcion-toggle-knob');
+
+    if (track && knob) {
+      if (isMulti) {
+        track.className = 'w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 bg-indigo-600 shadow-inner';
+        knob.className = 'w-4 h-4 bg-white rounded-full transition-transform translate-x-4 shadow-sm';
+      } else {
+        track.className = 'w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 bg-gray-200 shadow-inner';
+        knob.className = 'w-4 h-4 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+      }
+    }
 
     if (isMulti) {
       if (singleWrap) singleWrap.classList.add('hidden');
@@ -3700,6 +3713,12 @@
     // Resetear distribución multi-centro
     const toggleMulti = document.getElementById('modal-suscripcion-toggle-multicentro');
     if (toggleMulti) toggleMulti.checked = false;
+    const track = document.getElementById('modal-suscripcion-toggle-track');
+    const knob = document.getElementById('modal-suscripcion-toggle-knob');
+    if (track && knob) {
+      track.className = 'w-9 h-5 rounded-full transition-colors relative flex items-center p-0.5 bg-gray-200 shadow-inner';
+      knob.className = 'w-4 h-4 bg-white rounded-full transition-transform translate-x-0 shadow-sm';
+    }
     const singleWrap = document.getElementById('modal-suscripcion-single-centro-wrap');
     const multiWrap = document.getElementById('modal-suscripcion-multicentro-wrap');
     if (singleWrap) singleWrap.classList.remove('hidden');

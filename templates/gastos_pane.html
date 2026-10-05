@@ -582,21 +582,66 @@
           <div id="modal-suscripcion-tercero-ac" class="ac-drop hidden"></div>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <!-- Monto Cuota -->
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Monto por Período ($) <span class="text-rose-500">*</span></label>
-            <input id="modal-suscripcion-monto" type="text" inputmode="decimal" placeholder="0.00"
-                   class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none font-mono font-bold text-gray-800">
+        <!-- Monto Cuota -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Monto por Período ($) <span class="text-rose-500">*</span></label>
+          <input id="modal-suscripcion-monto" type="text" inputmode="decimal" placeholder="0.00"
+                 oninput="onSuscripcionMontoChange()"
+                 class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none font-mono font-bold text-gray-800">
+        </div>
+
+        <!-- Centro de Utilidad e Imputación Multisede -->
+        <div class="bg-gray-50/70 p-3 rounded-2xl border border-gray-200 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-gray-700 uppercase">Centro de Utilidad / Sede <span class="text-rose-500">*</span></label>
+            <label class="flex items-center gap-1.5 cursor-pointer select-none">
+              <input type="checkbox" id="modal-suscripcion-toggle-multicentro" onchange="toggleSuscripcionMultiCentro()" class="sr-only">
+              <div class="toggle-track w-8 h-4.5 rounded-full transition-colors relative flex items-center p-0.5 bg-gray-200 shadow-inner">
+                <div class="toggle-knob w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0 shadow-sm"></div>
+              </div>
+              <span class="text-[11px] font-bold text-indigo-700">🔀 Distribuir en Varias Sedes</span>
+            </label>
           </div>
 
-          <!-- Sede / Centro de Utilidad -->
-          <div>
-            <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Centro de Utilidad / Sede <span class="text-rose-500">*</span></label>
+          <!-- Modo 1: Sede Única (100%) -->
+          <div id="modal-suscripcion-single-centro-wrap">
             <select id="modal-suscripcion-centro-id"
                     class="border border-gray-200 bg-white rounded-xl px-3 py-2 text-xs font-bold w-full focus:ring-2 focus:ring-indigo-500 outline-none text-gray-800 h-[38px]">
               <!-- Dinámico -->
             </select>
+          </div>
+
+          <!-- Modo 2: Distribución Multisede (3 Opciones: Partes Iguales, Porcentaje, Valor Fijo) -->
+          <div id="modal-suscripcion-multicentro-wrap" class="hidden space-y-2.5">
+            <!-- Selector de Modo de Distribución -->
+            <div class="flex rounded-xl bg-gray-200/80 p-0.5 text-[11px] font-bold">
+              <button type="button" id="btn-dist-modo-iguales" onclick="cambiarModoDistCentros('iguales')"
+                      class="flex-1 py-1.5 px-2 rounded-lg bg-white text-indigo-700 shadow-xs transition text-[11px] font-black border border-indigo-100">
+                ⚖️ Partes Iguales
+              </button>
+              <button type="button" id="btn-dist-modo-pct" onclick="cambiarModoDistCentros('porcentaje')"
+                      class="flex-1 py-1.5 px-2 rounded-lg text-gray-600 hover:text-gray-900 transition text-[11px] font-bold">
+                📊 Porcentajes (%)
+              </button>
+              <button type="button" id="btn-dist-modo-monto" onclick="cambiarModoDistCentros('monto')"
+                      class="flex-1 py-1.5 px-2 rounded-lg text-gray-600 hover:text-gray-900 transition text-[11px] font-bold">
+                💵 Valores ($)
+              </button>
+            </div>
+
+            <!-- Lista de Centros de Utilidad -->
+            <div id="modal-suscripcion-centros-lista" class="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+              <!-- Se puebla dinámicamente con las sedes disponibles -->
+            </div>
+
+            <!-- Barra de Validación y Sumatoria -->
+            <div id="modal-suscripcion-dist-totales" class="p-2 rounded-xl bg-white border border-gray-200 flex justify-between items-center text-xs">
+              <span class="text-[11px] font-semibold text-gray-500">Suma distribuida:</span>
+              <div class="flex items-center gap-2">
+                <span id="modal-suscripcion-dist-pct-total" class="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-mono text-[11px]">100%</span>
+                <strong id="modal-suscripcion-dist-monto-total" class="font-mono text-xs font-black text-gray-800">$0.00</strong>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -3031,7 +3076,13 @@
               </span>
             </td>
             <td class="px-3 py-2.5 text-gray-600 font-medium">
-              ${escapeHtml(p.centro_nombre || 'Sede Principal')}
+              ${p.distribucion_centros && p.distribucion_centros.length > 0
+                ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 cursor-help"
+                         title="${p.distribucion_centros.map(c => `${c.centro_nombre || 'Sede'}: ${c.porcentaje}% ($${parseFloat(c.monto || 0).toLocaleString('es-CO')})`).join('&#10;')}">
+                     🔀 Distribuido (${p.distribucion_centros.length} sedes)
+                   </span>`
+                : escapeHtml(p.centro_nombre || 'Sede Principal')
+              }
             </td>
             <td class="px-3 py-2.5 text-gray-600">
               <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
@@ -3362,6 +3413,281 @@
     }
   }
 
+  // ═══ GESTIÓN DE DISTRIBUCIÓN MULTI-CENTRO EN SUSCRIPCIONES ═══
+  let _suscripcionModoDist = 'iguales'; // 'iguales' | 'porcentaje' | 'monto'
+  let _suscripcionCentrosList = []; // Array de { id, codigo, nombre, color, checked, porcentaje, monto }
+
+  function initSuscripcionCentrosList() {
+    let centros = [];
+    if (listaCentrosGas && listaCentrosGas.length > 0) {
+      centros = listaCentrosGas;
+    } else {
+      const sel = document.getElementById('modal-suscripcion-centro-id') || document.getElementById('gas-centro-id');
+      if (sel && sel.options) {
+        for (let i = 0; i < sel.options.length; i++) {
+          const opt = sel.options[i];
+          if (opt.value) {
+            const parts = opt.text.split(' - ');
+            centros.push({
+              id: parseInt(opt.value),
+              codigo: parts[0] || 'LOC',
+              nombre: parts[1] || opt.text,
+              color: '#4f46e5'
+            });
+          }
+        }
+      }
+    }
+
+    if (centros.length === 0) {
+      centros = [
+        { id: 1, codigo: 'MOV-01', nombre: 'Puntos Móviles', color: '#0284c7' },
+        { id: 2, codigo: 'LOC-01', nombre: 'Local Comercial', color: '#10b981' }
+      ];
+    }
+
+    _suscripcionCentrosList = centros.map(c => ({
+      id: c.id,
+      codigo: c.codigo || 'SEDE',
+      nombre: c.nombre || 'Centro ' + c.id,
+      color: c.color || '#4f46e5',
+      checked: true,
+      porcentaje: 0,
+      monto: 0
+    }));
+
+    recalcularDistCentros();
+    renderSuscripcionCentrosDist();
+  }
+
+  function toggleSuscripcionMultiCentro() {
+    const isMulti = document.getElementById('modal-suscripcion-toggle-multicentro')?.checked;
+    const singleWrap = document.getElementById('modal-suscripcion-single-centro-wrap');
+    const multiWrap = document.getElementById('modal-suscripcion-multicentro-wrap');
+
+    if (isMulti) {
+      if (singleWrap) singleWrap.classList.add('hidden');
+      if (multiWrap) multiWrap.classList.remove('hidden');
+      if (_suscripcionCentrosList.length === 0) {
+        initSuscripcionCentrosList();
+      } else {
+        recalcularDistCentros();
+        renderSuscripcionCentrosDist();
+      }
+    } else {
+      if (singleWrap) singleWrap.classList.remove('hidden');
+      if (multiWrap) multiWrap.classList.add('hidden');
+    }
+  }
+
+  function onSuscripcionMontoChange() {
+    const isMulti = document.getElementById('modal-suscripcion-toggle-multicentro')?.checked;
+    if (isMulti) {
+      recalcularDistCentros();
+      renderSuscripcionCentrosDist();
+    }
+  }
+
+  function cambiarModoDistCentros(modo) {
+    _suscripcionModoDist = modo;
+    
+    // Actualizar botones de modo
+    const btnIguales = document.getElementById('btn-dist-modo-iguales');
+    const btnPct = document.getElementById('btn-dist-modo-pct');
+    const btnMonto = document.getElementById('btn-dist-modo-monto');
+
+    const activeClass = 'flex-1 py-1.5 px-2 rounded-lg bg-white text-indigo-700 shadow-xs transition text-[11px] font-black border border-indigo-100';
+    const inactiveClass = 'flex-1 py-1.5 px-2 rounded-lg text-gray-600 hover:text-gray-900 transition text-[11px] font-bold';
+
+    if (btnIguales) btnIguales.className = (modo === 'iguales') ? activeClass : inactiveClass;
+    if (btnPct) btnPct.className = (modo === 'porcentaje') ? activeClass : inactiveClass;
+    if (btnMonto) btnMonto.className = (modo === 'monto') ? activeClass : inactiveClass;
+
+    recalcularDistCentros();
+    renderSuscripcionCentrosDist();
+  }
+
+  function recalcularDistCentros() {
+    const montoRaw = document.getElementById('modal-suscripcion-monto')?.value.replace(/[^0-9.]/g, '') || '0';
+    const montoTotal = parseFloat(montoRaw || 0);
+
+    const activos = _suscripcionCentrosList.filter(c => c.checked);
+    if (activos.length === 0) {
+      _suscripcionCentrosList.forEach(c => { c.porcentaje = 0; c.monto = 0; });
+      actualizarTotalesDistCentros();
+      return;
+    }
+
+    if (_suscripcionModoDist === 'iguales') {
+      const pctBase = Math.floor((100 / activos.length) * 100) / 100;
+      const montoBase = Math.floor((montoTotal / activos.length) * 100) / 100;
+      
+      let acumPct = 0;
+      let acumMonto = 0;
+
+      activos.forEach((c, idx) => {
+        if (idx === activos.length - 1) {
+          c.porcentaje = Math.round((100 - acumPct) * 100) / 100;
+          c.monto = Math.round((montoTotal - acumMonto) * 100) / 100;
+        } else {
+          c.porcentaje = pctBase;
+          c.monto = montoBase;
+          acumPct += pctBase;
+          acumMonto += montoBase;
+        }
+      });
+      _suscripcionCentrosList.filter(c => !c.checked).forEach(c => { c.porcentaje = 0; c.monto = 0; });
+    } else if (_suscripcionModoDist === 'porcentaje') {
+      activos.forEach(c => {
+        c.monto = Math.round((montoTotal * (c.porcentaje || 0) / 100) * 100) / 100;
+      });
+    } else if (_suscripcionModoDist === 'monto') {
+      activos.forEach(c => {
+        c.porcentaje = montoTotal > 0 ? Math.round(((c.monto || 0) / montoTotal * 100) * 100) / 100 : 0;
+      });
+    }
+
+    actualizarTotalesDistCentros();
+  }
+
+  function renderSuscripcionCentrosDist() {
+    const cont = document.getElementById('modal-suscripcion-centros-lista');
+    if (!cont) return;
+
+    if (_suscripcionCentrosList.length === 0) {
+      cont.innerHTML = '<div class="text-center text-gray-400 py-3 text-xs">No hay sedes disponibles</div>';
+      return;
+    }
+
+    cont.innerHTML = _suscripcionCentrosList.map(c => {
+      const isChecked = c.checked;
+      let inputCol = '';
+
+      if (!isChecked) {
+        inputCol = `<span class="text-gray-400 text-[11px] italic">Inactivo</span>`;
+      } else if (_suscripcionModoDist === 'iguales') {
+        inputCol = `
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold font-mono text-[11px] border border-indigo-200">
+              ${c.porcentaje}%
+            </span>
+            <span class="font-mono font-bold text-gray-700 text-xs">
+              $${c.monto.toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+            </span>
+          </div>
+        `;
+      } else if (_suscripcionModoDist === 'porcentaje') {
+        inputCol = `
+          <div class="flex items-center gap-1.5">
+            <div class="relative w-20">
+              <input type="number" step="0.01" min="0" max="100" value="${c.porcentaje}"
+                     oninput="onInputCentroPct(${c.id}, this.value)"
+                     class="border border-indigo-200 bg-white rounded-lg px-2 py-1 text-xs font-mono font-bold text-gray-800 text-right w-full focus:ring-1 focus:ring-indigo-500 outline-none pr-5">
+              <span class="absolute right-1.5 top-1 text-[10px] font-bold text-gray-400 pointer-events-none">%</span>
+            </div>
+            <span class="font-mono font-bold text-gray-600 text-[11px] min-w-[70px] text-right">
+              $${c.monto.toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+            </span>
+          </div>
+        `;
+      } else if (_suscripcionModoDist === 'monto') {
+        inputCol = `
+          <div class="flex items-center gap-1.5">
+            <div class="relative w-28">
+              <span class="absolute left-1.5 top-1 text-[10px] font-bold text-gray-400 pointer-events-none">$</span>
+              <input type="number" step="100" min="0" value="${c.monto}"
+                     oninput="onInputCentroMonto(${c.id}, this.value)"
+                     class="border border-indigo-200 bg-white rounded-lg pl-4 pr-2 py-1 text-xs font-mono font-bold text-gray-800 text-right w-full focus:ring-1 focus:ring-indigo-500 outline-none">
+            </div>
+            <span class="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold font-mono text-[10px] border border-indigo-200 min-w-[45px] text-center">
+              ${c.porcentaje}%
+            </span>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="flex items-center justify-between p-2 rounded-xl bg-white border ${isChecked ? 'border-indigo-150 shadow-2xs' : 'border-gray-150 opacity-60'} transition">
+          <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="onToggleCentroDistCheck(${c.id}, this.checked)"
+                   class="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-2xs" style="background: ${c.color};">
+              ${escapeHtml(c.codigo)}
+            </span>
+            <span class="text-xs font-semibold text-gray-800">${escapeHtml(c.nombre)}</span>
+          </label>
+          <div class="flex-shrink-0">
+            ${inputCol}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function onToggleCentroDistCheck(id, checked) {
+    const item = _suscripcionCentrosList.find(c => c.id === id);
+    if (item) {
+      item.checked = checked;
+      if (!checked) {
+        item.porcentaje = 0;
+        item.monto = 0;
+      }
+      recalcularDistCentros();
+      renderSuscripcionCentrosDist();
+    }
+  }
+
+  function onInputCentroPct(id, val) {
+    const montoRaw = document.getElementById('modal-suscripcion-monto')?.value.replace(/[^0-9.]/g, '') || '0';
+    const montoTotal = parseFloat(montoRaw || 0);
+
+    const item = _suscripcionCentrosList.find(c => c.id === id);
+    if (item) {
+      item.porcentaje = parseFloat(val || 0);
+      item.monto = Math.round((montoTotal * item.porcentaje / 100) * 100) / 100;
+      actualizarTotalesDistCentros();
+    }
+  }
+
+  function onInputCentroMonto(id, val) {
+    const montoRaw = document.getElementById('modal-suscripcion-monto')?.value.replace(/[^0-9.]/g, '') || '0';
+    const montoTotal = parseFloat(montoRaw || 0);
+
+    const item = _suscripcionCentrosList.find(c => c.id === id);
+    if (item) {
+      item.monto = parseFloat(val || 0);
+      item.porcentaje = montoTotal > 0 ? Math.round((item.monto / montoTotal * 100) * 100) / 100 : 0;
+      actualizarTotalesDistCentros();
+    }
+  }
+
+  function actualizarTotalesDistCentros() {
+    const montoRaw = document.getElementById('modal-suscripcion-monto')?.value.replace(/[^0-9.]/g, '') || '0';
+    const montoTotal = parseFloat(montoRaw || 0);
+
+    const activos = _suscripcionCentrosList.filter(c => c.checked);
+    const sumPct = Math.round(activos.reduce((acc, c) => acc + (c.porcentaje || 0), 0) * 100) / 100;
+    const sumMonto = Math.round(activos.reduce((acc, c) => acc + (c.monto || 0), 0) * 100) / 100;
+
+    const elPct = document.getElementById('modal-suscripcion-dist-pct-total');
+    const elMonto = document.getElementById('modal-suscripcion-dist-monto-total');
+    const wrapTot = document.getElementById('modal-suscripcion-dist-totales');
+
+    if (elPct) elPct.textContent = `${sumPct}%`;
+    if (elMonto) elMonto.textContent = `$${sumMonto.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+    const pctOk = Math.abs(sumPct - 100) <= 0.1;
+    const montoOk = montoTotal <= 0 || Math.abs(sumMonto - montoTotal) <= 1.0;
+
+    if (pctOk && montoOk && activos.length > 0) {
+      if (elPct) elPct.className = 'font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-mono text-[11px]';
+      if (wrapTot) wrapTot.className = 'p-2 rounded-xl bg-white border border-emerald-300 flex justify-between items-center text-xs';
+    } else {
+      if (elPct) elPct.className = 'font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-300 font-mono text-[11px] animate-pulse';
+      if (wrapTot) wrapTot.className = 'p-2 rounded-xl bg-rose-50/40 border border-rose-300 flex justify-between items-center text-xs';
+    }
+  }
+
   function abrirModalNuevaSuscripcion() {
     document.getElementById('modal-suscripcion-id').value = '';
     clearSuscripcionConcepto();
@@ -3370,6 +3696,16 @@
     document.getElementById('modal-suscripcion-frecuencia').value = 'mensual';
     document.getElementById('modal-suscripcion-dia-mes').value = '5';
     document.getElementById('modal-suscripcion-nota').value = '';
+
+    // Resetear distribución multi-centro
+    const toggleMulti = document.getElementById('modal-suscripcion-toggle-multicentro');
+    if (toggleMulti) toggleMulti.checked = false;
+    const singleWrap = document.getElementById('modal-suscripcion-single-centro-wrap');
+    const multiWrap = document.getElementById('modal-suscripcion-multicentro-wrap');
+    if (singleWrap) singleWrap.classList.remove('hidden');
+    if (multiWrap) multiWrap.classList.add('hidden');
+    _suscripcionModoDist = 'iguales';
+    _suscripcionCentrosList = [];
 
     // Poblar centros de utilidad en el select de suscripciones
     const selCentro = document.getElementById('modal-suscripcion-centro-id');
@@ -3402,6 +3738,7 @@
     const diaMes = parseInt(document.getElementById('modal-suscripcion-dia-mes').value || 5);
     const centroId = document.getElementById('modal-suscripcion-centro-id').value || 1;
     const nota = document.getElementById('modal-suscripcion-nota').value.trim();
+    const isMultiCentro = document.getElementById('modal-suscripcion-toggle-multicentro')?.checked;
 
     if (!concepto) {
       toast('Por favor ingrese el nombre o concepto del gasto', false);
@@ -3414,6 +3751,34 @@
     if (monto <= 0) {
       toast('Por favor ingrese un monto válido mayor a 0', false);
       return;
+    }
+
+    let distribucionCentrosPayload = null;
+    if (isMultiCentro) {
+      const centrosActivos = _suscripcionCentrosList.filter(c => c.checked && (c.monto > 0 || c.porcentaje > 0));
+      if (centrosActivos.length === 0) {
+        toast('Debe seleccionar al menos una sede para distribuir el gasto', false);
+        return;
+      }
+      const sumPct = centrosActivos.reduce((acc, c) => acc + (c.porcentaje || 0), 0);
+      const sumMonto = centrosActivos.reduce((acc, c) => acc + (c.monto || 0), 0);
+
+      if (Math.abs(sumPct - 100) > 0.5) {
+        toast(`La suma de los porcentajes debe ser exactamente 100% (actualmente ${Math.round(sumPct * 100)/100}%)`, false);
+        return;
+      }
+      if (Math.abs(sumMonto - monto) > 1.0) {
+        toast(`La suma de los valores ($${sumMonto.toLocaleString('es-CO')}) no coincide con el total ($${monto.toLocaleString('es-CO')})`, false);
+        return;
+      }
+
+      distribucionCentrosPayload = centrosActivos.map(c => ({
+        centro_utilidad_id: c.id,
+        centro_nombre: c.nombre,
+        centro_codigo: c.codigo,
+        porcentaje: c.porcentaje,
+        monto: c.monto
+      }));
     }
 
     const btn = document.getElementById('btn-guardar-suscripcion');
@@ -3432,6 +3797,7 @@
           frecuencia,
           dia_mes: diaMes,
           centro_utilidad_id: parseInt(centroId),
+          distribucion_centros: distribucionCentrosPayload,
           nota
         })
       });

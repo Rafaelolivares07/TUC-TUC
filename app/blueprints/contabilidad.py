@@ -857,15 +857,38 @@ def _ejecutar_asiento_gasto_recurrente(conn, prog_row, vars_dict):
     centro_utilidad_id = vars_dict.get('centro_utilidad_id') or 1
     desc_gen = f"Causación periódica: {concepto}"
 
-    # Asiento Débito (Gasto)
-    conn.execute("""
-        INSERT INTO movimientos_contables
-            (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
-             tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    """, (negocio_id, new_comp_id, cta_deb['id'], cod_deb, f"Gasto - {concepto}", 'debito',
-          monto, 1, tercero_id, td_row['id'] if td_row else None, numero_documento_str, hoy, tipo_doc_codigo,
-          desc_gen, 'causacion_recurrente', centro_utilidad_id))
+    # Asientos Débito (Gasto) con soporte de distribución multi-centro
+    distribucion_centros = vars_dict.get('distribucion_centros') or []
+    if distribucion_centros and isinstance(distribucion_centros, list) and len(distribucion_centros) > 0:
+        for dc in distribucion_centros:
+            monto_dc = float(dc.get('monto') or 0.0)
+            if monto_dc <= 0:
+                continue
+            cu_id = int(dc.get('centro_utilidad_id') or centro_utilidad_id or 1)
+            cu_nom = (dc.get('centro_nombre') or '').strip()
+            pct = dc.get('porcentaje')
+            desc_cu = f"Gasto - {concepto}"
+            if cu_nom:
+                desc_cu += f" ({cu_nom}" + (f" {pct}%" if pct else "") + ")"
+
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                     tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (negocio_id, new_comp_id, cta_deb['id'], cod_deb, desc_cu, 'debito',
+                  monto_dc, 1, tercero_id, td_row['id'] if td_row else None, numero_documento_str, hoy, tipo_doc_codigo,
+                  desc_gen, 'causacion_recurrente', cu_id))
+    else:
+        # Asiento Débito estándar (100% a un solo centro)
+        conn.execute("""
+            INSERT INTO movimientos_contables
+                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                 tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (negocio_id, new_comp_id, cta_deb['id'], cod_deb, f"Gasto - {concepto}", 'debito',
+              monto, 1, tercero_id, td_row['id'] if td_row else None, numero_documento_str, hoy, tipo_doc_codigo,
+              desc_gen, 'causacion_recurrente', centro_utilidad_id))
 
     # Asiento Crédito (Cuenta por Pagar)
     conn.execute("""
@@ -3745,8 +3768,13 @@ def api_suscripciones_gastos(negocio_id):
                 vars_h = d.get('variables_h') or {}
                 t_id = vars_h.get('tercero_id')
                 cu_id = vars_h.get('centro_utilidad_id') or 1
+                dist_c = vars_h.get('distribucion_centros') or []
+                d['distribucion_centros'] = dist_c
                 d['tercero_nombre'] = terceros_map.get(t_id, vars_h.get('tercero_nombre') or 'Sin tercero')
-                d['centro_nombre'] = centros_map.get(cu_id, f'Sede #{cu_id}')
+                if dist_c and len(dist_c) > 0:
+                    d['centro_nombre'] = f"Distribuido ({len(dist_c)} sedes)"
+                else:
+                    d['centro_nombre'] = centros_map.get(cu_id, f'Sede #{cu_id}')
                 d['monto_recurrente'] = float(vars_h.get('monto_recurrente') or vars_h.get('monto') or 0.0)
                 d['concepto'] = vars_h.get('concepto') or d['descripcion'] or 'Gasto Fijo'
                 d['nota'] = vars_h.get('nota') or ''
@@ -3767,6 +3795,7 @@ def api_suscripciones_gastos(negocio_id):
             tercero_id = data.get('tercero_id')
             centro_utilidad_id = data.get('centro_utilidad_id') or 1
             nota = (data.get('nota') or '').strip()
+            distribucion_centros_raw = data.get('distribucion_centros') or []
 
             if not concepto:
                 conn.close()
@@ -3777,6 +3806,27 @@ def api_suscripciones_gastos(negocio_id):
             if not tercero_id:
                 conn.close()
                 return jsonify({'ok': False, 'error': 'Debe seleccionar un proveedor / beneficiario'}), 400
+
+            # Sanitizar y validar distribución de centros si se especificó
+            clean_dist = []
+            if isinstance(distribucion_centros_raw, list) and len(distribucion_centros_raw) > 0:
+                tot_dist_monto = 0.0
+                for item in distribucion_centros_raw:
+                    cid = int(item.get('centro_utilidad_id') or item.get('id') or 1)
+                    c_monto = float(item.get('monto') or 0.0)
+                    c_pct = float(item.get('porcentaje') or item.get('pct') or 0.0)
+                    c_nom = str(item.get('centro_nombre') or item.get('nombre') or '').strip()
+                    if c_monto > 0:
+                        tot_dist_monto += c_monto
+                        clean_dist.append({
+                            'centro_utilidad_id': cid,
+                            'centro_nombre': c_nom,
+                            'monto': round(c_monto, 2),
+                            'porcentaje': round(c_pct, 2)
+                        })
+                if clean_dist and abs(tot_dist_monto - monto) > 1.0:
+                    conn.close()
+                    return jsonify({'ok': False, 'error': f'La suma de las sedes (${tot_dist_monto:,.2f}) no coincide con el monto total (${monto:,.2f})'}), 400
 
             # Resolver tipo_doc_id (buscar CAU o GAS)
             td = conn.execute("SELECT id FROM tipos_documento_negocio WHERE negocio_id = %s AND codigo IN ('CAU', 'CXP') LIMIT 1", (negocio_id,)).fetchone()
@@ -3816,6 +3866,7 @@ def api_suscripciones_gastos(negocio_id):
                 'monto_recurrente': monto,
                 'tercero_id': int(tercero_id),
                 'centro_utilidad_id': int(centro_utilidad_id),
+                'distribucion_centros': clean_dist if len(clean_dist) > 0 else None,
                 'cuenta_debito': cta_deb_cod,
                 'cuenta_puc_id': int(cuenta_puc_id) if cuenta_puc_id else None,
                 'cuenta_credito': cta_cred_cod,

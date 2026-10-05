@@ -5273,18 +5273,24 @@ def api_buscar_productos_inventario(negocio_id):
 @bp.route('/api/inventario/terceros/buscar')
 def api_buscar_terceros():
     q = request.args.get('q', '').strip()
-    if len(q) < 2:
-        return jsonify([])
     conn = get_db_connection()
     try:
-        rows = conn.execute("""
-            SELECT id, nombre, telefono 
-            FROM terceros 
-            WHERE nombre ILIKE %s 
-            ORDER BY nombre 
-            LIMIT 50
-        """, (f'%{q}%',)).fetchall()
-        return jsonify([{'id': r['id'], 'nombre': r['nombre'], 'telefono': r['telefono']} for r in rows])
+        if q:
+            rows = conn.execute("""
+                SELECT id, nombre, telefono, numero_documento 
+                FROM terceros 
+                WHERE nombre ILIKE %s OR COALESCE(numero_documento, '') ILIKE %s
+                ORDER BY nombre 
+                LIMIT 50
+            """, (f'%{q}%', f'%{q}%')).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT id, nombre, telefono, numero_documento 
+                FROM terceros 
+                ORDER BY nombre 
+                LIMIT 50
+            """).fetchall()
+        return jsonify([{'id': r['id'], 'nombre': r['nombre'], 'telefono': r['telefono'], 'numero_documento': r['numero_documento']} for r in rows])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:

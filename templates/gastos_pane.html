@@ -555,18 +555,21 @@
                  class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none uppercase font-semibold text-gray-800">
         </div>
 
-        <!-- Proveedor / Tercero -->
-        <div>
+        <!-- Proveedor / Tercero (Buscador Autocomplete Dropdown) -->
+        <div class="relative">
           <div class="flex justify-between items-center mb-1">
             <label class="block text-xs font-semibold text-gray-600 uppercase">Proveedor / Beneficiario <span class="text-rose-500">*</span></label>
-            <button type="button" onclick="abrirModalNuevoTercero()" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer">
+            <button type="button" onclick="abrirModalNuevoTercero(document.getElementById('modal-suscripcion-tercero-txt').value.trim())" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer">
               <span>👤+</span> Nuevo Proveedor
             </button>
           </div>
-          <select id="modal-suscripcion-tercero-id"
-                  class="border border-gray-200 bg-white rounded-xl px-3 py-2 text-xs font-semibold w-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-gray-800 h-[38px]">
-            <option value="">— Seleccionar Proveedor / Tercero —</option>
-          </select>
+          <input id="modal-suscripcion-tercero-txt" type="text" placeholder="Escriba para buscar o crear tercero..."
+                 autocomplete="off"
+                 class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                 oninput="onSuscripcionTerceroInput()" onfocus="onSuscripcionTerceroInput()" onkeydown="navSuscripcionTerceroAC(event)">
+          <button onclick="clearSuscripcionTercero()" type="button" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg cursor-pointer">&times;</button>
+          <input type="hidden" id="modal-suscripcion-tercero-id">
+          <div id="modal-suscripcion-tercero-ac" class="ac-drop hidden"></div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2526,7 +2529,10 @@
         const modalCierreInd = document.getElementById('modal-cierre-individual-linea');
 
         if (modalSuscripcion && !modalSuscripcion.classList.contains('hidden')) {
-          await cargarSelectTercerosSuscripcion(d.id);
+          document.getElementById('modal-suscripcion-tercero-txt').value = d.nombre || nombre;
+          document.getElementById('modal-suscripcion-tercero-id').value = d.id;
+          const ac = document.getElementById('modal-suscripcion-tercero-ac');
+          if (ac) ac.classList.add('hidden');
           cerrarModalNuevoTercero();
           setTimeout(() => document.getElementById('modal-suscripcion-monto')?.focus(), 80);
         } else if (modalCierreInd && !modalCierreInd.classList.contains('hidden')) {
@@ -2926,40 +2932,138 @@
     }
   }
 
-  async function cargarSelectTercerosSuscripcion(terceroSeleccionadoId = null) {
-    const sel = document.getElementById('modal-suscripcion-tercero-id');
-    if (!sel) return;
-    try {
-      const r = await fetch('/api/inventario/terceros/buscar');
-      const list = await r.json();
-      if (Array.isArray(list) && list.length > 0) {
-        sel.innerHTML = '<option value="">— Seleccionar Proveedor / Tercero —</option>' +
-          list.map(t => {
-            const docInfo = t.numero_documento ? ` (${t.numero_documento})` : '';
-            return `<option value="${t.id}">${escapeGasHtml(t.nombre)}${escapeGasHtml(docInfo)}</option>`;
+  let _suscripcionTerceroTimer = null;
+  let _suscripcionTerceroIdx = -1;
+
+  function onSuscripcionTerceroInput() {
+    clearTimeout(_suscripcionTerceroTimer);
+    _suscripcionTerceroTimer = setTimeout(() => renderSuscripcionTerceroAC(), 120);
+  }
+
+  function renderSuscripcionTerceroAC() {
+    const inp = document.getElementById('modal-suscripcion-tercero-txt');
+    const list = document.getElementById('modal-suscripcion-tercero-ac');
+    if (!inp || !list) return;
+
+    const q = inp.value.trim();
+
+    fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`)
+      .then(r => r.json())
+      .then(terceros => {
+        _suscripcionTerceroIdx = -1;
+        let html = '';
+        
+        if (Array.isArray(terceros) && terceros.length > 0) {
+          html = terceros.slice(0, 15).map(t => {
+            const docInfo = t.numero_documento ? ` · Doc: ${escapeGasHtml(t.numero_documento)}` : '';
+            const telInfo = t.telefono ? ` · 📞 ${escapeGasHtml(t.telefono)}` : '';
+            return `
+              <div class="ac-item px-3 py-2.5 hover:bg-indigo-50 cursor-pointer text-xs border-b border-gray-100 last:border-b-0 flex justify-between items-center transition"
+                   data-id="${t.id}" data-nombre="${t.nombre.replace(/"/g, '&quot;')}">
+                <div>
+                  <span class="font-bold text-gray-800 block">${escapeGasHtml(t.nombre)}</span>
+                  <span class="text-[10px] text-gray-500 font-mono">${docInfo}${telInfo}</span>
+                </div>
+                <span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold border border-indigo-100">Seleccionar</span>
+              </div>
+            `;
           }).join('');
-      } else {
-        sel.innerHTML = '<option value="">— No hay terceros registrados —</option>';
+        } else {
+          html = `<div class="px-3 py-2.5 text-xs text-gray-400 italic">No se encontró el tercero "${escapeGasHtml(q)}"</div>`;
+        }
+
+        if (q) {
+          html += `
+            <div class="p-2.5 border-t border-gray-100 bg-indigo-50/90 hover:bg-indigo-100 cursor-pointer text-xs text-indigo-700 font-bold flex items-center justify-between transition suscripcion-crear-tercero-opt">
+              <span class="flex items-center gap-1.5">
+                <span>👤✨</span> Crear nuevo proveedor: <strong class="underline font-bold">${escapeGasHtml(q)}</strong>
+              </span>
+              <span class="text-[10px] bg-indigo-200/80 text-indigo-800 px-1.5 py-0.5 rounded font-mono font-bold">+ Crear</span>
+            </div>
+          `;
+        }
+
+        list.innerHTML = html;
+
+        const btnCrear = list.querySelector('.suscripcion-crear-tercero-opt');
+        if (btnCrear) {
+          btnCrear.addEventListener('mousedown', e => {
+            e.preventDefault();
+            abrirModalNuevoTercero(q);
+          });
+        }
+
+        list.querySelectorAll('.ac-item').forEach(el => {
+          el.addEventListener('mousedown', e => {
+            e.preventDefault();
+            selectSuscripcionTercero(el.dataset.id, el.dataset.nombre);
+          });
+        });
+
+        list.classList.remove('hidden');
+      })
+      .catch(() => {
+        list.classList.add('hidden');
+      });
+  }
+
+  function selectSuscripcionTercero(id, nombre) {
+    document.getElementById('modal-suscripcion-tercero-id').value = id;
+    document.getElementById('modal-suscripcion-tercero-txt').value = nombre;
+    const ac = document.getElementById('modal-suscripcion-tercero-ac');
+    if (ac) ac.classList.add('hidden');
+    document.getElementById('modal-suscripcion-monto')?.focus();
+  }
+
+  function clearSuscripcionTercero() {
+    document.getElementById('modal-suscripcion-tercero-id').value = '';
+    document.getElementById('modal-suscripcion-tercero-txt').value = '';
+    const ac = document.getElementById('modal-suscripcion-tercero-ac');
+    if (ac) ac.classList.add('hidden');
+  }
+
+  function navSuscripcionTerceroAC(e) {
+    const list = document.getElementById('modal-suscripcion-tercero-ac');
+    if (!list) return;
+    const abierto = !list.classList.contains('hidden');
+    if (!abierto) {
+      if (e.key === 'ArrowDown') { onSuscripcionTerceroInput(); e.preventDefault(); }
+      return;
+    }
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      _suscripcionTerceroIdx = Math.min(_suscripcionTerceroIdx + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('ac-focus', i === _suscripcionTerceroIdx));
+      if (_suscripcionTerceroIdx >= 0) items[_suscripcionTerceroIdx].scrollIntoView({block: 'nearest'});
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      _suscripcionTerceroIdx = Math.max(_suscripcionTerceroIdx - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('ac-focus', i === _suscripcionTerceroIdx));
+      if (_suscripcionTerceroIdx >= 0) items[_suscripcionTerceroIdx].scrollIntoView({block: 'nearest'});
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      if (_suscripcionTerceroIdx >= 0 && items[_suscripcionTerceroIdx]) {
+        selectSuscripcionTercero(items[_suscripcionTerceroIdx].dataset.id, items[_suscripcionTerceroIdx].dataset.nombre);
+      } else if (items.length > 0) {
+        selectSuscripcionTercero(items[0].dataset.id, items[0].dataset.nombre);
       }
-      if (terceroSeleccionadoId) {
-        sel.value = String(terceroSeleccionadoId);
-      }
-    } catch (e) {
-      console.error(e);
-      sel.innerHTML = '<option value="">— Error al cargar terceros —</option>';
+      e.preventDefault();
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+      list.classList.add('hidden');
     }
   }
 
-  async function abrirModalNuevaSuscripcion() {
+  function abrirModalNuevaSuscripcion() {
     document.getElementById('modal-suscripcion-id').value = '';
     document.getElementById('modal-suscripcion-concepto').value = '';
+    document.getElementById('modal-suscripcion-tercero-txt').value = '';
+    document.getElementById('modal-suscripcion-tercero-id').value = '';
+    const ac = document.getElementById('modal-suscripcion-tercero-ac');
+    if (ac) ac.classList.add('hidden');
     document.getElementById('modal-suscripcion-monto').value = '';
     document.getElementById('modal-suscripcion-frecuencia').value = 'mensual';
     document.getElementById('modal-suscripcion-dia-mes').value = '5';
     document.getElementById('modal-suscripcion-nota').value = '';
-
-    // Cargar terceros en el select
-    await cargarSelectTercerosSuscripcion();
 
     // Poblar centros de utilidad en el select de suscripciones
     const selCentro = document.getElementById('modal-suscripcion-centro-id');
@@ -3097,6 +3201,14 @@
     }
     if (!e.target.closest('#gas-tercero-txt') && !e.target.closest('#gas-tercero-ac')) {
       document.getElementById('gas-tercero-ac').classList.add('hidden');
+    }
+    if (!e.target.closest('#modal-suscripcion-tercero-txt') && !e.target.closest('#modal-suscripcion-tercero-ac')) {
+      const ac = document.getElementById('modal-suscripcion-tercero-ac');
+      if (ac) ac.classList.add('hidden');
+    }
+    if (!e.target.closest('#modal-cierre-ind-tercero-txt') && !e.target.closest('#modal-cierre-ind-tercero-ac')) {
+      const ac = document.getElementById('modal-cierre-ind-tercero-ac');
+      if (ac) ac.classList.add('hidden');
     }
     if (e.target.id === 'modal-editar-soporte-gasto') {
       cerrarModalEditarSoporte();

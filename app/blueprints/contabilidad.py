@@ -3787,16 +3787,26 @@ def api_suscripciones_gastos(negocio_id):
             
             tipo_doc_id = td['id'] if td else 1
 
-            # Resolver cuentas PUC sugeridas
-            cta_deb_cod = '513535' # Servicios generales / arriendos por defecto
-            if 'ARRIEND' in concepto or 'LOCAL' in concepto:
-                cta_deb_cod = '512010'
-            elif 'SEGURO' in concepto or 'POLIZA' in concepto:
-                cta_deb_cod = '513005'
-            elif 'INTERNET' in concepto or 'TELEFON' in concepto or 'CELULAR' in concepto:
-                cta_deb_cod = '513535'
-            elif 'HONORAR' in concepto or 'ASESOR' in concepto:
-                cta_deb_cod = '511010'
+            # Resolver cuentas PUC sugeridas o seleccionadas exactamente
+            cuenta_puc_id = data.get('cuenta_puc_id')
+            cuenta_debito = (data.get('cuenta_debito') or '').strip()
+            
+            cta_deb_cod = '513535' # Fallback por defecto
+            if cuenta_puc_id:
+                cta_row = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cuenta_puc_id, negocio_id)).fetchone()
+                if cta_row and cta_row['codigo']:
+                    cta_deb_cod = cta_row['codigo']
+            elif cuenta_debito:
+                cta_deb_cod = cuenta_debito
+            else:
+                if 'ARRIEND' in concepto or 'LOCAL' in concepto:
+                    cta_deb_cod = '512010'
+                elif 'SEGURO' in concepto or 'POLIZA' in concepto:
+                    cta_deb_cod = '513005'
+                elif 'INTERNET' in concepto or 'TELEFON' in concepto or 'CELULAR' in concepto:
+                    cta_deb_cod = '513535'
+                elif 'HONORAR' in concepto or 'ASESOR' in concepto:
+                    cta_deb_cod = '511010'
 
             cta_cred_cod = '233525' # Costos y Gastos por Pagar
 
@@ -3807,6 +3817,7 @@ def api_suscripciones_gastos(negocio_id):
                 'tercero_id': int(tercero_id),
                 'centro_utilidad_id': int(centro_utilidad_id),
                 'cuenta_debito': cta_deb_cod,
+                'cuenta_puc_id': int(cuenta_puc_id) if cuenta_puc_id else None,
                 'cuenta_credito': cta_cred_cod,
                 'nota': nota
             }
@@ -5715,6 +5726,63 @@ def api_gastos_documentos(negocio_id):
         try: conn.close()
         except: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/gastos/conceptos/buscar', methods=['GET'])
+def api_gastos_conceptos_buscar(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    q = (request.args.get('q') or '').strip().lower()
+    try:
+        conn = get_db_connection()
+        query = """
+            SELECT DISTINCT p.id AS cuenta_puc_id, p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre,
+                   COALESCE(p.maneja_terceros, false) AS maneja_terceros
+            FROM cuentas_puc p
+            WHERE (p.creada_por_negocio_id = %s OR p.creada_por_negocio_id IS NULL)
+              AND (
+                  p.codigo LIKE '51%%' OR p.codigo LIKE '52%%' OR p.codigo LIKE '53%%' 
+                  OR p.codigo LIKE '6143%%' OR p.codigo LIKE '1505%%' 
+                  OR p.codigo LIKE '6144%%' OR p.codigo LIKE '1705%%'
+                  OR p.id IN (
+                      SELECT plc.cuenta_puc_id FROM parametros_lineas_contables plc
+                      JOIN parametros_contables_negocio pcn ON pcn.id = plc.parametro_id
+                      WHERE pcn.negocio_id = %s AND plc.activo = true
+                  )
+              )
+              AND p.activo = true
+        """
+        params = [negocio_id, negocio_id]
+        if q:
+            query += " AND (LOWER(p.nombre) LIKE %s OR p.codigo LIKE %s)"
+            params.extend([f"%{q}%", f"%{q}%"])
+        
+        query += " ORDER BY p.nombre ASC LIMIT 30"
+        
+        rows = conn.execute(query, tuple(params)).fetchall()
+        conn.close()
+        
+        results = []
+        for r in rows:
+            cod = str(r['cuenta_codigo'] or '')
+            cat = 'gasto'
+            if cod.startswith('6143') or cod.startswith('1505'):
+                cat = 'activo'
+            elif cod.startswith('6144') or cod.startswith('1705'):
+                cat = 'diferido'
+            results.append({
+                'cuenta_puc_id': r['cuenta_puc_id'],
+                'cuenta_codigo': r['cuenta_codigo'],
+                'cuenta_nombre': r['cuenta_nombre'],
+                'categoria_tipo': cat,
+                'maneja_terceros': bool(r['maneja_terceros'])
+            })
+        return jsonify(results)
+    except Exception as e:
+        try: conn.close()
+        except Exception: pass
+        return jsonify([])
 
 
 @bp.route('/api/contabilidad/<int:negocio_id>/gastos/relacion/<tipo_doc>/<num_doc>/lineas', methods=['GET'])

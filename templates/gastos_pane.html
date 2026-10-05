@@ -547,12 +547,22 @@
       
       <div class="space-y-3.5 mb-5 text-xs">
         
-        <!-- Concepto -->
-        <div>
-          <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Nombre o Concepto del Gasto <span class="text-rose-500">*</span></label>
-          <input id="modal-suscripcion-concepto" type="text" placeholder="Ej. ARRIENDO LOCAL PRINCIPAL, INTERNET, POLIZA SEGURO..."
+        <!-- Concepto (Buscador Autocomplete Dropdown de Rubros de Gasto) -->
+        <div class="relative">
+          <div class="flex justify-between items-center mb-1">
+            <label class="block text-xs font-semibold text-gray-600 uppercase">Nombre o Concepto del Gasto <span class="text-rose-500">*</span></label>
+            <button type="button" onclick="abrirModalNuevoGasto(document.getElementById('modal-suscripcion-concepto-txt').value.trim())" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer">
+              <span>✨+</span> Nuevo Rubro
+            </button>
+          </div>
+          <input id="modal-suscripcion-concepto-txt" type="text" placeholder="Escriba para buscar o crear rubro de gasto..."
                  autocomplete="off"
-                 class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none uppercase font-semibold text-gray-800">
+                 class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none uppercase font-semibold text-gray-800"
+                 oninput="onSuscripcionConceptoInput()" onfocus="onSuscripcionConceptoInput()" onkeydown="navSuscripcionConceptoAC(event)">
+          <button onclick="clearSuscripcionConcepto()" type="button" class="absolute right-2 top-[26px] text-gray-400 hover:text-gray-600 focus:outline-none text-lg cursor-pointer">&times;</button>
+          <input type="hidden" id="modal-suscripcion-concepto-id">
+          <input type="hidden" id="modal-suscripcion-concepto-cod">
+          <div id="modal-suscripcion-concepto-ac" class="ac-drop hidden"></div>
         </div>
 
         <!-- Proveedor / Tercero (Buscador Autocomplete Dropdown) -->
@@ -2367,10 +2377,14 @@
   }
 
   async function abrirModalNuevoGasto(nombreSugerido = '') {
-    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    let tipoDoc = document.getElementById('gas-tipo-doc')?.value;
     if (!tipoDoc) {
-      toast('Seleccione una tipología activa', false);
-      return;
+      const docSel = document.getElementById('gas-tipo-doc');
+      if (docSel && docSel.options && docSel.options.length > 0 && docSel.options[0].value) {
+        tipoDoc = docSel.options[0].value;
+      } else {
+        tipoDoc = 'GAS';
+      }
     }
 
     const inpNombre = document.getElementById('modal-nuevo-gasto-nombre');
@@ -2399,7 +2413,15 @@
   }
 
   async function guardarNuevoGasto() {
-    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    let tipoDoc = document.getElementById('gas-tipo-doc')?.value;
+    if (!tipoDoc) {
+      const docSel = document.getElementById('gas-tipo-doc');
+      if (docSel && docSel.options && docSel.options.length > 0 && docSel.options[0].value) {
+        tipoDoc = docSel.options[0].value;
+      } else {
+        tipoDoc = 'GAS';
+      }
+    }
     const nombre = document.getElementById('modal-nuevo-gasto-nombre').value.trim().toUpperCase();
     const codigo = document.getElementById('modal-nuevo-gasto-codigo').value.trim();
     const categoriaTipo = document.getElementById('modal-nuevo-gasto-cat').value || 'gasto';
@@ -2444,21 +2466,28 @@
           gasConceptos.push(itemConcepto);
         }
 
-        // Seleccionarlo inmediatamente en el formulario
-        document.getElementById('gas-concept-txt').value = d.cuenta_nombre;
-        document.getElementById('gas-concept-id').value = d.cuenta_puc_id;
-        document.getElementById('gas-concept-tercero').value = d.maneja_terceros ? 'true' : 'false';
-        document.getElementById('gas-concept-cat').value = d.categoria_tipo || categoriaTipo;
-        document.getElementById('gas-concept-ac').classList.add('hidden');
-
-        onConceptChange();
-        cerrarModalNuevoGasto();
-
-        // Dar foco al siguiente input
-        if (d.maneja_terceros) {
-          document.getElementById('gas-tercero-txt').focus();
+        const modalSuscripcion = document.getElementById('modal-nueva-suscripcion');
+        if (modalSuscripcion && !modalSuscripcion.classList.contains('hidden')) {
+          selectSuscripcionConcepto(d.cuenta_puc_id, d.cuenta_nombre, d.cuenta_codigo);
+          cerrarModalNuevoGasto();
+          setTimeout(() => document.getElementById('modal-suscripcion-tercero-txt')?.focus(), 60);
         } else {
-          document.getElementById('gas-monto').focus();
+          // Seleccionarlo inmediatamente en el formulario principal
+          document.getElementById('gas-concept-txt').value = d.cuenta_nombre;
+          document.getElementById('gas-concept-id').value = d.cuenta_puc_id;
+          document.getElementById('gas-concept-tercero').value = d.maneja_terceros ? 'true' : 'false';
+          document.getElementById('gas-concept-cat').value = d.categoria_tipo || categoriaTipo;
+          document.getElementById('gas-concept-ac').classList.add('hidden');
+
+          onConceptChange();
+          cerrarModalNuevoGasto();
+
+          // Dar foco al siguiente input
+          if (d.maneja_terceros) {
+            document.getElementById('gas-tercero-txt').focus();
+          } else {
+            document.getElementById('gas-monto').focus();
+          }
         }
       } else {
         toast(d.error || 'Error al crear rubro', false);
@@ -3054,13 +3083,174 @@
     }
   }
 
+  // ═══ AUTOCOMPLETE DE CONCEPTO / RUBRO EN SUSCRIPCIONES ═══
+  let _suscripcionConceptoTimer = null;
+  let _suscripcionConceptoIdx = -1;
+
+  function onSuscripcionConceptoInput() {
+    clearTimeout(_suscripcionConceptoTimer);
+    _suscripcionConceptoTimer = setTimeout(() => renderSuscripcionConceptoAC(), 100);
+  }
+
+  function renderSuscripcionConceptoAC() {
+    const inp = document.getElementById('modal-suscripcion-concepto-txt');
+    const list = document.getElementById('modal-suscripcion-concepto-ac');
+    if (!inp || !list) return;
+
+    const rawQ = inp.value.trim();
+    const qNorm = normalizeStr(rawQ);
+
+    // Filtrar coincidencias locales
+    let localMatches = (gasConceptos || []).filter(c => {
+      if (!c.cuenta_nombre) return false;
+      return normalizeStr(c.cuenta_nombre).includes(qNorm) || (c.cuenta_codigo && c.cuenta_codigo.includes(rawQ));
+    });
+
+    // Consultar endpoint backend para asegurar todas las cuentas PUC de gasto/activo
+    fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/conceptos/buscar?q=${encodeURIComponent(rawQ)}`)
+      .then(r => r.json())
+      .then(remoteList => {
+        _suscripcionConceptoIdx = -1;
+        let combined = [...localMatches];
+        if (Array.isArray(remoteList)) {
+          remoteList.forEach(rc => {
+            if (!combined.some(c => c.cuenta_puc_id === rc.cuenta_puc_id || c.cuenta_codigo === rc.cuenta_codigo)) {
+              combined.push(rc);
+            }
+          });
+        }
+
+        if (combined.length === 0 && rawQ.length > 0) {
+          list.innerHTML = `
+            <div class="px-3 py-2 text-xs text-gray-400 italic">No existe el rubro "${escapeGasHtml(rawQ)}"</div>
+            <div class="p-2.5 border-t border-gray-100 bg-rose-50/90 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition modal-sus-crear-gasto-opt">
+              <span class="flex items-center gap-1.5">
+                <span>✨</span> Crear como nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(rawQ)}</strong>
+              </span>
+              <span class="text-[10px] bg-rose-200/80 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
+            </div>
+          `;
+          const btnCrear = list.querySelector('.modal-sus-crear-gasto-opt');
+          if (btnCrear) {
+            btnCrear.addEventListener('mousedown', e => {
+              e.preventDefault();
+              abrirModalNuevoGasto(rawQ);
+            });
+          }
+          list.classList.remove('hidden');
+          return;
+        }
+
+        let html = combined.slice(0, 15).map(c => {
+          const cat = c.categoria_tipo || 'gasto';
+          let tagHtml = '';
+          if (cat === 'activo') tagHtml = '<span class="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">🏭 Activo</span>';
+          else if (cat === 'diferido') tagHtml = '<span class="text-[9px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">⏳ Diferido</span>';
+          else tagHtml = '<span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 font-bold">🧾 Gasto</span>';
+
+          return `
+            <div class="ac-item px-3 py-2.5 hover:bg-indigo-50 cursor-pointer text-xs border-b border-gray-100 last:border-b-0 flex justify-between items-center transition"
+                 data-id="${c.cuenta_puc_id}" data-cod="${c.cuenta_codigo || ''}" data-nombre="${c.cuenta_nombre.replace(/"/g, '&quot;')}">
+              <div>
+                <span class="font-bold text-gray-800 block">${escapeGasHtml(c.cuenta_nombre)}</span>
+                ${c.cuenta_codigo ? `<span class="text-[10px] text-gray-400 font-mono">PUC: ${c.cuenta_codigo}</span>` : ''}
+              </div>
+              <div class="flex items-center gap-1.5">
+                ${tagHtml}
+                <span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold border border-indigo-100">Seleccionar</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        if (rawQ.length > 0) {
+          html += `
+            <div class="p-2.5 border-t border-gray-100 bg-rose-50/80 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition modal-sus-crear-gasto-opt">
+              <span class="flex items-center gap-1.5">
+                <span>✨</span> Crear como nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(rawQ)}</strong>
+              </span>
+              <span class="text-[10px] bg-rose-200/80 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
+            </div>
+          `;
+        }
+
+        list.innerHTML = html;
+
+        const btnCrear = list.querySelector('.modal-sus-crear-gasto-opt');
+        if (btnCrear) {
+          btnCrear.addEventListener('mousedown', e => {
+            e.preventDefault();
+            abrirModalNuevoGasto(rawQ);
+          });
+        }
+
+        list.querySelectorAll('.ac-item').forEach(el => {
+          el.addEventListener('mousedown', e => {
+            e.preventDefault();
+            selectSuscripcionConcepto(el.dataset.id, el.dataset.nombre, el.dataset.cod);
+          });
+        });
+
+        list.classList.remove('hidden');
+      })
+      .catch(() => {
+        list.classList.add('hidden');
+      });
+  }
+
+  function selectSuscripcionConcepto(id, nombre, cod) {
+    document.getElementById('modal-suscripcion-concepto-txt').value = nombre;
+    document.getElementById('modal-suscripcion-concepto-id').value = id || '';
+    document.getElementById('modal-suscripcion-concepto-cod').value = cod || '';
+    const list = document.getElementById('modal-suscripcion-concepto-ac');
+    if (list) list.classList.add('hidden');
+    document.getElementById('modal-suscripcion-tercero-txt')?.focus();
+  }
+
+  function clearSuscripcionConcepto() {
+    document.getElementById('modal-suscripcion-concepto-txt').value = '';
+    document.getElementById('modal-suscripcion-concepto-id').value = '';
+    document.getElementById('modal-suscripcion-concepto-cod').value = '';
+    const list = document.getElementById('modal-suscripcion-concepto-ac');
+    if (list) list.classList.add('hidden');
+  }
+
+  function navSuscripcionConceptoAC(e) {
+    const list = document.getElementById('modal-suscripcion-concepto-ac');
+    if (!list) return;
+    const abierto = !list.classList.contains('hidden');
+    if (!abierto) {
+      if (e.key === 'ArrowDown') { onSuscripcionConceptoInput(); e.preventDefault(); }
+      return;
+    }
+    const items = list.querySelectorAll('.ac-item');
+    if (e.key === 'ArrowDown') {
+      _suscripcionConceptoIdx = Math.min(_suscripcionConceptoIdx + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('ac-focus', i === _suscripcionConceptoIdx));
+      if (_suscripcionConceptoIdx >= 0 && items[_suscripcionConceptoIdx]) items[_suscripcionConceptoIdx].scrollIntoView({block: 'nearest'});
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      _suscripcionConceptoIdx = Math.max(_suscripcionConceptoIdx - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('ac-focus', i === _suscripcionConceptoIdx));
+      if (_suscripcionConceptoIdx >= 0 && items[_suscripcionConceptoIdx]) items[_suscripcionConceptoIdx].scrollIntoView({block: 'nearest'});
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      if (_suscripcionConceptoIdx >= 0 && items[_suscripcionConceptoIdx]) {
+        const el = items[_suscripcionConceptoIdx];
+        selectSuscripcionConcepto(el.dataset.id, el.dataset.nombre, el.dataset.cod);
+      } else if (items.length > 0) {
+        selectSuscripcionConcepto(items[0].dataset.id, items[0].dataset.nombre, items[0].dataset.cod);
+      }
+      e.preventDefault();
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+      list.classList.add('hidden');
+    }
+  }
+
   function abrirModalNuevaSuscripcion() {
     document.getElementById('modal-suscripcion-id').value = '';
-    document.getElementById('modal-suscripcion-concepto').value = '';
-    document.getElementById('modal-suscripcion-tercero-txt').value = '';
-    document.getElementById('modal-suscripcion-tercero-id').value = '';
-    const ac = document.getElementById('modal-suscripcion-tercero-ac');
-    if (ac) ac.classList.add('hidden');
+    clearSuscripcionConcepto();
+    clearSuscripcionTercero();
     document.getElementById('modal-suscripcion-monto').value = '';
     document.getElementById('modal-suscripcion-frecuencia').value = 'mensual';
     document.getElementById('modal-suscripcion-dia-mes').value = '5';
@@ -3077,7 +3267,7 @@
     const modal = document.getElementById('modal-nueva-suscripcion');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    setTimeout(() => document.getElementById('modal-suscripcion-concepto')?.focus(), 50);
+    setTimeout(() => document.getElementById('modal-suscripcion-concepto-txt')?.focus(), 50);
   }
 
   function cerrarModalNuevaSuscripcion() {
@@ -3087,7 +3277,9 @@
   }
 
   async function guardarSuscripcionGasto() {
-    const concepto = document.getElementById('modal-suscripcion-concepto').value.trim();
+    const concepto = document.getElementById('modal-suscripcion-concepto-txt').value.trim();
+    const cuentaPucId = document.getElementById('modal-suscripcion-concepto-id').value;
+    const cuentaDebito = document.getElementById('modal-suscripcion-concepto-cod').value;
     const terceroId = document.getElementById('modal-suscripcion-tercero-id').value;
     const montoRaw = document.getElementById('modal-suscripcion-monto').value.replace(/[^0-9.]/g, '');
     const monto = parseFloat(montoRaw || 0);
@@ -3118,6 +3310,8 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           concepto,
+          cuenta_puc_id: cuentaPucId ? parseInt(cuentaPucId) : null,
+          cuenta_debito: cuentaDebito || null,
           tercero_id: parseInt(terceroId),
           monto,
           frecuencia,
@@ -3202,6 +3396,10 @@
     }
     if (!e.target.closest('#gas-tercero-txt') && !e.target.closest('#gas-tercero-ac')) {
       document.getElementById('gas-tercero-ac').classList.add('hidden');
+    }
+    if (!e.target.closest('#modal-suscripcion-concepto-txt') && !e.target.closest('#modal-suscripcion-concepto-ac')) {
+      const ac = document.getElementById('modal-suscripcion-concepto-ac');
+      if (ac) ac.classList.add('hidden');
     }
     if (!e.target.closest('#modal-suscripcion-tercero-txt') && !e.target.closest('#modal-suscripcion-tercero-ac')) {
       const ac = document.getElementById('modal-suscripcion-tercero-ac');

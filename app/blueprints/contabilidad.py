@@ -5630,12 +5630,12 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
     from ..db import get_db_connection
     conn = get_db_connection()
     try:
-        negocio = conn.execute("SELECT nombre, telefono, direccion, nit_o_cc, email, ciudad FROM terceros WHERE id = %s", (negocio_id,)).fetchone()
+        negocio = conn.execute("SELECT nombre, telefono, direccion FROM terceros WHERE id = %s", (negocio_id,)).fetchone()
         comp_id_param = request.args.get('comprobante_id', type=int)
         
         if comp_id_param:
             movs = conn.execute("""
-                SELECT mc.id, mc.cuenta, mc.concepto, mc.tipo, mc.monto, mc.tercero_id, t.nombre AS tercero_nombre, t.nit_o_cc AS tercero_nit,
+                SELECT mc.id, mc.cuenta, mc.concepto, mc.tipo, mc.monto, mc.tercero_id, t.nombre AS tercero_nombre,
                        mc.registrado_por, t_reg.nombre AS reg_tercero_nombre, u.nombre AS usuario_nombre,
                        mc.numero_documento, mc.tipo_documento, mc.origen_tipo, mc.origen_id, mc.fecha, mc.descripcion_general, mc.comprobante_id,
                        mc.centro_utilidad_id, cu.codigo AS centro_codigo, cu.nombre AS centro_nombre,
@@ -5650,7 +5650,7 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
             """, (comp_id_param, negocio_id)).fetchall()
         else:
             movs = conn.execute("""
-                SELECT mc.id, mc.cuenta, mc.concepto, mc.tipo, mc.monto, mc.tercero_id, t.nombre AS tercero_nombre, t.nit_o_cc AS tercero_nit,
+                SELECT mc.id, mc.cuenta, mc.concepto, mc.tipo, mc.monto, mc.tercero_id, t.nombre AS tercero_nombre,
                        mc.registrado_por, t_reg.nombre AS reg_tercero_nombre, u.nombre AS usuario_nombre,
                        mc.numero_documento, mc.tipo_documento, mc.origen_tipo, mc.origen_id, mc.fecha, mc.descripcion_general, mc.comprobante_id,
                        mc.centro_utilidad_id, cu.codigo AS centro_codigo, cu.nombre AS centro_nombre,
@@ -5728,10 +5728,10 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
                 self._doc_title = doc_name
                 self._doc_num = doc_num
                 self._is_closed = esta_cerrado
-                self._negocio_nombre = negocio['nombre'] if negocio else 'EMPRESA'
-                self._negocio_nit = negocio['nit_o_cc'] if negocio and negocio.get('nit_o_cc') else ''
-                self._negocio_tel = negocio['telefono'] if negocio and negocio.get('telefono') else ''
-                self._negocio_dir = negocio['direccion'] if negocio and negocio.get('direccion') else ''
+                self._negocio_nombre = (negocio['nombre'] or 'EMPRESA') if negocio else 'EMPRESA'
+                self._negocio_nit = ''
+                self._negocio_tel = (negocio['telefono'] or '') if negocio else ''
+                self._negocio_dir = (negocio['direccion'] or '') if negocio else ''
                 self._usuario_firma = usuario_firma
 
             def header(self):

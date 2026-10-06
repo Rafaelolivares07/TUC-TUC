@@ -2391,8 +2391,10 @@
         cerrarModalCierreIndividual();
         
         // Abrir comprobante PDF del documento cerrado
-        if (tipoDoc && numDoc) {
-          window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${numDoc}/pdf`, '_blank');
+        const docCerrado = d.num_doc_cerrado || numDoc;
+        const compIdQuery = d.comprobante_id ? `?comprobante_id=${d.comprobante_id}` : '';
+        if (tipoDoc && docCerrado) {
+          window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${docCerrado}/pdf${compIdQuery}`, '_blank');
         }
         
         await cargarGastosDocumentos();
@@ -2499,8 +2501,9 @@
       if (d.ok) {
         toast('¡Relación de desembolsos cerrada con éxito!');
         cerrarModalCierreRelacion();
-        closedTipoDoc = tipoDoc;
-        closedNumDoc = numDoc;
+        closedTipoDoc = d.tipo_doc || tipoDoc;
+        closedNumDoc = d.num_doc || numDoc;
+        closedCompId = d.comprobante_id || null;
         try { localStorage.removeItem(`gas_fecha_${NEGOCIO_ID}_${tipoDoc}`); } catch(e){}
         
         // Bloquear interfaz para evitar modificaciones fantasma
@@ -2526,10 +2529,12 @@
 
   let closedTipoDoc = null;
   let closedNumDoc = null;
+  let closedCompId = null;
 
   function imprimirPdfRelacionCerrada() {
     if (!closedTipoDoc || !closedNumDoc) return;
-    window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${closedTipoDoc}/${closedNumDoc}/pdf`, '_blank');
+    const qComp = closedCompId ? `?comprobante_id=${closedCompId}` : '';
+    window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${closedTipoDoc}/${closedNumDoc}/pdf${qComp}`, '_blank');
   }
 
   function irASiguienteRelacion() {

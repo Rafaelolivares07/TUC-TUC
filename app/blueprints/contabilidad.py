@@ -3276,7 +3276,7 @@ def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
                        p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre, p.nivel AS cuenta_nivel,
                        m.fecha, m.descripcion_general, m.tercero_id,
                        m.tipo_documento, m.tipo_documento_id, m.comprobante_id,
-                       m.centro_utilidad_id
+                       m.numero_documento, m.centro_utilidad_id
                 FROM movimientos_contables m
                 LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
                 WHERE m.comprobante_id = %s AND m.negocio_id = %s
@@ -3288,12 +3288,14 @@ def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
                        p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre, p.nivel AS cuenta_nivel,
                        m.fecha, m.descripcion_general, m.tercero_id,
                        m.tipo_documento, m.tipo_documento_id, m.comprobante_id,
-                       m.centro_utilidad_id
+                       m.numero_documento, m.centro_utilidad_id
                 FROM movimientos_contables m
                 LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
-                WHERE (m.tipo_documento_id = %s OR m.tipo_documento = %s) AND m.numero_documento = %s AND m.negocio_id = %s
+                WHERE (m.tipo_documento_id = %s OR m.tipo_documento = %s) 
+                  AND (m.numero_documento = %s OR %s = '0' OR %s = '' OR %s = 'doc') 
+                  AND m.negocio_id = %s
                 ORDER BY m.id
-            """, (td_id, str(tipo_doc), str(numero_documento), negocio_id)).fetchall()
+            """, (td_id, str(tipo_doc), str(numero_documento), str(numero_documento), str(numero_documento), str(numero_documento), negocio_id)).fetchall()
         else:
             # Resolver tipo_documento_id a partir de nombre o código
             td_row = conn.execute(
@@ -3309,25 +3311,28 @@ def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
                            p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre, p.nivel AS cuenta_nivel,
                            m.fecha, m.descripcion_general, m.tercero_id,
                            m.tipo_documento, m.tipo_documento_id, m.comprobante_id,
-                           m.centro_utilidad_id
+                           m.numero_documento, m.centro_utilidad_id
                     FROM movimientos_contables m
                     LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
                     WHERE (m.tipo_documento_id = %s OR m.tipo_documento = %s OR m.tipo_documento = %s OR LOWER(m.tipo_documento) = LOWER(%s)) 
-                      AND m.numero_documento = %s AND m.negocio_id = %s
+                      AND (m.numero_documento = %s OR %s = '0' OR %s = '' OR %s = 'doc') 
+                      AND m.negocio_id = %s
                     ORDER BY m.id
-                """, (resolved_td_id, resolved_td_cod, resolved_td_nom, tipo_doc, str(numero_documento), negocio_id)).fetchall()
+                """, (resolved_td_id, resolved_td_cod, resolved_td_nom, tipo_doc, str(numero_documento), str(numero_documento), str(numero_documento), str(numero_documento), negocio_id)).fetchall()
             else:
                 lineas = conn.execute("""
                     SELECT m.id, m.tipo, m.cuenta, m.concepto, m.monto, m.cuenta_id,
                            p.codigo AS cuenta_codigo, p.nombre AS cuenta_nombre, p.nivel AS cuenta_nivel,
                            m.fecha, m.descripcion_general, m.tercero_id,
                            m.tipo_documento, m.tipo_documento_id, m.comprobante_id,
-                           m.centro_utilidad_id
+                           m.numero_documento, m.centro_utilidad_id
                     FROM movimientos_contables m
                     LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
-                    WHERE (m.tipo_documento = %s OR LOWER(m.tipo_documento) = LOWER(%s)) AND m.numero_documento = %s AND m.negocio_id = %s
+                    WHERE (m.tipo_documento = %s OR LOWER(m.tipo_documento) = LOWER(%s) OR m.tipo_documento ILIKE %s) 
+                      AND (m.numero_documento = %s OR %s = '0' OR %s = '' OR %s = 'doc') 
+                      AND m.negocio_id = %s
                     ORDER BY m.id
-                """, (tipo_doc, tipo_doc, str(numero_documento), negocio_id)).fetchall()
+                """, (tipo_doc, tipo_doc, f"%{tipo_doc}%", str(numero_documento), str(numero_documento), str(numero_documento), str(numero_documento), negocio_id)).fetchall()
         
         if lineas and any(not ln['comprobante_id'] for ln in lineas):
             existing_cid = next((ln['comprobante_id'] for ln in lineas if ln['comprobante_id']), None)
@@ -5557,20 +5562,38 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
     conn = get_db_connection()
     try:
         negocio = conn.execute("SELECT nombre, telefono, direccion FROM terceros WHERE id = %s", (negocio_id,)).fetchone()
+        comp_id_param = request.args.get('comprobante_id', type=int)
         
-        movs = conn.execute("""
-            SELECT mc.id, mc.cuenta, mc.concepto, mc.tipo, mc.monto, mc.tercero_id, t.nombre AS tercero_nombre,
-                   mc.registrado_por, t_reg.nombre AS reg_tercero_nombre, u.nombre AS usuario_nombre,
-                   mc.numero_documento, mc.tipo_documento, mc.origen_tipo, mc.origen_id, mc.fecha, mc.descripcion_general, mc.comprobante_id,
-                   mc.centro_utilidad_id, cu.codigo AS centro_codigo, cu.nombre AS centro_nombre
-            FROM movimientos_contables mc
-            LEFT JOIN terceros t ON t.id = mc.tercero_id
-            LEFT JOIN terceros t_reg ON t_reg.id = mc.registrado_por
-            LEFT JOIN usuarios u ON u.id = mc.registrado_por
-            LEFT JOIN centros_utilidad cu ON cu.id = mc.centro_utilidad_id
-            WHERE mc.tipo_documento = %s AND mc.numero_documento = %s AND mc.negocio_id = %s
-            ORDER BY mc.tipo DESC, mc.id ASC
-        """, (tipo_doc, numero_documento, negocio_id)).fetchall()
+        if comp_id_param:
+            movs = conn.execute("""
+                SELECT mc.id, mc.cuenta, mc.concepto, mc.tipo, mc.monto, mc.tercero_id, t.nombre AS tercero_nombre,
+                       mc.registrado_por, t_reg.nombre AS reg_tercero_nombre, u.nombre AS usuario_nombre,
+                       mc.numero_documento, mc.tipo_documento, mc.origen_tipo, mc.origen_id, mc.fecha, mc.descripcion_general, mc.comprobante_id,
+                       mc.centro_utilidad_id, cu.codigo AS centro_codigo, cu.nombre AS centro_nombre
+                FROM movimientos_contables mc
+                LEFT JOIN terceros t ON t.id = mc.tercero_id
+                LEFT JOIN terceros t_reg ON t_reg.id = mc.registrado_por
+                LEFT JOIN usuarios u ON u.id = mc.registrado_por
+                LEFT JOIN centros_utilidad cu ON cu.id = mc.centro_utilidad_id
+                WHERE mc.comprobante_id = %s AND mc.negocio_id = %s
+                ORDER BY mc.tipo DESC, mc.id ASC
+            """, (comp_id_param, negocio_id)).fetchall()
+        else:
+            movs = conn.execute("""
+                SELECT mc.id, mc.cuenta, mc.concepto, mc.tipo, mc.monto, mc.tercero_id, t.nombre AS tercero_nombre,
+                       mc.registrado_por, t_reg.nombre AS reg_tercero_nombre, u.nombre AS usuario_nombre,
+                       mc.numero_documento, mc.tipo_documento, mc.origen_tipo, mc.origen_id, mc.fecha, mc.descripcion_general, mc.comprobante_id,
+                       mc.centro_utilidad_id, cu.codigo AS centro_codigo, cu.nombre AS centro_nombre
+                FROM movimientos_contables mc
+                LEFT JOIN terceros t ON t.id = mc.tercero_id
+                LEFT JOIN terceros t_reg ON t_reg.id = mc.registrado_por
+                LEFT JOIN usuarios u ON u.id = mc.registrado_por
+                LEFT JOIN centros_utilidad cu ON cu.id = mc.centro_utilidad_id
+                WHERE (mc.tipo_documento = %s OR LOWER(mc.tipo_documento) = LOWER(%s) OR mc.tipo_documento ILIKE %s) 
+                  AND (mc.numero_documento = %s OR %s = '0' OR %s = '') 
+                  AND mc.negocio_id = %s
+                ORDER BY mc.tipo DESC, mc.id ASC
+            """, (tipo_doc, tipo_doc, f"%{tipo_doc}%", numero_documento, numero_documento, numero_documento, negocio_id)).fetchall()
         
         conn.close()
         

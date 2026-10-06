@@ -110,13 +110,19 @@
 
   <!-- Formulario de Línea de Desembolso -->
   <div id="gas-form-container" class="bg-gray-50/50 rounded-2xl p-5 border border-gray-100 mb-6">
-    <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
       <h3 class="text-sm font-bold text-gray-700 flex items-center gap-1.5">
         <span>✏️</span> Registrar Nuevo Desembolso
       </h3>
-      <span id="gas-badge-tipo-detectado" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 border border-gray-200 hidden">
-        🧾 Gasto del Mes
-      </span>
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-semibold text-gray-500 uppercase">Clasificación:</span>
+        <button type="button" onclick="abrirModalReclasificarParaCreacion()" id="gas-btn-clasificacion-creacion"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-2xs bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                title="Haga clic para clasificar como Gasto del Mes, Activo Fijo o Gasto Diferido y definir plazos">
+          <span id="gas-txt-clasificacion-creacion">🧾 Gasto Corriente (1 mes)</span>
+          <span class="text-[10px] text-emerald-700 bg-emerald-200/70 px-1.5 py-0.5 rounded font-bold">Cambiar ⚙️</span>
+        </button>
+      </div>
     </div>
     
     <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
@@ -137,6 +143,9 @@
         <input type="hidden" id="gas-concept-id">
         <input type="hidden" id="gas-concept-tercero">
         <input type="hidden" id="gas-concept-cat" value="gasto">
+        <input type="hidden" id="gas-duracion-meses-val" value="1">
+        <input type="hidden" id="gas-modalidad-meses-val" value="fija">
+        <input type="hidden" id="gas-cuota1-val" value="">
         <div id="gas-concept-ac" class="ac-drop hidden"></div>
       </div>
       
@@ -173,48 +182,7 @@
         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Valor Total Pagado</label>
         <input id="gas-monto" type="text" inputmode="decimal" placeholder="0.00"
                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none font-mono font-bold h-[38px]"
-               oninput="recalcularCuotaMensualEnVivo()" onfocus="this.select()" onkeydown="navMonto(event)">
-      </div>
-
-      <!-- Plazo / Duración Progresiva (Solo visible para Activo o Diferido) -->
-      <div id="gas-duracion-container" class="md:col-span-12 bg-amber-50/80 rounded-xl p-3.5 border border-amber-250 hidden transition-all">
-        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-          <div class="md:col-span-4">
-            <label class="block text-xs font-bold text-amber-950 uppercase tracking-wide mb-1">
-              ⏱️ Plazo de Amortización
-            </label>
-            <select id="gas-duracion-meses" onchange="recalcularCuotaMensualEnVivo()"
-                    class="border-2 border-amber-400 bg-white rounded-xl px-3 py-1.5 text-xs font-bold w-full focus:ring-2 focus:ring-amber-500 text-amber-950 outline-none h-[38px]">
-              <option value="2">2 meses</option>
-              <option value="3">3 meses</option>
-              <option value="4">4 meses</option>
-              <option value="5">5 meses</option>
-              <option value="6">6 meses</option>
-              <option value="9">9 meses</option>
-              <option value="12" selected>1 año (12 meses)</option>
-              <option value="18">1.5 años (18 meses)</option>
-              <option value="24">2 años (24 meses)</option>
-              <option value="36">3 años (36 meses)</option>
-              <option value="48">4 años (48 meses)</option>
-              <option value="60">5 años (60 meses)</option>
-            </select>
-          </div>
-          <div class="md:col-span-4">
-            <label class="block text-xs font-bold text-amber-950 uppercase tracking-wide mb-1">
-              📊 Modalidad de Amortización
-            </label>
-            <select id="gas-modalidad-meses" onchange="recalcularCuotaMensualEnVivo()"
-                    class="border-2 border-amber-400 bg-white rounded-xl px-3 py-1.5 text-xs font-bold w-full focus:ring-2 focus:ring-amber-500 text-amber-950 outline-none h-[38px]">
-              <option value="fija" selected>⚖️ Cuotas Fijas / Iguales</option>
-              <option value="prorrateo">🗓️ Prorrateo Calendario (Días)</option>
-            </select>
-          </div>
-          <div class="md:col-span-4 bg-white rounded-xl px-4 py-2 border border-amber-200 shadow-2xs text-right">
-            <div class="text-[10px] uppercase font-bold text-gray-400">Gasto mensual reconocido:</div>
-            <div class="text-sm font-black text-emerald-700 font-mono" id="gas-cuota-preview">$0.00 / mes</div>
-            <div class="text-[10px] text-gray-500" id="gas-cuota-subtexto">Sin golpear el estado de resultados actual</div>
-          </div>
-        </div>
+               oninput="if(typeof recalcularCuotaMensualEnVivo==='function')recalcularCuotaMensualEnVivo()" onfocus="this.select()" onkeydown="navMonto(event)">
       </div>
 
       <!-- N° Recibo / Factura Soporte (Opcional) -->
@@ -1619,11 +1587,14 @@
     document.getElementById('gas-concept-id').value = '';
     document.getElementById('gas-concept-tercero').value = '';
     document.getElementById('gas-concept-cat').value = 'gasto';
+    document.getElementById('gas-duracion-meses-val').value = '1';
+    document.getElementById('gas-modalidad-meses-val').value = 'fija';
+    document.getElementById('gas-cuota1-val').value = '';
     document.getElementById('gas-concept-ac').classList.add('hidden');
     onConceptChange();
   }
 
-  // Controla la visibilidad del Tercero y del Plazo Multi-mes
+  // Controla la visibilidad del Tercero y la Clasificación Contable
   function onConceptChange() {
     const requiereTercero = document.getElementById('gas-concept-tercero').value === 'true';
     const containerTercero = document.getElementById('gas-tercero-container');
@@ -1635,26 +1606,47 @@
     }
 
     const cat = document.getElementById('gas-concept-cat').value || 'gasto';
-    const durContainer = document.getElementById('gas-duracion-container');
-    const badgeTipo = document.getElementById('gas-badge-tipo-detectado');
-    
-    if (cat === 'activo') {
-      durContainer.classList.remove('hidden');
-      badgeTipo.classList.remove('hidden');
-      badgeTipo.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200';
-      badgeTipo.innerHTML = '🏭 Propiedad, Planta y Equipo';
-    } else if (cat === 'diferido') {
-      durContainer.classList.remove('hidden');
-      badgeTipo.classList.remove('hidden');
-      badgeTipo.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200';
-      badgeTipo.innerHTML = '⏳ Pagos Anticipados / Diferidos';
-    } else {
-      durContainer.classList.add('hidden');
-      badgeTipo.classList.remove('hidden');
-      badgeTipo.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200';
-      badgeTipo.innerHTML = '🧾 Gasto del Día a Día';
+    let meses = parseInt(document.getElementById('gas-duracion-meses-val')?.value || 1);
+    if (cat !== 'gasto' && meses <= 1) {
+      meses = 12;
+      const durEl = document.getElementById('gas-duracion-meses-val');
+      if (durEl) durEl.value = '12';
     }
-    recalcularCuotaMensualEnVivo();
+    const modalidad = document.getElementById('gas-modalidad-meses-val')?.value || 'fija';
+    const cuota1 = document.getElementById('gas-cuota1-val')?.value || null;
+    
+    actualizarBadgeClasificacionCreacion(cat, meses, modalidad, cuota1);
+  }
+
+  function actualizarBadgeClasificacionCreacion(cat, meses, modalidad, cuota1) {
+    const btn = document.getElementById('gas-btn-clasificacion-creacion');
+    const txt = document.getElementById('gas-txt-clasificacion-creacion');
+    if (!btn || !txt) return;
+
+    const modStr = modalidad === 'fija' ? 'Fija' : 'Prorrateo';
+
+    if (cat === 'activo') {
+      btn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-2xs bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100';
+      txt.innerHTML = `🏭 Propiedad, Planta y Equipo <span class="font-normal opacity-85">(${meses > 1 ? meses : 12}m • ${modStr})</span>`;
+    } else if (cat === 'diferido') {
+      btn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-2xs bg-purple-50 text-purple-800 border-purple-300 hover:bg-purple-100';
+      txt.innerHTML = `⏳ Gasto Diferido <span class="font-normal opacity-85">(${meses > 1 ? meses : 12}m • ${modStr})</span>`;
+    } else {
+      btn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-2xs bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100';
+      txt.innerHTML = `🧾 Gasto Corriente <span class="font-normal opacity-85">(1 mes)</span>`;
+    }
+  }
+
+  function abrirModalReclasificarParaCreacion() {
+    const montoRaw = (document.getElementById('gas-monto')?.value || '').replace(/[$\s.]/g, '').replace(',', '.');
+    const monto = parseFloat(montoRaw || 0);
+    const concepto = document.getElementById('gas-concept-txt')?.value.trim() || 'Nuevo Desembolso';
+    const cat = document.getElementById('gas-concept-cat')?.value || 'gasto';
+    const duracion = parseInt(document.getElementById('gas-duracion-meses-val')?.value || (cat === 'gasto' ? 1 : 12));
+    const modalidad = document.getElementById('gas-modalidad-meses-val')?.value || 'prorrateo';
+    const cuota1 = document.getElementById('gas-cuota1-val')?.value || null;
+
+    abrirModalReclasificarLinea('new', concepto, cat, duracion, monto, modalidad, cuota1);
   }
 
   function recalcularCuotaMensualEnVivo() {
@@ -1942,12 +1934,12 @@
       conceptoFinal += ` (${nota})`;
     }
     
-    const durSel = document.getElementById('gas-duracion-meses');
-    const modSel = document.getElementById('gas-modalidad-meses');
-    const durContainer = document.getElementById('gas-duracion-container');
     const cat = document.getElementById('gas-concept-cat')?.value || 'gasto';
-    const meses_duracion = (!durContainer.classList.contains('hidden') && cat !== 'gasto' && durSel) ? parseInt(durSel.value || 12) : 1;
-    const modalidad_amortizacion = (cat !== 'gasto' && modSel) ? modSel.value : 'fija';
+    const durVal = document.getElementById('gas-duracion-meses-val')?.value;
+    const meses_duracion = (cat !== 'gasto' && durVal) ? parseInt(durVal || 12) : 1;
+    const modalidad_amortizacion = document.getElementById('gas-modalidad-meses-val')?.value || 'fija';
+    const cuota1Val = document.getElementById('gas-cuota1-val')?.value;
+    const cuota_1_monto = (cat !== 'gasto' && cuota1Val && !isNaN(parseFloat(cuota1Val))) ? parseFloat(cuota1Val) : null;
     
     try {
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea`, {
@@ -1962,8 +1954,10 @@
           concepto: conceptoFinal,
           tercero_id: tercero_id ? parseInt(tercero_id) : null,
           centro_utilidad_id: centro_utilidad_id ? parseInt(centro_utilidad_id) : null,
+          categoria_tipo: cat,
           meses_duracion: meses_duracion,
-          modalidad_amortizacion: modalidad_amortizacion
+          modalidad_amortizacion: modalidad_amortizacion,
+          cuota_1_monto: cuota_1_monto
         })
       });
       const d = await r.json();
@@ -3361,6 +3355,21 @@
     if (cat !== 'gasto' && _reclassModalidad === 'prorrateo' && cuota1Inp && cuota1Inp.value !== '') {
       cuota1Val = parseFloat(cuota1Inp.value);
       if (isNaN(cuota1Val)) cuota1Val = null;
+    }
+
+    if (lineId === 'new') {
+      const catEl = document.getElementById('gas-concept-cat');
+      const durEl = document.getElementById('gas-duracion-meses-val');
+      const modEl = document.getElementById('gas-modalidad-meses-val');
+      const cuotaEl = document.getElementById('gas-cuota1-val');
+      if (catEl) catEl.value = cat;
+      if (durEl) durEl.value = meses;
+      if (modEl) modEl.value = _reclassModalidad;
+      if (cuotaEl) cuotaEl.value = (cuota1Val !== null && cuota1Val !== undefined) ? cuota1Val : '';
+      actualizarBadgeClasificacionCreacion(cat, meses, _reclassModalidad, cuota1Val);
+      cerrarModalReclasificarLinea();
+      toast('Clasificación asignada al nuevo desembolso.');
+      return;
     }
 
     const btn = document.getElementById('btn-guardar-reclass-linea');

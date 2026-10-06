@@ -6007,6 +6007,65 @@ def api_gastos_linea_post(negocio_id):
 
         modalidad_amortizacion = (data.get('modalidad_amortizacion') or 'prorrateo').strip().lower()
         cuota_1_monto = data.get('cuota_1_monto')
+        categoria_tipo = (data.get('categoria_tipo') or 'gasto').strip().lower()
+
+        cuenta_id_final = cuenta_puc_id
+        cuenta_cod_final = str(acc['codigo']).strip()
+
+        if categoria_tipo == 'activo':
+            pref_costo = '6143'
+            pref_act = '1505'
+        elif categoria_tipo == 'diferido':
+            pref_costo = '6144'
+            pref_act = '1705'
+        else:
+            pref_costo = '6142'
+            pref_act = None
+
+        if not cuenta_cod_final.startswith(pref_costo):
+            concepto_raw = concepto or 'Desembolso'
+            import re
+            concepto_base = re.sub(r'\[Soporte:\s*[^\]]+\]', '', concepto_raw)
+            concepto_base = re.sub(r'\([^)]+\)$', '', concepto_base).strip()
+            
+            cta_existente = conn.execute("""
+                SELECT id, codigo FROM cuentas_puc 
+                WHERE codigo LIKE %s AND UPPER(nombre) = %s AND activo = true
+                LIMIT 1
+            """, (f"{pref_costo}%", concepto_base.upper())).fetchone()
+            
+            if cta_existente:
+                cuenta_id_final = cta_existente['id']
+                cuenta_cod_final = cta_existente['codigo']
+            else:
+                cuentas = conn.execute("""
+                    SELECT codigo FROM cuentas_puc WHERE codigo LIKE %s ORDER BY codigo ASC
+                """, (f"{pref_costo}%",)).fetchall()
+                max_num = 0
+                for c in cuentas:
+                    cod = str(c['codigo']).strip()
+                    if cod.startswith(pref_costo) and len(cod) > len(pref_costo):
+                        try:
+                            n = int(cod[len(pref_costo):])
+                            if n > max_num: max_num = n
+                        except: pass
+                siguiente_int = max_num + 1
+                nuevo_cod = f"{pref_costo}{siguiente_int:02d}"
+                
+                row_c = conn.execute("""
+                    INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                    VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true) RETURNING id
+                """, (nuevo_cod, concepto_base, pref_costo, negocio_id)).fetchone()
+                cuenta_id_final = row_c['id']
+                cuenta_cod_final = nuevo_cod
+                
+                if pref_act:
+                    cod_act = f"{pref_act}{siguiente_int:02d}"
+                    if not conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (cod_act,)).fetchone():
+                        conn.execute("""
+                            INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                            VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true)
+                        """, (cod_act, f"{concepto_base} (Activo)", pref_act, negocio_id))
 
         uid = session['usuario_id']
         conn.execute("""
@@ -6015,7 +6074,7 @@ def api_gastos_linea_post(negocio_id):
                  tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
                  meses_duracion, cuota_numero, cuota_total, modalidad_amortizacion, cuota_1_monto)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (negocio_id, comp_id, cuenta_puc_id, acc['codigo'], concepto, 'debito', monto, uid, tercero_id,
+        """, (negocio_id, comp_id, cuenta_id_final, cuenta_cod_final, concepto, 'debito', monto, uid, tercero_id,
               tipo_doc_id, num_doc, fecha, tipo_doc, 'Relación de Desembolsos', 'gasto', centro_utilidad_id,
               meses_duracion, 1, meses_duracion, modalidad_amortizacion, cuota_1_monto))
               

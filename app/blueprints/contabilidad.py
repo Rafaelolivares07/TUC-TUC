@@ -7030,12 +7030,10 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
         resto_abiertas = conn.execute("""
             SELECT id FROM movimientos_contables
             WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s
-              AND id != %s AND id NOT IN (
-                  SELECT COALESCE(movimiento_origen_id, 0) FROM movimientos_contables 
-                  WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s AND movimiento_origen_id IS NOT NULL
-              )
+              AND id != %s 
+              AND movimiento_origen_id IS NULL
               AND tipo IN ('debito', 'D') AND (origen_tipo != 'cierre' OR origen_tipo IS NULL)
-        """, (negocio_id, tipo_doc, num_doc_actual, line_id, negocio_id, tipo_doc, num_doc_actual)).fetchall()
+        """, (negocio_id, tipo_doc, num_doc_actual, line_id)).fetchall()
 
         if resto_abiertas:
             nuevo_comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]

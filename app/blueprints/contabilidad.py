@@ -6565,10 +6565,11 @@ def api_gastos_cierre_post(negocio_id):
     data = request.get_json() or {}
     tipo_doc = (data.get('tipo_doc') or '').strip()
     num_doc = (data.get('num_doc') or '').strip()
+    pagos = data.get('pagos')
     metodo_pago_codigo = (data.get('metodo_pago') or '').strip()
     
-    if not tipo_doc or not num_doc or not metodo_pago_codigo:
-        return jsonify({'ok': False, 'error': 'Faltan campos requeridos'}), 400
+    if not tipo_doc or not num_doc:
+        return jsonify({'ok': False, 'error': 'Faltan campos requeridos (tipo_doc, num_doc)'}), 400
         
     from ..db import get_db_connection
     from datetime import datetime, date
@@ -6588,26 +6589,77 @@ def api_gastos_cierre_post(negocio_id):
             conn.close()
             return jsonify({'ok': False, 'error': 'La relación de desembolsos no contiene líneas contables a cerrar.'}), 400
             
+        monto_total_deb = float(rows['total_deb'])
         fecha = rows['fecha']
         comp_id = rows['comprobante_id']
         tipo_doc_id = rows['tipo_doc_id']
         _verificar_periodo_cerrado(conn, negocio_id, fecha)
         
-        # Check payment method specific account for gastos
-        pm = conn.execute("""
-            SELECT cuenta_gastos_id FROM parametros_metodos_pago_negocio 
-            WHERE negocio_id = %s AND metodo_codigo = %s
-        """, (negocio_id, metodo_pago_codigo)).fetchone()
-        
-        if not pm or not pm['cuenta_gastos_id']:
-            conn.close()
-            return jsonify({'ok': False, 'error': f"El método de pago '{metodo_pago_codigo}' no tiene configurada una cuenta contable de egreso en los parámetros."}), 400
+        # Normalizar lista de pagos
+        if not pagos or not isinstance(pagos, list):
+            if not metodo_pago_codigo:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Debe especificar el método de pago para el cierre.'}), 400
+            pagos = [{
+                'metodo_pago': metodo_pago_codigo,
+                'monto': monto_total_deb,
+                'tercero_id': data.get('tercero_id'),
+                'documento_cruce': data.get('documento_cruce')
+            }]
+
+        pagos_procesados = []
+        suma_pagos = 0.0
+        for p in pagos:
+            m_cod = (p.get('metodo_pago') or '').strip()
+            m_monto = float(p.get('monto') or 0)
+            if m_monto <= 0:
+                continue
+            suma_pagos += m_monto
             
-        cuenta_puc_id = pm['cuenta_gastos_id']
-        acc = conn.execute("SELECT codigo FROM cuentas_puc WHERE id = %s", (cuenta_puc_id,)).fetchone()
-        if not acc:
+            pm = conn.execute("""
+                SELECT COALESCE(cuenta_gastos_id, cuenta_id) AS cuenta_gastos_id 
+                FROM parametros_metodos_pago_negocio 
+                WHERE negocio_id = %s AND metodo_codigo = %s
+            """, (negocio_id, m_cod)).fetchone()
+            
+            if not pm or not pm['cuenta_gastos_id']:
+                conn.close()
+                return jsonify({'ok': False, 'error': f"El método de pago '{m_cod}' no tiene configurada una cuenta contable en los parámetros."}), 400
+                
+            cuenta_puc_id = pm['cuenta_gastos_id']
+            acc = conn.execute("""
+                SELECT id, codigo, nombre, COALESCE(maneja_terceros, false) AS maneja_terceros, COALESCE(maneja_documentos, false) AS maneja_documentos 
+                FROM cuentas_puc WHERE id = %s
+            """, (cuenta_puc_id,)).fetchone()
+            if not acc:
+                conn.close()
+                return jsonify({'ok': False, 'error': f"Cuenta PUC de egreso para '{m_cod}' no encontrada"}), 400
+                
+            p_tercero_id = p.get('tercero_id')
+            if acc['maneja_terceros'] and not p_tercero_id:
+                conn.close()
+                return jsonify({'ok': False, 'error': f"El método '{m_cod}' ({acc['codigo']} - {acc['nombre']}) exige especificar un Tercero / Proveedor."}), 400
+                
+            pagos_procesados.append({
+                'metodo_pago': m_cod,
+                'monto': m_monto,
+                'cuenta_id': acc['id'],
+                'cuenta_codigo': acc['codigo'],
+                'maneja_terceros': acc['maneja_terceros'],
+                'maneja_documentos': acc['maneja_documentos'],
+                'tercero_id': p_tercero_id,
+                'documento_cruce': (p.get('documento_cruce') or '').strip()
+            })
+
+        if not pagos_procesados:
             conn.close()
-            return jsonify({'ok': False, 'error': 'Cuenta PUC de egreso no encontrada'}), 400
+            return jsonify({'ok': False, 'error': 'No hay métodos de pago con montos válidos.'}), 400
+
+        if abs(suma_pagos - monto_total_deb) > 0.05:
+            conn.close()
+            return jsonify({'ok': False, 'error': f"La suma de los métodos de pago (${suma_pagos:,.2f}) no coincide con el total de la relación (${monto_total_deb:,.2f})."}), 400
+
+        metodo_principal = pagos_procesados[0]['metodo_pago']
             
         # Obtener todas las líneas de débito de esta relación para procesar amortizaciones multi-mes
         lineas_deb = conn.execute("""
@@ -6707,7 +6759,7 @@ def api_gastos_cierre_post(negocio_id):
                     VALUES (%s, %s, %s, 'mensual', %s, %s, %s, TRUE, %s)
                 """, (negocio_id, tipo_doc_id, f"Amortización mensual {l['concepto']} ({meses} meses)", dia_c, hora_ejec, json.dumps(prog_vars), proximo_ejec))
             else:
-                conn.execute("UPDATE movimientos_contables SET metodo_desembolso = %s WHERE id = %s", (metodo_pago_codigo, l['id']))
+                conn.execute("UPDATE movimientos_contables SET metodo_desembolso = %s WHERE id = %s", (metodo_principal, l['id']))
 
         # Obtener centro_utilidad_id predominante de esta relación
         row_cu = conn.execute("""
@@ -6717,14 +6769,27 @@ def api_gastos_cierre_post(negocio_id):
         """, (negocio_id, tipo_doc, num_doc)).fetchone()
         centro_id_cierre = row_cu['centro_utilidad_id'] if row_cu and row_cu['centro_utilidad_id'] else 1
 
-        # Add Credit Contrapartida line for total amount
-        conn.execute("""
-            INSERT INTO movimientos_contables
-                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por,
-                 tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id, metodo_desembolso)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (negocio_id, comp_id, cuenta_puc_id, acc['codigo'], 'Cierre relación desembolsos - Contrapartida ' + metodo_pago_codigo, 'credito',
-              float(rows['total_deb']), uid, tipo_doc_id, num_doc, fecha, tipo_doc, 'Relación de Desembolsos cerrada', 'gasto', centro_id_cierre, metodo_pago_codigo))
+        # Asentar Créditos de Contrapartida para cada método en el reparto
+        for p in pagos_procesados:
+            if p['maneja_documentos'] and p['tercero_id']:
+                num_cruce = p['documento_cruce'] or f"{tipo_doc}-{num_doc}"
+                conn.execute("""
+                    INSERT INTO saldo_por_documentos
+                        (negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento,
+                         monto_original, saldo, usuario_id, fecha_hora, tipo_documento_id, notas)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s)
+                    ON CONFLICT (negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento)
+                    DO UPDATE SET saldo = saldo_por_documentos.saldo + EXCLUDED.saldo, updated_at = NOW()
+                """, (negocio_id, p['tercero_id'], p['cuenta_id'], tipo_doc, num_cruce,
+                      p['monto'], p['monto'], uid, tipo_doc_id, f"Cierre Relación Desembolsos - {p['metodo_pago']}"))
+
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                     tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id, metodo_desembolso)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (negocio_id, comp_id, p['cuenta_id'], p['cuenta_codigo'], f"Cierre relación desembolsos - Contrapartida {p['metodo_pago']}", 'credito',
+                  p['monto'], uid, p['tercero_id'], tipo_doc_id, num_doc, fecha, tipo_doc, 'Relación de Desembolsos cerrada', 'gasto', centro_id_cierre, p['metodo_pago']))
               
         # Increment consecutive number of the document type
         conn.execute("""
@@ -6747,10 +6812,8 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
     if not session.get('usuario_id'):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     data = request.get_json() or {}
+    pagos = data.get('pagos')
     metodo_pago_codigo = (data.get('metodo_pago') or '').strip()
-    
-    if not metodo_pago_codigo:
-        return jsonify({'ok': False, 'error': 'Método de pago/desembolso requerido'}), 400
         
     from ..db import get_db_connection
     from datetime import datetime
@@ -6782,50 +6845,76 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
         meses = int(line['meses_duracion'] or 1)
         uid = session['usuario_id']
 
-        # 2. Obtener cuenta PUC del método de pago
-        pm = conn.execute("""
-            SELECT COALESCE(cuenta_gastos_id, cuenta_id) AS cuenta_gastos_id 
-            FROM parametros_metodos_pago_negocio 
-            WHERE negocio_id = %s AND metodo_codigo = %s
-        """, (negocio_id, metodo_pago_codigo)).fetchone()
-        
-        if not pm or not pm['cuenta_gastos_id']:
-            conn.close()
-            return jsonify({'ok': False, 'error': f"El método de pago '{metodo_pago_codigo}' no tiene cuenta configurada."}), 400
+        # Normalizar lista de pagos
+        if not pagos or not isinstance(pagos, list):
+            if not metodo_pago_codigo:
+                conn.close()
+                return jsonify({'ok': False, 'error': 'Debe especificar el método de pago para la liquidación.'}), 400
+            pagos = [{
+                'metodo_pago': metodo_pago_codigo,
+                'monto': monto_linea,
+                'tercero_id': data.get('tercero_id') or line['tercero_id'],
+                'documento_cruce': data.get('documento_cruce') or data.get('soporte')
+            }]
+
+        pagos_procesados = []
+        suma_pagos = 0.0
+        for p in pagos:
+            m_cod = (p.get('metodo_pago') or '').strip()
+            m_monto = float(p.get('monto') or 0)
+            if m_monto <= 0:
+                continue
+            suma_pagos += m_monto
+
+            pm = conn.execute("""
+                SELECT COALESCE(cuenta_gastos_id, cuenta_id) AS cuenta_gastos_id 
+                FROM parametros_metodos_pago_negocio 
+                WHERE negocio_id = %s AND metodo_codigo = %s
+            """, (negocio_id, m_cod)).fetchone()
             
-        cuenta_puc_id = pm['cuenta_gastos_id']
-        acc = conn.execute("""
-            SELECT id, codigo, nombre, COALESCE(maneja_terceros, false) AS maneja_terceros, COALESCE(maneja_documentos, false) AS maneja_documentos 
-            FROM cuentas_puc WHERE id = %s
-        """, (cuenta_puc_id,)).fetchone()
-        if not acc:
+            if not pm or not pm['cuenta_gastos_id']:
+                conn.close()
+                return jsonify({'ok': False, 'error': f"El método de pago '{m_cod}' no tiene cuenta configurada."}), 400
+                
+            cuenta_puc_id = pm['cuenta_gastos_id']
+            acc = conn.execute("""
+                SELECT id, codigo, nombre, COALESCE(maneja_terceros, false) AS maneja_terceros, COALESCE(maneja_documentos, false) AS maneja_documentos 
+                FROM cuentas_puc WHERE id = %s
+            """, (cuenta_puc_id,)).fetchone()
+            if not acc:
+                conn.close()
+                return jsonify({'ok': False, 'error': f"Cuenta PUC de desembolso para '{m_cod}' no encontrada"}), 400
+
+            p_tercero_id = p.get('tercero_id') or (line['tercero_id'] if not acc['maneja_terceros'] else None)
+            if acc['maneja_terceros'] and not p_tercero_id:
+                conn.close()
+                return jsonify({'ok': False, 'error': f"El método '{m_cod}' ({acc['codigo']} - {acc['nombre']}) exige especificar un Tercero / Proveedor."}), 400
+
+            pagos_procesados.append({
+                'metodo_pago': m_cod,
+                'monto': m_monto,
+                'cuenta_id': acc['id'],
+                'cuenta_codigo': acc['codigo'],
+                'maneja_terceros': acc['maneja_terceros'],
+                'maneja_documentos': acc['maneja_documentos'],
+                'tercero_id': p_tercero_id or line['tercero_id'],
+                'documento_cruce': (p.get('documento_cruce') or p.get('soporte') or '').strip()
+            })
+
+        if not pagos_procesados:
             conn.close()
-            return jsonify({'ok': False, 'error': 'Cuenta PUC de pago no encontrada'}), 400
+            return jsonify({'ok': False, 'error': 'No hay métodos de pago con montos válidos.'}), 400
 
-        # Validar tercero si la cuenta de desembolso lo exige
-        tercero_id = data.get('tercero_id') or line['tercero_id']
-        if acc['maneja_terceros'] and not tercero_id:
+        if abs(suma_pagos - monto_linea) > 0.05:
             conn.close()
-            return jsonify({'ok': False, 'error': f"La cuenta {acc['codigo']} ({acc['nombre']}) exige especificar un Tercero / Proveedor."}), 400
+            return jsonify({'ok': False, 'error': f"La suma de los métodos (${suma_pagos:,.2f}) no coincide con el total de la línea (${monto_linea:,.2f})."}), 400
 
-        documento_cruce = (data.get('documento_cruce') or data.get('soporte') or '').strip()
+        metodo_principal = pagos_procesados[0]['metodo_pago']
+        tercero_principal = pagos_procesados[0]['tercero_id'] or line['tercero_id']
 
-        # Actualizar tercero_id en el débito si se proveyó uno nuevo
-        if tercero_id and tercero_id != line['tercero_id']:
-            conn.execute("UPDATE movimientos_contables SET tercero_id = %s WHERE id = %s", (tercero_id, line_id))
-
-        # Registrar en saldo_por_documentos si la cuenta maneja saldo por documento (ej: 2335 CxP)
-        if acc['maneja_documentos'] and tercero_id:
-            num_doc_cruce = documento_cruce or f"{tipo_doc}-{num_doc_actual}"
-            conn.execute("""
-                INSERT INTO saldo_por_documentos
-                    (negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento,
-                     monto_original, saldo, usuario_id, fecha_hora, tipo_documento_id, notas)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s)
-                ON CONFLICT (negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento)
-                DO UPDATE SET saldo = saldo_por_documentos.saldo + EXCLUDED.saldo, updated_at = NOW()
-            """, (negocio_id, tercero_id, cuenta_puc_id, tipo_doc, num_doc_cruce,
-                  monto_linea, monto_linea, uid, tipo_doc_id, f"Liquidación Individual - {line['concepto']}"))
+        # Actualizar tercero_id en el débito si se especificó
+        if tercero_principal and tercero_principal != line['tercero_id']:
+            conn.execute("UPDATE movimientos_contables SET tercero_id = %s WHERE id = %s", (tercero_principal, line_id))
 
         # 3. Procesar multi-mes si aplica
         if meses > 1:
@@ -6862,7 +6951,7 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
                 UPDATE movimientos_contables
                 SET monto = %s, cuota_numero = 1, cuota_total = %s, metodo_desembolso = %s
                 WHERE id = %s
-            """, (cuota_1, total_cuotas_conteo, metodo_pago_codigo, line_id))
+            """, (cuota_1, total_cuotas_conteo, metodo_principal, line_id))
 
             conn.execute("""
                 INSERT INTO movimientos_contables
@@ -6871,9 +6960,9 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
                      meses_duracion, cuota_numero, cuota_total, movimiento_origen_id, metodo_desembolso)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """, (negocio_id, comp_id_actual, cuenta_activo_id, cod_activo, f"Saldo por amortizar - {line['concepto']}", 'debito',
-                  saldo_activo, uid, tercero_id, tipo_doc_id, num_doc_actual, fecha, tipo_doc,
+                  saldo_activo, uid, tercero_principal, tipo_doc_id, num_doc_actual, fecha, tipo_doc,
                   'Liquidación Individual - Saldo Activo', 'gasto', line['centro_utilidad_id'],
-                  meses, 1, total_cuotas_conteo, line_id, metodo_pago_codigo))
+                  meses, 1, total_cuotas_conteo, line_id, metodo_principal))
 
             # Programación recurrente
             dia_c = parsed_fecha.day
@@ -6889,7 +6978,7 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
                 'cuota_total': total_cuotas_conteo,
                 'cronograma': cronograma_info['cronograma'][1:],
                 'concepto': line['concepto'],
-                'tercero_id': tercero_id,
+                'tercero_id': tercero_principal,
                 'centro_utilidad_id': line['centro_utilidad_id'],
                 'doc_origen': f"{tipo_doc}-{num_doc_actual}",
                 'movimiento_origen_id': line_id
@@ -6900,16 +6989,29 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
                 VALUES (%s, %s, %s, 'mensual', %s, %s, %s, TRUE, %s)
             """, (negocio_id, tipo_doc_id, f"Amortización mensual {line['concepto']} ({meses} meses)", dia_c, hora_ejec, json.dumps(prog_vars), proximo_ejec))
         else:
-            conn.execute("UPDATE movimientos_contables SET metodo_desembolso = %s WHERE id = %s", (metodo_pago_codigo, line_id))
+            conn.execute("UPDATE movimientos_contables SET metodo_desembolso = %s WHERE id = %s", (metodo_principal, line_id))
 
-        # 4. Asentar Crédito de Pago por el monto total de esta línea
-        conn.execute("""
-            INSERT INTO movimientos_contables
-                (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
-                 tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id, metodo_desembolso)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (negocio_id, comp_id_actual, cuenta_puc_id, acc['codigo'], f"Liquidación Individual - Contrapartida {metodo_pago_codigo}", 'credito',
-              monto_linea, uid, tercero_id, tipo_doc_id, num_doc_actual, fecha, tipo_doc, 'Liquidación Individual Desembolso', 'gasto', line['centro_utilidad_id'] or 1, metodo_pago_codigo))
+        # 4. Asentar Créditos de Pago para cada método en el reparto
+        for p in pagos_procesados:
+            if p['maneja_documentos'] and p['tercero_id']:
+                num_cruce = p['documento_cruce'] or f"{tipo_doc}-{num_doc_actual}"
+                conn.execute("""
+                    INSERT INTO saldo_por_documentos
+                        (negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento,
+                         monto_original, saldo, usuario_id, fecha_hora, tipo_documento_id, notas)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s)
+                    ON CONFLICT (negocio_id, tercero_id, cuenta_id, tipo_documento, numero_documento)
+                    DO UPDATE SET saldo = saldo_por_documentos.saldo + EXCLUDED.saldo, updated_at = NOW()
+                """, (negocio_id, p['tercero_id'], p['cuenta_id'], tipo_doc, num_cruce,
+                      p['monto'], p['monto'], uid, tipo_doc_id, f"Liquidación Individual - {line['concepto']} - {p['metodo_pago']}"))
+
+            conn.execute("""
+                INSERT INTO movimientos_contables
+                    (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
+                     tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id, metodo_desembolso)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (negocio_id, comp_id_actual, p['cuenta_id'], p['cuenta_codigo'], f"Liquidación Individual - Contrapartida {p['metodo_pago']}", 'credito',
+                  p['monto'], uid, p['tercero_id'], tipo_doc_id, num_doc_actual, fecha, tipo_doc, 'Liquidación Individual Desembolso', 'gasto', line['centro_utilidad_id'] or 1, p['metodo_pago']))
 
         # 5. Fijar el consecutivo cerrado en num_doc_actual y calcular el nuevo_consecutivo abierto
         try:

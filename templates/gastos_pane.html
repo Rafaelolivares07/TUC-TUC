@@ -706,16 +706,16 @@
     </div>
   </div>
 
-  <!-- Modal Liquidar / Cerrar Individualmente una Línea de Desembolso -->
-  <div id="modal-cierre-individual-linea" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-4">
-    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in-95 duration-150">
+  <!-- Modal Liquidar / Cerrar Individualmente una Línea de Desembolso (Multimétodo) -->
+  <div id="modal-cierre-individual-linea" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-5 sm:p-6 max-w-lg w-full max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2.5 text-gray-800">
           <div class="p-2 bg-amber-50 text-amber-600 rounded-xl">
             <span class="text-xl">⚡</span>
           </div>
           <div>
-            <h4 class="text-sm font-bold text-gray-800">Liquidar Esta Línea Individualmente</h4>
+            <h4 class="text-sm sm:text-base font-bold text-gray-800">Liquidar Esta Línea Individualmente</h4>
             <p class="text-[11px] text-gray-500">Asienta y cierra solo esta erogación con el consecutivo actual.</p>
           </div>
         </div>
@@ -728,68 +728,45 @@
       <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 mb-4 space-y-2 text-xs">
         <div class="flex justify-between">
           <span class="text-gray-500">Concepto / Destino:</span>
-          <strong id="modal-cierre-ind-concepto" class="text-gray-800 text-right"></strong>
+          <strong id="modal-cierre-ind-concepto" class="text-gray-800 text-right truncate max-w-[240px]"></strong>
         </div>
         <div class="flex justify-between">
           <span class="text-gray-500">Plazo / Reconocimiento:</span>
           <span id="modal-cierre-ind-plazo" class="font-bold text-blue-700"></span>
         </div>
         <div class="flex justify-between border-t border-gray-200 pt-1.5">
-          <span class="text-gray-600 font-bold uppercase text-[10px]">Monto Total Pagado:</span>
-          <strong id="modal-cierre-ind-monto" class="font-mono text-sm text-rose-700"></strong>
+          <span class="text-gray-600 font-bold uppercase text-[10px]">Total a Liquidar:</span>
+          <strong id="modal-cierre-ind-monto" class="font-mono text-sm text-rose-700 font-black"></strong>
         </div>
       </div>
 
-      <!-- Selector Método de Pago -->
+      <!-- Sección Reparto Multi-Método -->
       <div class="mb-3">
-        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">
-          💳 Salida de Dinero / Medio de Pago <span class="text-rose-500">*</span>
-        </label>
-        <select id="modal-cierre-ind-metodo" onchange="alCambiarMetodoCierreInd()"
-                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none font-semibold text-gray-800">
-          <!-- Opciones dinámicas -->
-        </select>
-        <div class="text-[11px] text-gray-500 mt-1 font-mono flex items-center justify-between">
-          <span id="modal-cierre-ind-cuenta-lbl"></span>
-        </div>
-      </div>
-
-      <!-- Indicadores dinámicos de la Cuenta Mapeada -->
-      <div id="modal-cierre-ind-badges" class="mb-3 flex flex-wrap gap-1.5">
-        <!-- Badges generados dinámicamente -->
-      </div>
-
-      <!-- Campo Dinámico: Tercero / Proveedor (si la cuenta lo exige) -->
-      <div id="modal-cierre-ind-tercero-container" class="mb-3 relative hidden">
-        <div class="flex justify-between items-center mb-1">
-          <label class="block text-xs font-semibold text-gray-700 uppercase">
-            👤 Tercero / Proveedor <span id="modal-cierre-ind-tercero-req" class="text-rose-500">*</span>
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-xs font-bold text-gray-700 uppercase">
+            💳 Métodos de Pago y Desembolso
           </label>
-          <button type="button" onclick="abrirModalNuevoTercero(document.getElementById('modal-cierre-ind-tercero-txt').value.trim())" 
-                  class="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer">
-            <span>👤+</span> Nuevo
+          <button type="button" onclick="agregarFilaPago('ind')"
+                  class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 shadow-2xs transition flex items-center gap-1 cursor-pointer">
+            <span>➕</span> Repartir en otro método
           </button>
         </div>
-        <input id="modal-cierre-ind-tercero-txt" type="text" placeholder="Escriba para buscar tercero..."
-               autocomplete="off"
-               class="border border-gray-200 rounded-xl pl-3 pr-8 py-2 text-xs w-full bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none h-[36px]"
-               oninput="onCierreIndTerceroInput()" onfocus="onCierreIndTerceroInput()">
-        <button onclick="clearCierreIndTercero()" class="absolute right-2 top-[25px] text-gray-400 hover:text-gray-600 text-base cursor-pointer">&times;</button>
-        <input type="hidden" id="modal-cierre-ind-tercero-id">
-        <div id="modal-cierre-ind-tercero-ac" class="ac-drop hidden"></div>
-        <p class="text-[10px] text-gray-400 mt-0.5">La cuenta contable de este método exige identificar el tercero beneficiario/acreedor.</p>
+
+        <div id="cierre-ind-pagos-container" class="space-y-2.5">
+          <!-- Filas dinámicas de pagos -->
+        </div>
       </div>
 
-      <!-- Campo Dinámico: Documento Cruce / Soporte (si la cuenta maneja saldo por documento / CxP) -->
-      <div id="modal-cierre-ind-doc-container" class="mb-3.5 hidden">
-        <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">
-          📑 Documento Cruce / Factura Soporte <span class="text-rose-500">*</span>
-        </label>
-        <input id="modal-cierre-ind-doc" type="text" placeholder="Ej: FAC-1024, REC-9821..."
-               class="border border-gray-200 rounded-xl px-3 py-2 text-xs w-full bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none h-[36px] font-mono">
-        <p class="text-[10px] text-purple-700 mt-0.5 flex items-center gap-1 font-semibold">
-          <span>ℹ️</span> Esta cuenta maneja <strong>Saldo por Documento</strong>. Se creará una obligación en Saldos x Documento (CxP).
-        </p>
+      <!-- Barra de Balance y Validación -->
+      <div id="balance-wrap-ind" class="p-2.5 rounded-xl border flex items-center justify-between text-xs mb-4">
+        <div>
+          <span class="text-[10px] text-gray-400 block uppercase font-bold">Estado del Reparto:</span>
+          <span id="balance-txt-ind" class="font-bold"></span>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] text-gray-400 block uppercase font-bold">Diferencia:</span>
+          <strong id="balance-dif-ind" class="font-mono font-black text-xs"></strong>
+        </div>
       </div>
 
       <div class="flex justify-end gap-2 pt-2 border-t border-gray-100">
@@ -799,6 +776,79 @@
         <button id="btn-confirmar-cierre-ind" onclick="ejecutarCierreIndividualLinea()"
                 class="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer">
           <span>⚡</span> Confirmar y Liquidar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Cierre General de Relación de Desembolsos (Multimétodo) -->
+  <div id="modal-cierre-relacion" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-5 sm:p-6 max-w-lg w-full max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2.5 text-gray-800">
+          <div class="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+            <span class="text-xl">💾</span>
+          </div>
+          <div>
+            <h4 class="text-sm sm:text-base font-bold text-gray-800">Registrar Pago y Cerrar Relación</h4>
+            <p class="text-[11px] text-gray-500">Asienta el egreso contable acumulado y finaliza este consecutivo.</p>
+          </div>
+        </div>
+        <button onclick="cerrarModalCierreRelacion()" class="text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer">&times;</button>
+      </div>
+
+      <!-- Resumen del Documento -->
+      <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 mb-4 space-y-2 text-xs">
+        <div class="flex justify-between">
+          <span class="text-gray-500">Documento / Relación:</span>
+          <strong id="modal-cierre-rel-doc" class="text-gray-800 font-mono"></strong>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-500">Cantidad de Desembolsos:</span>
+          <span id="modal-cierre-rel-cant" class="font-bold text-gray-700"></span>
+        </div>
+        <div class="flex justify-between border-t border-gray-200 pt-1.5">
+          <span class="text-gray-600 font-bold uppercase text-[10px]">Total a Pagar / Liquidar:</span>
+          <strong id="modal-cierre-rel-monto" class="font-mono text-sm text-emerald-700 font-black"></strong>
+        </div>
+      </div>
+
+      <!-- Sección Reparto Multi-Método -->
+      <div class="mb-3">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block text-xs font-bold text-gray-700 uppercase">
+            💳 Métodos de Pago y Desembolso
+          </label>
+          <button type="button" onclick="agregarFilaPago('rel')"
+                  class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-lg border border-emerald-200 shadow-2xs transition flex items-center gap-1 cursor-pointer">
+            <span>➕</span> Repartir en otro método
+          </button>
+        </div>
+
+        <div id="cierre-rel-pagos-container" class="space-y-2.5">
+          <!-- Filas dinámicas de pagos -->
+        </div>
+      </div>
+
+      <!-- Barra de Balance y Validación -->
+      <div id="balance-wrap-rel" class="p-2.5 rounded-xl border flex items-center justify-between text-xs mb-4">
+        <div>
+          <span class="text-[10px] text-gray-400 block uppercase font-bold">Estado del Reparto:</span>
+          <span id="balance-txt-rel" class="font-bold"></span>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] text-gray-400 block uppercase font-bold">Diferencia:</span>
+          <strong id="balance-dif-rel" class="font-mono font-black text-xs"></strong>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-gray-100">
+        <button onclick="cerrarModalCierreRelacion()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition cursor-pointer">
+          Cancelar
+        </button>
+        <button id="btn-confirmar-cierre-rel" onclick="ejecutarCierreRelacionModal()"
+                class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+          <span>💾</span> Registrar Pago y Cerrar
         </button>
       </div>
     </div>
@@ -1955,10 +2005,317 @@
     }
   }
 
-  // ═══ GESTIÓN DE CIERRE INDIVIDUAL DE LÍNEA ═══
+  // ═══ GESTIÓN DE CIERRE Y LIQUIDACIÓN MULTI-MÉTODO ═══
   let _lineaIdCierreInd = null;
-  let _cierreIndTerceroTimer = null;
+  let _montoTotalCierreInd = 0.0;
+  let _montoTotalCierreRel = 0.0;
+  let _pagosCierreInd = [];
+  let _pagosCierreRel = [];
+  let _cierreTerceroTimers = {};
 
+  // Inicializa el reparto multi-método para liquidación individual o cierre general
+  function inicializarRepartoPagos(type, montoTotal, defaultTerceroId = null, defaultTerceroNombre = '', defaultDoc = '') {
+    const list = [];
+    let primerMetodo = (_metodosPagoGastos && _metodosPagoGastos.length > 0) ? _metodosPagoGastos[0].codigo : 'efectivo';
+    
+    // Si es cierre de relación, preferir el método seleccionado en el select inferior si existe
+    if (type === 'rel') {
+      const selMain = document.getElementById('gas-metodo-pago');
+      if (selMain && selMain.value) {
+        primerMetodo = selMain.value;
+      }
+    }
+
+    const rowObj = {
+      id: Date.now(),
+      metodo_pago: primerMetodo,
+      monto: Math.round(montoTotal * 100) / 100,
+      tercero_id: defaultTerceroId ? parseInt(defaultTerceroId) : null,
+      tercero_nombre: defaultTerceroNombre || '',
+      documento_cruce: defaultDoc || ''
+    };
+    list.push(rowObj);
+
+    if (type === 'ind') {
+      _montoTotalCierreInd = montoTotal;
+      _pagosCierreInd = list;
+    } else {
+      _montoTotalCierreRel = montoTotal;
+      _pagosCierreRel = list;
+    }
+
+    renderFilasPagos(type);
+  }
+
+  function getPagosList(type) {
+    return type === 'ind' ? _pagosCierreInd : _pagosCierreRel;
+  }
+
+  function getMontoTotal(type) {
+    return type === 'ind' ? _montoTotalCierreInd : _montoTotalCierreRel;
+  }
+
+  function renderFilasPagos(type) {
+    const container = document.getElementById(`cierre-${type}-pagos-container`);
+    if (!container) return;
+
+    const list = getPagosList(type);
+    const optionsHtml = _metodosPagoGastos.map(m => 
+      `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}</option>`
+    ).join('');
+
+    container.innerHTML = list.map((p, idx) => {
+      const metodo = _metodosPagoGastos.find(m => m.codigo === p.metodo_pago) || {};
+      const codCta = metodo.gastos_codigo || metodo.cuenta_codigo || '';
+      const nomCta = metodo.gastos_nombre || metodo.cuenta_nombre || '';
+      const manejaTerceros = Boolean(metodo.maneja_terceros || metodo.gastos_maneja_terceros);
+      const manejaDocs = Boolean(metodo.maneja_documentos || metodo.gastos_maneja_documentos);
+
+      let badgeInfo = '';
+      if (manejaTerceros) badgeInfo += '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">👤 Requiere Tercero</span> ';
+      if (manejaDocs) badgeInfo += '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200">📑 Saldo x Doc (CxP)</span> ';
+      if (!manejaTerceros && !manejaDocs) badgeInfo += '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">💵 Salida Directa</span>';
+
+      return `
+        <div class="p-3 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-2 relative shadow-2xs" id="pago-row-${type}-${p.id}">
+          <div class="flex items-start justify-between gap-2">
+            <!-- Selector Método -->
+            <div class="flex-1 min-w-0">
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Método ${idx + 1}</label>
+              <select onchange="alCambiarMetodoFilaPago('${type}', ${p.id}, this.value)"
+                      class="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 h-[34px]">
+                ${optionsHtml}
+              </select>
+            </div>
+
+            <!-- Input Monto -->
+            <div class="w-36">
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Monto ($)</label>
+              <input type="number" step="0.01" value="${p.monto}"
+                     oninput="alCambiarMontoFilaPago('${type}', ${p.id}, this.value)"
+                     class="w-full text-right font-mono font-black text-xs bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 text-gray-900 outline-none h-[34px]">
+            </div>
+
+            <!-- Botón Eliminar Fila -->
+            <div class="pt-5">
+              ${list.length > 1 ? `
+                <button type="button" onclick="eliminarFilaPago('${type}', ${p.id})"
+                        class="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer" title="Eliminar método de pago">
+                  ❌
+                </button>
+              ` : `
+                <div class="w-6"></div>
+              `}
+            </div>
+          </div>
+
+          <!-- Info Cuenta y Badges -->
+          <div class="flex items-center justify-between flex-wrap gap-1 text-[10px] text-gray-500 border-t border-gray-200/60 pt-1.5">
+            <span class="font-mono text-gray-600 truncate max-w-[220px]">
+              ${codCta ? `🏛️ ${codCta} - ${nomCta}` : '⚠️ Sin cuenta PUC'}
+            </span>
+            <div class="flex gap-1">${badgeInfo}</div>
+          </div>
+
+          <!-- Campo Tercero Dinámico -->
+          <div class="${manejaTerceros ? '' : 'hidden'} relative pt-1">
+            <div class="flex justify-between items-center mb-0.5">
+              <label class="block text-[10px] font-bold text-gray-600 uppercase">
+                👤 Beneficiario / Acreedor <span class="text-rose-500">*</span>
+              </label>
+              <button type="button" onclick="abrirModalNuevoTercero(document.getElementById('cierre-${type}-tercero-txt-${p.id}').value.trim())" 
+                      class="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer">
+                <span>👤+</span> Nuevo
+              </button>
+            </div>
+            <input id="cierre-${type}-tercero-txt-${p.id}" type="text" placeholder="Buscar tercero por nombre o nit..."
+                   value="${escapeGasHtml(p.tercero_nombre || '')}"
+                   autocomplete="off"
+                   class="border border-gray-200 rounded-xl px-2.5 py-1 text-xs w-full bg-white focus:ring-2 focus:ring-indigo-500 outline-none h-[30px]"
+                   oninput="onBuscarTerceroFilaPago('${type}', ${p.id}, this.value)"
+                   onfocus="onBuscarTerceroFilaPago('${type}', ${p.id}, this.value)">
+            <div id="cierre-${type}-tercero-ac-${p.id}" class="ac-drop hidden z-50"></div>
+          </div>
+
+          <!-- Campo Documento Cruce Dinámico -->
+          <div class="${manejaDocs ? '' : 'hidden'} pt-1">
+            <label class="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">
+              📑 Documento Cruce / Soporte <span class="text-rose-500">*</span>
+            </label>
+            <input type="text" placeholder="Ej. FAC-1234, CXP-SOCIOS..."
+                   value="${escapeGasHtml(p.documento_cruce || '')}"
+                   oninput="alCambiarDocFilaPago('${type}', ${p.id}, this.value)"
+                   class="border border-gray-200 rounded-xl px-2.5 py-1 text-xs w-full bg-white focus:ring-2 focus:ring-indigo-500 outline-none h-[30px] font-mono">
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Ajustar los selects a sus valores guardados
+    list.forEach(p => {
+      const rowEl = document.getElementById(`pago-row-${type}-${p.id}`);
+      if (rowEl) {
+        const sel = rowEl.querySelector('select');
+        if (sel) sel.value = p.metodo_pago;
+      }
+    });
+
+    actualizarBalanceCierre(type);
+  }
+
+  function agregarFilaPago(type) {
+    const list = getPagosList(type);
+    const totalMonto = getMontoTotal(type);
+    const sumaActual = list.reduce((acc, p) => acc + (parseFloat(p.monto) || 0), 0);
+    const rem = Math.max(0, Math.round((totalMonto - sumaActual) * 100) / 100);
+
+    // Buscar el siguiente método no usado
+    const usados = list.map(p => p.metodo_pago);
+    let proxMetodo = _metodosPagoGastos.find(m => !usados.includes(m.codigo));
+    if (!proxMetodo && _metodosPagoGastos.length > 0) {
+      proxMetodo = _metodosPagoGastos[0];
+    }
+
+    list.push({
+      id: Date.now() + Math.floor(Math.random() * 100),
+      metodo_pago: proxMetodo ? proxMetodo.codigo : 'efectivo',
+      monto: rem,
+      tercero_id: null,
+      tercero_nombre: '',
+      documento_cruce: ''
+    });
+
+    renderFilasPagos(type);
+  }
+
+  function eliminarFilaPago(type, rowId) {
+    let list = getPagosList(type);
+    if (list.length <= 1) return;
+    list = list.filter(p => p.id !== rowId);
+    if (type === 'ind') _pagosCierreInd = list;
+    else _pagosCierreRel = list;
+    renderFilasPagos(type);
+  }
+
+  function alCambiarMetodoFilaPago(type, rowId, metodoCod) {
+    const list = getPagosList(type);
+    const item = list.find(p => p.id === rowId);
+    if (item) {
+      item.metodo_pago = metodoCod;
+      renderFilasPagos(type);
+    }
+  }
+
+  function alCambiarMontoFilaPago(type, rowId, montoVal) {
+    const list = getPagosList(type);
+    const item = list.find(p => p.id === rowId);
+    if (item) {
+      item.monto = parseFloat(montoVal) || 0;
+      actualizarBalanceCierre(type);
+    }
+  }
+
+  function alCambiarDocFilaPago(type, rowId, docVal) {
+    const list = getPagosList(type);
+    const item = list.find(p => p.id === rowId);
+    if (item) {
+      item.documento_cruce = docVal.trim();
+    }
+  }
+
+  function onBuscarTerceroFilaPago(type, rowId, txt) {
+    const key = `${type}_${rowId}`;
+    clearTimeout(_cierreTerceroTimers[key]);
+    _cierreTerceroTimers[key] = setTimeout(() => {
+      const q = (txt || '').trim();
+      const ac = document.getElementById(`cierre-${type}-tercero-ac-${rowId}`);
+      if (!ac) return;
+      if (!q) {
+        const item = getPagosList(type).find(p => p.id === rowId);
+        if (item) { item.tercero_id = null; item.tercero_nombre = ''; }
+        ac.classList.add('hidden');
+        return;
+      }
+      fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(resList => {
+          if (!Array.isArray(resList) || resList.length === 0) {
+            ac.innerHTML = `
+              <div class="p-2 text-xs text-gray-500 flex justify-between items-center">
+                <span>No se encontró "${escapeGasHtml(q)}"</span>
+                <button type="button" onclick="abrirModalNuevoTercero('${escapeJsString(q)}')" class="text-rose-600 font-bold underline cursor-pointer">Crear</button>
+              </div>
+            `;
+            ac.classList.remove('hidden');
+            return;
+          }
+          ac.innerHTML = resList.slice(0, 10).map(t => `
+            <div class="ac-item p-2 hover:bg-indigo-50 cursor-pointer text-xs border-b border-gray-100 flex justify-between items-center"
+                 onmousedown="selectTerceroFilaPago('${type}', ${rowId}, ${t.id}, '${escapeJsString(t.nombre)}')">
+              <div>
+                <strong class="text-gray-800">${escapeGasHtml(t.nombre)}</strong>
+                <span class="text-gray-400 block text-[10px] font-mono">${escapeGasHtml(t.numero_documento || '')}</span>
+              </div>
+              <span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono">${escapeGasHtml(t.tipo || 'Tercero')}</span>
+            </div>
+          `).join('');
+          ac.classList.remove('hidden');
+        })
+        .catch(() => ac.classList.add('hidden'));
+    }, 200);
+  }
+
+  function selectTerceroFilaPago(type, rowId, id, nombre) {
+    const list = getPagosList(type);
+    const item = list.find(p => p.id === rowId);
+    if (item) {
+      item.tercero_id = id;
+      item.tercero_nombre = nombre;
+    }
+    const inp = document.getElementById(`cierre-${type}-tercero-txt-${rowId}`);
+    if (inp) inp.value = nombre;
+    const ac = document.getElementById(`cierre-${type}-tercero-ac-${rowId}`);
+    if (ac) ac.classList.add('hidden');
+  }
+
+  function actualizarBalanceCierre(type) {
+    const list = getPagosList(type);
+    const totalMonto = getMontoTotal(type);
+    const suma = Math.round(list.reduce((acc, p) => acc + (parseFloat(p.monto) || 0), 0) * 100) / 100;
+    const diff = Math.round((totalMonto - suma) * 100) / 100;
+
+    const wrap = document.getElementById(`balance-wrap-${type}`);
+    const txt = document.getElementById(`balance-txt-${type}`);
+    const dif = document.getElementById(`balance-dif-${type}`);
+    const btn = document.getElementById(`btn-confirmar-cierre-${type}`);
+
+    if (!wrap || !txt || !dif) return;
+
+    if (Math.abs(diff) <= 0.05) {
+      wrap.className = 'p-2.5 rounded-xl border border-emerald-300 bg-emerald-50/70 flex items-center justify-between text-xs mb-4';
+      txt.className = 'font-bold text-emerald-800';
+      txt.textContent = `✓ Balance Cuadrado ($${suma.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})})`;
+      dif.className = 'font-mono font-black text-xs text-emerald-700';
+      dif.textContent = '$0.00';
+      if (btn) btn.disabled = false;
+    } else if (diff > 0.05) {
+      wrap.className = 'p-2.5 rounded-xl border border-amber-300 bg-amber-50/70 flex items-center justify-between text-xs mb-4';
+      txt.className = 'font-bold text-amber-800';
+      txt.textContent = `⚠️ Falta asignar ($${suma.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})} de $${totalMonto.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})})`;
+      dif.className = 'font-mono font-black text-xs text-amber-700';
+      dif.textContent = `-$${diff.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+      if (btn) btn.disabled = true;
+    } else {
+      wrap.className = 'p-2.5 rounded-xl border border-rose-300 bg-rose-50/70 flex items-center justify-between text-xs mb-4';
+      txt.className = 'font-bold text-rose-800';
+      txt.textContent = `❌ Excedido ($${suma.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})} de $${totalMonto.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})})`;
+      dif.className = 'font-mono font-black text-xs text-rose-700';
+      dif.textContent = `+$${Math.abs(diff).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+      if (btn) btn.disabled = true;
+    }
+  }
+
+  // ═══ APERTURA Y EJECUCIÓN: LIQUIDACIÓN INDIVIDUAL ═══
   function abrirModalCierreIndividual(lineId, concepto, monto, duracionMeses, terceroId, terceroNombre, soporte) {
     _lineaIdCierreInd = lineId;
     document.getElementById('modal-cierre-ind-linea-id').value = lineId;
@@ -1973,142 +2330,11 @@
       document.getElementById('modal-cierre-ind-plazo').textContent = 'Gasto del Mes (100% corriente)';
     }
 
-    // Prellenar tercero
-    document.getElementById('modal-cierre-ind-tercero-id').value = (terceroId && terceroId !== 'null') ? terceroId : '';
-    document.getElementById('modal-cierre-ind-tercero-txt').value = terceroNombre || '';
-    const acTercero = document.getElementById('modal-cierre-ind-tercero-ac');
-    if (acTercero) acTercero.classList.add('hidden');
-
-    // Prellenar documento soporte
-    document.getElementById('modal-cierre-ind-doc').value = soporte || '';
-
-    // Llenar selector de métodos de pago desde los métodos habilitados
-    const targetSel = document.getElementById('modal-cierre-ind-metodo');
-    if (targetSel && _metodosPagoGastos.length > 0) {
-      targetSel.innerHTML = _metodosPagoGastos.map(m => 
-        `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}</option>`
-      ).join('');
-    } else if (targetSel) {
-      targetSel.innerHTML = '<option value="">— Sin métodos configurados —</option>';
-    }
-
-    alCambiarMetodoCierreInd();
+    inicializarRepartoPagos('ind', parseFloat(monto || 0), terceroId, terceroNombre, soporte);
 
     const modal = document.getElementById('modal-cierre-individual-linea');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-  }
-
-  function alCambiarMetodoCierreInd() {
-    const sel = document.getElementById('modal-cierre-ind-metodo');
-    const metodoCod = sel ? sel.value : null;
-    const metodo = _metodosPagoGastos.find(m => m.codigo === metodoCod);
-    
-    const lblCuenta = document.getElementById('modal-cierre-ind-cuenta-lbl');
-    const badgesCont = document.getElementById('modal-cierre-ind-badges');
-    const tercCont = document.getElementById('modal-cierre-ind-tercero-container');
-    const docCont = document.getElementById('modal-cierre-ind-doc-container');
-
-    if (!metodo) {
-      if (lblCuenta) lblCuenta.textContent = '';
-      if (badgesCont) badgesCont.innerHTML = '';
-      if (tercCont) tercCont.classList.add('hidden');
-      if (docCont) docCont.classList.add('hidden');
-      return;
-    }
-
-    const codCta = metodo.gastos_codigo || metodo.cuenta_codigo || '';
-    const nomCta = metodo.gastos_nombre || metodo.cuenta_nombre || '';
-    if (lblCuenta) {
-      lblCuenta.textContent = codCta ? `Cuenta PUC: ${codCta} - ${nomCta}` : 'Sin cuenta PUC asociada';
-    }
-
-    const manejaTerceros = Boolean(metodo.maneja_terceros || metodo.gastos_maneja_terceros);
-    const manejaDocs = Boolean(metodo.maneja_documentos || metodo.gastos_maneja_documentos);
-
-    let badges = [];
-    if (manejaTerceros) {
-      badges.push('<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">👤 Requiere Tercero</span>');
-    }
-    if (manejaDocs) {
-      badges.push('<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">📑 Saldo x Documento (CxP)</span>');
-    }
-    if (!manejaTerceros && !manejaDocs) {
-      badges.push('<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">💵 Salida Directa Inmediata</span>');
-    }
-    if (badgesCont) badgesCont.innerHTML = badges.join('');
-
-    // Toggle visibilidad Tercero
-    if (tercCont) {
-      if (manejaTerceros) {
-        tercCont.classList.remove('hidden');
-      } else {
-        tercCont.classList.add('hidden');
-      }
-    }
-
-    // Toggle visibilidad Documento Cruce
-    if (docCont) {
-      if (manejaDocs) {
-        docCont.classList.remove('hidden');
-      } else {
-        docCont.classList.add('hidden');
-      }
-    }
-  }
-
-  function onCierreIndTerceroInput() {
-    clearTimeout(_cierreIndTerceroTimer);
-    _cierreIndTerceroTimer = setTimeout(() => {
-      const txt = document.getElementById('modal-cierre-ind-tercero-txt').value.trim();
-      const ac = document.getElementById('modal-cierre-ind-tercero-ac');
-      if (!ac) return;
-      if (!txt) {
-        document.getElementById('modal-cierre-ind-tercero-id').value = '';
-        ac.classList.add('hidden');
-        return;
-      }
-      fetch(`/api/inventario/terceros/buscar?q=${encodeURIComponent(txt)}`)
-        .then(r => r.json())
-        .then(list => {
-          if (!Array.isArray(list) || list.length === 0) {
-            ac.innerHTML = `
-              <div class="p-2.5 text-xs text-gray-500 flex justify-between items-center">
-                <span>No se encontró "${escapeGasHtml(txt)}"</span>
-                <button type="button" onclick="abrirModalNuevoTercero('${escapeJsString(txt)}')" class="text-rose-600 font-bold underline cursor-pointer">Crear</button>
-              </div>
-            `;
-            ac.classList.remove('hidden');
-            return;
-          }
-          ac.innerHTML = list.map(t => `
-            <div class="ac-item p-2 hover:bg-rose-50 cursor-pointer text-xs border-b border-gray-100 flex justify-between items-center"
-                 onmousedown="selectCierreIndTercero(${t.id}, '${escapeJsString(t.nombre)}')">
-              <div>
-                <strong class="text-gray-800">${escapeGasHtml(t.nombre)}</strong>
-                <span class="text-gray-400 block text-[10px]">${escapeGasHtml(t.numero_documento || '')}</span>
-              </div>
-              <span class="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">${escapeGasHtml(t.tipo || 'Tercero')}</span>
-            </div>
-          `).join('');
-          ac.classList.remove('hidden');
-        })
-        .catch(() => ac.classList.add('hidden'));
-    }, 250);
-  }
-
-  function selectCierreIndTercero(id, nombre) {
-    document.getElementById('modal-cierre-ind-tercero-id').value = id;
-    document.getElementById('modal-cierre-ind-tercero-txt').value = nombre;
-    const ac = document.getElementById('modal-cierre-ind-tercero-ac');
-    if (ac) ac.classList.add('hidden');
-  }
-
-  function clearCierreIndTercero() {
-    document.getElementById('modal-cierre-ind-tercero-id').value = '';
-    document.getElementById('modal-cierre-ind-tercero-txt').value = '';
-    const ac = document.getElementById('modal-cierre-ind-tercero-ac');
-    if (ac) ac.classList.add('hidden');
   }
 
   function cerrarModalCierreIndividual() {
@@ -2120,28 +2346,28 @@
 
   async function ejecutarCierreIndividualLinea() {
     if (!_lineaIdCierreInd) return;
-    const metodoPago = document.getElementById('modal-cierre-ind-metodo').value;
-    if (!metodoPago) {
-      toast('Seleccione un método de pago válido para liquidar', false);
+    
+    const list = getPagosList('ind');
+    if (!list || list.length === 0) {
+      toast('Debe configurar al menos un método de pago', false);
       return;
     }
 
-    const metodo = _metodosPagoGastos.find(m => m.codigo === metodoPago);
-    const terceroId = document.getElementById('modal-cierre-ind-tercero-id').value;
-    const documentoCruce = document.getElementById('modal-cierre-ind-doc').value.trim();
+    // Validar cada fila
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      const metodo = _metodosPagoGastos.find(m => m.codigo === p.metodo_pago);
+      const manejaTerceros = Boolean(metodo && (metodo.maneja_terceros || metodo.gastos_maneja_terceros));
+      const manejaDocs = Boolean(metodo && (metodo.maneja_documentos || metodo.gastos_maneja_documentos));
 
-    if (metodo && (metodo.maneja_terceros || metodo.gastos_maneja_terceros)) {
-      if (!terceroId) {
-        toast('Debe seleccionar un tercero / proveedor para este método de pago.', false);
-        document.getElementById('modal-cierre-ind-tercero-txt').focus();
+      if (manejaTerceros && !p.tercero_id) {
+        toast(`El método ${metodo ? metodo.nombre : p.metodo_pago} exige seleccionar un Tercero / Proveedor.`, false);
+        const inp = document.getElementById(`cierre-ind-tercero-txt-${p.id}`);
+        if (inp) inp.focus();
         return;
       }
-    }
-
-    if (metodo && (metodo.maneja_documentos || metodo.gastos_maneja_documentos)) {
-      if (!documentoCruce) {
-        toast('Debe indicar el número de documento cruce / factura soporte para registrar en Saldos x Documento.', false);
-        document.getElementById('modal-cierre-ind-doc').focus();
+      if (manejaDocs && !p.documento_cruce) {
+        toast(`El método ${metodo ? metodo.nombre : p.metodo_pago} exige ingresar un Documento Cruce / Soporte.`, false);
         return;
       }
     }
@@ -2156,9 +2382,12 @@
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          metodo_pago: metodoPago,
-          tercero_id: terceroId ? parseInt(terceroId) : null,
-          documento_cruce: documentoCruce
+          pagos: list.map(p => ({
+            metodo_pago: p.metodo_pago,
+            monto: parseFloat(p.monto),
+            tercero_id: p.tercero_id ? parseInt(p.tercero_id) : null,
+            documento_cruce: p.documento_cruce || null
+          }))
         })
       });
       const d = await r.json();
@@ -2183,22 +2412,79 @@
     }
   }
 
-  // Ejecuta el cierre global de la relación añadiendo la contrapartida de crédito
-  async function cerrarRelacionGasto() {
+  // ═══ APERTURA Y EJECUCIÓN: CIERRE GENERAL DE RELACIÓN ═══
+  function abrirModalCierreRelacion() {
     const tipoDoc = document.getElementById('gas-tipo-doc').value;
     const numDoc = document.getElementById('gas-num-doc').value;
-    const metodoPago = document.getElementById('gas-metodo-pago').value;
-    
+    const totalTxt = document.getElementById('gas-total-gastos').textContent || '$0.00';
+    const totalMonto = parseFloat(totalTxt.replace(/[$\s.]/g, '').replace(',', '.')) || 0;
+
+    const lineasRows = document.querySelectorAll('#gas-lineas-body tr');
+    const cantLineas = lineasRows.length;
+
+    if (!tipoDoc || !numDoc) {
+      toast('No hay una relación activa seleccionada', false);
+      return;
+    }
+    if (totalMonto <= 0 || cantLineas === 0) {
+      toast('La relación actual no contiene desembolsos para cerrar', false);
+      return;
+    }
+
+    document.getElementById('modal-cierre-rel-doc').textContent = `${tipoDoc} #${numDoc}`;
+    document.getElementById('modal-cierre-rel-cant').textContent = `${cantLineas} desembolsos registrados`;
+    document.getElementById('modal-cierre-rel-monto').textContent = '$' + totalMonto.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    inicializarRepartoPagos('rel', totalMonto);
+
+    const modal = document.getElementById('modal-cierre-relacion');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function cerrarModalCierreRelacion() {
+    const modal = document.getElementById('modal-cierre-relacion');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function cerrarRelacionGasto() {
+    abrirModalCierreRelacion();
+  }
+
+  async function ejecutarCierreRelacionModal() {
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    const numDoc = document.getElementById('gas-num-doc').value;
+    const list = getPagosList('rel');
+
     if (!tipoDoc || !numDoc) return;
-    if (!metodoPago) {
-      toast('Debe seleccionar un método de pago con cuenta de gastos configurada para el cierre.', false);
+    if (!list || list.length === 0) {
+      toast('Debe configurar al menos un método de pago para el cierre.', false);
       return;
     }
-    
-    if (!confirm(`¿Está seguro de cerrar la relación de desembolsos ${tipoDoc} #${numDoc}?\nEsto registrará el egreso final acumulado con el método de pago seleccionado y no podrá añadir más registros en este consecutivo.`)) {
-      return;
+
+    // Validar cada fila
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      const metodo = _metodosPagoGastos.find(m => m.codigo === p.metodo_pago);
+      const manejaTerceros = Boolean(metodo && (metodo.maneja_terceros || metodo.gastos_maneja_terceros));
+      const manejaDocs = Boolean(metodo && (metodo.maneja_documentos || metodo.gastos_maneja_documentos));
+
+      if (manejaTerceros && !p.tercero_id) {
+        toast(`El método ${metodo ? metodo.nombre : p.metodo_pago} exige seleccionar un Tercero / Proveedor.`, false);
+        const inp = document.getElementById(`cierre-rel-tercero-txt-${p.id}`);
+        if (inp) inp.focus();
+        return;
+      }
+      if (manejaDocs && !p.documento_cruce) {
+        toast(`El método ${metodo ? metodo.nombre : p.metodo_pago} exige ingresar un Documento Cruce / Soporte.`, false);
+        return;
+      }
     }
-    
+
+    const btn = document.getElementById('btn-confirmar-cierre-rel');
+    if (btn) btn.disabled = true;
+
     try {
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/cierre`, {
         method: 'POST',
@@ -2206,12 +2492,18 @@
         body: JSON.stringify({
           tipo_doc: tipoDoc,
           num_doc: numDoc,
-          metodo_pago: metodoPago
+          pagos: list.map(p => ({
+            metodo_pago: p.metodo_pago,
+            monto: parseFloat(p.monto),
+            tercero_id: p.tercero_id ? parseInt(p.tercero_id) : null,
+            documento_cruce: p.documento_cruce || null
+          }))
         })
       });
       const d = await r.json();
       if (d.ok) {
         toast('¡Relación de desembolsos cerrada con éxito!');
+        cerrarModalCierreRelacion();
         closedTipoDoc = tipoDoc;
         closedNumDoc = numDoc;
         try { localStorage.removeItem(`gas_fecha_${NEGOCIO_ID}_${tipoDoc}`); } catch(e){}
@@ -2227,11 +2519,13 @@
         document.getElementById('gas-btn-siguiente').classList.remove('hidden');
         document.getElementById('gas-btn-siguiente').classList.add('flex');
       } else {
-        toast(d.error, false);
+        toast(d.error || 'Error al cerrar relación', false);
       }
     } catch(e) {
       console.error(e);
       toast('Error de red al procesar el cierre', false);
+    } finally {
+      if (btn) btn.disabled = false;
     }
   }
 
@@ -4108,11 +4402,19 @@
     if (e.target.id === 'modal-cierre-individual-linea') {
       cerrarModalCierreIndividual();
     }
+    if (e.target.id === 'modal-cierre-relacion') {
+      cerrarModalCierreRelacion();
+    }
     if (e.target.id === 'modal-reclasificar-linea-gasto') {
       cerrarModalReclasificarLinea();
     }
     if (e.target.id === 'modal-nuevo-tercero') {
       cerrarModalNuevoTercero();
+    }
+    // Cerrar autocomplete de terceros en filas dinámicas de cierre si se hace clic afuera
+    if (!e.target.closest('[id^="cierre-ind-tercero-txt-"]') && !e.target.closest('[id^="cierre-ind-tercero-ac-"]') &&
+        !e.target.closest('[id^="cierre-rel-tercero-txt-"]') && !e.target.closest('[id^="cierre-rel-tercero-ac-"]')) {
+      document.querySelectorAll('[id^="cierre-ind-tercero-ac-"], [id^="cierre-rel-tercero-ac-"]').forEach(el => el.classList.add('hidden'));
     }
   });
 </script>

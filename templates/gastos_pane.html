@@ -1073,6 +1073,53 @@
     </div>
   </div>
 
+  <!-- Modal Consultar Distribución Multi-Sede de Suscripción / Gasto Fijo -->
+  <div id="modal-ver-distribucion-suscripcion" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden items-center justify-center p-3 sm:p-4">
+    <div class="bg-white rounded-2xl border border-gray-150 shadow-2xl p-5 max-w-md w-full animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-lg font-bold shadow-xs">
+            🔀
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-gray-800" id="modal-ver-dist-concepto">Distribución de Gasto</h4>
+            <p class="text-[11px] text-gray-500 font-semibold" id="modal-ver-dist-tercero">Proveedor / Beneficiario</p>
+          </div>
+        </div>
+        <button onclick="cerrarModalVerDistribucion()" class="text-gray-400 hover:text-gray-600 p-1 text-xl leading-none cursor-pointer rounded-lg hover:bg-gray-100">&times;</button>
+      </div>
+
+      <!-- Resumen del Monto Total -->
+      <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80 mb-3.5 flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-600 uppercase">Monto Total Recurrente:</span>
+        <strong id="modal-ver-dist-monto-total" class="font-mono text-sm font-black text-rose-700">$0.00</strong>
+      </div>
+
+      <!-- Barra de Distribución Visual Multisede -->
+      <div class="mb-3.5">
+        <div class="flex justify-between text-[11px] font-semibold text-gray-500 mb-1.5">
+          <span>Proporción por Sede</span>
+          <span id="modal-ver-dist-cant-sedes" class="font-bold text-indigo-700">2 sedes</span>
+        </div>
+        <div id="modal-ver-dist-barras" class="w-full h-3 rounded-full bg-gray-100 flex overflow-hidden shadow-inner">
+          <!-- Segmentos de colores generados dinámicamente -->
+        </div>
+      </div>
+
+      <!-- Lista de Sedes y Desglose -->
+      <div class="space-y-2 mb-5 max-h-60 overflow-y-auto pr-1 custom-scrollbar" id="modal-ver-dist-lista">
+        <!-- Generado dinámicamente -->
+      </div>
+
+      <div class="flex justify-end pt-2 border-t border-gray-100">
+        <button onclick="cerrarModalVerDistribucion()"
+                class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5">
+          <span>✓</span> Cerrar Detalle
+        </button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -3011,6 +3058,8 @@
     }
   }
 
+  let _suscripcionesGastosList = [];
+
   async function cargarSuscripcionesGastos() {
     const tb = document.getElementById('suscripciones-body');
     const badge = document.getElementById('badge-suscripciones-count');
@@ -3026,6 +3075,7 @@
       }
 
       const progs = data.suscripciones || [];
+      _suscripcionesGastosList = progs;
       const activas = progs.filter(p => p.activo);
       if (badge) badge.textContent = `${activas.length} activa${activas.length === 1 ? '' : 's'}`;
 
@@ -3077,11 +3127,16 @@
             </td>
             <td class="px-3 py-2.5 text-gray-600 font-medium">
               ${p.distribucion_centros && p.distribucion_centros.length > 0
-                ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 cursor-help"
-                         title="${p.distribucion_centros.map(c => `${c.centro_nombre || 'Sede'}: ${c.porcentaje}% ($${parseFloat(c.monto || 0).toLocaleString('es-CO')})`).join('&#10;')}">
-                     🔀 Distribuido (${p.distribucion_centros.length} sedes)
+                ? `<button type="button" onclick="mostrarModalVerDistribucion(${p.id})"
+                           class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 hover:border-indigo-300 active:scale-95 transition cursor-pointer shadow-2xs group"
+                           title="${p.distribucion_centros.map(c => `${c.centro_nombre || 'Sede'}: ${c.porcentaje}% ($${parseFloat(c.monto || 0).toLocaleString('es-CO')})`).join('&#10;')}">
+                     <span>🔀</span>
+                     <span>Distribuido (${p.distribucion_centros.length} sedes)</span>
+                     <span class="text-[9px] text-indigo-400 group-hover:text-indigo-600 transition">🔍</span>
+                   </button>`
+                : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold text-gray-700 bg-gray-100 border border-gray-200">
+                     🏢 ${escapeHtml(p.centro_nombre || 'Sede Principal')}
                    </span>`
-                : escapeHtml(p.centro_nombre || 'Sede Principal')
               }
             </td>
             <td class="px-3 py-2.5 text-gray-600">
@@ -3124,6 +3179,73 @@
     } catch (e) {
       console.error(e);
       if (tb) tb.innerHTML = `<tr><td colspan="8" class="text-center text-rose-500 py-4">Error de conexión al cargar</td></tr>`;
+    }
+  }
+
+  function mostrarModalVerDistribucion(pid) {
+    const prog = (_suscripcionesGastosList || []).find(p => p.id === pid);
+    if (!prog || !prog.distribucion_centros || prog.distribucion_centros.length === 0) return;
+
+    document.getElementById('modal-ver-dist-concepto').textContent = prog.concepto || 'Distribución de Gasto';
+    document.getElementById('modal-ver-dist-tercero').textContent = '👤 Beneficiario: ' + (prog.tercero_nombre || 'Proveedor');
+    document.getElementById('modal-ver-dist-monto-total').textContent = '$' + parseFloat(prog.monto_recurrente || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('modal-ver-dist-cant-sedes').textContent = `${prog.distribucion_centros.length} sedes asignadas`;
+
+    // Renderizar barra proporcional
+    const barrasCont = document.getElementById('modal-ver-dist-barras');
+    const colores = ['#4f46e5', '#0284c7', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
+    
+    if (barrasCont) {
+      barrasCont.innerHTML = prog.distribucion_centros.map((c, i) => {
+        const color = c.color || colores[i % colores.length];
+        const pct = Math.max(2, parseFloat(c.porcentaje || 0));
+        return `<div style="width: ${pct}%; background-color: ${color};" title="${c.centro_nombre || 'Sede'}: ${c.porcentaje}%" class="h-full transition-all"></div>`;
+      }).join('');
+    }
+
+    // Renderizar lista de sedes
+    const listaCont = document.getElementById('modal-ver-dist-lista');
+    if (listaCont) {
+      listaCont.innerHTML = prog.distribucion_centros.map((c, i) => {
+        const color = c.color || colores[i % colores.length];
+        const cod = c.centro_codigo || ('SEDE-' + (i + 1));
+        const nom = c.centro_nombre || ('Sede ' + (i + 1));
+        const pct = parseFloat(c.porcentaje || 0);
+        const monto = parseFloat(c.monto || 0);
+
+        return `
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 shadow-2xs">
+            <div class="flex items-center gap-2 min-w-0 pr-2">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-white flex-shrink-0 shadow-2xs" style="background-color: ${color};">
+                ${escapeHtml(cod)}
+              </span>
+              <span class="text-xs font-bold text-gray-800 truncate">${escapeHtml(nom)}</span>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold font-mono text-[11px] border border-indigo-200">
+                ${pct}%
+              </span>
+              <strong class="font-mono text-xs font-black text-gray-800 min-w-[70px] text-right">
+                $${monto.toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+              </strong>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    const modal = document.getElementById('modal-ver-distribucion-suscripcion');
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+  }
+
+  function cerrarModalVerDistribucion() {
+    const modal = document.getElementById('modal-ver-distribucion-suscripcion');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
     }
   }
 

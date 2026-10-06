@@ -769,7 +769,21 @@ def _ejecutar_asiento_amortizacion(conn, prog_row, vars_dict):
         sufijo_idx += 1
         doc_versionado = f"{base_num}-{sufijo_idx}"
 
-    hoy = date.today()
+    from datetime import date, datetime
+    from dateutil.relativedelta import relativedelta
+
+    fecha_cuota_str = vars_dict.get('proxima_fecha_cuota')
+    if fecha_cuota_str:
+        try:
+            fecha_asiento = datetime.strptime(str(fecha_cuota_str)[:10], '%Y-%m-%d').date()
+        except Exception:
+            fecha_asiento = prog_row['proximo_ejecutado'].date() if prog_row.get('proximo_ejecutado') else date.today()
+    else:
+        fecha_asiento = prog_row['proximo_ejecutado'].date() if prog_row.get('proximo_ejecutado') else date.today()
+
+    siguiente_fecha_cuota = fecha_asiento + relativedelta(months=1)
+    vars_dict['proxima_fecha_cuota'] = siguiente_fecha_cuota.isoformat()
+
     concepto = vars_dict.get('concepto', 'Amortización')
     tercero_id = vars_dict.get('tercero_id')
     centro_utilidad_id = vars_dict.get('centro_utilidad_id') or 1
@@ -783,7 +797,7 @@ def _ejecutar_asiento_amortizacion(conn, prog_row, vars_dict):
              meses_duracion, cuota_numero, cuota_total, movimiento_origen_id)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (negocio_id, new_comp_id, cta_deb['id'], cod_deb, f"Amortización Cuota {cuota_numero}/{cuota_total} - {concepto}", 'debito',
-          monto_cuota, 1, tercero_id, tipo_doc_id, doc_versionado, hoy, tipo_doc,
+          monto_cuota, 1, tercero_id, tipo_doc_id, doc_versionado, fecha_asiento, tipo_doc,
           f"Amortización Cuota {cuota_numero}", 'amortizacion', centro_utilidad_id,
           cuota_total, cuota_numero, cuota_total, mov_origen_id))
 
@@ -795,7 +809,7 @@ def _ejecutar_asiento_amortizacion(conn, prog_row, vars_dict):
              meses_duracion, cuota_numero, cuota_total, movimiento_origen_id)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (negocio_id, new_comp_id, cta_cred['id'], cod_cred, f"Amortización Cuota {cuota_numero}/{cuota_total} - {concepto}", 'credito',
-          monto_cuota, 1, tercero_id, tipo_doc_id, doc_versionado, hoy, tipo_doc,
+          monto_cuota, 1, tercero_id, tipo_doc_id, doc_versionado, fecha_asiento, tipo_doc,
           f"Amortización Cuota {cuota_numero}", 'amortizacion', centro_utilidad_id,
           cuota_total, cuota_numero, cuota_total, mov_origen_id))
 
@@ -962,16 +976,52 @@ def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
 
         for p in progs:
             resultado = 'ok'
+            vars_dict = dict(p['variables_h'] or {})
+            is_amort = bool(vars_dict.get('cuenta_debito') and vars_dict.get('cuenta_credito') and vars_dict.get('movimiento_origen_id'))
             try:
-                vars_dict = dict(p['variables_h'] or {})
-                if vars_dict.get('cuenta_debito') and vars_dict.get('cuenta_credito') and vars_dict.get('movimiento_origen_id'):
-                    comp_id = _ejecutar_asiento_amortizacion(conn, p, vars_dict)
-                    conn.commit()
-                    resultado = f'ok comp={comp_id}' if comp_id else 'amortizacion_completada'
+                if is_amort:
+                    from dateutil.relativedelta import relativedelta
+                    from datetime import time, datetime
+                    ejecutados = []
+                    while True:
+                        sig_cuota_str = vars_dict.get('proxima_fecha_cuota')
+                        cuotas_rest = vars_dict.get('cuotas_restantes', 0)
+                        if not sig_cuota_str or cuotas_rest <= 0:
+                            break
+
+                        dt_sig_cuota = datetime.strptime(str(sig_cuota_str)[:10], '%Y-%m-%d')
+                        proximo_dt = datetime.combine(dt_sig_cuota.date(), time(8, 0))
+
+                        # Si la fecha de la cuota es futura (> ahora), no la causamos todavía
+                        if proximo_dt > ahora:
+                            proximo = proximo_dt
+                            break
+
+                        # Ejecutar la cuota vencida
+                        comp_id = _ejecutar_asiento_amortizacion(conn, p, vars_dict)
+                        conn.commit()
+                        if comp_id:
+                            ejecutados.append(comp_id)
+
+                        # Recargar estado de la programación
+                        p_updated = conn.execute("SELECT variables_h, activo FROM programaciones_contables WHERE id = %s", (p['id'],)).fetchone()
+                        if not p_updated or not p_updated['activo']:
+                            proximo = None
+                            break
+                        vars_dict = dict(p_updated['variables_h'] or {})
+
+                    if vars_dict.get('cuotas_restantes', 0) > 0 and vars_dict.get('proxima_fecha_cuota'):
+                        dt_sig = datetime.strptime(str(vars_dict['proxima_fecha_cuota'])[:10], '%Y-%m-%d')
+                        proximo = datetime.combine(dt_sig.date(), time(8, 0))
+                    else:
+                        proximo = None
+                    resultado = f"ok comp={','.join(map(str, ejecutados))}" if ejecutados else "amortizacion_al_dia"
+
                 elif vars_dict.get('tipo_programacion') == 'gasto_fijo_recurrente' or vars_dict.get('monto_recurrente'):
                     comp_id = _ejecutar_asiento_gasto_recurrente(conn, p, vars_dict)
                     conn.commit()
                     resultado = f'ok comp={comp_id}' if comp_id else 'causacion_ejecutada'
+                    proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
                 else:
                     comp_id = _ejecutar_asiento_automatico(
                         conn, p['negocio_id'], p['tipo_codigo'],
@@ -980,12 +1030,14 @@ def verificar_y_ejecutar_programaciones(conn=None, app=None, forzar=False):
                     )
                     conn.commit()
                     resultado = f'ok comp={comp_id}' if comp_id else 'sin_parametrizacion'
+                    proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
+
             except Exception as e:
                 try: conn.rollback()
                 except Exception: pass
                 resultado = f'error: {str(e)[:80]}'
+                proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
 
-            proximo = _calcular_proximo(p['frecuencia'], p['dia_semana'], p['dia_mes'], p['hora'])
             conn.execute(
                 "UPDATE programaciones_contables "
                 "SET ultimo_ejecutado=%s, proximo_ejecutado=%s, ultimo_resultado=%s WHERE id=%s",
@@ -6821,10 +6873,14 @@ def api_gastos_cierre_post(negocio_id):
                       meses, 1, total_cuotas_conteo, l['id'], metodo_pago_codigo))
 
                 # 3. Crear Programación Recurrente para los meses 2..N
-                dia_c = parsed_fecha.day
+                from dateutil.relativedelta import relativedelta
+                from datetime import time, datetime
+                parsed_fecha = datetime.strptime(str(fecha)[:10], '%Y-%m-%d').date() if isinstance(fecha, str) else fecha
+                proxima_fecha = parsed_fecha + relativedelta(months=1)
+                dia_c = proxima_fecha.day
                 cuotas_restantes = total_cuotas_conteo - 1
                 hora_ejec = '08:00'
-                proximo_ejec = _calcular_proximo('mensual', None, dia_c, hora_ejec, desde=datetime.combine(parsed_fecha, datetime.min.time()))
+                proximo_ejec = datetime.combine(proxima_fecha, time(8, 0))
                 
                 prog_vars = {
                     'cuenta_debito': cod_str,
@@ -6838,7 +6894,9 @@ def api_gastos_cierre_post(negocio_id):
                     'tercero_id': l['tercero_id'],
                     'centro_utilidad_id': l['centro_utilidad_id'],
                     'doc_origen': f"{tipo_doc}-{num_doc}",
-                    'movimiento_origen_id': l['id']
+                    'movimiento_origen_id': l['id'],
+                    'fecha_inicio': parsed_fecha.isoformat(),
+                    'proxima_fecha_cuota': proxima_fecha.isoformat()
                 }
 
                 conn.execute("""
@@ -7053,10 +7111,14 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
                   meses, 1, total_cuotas_conteo, line_id, metodo_principal))
 
             # Programación recurrente
-            dia_c = parsed_fecha.day
+            from dateutil.relativedelta import relativedelta
+            from datetime import time, datetime
+            parsed_fecha = datetime.strptime(str(fecha)[:10], '%Y-%m-%d').date() if isinstance(fecha, str) else fecha
+            proxima_fecha = parsed_fecha + relativedelta(months=1)
+            dia_c = proxima_fecha.day
             cuotas_restantes = total_cuotas_conteo - 1
             hora_ejec = '08:00'
-            proximo_ejec = _calcular_proximo('mensual', None, dia_c, hora_ejec, desde=datetime.combine(parsed_fecha, datetime.min.time()))
+            proximo_ejec = datetime.combine(proxima_fecha, time(8, 0))
             prog_vars = {
                 'cuenta_debito': cod_str,
                 'cuenta_credito': cod_activo,
@@ -7069,7 +7131,9 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
                 'tercero_id': tercero_principal,
                 'centro_utilidad_id': line['centro_utilidad_id'],
                 'doc_origen': f"{tipo_doc}-{num_doc_actual}",
-                'movimiento_origen_id': line_id
+                'movimiento_origen_id': line_id,
+                'fecha_inicio': parsed_fecha.isoformat(),
+                'proxima_fecha_cuota': proxima_fecha.isoformat()
             }
             conn.execute("""
                 INSERT INTO programaciones_contables
@@ -7333,7 +7397,9 @@ def api_gastos_reprocesar_historico_post(negocio_id):
                 'tercero_id': mc['tercero_id'],
                 'centro_utilidad_id': mc['centro_utilidad_id'],
                 'doc_origen': f"{tipo_doc_orig}-{num_doc_orig}",
-                'movimiento_origen_id': movimiento_id
+                'movimiento_origen_id': movimiento_id,
+                'fecha_inicio': parsed_fecha_orig.isoformat(),
+                'proxima_fecha_cuota': proxima_fecha.isoformat()
             }
             conn.execute("""
                 INSERT INTO programaciones_contables

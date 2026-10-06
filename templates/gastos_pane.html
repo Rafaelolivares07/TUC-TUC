@@ -1319,23 +1319,26 @@
           const esActivo = ctaCod.startsWith('6143') || ctaCod.startsWith('1505');
           const esDiferido = ctaCod.startsWith('6144') || ctaCod.startsWith('1705');
           const catStr = esActivo ? 'activo' : (esDiferido ? 'diferido' : 'gasto');
+          const modalidadStr = l.modalidad_amortizacion || 'prorrateo';
+          const cuota1Val = (l.cuota_1_monto !== null && l.cuota_1_monto !== undefined) ? parseFloat(l.cuota_1_monto) : 'null';
 
           if (duracion > 1) {
             const cuotaMes = (parseFloat(l.monto) / duracion).toLocaleString('es-CO', {minimumFractionDigits:0, maximumFractionDigits:0});
             const icono = esActivo ? '🏭' : (esDiferido ? '⏳' : '⏱️');
             const catColor = esActivo ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100' : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100';
+            const modLabel = modalidadStr === 'fija' ? 'Fija' : 'Prorr.';
             tipoPlazoBadge = `
-              <button type="button" onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)})"
+              <button type="button" onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)}, '${modalidadStr}', ${cuota1Val})"
                       class="inline-flex flex-col items-center p-1 rounded-lg hover:shadow-2xs transition cursor-pointer" title="Haga clic para cambiar la clasificación o plazo">
                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${catColor} border shadow-2xs">
-                  <span>${icono}</span> ${duracion} meses <span class="text-[9px] opacity-70">✏️</span>
+                  <span>${icono}</span> ${duracion}m (${modLabel}) <span class="text-[9px] opacity-70">✏️</span>
                 </span>
                 <span class="text-[9px] text-gray-500 font-mono mt-0.5 font-semibold">$${cuotaMes}/mes</span>
               </button>
             `;
           } else {
             tipoPlazoBadge = `
-              <button type="button" onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', 1, ${parseFloat(l.monto)})"
+              <button type="button" onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', 1, ${parseFloat(l.monto)}, '${modalidadStr}', ${cuota1Val})"
                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 transition cursor-pointer shadow-2xs" title="Haga clic para clasificar como activo o diferido">
                 <span>🧾 Gasto Mes</span> <span class="text-[9px] text-gray-400">✏️</span>
               </button>
@@ -1354,7 +1357,7 @@
             <td class="px-4 py-2.5 text-right font-mono text-xs text-rose-700 font-bold">$${parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             <td class="px-4 py-2.5 text-center whitespace-nowrap">
               <div class="inline-flex items-center gap-1.5 justify-center">
-                <button onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)})"
+                <button onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)}, '${modalidadStr}', ${cuota1Val})"
                         class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg border border-blue-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
                         title="Reclasificar este desembolso (Gasto / Activo / Diferido y plazo)">
                   <span>🔄</span> Reclasificar
@@ -2831,20 +2834,29 @@
     recalcularPreviewReclasificarLinea(true);
   }
 
-  function abrirModalReclasificarLinea(lineId, concepto, cat, duracion, monto) {
+  function abrirModalReclasificarLinea(lineId, concepto, cat, duracion, monto, modalidad = 'prorrateo', cuota1 = null) {
     document.getElementById('modal-reclass-linea-id').value = lineId;
     document.getElementById('modal-reclass-monto-val').value = monto;
     document.getElementById('modal-reclass-concepto').textContent = concepto || 'Desembolso';
     document.getElementById('modal-reclass-monto').textContent = '$' + parseFloat(monto || 0).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
     
     const cuota1Inp = document.getElementById('modal-reclass-cuota1-input');
-    if (cuota1Inp) cuota1Inp.value = '';
+    if (cuota1Inp) {
+      if (cuota1 !== null && cuota1 !== undefined && cuota1 !== 'null' && !isNaN(parseFloat(cuota1))) {
+        cuota1Inp.value = parseFloat(cuota1).toFixed(2);
+      } else {
+        cuota1Inp.value = '';
+      }
+    }
 
     const durSel = document.getElementById('modal-reclass-duracion');
     if (durSel) durSel.value = String(duracion > 1 ? duracion : 12);
 
     seleccionarCatReclass(cat || 'gasto');
-    seleccionarModalidadReclass('prorrateo');
+    seleccionarModalidadReclass(modalidad || 'prorrateo');
+    if (cuota1 !== null && cuota1 !== undefined && cuota1 !== 'null' && !isNaN(parseFloat(cuota1))) {
+      recalcularPreviewReclasificarLinea(false);
+    }
     
     const modal = document.getElementById('modal-reclasificar-linea-gasto');
     modal.classList.remove('hidden');
@@ -3015,6 +3027,13 @@
     const durSel = document.getElementById('modal-reclass-duracion');
     const meses = (cat !== 'gasto' && durSel) ? parseInt(durSel.value || 12) : 1;
     
+    const cuota1Inp = document.getElementById('modal-reclass-cuota1-input');
+    let cuota1Val = null;
+    if (cat !== 'gasto' && _reclassModalidad === 'prorrateo' && cuota1Inp && cuota1Inp.value !== '') {
+      cuota1Val = parseFloat(cuota1Inp.value);
+      if (isNaN(cuota1Val)) cuota1Val = null;
+    }
+
     const btn = document.getElementById('btn-guardar-reclass-linea');
     if (btn) btn.disabled = true;
     
@@ -3022,7 +3041,12 @@
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea/${lineId}/reclasificar`, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ categoria_tipo: cat, meses_duracion: meses })
+        body: JSON.stringify({
+          categoria_tipo: cat,
+          meses_duracion: meses,
+          modalidad_amortizacion: _reclassModalidad,
+          cuota_1_monto: cuota1Val
+        })
       });
       const d = await r.json();
       if (d.ok) {

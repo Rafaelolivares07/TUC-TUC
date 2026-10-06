@@ -204,6 +204,8 @@ def _asegurar_tablas(conn):
         "ALTER TABLE grupos_inventario       ADD COLUMN IF NOT EXISTS cuenta_ajuste_contra_id INTEGER REFERENCES cuentas_puc(id)",
         # producto_id en movimientos_contables
         "ALTER TABLE movimientos_contables   ADD COLUMN IF NOT EXISTS producto_id INTEGER REFERENCES productos(id) ON DELETE SET NULL",
+        "ALTER TABLE movimientos_contables   ADD COLUMN IF NOT EXISTS modalidad_amortizacion VARCHAR(20) DEFAULT 'prorrateo'",
+        "ALTER TABLE movimientos_contables   ADD COLUMN IF NOT EXISTS cuota_1_monto NUMERIC(15,2)",
     ]:
         try:
             conn.execute(sql)
@@ -5847,7 +5849,8 @@ def api_gastos_lineas(negocio_id, tipo_doc, num_doc):
         rows = conn.execute("""
             SELECT m.id, m.cuenta, m.concepto, m.monto, m.fecha, m.tercero_id, t.nombre AS tercero_nombre, m.comprobante_id,
                    m.centro_utilidad_id, cu.codigo AS centro_codigo, cu.nombre AS centro_nombre, cu.color_badge AS centro_color,
-                   COALESCE(m.meses_duracion, 1) AS meses_duracion, COALESCE(m.cuota_numero, 1) AS cuota_numero, COALESCE(m.cuota_total, 1) AS cuota_total
+                   COALESCE(m.meses_duracion, 1) AS meses_duracion, COALESCE(m.cuota_numero, 1) AS cuota_numero, COALESCE(m.cuota_total, 1) AS cuota_total,
+                   COALESCE(m.modalidad_amortizacion, 'prorrateo') AS modalidad_amortizacion, m.cuota_1_monto
             FROM movimientos_contables m
             LEFT JOIN terceros t ON t.id = m.tercero_id
             LEFT JOIN centros_utilidad cu ON cu.id = m.centro_utilidad_id
@@ -5973,16 +5976,19 @@ def api_gastos_linea_post(negocio_id):
         except Exception:
             centro_utilidad_id = 1
 
+        modalidad_amortizacion = (data.get('modalidad_amortizacion') or 'prorrateo').strip().lower()
+        cuota_1_monto = data.get('cuota_1_monto')
+
         uid = session['usuario_id']
         conn.execute("""
             INSERT INTO movimientos_contables
                 (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
                  tipo_documento_id, numero_documento, fecha, tipo_documento, descripcion_general, origen_tipo, centro_utilidad_id,
-                 meses_duracion, cuota_numero, cuota_total)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                 meses_duracion, cuota_numero, cuota_total, modalidad_amortizacion, cuota_1_monto)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (negocio_id, comp_id, cuenta_puc_id, acc['codigo'], concepto, 'debito', monto, uid, tercero_id,
               tipo_doc_id, num_doc, fecha, tipo_doc, 'Relación de Desembolsos', 'gasto', centro_utilidad_id,
-              meses_duracion, 1, meses_duracion))
+              meses_duracion, 1, meses_duracion, modalidad_amortizacion, cuota_1_monto))
               
         conn.commit()
         conn.close()
@@ -6260,11 +6266,15 @@ def api_gastos_linea_reclasificar_put(negocio_id, line_id):
                             VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true)
                         """, (cod_act, f"{concepto_base} (Activo)", pref_act, negocio_id))
 
+        modalidad = (data.get('modalidad_amortizacion') or 'prorrateo').strip().lower()
+        cuota_1_monto = data.get('cuota_1_monto')
+
         conn.execute("""
             UPDATE movimientos_contables
-            SET cuenta_id = %s, cuenta = %s, meses_duracion = %s, cuota_total = %s
+            SET cuenta_id = %s, cuenta = %s, meses_duracion = %s, cuota_total = %s,
+                modalidad_amortizacion = %s, cuota_1_monto = %s
             WHERE id = %s AND negocio_id = %s
-        """, (cuenta_id_final, cuenta_cod_final, meses_duracion, meses_duracion, line_id, negocio_id))
+        """, (cuenta_id_final, cuenta_cod_final, meses_duracion, meses_duracion, modalidad, cuota_1_monto, line_id, negocio_id))
         
         conn.commit()
         conn.close()
@@ -6273,7 +6283,9 @@ def api_gastos_linea_reclasificar_put(negocio_id, line_id):
             'cuenta_id': cuenta_id_final,
             'cuenta_codigo': cuenta_cod_final,
             'meses_duracion': meses_duracion,
-            'categoria_tipo': categoria_tipo
+            'categoria_tipo': categoria_tipo,
+            'modalidad_amortizacion': modalidad,
+            'cuota_1_monto': cuota_1_monto
         })
     except Exception as e:
         try: conn.rollback(); conn.close()
@@ -6600,7 +6612,8 @@ def api_gastos_cierre_post(negocio_id):
         # Obtener todas las líneas de débito de esta relación para procesar amortizaciones multi-mes
         lineas_deb = conn.execute("""
             SELECT id, cuenta, cuenta_id, concepto, monto, COALESCE(meses_duracion, 1) AS meses_duracion,
-                   tercero_id, centro_utilidad_id, fecha
+                   tercero_id, centro_utilidad_id, fecha,
+                   COALESCE(modalidad_amortizacion, 'prorrateo') AS modalidad_amortizacion, cuota_1_monto
             FROM movimientos_contables
             WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s AND tipo IN ('debito', 'D')
             ORDER BY id ASC
@@ -6613,7 +6626,13 @@ def api_gastos_cierre_post(negocio_id):
             meses = int(l['meses_duracion'])
             if meses > 1:
                 monto_total = float(l['monto'])
-                cronograma_info = _calcular_cronograma_amortizacion(monto_total, parsed_fecha, meses, es_prorrateado=True)
+                es_prorrateado = (l.get('modalidad_amortizacion') != 'fija')
+                cuota_1_override = l.get('cuota_1_monto')
+                cronograma_info = _calcular_cronograma_amortizacion(
+                    monto_total, parsed_fecha, meses,
+                    es_prorrateado=es_prorrateado,
+                    cuota_1_override=cuota_1_override
+                )
                 cuota_1 = cronograma_info['cuota_1']
                 saldo_activo = cronograma_info['saldo_activo_inicial']
                 total_cuotas_conteo = cronograma_info['cuotas_total_conteo']
@@ -6810,7 +6829,13 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
 
         # 3. Procesar multi-mes si aplica
         if meses > 1:
-            cronograma_info = _calcular_cronograma_amortizacion(monto_linea, parsed_fecha, meses, es_prorrateado=True)
+            es_prorrateado = (line.get('modalidad_amortizacion') != 'fija')
+            cuota_1_override = line.get('cuota_1_monto')
+            cronograma_info = _calcular_cronograma_amortizacion(
+                monto_linea, parsed_fecha, meses,
+                es_prorrateado=es_prorrateado,
+                cuota_1_override=cuota_1_override
+            )
             cuota_1 = cronograma_info['cuota_1']
             saldo_activo = cronograma_info['saldo_activo_inicial']
             total_cuotas_conteo = cronograma_info['cuotas_total_conteo']

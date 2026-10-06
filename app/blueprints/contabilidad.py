@@ -5806,7 +5806,7 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
                 self.set_y(-12)
                 self.set_font('Helvetica', '', 7)
                 self.set_text_color(148, 163, 184)
-                self.cell(90, 4, f"TUC TUC Contabilidad  ·  Usuario: {_pdf_sanitize(self._usuario_firma)}", align='L')
+                self.cell(90, 4, _pdf_sanitize(f"TUC TUC Contabilidad  |  Usuario: {self._usuario_firma}"), align='L')
                 self.cell(98, 4, f"Pagina {self.page_no()} de {{nb}}", align='R')
 
         pdf = DocumentoContablePDF()
@@ -5927,9 +5927,9 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
             pdf.cell(col_w[3], 5.5, " " + _fit_pdf_cell(pdf, tercero_line, col_w[3] - 3), border=0, align='L', fill=True)
             # Débito
             pdf.set_text_color(30, 41, 59)
-            pdf.cell(col_w[4], 5.5, (_pdf_money(monto_d) + " ") if monto_d > 0 else "— ", border=0, align='R', fill=True)
+            pdf.cell(col_w[4], 5.5, (_pdf_money(monto_d) + " ") if monto_d > 0 else "- ", border=0, align='R', fill=True)
             # Crédito
-            pdf.cell(col_w[5], 5.5, (_pdf_money(monto_c) + " ") if monto_c > 0 else "— ", border=0, align='R', fill=True)
+            pdf.cell(col_w[5], 5.5, (_pdf_money(monto_c) + " ") if monto_c > 0 else "- ", border=0, align='R', fill=True)
             pdf.ln(5.5)
 
             # Línea divisoria sutil

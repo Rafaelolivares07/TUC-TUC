@@ -5592,13 +5592,14 @@ def _pdf_sanitize(txt):
         'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
         'ñ': 'n', 'Ñ': 'N', 'ü': 'u', 'Ü': 'U',
         'í': 'i', 'ï': 'i', 'ö': 'o', 'ä': 'a',
-        '•': '|', '—': '-', '–': '-', '“': '"', '”': '"', '’': "'", '‘': "'",
-        '…': '...', '≥': '>=', '≤': '<=', '≠': '!=', '±': '+/-', '×': 'x'
+        '•': '-', '—': '-', '–': '-', '“': '"', '”': '"', '’': "'", '‘': "'",
+        '…': '...', '≥': '>=', '≤': '<=', '≠': '!=', '±': '+/-', '×': 'x',
+        '●': '*', '✔': '[OK]', '⏳': '', '🧾': '', '🏭': '', '💳': '', '⚙': '', '⚡': '', '🔄': ''
     }
     res = str(txt)
     for k, v in replacements.items():
         res = res.replace(k, v)
-    return res.encode('latin1', 'replace').decode('latin1')
+    return res.encode('latin1', 'ignore').decode('latin1')
 
 def _pdf_money(valor):
     try:
@@ -5690,20 +5691,20 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
         tipo_code = str(movs[0]['tipo_documento'] or '').upper()
         if "GASTO" in tipo_code or movs[0]['origen_tipo'] == 'gasto':
             if not esta_cerrado:
-                doc_name = "RELACIÓN DE DESEMBOLSOS (ABIERTA)"
+                doc_name = "RELACION DE DESEMBOLSOS (ABIERTA)"
             else:
                 if len(movs) <= 4 and any((m.get('meses_duracion') or 1) > 1 for m in movs):
-                    doc_name = "LIQUIDACIÓN DE DESEMBOLSO"
+                    doc_name = "LIQUIDACION DE DESEMBOLSO"
                 else:
-                    doc_name = "RELACIÓN DE DESEMBOLSOS (LIQUIDADA)"
+                    doc_name = "RELACION DE DESEMBOLSOS (LIQUIDADA)"
         elif "RECIBO" in tipo_code or "CAJA" in tipo_code or "COBRO" in tipo_code:
             doc_name = "RECIBO DE CAJA"
         elif "EGRESO" in tipo_code or "PAGO" in tipo_code:
             doc_name = "COMPROBANTE DE EGRESO"
         elif "PRODUCCION" in tipo_code:
-            doc_name = "COMPROBANTE DE PRODUCCIÓN"
+            doc_name = "COMPROBANTE DE PRODUCCION"
         elif "AMORT" in tipo_code or movs[0]['origen_tipo'] == 'amortizacion':
-            doc_name = "COMPROBANTE DE AMORTIZACIÓN"
+            doc_name = "COMPROBANTE DE AMORTIZACION"
         else:
             doc_name = f"COMPROBANTE {tipo_code}"
 
@@ -5780,18 +5781,18 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
                 self.set_xy(box_x + 3, box_y + 7.2)
                 self.set_font('Helvetica', 'B', 8.5)
                 self.set_text_color(30, 41, 59)
-                self.cell(box_w - 6, 4, f"N° {self._doc_num}", align='R')
+                self.cell(box_w - 6, 4, f"No. {self._doc_num}", align='R')
 
                 # Badge de Estado
                 self.set_xy(box_x + 3, box_y + 12)
                 if self._is_closed:
                     self.set_font('Helvetica', 'B', 7)
                     self.set_text_color(22, 101, 52) # Green 800
-                    self.cell(box_w - 6, 3.5, "● ESTADO: LIQUIDADO / CERRADO", align='R')
+                    self.cell(box_w - 6, 3.5, "ESTADO: LIQUIDADO / CERRADO", align='R')
                 else:
                     self.set_font('Helvetica', 'B', 7)
                     self.set_text_color(194, 65, 12) # Amber 700
-                    self.cell(box_w - 6, 3.5, "● ESTADO: RELACION ABIERTA", align='R')
+                    self.cell(box_w - 6, 3.5, "ESTADO: RELACION ABIERTA", align='R')
 
                 self.set_xy(box_x + 3, box_y + 16.5)
                 self.set_font('Helvetica', '', 6.5)
@@ -5964,7 +5965,7 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
             pdf.set_font('Helvetica', 'B', 7.5)
             pdf.set_text_color(22, 101, 52) # Green 800
             pdf.set_xy(16, pdf.get_y() + 1)
-            pdf.cell(184, 4.5, _pdf_sanitize("✔ COMPROBANTE CUADRADO (DEBITOS = CREDITOS: $0.00 DIFERENCIA) — REGISTRO CONTABLE PERFECCIONADO"), align='C')
+            pdf.cell(184, 4.5, _pdf_sanitize("[OK] COMPROBANTE CUADRADO (DEBITOS = CREDITOS: $0.00 DIFERENCIA) - REGISTRO CONTABLE PERFECCIONADO"), align='C')
             pdf.set_y(pdf.get_y() + 5.5)
         elif total_c == 0:
             pdf.ln(2.5)
@@ -5974,7 +5975,7 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
             pdf.set_font('Helvetica', 'B', 7.5)
             pdf.set_text_color(180, 83, 9) # Amber 700
             pdf.set_xy(16, pdf.get_y() + 1)
-            pdf.cell(184, 4.5, _pdf_sanitize(f"⏳ RELACION EN ELABORACION — TOTAL DESEMBOLSOS ACUMULADOS: {_pdf_money(total_d)}"), align='C')
+            pdf.cell(184, 4.5, _pdf_sanitize(f"RELACION EN ELABORACION - TOTAL DESEMBOLSOS ACUMULADOS: {_pdf_money(total_d)}"), align='C')
             pdf.set_y(pdf.get_y() + 5.5)
 
         # Sección de Firmas

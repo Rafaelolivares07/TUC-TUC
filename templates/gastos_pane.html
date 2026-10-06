@@ -1386,14 +1386,9 @@
             <td class="px-4 py-2.5 text-center whitespace-nowrap">
               <div class="inline-flex items-center gap-1.5 justify-center">
                 <button onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)}, '${modalidadStr}', ${cuota1Val})"
-                        class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg border border-blue-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                        class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg border border-blue-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
                         title="Reclasificar este desembolso (Gasto / Activo / Diferido y plazo)">
                   <span>🔄</span> Reclasificar
-                </button>
-                <button onclick="abrirModalCierreIndividual(${l.id}, '${escapeJsString(displayConcepto)}', ${parseFloat(l.monto)}, ${duracion}, ${l.tercero_id || 'null'}, '${escapeJsString(l.tercero_nombre || '')}', '${escapeJsString(notaValor || '')}')"
-                        class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
-                        title="Liquidar individualmente esta erogación con el consecutivo actual">
-                  <span>⚡</span> Liquidar
                 </button>
                 <button onclick="eliminarLineaGasto(${l.id})" class="text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2 py-1 rounded transition text-xs cursor-pointer" title="Eliminar este desembolso">
                   ❌

@@ -3371,7 +3371,10 @@ def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
         # Consultar movimientos de inventario asociados
         if tipo_doc_id:
             movs = conn.execute("""
-                SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad, valor_unitario, valor_total, notas
+                SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad,
+                       COALESCE(valor_unitario, costo_und, 0) AS valor_unitario,
+                       COALESCE(valor_total, ROUND(COALESCE(costo_und, valor_unitario, 0) * cantidad, 2), 0) AS valor_total,
+                       costo_und, notas
                 FROM movimientos_inventario
                 WHERE negocio_id = %s 
                   AND tipo_documento_id = %s
@@ -3381,7 +3384,10 @@ def api_documento_lineas(negocio_id, tipo_doc, numero_documento):
         else:
             # Fallback por nombre/código de documento
             movs = conn.execute("""
-                SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad, valor_unitario, valor_total, notas
+                SELECT id, producto_id, nombre_producto, tipo, motivo, cantidad,
+                       COALESCE(valor_unitario, costo_und, 0) AS valor_unitario,
+                       COALESCE(valor_total, ROUND(COALESCE(costo_und, valor_unitario, 0) * cantidad, 2), 0) AS valor_total,
+                       costo_und, notas
                 FROM movimientos_inventario
                 WHERE negocio_id = %s 
                   AND (

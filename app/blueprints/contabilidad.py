@@ -6911,12 +6911,18 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
         """, (negocio_id, comp_id_actual, cuenta_puc_id, acc['codigo'], f"Liquidación Individual - Contrapartida {metodo_pago_codigo}", 'credito',
               monto_linea, uid, tercero_id, tipo_doc_id, num_doc_actual, fecha, tipo_doc, 'Liquidación Individual Desembolso', 'gasto', line['centro_utilidad_id'] or 1, metodo_pago_codigo))
 
-        # 5. Incrementar consecutivo general
-        consecutivo_actual = int(line['consecutivo_actual'] or 0)
-        nuevo_consecutivo = str(consecutivo_actual + 1)
+        # 5. Fijar el consecutivo cerrado en num_doc_actual y calcular el nuevo_consecutivo abierto
+        try:
+            num_actual_int = int(num_doc_actual)
+        except (ValueError, TypeError):
+            num_actual_int = int(line.get('consecutivo_actual') or 0)
+            
+        consecutivo_cerrado = num_actual_int
+        nuevo_consecutivo = str(consecutivo_cerrado + 1)
+        
         conn.execute("""
-            UPDATE tipos_documento_negocio SET consecutivo = consecutivo + 1 WHERE negocio_id = %s AND codigo = %s
-        """, (negocio_id, tipo_doc))
+            UPDATE tipos_documento_negocio SET consecutivo = %s WHERE negocio_id = %s AND codigo = %s
+        """, (consecutivo_cerrado, negocio_id, tipo_doc))
 
         # 6. Reasignar las demás líneas abiertas restantes a un nuevo comprobante_id y nuevo_consecutivo
         resto_abiertas = conn.execute("""

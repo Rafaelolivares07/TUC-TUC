@@ -178,13 +178,13 @@
 
       <!-- Plazo / Duración Progresiva (Solo visible para Activo o Diferido) -->
       <div id="gas-duracion-container" class="md:col-span-12 bg-amber-50/80 rounded-xl p-3.5 border border-amber-250 hidden transition-all">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div class="flex-1">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          <div class="md:col-span-4">
             <label class="block text-xs font-bold text-amber-950 uppercase tracking-wide mb-1">
-              ⏱️ ¿En cuánto tiempo se reparte este desembolso?
+              ⏱️ Plazo de Amortización
             </label>
             <select id="gas-duracion-meses" onchange="recalcularCuotaMensualEnVivo()"
-                    class="border-2 border-amber-400 bg-white rounded-xl px-3 py-1.5 text-xs font-bold w-full sm:w-72 focus:ring-2 focus:ring-amber-500 text-amber-950 outline-none h-[38px]">
+                    class="border-2 border-amber-400 bg-white rounded-xl px-3 py-1.5 text-xs font-bold w-full focus:ring-2 focus:ring-amber-500 text-amber-950 outline-none h-[38px]">
               <option value="2">2 meses</option>
               <option value="3">3 meses</option>
               <option value="4">4 meses</option>
@@ -199,7 +199,17 @@
               <option value="60">5 años (60 meses)</option>
             </select>
           </div>
-          <div class="bg-white rounded-xl px-4 py-2 border border-amber-200 shadow-2xs text-right sm:min-w-[220px]">
+          <div class="md:col-span-4">
+            <label class="block text-xs font-bold text-amber-950 uppercase tracking-wide mb-1">
+              📊 Modalidad de Amortización
+            </label>
+            <select id="gas-modalidad-meses" onchange="recalcularCuotaMensualEnVivo()"
+                    class="border-2 border-amber-400 bg-white rounded-xl px-3 py-1.5 text-xs font-bold w-full focus:ring-2 focus:ring-amber-500 text-amber-950 outline-none h-[38px]">
+              <option value="fija" selected>⚖️ Cuotas Fijas / Iguales</option>
+              <option value="prorrateo">🗓️ Prorrateo Calendario (Días)</option>
+            </select>
+          </div>
+          <div class="md:col-span-4 bg-white rounded-xl px-4 py-2 border border-amber-200 shadow-2xs text-right">
             <div class="text-[10px] uppercase font-bold text-gray-400">Gasto mensual reconocido:</div>
             <div class="text-sm font-black text-emerald-700 font-mono" id="gas-cuota-preview">$0.00 / mes</div>
             <div class="text-[10px] text-gray-500" id="gas-cuota-subtexto">Sin golpear el estado de resultados actual</div>
@@ -1602,17 +1612,39 @@
     const monto = parseFloat(montoRaw || 0);
     const cat = document.getElementById('gas-concept-cat')?.value || 'gasto';
     const durSel = document.getElementById('gas-duracion-meses');
+    const modSel = document.getElementById('gas-modalidad-meses');
     const meses = (cat !== 'gasto' && durSel) ? parseInt(durSel.value || 12) : 1;
-    const cuota = meses > 0 ? (monto / meses) : monto;
+    const modalidad = modSel?.value || 'fija';
+    const fechaStr = document.getElementById('gas-fecha')?.value || '';
+
+    let cuota = meses > 0 ? (monto / meses) : monto;
+    let diaInicio = 1, diasEnMes1 = 30;
+    if (fechaStr) {
+      try {
+        const parts = fechaStr.split('-');
+        diaInicio = parseInt(parts[2]);
+        diasEnMes1 = new Date(parseInt(parts[0]), parseInt(parts[1]), 0).getDate();
+      } catch(e){}
+    }
+    
+    if (modalidad === 'prorrateo' && meses > 1) {
+      const diasRestantes = Math.max(diasEnMes1 - diaInicio + 1, 1);
+      const cuotaDia = cuota / diasEnMes1;
+      cuota = Math.round(cuotaDia * diasRestantes * 100) / 100;
+    }
     
     const prevEl = document.getElementById('gas-cuota-preview');
     const subEl = document.getElementById('gas-cuota-subtexto');
     if (prevEl) {
-      prevEl.textContent = '$' + cuota.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' / mes';
+      prevEl.textContent = '$' + cuota.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2}) + (modalidad === 'prorrateo' ? ' (1ª cuota)' : ' / mes');
     }
     if (subEl) {
       if (meses > 1) {
-        subEl.textContent = `Cuota 1 de ${meses} se asienta hoy. Saldo restante diferido en activo.`;
+        if (modalidad === 'fija') {
+          subEl.textContent = `${meses} cuotas fijas idénticas reconocidas mes a mes.`;
+        } else {
+          subEl.textContent = `Cuota 1 calculada por días (${diasEnMes1 - diaInicio + 1} días). Saldo diferido en activo.`;
+        }
       } else {
         subEl.textContent = `Gasto 100% imputado al período actual.`;
       }
@@ -1861,9 +1893,11 @@
     }
     
     const durSel = document.getElementById('gas-duracion-meses');
+    const modSel = document.getElementById('gas-modalidad-meses');
     const durContainer = document.getElementById('gas-duracion-container');
     const cat = document.getElementById('gas-concept-cat')?.value || 'gasto';
     const meses_duracion = (!durContainer.classList.contains('hidden') && cat !== 'gasto' && durSel) ? parseInt(durSel.value || 12) : 1;
+    const modalidad_amortizacion = (cat !== 'gasto' && modSel) ? modSel.value : 'fija';
     
     try {
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/linea`, {
@@ -1878,7 +1912,8 @@
           concepto: conceptoFinal,
           tercero_id: tercero_id ? parseInt(tercero_id) : null,
           centro_utilidad_id: centro_utilidad_id ? parseInt(centro_utilidad_id) : null,
-          meses_duracion: meses_duracion
+          meses_duracion: meses_duracion,
+          modalidad_amortizacion: modalidad_amortizacion
         })
       });
       const d = await r.json();

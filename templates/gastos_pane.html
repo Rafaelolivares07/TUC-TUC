@@ -1312,9 +1312,10 @@
           
           let displayConcepto = l.concepto || '';
           let soporteBadge = '';
+          let soporteValor = '';
           const matchSoporte = displayConcepto.match(/\[Soporte:\s*([^\]]+)\]/i);
           if (matchSoporte) {
-            const soporteValor = matchSoporte[1].trim();
+            soporteValor = matchSoporte[1].trim();
             soporteBadge = `<button type="button" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition shadow-2xs" onclick="abrirModalEditarSoporte(${l.id}, '${escapeJsString(soporteValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para modificar el N° de recibo/factura">🧾 ${escapeGasHtml(soporteValor)} <span class="text-[9px] text-amber-600 opacity-70">✏️</span></button>`;
             displayConcepto = displayConcepto.replace(/\[Soporte:\s*[^\]]+\]/i, '').trim();
           } else {

@@ -1390,7 +1390,14 @@
 
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 sm:gap-3">
+
+        <!-- Botón Calculadora -->
+        <button id="btn-calculadora-inventario" type="button" onclick="abrirCalculadoraFlotante()" 
+                class="px-2.5 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 select-none" 
+                title="Abrir Calculadora (F4 o Alt+C)">
+          <span class="text-sm">🧮</span> <span class="hidden sm:inline">Calculadora</span>
+        </button>
 
         <button id="theme-toggle" onclick="toggleTheme()" class="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors text-xs flex items-center justify-center font-bold text-gray-600" style="width: 32px; height: 32px;" title="Cambiar Tema">
 
@@ -16708,7 +16715,7 @@ async function cargarReporteEnsambles() {
     </div>
 
     {% include 'inv_distribuido_modal.html' %}
-
+    <script src="/static/js/calculadora_widget.js"></script>
 </body>
 
 </html>

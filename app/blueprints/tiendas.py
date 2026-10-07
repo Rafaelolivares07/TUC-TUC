@@ -1,3 +1,6 @@
+import io
+import os
+import zipfile
 import base64
 import itertools
 import json
@@ -8,6 +11,11 @@ import time
 import unicodedata
 import uuid
 from datetime import date, timedelta
+
+try:
+    from fpdf import FPDF
+except ImportError:
+    FPDF = None
 
 from flask import (Blueprint, Response, jsonify, make_response, redirect,
                    render_template, request, session, flash, url_for)
@@ -2794,10 +2802,23 @@ def api_tienda_pedido_crear(slug):
                 f"Domicilio: {'por confirmar' if domicilio_estado == 'por_confirmar' else '$' + format(float(valor_domicilio or 0), ',.0f')}\n"
                 f"💰 Total: ${total:,.0f}"
             )
-            for cid in chats_a_notificar:
-                _enviar_telegram_tienda(conn, cid, msg)
-        else:
-            print(f'[telegram tienda] sin chat_id para tienda {slug}')
+        # Auto-guardado de PDF de factura en servidor
+        try:
+            _guardar_pdf_factura_disco(
+                tienda=negocio,
+                pedido_id=pedido_id,
+                numero_documento=numero_documento,
+                total=total,
+                items=items_validos,
+                pagos=pagos_validos,
+                cu_info=cu_info,
+                fecha_pedido=fecha_pedido,
+                nombre_cajero=nombre_cajero,
+                nombre_cliente=nombre_cliente
+            )
+        except Exception as _pdf_err:
+            print(f'[pdf auto-save] error guardando pdf pedido {pedido_id}: {_pdf_err}')
+
         return jsonify({'ok': True, 'pedido_id': pedido_id, 'total': total, 'numero_documento': numero_documento})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -2918,6 +2939,453 @@ def api_caja_pedidos_premontados(slug):
             })
             
         return jsonify({'ok': True, 'pedidos': pedidos})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+# ── Facturas de Caja POS: Generación en Servidor, Autoguardado en Disco y ZIP ──
+
+def _obtener_directorio_facturas(tercero_id, fecha_str):
+    try:
+        from flask import current_app
+        static_dir = current_app.static_folder or os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'static')
+    except Exception:
+        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'static')
+    
+    t_key = str(tercero_id or 'general')
+    f_key = str(fecha_str or date.today().isoformat())
+    target_dir = os.path.join(static_dir, 'facturas_caja', t_key, f_key)
+    os.makedirs(target_dir, exist_ok=True)
+    return target_dir
+
+
+def _pdf_sanitize_factura(texto):
+    if not texto:
+        return ''
+    t = str(texto)
+    t = t.replace('–', '-').replace('—', '-').replace('“', '"').replace('”', '"').replace('’', "'").replace('‘', "'")
+    t = t.replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
+    t = t.replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+    t = t.replace('ñ', 'n').replace('Ñ', 'N').replace('ü', 'u').replace('Ü', 'U')
+    return t.encode('latin-1', 'replace').decode('latin-1')
+
+
+def _pdf_money_factura(valor):
+    try:
+        return f"${float(valor or 0):,.0f}"
+    except Exception:
+        return "$0"
+
+
+def _generar_pdf_factura_caja(tienda, pedido_id, numero_documento, total, items, pagos, cu_info=None, fecha_pedido=None, nombre_cajero=None, nombre_cliente=None):
+    if FPDF is None:
+        return None
+    try:
+        n_items = len(items or [])
+        n_pagos = len(pagos or [])
+        alto_estimado = max(130.0, 95.0 + (n_items * 10.0) + (n_pagos * 6.0) + 30.0)
+        
+        pdf = FPDF(unit='mm', format=(80.0, alto_estimado))
+        pdf.set_auto_page_break(auto=False)
+        pdf.set_margins(4, 4, 4)
+        pdf.add_page()
+        
+        w_util = 72.0
+        
+        nombre_tienda = (tienda.get('nombre') or 'TucTuc POS').strip()
+        pdf.set_font('Helvetica', 'B', 12)
+        pdf.multi_cell(w_util, 5, _pdf_sanitize_factura(nombre_tienda), align='C')
+        
+        if cu_info:
+            pdf.set_font('Helvetica', '', 8)
+            pdf.multi_cell(w_util, 4, _pdf_sanitize_factura(f"Sede: {cu_info}"), align='C')
+        
+        pdf.set_font('Helvetica', '', 7.5)
+        pdf.cell(w_util, 3.5, "-" * 42, ln=1, align='C')
+        
+        doc_label = numero_documento if numero_documento else f"PEDIDO #{pedido_id}"
+        pdf.set_font('Helvetica', 'B', 9.5)
+        pdf.cell(w_util, 4.5, _pdf_sanitize_factura(f"FACTURA: {doc_label}"), ln=1, align='C')
+        
+        if fecha_pedido:
+            fecha_display = str(fecha_pedido)[:19]
+        else:
+            from datetime import datetime
+            fecha_display = datetime.now().strftime('%Y-%m-%d %H:%M')
+            
+        pdf.set_font('Helvetica', '', 8)
+        pdf.cell(w_util, 4, _pdf_sanitize_factura(f"Fecha: {fecha_display}"), ln=1, align='L')
+        
+        if nombre_cajero:
+            pdf.cell(w_util, 4, _pdf_sanitize_factura(f"Cajero: {nombre_cajero}"), ln=1, align='L')
+        if nombre_cliente:
+            pdf.cell(w_util, 4, _pdf_sanitize_factura(f"Cliente: {nombre_cliente}"), ln=1, align='L')
+            
+        pdf.set_font('Helvetica', '', 7.5)
+        pdf.cell(w_util, 3.5, "-" * 42, ln=1, align='C')
+        
+        # Items
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.cell(10, 4, "Cant", ln=0, align='L')
+        pdf.cell(38, 4, "Descripcion", ln=0, align='L')
+        pdf.cell(24, 4, "Total", ln=1, align='R')
+        
+        pdf.set_font('Helvetica', '', 8)
+        for it in (items or []):
+            cant = float(it.get('cantidad') or 1)
+            cant_str = f"{cant:g}"
+            nom = (it.get('nombre_producto') or it.get('nombre') or 'Producto').strip()
+            p_unit = float(it.get('precio_unitario') or it.get('precio') or 0)
+            subt = cant * p_unit
+            
+            pdf.cell(10, 4, cant_str, ln=0, align='L')
+            nom_display = nom[:20] + '..' if len(nom) > 22 else nom
+            pdf.cell(38, 4, _pdf_sanitize_factura(nom_display), ln=0, align='L')
+            pdf.cell(24, 4, _pdf_money_factura(subt), ln=1, align='R')
+            
+            adiciones = it.get('adiciones') or []
+            if isinstance(adiciones, list) and len(adiciones) > 0:
+                pdf.set_font('Helvetica', 'I', 7)
+                for ad in adiciones:
+                    ad_nom = (ad.get('nombre') or '').strip()
+                    ad_precio = float(ad.get('precio') or 0)
+                    if ad_nom:
+                        txt_ad = f" + {ad_nom} ({_pdf_money_factura(ad_precio)})"
+                        pdf.cell(w_util, 3.2, _pdf_sanitize_factura(txt_ad[:35]), ln=1, align='L')
+                pdf.set_font('Helvetica', '', 8)
+
+        pdf.set_font('Helvetica', '', 7.5)
+        pdf.cell(w_util, 3.5, "-" * 42, ln=1, align='C')
+        
+        # Total
+        pdf.set_font('Helvetica', 'B', 11)
+        pdf.cell(36, 6, "TOTAL:", ln=0, align='L')
+        pdf.cell(36, 6, _pdf_money_factura(total), ln=1, align='R')
+        
+        # Pagos
+        if pagos:
+            pdf.set_font('Helvetica', 'B', 8)
+            pdf.cell(w_util, 4, "Forma de Pago:", ln=1, align='L')
+            pdf.set_font('Helvetica', '', 8)
+            for p in pagos:
+                p_nom = (p.get('metodo_nombre') or p.get('nombre') or p.get('codigo') or 'Pago').capitalize()
+                p_monto = float(p.get('monto') or 0)
+                pdf.cell(46, 4, _pdf_sanitize_factura(p_nom), ln=0, align='L')
+                pdf.cell(26, 4, _pdf_money_factura(p_monto), ln=1, align='R')
+                
+                p_recibido = p.get('recibido_con')
+                p_devuelta = p.get('devuelta')
+                if p_recibido:
+                    pdf.set_font('Helvetica', 'I', 7)
+                    txt_rec = f"  Recibido: {_pdf_money_factura(p_recibido)} | Cambio: {_pdf_money_factura(p_devuelta or 0)}"
+                    pdf.cell(w_util, 3.2, _pdf_sanitize_factura(txt_rec), ln=1, align='L')
+                    pdf.set_font('Helvetica', '', 8)
+
+        pdf.set_font('Helvetica', '', 7.5)
+        pdf.cell(w_util, 3.5, "-" * 42, ln=1, align='C')
+        
+        # Footer
+        pdf.set_font('Helvetica', 'I', 8)
+        pdf.cell(w_util, 4, _pdf_sanitize_factura("Gracias por su compra!"), ln=1, align='C')
+        pdf.set_font('Helvetica', '', 7)
+        pdf.cell(w_util, 3.5, _pdf_sanitize_factura("Generado automaticamente por TucTuc POS"), ln=1, align='C')
+        
+        return bytes(pdf.output())
+    except Exception as e:
+        print(f"[_generar_pdf_factura_caja] Error: {e}")
+        return None
+
+
+def _guardar_pdf_factura_disco(tienda, pedido_id, numero_documento, total, items, pagos, cu_info=None, fecha_pedido=None, nombre_cajero=None, nombre_cliente=None):
+    if FPDF is None:
+        return None
+    try:
+        pdf_bytes = _generar_pdf_factura_caja(
+            tienda=tienda,
+            pedido_id=pedido_id,
+            numero_documento=numero_documento,
+            total=total,
+            items=items,
+            pagos=pagos,
+            cu_info=cu_info,
+            fecha_pedido=fecha_pedido,
+            nombre_cajero=nombre_cajero,
+            nombre_cliente=nombre_cliente
+        )
+        if not pdf_bytes:
+            return None
+        
+        fecha_str = str(fecha_pedido)[:10] if fecha_pedido else date.today().isoformat()
+        tercero_id = tienda.get('tercero_id') or tienda.get('id') or 'general'
+        target_dir = _obtener_directorio_facturas(tercero_id, fecha_str)
+        
+        doc_clean = (numero_documento or f"pedido_{pedido_id}").replace('/', '-').replace('\\', '-').replace(':', '-').strip()
+        filename = f"{doc_clean}.pdf"
+        filepath = os.path.join(target_dir, filename)
+        
+        with open(filepath, 'wb') as f:
+            f.write(pdf_bytes)
+            
+        return filepath
+    except Exception as e:
+        print(f"[_guardar_pdf_factura_disco] Error: {e}")
+        return None
+
+
+@bp.route('/api/caja/<slug>/facturas-guardadas')
+@bp.route('/api/tienda/<slug>/caja/facturas-guardadas')
+def api_caja_facturas_guardadas(slug):
+    conn = get_db_connection()
+    try:
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+            
+        fecha_req = request.args.get('fecha') or date.today().isoformat()
+        
+        if negocio['tipo_negocio'] == 'tienda':
+            cond_negocio = "(p.tienda_id = %s OR p.negocio_id = %s)"
+            params = [negocio['id'], negocio['tercero_id'], fecha_req]
+        else:
+            cond_negocio = "(p.restaurante_id = %s OR p.negocio_id = %s)"
+            params = [negocio['id'], negocio['tercero_id'], fecha_req]
+            
+        pedidos_rows = conn.execute(f"""
+            SELECT p.id, p.numero_documento, p.total, p.created_at, p.fecha,
+                   p.nombre_cajero, p.nombre_cliente, p.telefono_cliente,
+                   p.tipo_entrega, p.estado, p.metodo_pago, p.subtotal_productos, p.valor_domicilio
+            FROM pedidos p
+            WHERE {cond_negocio}
+              AND DATE(COALESCE(p.fecha, p.created_at)) = %s
+              AND COALESCE(p.estado, '') != 'cancelado'
+            ORDER BY p.id DESC
+        """, tuple(params)).fetchall()
+        
+        facturas = []
+        tercero_id = negocio.get('tercero_id') or negocio.get('id') or 'general'
+        target_dir = _obtener_directorio_facturas(tercero_id, fecha_req)
+        
+        for p in pedidos_rows:
+            p_id = p['id']
+            items_rows = conn.execute("""
+                SELECT nombre_producto, cantidad, precio_unitario
+                FROM pedido_items
+                WHERE pedido_id = %s
+                ORDER BY id
+            """, (p_id,)).fetchall()
+            
+            pagos_rows = conn.execute("""
+                SELECT metodo_codigo, metodo_nombre, monto, recibido_con, devuelta
+                FROM pedido_pagos
+                WHERE pedido_id = %s
+                ORDER BY id
+            """, (p_id,)).fetchall()
+            
+            items_resumen = []
+            for it in items_rows:
+                c = float(it['cantidad'] or 1)
+                c_str = f"{c:g}"
+                items_resumen.append(f"{c_str}x {it['nombre_producto']}")
+            items_resumen_txt = ", ".join(items_resumen)
+            
+            pagos_list = [{
+                'codigo': pg['metodo_codigo'] or '',
+                'nombre': pg['metodo_nombre'] or pg['metodo_codigo'] or '',
+                'monto': float(pg['monto'] or 0),
+                'recibido_con': float(pg['recibido_con'] or 0) if pg['recibido_con'] is not None else None,
+                'devuelta': float(pg['devuelta'] or 0) if pg['devuelta'] is not None else None
+            } for pg in pagos_rows]
+            
+            doc_label = p['numero_documento'] or f"pedido_{p_id}"
+            doc_clean = doc_label.replace('/', '-').replace('\\', '-').replace(':', '-').strip()
+            filename = f"{doc_clean}.pdf"
+            filepath = os.path.join(target_dir, filename)
+            pdf_existe = os.path.exists(filepath)
+            
+            facturas.append({
+                'id': p_id,
+                'numero_documento': p['numero_documento'] or f"#{p_id}",
+                'total': float(p['total'] or 0),
+                'hora': p['created_at'].strftime('%H:%M:%S') if p['created_at'] else '',
+                'fecha_hora': p['created_at'].strftime('%Y-%m-%d %H:%M:%S') if p['created_at'] else str(p['fecha'] or ''),
+                'nombre_cajero': p['nombre_cajero'] or '',
+                'nombre_cliente': p['nombre_cliente'] or 'Cliente en local',
+                'telefono_cliente': p['telefono_cliente'] or '',
+                'metodo_pago': p['metodo_pago'] or 'Efectivo',
+                'items_resumen': items_resumen_txt,
+                'items': [{'nombre': it['nombre_producto'], 'cantidad': float(it['cantidad'] or 1), 'precio': float(it['precio_unitario'] or 0)} for it in items_rows],
+                'pagos': pagos_list,
+                'pdf_url': f"/api/caja/{slug}/factura/{p_id}/pdf",
+                'pdf_existe': pdf_existe,
+                'filename': filename
+            })
+            
+        gran_total = sum(f['total'] for f in facturas)
+        return jsonify({
+            'ok': True,
+            'fecha': fecha_req,
+            'total_facturas': len(facturas),
+            'gran_total': gran_total,
+            'facturas': facturas
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/caja/<slug>/factura/<int:pedido_id>/pdf')
+@bp.route('/api/tienda/<slug>/caja/factura/<int:pedido_id>/pdf')
+def api_caja_factura_pdf(slug, pedido_id):
+    conn = get_db_connection()
+    try:
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return "Negocio no encontrado", 404
+            
+        p = conn.execute("""
+            SELECT id, numero_documento, total, created_at, fecha,
+                   nombre_cajero, nombre_cliente, metodo_pago, tipo_entrega, centro_utilidad_id
+            FROM pedidos
+            WHERE id = %s
+        """, (pedido_id,)).fetchone()
+        if not p:
+            return "Factura no encontrada", 404
+            
+        fecha_str = str(p['fecha'] or (p['created_at'].date() if p['created_at'] else date.today()))
+        tercero_id = negocio.get('tercero_id') or negocio.get('id') or 'general'
+        target_dir = _obtener_directorio_facturas(tercero_id, fecha_str)
+        doc_label = p['numero_documento'] or f"pedido_{pedido_id}"
+        doc_clean = doc_label.replace('/', '-').replace('\\', '-').replace(':', '-').strip()
+        filename = f"{doc_clean}.pdf"
+        filepath = os.path.join(target_dir, filename)
+        
+        # Si el PDF no existe en disco, generarlo al vuelo
+        if not os.path.exists(filepath):
+            items_rows = conn.execute("""
+                SELECT nombre_producto, cantidad, precio_unitario
+                FROM pedido_items WHERE pedido_id = %s ORDER BY id
+            """, (pedido_id,)).fetchall()
+            pagos_rows = conn.execute("""
+                SELECT metodo_codigo, metodo_nombre, monto, recibido_con, devuelta
+                FROM pedido_pagos WHERE pedido_id = %s ORDER BY id
+            """, (pedido_id,)).fetchall()
+            
+            items_validos = [{'nombre_producto': it['nombre_producto'], 'cantidad': float(it['cantidad']), 'precio_unitario': float(it['precio_unitario'])} for it in items_rows]
+            pagos_validos = [{'metodo_codigo': pg['metodo_codigo'], 'metodo_nombre': pg['metodo_nombre'], 'monto': float(pg['monto']), 'recibido_con': pg['recibido_con'], 'devuelta': pg['devuelta']} for pg in pagos_rows]
+            
+            cu_info = None
+            if p['centro_utilidad_id']:
+                cu_row = conn.execute("SELECT nombre FROM centros_utilidad WHERE id = %s", (p['centro_utilidad_id'],)).fetchone()
+                if cu_row:
+                    cu_info = cu_row['nombre']
+                    
+            _guardar_pdf_factura_disco(
+                tienda=negocio,
+                pedido_id=pedido_id,
+                numero_documento=p['numero_documento'],
+                total=float(p['total']),
+                items=items_validos,
+                pagos=pagos_validos,
+                cu_info=cu_info,
+                fecha_pedido=p['fecha'] or (p['created_at'].date() if p['created_at'] else date.today()),
+                nombre_cajero=p['nombre_cajero'],
+                nombre_cliente=p['nombre_cliente']
+            )
+            
+        if not os.path.exists(filepath):
+            return "No fue posible generar el PDF", 500
+            
+        with open(filepath, 'rb') as f:
+            pdf_data = f.read()
+            
+        download = request.args.get('download') == '1'
+        disposition = f'attachment; filename="{filename}"' if download else f'inline; filename="{filename}"'
+        return Response(pdf_data, mimetype='application/pdf', headers={'Content-Disposition': disposition})
+    except Exception as e:
+        return f"Error generando PDF: {e}", 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/caja/<slug>/facturas-guardadas/descargar-zip')
+@bp.route('/api/tienda/<slug>/caja/facturas-guardadas/descargar-zip')
+def api_caja_facturas_descargar_zip(slug):
+    conn = get_db_connection()
+    try:
+        negocio = _obtener_negocio_por_slug(conn, slug)
+        if not negocio:
+            return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
+            
+        fecha_req = request.args.get('fecha') or date.today().isoformat()
+        
+        if negocio['tipo_negocio'] == 'tienda':
+            cond_negocio = "(p.tienda_id = %s OR p.negocio_id = %s)"
+            params = [negocio['id'], negocio['tercero_id'], fecha_req]
+        else:
+            cond_negocio = "(p.restaurante_id = %s OR p.negocio_id = %s)"
+            params = [negocio['id'], negocio['tercero_id'], fecha_req]
+            
+        pedidos_rows = conn.execute(f"""
+            SELECT p.id, p.numero_documento, p.total, p.created_at, p.fecha,
+                   p.nombre_cajero, p.nombre_cliente, p.centro_utilidad_id
+            FROM pedidos p
+            WHERE {cond_negocio}
+              AND DATE(COALESCE(p.fecha, p.created_at)) = %s
+              AND COALESCE(p.estado, '') != 'cancelado'
+            ORDER BY p.id ASC
+        """, tuple(params)).fetchall()
+        
+        if not pedidos_rows:
+            return jsonify({'ok': False, 'error': f'No hay facturas para la fecha {fecha_req}'}), 404
+            
+        tercero_id = negocio.get('tercero_id') or negocio.get('id') or 'general'
+        target_dir = _obtener_directorio_facturas(tercero_id, fecha_req)
+        
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for p in pedidos_rows:
+                p_id = p['id']
+                doc_label = p['numero_documento'] or f"pedido_{p_id}"
+                doc_clean = doc_label.replace('/', '-').replace('\\', '-').replace(':', '-').strip()
+                filename = f"{doc_clean}.pdf"
+                filepath = os.path.join(target_dir, filename)
+                
+                if not os.path.exists(filepath):
+                    items_rows = conn.execute("SELECT nombre_producto, cantidad, precio_unitario FROM pedido_items WHERE pedido_id = %s ORDER BY id", (p_id,)).fetchall()
+                    pagos_rows = conn.execute("SELECT metodo_codigo, metodo_nombre, monto, recibido_con, devuelta FROM pedido_pagos WHERE pedido_id = %s ORDER BY id", (p_id,)).fetchall()
+                    items_validos = [{'nombre_producto': it['nombre_producto'], 'cantidad': float(it['cantidad']), 'precio_unitario': float(it['precio_unitario'])} for it in items_rows]
+                    pagos_validos = [{'metodo_codigo': pg['metodo_codigo'], 'metodo_nombre': pg['metodo_nombre'], 'monto': float(pg['monto']), 'recibido_con': pg['recibido_con'], 'devuelta': pg['devuelta']} for pg in pagos_rows]
+                    cu_info = None
+                    if p['centro_utilidad_id']:
+                        cu_row = conn.execute("SELECT nombre FROM centros_utilidad WHERE id = %s", (p['centro_utilidad_id'],)).fetchone()
+                        if cu_row: cu_info = cu_row['nombre']
+                        
+                    _guardar_pdf_factura_disco(
+                        tienda=negocio,
+                        pedido_id=p_id,
+                        numero_documento=p['numero_documento'],
+                        total=float(p['total']),
+                        items=items_validos,
+                        pagos=pagos_validos,
+                        cu_info=cu_info,
+                        fecha_pedido=p['fecha'] or (p['created_at'].date() if p['created_at'] else date.today()),
+                        nombre_cajero=p['nombre_cajero'],
+                        nombre_cliente=p['nombre_cliente']
+                    )
+                    
+                if os.path.exists(filepath):
+                    zf.write(filepath, arcname=filename)
+                    
+        zip_buffer.seek(0)
+        zip_filename = f"facturas_{slug}_{fecha_req}.zip"
+        return Response(
+            zip_buffer.getvalue(),
+            mimetype='application/zip',
+            headers={'Content-Disposition': f'attachment; filename="{zip_filename}"'}
+        )
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

@@ -322,6 +322,11 @@
                 </div>
             </div>
             <div class="flex items-center gap-1.5">
+                <button type="button" onclick="abrirModalFacturasGuardadas()" 
+                        class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                        title="Ver facturas autoguardadas en PDF por turno y fecha">
+                    <span>📑</span> <span>Facturas</span>
+                </button>
                 <button type="button" onclick="abrirModalResumenVentaRapida()" 
                         class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
                         title="Ver resumen de ventas del turno y componentes omitidos">
@@ -886,6 +891,79 @@
                     Cerrar
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Visor y Descarga de Facturas Guardadas en Servidor (PDF) -->
+<div id="modal-facturas-guardadas" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-2.5 sm:p-4 overflow-y-auto" onclick="if(event.target===this)cerrarModalFacturasGuardadas()">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-[96vw] sm:max-w-2xl p-4 sm:p-6 flex flex-col max-h-[92vh] my-auto box-border overflow-hidden" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-gray-150 pb-3 mb-3 shrink-0">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <span class="text-2xl p-2 bg-emerald-50 text-emerald-700 rounded-2xl shrink-0">📑</span>
+                <div class="min-w-0">
+                    <h3 class="font-extrabold text-base sm:text-lg text-gray-900 leading-tight truncate">Facturas Guardadas (PDF)</h3>
+                    <p class="text-[10px] sm:text-[11px] text-gray-500 truncate">Autoguardado en servidor en formato ticket 80mm</p>
+                </div>
+            </div>
+            <button onclick="cerrarModalFacturasGuardadas()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 shrink-0">&times;</button>
+        </div>
+
+        <!-- Barra de Filtros (Turnos, Fechas y ZIP) -->
+        <div class="bg-gray-50/90 rounded-2xl p-3 border border-gray-200 mb-3 space-y-2 shrink-0">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                    <button type="button" onclick="cambiarFiltroFacturas('turno')" id="btn-filtro-facturas-turno"
+                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition bg-emerald-600 text-white shadow-xs cursor-pointer">
+                        ⚡ Turno Actual
+                    </button>
+                    <button type="button" onclick="cambiarFiltroFacturas('hoy')" id="btn-filtro-facturas-hoy"
+                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 cursor-pointer">
+                        📅 Hoy (Todo el día)
+                    </button>
+                    <button type="button" onclick="cambiarFiltroFacturas('ayer')" id="btn-filtro-facturas-ayer"
+                            class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 cursor-pointer">
+                        ⏮️ Ayer
+                    </button>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <input type="date" id="facturas-filtro-fecha" onchange="cambiarFechaFacturas(this.value)"
+                           class="bg-white border border-gray-300 text-gray-700 text-xs rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-emerald-500 font-bold outline-none cursor-pointer">
+                    <button type="button" onclick="descargarZipFacturas()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-xs transition cursor-pointer active:scale-95"
+                            title="Descargar todas las facturas del día seleccionado en un archivo ZIP">
+                        <span>📦</span> <span>Descargar ZIP</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Resumen numérico -->
+            <div class="flex items-center justify-between pt-2 border-t border-gray-200/70 text-xs">
+                <div class="flex items-center gap-3 text-gray-600 font-semibold">
+                    <span>Documentos: <strong id="facturas-count-badge" class="text-emerald-700 font-mono font-black">0</strong></span>
+                    <span>Total Facturado: <strong id="facturas-total-badge" class="text-gray-900 font-mono font-black">$0</strong></span>
+                </div>
+                <span id="facturas-filtro-info" class="text-[11px] text-gray-500 italic">Mostrando turno actual</span>
+            </div>
+        </div>
+
+        <!-- Lista scrolleable de Facturas -->
+        <div id="contenedor-facturas-guardadas" class="overflow-y-auto space-y-2 flex-1 pr-1 custom-scrollbar min-w-0">
+            <!-- Spinner / Cards Dinámicas -->
+        </div>
+
+        <!-- Footer -->
+        <div class="pt-3 border-t border-gray-150 flex items-center justify-between gap-2 mt-3 shrink-0">
+            <button type="button" onclick="cargarFacturasGuardadas()" 
+                    class="py-2 px-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs flex items-center gap-1 transition cursor-pointer active:scale-95">
+                <span>🔄</span> <span>Actualizar</span>
+            </button>
+            <button type="button" onclick="cerrarModalFacturasGuardadas()" 
+                    class="py-2.5 px-5 rounded-xl bg-gray-800 hover:bg-gray-900 text-white font-extrabold text-xs shadow-sm transition cursor-pointer">
+                Cerrar
+            </button>
         </div>
     </div>
 </div>
@@ -1880,6 +1958,281 @@ function imprimirResumenVentaRapida() {
         </div>
     `;
 
+    document.getElementById('ticket-print').innerHTML = html;
+    window.print();
+}
+
+// ── MODAL FACTURAS GUARDADAS EN SERVIDOR (PDF) ──────────────────────────────
+
+let estadoFacturasModal = {
+    fecha: new Date().toISOString().split('T')[0],
+    filtro: 'turno', // 'turno', 'hoy', 'ayer', 'custom'
+    todas: [],
+    filtradas: []
+};
+
+function abrirModalFacturasGuardadas(fecha) {
+    const hoyStr = new Date().toISOString().split('T')[0];
+    estadoFacturasModal.fecha = fecha || hoyStr;
+    estadoFacturasModal.filtro = (estadoFacturasModal.fecha === hoyStr) ? 'turno' : 'hoy';
+    
+    const inputFecha = document.getElementById('facturas-filtro-fecha');
+    if (inputFecha) inputFecha.value = estadoFacturasModal.fecha;
+    
+    actualizarBotonesFiltroFacturas();
+    cargarFacturasGuardadas();
+    
+    document.getElementById('modal-facturas-guardadas').classList.remove('hidden');
+}
+
+function cerrarModalFacturasGuardadas() {
+    document.getElementById('modal-facturas-guardadas').classList.add('hidden');
+}
+
+function cambiarFechaFacturas(nuevaFecha) {
+    if (!nuevaFecha) return;
+    estadoFacturasModal.fecha = nuevaFecha;
+    const hoyStr = new Date().toISOString().split('T')[0];
+    const ayer = new Date();
+    ayer.setDate(ayer.getDate() - 1);
+    const ayerStr = ayer.toISOString().split('T')[0];
+    
+    if (nuevaFecha === hoyStr) {
+        estadoFacturasModal.filtro = 'hoy';
+    } else if (nuevaFecha === ayerStr) {
+        estadoFacturasModal.filtro = 'ayer';
+    } else {
+        estadoFacturasModal.filtro = 'custom';
+    }
+    actualizarBotonesFiltroFacturas();
+    cargarFacturasGuardadas();
+}
+
+function cambiarFiltroFacturas(tipo) {
+    const hoyStr = new Date().toISOString().split('T')[0];
+    const ayer = new Date();
+    ayer.setDate(ayer.getDate() - 1);
+    const ayerStr = ayer.toISOString().split('T')[0];
+    
+    estadoFacturasModal.filtro = tipo;
+    if (tipo === 'turno' || tipo === 'hoy') {
+        estadoFacturasModal.fecha = hoyStr;
+    } else if (tipo === 'ayer') {
+        estadoFacturasModal.fecha = ayerStr;
+    }
+    
+    const inputFecha = document.getElementById('facturas-filtro-fecha');
+    if (inputFecha) inputFecha.value = estadoFacturasModal.fecha;
+    
+    actualizarBotonesFiltroFacturas();
+    cargarFacturasGuardadas();
+}
+
+function actualizarBotonesFiltroFacturas() {
+    const f = estadoFacturasModal.filtro;
+    const bTurno = document.getElementById('btn-filtro-facturas-turno');
+    const bHoy = document.getElementById('btn-filtro-facturas-hoy');
+    const bAyer = document.getElementById('btn-filtro-facturas-ayer');
+    
+    const claseActivo = 'px-2.5 py-1.5 rounded-xl text-xs font-bold transition bg-emerald-600 text-white shadow-xs cursor-pointer';
+    const claseInactivo = 'px-2.5 py-1.5 rounded-xl text-xs font-bold transition bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 cursor-pointer';
+    
+    if (bTurno) bTurno.className = (f === 'turno') ? claseActivo : claseInactivo;
+    if (bHoy) bHoy.className = (f === 'hoy') ? claseActivo : claseInactivo;
+    if (bAyer) bAyer.className = (f === 'ayer') ? claseActivo : claseInactivo;
+}
+
+async function cargarFacturasGuardadas() {
+    const cont = document.getElementById('contenedor-facturas-guardadas');
+    if (!cont) return;
+    
+    cont.innerHTML = `
+        <div class="py-12 flex flex-col items-center justify-center gap-2 text-gray-400">
+            <div class="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-xs font-bold text-gray-500">Cargando facturas...</span>
+        </div>
+    `;
+    
+    try {
+        const resp = await fetch(`/api/caja/${SLUG}/facturas-guardadas?fecha=${estadoFacturasModal.fecha}`);
+        const data = await resp.json();
+        
+        if (!data.ok) {
+            cont.innerHTML = `
+                <div class="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700 font-bold text-center">
+                    Error cargando facturas: ${data.error || 'Error desconocido'}
+                </div>
+            `;
+            return;
+        }
+        
+        estadoFacturasModal.todas = data.facturas || [];
+        aplicarFiltroTurnoLocal();
+        renderizarFacturasGuardadas();
+    } catch (err) {
+        cont.innerHTML = `
+            <div class="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-700 font-bold text-center">
+                Error de conexión al cargar facturas.
+            </div>
+        `;
+    }
+}
+
+function aplicarFiltroTurnoLocal() {
+    cargarSesionVentaRapida();
+    const sess = sessionVentaRapida;
+    const f = estadoFacturasModal.filtro;
+    const hoyStr = new Date().toISOString().split('T')[0];
+    
+    if (f === 'turno' && estadoFacturasModal.fecha === hoyStr && sess && sess.fechaInicio) {
+        const fechaInicioTurno = new Date(sess.fechaInicio);
+        estadoFacturasModal.filtradas = estadoFacturasModal.todas.filter(fac => {
+            if (!fac.fecha_hora) return true;
+            const d = new Date(fac.fecha_hora.replace(' ', 'T'));
+            return d >= fechaInicioTurno;
+        });
+    } else {
+        estadoFacturasModal.filtradas = [...estadoFacturasModal.todas];
+    }
+}
+
+function renderizarFacturasGuardadas() {
+    const cont = document.getElementById('contenedor-facturas-guardadas');
+    const badgeCount = document.getElementById('facturas-count-badge');
+    const badgeTotal = document.getElementById('facturas-total-badge');
+    const lblInfo = document.getElementById('facturas-filtro-info');
+    
+    const list = estadoFacturasModal.filtradas;
+    const granTotal = list.reduce((acc, x) => acc + (parseFloat(x.total) || 0), 0);
+    
+    if (badgeCount) badgeCount.textContent = list.length;
+    if (badgeTotal) badgeTotal.textContent = '$' + granTotal.toLocaleString('es-CO');
+    if (lblInfo) {
+        if (estadoFacturasModal.filtro === 'turno') {
+            lblInfo.textContent = `Turno actual (${list.length} de ${estadoFacturasModal.todas.length} de hoy)`;
+        } else {
+            lblInfo.textContent = `Fecha: ${estadoFacturasModal.fecha} (${list.length} facturas)`;
+        }
+    }
+    
+    if (!list.length) {
+        cont.innerHTML = `
+            <div class="py-12 px-4 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                <span class="text-3xl block mb-2">📑</span>
+                <p class="text-xs font-bold text-gray-700">No hay facturas registradas</p>
+                <p class="text-[11px] text-gray-400 mt-0.5">No se encontraron ventas para el filtro o fecha seleccionada.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    cont.innerHTML = list.map(fac => {
+        const totalFmt = '$' + (parseFloat(fac.total) || 0).toLocaleString('es-CO');
+        const horaFmt = fac.hora || (fac.fecha_hora ? fac.fecha_hora.split(' ')[1] : '--');
+        const clienteFmt = fac.nombre_cliente && fac.nombre_cliente !== 'Cliente en local' ? fac.nombre_cliente : (fac.nombre_cajero ? `Cajero: ${fac.nombre_cajero}` : 'Venta en local');
+        
+        const pagosBadges = (fac.pagos && fac.pagos.length) 
+            ? fac.pagos.map(p => `<span class="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-[10px] font-bold">${p.nombre}: $${(p.monto||0).toLocaleString('es-CO')}</span>`).join(' ')
+            : `<span class="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-[10px] font-bold">${fac.metodo_pago || 'Efectivo'}</span>`;
+            
+        return `
+            <div class="p-3 bg-white hover:bg-slate-50 border border-gray-200 rounded-2xl transition shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div class="min-w-0 flex-1 space-y-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-mono font-black text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg">${fac.numero_documento}</span>
+                        <span class="text-[11px] font-mono text-gray-500 font-semibold">🕒 ${horaFmt}</span>
+                        <span class="text-[11px] text-gray-600 font-bold truncate max-w-[160px]">👤 ${clienteFmt}</span>
+                    </div>
+                    <p class="text-xs text-gray-800 font-medium line-clamp-2 leading-tight">
+                        ${fac.items_resumen || 'Detalle de productos'}
+                    </p>
+                    <div class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                        ${pagosBadges}
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between sm:justify-end gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-gray-100">
+                    <div class="text-left sm:text-right">
+                        <span class="text-[10px] text-gray-400 font-bold block uppercase tracking-wider">Total</span>
+                        <span class="text-sm font-black font-mono text-emerald-700">${totalFmt}</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <a href="${fac.pdf_url}" target="_blank"
+                           class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-extrabold text-xs px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition shadow-xs cursor-pointer"
+                           title="Abrir o ver PDF en nueva pestaña">
+                            <span>📄</span> <span>Ver PDF</span>
+                        </a>
+                        <a href="${fac.pdf_url}?download=1" download="${fac.filename || 'factura.pdf'}"
+                           class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs p-1.5 rounded-xl transition cursor-pointer"
+                           title="Descargar archivo PDF individual">
+                            <span>⬇️</span>
+                        </a>
+                        <button type="button" onclick="reimprimirFacturaGuardada(${fac.id})"
+                                class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs p-1.5 rounded-xl transition cursor-pointer active:scale-95"
+                                title="Reimprimir ticket térmico en caja">
+                            <span>🖨️</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function descargarZipFacturas() {
+    const f = estadoFacturasModal.fecha;
+    if (!f) return;
+    const url = `/api/caja/${SLUG}/facturas-guardadas/descargar-zip?fecha=${f}`;
+    window.open(url, '_blank');
+}
+
+async function reimprimirFacturaGuardada(pedidoId) {
+    const fac = estadoFacturasModal.todas.find(x => x.id === pedidoId);
+    if (!fac) {
+        toast('Factura no encontrada para reimprimir', 'error');
+        return;
+    }
+    
+    let itemsHtml = (fac.items || []).map(it => `
+        <div class="linea">
+            <span>${it.cantidad}x ${it.nombre}</span>
+            <span>$${((it.cantidad || 1) * (it.precio || 0)).toLocaleString('es-CO')}</span>
+        </div>
+    `).join('');
+    
+    let pagosHtml = (fac.pagos || []).map(p => `
+        <div class="linea">
+            <span>${p.nombre}</span>
+            <span>$${(p.monto || 0).toLocaleString('es-CO')}</span>
+        </div>
+        ${p.recibido_con ? `<div class="linea" style="font-size:10px; color:#555;"><span>Recibido: $${p.recibido_con.toLocaleString('es-CO')}</span><span>Cambio: $${(p.devuelta||0).toLocaleString('es-CO')}</span></div>` : ''}
+    `).join('');
+    
+    const html = `
+        <div class="ticket-seccion">
+            <div class="centro"><strong>${TIENDA_NOMBRE}</strong></div>
+            <div class="centro" style="font-size:12px; font-weight:bold; margin:3px 0;">FACTURA DE VENTA</div>
+            <div class="centro" style="font-size:11px; font-weight:bold;">${fac.numero_documento}</div>
+            <div class="centro" style="font-size:10px;">Fecha: ${fac.fecha_hora || fac.hora}</div>
+            ${fac.nombre_cajero ? `<div class="centro" style="font-size:10px;">Cajero: ${fac.nombre_cajero}</div>` : ''}
+            ${fac.nombre_cliente ? `<div class="centro" style="font-size:10px;">Cliente: ${fac.nombre_cliente}</div>` : ''}
+            <div class="sep-bold"></div>
+            <div class="centro" style="font-size:10px; font-weight:bold;">DETALLE DE PRODUCTOS</div>
+            ${itemsHtml || '<div class="centro" style="font-size:10px;">Sin items</div>'}
+            <div class="sep-bold"></div>
+            <div class="linea total-line">
+                <span>TOTAL:</span>
+                <span>$${(parseFloat(fac.total) || 0).toLocaleString('es-CO')}</span>
+            </div>
+            <div class="sep"></div>
+            <div class="centro" style="font-size:10px; font-weight:bold;">FORMA DE PAGO</div>
+            ${pagosHtml || `<div class="linea"><span>${fac.metodo_pago || 'Efectivo'}</span><span>$${(parseFloat(fac.total)||0).toLocaleString('es-CO')}</span></div>`}
+            <div class="sep"></div>
+            <div class="centro" style="font-size:10px; margin-top:6px;">*** COPIA REIMPRESA ***</div>
+            <div class="centro" style="font-size:9px;">¡Gracias por su compra!</div>
+        </div>
+    `;
+    
     document.getElementById('ticket-print').innerHTML = html;
     window.print();
 }

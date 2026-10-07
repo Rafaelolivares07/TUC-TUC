@@ -312,30 +312,30 @@
 
     <!-- ── VISTA VENTA RÁPIDA / FLASH ────────────────────────────────────── -->
     <div id="pantalla-venta-rapida" class="hidden w-full max-w-md mx-auto pb-24 space-y-3.5 box-border overflow-x-hidden">
-        <!-- Barra superior rápida: Centro/Nevera, Consecutivo y Botón Configuración -->
-        <div class="bg-white rounded-2xl p-3 shadow-xs border border-gray-150 flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <span class="text-xl" id="flash-centro-ico">🏪</span>
-                <div class="leading-tight">
-                    <span id="flash-centro-nombre" class="text-xs font-black text-gray-800 block">Sede Principal</span>
-                    <span id="flash-doc-badge" class="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded">Doc: --</span>
+        <!-- Barra superior rápida: Centro/Nevera, Consecutivo y Botones de Acción -->
+        <div class="bg-white rounded-2xl p-2.5 sm:p-3 shadow-xs border border-gray-150 flex items-center justify-between gap-1.5 min-w-0">
+            <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                <span class="text-lg sm:text-xl shrink-0" id="flash-centro-ico">🏪</span>
+                <div class="leading-tight min-w-0">
+                    <span id="flash-centro-nombre" class="text-xs font-black text-gray-800 block truncate">Sede Principal</span>
+                    <span id="flash-doc-badge" class="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded inline-block truncate">Doc: --</span>
                 </div>
             </div>
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
                 <button type="button" onclick="abrirModalFacturasGuardadas()" 
-                        class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                        class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-2 sm:px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95 shrink-0"
                         title="Ver facturas autoguardadas en PDF por turno y fecha">
-                    <span>📑</span> <span>Facturas</span>
+                    <span class="text-sm">📑</span> <span class="hidden sm:inline">Facturas</span>
                 </button>
                 <button type="button" onclick="abrirModalResumenVentaRapida()" 
-                        class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                        class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-2 sm:px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95 shrink-0"
                         title="Ver resumen de ventas del turno y componentes omitidos">
-                    <span>📊</span> <span>Resumen</span>
+                    <span class="text-sm">📊</span> <span class="hidden sm:inline">Resumen</span>
                 </button>
                 <button type="button" onclick="abrirModalConfigVentaRapida()" 
-                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-2 sm:px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95 shrink-0"
                         title="Configurar productos y opciones de Venta Rápida">
-                    <span>⚙️</span> <span>Configurar</span>
+                    <span class="text-sm">⚙️</span> <span class="hidden sm:inline">Configurar</span>
                 </button>
             </div>
         </div>

@@ -31,6 +31,32 @@
         #carrito-items { max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; }
         .prod-btn { transition: transform 0.1s, box-shadow 0.15s; }
         .prod-btn:active { transform: scale(0.96); }
+        
+        /* ── Utilidades Venta Rápida / Flash ── */
+        input.no-spinner::-webkit-outer-spin-button,
+        input.no-spinner::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input.no-spinner[type=number] {
+            -moz-appearance: textfield;
+        }
+        .flash-card {
+            transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease, border-color 0.15s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .flash-card:active {
+            transform: scale(0.96);
+        }
+        .flash-pulse {
+            animation: flashPulseAnim 1.8s infinite;
+        }
+        @keyframes flashPulseAnim {
+            0%, 100% { transform: scale(1); box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.39); }
+            50% { transform: scale(1.02); box-shadow: 0 8px 22px 0 rgba(16, 185, 129, 0.6); }
+        }
+
         @media (min-width: 768px) {
             #layout { display: grid; grid-template-columns: 1fr 390px; gap: 0.75rem; }
             #lista-productos { max-height: 78vh; }
@@ -115,6 +141,18 @@
             </div>
         </div>
         <button onclick="cerrarSesionCaja()" class="text-xs text-gray-400 hover:text-gray-600">Salir</button>
+    </div>
+
+    <!-- Selector de Modo de Caja: Tradicional vs Venta Rápida -->
+    <div class="flex items-center justify-between bg-slate-200/90 p-1 rounded-2xl mb-3 shadow-inner max-w-md mx-auto md:max-w-none">
+        <button type="button" id="tab-btn-pos" onclick="cambiarModoCaja('pos')" 
+                class="flex-1 py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm bg-white text-gray-800 cursor-pointer">
+            <span>🛒</span> <span>POS Tradicional</span>
+        </button>
+        <button type="button" id="tab-btn-flash" onclick="cambiarModoCaja('flash')" 
+                class="flex-1 py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 transition-all text-gray-600 hover:text-gray-900 cursor-pointer">
+            <span class="text-amber-500 font-black">⚡</span> <span>Venta Rápida</span>
+        </button>
     </div>
 
     <div id="layout">
@@ -233,6 +271,167 @@
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- ── VISTA VENTA RÁPIDA / FLASH ────────────────────────────────────── -->
+    <div id="pantalla-venta-rapida" class="hidden max-w-md mx-auto pb-24 space-y-3.5">
+        <!-- Barra superior rápida: Centro/Nevera, Consecutivo y Botón Configuración -->
+        <div class="bg-white rounded-2xl p-3 shadow-xs border border-gray-150 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-xl" id="flash-centro-ico">🏪</span>
+                <div class="leading-tight">
+                    <span id="flash-centro-nombre" class="text-xs font-black text-gray-800 block">Sede Principal</span>
+                    <span id="flash-doc-badge" class="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded">Doc: --</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="abrirModalConfigVentaRapida()" 
+                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer"
+                        title="Configurar productos y opciones de Venta Rápida">
+                    <span>⚙️</span> <span>Configurar</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- PASO 1: Selección de Productos Flash -->
+        <div id="paso-1-productos" class="bg-white rounded-3xl p-4 shadow-sm border border-gray-150 space-y-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                    <span class="bg-amber-100 text-amber-800 text-[11px] font-black px-2 py-0.5 rounded-full">PASO 1</span>
+                    <h2 class="font-extrabold text-sm text-gray-800">Toca los productos</h2>
+                </div>
+                <span id="flash-items-count-badge" class="text-xs font-bold text-gray-400">0 unids</span>
+            </div>
+
+            <!-- Grid de Tarjetas Gigantes (2 o 4 productos) -->
+            <div id="flash-productos-grid" class="grid grid-cols-2 gap-3">
+                <!-- Se llena dinámicamente -->
+            </div>
+
+            <!-- Barra inferior del Paso 1: Resumen y Botones de Acción -->
+            <div class="pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+                <button type="button" onclick="reiniciarPedidoFlash()" 
+                        class="py-3 px-3 rounded-2xl bg-gray-100 hover:bg-red-50 text-gray-600 hover:text-red-600 font-bold text-xs flex items-center gap-1 transition active:scale-95 shrink-0 cursor-pointer"
+                        title="Limpiar selección">
+                    <span>🗑️</span> <span>Reiniciar</span>
+                </button>
+                <div class="text-right flex-1 min-w-0 pr-1">
+                    <span class="text-[10px] uppercase tracking-wider text-gray-400 font-bold block">Total Selección</span>
+                    <span id="flash-total-paso1" class="text-lg font-black font-mono text-gray-800 truncate block">$0</span>
+                </div>
+                <button type="button" id="btn-flash-listo" onclick="irAPaso2Flash()" disabled
+                        class="py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:hover:bg-blue-600 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-md transition active:scale-95 shrink-0 cursor-pointer disabled:cursor-not-allowed">
+                    <span>¡Listo!</span> <span>➡️</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- PASO 2: Métodos de Pago (Directo y Distribuido) -->
+        <div id="paso-2-pago" class="bg-white rounded-3xl p-4 shadow-sm border border-gray-150 space-y-3 scroll-mt-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                    <span class="bg-indigo-100 text-indigo-800 text-[11px] font-black px-2 py-0.5 rounded-full">PASO 2</span>
+                    <h2 class="font-extrabold text-sm text-gray-800">Forma de Pago</h2>
+                </div>
+                <span id="flash-pago-seleccionado-label" class="text-xs font-bold text-indigo-600"></span>
+            </div>
+
+            <!-- Botones Directos 100% -->
+            <div class="grid grid-cols-2 gap-2.5">
+                <button type="button" id="btn-pago-directo-efectivo" onclick="seleccionarPagoDirectoFlash('efectivo')"
+                        class="p-3.5 rounded-2xl border-2 border-emerald-500 bg-emerald-50/60 hover:bg-emerald-100/70 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer">
+                    <div class="flex items-center justify-between">
+                        <span class="text-2xl">💵</span>
+                        <span class="text-[10px] font-black uppercase tracking-wider bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">100%</span>
+                    </div>
+                    <div class="mt-1">
+                        <span class="text-xs font-extrabold text-gray-800 block">Efectivo</span>
+                        <span id="flash-monto-directo-efectivo" class="text-xs font-bold font-mono text-emerald-700">$0</span>
+                    </div>
+                </button>
+
+                <button type="button" id="btn-pago-directo-banco" onclick="seleccionarPagoDirectoFlash('banco')"
+                        class="p-3.5 rounded-2xl border-2 border-gray-200 hover:border-blue-400 bg-white hover:bg-blue-50/40 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer">
+                    <div class="flex items-center justify-between">
+                        <span class="text-2xl" id="flash-banco-icono">📱</span>
+                        <span class="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-900 px-1.5 py-0.5 rounded">100%</span>
+                    </div>
+                    <div class="mt-1">
+                        <span id="flash-banco-nombre" class="text-xs font-extrabold text-gray-800 block truncate">Transferencia</span>
+                        <span id="flash-monto-directo-banco" class="text-xs font-bold font-mono text-blue-700">$0</span>
+                    </div>
+                </button>
+            </div>
+
+            <!-- Botón Toggle Pago Distribuido -->
+            <button type="button" id="btn-toggle-distribuido" onclick="seleccionarPagoDistribuidoFlash()"
+                    class="w-full p-3 rounded-2xl border-2 border-gray-200 hover:border-amber-400 bg-gray-50 hover:bg-amber-50/40 text-gray-800 font-extrabold text-xs flex items-center justify-between transition active:scale-98 cursor-pointer">
+                <div class="flex items-center gap-2">
+                    <span class="text-base text-amber-500">⚡</span>
+                    <span>Pago Distribuido (Efectivo + Transferencia)</span>
+                </div>
+                <span id="flash-distribuido-arrow" class="text-xs text-gray-400">▼</span>
+            </button>
+
+            <!-- Panel Desplegable de Pago Distribuido -->
+            <div id="panel-pago-distribuido" class="hidden bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                <!-- Efectivo Input & Preset Buttons -->
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-gray-700 flex items-center gap-1">
+                            <span>💵</span> Efectivo:
+                        </label>
+                        <span class="text-[10px] text-gray-400 font-medium">(Toca para escribir directo)</span>
+                    </div>
+                    
+                    <div class="relative">
+                        <span class="absolute left-3 top-2.5 text-gray-400 font-bold">$</span>
+                        <input type="number" inputmode="numeric" id="input-flash-efectivo"
+                               class="no-spinner w-full bg-white border-2 border-slate-300 focus:border-emerald-500 rounded-xl pl-7 pr-3 py-2 text-base font-black font-mono text-gray-800 outline-none transition"
+                               placeholder="0" onfocus="this.select()" oninput="onInputFlashEfectivo(this.value)">
+                    </div>
+
+                    <!-- Botones Rápidos de Incremento / Decremento por miles -->
+                    <div class="grid grid-cols-4 gap-1.5 pt-1">
+                        <button type="button" onclick="ajustarMontoFlashEfectivo(-5000)" class="py-2 px-1 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl text-[11px] font-extrabold text-gray-700 active:scale-95 cursor-pointer shadow-xs">-$5.000</button>
+                        <button type="button" onclick="ajustarMontoFlashEfectivo(-1000)" class="py-2 px-1 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl text-[11px] font-extrabold text-gray-700 active:scale-95 cursor-pointer shadow-xs">-$1.000</button>
+                        <button type="button" onclick="ajustarMontoFlashEfectivo(1000)" class="py-2 px-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-xl text-[11px] font-extrabold text-emerald-800 active:scale-95 cursor-pointer shadow-xs">+$1.000</button>
+                        <button type="button" onclick="ajustarMontoFlashEfectivo(5000)" class="py-2 px-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-xl text-[11px] font-extrabold text-emerald-800 active:scale-95 cursor-pointer shadow-xs">+$5.000</button>
+                    </div>
+                </div>
+
+                <!-- Transferencia automática resultante -->
+                <div class="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div class="flex items-center gap-1.5">
+                        <span id="flash-dist-banco-icono" class="text-base">📱</span>
+                        <span id="flash-dist-banco-nombre" class="text-xs font-bold text-gray-700">Transferencia</span>
+                    </div>
+                    <span id="flash-dist-banco-monto" class="text-sm font-black font-mono text-blue-700">$0</span>
+                </div>
+
+                <!-- Validación de cuadre -->
+                <div id="flash-dist-validacion" class="text-xs font-bold text-center py-1.5 rounded-xl bg-emerald-100 text-emerald-800">
+                    ✓ Cuadre exacto ($0)
+                </div>
+
+                <button type="button" onclick="irAPaso3Flash()" 
+                        class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-98 cursor-pointer">
+                    <span>Continuar a Facturar</span> <span>➡️</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- PASO 3: Botón Gigante de Facturación Flash -->
+        <div id="paso-3-facturar" class="pt-1 scroll-mt-6">
+            <button type="button" id="btn-ejecutar-flash" onclick="ejecutarFacturacionFlash()" disabled
+                    class="w-full py-4 px-6 rounded-3xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-black text-lg sm:text-xl shadow-lg transition-all active:scale-97 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                <span>🚀</span>
+                <span id="btn-flash-label">FACTURAR ($0)</span>
+            </button>
+            <p id="flash-modo-auto-nota" class="text-[11px] text-gray-400 text-center font-medium mt-1.5">
+                ⚡ Modo Ultra Flash activo (guardado instantáneo)
+            </p>
         </div>
     </div>
 </div>
@@ -486,6 +685,83 @@
     </div>
 </div>
 
+<!-- Modal: Configuración de Venta Rápida -->
+<div id="modal-config-venta-rapida" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4" onclick="if(event.target===this)cerrarModalConfigVentaRapida()">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-5 flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-150" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-gray-150 pb-3 mb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-xl p-1.5 bg-amber-100 text-amber-800 rounded-xl">⚙️</span>
+                <div>
+                    <h3 class="font-extrabold text-base text-gray-800 leading-tight">Configurar Venta Rápida</h3>
+                    <p class="text-[11px] text-gray-400">Personaliza productos estrella y comportamiento</p>
+                </div>
+            </div>
+            <button onclick="cerrarModalConfigVentaRapida()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+
+        <div class="overflow-y-auto space-y-4 flex-1 pr-1 custom-scrollbar">
+            <!-- 1. Selección de 2 a 4 productos estrella -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-black text-gray-800 block flex items-center gap-1">
+                    <span>1.</span> <span>Productos principales en pantalla (2 a 4 recomendados):</span>
+                </label>
+                <p class="text-[11px] text-gray-500">
+                    Marca los productos que más vendes para tenerlos en los botones gigantes de pantalla rápida.
+                </p>
+                <div id="config-flash-lista-productos" class="space-y-1 max-h-48 overflow-y-auto border border-gray-200 rounded-2xl p-2 bg-gray-50/50">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+
+            <!-- 2. Método de Transferencia / Banco predeterminado -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-black text-gray-800 block flex items-center gap-1">
+                    <span>2.</span> <span>Cuenta para Transferencia 100%:</span>
+                </label>
+                <select id="config-flash-metodo-banco" class="w-full border border-gray-200 rounded-xl p-2 text-xs font-bold text-gray-800 bg-white focus:border-blue-500">
+                    <!-- Opciones de métodos con cuenta contable activa -->
+                </select>
+            </div>
+
+            <!-- 3. Tipo de Documento Predeterminado -->
+            <div class="space-y-1.5">
+                <label class="text-xs font-black text-gray-800 block flex items-center gap-1">
+                    <span>3.</span> <span>Tipo de documento contable:</span>
+                </label>
+                <select id="config-flash-tipo-doc" class="w-full border border-gray-200 rounded-xl p-2 text-xs font-bold text-gray-800 bg-white focus:border-blue-500">
+                    <!-- Opciones de tiposDocumento -->
+                </select>
+            </div>
+
+            <!-- 4. Impresión Ultra Flash Silenciosa -->
+            <div class="bg-amber-50/80 border border-amber-200 rounded-2xl p-3 space-y-1.5">
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                    <input type="checkbox" id="config-flash-silent" class="mt-0.5 rounded text-amber-600 focus:ring-amber-500 w-4 h-4">
+                    <div class="text-xs">
+                        <span class="font-extrabold text-amber-900 block">Facturación Ultra Flash Silenciosa</span>
+                        <span class="text-amber-700 text-[11px] block leading-tight">
+                            Guarda y factura en el backend inmediatamente sin abrir ventana de impresión, quedando listo en milisegundos para el siguiente cliente.
+                        </span>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="pt-3 border-t border-gray-150 flex items-center gap-2 mt-2">
+            <button type="button" onclick="cerrarModalConfigVentaRapida()" 
+                    class="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold text-xs hover:bg-gray-50 transition cursor-pointer">
+                Cancelar
+            </button>
+            <button type="button" onclick="guardarConfigVentaRapida()" 
+                    class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-sm transition cursor-pointer">
+                Guardar Configuración
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
 const SLUG = '{{ slug }}';
 const TIENDA_ID = {{ (tienda.id | default(0)) | tojson }};
@@ -513,6 +789,658 @@ let listAdjustmentsTemporal = [];
 let shortagesList = [];
 let CENTRO_ACTIVO = null;
 let CENTROS_UTILIDAD = [];
+
+// ── ESTADO Y LÓGICA DE VENTA RÁPIDA / FLASH ──────────────────────────────────
+let modoCajaActivo = localStorage.getItem('tuctuc_caja_modo_' + TERCERO_ID) || 'pos';
+let configVentaRapida = null;
+let pedidoFlash = {}; // { [productoId]: cantidad }
+let pagoFlash = {
+    tipo: 'efectivo', // 'efectivo' | 'banco' | 'distribuido'
+    efectivo: 0,
+    banco: 0,
+    bancoCodigo: ''
+};
+
+function cambiarModoCaja(modo) {
+    modoCajaActivo = modo;
+    localStorage.setItem('tuctuc_caja_modo_' + TERCERO_ID, modo);
+    const tabPos = document.getElementById('tab-btn-pos');
+    const tabFlash = document.getElementById('tab-btn-flash');
+    const layoutPos = document.getElementById('layout');
+    const vistaFlash = document.getElementById('pantalla-venta-rapida');
+
+    if (modo === 'flash') {
+        if (tabPos) {
+            tabPos.className = "flex-1 py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 transition-all text-gray-600 hover:text-gray-900 cursor-pointer";
+        }
+        if (tabFlash) {
+            tabFlash.className = "flex-1 py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm bg-white text-gray-800 cursor-pointer";
+        }
+        if (layoutPos) layoutPos.classList.add('hidden');
+        if (vistaFlash) {
+            vistaFlash.classList.remove('hidden');
+            renderProductosFlash();
+            actualizarHeaderFlash();
+            actualizarTotalesFlash();
+        }
+    } else {
+        if (tabPos) {
+            tabPos.className = "flex-1 py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm bg-white text-gray-800 cursor-pointer";
+        }
+        if (tabFlash) {
+            tabFlash.className = "flex-1 py-2 px-3 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 transition-all text-gray-600 hover:text-gray-900 cursor-pointer";
+        }
+        if (vistaFlash) vistaFlash.classList.add('hidden');
+        if (layoutPos) layoutPos.classList.remove('hidden');
+    }
+}
+
+function cargarConfigVentaRapida() {
+    try {
+        const raw = localStorage.getItem('caja_flash_config_' + TERCERO_ID);
+        if (raw) {
+            configVentaRapida = JSON.parse(raw);
+        }
+    } catch (e) {
+        console.warn('Error parseando config flash:', e);
+    }
+    if (!configVentaRapida) {
+        configVentaRapida = {
+            productosIds: [],
+            metodoBancoCodigo: '',
+            tipoDocId: null,
+            silentPrint: true
+        };
+    }
+    const notaSilent = document.getElementById('flash-modo-auto-nota');
+    if (notaSilent) {
+        if (configVentaRapida.silentPrint !== false) {
+            notaSilent.classList.remove('hidden');
+        } else {
+            notaSilent.classList.add('hidden');
+        }
+    }
+}
+
+function getProductosFlashList() {
+    if (!productos || !productos.length) return [];
+    if (configVentaRapida && configVentaRapida.productosIds && configVentaRapida.productosIds.length > 0) {
+        const filtrados = productos.filter(p => configVentaRapida.productosIds.includes(p.id));
+        if (filtrados.length > 0) return filtrados;
+    }
+    // Si no hay configuración manual, tomar los primeros 4 productos del catálogo
+    return productos.slice(0, 4);
+}
+
+function getMetodoBancoActivo() {
+    const metodosConCuenta = metodosDisponibles.filter(m => m.tiene_cuenta_contable && m.codigo !== 'efectivo');
+    if (configVentaRapida && configVentaRapida.metodoBancoCodigo) {
+        const found = metodosDisponibles.find(m => m.codigo === configVentaRapida.metodoBancoCodigo);
+        if (found) return found;
+    }
+    if (metodosConCuenta.length > 0) {
+        return metodosConCuenta[0];
+    }
+    const noEfectivo = metodosDisponibles.find(m => m.codigo !== 'efectivo');
+    if (noEfectivo) return noEfectivo;
+    return { codigo: 'transferencia', nombre: 'Transferencia', icono: '📱', tiene_cuenta_contable: true };
+}
+
+function renderProductosFlash() {
+    const cont = document.getElementById('flash-productos-grid');
+    if (!cont) return;
+    const lista = getProductosFlashList();
+    if (!lista.length) {
+        cont.innerHTML = `
+            <div class="col-span-2 text-center py-8 text-gray-400 text-xs">
+                No hay productos disponibles en el catálogo.
+            </div>
+        `;
+        return;
+    }
+
+    cont.innerHTML = lista.map(p => {
+        const cant = pedidoFlash[p.id] || 0;
+        const selClass = cant > 0 
+            ? 'border-emerald-500 bg-emerald-50/50 shadow-md ring-2 ring-emerald-400/40' 
+            : 'border-gray-200 hover:border-gray-300 bg-white shadow-xs';
+        const formattedPrice = '$' + (p.precio || 0).toLocaleString('es-CO');
+
+        return `
+            <div onclick="tocarProductoFlash(${p.id})"
+                 class="flash-card relative p-3.5 sm:p-4 rounded-3xl border-2 ${selClass} flex flex-col justify-between min-h-[110px] sm:min-h-[125px] cursor-pointer transition select-none">
+                
+                <!-- Badge de Cantidad -->
+                ${cant > 0 ? `
+                    <div class="absolute -top-2.5 -right-2 bg-emerald-600 text-white font-black text-xs px-2.5 py-0.5 rounded-full shadow-md flex items-center gap-1 animate-in zoom-in duration-100">
+                        <span>x${cant}</span>
+                    </div>
+                ` : ''}
+
+                <!-- Nombre y Stock -->
+                <div>
+                    <h3 class="font-black text-gray-900 text-sm sm:text-base leading-snug line-clamp-2">${p.nombre}</h3>
+                    ${p.stock !== undefined && p.stock !== null && p.stock < 10 ? `
+                        <span class="text-[10px] text-amber-600 font-bold">Stock: ${p.stock}</span>
+                    ` : ''}
+                </div>
+
+                <!-- Precio y Botón Restar -->
+                <div class="flex items-center justify-between mt-2 pt-1 border-t border-gray-100/80">
+                    <span class="text-sm sm:text-base font-black font-mono text-emerald-700">${formattedPrice}</span>
+                    ${cant > 0 ? `
+                        <button type="button" onclick="event.stopPropagation(); cambiarCantidadFlash(${p.id}, -1)" 
+                                class="w-7 h-7 bg-red-100 hover:bg-red-200 text-red-700 rounded-full font-black text-sm flex items-center justify-center transition active:scale-90 shadow-2xs cursor-pointer"
+                                title="Restar 1">
+                            -
+                        </button>
+                    ` : `
+                        <span class="text-xs text-gray-400 font-bold">+1</span>
+                    `}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function tocarProductoFlash(prodId) {
+    pedidoFlash[prodId] = (pedidoFlash[prodId] || 0) + 1;
+    renderProductosFlash();
+    actualizarTotalesFlash();
+}
+
+function cambiarCantidadFlash(prodId, delta) {
+    const act = (pedidoFlash[prodId] || 0) + delta;
+    if (act <= 0) {
+        delete pedidoFlash[prodId];
+    } else {
+        pedidoFlash[prodId] = act;
+    }
+    renderProductosFlash();
+    actualizarTotalesFlash();
+}
+
+function reiniciarPedidoFlash() {
+    pedidoFlash = {};
+    pagoFlash = { tipo: 'efectivo', efectivo: 0, banco: 0, bancoCodigo: '' };
+    renderProductosFlash();
+    actualizarTotalesFlash();
+}
+
+function actualizarHeaderFlash() {
+    const ico = document.getElementById('flash-centro-ico');
+    const nom = document.getElementById('flash-centro-nombre');
+    const docBadge = document.getElementById('flash-doc-badge');
+
+    if (CENTRO_ACTIVO) {
+        if (ico) ico.textContent = (CENTRO_ACTIVO.tipo === 'movil') ? '🛵' : '🏪';
+        if (nom) nom.textContent = CENTRO_ACTIVO.nombre || 'Sede Principal';
+    }
+
+    let docId = configVentaRapida ? configVentaRapida.tipoDocId : null;
+    let selectedDoc = null;
+    if (docId) {
+        selectedDoc = tiposDocumento.find(t => String(t.id) === String(docId));
+    }
+    if (!selectedDoc) {
+        selectedDoc = tiposDocumento.find(t => t.predeterminado) || tiposDocumento[0];
+    }
+    if (docBadge) {
+        if (selectedDoc && selectedDoc.siguiente_numero) {
+            docBadge.textContent = `${selectedDoc.codigo || selectedDoc.nombre}: #${selectedDoc.siguiente_numero}`;
+            docBadge.classList.remove('hidden');
+        } else {
+            docBadge.textContent = 'Doc: Auto';
+        }
+    }
+}
+
+function getTotalesFlash() {
+    let total = 0;
+    let cantItems = 0;
+    for (const [id, cant] of Object.entries(pedidoFlash)) {
+        const p = productos.find(x => x.id === parseInt(id));
+        if (p && cant > 0) {
+            total += (p.precio || 0) * cant;
+            cantItems += cant;
+        }
+    }
+    return { total, cantItems };
+}
+
+function actualizarTotalesFlash() {
+    const { total, cantItems } = getTotalesFlash();
+    const formattedTotal = '$' + total.toLocaleString('es-CO');
+
+    // Paso 1 Badges
+    const itemsBadge = document.getElementById('flash-items-count-badge');
+    const totalPaso1 = document.getElementById('flash-total-paso1');
+    const btnListo = document.getElementById('btn-flash-listo');
+
+    if (itemsBadge) itemsBadge.textContent = `${cantItems} unid${cantItems !== 1 ? 's' : ''}`;
+    if (totalPaso1) totalPaso1.textContent = formattedTotal;
+    if (btnListo) {
+        btnListo.disabled = (total === 0);
+        btnListo.innerHTML = `<span>¡Listo! (${formattedTotal})</span> <span>➡️</span>`;
+    }
+
+    // Actualizar banco nombre e icono en Paso 2
+    const bancoMetodo = getMetodoBancoActivo();
+    const bancoIco = document.getElementById('flash-banco-icono');
+    const bancoNom = document.getElementById('flash-banco-nombre');
+    const distBancoIco = document.getElementById('flash-dist-banco-icono');
+    const distBancoNom = document.getElementById('flash-dist-banco-nombre');
+
+    if (bancoIco) bancoIco.textContent = bancoMetodo.icono || '📱';
+    if (bancoNom) bancoNom.textContent = bancoMetodo.nombre || 'Transferencia';
+    if (distBancoIco) distBancoIco.textContent = bancoMetodo.icono || '📱';
+    if (distBancoNom) distBancoNom.textContent = bancoMetodo.nombre || 'Transferencia';
+
+    // Montos directos Paso 2
+    const montoDirEf = document.getElementById('flash-monto-directo-efectivo');
+    const montoDirBn = document.getElementById('flash-monto-directo-banco');
+    if (montoDirEf) montoDirEf.textContent = formattedTotal;
+    if (montoDirBn) montoDirBn.textContent = formattedTotal;
+
+    // Actualizar montos según el modo de pago actual
+    if (pagoFlash.tipo === 'efectivo') {
+        pagoFlash.efectivo = total;
+        pagoFlash.banco = 0;
+    } else if (pagoFlash.tipo === 'banco') {
+        pagoFlash.efectivo = 0;
+        pagoFlash.banco = total;
+    } else if (pagoFlash.tipo === 'distribuido') {
+        if (pagoFlash.efectivo > total) {
+            pagoFlash.efectivo = total;
+        }
+        pagoFlash.banco = Math.max(0, total - pagoFlash.efectivo);
+        const inputEf = document.getElementById('input-flash-efectivo');
+        if (inputEf && document.activeElement !== inputEf) {
+            inputEf.value = pagoFlash.efectivo;
+        }
+        const distBancoMonto = document.getElementById('flash-dist-banco-monto');
+        if (distBancoMonto) distBancoMonto.textContent = '$' + pagoFlash.banco.toLocaleString('es-CO');
+        validarCuadreDistribuido(total);
+    }
+
+    // Paso 3 Botón Facturar
+    const btnFacturar = document.getElementById('btn-ejecutar-flash');
+    const labelFacturar = document.getElementById('btn-flash-label');
+    if (btnFacturar) {
+        btnFacturar.disabled = (total === 0);
+        if (total > 0) {
+            btnFacturar.classList.add('flash-pulse');
+        } else {
+            btnFacturar.classList.remove('flash-pulse');
+        }
+    }
+    if (labelFacturar) {
+        labelFacturar.textContent = `FACTURAR (${formattedTotal})`;
+    }
+
+    renderEstilosBotonesPago();
+}
+
+function renderEstilosBotonesPago() {
+    const btnEf = document.getElementById('btn-pago-directo-efectivo');
+    const btnBn = document.getElementById('btn-pago-directo-banco');
+    const btnDist = document.getElementById('btn-toggle-distribuido');
+    const panelDist = document.getElementById('panel-pago-distribuido');
+    const arrowDist = document.getElementById('flash-distribuido-arrow');
+    const lblPago = document.getElementById('flash-pago-seleccionado-label');
+
+    if (pagoFlash.tipo === 'efectivo') {
+        if (btnEf) btnEf.className = "p-3.5 rounded-2xl border-2 border-emerald-500 bg-emerald-50/70 shadow-sm text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer ring-2 ring-emerald-400/40";
+        if (btnBn) btnBn.className = "p-3.5 rounded-2xl border-2 border-gray-200 hover:border-blue-400 bg-white hover:bg-blue-50/40 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer";
+        if (btnDist) btnDist.className = "w-full p-3 rounded-2xl border-2 border-gray-200 hover:border-amber-400 bg-gray-50 hover:bg-amber-50/40 text-gray-800 font-extrabold text-xs flex items-center justify-between transition active:scale-98 cursor-pointer";
+        if (panelDist) panelDist.classList.add('hidden');
+        if (arrowDist) arrowDist.textContent = '▼';
+        if (lblPago) lblPago.textContent = '💵 Efectivo 100%';
+    } else if (pagoFlash.tipo === 'banco') {
+        if (btnEf) btnEf.className = "p-3.5 rounded-2xl border-2 border-gray-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/40 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer";
+        if (btnBn) btnBn.className = "p-3.5 rounded-2xl border-2 border-blue-500 bg-blue-50/70 shadow-sm text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer ring-2 ring-blue-400/40";
+        if (btnDist) btnDist.className = "w-full p-3 rounded-2xl border-2 border-gray-200 hover:border-amber-400 bg-gray-50 hover:bg-amber-50/40 text-gray-800 font-extrabold text-xs flex items-center justify-between transition active:scale-98 cursor-pointer";
+        if (panelDist) panelDist.classList.add('hidden');
+        if (arrowDist) arrowDist.textContent = '▼';
+        const bancoMetodo = getMetodoBancoActivo();
+        if (lblPago) lblPago.textContent = `${bancoMetodo.icono || '📱'} ${bancoMetodo.nombre} 100%`;
+    } else if (pagoFlash.tipo === 'distribuido') {
+        if (btnEf) btnEf.className = "p-3.5 rounded-2xl border-2 border-gray-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/40 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer opacity-70";
+        if (btnBn) btnBn.className = "p-3.5 rounded-2xl border-2 border-gray-200 hover:border-blue-400 bg-white hover:bg-blue-50/40 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer opacity-70";
+        if (btnDist) btnDist.className = "w-full p-3 rounded-2xl border-2 border-amber-500 bg-amber-50/80 shadow-sm text-gray-900 font-black text-xs flex items-center justify-between transition active:scale-98 cursor-pointer ring-2 ring-amber-400/40";
+        if (panelDist) panelDist.classList.remove('hidden');
+        if (arrowDist) arrowDist.textContent = '▲';
+        if (lblPago) lblPago.textContent = '⚡ Distribuido';
+    }
+}
+
+function irAPaso2Flash() {
+    const el = document.getElementById('paso-2-pago');
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function irAPaso3Flash() {
+    const el = document.getElementById('paso-3-facturar');
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+function seleccionarPagoDirectoFlash(tipo) {
+    pagoFlash.tipo = tipo;
+    actualizarTotalesFlash();
+    irAPaso3Flash();
+}
+
+function seleccionarPagoDistribuidoFlash() {
+    const { total } = getTotalesFlash();
+    pagoFlash.tipo = 'distribuido';
+    const mitad = Math.round((total / 2) / 1000) * 1000;
+    pagoFlash.efectivo = mitad;
+    pagoFlash.banco = total - mitad;
+
+    const inputEf = document.getElementById('input-flash-efectivo');
+    if (inputEf) inputEf.value = pagoFlash.efectivo;
+    actualizarTotalesFlash();
+    
+    setTimeout(() => {
+        const panel = document.getElementById('panel-pago-distribuido');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
+}
+
+function onInputFlashEfectivo(val) {
+    const { total } = getTotalesFlash();
+    const ef = parseFloat(val) || 0;
+    pagoFlash.efectivo = Math.max(0, ef);
+    pagoFlash.banco = Math.max(0, total - pagoFlash.efectivo);
+
+    const distBancoMonto = document.getElementById('flash-dist-banco-monto');
+    if (distBancoMonto) distBancoMonto.textContent = '$' + pagoFlash.banco.toLocaleString('es-CO');
+    validarCuadreDistribuido(total);
+}
+
+function ajustarMontoFlashEfectivo(delta) {
+    const { total } = getTotalesFlash();
+    let ef = (pagoFlash.efectivo || 0) + delta;
+    if (ef < 0) ef = 0;
+    if (ef > total) ef = total;
+    pagoFlash.efectivo = ef;
+    pagoFlash.banco = Math.max(0, total - ef);
+
+    const inputEf = document.getElementById('input-flash-efectivo');
+    if (inputEf) inputEf.value = pagoFlash.efectivo;
+
+    const distBancoMonto = document.getElementById('flash-dist-banco-monto');
+    if (distBancoMonto) distBancoMonto.textContent = '$' + pagoFlash.banco.toLocaleString('es-CO');
+    validarCuadreDistribuido(total);
+}
+
+function validarCuadreDistribuido(total) {
+    const sum = pagoFlash.efectivo + pagoFlash.banco;
+    const diff = total - sum;
+    const valBox = document.getElementById('flash-dist-validacion');
+    const btnFacturar = document.getElementById('btn-ejecutar-flash');
+    if (!valBox) return;
+
+    if (diff === 0) {
+        valBox.className = "text-xs font-bold text-center py-1.5 rounded-xl bg-emerald-100 text-emerald-800";
+        valBox.textContent = `✓ Cuadre exacto ($${total.toLocaleString('es-CO')})`;
+        if (btnFacturar && total > 0) btnFacturar.disabled = false;
+    } else if (diff > 0) {
+        valBox.className = "text-xs font-bold text-center py-1.5 rounded-xl bg-red-100 text-red-800";
+        valBox.textContent = `⚠️ Faltan $${diff.toLocaleString('es-CO')}`;
+        if (btnFacturar) btnFacturar.disabled = true;
+    } else {
+        valBox.className = "text-xs font-bold text-center py-1.5 rounded-xl bg-amber-100 text-amber-800";
+        valBox.textContent = `⚠️ Sobran $${Math.abs(diff).toLocaleString('es-CO')}`;
+        if (btnFacturar) btnFacturar.disabled = true;
+    }
+}
+
+async function ejecutarFacturacionFlash() {
+    const { total, cantItems } = getTotalesFlash();
+    if (total === 0 || cantItems === 0) {
+        toast('Selecciona al menos un producto para facturar', true);
+        return;
+    }
+
+    const bancoMetodo = getMetodoBancoActivo();
+    let pagos = [];
+    if (pagoFlash.tipo === 'efectivo') {
+        pagos = [{ codigo: 'efectivo', nombre: 'Efectivo', monto: total }];
+    } else if (pagoFlash.tipo === 'banco') {
+        pagos = [{ codigo: bancoMetodo.codigo, nombre: bancoMetodo.nombre, monto: total }];
+    } else if (pagoFlash.tipo === 'distribuido') {
+        if (pagoFlash.efectivo > 0) {
+            pagos.push({ codigo: 'efectivo', nombre: 'Efectivo', monto: pagoFlash.efectivo });
+        }
+        if (pagoFlash.banco > 0) {
+            pagos.push({ codigo: bancoMetodo.codigo, nombre: bancoMetodo.nombre, monto: pagoFlash.banco });
+        }
+    }
+
+    const sumPagos = pagos.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
+    if (Math.round(sumPagos) !== Math.round(total)) {
+        toast('El monto pagado no coincide con el total', true);
+        return;
+    }
+
+    const items = [];
+    for (const [id, cant] of Object.entries(pedidoFlash)) {
+        if (cant > 0) {
+            const p = productos.find(x => x.id === parseInt(id));
+            if (p) {
+                items.push({
+                    producto_id: p.id,
+                    nombre_producto: p.nombre,
+                    cantidad: cant,
+                    precio_unitario: p.precio,
+                    excluir_componentes_ids: [],
+                    excluidos_nombres: [],
+                    adiciones: []
+                });
+            }
+        }
+    }
+
+    const btn = document.getElementById('btn-ejecutar-flash');
+    const label = document.getElementById('btn-flash-label');
+    if (btn) btn.disabled = true;
+    if (label) label.textContent = 'Facturando…';
+
+    let tipoDocId = configVentaRapida ? configVentaRapida.tipoDocId : null;
+    if (!tipoDocId) {
+        const pred = tiposDocumento.find(t => t.predeterminado);
+        if (pred) tipoDocId = pred.id;
+        else if (tiposDocumento.length > 0) tipoDocId = tiposDocumento[0].id;
+    }
+
+    const payload = {
+        items,
+        tipo_entrega: 'caja',
+        fecha: null,
+        pagos,
+        metodo_pago: pagos.length ? pagos[0].codigo : 'efectivo',
+        nombre_cliente: 'Venta Flash',
+        telefono_cliente: '',
+        cliente_id: null,
+        crear_cliente: false,
+        id_cajero: cajeroId,
+        nombre_cajero: cajeroNombre,
+        id_tercero_cajero: cajeroTerceroId,
+        tipo_documento_id: tipoDocId ? parseInt(tipoDocId) : null,
+        force_negative_stock: false,
+        excluir_componentes: [],
+        adjustments: [],
+        pedido_premontado_id: null,
+        centro_utilidad_id: CENTRO_ACTIVO ? CENTRO_ACTIVO.id : 1,
+        token_dispositivo: localStorage.getItem('tt_device_token') || null
+    };
+
+    try {
+        const r = await fetch(`/api/caja/${SLUG}/pedido`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+
+        if (d.ok) {
+            const numDocTxt = d.numero_documento ? ` (${d.numero_documento})` : ` (#${d.pedido_id})`;
+            toast(`⚡ ¡Venta${numDocTxt} registrada con éxito!`);
+
+            const esSilent = configVentaRapida && (configVentaRapida.silentPrint !== false);
+
+            if (!esSilent) {
+                const iva = items.reduce((s, i) => {
+                    const p = productos.find(x => x.id === i.producto_id);
+                    if (!p || !p.iva_pct) return s;
+                    return s + (i.precio_unitario * i.cantidad * p.iva_pct / (100 + p.iva_pct));
+                }, 0);
+                ultimoRecibo = {
+                    total,
+                    iva: Math.round(iva),
+                    subtotal: Math.round(total - iva),
+                    pagos,
+                    metodo: pagos.length ? pagos.map(p => p.nombre).join(' + ') : 'Efectivo',
+                    cliente: 'Venta Flash',
+                    telefono: '',
+                    cajero: cajeroNombre,
+                    pedido_id: d.pedido_id || null,
+                    numero_documento: d.numero_documento || null,
+                    fecha: new Date().toISOString(),
+                    tienda: TIENDA_NOMBRE,
+                    items: items.map(i => ({...i, precio: i.precio_unitario}))
+                };
+                publicarPantallaCliente('cobrada', {...ultimoRecibo, telefono: ''});
+                mostrarRecibo();
+            } else {
+                publicarPantallaCliente('cobrada', {
+                    total,
+                    pagos,
+                    items: items.map(i => ({...i, precio: i.precio_unitario})),
+                    pedido_id: d.pedido_id,
+                    numero_documento: d.numero_documento
+                });
+            }
+
+            reiniciarPedidoFlash();
+            if (btn) btn.disabled = true;
+            if (label) label.textContent = 'FACTURAR ($0)';
+
+            const elPaso1 = document.getElementById('paso-1-productos');
+            if (elPaso1) elPaso1.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            cargarProductos();
+            cargarTiposDocumento();
+        } else if (d.error === 'insufficient_stock') {
+            shortagesList = d.shortages;
+            document.getElementById('modal-alerta-stock').classList.remove('hidden');
+            renderShortages(d.shortages);
+            if (btn) btn.disabled = false;
+            if (label) label.textContent = `FACTURAR (${'$' + total.toLocaleString('es-CO')})`;
+            toast('⚠️ Stock insuficiente. Revisa la ventana de alerta.', true);
+        } else {
+            toast(d.error || 'Error al registrar la venta', true);
+            if (btn) btn.disabled = false;
+            if (label) label.textContent = `FACTURAR (${'$' + total.toLocaleString('es-CO')})`;
+        }
+    } catch (err) {
+        console.error('Error en facturación flash:', err);
+        toast('⚠️ Error de conexión al facturar. Intenta nuevamente.', true);
+        if (btn) btn.disabled = false;
+        if (label) label.textContent = `FACTURAR (${'$' + total.toLocaleString('es-CO')})`;
+    }
+}
+
+function abrirModalConfigVentaRapida() {
+    cargarConfigVentaRapida();
+    const contProd = document.getElementById('config-flash-lista-productos');
+    const selBanco = document.getElementById('config-flash-metodo-banco');
+    const selDoc = document.getElementById('config-flash-tipo-doc');
+    const chkSilent = document.getElementById('config-flash-silent');
+
+    if (contProd) {
+        const seleccionados = configVentaRapida.productosIds || [];
+        contProd.innerHTML = productos.map(p => {
+            const isChecked = seleccionados.includes(p.id);
+            return `
+                <label class="flex items-center justify-between p-2 rounded-xl bg-white border border-gray-150 hover:bg-emerald-50/40 cursor-pointer text-xs">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" name="cfg-flash-prod" value="${p.id}" ${isChecked ? 'checked' : ''} 
+                               class="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+                        <span class="font-bold text-gray-800">${p.nombre}</span>
+                    </div>
+                    <span class="font-mono text-gray-600 font-semibold">$${(p.precio || 0).toLocaleString('es-CO')}</span>
+                </label>
+            `;
+        }).join('');
+    }
+
+    if (selBanco) {
+        const metodosFiltrados = metodosDisponibles.filter(m => m.tiene_cuenta_contable && m.codigo !== 'efectivo');
+        const listaOpciones = metodosFiltrados.length ? metodosFiltrados : metodosDisponibles.filter(m => m.codigo !== 'efectivo');
+        selBanco.innerHTML = listaOpciones.map(m => `
+            <option value="${m.codigo}" ${configVentaRapida.metodoBancoCodigo === m.codigo ? 'selected' : ''}>
+                ${m.icono || '📱'} ${m.nombre}
+            </option>
+        `).join('');
+    }
+
+    if (selDoc) {
+        selDoc.innerHTML = '<option value="">-- Sin documento contable --</option>' +
+            tiposDocumento.map(t => `
+                <option value="${t.id}" ${String(configVentaRapida.tipoDocId) === String(t.id) || (!configVentaRapida.tipoDocId && t.predeterminado) ? 'selected' : ''}>
+                    ${t.nombre} ${t.siguiente_numero ? `(#${t.siguiente_numero})` : ''}
+                </option>
+            `).join('');
+    }
+
+    if (chkSilent) {
+        chkSilent.checked = (configVentaRapida.silentPrint !== false);
+    }
+
+    document.getElementById('modal-config-venta-rapida').classList.remove('hidden');
+}
+
+function cerrarModalConfigVentaRapida() {
+    document.getElementById('modal-config-venta-rapida').classList.add('hidden');
+}
+
+function guardarConfigVentaRapida() {
+    const chks = document.querySelectorAll('input[name="cfg-flash-prod"]:checked');
+    const prodIds = Array.from(chks).map(c => parseInt(c.value));
+    const selBanco = document.getElementById('config-flash-metodo-banco');
+    const selDoc = document.getElementById('config-flash-tipo-doc');
+    const chkSilent = document.getElementById('config-flash-silent');
+
+    configVentaRapida = {
+        productosIds: prodIds,
+        metodoBancoCodigo: selBanco ? selBanco.value : '',
+        tipoDocId: selDoc && selDoc.value ? parseInt(selDoc.value) : null,
+        silentPrint: chkSilent ? chkSilent.checked : true
+    };
+
+    localStorage.setItem('caja_flash_config_' + TERCERO_ID, JSON.stringify(configVentaRapida));
+    
+    const notaSilent = document.getElementById('flash-modo-auto-nota');
+    if (notaSilent) {
+        if (configVentaRapida.silentPrint !== false) {
+            notaSilent.classList.remove('hidden');
+        } else {
+            notaSilent.classList.add('hidden');
+        }
+    }
+
+    cerrarModalConfigVentaRapida();
+    renderProductosFlash();
+    actualizarHeaderFlash();
+    actualizarTotalesFlash();
+    toast('Configuración de Venta Rápida guardada');
+}
 
 async function inicializarCentroCaja() {
     try {
@@ -573,6 +1501,7 @@ function actualizarBadgeCentroCaja() {
         `).join('');
         sel.value = String(CENTRO_ACTIVO.id);
     }
+    actualizarHeaderFlash();
 }
 
 function abrirModalCentrosCaja() {
@@ -642,6 +1571,8 @@ async function iniciarCajaAdmin() {
     cargarMetodosPago();
     cargarProductos();
     cargarTiposDocumento();
+    cargarConfigVentaRapida();
+    cambiarModoCaja(modoCajaActivo);
 }
 
 if (MODO_ADMIN) {
@@ -675,6 +1606,8 @@ async function verificarPin() {
             cargarMetodosPago();
             cargarProductos();
             cargarTiposDocumento();
+            cargarConfigVentaRapida();
+            cambiarModoCaja(modoCajaActivo);
         } else {
             document.getElementById('pin-error').textContent = d.error;
             document.getElementById('pin-error').classList.remove('hidden');
@@ -831,6 +1764,8 @@ async function cargarProductos() {
             if (!carrito || carrito.length === 0) {
                 cargarCarritoStorage();
             }
+            renderProductosFlash();
+            actualizarTotalesFlash();
         }
     } catch {
         toast('Error al cargar productos', true);
@@ -1457,9 +2392,11 @@ async function cargarMetodosPago() {
             metodosDisponibles = [{nombre: 'Efectivo', codigo: 'efectivo', icono: '💵'}];
         }
         renderMetodosPago();
+        actualizarTotalesFlash();
     } catch(e) {
         metodosDisponibles = [{nombre: 'Efectivo', codigo: 'efectivo', icono: '💵'}];
         renderMetodosPago();
+        actualizarTotalesFlash();
     }
 }
 
@@ -1499,6 +2436,7 @@ async function cargarTiposDocumento() {
                     tiposDocumento.map(t => `<option value="${t.id}" ${t.predeterminado ? 'selected' : ''}>${t.nombre}</option>`).join('');
                 actualizarConsecutivoDisplay();
             }
+            actualizarHeaderFlash();
         }
     } catch (e) {
         console.error("Error al cargar tipos de documento:", e);

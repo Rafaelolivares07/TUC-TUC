@@ -154,34 +154,43 @@
     input:focus, select:focus, textarea:focus { border-color: #e11d48; }
 
     #tab-entradas input:not([type="hidden"]),
-
     #tab-entradas select,
-
     #tab-entradas textarea {
-
-      font-size: .6875rem;
-
-      padding-top: 5px;
-
-      padding-bottom: 5px;
-
+      font-size: 1rem;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-weight: 600;
+      min-height: 44px;
     }
 
-    #tab-entradas label { margin-bottom: 0; }
+    #tab-entradas label {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #374151;
+      margin-bottom: 4px;
+      display: block;
+    }
 
     #tab-entradas #entrada-tipo-doc,
-
     #tab-entradas #entrada-num-doc,
-
-    #tab-entradas #entrada-fecha-doc { width: 80%; }
+    #tab-entradas #entrada-fecha-doc {
+      width: 100%;
+    }
 
     #tab-entradas input[id^="ent-ac-"],
+    #tab-entradas input[id^="ent-pres-"] {
+      text-align: left;
+      padding-left: 12px;
+    }
 
-    #tab-entradas input[id^="ent-pres-"] { text-align: left; padding-left: 16px; }
+    #tab-entradas input[id^="ent-cant-emp-"] {
+      max-width: 100%;
+    }
 
-    #tab-entradas input[id^="ent-cant-emp-"] { max-width: 70%; }
-
-    #tab-entradas select[id^="ent-iva-pct-"] { max-width: 60%; font-size: 11px; }
+    #tab-entradas select[id^="ent-iva-pct-"] {
+      max-width: 100%;
+      font-size: 0.95rem;
+    }
 
     #tab-entradas .grid-cols-12 > div:last-child { white-space: nowrap; }
 
@@ -1946,29 +1955,29 @@
 
     <div class="mb-3">
 
-      <div class="grid grid-cols-12 gap-0.5 mb-0.5 px-0.5">
+      <div class="grid grid-cols-12 gap-1 mb-1 px-1">
 
-        <span class="col-span-2 text-[10px] font-bold text-gray-400 uppercase text-center">Producto</span>
+        <span class="col-span-2 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Producto</span>
 
-        <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">Cant.Emp</span>
+        <span class="col-span-1 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Cant.Emp</span>
 
-        <span class="col-span-2 text-[10px] font-bold text-gray-400 uppercase text-center">Presentación</span>
+        <span class="col-span-2 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Presentación</span>
 
-        <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">Base</span>
+        <span class="col-span-1 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Base</span>
 
-        <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">$ Emp.</span>
+        <span class="col-span-1 text-xs font-black text-gray-600 uppercase text-center tracking-wide">$ Emp.</span>
 
-        <span class="col-span-2 text-[10px] font-bold text-gray-400 uppercase text-center">Total Línea</span>
+        <span class="col-span-2 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Total Línea</span>
 
-        <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">Cost.Base</span>
+        <span class="col-span-1 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Cost.Base</span>
 
-        <span class="col-span-1 text-[10px] font-bold text-gray-400 uppercase text-center">IVA</span>
+        <span class="col-span-1 text-xs font-black text-gray-600 uppercase text-center tracking-wide">IVA</span>
 
         <span class="col-span-1"></span>
 
       </div>
 
-      <div id="entrada-lineas" class="space-y-0.5"></div>
+      <div id="entrada-lineas" class="space-y-1"></div>
 
     </div>
 
@@ -1976,7 +1985,7 @@
 
     <button onclick="agregarLineaEntrada()"
 
-            class="w-full py-2 border-2 border-dashed border-gray-300 rounded-xl text-sm font-semibold text-gray-400 hover:border-rose-400 hover:text-rose-500 mb-5">
+            class="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-base font-bold text-gray-500 hover:border-rose-500 hover:text-rose-600 mb-5 transition">
 
       + Agregar línea
 
@@ -1986,23 +1995,23 @@
 
     <!-- Totales del Documento en tiempo real -->
 
-    <div class="bg-gray-50 p-4 rounded-xl mb-4 border border-gray-200 flex flex-wrap justify-between items-center gap-3">
+    <div class="bg-gray-50 p-4 rounded-xl mb-4 border border-gray-200 flex flex-wrap justify-between items-center gap-4">
 
-      <div class="text-sm font-medium text-gray-600">
+      <div class="text-base font-semibold text-gray-600">
 
-        Subtotal: <span id="entrada-subtotal-val" class="font-bold text-gray-800">$0.00</span>
-
-      </div>
-
-      <div class="text-sm font-medium text-gray-600">
-
-        IVA: <span id="entrada-iva-val" class="font-bold text-gray-800">$0.00</span>
+        Subtotal: <span id="entrada-subtotal-val" class="font-bold text-gray-900 text-lg">$0.00</span>
 
       </div>
 
-      <div class="text-base font-bold text-gray-700">
+      <div class="text-base font-semibold text-gray-600">
 
-        Total Documento: <span id="entrada-total-val" class="text-rose-600 font-extrabold text-lg">$0.00</span>
+        IVA: <span id="entrada-iva-val" class="font-bold text-gray-900 text-lg">$0.00</span>
+
+      </div>
+
+      <div class="text-lg font-bold text-gray-800">
+
+        Total Documento: <span id="entrada-total-val" class="text-rose-600 font-black text-2xl">$0.00</span>
 
       </div>
 
@@ -6977,7 +6986,7 @@ function agregarLineaEntrada() {
   const idx = entradaLineas.length;
 
   const div = document.createElement('div');
-  div.className = 'grid grid-cols-12 gap-0.5 items-end';
+  div.className = 'grid grid-cols-12 gap-1 items-end';
 
 
 
@@ -7013,7 +7022,7 @@ function agregarLineaEntrada() {
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center text-[11px]" onfocus="this.select()">
+       <input type="text" inputmode="decimal" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-100 text-gray-700 font-mono text-center text-sm font-bold" onfocus="this.select()">
 
     </div>
 
@@ -7025,19 +7034,19 @@ function agregarLineaEntrada() {
 
     <div class="col-span-2">
 
-       <input type="text" inputmode="decimal" id="ent-total-${idx}" placeholder="Total Línea" value="" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'total')" class="font-bold">
+       <input type="text" inputmode="decimal" id="ent-total-${idx}" placeholder="Total Línea" value="" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'total')" class="font-bold text-gray-900">
 
     </div>
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost.Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right text-[11px]" onfocus="this.select()">
+       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost.Base" readonly class="bg-gray-100 text-gray-700 font-mono text-right text-sm font-bold" onfocus="this.select()">
 
     </div>
 
     <div class="col-span-1">
 
-      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full text-[11px]">
+      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full text-sm font-semibold">
 
         <option value="0" selected>0%</option>
 
@@ -7053,7 +7062,7 @@ function agregarLineaEntrada() {
 
       <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
 
-              class="text-red-400 hover:text-red-600 font-bold text-lg">×</button>
+              class="text-red-500 hover:text-red-700 font-bold text-xl px-1">×</button>
 
     </div>
 
@@ -7166,7 +7175,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
   const div = document.createElement('div');
 
-  div.className = 'grid grid-cols-12 gap-0.5 items-end';
+  div.className = 'grid grid-cols-12 gap-1 items-end';
 
   
 
@@ -7212,7 +7221,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-50 text-gray-500 font-mono text-center text-[11px]" value="${cantidad}" onfocus="this.select()">
+       <input type="text" inputmode="decimal" id="ent-cant-base-${idx}" placeholder="Base" readonly class="bg-gray-100 text-gray-700 font-mono text-center text-sm font-bold" value="${cantidad}" onfocus="this.select()">
 
     </div>
 
@@ -7224,19 +7233,19 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
     <div class="col-span-2">
 
-       <input type="text" inputmode="decimal" id="ent-total-${idx}" placeholder="Total Línea" value="${totalL.toFixed(2)}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'total')" class="font-bold">
+       <input type="text" inputmode="decimal" id="ent-total-${idx}" placeholder="Total Línea" value="${totalL.toFixed(2)}" onfocus="this.select()" oninput="calcularCostoFilaEmpaque(${idx}, 'total')" class="font-bold text-gray-900">
 
     </div>
 
     <div class="col-span-1">
 
-       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost.Base" readonly class="bg-gray-50 text-gray-500 font-mono text-right text-[11px]" value="${valorUnitario}" onfocus="this.select()">
+       <input type="text" inputmode="decimal" id="ent-vu-${idx}" placeholder="Cost.Base" readonly class="bg-gray-100 text-gray-700 font-mono text-right text-sm font-bold" value="${valorUnitario}" onfocus="this.select()">
 
     </div>
 
     <div class="col-span-1">
 
-      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full text-[11px]">
+      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full text-sm font-semibold">
 
         <option value="0" ${ivaPct === 0 ? 'selected' : ''}>0%</option>
 
@@ -7252,7 +7261,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
       <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
 
-              class="text-red-400 hover:text-red-600 font-bold text-lg">×</button>
+              class="text-red-500 hover:text-red-700 font-bold text-xl px-1">×</button>
 
     </div>
 

@@ -57,6 +57,15 @@
             50% { transform: scale(1.02); box-shadow: 0 8px 22px 0 rgba(16, 185, 129, 0.6); }
         }
 
+        #modal-config-venta-rapida {
+            box-sizing: border-box;
+        }
+        #modal-config-venta-rapida > div {
+            box-sizing: border-box;
+            max-width: min(92vw, 420px) !important;
+            width: 100% !important;
+        }
+
         @media (min-width: 768px) {
             #layout { display: grid; grid-template-columns: 1fr 390px; gap: 0.75rem; }
             #lista-productos { max-height: 78vh; }
@@ -686,62 +695,62 @@
 </div>
 
 <!-- Modal: Configuración de Venta Rápida -->
-<div id="modal-config-venta-rapida" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4" onclick="if(event.target===this)cerrarModalConfigVentaRapida()">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-5 flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-150" onclick="event.stopPropagation()">
+<div id="modal-config-venta-rapida" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-2.5 sm:p-4 overflow-y-auto" onclick="if(event.target===this)cerrarModalConfigVentaRapida()">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-[92vw] sm:max-w-md p-4 sm:p-5 flex flex-col max-h-[86vh] my-auto box-border overflow-hidden" onclick="event.stopPropagation()">
         <!-- Header -->
-        <div class="flex items-center justify-between border-b border-gray-150 pb-3 mb-3">
-            <div class="flex items-center gap-2">
-                <span class="text-xl p-1.5 bg-amber-100 text-amber-800 rounded-xl">⚙️</span>
-                <div>
-                    <h3 class="font-extrabold text-base text-gray-800 leading-tight">Configurar Venta Rápida</h3>
-                    <p class="text-[11px] text-gray-400">Personaliza productos estrella y comportamiento</p>
+        <div class="flex items-center justify-between border-b border-gray-150 pb-3 mb-3 shrink-0">
+            <div class="flex items-center gap-2 min-w-0">
+                <span class="text-xl p-1.5 bg-amber-100 text-amber-800 rounded-xl shrink-0">⚙️</span>
+                <div class="min-w-0">
+                    <h3 class="font-extrabold text-sm sm:text-base text-gray-800 leading-tight truncate">Configurar Venta Rápida</h3>
+                    <p class="text-[10px] sm:text-[11px] text-gray-400 truncate">Productos estrella y comportamiento</p>
                 </div>
             </div>
-            <button onclick="cerrarModalConfigVentaRapida()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            <button onclick="cerrarModalConfigVentaRapida()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 shrink-0">&times;</button>
         </div>
 
-        <div class="overflow-y-auto space-y-4 flex-1 pr-1 custom-scrollbar">
+        <div class="overflow-y-auto space-y-3.5 flex-1 pr-1 custom-scrollbar min-w-0">
             <!-- 1. Selección de 2 a 4 productos estrella -->
-            <div class="space-y-1.5">
+            <div class="space-y-1 min-w-0">
                 <label class="text-xs font-black text-gray-800 block flex items-center gap-1">
-                    <span>1.</span> <span>Productos principales en pantalla (2 a 4 recomendados):</span>
+                    <span>1.</span> <span>Productos principales en pantalla:</span>
                 </label>
-                <p class="text-[11px] text-gray-500">
-                    Marca los productos que más vendes para tenerlos en los botones gigantes de pantalla rápida.
+                <p class="text-[11px] text-gray-500 leading-tight">
+                    Marca de 2 a 4 productos que más vendes para botones gigantes.
                 </p>
-                <div id="config-flash-lista-productos" class="space-y-1 max-h-48 overflow-y-auto border border-gray-200 rounded-2xl p-2 bg-gray-50/50">
+                <div id="config-flash-lista-productos" class="space-y-1 max-h-44 overflow-y-auto border border-gray-200 rounded-2xl p-2 bg-gray-50/50 min-w-0">
                     <!-- Se llena dinámicamente -->
                 </div>
             </div>
 
             <!-- 2. Método de Transferencia / Banco predeterminado -->
-            <div class="space-y-1.5">
+            <div class="space-y-1 min-w-0">
                 <label class="text-xs font-black text-gray-800 block flex items-center gap-1">
                     <span>2.</span> <span>Cuenta para Transferencia 100%:</span>
                 </label>
-                <select id="config-flash-metodo-banco" class="w-full border border-gray-200 rounded-xl p-2 text-xs font-bold text-gray-800 bg-white focus:border-blue-500">
+                <select id="config-flash-metodo-banco" class="w-full border border-gray-200 rounded-xl p-2 text-xs font-bold text-gray-800 bg-white focus:border-blue-500 min-w-0">
                     <!-- Opciones de métodos con cuenta contable activa -->
                 </select>
             </div>
 
             <!-- 3. Tipo de Documento Predeterminado -->
-            <div class="space-y-1.5">
+            <div class="space-y-1 min-w-0">
                 <label class="text-xs font-black text-gray-800 block flex items-center gap-1">
                     <span>3.</span> <span>Tipo de documento contable:</span>
                 </label>
-                <select id="config-flash-tipo-doc" class="w-full border border-gray-200 rounded-xl p-2 text-xs font-bold text-gray-800 bg-white focus:border-blue-500">
+                <select id="config-flash-tipo-doc" class="w-full border border-gray-200 rounded-xl p-2 text-xs font-bold text-gray-800 bg-white focus:border-blue-500 min-w-0">
                     <!-- Opciones de tiposDocumento -->
                 </select>
             </div>
 
             <!-- 4. Impresión Ultra Flash Silenciosa -->
-            <div class="bg-amber-50/80 border border-amber-200 rounded-2xl p-3 space-y-1.5">
-                <label class="flex items-start gap-2.5 cursor-pointer">
-                    <input type="checkbox" id="config-flash-silent" class="mt-0.5 rounded text-amber-600 focus:ring-amber-500 w-4 h-4">
-                    <div class="text-xs">
-                        <span class="font-extrabold text-amber-900 block">Facturación Ultra Flash Silenciosa</span>
-                        <span class="text-amber-700 text-[11px] block leading-tight">
-                            Guarda y factura en el backend inmediatamente sin abrir ventana de impresión, quedando listo en milisegundos para el siguiente cliente.
+            <div class="bg-amber-50/80 border border-amber-200 rounded-2xl p-2.5 space-y-1 min-w-0">
+                <label class="flex items-start gap-2 cursor-pointer">
+                    <input type="checkbox" id="config-flash-silent" class="mt-0.5 rounded text-amber-600 focus:ring-amber-500 w-4 h-4 shrink-0">
+                    <div class="text-xs min-w-0 flex-1">
+                        <span class="font-extrabold text-amber-900 block text-[11px] sm:text-xs">Facturación Ultra Flash Silenciosa</span>
+                        <span class="text-amber-700 text-[10px] sm:text-[11px] block leading-tight mt-0.5">
+                            Guarda y factura inmediatamente sin abrir ventana de impresión.
                         </span>
                     </div>
                 </label>
@@ -749,14 +758,14 @@
         </div>
 
         <!-- Botones de Acción -->
-        <div class="pt-3 border-t border-gray-150 flex items-center gap-2 mt-2">
+        <div class="pt-3 border-t border-gray-150 flex items-center gap-2 mt-2 shrink-0">
             <button type="button" onclick="cerrarModalConfigVentaRapida()" 
                     class="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold text-xs hover:bg-gray-50 transition cursor-pointer">
                 Cancelar
             </button>
             <button type="button" onclick="guardarConfigVentaRapida()" 
                     class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-sm transition cursor-pointer">
-                Guardar Configuración
+                Guardar
             </button>
         </div>
     </div>
@@ -1368,13 +1377,13 @@ function abrirModalConfigVentaRapida() {
         contProd.innerHTML = productos.map(p => {
             const isChecked = seleccionados.includes(p.id);
             return `
-                <label class="flex items-center justify-between p-2 rounded-xl bg-white border border-gray-150 hover:bg-emerald-50/40 cursor-pointer text-xs">
-                    <div class="flex items-center gap-2">
+                <label class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-gray-150 hover:bg-emerald-50/40 cursor-pointer text-xs min-w-0">
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
                         <input type="checkbox" name="cfg-flash-prod" value="${p.id}" ${isChecked ? 'checked' : ''} 
-                               class="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
-                        <span class="font-bold text-gray-800">${p.nombre}</span>
+                               class="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 shrink-0">
+                        <span class="font-bold text-gray-800 truncate">${p.nombre}</span>
                     </div>
-                    <span class="font-mono text-gray-600 font-semibold">$${(p.precio || 0).toLocaleString('es-CO')}</span>
+                    <span class="font-mono text-gray-600 font-semibold shrink-0 text-[11px]">$${(p.precio || 0).toLocaleString('es-CO')}</span>
                 </label>
             `;
         }).join('');

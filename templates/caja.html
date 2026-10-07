@@ -385,60 +385,74 @@
 
             <!-- Botón Toggle Pago Distribuido -->
             <button type="button" id="btn-toggle-distribuido" onclick="seleccionarPagoDistribuidoFlash()"
-                    class="w-full p-3 rounded-2xl border-2 border-gray-200 hover:border-amber-400 bg-gray-50 hover:bg-amber-50/40 text-gray-800 font-extrabold text-xs flex items-center justify-between transition active:scale-98 cursor-pointer">
+                    class="w-full p-3.5 rounded-2xl border-2 border-gray-200 hover:border-amber-400 bg-gray-50 hover:bg-amber-50/50 text-gray-900 font-black text-xs sm:text-sm flex items-center justify-between transition active:scale-98 cursor-pointer shadow-xs">
                 <div class="flex items-center gap-2">
-                    <span class="text-base text-amber-500">⚡</span>
+                    <span class="text-xl text-amber-500">⚡</span>
                     <span>Pago Distribuido (Efectivo + Transferencia)</span>
                 </div>
-                <span id="flash-distribuido-arrow" class="text-xs text-gray-400">▼</span>
+                <span id="flash-distribuido-arrow" class="text-sm text-gray-400 font-black">▼</span>
             </button>
 
             <!-- Panel Desplegable de Pago Distribuido -->
-            <div id="panel-pago-distribuido" class="hidden bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-3">
-                <!-- Efectivo Input & Preset Buttons -->
-                <div class="space-y-1.5">
+            <div id="panel-pago-distribuido" class="hidden bg-gradient-to-b from-amber-50/70 to-slate-50 p-4 sm:p-5 rounded-3xl border-2 border-amber-300 shadow-md space-y-4 transition-all">
+                <div class="flex items-center justify-between border-b border-amber-200/80 pb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">⚡</span>
+                        <h3 class="text-xs sm:text-sm font-black text-gray-800">Distribución del Pago</h3>
+                    </div>
+                    <span class="text-[10px] sm:text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">Mixto</span>
+                </div>
+
+                <!-- 1. Efectivo Input & Preset Buttons -->
+                <div class="space-y-2">
                     <div class="flex items-center justify-between">
-                        <label class="text-xs font-bold text-gray-700 flex items-center gap-1">
-                            <span>💵</span> Efectivo:
+                        <label for="input-flash-efectivo" class="text-xs sm:text-sm font-extrabold text-gray-800 flex items-center gap-1.5">
+                            <span>💵</span> <span>Efectivo Recibido:</span>
                         </label>
-                        <span class="text-[10px] text-gray-400 font-medium">(Toca para escribir directo)</span>
+                        <span class="text-[11px] text-gray-400 font-semibold">(Toca para escribir)</span>
                     </div>
                     
                     <div class="relative">
-                        <span class="absolute left-3 top-2.5 text-gray-400 font-bold">$</span>
+                        <span class="absolute left-3.5 top-3 text-lg font-black text-gray-400">$</span>
                         <input type="number" inputmode="numeric" id="input-flash-efectivo"
-                               class="no-spinner w-full bg-white border-2 border-slate-300 focus:border-emerald-500 rounded-xl pl-7 pr-3 py-2 text-base font-black font-mono text-gray-800 outline-none transition"
+                               class="no-spinner w-full bg-white border-2 border-slate-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 rounded-2xl pl-8 pr-4 py-3 text-xl sm:text-2xl font-black font-mono text-gray-900 outline-none transition shadow-inner"
                                placeholder="0" onfocus="this.select()" oninput="onInputFlashEfectivo(this.value)">
                     </div>
 
-                    <!-- Botones Rápidos de Incremento / Decremento por miles -->
-                    <div class="grid grid-cols-4 gap-1.5 pt-1">
-                        <button type="button" onclick="ajustarMontoFlashEfectivo(-5000)" class="py-2 px-1 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl text-[11px] font-extrabold text-gray-700 active:scale-95 cursor-pointer shadow-xs">-$5.000</button>
-                        <button type="button" onclick="ajustarMontoFlashEfectivo(-1000)" class="py-2 px-1 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl text-[11px] font-extrabold text-gray-700 active:scale-95 cursor-pointer shadow-xs">-$1.000</button>
-                        <button type="button" onclick="ajustarMontoFlashEfectivo(1000)" class="py-2 px-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-xl text-[11px] font-extrabold text-emerald-800 active:scale-95 cursor-pointer shadow-xs">+$1.000</button>
-                        <button type="button" onclick="ajustarMontoFlashEfectivo(5000)" class="py-2 px-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-xl text-[11px] font-extrabold text-emerald-800 active:scale-95 cursor-pointer shadow-xs">+$5.000</button>
+                    <!-- Botones Rápidos de Ajuste -->
+                    <div class="grid grid-cols-4 gap-1.5 pt-0.5">
+                        <button type="button" onclick="ajustarMontoFlashEfectivo(-5000)" class="py-2.5 px-1 bg-white hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-black text-gray-700 active:scale-95 cursor-pointer shadow-xs">-$5.000</button>
+                        <button type="button" onclick="ajustarMontoFlashEfectivo(-1000)" class="py-2.5 px-1 bg-white hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-black text-gray-700 active:scale-95 cursor-pointer shadow-xs">-$1.000</button>
+                        <button type="button" onclick="ajustarMontoFlashEfectivo(1000)" class="py-2.5 px-1 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-xl text-xs font-black text-emerald-900 active:scale-95 cursor-pointer shadow-xs">+$1.000</button>
+                        <button type="button" onclick="ajustarMontoFlashEfectivo(5000)" class="py-2.5 px-1 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-xl text-xs font-black text-emerald-900 active:scale-95 cursor-pointer shadow-xs">+$5.000</button>
                     </div>
                 </div>
 
-                <!-- Transferencia automática resultante con Selector de Cuenta -->
-                <div class="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-1.5 min-w-0 flex-1">
-                        <span id="flash-dist-banco-icono" class="text-base shrink-0">📱</span>
-                        <select id="flash-dist-banco-select" onchange="cambiarMetodoDistribuidoFlash(this.value)"
-                                class="text-xs font-bold text-gray-700 bg-transparent outline-none cursor-pointer truncate max-w-[140px] sm:max-w-none">
-                            <!-- Se llena dinámicamente -->
-                        </select>
+                <!-- 2. Restante Automático a Transferencia / Cuenta Digital -->
+                <div class="p-3.5 bg-white rounded-2xl border-2 border-blue-200/80 shadow-xs flex items-center justify-between gap-2.5">
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                        <span id="flash-dist-banco-icono" class="text-2xl shrink-0">📱</span>
+                        <div class="min-w-0 flex-1">
+                            <span class="text-[10px] font-bold uppercase text-gray-400 block leading-tight">Cuenta de Transferencia</span>
+                            <select id="flash-dist-banco-select" onchange="cambiarMetodoDistribuidoFlash(this.value)"
+                                    class="text-xs sm:text-sm font-black text-gray-900 bg-transparent outline-none cursor-pointer truncate w-full">
+                                <!-- Dinámico -->
+                            </select>
+                        </div>
                     </div>
-                    <span id="flash-dist-banco-monto" class="text-sm font-black font-mono text-blue-700 shrink-0">$0</span>
+                    <div class="text-right shrink-0">
+                        <span class="text-[10px] font-bold uppercase text-blue-500 block leading-tight">Restante</span>
+                        <span id="flash-dist-banco-monto" class="text-lg sm:text-xl font-black font-mono text-blue-700 block">$0</span>
+                    </div>
                 </div>
 
-                <!-- Validación de cuadre -->
-                <div id="flash-dist-validacion" class="text-xs font-bold text-center py-1.5 rounded-xl bg-emerald-100 text-emerald-800">
+                <!-- 3. Validación de cuadre -->
+                <div id="flash-dist-validacion" class="text-xs sm:text-sm font-extrabold text-center py-2.5 rounded-2xl bg-emerald-100 text-emerald-900 shadow-2xs">
                     ✓ Cuadre exacto ($0)
                 </div>
 
                 <button type="button" onclick="irAPaso3Flash()" 
-                        class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-98 cursor-pointer">
+                        class="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-98 cursor-pointer">
                     <span>Continuar a Facturar</span> <span>➡️</span>
                 </button>
             </div>
@@ -1283,8 +1297,14 @@ function renderSelectorDistribuidoFlash() {
     if (!sel) return;
 
     const digitales = getMetodosDigitalesFlash();
+    const savedDist = localStorage.getItem('tuctuc_flash_last_dist_metodo_' + TERCERO_ID);
+
     if (!pagoFlash.distMetodoCodigo || !digitales.some(d => d.codigo === pagoFlash.distMetodoCodigo)) {
-        pagoFlash.distMetodoCodigo = digitales[0].codigo;
+        if (savedDist && digitales.some(d => d.codigo === savedDist)) {
+            pagoFlash.distMetodoCodigo = savedDist;
+        } else {
+            pagoFlash.distMetodoCodigo = digitales[0].codigo;
+        }
     }
 
     sel.innerHTML = digitales.map(d => `
@@ -1301,12 +1321,14 @@ function renderSelectorDistribuidoFlash() {
 
 function cambiarMetodoDistribuidoFlash(codigo) {
     pagoFlash.distMetodoCodigo = codigo;
+    localStorage.setItem('tuctuc_flash_last_dist_metodo_' + TERCERO_ID, codigo);
     const digitales = getMetodosDigitalesFlash();
     const activo = digitales.find(d => d.codigo === codigo);
     const ico = document.getElementById('flash-dist-banco-icono');
     if (ico && activo) {
         ico.textContent = activo.icono || '📱';
     }
+    actualizarTotalesFlash();
 }
 
 function actualizarTotalesFlash() {
@@ -1423,8 +1445,14 @@ function seleccionarPagoDistribuidoFlash() {
     
     setTimeout(() => {
         const panel = document.getElementById('panel-pago-distribuido');
-        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 50);
+        if (panel) {
+            panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (inputEf) {
+                inputEf.focus();
+                inputEf.select();
+            }
+        }
+    }, 80);
 }
 
 function onInputFlashEfectivo(val) {

@@ -1148,7 +1148,7 @@ function renderProductosFlash() {
 
         return `
             <div onclick="tocarProductoFlash(${p.id})"
-                 class="flash-card relative p-3.5 sm:p-4 rounded-3xl border-2 ${selClass} flex flex-col justify-between min-h-[110px] sm:min-h-[125px] cursor-pointer transition select-none">
+                 class="flash-card relative p-3.5 sm:p-4 rounded-3xl border-2 ${selClass} flex flex-col justify-between min-h-[118px] sm:min-h-[132px] cursor-pointer transition select-none">
                 
                 <!-- Badge de Cantidad -->
                 ${cant > 0 ? `
@@ -1158,15 +1158,15 @@ function renderProductosFlash() {
                 ` : ''}
 
                 <!-- Nombre y Stock -->
-                <div>
-                    <h3 class="font-black text-gray-900 text-sm sm:text-base leading-snug line-clamp-2">${p.nombre}</h3>
+                <div class="min-w-0 flex-1 mb-1">
+                    <h3 class="font-black text-gray-900 text-xs sm:text-sm md:text-base leading-tight break-words">${p.nombre}</h3>
                     ${p.stock !== undefined && p.stock !== null && p.stock < 10 ? `
-                        <span class="text-[10px] text-amber-600 font-bold">Stock: ${p.stock}</span>
+                        <span class="text-[10px] text-amber-600 font-bold block mt-0.5">Stock: ${p.stock}</span>
                     ` : ''}
                 </div>
 
                 <!-- Precio y Botón Restar -->
-                <div class="flex items-center justify-between mt-2 pt-1 border-t border-gray-100/80">
+                <div class="flex items-center justify-between mt-auto pt-1.5 border-t border-gray-100/90">
                     <span class="text-sm sm:text-base font-black font-mono text-emerald-700">${formattedPrice}</span>
                     ${cant > 0 ? `
                         <button type="button" onclick="event.stopPropagation(); cambiarCantidadFlash(${p.id}, -1)" 

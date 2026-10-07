@@ -1738,10 +1738,10 @@ function abrirModalResumenVentaRapida() {
             metGrid.innerHTML = `<div class="col-span-2 text-center text-xs text-gray-400 py-3 bg-gray-50 rounded-xl">Sin pagos registrados en este turno</div>`;
         } else {
             metGrid.innerHTML = metList.map(m => `
-                <div class="p-2.5 rounded-xl border border-gray-150 bg-gray-50 flex items-center justify-between">
-                    <div class="flex items-center gap-2 min-w-0">
+                <div class="p-2.5 rounded-xl border border-gray-150 bg-gray-50 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
                         <span class="text-xl shrink-0">${m.icono || '💳'}</span>
-                        <span class="text-xs font-bold text-gray-800 truncate">${m.nombre}</span>
+                        <span class="text-xs font-bold text-gray-800 leading-tight break-words">${m.nombre}</span>
                     </div>
                     <span class="text-xs font-black font-mono text-gray-900 shrink-0">$${(m.total || 0).toLocaleString('es-CO')}</span>
                 </div>
@@ -1757,10 +1757,10 @@ function abrirModalResumenVentaRapida() {
             prodListEl.innerHTML = `<div class="text-center text-xs text-gray-400 py-4">No se han registrado productos vendidos aún</div>`;
         } else {
             prodListEl.innerHTML = prods.map(p => `
-                <div class="p-2.5 flex items-center justify-between gap-2 hover:bg-gray-100/50">
+                <div class="p-2.5 flex items-center justify-between gap-2.5 hover:bg-gray-100/50">
                     <div class="min-w-0 flex-1">
-                        <span class="text-xs font-bold text-gray-900 block truncate">${p.nombre}</span>
-                        <span class="text-[10px] text-gray-400 font-semibold">${p.cantidad} unidad${p.cantidad !== 1 ? 'es' : ''}</span>
+                        <span class="text-xs font-bold text-gray-900 block leading-snug break-words">${p.nombre}</span>
+                        <span class="text-[10px] text-gray-400 font-semibold block mt-0.5">${p.cantidad} unidad${p.cantidad !== 1 ? 'es' : ''}</span>
                     </div>
                     <span class="text-xs font-black font-mono text-indigo-700 shrink-0">$${(p.total || 0).toLocaleString('es-CO')}</span>
                 </div>
@@ -1784,10 +1784,10 @@ function abrirModalResumenVentaRapida() {
                     .map(([nom, cant]) => `${cant}x ${nom}`)
                     .join(', ');
                 return `
-                    <div class="p-2 bg-white rounded-xl border border-rose-200/80 flex items-center justify-between gap-2">
+                    <div class="p-2.5 bg-white rounded-xl border border-rose-200/80 flex items-center justify-between gap-2.5">
                         <div class="min-w-0 flex-1">
-                            <span class="font-extrabold text-rose-900 block truncate">🚫 ${o.nombre}</span>
-                            ${afectados ? `<span class="text-[10px] text-rose-700 block truncate">Omitido en: ${afectados}</span>` : ''}
+                            <span class="font-extrabold text-rose-900 block leading-snug break-words">🚫 ${o.nombre}</span>
+                            ${afectados ? `<span class="text-[10px] text-rose-700 block leading-tight break-words mt-0.5">Omitido en: ${afectados}</span>` : ''}
                         </div>
                         <span class="font-black font-mono text-rose-800 bg-rose-100 px-2 py-0.5 rounded-lg text-xs shrink-0">
                             ${o.cantidadOmitida} omisión${o.cantidadOmitida !== 1 ? 'es' : ''}

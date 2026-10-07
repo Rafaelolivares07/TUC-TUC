@@ -360,10 +360,12 @@
     <!-- Paso 2: Historial y Filtros (se muestra cuando hay un tercero seleccionado - Colapsable) -->
     <div id="auditor-panel-historico" class="hidden bg-white border border-gray-200 rounded-2xl shadow-xs mb-4 overflow-hidden transition-all">
       <div onclick="toggleSeccionAuditoria('aud-historico')" class="cursor-pointer bg-slate-50 hover:bg-slate-100/80 px-4 py-3 border-b border-gray-200 flex items-center justify-between select-none transition">
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
           <span class="text-sm">📅</span>
           <span class="text-xs font-black uppercase tracking-wide text-slate-700">Historial de Documentos del Tercero</span>
-          <span id="aud-historico-badge" class="text-[10px] font-bold text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-md">Por Tercero</span>
+          <span id="aud-historico-badge" class="text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+            <span>🏢</span> <span id="aud-historico-badge-txt">Seleccionar Tercero</span>
+          </span>
         </div>
         <div class="flex items-center gap-1.5 text-slate-400 text-xs font-bold">
           <span id="aud-historico-toggle-txt" class="text-[11px] text-slate-500">Colapsar</span>
@@ -371,21 +373,30 @@
         </div>
       </div>
       <div id="aud-historico-body" class="p-4 space-y-4">
-        <div class="flex items-center justify-between gap-4 flex-wrap bg-gray-50 p-4 rounded-xl border border-gray-200">
-          <div class="w-full sm:w-auto">
-            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Filtrar por Tipo</label>
-            <select id="auditor-filtro-tipo" onchange="filtrarTablaHistorico()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none bg-white">
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-gray-50 p-4 rounded-xl border border-gray-200 items-end">
+          <div class="sm:col-span-5 relative">
+            <label class="block text-xs font-bold text-gray-700 uppercase mb-1 flex items-center justify-between">
+              <span>🏢 Tercero (Cliente / Proveedor)</span>
+            </label>
+            <div class="relative">
+              <input id="auditor-hist-tercero" type="text" placeholder="Buscar cliente o proveedor..." autocomplete="off" class="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-400 focus:border-rose-500 w-full bg-white font-semibold text-gray-800">
+              <div id="auditor-hist-tercero-list" class="ac-list hidden"></div>
+            </div>
+          </div>
+          <div class="sm:col-span-3">
+            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Filtrar por Tipo</label>
+            <select id="auditor-filtro-tipo" onchange="filtrarTablaHistorico()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none w-full bg-white font-medium">
               <option value="todos">Todos los tipos</option>
             </select>
           </div>
-          <div class="w-full sm:w-auto flex-1 max-w-xs">
-            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Filtrar por Número de Documento</label>
-            <input id="auditor-filtro-numero" type="text" oninput="filtrarTablaHistorico()" placeholder="Buscar número..." class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none w-full bg-white">
+          <div class="sm:col-span-4">
+            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Filtrar por Número de Documento</label>
+            <input id="auditor-filtro-numero" type="text" oninput="filtrarTablaHistorico()" placeholder="Buscar número..." class="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none w-full bg-white">
           </div>
         </div>
 
         <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-          <div class="overflow-x-auto max-h-60 overflow-y-auto">
+          <div class="overflow-x-auto max-h-72 overflow-y-auto">
             <table class="w-full text-left text-xs border-collapse">
               <thead>
                 <tr class="border-b text-gray-400">
@@ -677,24 +688,61 @@
     initDefaultAuditorTercero();
   }
 
+  function formatearFechaLocal(fechaStr) {
+    if (!fechaStr) return '—';
+    const soloFecha = String(fechaStr).split('T')[0].split(' ')[0].trim();
+    const parts = soloFecha.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      const [y, m, d] = parts;
+      return `${parseInt(d, 10)}/${parseInt(m, 10)}/${y}`;
+    }
+    return soloFecha;
+  }
+
+  function sincronizarTerceroAuditoria(id, nombre) {
+    const idVal = id ? String(id) : '';
+    const nomVal = nombre || '';
+    
+    const inpTopId = document.getElementById('auditor-tercero-id');
+    if (inpTopId) inpTopId.value = idVal;
+    
+    const inpTop = document.getElementById('auditor-tercero');
+    if (inpTop) inpTop.value = nomVal;
+    
+    const inpHist = document.getElementById('auditor-hist-tercero');
+    if (inpHist) inpHist.value = nomVal;
+    
+    const badgeTxt = document.getElementById('aud-historico-badge-txt');
+    if (badgeTxt) badgeTxt.textContent = nomVal || 'Seleccionar Tercero';
+    
+    const lblTop = document.getElementById('aud-tercero-nombre-lbl');
+    if (lblTop) lblTop.textContent = nomVal;
+    
+    const badgeTop = document.getElementById('selected-aud-tercero-badge');
+    if (badgeTop) {
+      if (nomVal) badgeTop.classList.remove('hidden');
+      else badgeTop.classList.add('hidden');
+    }
+  }
+
   async function initDefaultAuditorTercero() {
     try {
       const r = await fetch(`/api/inventario/terceros/buscar?q=Tercero Ocasional`);
       const matches = await r.json();
       const match = matches.find(m => m.nombre.toLowerCase() === 'tercero ocasional');
       if (match) {
-        document.getElementById('auditor-tercero-id').value = match.id;
-        document.getElementById('auditor-tercero').value = match.nombre;
-        document.getElementById('aud-tercero-nombre-lbl').textContent = match.nombre;
-        document.getElementById('selected-aud-tercero-badge').classList.remove('hidden');
-        cargarDocumentosTercero(match.id);
+        sincronizarTerceroAuditoria(match.id, match.nombre);
+        cargarDocumentosTercero(match.id, match.nombre);
       }
     } catch(e) {
       console.error('Error setting default auditor client:', e);
     }
   }
 
-  async function cargarDocumentosTercero(terceroId) {
+  async function cargarDocumentosTercero(terceroId, terceroNombre = null) {
+    if (terceroNombre) {
+      sincronizarTerceroAuditoria(terceroId, terceroNombre);
+    }
     const loader = document.getElementById('auditor-cargando');
     const panelHistorico = document.getElementById('auditor-panel-historico');
     const selectTipo = document.getElementById('auditor-filtro-tipo');
@@ -755,7 +803,7 @@
         <tr class="border-b hover:bg-gray-50">
           <td class="py-2.5 font-bold text-gray-700">${doc.tipo_documento.toUpperCase()}</td>
           <td class="py-2.5 font-mono text-gray-800">${doc.documento_numero}</td>
-          <td class="py-2.5 text-gray-500">${doc.fecha ? new Date(doc.fecha).toLocaleDateString('es-CO') : '—'}</td>
+          <td class="py-2.5 text-gray-600 font-medium">${formatearFechaLocal(doc.fecha)}</td>
           <td class="py-2.5 text-right font-semibold text-gray-700">$${doc.total.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
           <td class="py-2.5 text-right ${balanceClass}">${balanceStr}</td>
           <td class="py-2.5 text-center">
@@ -927,7 +975,7 @@
         cardInv.classList.remove('hidden');
         const item = d.inventario[0];
         const dateRaw = item.documento_fecha || (item.created_at ? item.created_at.split('T')[0] : null);
-        const invDate = dateRaw ? new Date(dateRaw + 'T00:00:00').toLocaleDateString('es-CO') : '—';
+        const invDate = formatearFechaLocal(dateRaw);
         const terceroLbl = provNombre ? ` | Tercero: ${provNombre}` : '';
         document.getElementById('aud-lbl-inv-documento').textContent = `Documento: ${tipo}-${numero}${terceroLbl} | Fecha: ${invDate}`;
         tbodyInv.innerHTML = d.inventario.map(item => `
@@ -967,7 +1015,7 @@
           badgeSaldo.classList.add('hidden');
         }
         
-        document.getElementById('aud-lbl-cc-concepto').textContent = `Fecha: ${d.contabilidad.fecha} | Concepto: ${d.contabilidad.descripcion || '—'}`;
+        document.getElementById('aud-lbl-cc-concepto').textContent = `Fecha: ${formatearFechaLocal(d.contabilidad.fecha)} | Concepto: ${d.contabilidad.descripcion || '—'}`;
         
         tbodyCont.innerHTML = d.contabilidad.asientos.map(e => `
           <tr class="border-b">
@@ -989,7 +1037,7 @@
       const tbodyVtas = document.getElementById('aud-tbody-ventas');
       if (d.ventas) {
         cardVtas.classList.remove('hidden');
-        const vDate = d.ventas.fecha ? new Date(d.ventas.fecha).toLocaleDateString('es-CO') : '—';
+        const vDate = formatearFechaLocal(d.ventas.fecha);
         document.getElementById('aud-lbl-venta-cliente').textContent = `Cliente: ${d.ventas.cliente_nombre || 'Mostrador'} | Fecha: ${vDate} | Pago: ${d.ventas.metodo_pago || '—'}`;
         
         const badgeEst = document.getElementById('aud-badge-venta-estado');
@@ -1218,11 +1266,13 @@
   });
 
   setupRemoteAC('auditor-tercero', 'auditor-tercero-list', ({id, nombre}) => {
-    document.getElementById('auditor-tercero-id').value = id;
-    document.getElementById('auditor-tercero').value = nombre;
-    document.getElementById('aud-tercero-nombre-lbl').textContent = nombre;
-    document.getElementById('selected-aud-tercero-badge').classList.remove('hidden');
-    cargarDocumentosTercero(id);
+    sincronizarTerceroAuditoria(id, nombre);
+    cargarDocumentosTercero(id, nombre);
+  });
+
+  setupRemoteAC('auditor-hist-tercero', 'auditor-hist-tercero-list', ({id, nombre}) => {
+    sincronizarTerceroAuditoria(id, nombre);
+    cargarDocumentosTercero(id, nombre);
   });
 
   setupRemoteAC('aud-edit-tercero', 'aud-edit-tercero-list', ({id, nombre}) => {

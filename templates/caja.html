@@ -321,9 +321,14 @@
                     <span id="flash-doc-badge" class="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded">Doc: --</span>
                 </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5">
+                <button type="button" onclick="abrirModalResumenVentaRapida()" 
+                        class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
+                        title="Ver resumen de ventas del turno y componentes omitidos">
+                    <span>📊</span> <span>Resumen</span>
+                </button>
                 <button type="button" onclick="abrirModalConfigVentaRapida()" 
-                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer"
+                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-xs cursor-pointer active:scale-95"
                         title="Configurar productos y opciones de Venta Rápida">
                     <span>⚙️</span> <span>Configurar</span>
                 </button>
@@ -373,31 +378,9 @@
                 <span id="flash-pago-seleccionado-label" class="text-xs font-bold text-indigo-600"></span>
             </div>
 
-            <!-- Botones Directos 100% -->
-            <div class="grid grid-cols-2 gap-2.5">
-                <button type="button" id="btn-pago-directo-efectivo" onclick="seleccionarPagoDirectoFlash('efectivo')"
-                        class="p-3.5 rounded-2xl border-2 border-emerald-500 bg-emerald-50/60 hover:bg-emerald-100/70 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer">
-                    <div class="flex items-center justify-between">
-                        <span class="text-2xl">💵</span>
-                        <span class="text-[10px] font-black uppercase tracking-wider bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">100%</span>
-                    </div>
-                    <div class="mt-1">
-                        <span class="text-xs font-extrabold text-gray-800 block">Efectivo</span>
-                        <span id="flash-monto-directo-efectivo" class="text-xs font-bold font-mono text-emerald-700">$0</span>
-                    </div>
-                </button>
-
-                <button type="button" id="btn-pago-directo-banco" onclick="seleccionarPagoDirectoFlash('banco')"
-                        class="p-3.5 rounded-2xl border-2 border-gray-200 hover:border-blue-400 bg-white hover:bg-blue-50/40 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer">
-                    <div class="flex items-center justify-between">
-                        <span class="text-2xl" id="flash-banco-icono">📱</span>
-                        <span class="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-900 px-1.5 py-0.5 rounded">100%</span>
-                    </div>
-                    <div class="mt-1">
-                        <span id="flash-banco-nombre" class="text-xs font-extrabold text-gray-800 block truncate">Transferencia</span>
-                        <span id="flash-monto-directo-banco" class="text-xs font-bold font-mono text-blue-700">$0</span>
-                    </div>
-                </button>
+            <!-- Botones Directos 100% Dinámicos -->
+            <div id="flash-metodos-directos-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <!-- Se llena dinámicamente con Efectivo, Bancolombia, Nequi, etc. -->
             </div>
 
             <!-- Botón Toggle Pago Distribuido -->
@@ -437,13 +420,16 @@
                     </div>
                 </div>
 
-                <!-- Transferencia automática resultante -->
-                <div class="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
-                    <div class="flex items-center gap-1.5">
-                        <span id="flash-dist-banco-icono" class="text-base">📱</span>
-                        <span id="flash-dist-banco-nombre" class="text-xs font-bold text-gray-700">Transferencia</span>
+                <!-- Transferencia automática resultante con Selector de Cuenta -->
+                <div class="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span id="flash-dist-banco-icono" class="text-base shrink-0">📱</span>
+                        <select id="flash-dist-banco-select" onchange="cambiarMetodoDistribuidoFlash(this.value)"
+                                class="text-xs font-bold text-gray-700 bg-transparent outline-none cursor-pointer truncate max-w-[140px] sm:max-w-none">
+                            <!-- Se llena dinámicamente -->
+                        </select>
                     </div>
-                    <span id="flash-dist-banco-monto" class="text-sm font-black font-mono text-blue-700">$0</span>
+                    <span id="flash-dist-banco-monto" class="text-sm font-black font-mono text-blue-700 shrink-0">$0</span>
                 </div>
 
                 <!-- Validación de cuadre -->
@@ -750,14 +736,15 @@
                 </div>
             </div>
 
-            <!-- 2. Método de Transferencia / Banco predeterminado -->
+            <!-- 2. Método de pago predeterminado -->
             <div class="space-y-1 min-w-0">
                 <label class="text-xs font-black text-gray-800 block flex items-center gap-1">
-                    <span>2.</span> <span>Cuenta para Transferencia 100%:</span>
+                    <span>2.</span> <span>Forma de pago predeterminada (aparecerá de primero):</span>
                 </label>
                 <select id="config-flash-metodo-banco" class="w-full border border-gray-200 rounded-xl p-2 text-xs font-bold text-gray-800 bg-white focus:border-blue-500 min-w-0">
                     <!-- Opciones de métodos con cuenta contable activa -->
                 </select>
+                <p class="text-[10px] text-gray-400">El método elegido aparecerá de primero y preseleccionado para cada venta rápida.</p>
             </div>
 
             <!-- 3. Tipo de Documento Predeterminado -->
@@ -770,13 +757,24 @@
                 </select>
             </div>
 
-            <!-- 4. Impresión Ultra Flash Silenciosa -->
-            <div class="bg-amber-50/80 border border-amber-200 rounded-2xl p-2.5 space-y-1 min-w-0">
+            <!-- 4. Política fija ante faltantes de componentes -->
+            <div class="bg-amber-50/90 border border-amber-200/90 rounded-2xl p-2.5 space-y-1 min-w-0">
+                <div class="flex items-center gap-1.5 text-xs font-black text-amber-900">
+                    <span>🚫</span>
+                    <span>Faltantes de componentes en recetas:</span>
+                </div>
+                <p class="text-[11px] text-amber-800 leading-tight">
+                    <strong>Política Flash:</strong> Si un ingrediente no tiene stock, se <strong>omite automáticamente</strong> para no detener la venta ni desfasar el stock físico. Cada omisión se registra en el <strong>Resumen de Turno</strong>.
+                </p>
+            </div>
+
+            <!-- 5. Impresión Ultra Flash Silenciosa -->
+            <div class="bg-slate-50 border border-gray-200 rounded-2xl p-2.5 space-y-1 min-w-0">
                 <label class="flex items-start gap-2 cursor-pointer">
-                    <input type="checkbox" id="config-flash-silent" class="mt-0.5 rounded text-amber-600 focus:ring-amber-500 w-4 h-4 shrink-0">
+                    <input type="checkbox" id="config-flash-silent" class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 shrink-0">
                     <div class="text-xs min-w-0 flex-1">
-                        <span class="font-extrabold text-amber-900 block text-[11px] sm:text-xs">Facturación Ultra Flash Silenciosa</span>
-                        <span class="text-amber-700 text-[10px] sm:text-[11px] block leading-tight mt-0.5">
+                        <span class="font-extrabold text-gray-900 block text-[11px] sm:text-xs">Facturación Ultra Flash Silenciosa</span>
+                        <span class="text-gray-500 text-[10px] sm:text-[11px] block leading-tight mt-0.5">
                             Guarda y factura inmediatamente sin abrir ventana de impresión.
                         </span>
                     </div>
@@ -794,6 +792,86 @@
                     class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-sm transition cursor-pointer">
                 Guardar
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Resumen y Cierre de Turno de Venta Rápida -->
+<div id="modal-resumen-venta-rapida" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-2.5 sm:p-4 overflow-y-auto" onclick="if(event.target===this)cerrarModalResumenVentaRapida()">
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-[92vw] sm:max-w-lg p-4 sm:p-6 flex flex-col max-h-[90vh] my-auto box-border overflow-hidden" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-gray-150 pb-3 mb-3 shrink-0">
+            <div class="flex items-center gap-2 min-w-0">
+                <span class="text-2xl p-2 bg-indigo-50 text-indigo-700 rounded-2xl shrink-0">📊</span>
+                <div class="min-w-0">
+                    <h3 class="font-extrabold text-base sm:text-lg text-gray-900 leading-tight truncate">Resumen de Venta Rápida</h3>
+                    <p id="flash-resumen-fecha-inicio" class="text-[10px] sm:text-[11px] text-gray-500 truncate">Sesión iniciada hoy</p>
+                </div>
+            </div>
+            <button onclick="cerrarModalResumenVentaRapida()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 shrink-0">&times;</button>
+        </div>
+
+        <div class="overflow-y-auto space-y-4 flex-1 pr-1 custom-scrollbar min-w-0">
+            <!-- Tarjeta Gran Total Recaudado -->
+            <div class="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl p-4 shadow-md flex items-center justify-between">
+                <div>
+                    <span class="text-[11px] uppercase tracking-wider text-indigo-200 font-bold block">Gran Total Recaudado</span>
+                    <span id="flash-resumen-gran-total" class="text-2xl sm:text-3xl font-black font-mono block mt-0.5">$0</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-[11px] uppercase tracking-wider text-indigo-200 font-bold block">Ventas Realizadas</span>
+                    <span id="flash-resumen-total-ventas-badge" class="text-xl sm:text-2xl font-black font-mono block mt-0.5">0</span>
+                </div>
+            </div>
+
+            <!-- Desglose por Métodos de Pago -->
+            <div class="space-y-1.5 min-w-0">
+                <h4 class="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>💳</span> <span>Recaudo por Métodos de Pago</span>
+                </h4>
+                <div id="flash-resumen-metodos-grid" class="grid grid-cols-2 gap-2">
+                    <!-- Dinámico -->
+                </div>
+            </div>
+
+            <!-- Desglose por Productos Vendidos -->
+            <div class="space-y-1.5 min-w-0">
+                <h4 class="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🥪</span> <span>Productos Vendidos</span>
+                </h4>
+                <div id="flash-resumen-productos-lista" class="border border-gray-200 rounded-2xl divide-y divide-gray-100 bg-gray-50/50 max-h-48 overflow-y-auto">
+                    <!-- Dinámico -->
+                </div>
+            </div>
+
+            <!-- Sección Componentes Omitidos por Faltantes de Inventario -->
+            <div class="space-y-1.5 min-w-0">
+                <h4 class="text-xs font-black text-rose-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🚫</span> <span>Componentes Omitidos por Falta de Stock</span>
+                </h4>
+                <div id="flash-resumen-omitidos-lista" class="border border-rose-200 bg-rose-50/50 rounded-2xl p-2.5 text-xs text-rose-900 space-y-1.5 max-h-40 overflow-y-auto">
+                    <!-- Dinámico -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Acciones Inferiores -->
+        <div class="pt-3 border-t border-gray-150 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mt-2 shrink-0">
+            <button type="button" onclick="reiniciarSesionVentaRapida()" 
+                    class="py-2.5 px-3 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 font-bold text-xs flex items-center gap-1 transition cursor-pointer active:scale-95"
+                    title="Reiniciar contadores para iniciar un nuevo turno">
+                <span>🔄</span> <span>Reiniciar Turno</span>
+            </button>
+            <div class="flex items-center gap-2 flex-1 sm:flex-none justify-end">
+                <button type="button" onclick="imprimirResumenVentaRapida()" 
+                        class="flex-1 sm:flex-none py-2.5 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-sm flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95">
+                    <span>🖨️</span> <span>Imprimir Resumen</span>
+                </button>
+                <button type="button" onclick="cerrarModalResumenVentaRapida()" 
+                        class="py-2.5 px-4 rounded-xl border border-gray-300 text-gray-700 font-bold text-xs hover:bg-gray-50 transition cursor-pointer">
+                    Cerrar
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -831,11 +909,111 @@ let modoCajaActivo = localStorage.getItem('tuctuc_caja_modo_' + TERCERO_ID) || '
 let configVentaRapida = null;
 let pedidoFlash = {}; // { [productoId]: cantidad }
 let pagoFlash = {
-    tipo: 'efectivo', // 'efectivo' | 'banco' | 'distribuido'
+    tipo: 'directo', // 'directo' | 'distribuido'
+    metodoCodigo: 'efectivo', // código del método seleccionado para pago 100%
     efectivo: 0,
     banco: 0,
-    bancoCodigo: ''
+    distMetodoCodigo: '' // código del método digital en pago mixto
 };
+
+// Sesión / Turno acumulado de Venta Rápida
+let sessionVentaRapida = null;
+
+function getFlashSessionStorageKey() {
+    const centroId = CENTRO_ACTIVO ? CENTRO_ACTIVO.id : 1;
+    return `tuctuc_flash_session_${TERCERO_ID}_${centroId}`;
+}
+
+function cargarSesionVentaRapida() {
+    try {
+        const raw = localStorage.getItem(getFlashSessionStorageKey());
+        if (raw) {
+            sessionVentaRapida = JSON.parse(raw);
+        }
+    } catch (e) {
+        console.warn('Error cargando sesión flash:', e);
+    }
+    if (!sessionVentaRapida || !sessionVentaRapida.fechaInicio) {
+        sessionVentaRapida = {
+            fechaInicio: new Date().toISOString(),
+            ventasCount: 0,
+            granTotal: 0,
+            productos: {}, // { [id]: { id, nombre, cantidad, total } }
+            metodosPago: {}, // { [codigo]: { codigo, nombre, icono, total } }
+            componentesOmitidos: {} // { [compId]: { id, nombre, cantidadOmitida, productosNombres: [] } }
+        };
+    }
+}
+
+function guardarSesionVentaRapida() {
+    try {
+        if (sessionVentaRapida) {
+            localStorage.setItem(getFlashSessionStorageKey(), JSON.stringify(sessionVentaRapida));
+        }
+    } catch (e) {
+        console.warn('Error guardando sesión flash:', e);
+    }
+}
+
+function registrarVentaEnSesionFlash(items, pagos, omitidos = []) {
+    cargarSesionVentaRapida();
+    sessionVentaRapida.ventasCount = (sessionVentaRapida.ventasCount || 0) + 1;
+
+    // Sumar items
+    items.forEach(it => {
+        const pId = String(it.producto_id);
+        const sub = (it.precio_unitario || 0) * (it.cantidad || 1);
+        sessionVentaRapida.granTotal = (sessionVentaRapida.granTotal || 0) + sub;
+
+        if (!sessionVentaRapida.productos[pId]) {
+            sessionVentaRapida.productos[pId] = {
+                id: it.producto_id,
+                nombre: it.nombre_producto,
+                cantidad: 0,
+                total: 0
+            };
+        }
+        sessionVentaRapida.productos[pId].cantidad += (it.cantidad || 1);
+        sessionVentaRapida.productos[pId].total += sub;
+    });
+
+    // Sumar pagos
+    pagos.forEach(p => {
+        const cod = p.codigo || 'efectivo';
+        if (!sessionVentaRapida.metodosPago[cod]) {
+            const mInfo = metodosDisponibles.find(m => m.codigo === cod) || {};
+            sessionVentaRapida.metodosPago[cod] = {
+                codigo: cod,
+                nombre: p.nombre || mInfo.nombre || cod,
+                icono: mInfo.icono || (cod === 'efectivo' ? '💵' : '📱'),
+                total: 0
+            };
+        }
+        sessionVentaRapida.metodosPago[cod].total += (parseFloat(p.monto) || 0);
+    });
+
+    // Registrar componentes omitidos si hubo faltantes
+    if (omitidos && omitidos.length > 0) {
+        omitidos.forEach(om => {
+            const cId = String(om.componente_id);
+            if (!sessionVentaRapida.componentesOmitidos[cId]) {
+                sessionVentaRapida.componentesOmitidos[cId] = {
+                    id: om.componente_id,
+                    nombre: om.componente_nombre,
+                    cantidadOmitida: 0,
+                    productosAfectados: {}
+                };
+            }
+            sessionVentaRapida.componentesOmitidos[cId].cantidadOmitida += 1;
+            if (om.producto_nombre) {
+                sessionVentaRapida.componentesOmitidos[cId].productosAfectados[om.producto_nombre] = 
+                    (sessionVentaRapida.componentesOmitidos[cId].productosAfectados[om.producto_nombre] || 0) + 1;
+            }
+        });
+    }
+
+    guardarSesionVentaRapida();
+}
 
 function cambiarModoCaja(modo) {
     modoCajaActivo = modo;
@@ -883,7 +1061,7 @@ function cargarConfigVentaRapida() {
     if (!configVentaRapida) {
         configVentaRapida = {
             productosIds: [],
-            metodoBancoCodigo: '',
+            metodoBancoCodigo: 'efectivo',
             tipoDocId: null,
             silentPrint: true
         };
@@ -908,18 +1086,30 @@ function getProductosFlashList() {
     return productos.slice(0, 4);
 }
 
-function getMetodoBancoActivo() {
-    const metodosConCuenta = metodosDisponibles.filter(m => m.tiene_cuenta_contable && m.codigo !== 'efectivo');
-    if (configVentaRapida && configVentaRapida.metodoBancoCodigo) {
-        const found = metodosDisponibles.find(m => m.codigo === configVentaRapida.metodoBancoCodigo);
-        if (found) return found;
+function getMetodosFlashDisponibles() {
+    if (!metodosDisponibles || !metodosDisponibles.length) {
+        return [{ nombre: 'Efectivo', codigo: 'efectivo', icono: '💵', tiene_cuenta_contable: true }];
     }
-    if (metodosConCuenta.length > 0) {
-        return metodosConCuenta[0];
+    // Filtrar solo métodos con cuenta contable activa (o todos si ninguno está marcado)
+    const conCuenta = metodosDisponibles.filter(m => m.tiene_cuenta_contable);
+    const lista = conCuenta.length ? [...conCuenta] : [...metodosDisponibles];
+
+    // Ordenar de primero el método seleccionado como predeterminado en la configuración
+    const predeterminado = configVentaRapida ? configVentaRapida.metodoBancoCodigo : 'efectivo';
+    if (predeterminado) {
+        lista.sort((a, b) => {
+            if (a.codigo === predeterminado) return -1;
+            if (b.codigo === predeterminado) return 1;
+            return 0;
+        });
     }
-    const noEfectivo = metodosDisponibles.find(m => m.codigo !== 'efectivo');
-    if (noEfectivo) return noEfectivo;
-    return { codigo: 'transferencia', nombre: 'Transferencia', icono: '📱', tiene_cuenta_contable: true };
+    return lista;
+}
+
+function getMetodosDigitalesFlash() {
+    const todos = getMetodosFlashDisponibles();
+    const digitales = todos.filter(m => m.codigo !== 'efectivo');
+    return digitales.length ? digitales : todos;
 }
 
 function renderProductosFlash() {
@@ -998,7 +1188,15 @@ function cambiarCantidadFlash(prodId, delta) {
 
 function reiniciarPedidoFlash() {
     pedidoFlash = {};
-    pagoFlash = { tipo: 'efectivo', efectivo: 0, banco: 0, bancoCodigo: '' };
+    const metodos = getMetodosFlashDisponibles();
+    const defaultCod = (metodos.length > 0) ? metodos[0].codigo : 'efectivo';
+    pagoFlash = {
+        tipo: 'directo',
+        metodoCodigo: defaultCod,
+        efectivo: 0,
+        banco: 0,
+        distMetodoCodigo: ''
+    };
     renderProductosFlash();
     actualizarTotalesFlash();
 }
@@ -1044,6 +1242,73 @@ function getTotalesFlash() {
     return { total, cantItems };
 }
 
+function renderMetodosDirectosFlash(totalFormatted) {
+    const grid = document.getElementById('flash-metodos-directos-grid');
+    if (!grid) return;
+
+    const metodos = getMetodosFlashDisponibles();
+    if (!pagoFlash.metodoCodigo || !metodos.some(m => m.codigo === pagoFlash.metodoCodigo)) {
+        pagoFlash.metodoCodigo = metodos[0].codigo;
+    }
+
+    grid.innerHTML = metodos.map(m => {
+        const isSelected = (pagoFlash.tipo === 'directo' && pagoFlash.metodoCodigo === m.codigo);
+        const borderClass = isSelected
+            ? 'border-indigo-600 bg-indigo-50/70 shadow-sm ring-2 ring-indigo-400/40 text-indigo-950'
+            : 'border-gray-200 hover:border-gray-300 bg-white text-gray-800';
+
+        const badgeColor = isSelected
+            ? 'bg-indigo-600 text-white'
+            : 'bg-gray-100 text-gray-700';
+
+        return `
+            <button type="button" onclick="seleccionarMetodoDirectoFlash('${m.codigo}')"
+                    class="p-3.5 rounded-2xl border-2 ${borderClass} text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer">
+                <div class="flex items-center justify-between">
+                    <span class="text-2xl">${m.icono || '💳'}</span>
+                    <span class="text-[10px] font-black uppercase tracking-wider ${badgeColor} px-1.5 py-0.5 rounded">100%</span>
+                </div>
+                <div class="mt-1">
+                    <span class="text-xs font-extrabold block truncate">${m.nombre}</span>
+                    <span class="text-xs font-bold font-mono text-indigo-700">${totalFormatted}</span>
+                </div>
+            </button>
+        `;
+    }).join('');
+}
+
+function renderSelectorDistribuidoFlash() {
+    const sel = document.getElementById('flash-dist-banco-select');
+    const ico = document.getElementById('flash-dist-banco-icono');
+    if (!sel) return;
+
+    const digitales = getMetodosDigitalesFlash();
+    if (!pagoFlash.distMetodoCodigo || !digitales.some(d => d.codigo === pagoFlash.distMetodoCodigo)) {
+        pagoFlash.distMetodoCodigo = digitales[0].codigo;
+    }
+
+    sel.innerHTML = digitales.map(d => `
+        <option value="${d.codigo}" ${pagoFlash.distMetodoCodigo === d.codigo ? 'selected' : ''}>
+            ${d.icono || '📱'} ${d.nombre}
+        </option>
+    `).join('');
+
+    const activo = digitales.find(d => d.codigo === pagoFlash.distMetodoCodigo) || digitales[0];
+    if (ico && activo) {
+        ico.textContent = activo.icono || '📱';
+    }
+}
+
+function cambiarMetodoDistribuidoFlash(codigo) {
+    pagoFlash.distMetodoCodigo = codigo;
+    const digitales = getMetodosDigitalesFlash();
+    const activo = digitales.find(d => d.codigo === codigo);
+    const ico = document.getElementById('flash-dist-banco-icono');
+    if (ico && activo) {
+        ico.textContent = activo.icono || '📱';
+    }
+}
+
 function actualizarTotalesFlash() {
     const { total, cantItems } = getTotalesFlash();
     const formattedTotal = '$' + total.toLocaleString('es-CO');
@@ -1060,31 +1325,14 @@ function actualizarTotalesFlash() {
         btnListo.innerHTML = `<span>¡Listo! (${formattedTotal})</span> <span>➡️</span>`;
     }
 
-    // Actualizar banco nombre e icono en Paso 2
-    const bancoMetodo = getMetodoBancoActivo();
-    const bancoIco = document.getElementById('flash-banco-icono');
-    const bancoNom = document.getElementById('flash-banco-nombre');
-    const distBancoIco = document.getElementById('flash-dist-banco-icono');
-    const distBancoNom = document.getElementById('flash-dist-banco-nombre');
+    // Paso 2: Renderizar Botones Directos Dinámicos y Selector Distribuido
+    renderMetodosDirectosFlash(formattedTotal);
+    renderSelectorDistribuidoFlash();
 
-    if (bancoIco) bancoIco.textContent = bancoMetodo.icono || '📱';
-    if (bancoNom) bancoNom.textContent = bancoMetodo.nombre || 'Transferencia';
-    if (distBancoIco) distBancoIco.textContent = bancoMetodo.icono || '📱';
-    if (distBancoNom) distBancoNom.textContent = bancoMetodo.nombre || 'Transferencia';
-
-    // Montos directos Paso 2
-    const montoDirEf = document.getElementById('flash-monto-directo-efectivo');
-    const montoDirBn = document.getElementById('flash-monto-directo-banco');
-    if (montoDirEf) montoDirEf.textContent = formattedTotal;
-    if (montoDirBn) montoDirBn.textContent = formattedTotal;
-
-    // Actualizar montos según el modo de pago actual
-    if (pagoFlash.tipo === 'efectivo') {
-        pagoFlash.efectivo = total;
-        pagoFlash.banco = 0;
-    } else if (pagoFlash.tipo === 'banco') {
+    // Actualizar montos según modo
+    if (pagoFlash.tipo === 'directo') {
         pagoFlash.efectivo = 0;
-        pagoFlash.banco = total;
+        pagoFlash.banco = 0;
     } else if (pagoFlash.tipo === 'distribuido') {
         if (pagoFlash.efectivo > total) {
             pagoFlash.efectivo = total;
@@ -1118,35 +1366,26 @@ function actualizarTotalesFlash() {
 }
 
 function renderEstilosBotonesPago() {
-    const btnEf = document.getElementById('btn-pago-directo-efectivo');
-    const btnBn = document.getElementById('btn-pago-directo-banco');
     const btnDist = document.getElementById('btn-toggle-distribuido');
     const panelDist = document.getElementById('panel-pago-distribuido');
     const arrowDist = document.getElementById('flash-distribuido-arrow');
     const lblPago = document.getElementById('flash-pago-seleccionado-label');
 
-    if (pagoFlash.tipo === 'efectivo') {
-        if (btnEf) btnEf.className = "p-3.5 rounded-2xl border-2 border-emerald-500 bg-emerald-50/70 shadow-sm text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer ring-2 ring-emerald-400/40";
-        if (btnBn) btnBn.className = "p-3.5 rounded-2xl border-2 border-gray-200 hover:border-blue-400 bg-white hover:bg-blue-50/40 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer";
+    if (pagoFlash.tipo === 'directo') {
         if (btnDist) btnDist.className = "w-full p-3 rounded-2xl border-2 border-gray-200 hover:border-amber-400 bg-gray-50 hover:bg-amber-50/40 text-gray-800 font-extrabold text-xs flex items-center justify-between transition active:scale-98 cursor-pointer";
         if (panelDist) panelDist.classList.add('hidden');
         if (arrowDist) arrowDist.textContent = '▼';
-        if (lblPago) lblPago.textContent = '💵 Efectivo 100%';
-    } else if (pagoFlash.tipo === 'banco') {
-        if (btnEf) btnEf.className = "p-3.5 rounded-2xl border-2 border-gray-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/40 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer";
-        if (btnBn) btnBn.className = "p-3.5 rounded-2xl border-2 border-blue-500 bg-blue-50/70 shadow-sm text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer ring-2 ring-blue-400/40";
-        if (btnDist) btnDist.className = "w-full p-3 rounded-2xl border-2 border-gray-200 hover:border-amber-400 bg-gray-50 hover:bg-amber-50/40 text-gray-800 font-extrabold text-xs flex items-center justify-between transition active:scale-98 cursor-pointer";
-        if (panelDist) panelDist.classList.add('hidden');
-        if (arrowDist) arrowDist.textContent = '▼';
-        const bancoMetodo = getMetodoBancoActivo();
-        if (lblPago) lblPago.textContent = `${bancoMetodo.icono || '📱'} ${bancoMetodo.nombre} 100%`;
+
+        const metodos = getMetodosFlashDisponibles();
+        const met = metodos.find(m => m.codigo === pagoFlash.metodoCodigo) || metodos[0];
+        if (lblPago && met) {
+            lblPago.textContent = `${met.icono || '💳'} ${met.nombre} 100%`;
+        }
     } else if (pagoFlash.tipo === 'distribuido') {
-        if (btnEf) btnEf.className = "p-3.5 rounded-2xl border-2 border-gray-200 hover:border-emerald-400 bg-white hover:bg-emerald-50/40 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer opacity-70";
-        if (btnBn) btnBn.className = "p-3.5 rounded-2xl border-2 border-gray-200 hover:border-blue-400 bg-white hover:bg-blue-50/40 text-left transition active:scale-98 relative flex flex-col justify-between min-h-[78px] cursor-pointer opacity-70";
         if (btnDist) btnDist.className = "w-full p-3 rounded-2xl border-2 border-amber-500 bg-amber-50/80 shadow-sm text-gray-900 font-black text-xs flex items-center justify-between transition active:scale-98 cursor-pointer ring-2 ring-amber-400/40";
         if (panelDist) panelDist.classList.remove('hidden');
         if (arrowDist) arrowDist.textContent = '▲';
-        if (lblPago) lblPago.textContent = '⚡ Distribuido';
+        if (lblPago) lblPago.textContent = '⚡ Pago Distribuido';
     }
 }
 
@@ -1164,8 +1403,9 @@ function irAPaso3Flash() {
     }
 }
 
-function seleccionarPagoDirectoFlash(tipo) {
-    pagoFlash.tipo = tipo;
+function seleccionarMetodoDirectoFlash(codigo) {
+    pagoFlash.tipo = 'directo';
+    pagoFlash.metodoCodigo = codigo;
     actualizarTotalesFlash();
     irAPaso3Flash();
 }
@@ -1243,18 +1483,20 @@ async function ejecutarFacturacionFlash() {
         return;
     }
 
-    const bancoMetodo = getMetodoBancoActivo();
     let pagos = [];
-    if (pagoFlash.tipo === 'efectivo') {
-        pagos = [{ codigo: 'efectivo', nombre: 'Efectivo', monto: total }];
-    } else if (pagoFlash.tipo === 'banco') {
-        pagos = [{ codigo: bancoMetodo.codigo, nombre: bancoMetodo.nombre, monto: total }];
+    const metodos = getMetodosFlashDisponibles();
+
+    if (pagoFlash.tipo === 'directo') {
+        const met = metodos.find(m => m.codigo === pagoFlash.metodoCodigo) || metodos[0];
+        pagos = [{ codigo: met.codigo, nombre: met.nombre, monto: total }];
     } else if (pagoFlash.tipo === 'distribuido') {
         if (pagoFlash.efectivo > 0) {
             pagos.push({ codigo: 'efectivo', nombre: 'Efectivo', monto: pagoFlash.efectivo });
         }
         if (pagoFlash.banco > 0) {
-            pagos.push({ codigo: bancoMetodo.codigo, nombre: bancoMetodo.nombre, monto: pagoFlash.banco });
+            const digitales = getMetodosDigitalesFlash();
+            const digMet = digitales.find(d => d.codigo === pagoFlash.distMetodoCodigo) || digitales[0];
+            pagos.push({ codigo: digMet.codigo, nombre: digMet.nombre, monto: pagoFlash.banco });
         }
     }
 
@@ -1325,60 +1567,55 @@ async function ejecutarFacturacionFlash() {
         const d = await r.json();
 
         if (d.ok) {
-            const numDocTxt = d.numero_documento ? ` (${d.numero_documento})` : ` (#${d.pedido_id})`;
-            toast(`⚡ ¡Venta${numDocTxt} registrada con éxito!`);
+            registrarVentaEnSesionFlash(items, pagos, []);
+            finalizarFacturacionFlashExitosa(d, total, items, pagos);
+        } else if (d.error === 'insufficient_stock') {
+            // Política Flash: Omitir componentes faltantes automáticamente y reintentar de inmediato
+            const excluidosAuto = [];
+            const omitidosInfo = [];
 
-            const esSilent = configVentaRapida && (configVentaRapida.silentPrint !== false);
+            (d.shortages || []).forEach(s => {
+                if (s.final_products && s.final_products.length > 0) {
+                    s.final_products.forEach(fp => {
+                        if (fp.nombre !== "Venta Directa") {
+                            excluidosAuto.push({
+                                producto_id: fp.id,
+                                componente_id: s.producto_id
+                            });
+                            omitidosInfo.push({
+                                componente_id: s.producto_id,
+                                componente_nombre: s.nombre,
+                                producto_id: fp.id,
+                                producto_nombre: fp.nombre
+                            });
+                        }
+                    });
+                }
+            });
 
-            if (!esSilent) {
-                const iva = items.reduce((s, i) => {
-                    const p = productos.find(x => x.id === i.producto_id);
-                    if (!p || !p.iva_pct) return s;
-                    return s + (i.precio_unitario * i.cantidad * p.iva_pct / (100 + p.iva_pct));
-                }, 0);
-                ultimoRecibo = {
-                    total,
-                    iva: Math.round(iva),
-                    subtotal: Math.round(total - iva),
-                    pagos,
-                    metodo: pagos.length ? pagos.map(p => p.nombre).join(' + ') : 'Efectivo',
-                    cliente: 'Venta Flash',
-                    telefono: '',
-                    cajero: cajeroNombre,
-                    pedido_id: d.pedido_id || null,
-                    numero_documento: d.numero_documento || null,
-                    fecha: new Date().toISOString(),
-                    tienda: TIENDA_NOMBRE,
-                    items: items.map(i => ({...i, precio: i.precio_unitario}))
-                };
-                publicarPantallaCliente('cobrada', {...ultimoRecibo, telefono: ''});
-                mostrarRecibo();
-            } else {
-                publicarPantallaCliente('cobrada', {
-                    total,
-                    pagos,
-                    items: items.map(i => ({...i, precio: i.precio_unitario})),
-                    pedido_id: d.pedido_id,
-                    numero_documento: d.numero_documento
-                });
+            if (excluidosAuto.length > 0) {
+                payload.excluir_componentes = excluidosAuto;
+                try {
+                    const r2 = await fetch(`/api/caja/${SLUG}/pedido`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(payload)
+                    });
+                    const d2 = await r2.json();
+                    if (d2.ok) {
+                        registrarVentaEnSesionFlash(items, pagos, omitidosInfo);
+                        finalizarFacturacionFlashExitosa(d2, total, items, pagos, omitidosInfo);
+                        return;
+                    }
+                } catch (e2) {
+                    console.error('Error en reintento automático flash:', e2);
+                }
             }
 
-            reiniciarPedidoFlash();
-            if (btn) btn.disabled = true;
-            if (label) label.textContent = 'FACTURAR ($0)';
-
-            const elPaso1 = document.getElementById('paso-1-productos');
-            if (elPaso1) elPaso1.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-            cargarProductos();
-            cargarTiposDocumento();
-        } else if (d.error === 'insufficient_stock') {
-            shortagesList = d.shortages;
-            document.getElementById('modal-alerta-stock').classList.remove('hidden');
-            renderShortages(d.shortages);
+            // Si es un producto directo sin receta y no hay stock
+            toast('⚠️ Stock insuficiente en producto directo. Revisa el inventario.', true);
             if (btn) btn.disabled = false;
             if (label) label.textContent = `FACTURAR (${'$' + total.toLocaleString('es-CO')})`;
-            toast('⚠️ Stock insuficiente. Revisa la ventana de alerta.', true);
         } else {
             toast(d.error || 'Error al registrar la venta', true);
             if (btn) btn.disabled = false;
@@ -1391,6 +1628,235 @@ async function ejecutarFacturacionFlash() {
         if (label) label.textContent = `FACTURAR (${'$' + total.toLocaleString('es-CO')})`;
     }
 }
+
+function finalizarFacturacionFlashExitosa(d, total, items, pagos, omitidos = []) {
+    const btn = document.getElementById('btn-ejecutar-flash');
+    const label = document.getElementById('btn-flash-label');
+
+    const numDocTxt = d.numero_documento ? ` (${d.numero_documento})` : ` (#${d.pedido_id})`;
+    const omitidosTxt = (omitidos && omitidos.length > 0) ? ' • Insumos faltantes omitidos' : '';
+    toast(`⚡ ¡Venta${numDocTxt} registrada!${omitidosTxt}`);
+
+    const esSilent = configVentaRapida && (configVentaRapida.silentPrint !== false);
+
+    if (!esSilent) {
+        const iva = items.reduce((s, i) => {
+            const p = productos.find(x => x.id === i.producto_id);
+            if (!p || !p.iva_pct) return s;
+            return s + (i.precio_unitario * i.cantidad * p.iva_pct / (100 + p.iva_pct));
+        }, 0);
+        ultimoRecibo = {
+            total,
+            iva: Math.round(iva),
+            subtotal: Math.round(total - iva),
+            pagos,
+            metodo: pagos.length ? pagos.map(p => p.nombre).join(' + ') : 'Efectivo',
+            cliente: 'Venta Flash',
+            telefono: '',
+            cajero: cajeroNombre,
+            pedido_id: d.pedido_id || null,
+            numero_documento: d.numero_documento || null,
+            fecha: new Date().toISOString(),
+            tienda: TIENDA_NOMBRE,
+            items: items.map(i => ({...i, precio: i.precio_unitario}))
+        };
+        publicarPantallaCliente('cobrada', {...ultimoRecibo, telefono: ''});
+        mostrarRecibo();
+    } else {
+        publicarPantallaCliente('cobrada', {
+            total,
+            pagos,
+            items: items.map(i => ({...i, precio: i.precio_unitario})),
+            pedido_id: d.pedido_id,
+            numero_documento: d.numero_documento
+        });
+    }
+
+    reiniciarPedidoFlash();
+    if (btn) btn.disabled = true;
+    if (label) label.textContent = 'FACTURAR ($0)';
+
+    const elPaso1 = document.getElementById('paso-1-productos');
+    if (elPaso1) elPaso1.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    cargarProductos();
+    cargarTiposDocumento();
+}
+
+// ── MODAL RESUMEN Y CIERRE DE VENTA RÁPIDA ───────────────────────────────────
+
+function abrirModalResumenVentaRapida() {
+    cargarSesionVentaRapida();
+    const sess = sessionVentaRapida;
+
+    // Fecha inicio
+    const lblFecha = document.getElementById('flash-resumen-fecha-inicio');
+    if (lblFecha) {
+        const d = new Date(sess.fechaInicio);
+        lblFecha.textContent = `Turno iniciado: ${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    // Totales
+    const elGranTotal = document.getElementById('flash-resumen-gran-total');
+    const elTotalVentas = document.getElementById('flash-resumen-total-ventas-badge');
+    if (elGranTotal) elGranTotal.textContent = '$' + (sess.granTotal || 0).toLocaleString('es-CO');
+    if (elTotalVentas) elTotalVentas.textContent = sess.ventasCount || 0;
+
+    // Desglose Métodos de Pago
+    const metGrid = document.getElementById('flash-resumen-metodos-grid');
+    if (metGrid) {
+        const metList = Object.values(sess.metodosPago || {});
+        if (!metList.length) {
+            metGrid.innerHTML = `<div class="col-span-2 text-center text-xs text-gray-400 py-3 bg-gray-50 rounded-xl">Sin pagos registrados en este turno</div>`;
+        } else {
+            metGrid.innerHTML = metList.map(m => `
+                <div class="p-2.5 rounded-xl border border-gray-150 bg-gray-50 flex items-center justify-between">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-xl shrink-0">${m.icono || '💳'}</span>
+                        <span class="text-xs font-bold text-gray-800 truncate">${m.nombre}</span>
+                    </div>
+                    <span class="text-xs font-black font-mono text-gray-900 shrink-0">$${(m.total || 0).toLocaleString('es-CO')}</span>
+                </div>
+            `).join('');
+        }
+    }
+
+    // Desglose Productos
+    const prodListEl = document.getElementById('flash-resumen-productos-lista');
+    if (prodListEl) {
+        const prods = Object.values(sess.productos || {});
+        if (!prods.length) {
+            prodListEl.innerHTML = `<div class="text-center text-xs text-gray-400 py-4">No se han registrado productos vendidos aún</div>`;
+        } else {
+            prodListEl.innerHTML = prods.map(p => `
+                <div class="p-2.5 flex items-center justify-between gap-2 hover:bg-gray-100/50">
+                    <div class="min-w-0 flex-1">
+                        <span class="text-xs font-bold text-gray-900 block truncate">${p.nombre}</span>
+                        <span class="text-[10px] text-gray-400 font-semibold">${p.cantidad} unidad${p.cantidad !== 1 ? 'es' : ''}</span>
+                    </div>
+                    <span class="text-xs font-black font-mono text-indigo-700 shrink-0">$${(p.total || 0).toLocaleString('es-CO')}</span>
+                </div>
+            `).join('');
+        }
+    }
+
+    // Desglose Componentes Omitidos
+    const omitListEl = document.getElementById('flash-resumen-omitidos-lista');
+    if (omitListEl) {
+        const omits = Object.values(sess.componentesOmitidos || {});
+        if (!omits.length) {
+            omitListEl.innerHTML = `
+                <div class="text-center py-2.5 text-emerald-700 font-semibold flex items-center justify-center gap-1.5">
+                    <span>✓</span> <span>No hubo omisiones de ingredientes por falta de stock.</span>
+                </div>
+            `;
+        } else {
+            omitListEl.innerHTML = omits.map(o => {
+                const afectados = Object.entries(o.productosAfectados || {})
+                    .map(([nom, cant]) => `${cant}x ${nom}`)
+                    .join(', ');
+                return `
+                    <div class="p-2 bg-white rounded-xl border border-rose-200/80 flex items-center justify-between gap-2">
+                        <div class="min-w-0 flex-1">
+                            <span class="font-extrabold text-rose-900 block truncate">🚫 ${o.nombre}</span>
+                            ${afectados ? `<span class="text-[10px] text-rose-700 block truncate">Omitido en: ${afectados}</span>` : ''}
+                        </div>
+                        <span class="font-black font-mono text-rose-800 bg-rose-100 px-2 py-0.5 rounded-lg text-xs shrink-0">
+                            ${o.cantidadOmitida} omisión${o.cantidadOmitida !== 1 ? 'es' : ''}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    document.getElementById('modal-resumen-venta-rapida').classList.remove('hidden');
+}
+
+function cerrarModalResumenVentaRapida() {
+    document.getElementById('modal-resumen-venta-rapida').classList.add('hidden');
+}
+
+function reiniciarSesionVentaRapida() {
+    if (!confirm('¿Estás seguro de reiniciar los contadores de este turno de Venta Rápida?')) {
+        return;
+    }
+    sessionVentaRapida = {
+        fechaInicio: new Date().toISOString(),
+        ventasCount: 0,
+        granTotal: 0,
+        productos: {},
+        metodosPago: {},
+        componentesOmitidos: {}
+    };
+    guardarSesionVentaRapida();
+    abrirModalResumenVentaRapida();
+    toast('Turno de Venta Rápida reiniciado con éxito');
+}
+
+function imprimirResumenVentaRapida() {
+    const sess = sessionVentaRapida;
+    if (!sess) return;
+    const ahora = new Date().toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const fechaInic = new Date(sess.fechaInicio).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    let prodsHtml = Object.values(sess.productos || {}).map(p => `
+        <div class="linea">
+            <span>${p.cantidad}x ${p.nombre}</span>
+            <span>$${(p.total || 0).toLocaleString('es-CO')}</span>
+        </div>
+    `).join('');
+
+    let pagosHtml = Object.values(sess.metodosPago || {}).map(m => `
+        <div class="linea">
+            <span>${m.nombre}</span>
+            <span>$${(m.total || 0).toLocaleString('es-CO')}</span>
+        </div>
+    `).join('');
+
+    let omitHtml = '';
+    const omits = Object.values(sess.componentesOmitidos || {});
+    if (omits.length > 0) {
+        omitHtml = `
+            <div class="sep"></div>
+            <div class="centro" style="font-size:11px; font-weight:bold;">COMPONENTES OMITIDOS POR STOCK</div>
+            ${omits.map(o => `<div class="linea" style="font-size:10px; color:#555;"><span>* ${o.nombre}</span><span>${o.cantidadOmitida} veces</span></div>`).join('')}
+        `;
+    }
+
+    const html = `
+        <div class="ticket-seccion">
+            <div class="centro"><strong>${TIENDA_NOMBRE}</strong></div>
+            <div class="centro" style="font-size:13px; font-weight:900; margin:4px 0;">📊 RESUMEN VENTA RÁPIDA</div>
+            <div class="centro" style="font-size:10px;">Inicio Turno: ${fechaInic}</div>
+            <div class="centro" style="font-size:10px;">Cierre/Impresión: ${ahora}</div>
+            <div class="centro" style="font-size:10px;">Cajero: ${cajeroNombre || 'Caja'}</div>
+            <div class="sep-bold"></div>
+            <div class="centro" style="font-size:11px; font-weight:bold;">PRODUCTOS VENDIDOS</div>
+            ${prodsHtml || '<div class="centro" style="font-size:10px;">Sin ventas</div>'}
+            <div class="sep"></div>
+            <div class="centro" style="font-size:11px; font-weight:bold;">RECAUDO POR FORMA DE PAGO</div>
+            ${pagosHtml || '<div class="centro" style="font-size:10px;">Sin pagos</div>'}
+            <div class="sep-bold"></div>
+            <div class="linea total-line">
+                <span>TOTAL RECAUDADO</span>
+                <span>$${(sess.granTotal || 0).toLocaleString('es-CO')}</span>
+            </div>
+            <div class="linea" style="font-size:11px; margin-top:2px;">
+                <span>Total Ventas / Transacciones:</span>
+                <span>${sess.ventasCount || 0}</span>
+            </div>
+            ${omitHtml}
+            <div class="sep"></div>
+            <div class="centro" style="font-size:10px; margin-top:6px;">*** FIN RESUMEN TURNO ***</div>
+        </div>
+    `;
+
+    document.getElementById('ticket-print').innerHTML = html;
+    window.print();
+}
+
+// ── CONFIGURACIÓN MODAL ──────────────────────────────────────────────────────
 
 function abrirModalConfigVentaRapida() {
     cargarConfigVentaRapida();
@@ -1417,11 +1883,13 @@ function abrirModalConfigVentaRapida() {
     }
 
     if (selBanco) {
-        const metodosFiltrados = metodosDisponibles.filter(m => m.tiene_cuenta_contable && m.codigo !== 'efectivo');
-        const listaOpciones = metodosFiltrados.length ? metodosFiltrados : metodosDisponibles.filter(m => m.codigo !== 'efectivo');
+        const metodosConCuenta = metodosDisponibles.filter(m => m.tiene_cuenta_contable);
+        const listaOpciones = metodosConCuenta.length ? metodosConCuenta : metodosDisponibles;
+        const currentCode = configVentaRapida.metodoBancoCodigo || 'efectivo';
+
         selBanco.innerHTML = listaOpciones.map(m => `
-            <option value="${m.codigo}" ${configVentaRapida.metodoBancoCodigo === m.codigo ? 'selected' : ''}>
-                ${m.icono || '📱'} ${m.nombre}
+            <option value="${m.codigo}" ${currentCode === m.codigo ? 'selected' : ''}>
+                ${m.icono || '💳'} ${m.nombre}
             </option>
         `).join('');
     }
@@ -1455,7 +1923,7 @@ function guardarConfigVentaRapida() {
 
     configVentaRapida = {
         productosIds: prodIds,
-        metodoBancoCodigo: selBanco ? selBanco.value : '',
+        metodoBancoCodigo: selBanco ? selBanco.value : 'efectivo',
         tipoDocId: selDoc && selDoc.value ? parseInt(selDoc.value) : null,
         silentPrint: chkSilent ? chkSilent.checked : true
     };

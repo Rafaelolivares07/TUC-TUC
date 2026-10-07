@@ -1819,10 +1819,14 @@ def api_inventario_kardex(producto_id):
                    TO_CHAR(m.created_at, 'YYYY-MM-DD"T"HH24:MI:SS') AS created_at_iso,
                    TO_CHAR(m.documento_fecha, 'YYYY-MM-DD') AS documento_fecha_iso,
                    p_padre.nombre AS producto_padre_nombre,
-                   m.bodega
+                   m.bodega,
+                   m.presentacion_id,
+                   pres.nombre AS presentacion_nombre,
+                   pres.equivalencia AS presentacion_equivalencia
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
+            LEFT JOIN presentaciones pres ON pres.id = m.presentacion_id
             WHERE m.producto_id = %s {filtro_bodega_sql}
             ORDER BY COALESCE(m.documento_fecha, m.created_at::date) DESC, m.created_at DESC, m.id DESC LIMIT 300
         """, tuple(params_kardex)).fetchall()
@@ -1934,10 +1938,14 @@ def api_inventario_kardex_pdf(producto_id):
                    COALESCE(t.nombre, m.proveedor_nombre) AS proveedor_nombre,
                    TO_CHAR(m.documento_fecha, 'DD/MM/YY') || ' ' || TO_CHAR(m.created_at, 'HH24:MI') AS fecha,
                    TO_CHAR(m.documento_fecha, 'YYYY-MM-DD') AS documento_fecha_iso,
-                   p_padre.nombre AS producto_padre_nombre
+                   p_padre.nombre AS producto_padre_nombre,
+                   m.presentacion_id,
+                   pres.nombre AS presentacion_nombre,
+                   pres.equivalencia AS presentacion_equivalencia
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
+            LEFT JOIN presentaciones pres ON pres.id = m.presentacion_id
             WHERE m.producto_id = %s {filtro_bodega_sql}
             ORDER BY COALESCE(m.documento_fecha, m.created_at::date), m.created_at, m.id
         """, tuple(params_kardex)).fetchall()
@@ -8972,6 +8980,12 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
         segmentos = []
         if origen:
             segmentos.append('Origen: ' + _pdf_sanitize(origen))
+        pres_nom = m.get('presentacion_nombre')
+        if pres_nom and pres_nom.lower() != 'unidad':
+            equiv = float(m.get('presentacion_equivalencia') or 1)
+            cant_emp = (cant / equiv) if (equiv > 0 and cant) else None
+            cant_emp_str = f"{cant_emp:g} " if cant_emp else ''
+            segmentos.append(f'Empaque: {cant_emp_str}{_pdf_sanitize(pres_nom)}')
         nota_txt = _pdf_sanitize(m.get('notas') or '').strip()
         if nota_txt:
             segmentos.append('Nota: ' + nota_txt)

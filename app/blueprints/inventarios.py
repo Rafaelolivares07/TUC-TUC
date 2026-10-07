@@ -1558,15 +1558,20 @@ def api_inventario_tarjetas_reemplazar_componente(negocio_id):
         componente_destino_id = int(data.get('componente_destino_id') or 0)
         reemplazos = data.get('reemplazos') or []
 
-        if not componente_origen_id or not componente_destino_id:
-            return jsonify({'ok': False, 'error': 'Debe seleccionar el insumo actual y el insumo nuevo de reemplazo'}), 400
-        if componente_origen_id == componente_destino_id:
-            return jsonify({'ok': False, 'error': 'El insumo de reemplazo no puede ser el mismo'}), 400
+        if not componente_origen_id:
+            return jsonify({'ok': False, 'error': 'Debe seleccionar el insumo a modificar o reemplazar'}), 400
+        
+        # Si no se envía destino o es 0, se asume que se actualizan cantidades del mismo insumo
+        if not componente_destino_id:
+            componente_destino_id = componente_origen_id
+
         if not reemplazos:
             return jsonify({'ok': False, 'error': 'Debe seleccionar al menos una receta para actualizar'}), 400
 
         usuario_tercero_id = session.get('chat_tercero_id') or session['usuario_id']
         actualizados = 0
+
+        es_mismo_insumo = (componente_origen_id == componente_destino_id)
 
         for r in reemplazos:
             prod_id = int(r.get('producto_id') or 0)
@@ -1574,25 +1579,33 @@ def api_inventario_tarjetas_reemplazar_componente(negocio_id):
             if not prod_id or nueva_cant <= 0:
                 continue
 
-            # 1. Eliminar el componente viejo de esta receta
-            conn.execute("""
-                DELETE FROM tarjeta_estandar
-                WHERE producto_id = %s AND componente_id = %s
-            """, (prod_id, componente_origen_id))
+            if es_mismo_insumo:
+                # Actualizar directamente la cantidad del componente en la tarjeta estándar
+                conn.execute("""
+                    UPDATE tarjeta_estandar
+                    SET cantidad = %s, actualizado_en = NOW(), tercero_id = %s
+                    WHERE producto_id = %s AND componente_id = %s
+                """, (nueva_cant, usuario_tercero_id, prod_id, componente_origen_id))
+                actualizados += 1
+            else:
+                # Reemplazo por otro insumo: eliminar viejo e insertar/actualizar nuevo
+                conn.execute("""
+                    DELETE FROM tarjeta_estandar
+                    WHERE producto_id = %s AND componente_id = %s
+                """, (prod_id, componente_origen_id))
 
-            # 2. Insertar o actualizar el nuevo componente en la tarjeta estándar
-            conn.execute("""
-                INSERT INTO tarjeta_estandar (producto_id, componente_id, cantidad, tercero_id, creado_en, actualizado_en)
-                VALUES (%s, %s, %s, %s, NOW(), NOW())
-                ON CONFLICT (producto_id, componente_id) DO UPDATE
-                    SET cantidad = EXCLUDED.cantidad,
-                        actualizado_en = NOW(),
-                        tercero_id = EXCLUDED.tercero_id
-            """, (prod_id, componente_destino_id, nueva_cant, usuario_tercero_id))
-            actualizados += 1
+                conn.execute("""
+                    INSERT INTO tarjeta_estandar (producto_id, componente_id, cantidad, tercero_id, creado_en, actualizado_en)
+                    VALUES (%s, %s, %s, %s, NOW(), NOW())
+                    ON CONFLICT (producto_id, componente_id) DO UPDATE
+                        SET cantidad = EXCLUDED.cantidad,
+                            actualizado_en = NOW(),
+                            tercero_id = EXCLUDED.tercero_id
+                """, (prod_id, componente_destino_id, nueva_cant, usuario_tercero_id))
+                actualizados += 1
 
         conn.commit()
-        return jsonify({'ok': True, 'actualizados': actualizados})
+        return jsonify({'ok': True, 'actualizados': actualizados, 'es_mismo_insumo': es_mismo_insumo})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500

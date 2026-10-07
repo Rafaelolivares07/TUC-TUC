@@ -1898,13 +1898,13 @@ function abrirModalConfigVentaRapida() {
         contProd.innerHTML = productos.map(p => {
             const isChecked = seleccionados.includes(p.id);
             return `
-                <label class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-gray-150 hover:bg-emerald-50/40 cursor-pointer text-xs min-w-0">
-                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                <label class="flex items-center justify-between gap-2.5 p-2.5 rounded-xl bg-white border border-gray-150 hover:bg-emerald-50/40 cursor-pointer text-xs min-w-0">
+                    <div class="flex items-center gap-2.5 min-w-0 flex-1">
                         <input type="checkbox" name="cfg-flash-prod" value="${p.id}" ${isChecked ? 'checked' : ''} 
                                class="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 shrink-0">
-                        <span class="font-bold text-gray-800 truncate">${p.nombre}</span>
+                        <span class="font-bold text-gray-800 leading-snug break-words">${p.nombre}</span>
                     </div>
-                    <span class="font-mono text-gray-600 font-semibold shrink-0 text-[11px]">$${(p.precio || 0).toLocaleString('es-CO')}</span>
+                    <span class="font-mono text-gray-600 font-semibold shrink-0 text-[11px] ml-1">$${(p.precio || 0).toLocaleString('es-CO')}</span>
                 </label>
             `;
         }).join('');

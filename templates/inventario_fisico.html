@@ -145,6 +145,14 @@
                    class="w-20 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-mono font-extrabold text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-center">
           </div>
         </div>
+        <div class="flex flex-col items-end justify-end">
+          <span class="text-[10px] text-gray-400 font-extrabold uppercase tracking-widest opacity-0 select-none hidden sm:block">Calculadora</span>
+          <button id="btn-calculadora-inventario-fisico" type="button" onclick="abrirCalculadoraFlotante()" 
+                  class="h-[38px] px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 select-none mt-0.5" 
+                  title="Abrir Calculadora (F4 o Alt+C)">
+            <span class="text-sm">🧮</span> <span class="hidden sm:inline">Calculadora</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1211,5 +1219,6 @@ function toast(msg, ok=true) {
   setTimeout(() => el.classList.remove("show"), 3000);
 }
 </script>
+<script src="/static/js/calculadora_widget.js"></script>
 </body>
 </html>

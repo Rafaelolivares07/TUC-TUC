@@ -10715,7 +10715,7 @@ function renderTablaPrevisualizacion() {
 
   tb.innerHTML = activePreviewData.lineas.map(l => {
     const suf = l.stock_actual >= l.a_consumir;
-    const aConsumirFmt = Number(Number(l.a_consumir).toFixed(_prodPreviewDecimales));
+    const aConsumirFmt = Number(l.a_consumir || 0).toFixed(_prodPreviewDecimales);
     return `
       <tr id="prod-preview-row-${l.id}" class="border-b border-gray-100 hover:bg-gray-50/80 transition">
         <td class="px-3 py-1.5 text-left font-bold text-gray-800 text-xs sm:text-sm">${l.nombre}</td>
@@ -10723,6 +10723,7 @@ function renderTablaPrevisualizacion() {
         <td class="px-3 py-1.5 text-right">
           <input type="number" step="any" min="0" value="${aConsumirFmt}"
                  oninput="actualizarConsumoPrevisualizacion(${l.id}, this.value)"
+                 onblur="this.value = Number(this.value || 0).toFixed(_prodPreviewDecimales); actualizarConsumoPrevisualizacion(${l.id}, this.value);"
                  class="w-24 text-right border border-gray-300 rounded-md px-2 py-0.5 text-xs sm:text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white shadow-2xs">
         </td>
         <td class="px-3 py-1.5 text-right num font-mono text-xs sm:text-sm text-gray-600">${_fmtProdMon(l.costo_und)}</td>

@@ -2347,7 +2347,7 @@
 
               <th class="px-3 py-2 text-right">Stock actual</th>
 
-              <th class="px-3 py-2 text-right">A consumir</th>
+              <th class="px-3 py-2 text-right w-44 sm:w-48">A consumir</th>
 
               <th class="px-3 py-2 text-right">Costo unit.</th>
 
@@ -10724,7 +10724,7 @@ function renderTablaPrevisualizacion() {
           <input type="number" step="any" min="0" value="${aConsumirFmt}"
                  oninput="actualizarConsumoPrevisualizacion(${l.id}, this.value)"
                  onblur="this.value = Number(this.value || 0).toFixed(_prodPreviewDecimales); actualizarConsumoPrevisualizacion(${l.id}, this.value);"
-                 class="w-24 text-right border border-gray-300 rounded-md px-2 py-0.5 text-xs sm:text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white shadow-2xs">
+                 class="w-44 sm:w-48 text-right border border-gray-300 rounded-md px-2.5 py-0.5 text-xs sm:text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white shadow-2xs">
         </td>
         <td class="px-3 py-1.5 text-right num font-mono text-xs sm:text-sm text-gray-600">${_fmtProdMon(l.costo_und)}</td>
         <td id="prod-subtotal-${l.id}" class="px-3 py-1.5 text-right num font-mono font-black text-xs sm:text-sm text-gray-900">${_fmtProdMon(l.costo_total)}</td>

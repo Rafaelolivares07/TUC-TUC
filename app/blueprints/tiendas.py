@@ -2802,6 +2802,11 @@ def api_tienda_pedido_crear(slug):
                 f"Domicilio: {'por confirmar' if domicilio_estado == 'por_confirmar' else '$' + format(float(valor_domicilio or 0), ',.0f')}\n"
                 f"💰 Total: ${total:,.0f}"
             )
+            for c_id in chats_a_notificar:
+                try:
+                    _enviar_telegram_tienda(conn, c_id, msg)
+                except Exception as _tg_e:
+                    print(f'[telegram tienda] error enviando a {c_id}: {_tg_e}')
         # Auto-guardado de PDF de factura en servidor
         try:
             _guardar_pdf_factura_disco(

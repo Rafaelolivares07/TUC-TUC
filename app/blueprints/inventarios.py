@@ -5739,9 +5739,15 @@ def api_mantenimiento_documentos_recientes(negocio_id):
                     'tercero_id': p_id
                 }
             
-        # Convertir diccionario consolidado a lista y ordenar por fecha descendente
+        # Convertir diccionario consolidado a lista y ordenar por fecha y consecutivo numérico descendente
         documentos = list(consolidated.values())
-        documentos.sort(key=lambda d: d['fecha'] or '', reverse=True)
+        def _sort_doc_key(d):
+            f = d.get('fecha') or ''
+            num_str = str(d.get('documento_numero') or '')
+            match = re.search(r'\d+', num_str)
+            num_int = int(match.group()) if match else 0
+            return (f, num_int)
+        documentos.sort(key=_sort_doc_key, reverse=True)
         
         # Calcular paginación
         total_registros = len(documentos)

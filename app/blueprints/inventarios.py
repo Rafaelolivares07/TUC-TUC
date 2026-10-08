@@ -5374,23 +5374,26 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
             ORDER BY mi.documento_fecha DESC, mi.documento_numero DESC
         """, (negocio_id, tercero_id)).fetchall()
         
-        documentos = []
+        consolidated = {}
         for r in rows_inv:
             td_id = r['tipo_documento_id']
             td_name = r['tipo_documento'] or 'otro'
             if td_id and td_id in types_map:
                 td_name = types_map[td_id]
             doc_num = r['documento_numero']
-            documentos.append({
+            pure_num = _num_documento_limpio(doc_num, td_id, types_code)
+            td_key = td_id if td_id else td_name.lower()
+            key = (td_key, pure_num)
+            consolidated[key] = {
                 'tipo_documento_id': td_id,
                 'tipo_documento': td_name,
-                'documento_numero': _num_documento_limpio(doc_num, td_id, types_code),
+                'documento_numero': pure_num,
                 'documento_numero_completo': doc_num,
                 'fecha': r['documento_fecha'].isoformat() if r['documento_fecha'] else None,
                 'origen': 'inventario',
                 'total': float(r['total'] or 0),
                 'saldo_pendiente': float(r['saldo_pendiente']) if r['saldo_pendiente'] is not None else None
-            })
+            }
             
         # Query documents in pedidos (sales/orders) — solo ventas facturadas (con tipo de documento)
         rows_ped = conn.execute("""
@@ -5403,23 +5406,41 @@ def api_mantenimiento_documentos_tercero(negocio_id, tercero_id):
         
         for r in rows_ped:
             doc_num = r['numero_documento'] or str(r['id'])
-            # Fallback to created_at if fecha is null
             f_val = r['fecha'] or r['created_at']
             td_id = r['tipo_documento_id']
             td_name = types_map.get(td_id) if td_id else 'pedido_venta'
-            documentos.append({
-                'tipo_documento_id': td_id,
-                'tipo_documento': td_name,
-                'documento_numero': _num_documento_limpio(doc_num, td_id, types_code),
-                'documento_numero_completo': doc_num,
-                'fecha': f_val.date().isoformat() if f_val else None,
-                'origen': 'ventas',
-                'total': float(r['total'] or 0),
-                'estado': r['estado']
-            })
+            pure_num = _num_documento_limpio(doc_num, td_id, types_code)
+            td_key = td_id if td_id else td_name.lower()
+            key = (td_key, pure_num)
             
-        # Sort combined documents by date descending
-        documentos.sort(key=lambda d: d['fecha'] or '', reverse=True)
+            if key in consolidated:
+                consolidated[key]['origen'] = 'ambos'
+                consolidated[key]['total'] = float(r['total'] or 0)
+                consolidated[key]['estado'] = r['estado']
+                if doc_num and len(doc_num) > len(consolidated[key].get('documento_numero_completo') or ''):
+                    consolidated[key]['documento_numero_completo'] = doc_num
+            else:
+                consolidated[key] = {
+                    'tipo_documento_id': td_id,
+                    'tipo_documento': td_name,
+                    'documento_numero': pure_num,
+                    'documento_numero_completo': doc_num,
+                    'fecha': f_val.date().isoformat() if f_val else None,
+                    'origen': 'ventas',
+                    'total': float(r['total'] or 0),
+                    'estado': r['estado']
+                }
+            
+        # Sort combined documents naturally by date and numeric consecutive descending
+        import re
+        documentos = list(consolidated.values())
+        def _sort_doc_tercero_key(d):
+            f = d.get('fecha') or ''
+            num_str = str(d.get('documento_numero') or '')
+            match = re.search(r'\d+', num_str)
+            num_int = int(match.group()) if match else 0
+            return (f, num_int)
+        documentos.sort(key=_sort_doc_tercero_key, reverse=True)
         
         return jsonify({
             'ok': True,

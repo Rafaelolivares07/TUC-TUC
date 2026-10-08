@@ -4038,7 +4038,22 @@ async function ejecutarRecosteo(payload, descripcion) {
 
 
 
-// ── Formateo ──────────────────────────────────────────────────────────────────
+// ── Formateo & Fechas ─────────────────────────────────────────────────────────
+
+function getFechaHoyBogota() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Bogota',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  } catch(e) {
+    const d = new Date();
+    const offset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - offset).toISOString().slice(0, 10);
+  }
+}
 
 const fmt = n => (n == null ? '—' : Number(n).toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 2}));
 
@@ -8017,7 +8032,7 @@ async function registrarEntrada() {
 
 async function validarFechaEntrada(fecha) {
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = getFechaHoyBogota();
 
   const fechaEfectiva = fecha || hoy;
 
@@ -8049,7 +8064,7 @@ async function validarFechaEntrada(fecha) {
 
 function validarFechaCompraSugerida(input) {
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = getFechaHoyBogota();
 
   if (input.value > hoy) {
 
@@ -8618,7 +8633,7 @@ async function abrirModalFechaDocumento(tipoDocumentoId, numeroCodificado, fecha
   
   const fInp = document.getElementById('fecha-doc-nueva');
   fInp.value = fNueva;
-  fInp.max = new Date().toISOString().slice(0, 10);
+  fInp.max = getFechaHoyBogota();
 
   const hInp = document.getElementById('hora-doc-nueva');
   hInp.value = hNueva;
@@ -8689,7 +8704,7 @@ async function guardarFechaDocumento() {
   const modal = document.getElementById('modal-fecha-documento');
   const fecha = document.getElementById('fecha-doc-nueva').value;
   const hora = document.getElementById('hora-doc-nueva').value;
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = getFechaHoyBogota();
   const btn = document.getElementById('btn-guardar-fecha-doc');
 
   if (!fecha) { toast('Selecciona una fecha.', false); return; }
@@ -9412,7 +9427,7 @@ function renderizarComprasTabla(proveedores) {
 
                 Fecha
 
-                <input type="date" id="compras-fecha-${pIdx}" max="${new Date().toISOString().split('T')[0]}" onchange="validarFechaCompraSugerida(this)" aria-label="Fecha del documento" class="border rounded px-2 py-1 text-sm font-medium w-32 outline-none bg-white">
+                <input type="date" id="compras-fecha-${pIdx}" max="${getFechaHoyBogota()}" onchange="validarFechaCompraSugerida(this)" aria-label="Fecha del documento" class="border rounded px-2 py-1 text-sm font-medium w-32 outline-none bg-white">
 
               </label>
 
@@ -10463,7 +10478,7 @@ function hacerEntradaProveedor(pIdx) {
 
   const fechaInput = document.getElementById(`compras-fecha-${pIdx}`);
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = getFechaHoyBogota();
 
   if (fechaInput?.value && fechaInput.value > hoy) {
 
@@ -10879,7 +10894,10 @@ async function registrarProduccion() {
       document.getElementById('prod-cantidad').value = '1';
       document.getElementById('prod-notas').value = '';
       const prodFechaEl = document.getElementById('prod-fecha');
-      if (prodFechaEl) prodFechaEl.value = new Date().toISOString().split('T')[0];
+      if (prodFechaEl) {
+        prodFechaEl.value = getFechaHoyBogota();
+        prodFechaEl.max = getFechaHoyBogota();
+      }
       document.getElementById('prod-responsable').value = '{{ session.get("nombre", "") }}';
       document.getElementById('prod-responsable-id').value = '{{ session.get("chat_tercero_id", "") }}';
       limpiarPreview();
@@ -11157,8 +11175,9 @@ let tiposDocProduccion = [];
 async function cargarTiposDocProduccion() {
   try {
     const prodFechaEl = document.getElementById('prod-fecha');
-    if (prodFechaEl && !prodFechaEl.value) {
-      prodFechaEl.value = new Date().toISOString().split('T')[0];
+    if (prodFechaEl) {
+      if (!prodFechaEl.value) prodFechaEl.value = getFechaHoyBogota();
+      prodFechaEl.max = getFechaHoyBogota();
     }
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
     const d = await r.json();
@@ -12206,7 +12225,8 @@ function cargarCentrosParaTraslado() {
   if (!orig || !dest) return;
 
   if (fechaInp && !fechaInp.value) {
-    fechaInp.value = new Date().toISOString().slice(0, 10);
+    fechaInp.value = getFechaHoyBogota();
+    fechaInp.max = getFechaHoyBogota();
   }
 
   const activoId = CENTRO_ACTIVO && CENTRO_ACTIVO.id !== 'consolidado' ? CENTRO_ACTIVO.id : (CENTROS_UTILIDAD[0]?.id || 1);
@@ -12622,7 +12642,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  document.getElementById('entrada-fecha-doc').value = new Date().toISOString().slice(0, 10);
+  const entFechaInp = document.getElementById('entrada-fecha-doc');
+  if (entFechaInp) {
+    entFechaInp.value = getFechaHoyBogota();
+    entFechaInp.max = getFechaHoyBogota();
+  }
 
 
 

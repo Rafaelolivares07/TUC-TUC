@@ -1,7 +1,8 @@
 from flask import Blueprint, Response, jsonify, redirect, render_template, request, session, url_for
 from ..db import get_db_connection
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 try:
     from fpdf import FPDF
@@ -279,6 +280,13 @@ def _fecha_o_none(value):
         return date.fromisoformat(value[:10])
     except Exception:
         return None
+
+
+def _hoy_bogota():
+    try:
+        return datetime.now(ZoneInfo('America/Bogota')).date()
+    except Exception:
+        return date.today()
 
 
 def _negocio_id_tienda(conn, slug):
@@ -791,8 +799,8 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
     documento_fecha = _fecha_o_none(fecha_recibida)
     if fecha_recibida and not documento_fecha:
         return {'ok': False, 'error': 'La fecha del documento no es válida.'}, 400
-    if documento_fecha and documento_fecha > date.today():
-        return {'ok': False, 'error': 'La fecha del documento no puede ser futura.'}, 400
+    if documento_fecha and documento_fecha > _hoy_bogota():
+        return {'ok': False, 'error': f'La fecha del documento ({documento_fecha}) no puede ser futura respecto a hoy ({_hoy_bogota()}).'}, 400
     if documento_fecha:
         try:
             _verificar_periodo_cerrado(conn, negocio_id, documento_fecha)
@@ -4168,7 +4176,8 @@ def api_produccion_registrar(negocio_id):
     tercero_id  = _int_o_none(data.get('tercero_id'))
     tercero_nombre = (data.get('tercero_nombre') or '').strip() or None
     fecha_raw   = (_txt(data.get('fecha')) or '').strip()
-    fecha_prod  = _fecha_o_none(fecha_raw) or date.today()
+    hoy_colombia = _hoy_bogota()
+    fecha_prod  = _fecha_o_none(fecha_raw) or hoy_colombia
     centro_utilidad_id = _int_o_none(data.get('centro_utilidad_id') or data.get('bodega')) or session.get('centro_utilidad_id') or 1
     try:
         centro_utilidad_id = int(centro_utilidad_id)
@@ -4177,8 +4186,8 @@ def api_produccion_registrar(negocio_id):
 
     if not producto_id or cantidad <= 0:
         return jsonify({'ok': False, 'error': 'producto_id y cantidad requeridos'}), 400
-    if fecha_prod > date.today():
-        return jsonify({'ok': False, 'error': 'La fecha de producción no puede ser futura'}), 400
+    if fecha_prod > hoy_colombia:
+        return jsonify({'ok': False, 'error': f'La fecha de producción ({fecha_prod}) no puede ser futura respecto a la fecha actual ({hoy_colombia})'}), 400
 
     conn = get_db_connection()
     try:
@@ -4936,8 +4945,8 @@ def api_cambiar_fecha_documento_inventario(negocio_id):
     except ValueError:
         return jsonify({'ok': False, 'error': 'Fecha u hora inválida'}), 400
 
-    if nueva_fecha > date.today():
-        return jsonify({'ok': False, 'error': 'La fecha del documento no puede ser futura'}), 400
+    if nueva_fecha > _hoy_bogota():
+        return jsonify({'ok': False, 'error': f'La fecha del documento ({nueva_fecha}) no puede ser futura respecto a hoy ({_hoy_bogota()})'}), 400
 
     conn = get_db_connection()
     try:

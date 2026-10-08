@@ -2954,7 +2954,7 @@ def api_comprobantes_get(negocio_id):
 
         sort_map = {
             'tipo': 'COALESCE(MAX(td.nombre), MAX(mc.tipo_documento))',
-            'numero': 'MAX(mc.numero_documento)',
+            'numero': "COALESCE(NULLIF(regexp_replace(MAX(mc.numero_documento), '\\D', '', 'g'), '')::bigint, 0)",
             'fecha': 'MAX(mc.fecha)',
             'fecha_grabacion': 'MAX(mc.created_at)',
             'tercero': 'COALESCE(MAX(t.nombre), MAX(t_reg.nombre), MAX(u.nombre), \'\')',
@@ -2964,10 +2964,17 @@ def api_comprobantes_get(negocio_id):
         }
         
         sql_sort_expr = sort_map.get(sort_col, 'MAX(mc.fecha)')
-        order_clause = f"ORDER BY {sql_sort_expr} {sort_dir.upper()}, MAX(mc.numero_documento) DESC"
+        if sort_col == 'fecha':
+            order_clause = f"ORDER BY MAX(mc.fecha) {sort_dir.upper()}, MAX(mc.created_at) {sort_dir.upper()}, COALESCE(NULLIF(regexp_replace(MAX(mc.numero_documento), '\\D', '', 'g'), '')::bigint, 0) {sort_dir.upper()}, mc.comprobante_id {sort_dir.upper()}"
+        elif sort_col == 'numero':
+            order_clause = f"ORDER BY {sql_sort_expr} {sort_dir.upper()}, MAX(mc.fecha) DESC, MAX(mc.created_at) DESC"
+        elif sort_col == 'fecha_grabacion':
+            order_clause = f"ORDER BY MAX(mc.created_at) {sort_dir.upper()}, MAX(mc.fecha) {sort_dir.upper()}, mc.comprobante_id {sort_dir.upper()}"
+        else:
+            order_clause = f"ORDER BY {sql_sort_expr} {sort_dir.upper()}, MAX(mc.fecha) DESC, MAX(mc.created_at) DESC"
         
         if solo_descuadrados and sort_col == 'fecha':
-            order_clause = "ORDER BY diferencia DESC, MAX(mc.fecha) DESC"
+            order_clause = "ORDER BY diferencia DESC, MAX(mc.fecha) DESC, MAX(mc.created_at) DESC"
 
         query_params = params + [limit, offset]
         rows = conn.execute(f"""

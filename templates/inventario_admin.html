@@ -2315,9 +2315,23 @@
           <span class="font-bold flex items-center gap-1 text-gray-800">
             <span>📋</span> Desglose de Insumos y Materia Prima requerida:
           </span>
-          <span id="prod-preview-items-count" class="font-bold text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-lg text-xs">
-            <!-- 5 insumos -->
-          </span>
+          <div class="flex items-center gap-3">
+            <!-- Selector de Decimales -->
+            <div class="flex items-center gap-1.5 bg-white border border-rose-200 rounded-lg px-2.5 py-1 shadow-2xs">
+              <label for="prod-preview-decimales" class="font-bold text-[11px] text-gray-700 flex items-center gap-1">
+                <span>🔢</span> Decimales:
+              </label>
+              <input id="prod-preview-decimales" type="number" min="0" max="6" step="1" value="2"
+                     oninput="cambiarDecimalesPreviewProduccion(this.value)"
+                     onchange="cambiarDecimalesPreviewProduccion(this.value)"
+                     onblur="validarDecimalesPreviewProduccionInput(this)"
+                     class="w-12 text-center font-mono font-bold text-xs bg-rose-50/50 border border-rose-300 rounded px-1 py-0.5 outline-none text-rose-900 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                     title="Número de decimales visibles en la vista previa (0 a 6)">
+            </div>
+            <span id="prod-preview-items-count" class="font-bold text-rose-700 bg-rose-100 px-2.5 py-1 rounded-lg text-xs">
+              <!-- 5 insumos -->
+            </span>
+          </div>
         </div>
       </div>
 
@@ -2329,17 +2343,17 @@
 
             <tr class="bg-gray-100 text-xs uppercase font-black text-gray-600 border-b border-gray-200">
 
-              <th class="px-4 py-3 text-left">Componente / Insumo</th>
+              <th class="px-3 py-2 text-left">Componente / Insumo</th>
 
-              <th class="px-4 py-3 text-right">Stock actual</th>
+              <th class="px-3 py-2 text-right">Stock actual</th>
 
-              <th class="px-4 py-3 text-right">A consumir</th>
+              <th class="px-3 py-2 text-right">A consumir</th>
 
-              <th class="px-4 py-3 text-right">Costo unit.</th>
+              <th class="px-3 py-2 text-right">Costo unit.</th>
 
-              <th class="px-4 py-3 text-right">Total Línea</th>
+              <th class="px-3 py-2 text-right">Total Línea</th>
 
-              <th class="px-4 py-3 text-center">Estado</th>
+              <th class="px-3 py-2 text-center">Estado</th>
 
             </tr>
 
@@ -2349,25 +2363,25 @@
 
           <tfoot>
 
-            <tr class="bg-gray-50 border-t border-gray-200 font-bold text-gray-800 text-sm sm:text-base">
+            <tr class="bg-gray-50 border-t border-gray-200 font-bold text-gray-800 text-xs sm:text-sm">
 
-              <td class="px-4 py-3.5 text-left">Total costo producción</td>
+              <td class="px-3 py-2.5 text-left">Total costo producción</td>
 
               <td colspan="3"></td>
 
-              <td id="prod-resumen-total" class="px-4 py-3.5 text-right text-rose-600 font-mono font-black text-base sm:text-lg"></td>
+              <td id="prod-resumen-total" class="px-3 py-2.5 text-right text-rose-600 font-mono font-black text-sm sm:text-base"></td>
 
               <td></td>
 
             </tr>
 
-            <tr class="bg-gray-50 border-t border-gray-100 font-bold text-gray-800 text-sm sm:text-base">
+            <tr class="bg-gray-50 border-t border-gray-100 font-bold text-gray-800 text-xs sm:text-sm">
 
-              <td class="px-4 py-3.5 text-left">Costo unitario estimado</td>
+              <td class="px-3 py-2.5 text-left">Costo unitario estimado</td>
 
               <td colspan="3"></td>
 
-              <td id="prod-resumen-unitario" class="px-4 py-3.5 text-right text-rose-600 font-mono font-black text-base sm:text-lg"></td>
+              <td id="prod-resumen-unitario" class="px-3 py-2.5 text-right text-rose-600 font-mono font-black text-sm sm:text-base"></td>
 
               <td></td>
 
@@ -3723,6 +3737,10 @@ function mostrarTab(t) {
 
   if (t === 'productos') {
     inicializarDecimalesProductos();
+  }
+
+  if (t === 'produccion') {
+    inicializarDecimalesPreviewProduccion();
   }
 
   if (t === 'tarjetas') {
@@ -10576,26 +10594,71 @@ function seleccionarSugerencia(productoId, productoNombre, cantidad) {
 
 
 // ── Producción ────────────────────────────────────────────────────────────────
-
 let prodPuedeRegistrar = false;
-
 let activePreviewData = null;
+let _prodPreviewDecimales = 2;
+try {
+  const _savedProdDec = localStorage.getItem('prod_preview_decimales');
+  if (_savedProdDec !== null) {
+    const p = parseInt(_savedProdDec, 10);
+    if (!isNaN(p) && p >= 0 && p <= 6) _prodPreviewDecimales = p;
+  }
+} catch(e) {}
 
-
-
-function limpiarPreview() {
-
-  document.getElementById('prod-preview').classList.add('hidden');
-
-  document.getElementById('prod-btn-registrar').disabled = true;
-
-  prodPuedeRegistrar = false;
-
-  activePreviewData = null;
-
+function _fmtProdNum(n) {
+  if (n == null || isNaN(n)) return '-';
+  return Number(n).toLocaleString('es-CO', {
+    minimumFractionDigits: _prodPreviewDecimales,
+    maximumFractionDigits: _prodPreviewDecimales
+  });
 }
 
+function _fmtProdMon(n) {
+  if (n == null || isNaN(n)) return '$ 0';
+  return '$ ' + Number(n).toLocaleString('es-CO', {
+    minimumFractionDigits: _prodPreviewDecimales,
+    maximumFractionDigits: _prodPreviewDecimales
+  });
+}
 
+function cambiarDecimalesPreviewProduccion(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(6, d));
+  _prodPreviewDecimales = d;
+  try { localStorage.setItem('prod_preview_decimales', d); } catch(e) {}
+
+  const inp = document.getElementById('prod-preview-decimales');
+  if (inp && parseInt(inp.value, 10) !== d) inp.value = d;
+
+  if (activePreviewData) {
+    const cantBadgeEl = document.getElementById('prod-preview-cant-badge');
+    if (cantBadgeEl) {
+      cantBadgeEl.textContent = `${_fmtProdNum(activePreviewData.cantidad)} Unidades`;
+    }
+    renderTablaPrevisualizacion();
+  }
+}
+
+function validarDecimalesPreviewProduccionInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 6) d = 6;
+  inputEl.value = d;
+  cambiarDecimalesPreviewProduccion(d);
+}
+
+function inicializarDecimalesPreviewProduccion() {
+  const inp = document.getElementById('prod-preview-decimales');
+  if (inp) inp.value = _prodPreviewDecimales;
+}
+
+function limpiarPreview() {
+  document.getElementById('prod-preview').classList.add('hidden');
+  document.getElementById('prod-btn-registrar').disabled = true;
+  prodPuedeRegistrar = false;
+  activePreviewData = null;
+}
 
 async function previsualizarProduccion() {
   const id  = document.getElementById('prod-ac-id').value;
@@ -10626,7 +10689,7 @@ async function previsualizarProduccion() {
   if (prodTitleEl) prodTitleEl.textContent = d.producto || 'Producto';
   
   const cantBadgeEl = document.getElementById('prod-preview-cant-badge');
-  if (cantBadgeEl) cantBadgeEl.textContent = `${qty.toLocaleString('es-CO')} Unidades`;
+  if (cantBadgeEl) cantBadgeEl.textContent = `${_fmtProdNum(qty)} Unidades`;
   
   const countEl = document.getElementById('prod-preview-items-count');
   const numLineas = (d.lineas || []).length;
@@ -10634,6 +10697,7 @@ async function previsualizarProduccion() {
     countEl.textContent = `${numLineas} ingrediente${numLineas === 1 ? '' : 's'} / insumo${numLineas === 1 ? '' : 's'}`;
   }
 
+  inicializarDecimalesPreviewProduccion();
   renderTablaPrevisualizacion();
   const previewEl = document.getElementById('prod-preview');
   if (previewEl) {
@@ -10644,158 +10708,83 @@ async function previsualizarProduccion() {
   }
 }
 
-
-
 function renderTablaPrevisualizacion() {
-
   if (!activePreviewData) return;
-
   const qty = activePreviewData.cantidad;
-
   const tb = document.getElementById('prod-preview-tabla');
 
   tb.innerHTML = activePreviewData.lineas.map(l => {
-
     const suf = l.stock_actual >= l.a_consumir;
-
+    const aConsumirFmt = Number(Number(l.a_consumir).toFixed(_prodPreviewDecimales));
     return `
-
       <tr id="prod-preview-row-${l.id}" class="border-b border-gray-100 hover:bg-gray-50/80 transition">
-
-        <td class="px-4 py-3 text-left font-bold text-gray-800 text-sm sm:text-base">${l.nombre}</td>
-
-        <td id="prod-stock-${l.id}" class="px-4 py-3 text-right num text-sm sm:text-base font-mono font-bold ${suf ? 'text-green-600' : 'text-red-500'}">${fmt(l.stock_actual)}</td>
-
-        <td class="px-4 py-3 text-right">
-
-          <input type="number" step="any" min="0" value="${l.a_consumir}"
-
+        <td class="px-3 py-1.5 text-left font-bold text-gray-800 text-xs sm:text-sm">${l.nombre}</td>
+        <td id="prod-stock-${l.id}" class="px-3 py-1.5 text-right num text-xs sm:text-sm font-mono font-bold ${suf ? 'text-green-600' : 'text-red-500'}">${_fmtProdNum(l.stock_actual)}</td>
+        <td class="px-3 py-1.5 text-right">
+          <input type="number" step="any" min="0" value="${aConsumirFmt}"
                  oninput="actualizarConsumoPrevisualizacion(${l.id}, this.value)"
-
-                 class="w-28 text-right border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white shadow-2xs">
-
+                 class="w-24 text-right border border-gray-300 rounded-md px-2 py-0.5 text-xs sm:text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white shadow-2xs">
         </td>
-
-        <td class="px-4 py-3 text-right num font-mono text-sm text-gray-600">${fmt(l.costo_und)}</td>
-
-        <td id="prod-subtotal-${l.id}" class="px-4 py-3 text-right num font-mono font-black text-sm sm:text-base text-gray-900">${fmt(l.costo_total)}</td>
-
-        <td id="prod-badge-${l.id}" class="px-4 py-3 text-center">
-
+        <td class="px-3 py-1.5 text-right num font-mono text-xs sm:text-sm text-gray-600">${_fmtProdMon(l.costo_und)}</td>
+        <td id="prod-subtotal-${l.id}" class="px-3 py-1.5 text-right num font-mono font-black text-xs sm:text-sm text-gray-900">${_fmtProdMon(l.costo_total)}</td>
+        <td id="prod-badge-${l.id}" class="px-3 py-1.5 text-center">
           ${suf
-
-            ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">✓ OK</span>'
-
-            : '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">✗ Insuficiente</span>'}
-
+            ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-100 text-green-800">✓ OK</span>'
+            : '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800">✗ Insuficiente</span>'}
         </td>
-
       </tr>
-
     `;
-
   }).join('');
 
-
-
   actualizarTotalesPrevisualizacion();
-
 }
-
-
 
 function actualizarConsumoPrevisualizacion(componenteId, valStr) {
-
   if (!activePreviewData) return;
-
   const val = parseFloat(valStr) || 0;
-
-  
-
   const l = activePreviewData.lineas.find(line => line.id === componenteId);
-
   if (!l) return;
 
-  
-
   l.a_consumir = val;
-
   l.costo_total = val * l.costo_und;
-
   l.suficiente = l.stock_actual >= l.a_consumir;
 
-  
-
   // Actualizar fila in-place
-
   const subEl = document.getElementById(`prod-subtotal-${componenteId}`);
-
-  if (subEl) subEl.textContent = fmt(l.costo_total);
-
-  
+  if (subEl) subEl.textContent = _fmtProdMon(l.costo_total);
 
   const stockEl = document.getElementById(`prod-stock-${componenteId}`);
-
   if (stockEl) {
-
-    stockEl.className = `px-3 py-2 text-right num ${l.suficiente ? 'text-green-600' : 'text-red-500 font-bold'}`;
-
+    stockEl.className = `px-3 py-1.5 text-right num text-xs sm:text-sm font-mono font-bold ${l.suficiente ? 'text-green-600' : 'text-red-500'}`;
+    stockEl.textContent = _fmtProdNum(l.stock_actual);
   }
-
-  
 
   const badgeEl = document.getElementById(`prod-badge-${componenteId}`);
-
   if (badgeEl) {
-
     badgeEl.innerHTML = l.suficiente
-
-      ? '<span class="badge" style="background:#d1fae5;color:#065f46">✓ OK</span>'
-
-      : '<span class="badge" style="background:#fee2e2;color:#991b1b">✗ Insuficiente</span>';
-
+      ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-green-100 text-green-800">✓ OK</span>'
+      : '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800">✗ Insuficiente</span>';
   }
 
-  
-
   actualizarTotalesPrevisualizacion();
-
 }
 
-
-
 function actualizarTotalesPrevisualizacion() {
-
   if (!activePreviewData) return;
 
-  
-
   let costoTotal = 0;
-
   activePreviewData.lineas.forEach(l => {
-
     costoTotal += l.costo_total;
-
   });
 
-  
-
   activePreviewData.costo_total_produccion = costoTotal;
-
   const qty = activePreviewData.cantidad;
-
   activePreviewData.costo_unitario_produccion = qty > 0 ? (costoTotal / qty) : 0;
 
-  
-
-  document.getElementById('prod-resumen-total').textContent = '$ ' + fmt(activePreviewData.costo_total_produccion);
-
-  document.getElementById('prod-resumen-unitario').textContent = '$ ' + fmt(activePreviewData.costo_unitario_produccion);
-
-  
+  document.getElementById('prod-resumen-total').textContent = _fmtProdMon(activePreviewData.costo_total_produccion);
+  document.getElementById('prod-resumen-unitario').textContent = _fmtProdMon(activePreviewData.costo_unitario_produccion);
 
   // Validar si todos son suficientes
-
   activePreviewData.puede_producir = activePreviewData.lineas.every(l => l.suficiente);
 
   
@@ -12607,6 +12596,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   inicializarDecimalesProductos();
   inicializarDecimalesTarjetas();
+  inicializarDecimalesPreviewProduccion();
 
   await inicializarCentrosUtilidad();
 

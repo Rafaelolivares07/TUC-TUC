@@ -474,6 +474,21 @@
                         <div class="relative w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-amber-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 ml-3 flex-shrink-0"></div>
                     </label>
                 </div>
+
+                <!-- Notificaciones Telegram -->
+                <div class="mt-6 bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xl">✈️</span>
+                        <h3 class="font-bold text-gray-700">Notificaciones Telegram</h3>
+                    </div>
+                    <p class="text-xs sm:text-sm text-gray-500 mb-3">Recibe un mensaje en Telegram cada vez que llegue un pedido nuevo. Envía <code class="bg-gray-100 px-1 py-0.5 rounded text-rose-600 font-mono font-bold">/start</code> a <b>@userinfobot</b> en Telegram para obtener tu Chat ID.</p>
+                    <div class="flex gap-2">
+                        <input id="inp-telegram" type="text" placeholder="Chat ID (ej: 123456789)" value="{{ restaurante.telegram_chat_id or '' }}" class="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1 focus:ring-2 focus:ring-blue-400 focus:outline-none font-mono">
+                        <button onclick="guardarTelegram()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1 shrink-0 shadow-sm">
+                            💾 Guardar
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1933,6 +1948,24 @@ function actualizarEnlacesWA() {
     } else {
         btnCocina.href = '#';
         btnCocina.className = 'mt-2 block text-center bg-gray-300 text-white text-xs px-3 py-2 rounded-lg font-semibold pointer-events-none';
+    }
+}
+
+async function guardarTelegram() {
+    const inp = document.getElementById('inp-telegram');
+    if (!inp) return;
+    const chat_id = inp.value.trim();
+    try {
+        const r = await fetch(`${BASE}/telegram`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({telegram_chat_id: chat_id})
+        });
+        const data = await r.json();
+        if (data.ok) toast('Telegram configurado correctamente');
+        else toast(data.error || 'Error al guardar Telegram', false);
+    } catch(e) {
+        toast('Error de conexión', false);
     }
 }
 

@@ -2705,12 +2705,17 @@ def api_reparar_costos_venta(negocio_id):
                           )
                           AND LEFT(cuenta, 2) = '61'
                           AND (
-                              UPPER(concepto) = 'COSTO VENTA: ' || UPPER(%s)
-                              OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
-                              OR UPPER(concepto) LIKE '%%' || UPPER(%s) || '%%'
-                              OR producto_id = %s
+                              (producto_padre_id = %s OR producto_id = %s)
+                              OR (
+                                  (producto_padre_id IS NULL AND producto_id IS NULL)
+                                  AND (
+                                      UPPER(concepto) = 'COSTO VENTA: ' || UPPER(%s)
+                                      OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
+                                      OR UPPER(concepto) LIKE '%%' || UPPER(%s) || '%%'
+                                  )
+                              )
                           )
-                    """, (negocio_id, consecutive, doc_num, td_code, padre_nombre, padre_nombre, padre_nombre, ppid)).fetchone()
+                    """, (negocio_id, consecutive, doc_num, td_code, ppid, ppid, padre_nombre, padre_nombre, padre_nombre)).fetchone()
                     cogs_monto = float(cogs_row['total_cogs']) if (cogs_row and cogs_row['total_cogs'] is not None) else 0.0
                     cogs_ids = list(cogs_row['ids']) if (cogs_row and cogs_row['ids']) else []
                     
@@ -3430,23 +3435,28 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
     ).fetchone()
     padre_nombre = padre_row['nombre'] if padre_row else ''
 
-    contab_debito = conn.execute("""
+    contab_debitos = conn.execute("""
         SELECT id, monto, concepto, comprobante_id, tipo_documento_id, tipo_documento, fecha
         FROM movimientos_contables
         WHERE negocio_id = %s
           AND cuenta LIKE '14%%' AND tipo = 'debito'
           AND (numero_documento = %s OR numero_documento = %s)
           AND (
-              tipo_documento ILIKE '%%PRODUC%%'
-              OR tipo_documento ILIKE '%%REPORTE%%'
-              OR tipo_documento ILIKE '%%ENSAMBLE%%'
-              OR UPPER(concepto) LIKE '%%' || UPPER(%s) || '%%'
-              OR producto_id = %s
+              (producto_id = %s OR producto_padre_id = %s)
+              OR (
+                  (producto_id IS NULL AND producto_padre_id IS NULL)
+                  AND (
+                      tipo_documento ILIKE '%%PRODUC%%'
+                      OR tipo_documento ILIKE '%%REPORTE%%'
+                      OR tipo_documento ILIKE '%%ENSAMBLE%%'
+                      OR UPPER(concepto) LIKE '%%' || UPPER(%s) || '%%'
+                  )
+              )
           )
-        ORDER BY id
-        LIMIT 1
-    """, (negocio_id, numero_doc, consecutive, padre_nombre, prod_padre_id)).fetchone()
+        ORDER BY id ASC
+    """, (negocio_id, numero_doc, consecutive, prod_padre_id, prod_padre_id, padre_nombre)).fetchall()
 
+    contab_debito = contab_debitos[0] if contab_debitos else None
     comp_id_deb = contab_debito['comprobante_id'] if contab_debito else None
 
     # 3. Buscar asientos 14xx credito (materias primas de produccion)
@@ -3665,6 +3675,10 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
                 SET monto = %s, comprobante_id = COALESCE(comprobante_id, %s)
                 WHERE id = %s
             """, (total_nuevo_creditos, comprobante_id, contab_debito['id']))
+        if len(contab_debitos) > 1:
+            ids_borrar_deb = [r['id'] for r in contab_debitos[1:]]
+            placeholders = ','.join(['%s'] * len(ids_borrar_deb))
+            conn.execute(f"DELETE FROM movimientos_contables WHERE id IN ({placeholders})", ids_borrar_deb)
             debito_modificado = True
     elif total_nuevo_creditos > 0:
         conn.execute("""
@@ -3705,7 +3719,8 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
     kardex_rows = conn.execute("""
         SELECT producto_id, nombre_producto,
                cantidad, costo_und,
-               COALESCE(valor_total, cantidad * costo_und, 0) AS total
+               COALESCE(valor_total, cantidad * costo_und, 0) AS total,
+               documento_fecha, created_at
         FROM movimientos_inventario
         WHERE negocio_id = %s
           AND producto_padre_id = %s
@@ -3772,7 +3787,9 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
         if td_v:
             tipo_doc_id = td_v['id']
             tipo_doc_nombre = td_v['nombre']
-    fecha_ref = doc_ref_row['fecha'] if doc_ref_row else None
+    fecha_ref = doc_ref_row['fecha'] if doc_ref_row and doc_ref_row.get('fecha') else None
+    if not fecha_ref and kardex_rows:
+        fecha_ref = kardex_rows[0].get('documento_fecha') or (kardex_rows[0]['created_at'].date() if kardex_rows[0].get('created_at') else None)
     cta_140505_row = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '140505' LIMIT 1").fetchone()
     cta_140505_id = cta_140505_row['id'] if cta_140505_row else None
 
@@ -3874,12 +3891,12 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
     td_code = td_codigo_map.get(tipo_doc_id, 'FACTURA_DE_VENTA') if (doc_ref_row and doc_ref_row['tipo_documento_id']) else 'FACTURA_DE_VENTA'
 
     padre_row = conn.execute(
-        "SELECT nombre FROM productos WHERE id = %s AND negocio_id = %s",
+        "SELECT nombre, categoria FROM productos WHERE id = %s AND negocio_id = %s",
         (prod_padre_id, negocio_id)
     ).fetchone()
     padre_nombre = padre_row['nombre'] if padre_row else ''
 
-    cogs_row = conn.execute("""
+    cogs_rows = conn.execute("""
         SELECT id, monto
         FROM movimientos_contables
         WHERE negocio_id = %s
@@ -3891,24 +3908,74 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
           )
           AND LEFT(cuenta, 2) = '61'
           AND (
-              UPPER(concepto) = 'COSTO VENTA: ' || UPPER(%s)
-              OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
-              OR UPPER(concepto) LIKE '%%' || UPPER(%s) || '%%'
-              OR producto_id = %s
-              OR producto_padre_id = %s
+              (producto_padre_id = %s OR producto_id = %s)
+              OR (
+                  (producto_padre_id IS NULL AND producto_id IS NULL)
+                  AND (
+                      UPPER(concepto) = 'COSTO VENTA: ' || UPPER(%s)
+                      OR UPPER(concepto) = 'COSTO DE VENTA: ' || UPPER(%s)
+                      OR UPPER(concepto) LIKE '%%' || UPPER(%s) || '%%'
+                  )
+              )
           )
-        LIMIT 1
-    """, (negocio_id, consecutive, numero_doc, td_code, padre_nombre, padre_nombre, padre_nombre, prod_padre_id, prod_padre_id)).fetchone()
+        ORDER BY id ASC
+    """, (negocio_id, consecutive, numero_doc, td_code, prod_padre_id, prod_padre_id, padre_nombre, padre_nombre, padre_nombre)).fetchall()
 
     cogs_modificado = False
-    if cogs_row:
-        monto_actual_cogs = float(cogs_row['monto'] or 0)
-        if abs(monto_actual_cogs - total_kardex_padre) > 0.01 or True:
-            conn.execute(
-                "UPDATE movimientos_contables SET monto = %s, producto_id = %s, producto_padre_id = %s WHERE id = %s",
-                (total_kardex_padre, prod_padre_id, prod_padre_id, cogs_row['id'])
+    cogs_row_id = None
+    if cogs_rows:
+        primer_cogs = cogs_rows[0]
+        cogs_row_id = primer_cogs['id']
+        conn.execute(
+            "UPDATE movimientos_contables SET monto = %s, producto_id = %s, producto_padre_id = %s WHERE id = %s",
+            (total_kardex_padre, prod_padre_id, prod_padre_id, primer_cogs['id'])
+        )
+        cogs_modificado = True
+
+        # Eliminar asientos 61* duplicados para este mismo producto/documento
+        if len(cogs_rows) > 1:
+            ids_borrar = [r['id'] for r in cogs_rows[1:]]
+            placeholders = ','.join(['%s'] * len(ids_borrar))
+            conn.execute(f"DELETE FROM movimientos_contables WHERE id IN ({placeholders})", ids_borrar)
+    elif total_kardex_padre > 0:
+        # Resolver cuenta 61* de costo de venta (por categoría/grupo_inventario o por defecto 614005/6135)
+        gi_sold = None
+        padre_cat = padre_row['categoria'] if (padre_row and 'categoria' in padre_row) else None
+        if padre_cat:
+            gi_sold = conn.execute("""
+                SELECT gi.cuenta_cos_id, c_cos.codigo AS cod_costo
+                FROM grupos_inventario gi
+                LEFT JOIN cuentas_puc c_cos ON c_cos.id = gi.cuenta_cos_id
+                WHERE gi.negocio_id = %s AND gi.nombre = %s
+            """, (negocio_id, padre_cat)).fetchone()
+
+        cuenta_61_cod = (gi_sold['cod_costo'] if gi_sold and gi_sold['cod_costo'] else None)
+        if not cuenta_61_cod:
+            rp_61 = conn.execute("""
+                SELECT codigo FROM cuentas_puc 
+                WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) AND codigo LIKE '61%%'
+                ORDER BY codigo ASC LIMIT 1
+            """, (negocio_id,)).fetchone()
+            cuenta_61_cod = rp_61['codigo'] if rp_61 else '614005'
+
+        c_puc = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s LIMIT 1", (cuenta_61_cod,)).fetchone()
+        cuenta_61_id = c_puc['id'] if c_puc else None
+
+        c_res = conn.execute("""
+            INSERT INTO movimientos_contables (
+                negocio_id, comprobante_id, tipo_documento, tipo_documento_id,
+                numero_documento, cuenta, cuenta_id, concepto, tipo, monto,
+                producto_id, producto_padre_id, fecha, created_at
             )
-            cogs_modificado = True
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'debito', %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            RETURNING id
+        """, (
+            negocio_id, comprobante_id, tipo_doc_nombre or 'FACTURA DE VENTA', tipo_doc_id,
+            consecutive, cuenta_61_cod, cuenta_61_id, f"Costo Venta: {padre_nombre}",
+            total_kardex_padre, prod_padre_id, prod_padre_id, fecha_ref
+        )).fetchone()
+        cogs_row_id = c_res['id'] if c_res else None
+        cogs_modificado = True
 
     # 6. Actualizar pedido_items.costo_unitario para todos los items de este producto en el pedido
     ref_row = conn.execute("""
@@ -3955,7 +4022,7 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
         'tipo': 'venta',
         'cambios_contables': cambios,
         'cogs_modificado': cogs_modificado,
-        'cogs_id': cogs_row['id'] if cogs_row else None,
+        'cogs_id': cogs_row_id,
         'pedido_item_modificado': pi_modificado,
     }
 
@@ -4511,9 +4578,10 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
             else:
                 val_existencia = stock_nuevo * costo_und if stock_nuevo > 0 else Decimal('0')
 
-            # Para salidas, el valor total del movimiento se valora al costo promedio del inventario
+            # Para salidas, el valor total y valor unitario del movimiento se valoran al costo promedio del inventario
             costo_linea = vu if (m['tipo'] == 'entrada' and vu is not None) else costo_und
             valor_total = abs(cant_m * (costo_linea or Decimal('0')))
+            vu_guardar = float(vu) if (m['tipo'] == 'entrada' and vu is not None) else (float(costo_und) if costo_und is not None else None)
 
             conn.execute("""
                 UPDATE movimientos_inventario
@@ -4524,7 +4592,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                     valor_total = %s,
                     bodega = %s
                 WHERE id = %s
-            """, (float(stock_ant), float(stock_nuevo), float(costo_und), float(vu) if vu is not None else None, float(valor_total), b_id, m['id']))
+            """, (float(stock_ant), float(stock_nuevo), float(costo_und), vu_guardar, float(valor_total), b_id, m['id']))
 
             stock = stock_nuevo
 

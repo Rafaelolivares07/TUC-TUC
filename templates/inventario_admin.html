@@ -15233,8 +15233,8 @@ async function cargarReporteEnsambles() {
           html += `${badgeCantProd}`;
           html += `${badgeProdStatus}`;
           html += `</div>`;
-          html += `<div class="text-right text-xs">`;
-          html += `<span class="text-gray-600">Contable: <b>$${costTotalContab.toLocaleString('es-CO')}</b> → Kardex: <b>$${costTotalKardex.toLocaleString('es-CO')}</b></span>`;
+          const contabProdLabel = esProdGeneral ? 'Contable (14* Déb)' : 'Contable (61* Déb)';
+          html += `<span class="text-gray-600">${contabProdLabel}: <b>$${costTotalContab.toLocaleString('es-CO')}</b> → Kardex: <b>$${costTotalKardex.toLocaleString('es-CO')}</b></span>`;
           html += `<span class="ml-2 text-sm font-bold ${Math.abs(difProd) > 0.01 ? 'text-red-600' : 'text-green-600'}">${Math.abs(difProd) > 0.01 ? 'Dif Contab: $' + difProd.toLocaleString('es-CO') : '✅ Cuadrado ($0)'}</span>`;
           if (docsConDifPedido > 0) {
             html += `<span class="ml-2 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded font-mono">⚠️ Pedidos: $${montoDifPedidoProd.toLocaleString('es-CO')}</span>`;
@@ -15334,7 +15334,8 @@ async function cargarReporteEnsambles() {
             html += `<svg class="w-3.5 h-3.5 text-gray-500 transition-transform repair-arrow" id="arrow-${docAccId}" ${docArrowStyle} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>`;
             html += `${badgeGrupo}<span class="text-xs text-gray-600 font-bold uppercase bg-gray-200 px-2 py-0.5 rounded">${ff.tipo_documento}</span><span class="text-xs font-bold text-gray-900 font-mono">${ff.documento_numero}</span><span class="text-xs text-gray-500 font-mono">${ff.fecha}</span>${badgeCantDoc}${badgeLineasMulti}`;
             html += `</div>`;
-            html += `<div class="text-right text-xs"><span class="text-gray-500">Contable: <b>$${cogsMontoDoc.toLocaleString('es-CO')}</b> → Kardex: <b>$${kardexMontoDoc.toLocaleString('es-CO')}</b></span>${badgeDocStatus}</div>`;
+            const contabLabel = isProd ? 'Contable (14* Déb)' : 'Contable (61* Déb)';
+            html += `<div class="text-right text-xs"><span class="text-gray-500">${contabLabel}: <b>$${cogsMontoDoc.toLocaleString('es-CO')}</b> → Kardex: <b>$${kardexMontoDoc.toLocaleString('es-CO')}</b></span>${badgeDocStatus}</div>`;
             html += `</button>`;
             
             html += `<div id="${docAccId}" class="${docHiddenClass} px-3.5 pb-3 pt-2 space-y-2 text-xs border-t border-gray-100">`;
@@ -15354,16 +15355,16 @@ async function cargarReporteEnsambles() {
               
               html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">`;
               html += `<div class="p-2.5 bg-amber-50/60 rounded-lg border border-amber-200/80">`;
-              html += `<span class="text-[10px] text-amber-800 font-bold uppercase block mb-1">📦 Kardex: Cantidad Elaborada & Costo Unitario</span>`;
+              html += `<span class="text-[10px] text-amber-800 font-bold uppercase block mb-1">📦 Kardex: Cantidad Elaborada & Costo Unitario Insumos</span>`;
               html += `<div class="font-mono font-bold text-gray-800 text-xs">Cantidad: <span class="text-amber-900">${cantStr}</span> | Unitario: <span class="text-amber-900">$${costoUnitKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
               html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Kardex: <b class="text-gray-800 font-mono">$${kardexMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
               html += `</div>`;
 
               html += `<div class="p-2.5 bg-slate-50 rounded-lg border border-gray-200">`;
-              html += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Contable: Débito 14* (Entrada Elaborada)</span>`;
+              html += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Contable: Entrada Elaborada (14* Débito)</span>`;
               html += `<div class="font-mono font-bold text-gray-800 text-xs">Total Débito 14*: <span class="text-gray-900">$${cogsMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> | Unit: <span class="text-gray-900">$${costoUnitContab.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
               const clsU = Math.abs(difCostoUnit) > 0.01 ? 'text-red-600' : 'text-green-600';
-              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Diferencia Total: $${(cogsMontoDoc - kardexMontoDoc).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
+              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Dif Entrada Elaborada (14* Déb vs Kardex): $${(cogsMontoDoc - kardexMontoDoc).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
               html += `</div>`;
               html += `</div>`;
             } else {
@@ -15373,16 +15374,16 @@ async function cargarReporteEnsambles() {
               
               html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">`;
               html += `<div class="p-2.5 bg-emerald-50/60 rounded-lg border border-emerald-200/80">`;
-              html += `<span class="text-[10px] text-emerald-800 font-bold uppercase block mb-1">📦 Kardex: Cantidad Vendida & Costo Unitario</span>`;
+              html += `<span class="text-[10px] text-emerald-800 font-bold uppercase block mb-1">📦 Kardex: Cantidad Vendida & Costo Unitario Insumos</span>`;
               html += `<div class="font-mono font-bold text-gray-800 text-xs">Cantidad: <span class="text-emerald-900">${cantStr}</span> ${numLineas > 1 ? `<span class="ml-1 text-[11px] text-indigo-900 font-bold bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">(${lineasDesgloseTxt})</span>` : ''} | Unitario: <span class="text-emerald-900">$${costoUnitKardex.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
-              html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Receta: <b class="text-gray-800 font-mono">$${kardexMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
+              html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Receta (Kardex): <b class="text-gray-800 font-mono">$${kardexMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
               html += `</div>`;
 
               html += `<div class="p-2.5 bg-slate-50 rounded-lg border border-gray-200">`;
-              html += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Contable & Pedido: Costo Venta (61* & Pedido)</span>`;
-              html += `<div class="font-mono font-bold text-gray-800 text-xs">Asiento 61*: <span class="text-gray-900">$${cogsMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> | Pedido Unit: <span class="text-gray-900">$${costoUnitPi.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
+              html += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Contable: Costo de Venta (61* Débito) & Pedido</span>`;
+              html += `<div class="font-mono font-bold text-gray-800 text-xs">Asiento 61* (Déb): <span class="text-gray-900">$${cogsMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> | Pedido Unit: <span class="text-gray-900">$${costoUnitPi.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
               const clsU = Math.abs(difCostoUnit) > 0.01 ? 'text-red-600' : 'text-green-600';
-              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Diferencia Total: $${(cogsMontoDoc - kardexMontoDoc).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
+              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Dif Costo Venta (61* Déb vs Kardex): $${(cogsMontoDoc - kardexMontoDoc).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
               html += `</div>`;
               html += `</div>`;
             }
@@ -15422,11 +15423,11 @@ async function cargarReporteEnsambles() {
 
               html += `<div class="mt-2">`;
               html += `<div class="grid grid-cols-5 gap-2 text-[10px] text-gray-500 font-bold uppercase px-2 mb-0.5">`;
-              html += `<span>Componente / Insumo</span><span class="text-right">Kardex Insumo</span><span class="text-right">Contable (14* Cr)</span><span class="text-right">Diferencia Insumo</span><span class="text-center">Estado ID</span>`;
+              html += `<span>Componente / Insumo</span><span class="text-right">Kardex Insumo</span><span class="text-right">Contable (14* Crédito)</span><span class="text-right">Dif Insumo (14* vs Kardex)</span><span class="text-center">Estado ID</span>`;
               html += `</div>`;
 
               html += `<div class="grid grid-cols-5 gap-2 text-xs font-bold px-2 py-1.5 bg-slate-100/90 rounded-lg border border-slate-200 text-gray-800 mb-1.5 items-center">`;
-              html += `<span class="text-[11px] font-bold text-gray-700 uppercase flex items-center gap-1">🥗 TOTAL INSUMOS <span class="text-[10px] text-gray-500 font-normal">(${todosNombres.length})</span></span>`;
+              html += `<span class="text-[11px] font-bold text-gray-700 uppercase flex items-center gap-1">🥗 TOTAL INSUMOS (14* CR) <span class="text-[10px] text-gray-500 font-normal">(${todosNombres.length})</span></span>`;
               html += `<span class="text-right font-mono text-gray-900">$${sumaKardexComps.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
               html += `<span class="text-right font-mono text-gray-900">$${sumaContabComps.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
               const clsSumaDif = Math.abs(sumaDifComps) > 0.01 ? 'text-red-600' : 'text-green-600';

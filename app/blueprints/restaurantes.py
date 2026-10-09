@@ -154,6 +154,7 @@ def _crear_tablas(conn):
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS solo_carta BOOLEAN DEFAULT FALSE",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS ref_vendedor VARCHAR(50)",
         "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS descripcion TEXT",
+        "ALTER TABLE restaurantes ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(50)",
         "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20)",
         "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS comprobante_pago TEXT",
     ]
@@ -390,7 +391,12 @@ def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo
         admin_id = dict(rest).get('admin_id') if rest else None
         nombre_rest = dict(rest).get('nombre', 'restaurante') if rest else 'restaurante'
     chat_id = None
-    if admin_id:
+    if rest:
+        try:
+            chat_id = rest['telegram_chat_id']
+        except Exception:
+            chat_id = dict(rest).get('telegram_chat_id') if hasattr(rest, 'get') or isinstance(rest, dict) else None
+    if not chat_id and admin_id:
         admin = conn.execute(
             "SELECT telegram_chat_id FROM terceros WHERE id = %s", (admin_id,)
         ).fetchone()
@@ -1489,6 +1495,25 @@ def api_pines_set(slug):
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/restaurante/<slug>/telegram', methods=['POST'])
+def api_restaurante_telegram(slug):
+    uid = session.get('usuario_id')
+    tok = session.get('restaurante_token')
+    if not uid and not tok:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    chat_id = (request.get_json() or {}).get('telegram_chat_id', '').strip()
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        conn.execute("UPDATE restaurantes SET telegram_chat_id = %s WHERE slug = %s", (chat_id or None, slug))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 
 
 @bp.route('/api/restaurante/<slug>/verificar-pin', methods=['POST'])

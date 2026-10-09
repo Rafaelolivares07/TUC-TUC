@@ -134,12 +134,18 @@
               class="w-full border border-gray-200 rounded-xl p-3 text-sm text-gray-700 focus:outline-none focus:border-indigo-400 resize-none"></textarea>
   </div>
 
+  </div>
+
   <div class="bg-white rounded-2xl shadow p-5">
-    <h2 class="text-base font-bold text-gray-800 mb-1">Mensaje sin pedidos</h2>
-    <p class="text-sm text-gray-500 mb-3">Texto que ve el cliente cuando todavia no tiene pedidos en seguimiento. Dejalo vacio para no mostrar nada.</p>
-    <input id="mensaje-sin-pedidos" type="text" maxlength="180"
-           placeholder="Aun no has pedido nada"
-           class="w-full border border-gray-200 rounded-xl p-3 text-sm text-gray-700 focus:outline-none focus:border-indigo-400">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="text-xl">✈️</span>
+      <h2 class="text-base font-bold text-gray-800">Notificaciones Telegram</h2>
+    </div>
+    <p class="text-sm text-gray-500 mb-3">Recibe una alerta en Telegram cada vez que llegue un pedido nuevo. Envía <code class="bg-gray-100 px-1 py-0.5 rounded text-rose-600 font-mono font-bold">/start</code> a <b>@userinfobot</b> en Telegram para obtener tu Chat ID.</p>
+    <div class="flex flex-col sm:flex-row gap-2">
+      <input id="telegram-chat-id" type="text" placeholder="Chat ID (ej: 123456789)"
+             class="flex-1 border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-400 font-mono">
+    </div>
   </div>
 
   <!-- Guardar -->
@@ -205,6 +211,8 @@ async function cargar() {
     document.getElementById('domicilio-tarifa').value = Number(d.config.domicilio_tarifa || 0) || '';
     document.getElementById('domicilio-modo-fuera').value = d.config.domicilio_modo_fuera || 'por_confirmar';
     document.getElementById('cambio-efectivo-modo').value = d.config.cambio_efectivo_modo || 'N';
+    const tgInp = document.getElementById('telegram-chat-id');
+    if (tgInp) tgInp.value = d.config.telegram_chat_id || '';
     actualizarConfigDomicilioVisible();
   } catch(e) { toast('Error de red', true); }
 }
@@ -519,7 +527,8 @@ async function guardar() {
         domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera').value,
         domicilio_zona: domicilioZonaActual,
         cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value,
-        mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos').value
+        mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos').value,
+        telegram_chat_id: document.getElementById('telegram-chat-id')?.value?.trim() || ''
       })
     });
     const d = await r.json();

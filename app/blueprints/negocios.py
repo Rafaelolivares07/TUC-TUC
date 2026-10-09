@@ -508,6 +508,29 @@ def api_config_get(tercero_id):
             catalogo = [dict(m) for m in catalogo]
         except Exception:
             catalogo = [{'id': 0, 'nombre': 'Efectivo', 'codigo': 'efectivo', 'icono': '💵'}]
+        
+        telegram_chat_id = None
+        try:
+            t_row = conn.execute("SELECT telegram_chat_id FROM terceros WHERE id = %s", (tercero_id,)).fetchone()
+            if t_row and t_row['telegram_chat_id']:
+                telegram_chat_id = t_row['telegram_chat_id']
+        except Exception:
+            pass
+        if not telegram_chat_id:
+            try:
+                td_row = conn.execute("SELECT telegram_chat_id FROM tiendas WHERE tercero_id = %s OR admin_id = %s", (tercero_id, tercero_id)).fetchone()
+                if td_row and td_row['telegram_chat_id']:
+                    telegram_chat_id = td_row['telegram_chat_id']
+            except Exception:
+                pass
+            if not telegram_chat_id:
+                try:
+                    rst_row = conn.execute("SELECT telegram_chat_id FROM restaurantes WHERE tercero_id = %s OR admin_id = %s", (tercero_id, tercero_id)).fetchone()
+                    if rst_row and rst_row['telegram_chat_id']:
+                        telegram_chat_id = rst_row['telegram_chat_id']
+                except Exception:
+                    pass
+        config['telegram_chat_id'] = telegram_chat_id
         return jsonify({'ok': True, 'config': config, 'catalogo_metodos': catalogo, 'metodos_info': config.get('metodos_info', {})})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -709,6 +732,23 @@ def api_config_save(tercero_id):
             cambio_efectivo_modo, mensaje_sin_pedidos
         ))
         conn.commit()
+
+        if 'telegram_chat_id' in data:
+            tg_val = (data.get('telegram_chat_id') or '').strip() or None
+            try:
+                conn.execute("UPDATE terceros SET telegram_chat_id = %s WHERE id = %s", (tg_val, tercero_id))
+            except Exception:
+                pass
+            try:
+                conn.execute("UPDATE tiendas SET telegram_chat_id = %s WHERE tercero_id = %s OR admin_id = %s", (tg_val, tercero_id, tercero_id))
+            except Exception:
+                pass
+            try:
+                conn.execute("UPDATE restaurantes SET telegram_chat_id = %s WHERE tercero_id = %s OR admin_id = %s", (tg_val, tercero_id, tercero_id))
+            except Exception:
+                pass
+            conn.commit()
+
         return jsonify({'ok': True})
     except Exception as e:
         try: conn.rollback()

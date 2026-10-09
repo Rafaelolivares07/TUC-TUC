@@ -1165,26 +1165,41 @@
   let gasConceptoTimer = null;
   let gasTerceroIdx = -1;
 
-  // Auto-inicialización: detectar cuándo el panel se hace visible
+  // Auto-inicialización: correr en DOMContentLoaded, evento o cuando el panel se hace visible
   (function() {
     let _gasInit = false;
-    const _panel = document.currentScript && document.currentScript.parentElement;
-    if (!_panel) return;
-    const _check = () => {
-      if (_gasInit) return;
-      if (_panel.offsetParent !== null) {
-        _gasInit = true;
-        inicializarModuloGastos();
-      }
+    const _init = () => {
+      inicializarModuloGastos();
     };
-    new MutationObserver(_check).observe(_panel, { attributes: true, attributeFilter: ['class'] });
-    _check();
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', _init);
+    } else {
+      setTimeout(_init, 50);
+    }
+
+    const _panel = document.currentScript && document.currentScript.parentElement;
+    if (_panel) {
+      const _check = () => {
+        if (_panel.offsetParent !== null) {
+          inicializarModuloGastos();
+        }
+      };
+      new MutationObserver(_check).observe(_panel, { attributes: true, attributeFilter: ['class'] });
+    }
   })();
 
   // Inicialización del panel de Gastos
+  let _gasInitRunning = false;
   async function inicializarModuloGastos() {
-    await cargarGastosDocumentos();
-    await cargarCentrosUtilidadGastos();
+    if (_gasInitRunning) return;
+    _gasInitRunning = true;
+    try {
+      await cargarGastosDocumentos();
+      await cargarCentrosUtilidadGastos();
+    } finally {
+      _gasInitRunning = false;
+    }
   }
 
   let listaCentrosGas = [];
@@ -1219,6 +1234,7 @@
       
       gasDocumentos = d.documentos || [];
       const sel = document.getElementById('gas-tipo-doc');
+      if (!sel) return;
       
       if (gasDocumentos.length === 0) {
         sel.innerHTML = '<option value="">— No hay tipologías de Gastos creadas —</option>';
@@ -1227,13 +1243,16 @@
       
       sel.innerHTML = gasDocumentos.map(doc => {
         const lbl = doc.status === 'abierto' ? `${doc.nombre} — ABIERTO (# ${doc.numero_documento})` : doc.nombre;
-        return `<option value="${doc.codigo}" ${doc.predeterminado ? 'selected' : ''}>${lbl}</option>`;
+        return `<option value="${doc.codigo}">${lbl}</option>`;
       }).join('');
-      const pred = gasDocumentos.find(d => d.predeterminado);
-      if (pred) sel.value = pred.codigo;
+
+      const pred = gasDocumentos.find(d => d.predeterminado) || gasDocumentos[0];
+      if (pred) {
+        sel.value = pred.codigo;
+      }
       
-      cargarRelacionGastoActiva();
-      cargarSuscripcionesGastos();
+      await cargarRelacionGastoActiva();
+      await cargarSuscripcionesGastos();
     } catch(e) {
       console.error(e);
       toast('Error al conectar con la API de documentos', false);

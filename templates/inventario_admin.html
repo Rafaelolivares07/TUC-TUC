@@ -1506,6 +1506,23 @@
 
   <div id="tab-productos" class="bg-white rounded-2xl shadow p-5">
 
+    <!-- ── SELECTOR PRINCIPAL DE VISTA: CATÁLOGO vs COSTOS UNITARIOS ── -->
+    <div class="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100 flex-wrap">
+      <div class="flex items-center gap-2">
+        <button type="button" id="btn-vista-catalogo" onclick="cambiarSubVistaProductos('catalogo')"
+                class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+          <span>📋</span> Catálogo de Productos
+        </button>
+        <button type="button" id="btn-vista-costos" onclick="cambiarSubVistaProductos('costos')"
+                class="px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition flex items-center gap-1.5 cursor-pointer">
+          <span>📊</span> Reporte de Costos Unitarios & Proveedores
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ VISTA 1: CATÁLOGO ESTÁNDAR ═══ -->
+    <div id="seccion-vista-catalogo">
+
     <!-- ── SECCIÓN DE AUDITORÍA INTEGRAL: TABLA vs KARDEX vs CONTABILIDAD (COLAPSADA POR DEFECTO) ── -->
     <div class="mb-5">
       <div class="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-4 text-white shadow-lg">
@@ -1705,7 +1722,78 @@
 
     </div>
 
-    
+    </div>
+    <!-- ═══ FIN VISTA 1: CATÁLOGO ESTÁNDAR ═══ -->
+
+    <!-- ═══ VISTA 2: REPORTE DE COSTOS UNITARIOS & PROVEEDORES ═══ -->
+    <div id="seccion-vista-costos-unitarios" class="hidden">
+      <!-- Barra superior de filtros de costos y acciones -->
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4 w-full">
+        <!-- Filtros píldora por tipología -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button type="button" id="btn-costos-filtro-todos" onclick="filtrarTipoCostos('todos')"
+                  class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-2xs transition cursor-pointer">
+            Todo el Catálogo (<span id="cnt-costos-todos">0</span>)
+          </button>
+          <button type="button" id="btn-costos-filtro-mp" onclick="filtrarTipoCostos('materia_prima')"
+                  class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition cursor-pointer">
+            🌾 Materias Primas (<span id="cnt-costos-mp">0</span>)
+          </button>
+          <button type="button" id="btn-costos-filtro-inter" onclick="filtrarTipoCostos('intermedio')"
+                  class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition cursor-pointer">
+            🥣 Intermedios Producidos (<span id="cnt-costos-inter">0</span>)
+          </button>
+          <button type="button" id="btn-costos-filtro-venta" onclick="filtrarTipoCostos('venta')"
+                  class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition cursor-pointer">
+            🥪 Platos de Venta (<span id="cnt-costos-venta">0</span>)
+          </button>
+        </div>
+
+        <!-- Buscador y botones de exportación -->
+        <div class="flex items-center gap-2 flex-wrap ml-auto">
+          <input id="filtro-costos-txt" type="text" placeholder="🔍 Buscar por nombre..." oninput="filtrarTablaCostosUnitarios()"
+                 class="text-xs border border-gray-200 rounded-xl px-3 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-slate-900 w-48 sm:w-56">
+
+          <button type="button" onclick="exportarCostosUnitariosCSV()"
+                  class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title="Exportar matriz de costos a formato Excel / CSV">
+            <span>📥</span> Excel (CSV)
+          </button>
+
+          <button type="button" onclick="imprimirCostosUnitariosPDF()"
+                  class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title="Imprimir o descargar informe en PDF corporativo limpio">
+            <span>📄</span> Imprimir PDF
+          </button>
+
+          <button type="button" onclick="cargarReporteCostosUnitarios()"
+                  class="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                  title="Actualizar datos">
+            <span>⚡</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabla Limpia de Costos Unitarios (Fuentes grandes, líneas sutiles) -->
+      <div class="overflow-x-auto max-h-[75vh] overflow-y-auto custom-scrollbar border border-gray-100 rounded-xl">
+        <table class="w-full text-left">
+          <thead class="sticky-table-header">
+            <tr class="bg-slate-50 text-xs uppercase font-bold text-slate-700 border-b border-slate-200 select-none">
+              <th class="px-4 py-3 text-left">Tipo</th>
+              <th class="px-4 py-3 text-left">Producto / Descripción</th>
+              <th class="px-4 py-3 text-right">Costo Base (Receta)</th>
+              <th class="px-3 py-3 text-left">Empaque / Compra</th>
+              <th class="px-4 py-3 text-left">Última Compra (Empaque | Proveedor)</th>
+              <th class="px-4 py-3 text-left">Mejor Compra (Récord | Proveedor)</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-costos-unitarios">
+            <tr><td colspan="6" class="text-center text-gray-400 py-10 text-sm">Cargando reporte de costos unitarios…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- ═══ FIN VISTA 2: REPORTE DE COSTOS UNITARIOS ═══ -->
 
   </div>
 
@@ -2906,12 +2994,16 @@
           <span id="text-toggle-valores-kardex">Solo Cantidades</span>
         </button>
 
-        <!-- Botón Conmutador de Decimales homogéneos -->
-        <button type="button" id="btn-toggle-decimales-kardex" onclick="toggleDecimalesKardex()"
-                class="px-3 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-800 cursor-pointer select-none text-xs shadow-xs"
-                title="Mostrar u ocultar decimales homogéneamente en todas las columnas">
-          <span id="icon-toggle-decimales-kardex" class="text-slate-400">✗</span> .00 Decimales
-        </button>
+        <!-- Selector interactivo de decimales para Kardex -->
+        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
+          <label for="kardex-decimales-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1" title="Número de decimales visibles en el Kardex (0 a 6)">
+            <span>🔢 Decimales:</span>
+          </label>
+          <input id="kardex-decimales-input" type="number" min="0" max="6" step="1" value="2"
+                 oninput="cambiarDecimalesKardex(this.value)" onchange="cambiarDecimalesKardex(this.value)" onblur="validarDecimalesKardexInput(this)"
+                 class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                 title="Número de decimales visibles para cantidades, costos y valores en Kardex (0 a 6)">
+        </div>
 
         <button id="kardex-btn-pdf" onclick="generarPdfKardex()" class="hidden px-3.5 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-xl transition-colors shadow-sm items-center gap-1.5">
 
@@ -3729,10 +3821,20 @@ function mostrarTab(t) {
     }
   }
 
+  if (t === 'desembolsos') {
+    if (typeof inicializarModuloGastos === 'function') {
+      inicializarModuloGastos();
+    }
+  }
+
   if (t === 'traslados') {
     cargarCentrosParaTraslado();
     cargarHistorialTraslados();
     cargarInfoDocumentoTraslado();
+  }
+
+  if (t === 'kardex') {
+    inicializarDecimalesKardex();
   }
 
   if (t === 'productos') {
@@ -4011,29 +4113,23 @@ async function ejecutarRecosteoTodos() {
 
 
 async function ejecutarRecosteo(payload, descripcion) {
-
   try {
-
+    toast(`Iniciando recosteo para ${descripcion}...`);
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/ejecutar`, {
-
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
-
     });
-
     const d = await r.json();
-
     if (!r.ok || !d.ok) throw new Error(d.error || 'No fue posible ejecutar el recosteo.');
-
-    toast(`Recosteo ejecutado para ${descripcion}.`);
-
+    toast(`Recosteo completado para ${descripcion}.`);
+    
+    if (typeof mostrarInformeRecosteo === 'function' && d.resumen) {
+      mostrarInformeRecosteo(d.resumen, d.productos_detalle);
+    }
+    
     await cargarAuditoriaRecosteo();
-
   } catch (error) {
-
     toast(error.message, false);
-
   }
-
 }
 
 
@@ -5889,6 +5985,284 @@ async function eliminarProducto(id, nombre) {
 
   }
 
+}
+
+// ═══ GESTIÓN Y REPORTE DE COSTOS UNITARIOS & PROVEEDORES ═══
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+let _costosUnitariosData = [];
+let _costosUnitariosFiltrados = [];
+let _costosTipoActivo = 'todos';
+let _subVistaProductosActiva = 'catalogo';
+
+function cambiarSubVistaProductos(vista) {
+  _subVistaProductosActiva = vista;
+  const btnCat = document.getElementById('btn-vista-catalogo');
+  const btnCos = document.getElementById('btn-vista-costos');
+  const secCat = document.getElementById('seccion-vista-catalogo');
+  const secCos = document.getElementById('seccion-vista-costos-unitarios');
+  
+  if (vista === 'costos') {
+    if (btnCat) {
+      btnCat.className = 'px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition flex items-center gap-1.5 cursor-pointer';
+    }
+    if (btnCos) {
+      btnCos.className = 'px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer';
+    }
+    if (secCat) secCat.classList.add('hidden');
+    if (secCos) secCos.classList.remove('hidden');
+    
+    cargarReporteCostosUnitarios();
+  } else {
+    if (btnCat) {
+      btnCat.className = 'px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer';
+    }
+    if (btnCos) {
+      btnCos.className = 'px-4 py-2 rounded-xl text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 transition flex items-center gap-1.5 cursor-pointer';
+    }
+    if (secCat) secCat.classList.remove('hidden');
+    if (secCos) secCos.classList.add('hidden');
+  }
+}
+
+async function cargarReporteCostosUnitarios() {
+  const tbody = document.getElementById('tabla-costos-unitarios');
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-slate-500 py-10 text-sm font-semibold"><span class="inline-block animate-spin mr-2">⏳</span> Cargando matriz de costos unitarios...</td></tr>';
+  }
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/reporte-costos-unitarios?_t=` + Date.now());
+    if (!r.ok) {
+      const errText = await r.text();
+      let msg = `Error ${r.status}`;
+      try { const j = JSON.parse(errText); msg = j.error || msg; } catch(_) { msg = errText || msg; }
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-rose-500 py-8 text-sm font-semibold">⚠️ ${escapeHtml(msg)}</td></tr>`;
+      }
+      return;
+    }
+    const d = await r.json();
+    if (d.ok) {
+      _costosUnitariosData = d.productos || [];
+      const tot = d.totales || {};
+      const elTodos = document.getElementById('cnt-costos-todos');
+      const elMp = document.getElementById('cnt-costos-mp');
+      const elInter = document.getElementById('cnt-costos-inter');
+      const elVenta = document.getElementById('cnt-costos-venta');
+      if (elTodos) elTodos.textContent = tot.total || 0;
+      if (elMp) elMp.textContent = tot.materias_primas || 0;
+      if (elInter) elInter.textContent = tot.intermedios || 0;
+      if (elVenta) elVenta.textContent = tot.platos_venta || 0;
+      
+      filtrarTablaCostosUnitarios();
+    } else {
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-rose-500 py-8 text-sm font-semibold">⚠️ ${escapeHtml(d.error || 'Error al cargar reporte de costos')}</td></tr>`;
+      }
+    }
+  } catch (e) {
+    console.error('Error al cargar reporte de costos unitarios:', e);
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-rose-500 py-8 text-sm font-semibold">⚠️ Error de red o script: ${escapeHtml(e.message || String(e))}</td></tr>`;
+    }
+  }
+}
+
+function filtrarTipoCostos(tipo) {
+  _costosTipoActivo = tipo;
+  ['todos', 'mp', 'inter', 'venta'].forEach(k => {
+    const btn = document.getElementById(`btn-costos-filtro-${k}`);
+    if (!btn) return;
+    const match = (k === 'todos' && tipo === 'todos') ||
+                  (k === 'mp' && tipo === 'materia_prima') ||
+                  (k === 'inter' && tipo === 'intermedio') ||
+                  (k === 'venta' && tipo === 'venta');
+    if (match) {
+      btn.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-2xs transition cursor-pointer';
+    } else {
+      btn.className = 'px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition cursor-pointer';
+    }
+  });
+  filtrarTablaCostosUnitarios();
+}
+
+function filtrarTablaCostosUnitarios() {
+  const q = (document.getElementById('filtro-costos-txt')?.value || '').toLowerCase().trim();
+  let lista = _costosUnitariosData;
+  
+  if (_costosTipoActivo !== 'todos') {
+    lista = lista.filter(p => p.tipo === _costosTipoActivo);
+  }
+  
+  if (q) {
+    lista = lista.filter(p => (p.nombre || '').toLowerCase().includes(q) || (p.codigo || '').toLowerCase().includes(q) || (p.categoria || '').toLowerCase().includes(q));
+  }
+  
+  _costosUnitariosFiltrados = lista;
+  renderTablaCostosUnitarios(lista);
+}
+
+function renderTablaCostosUnitarios(items) {
+  const tbody = document.getElementById('tabla-costos-unitarios');
+  if (!tbody) return;
+  
+  if (!items || !items.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-10 text-sm font-semibold">No se encontraron productos activos con los filtros aplicados.</td></tr>';
+    return;
+  }
+  
+  let html = '';
+  let ultimoTipo = null;
+  
+  const grupoNombres = {
+    'materia_prima': { icon: '🌾', label: 'MATERIAS PRIMAS / INSUMOS BASE', badge: 'bg-amber-50 text-amber-800 border-amber-200' },
+    'intermedio': { icon: '🥣', label: 'PRODUCTOS INTERMEDIOS / PRODUCCIÓN PROPIA', badge: 'bg-purple-50 text-purple-800 border-purple-200' },
+    'venta': { icon: '🥪', label: 'PLATOS DE VENTA / ENSAMBLES', badge: 'bg-emerald-50 text-emerald-800 border-emerald-200' }
+  };
+  
+  items.forEach((p, idx) => {
+    if (_costosTipoActivo === 'todos' && p.tipo !== ultimoTipo) {
+      const gInfo = grupoNombres[p.tipo] || { icon: '📦', label: 'PRODUCTOS' };
+      html += `
+        <tr class="bg-slate-100/70 border-t border-b border-slate-200">
+          <td colspan="6" class="px-4 py-2 text-xs font-extrabold text-slate-800 uppercase tracking-wide">
+            <span>${gInfo.icon}</span> <span class="ml-1">${gInfo.label}</span>
+          </td>
+        </tr>
+      `;
+      ultimoTipo = p.tipo;
+    }
+    
+    const gInfo = grupoNombres[p.tipo] || { icon: '📦', label: p.tipo_label, badge: 'bg-gray-50 text-gray-800 border-gray-200' };
+    const costActual = Number(p.costo_actual || 0);
+    const costActualFormatted = costActual >= 1 ? '$' + costActual.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '$' + costActual.toFixed(4);
+    
+    // Empaque / Presentación
+    let empaqueHtml = `<div class="text-xs font-bold text-slate-800">${escapeHtml(p.empaque_label || 'Unidad (Und)')}</div>`;
+    if (p.costo_empaque && Number(p.factor_empaque || 1) > 1) {
+      const cEmp = Number(p.costo_empaque);
+      const cEmpFmt = cEmp >= 1 ? '$' + cEmp.toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '$' + cEmp.toFixed(2);
+      empaqueHtml += `<div class="text-[11px] font-semibold text-gray-500 font-mono">${cEmpFmt} / empaque</div>`;
+    }
+
+    // Última Compra
+    let ultCompraHtml = '<span class="text-gray-400 text-xs">—</span>';
+    if (p.ultima_compra && p.ultima_compra.costo) {
+      const ucC = Number(p.ultima_compra.costo);
+      const ucFmt = ucC >= 1 ? '$' + ucC.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '$' + ucC.toFixed(4);
+      const ucEmp = Number(p.ultima_compra.costo_empaque || 0);
+      const ucEmpFmt = ucEmp >= 1 ? '$' + ucEmp.toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '';
+      
+      ultCompraHtml = `
+        <div>
+          ${ucEmpFmt && Number(p.factor_empaque || 1) > 1 ? `<span class="font-mono font-bold text-slate-800 text-xs">${ucEmpFmt} <span class="text-[10px] text-gray-500 font-normal">(${ucFmt}/${p.unidad})</span></span>` : `<span class="font-mono font-bold text-slate-800 text-xs">${ucFmt}/${p.unidad}</span>`}
+          <div class="text-[11px] text-gray-600 truncate max-w-[220px]" title="${escapeHtml(p.ultima_compra.proveedor || '')}">${escapeHtml(p.ultima_compra.proveedor || '')}</div>
+          ${p.ultima_compra.fecha ? `<span class="text-[10px] text-gray-400 font-mono">${p.ultima_compra.fecha}</span>` : ''}
+        </div>
+      `;
+    } else if (p.tipo === 'intermedio') {
+      ultCompraHtml = '<span class="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">Producción Propia</span>';
+    } else if (p.tipo === 'venta') {
+      ultCompraHtml = '<span class="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">Ensamble Receta</span>';
+    }
+
+    // Mejor Compra
+    let mejCompraHtml = '<span class="text-gray-400 text-xs">—</span>';
+    if (p.mejor_compra && p.mejor_compra.costo) {
+      const mcC = Number(p.mejor_compra.costo);
+      const mcFmt = mcC >= 1 ? '$' + mcC.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '$' + mcC.toFixed(4);
+      const mcEmp = Number(p.mejor_compra.costo_empaque || 0);
+      const mcEmpFmt = mcEmp >= 1 ? '$' + mcEmp.toLocaleString('es-CO', {minimumFractionDigits: 0, maximumFractionDigits: 0}) : '';
+
+      mejCompraHtml = `
+        <div>
+          ${mcEmpFmt && Number(p.factor_empaque || 1) > 1 ? `<span class="font-mono font-bold text-emerald-700 text-xs">${mcEmpFmt} <span class="text-[10px] text-emerald-600 font-normal">(${mcFmt}/${p.unidad})</span></span>` : `<span class="font-mono font-bold text-emerald-700 text-xs">${mcFmt}/${p.unidad}</span>`}
+          <div class="text-[11px] text-gray-600 truncate max-w-[220px]" title="${escapeHtml(p.mejor_compra.proveedor || '')}">${escapeHtml(p.mejor_compra.proveedor || '')}</div>
+          ${p.mejor_compra.fecha ? `<span class="text-[10px] text-gray-400 font-mono">${p.mejor_compra.fecha}</span>` : ''}
+        </div>
+      `;
+    } else if (p.tipo === 'intermedio') {
+      mejCompraHtml = '<span class="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">Producción Propia</span>';
+    } else if (p.tipo === 'venta') {
+      mejCompraHtml = '<span class="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">Ensamble Receta</span>';
+    }
+
+    html += `
+      <tr class="hover:bg-slate-50/80 transition-colors border-b border-gray-100">
+        <td class="px-4 py-3 whitespace-nowrap">
+          <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border ${gInfo.badge}">
+            <span>${gInfo.icon}</span> <span>${p.tipo_label}</span>
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          <div class="font-bold text-slate-800 text-sm md:text-base">${escapeHtml(p.nombre)}</div>
+          ${p.codigo ? `<span class="text-[10px] text-gray-400 font-mono">Cód: ${escapeHtml(p.codigo)}</span>` : ''}
+        </td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          <span class="font-mono font-bold text-slate-900 text-sm md:text-base">${costActualFormatted}</span>
+          <span class="text-xs font-semibold text-slate-500 ml-0.5">/${p.unidad}</span>
+        </td>
+        <td class="px-3 py-3 text-left">
+          ${empaqueHtml}
+        </td>
+        <td class="px-4 py-3">
+          ${ultCompraHtml}
+        </td>
+        <td class="px-4 py-3">
+          ${mejCompraHtml}
+        </td>
+      </tr>
+    `;
+  });
+  
+  tbody.innerHTML = html;
+}
+
+function exportarCostosUnitariosCSV() {
+  if (!_costosUnitariosFiltrados || !_costosUnitariosFiltrados.length) {
+    toast('No hay datos para exportar', false);
+    return;
+  }
+  
+  const headers = ['Tipo', 'Producto', 'Unidad Base Receta', 'Costo Base Receta', 'Presentacion / Empaque', 'Costo Empaque', 'Ultima Compra Valor Empaque', 'Ultima Compra Costo Base', 'Ultima Compra Proveedor', 'Ultima Compra Fecha', 'Mejor Compra Valor Empaque', 'Mejor Compra Costo Base', 'Mejor Compra Proveedor', 'Mejor Compra Fecha'];
+  const rows = _costosUnitariosFiltrados.map(p => [
+    p.tipo_label || p.tipo,
+    p.nombre,
+    p.unidad,
+    p.costo_actual,
+    p.empaque_label || '',
+    p.costo_empaque || '',
+    p.ultima_compra ? (p.ultima_compra.costo_empaque || '') : '',
+    p.ultima_compra ? p.ultima_compra.costo : '',
+    p.ultima_compra ? (p.ultima_compra.proveedor || '') : '',
+    p.ultima_compra ? (p.ultima_compra.fecha || '') : '',
+    p.mejor_compra ? (p.mejor_compra.costo_empaque || '') : '',
+    p.mejor_compra ? p.mejor_compra.costo : '',
+    p.mejor_compra ? (p.mejor_compra.proveedor || '') : '',
+    p.mejor_compra ? (p.mejor_compra.fecha || '') : ''
+  ]);
+  
+  let csvContent = '\uFEFF' + [headers, ...rows].map(e => e.map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `reporte_costos_unitarios_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function imprimirCostosUnitariosPDF() {
+  window.open(`/api/inventario/${NEGOCIO_ID}/reporte-costos-unitarios/pdf`, '_blank');
 }
 
 // ── Configuración de Categorías de Adición / Extras POS ─────────────────────
@@ -8120,7 +8494,14 @@ function verKardex(id, nombre, movimientoId = null) {
 
 let kardexProductoActual = null;
 let _kardexPdfInfo = null;
-let _kardexMostrarDecimales = false; // Por defecto sin decimales (homogéneo a enteros como en contabilidad)
+let _kardexDecimales = (() => {
+  const guardado = localStorage.getItem('kardex_decimales');
+  if (guardado !== null) {
+    const p = parseInt(guardado, 10);
+    if (!isNaN(p) && p >= 0 && p <= 6) return p;
+  }
+  return 2;
+})();
 let _kardexOcultarValores = localStorage.getItem('kardex_ocultar_valores') === '1';
 let _kardexDataActual = null;
 
@@ -8162,59 +8543,60 @@ function actualizarBotonValoresKardex() {
   }
 }
 
-function toggleDecimalesKardex() {
-  _kardexMostrarDecimales = !_kardexMostrarDecimales;
-  actualizarBotonDecimalesKardex();
+function cambiarDecimalesKardex(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) d = 2;
+  d = Math.max(0, Math.min(6, d));
+  _kardexDecimales = d;
+  try { localStorage.setItem('kardex_decimales', d); } catch(e) {}
+
+  const inp = document.getElementById('kardex-decimales-input');
+  if (inp && parseInt(inp.value, 10) !== d) inp.value = d;
+
   if (_kardexDataActual) {
     renderizarTablaKardex(_kardexDataActual);
   }
 }
 
-function actualizarBotonDecimalesKardex() {
-  const btn = document.getElementById('btn-toggle-decimales-kardex');
-  const icon = document.getElementById('icon-toggle-decimales-kardex');
-  if (!btn) return;
-  if (_kardexMostrarDecimales) {
-    btn.className = 'px-3 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-blue-600 text-white border-blue-700 shadow-xs cursor-pointer select-none text-xs';
-    if (icon) {
-      icon.className = 'text-white font-bold';
-      icon.textContent = '✓';
-    }
-  } else {
-    btn.className = 'px-3 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-800 cursor-pointer select-none text-xs shadow-xs';
-    if (icon) {
-      icon.className = 'text-slate-400';
-      icon.textContent = '✗';
-    }
-  }
+function validarDecimalesKardexInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 6) d = 6;
+  inputEl.value = d;
+  cambiarDecimalesKardex(d);
+}
+
+function inicializarDecimalesKardex() {
+  const inp = document.getElementById('kardex-decimales-input');
+  if (inp) inp.value = _kardexDecimales;
 }
 
 // Formateadores homogéneos para Kardex
 function _fmtKardexQty(n) {
   if (n == null || isNaN(n)) return '—';
   const val = Number(n);
-  if (_kardexMostrarDecimales) {
-    return val.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (_kardexDecimales === 0) {
+    return Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
-  return Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return val.toLocaleString('es-CO', { minimumFractionDigits: _kardexDecimales, maximumFractionDigits: _kardexDecimales });
 }
 
 function _fmtKardexUnit(n) {
   if (n == null || isNaN(n)) return '—';
   const val = Number(n);
-  if (_kardexMostrarDecimales) {
-    return '$' + val.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (_kardexDecimales === 0) {
+    return '$' + Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
-  return '$' + Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return '$' + val.toLocaleString('es-CO', { minimumFractionDigits: _kardexDecimales, maximumFractionDigits: _kardexDecimales });
 }
 
 function _fmtKardexMon(n) {
   if (n == null || isNaN(n)) return '—';
   const val = Number(n);
-  if (_kardexMostrarDecimales) {
-    return '$' + val.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (_kardexDecimales === 0) {
+    return '$' + Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
-  return '$' + Math.round(val).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return '$' + val.toLocaleString('es-CO', { minimumFractionDigits: _kardexDecimales, maximumFractionDigits: _kardexDecimales });
 }
 
 function toggleKardexNota(movId) {
@@ -8277,17 +8659,44 @@ function renderizarTablaKardex(d) {
       ? `<button type="button" onclick="toggleKardexNota(${m.id})" class="inline-flex items-center gap-0.5 px-1 py-0.2 text-[9px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition cursor-pointer select-none" title="Clic para ver/ocultar nota">📝 Nota</button>`
       : '';
 
+    // Formatear nombre puro del documento sin slugs ni concatenaciones redundantes
+    const docTypeRaw = (m.tipo_documento || '').trim();
+    const docNumRaw = String(m.documento_numero || '').trim();
+
+    let cleanNum = docNumRaw;
+    const matchNum = docNumRaw.match(/^[A-Za-z0-9_]+[-_](\d+)$/);
+    if (matchNum) {
+      cleanNum = matchNum[1];
+    }
+
+    let cleanType = docTypeRaw.replace(/[_-]+/g, ' ').trim();
+    if (!cleanType && /^[A-Za-z_]+[-_]/.test(docNumRaw)) {
+      cleanType = docNumRaw.replace(/[-_]\d+$/, '').replace(/[_-]+/g, ' ').trim();
+    }
+
+    let docDisplay = '';
+    if (cleanType && cleanNum) {
+      if (cleanType.toLowerCase().endsWith(cleanNum.toLowerCase())) {
+        docDisplay = cleanType.toLowerCase();
+      } else {
+        docDisplay = `${cleanType.toLowerCase()} ${cleanNum}`;
+      }
+    } else if (cleanType) {
+      docDisplay = cleanType.toLowerCase();
+    } else if (cleanNum) {
+      docDisplay = cleanNum;
+    } else if (m.motivo === 'ajuste') {
+      docDisplay = 'ajuste de inventario';
+    }
+
     let docOrProveedorInfo = '';
-    if (m.tipo_documento || m.documento_numero) {
-      const docType = m.tipo_documento || '';
-      const docNum = m.documento_numero || '';
-      const tId = m.proveedor_id || '';
-      const linkUrl = `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docType)}&documento_numero=${encodeURIComponent(docNum)}&tercero_id=${encodeURIComponent(tId)}`;
+    if (docDisplay) {
+      const linkUrl = `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docTypeRaw)}&documento_numero=${encodeURIComponent(docNumRaw)}&tercero_id=${encodeURIComponent(m.proveedor_id || '')}`;
 
       docOrProveedorInfo += `
         <div class="font-semibold text-gray-700 flex items-center gap-1 flex-wrap leading-tight text-[11px]">
-          <span>${docType} ${docNum}</span>
-          ${docNum ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-[11px] inline-flex items-center">🔗</a>` : ''}
+          <span>${docDisplay}</span>
+          ${docNumRaw ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-[11px] inline-flex items-center">🔗</a>` : ''}
           ${btnNota}
         </div>
       `;
@@ -8308,6 +8717,19 @@ function renderizarTablaKardex(d) {
           </span>
         </div>
       `;
+    } else if (m.motivo === 'ajuste' || m.tipo === 'ajuste') {
+      const isAjusteEnVenta = (docTypeRaw && docTypeRaw.toLowerCase().includes('factura')) ||
+                              (docNumRaw && docNumRaw.toLowerCase().includes('factura')) ||
+                              (m.notas && m.notas.toLowerCase().includes('caja')) ||
+                              (m.referencia_tipo && m.referencia_tipo.includes('pedido'));
+      const textoAjuste = isAjusteEnVenta ? 'Ajuste en venta' : 'Ajuste de inventario';
+      origenInfo += `
+        <div class="flex items-center gap-1">
+          <span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-[10px] font-bold text-amber-900 border border-amber-300 whitespace-normal break-words leading-tight" title="Ajuste de inventarios">
+            ⚖️ ${textoAjuste}
+          </span>
+        </div>
+      `;
     }
 
     if (m.presentacion_nombre && m.presentacion_nombre.toLowerCase() !== 'unidad') {
@@ -8316,7 +8738,7 @@ function renderizarTablaKardex(d) {
       const cantEmpaquesStr = cantEmpaques ? `${_fmtKardexQty(cantEmpaques)} ` : '';
       
       origenInfo += `
-        <div class="flex items-center gap-1 ${m.producto_padre_nombre ? 'mt-0.5' : ''}">
+        <div class="flex items-center gap-1 ${(m.producto_padre_nombre || m.motivo === 'ajuste') ? 'mt-0.5' : ''}">
           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-[10px] font-bold text-amber-800 border border-amber-200/80 whitespace-normal break-words leading-tight" title="Empaque de compra: ${cantEmpaquesStr}${m.presentacion_nombre} (Equiv: ${equiv})">
             <span class="shrink-0">📦</span> <span>${cantEmpaquesStr}${m.presentacion_nombre}</span>
           </span>
@@ -8360,11 +8782,11 @@ function renderizarTablaKardex(d) {
         <td class="px-2 py-1 text-xs text-gray-600 align-middle">${origenInfo}</td>
         <td class="px-2 py-1 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
         <td class="px-2 py-1 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
-        <td class="px-2 py-1 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${_fmtKardexQty(m.stock_nuevo)}</td>
+        <td class="px-2 py-1 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${_fmtKardexQty(m.saldo_calculado ?? m.stock_nuevo)}</td>
         <td class="px-1.5 py-1 text-right num font-mono text-xs text-gray-600 border-r border-gray-100/50 kardex-col-valores">${_fmtKardexUnit(transCostVal)}</td>
         <td class="px-1.5 py-1 text-right num font-mono text-xs text-gray-600 kardex-col-valores">${_fmtKardexUnit(avgCostVal)}</td>
         <td class="px-2 py-1 text-right num font-mono font-semibold text-gray-800 kardex-col-valores">${_fmtKardexMon(lineTotal)}</td>
-        <td class="px-2 py-1 text-right num font-mono font-bold text-emerald-700 bg-emerald-50/20 kardex-col-valores">${_fmtKardexMon(Number(m.stock_nuevo || 0) * Number(avgCostVal || 0))}</td>
+        <td class="px-2 py-1 text-right num font-mono font-bold text-emerald-700 bg-emerald-50/20 kardex-col-valores">${_fmtKardexMon(Number((m.saldo_calculado ?? m.stock_nuevo) || 0) * Number(avgCostVal || 0))}</td>
       </tr>
     `;
 
@@ -8439,7 +8861,7 @@ async function cargarKardex(productoId) {
   const btnPdf = document.getElementById('kardex-btn-pdf');
   if (btnPdf) { btnPdf.classList.remove('hidden'); btnPdf.classList.add('flex'); }
 
-  actualizarBotonDecimalesKardex();
+  inicializarDecimalesKardex();
   actualizarBotonValoresKardex();
   renderizarTablaKardex(d);
 }
@@ -8758,6 +9180,7 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
 
   const difVal = Math.abs(auditoria.diferencia_valor || 0);
   const difClass = difVal > 0.01 ? 'text-red-600 font-bold' : 'text-emerald-600 font-bold';
+  const requiereRecosteo = alertas.length > 0 || difVal > 0.01 || auditoria.stock_inconsistente || auditoria.costo_inconsistente;
 
   const detalle = [
     ...(auditoria.negativos_intermedios || []).map(x => `Mov #${x.movimiento_id}: stock negativo (${_fmtKardexQty(x.stock)})`),
@@ -8767,14 +9190,30 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
     ...(auditoria.valor_inconsistente ? ['Valor no coincide con reconstrucción'] : [])
   ];
 
-  el.className = `mb-2 rounded-lg border px-3 py-1.5 text-xs flex flex-wrap items-center justify-between gap-2 shadow-2xs ${alertas.length ? 'border-amber-200 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/40'}`;
+  el.className = `mb-2 rounded-lg border px-3 py-1.5 text-xs flex flex-wrap items-center justify-between gap-2 shadow-2xs ${requiereRecosteo ? 'border-amber-300 bg-amber-50/70' : 'border-emerald-200 bg-emerald-50/40'}`;
 
   el.innerHTML = `
-    <div class="flex items-center gap-2 flex-wrap">
+    <div class="flex items-center gap-2 flex-wrap shrink-0">
       <span class="text-[11px] font-extrabold text-gray-700">Auditoría:</span>
       ${alertas.length ? alertas.join('') : '<span class="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 font-bold text-[10px]">✓ Sin inconsistencias</span>'}
     </div>
-    <div class="flex items-center gap-3 text-[11px] font-mono text-gray-600">
+
+    <div class="flex-1 flex items-center justify-center gap-2 px-2">
+      ${requiereRecosteo ? `
+        <span class="text-[11px] font-semibold text-amber-900 flex items-center gap-1">
+          <span>⚠️</span> <span>Recomendación: ejecutar recosteo para sincronizar saldos</span>
+        </span>
+        <button type="button" onclick="ejecutarRecosteoKardex(${productoId})" id="btn-recosteo-kardex"
+                class="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
+                title="Recalcular cronológicamente los saldos y el costo promedio de este producto">
+          <span>⚡</span> <span>Ejecutar Recosteo</span>
+        </button>
+      ` : `
+        <span class="text-[10px] text-gray-400 font-medium hidden md:inline">Saldos y costos sincronizados con la historia</span>
+      `}
+    </div>
+
+    <div class="flex items-center gap-3 text-[11px] font-mono text-gray-600 shrink-0">
       <span>Alm: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_almacenado)}</strong></span>
       <span>Rec: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_reconstruido)}</strong></span>
       <span>Dif: <span class="${difClass}">${_fmtKardexMon(auditoria.diferencia_valor)}</span></span>
@@ -8786,6 +9225,181 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
           </div>
         </details>
       ` : ''}
+    </div>
+  `;
+}
+
+async function ejecutarRecosteoKardex(productoId) {
+  if (!productoId) return;
+  const btn = document.getElementById('btn-recosteo-kardex');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> <span>Recosteando...</span>';
+  }
+  try {
+    toast('Ejecutando recosteo y sincronización de saldos...');
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/ejecutar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ producto_ids: [Number(productoId)] })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || 'No fue posible ejecutar el recosteo.');
+    toast('Recosteo completado exitosamente.');
+    if (typeof mostrarInformeRecosteo === 'function' && d.resumen) {
+      mostrarInformeRecosteo(d.resumen, d.productos_detalle);
+    }
+    await cargarKardex(productoId);
+    if (typeof cargarProductos === 'function') {
+      cargarProductos();
+    }
+  } catch (err) {
+    toast(err.message, false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>⚡</span> <span>Ejecutar Recosteo</span>';
+    }
+  }
+}
+
+function mostrarInformeRecosteo(resumen, productosDetalle) {
+  if (!resumen) return;
+  
+  let modalEl = document.getElementById('modal-informe-recosteo');
+  if (!modalEl) {
+    modalEl = document.createElement('div');
+    modalEl.id = 'modal-informe-recosteo';
+    document.body.appendChild(modalEl);
+  }
+  modalEl.className = 'fixed inset-0 flex items-center justify-center p-4 transition-all duration-300';
+  modalEl.style.cssText = 'position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100vw !important; height: 100vh !important; background-color: rgba(15, 23, 42, 0.75) !important; backdrop-filter: blur(4px) !important; -webkit-backdrop-filter: blur(4px) !important; z-index: 999999 !important; display: flex !important; align-items: center !important; justify-content: center !important; padding: 16px !important; margin: 0 !important;';
+  modalEl.onclick = function(e) {
+    if (e.target === modalEl) modalEl.remove();
+  };
+
+  const prods = productosDetalle || [];
+  const totalProds = resumen.total_productos || prods.length || 0;
+  const totalMovs = resumen.total_movimientos_procesados || 0;
+  const totalMovsAjustados = resumen.total_movimientos_ajustados || 0;
+  const totalAs14 = resumen.total_asientos_inv_ajustados || 0;
+  const totalAscp = resumen.total_asientos_cp_ajustados || 0;
+  const totalPed = resumen.total_pedidos_ajustados || 0;
+  const prodsConCambios = resumen.productos_con_cambios || 0;
+
+  let filasHtml = '';
+  prods.forEach(p => {
+    const tieneCambios = (p.movimientos_ajustados > 0 || p.asientos_14_ajustados > 0 || p.pedidos_ajustados > 0);
+    const difCosto = (p.costo_final || 0) - (p.costo_anterior || 0);
+    
+    filasHtml += `
+      <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 transition-all shadow-sm">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-bold text-slate-800 dark:text-slate-100 text-sm truncate">${p.producto_nombre}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full font-semibold ${tieneCambios ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'}">
+              ${tieneCambios ? '⚡ ' + p.movimientos_ajustados + ' movs ajustados' : '✅ Sin desfases'}
+            </span>
+          </div>
+          <div class="text-right whitespace-nowrap">
+            <span class="text-xs font-medium text-slate-500">Stock Final:</span>
+            <span class="text-xs font-bold text-slate-700 dark:text-slate-200 ml-1">${Number(p.stock_final || 0).toLocaleString('es-CO', {maximumFractionDigits: 2})} unds</span>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-xs">
+          <div>
+            <span class="text-slate-500 block">Costo Promedio:</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-100">$${Number(p.costo_final || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+            ${Math.abs(difCosto) > 0.01 ? `<span class="text-[10px] ${difCosto > 0 ? 'text-rose-500' : 'text-emerald-500'} block">(${difCosto > 0 ? '+' : ''}$${difCosto.toFixed(2)})</span>` : ''}
+          </div>
+          <div>
+            <span class="text-slate-500 block">Valor Existencias:</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-100">$${Number(p.valor_existencia || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+          </div>
+          <div>
+            <span class="text-slate-500 block">Asientos 14* / 61*:</span>
+            <span class="font-semibold ${p.asientos_14_ajustados > 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400'}">
+              ${(p.asientos_14_ajustados || 0) + (p.asientos_cp_ajustados || 0)} sincronizados
+            </span>
+          </div>
+          <div>
+            <span class="text-slate-500 block">Comandas Pedidos:</span>
+            <span class="font-semibold ${p.pedidos_ajustados > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400'}">
+              ${p.pedidos_ajustados || 0} actualizados
+            </span>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  modalEl.innerHTML = `
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div class="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-indigo-500/10">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shadow-inner">
+            📊
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-800 dark:text-slate-100 text-lg">Informe Ejecutivo de Recosteo</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Sincronización integral: Kardex ↔ Contabilidad ↔ Pedidos</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('modal-informe-recosteo').remove()" class="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+          ✕
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto flex-1 space-y-4">
+        <!-- KPI CARDS -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Productos</span>
+            <span class="text-xl font-black text-slate-800 dark:text-slate-100">${totalProds}</span>
+            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 block font-medium mt-0.5">Recosteados</span>
+          </div>
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Kardex Movs</span>
+            <span class="text-xl font-black text-slate-800 dark:text-slate-100">${totalMovsAjustados}</span>
+            <span class="text-[10px] text-slate-500 block font-medium mt-0.5">de ${totalMovs} proc.</span>
+          </div>
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Contabilidad</span>
+            <span class="text-xl font-black text-indigo-600 dark:text-indigo-400">${totalAs14 + totalAscp}</span>
+            <span class="text-[10px] text-indigo-500 block font-medium mt-0.5">Asientos 14* y 61*</span>
+          </div>
+          <div class="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-center">
+            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">Comandas</span>
+            <span class="text-xl font-black text-amber-600 dark:text-amber-400">${totalPed}</span>
+            <span class="text-[10px] text-amber-500 block font-medium mt-0.5">Pedidos POS</span>
+          </div>
+        </div>
+
+        <!-- LISTA DE PRODUCTOS -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Detalle por Producto</span>
+            <span class="text-xs text-slate-500 font-medium">${prodsConCambios} con ajustes aplicados</span>
+          </div>
+          <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
+            ${filasHtml}
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 flex items-center gap-3">
+          <div class="text-xl">✅</div>
+          <p class="text-xs text-emerald-800 dark:text-emerald-300 font-medium">
+            Todos los saldos de inventario, asientos contables del Libro Diario y costos en comandas quedaron <strong>100% sincronizados y cuadrados</strong>.
+          </p>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
+        <button onclick="document.getElementById('modal-informe-recosteo').remove()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white font-bold text-sm rounded-xl transition-all shadow-md active:scale-95">
+          Entendido / Cerrar
+        </button>
+      </div>
     </div>
   `;
 }
@@ -12618,6 +13232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   inicializarDecimalesProductos();
   inicializarDecimalesTarjetas();
   inicializarDecimalesPreviewProduccion();
+  inicializarDecimalesKardex();
 
   await inicializarCentrosUtilidad();
 
@@ -15209,9 +15824,9 @@ async function cargarReporteEnsambles() {
             ? `<span class="text-xs px-2.5 py-0.5 bg-amber-200/90 text-amber-950 rounded-full font-bold border border-amber-300 flex items-center gap-1">🍳 ${cantProdStr} Elaboradas</span>`
             : `<span class="text-xs px-2.5 py-0.5 bg-emerald-100 text-emerald-950 rounded-full font-bold border border-emerald-300 flex items-center gap-1">🍽️ ${cantProdStr} Vendidas</span>`;
 
-          const docsConDifContab = prod.facturas.filter(f => Math.abs((f.cogs_contable ? Number(f.cogs_contable.monto_actual || 0) : 0) - Number(f.costo_real_kardex || 0)) > 0.01).length;
-          const docsConDifPedido = prod.facturas.filter(f => f.pedido_item && Math.abs(Number(f.pedido_item.diferencia || 0)) > 0.01).length;
-          const montoDifPedidoProd = prod.facturas.reduce((s, ff) => s + (ff.pedido_item ? Math.abs(Number(ff.pedido_item.diferencia || 0)) : 0), 0);
+          const docsConDifContab = prod.facturas.filter(f => Math.abs((f.cogs_contable ? Number(f.cogs_contable.monto_actual || 0) : 0) - Number(f.costo_real_kardex || 0)) > 0.05).length;
+          const docsConDifPedido = prod.facturas.filter(f => f.pedido_item && Math.abs(Number(f.pedido_item.diferencia || 0)) > 0.50).length;
+          const montoDifPedidoProd = prod.facturas.reduce((s, ff) => s + (ff.pedido_item && Math.abs(Number(ff.pedido_item.diferencia || 0)) > 0.50 ? Math.abs(Number(ff.pedido_item.diferencia || 0)) : 0), 0);
 
           let badgesStatusList = [];
           if (docsConDifContab > 0) {

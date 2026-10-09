@@ -986,6 +986,11 @@ function cambiarTab(t) {
   if (t === 'manual')            { setModoComp('libre'); if (!document.querySelectorAll('.linea-manual').length) addLineaManual(); }
   if (t === 'consulta')          { inicializarFechasConsulta(); cargarAuditoriaContable(); }
   if (t === 'balance')           inicializarBalanceTab();
+  if (t === 'desembolsos') {
+    if (typeof inicializarModuloGastos === 'function') {
+      inicializarModuloGastos();
+    }
+  }
   if (t === 'estado_resultados') {
     if (typeof initEstadoResultados === 'function') {
       initEstadoResultados();

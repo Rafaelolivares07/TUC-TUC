@@ -1626,6 +1626,138 @@ function quitarDeCola(index) {
   renderQueue();
 }
 
+function actualizarControlesModos() {
+  const btnShuffle = document.getElementById('btn-shuffle');
+  const btnRepeat = document.getElementById('btn-repeat');
+  const pillShuffle = document.getElementById('pill-shuffle');
+  const pillRepeat = document.getElementById('pill-repeat');
+  const labelShuffleText = document.getElementById('label-shuffle-text');
+  const labelRepeatIcon = document.getElementById('label-repeat-icon');
+  const labelRepeatText = document.getElementById('label-repeat-text');
+  const labelQueueCount = document.getElementById('label-queue-count');
+
+  // Control Aleatorio / Desorden
+  if (btnShuffle) {
+    btnShuffle.classList.toggle('active', isShuffle);
+    btnShuffle.title = isShuffle
+      ? 'Desorden activado (Aleatorio) ✓ — Clic para reproducir en orden'
+      : 'En orden secuencial — Clic para reproducir en desorden';
+  }
+  if (pillShuffle) {
+    pillShuffle.classList.toggle('active', isShuffle);
+  }
+  if (labelShuffleText) {
+    labelShuffleText.textContent = isShuffle ? 'En desorden (Aleatorio) ✓' : 'En orden';
+  }
+
+  // Control Repetición (3 estados: off, all, one)
+  if (btnRepeat) {
+    btnRepeat.classList.remove('active', 'active-one');
+    if (repeatMode === 'all') {
+      btnRepeat.classList.add('active');
+      btnRepeat.textContent = '🔁';
+      btnRepeat.title = 'Repetir: Toda la lista ✓ — Clic para repetir solo esta canción';
+    } else if (repeatMode === 'one') {
+      btnRepeat.classList.add('active-one');
+      btnRepeat.textContent = '🔂';
+      btnRepeat.title = 'Repetir: Esta canción en bucle 🔂 — Clic para desactivar';
+    } else {
+      btnRepeat.textContent = '🔁';
+      btnRepeat.title = 'No repetir — Clic para repetir toda la lista';
+    }
+  }
+
+  if (pillRepeat) {
+    pillRepeat.classList.remove('active', 'active-one');
+    if (repeatMode === 'all') {
+      pillRepeat.classList.add('active');
+    } else if (repeatMode === 'one') {
+      pillRepeat.classList.add('active-one');
+    }
+  }
+
+  if (labelRepeatIcon) {
+    labelRepeatIcon.textContent = repeatMode === 'one' ? '🔂' : '🔁';
+  }
+  if (labelRepeatText) {
+    if (repeatMode === 'all') {
+      labelRepeatText.textContent = 'Repetir: Toda la lista';
+    } else if (repeatMode === 'one') {
+      labelRepeatText.textContent = 'Repetir: Esta canción 🔂';
+    } else {
+      labelRepeatText.textContent = 'No repetir';
+    }
+  }
+
+  if (labelQueueCount) {
+    labelQueueCount.textContent = `${currentQueue.length} en lista`;
+  }
+}
+
+function toggleShuffle() {
+  if (!currentQueue.length) {
+    isShuffle = !isShuffle;
+    actualizarControlesModos();
+    return;
+  }
+
+  isShuffle = !isShuffle;
+
+  if (isShuffle) {
+    // Al activar desorden: guardar el orden original si no está guardado
+    if (!originalQueue.length || originalQueue.length !== currentQueue.length) {
+      originalQueue = [...currentQueue];
+    }
+
+    const cancionActualItem = currentQueue[currentIndex];
+
+    // Mantener la canción que está sonando en la posición 0 y mezclar todas las demás
+    if (cancionActualItem) {
+      const demas = currentQueue.filter((_, idx) => idx !== currentIndex);
+      const demasMezcladas = mezclarArray(demas);
+      currentQueue = [cancionActualItem, ...demasMezcladas];
+      currentIndex = 0;
+    } else {
+      currentQueue = mezclarArray(currentQueue);
+      currentIndex = 0;
+    }
+
+    renderQueue();
+    actualizarControlesModos();
+    mostrarMensaje('🔀 Lista rearmada en desorden: ahora ves el orden aleatorio real', 'ok');
+  } else {
+    // Al desactivar desorden: restaurar el orden original secuencial
+    if (originalQueue.length) {
+      const cancionActualItem = currentQueue[currentIndex];
+      currentQueue = [...originalQueue];
+      if (cancionActualItem) {
+        const nuevaPos = currentQueue.findIndex(s => s.id === cancionActualItem.id);
+        currentIndex = nuevaPos !== -1 ? nuevaPos : 0;
+      } else {
+        currentIndex = 0;
+      }
+    }
+
+    renderQueue();
+    actualizarControlesModos();
+    mostrarMensaje('➡️ Lista restaurada al orden original secuencial', 'ok');
+  }
+}
+
+function toggleRepeat() {
+  if (repeatMode === 'off') {
+    repeatMode = 'all';
+    mostrarMensaje('🔁 Repetición activada: Toda la lista se repetirá al terminar', 'ok');
+  } else if (repeatMode === 'all') {
+    repeatMode = 'one';
+    mostrarMensaje('🔂 Repetición activada: La canción actual se repetirá en bucle', 'ok');
+  } else {
+    repeatMode = 'off';
+    mostrarMensaje('➡️ Repetición desactivada: Se detendrá al terminar la lista', 'ok');
+  }
+  actualizarControlesModos();
+}
+
 /* ── Lógica de Fundido Cruzado (Crossfade) ── */
 async function iniciarCrossfade(secs, targetIndex = null) {
   if (transitioning) return;
@@ -1974,7 +2106,7 @@ async function limpiarTodaBiblioteca() {
     currentQueue = [];
     currentIndex = -1;
     if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
-    audioEngine.pause();
+    if (player) player.pause(); if (standbyPlayer) standbyPlayer.pause();
     nowTitle.textContent = 'Biblioteca vacía';
     nowSub.textContent = 'Agrega una carpeta para comenzar';
     btnPlayPause.textContent = '▶';

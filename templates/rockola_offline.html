@@ -398,6 +398,123 @@ body {
   color: #fff;
 }
 
+/* Barra de modos e indicadores explícitos */
+.player-modes-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,212,255,0.1);
+  flex-wrap: wrap;
+}
+.mode-pill {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.mode-pill:hover {
+  background: var(--ac1-bg);
+  color: var(--ac1);
+  border-color: var(--ac1);
+}
+.mode-pill.active {
+  background: var(--ac1-dim);
+  border-color: var(--ac1);
+  color: var(--ac1);
+  box-shadow: 0 0 10px rgba(0,212,255,0.25);
+  font-weight: 800;
+}
+.mode-pill.active-one {
+  background: rgba(255, 193, 7, 0.15);
+  border-color: #ffc107;
+  color: #ffc107;
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.25);
+  font-weight: 800;
+}
+.ctrl-btn.active-one {
+  background: rgba(255, 193, 7, 0.18);
+  border-color: #ffc107;
+  color: #ffc107;
+  box-shadow: 0 0 12px rgba(255, 193, 7, 0.3);
+}
+
+/* Elementos de la lista de reproducción enriquecida */
+.q-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin-bottom: 6px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.q-item:hover {
+  background: rgba(0,212,255,0.06);
+  border-color: var(--border);
+}
+.q-item.played {
+  opacity: 0.65;
+  background: rgba(255,255,255,0.01);
+  border-color: rgba(255,255,255,0.03);
+}
+.q-item.played:hover {
+  opacity: 0.95;
+}
+.q-item.now-playing {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(0,212,255,0.18) 0%, rgba(0,102,255,0.08) 100%);
+  border: 1px solid var(--ac1);
+  box-shadow: 0 0 16px rgba(0,212,255,0.18);
+}
+.q-item.is-next {
+  border-color: rgba(0,212,255,0.35);
+  background: rgba(0,212,255,0.05);
+}
+.q-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.q-badge.badge-played {
+  background: rgba(255,255,255,0.06);
+  color: var(--muted);
+}
+.q-badge.badge-now {
+  background: var(--ac-grad);
+  color: #00101b;
+  font-weight: 900;
+}
+.q-badge.badge-next {
+  background: rgba(0,212,255,0.18);
+  color: var(--ac1);
+  border: 1px solid rgba(0,212,255,0.3);
+}
+.q-badge.badge-waiting {
+  background: rgba(255,255,255,0.04);
+  color: var(--muted2);
+}
+
 /* Tarjetas de listas/géneros */
 .genre-grid {
   display: grid;
@@ -524,6 +641,31 @@ body {
       <input class="volume-slider" id="volume-slider" type="range" min="0" max="1" step="0.05" value="0.9" oninput="setVolume(this.value)">
       <span>🔊</span>
     </div>
+
+    <!-- Barra de Indicadores y Modos Claros -->
+    <div class="player-modes-bar">
+      <button class="mode-pill" id="pill-shuffle" onclick="toggleShuffle()" title="Toca para cambiar orden (En orden / En desorden)">
+        <span id="label-shuffle-icon">🔀</span> <span id="label-shuffle-text">En orden</span>
+      </button>
+      <button class="mode-pill" id="pill-repeat" onclick="toggleRepeat()" title="Toca para cambiar repetición (No repetir / Toda la lista / Esta canción)">
+        <span id="label-repeat-icon">🔁</span> <span id="label-repeat-text">No repetir</span>
+      </button>
+      <button class="mode-pill" id="pill-queue-toggle" onclick="toggleQueuePanel()" title="Toca para ver u ocultar la lista completa aquí">
+        <span>📋</span> <span id="label-queue-count">0 en lista</span>
+      </button>
+    </div>
+
+    <!-- Panel Desplegable de Lista en Reproducción Actual -->
+    <div id="player-queue-panel" style="display:none; margin-top:14px; padding-top:12px; border-top:1px solid rgba(0,212,255,0.12);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span style="font-size:12px; font-weight:800; color:var(--ac1); text-transform:uppercase; letter-spacing:1px;">Lista en Reproducción Actual</span>
+        <div style="display:flex; gap:6px;">
+          <button class="mini-btn del" onclick="limpiarCola()" title="Vaciar la lista actual">Vaciar</button>
+          <button class="mini-btn" onclick="toggleQueuePanel()" title="Cerrar panel">Cerrar ✕</button>
+        </div>
+      </div>
+      <ul class="song-list" id="player-queue-list" style="max-height:280px;"></ul>
+    </div>
   </div>
 
   <!-- Agregar Música a la Biblioteca -->
@@ -571,6 +713,10 @@ body {
 
     <!-- Vista Cola -->
     <div id="view-queue" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <span style="font-size:12px; font-weight:800; color:var(--ac1); text-transform:uppercase; letter-spacing:1px;">Lista de Reproducción Completa</span>
+        <button class="mini-btn del" onclick="limpiarCola()" title="Vaciar lista">Vaciar lista</button>
+      </div>
       <ul class="song-list" id="queue-list">
         <li class="empty-state">No hay canciones en la cola.</li>
       </ul>
@@ -664,7 +810,8 @@ let currentQueue = [];
 let currentIndex = -1;
 let currentObjectUrl = null;
 let isShuffle = false;
-let isRepeat = false;
+// repeatMode: 'off' (No repetir), 'all' (Toda la lista), 'one' (Esta canción en bucle)
+let repeatMode = 'off';
 let songToAddId = null;
 let isIndexingActive = false;
 
@@ -1038,7 +1185,8 @@ function renderSongs() {
         <div class="song-meta">${Math.max(1, Math.round((s.size || 0) / 1024 / 1024))} MB · Local</div>
       </div>
       <div class="song-actions">
-        <button class="mini-btn" onclick="abrirModalParaAgregar('${s.id}')" title="Agregar a lista">+ Lista</button>
+        <button class="mini-btn" onclick="agregarACola('${s.id}')" title="Agregar a la lista de reproducción">+ Cola</button>
+        <button class="mini-btn" onclick="abrirModalParaAgregar('${s.id}')" title="Agregar a lista o género">+ Lista</button>
         <button class="mini-btn" onclick="sonarCancionDirecta('${s.id}')" title="Reproducir ahora">▶ Sonar</button>
         <button class="mini-btn del" onclick="eliminarCancion('${s.id}')" title="Borrar de este dispositivo">✕</button>
       </div>
@@ -1070,25 +1218,101 @@ function renderPlaylists() {
   }).join('');
 }
 
-function renderQueue() {
-  countQueueEl.textContent = currentQueue.length;
-  if (!currentQueue.length) {
-    queueListEl.innerHTML = '<li class="empty-state">La cola está vacía. Selecciona una canción o lista para reproducir.</li>';
-    return;
+function toggleQueuePanel() {
+  const panel = document.getElementById('player-queue-panel');
+  if (!panel) return;
+  const visible = panel.style.display === 'block';
+  panel.style.display = visible ? 'none' : 'block';
+  const pill = document.getElementById('pill-queue-toggle');
+  if (pill) pill.classList.toggle('active', !visible);
+}
+
+function generarHtmlCola(queue, curIdx) {
+  if (!queue.length) {
+    return '<li class="empty-state">La lista está vacía. Selecciona una canción o lista para reproducir.</li>';
   }
 
-  queueListEl.innerHTML = currentQueue.map((s, i) => `
-    <li class="song-item" style="${i === currentIndex ? 'background: rgba(0,212,255,0.1); border-color: var(--ac1);' : ''}">
-      <span style="font-size:12px; font-weight:800; color:var(--ac1); width:20px;">${i === currentIndex ? '▶' : '#' + (i + 1)}</span>
-      <div class="song-info">
-        <div class="song-name">${limpiarNombre(s.nombre)}</div>
-      </div>
-      <div class="song-actions">
-        <button class="mini-btn" onclick="saltarAIndice(${i})">Sonar</button>
-        <button class="mini-btn del" onclick="quitarDeCola(${i})">✕</button>
-      </div>
-    </li>
-  `).join('');
+  return queue.map((s, i) => {
+    let estadoClase = '';
+    let badgeHtml = '';
+    let iconNum = '';
+
+    if (i < curIdx) {
+      estadoClase = 'played';
+      badgeHtml = '<span class="q-badge badge-played">⏮ Ya sonó</span>';
+      iconNum = `<span style="font-size:11px; color:var(--muted); width:28px;">#${i + 1}</span>`;
+    } else if (i === curIdx) {
+      estadoClase = 'now-playing';
+      badgeHtml = '<span class="q-badge badge-now">▶ Sonando ahora</span>';
+      iconNum = `<span style="font-size:14px; font-weight:900; color:var(--ac1); width:28px;">▶</span>`;
+    } else if (i === curIdx + 1) {
+      estadoClase = 'is-next';
+      badgeHtml = '<span class="q-badge badge-next">⏭ Siguiente</span>';
+      iconNum = `<span style="font-size:11px; font-weight:800; color:var(--ac1); width:28px;">#${i + 1}</span>`;
+    } else {
+      estadoClase = 'waiting';
+      badgeHtml = '<span class="q-badge badge-waiting">En espera</span>';
+      iconNum = `<span style="font-size:11px; color:var(--muted2); width:28px;">#${i + 1}</span>`;
+    }
+
+    return `
+      <li class="q-item ${estadoClase}" onclick="saltarAIndice(${i})" title="Toca para reproducir esta canción">
+        ${iconNum}
+        <div class="song-info">
+          <div class="song-name" style="${i === curIdx ? 'color:var(--ac1); font-weight:800;' : ''}">${limpiarNombre(s.nombre)}</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
+            ${badgeHtml}
+            <span class="song-meta" style="margin:0;">${s.size ? Math.max(1, Math.round(s.size / 1024 / 1024)) + ' MB' : 'Local'}</span>
+          </div>
+        </div>
+        <div class="song-actions" onclick="event.stopPropagation()">
+          <button class="mini-btn ${i === curIdx ? 'primary' : ''}" onclick="saltarAIndice(${i})" title="Sonar">${i === curIdx ? 'Sonando' : 'Sonar'}</button>
+          <button class="mini-btn del" onclick="quitarDeCola(${i})" title="Quitar de la lista">✕</button>
+        </div>
+      </li>
+    `;
+  }).join('');
+}
+
+function renderQueue() {
+  countQueueEl.textContent = currentQueue.length;
+  actualizarControlesModos();
+
+  const html = generarHtmlCola(currentQueue, currentIndex);
+  if (queueListEl) queueListEl.innerHTML = html;
+
+  const playerQueueEl = document.getElementById('player-queue-list');
+  if (playerQueueEl) playerQueueEl.innerHTML = html;
+}
+
+function agregarACola(id) {
+  const cancion = allSongs.find(s => s.id === id);
+  if (!cancion) return;
+  currentQueue.push(cancion);
+  if (currentIndex === -1) {
+    currentIndex = 0;
+    reproducirIndiceActual();
+  } else {
+    renderQueue();
+  }
+  mostrarMensaje(`Agregada a la lista: ${limpiarNombre(cancion.nombre)}`, 'ok');
+}
+
+function limpiarCola() {
+  if (!currentQueue.length) return;
+  currentQueue = [];
+  currentIndex = -1;
+  audioEngine.pause();
+  audioEngine.removeAttribute('src');
+  btnPlayPause.textContent = '▶';
+  vinylDisc.classList.remove('spin');
+  nowTitle.textContent = 'Sin reproducción activa';
+  nowSub.textContent = 'Selecciona una canción o lista abajo';
+  progressFill.style.width = '0%';
+  timeCurrent.textContent = '0:00';
+  timeDuration.textContent = '0:00';
+  renderQueue();
+  mostrarMensaje('Lista de reproducción vaciada');
 }
 
 /* ── Motor de Reproducción ── */
@@ -1150,6 +1374,25 @@ function reproducirIndiceActual() {
     vinylDisc.classList.remove('spin');
   });
 
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: limpiarNombre(s.nombre),
+        artist: 'Mi Rockola Offline',
+        album: 'Música Local',
+        artwork: [
+          { src: '/static/rockola-icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/static/rockola-icon-512.png', sizes: '512x512', type: 'image/png' }
+        ]
+      });
+      navigator.mediaSession.setActionHandler('play', () => { togglePlayPause(); });
+      navigator.mediaSession.setActionHandler('pause', () => { togglePlayPause(); });
+      navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
+      navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
+      navigator.mediaSession.playbackState = 'playing';
+    } catch(e) {}
+  }
+
   renderQueue();
 }
 
@@ -1172,16 +1415,38 @@ function togglePlayPause() {
 function playNext() {
   if (!currentQueue.length) return;
   if (isShuffle) {
-    currentIndex = Math.floor(Math.random() * currentQueue.length);
+    if (currentQueue.length > 1) {
+      let nuevoIndex = currentIndex;
+      let intentos = 0;
+      while (nuevoIndex === currentIndex && intentos < 15) {
+        nuevoIndex = Math.floor(Math.random() * currentQueue.length);
+        intentos++;
+      }
+      currentIndex = nuevoIndex;
+    }
   } else {
-    currentIndex = (currentIndex + 1) % currentQueue.length;
+    if (currentIndex >= currentQueue.length - 1) {
+      currentIndex = 0; // Vuelve al inicio
+    } else {
+      currentIndex++;
+    }
   }
   reproducirIndiceActual();
 }
 
 function playPrev() {
   if (!currentQueue.length) return;
-  currentIndex = (currentIndex - 1 + currentQueue.length) % currentQueue.length;
+  if (audioEngine.currentTime > 3) {
+    audioEngine.currentTime = 0;
+    return;
+  }
+  if (isShuffle) {
+    if (currentQueue.length > 1) {
+      currentIndex = Math.floor(Math.random() * currentQueue.length);
+    }
+  } else {
+    currentIndex = (currentIndex - 1 + currentQueue.length) % currentQueue.length;
+  }
   reproducirIndiceActual();
 }
 
@@ -1201,16 +1466,96 @@ function quitarDeCola(index) {
   renderQueue();
 }
 
+function actualizarControlesModos() {
+  const btnShuffle = document.getElementById('btn-shuffle');
+  const btnRepeat = document.getElementById('btn-repeat');
+  const pillShuffle = document.getElementById('pill-shuffle');
+  const pillRepeat = document.getElementById('pill-repeat');
+  const labelShuffleText = document.getElementById('label-shuffle-text');
+  const labelRepeatIcon = document.getElementById('label-repeat-icon');
+  const labelRepeatText = document.getElementById('label-repeat-text');
+  const labelQueueCount = document.getElementById('label-queue-count');
+
+  // Control Aleatorio / Desorden
+  if (btnShuffle) {
+    btnShuffle.classList.toggle('active', isShuffle);
+    btnShuffle.title = isShuffle
+      ? 'Desorden activado (Aleatorio) ✓ — Clic para reproducir en orden'
+      : 'En orden secuencial — Clic para reproducir en desorden';
+  }
+  if (pillShuffle) {
+    pillShuffle.classList.toggle('active', isShuffle);
+  }
+  if (labelShuffleText) {
+    labelShuffleText.textContent = isShuffle ? 'En desorden (Aleatorio) ✓' : 'En orden';
+  }
+
+  // Control Repetición (3 estados: off, all, one)
+  if (btnRepeat) {
+    btnRepeat.classList.remove('active', 'active-one');
+    if (repeatMode === 'all') {
+      btnRepeat.classList.add('active');
+      btnRepeat.textContent = '🔁';
+      btnRepeat.title = 'Repetir: Toda la lista ✓ — Clic para repetir solo esta canción';
+    } else if (repeatMode === 'one') {
+      btnRepeat.classList.add('active-one');
+      btnRepeat.textContent = '🔂';
+      btnRepeat.title = 'Repetir: Esta canción en bucle 🔂 — Clic para desactivar';
+    } else {
+      btnRepeat.textContent = '🔁';
+      btnRepeat.title = 'No repetir — Clic para repetir toda la lista';
+    }
+  }
+
+  if (pillRepeat) {
+    pillRepeat.classList.remove('active', 'active-one');
+    if (repeatMode === 'all') {
+      pillRepeat.classList.add('active');
+    } else if (repeatMode === 'one') {
+      pillRepeat.classList.add('active-one');
+    }
+  }
+
+  if (labelRepeatIcon) {
+    labelRepeatIcon.textContent = repeatMode === 'one' ? '🔂' : '🔁';
+  }
+  if (labelRepeatText) {
+    if (repeatMode === 'all') {
+      labelRepeatText.textContent = 'Repetir: Toda la lista';
+    } else if (repeatMode === 'one') {
+      labelRepeatText.textContent = 'Repetir: Esta canción 🔂';
+    } else {
+      labelRepeatText.textContent = 'No repetir';
+    }
+  }
+
+  if (labelQueueCount) {
+    labelQueueCount.textContent = `${currentQueue.length} en lista`;
+  }
+}
+
 function toggleShuffle() {
   isShuffle = !isShuffle;
-  document.getElementById('btn-shuffle').classList.toggle('active', isShuffle);
-  mostrarMensaje(isShuffle ? 'Modo aleatorio activado' : 'Modo aleatorio desactivado');
+  actualizarControlesModos();
+  if (isShuffle) {
+    mostrarMensaje('🔀 Desorden activado: las canciones sonarán de forma aleatoria', 'ok');
+  } else {
+    mostrarMensaje('➡️ Modo en orden secuencial activado', 'ok');
+  }
 }
 
 function toggleRepeat() {
-  isRepeat = !isRepeat;
-  document.getElementById('btn-repeat').classList.toggle('active', isRepeat);
-  mostrarMensaje(isRepeat ? 'Repetición activada' : 'Repetición desactivada');
+  if (repeatMode === 'off') {
+    repeatMode = 'all';
+    mostrarMensaje('🔁 Repetición activada: Toda la lista se repetirá al terminar', 'ok');
+  } else if (repeatMode === 'all') {
+    repeatMode = 'one';
+    mostrarMensaje('🔂 Repetición activada: La canción actual se repetirá en bucle', 'ok');
+  } else {
+    repeatMode = 'off';
+    mostrarMensaje('➡️ Repetición desactivada: Se detendrá al terminar la lista', 'ok');
+  }
+  actualizarControlesModos();
 }
 
 function setVolume(v) {
@@ -1235,9 +1580,31 @@ audioEngine.addEventListener('timeupdate', () => {
 });
 
 audioEngine.addEventListener('ended', () => {
-  if (currentIndex === currentQueue.length - 1 && !isRepeat && !isShuffle) {
-    btnPlayPause.textContent = '▶';
-    vinylDisc.classList.remove('spin');
+  // 1. Si está en modo repetir la canción actual (one)
+  if (repeatMode === 'one') {
+    audioEngine.currentTime = 0;
+    audioEngine.play().catch(() => {});
+    return;
+  }
+
+  // 2. Si está en modo desorden (shuffle)
+  if (isShuffle) {
+    playNext();
+    return;
+  }
+
+  // 3. En orden secuencial
+  if (currentIndex === currentQueue.length - 1) {
+    if (repeatMode === 'all') {
+      // Repetir toda la lista desde la primera canción
+      currentIndex = 0;
+      reproducirIndiceActual();
+    } else {
+      // No repetir: detener al finalizar la última canción
+      btnPlayPause.textContent = '▶';
+      vinylDisc.classList.remove('spin');
+      mostrarMensaje('Fin de la lista de reproducción');
+    }
   } else {
     playNext();
   }
@@ -1445,6 +1812,7 @@ window.addEventListener('online', actualizarEstadoRed);
 window.addEventListener('offline', actualizarEstadoRed);
 
 actualizarEstadoRed();
+actualizarControlesModos();
 cargarBibliotecaCompleta();
 </script>
 </body>

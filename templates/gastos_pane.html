@@ -1445,95 +1445,157 @@
   }
 
   // Autocomplete de Concepto / Cuenta
+  let _gasConceptoReqSeq = 0;
   function onConceptInput() {
     clearTimeout(gasConceptoTimer);
     gasConceptoTimer = setTimeout(() => renderConceptAC(), 100);
   }
 
-  function renderConceptAC() {
+  async function renderConceptAC() {
     const inp = document.getElementById('gas-concept-txt');
     const list = document.getElementById('gas-concept-ac');
-    const rawQ = inp.value.trim().toLowerCase();
-    const qNorm = normalizeStr(rawQ);
+    if (!inp || !list) return;
 
+    const rawQ = inp.value.trim();
+    const qNorm = normalizeStr(rawQ);
+    const thisSeq = ++_gasConceptoReqSeq;
+
+    // Si está vacío, mostrar los conceptos preconfigurados/habituales
     if (qNorm.length < 1) {
       if (rawQ.length === 0) {
         document.getElementById('gas-concept-id').value = '';
         document.getElementById('gas-concept-tercero').value = '';
         document.getElementById('gas-concept-cat').value = 'gasto';
       }
-      list.classList.add('hidden');
-      return;
-    }
-
-    if (!gasConceptos.length && rawQ.length > 0) {
-      gasConceptoIdx = -1;
-      list.innerHTML = `
-        <div class="p-2.5 bg-rose-50 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition"
-             onmousedown="event.preventDefault(); abrirModalNuevoGasto('${escapeGasHtml(inp.value.trim())}')">
-          <span class="flex items-center gap-1.5">
-            <span>✨</span> Crear como nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(inp.value.trim())}</strong>
-          </span>
-          <span class="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
-        </div>
-      `;
-      list.classList.remove('hidden');
-      return;
-    }
-
-    const matches = gasConceptos.filter(c => {
-      if (!c.cuenta_nombre) return false;
-      return normalizeStr(c.cuenta_nombre).includes(qNorm);
-    });
-
-    if (!matches.length) {
-      gasConceptoIdx = -1;
-      list.innerHTML = `
-        <div class="px-3 py-2 text-xs text-gray-400 italic">No se encontró el rubro "${escapeGasHtml(inp.value.trim())}"</div>
-        <div class="p-2.5 border-t border-gray-100 bg-rose-50 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition"
-             onmousedown="event.preventDefault(); abrirModalNuevoGasto('${escapeGasHtml(inp.value.trim())}')">
-          <span class="flex items-center gap-1.5">
-            <span>✨</span> Crear como nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(inp.value.trim())}</strong>
-          </span>
-          <span class="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
-        </div>
-      `;
-      list.classList.remove('hidden');
-      return;
-    }
-
-    gasConceptoIdx = -1;
-    let html = matches.map((c, i) => {
-      const cat = c.categoria_tipo || 'gasto';
-      let tagHtml = '';
-      if (cat === 'activo') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">🏭 Activo</span>';
-      else if (cat === 'diferido') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold">⏳ Diferido</span>';
       
-      return `
-        <div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs flex items-center justify-between" data-i="${i}"
-              data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}" data-cat="${cat}">
-          <span class="font-semibold text-gray-700">${c.cuenta_nombre}</span>
-          ${tagHtml}
+      if (!gasConceptos || gasConceptos.length === 0) {
+        list.classList.add('hidden');
+        return;
+      }
+
+      gasConceptoIdx = -1;
+      let html = '<div class="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider bg-gray-50 border-b border-gray-100">Rubros Frecuentes / Preconfigurados</div>';
+      html += gasConceptos.slice(0, 15).map((c, i) => {
+        const cat = c.categoria_tipo || 'gasto';
+        let tagHtml = '';
+        if (cat === 'activo') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">🏭 Activo</span>';
+        else if (cat === 'diferido') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold">⏳ Diferido</span>';
+        else tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold">🧾 Gasto</span>';
+        
+        return `
+          <div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs flex items-center justify-between" data-i="${i}"
+                data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}" data-cat="${cat}">
+            <span class="font-semibold text-gray-700">${escapeGasHtml(c.cuenta_nombre)}</span>
+            ${tagHtml}
+          </div>
+        `;
+      }).join('');
+
+      html += `
+        <div class="p-2 border-t border-gray-100 bg-gray-50/80 text-[11px] text-gray-500 flex items-center justify-between">
+          <span>💡 Escriba para buscar en todo el catálogo</span>
+          <button type="button" onmousedown="event.preventDefault(); abrirModalNuevoGasto('')" class="text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer">+ Crear Nuevo</button>
         </div>
       `;
-    }).join('');
 
-    html += `
-      <div class="p-2.5 border-t border-gray-100 bg-rose-50/70 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition"
-           onmousedown="event.preventDefault(); abrirModalNuevoGasto('${escapeGasHtml(inp.value.trim())}')">
-        <span class="flex items-center gap-1.5">
-          <span>✨</span> Crear nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(inp.value.trim())}</strong>
-        </span>
-        <span class="text-[10px] bg-rose-200/80 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
-      </div>
-    `;
+      list.innerHTML = html;
+      list.querySelectorAll('.ac-item').forEach(el => {
+        el.addEventListener('mousedown', e => { e.preventDefault(); selectConcepto(el); });
+      });
+      list.classList.remove('hidden');
+      return;
+    }
 
-    list.innerHTML = html;
-
-    list.querySelectorAll('.ac-item').forEach(el => {
-      el.addEventListener('mousedown', e => { e.preventDefault(); selectConcepto(el); });
+    // Coincidencias locales inmediatas
+    let localMatches = (gasConceptos || []).filter(c => {
+      if (!c.cuenta_nombre) return false;
+      return normalizeStr(c.cuenta_nombre).includes(qNorm) || (c.cuenta_codigo && c.cuenta_codigo.includes(rawQ));
     });
-    list.classList.remove('hidden');
+
+    // Mostrar render preliminar con locales si existen
+    const renderList = (items, esRemoto = false) => {
+      if (thisSeq !== _gasConceptoReqSeq) return; // Evitar carrera
+      gasConceptoIdx = -1;
+
+      if (!items || items.length === 0) {
+        list.innerHTML = `
+          <div class="px-3 py-2.5 text-xs text-gray-400 italic">No se encontró el rubro "${escapeGasHtml(rawQ)}"</div>
+          <div class="p-2.5 border-t border-gray-100 bg-rose-50 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition"
+               onmousedown="event.preventDefault(); abrirModalNuevoGasto('${escapeGasHtml(rawQ)}')">
+            <span class="flex items-center gap-1.5">
+              <span>✨</span> Crear como nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(rawQ)}</strong>
+            </span>
+            <span class="text-[10px] bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
+          </div>
+        `;
+        list.classList.remove('hidden');
+        return;
+      }
+
+      let html = items.slice(0, 15).map((c, i) => {
+        const cat = c.categoria_tipo || 'gasto';
+        let tagHtml = '';
+        if (cat === 'activo') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">🏭 Activo</span>';
+        else if (cat === 'diferido') tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold">⏳ Diferido</span>';
+        else tagHtml = '<span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-semibold">🧾 Gasto</span>';
+
+        return `
+          <div class="ac-item px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs flex items-center justify-between" data-i="${i}"
+                data-id="${c.cuenta_puc_id}" data-tercero="${c.maneja_terceros}" data-cat="${cat}">
+            <div>
+              <span class="font-semibold text-gray-700">${escapeGasHtml(c.cuenta_nombre)}</span>
+              ${c.cuenta_codigo ? `<span class="text-[10px] text-gray-400 font-mono block">${c.cuenta_codigo}</span>` : ''}
+            </div>
+            ${tagHtml}
+          </div>
+        `;
+      }).join('');
+
+      html += `
+        <div class="p-2.5 border-t border-gray-100 bg-rose-50/70 hover:bg-rose-100 cursor-pointer text-xs text-rose-700 font-bold flex items-center justify-between transition"
+             onmousedown="event.preventDefault(); abrirModalNuevoGasto('${escapeGasHtml(rawQ)}')">
+          <span class="flex items-center gap-1.5">
+            <span>✨</span> Crear nuevo rubro: <strong class="underline font-bold">${escapeGasHtml(rawQ)}</strong>
+          </span>
+          <span class="text-[10px] bg-rose-200/80 text-rose-800 px-1.5 py-0.5 rounded font-bold">+ Crear</span>
+        </div>
+      `;
+
+      list.innerHTML = html;
+      list.querySelectorAll('.ac-item').forEach(el => {
+        el.addEventListener('mousedown', e => { e.preventDefault(); selectConcepto(el); });
+      });
+      list.classList.remove('hidden');
+    };
+
+    if (localMatches.length > 0) {
+      renderList(localMatches, false);
+    }
+
+    // Consulta remota a la base de datos
+    try {
+      const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/conceptos/buscar?q=${encodeURIComponent(rawQ)}`);
+      const remotes = await resp.json();
+      if (thisSeq !== _gasConceptoReqSeq) return;
+
+      // Unir locales y remotos sin duplicar cuenta_puc_id
+      const combined = [...localMatches];
+      const seenIds = new Set(localMatches.map(m => String(m.cuenta_puc_id)));
+      if (Array.isArray(remotes)) {
+        for (const r of remotes) {
+          if (!seenIds.has(String(r.cuenta_puc_id))) {
+            seenIds.add(String(r.cuenta_puc_id));
+            combined.push(r);
+          }
+        }
+      }
+      renderList(combined, true);
+    } catch(err) {
+      console.error(err);
+      if (localMatches.length === 0) {
+        renderList([], false);
+      }
+    }
   }
 
   function navConceptAC(e) {

@@ -6216,8 +6216,9 @@ def api_gastos_conceptos_buscar(negocio_id):
             WHERE (p.creada_por_negocio_id = %s OR p.creada_por_negocio_id IS NULL)
               AND (
                   p.codigo LIKE '51%%' OR p.codigo LIKE '52%%' OR p.codigo LIKE '53%%' 
-                  OR p.codigo LIKE '6143%%' OR p.codigo LIKE '1505%%' 
-                  OR p.codigo LIKE '6144%%' OR p.codigo LIKE '1705%%'
+                  OR p.codigo LIKE '6142%%' OR p.codigo LIKE '6143%%' OR p.codigo LIKE '6144%%'
+                  OR p.codigo LIKE '1505%%' OR p.codigo LIKE '1705%%'
+                  OR p.codigo LIKE '15%%' OR p.codigo LIKE '17%%' OR p.codigo LIKE '61%%'
                   OR p.id IN (
                       SELECT plc.cuenta_puc_id FROM parametros_lineas_contables plc
                       JOIN parametros_contables_negocio pcn ON pcn.id = plc.parametro_id
@@ -6231,7 +6232,7 @@ def api_gastos_conceptos_buscar(negocio_id):
             query += " AND (LOWER(p.nombre) LIKE %s OR p.codigo LIKE %s)"
             params.extend([f"%{q}%", f"%{q}%"])
         
-        query += " ORDER BY p.nombre ASC LIMIT 30"
+        query += " ORDER BY p.nombre ASC LIMIT 35"
         
         rows = conn.execute(query, tuple(params)).fetchall()
         conn.close()
@@ -6240,9 +6241,9 @@ def api_gastos_conceptos_buscar(negocio_id):
         for r in rows:
             cod = str(r['cuenta_codigo'] or '')
             cat = 'gasto'
-            if cod.startswith('6143') or cod.startswith('1505'):
+            if cod.startswith('6143') or cod.startswith('1505') or cod.startswith('15'):
                 cat = 'activo'
-            elif cod.startswith('6144') or cod.startswith('1705'):
+            elif cod.startswith('6144') or cod.startswith('1705') or cod.startswith('17'):
                 cat = 'diferido'
             results.append({
                 'cuenta_puc_id': r['cuenta_puc_id'],

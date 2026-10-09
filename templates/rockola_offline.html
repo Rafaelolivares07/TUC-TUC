@@ -443,6 +443,47 @@ body {
   box-shadow: 0 0 10px rgba(255, 193, 7, 0.25);
   font-weight: 800;
 }
+/* Switch & Fundido Panel */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #1a2e4c;
+  transition: .3s;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--muted);
+  transition: .3s;
+  border-radius: 50%;
+}
+input:checked + .slider {
+  background-color: var(--ac1-dim);
+  border-color: var(--ac1);
+}
+input:checked + .slider:before {
+  transform: translateX(18px);
+  background-color: var(--ac1);
+}
+
 .ctrl-btn.active-one {
   background: rgba(255, 193, 7, 0.18);
   border-color: #ffc107;
@@ -642,6 +683,38 @@ body {
       <span>🔊</span>
     </div>
 
+    <!-- Fundido cruzado Offline -->
+    <div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:6px; margin-top:8px; width:100%;">
+      <div onclick="toggleFundidoPanel()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 0;">
+        <span style="font-size:12px; font-weight:700; color:var(--muted);">Fundido cruzado</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="fundido-status" style="font-size:10px; color:var(--ac1); font-weight:700;">12s → 5s</span>
+          <label class="switch" style="margin:0;" onclick="event.stopPropagation()">
+            <input type="checkbox" id="fundido-toggle" checked onchange="guardarFundidoSettings()">
+            <span class="slider"></span>
+          </label>
+          <span id="fundido-arrow" style="font-size:10px; color:var(--muted); transition:transform .2s;">▸</span>
+        </div>
+      </div>
+      <div id="fundido-panel" style="display:none; flex-direction:column; gap:10px; padding:8px 0 4px;">
+        <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+            <span style="color:var(--muted);">Empezar cuando falten:</span>
+            <span style="color:var(--ac1); font-weight:800;" id="fundido-sec-label">12s</span>
+          </div>
+          <input type="range" id="fundido-segundos" min="2" max="30" value="12" style="width:100%; accent-color:var(--ac1);" oninput="onAnticipacionChange(this.value)">
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px;">
+            <span style="color:var(--muted);">Duración del cruce:</span>
+            <span style="color:var(--ac1); font-weight:800;" id="fundido-dur-label">5s</span>
+          </div>
+          <input type="range" id="fundido-duracion" min="1" max="12" value="5" style="width:100%; accent-color:var(--ac1);" oninput="onDuracionChange(this.value)">
+          <div id="fundido-hint" style="font-size:9px; color:var(--muted); text-align:right; min-height:12px;"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Barra de Indicadores y Modos Claros -->
     <div class="player-modes-bar">
       <button class="mode-pill" id="pill-shuffle" onclick="toggleShuffle()" title="Toca para cambiar orden (En orden / En desorden)">
@@ -775,14 +848,24 @@ body {
 </div>
 
 <!-- Audio element oculto -->
-<audio id="audio-engine" preload="auto"></audio>
+<!-- Motores de Audio para Fundido Cruzado -->
+<audio id="audio1" preload="auto"></audio>
+<audio id="audio2" preload="auto"></audio>
 
 <script>
 const DB_NAME = 'rockola_local_library_v1';
 const DB_VERSION = 3;
 const DEVICE_KEY = 'rockola_device_id';
 
-const audioEngine = document.getElementById('audio-engine');
+const audio1 = document.getElementById('audio1');
+const audio2 = document.getElementById('audio2');
+let player = audio1;
+let standbyPlayer = audio2;
+let transitioning = false;
+let crossfadeInterval = null;
+let currentVolumen = 0.9;
+let activeObjectUrl = null;
+let standbyObjectUrl = null;
 const vinylDisc = document.getElementById('vinyl-disc');
 const nowTitle = document.getElementById('now-title');
 const nowSub = document.getElementById('now-sub');
@@ -1302,11 +1385,17 @@ function agregarACola(id) {
 
 function limpiarCola() {
   if (!currentQueue.length) return;
+  if (crossfadeInterval) clearInterval(crossfadeInterval);
+  transitioning = false;
   currentQueue = [];
   originalQueue = [];
   currentIndex = -1;
-  audioEngine.pause();
-  audioEngine.removeAttribute('src');
+  player.pause();
+  player.removeAttribute('src');
+  standbyPlayer.pause();
+  standbyPlayer.removeAttribute('src');
+  if (activeObjectUrl) { URL.revokeObjectURL(activeObjectUrl); activeObjectUrl = null; }
+  if (standbyObjectUrl) { URL.revokeObjectURL(standbyObjectUrl); standbyObjectUrl = null; }
   btnPlayPause.textContent = '▶';
   vinylDisc.classList.remove('spin');
   nowTitle.textContent = 'Sin reproducción activa';
@@ -1332,15 +1421,14 @@ function sonarCancionDirecta(id) {
   const cancion = allSongs.find(s => s.id === id);
   if (!cancion) return;
   
-  // Si la canción ya está en la lista actual, saltar directamente a ella
   const idxExistente = currentQueue.findIndex(s => s.id === id);
   if (idxExistente !== -1) {
-    currentIndex = idxExistente;
-    renderQueue();
-    reproducirIndiceActual();
+    saltarAIndice(idxExistente);
     return;
   }
 
+  if (crossfadeInterval) clearInterval(crossfadeInterval);
+  transitioning = false;
   currentQueue = [cancion];
   originalQueue = [cancion];
   currentIndex = 0;
@@ -1363,6 +1451,8 @@ function sonarLista(idListaSel, aleatorio = false) {
     return;
   }
 
+  if (crossfadeInterval) clearInterval(crossfadeInterval);
+  transitioning = false;
   originalQueue = [...canciones];
 
   if (aleatorio) {
@@ -1384,11 +1474,20 @@ function reproducirIndiceActual() {
   const s = currentQueue[currentIndex];
   if (!s) return;
 
-  if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+  if (crossfadeInterval) clearInterval(crossfadeInterval);
+  transitioning = false;
+
+  // Pausar standby por seguridad
+  standbyPlayer.pause();
+  standbyPlayer.removeAttribute('src');
+  if (standbyObjectUrl) { URL.revokeObjectURL(standbyObjectUrl); standbyObjectUrl = null; }
+
+  if (activeObjectUrl) URL.revokeObjectURL(activeObjectUrl);
 
   if (s.blob) {
-    currentObjectUrl = URL.createObjectURL(s.blob);
-    audioEngine.src = currentObjectUrl;
+    activeObjectUrl = URL.createObjectURL(s.blob);
+    player.src = activeObjectUrl;
+    player.volume = currentVolumen;
   } else {
     mostrarMensaje('No se pudo acceder al archivo de audio de: ' + s.nombre, 'error');
     return;
@@ -1399,32 +1498,34 @@ function reproducirIndiceActual() {
   vinylDisc.classList.add('spin');
   btnPlayPause.textContent = '⏸';
 
-  audioEngine.play().catch(e => {
+  player.play().catch(e => {
     console.warn('Error en play offline:', e);
     btnPlayPause.textContent = '▶';
     vinylDisc.classList.remove('spin');
   });
 
-  if ('mediaSession' in navigator) {
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: limpiarNombre(s.nombre),
-        artist: 'Mi Rockola Offline',
-        album: 'Música Local',
-        artwork: [
-          { src: '/static/rockola-icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/static/rockola-icon-512.png', sizes: '512x512', type: 'image/png' }
-        ]
-      });
-      navigator.mediaSession.setActionHandler('play', () => { togglePlayPause(); });
-      navigator.mediaSession.setActionHandler('pause', () => { togglePlayPause(); });
-      navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
-      navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
-      navigator.mediaSession.playbackState = 'playing';
-    } catch(e) {}
-  }
-
+  actualizarMediaSession(s);
   renderQueue();
+}
+
+function actualizarMediaSession(s) {
+  if (!('mediaSession' in navigator) || !s) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: limpiarNombre(s.nombre),
+      artist: 'Mi Rockola Offline',
+      album: 'Música Local',
+      artwork: [
+        { src: '/static/rockola-icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: '/static/rockola-icon-512.png', sizes: '512x512', type: 'image/png' }
+      ]
+    });
+    navigator.mediaSession.setActionHandler('play', () => { togglePlayPause(); });
+    navigator.mediaSession.setActionHandler('pause', () => { togglePlayPause(); });
+    navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
+    navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
+    navigator.mediaSession.playbackState = 'playing';
+  } catch(e) {}
 }
 
 function togglePlayPause() {
@@ -1432,41 +1533,62 @@ function togglePlayPause() {
     if (allSongs.length) sonarCancionDirecta(allSongs[0].id);
     return;
   }
-  if (audioEngine.paused) {
-    audioEngine.play();
+  if (player.paused) {
+    player.play();
     btnPlayPause.textContent = '⏸';
     vinylDisc.classList.add('spin');
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
   } else {
-    audioEngine.pause();
+    player.pause();
     btnPlayPause.textContent = '▶';
     vinylDisc.classList.remove('spin');
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
   }
 }
 
-function playNext() {
+function playNext(forzarSinCrossfade = false) {
   if (!currentQueue.length) return;
-  if (currentIndex >= currentQueue.length - 1) {
+
+  const toggle = document.getElementById('fundido-toggle');
+  const durInput = document.getElementById('fundido-duracion');
+  const crossfadeOn = toggle ? toggle.checked : false;
+  const durSecs = durInput ? (parseInt(durInput.value) || 5) : 5;
+
+  let nextIdx = currentIndex + 1;
+  if (nextIdx >= currentQueue.length) {
     if (repeatMode === 'all') {
-      currentIndex = 0;
-      reproducirIndiceActual();
+      nextIdx = 0;
     } else {
-      // Fin de la lista
+      // Fin de la cola
+      if (crossfadeInterval) clearInterval(crossfadeInterval);
+      transitioning = false;
+      player.pause();
       btnPlayPause.textContent = '▶';
       vinylDisc.classList.remove('spin');
       mostrarMensaje('Fin de la lista de reproducción');
+      return;
     }
+  }
+
+  if (crossfadeOn && !forzarSinCrossfade && !player.paused && player.currentTime > 1 && !transitioning) {
+    iniciarCrossfade(durSecs, nextIdx);
   } else {
-    currentIndex++;
+    if (crossfadeInterval) clearInterval(crossfadeInterval);
+    transitioning = false;
+    currentIndex = nextIdx;
     reproducirIndiceActual();
   }
 }
 
 function playPrev() {
   if (!currentQueue.length) return;
-  if (audioEngine.currentTime > 3) {
-    audioEngine.currentTime = 0;
+  if (player.currentTime > 3) {
+    player.currentTime = 0;
     return;
   }
+  if (crossfadeInterval) clearInterval(crossfadeInterval);
+  transitioning = false;
+
   if (currentIndex <= 0) {
     currentIndex = currentQueue.length - 1;
   } else {
@@ -1477,198 +1599,246 @@ function playPrev() {
 
 function saltarAIndice(index) {
   if (index >= 0 && index < currentQueue.length) {
-    currentIndex = index;
-    reproducirIndiceActual();
+    if (index === currentIndex) return;
+
+    const toggle = document.getElementById('fundido-toggle');
+    const durInput = document.getElementById('fundido-duracion');
+    const crossfadeOn = toggle ? toggle.checked : false;
+    const durSecs = durInput ? (parseInt(durInput.value) || 5) : 5;
+
+    if (crossfadeOn && !player.paused && player.currentTime > 1 && !transitioning) {
+      iniciarCrossfade(durSecs, index);
+    } else {
+      if (crossfadeInterval) clearInterval(crossfadeInterval);
+      transitioning = false;
+      currentIndex = index;
+      reproducirIndiceActual();
+    }
   }
 }
 
 function quitarDeCola(index) {
   if (index === currentIndex) {
-    playNext();
+    playNext(true);
   }
   currentQueue.splice(index, 1);
   if (currentIndex >= currentQueue.length) currentIndex = 0;
   renderQueue();
 }
 
-function actualizarControlesModos() {
-  const btnShuffle = document.getElementById('btn-shuffle');
-  const btnRepeat = document.getElementById('btn-repeat');
-  const pillShuffle = document.getElementById('pill-shuffle');
-  const pillRepeat = document.getElementById('pill-repeat');
-  const labelShuffleText = document.getElementById('label-shuffle-text');
-  const labelRepeatIcon = document.getElementById('label-repeat-icon');
-  const labelRepeatText = document.getElementById('label-repeat-text');
-  const labelQueueCount = document.getElementById('label-queue-count');
-
-  // Control Aleatorio / Desorden
-  if (btnShuffle) {
-    btnShuffle.classList.toggle('active', isShuffle);
-    btnShuffle.title = isShuffle
-      ? 'Desorden activado (Aleatorio) ✓ — Clic para reproducir en orden'
-      : 'En orden secuencial — Clic para reproducir en desorden';
-  }
-  if (pillShuffle) {
-    pillShuffle.classList.toggle('active', isShuffle);
-  }
-  if (labelShuffleText) {
-    labelShuffleText.textContent = isShuffle ? 'En desorden (Aleatorio) ✓' : 'En orden';
-  }
-
-  // Control Repetición (3 estados: off, all, one)
-  if (btnRepeat) {
-    btnRepeat.classList.remove('active', 'active-one');
+/* ── Lógica de Fundido Cruzado (Crossfade) ── */
+async function iniciarCrossfade(secs, targetIndex = null) {
+  if (transitioning) return;
+  
+  let nextIdx = targetIndex !== null ? targetIndex : currentIndex + 1;
+  if (nextIdx >= currentQueue.length) {
     if (repeatMode === 'all') {
-      btnRepeat.classList.add('active');
-      btnRepeat.textContent = '🔁';
-      btnRepeat.title = 'Repetir: Toda la lista ✓ — Clic para repetir solo esta canción';
-    } else if (repeatMode === 'one') {
-      btnRepeat.classList.add('active-one');
-      btnRepeat.textContent = '🔂';
-      btnRepeat.title = 'Repetir: Esta canción en bucle 🔂 — Clic para desactivar';
+      nextIdx = 0;
     } else {
-      btnRepeat.textContent = '🔁';
-      btnRepeat.title = 'No repetir — Clic para repetir toda la lista';
+      return; // No hay siguiente pista para fundir
     }
   }
 
-  if (pillRepeat) {
-    pillRepeat.classList.remove('active', 'active-one');
-    if (repeatMode === 'all') {
-      pillRepeat.classList.add('active');
-    } else if (repeatMode === 'one') {
-      pillRepeat.classList.add('active-one');
-    }
-  }
+  const nextSong = currentQueue[nextIdx];
+  if (!nextSong || !nextSong.blob) return;
 
-  if (labelRepeatIcon) {
-    labelRepeatIcon.textContent = repeatMode === 'one' ? '🔂' : '🔁';
-  }
-  if (labelRepeatText) {
-    if (repeatMode === 'all') {
-      labelRepeatText.textContent = 'Repetir: Toda la lista';
-    } else if (repeatMode === 'one') {
-      labelRepeatText.textContent = 'Repetir: Esta canción 🔂';
-    } else {
-      labelRepeatText.textContent = 'No repetir';
-    }
-  }
+  transitioning = true;
 
-  if (labelQueueCount) {
-    labelQueueCount.textContent = `${currentQueue.length} en lista`;
-  }
-}
-
-function toggleShuffle() {
-  if (!currentQueue.length) {
-    isShuffle = !isShuffle;
-    actualizarControlesModos();
+  try {
+    if (standbyObjectUrl) URL.revokeObjectURL(standbyObjectUrl);
+    standbyObjectUrl = URL.createObjectURL(nextSong.blob);
+    standbyPlayer.src = standbyObjectUrl;
+    standbyPlayer.volume = 0;
+    await standbyPlayer.play();
+  } catch(err) {
+    console.warn('[Crossfade Offline] Error al arrancar standby:', err);
+    transitioning = false;
     return;
   }
 
-  isShuffle = !isShuffle;
+  const saliente = player;
+  const entrante = standbyPlayer;
+  const maxVol = currentVolumen;
+  let fadeProgress = 0;
+  const stepMs = Math.max(50, Math.floor((secs * 1000) / 20));
 
-  if (isShuffle) {
-    // Al activar desorden: guardar el orden original si no está guardado
-    if (!originalQueue.length || originalQueue.length !== currentQueue.length) {
-      originalQueue = [...currentQueue];
-    }
+  if (crossfadeInterval) clearInterval(crossfadeInterval);
 
-    const cancionActualItem = currentQueue[currentIndex];
+  crossfadeInterval = setInterval(() => {
+    fadeProgress += 0.05;
+    if (fadeProgress >= 1) {
+      fadeProgress = 1;
+      clearInterval(crossfadeInterval);
+      crossfadeInterval = null;
 
-    // Mantener la canción que está sonando en la posición 0 y mezclar todas las demás
-    if (cancionActualItem) {
-      const demas = currentQueue.filter((_, idx) => idx !== currentIndex);
-      const demasMezcladas = mezclarArray(demas);
-      currentQueue = [cancionActualItem, ...demasMezcladas];
-      currentIndex = 0;
-    } else {
-      currentQueue = mezclarArray(currentQueue);
-      currentIndex = 0;
-    }
-
-    renderQueue();
-    actualizarControlesModos();
-    mostrarMensaje('🔀 Lista rearmada en desorden: ahora ves el orden aleatorio real', 'ok');
-  } else {
-    // Al desactivar desorden: restaurar el orden original secuencial
-    if (originalQueue.length) {
-      const cancionActualItem = currentQueue[currentIndex];
-      currentQueue = [...originalQueue];
-      if (cancionActualItem) {
-        const nuevaPos = currentQueue.findIndex(s => s.id === cancionActualItem.id);
-        currentIndex = nuevaPos !== -1 ? nuevaPos : 0;
-      } else {
-        currentIndex = 0;
+      // Finalizar fundido
+      saliente.pause();
+      saliente.removeAttribute('src');
+      if (activeObjectUrl) {
+        URL.revokeObjectURL(activeObjectUrl);
+        activeObjectUrl = null;
       }
+
+      // El standby pasa a ser el reproductor activo principal
+      activeObjectUrl = standbyObjectUrl;
+      standbyObjectUrl = null;
+      player = entrante;
+      standbyPlayer = saliente;
+      player.volume = maxVol;
+
+      currentIndex = nextIdx;
+      transitioning = false;
+
+      nowTitle.textContent = limpiarNombre(nextSong.nombre);
+      nowSub.textContent = `Canción ${currentIndex + 1} de ${currentQueue.length}`;
+      actualizarMediaSession(nextSong);
+      renderQueue();
+    } else {
+      saliente.volume = Math.max(0, maxVol * (1 - fadeProgress));
+      entrante.volume = Math.min(maxVol, maxVol * fadeProgress);
     }
-
-    renderQueue();
-    actualizarControlesModos();
-    mostrarMensaje('➡️ Lista restaurada al orden original secuencial', 'ok');
-  }
+  }, stepMs);
 }
 
-function toggleRepeat() {
-  if (repeatMode === 'off') {
-    repeatMode = 'all';
-    mostrarMensaje('🔁 Repetición activada: Toda la lista se repetirá al terminar', 'ok');
-  } else if (repeatMode === 'all') {
-    repeatMode = 'one';
-    mostrarMensaje('🔂 Repetición activada: La canción actual se repetirá en bucle', 'ok');
-  } else {
-    repeatMode = 'off';
-    mostrarMensaje('➡️ Repetición desactivada: Se detendrá al terminar la lista', 'ok');
-  }
-  actualizarControlesModos();
-}
+function handleAudioTimeUpdate(e) {
+  const p = e.target;
+  if (p !== player) return;
 
-function setVolume(v) {
-  audioEngine.volume = parseFloat(v);
-}
-
-function seekAudio(e) {
-  if (!audioEngine.duration) return;
-  const rect = document.getElementById('progress-track').getBoundingClientRect();
-  const pos = (e.clientX - rect.left) / rect.width;
-  audioEngine.currentTime = pos * audioEngine.duration;
-}
-
-audioEngine.addEventListener('timeupdate', () => {
-  const cur = audioEngine.currentTime || 0;
-  const dur = audioEngine.duration || 0;
+  const cur = p.currentTime || 0;
+  const dur = p.duration || 0;
   timeCurrent.textContent = formatearSegundos(cur);
   timeDuration.textContent = formatearSegundos(dur);
   if (dur > 0) {
     progressFill.style.width = ((cur / dur) * 100) + '%';
   }
-});
 
-audioEngine.addEventListener('ended', () => {
-  // 1. Si está en modo repetir la canción actual (one)
+  const toggle = document.getElementById('fundido-toggle');
+  const secInput = document.getElementById('fundido-segundos');
+  const durInput = document.getElementById('fundido-duracion');
+  const crossfadeOn = toggle ? toggle.checked : false;
+  const anticipation = secInput ? (parseInt(secInput.value) || 12) : 12;
+  const durSecs = durInput ? (parseInt(durInput.value) || 5) : 5;
+
+  const tieneSiguiente = (currentIndex < currentQueue.length - 1) || (repeatMode === 'all' && currentQueue.length > 1);
+
+  if (crossfadeOn && tieneSiguiente && dur && (dur - cur <= anticipation) && !transitioning && repeatMode !== 'one') {
+    iniciarCrossfade(durSecs);
+  }
+}
+
+function handleAudioEnded(e) {
+  const p = e.target;
+  if (p !== player) return;
+  if (transitioning) return;
+
   if (repeatMode === 'one') {
-    audioEngine.currentTime = 0;
-    audioEngine.play().catch(() => {});
+    player.currentTime = 0;
+    player.play().catch(() => {});
     return;
   }
 
-  // 2. Si es la última canción de la lista (en orden o desordenada)
-  if (currentIndex >= currentQueue.length - 1) {
-    if (repeatMode === 'all') {
-      // Repetir toda la lista desde el principio
-      currentIndex = 0;
-      reproducirIndiceActual();
-    } else {
-      // Detener al finalizar la lista
-      btnPlayPause.textContent = '▶';
-      vinylDisc.classList.remove('spin');
-      mostrarMensaje('Fin de la lista de reproducción');
-    }
-  } else {
-    // Pasar a la siguiente canción armada en la lista
-    playNext();
+  playNext(true);
+}
+
+// Vincular eventos a ambos reproductores de audio
+audio1.addEventListener('timeupdate', handleAudioTimeUpdate);
+audio2.addEventListener('timeupdate', handleAudioTimeUpdate);
+audio1.addEventListener('ended', handleAudioEnded);
+audio2.addEventListener('ended', handleAudioEnded);
+
+function setVolume(v) {
+  currentVolumen = parseFloat(v);
+  if (!transitioning) {
+    player.volume = currentVolumen;
   }
-});
+}
+
+function seekAudio(e) {
+  if (!player.duration) return;
+  const rect = document.getElementById('progress-track').getBoundingClientRect();
+  const pos = (e.clientX - rect.left) / rect.width;
+  player.currentTime = pos * player.duration;
+}
+
+/* ── Panel y Configuración de Fundido Cruzado ── */
+function toggleFundidoPanel() {
+  const panel = document.getElementById('fundido-panel');
+  const arrow = document.getElementById('fundido-arrow');
+  const abierto = panel.style.display === 'flex';
+  panel.style.display = abierto ? 'none' : 'flex';
+  arrow.style.transform = abierto ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+
+function actualizarFundidoStatus() {
+  const sec = document.getElementById('fundido-segundos').value;
+  const dur = document.getElementById('fundido-duracion').value;
+  const on = document.getElementById('fundido-toggle').checked;
+  const el = document.getElementById('fundido-status');
+  el.textContent = on ? `${sec}s → ${dur}s` : 'OFF';
+  el.style.color = on ? 'var(--ac1)' : 'var(--muted2)';
+}
+
+function onAnticipacionChange(val) {
+  const anticipacion = parseInt(val) || 12;
+  document.getElementById('fundido-sec-label').textContent = anticipacion + 's';
+  const durSlider = document.getElementById('fundido-duracion');
+  const durLabel = document.getElementById('fundido-dur-label');
+  durSlider.max = anticipacion;
+  if (parseInt(durSlider.value) > anticipacion) {
+    durSlider.value = anticipacion;
+    durLabel.textContent = anticipacion + 's';
+  }
+  actualizarFundidoStatus();
+}
+
+function onDuracionChange(val) {
+  const dur = parseInt(val) || 5;
+  document.getElementById('fundido-dur-label').textContent = dur + 's';
+  actualizarFundidoStatus();
+}
+
+function guardarFundidoSettings() {
+  actualizarFundidoStatus();
+  const isCruzado = document.getElementById('fundido-toggle').checked;
+  const secs = parseInt(document.getElementById('fundido-segundos').value) || 12;
+  const dur = parseInt(document.getElementById('fundido-duracion').value) || 5;
+  try {
+    localStorage.setItem('rockola_offline_crossfade_on', isCruzado ? '1' : '0');
+    localStorage.setItem('rockola_offline_crossfade_anticipation', secs.toString());
+    localStorage.setItem('rockola_offline_crossfade_duration', dur.toString());
+  } catch(e) {}
+}
+
+function cargarFundidoSettings() {
+  try {
+    const savedOn = localStorage.getItem('rockola_offline_crossfade_on');
+    const savedSecs = localStorage.getItem('rockola_offline_crossfade_anticipation');
+    const savedDur = localStorage.getItem('rockola_offline_crossfade_duration');
+
+    const toggle = document.getElementById('fundido-toggle');
+    const secSlider = document.getElementById('fundido-segundos');
+    const durSlider = document.getElementById('fundido-duracion');
+
+    if (savedOn !== null && toggle) {
+      toggle.checked = savedOn === '1';
+    }
+    if (savedSecs !== null && secSlider) {
+      secSlider.value = savedSecs;
+      const secLabel = document.getElementById('fundido-sec-label');
+      if (secLabel) secLabel.textContent = savedSecs + 's';
+    }
+    if (savedDur !== null && durSlider) {
+      durSlider.value = savedDur;
+      const durLabel = document.getElementById('fundido-dur-label');
+      if (durLabel) durLabel.textContent = savedDur + 's';
+    }
+    actualizarFundidoStatus();
+  } catch(e) {}
+}
+
+document.getElementById('fundido-toggle').addEventListener('change', guardarFundidoSettings);
+document.getElementById('fundido-segundos').addEventListener('change', guardarFundidoSettings);
+document.getElementById('fundido-duracion').addEventListener('change', guardarFundidoSettings);
 
 /* ── Modales y Gestión de Listas ── */
 function abrirModalCrearLista() {
@@ -1873,6 +2043,7 @@ window.addEventListener('offline', actualizarEstadoRed);
 
 actualizarEstadoRed();
 actualizarControlesModos();
+cargarFundidoSettings();
 cargarBibliotecaCompleta();
 </script>
 </body>

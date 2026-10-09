@@ -1,10 +1,9 @@
 import os
 import sys
 
-# Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.blueprints.db import get_db_connection
+from app.db import get_db_connection
 
 def migrate():
     conn = get_db_connection()
@@ -23,7 +22,7 @@ def migrate():
             conn.rollback()
             print("ERR:", sql, e)
     conn.close()
-    print("Migration finished!")
+    print("Migration finished successfully!")
 
 if __name__ == "__main__":
     migrate()

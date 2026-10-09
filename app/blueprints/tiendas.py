@@ -859,7 +859,7 @@ def _obtener_negocio_por_slug(conn, slug):
     if tienda:
         return dict(tienda)
     restaurante = conn.execute(
-        "SELECT id, nombre, 'restaurante' as tipo_negocio, tercero_id, NULL as color_primario, NULL as imagen_header, NULL as telegram_chat_id, admin_id, token_acceso FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        "SELECT id, nombre, 'restaurante' as tipo_negocio, tercero_id, NULL as color_primario, NULL as imagen_header, telegram_chat_id, admin_id, token_acceso FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
     ).fetchone()
     if restaurante:
         res = dict(restaurante)
@@ -2375,10 +2375,12 @@ def api_tienda_pedido_crear(slug):
             admin_id = tienda['admin_id']
         else:
             restaurante = conn.execute(
-                "SELECT id, nombre, admin_id, token_acceso FROM restaurantes WHERE id = %s",
+                "SELECT id, nombre, admin_id, token_acceso, telegram_chat_id FROM restaurantes WHERE id = %s",
                 (negocio['id'],)
             ).fetchone()
-            admin_id = restaurante['admin_id']
+            admin_id = restaurante['admin_id'] if restaurante else None
+            telegram_chat_id = restaurante['telegram_chat_id'] if restaurante else None
+            tienda = dict(restaurante) if restaurante else negocio
 
         if fecha_vence and date.today() > fecha_vence:
             return jsonify({'ok': False, 'error': 'suscripcion_agotada', 'fecha_vence': str(fecha_vence)}), 402
@@ -2730,10 +2732,11 @@ def api_tienda_pedido_crear(slug):
 
         conn.commit()
         # Notificación Telegram
-        chat_id = tienda['telegram_chat_id']
-        if not chat_id and tienda['admin_id']:
+        chat_id = telegram_chat_id or (tienda.get('telegram_chat_id') if isinstance(tienda, dict) else (tienda['telegram_chat_id'] if tienda else None))
+        if not chat_id and tienda and (tienda.get('admin_id') if isinstance(tienda, dict) else tienda['admin_id']):
+            aid = tienda.get('admin_id') if isinstance(tienda, dict) else tienda['admin_id']
             admin = conn.execute(
-                "SELECT telegram_chat_id FROM terceros WHERE id = %s", (tienda['admin_id'],)
+                "SELECT telegram_chat_id FROM terceros WHERE id = %s", (aid,)
             ).fetchone()
             chat_id = admin['telegram_chat_id'] if admin else None
         if not chat_id:

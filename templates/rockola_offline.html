@@ -807,6 +807,7 @@ const idxModalDetail = document.getElementById('idx-modal-detail');
 let allSongs = [];
 let allPlaylists = [];
 let currentQueue = [];
+let originalQueue = [];
 let currentIndex = -1;
 let currentObjectUrl = null;
 let isShuffle = false;
@@ -1289,6 +1290,7 @@ function agregarACola(id) {
   const cancion = allSongs.find(s => s.id === id);
   if (!cancion) return;
   currentQueue.push(cancion);
+  originalQueue.push(cancion);
   if (currentIndex === -1) {
     currentIndex = 0;
     reproducirIndiceActual();
@@ -1301,6 +1303,7 @@ function agregarACola(id) {
 function limpiarCola() {
   if (!currentQueue.length) return;
   currentQueue = [];
+  originalQueue = [];
   currentIndex = -1;
   audioEngine.pause();
   audioEngine.removeAttribute('src');
@@ -1316,11 +1319,33 @@ function limpiarCola() {
 }
 
 /* ── Motor de Reproducción ── */
+function mezclarArray(arr) {
+  const copia = [...arr];
+  for (let i = copia.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copia[i], copia[j]] = [copia[j], copia[i]];
+  }
+  return copia;
+}
+
 function sonarCancionDirecta(id) {
   const cancion = allSongs.find(s => s.id === id);
   if (!cancion) return;
+  
+  // Si la canción ya está en la lista actual, saltar directamente a ella
+  const idxExistente = currentQueue.findIndex(s => s.id === id);
+  if (idxExistente !== -1) {
+    currentIndex = idxExistente;
+    renderQueue();
+    reproducirIndiceActual();
+    return;
+  }
+
   currentQueue = [cancion];
+  originalQueue = [cancion];
   currentIndex = 0;
+  isShuffle = false;
+  actualizarControlesModos();
   renderQueue();
   reproducirIndiceActual();
 }
@@ -1338,15 +1363,21 @@ function sonarLista(idListaSel, aleatorio = false) {
     return;
   }
 
+  originalQueue = [...canciones];
+
   if (aleatorio) {
-    canciones = [...canciones].sort(() => Math.random() - 0.5);
+    canciones = mezclarArray(canciones);
+    isShuffle = true;
+  } else {
+    isShuffle = false;
   }
 
   currentQueue = canciones;
   currentIndex = 0;
+  actualizarControlesModos();
   renderQueue();
   reproducirIndiceActual();
-  mostrarMensaje(`Reproduciendo: ${lista.nombre} (${canciones.length} canciones)`, 'ok');
+  mostrarMensaje(`Reproduciendo: ${lista.nombre} (${canciones.length} canciones)${aleatorio ? ' en desorden 🔀' : ''}`, 'ok');
 }
 
 function reproducirIndiceActual() {
@@ -1414,24 +1445,20 @@ function togglePlayPause() {
 
 function playNext() {
   if (!currentQueue.length) return;
-  if (isShuffle) {
-    if (currentQueue.length > 1) {
-      let nuevoIndex = currentIndex;
-      let intentos = 0;
-      while (nuevoIndex === currentIndex && intentos < 15) {
-        nuevoIndex = Math.floor(Math.random() * currentQueue.length);
-        intentos++;
-      }
-      currentIndex = nuevoIndex;
+  if (currentIndex >= currentQueue.length - 1) {
+    if (repeatMode === 'all') {
+      currentIndex = 0;
+      reproducirIndiceActual();
+    } else {
+      // Fin de la lista
+      btnPlayPause.textContent = '▶';
+      vinylDisc.classList.remove('spin');
+      mostrarMensaje('Fin de la lista de reproducción');
     }
   } else {
-    if (currentIndex >= currentQueue.length - 1) {
-      currentIndex = 0; // Vuelve al inicio
-    } else {
-      currentIndex++;
-    }
+    currentIndex++;
+    reproducirIndiceActual();
   }
-  reproducirIndiceActual();
 }
 
 function playPrev() {
@@ -1440,12 +1467,10 @@ function playPrev() {
     audioEngine.currentTime = 0;
     return;
   }
-  if (isShuffle) {
-    if (currentQueue.length > 1) {
-      currentIndex = Math.floor(Math.random() * currentQueue.length);
-    }
+  if (currentIndex <= 0) {
+    currentIndex = currentQueue.length - 1;
   } else {
-    currentIndex = (currentIndex - 1 + currentQueue.length) % currentQueue.length;
+    currentIndex--;
   }
   reproducirIndiceActual();
 }
@@ -1535,12 +1560,52 @@ function actualizarControlesModos() {
 }
 
 function toggleShuffle() {
+  if (!currentQueue.length) {
+    isShuffle = !isShuffle;
+    actualizarControlesModos();
+    return;
+  }
+
   isShuffle = !isShuffle;
-  actualizarControlesModos();
+
   if (isShuffle) {
-    mostrarMensaje('🔀 Desorden activado: las canciones sonarán de forma aleatoria', 'ok');
+    // Al activar desorden: guardar el orden original si no está guardado
+    if (!originalQueue.length || originalQueue.length !== currentQueue.length) {
+      originalQueue = [...currentQueue];
+    }
+
+    const cancionActualItem = currentQueue[currentIndex];
+
+    // Mantener la canción que está sonando en la posición 0 y mezclar todas las demás
+    if (cancionActualItem) {
+      const demas = currentQueue.filter((_, idx) => idx !== currentIndex);
+      const demasMezcladas = mezclarArray(demas);
+      currentQueue = [cancionActualItem, ...demasMezcladas];
+      currentIndex = 0;
+    } else {
+      currentQueue = mezclarArray(currentQueue);
+      currentIndex = 0;
+    }
+
+    renderQueue();
+    actualizarControlesModos();
+    mostrarMensaje('🔀 Lista rearmada en desorden: ahora ves el orden aleatorio real', 'ok');
   } else {
-    mostrarMensaje('➡️ Modo en orden secuencial activado', 'ok');
+    // Al desactivar desorden: restaurar el orden original secuencial
+    if (originalQueue.length) {
+      const cancionActualItem = currentQueue[currentIndex];
+      currentQueue = [...originalQueue];
+      if (cancionActualItem) {
+        const nuevaPos = currentQueue.findIndex(s => s.id === cancionActualItem.id);
+        currentIndex = nuevaPos !== -1 ? nuevaPos : 0;
+      } else {
+        currentIndex = 0;
+      }
+    }
+
+    renderQueue();
+    actualizarControlesModos();
+    mostrarMensaje('➡️ Lista restaurada al orden original secuencial', 'ok');
   }
 }
 
@@ -1587,25 +1652,20 @@ audioEngine.addEventListener('ended', () => {
     return;
   }
 
-  // 2. Si está en modo desorden (shuffle)
-  if (isShuffle) {
-    playNext();
-    return;
-  }
-
-  // 3. En orden secuencial
-  if (currentIndex === currentQueue.length - 1) {
+  // 2. Si es la última canción de la lista (en orden o desordenada)
+  if (currentIndex >= currentQueue.length - 1) {
     if (repeatMode === 'all') {
-      // Repetir toda la lista desde la primera canción
+      // Repetir toda la lista desde el principio
       currentIndex = 0;
       reproducirIndiceActual();
     } else {
-      // No repetir: detener al finalizar la última canción
+      // Detener al finalizar la lista
       btnPlayPause.textContent = '▶';
       vinylDisc.classList.remove('spin');
       mostrarMensaje('Fin de la lista de reproducción');
     }
   } else {
+    // Pasar a la siguiente canción armada en la lista
     playNext();
   }
 });

@@ -650,18 +650,18 @@ body {
       <button class="mode-pill" id="pill-repeat" onclick="toggleRepeat()" title="Toca para cambiar repetición (No repetir / Toda la lista / Esta canción)">
         <span id="label-repeat-icon">🔁</span> <span id="label-repeat-text">No repetir</span>
       </button>
-      <button class="mode-pill" id="pill-queue-toggle" onclick="toggleQueuePanel()" title="Toca para ver u ocultar la lista completa aquí">
+      <button class="mode-pill active" id="pill-queue-toggle" onclick="toggleQueuePanel()" title="Toca para colapsar o ver la lista de reproducción actual">
         <span>📋</span> <span id="label-queue-count">0 en lista</span>
       </button>
     </div>
 
-    <!-- Panel Desplegable de Lista en Reproducción Actual -->
-    <div id="player-queue-panel" style="display:none; margin-top:14px; padding-top:12px; border-top:1px solid rgba(0,212,255,0.12);">
+    <!-- Panel Desplegable de Lista en Reproducción Actual (Visible por defecto) -->
+    <div id="player-queue-panel" style="display:block; margin-top:14px; padding-top:12px; border-top:1px solid rgba(0,212,255,0.12);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <span style="font-size:12px; font-weight:800; color:var(--ac1); text-transform:uppercase; letter-spacing:1px;">Lista en Reproducción Actual</span>
         <div style="display:flex; gap:6px;">
           <button class="mini-btn del" onclick="limpiarCola()" title="Vaciar la lista actual">Vaciar</button>
-          <button class="mini-btn" onclick="toggleQueuePanel()" title="Cerrar panel">Cerrar ✕</button>
+          <button class="mini-btn" onclick="toggleQueuePanel()" title="Colapsar lista de reproducción">Ocultar ▾</button>
         </div>
       </div>
       <ul class="song-list" id="player-queue-list" style="max-height:280px;"></ul>
@@ -1222,7 +1222,7 @@ function renderPlaylists() {
 function toggleQueuePanel() {
   const panel = document.getElementById('player-queue-panel');
   if (!panel) return;
-  const visible = panel.style.display === 'block';
+  const visible = panel.style.display !== 'none';
   panel.style.display = visible ? 'none' : 'block';
   const pill = document.getElementById('pill-queue-toggle');
   if (pill) pill.classList.toggle('active', !visible);

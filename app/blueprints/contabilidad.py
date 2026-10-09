@@ -1361,30 +1361,57 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                     if item['motivo'] == 'ajuste':
                         val_u = item.get('valor_unitario') if item.get('valor_unitario') is not None else (item.get('costo_und') or 0)
                         total_adj_dec = (Decimal(str(item['cantidad'] or 0)) * Decimal(str(val_u or 0))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                        if total_adj_dec > 0 and item['categoria']:
-                            gi_adj = conn.execute("""
-                                SELECT gi.cuenta_inve_id, gi.cuenta_ajuste_favor_id,
-                                       c_inv.codigo AS cod_inve, c_inv.nombre AS nom_inve,
-                                       c_fav.codigo AS cod_fav, c_fav.nombre AS nom_fav
-                                FROM grupos_inventario gi
-                                LEFT JOIN cuentas_puc c_inv ON c_inv.id = gi.cuenta_inve_id
-                                LEFT JOIN cuentas_puc c_fav ON c_fav.id = gi.cuenta_ajuste_favor_id
-                                WHERE gi.negocio_id = %s AND gi.nombre = %s
-                            """, (negocio_id, item['categoria'])).fetchone()
-                            if gi_adj and gi_adj['cuenta_inve_id'] and gi_adj['cuenta_ajuste_favor_id']:
-                                # Débito en Inventario (14x)
+                        if total_adj_dec > 0:
+                            gi_adj = None
+                            if item['categoria']:
+                                gi_adj = conn.execute("""
+                                    SELECT gi.cuenta_inve_id, gi.cuenta_ajuste_favor_id, gi.cuenta_ajuste_contra_id,
+                                           c_inv.codigo AS cod_inve, c_inv.nombre AS nom_inve,
+                                           c_fav.codigo AS cod_fav, c_fav.nombre AS nom_fav,
+                                           c_con.codigo AS cod_con, c_con.nombre AS nom_con
+                                    FROM grupos_inventario gi
+                                    LEFT JOIN cuentas_puc c_inv ON c_inv.id = gi.cuenta_inve_id
+                                    LEFT JOIN cuentas_puc c_fav ON c_fav.id = gi.cuenta_ajuste_favor_id
+                                    LEFT JOIN cuentas_puc c_con ON c_con.id = gi.cuenta_ajuste_contra_id
+                                    WHERE gi.negocio_id = %s AND gi.nombre = %s
+                                """, (negocio_id, item['categoria'])).fetchone()
+
+                            cod_inv = gi_adj['cod_inve'] if (gi_adj and gi_adj['cod_inve']) else '140505'
+                            id_inv = gi_adj['cuenta_inve_id'] if (gi_adj and gi_adj['cuenta_inve_id']) else None
+
+                            if item['tipo'] == 'entrada':
+                                # Ajuste Físico (+): Débito Inventario (14x), Crédito Ingreso Ajuste (41x / 42x)
+                                cod_fav = gi_adj['cod_fav'] if (gi_adj and gi_adj['cod_fav']) else '429505'
+                                id_fav = gi_adj['cuenta_ajuste_favor_id'] if (gi_adj and gi_adj['cuenta_ajuste_favor_id']) else None
                                 mov_list.append({
-                                    'cuenta_puc_id': gi_adj['cuenta_inve_id'],
-                                    'cuenta_codigo': gi_adj['cod_inve'],
+                                    'cuenta_puc_id': id_inv,
+                                    'cuenta_codigo': cod_inv,
                                     'concepto':      f"Inv: {item['producto_nombre']}",
                                     'tipo_mov':      'D',
                                     'monto':         float(total_adj_dec),
                                 })
-                                # Crédito en Ingreso por Ajuste (41x)
                                 mov_list.append({
-                                    'cuenta_puc_id': gi_adj['cuenta_ajuste_favor_id'],
-                                    'cuenta_codigo': gi_adj['cod_fav'],
+                                    'cuenta_puc_id': id_fav,
+                                    'cuenta_codigo': cod_fav,
                                     'concepto':      f"Ajuste Físico (+): Insumo {item['producto_nombre']}",
+                                    'tipo_mov':      'C',
+                                    'monto':         float(total_adj_dec),
+                                })
+                            else:
+                                # Ajuste Físico (-): Débito Gasto Ajuste (5x / 6x), Crédito Inventario (14x)
+                                cod_con = gi_adj['cod_con'] if (gi_adj and gi_adj['cod_con']) else '539505'
+                                id_con = gi_adj['cuenta_ajuste_contra_id'] if (gi_adj and gi_adj['cuenta_ajuste_contra_id']) else None
+                                mov_list.append({
+                                    'cuenta_puc_id': id_con,
+                                    'cuenta_codigo': cod_con,
+                                    'concepto':      f"Ajuste Físico (-): Insumo {item['producto_nombre']}",
+                                    'tipo_mov':      'D',
+                                    'monto':         float(total_adj_dec),
+                                })
+                                mov_list.append({
+                                    'cuenta_puc_id': id_inv,
+                                    'cuenta_codigo': cod_inv,
+                                    'concepto':      f"Inv: {item['producto_nombre']}",
                                     'tipo_mov':      'C',
                                     'monto':         float(total_adj_dec),
                                 })
@@ -1653,17 +1680,47 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                     WHERE id = %s
                 """, (nuevo_saldo, existente['id']))
 
-        conn.execute("""
+        ins_row = conn.execute("""
             INSERT INTO movimientos_contables
                 (negocio_id, comprobante_id, cuenta_id, cuenta, concepto, tipo, monto, registrado_por, tercero_id,
                  tipo_documento_id, numero_documento, fecha, tipo_documento, origen_tipo, origen_id, descripcion_general,
                  producto_id, producto_padre_id, centro_utilidad_id)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
         """, (negocio_id, comp_id, m['cuenta_puc_id'], m['cuenta_codigo'],
               m['concepto'], 'debito' if m['tipo_mov'] == 'D' else 'credito',
               m['monto'], registrado_por, tercero_id,
               tipo_doc['id'], (documento_numero_fisico or (str(num_doc) if num_doc is not None else '')), fecha_uso, tipo_doc_codigo, origen_tipo, origen_id, desc,
-              m.get('producto_id'), m.get('producto_padre_id'), centro_utilidad_id or 1))
+              m.get('producto_id'), m.get('producto_padre_id'), centro_utilidad_id or 1)).fetchone()
+
+        c_id = ins_row['id'] if ins_row else None
+        
+        # Sincronizar inmediatamente con movimientos_inventario si aplica:
+        if c_id and (documento_numero_fisico or num_doc):
+            doc_str = str(documento_numero_fisico or num_doc)
+            p_id = m.get('producto_id')
+            p_padre = m.get('producto_padre_id')
+            cta_cod = str(m.get('cuenta_codigo') or '')
+            
+            if cta_cod.startswith('14') and m['tipo_mov'] == 'C' and p_id:
+                # Línea de inventario 14* credito
+                conn.execute("""
+                    UPDATE movimientos_inventario
+                    SET asiento_inventario_id = %s
+                    WHERE negocio_id = %s AND (documento_numero = %s OR numero_documento = %s)
+                      AND producto_id = %s AND (producto_padre_id = %s OR (producto_padre_id IS NULL AND %s IS NULL))
+                      AND asiento_inventario_id IS NULL
+                """, (c_id, negocio_id, doc_str, doc_str, p_id, p_padre, p_padre))
+            elif cta_cod.startswith('61') and m['tipo_mov'] == 'D' and (p_padre or p_id):
+                # Línea de costo 61* debito
+                t_padre = p_padre or p_id
+                conn.execute("""
+                    UPDATE movimientos_inventario
+                    SET asiento_contrapartida_id = %s
+                    WHERE negocio_id = %s AND (documento_numero = %s OR numero_documento = %s)
+                      AND (producto_padre_id = %s OR (producto_padre_id IS NULL AND producto_id = %s))
+                      AND asiento_contrapartida_id IS NULL
+                """, (c_id, negocio_id, doc_str, doc_str, t_padre, t_padre))
 
     return comp_id
 
@@ -5601,7 +5658,8 @@ def _pdf_sanitize(txt):
         'í': 'i', 'ï': 'i', 'ö': 'o', 'ä': 'a',
         '•': '-', '—': '-', '–': '-', '“': '"', '”': '"', '’': "'", '‘': "'",
         '…': '...', '≥': '>=', '≤': '<=', '≠': '!=', '±': '+/-', '×': 'x',
-        '●': '*', '✔': '[OK]', '⏳': '', '🧾': '', '🏭': '', '💳': '', '⚙': '', '⚡': '', '🔄': ''
+        '●': '*', '✔': '[OK]', '✓': '[OK]', '⏳': '', '🧾': '', '🏭': '', '💳': '', '⚙': '', '⚡': '', '🔄': '',
+        '💸': '', '📦': '', '💰': '', '⚖': '', '🔒': '', '📌': '', '📋': ''
     }
     res = str(txt)
     for k, v in replacements.items():
@@ -5647,7 +5705,7 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
                        mc.registrado_por, t_reg.nombre AS reg_tercero_nombre, u.nombre AS usuario_nombre,
                        mc.numero_documento, mc.tipo_documento, mc.origen_tipo, mc.origen_id, mc.fecha, mc.descripcion_general, mc.comprobante_id,
                        mc.centro_utilidad_id, cu.codigo AS centro_codigo, cu.nombre AS centro_nombre,
-                       mc.meses_duracion, mc.cuota_numero, mc.cuota_total, mc.metodo_desembolso
+                       mc.meses_duracion, mc.cuota_numero, mc.cuota_total, mc.metodo_desembolso, mc.movimiento_origen_id
                 FROM movimientos_contables mc
                 LEFT JOIN terceros t ON t.id = mc.tercero_id
                 LEFT JOIN terceros t_reg ON t_reg.id = mc.registrado_por
@@ -5662,7 +5720,7 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
                        mc.registrado_por, t_reg.nombre AS reg_tercero_nombre, u.nombre AS usuario_nombre,
                        mc.numero_documento, mc.tipo_documento, mc.origen_tipo, mc.origen_id, mc.fecha, mc.descripcion_general, mc.comprobante_id,
                        mc.centro_utilidad_id, cu.codigo AS centro_codigo, cu.nombre AS centro_nombre,
-                       mc.meses_duracion, mc.cuota_numero, mc.cuota_total, mc.metodo_desembolso
+                       mc.meses_duracion, mc.cuota_numero, mc.cuota_total, mc.metodo_desembolso, mc.movimiento_origen_id
                 FROM movimientos_contables mc
                 LEFT JOIN terceros t ON t.id = mc.tercero_id
                 LEFT JOIN terceros t_reg ON t_reg.id = mc.registrado_por
@@ -5679,17 +5737,31 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
         if not movs:
             return "No hay movimientos registrados para este documento", 400
             
-        tercero_nombre = "Varios / Ocasional"
+        # Determinar Tercero Principal (Beneficiario / Proveedor del desembolso o gasto)
+        tercero_nombre = None
+        
+        # 1. Buscar en débitos principales de gasto/desembolso
         for m in movs:
-            if m['tercero_nombre']:
+            if m['tipo'] in ('debito', 'D') and m['tercero_nombre'] and (m.get('movimiento_origen_id') is None):
                 tercero_nombre = m['tercero_nombre']
                 break
-            elif m['reg_tercero_nombre']:
-                tercero_nombre = m['reg_tercero_nombre']
-                break
-            elif m['usuario_nombre']:
-                tercero_nombre = m['usuario_nombre']
-                break
+        
+        # 2. Si no hay, buscar en cualquier débito
+        if not tercero_nombre:
+            for m in movs:
+                if m['tipo'] in ('debito', 'D') and m['tercero_nombre']:
+                    tercero_nombre = m['tercero_nombre']
+                    break
+                    
+        # 3. Fallback a cualquier tercero presente
+        if not tercero_nombre:
+            for m in movs:
+                if m['tercero_nombre']:
+                    tercero_nombre = m['tercero_nombre']
+                    break
+
+        if not tercero_nombre:
+            tercero_nombre = movs[0]['usuario_nombre'] or movs[0]['reg_tercero_nombre'] or "Varios / Ocasional"
                 
         total_d = sum(float(m['monto']) for m in movs if m['tipo'] in ('debito', 'D'))
         total_c = sum(float(m['monto']) for m in movs if m['tipo'] in ('credito', 'C'))
@@ -5731,83 +5803,77 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
         class DocumentoContablePDF(FPDF):
             def __init__(self, *args, **kwargs):
                 super().__init__(format='letter', unit='mm', *args, **kwargs)
-                self.set_auto_page_break(auto=True, margin=16)
+                self.set_auto_page_break(auto=True, margin=15)
                 self.alias_nb_pages()
                 self._doc_title = doc_name
                 self._doc_num = doc_num
                 self._is_closed = esta_cerrado
                 self._negocio_nombre = (negocio['nombre'] or 'EMPRESA') if negocio else 'EMPRESA'
-                self._negocio_nit = ''
+                self._negocio_nit = (negocio['nit'] or '') if (negocio and 'nit' in negocio and negocio['nit']) else ''
                 self._negocio_tel = (negocio['telefono'] or '') if negocio else ''
                 self._negocio_dir = (negocio['direccion'] or '') if negocio else ''
                 self._usuario_firma = usuario_firma
 
             def header(self):
-                # Línea superior de acento corporativo (Navy Slate 900)
-                self.set_fill_color(15, 23, 42)
-                self.rect(14, 10, 188, 2, style='F')
+                # Línea superior de acento corporativo muy sutil (Slate 800)
+                self.set_draw_color(30, 41, 59)
+                self.set_line_width(0.8)
+                self.line(14, 10, 202, 10)
+                self.set_line_width(0.2)
 
                 # Bloque Izquierdo: Identidad Empresarial
-                self.set_xy(14, 14)
-                self.set_font('Helvetica', 'B', 14)
-                self.set_text_color(15, 23, 42)
-                self.cell(108, 6, _pdf_sanitize(self._negocio_nombre).upper(), align='L')
+                self.set_xy(14, 13)
+                self.set_font('Helvetica', 'B', 13)
+                self.set_text_color(15, 23, 42) # Slate 900
+                self.cell(110, 5.5, _pdf_sanitize(self._negocio_nombre).upper(), align='L')
 
-                # NIT / Documento si existe
-                if self._negocio_nit:
-                    self.set_xy(14, 20.5)
-                    self.set_font('Helvetica', 'B', 8)
-                    self.set_text_color(71, 85, 105) # Slate 600
-                    self.cell(108, 4, f"NIT / Doc: {_pdf_sanitize(self._negocio_nit)}", align='L')
-
-                # Teléfono y Dirección
-                contacto_str = []
-                if self._negocio_tel: contacto_str.append(f"Tel: {self._negocio_tel}")
-                if self._negocio_dir: contacto_str.append(f"Dir: {self._negocio_dir}")
-                contacto_line = "  |  ".join(contacto_str)
+                # Datos de contacto en una sola línea sutil
+                contacto_parts = []
+                if self._negocio_nit: contacto_parts.append(f"NIT: {self._negocio_nit}")
+                if self._negocio_dir: contacto_parts.append(f"{self._negocio_dir}")
+                if self._negocio_tel: contacto_parts.append(f"Tel: {self._negocio_tel}")
+                contacto_line = "  |  ".join(contacto_parts)
                 if contacto_line:
-                    self.set_xy(14, 24.5 if self._negocio_nit else 21)
+                    self.set_xy(14, 19)
                     self.set_font('Helvetica', '', 7.5)
                     self.set_text_color(100, 116, 139) # Slate 500
-                    self.cell(108, 4, _pdf_sanitize(contacto_line), align='L')
+                    self.cell(110, 4, _pdf_sanitize(contacto_line), align='L')
 
-                # Bloque Derecho: Ficha Técnica en tarjeta redondeada
+                # Bloque Derecho: Título y Número del Documento (Líneas sutiles, sin cajas pesadas)
                 box_x = 126
-                box_y = 14
+                box_y = 12.5
                 box_w = 76
-                box_h = 24
-                self.set_fill_color(248, 250, 252) # Slate 50
-                self.set_draw_color(226, 232, 240) # Slate 200
-                self.rect(box_x, box_y, box_w, box_h, style='DF', round_corners=True, corner_radius=2.5)
-
-                self.set_xy(box_x + 3, box_y + 2.5)
-                self.set_font('Helvetica', 'B', 9)
+                
+                self.set_xy(box_x, box_y)
+                self.set_font('Helvetica', 'B', 9.5)
                 self.set_text_color(15, 23, 42)
-                self.cell(box_w - 6, 4.5, _pdf_sanitize(self._doc_title), align='R')
+                self.cell(box_w, 4.5, _pdf_sanitize(self._doc_title), align='R')
 
-                self.set_xy(box_x + 3, box_y + 7.2)
-                self.set_font('Helvetica', 'B', 8.5)
-                self.set_text_color(30, 41, 59)
-                self.cell(box_w - 6, 4, f"No. {self._doc_num}", align='R')
+                self.set_xy(box_x, box_y + 4.8)
+                self.set_font('Helvetica', 'B', 9)
+                self.set_text_color(51, 65, 85) # Slate 700
+                self.cell(box_w, 4, f"No. {self._doc_num}", align='R')
 
-                # Badge de Estado
-                self.set_xy(box_x + 3, box_y + 12)
+                self.set_xy(box_x, box_y + 9.2)
                 if self._is_closed:
                     self.set_font('Helvetica', 'B', 7)
                     self.set_text_color(22, 101, 52) # Green 800
-                    self.cell(box_w - 6, 3.5, "ESTADO: LIQUIDADO / CERRADO", align='R')
+                    self.cell(box_w, 3.5, "[OK] ESTADO: LIQUIDADO / CERRADO", align='R')
                 else:
                     self.set_font('Helvetica', 'B', 7)
                     self.set_text_color(194, 65, 12) # Amber 700
-                    self.cell(box_w - 6, 3.5, "ESTADO: RELACION ABIERTA", align='R')
+                    self.cell(box_w, 3.5, "ESTADO: RELACION EN ELABORACION", align='R')
 
-                self.set_xy(box_x + 3, box_y + 16.5)
+                self.set_xy(box_x, box_y + 13)
                 self.set_font('Helvetica', '', 6.5)
                 self.set_text_color(148, 163, 184)
                 emision_str = f"Emision: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-                self.cell(box_w - 6, 3.5, _pdf_sanitize(emision_str), align='R')
+                self.cell(box_w, 3.5, _pdf_sanitize(emision_str), align='R')
 
-                self.set_y(41)
+                # Línea divisoria de cabecera
+                self.set_draw_color(226, 232, 240) # Slate 200
+                self.line(14, 30, 202, 30)
+                self.set_y(32)
 
             def footer(self):
                 self.set_y(-12)
@@ -5819,69 +5885,71 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
         pdf = DocumentoContablePDF()
         pdf.add_page()
         
-        # Tarjeta Resumen / Metadatos
+        # Bloque Metadatos: Formato limpio con líneas sutiles
         meta_y = pdf.get_y()
-        meta_w = 188
-        meta_h = 13
-        pdf.set_fill_color(241, 245, 249) # Slate 100
+        
+        # Columna 1: Fecha Contable
+        pdf.set_xy(14, meta_y)
+        pdf.set_font('Helvetica', 'B', 6.8)
+        pdf.set_text_color(100, 116, 139)
+        pdf.cell(32, 3.2, "FECHA CONTABLE", align='L')
+        pdf.set_xy(14, meta_y + 3.6)
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(32, 4.2, fecha_str, align='L')
+
+        # Columna 2: Sede / Centro
+        pdf.set_xy(48, meta_y)
+        pdf.set_font('Helvetica', 'B', 6.8)
+        pdf.set_text_color(100, 116, 139)
+        pdf.cell(56, 3.2, "SEDE / CENTRO DE COSTO", align='L')
+        pdf.set_xy(48, meta_y + 3.6)
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(56, 4.2, _fit_pdf_cell(pdf, centro_header_str, 54), align='L')
+
+        # Columna 3: Beneficiario / Responsable
+        tercero_full_str = tercero_nombre
+            
+        pdf.set_xy(106, meta_y)
+        pdf.set_font('Helvetica', 'B', 6.8)
+        pdf.set_text_color(100, 116, 139)
+        pdf.cell(64, 3.2, "BENEFICIARIO / PROVEEDOR", align='L')
+        pdf.set_xy(106, meta_y + 3.6)
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(64, 4.2, _fit_pdf_cell(pdf, tercero_full_str, 62), align='L')
+
+        # Columna 4: Comprobante N°
+        pdf.set_xy(172, meta_y)
+        pdf.set_font('Helvetica', 'B', 6.8)
+        pdf.set_text_color(100, 116, 139)
+        pdf.cell(30, 3.2, "COMPROBANTE N°", align='R')
+        pdf.set_xy(172, meta_y + 3.6)
+        pdf.set_font('Helvetica', 'B', 8.5)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(30, 4.2, f"#{movs[0]['comprobante_id']}", align='R')
+
         pdf.set_draw_color(226, 232, 240) # Slate 200
-        pdf.rect(14, meta_y, meta_w, meta_h, style='DF', round_corners=True, corner_radius=2)
+        pdf.line(14, meta_y + 9.5, 202, meta_y + 9.5)
+        pdf.set_y(meta_y + 12)
 
-        # Col 1: Fecha Contable
-        pdf.set_xy(17, meta_y + 2)
-        pdf.set_font('Helvetica', 'B', 7)
-        pdf.set_text_color(100, 116, 139)
-        pdf.cell(38, 3.5, "FECHA CONTABLE", align='L')
-        pdf.set_xy(17, meta_y + 5.8)
-        pdf.set_font('Helvetica', 'B', 8.5)
-        pdf.set_text_color(15, 23, 42)
-        pdf.cell(38, 4.5, fecha_str, align='L')
-
-        # Col 2: Sede / Centro
-        pdf.set_xy(58, meta_y + 2)
-        pdf.set_font('Helvetica', 'B', 7)
-        pdf.set_text_color(100, 116, 139)
-        pdf.cell(60, 3.5, "SEDE / CENTRO DE COSTO", align='L')
-        pdf.set_xy(58, meta_y + 5.8)
-        pdf.set_font('Helvetica', 'B', 8)
-        pdf.set_text_color(15, 23, 42)
-        pdf.cell(60, 4.5, _fit_pdf_cell(pdf, centro_header_str, 58), align='L')
-
-        # Col 3: Tercero Principal
-        pdf.set_xy(120, meta_y + 2)
-        pdf.set_font('Helvetica', 'B', 7)
-        pdf.set_text_color(100, 116, 139)
-        pdf.cell(44, 3.5, "BENEFICIARIO / RESPONSABLE", align='L')
-        pdf.set_xy(120, meta_y + 5.8)
-        pdf.set_font('Helvetica', 'B', 8)
-        pdf.set_text_color(15, 23, 42)
-        pdf.cell(44, 4.5, _fit_pdf_cell(pdf, tercero_nombre, 42), align='L')
-
-        # Col 4: Comprobante ID
-        pdf.set_xy(166, meta_y + 2)
-        pdf.set_font('Helvetica', 'B', 7)
-        pdf.set_text_color(100, 116, 139)
-        pdf.cell(32, 3.5, "COMPROBANTE N°", align='R')
-        pdf.set_xy(166, meta_y + 5.8)
-        pdf.set_font('Helvetica', 'B', 8.5)
-        pdf.set_text_color(15, 23, 42)
-        pdf.cell(32, 4.5, f"#{movs[0]['comprobante_id']}", align='R')
-
-        pdf.set_y(meta_y + meta_h + 4)
-
-        # Configuración de Tabla de Movimientos
-        headers = ['SEDE', 'CUENTA', 'CONCEPTO / DETALLE OPERATIVO', 'TERCERO / PROVEEDOR', 'DEBITO (COP)', 'CREDITO (COP)']
-        col_w = [16, 18, 66, 44, 22, 22]
+        # Configuración de Columnas y Tabla (Ancho Total: 188 mm)
+        headers = ['SEDE', 'CUENTA', 'CONCEPTO / DETALLE OPERATIVO', 'TERCERO / BENEFICIARIO', 'DEBITO (COP)', 'CREDITO (COP)']
+        col_w = [15, 18, 65, 46, 22, 22] # Total = 188 mm
+        aligns = ['C', 'C', 'L', 'L', 'R', 'R']
+        wrap_cols = [2, 3] # Concepto y Tercero admiten salto de línea automático
 
         def _draw_table_header(p):
-            p.set_fill_color(15, 23, 42) # Slate 900
-            p.set_text_color(255, 255, 255)
+            p.set_fill_color(241, 245, 249) # Slate 100
+            p.set_text_color(15, 23, 42) # Slate 900
+            p.set_draw_color(203, 213, 225) # Slate 300
             p.set_font('Helvetica', 'B', 7)
             for i, h in enumerate(headers):
-                align = 'R' if i >= 4 else ('C' if i < 2 else 'L')
+                align = aligns[i]
                 pad = " " if align == 'L' else ""
-                p.cell(col_w[i], 6.5, pad + h, border=0, align=align, fill=True)
-            p.ln(6.5)
+                p.cell(col_w[i], 6.0, pad + h, border='B', align=align, fill=True)
+            p.ln(6.0)
 
         _draw_table_header(pdf)
 
@@ -5889,10 +5957,6 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
         total_c = 0.0
 
         for idx, m in enumerate(movs):
-            if pdf.get_y() > 240:
-                pdf.add_page()
-                _draw_table_header(pdf)
-
             monto_d = float(m['monto']) if m['tipo'] in ('debito', 'D') else 0.0
             monto_c = float(m['monto']) if m['tipo'] in ('credito', 'C') else 0.0
             total_d += monto_d
@@ -5915,39 +5979,80 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
             tercero_line = str(m['tercero_nombre'] or '')
             if not tercero_line and m.get('tercero_nit'):
                 tercero_line = f"NIT: {m['tercero_nit']}"
+            elif tercero_line and m.get('tercero_nit'):
+                tercero_line = f"{tercero_line} ({m['tercero_nit']})"
 
-            bg_row = (255, 255, 255) if (idx % 2 == 0) else (248, 250, 252) # Slate 50
-            pdf.set_fill_color(*bg_row)
-            pdf.set_text_color(30, 41, 59) # Slate 800
-            pdf.set_font('Helvetica', '', 7.5)
+            debito_str = _pdf_money(monto_d) if monto_d > 0 else "-"
+            credito_str = _pdf_money(monto_c) if monto_c > 0 else "-"
 
-            # Sede
-            pdf.cell(col_w[0], 5.5, _fit_pdf_cell(pdf, c_tag, col_w[0] - 2), border=0, align='C', fill=True)
-            # Cuenta
-            pdf.set_font('Helvetica', 'B', 7.5)
-            pdf.cell(col_w[1], 5.5, _fit_pdf_cell(pdf, cta_str, col_w[1] - 2), border=0, align='C', fill=True)
-            # Concepto
-            pdf.set_font('Helvetica', '', 7.5)
-            pdf.cell(col_w[2], 5.5, " " + _fit_pdf_cell(pdf, concepto_display, col_w[2] - 3), border=0, align='L', fill=True)
-            # Tercero
-            pdf.set_text_color(71, 85, 105) # Slate 600
-            pdf.cell(col_w[3], 5.5, " " + _fit_pdf_cell(pdf, tercero_line, col_w[3] - 3), border=0, align='L', fill=True)
-            # Débito
-            pdf.set_text_color(30, 41, 59)
-            pdf.cell(col_w[4], 5.5, (_pdf_money(monto_d) + " ") if monto_d > 0 else "- ", border=0, align='R', fill=True)
-            # Crédito
-            pdf.cell(col_w[5], 5.5, (_pdf_money(monto_c) + " ") if monto_c > 0 else "- ", border=0, align='R', fill=True)
-            pdf.ln(5.5)
+            row_fields = [
+                _pdf_sanitize(c_tag),
+                _pdf_sanitize(cta_str),
+                _pdf_sanitize(concepto_display),
+                _pdf_sanitize(tercero_line),
+                debito_str,
+                credito_str
+            ]
 
-            # Línea divisoria sutil
+            # Wrap dinámico para evitar que las columnas se monten unas sobre otras
+            alto_linea = 3.8
+            n_max = 1
+            for col_i in wrap_cols:
+                txt_c = row_fields[col_i]
+                if txt_c:
+                    pdf.set_font('Helvetica', '', 7)
+                    ls = pdf.multi_cell(col_w[col_i] - 2.0, alto_linea, txt_c, split_only=True)
+                    n_max = max(n_max, len(ls))
+            
+            alto_fila = max(n_max * alto_linea + 1.6, 5.2)
+
+            if pdf.get_y() + alto_fila > 248:
+                pdf.add_page()
+                _draw_table_header(pdf)
+
+            x0 = 14
+            y0 = pdf.get_y()
+
+            # Fondo alternado muy suave
+            if idx % 2 == 1:
+                pdf.set_fill_color(248, 250, 252) # Slate 50
+                pdf.rect(x0, y0, 188, alto_fila, style='F')
+
+            # Renderizado de celdas
+            x_cur = x0
+            for i, val in enumerate(row_fields):
+                w_col = col_w[i]
+                al = aligns[i]
+                
+                if i == 1:
+                    pdf.set_font('Helvetica', 'B', 7.2)
+                    pdf.set_text_color(15, 23, 42)
+                elif i in (4, 5):
+                    pdf.set_font('Helvetica', 'B' if (monto_d > 0 or monto_c > 0) else '', 7.2)
+                    pdf.set_text_color(15, 23, 42)
+                else:
+                    pdf.set_font('Helvetica', '', 7.2)
+                    pdf.set_text_color(51, 65, 85)
+
+                if i in wrap_cols:
+                    pdf.set_xy(x_cur + 1.0, y0 + 0.8)
+                    pdf.multi_cell(w_col - 2.0, alto_linea, val, border=0, align=al)
+                else:
+                    pdf.set_xy(x_cur, y0)
+                    pdf.cell(w_col - 1.0 if al == 'R' else w_col, alto_fila, val, border=0, align=al)
+                
+                x_cur += w_col
+
+            # Línea divisoria sutil de fila
             pdf.set_draw_color(241, 245, 249) # Slate 100
-            pdf.line(14, pdf.get_y(), 202, pdf.get_y())
+            pdf.line(x0, y0 + alto_fila, x0 + 188, y0 + alto_fila)
+            pdf.set_xy(x0, y0 + alto_fila)
 
-        # Barra de Totales
-        if pdf.get_y() > 240:
+        # Fila de Totales Contables
+        if pdf.get_y() + 15 > 248:
             pdf.add_page()
         
-        curr_y = pdf.get_y() + 1
+        curr_y = pdf.get_y() + 0.5
         pdf.set_fill_color(241, 245, 249) # Slate 100
         pdf.set_draw_color(203, 213, 225) # Slate 300
         pdf.line(14, curr_y, 202, curr_y)
@@ -5956,81 +6061,80 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
         pdf.set_font('Helvetica', 'B', 7.5)
         pdf.set_text_color(15, 23, 42)
         w_sum_desc = col_w[0] + col_w[1] + col_w[2] + col_w[3] # 144 mm
-        pdf.cell(w_sum_desc, 6.5, "TOTALES CONTABLES (COP)   ", border=0, align='R', fill=True)
-        pdf.cell(col_w[4], 6.5, _pdf_money(total_d) + " ", border=0, align='R', fill=True)
-        pdf.cell(col_w[5], 6.5, _pdf_money(total_c) + " ", border=0, align='R', fill=True)
-        pdf.ln(6.5)
+        pdf.cell(w_sum_desc, 6.0, "TOTALES CONTABLES (COP)   ", border=0, align='R', fill=True)
+        pdf.cell(col_w[4] - 1.0, 6.0, _pdf_money(total_d), border=0, align='R', fill=True)
+        pdf.cell(col_w[5] - 1.0, 6.0, _pdf_money(total_c), border=0, align='R', fill=True)
+        pdf.ln(6.0)
+        pdf.set_draw_color(203, 213, 225)
         pdf.line(14, pdf.get_y(), 202, pdf.get_y())
 
         # Badge de Balance / Cuadre
         diff = abs(total_d - total_c)
         if total_c > 0 and diff < 0.05:
-            pdf.ln(2.5)
-            pdf.set_fill_color(240, 253, 244) # Green 50
-            pdf.set_draw_color(187, 247, 208) # Green 200
-            pdf.rect(14, pdf.get_y(), 188, 6.5, style='DF', round_corners=True, corner_radius=1.5)
-            pdf.set_font('Helvetica', 'B', 7.5)
+            pdf.ln(2.0)
+            pdf.set_font('Helvetica', 'B', 7.2)
             pdf.set_text_color(22, 101, 52) # Green 800
-            pdf.set_xy(16, pdf.get_y() + 1)
-            pdf.cell(184, 4.5, _pdf_sanitize("[OK] COMPROBANTE CUADRADO (DEBITOS = CREDITOS: $0.00 DIFERENCIA) - REGISTRO CONTABLE PERFECCIONADO"), align='C')
-            pdf.set_y(pdf.get_y() + 5.5)
+            pdf.cell(188, 4.0, _pdf_sanitize("[OK] Partida doble cuadrada (Debitos = Creditos: $0.00 diferencia) - Registro Contable Consolidado"), align='C')
+            pdf.ln(3.0)
         elif total_c == 0:
-            pdf.ln(2.5)
-            pdf.set_fill_color(254, 243, 199) # Amber 100
-            pdf.set_draw_color(253, 230, 138) # Amber 200
-            pdf.rect(14, pdf.get_y(), 188, 6.5, style='DF', round_corners=True, corner_radius=1.5)
-            pdf.set_font('Helvetica', 'B', 7.5)
+            pdf.ln(2.0)
+            pdf.set_font('Helvetica', 'B', 7.2)
             pdf.set_text_color(180, 83, 9) # Amber 700
-            pdf.set_xy(16, pdf.get_y() + 1)
-            pdf.cell(184, 4.5, _pdf_sanitize(f"RELACION EN ELABORACION - TOTAL DESEMBOLSOS ACUMULADOS: {_pdf_money(total_d)}"), align='C')
-            pdf.set_y(pdf.get_y() + 5.5)
+            pdf.cell(188, 4.0, _pdf_sanitize(f"Relacion en elaboracion  |  Total desembolsos acumulados: {_pdf_money(total_d)}"), align='C')
+            pdf.ln(3.0)
 
-        # Sección de Firmas
+        # Sección de Firmas (Líneas sutiles)
         if pdf.get_y() > 220:
             pdf.add_page()
         
-        pdf.ln(8)
+        pdf.ln(6)
         sig_y = pdf.get_y()
         sig_w = 54
         gap = (188 - (sig_w * 3)) / 2 # 13 mm
         
         # Firma 1: Elaborado por
         x1 = 14
-        pdf.set_draw_color(148, 163, 184)
-        pdf.line(x1, sig_y + 12, x1 + sig_w, sig_y + 12)
-        pdf.set_xy(x1, sig_y + 13.5)
-        pdf.set_font('Helvetica', 'B', 7.5)
+        pdf.set_draw_color(148, 163, 184) # Slate 400
+        pdf.line(x1, sig_y + 10, x1 + sig_w, sig_y + 10)
+        pdf.set_xy(x1, sig_y + 11.5)
+        pdf.set_font('Helvetica', 'B', 7.2)
         pdf.set_text_color(30, 41, 59)
-        pdf.cell(sig_w, 4, _fit_pdf_cell(pdf, f"Elaborado por: {usuario_firma}", sig_w), align='C')
-        pdf.set_xy(x1, sig_y + 17.5)
+        pdf.cell(sig_w, 3.5, _fit_pdf_cell(pdf, f"Elaborado por: {usuario_firma}", sig_w), align='C')
+        pdf.set_xy(x1, sig_y + 15)
         pdf.set_font('Helvetica', '', 6.5)
         pdf.set_text_color(100, 116, 139)
-        pdf.cell(sig_w, 3.5, "Operaciones / Registro", align='C')
+        pdf.cell(sig_w, 3.0, "Operaciones / Registro", align='C')
 
         # Firma 2: Aprobado / Contabilidad
         x2 = x1 + sig_w + gap
-        pdf.line(x2, sig_y + 12, x2 + sig_w, sig_y + 12)
-        pdf.set_xy(x2, sig_y + 13.5)
-        pdf.set_font('Helvetica', 'B', 7.5)
+        pdf.line(x2, sig_y + 10, x2 + sig_w, sig_y + 10)
+        pdf.set_xy(x2, sig_y + 11.5)
+        pdf.set_font('Helvetica', 'B', 7.2)
         pdf.set_text_color(30, 41, 59)
-        pdf.cell(sig_w, 4, "Aprobado / Contabilidad", align='C')
-        pdf.set_xy(x2, sig_y + 17.5)
+        pdf.cell(sig_w, 3.5, "Aprobado / Contabilidad", align='C')
+        pdf.set_xy(x2, sig_y + 15)
         pdf.set_font('Helvetica', '', 6.5)
         pdf.set_text_color(100, 116, 139)
-        pdf.cell(sig_w, 3.5, "Revision y Control Interno", align='C')
+        pdf.cell(sig_w, 3.0, "Revision y Control Interno", align='C')
 
         # Firma 3: Recibido / Beneficiario
         x3 = x2 + sig_w + gap
-        pdf.line(x3, sig_y + 12, x3 + sig_w, sig_y + 12)
-        pdf.set_xy(x3, sig_y + 13.5)
-        pdf.set_font('Helvetica', 'B', 7.5)
+        pdf.line(x3, sig_y + 10, x3 + sig_w, sig_y + 10)
+        pdf.set_xy(x3, sig_y + 11.5)
+        pdf.set_font('Helvetica', 'B', 7.2)
         pdf.set_text_color(30, 41, 59)
         tercero_sig_label = _fit_pdf_cell(pdf, f"Recibido: {tercero_nombre}", sig_w) if tercero_nombre != "Varios / Ocasional" else "Recibido / Beneficiario"
-        pdf.cell(sig_w, 4, tercero_sig_label, align='C')
-        pdf.set_xy(x3, sig_y + 17.5)
+        pdf.cell(sig_w, 3.5, tercero_sig_label, align='C')
+        pdf.set_xy(x3, sig_y + 15)
         pdf.set_font('Helvetica', '', 6.5)
         pdf.set_text_color(100, 116, 139)
-        pdf.cell(sig_w, 3.5, "Firma / C.C. o NIT", align='C')
+        pdf.cell(sig_w, 3.0, "Firma / C.C. o NIT", align='C')
+        
+        # Firma discreta al pie
+        pdf.set_xy(14, sig_y + 20)
+        pdf.set_font('Helvetica', '', 6.5)
+        pdf.set_text_color(180, 180, 180)
+        pdf.cell(188, 3.0, "Generado con TUC TUC", align='C')
         
         resp = Response(bytes(pdf.output()), mimetype='application/pdf')
         resp.headers['Content-Disposition'] = f"inline; filename=documento_{tipo_doc}_{numero_documento}.pdf"
@@ -6970,6 +7074,14 @@ def api_gastos_cierre_post(negocio_id):
         tipo_doc_id = rows['tipo_doc_id']
         _verificar_periodo_cerrado(conn, negocio_id, fecha)
         
+        # Tercero fallback de las líneas del documento
+        t_fallback_row = conn.execute("""
+            SELECT tercero_id FROM movimientos_contables 
+            WHERE negocio_id = %s AND tipo_documento = %s AND numero_documento = %s AND tercero_id IS NOT NULL 
+            ORDER BY id ASC LIMIT 1
+        """, (negocio_id, tipo_doc, num_doc)).fetchone()
+        tercero_default_rel = t_fallback_row['tercero_id'] if t_fallback_row else None
+
         # Normalizar lista de pagos
         if not pagos or not isinstance(pagos, list):
             if not metodo_pago_codigo:
@@ -6978,7 +7090,7 @@ def api_gastos_cierre_post(negocio_id):
             pagos = [{
                 'metodo_pago': metodo_pago_codigo,
                 'monto': monto_total_deb,
-                'tercero_id': data.get('tercero_id'),
+                'tercero_id': data.get('tercero_id') or tercero_default_rel,
                 'documento_cruce': data.get('documento_cruce')
             }]
 
@@ -7010,7 +7122,7 @@ def api_gastos_cierre_post(negocio_id):
                 conn.close()
                 return jsonify({'ok': False, 'error': f"Cuenta PUC de egreso para '{m_cod}' no encontrada"}), 400
                 
-            p_tercero_id = p.get('tercero_id')
+            p_tercero_id = p.get('tercero_id') or tercero_default_rel
             if acc['maneja_terceros'] and not p_tercero_id:
                 conn.close()
                 return jsonify({'ok': False, 'error': f"El método '{m_cod}' ({acc['codigo']} - {acc['nombre']}) exige especificar un Tercero / Proveedor."}), 400
@@ -7272,7 +7384,7 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
                 conn.close()
                 return jsonify({'ok': False, 'error': f"Cuenta PUC de desembolso para '{m_cod}' no encontrada"}), 400
 
-            p_tercero_id = p.get('tercero_id') or (line['tercero_id'] if not acc['maneja_terceros'] else None)
+            p_tercero_id = p.get('tercero_id') or line['tercero_id']
             if acc['maneja_terceros'] and not p_tercero_id:
                 conn.close()
                 return jsonify({'ok': False, 'error': f"El método '{m_cod}' ({acc['codigo']} - {acc['nombre']}) exige especificar un Tercero / Proveedor."}), 400
@@ -7442,7 +7554,11 @@ def api_gastos_linea_cierre_individual_post(negocio_id, line_id):
         return jsonify({
             'ok': True,
             'mensaje': f'Línea liquidada exitosamente bajo {tipo_doc} #{num_doc_actual}. Relación activa avanzada a #{nuevo_consecutivo}.',
-            'nuevo_num_doc': nuevo_consecutivo
+            'tipo_doc': tipo_doc,
+            'num_doc': num_doc_actual,
+            'num_doc_cerrado': num_doc_actual,
+            'nuevo_num_doc': nuevo_consecutivo,
+            'comprobante_id': comp_id_actual
         })
     except Exception as e:
         try: conn.rollback(); conn.close()

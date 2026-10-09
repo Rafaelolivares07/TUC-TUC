@@ -710,13 +710,16 @@
 
       <!-- Sección Reparto Multi-Método -->
       <div class="mb-3">
-        <div class="flex items-center justify-between mb-2">
-          <label class="block text-xs font-bold text-gray-700 uppercase">
-            💳 Métodos de Pago y Desembolso
-          </label>
+        <div class="flex items-center justify-between mb-2.5">
+          <div>
+            <label class="block text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
+              <span>💳</span> Distribución de Formas de Pago
+            </label>
+            <span class="text-[11px] text-gray-500">Seleccione los métodos y distribuya el valor total.</span>
+          </div>
           <button type="button" onclick="agregarFilaPago('ind')"
-                  class="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 shadow-2xs transition flex items-center gap-1 cursor-pointer">
-            <span>➕</span> Repartir en otro método
+                  class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95">
+            <span>➕</span> Agregar Método
           </button>
         </div>
 
@@ -783,13 +786,16 @@
 
       <!-- Sección Reparto Multi-Método -->
       <div class="mb-3">
-        <div class="flex items-center justify-between mb-2">
-          <label class="block text-xs font-bold text-gray-700 uppercase">
-            💳 Métodos de Pago y Desembolso
-          </label>
+        <div class="flex items-center justify-between mb-2.5">
+          <div>
+            <label class="block text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
+              <span>💳</span> Distribución de Formas de Pago
+            </label>
+            <span class="text-[11px] text-gray-500">Seleccione los métodos y distribuya el valor total.</span>
+          </div>
           <button type="button" onclick="agregarFilaPago('rel')"
-                  class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-lg border border-emerald-200 shadow-2xs transition flex items-center gap-1 cursor-pointer">
-            <span>➕</span> Repartir en otro método
+                  class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95">
+            <span>➕</span> Agregar Método
           </button>
         </div>
 
@@ -2008,8 +2014,18 @@
   let _pagosCierreRel = [];
   let _cierreTerceroTimers = {};
 
+  let _defaultTerceroIdCierreInd = null;
+  let _defaultTerceroNombreCierreInd = '';
+  let _defaultDocCierreInd = '';
+
   // Inicializa el reparto multi-método para liquidación individual o cierre general
   function inicializarRepartoPagos(type, montoTotal, defaultTerceroId = null, defaultTerceroNombre = '', defaultDoc = '') {
+    if (type === 'ind') {
+      _defaultTerceroIdCierreInd = defaultTerceroId ? parseInt(defaultTerceroId) : null;
+      _defaultTerceroNombreCierreInd = defaultTerceroNombre || '';
+      _defaultDocCierreInd = defaultDoc || '';
+    }
+    
     const list = [];
     let primerMetodo = (_metodosPagoGastos && _metodosPagoGastos.length > 0) ? _metodosPagoGastos[0].codigo : 'efectivo';
     
@@ -2027,7 +2043,8 @@
       monto: Math.round(montoTotal * 100) / 100,
       tercero_id: defaultTerceroId ? parseInt(defaultTerceroId) : null,
       tercero_nombre: defaultTerceroNombre || '',
-      documento_cruce: defaultDoc || ''
+      documento_cruce: defaultDoc || '',
+      editando_tercero: false
     };
     list.push(rowObj);
 
@@ -2050,16 +2067,64 @@
     return type === 'ind' ? _montoTotalCierreInd : _montoTotalCierreRel;
   }
 
+  function dividirRepartoIgual(type) {
+    const list = getPagosList(type);
+    const total = getMontoTotal(type);
+    if (!list || list.length === 0 || total <= 0) return;
+    const cuota = Math.floor((total / list.length) * 100) / 100;
+    let suma = 0;
+    for (let i = 0; i < list.length - 1; i++) {
+      list[i].monto = cuota;
+      suma += cuota;
+    }
+    list[list.length - 1].monto = Math.round((total - suma) * 100) / 100;
+    renderFilasPagos(type);
+  }
+
+  function mostrarInputTerceroFila(type, rowId) {
+    const list = getPagosList(type);
+    const item = list.find(p => p.id === rowId);
+    if (item) {
+      item.editando_tercero = true;
+      renderFilasPagos(type);
+      setTimeout(() => {
+        const inp = document.getElementById(`cierre-${type}-tercero-txt-${rowId}`);
+        if (inp) { inp.focus(); inp.select(); }
+      }, 50);
+    }
+  }
+
   function renderFilasPagos(type) {
     const container = document.getElementById(`cierre-${type}-pagos-container`);
     if (!container) return;
 
     const list = getPagosList(type);
+    const totalMonto = getMontoTotal(type);
     const optionsHtml = _metodosPagoGastos.map(m => 
       `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}</option>`
     ).join('');
 
-    container.innerHTML = list.map((p, idx) => {
+    let quickToolsHtml = '';
+    if (list.length > 1) {
+      quickToolsHtml = `
+        <div class="flex items-center justify-between pb-1 text-[11px] text-gray-500">
+          <span class="font-semibold text-gray-600">Herramientas rápidas:</span>
+          <div class="flex gap-1.5">
+            ${list.length === 2 ? `
+              <button type="button" onclick="dividirRepartoIgual('${type}')" class="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-md transition cursor-pointer">
+                50% / 50%
+              </button>
+            ` : `
+              <button type="button" onclick="dividirRepartoIgual('${type}')" class="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-md transition cursor-pointer">
+                Dividir partes iguales
+              </button>
+            `}
+          </div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = quickToolsHtml + list.map((p, idx) => {
       const metodo = _metodosPagoGastos.find(m => m.codigo === p.metodo_pago) || {};
       const codCta = metodo.gastos_codigo || metodo.cuenta_codigo || '';
       const nomCta = metodo.gastos_nombre || metodo.cuenta_nombre || '';
@@ -2067,18 +2132,37 @@
       const manejaDocs = Boolean(metodo.maneja_documentos || metodo.gastos_maneja_documentos);
 
       let badgeInfo = '';
-      if (manejaTerceros) badgeInfo += '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200">👤 Requiere Tercero</span> ';
-      if (manejaDocs) badgeInfo += '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200">📑 Saldo x Doc (CxP)</span> ';
-      if (!manejaTerceros && !manejaDocs) badgeInfo += '<span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">💵 Salida Directa</span>';
+      if (manejaTerceros) badgeInfo += '<span class="px-2 py-0.5 rounded-md text-[9px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80">👤 Exige Acreedor</span> ';
+      if (manejaDocs) badgeInfo += '<span class="px-2 py-0.5 rounded-md text-[9px] font-bold bg-purple-50 text-purple-700 border border-purple-200/80">📑 Saldo x Doc</span> ';
+      if (!manejaTerceros && !manejaDocs) badgeInfo += '<span class="px-2 py-0.5 rounded-md text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80">💵 Salida Directa</span>';
+
+      const showTerceroCard = manejaTerceros && p.tercero_id && p.tercero_nombre && !p.editando_tercero;
 
       return `
-        <div class="p-3 bg-slate-50 border border-slate-200/90 rounded-2xl space-y-2 relative shadow-2xs" id="pago-row-${type}-${p.id}">
-          <div class="flex items-start justify-between gap-2">
+        <div class="p-3.5 bg-white border border-gray-200/90 hover:border-gray-300 rounded-2xl space-y-2.5 relative shadow-xs transition-all duration-150" id="pago-row-${type}-${p.id}">
+          
+          <!-- Encabezado de la Fila -->
+          <div class="flex items-center justify-between">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200/60">
+              <span>💳</span> Forma de Pago #${idx + 1}
+            </span>
+            ${list.length > 1 ? `
+              <button type="button" onclick="eliminarFilaPago('${type}', ${p.id})"
+                      class="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" title="Eliminar este método de pago">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>Quitar</span>
+              </button>
+            ` : ''}
+          </div>
+
+          <div class="flex items-start justify-between gap-2.5">
             <!-- Selector Método -->
             <div class="flex-1 min-w-0">
-              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Método ${idx + 1}</label>
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Cuenta / Método</label>
               <select onchange="alCambiarMetodoFilaPago('${type}', ${p.id}, this.value)"
-                      class="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 h-[34px]">
+                      class="w-full bg-gray-50/60 hover:bg-white border border-gray-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs font-bold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500/20 h-[38px] transition-all">
                 ${optionsHtml}
               </select>
             </div>
@@ -2088,24 +2172,12 @@
               <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Monto ($)</label>
               <input type="number" step="0.01" value="${p.monto}"
                      oninput="alCambiarMontoFilaPago('${type}', ${p.id}, this.value)"
-                     class="w-full text-right font-mono font-black text-xs bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 text-gray-900 outline-none h-[34px]">
-            </div>
-
-            <!-- Botón Eliminar Fila -->
-            <div class="pt-5">
-              ${list.length > 1 ? `
-                <button type="button" onclick="eliminarFilaPago('${type}', ${p.id})"
-                        class="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer" title="Eliminar método de pago">
-                  ❌
-                </button>
-              ` : `
-                <div class="w-6"></div>
-              `}
+                     class="w-full text-right font-mono font-black text-xs bg-gray-50/60 hover:bg-white border border-gray-200 focus:border-indigo-500 rounded-xl px-3 py-2 focus:ring-2 focus:ring-indigo-500/20 text-gray-900 outline-none h-[38px] transition-all">
             </div>
           </div>
 
           <!-- Info Cuenta y Badges -->
-          <div class="flex items-center justify-between flex-wrap gap-1 text-[10px] text-gray-500 border-t border-gray-200/60 pt-1.5">
+          <div class="flex items-center justify-between flex-wrap gap-1.5 text-[10px] text-gray-500 border-t border-gray-100 pt-2">
             <span class="font-mono text-gray-600 truncate max-w-[220px]">
               ${codCta ? `🏛️ ${codCta} - ${nomCta}` : '⚠️ Sin cuenta PUC'}
             </span>
@@ -2113,34 +2185,48 @@
           </div>
 
           <!-- Campo Tercero Dinámico -->
-          <div class="${manejaTerceros ? '' : 'hidden'} relative pt-1">
-            <div class="flex justify-between items-center mb-0.5">
-              <label class="block text-[10px] font-bold text-gray-600 uppercase">
-                👤 Beneficiario / Acreedor <span class="text-rose-500">*</span>
-              </label>
-              <button type="button" onclick="abrirModalNuevoTercero(document.getElementById('cierre-${type}-tercero-txt-${p.id}').value.trim())" 
-                      class="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer">
-                <span>👤+</span> Nuevo
-              </button>
-            </div>
-            <input id="cierre-${type}-tercero-txt-${p.id}" type="text" placeholder="Buscar tercero por nombre o nit..."
-                   value="${escapeGasHtml(p.tercero_nombre || '')}"
-                   autocomplete="off"
-                   class="border border-gray-200 rounded-xl px-2.5 py-1 text-xs w-full bg-white focus:ring-2 focus:ring-indigo-500 outline-none h-[30px]"
-                   oninput="onBuscarTerceroFilaPago('${type}', ${p.id}, this.value)"
-                   onfocus="onBuscarTerceroFilaPago('${type}', ${p.id}, this.value)">
-            <div id="cierre-${type}-tercero-ac-${p.id}" class="ac-drop hidden z-50"></div>
+          <div class="${manejaTerceros ? '' : 'hidden'} pt-1">
+            ${showTerceroCard ? `
+              <div class="p-2.5 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-center justify-between text-xs">
+                <div class="flex items-center gap-1.5 truncate">
+                  <span class="text-blue-700 font-bold text-[11px]">👤 Acreedor / Beneficiario:</span>
+                  <strong class="text-gray-800 truncate">${escapeGasHtml(p.tercero_nombre)}</strong>
+                </div>
+                <button type="button" onclick="mostrarInputTerceroFila('${type}', ${p.id})" class="text-[10px] text-blue-700 hover:text-blue-900 font-bold hover:underline shrink-0 ml-2">
+                  Cambiar
+                </button>
+              </div>
+            ` : `
+              <div class="relative">
+                <div class="flex justify-between items-center mb-1">
+                  <label class="block text-[10px] font-bold text-gray-600 uppercase">
+                    👤 Beneficiario / Acreedor del Pago
+                  </label>
+                  <button type="button" onclick="abrirModalNuevoTercero(document.getElementById('cierre-${type}-tercero-txt-${p.id}').value.trim())" 
+                          class="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline flex items-center gap-0.5 cursor-pointer">
+                    <span>👤+</span> Crear Nuevo
+                  </button>
+                </div>
+                <input id="cierre-${type}-tercero-txt-${p.id}" type="text" placeholder="Buscar acreedor por nombre o nit..."
+                       value="${escapeGasHtml(p.tercero_nombre || '')}"
+                       autocomplete="off"
+                       class="border border-gray-200 rounded-xl px-3 py-1.5 text-xs w-full bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none h-[32px]"
+                       oninput="onBuscarTerceroFilaPago('${type}', ${p.id}, this.value)"
+                       onfocus="onBuscarTerceroFilaPago('${type}', ${p.id}, this.value)">
+                <div id="cierre-${type}-tercero-ac-${p.id}" class="ac-drop hidden z-50"></div>
+              </div>
+            `}
           </div>
 
           <!-- Campo Documento Cruce Dinámico -->
           <div class="${manejaDocs ? '' : 'hidden'} pt-1">
-            <label class="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">
-              📑 Documento Cruce / Soporte <span class="text-rose-500">*</span>
+            <label class="block text-[10px] font-bold text-gray-600 uppercase mb-1">
+              📑 Documento Cruce / Factura Soporte
             </label>
             <input type="text" placeholder="Ej. FAC-1234, CXP-SOCIOS..."
                    value="${escapeGasHtml(p.documento_cruce || '')}"
                    oninput="alCambiarDocFilaPago('${type}', ${p.id}, this.value)"
-                   class="border border-gray-200 rounded-xl px-2.5 py-1 text-xs w-full bg-white focus:ring-2 focus:ring-indigo-500 outline-none h-[30px] font-mono">
+                   class="border border-gray-200 rounded-xl px-3 py-1.5 text-xs w-full bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none h-[32px] font-mono">
           </div>
         </div>
       `;
@@ -2175,10 +2261,14 @@
       id: Date.now() + Math.floor(Math.random() * 100),
       metodo_pago: proxMetodo ? proxMetodo.codigo : 'efectivo',
       monto: rem,
-      tercero_id: null,
-      tercero_nombre: '',
-      documento_cruce: ''
+      tercero_id: type === 'ind' ? _defaultTerceroIdCierreInd : null,
+      tercero_nombre: type === 'ind' ? _defaultTerceroNombreCierreInd : '',
+      documento_cruce: type === 'ind' ? _defaultDocCierreInd : '',
+      editando_tercero: false
     });
+
+    renderFilasPagos(type);
+  }
 
     renderFilasPagos(type);
   }
@@ -2348,7 +2438,7 @@
       return;
     }
 
-    // Validar cada fila
+    // Validar cada fila con auto-herencia inteligente
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
       const metodo = _metodosPagoGastos.find(m => m.codigo === p.metodo_pago);
@@ -2356,14 +2446,17 @@
       const manejaDocs = Boolean(metodo && (metodo.maneja_documentos || metodo.gastos_maneja_documentos));
 
       if (manejaTerceros && !p.tercero_id) {
-        toast(`El método ${metodo ? metodo.nombre : p.metodo_pago} exige seleccionar un Tercero / Proveedor.`, false);
-        const inp = document.getElementById(`cierre-ind-tercero-txt-${p.id}`);
-        if (inp) inp.focus();
-        return;
+        if (_defaultTerceroIdCierreInd) {
+          p.tercero_id = _defaultTerceroIdCierreInd;
+          p.tercero_nombre = _defaultTerceroNombreCierreInd;
+        } else {
+          toast(`El método ${metodo ? metodo.nombre : p.metodo_pago} exige seleccionar un Tercero / Proveedor.`, false);
+          mostrarInputTerceroFila('ind', p.id);
+          return;
+        }
       }
-      if (manejaDocs && !p.documento_cruce) {
-        toast(`El método ${metodo ? metodo.nombre : p.metodo_pago} exige ingresar un Documento Cruce / Soporte.`, false);
-        return;
+      if (manejaDocs && !p.documento_cruce && _defaultDocCierreInd) {
+        p.documento_cruce = _defaultDocCierreInd;
       }
     }
 

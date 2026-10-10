@@ -531,7 +531,7 @@
   let _peGastosAdicionales = [];
   let _peProgramadosActivos = {};
 
-  // Redondeo estricto a miles (cero unidades, decenas y centenas)
+  // Redondeo estricto a miles (cero unidades, decenas y centenas) para fijos y ventas globales
   function redondearMiles(val) {
     if (!val || isNaN(val) || val <= 0) return 0;
     return Math.round(val / 1000) * 1000;
@@ -539,6 +539,13 @@
 
   function formatMiles(val) {
     const r = redondearMiles(val);
+    return '$' + r.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  // Formato para costos unitarios exactos (sin redondear a miles, ej: $4.350)
+  function formatPesosExactos(val) {
+    if (!val || isNaN(val) || val <= 0) return '$0';
+    const r = Math.round(val);
     return '$' + r.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
 
@@ -710,7 +717,7 @@
         const uReal = (data.unidades_mes_real || 0).toLocaleString('es-CO');
         const vReal = formatMiles(data.ventas_mes_real || 0);
         const pProm = formatMiles(data.precio_promedio || 0);
-        const cProm = formatMiles(data.costo_unitario_promedio || 0);
+        const cProm = formatPesosExactos(data.costo_unitario_promedio || 0);
         const peds = (data.total_pedidos_real || 0).toLocaleString('es-CO');
 
         if (data.es_fallback_consolidado) {
@@ -737,7 +744,7 @@
         }
       }
 
-      // Render top platos de la mezcla
+      // Render top platos de la mezcla (costo exacto sin redondear a miles)
       const topListEl = document.getElementById('pe-top-platos-lista');
       if (topListEl && Array.isArray(data.top_productos_mezcla)) {
         if (data.top_productos_mezcla.length === 0) {
@@ -749,7 +756,7 @@
               <div class="flex items-center justify-between text-xs text-indigo-800 font-mono mt-1">
                 <span>Cant: <strong>${p.cantidad} unds</strong></span>
                 <span>P: <strong>${formatMiles(p.precio)}</strong></span>
-                <span>C: <strong>${formatMiles(p.costo)}</strong></span>
+                <span>C: <strong>${formatPesosExactos(p.costo)}</strong></span>
               </div>
             </div>
           `).join('');
@@ -967,10 +974,10 @@
     const margenUnit = Math.max(precioUnit - costoUnit, 0);
     const margenPct = precioUnit > 0 ? (margenUnit / precioUnit) : 0;
 
-    // Badges de Margen Unitario
+    // Badges de Margen Unitario (exacto en pesos)
     const mUnitBadge = document.getElementById('pe-margen-unit-badge');
     const mPctBadge = document.getElementById('pe-margen-pct-badge');
-    if (mUnitBadge) mUnitBadge.textContent = formatMiles(margenUnit);
+    if (mUnitBadge) mUnitBadge.textContent = formatPesosExactos(margenUnit);
     if (mPctBadge) mPctBadge.textContent = (margenPct * 100).toFixed(1) + '%';
 
     // 2. Nómina Operativa (Costos)
@@ -1081,12 +1088,12 @@
     const elCostoVarPct = document.getElementById('pe-kpi-costo-var-pct');
     if (elCostoVarPct) elCostoVarPct.textContent = costoVarPct.toFixed(1) + '% de venta';
     const elCostoUnitSub = document.getElementById('pe-kpi-costo-unit-sub');
-    if (elCostoUnitSub) elCostoUnitSub.textContent = formatMiles(costoUnit) + ' / plato';
+    if (elCostoUnitSub) elCostoUnitSub.textContent = formatPesosExactos(costoUnit) + ' / plato';
 
     // Actualizar Tarjeta 4: Fijos Totales y Margen
     document.getElementById('pe-kpi-total-fijos').textContent = formatMiles(granTotalFijos);
     document.getElementById('pe-kpi-margen-pct-box').textContent = (margenPct * 100).toFixed(1) + '%';
-    document.getElementById('pe-kpi-margen-unit-bottom').textContent = formatMiles(margenUnit) + ' / plato';
+    document.getElementById('pe-kpi-margen-unit-bottom').textContent = formatPesosExactos(margenUnit) + ' / plato';
     const elFijosDia = document.getElementById('pe-kpi-fijos-diario');
     if (elFijosDia) elFijosDia.textContent = formatMiles(redondearMiles(granTotalFijos / 30));
 

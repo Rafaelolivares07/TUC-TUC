@@ -9077,13 +9077,13 @@ def api_punto_equilibrio_datos(negocio_id):
             avg_precio = total_ventas / total_unidades
             avg_costo = total_costos / total_unidades
 
-            # Top 5 productos de la mezcla de este centro
+            # Top 5 productos de la mezcla de este centro (el costo se deja exacto en pesos, sin redondear a miles)
             top_prods_query = f"""
                 SELECT 
                     COALESCE(prod.nombre, pi.nombre_producto, 'Plato') AS nombre,
                     SUM(pi.cantidad) AS cantidad,
                     ROUND(AVG(pi.precio_unitario) / 1000.0) * 1000 AS precio,
-                    ROUND(AVG(COALESCE(pi.costo_unitario, prod.costo, 0)) / 1000.0) * 1000 AS costo
+                    ROUND(AVG(COALESCE(pi.costo_unitario, prod.costo, 0))) AS costo
                 FROM pedido_items pi
                 JOIN pedidos ped ON ped.id = pi.pedido_id
                 LEFT JOIN productos prod ON prod.id = pi.producto_id
@@ -9128,13 +9128,13 @@ def api_punto_equilibrio_datos(negocio_id):
                 total_pedidos = c_pedidos
                 es_fallback_consolidado = True
 
-                # Top productos de la mezcla consolidada
+                # Top productos de la mezcla consolidada (costo exacto sin redondear a miles)
                 top_prods_query = """
                     SELECT 
                         COALESCE(prod.nombre, pi.nombre_producto, 'Plato') AS nombre,
                         SUM(pi.cantidad) AS cantidad,
                         ROUND(AVG(pi.precio_unitario) / 1000.0) * 1000 AS precio,
-                        ROUND(AVG(COALESCE(pi.costo_unitario, prod.costo, 0)) / 1000.0) * 1000 AS costo
+                        ROUND(AVG(COALESCE(pi.costo_unitario, prod.costo, 0))) AS costo
                     FROM pedido_items pi
                     JOIN pedidos ped ON ped.id = pi.pedido_id
                     LEFT JOIN productos prod ON prod.id = pi.producto_id
@@ -9165,9 +9165,10 @@ def api_punto_equilibrio_datos(negocio_id):
         if avg_costo <= 0 or avg_costo >= avg_precio:
             avg_costo = avg_precio * 0.45
 
-        # Redondear estrictamente a miles cerrados (.000)
+        # Redondear precio a miles cerrados (.000). 
+        # El costo unitario NO se redondea a miles para no castigar el margen: se deja tal cual (ej. 4350)
         avg_precio = round(avg_precio / 1000.0) * 1000
-        avg_costo = round(avg_costo / 1000.0) * 1000
+        avg_costo = round(avg_costo)
 
         # 3. Gastos Fijos Programados
         progs_query = """
@@ -9187,25 +9188,47 @@ def api_punto_equilibrio_datos(negocio_id):
                     vars_data = {}
             
             p_centro_id = vars_data.get('centro_utilidad_id')
-            if centro_id and p_centro_id and int(p_centro_id) != centro_id:
-                continue
-                
-            monto_val = (
-                vars_data.get('monto_recurrente') or 
-                vars_data.get('monto_cuota') or 
-                vars_data.get('monto') or 
-                vars_data.get('valor') or 
-                0
-            )
-            try:
-                monto_cuota = float(monto_val)
-            except (ValueError, TypeError):
-                monto_cuota = 0.0
+            distribucion = vars_data.get('distribucion_centros')
+
+            # Si el gasto tiene distribución por centros (ej. USO DE APLICACION)
+            monto_cuota = 0.0
+            desc_extra = ''
+            if isinstance(distribucion, list) and len(distribucion) > 0:
+                if centro_id:
+                    # Buscar la cuota correspondiente a este centro
+                    dist_item = next((d for d in distribucion if int(d.get('centro_utilidad_id') or 0) == centro_id), None)
+                    if dist_item:
+                        monto_cuota = float(dist_item.get('monto') or 0)
+                        pct = dist_item.get('porcentaje')
+                        if pct:
+                            desc_extra = f" ({pct}% sede)"
+                    else:
+                        continue
+                else:
+                    # Consolidado: monto total recurrente
+                    monto_val = vars_data.get('monto_recurrente') or vars_data.get('monto_cuota') or vars_data.get('monto') or vars_data.get('valor') or 0
+                    monto_cuota = float(monto_val or 0)
+            else:
+                # Gasto asignado a un centro o sin distribución
+                if centro_id and p_centro_id and int(p_centro_id) != centro_id:
+                    continue
+                monto_val = (
+                    vars_data.get('monto_recurrente') or 
+                    vars_data.get('monto_cuota') or 
+                    vars_data.get('monto') or 
+                    vars_data.get('valor') or 
+                    0
+                )
+                try:
+                    monto_cuota = float(monto_val)
+                except (ValueError, TypeError):
+                    monto_cuota = 0.0
 
             if monto_cuota > 0:
+                desc = (p['descripcion'] or vars_data.get('concepto') or 'Gasto Programado') + desc_extra
                 gastos_fijos_programados.append({
                     'id': p['id'],
-                    'descripcion': p['descripcion'] or vars_data.get('concepto') or 'Gasto Programado',
+                    'descripcion': desc,
                     'monto': round(monto_cuota / 1000.0) * 1000,
                     'centro_id': p_centro_id
                 })

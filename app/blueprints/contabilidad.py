@@ -9069,21 +9069,95 @@ def api_punto_equilibrio_datos(negocio_id):
         total_costos = float(mix_stats['total_costos'] or 0)
         total_pedidos = int(mix_stats['total_pedidos'] or 0)
 
-        # Si hubo ventas en el último mes, calculamos el precio y costo promedio ponderado de la mezcla
+        es_fallback_consolidado = False
+        top_productos_mezcla = []
+
+        # Si hubo ventas en el centro en el último mes, calculamos el precio y costo promedio ponderado de la mezcla
         if total_unidades > 0 and total_ventas > 0:
             avg_precio = total_ventas / total_unidades
             avg_costo = total_costos / total_unidades
+
+            # Top 5 productos de la mezcla de este centro
+            top_prods_query = f"""
+                SELECT 
+                    COALESCE(prod.nombre, pi.nombre_producto, 'Plato') AS nombre,
+                    SUM(pi.cantidad) AS cantidad,
+                    ROUND(AVG(pi.precio_unitario) / 1000.0) * 1000 AS precio,
+                    ROUND(AVG(COALESCE(pi.costo_unitario, prod.costo, 0)) / 1000.0) * 1000 AS costo
+                FROM pedido_items pi
+                JOIN pedidos ped ON ped.id = pi.pedido_id
+                LEFT JOIN productos prod ON prod.id = pi.producto_id
+                WHERE ped.negocio_id = %s
+                  AND COALESCE(ped.estado, '') != 'cancelado'
+                  AND ped.created_at >= NOW() - INTERVAL '30 days'
+                  {cond_ped_centro}
+                GROUP BY COALESCE(prod.nombre, pi.nombre_producto, 'Plato')
+                ORDER BY cantidad DESC
+                LIMIT 5
+            """
+            top_prods_rows = conn.execute(top_prods_query, tuple(params_ped)).fetchall()
+            top_productos_mezcla = [dict(r) for r in top_prods_rows]
         else:
-            # Fallback a catálogo de productos activos si es un centro nuevo sin ventas recientes
-            prod_stats = conn.execute("""
-                SELECT COALESCE(AVG(precio), 0) AS avg_precio,
-                       COALESCE(AVG(costo), 0) AS avg_costo
-                FROM productos
-                WHERE negocio_id = %s AND disponible = true AND precio > 0
+            # Si el centro específico no tiene ventas (ej. sede nueva en apertura como Envigado),
+            # adoptamos automáticamente la mezcla de ventas y costos del CONSOLIDADO del negocio
+            mix_cons = conn.execute("""
+                SELECT 
+                    COUNT(DISTINCT ped.id) AS total_pedidos,
+                    COALESCE(SUM(pi.cantidad), 0) AS total_unidades,
+                    COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0) AS total_ventas,
+                    COALESCE(SUM(pi.cantidad * COALESCE(pi.costo_unitario, prod.costo, 0)), 0) AS total_costos
+                FROM pedido_items pi
+                JOIN pedidos ped ON ped.id = pi.pedido_id
+                LEFT JOIN productos prod ON prod.id = pi.producto_id
+                WHERE ped.negocio_id = %s
+                  AND COALESCE(ped.estado, '') != 'cancelado'
+                  AND ped.created_at >= NOW() - INTERVAL '30 days'
             """, (negocio_id,)).fetchone()
-            avg_precio = float(prod_stats['avg_precio'] or 18000.0)
-            avg_costo = float(prod_stats['avg_costo'] or 7000.0)
-            total_unidades = 500
+
+            c_unidades = int(mix_cons['total_unidades'] or 0)
+            c_ventas = float(mix_cons['total_ventas'] or 0)
+            c_costos = float(mix_cons['total_costos'] or 0)
+            c_pedidos = int(mix_cons['total_pedidos'] or 0)
+
+            if c_unidades > 0 and c_ventas > 0:
+                avg_precio = c_ventas / c_unidades
+                avg_costo = c_costos / c_unidades
+                total_unidades = c_unidades
+                total_ventas = c_ventas
+                total_costos = c_costos
+                total_pedidos = c_pedidos
+                es_fallback_consolidado = True
+
+                # Top productos de la mezcla consolidada
+                top_prods_query = """
+                    SELECT 
+                        COALESCE(prod.nombre, pi.nombre_producto, 'Plato') AS nombre,
+                        SUM(pi.cantidad) AS cantidad,
+                        ROUND(AVG(pi.precio_unitario) / 1000.0) * 1000 AS precio,
+                        ROUND(AVG(COALESCE(pi.costo_unitario, prod.costo, 0)) / 1000.0) * 1000 AS costo
+                    FROM pedido_items pi
+                    JOIN pedidos ped ON ped.id = pi.pedido_id
+                    LEFT JOIN productos prod ON prod.id = pi.producto_id
+                    WHERE ped.negocio_id = %s
+                      AND COALESCE(ped.estado, '') != 'cancelado'
+                      AND ped.created_at >= NOW() - INTERVAL '30 days'
+                    GROUP BY COALESCE(prod.nombre, pi.nombre_producto, 'Plato')
+                    ORDER BY cantidad DESC
+                    LIMIT 5
+                """
+                top_prods_rows = conn.execute(top_prods_query, (negocio_id,)).fetchall()
+                top_productos_mezcla = [dict(r) for r in top_prods_rows]
+            else:
+                # Si ningún centro tiene ventas, recurrir al catálogo de productos
+                prod_stats = conn.execute("""
+                    SELECT COALESCE(AVG(precio), 0) AS avg_precio,
+                           COALESCE(AVG(costo), 0) AS avg_costo
+                    FROM productos
+                    WHERE negocio_id = %s AND disponible = true AND precio > 0
+                """, (negocio_id,)).fetchone()
+                avg_precio = float(prod_stats['avg_precio'] or 18000.0)
+                avg_costo = float(prod_stats['avg_costo'] or 7000.0)
+                total_unidades = 500
 
         # Validación de márgenes
         if avg_precio <= 0:
@@ -9094,27 +9168,6 @@ def api_punto_equilibrio_datos(negocio_id):
         # Redondear estrictamente a miles cerrados (.000)
         avg_precio = round(avg_precio / 1000.0) * 1000
         avg_costo = round(avg_costo / 1000.0) * 1000
-
-        # Top 5 productos de la mezcla para transparencia informativa
-        top_prods_query = f"""
-            SELECT 
-                COALESCE(prod.nombre, pi.nombre_producto, 'Plato') AS nombre,
-                SUM(pi.cantidad) AS cantidad,
-                ROUND(AVG(pi.precio_unitario) / 1000.0) * 1000 AS precio,
-                ROUND(AVG(COALESCE(pi.costo_unitario, prod.costo, 0)) / 1000.0) * 1000 AS costo
-            FROM pedido_items pi
-            JOIN pedidos ped ON ped.id = pi.pedido_id
-            LEFT JOIN productos prod ON prod.id = pi.producto_id
-            WHERE ped.negocio_id = %s
-              AND COALESCE(ped.estado, '') != 'cancelado'
-              AND ped.created_at >= NOW() - INTERVAL '30 days'
-              {cond_ped_centro}
-            GROUP BY COALESCE(prod.nombre, pi.nombre_producto, 'Plato')
-            ORDER BY cantidad DESC
-            LIMIT 5
-        """
-        top_prods_rows = conn.execute(top_prods_query, tuple(params_ped)).fetchall()
-        top_productos_mezcla = [dict(r) for r in top_prods_rows]
 
         # 3. Gastos Fijos Programados
         progs_query = """
@@ -9174,6 +9227,7 @@ def api_punto_equilibrio_datos(negocio_id):
             'costos_mes_real': round(total_costos / 1000.0) * 1000,
             'total_pedidos_real': total_pedidos,
             'top_productos_mezcla': top_productos_mezcla,
+            'es_fallback_consolidado': es_fallback_consolidado,
             'gastos_fijos_programados': gastos_fijos_programados,
             'referencias_legales': referencias_legales
         })

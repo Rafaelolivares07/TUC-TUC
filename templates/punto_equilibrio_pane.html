@@ -215,9 +215,9 @@
     </div>
 
     <!-- Desglose desplegable de platos más vendidos en la mezcla -->
-    <div id="pe-detalle-mezcla-box" class="hidden mt-4 pt-3 border-t border-indigo-200">
-      <h5 class="text-xs md:text-sm font-extrabold uppercase text-indigo-900 mb-2">Top Platos Vendidos (Últimos 30 días)</h5>
-      <div id="pe-top-platos-lista" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+    <div id="pe-detalle-mezcla-box" class="hidden mt-4 pt-4 border-t-2 border-indigo-200">
+      <h5 class="text-sm md:text-base font-black uppercase text-indigo-950 mb-3 tracking-wide">Top Platos Vendidos vs Promedio Ponderado (Últimos 30 días)</h5>
+      <div id="pe-top-platos-lista" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <!-- Render dinámico -->
       </div>
     </div>
@@ -750,42 +750,42 @@
         if (data.top_productos_mezcla.length === 0) {
           topListEl.innerHTML = '<p class="text-xs text-indigo-700 italic">No hay productos vendidos en este periodo.</p>';
         } else {
-          // 1. Tarjeta destacada: Promedio Ponderado de la Mezcla Total
+          // 1. Tarjeta destacada: Promedio Ponderado de la Mezcla Total (Ampliación 200%)
           const cardPromedioPonderado = `
-            <div class="bg-gradient-to-br from-indigo-900 to-indigo-950 text-white border-2 border-indigo-700 rounded-xl p-2.5 shadow-md flex flex-col justify-between">
+            <div class="bg-gradient-to-br from-indigo-900 to-indigo-950 text-white border-2 border-indigo-600 rounded-2xl p-4 shadow-md flex flex-col justify-between">
               <div>
-                <div class="flex items-center justify-between mb-1">
-                  <span class="font-black text-[11px] tracking-wider uppercase text-amber-300 flex items-center gap-1">
-                    <span>🌟</span> PROMEDIO PONDERADO
+                <div class="flex items-center justify-between mb-2">
+                  <span class="font-black text-sm md:text-base tracking-wider uppercase text-amber-300 flex items-center gap-1.5">
+                    <span class="text-lg">🌟</span> PROMEDIO PONDERADO
                   </span>
-                  <span class="text-[9px] bg-indigo-800 text-indigo-200 px-1.5 py-0.5 rounded-full font-bold">100% Mezcla</span>
+                  <span class="text-xs bg-indigo-800 text-indigo-200 px-2.5 py-0.5 rounded-full font-bold">100% Mezcla</span>
                 </div>
-                <div class="text-[11px] font-bold text-indigo-100 truncate">Mezcla Global Ponderada</div>
+                <div class="text-sm md:text-base font-black text-indigo-100">Mezcla Global Ponderada</div>
               </div>
 
-              <div class="flex items-center justify-between text-xs font-mono mt-1.5 pt-1.5 border-t border-indigo-800/80">
-                <span>Total: <strong>${(data.unidades_mes_real || 0).toLocaleString('es-CO')} u</strong></span>
-                <span title="Precio Promedio Ponderado">P: <strong class="text-amber-300">${formatMiles(data.precio_promedio || 0)}</strong></span>
-                <span title="Costo Promedio Ponderado">C: <strong class="text-rose-300">${formatPesosExactos(data.costo_unitario_promedio || 0)}</strong></span>
+              <div class="flex items-center justify-between text-base md:text-lg font-mono mt-3 pt-3 border-t-2 border-indigo-800/80">
+                <span class="text-indigo-200">Total: <strong class="text-white text-lg font-black">${(data.unidades_mes_real || 0).toLocaleString('es-CO')} u</strong></span>
+                <span title="Precio Promedio Ponderado" class="text-indigo-200">P: <strong class="text-amber-300 text-lg font-black">${formatMiles(data.precio_promedio || 0)}</strong></span>
+                <span title="Costo Promedio Ponderado" class="text-indigo-200">C: <strong class="text-rose-300 text-lg font-black">${formatPesosExactos(data.costo_unitario_promedio || 0)}</strong></span>
               </div>
 
-              <p class="text-[10px] text-indigo-300 font-medium mt-1.5 leading-tight italic">
+              <p class="text-xs md:text-sm text-indigo-200 font-semibold mt-3 leading-relaxed italic bg-indigo-950/60 p-2 rounded-xl border border-indigo-800/60">
                 Media ponderada: promedio participativo inclinado hacia los platos más vendidos.
               </p>
             </div>
           `;
 
-          // 2. Tarjetas de los platos individuales
+          // 2. Tarjetas de los platos individuales (Ampliación 200%)
           const tarjetasIndividuales = data.top_productos_mezcla.map(p => `
-            <div class="bg-white border-2 border-indigo-200 rounded-xl p-2.5 shadow-2xs flex flex-col justify-between">
+            <div class="bg-white border-2 border-indigo-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between hover:border-indigo-400 transition">
               <div>
-                <div class="font-extrabold text-xs text-indigo-950 truncate" title="${escapePeHtml(p.nombre)}">${escapePeHtml(p.nombre)}</div>
-                <span class="text-[10px] text-gray-500 font-semibold block mt-0.5">Plato Individual</span>
+                <div class="font-black text-sm md:text-base text-indigo-950 truncate" title="${escapePeHtml(p.nombre)}">${escapePeHtml(p.nombre)}</div>
+                <span class="text-xs font-bold text-gray-500 block mt-1">Plato Individual de la Mezcla</span>
               </div>
-              <div class="flex items-center justify-between text-xs text-indigo-900 font-mono mt-2 pt-1.5 border-t border-gray-100">
-                <span>Cant: <strong class="text-indigo-950">${p.cantidad} unds</strong></span>
-                <span>P: <strong class="text-gray-900">${formatMiles(p.precio)}</strong></span>
-                <span>C: <strong class="text-rose-700">${formatPesosExactos(p.costo)}</strong></span>
+              <div class="flex items-center justify-between text-base md:text-lg text-indigo-900 font-mono mt-3 pt-3 border-t-2 border-gray-100">
+                <span class="text-gray-600">Cant: <strong class="text-indigo-950 text-lg font-black">${p.cantidad} u</strong></span>
+                <span class="text-gray-600">P: <strong class="text-gray-900 text-lg font-black">${formatMiles(p.precio)}</strong></span>
+                <span class="text-gray-600">C: <strong class="text-rose-700 text-lg font-black">${formatPesosExactos(p.costo)}</strong></span>
               </div>
             </div>
           `).join('');

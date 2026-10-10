@@ -106,7 +106,7 @@
   </div>
 </div>
 
-<div class="max-w-5xl mx-auto">
+<div class="max-w-7xl w-full mx-auto">
 
   <!-- Cabecera -->
   <div class="bg-white rounded-2xl shadow-lg p-5 mb-5 border-t-4 border-emerald-500">
@@ -228,25 +228,28 @@
   <!-- Zona de Conteo Categoría / Completo -->
   <div id="conteo-lista" class="bg-white rounded-2xl shadow-md p-5 mb-5 hidden">
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <h2 id="conteo-lista-titulo" class="text-sm font-bold text-gray-800 uppercase tracking-wide">Productos del Inventario</h2>
-      <div id="select-cat-container" class="w-64 hidden">
+      <div class="flex items-center gap-3">
+        <h2 id="conteo-lista-titulo" class="text-base md:text-lg font-black text-gray-800 uppercase tracking-wide">📦 Productos del Inventario</h2>
+        <span id="badge-total-filas-lista" class="text-xs font-bold px-2.5 py-1 bg-gray-100 text-gray-700 rounded-lg">0 productos</span>
+      </div>
+      <div id="select-cat-container" class="w-72 hidden">
         <select id="select-categoria-filtro" onchange="cargarTablaPorCategoria()"
-                class="w-full border border-gray-200 rounded-xl px-3 py-1.5 bg-gray-50 text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500">
+                class="w-full border-2 border-emerald-200 rounded-xl px-3 py-2 bg-emerald-50/50 text-sm font-bold text-emerald-950 outline-none focus:ring-2 focus:ring-emerald-500">
           <option value="">-- Seleccionar Categoría --</option>
         </select>
       </div>
     </div>
     
-    <div class="overflow-x-auto max-h-[500px] overflow-y-auto border border-gray-100 rounded-xl">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-gray-500 text-xs uppercase sticky top-0 z-10">
+    <div class="overflow-x-auto max-h-[650px] overflow-y-auto border-2 border-gray-100 rounded-2xl shadow-inner">
+      <table class="w-full text-base">
+        <thead class="bg-gray-100/90 text-gray-700 text-sm font-black uppercase tracking-wider sticky top-0 z-10 border-b-2 border-gray-200 backdrop-blur-xs">
           <tr>
-            <th class="px-4 py-2.5 text-left bg-gray-50">Producto</th>
-            <th class="px-4 py-2.5 text-center bg-gray-50">Stock Sistema</th>
-            <th class="px-4 py-2.5 text-center bg-gray-50">Cantidad Física</th>
-            <th class="px-4 py-2.5 text-center bg-gray-50">Diferencia</th>
-            <th class="px-4 py-2.5 text-center bg-gray-50">Costo Ajuste ($)</th>
-            <th class="px-4 py-2.5 text-right bg-gray-50">Ajuste</th>
+            <th class="px-5 py-3.5 text-left bg-gray-100">Producto / Insumo</th>
+            <th class="px-5 py-3.5 text-center bg-gray-100">Stock Sistema</th>
+            <th class="px-5 py-3.5 text-center bg-gray-100">Cantidad Física</th>
+            <th class="px-5 py-3.5 text-center bg-gray-100">Diferencia</th>
+            <th class="px-5 py-3.5 text-center bg-gray-100">Costo Unitario ($)</th>
+            <th class="px-5 py-3.5 text-right bg-gray-100">Acción</th>
           </tr>
         </thead>
         <tbody id="tabla-lista-body"></tbody>
@@ -255,28 +258,28 @@
   </div>
 
   <!-- Ítems ajustados en caliente -->
-  <div class="bg-white rounded-2xl shadow-md p-5 mb-5">
-    <div class="border-b border-gray-100 pb-3 mb-4 flex items-center justify-between">
-      <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wide flex items-center gap-2">
+  <div class="bg-white rounded-2xl shadow-md p-6 mb-5">
+    <div class="border-b-2 border-gray-100 pb-3 mb-4 flex items-center justify-between">
+      <h2 class="text-base md:text-lg font-black text-gray-800 uppercase tracking-wide flex items-center gap-2">
         <span>📋 Ítems ajustados en el documento actual</span>
       </h2>
-      <span id="lbl-items-documento" class="text-xs font-semibold text-gray-400">Ninguno ajustado</span>
+      <span id="lbl-items-documento" class="text-xs md:text-sm font-black px-3 py-1 bg-emerald-100 text-emerald-900 rounded-xl">Ninguno ajustado</span>
     </div>
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+      <table class="w-full text-base">
         <thead>
-          <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100">
-            <th class="px-3 py-2 text-left">Producto</th>
-            <th class="px-3 py-2 text-left">Categoría</th>
-            <th class="px-3 py-2 text-center">Stock Anterior</th>
-            <th class="px-3 py-2 text-center">Conteo Físico</th>
-            <th class="px-3 py-2 text-center">Diferencia</th>
-            <th class="px-3 py-2 text-right">Costo Unitario</th>
-            <th class="px-3 py-2 text-right">Ajuste Total</th>
+          <tr class="bg-gray-100 text-sm font-black uppercase text-gray-700 border-b-2 border-gray-200">
+            <th class="px-4 py-3 text-left">Producto</th>
+            <th class="px-4 py-3 text-left">Categoría</th>
+            <th class="px-4 py-3 text-center">Stock Anterior</th>
+            <th class="px-4 py-3 text-center">Conteo Físico</th>
+            <th class="px-4 py-3 text-center">Diferencia</th>
+            <th class="px-4 py-3 text-right">Costo Unitario</th>
+            <th class="px-4 py-3 text-right">Ajuste Total</th>
           </tr>
         </thead>
         <tbody id="body-items-documento">
-          <tr><td colspan="7" class="text-center text-gray-400 py-6 text-xs">No se han registrado ajustes bajo este consecutivo en esta sesión.</td></tr>
+          <tr><td colspan="7" class="text-center text-gray-400 py-6 text-sm">No se han registrado ajustes bajo este consecutivo en esta sesión.</td></tr>
         </tbody>
       </table>
     </div>
@@ -300,6 +303,7 @@ let activeDocNumber = "";
 let currentProducts = []; // Caché en memoria de todos los productos
 let selectedProduct = null; // Producto seleccionado en modalidad libre
 let categoriasDisponibles = [];
+let itemsAjustadosEnSesion = new Map(); // Mapa de producto_id -> info de ajuste en la sesión actual
 
 function numDocLimpio(num) {
   const s = String(num || '').trim();
@@ -489,37 +493,83 @@ function cargarTablaPorCategoria() {
 
 function renderTablaLista(list) {
   const body = document.getElementById("tabla-lista-body");
+  const badgeTotal = document.getElementById("badge-total-filas-lista");
+  if (badgeTotal) {
+    const ajustadosCount = list.filter(p => itemsAjustadosEnSesion.has(p.id)).length;
+    badgeTotal.textContent = `${list.length} productos${ajustadosCount > 0 ? ` (${ajustadosCount} ajustados)` : ''}`;
+  }
+
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-6 text-xs">No hay productos disponibles.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8 text-base font-semibold">No hay productos disponibles en esta vista.</td></tr>';
     return;
   }
   
   body.innerHTML = list.map(p => {
+    const itemAjustado = itemsAjustadosEnSesion.get(p.id);
+    const estaAjustado = !!itemAjustado;
+    
+    // Si ya fue ajustado en este documento, prellenar y destacar con estilo verde de éxito
+    const rowBgClass = estaAjustado 
+      ? 'bg-emerald-50/70 border-b-2 border-emerald-200 transition-colors' 
+      : 'border-b border-gray-100 hover:bg-gray-50/80 transition-colors';
+
+    const diffAjustada = estaAjustado ? (itemAjustado.cantidad * (itemAjustado.tipo === 'entrada' ? 1 : -1)) : 0;
+    const diffBadgeHtml = estaAjustado
+      ? `<span class="inline-flex items-center gap-1 text-sm font-black font-mono px-2.5 py-1 rounded-lg ${diffAjustada >= 0 ? 'bg-emerald-200/80 text-emerald-900' : 'bg-red-200/80 text-red-900'}">
+          ${diffAjustada > 0 ? '+' : ''}${diffAjustada.toFixed(2)}
+         </span>`
+      : `<span id="tbl-diff-badge-${p.id}" class="text-sm font-bold font-mono text-gray-400">—</span>`;
+
+    const statusBadge = estaAjustado
+      ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-600 text-white shadow-2xs mt-1">
+          ✓ Ajustado (${itemAjustado.stock_anterior} ➔ ${itemAjustado.stock_nuevo})
+         </span>`
+      : '';
+
     return `
-      <tr class="border-b border-gray-100 hover:bg-gray-50/50">
-        <td class="px-4 py-3">
-          <span class="font-semibold text-gray-800 text-sm block">${p.nombre}</span>
-          <span class="text-[10px] uppercase font-bold text-gray-400">${p.categoria || 'Sin categoría'}</span>
+      <tr class="${rowBgClass}">
+        <td class="px-5 py-3.5">
+          <div class="flex flex-col">
+            <span class="font-bold text-gray-950 text-base md:text-lg block leading-snug">${escapePeHtml(p.nombre)}</span>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span class="text-xs uppercase font-extrabold text-gray-400 tracking-wider">${escapePeHtml(p.categoria || 'Sin categoría')}</span>
+              ${statusBadge}
+            </div>
+          </div>
         </td>
-        <td class="px-4 py-3 text-center font-mono font-bold text-gray-600 text-xs">${p.stock}</td>
-        <td class="px-4 py-3 text-center">
-          <input type="number" id="tbl-qty-${p.id}" placeholder="${p.stock}" step="any"
-                 class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-24 text-center font-semibold outline-none focus:border-emerald-500"
+        <td class="px-5 py-3.5 text-center font-mono font-black text-gray-700 text-base md:text-lg">
+          ${p.stock}
+        </td>
+        <td class="px-5 py-3.5 text-center">
+          <input type="number" id="tbl-qty-${p.id}" 
+                 value="${estaAjustado ? itemAjustado.stock_nuevo : ''}"
+                 placeholder="${p.stock}" step="any"
+                 class="border-2 ${estaAjustado ? 'border-emerald-300 bg-white' : 'border-gray-200'} rounded-xl px-3 py-2 text-base md:text-lg w-32 text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs"
                  oninput="calcDiffFila(${p.id}, ${p.stock})"
                  onkeydown="if(event.key==='Enter') abrirValidacionFila(${p.id})">
         </td>
-        <td class="px-4 py-3 text-center">
-          <span id="tbl-diff-badge-${p.id}" class="text-xs font-bold font-mono text-gray-400">—</span>
+        <td class="px-5 py-3.5 text-center">
+          ${diffBadgeHtml}
         </td>
-        <td class="px-4 py-3 text-center">
+        <td class="px-5 py-3.5 text-center">
           <input type="number" id="tbl-cost-${p.id}" value="${p.costo || 0}" step="0.01" min="0"
-                 class="border border-gray-200 rounded-lg px-2 py-1 text-xs w-24 text-center font-semibold outline-none focus:border-emerald-500">
+                 class="border-2 border-gray-200 rounded-xl px-3 py-2 text-base md:text-lg w-32 text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs">
         </td>
-        <td class="px-4 py-3 text-right">
-          <button onclick="abrirValidacionFila(${p.id})" id="tbl-btn-save-${p.id}" disabled
-                  class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition">
-            Ajustar
-          </button>
+        <td class="px-5 py-3.5 text-right">
+          ${estaAjustado ? `
+            <div class="flex items-center justify-end gap-1.5">
+              <button onclick="abrirValidacionFila(${p.id})" id="tbl-btn-save-${p.id}"
+                      class="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 font-extrabold text-sm px-3.5 py-2 rounded-xl transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                      title="Reajustar si hubo un error en la toma">
+                <span>🔄 Reajustar</span>
+              </button>
+            </div>
+          ` : `
+            <button onclick="abrirValidacionFila(${p.id})" id="tbl-btn-save-${p.id}" disabled
+                    class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer">
+              Ajustar
+            </button>
+          `}
         </td>
       </tr>
     `;
@@ -532,43 +582,51 @@ function calcDiffFila(id, sysStock) {
   const badge = document.getElementById(`tbl-diff-badge-${id}`);
   
   if (input.value.trim() === "") {
-    badge.className = "text-xs font-bold font-mono text-gray-400";
-    badge.textContent = "—";
-    btn.disabled = true;
+    if (badge) {
+      badge.className = "text-sm font-bold font-mono text-gray-400";
+      badge.textContent = "—";
+    }
+    if (btn) btn.disabled = true;
     return;
   }
   
   const physVal = parseFloat(input.value);
   if (isNaN(physVal)) {
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
     return;
   }
   
   const diff = physVal - sysStock;
-  btn.disabled = Math.abs(diff) < 0.000001;
+  if (btn) btn.disabled = Math.abs(diff) < 0.000001;
   
   const costInput = document.getElementById(`tbl-cost-${id}`);
   const prod = currentProducts.find(x => x.id === id);
 
   if (Math.abs(diff) < 0.000001) {
-    badge.className = "text-xs font-bold font-mono text-gray-400";
-    badge.textContent = "0.0";
+    if (badge) {
+      badge.className = "text-sm font-bold font-mono text-gray-400";
+      badge.textContent = "0.0";
+    }
     if (costInput && prod) {
       costInput.readOnly = true;
       costInput.value = parseFloat(prod.costo || 0).toFixed(2);
       costInput.classList.add("bg-gray-100", "cursor-not-allowed", "text-gray-500");
     }
   } else if (diff > 0) {
-    badge.className = "text-xs font-extrabold font-mono text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded";
-    badge.textContent = `+${diff.toFixed(2)}`;
+    if (badge) {
+      badge.className = "text-sm md:text-base font-black font-mono text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-xl shadow-2xs";
+      badge.textContent = `+${diff.toFixed(2)}`;
+    }
     // Entrada: editable
     if (costInput) {
       costInput.readOnly = false;
       costInput.classList.remove("bg-gray-100", "cursor-not-allowed", "text-gray-500");
     }
   } else {
-    badge.className = "text-xs font-extrabold font-mono text-red-600 bg-red-50 px-1.5 py-0.5 rounded";
-    badge.textContent = diff.toFixed(2);
+    if (badge) {
+      badge.className = "text-sm md:text-base font-black font-mono text-red-800 bg-red-100 px-2.5 py-1 rounded-xl shadow-2xs";
+      badge.textContent = diff.toFixed(2);
+    }
     // Salida: NUNCA editable (bloqueado con costo promedio)
     if (costInput && prod) {
       costInput.readOnly = true;
@@ -832,31 +890,45 @@ async function cargarItemsDocumento() {
   const body = document.getElementById("body-items-documento");
   const lbl = document.getElementById("lbl-items-documento");
   
+  itemsAjustadosEnSesion.clear();
+  
   if (data.ok && data.items.length > 0) {
     lbl.textContent = `${data.items.length} ítems ajustados`;
+    data.items.forEach(m => {
+      itemsAjustadosEnSesion.set(m.producto_id, m);
+    });
+
     body.innerHTML = data.items.map(m => {
       const diff = m.cantidad * (m.tipo === 'entrada' ? 1 : -1);
       const total = m.valor_total || 0;
       
       const badgeDiff = diff > 0 
-        ? `<span class="text-xs font-bold font-mono text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">+${diff.toFixed(2)}</span>`
-        : `<span class="text-xs font-bold font-mono text-red-600 bg-red-50 px-1.5 py-0.5 rounded">${diff.toFixed(2)}</span>`;
+        ? `<span class="text-sm font-black font-mono text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg">+${diff.toFixed(2)}</span>`
+        : `<span class="text-sm font-black font-mono text-red-800 bg-red-100 px-2 py-0.5 rounded-lg">${diff.toFixed(2)}</span>`;
         
       return `
-        <tr class="border-b border-gray-100 hover:bg-gray-50/50">
-          <td class="px-3 py-2 font-semibold text-gray-800">${m.nombre_producto}</td>
-          <td class="px-3 py-2 text-xs text-gray-400 uppercase font-bold">${m.categoria || 'Sin cat.'}</td>
-          <td class="px-3 py-2 text-center font-mono text-xs text-gray-500">${m.stock_anterior}</td>
-          <td class="px-3 py-2 text-center font-mono text-xs font-bold text-gray-900">${m.stock_nuevo}</td>
-          <td class="px-3 py-2 text-center">${badgeDiff}</td>
-          <td class="px-3 py-2 text-right font-mono font-medium text-xs">$${parseFloat(m.costo_und || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</td>
-          <td class="px-3 py-2 text-right font-mono font-bold text-xs">$${parseFloat(total).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</td>
+        <tr class="border-b border-gray-100 hover:bg-gray-50/80 transition-colors">
+          <td class="px-4 py-3 font-bold text-gray-950 text-base">${escapePeHtml(m.nombre_producto)}</td>
+          <td class="px-4 py-3 text-xs text-gray-400 uppercase font-black tracking-wider">${escapePeHtml(m.categoria || 'Sin cat.')}</td>
+          <td class="px-4 py-3 text-center font-mono text-base text-gray-500 font-bold">${m.stock_anterior}</td>
+          <td class="px-4 py-3 text-center font-mono text-base font-black text-gray-950">${m.stock_nuevo}</td>
+          <td class="px-4 py-3 text-center">${badgeDiff}</td>
+          <td class="px-4 py-3 text-right font-mono font-bold text-sm text-gray-700">$${parseFloat(m.costo_und || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</td>
+          <td class="px-4 py-3 text-right font-mono font-black text-base text-gray-950">$${parseFloat(total).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</td>
         </tr>
       `;
     }).join('');
   } else {
     lbl.textContent = "Ninguno ajustado";
-    body.innerHTML = `<tr><td colspan="7" class="text-center text-gray-400 py-6 text-xs">No se han registrado ajustes bajo este consecutivo en esta sesión.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="text-center text-gray-400 py-6 text-sm font-medium">No se han registrado ajustes bajo este consecutivo en esta sesión.</td></tr>`;
+  }
+
+  // Refrescar la lista de conteo si está visible para marcar de inmediato los ítems ajustados
+  const mod = document.getElementById("select-modalidad")?.value;
+  if (mod === "completo") {
+    cargarTablaCompleta();
+  } else if (mod === "categoria") {
+    cargarTablaPorCategoria();
   }
 }
 
@@ -1217,6 +1289,16 @@ function toast(msg, ok=true) {
   el.textContent = msg;
   el.className = `toast ${ok ? 'toast-ok' : 'toast-err'} show`;
   setTimeout(() => el.classList.remove("show"), 3000);
+}
+
+function escapePeHtml(str) {
+  if (!str) return '';
+  return str.toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 </script>
 <script src="/static/js/calculadora_widget.js"></script>

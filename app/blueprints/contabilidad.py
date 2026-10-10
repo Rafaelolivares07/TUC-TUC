@@ -9046,7 +9046,7 @@ def api_punto_equilibrio_datos(negocio_id):
                    COALESCE(AVG(costo), 0) AS avg_costo,
                    COUNT(*) AS total_prods
             FROM productos
-            WHERE negocio_id = %s AND activo = true AND precio > 0
+            WHERE negocio_id = %s AND disponible = true AND precio > 0
         """, (negocio_id,)).fetchone()
         
         avg_precio = float(prod_stats['avg_precio'] or 0)

@@ -1338,6 +1338,16 @@ def api_inventario_productos(negocio_id):
             END
         """
 
+        sql_rotacion = """
+            COALESCE((
+                SELECT COUNT(*)
+                FROM movimientos_inventario m_rot
+                WHERE m_rot.negocio_id = p.negocio_id
+                  AND m_rot.producto_id = p.id
+                  AND m_rot.created_at >= NOW() - INTERVAL '30 days'
+            ), 0)
+        """
+
         es_consolidado = str(bodega_param).lower() in ('consolidado', 'todas', 'all')
         if es_consolidado:
             rows = conn.execute(f"""
@@ -1345,7 +1355,9 @@ def api_inventario_productos(negocio_id):
                        {sql_costo_fallback} AS costo,
                        {sql_costo_origen} AS costo_origen,
                        p.codigo_barra, p.iva_pct, p.disponible, p.orden,
-                       COALESCE(s.stock, 0) AS stock
+                       COALESCE(s.stock, 0) AS stock,
+                       {sql_rotacion} AS rotacion_30d,
+                       ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total
                 FROM productos p
                 LEFT JOIN (
                     SELECT producto_id, negocio_id, SUM(stock) as stock, 
@@ -1367,7 +1379,9 @@ def api_inventario_productos(negocio_id):
                        {sql_costo_fallback} AS costo,
                        {sql_costo_origen} AS costo_origen,
                        p.codigo_barra, p.iva_pct, p.disponible, p.orden,
-                       COALESCE(s.stock, 0) AS stock
+                       COALESCE(s.stock, 0) AS stock,
+                       {sql_rotacion} AS rotacion_30d,
+                       ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total
                 FROM productos p
                 LEFT JOIN saldos_inventario s ON s.producto_id = p.id
                     AND s.negocio_id = p.negocio_id AND s.bodega = %s

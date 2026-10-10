@@ -252,23 +252,48 @@
         <h2 id="conteo-lista-titulo" class="text-base md:text-lg font-black text-gray-800 uppercase tracking-wide">📦 Productos del Inventario</h2>
         <span id="badge-total-filas-lista" class="text-xs font-bold px-2.5 py-1 bg-gray-100 text-gray-700 rounded-lg">0 productos</span>
       </div>
-      <div id="select-cat-container" class="w-72 hidden">
-        <select id="select-categoria-filtro" onchange="cargarTablaPorCategoria()"
-                class="w-full border-2 border-emerald-200 rounded-xl px-3 py-2 bg-emerald-50/50 text-sm font-bold text-emerald-950 outline-none focus:ring-2 focus:ring-emerald-500">
-          <option value="">-- Seleccionar Categoría --</option>
-        </select>
+      <div class="flex items-center gap-2.5 flex-wrap">
+        <!-- Control visible de Ordenamiento -->
+        <div class="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 shadow-2xs">
+          <label for="select-criterio-orden" class="text-xs font-bold text-gray-500 uppercase flex items-center gap-1 cursor-pointer select-none">
+            <span class="text-sm">⇅</span> Ordenar:
+          </label>
+          <select id="select-criterio-orden" onchange="cambiarCriterioOrden()"
+                  class="bg-transparent text-xs md:text-sm font-black text-gray-800 outline-none cursor-pointer">
+            <option value="categoria">🗂️ Categoría + Nombre (A-Z) (Por defecto)</option>
+            <option value="alfabetico">🔤 Nombre Alfabético (A-Z)</option>
+            <option value="valor_total_desc">💰 Mayor Valor en Pesos ($ Stock × Costo)</option>
+            <option value="rotacion_desc">🔄 Mayor Rotación (Movimientos 30d)</option>
+            <option value="impacto_abc">⭐ Alto Impacto (Mayor Valor + Rotación)</option>
+            <option value="pendientes_primero">⏳ Pendientes de conteo primero</option>
+            <option value="ajustados_primero">✅ Ya ajustados en sesión primero</option>
+          </select>
+        </div>
+
+        <div id="select-cat-container" class="w-64 hidden">
+          <select id="select-categoria-filtro" onchange="cargarTablaPorCategoria()"
+                  class="w-full border-2 border-emerald-200 rounded-xl px-3 py-1.5 bg-emerald-50/50 text-xs md:text-sm font-bold text-emerald-950 outline-none focus:ring-2 focus:ring-emerald-500">
+            <option value="">-- Seleccionar Categoría --</option>
+          </select>
+        </div>
       </div>
     </div>
     
     <div class="overflow-x-auto max-h-[650px] overflow-y-auto border-2 border-gray-100 rounded-2xl shadow-inner">
       <table class="w-full text-base">
-        <thead class="bg-gray-100/90 text-gray-700 text-sm font-black uppercase tracking-wider sticky top-0 z-10 border-b-2 border-gray-200 backdrop-blur-xs">
+        <thead class="bg-gray-100/90 text-gray-700 text-sm font-black uppercase tracking-wider sticky top-0 z-10 border-b-2 border-gray-200 backdrop-blur-xs select-none">
           <tr>
-            <th class="px-5 py-3.5 text-left bg-gray-100">Producto / Insumo</th>
-            <th class="px-5 py-3.5 text-center bg-gray-100">Stock Sistema</th>
+            <th class="px-5 py-3.5 text-left bg-gray-100 cursor-pointer hover:bg-gray-200/80 transition" onclick="toggleOrdenRapido('alfabetico')" title="Clic para alternar orden alfabético">
+              <span class="flex items-center gap-1.5">Producto / Insumo <span id="th-ico-prod" class="text-xs text-gray-400">⇅</span></span>
+            </th>
+            <th class="px-5 py-3.5 text-center bg-gray-100 cursor-pointer hover:bg-gray-200/80 transition" onclick="toggleOrdenRapido('valor_total_desc')" title="Clic para ordenar por mayor valor en libros">
+              <span class="flex items-center justify-center gap-1.5">Stock Sistema <span id="th-ico-stock" class="text-xs text-gray-400">⇅</span></span>
+            </th>
             <th class="px-5 py-3.5 text-center bg-gray-100">Cantidad Física</th>
             <th class="px-5 py-3.5 text-center bg-gray-100">Diferencia</th>
-            <th class="px-5 py-3.5 text-center bg-gray-100">Costo Unitario ($)</th>
+            <th class="px-5 py-3.5 text-center bg-gray-100 cursor-pointer hover:bg-gray-200/80 transition" onclick="toggleOrdenRapido('costo_desc')" title="Clic para ordenar por costo">
+              <span class="flex items-center justify-center gap-1.5">Costo Unitario ($) <span id="th-ico-costo" class="text-xs text-gray-400">⇅</span></span>
+            </th>
             <th class="px-5 py-3.5 text-right bg-gray-100">Acción</th>
           </tr>
         </thead>
@@ -346,6 +371,14 @@ document.addEventListener("DOMContentLoaded", () => {
     selMod.value = savedMod;
   }
   cambiarModalidad(false);
+
+  // Restaurar criterio de ordenación preferido
+  const savedOrden = localStorage.getItem(`inv_fisico_orden_${NEGOCIO_ID}`) || 'categoria';
+  const selOrden = document.getElementById("select-criterio-orden");
+  if (selOrden && ['categoria', 'alfabetico', 'valor_total_desc', 'rotacion_desc', 'impacto_abc', 'pendientes_primero', 'ajustados_primero'].includes(savedOrden)) {
+    selOrden.value = savedOrden;
+  }
+  actualizarIndicadoresEncabezados();
 
   inicializarSesion();
   cargarProductos();
@@ -548,6 +581,108 @@ async function abrirValidacionLibre() {
 }
 
 // ── FLUX: MODALIDAD CATEGORIA / COMPLETO ────────────────────────────────────────
+function obtenerListaOrdenada(lista) {
+  const criterio = document.getElementById("select-criterio-orden")?.value || 'categoria';
+  const copia = [...lista];
+
+  copia.sort((a, b) => {
+    const aAjustado = itemsAjustadosEnSesion.has(a.id) ? 1 : 0;
+    const bAjustado = itemsAjustadosEnSesion.has(b.id) ? 1 : 0;
+    const aVal = parseFloat(a.valor_total || ((a.stock || 0) * (a.costo || 0)) || 0);
+    const bVal = parseFloat(b.valor_total || ((b.stock || 0) * (b.costo || 0)) || 0);
+    const aRot = parseInt(a.rotacion_30d || 0);
+    const bRot = parseInt(b.rotacion_30d || 0);
+    const aCosto = parseFloat(a.costo || 0);
+    const bCosto = parseFloat(b.costo || 0);
+
+    // Impacto ABC combinado: Valor en pesos * (1 + log(1 + rotación))
+    const aImpacto = aVal * (1 + Math.log1p(aRot));
+    const bImpacto = bVal * (1 + Math.log1p(bRot));
+
+    switch (criterio) {
+      case 'categoria': {
+        const catCmp = (a.categoria || '').localeCompare(b.categoria || '', 'es', { sensitivity: 'base' });
+        if (catCmp !== 0) return catCmp;
+        const ordCmp = (a.orden || 0) - (b.orden || 0);
+        if (ordCmp !== 0) return ordCmp;
+        return (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' });
+      }
+      case 'alfabetico':
+        return (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' });
+
+      case 'valor_total_desc':
+        if (Math.abs(bVal - aVal) > 0.001) return bVal - aVal;
+        return (a.nombre || '').localeCompare(b.nombre || '', 'es');
+
+      case 'rotacion_desc':
+        if (bRot !== aRot) return bRot - aRot;
+        if (Math.abs(bVal - aVal) > 0.001) return bVal - aVal;
+        return (a.nombre || '').localeCompare(b.nombre || '', 'es');
+
+      case 'impacto_abc':
+        if (Math.abs(bImpacto - aImpacto) > 0.001) return bImpacto - aImpacto;
+        return (a.nombre || '').localeCompare(b.nombre || '', 'es');
+
+      case 'costo_desc':
+        if (Math.abs(bCosto - aCosto) > 0.001) return bCosto - aCosto;
+        return (a.nombre || '').localeCompare(b.nombre || '', 'es');
+
+      case 'pendientes_primero':
+        if (aAjustado !== bAjustado) return aAjustado - bAjustado;
+        return (a.nombre || '').localeCompare(b.nombre || '', 'es');
+
+      case 'ajustados_primero':
+        if (aAjustado !== bAjustado) return bAjustado - aAjustado;
+        return (a.nombre || '').localeCompare(b.nombre || '', 'es');
+
+      default:
+        return 0;
+    }
+  });
+
+  return copia;
+}
+
+function cambiarCriterioOrden() {
+  const sel = document.getElementById("select-criterio-orden");
+  if (sel) {
+    try { localStorage.setItem(`inv_fisico_orden_${NEGOCIO_ID}`, sel.value); } catch(e){}
+  }
+  
+  actualizarIndicadoresEncabezados();
+
+  const mod = document.getElementById("select-modalidad")?.value;
+  if (mod === "completo") {
+    cargarTablaCompleta();
+  } else if (mod === "categoria") {
+    cargarTablaPorCategoria();
+  }
+}
+
+function actualizarIndicadoresEncabezados() {
+  const crit = document.getElementById("select-criterio-orden")?.value || 'categoria';
+  const icoProd = document.getElementById("th-ico-prod");
+  const icoStock = document.getElementById("th-ico-stock");
+  const icoCosto = document.getElementById("th-ico-costo");
+  
+  if (icoProd) icoProd.textContent = (crit === 'alfabetico') ? '▲' : '⇅';
+  if (icoStock) icoStock.textContent = (crit === 'valor_total_desc' || crit === 'impacto_abc') ? '▼' : '⇅';
+  if (icoCosto) icoCosto.textContent = (crit === 'costo_desc') ? '▼' : '⇅';
+}
+
+function toggleOrdenRapido(tipo) {
+  const sel = document.getElementById("select-criterio-orden");
+  if (!sel) return;
+  if (tipo === 'alfabetico') {
+    sel.value = (sel.value === 'alfabetico') ? 'categoria' : 'alfabetico';
+  } else if (tipo === 'valor_total_desc') {
+    sel.value = (sel.value === 'valor_total_desc') ? 'impacto_abc' : 'valor_total_desc';
+  } else if (tipo === 'costo_desc') {
+    sel.value = (sel.value === 'costo_desc') ? 'valor_total_desc' : 'costo_desc';
+  }
+  cambiarCriterioOrden();
+}
+
 function cargarTablaCompleta() {
   if (!currentProducts || currentProducts.length === 0) {
     const body = document.getElementById("tabla-lista-body");
@@ -556,7 +691,8 @@ function cargarTablaCompleta() {
     }
     return;
   }
-  renderTablaLista(currentProducts);
+  const listaOrdenada = obtenerListaOrdenada(currentProducts);
+  renderTablaLista(listaOrdenada);
 }
 
 function cargarTablaPorCategoria() {
@@ -575,7 +711,8 @@ function cargarTablaPorCategoria() {
     return;
   }
   const filtered = currentProducts.filter(p => p.categoria === cat);
-  renderTablaLista(filtered);
+  const listaOrdenada = obtenerListaOrdenada(filtered);
+  renderTablaLista(listaOrdenada);
 }
 
 function renderTablaLista(list) {
@@ -607,8 +744,23 @@ function renderTablaLista(list) {
       : `<span id="tbl-diff-badge-${p.id}" class="text-sm font-bold font-mono text-gray-400">—</span>`;
 
     const statusBadge = estaAjustado
-      ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-600 text-white shadow-2xs mt-1">
+      ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-600 text-white shadow-2xs">
           ✓ Ajustado (${itemAjustado.stock_anterior} ➔ ${itemAjustado.stock_nuevo})
+         </span>`
+      : '';
+
+    const valTotalPesos = parseFloat(p.valor_total || ((p.stock || 0) * (p.costo || 0)) || 0);
+    const rotacion = parseInt(p.rotacion_30d || 0);
+
+    const valorBadge = valTotalPesos > 0 
+      ? `<span class="inline-flex items-center gap-0.5 text-[11px] font-bold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-md" title="Valor en inventario (Stock x Costo): $${valTotalPesos.toLocaleString('es-CO', { minimumFractionDigits: 2 })}">
+           💵 $${valTotalPesos.toLocaleString('es-CO', { maximumFractionDigits: 0 })}
+         </span>`
+      : '';
+
+    const rotacionBadge = rotacion > 0
+      ? `<span class="inline-flex items-center gap-0.5 text-[11px] font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md" title="Rotación en los últimos 30 días (${rotacion} movimientos)">
+           🔄 ${rotacion} mov/mes
          </span>`
       : '';
 
@@ -617,8 +769,10 @@ function renderTablaLista(list) {
         <td class="px-5 py-3.5">
           <div class="flex flex-col">
             <span class="font-bold text-gray-950 text-base md:text-lg block leading-snug">${escapePeHtml(p.nombre)}</span>
-            <div class="flex items-center gap-2 mt-0.5">
+            <div class="flex items-center gap-2 mt-1 flex-wrap">
               <span class="text-xs uppercase font-extrabold text-gray-400 tracking-wider">${escapePeHtml(p.categoria || 'Sin categoría')}</span>
+              ${valorBadge}
+              ${rotacionBadge}
               ${statusBadge}
             </div>
           </div>
@@ -647,10 +801,10 @@ function renderTablaLista(list) {
         <td class="px-5 py-3.5 text-right">
           ${estaAjustado ? `
             <div class="flex items-center justify-end gap-1.5">
-              <button onclick="abrirValidacionFila(${p.id})" id="tbl-btn-save-${p.id}" disabled
-                      class="bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-sm px-3.5 py-2 rounded-xl opacity-75 cursor-default transition flex items-center gap-1 shadow-2xs"
-                      title="Item ya ajustado en este documento. Para modificarlo ingrese una nueva cantidad.">
-                <span>✓ Ajustado</span>
+              <button onclick="abrirValidacionFila(${p.id})" id="tbl-btn-save-${p.id}"
+                      class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      title="Item ya ajustado bajo este documento. Haz clic para volver a reajustar si lo necesitas.">
+                <span>🔄 Reajustar</span>
               </button>
             </div>
           ` : `
@@ -682,11 +836,12 @@ function calcDiffFila(id, sysStock) {
       }
     }
     if (btn) {
-      btn.disabled = true;
       if (estaAjustado) {
-        btn.innerHTML = '<span>✓ Ajustado</span>';
-        btn.className = "bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-sm px-3.5 py-2 rounded-xl opacity-75 cursor-default transition flex items-center gap-1 shadow-2xs";
+        btn.disabled = false;
+        btn.innerHTML = '<span>🔄 Reajustar</span>';
+        btn.className = "bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer";
       } else {
+        btn.disabled = true;
         btn.textContent = 'Ajustar';
         btn.className = "bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer";
       }
@@ -696,21 +851,22 @@ function calcDiffFila(id, sysStock) {
   
   const physVal = parseFloat(input.value);
   if (isNaN(physVal)) {
-    if (btn) btn.disabled = true;
+    if (btn && !estaAjustado) btn.disabled = true;
     return;
   }
   
   const diff = physVal - sysStock;
   const tieneDif = Math.abs(diff) >= 0.000001;
   if (btn) {
-    btn.disabled = !tieneDif;
-    if (tieneDif) {
-      btn.textContent = estaAjustado ? '🔄 Reajustar' : 'Ajustar';
-      btn.className = "bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer";
+    if (estaAjustado) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🔄 Reajustar</span>';
+      btn.className = "bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer";
     } else {
-      btn.innerHTML = estaAjustado ? '<span>✓ Ajustado</span>' : 'Ajustar';
-      btn.className = estaAjustado 
-        ? "bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-sm px-3.5 py-2 rounded-xl opacity-75 cursor-default transition flex items-center gap-1 shadow-2xs"
+      btn.disabled = !tieneDif;
+      btn.textContent = 'Ajustar';
+      btn.className = tieneDif
+        ? "bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer"
         : "bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer";
     }
   }
@@ -756,8 +912,21 @@ function abrirValidacionFila(id) {
   const p = currentProducts.find(x => x.id === id);
   if (!p) return;
   const input = document.getElementById(`tbl-qty-${id}`);
-  const physVal = parseFloat(input.value);
-  if (isNaN(physVal)) return;
+  let physVal = parseFloat(input?.value);
+  
+  if (isNaN(physVal)) {
+    const ajustado = itemsAjustadosEnSesion.get(id);
+    if (ajustado) {
+      // Precargar la cantidad que se había ajustado previamente para facilitar el reajuste inmediato
+      input.value = ajustado.stock_nuevo;
+      physVal = parseFloat(ajustado.stock_nuevo);
+      calcDiffFila(id, p.stock);
+    } else {
+      input.focus();
+      toast("Ingresa la cantidad física contada para este producto", false);
+      return;
+    }
+  }
   
   // Tomar costo de la celda
   const costVal = parseFloat(document.getElementById(`tbl-cost-${id}`).value) || 0.0;

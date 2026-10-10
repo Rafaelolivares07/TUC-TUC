@@ -9040,27 +9040,82 @@ def api_punto_equilibrio_datos(negocio_id):
             ORDER BY id ASC
         """, (negocio_id,)).fetchall()
         
-        # 2. Promedios de ventas y costos (productos activos del negocio)
-        prod_stats = conn.execute("""
-            SELECT COALESCE(AVG(precio), 0) AS avg_precio,
-                   COALESCE(AVG(costo), 0) AS avg_costo,
-                   COUNT(*) AS total_prods
-            FROM productos
-            WHERE negocio_id = %s AND disponible = true AND precio > 0
-        """, (negocio_id,)).fetchone()
+        # 2. Mezcla de productos vendidos en el último mes (30 días)
+        cond_ped_centro = ""
+        params_ped = [negocio_id]
+        if centro_id:
+            cond_ped_centro = " AND ped.centro_utilidad_id = %s"
+            params_ped.append(centro_id)
+
+        # Consulta ponderada de ventas reales y costos reales según mezcla de productos
+        mix_query = f"""
+            SELECT 
+                COUNT(DISTINCT ped.id) AS total_pedidos,
+                COALESCE(SUM(pi.cantidad), 0) AS total_unidades,
+                COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0) AS total_ventas,
+                COALESCE(SUM(pi.cantidad * COALESCE(pi.costo_unitario, prod.costo, 0)), 0) AS total_costos
+            FROM pedido_items pi
+            JOIN pedidos ped ON ped.id = pi.pedido_id
+            LEFT JOIN productos prod ON prod.id = pi.producto_id
+            WHERE ped.negocio_id = %s
+              AND COALESCE(ped.estado, '') != 'cancelado'
+              AND ped.created_at >= NOW() - INTERVAL '30 days'
+              {cond_ped_centro}
+        """
+        mix_stats = conn.execute(mix_query, tuple(params_ped)).fetchone()
         
-        avg_precio = float(prod_stats['avg_precio'] or 0)
-        avg_costo = float(prod_stats['avg_costo'] or 0)
-        
+        total_unidades = int(mix_stats['total_unidades'] or 0)
+        total_ventas = float(mix_stats['total_ventas'] or 0)
+        total_costos = float(mix_stats['total_costos'] or 0)
+        total_pedidos = int(mix_stats['total_pedidos'] or 0)
+
+        # Si hubo ventas en el último mes, calculamos el precio y costo promedio ponderado de la mezcla
+        if total_unidades > 0 and total_ventas > 0:
+            avg_precio = total_ventas / total_unidades
+            avg_costo = total_costos / total_unidades
+        else:
+            # Fallback a catálogo de productos activos si es un centro nuevo sin ventas recientes
+            prod_stats = conn.execute("""
+                SELECT COALESCE(AVG(precio), 0) AS avg_precio,
+                       COALESCE(AVG(costo), 0) AS avg_costo
+                FROM productos
+                WHERE negocio_id = %s AND disponible = true AND precio > 0
+            """, (negocio_id,)).fetchone()
+            avg_precio = float(prod_stats['avg_precio'] or 18000.0)
+            avg_costo = float(prod_stats['avg_costo'] or 7000.0)
+            total_unidades = 500
+
+        # Validación de márgenes
         if avg_precio <= 0:
             avg_precio = 18000.0
         if avg_costo <= 0 or avg_costo >= avg_precio:
-            avg_costo = round((avg_precio * 0.40) / 1000.0) * 1000
-            
-        # Redondear promedio base a miles cerrados (.000)
+            avg_costo = avg_precio * 0.45
+
+        # Redondear estrictamente a miles cerrados (.000)
         avg_precio = round(avg_precio / 1000.0) * 1000
         avg_costo = round(avg_costo / 1000.0) * 1000
-        
+
+        # Top 5 productos de la mezcla para transparencia informativa
+        top_prods_query = f"""
+            SELECT 
+                COALESCE(prod.nombre, pi.nombre_producto, 'Plato') AS nombre,
+                SUM(pi.cantidad) AS cantidad,
+                ROUND(AVG(pi.precio_unitario) / 1000.0) * 1000 AS precio,
+                ROUND(AVG(COALESCE(pi.costo_unitario, prod.costo, 0)) / 1000.0) * 1000 AS costo
+            FROM pedido_items pi
+            JOIN pedidos ped ON ped.id = pi.pedido_id
+            LEFT JOIN productos prod ON prod.id = pi.producto_id
+            WHERE ped.negocio_id = %s
+              AND COALESCE(ped.estado, '') != 'cancelado'
+              AND ped.created_at >= NOW() - INTERVAL '30 days'
+              {cond_ped_centro}
+            GROUP BY COALESCE(prod.nombre, pi.nombre_producto, 'Plato')
+            ORDER BY cantidad DESC
+            LIMIT 5
+        """
+        top_prods_rows = conn.execute(top_prods_query, tuple(params_ped)).fetchall()
+        top_productos_mezcla = [dict(r) for r in top_prods_rows]
+
         # 3. Gastos Fijos Programados
         progs_query = """
             SELECT id, descripcion, frecuencia, variables_h, proximo_ejecutado
@@ -9091,15 +9146,20 @@ def api_punto_equilibrio_datos(negocio_id):
                     'centro_id': p_centro_id
                 })
         
-        # 4. Referencias legales vigentes sugeridas (Colombia)
-        # Salario mínimo de referencia legal: $1.424.000 (redondeado a miles)
-        # Auxilio transporte de referencia legal: $200.000 (redondeado a miles)
-        # Factor prestacional y seguridad social: 50%
+        # 4. Referencias legales vigentes (Colombia)
+        # 2026: SMMLV $1.751.000 + Aux. Transporte $249.000 = $2.000.000
+        # 2025: SMMLV $1.424.000 + Aux. Transporte $200.000 = $1.624.000
+        # 2024: SMMLV $1.300.000 + Aux. Transporte $162.000 = $1.462.000
+        # Factor prestacional y de seguridad social legal sugerido: 50%
         referencias_legales = {
-            'salario_minimo_base': 1300000,
-            'auxilio_transporte_base': 162000,
-            'salario_minimo_2025': 1423500,
+            'salario_minimo_base': 1751000,
+            'auxilio_transporte_base': 249000,
+            'salario_minimo_2026': 1751000,
+            'auxilio_transporte_2026': 249000,
+            'salario_minimo_2025': 1424000,
             'auxilio_transporte_2025': 200000,
+            'salario_minimo_2024': 1300000,
+            'auxilio_transporte_2024': 162000,
             'factor_prestacional_pct': 50
         }
         
@@ -9109,6 +9169,11 @@ def api_punto_equilibrio_datos(negocio_id):
             'centros': [dict(c) for c in centros],
             'precio_promedio': avg_precio,
             'costo_unitario_promedio': avg_costo,
+            'unidades_mes_real': total_unidades,
+            'ventas_mes_real': round(total_ventas / 1000.0) * 1000,
+            'costos_mes_real': round(total_costos / 1000.0) * 1000,
+            'total_pedidos_real': total_pedidos,
+            'top_productos_mezcla': top_productos_mezcla,
             'gastos_fijos_programados': gastos_fijos_programados,
             'referencias_legales': referencias_legales
         })

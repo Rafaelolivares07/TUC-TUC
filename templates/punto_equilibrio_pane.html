@@ -1,399 +1,485 @@
 <!-- ═══ COMPONENTE: PUNTO DE EQUILIBRIO POR CENTRO DE UTILIDAD (CON PROYECCIÓN Y PERSISTENCIA) ═══ -->
-<div id="pane-punto-equilibrio-content" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6 mb-6">
+<div id="pane-punto-equilibrio-content" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-7 mb-6">
 
   <!-- Encabezado y Filtros -->
-  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-gray-100 pb-5 mb-5">
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-gray-100 pb-5 mb-6">
     <div>
-      <div class="flex items-center gap-2 mb-1">
-        <span class="text-2xl">🎯</span>
-        <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Punto de Equilibrio por Centro de Utilidad</h2>
-        <span class="text-[10px] bg-amber-100 text-amber-800 font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Simulador Gerencial</span>
+      <div class="flex items-center gap-2.5 mb-1.5">
+        <span class="text-3xl">🎯</span>
+        <h2 class="text-xl md:text-2xl font-black text-gray-800 tracking-tight">Punto de Equilibrio por Centro de Utilidad</h2>
+        <span class="text-xs bg-amber-100 text-amber-900 font-black px-3 py-1 rounded-full uppercase tracking-wider">Simulador Gerencial</span>
       </div>
-      <p class="text-xs text-gray-500">
-        Simule escenarios y calcule el volumen mínimo de ventas requerido para cubrir la totalidad de costos y gastos fijos sin pérdidas. Valores monetarios redondeados estrictamente a miles.
+      <p class="text-sm md:text-base text-gray-600 font-medium">
+        Calcula las cantidades mínimas a vender y las ventas requeridas para no perder, alimentado automáticamente con la <strong>mezcla real de ventas del último mes</strong>.
       </p>
     </div>
 
     <!-- Acciones y Selector de Sede -->
-    <div class="flex items-center flex-wrap gap-2.5">
-      <div class="flex items-center gap-2">
-        <label for="pe-centro-select" class="text-xs font-semibold text-gray-500 uppercase">Sede / Centro:</label>
+    <div class="flex items-center flex-wrap gap-3">
+      <div class="flex items-center gap-2.5">
+        <label for="pe-centro-select" class="text-xs md:text-sm font-extrabold text-gray-600 uppercase tracking-wide">Sede / Centro:</label>
         <select id="pe-centro-select" onchange="cambiarCentroPuntoEquilibrio()"
-                class="border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none">
+                class="border-2 border-gray-300 rounded-xl px-4 py-2.5 text-sm md:text-base font-extrabold text-gray-800 bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none shadow-xs">
           <option value="">🏛️ Consolidado (Todos los Centros)</option>
         </select>
       </div>
 
       <button type="button" onclick="restablecerValoresBase()"
-              class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
-              title="Restablecer a los promedios calculados por el sistema">
+              class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs md:text-sm font-extrabold rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer"
+              title="Restablecer a la mezcla real del último mes calculada por el sistema">
         <span>🔄</span> Restablecer Base
       </button>
     </div>
   </div>
 
   <!-- TARJETAS PRINCIPALES: PUNTO DE EQUILIBRIO VS VENTAS PROYECTADAS (EN VIVO) -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
     
-    <!-- KPI 1: Punto de Equilibrio en Pesos -->
-    <div class="p-4 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl text-white shadow-sm flex flex-col justify-between">
+    <!-- KPI 1: Punto de Equilibrio en Pesos y en Unidades -->
+    <div class="p-5 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl text-white shadow-md flex flex-col justify-between">
       <div class="flex items-center justify-between">
-        <span class="text-[10px] font-extrabold uppercase tracking-wider text-amber-100">Punto de Equilibrio ($)</span>
-        <span class="text-base">🎯</span>
+        <span class="text-xs font-black uppercase tracking-wider text-amber-100">Punto de Equilibrio ($)</span>
+        <span class="text-xl">🎯</span>
       </div>
-      <div class="my-2">
-        <span id="pe-kpi-pesos" class="text-2xl md:text-3xl font-black font-mono tracking-tight">$0</span>
-        <span class="text-[11px] block text-amber-100 font-medium mt-0.5">Venta mensual mínima requerida</span>
+      <div class="my-3">
+        <span id="pe-kpi-pesos" class="text-3xl md:text-4xl font-black font-mono tracking-tight">$0</span>
+        <span class="text-xs block text-amber-100 font-semibold mt-1">Venta mensual mínima requerida</span>
       </div>
-      <div class="pt-2 border-t border-amber-400/50 flex items-center justify-between text-[11px] text-amber-50">
-        <span>Meta por día (30d):</span>
+      
+      <!-- Meta destacada de cantidades mínimas a vender -->
+      <div class="bg-amber-700/40 border border-amber-300/40 rounded-xl p-2.5 mb-2">
+        <div class="flex items-center justify-between text-xs text-amber-100 font-bold mb-0.5">
+          <span>📦 CANTIDADES A VENDER:</span>
+        </div>
+        <div class="flex items-baseline justify-between">
+          <strong id="pe-kpi-unidades-meta" class="text-xl md:text-2xl font-black font-mono text-white">0 unds / mes</strong>
+          <span id="pe-kpi-unidades-dia-sub" class="text-xs font-bold text-amber-200 font-mono">0 und/día</span>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-amber-400/50 flex items-center justify-between text-xs text-amber-50">
+        <span>Meta en pesos por día (30d):</span>
         <strong id="pe-kpi-diario" class="font-mono font-bold">$0</strong>
       </div>
     </div>
 
     <!-- KPI 2: Ventas Proyectadas del Mes (Simulación) -->
-    <div class="p-4 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl text-white shadow-sm flex flex-col justify-between">
+    <div class="p-5 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl text-white shadow-md flex flex-col justify-between">
       <div class="flex items-center justify-between">
-        <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-100">Ventas Proyectadas ($)</span>
-        <span class="text-base">🚀</span>
+        <span class="text-xs font-black uppercase tracking-wider text-indigo-100">Ventas Proyectadas ($)</span>
+        <span class="text-xl">🚀</span>
       </div>
-      <div class="my-2">
-        <span id="pe-kpi-ventas-proy" class="text-2xl md:text-3xl font-black font-mono tracking-tight">$0</span>
-        <span class="text-[11px] block text-indigo-100 font-medium mt-0.5" id="pe-kpi-unidades-proy-sub">0 und proyectadas / mes</span>
+      <div class="my-3">
+        <span id="pe-kpi-ventas-proy" class="text-3xl md:text-4xl font-black font-mono tracking-tight">$0</span>
+        <span class="text-xs block text-indigo-100 font-semibold mt-1" id="pe-kpi-unidades-proy-sub">0 unidades proyectadas / mes</span>
       </div>
-      <div class="pt-2 border-t border-indigo-500/50 flex items-center justify-between text-[11px] text-indigo-50">
+
+      <!-- Comparación de cantidades proyectadas -->
+      <div class="bg-indigo-900/40 border border-indigo-400/40 rounded-xl p-2.5 mb-2">
+        <div class="flex items-center justify-between text-xs text-indigo-100 font-bold mb-0.5">
+          <span>📊 UNIDADES PROYECTADAS:</span>
+        </div>
+        <div class="flex items-baseline justify-between">
+          <strong id="pe-kpi-unidades-proy-box" class="text-xl md:text-2xl font-black font-mono text-white">0 unds / mes</strong>
+          <span id="pe-kpi-unidades-proy-dia-box" class="text-xs font-bold text-indigo-200 font-mono">0 und/día</span>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-indigo-500/50 flex items-center justify-between text-xs text-indigo-50">
         <span>Venta día proyectada:</span>
         <strong id="pe-kpi-ventas-proy-dia" class="font-mono font-bold">$0</strong>
       </div>
     </div>
 
     <!-- KPI 3: Utilidad / Pérdida Neta Proyectada -->
-    <div id="pe-card-utilidad-box" class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl shadow-xs flex flex-col justify-between transition-colors">
+    <div id="pe-card-utilidad-box" class="p-5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl shadow-sm flex flex-col justify-between transition-colors">
       <div class="flex items-center justify-between">
-        <span id="pe-lbl-utilidad-proy" class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800">Resultado Proyectado</span>
-        <span id="pe-icon-utilidad" class="text-base">📈</span>
+        <span id="pe-lbl-utilidad-proy" class="text-xs font-black uppercase tracking-wider text-emerald-900">Resultado Proyectado</span>
+        <span id="pe-icon-utilidad" class="text-xl">📈</span>
       </div>
-      <div class="my-2">
-        <span id="pe-kpi-utilidad-proy" class="text-2xl md:text-3xl font-black font-mono text-emerald-700">$0</span>
-        <span id="pe-sub-utilidad-proy" class="text-[11px] block text-emerald-800 font-medium mt-0.5">Superávit sobre punto de equilibrio</span>
+      <div class="my-3">
+        <span id="pe-kpi-utilidad-proy" class="text-3xl md:text-4xl font-black font-mono text-emerald-700">$0</span>
+        <span id="pe-sub-utilidad-proy" class="text-xs block text-emerald-800 font-bold mt-1">Superávit sobre punto de equilibrio</span>
       </div>
-      <div class="pt-2 border-t border-emerald-200/80 flex items-center justify-between text-[11px] text-emerald-900">
+
+      <!-- Diferencial de Unidades (Margen de Seguridad en cantidades) -->
+      <div id="pe-box-margen-seguridad" class="bg-emerald-100/70 border border-emerald-300 rounded-xl p-2.5 mb-2">
+        <div class="flex items-center justify-between text-xs text-emerald-900 font-bold mb-0.5">
+          <span>🛡️ MARGEN DE SEGURIDAD:</span>
+        </div>
+        <div class="flex items-baseline justify-between">
+          <strong id="pe-kpi-unds-diferencia" class="text-xl md:text-2xl font-black font-mono text-emerald-800">+0 unds</strong>
+          <span id="pe-kpi-unds-diferencia-sub" class="text-xs font-bold text-emerald-700">Sobre equilibrio</span>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-emerald-200/80 flex items-center justify-between text-xs text-emerald-900">
         <span>Cobertura del Equilibrio:</span>
-        <strong id="pe-kpi-cobertura-pct" class="font-mono font-extrabold text-emerald-800">0%</strong>
+        <strong id="pe-kpi-cobertura-pct" class="font-mono font-black text-emerald-800 text-sm">0%</strong>
       </div>
     </div>
 
     <!-- KPI 4: Total Fijos y Margen % -->
-    <div class="p-4 bg-white border border-gray-100 rounded-2xl shadow-xs flex flex-col justify-between">
+    <div class="p-5 bg-white border-2 border-gray-200 rounded-2xl shadow-sm flex flex-col justify-between">
       <div class="flex items-center justify-between">
-        <span class="text-[10px] font-extrabold uppercase tracking-wider text-gray-500">Total Fijos Mes</span>
-        <span class="text-base">🔒</span>
+        <span class="text-xs font-black uppercase tracking-wider text-gray-500">Total Fijos Mes</span>
+        <span class="text-xl">🔒</span>
       </div>
-      <div class="my-2">
-        <span id="pe-kpi-total-fijos" class="text-2xl md:text-3xl font-black font-mono text-rose-600">$0</span>
-        <span class="text-[11px] block text-gray-500 font-medium mt-0.5">Costos Fijos + Gastos Fijos</span>
+      <div class="my-3">
+        <span id="pe-kpi-total-fijos" class="text-3xl md:text-4xl font-black font-mono text-rose-600">$0</span>
+        <span class="text-xs block text-gray-500 font-bold mt-1">Costos Fijos + Gastos Fijos</span>
       </div>
-      <div class="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-600">
-        <span>% Margen Contribución:</span>
-        <strong id="pe-kpi-margen-pct" class="font-mono font-bold text-emerald-600">0%</strong>
+
+      <div class="bg-gray-100 rounded-xl p-2.5 mb-2">
+        <div class="text-xs text-gray-600 font-bold mb-0.5">% MARGEN CONTRIBUCIÓN:</div>
+        <strong id="pe-kpi-margen-pct-box" class="text-xl md:text-2xl font-black font-mono text-emerald-700">0%</strong>
+      </div>
+
+      <div class="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-600">
+        <span>Margen Unitario ($):</span>
+        <strong id="pe-kpi-margen-unit-bottom" class="font-mono font-bold text-emerald-600 text-sm">$0</strong>
       </div>
     </div>
 
   </div>
 
   <!-- BARRA DE COBERTURA DEL PUNTO DE EQUILIBRIO -->
-  <div class="bg-gray-50/80 border border-gray-200/80 rounded-2xl p-4 mb-6">
-    <div class="flex items-center justify-between mb-2">
-      <span class="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+  <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 md:p-5 mb-6">
+    <div class="flex items-center justify-between mb-2.5">
+      <span class="text-sm md:text-base font-extrabold text-gray-800 flex items-center gap-2">
         <span>📊</span> Cobertura del Punto de Equilibrio:
       </span>
-      <span id="pe-barra-cobertura-txt" class="text-xs font-extrabold font-mono text-emerald-700">0% de la meta</span>
+      <span id="pe-barra-cobertura-txt" class="text-sm md:text-base font-black font-mono text-emerald-700">0% de la meta</span>
     </div>
-    <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-      <div id="pe-barra-cobertura-fill" class="bg-amber-500 h-3 rounded-full transition-all duration-300" style="width: 0%;"></div>
+    <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+      <div id="pe-barra-cobertura-fill" class="bg-amber-500 h-4 rounded-full transition-all duration-300" style="width: 0%;"></div>
     </div>
-    <div class="flex items-center justify-between mt-2 text-[11px] text-gray-500 font-mono">
+    <div class="flex items-center justify-between mt-2.5 text-xs md:text-sm text-gray-600 font-mono font-semibold">
       <span>0 (Inicio)</span>
-      <span>Punto de Equilibrio: <strong id="pe-barra-lbl-equilibrio" class="text-amber-800">$0</strong></span>
-      <span>Proyectado: <strong id="pe-barra-lbl-proyectado" class="text-indigo-800">$0</strong></span>
+      <span>Punto de Equilibrio: <strong id="pe-barra-lbl-equilibrio" class="text-amber-800 text-sm md:text-base">$0</strong> (<span id="pe-barra-lbl-unds-eq" class="font-bold">0 unds</span>)</span>
+      <span>Proyectado: <strong id="pe-barra-lbl-proyectado" class="text-indigo-800 text-sm md:text-base">$0</strong> (<span id="pe-barra-lbl-unds-proy" class="font-bold">0 unds</span>)</span>
     </div>
   </div>
 
-  <!-- SECCIÓN 1: PROYECCIÓN DE VENTAS, PRECIO Y COSTO VARIABLE UNITARIO -->
-  <div class="bg-gray-50/70 border border-gray-200/80 rounded-2xl p-4 sm:p-5 mb-5 shadow-2xs">
-    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
-        <span>🚀</span> Ventas Proyectadas y Parámetros Unitarios
-      </h3>
-      <span class="text-[11px] text-gray-500 italic">Varíe cualquier valor y el escenario se recalcula en tiempo real</span>
+  <!-- BANNER INFORMATIVO: MEZCLA REAL DE VENTAS DEL ÚLTIMO MES -->
+  <div id="pe-banner-mezcla-ventas" class="bg-indigo-50/80 border-2 border-indigo-200 rounded-2xl p-4 mb-6 transition-all">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div class="flex items-start gap-3">
+        <span class="text-2xl mt-0.5">ℹ️</span>
+        <div>
+          <h4 class="text-sm md:text-base font-black text-indigo-950">
+            Datos Alimentados Automáticamente por la Mezcla Real de Ventas del Último Mes
+          </h4>
+          <p id="pe-banner-texto-mezcla" class="text-xs md:text-sm text-indigo-800 mt-0.5 font-medium">
+            Consultando ventas registradas en el POS y pedidos de los últimos 30 días...
+          </p>
+        </div>
+      </div>
+      <button type="button" onclick="toggleDetalleMezcla()"
+              class="self-start md:self-center px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-900 rounded-xl text-xs md:text-sm font-extrabold transition cursor-pointer shrink-0">
+        <span id="pe-btn-detalle-mezcla-txt">Ver Top Platos de la Mezcla ▾</span>
+      </button>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+    <!-- Desglose desplegable de platos más vendidos en la mezcla -->
+    <div id="pe-detalle-mezcla-box" class="hidden mt-4 pt-3 border-t border-indigo-200">
+      <h5 class="text-xs md:text-sm font-extrabold uppercase text-indigo-900 mb-2">Top Platos Vendidos (Últimos 30 días)</h5>
+      <div id="pe-top-platos-lista" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        <!-- Render dinámico -->
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 1: PROYECCIÓN DE VENTAS, PRECIO Y COSTO VARIABLE UNITARIO (AMPLIADO 300%) -->
+  <div class="bg-gray-50/90 border-2 border-indigo-100 rounded-2xl p-5 md:p-6 mb-6 shadow-2xs">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">🚀</span>
+        <h3 class="text-base md:text-lg font-black uppercase tracking-wide text-gray-800">
+          Ventas Proyectadas y Parámetros Unitarios
+        </h3>
+      </div>
+      <span class="text-xs md:text-sm text-indigo-700 font-bold bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
+        Varíe cualquier input y todo el escenario se recalcula en tiempo real
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
       
-      <!-- Unidades / Ventas Proyectadas al Mes -->
+      <!-- 1. Unidades / Pedidos Proyectados al Mes -->
       <div>
-        <label for="pe-unidades-proyectadas" class="block text-xs font-semibold text-gray-700 mb-1">
-          Unidades / Pedidos Proyectados (Mes)
+        <label for="pe-unidades-proyectadas" class="block text-sm md:text-base font-extrabold text-gray-800 mb-2">
+          📦 Unidades Proyectadas (Mes)
         </label>
         <div class="relative">
-          <input type="number" id="pe-unidades-proyectadas" min="1" step="1" value="500"
+          <input type="number" id="pe-unidades-proyectadas" min="1" step="1" value="1200"
                  oninput="onModificarInput(); recalcularPuntoEquilibrio();"
-                 class="border border-indigo-200 rounded-xl px-3 py-1.5 text-sm font-black font-mono text-indigo-900 bg-white w-full focus:ring-2 focus:ring-indigo-500 outline-none">
+                 class="border-2 border-indigo-300 rounded-2xl px-4 py-3 text-2xl md:text-3xl font-black font-mono text-indigo-950 bg-white w-full focus:ring-4 focus:ring-indigo-100 focus:border-indigo-600 outline-none shadow-xs">
         </div>
-        <p class="text-[10px] text-gray-400 mt-1">Meta estimada de platos/ventas en el mes.</p>
+        <p class="text-xs md:text-sm text-gray-500 font-semibold mt-1.5">Prellenado con las ventas reales del mes.</p>
       </div>
 
-      <!-- Precio Promedio -->
+      <!-- 2. Precio Promedio Ponderado -->
       <div>
-        <label for="pe-precio-promedio" class="block text-xs font-semibold text-gray-700 mb-1">
-          Precio de Venta Promedio por Unidad ($)
+        <label for="pe-precio-promedio" class="block text-sm md:text-base font-extrabold text-gray-800 mb-2">
+          🏷️ Precio Promedio Unidad ($)
         </label>
         <div class="relative">
-          <span class="absolute left-3 top-2 text-gray-400 font-bold">$</span>
+          <span class="absolute left-4 top-3.5 text-gray-400 font-black text-xl">$</span>
           <input type="text" id="pe-precio-promedio"
                  oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
-                 class="border border-gray-300 rounded-xl pl-7 pr-3 py-1.5 text-sm font-bold font-mono text-gray-800 bg-white w-full focus:ring-2 focus:ring-amber-500 outline-none"
+                 class="border-2 border-gray-300 rounded-2xl pl-9 pr-4 py-3 text-2xl md:text-3xl font-black font-mono text-gray-900 bg-white w-full focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none shadow-xs"
                  placeholder="0">
         </div>
-        <p class="text-[10px] text-gray-400 mt-1">Ticket promedio o precio del plato.</p>
+        <p class="text-xs md:text-sm text-gray-500 font-semibold mt-1.5">Ticket o precio promedio ponderado.</p>
       </div>
 
-      <!-- Costo Variable Unitario -->
+      <!-- 3. Costo Variable Unitario -->
       <div>
-        <label for="pe-costo-unitario" class="block text-xs font-semibold text-gray-700 mb-1">
-          Costo Variable Unitario ($)
+        <label for="pe-costo-unitario" class="block text-sm md:text-base font-extrabold text-gray-800 mb-2">
+          🥩 Costo Variable Unidad ($)
         </label>
         <div class="relative">
-          <span class="absolute left-3 top-2 text-gray-400 font-bold">$</span>
+          <span class="absolute left-4 top-3.5 text-rose-400 font-black text-xl">$</span>
           <input type="text" id="pe-costo-unitario"
                  oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
-                 class="border border-gray-300 rounded-xl pl-7 pr-3 py-1.5 text-sm font-bold font-mono text-rose-700 bg-white w-full focus:ring-2 focus:ring-amber-500 outline-none"
+                 class="border-2 border-gray-300 rounded-2xl pl-9 pr-4 py-3 text-2xl md:text-3xl font-black font-mono text-rose-700 bg-white w-full focus:ring-4 focus:ring-rose-100 focus:border-rose-500 outline-none shadow-xs"
                  placeholder="0">
         </div>
-        <p class="text-[10px] text-gray-400 mt-1">Materia prima e insumos por unidad.</p>
+        <p class="text-xs md:text-sm text-gray-500 font-semibold mt-1.5">Materia prima e insumos por unidad.</p>
       </div>
 
-      <!-- Margen Unitario de Contribución -->
-      <div class="p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between h-[38px] mb-4 sm:mb-0">
+      <!-- 4. Margen Unitario de Contribución -->
+      <div class="p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl flex items-center justify-between h-[58px] shadow-xs">
         <div>
-          <span class="text-[9px] font-bold text-emerald-800 uppercase block">Margen Unit. ($)</span>
-          <span id="pe-margen-unit-badge" class="text-xs font-bold font-mono text-emerald-700">$0</span>
+          <span class="text-xs font-black text-emerald-900 uppercase block tracking-wider">Margen Unit. ($)</span>
+          <span id="pe-margen-unit-badge" class="text-xl md:text-2xl font-black font-mono text-emerald-800">$0</span>
         </div>
         <div class="text-right">
-          <span class="text-[9px] font-bold text-emerald-800 uppercase block">% Margen</span>
-          <span id="pe-margen-pct-badge" class="text-xs font-extrabold font-mono text-emerald-700">0%</span>
+          <span class="text-xs font-black text-emerald-900 uppercase block tracking-wider">% Margen</span>
+          <span id="pe-margen-pct-badge" class="text-xl md:text-2xl font-black font-mono text-emerald-800">0%</span>
         </div>
       </div>
 
     </div>
   </div>
 
-  <!-- DOS COLUMNAS: COSTOS OPERATIVOS vs GASTOS FIJOS -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+  <!-- DOS COLUMNAS: COSTOS OPERATIVOS vs GASTOS FIJOS (AMPLIADO 300%) -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
     <!-- COLUMNA IZQUIERDA: COSTOS OPERATIVOS (MANO DE OBRA + COSTOS DIRECTOS) -->
-    <div class="bg-white border border-gray-200/90 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
+    <div class="bg-white border-2 border-blue-100 rounded-2xl p-5 md:p-6 shadow-sm flex flex-col justify-between">
       <div>
-        <div class="flex items-center justify-between border-b border-gray-100 pb-3 mb-3">
-          <div class="flex items-center gap-2">
-            <span class="p-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm">👨‍🍳</span>
-            <h3 class="text-sm font-bold text-gray-800">Costos Operativos (Mano de Obra Directa)</h3>
+        <div class="flex items-center justify-between border-b-2 border-blue-50 pb-4 mb-4">
+          <div class="flex items-center gap-2.5">
+            <span class="p-2 bg-blue-100 text-blue-800 rounded-xl text-lg font-bold">👨‍🍳</span>
+            <h3 class="text-base md:text-lg font-black text-gray-800">Costos Operativos (Mano de Obra Directa)</h3>
           </div>
-          <span id="pe-tot-costos-col" class="text-xs font-mono font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-full">$0</span>
+          <span id="pe-tot-costos-col" class="text-sm md:text-base font-mono font-black text-blue-900 bg-blue-50 border border-blue-200 px-3 py-1 rounded-xl">$0</span>
         </div>
 
         <!-- Nómina Operativa -->
-        <div class="bg-blue-50/40 rounded-xl p-3.5 border border-blue-100 mb-4">
-          <div class="flex items-center justify-between mb-1.5 flex-wrap gap-2">
-            <span class="text-xs font-bold text-blue-900 flex items-center gap-1">
+        <div class="bg-blue-50/60 rounded-2xl p-4 md:p-5 border-2 border-blue-100 mb-5">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <span class="text-sm md:text-base font-black text-blue-950 flex items-center gap-1.5">
               <span>👥</span> Mano de Obra (Operativa / Cocina)
             </span>
-            <span id="pe-nom-operativa-total-badge" class="text-xs font-mono font-bold text-blue-700">$0 / mes</span>
+            <span id="pe-nom-operativa-total-badge" class="text-sm md:text-base font-mono font-black text-blue-800 bg-white px-3 py-0.5 rounded-lg border border-blue-200">$0 / mes</span>
           </div>
 
           <!-- Botones de Acceso Rápido SMMLV -->
-          <div class="flex items-center gap-2 mb-2.5">
-            <span class="text-[10px] text-gray-400 font-semibold uppercase">Sugerir SMMLV:</span>
-            <button type="button" onclick="aplicarSMMLV('op', 2024)"
-                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-blue-100 text-blue-800 border border-blue-200 transition cursor-pointer">
-              2024 ($1.300.000 + $162.000)
+          <div class="flex items-center gap-2 mb-4 flex-wrap">
+            <span class="text-xs text-blue-900 font-extrabold uppercase">Sugerir SMMLV Legal:</span>
+            <button type="button" onclick="aplicarSMMLV('op', 2026)"
+                    class="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer shadow-xs"
+                    title="Vigente 2026 en Colombia">
+              ⭐ 2026 ($1.751.000 + $249.000)
             </button>
             <button type="button" onclick="aplicarSMMLV('op', 2025)"
-                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-blue-100 text-blue-800 border border-blue-200 transition cursor-pointer">
-              2025 ($1.423.500 + $200.000)
+                    class="px-2.5 py-1 rounded-lg text-xs font-bold bg-white hover:bg-blue-100 text-blue-800 border border-blue-300 transition cursor-pointer">
+              2025 ($1.424.000 + $200.000)
+            </button>
+            <button type="button" onclick="aplicarSMMLV('op', 2024)"
+                    class="px-2.5 py-1 rounded-lg text-xs font-bold bg-white hover:bg-blue-100 text-blue-800 border border-blue-300 transition cursor-pointer">
+              2024 ($1.300.000 + $162.000)
             </button>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <div>
-              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">N° Empleados</label>
+              <label class="block text-xs md:text-sm font-extrabold text-blue-950 uppercase mb-1">N° Empleados</label>
               <input type="number" id="pe-nom-op-empleados" value="2" min="0" step="1"
                      oninput="onModificarInput(); recalcularPuntoEquilibrio();"
-                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+                     class="border-2 border-blue-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
 
             <div>
-              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Salario Base ($)</label>
-              <input type="text" id="pe-nom-op-salario" value="1.300.000"
+              <label class="block text-xs md:text-sm font-extrabold text-blue-950 uppercase mb-1">Salario Base ($)</label>
+              <input type="text" id="pe-nom-op-salario" value="1.751.000"
                      oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
-                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+                     class="border-2 border-blue-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
 
             <div>
-              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Aux. Transporte ($)</label>
-              <input type="text" id="pe-nom-op-transporte" value="162.000"
+              <label class="block text-xs md:text-sm font-extrabold text-blue-950 uppercase mb-1">Aux. Transporte ($)</label>
+              <input type="text" id="pe-nom-op-transporte" value="249.000"
                      oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
-                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+                     class="border-2 border-blue-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
           </div>
 
           <!-- Desglose de Nómina Operativa -->
-          <div class="mt-2.5 pt-2 border-t border-blue-100/70 flex items-center justify-between text-[11px] text-blue-900">
-            <span>Carga Prestacional + Seg. Social (50%): <strong id="pe-nom-op-carga" class="font-mono">$0</strong></span>
-            <span>Costo x Empleado: <strong id="pe-nom-op-por-emp" class="font-mono">$0</strong></span>
+          <div class="mt-3.5 pt-2.5 border-t border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between text-xs md:text-sm text-blue-950 gap-1.5 font-medium">
+            <span>Carga Prestacional + Seg. Social (50%): <strong id="pe-nom-op-carga" class="font-mono font-bold">$0</strong></span>
+            <span>Costo Total por Empleado: <strong id="pe-nom-op-por-emp" class="font-mono font-black text-blue-900">$0</strong></span>
           </div>
         </div>
 
-        <!-- Líneas de Costos Variables / Operativos Adicionales -->
+        <!-- Líneas de Costos Directos Adicionales -->
         <div>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-bold text-gray-700">Costos Directos Adicionales:</span>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm md:text-base font-extrabold text-gray-800">Costos Directos / Fijos Adicionales:</span>
             <button type="button" onclick="agregarLineaCosto()"
-                    class="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline flex items-center gap-0.5 cursor-pointer">
+                    class="text-xs md:text-sm font-extrabold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-lg border border-blue-200 transition flex items-center gap-1 cursor-pointer">
               <span>➕</span> Agregar Costo
             </button>
           </div>
 
-          <div id="pe-lista-costos-container" class="space-y-2 mb-2">
+          <div id="pe-lista-costos-container" class="space-y-2.5 mb-2">
             <!-- Dinámico -->
           </div>
-          <p id="pe-empty-costos-msg" class="text-[11px] text-gray-400 italic py-1">No hay costos adicionales agregados.</p>
+          <p id="pe-empty-costos-msg" class="text-xs md:text-sm text-gray-400 italic py-1">No hay costos adicionales agregados.</p>
         </div>
       </div>
 
-      <div class="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-        <span class="font-bold text-gray-500 uppercase text-[10px]">Subtotal Costos Operativos:</span>
-        <span id="pe-subtotal-costos-val" class="font-bold font-mono text-blue-700 text-sm">$0</span>
+      <div class="mt-5 pt-3.5 border-t-2 border-gray-100 flex items-center justify-between">
+        <span class="font-extrabold text-gray-600 uppercase text-xs md:text-sm">Subtotal Costos Operativos:</span>
+        <span id="pe-subtotal-costos-val" class="font-black font-mono text-blue-800 text-lg md:text-xl">$0</span>
       </div>
     </div>
 
     <!-- COLUMNA DERECHA: GASTOS FIJOS (PROGRAMADOS + ADMINISTRACIÓN Y VENTAS) -->
-    <div class="bg-white border border-gray-200/90 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
+    <div class="bg-white border-2 border-rose-100 rounded-2xl p-5 md:p-6 shadow-sm flex flex-col justify-between">
       <div>
-        <div class="flex items-center justify-between border-b border-gray-100 pb-3 mb-3">
-          <div class="flex items-center gap-2">
-            <span class="p-1.5 bg-rose-50 text-rose-700 rounded-lg text-sm">🏢</span>
-            <h3 class="text-sm font-bold text-gray-800">Gastos Fijos (Admin, Ventas y Sede)</h3>
+        <div class="flex items-center justify-between border-b-2 border-rose-50 pb-4 mb-4">
+          <div class="flex items-center gap-2.5">
+            <span class="p-2 bg-rose-100 text-rose-800 rounded-xl text-lg font-bold">🏢</span>
+            <h3 class="text-base md:text-lg font-black text-gray-800">Gastos Fijos (Admin, Ventas y Sede)</h3>
           </div>
-          <span id="pe-tot-gastos-col" class="text-xs font-mono font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-full">$0</span>
+          <span id="pe-tot-gastos-col" class="text-sm md:text-base font-mono font-black text-rose-900 bg-rose-50 border border-rose-200 px-3 py-1 rounded-xl">$0</span>
         </div>
 
         <!-- Gastos Fijos Programados en la Base de Datos -->
-        <div class="mb-4">
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="text-xs font-bold text-gray-700 flex items-center gap-1">
+        <div class="mb-5">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm md:text-base font-extrabold text-gray-800 flex items-center gap-1.5">
               <span>📅</span> Gastos Fijos Programados del Centro
             </span>
-            <span id="pe-tot-programados-badge" class="text-[10px] font-mono font-bold text-gray-500">$0</span>
+            <span id="pe-tot-programados-badge" class="text-xs md:text-sm font-mono font-black text-gray-700 bg-gray-100 px-2.5 py-0.5 rounded-lg">$0</span>
           </div>
-          <div id="pe-programados-list" class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-            <p class="text-[11px] text-gray-400 italic">Consultando compromisos fijos programados...</p>
+          <div id="pe-programados-list" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+            <p class="text-xs md:text-sm text-gray-400 italic">Consultando compromisos fijos programados...</p>
           </div>
         </div>
 
         <!-- Nómina Administrativa y Comercial -->
-        <div class="bg-purple-50/40 rounded-xl p-3.5 border border-purple-100 mb-4">
-          <div class="flex items-center justify-between mb-1.5 flex-wrap gap-2">
-            <span class="text-xs font-bold text-purple-900 flex items-center gap-1">
+        <div class="bg-purple-50/60 rounded-2xl p-4 md:p-5 border-2 border-purple-100 mb-5">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <span class="text-sm md:text-base font-black text-purple-950 flex items-center gap-1.5">
               <span>💼</span> Nómina Administrativa y Comercial
             </span>
-            <span id="pe-nom-admin-total-badge" class="text-xs font-mono font-bold text-purple-700">$0 / mes</span>
+            <span id="pe-nom-admin-total-badge" class="text-sm md:text-base font-mono font-black text-purple-800 bg-white px-3 py-0.5 rounded-lg border border-purple-200">$0 / mes</span>
           </div>
 
           <!-- Botones de Acceso Rápido SMMLV -->
-          <div class="flex items-center gap-2 mb-2.5">
-            <span class="text-[10px] text-gray-400 font-semibold uppercase">Sugerir SMMLV:</span>
-            <button type="button" onclick="aplicarSMMLV('admin', 2024)"
-                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-purple-100 text-purple-800 border border-purple-200 transition cursor-pointer">
-              2024 ($1.300.000 + $162.000)
+          <div class="flex items-center gap-2 mb-4 flex-wrap">
+            <span class="text-xs text-purple-900 font-extrabold uppercase">Sugerir SMMLV Legal:</span>
+            <button type="button" onclick="aplicarSMMLV('admin', 2026)"
+                    class="px-2.5 py-1 rounded-lg text-xs font-black bg-purple-600 hover:bg-purple-700 text-white transition cursor-pointer shadow-xs"
+                    title="Vigente 2026 en Colombia">
+              ⭐ 2026 ($1.751.000 + $249.000)
             </button>
             <button type="button" onclick="aplicarSMMLV('admin', 2025)"
-                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-white hover:bg-purple-100 text-purple-800 border border-purple-200 transition cursor-pointer">
-              2025 ($1.423.500 + $200.000)
+                    class="px-2.5 py-1 rounded-lg text-xs font-bold bg-white hover:bg-purple-100 text-purple-800 border border-purple-300 transition cursor-pointer">
+              2025 ($1.424.000 + $200.000)
+            </button>
+            <button type="button" onclick="aplicarSMMLV('admin', 2024)"
+                    class="px-2.5 py-1 rounded-lg text-xs font-bold bg-white hover:bg-purple-100 text-purple-800 border border-purple-300 transition cursor-pointer">
+              2024 ($1.300.000 + $162.000)
             </button>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <div>
-              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">N° Empleados</label>
+              <label class="block text-xs md:text-sm font-extrabold text-purple-950 uppercase mb-1">N° Empleados</label>
               <input type="number" id="pe-nom-admin-empleados" value="1" min="0" step="1"
                      oninput="onModificarInput(); recalcularPuntoEquilibrio();"
-                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-purple-500 outline-none">
+                     class="border-2 border-purple-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-purple-500 outline-none">
             </div>
 
             <div>
-              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Salario Base ($)</label>
-              <input type="text" id="pe-nom-admin-salario" value="1.300.000"
+              <label class="block text-xs md:text-sm font-extrabold text-purple-950 uppercase mb-1">Salario Base ($)</label>
+              <input type="text" id="pe-nom-admin-salario" value="1.751.000"
                      oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
-                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-purple-500 outline-none">
+                     class="border-2 border-purple-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-purple-500 outline-none">
             </div>
 
             <div>
-              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Aux. Transporte ($)</label>
-              <input type="text" id="pe-nom-admin-transporte" value="162.000"
+              <label class="block text-xs md:text-sm font-extrabold text-purple-950 uppercase mb-1">Aux. Transporte ($)</label>
+              <input type="text" id="pe-nom-admin-transporte" value="249.000"
                      oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
-                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-purple-500 outline-none">
+                     class="border-2 border-purple-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-purple-500 outline-none">
             </div>
           </div>
 
           <!-- Desglose de Nómina Administrativa -->
-          <div class="mt-2.5 pt-2 border-t border-purple-100/70 flex items-center justify-between text-[11px] text-purple-900">
-            <span>Carga Prestacional + Seg. Social (50%): <strong id="pe-nom-admin-carga" class="font-mono">$0</strong></span>
-            <span>Costo x Empleado: <strong id="pe-nom-admin-por-emp" class="font-mono">$0</strong></span>
+          <div class="mt-3.5 pt-2.5 border-t border-purple-200 flex flex-col sm:flex-row sm:items-center justify-between text-xs md:text-sm text-purple-950 gap-1.5 font-medium">
+            <span>Carga Prestacional + Seg. Social (50%): <strong id="pe-nom-admin-carga" class="font-mono font-bold">$0</strong></span>
+            <span>Costo Total por Empleado: <strong id="pe-nom-admin-por-emp" class="font-mono font-black text-purple-900">$0</strong></span>
           </div>
         </div>
 
         <!-- Líneas de Gastos Fijos Adicionales -->
         <div>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-bold text-gray-700">Gastos Fijos Adicionales:</span>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm md:text-base font-extrabold text-gray-800">Gastos Fijos Adicionales:</span>
             <button type="button" onclick="agregarLineaGastoFijo()"
-                    class="text-[11px] font-bold text-rose-600 hover:text-rose-800 underline flex items-center gap-0.5 cursor-pointer">
+                    class="text-xs md:text-sm font-extrabold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 px-3 py-1 rounded-lg border border-rose-200 transition flex items-center gap-1 cursor-pointer">
               <span>➕</span> Agregar Gasto
             </button>
           </div>
 
-          <div id="pe-lista-gastos-container" class="space-y-2 mb-2">
+          <div id="pe-lista-gastos-container" class="space-y-2.5 mb-2">
             <!-- Dinámico -->
           </div>
-          <p id="pe-empty-gastos-msg" class="text-[11px] text-gray-400 italic py-1">No hay gastos fijos adicionales agregados.</p>
+          <p id="pe-empty-gastos-msg" class="text-xs md:text-sm text-gray-400 italic py-1">No hay gastos fijos adicionales agregados.</p>
         </div>
       </div>
 
-      <div class="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-        <span class="font-bold text-gray-500 uppercase text-[10px]">Subtotal Gastos Fijos:</span>
-        <span id="pe-subtotal-gastos-val" class="font-bold font-mono text-rose-700 text-sm">$0</span>
+      <div class="mt-5 pt-3.5 border-t-2 border-gray-100 flex items-center justify-between">
+        <span class="font-extrabold text-gray-600 uppercase text-xs md:text-sm">Subtotal Gastos Fijos:</span>
+        <span id="pe-subtotal-gastos-val" class="font-black font-mono text-rose-800 text-lg md:text-xl">$0</span>
       </div>
     </div>
 
   </div>
 
   <!-- RESUMEN FINAL Y EXPLICACIÓN GERENCIAL -->
-  <div class="bg-amber-50/50 border border-amber-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-    <div class="flex items-center gap-3">
-      <div class="p-2.5 bg-amber-100 text-amber-800 rounded-xl text-lg font-bold">
+  <div class="bg-amber-50/70 border-2 border-amber-300 rounded-2xl p-5 md:p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div class="flex items-center gap-4">
+      <div class="p-3 bg-amber-100 text-amber-900 rounded-2xl text-2xl font-bold">
         ⚖️
       </div>
       <div>
-        <h4 class="text-xs font-bold text-amber-900 uppercase">Interpretación Gerencial del Escenario</h4>
-        <p class="text-[11px] text-amber-800" id="pe-explicacion-texto">
+        <h4 class="text-sm md:text-base font-black text-amber-950 uppercase tracking-wide">Interpretación Gerencial del Escenario</h4>
+        <p class="text-xs md:text-sm text-amber-900 font-medium mt-0.5" id="pe-explicacion-texto">
           Cargando escenario...
         </p>
       </div>
     </div>
     <div class="text-right shrink-0">
-      <span class="text-[10px] text-gray-400 block uppercase font-bold">Total Fijos Mes</span>
-      <span id="pe-exp-total-fijos" class="text-base font-mono font-black text-gray-800">$0</span>
+      <span class="text-xs font-black text-gray-500 uppercase tracking-wider block">Total Fijos Mes</span>
+      <span id="pe-exp-total-fijos" class="text-2xl md:text-3xl font-mono font-black text-gray-900">$0</span>
     </div>
   </div>
 
@@ -446,7 +532,7 @@
   function guardarEstadoSimulacion() {
     try {
       const estado = {
-        unidades_proyectadas: document.getElementById('pe-unidades-proyectadas')?.value || '500',
+        unidades_proyectadas: document.getElementById('pe-unidades-proyectadas')?.value || '',
         precio_promedio: document.getElementById('pe-precio-promedio')?.value || '',
         costo_unitario: document.getElementById('pe-costo-unitario')?.value || '',
         nom_op_empleados: document.getElementById('pe-nom-op-empleados')?.value || '2',
@@ -496,11 +582,14 @@
   }
 
   function aplicarSMMLV(tipo, anio) {
-    let salario = '1.300.000';
-    let transporte = '162.000';
+    let salario = '1.751.000';
+    let transporte = '249.000';
     if (anio === 2025) {
-      salario = '1.423.500';
+      salario = '1.424.000';
       transporte = '200.000';
+    } else if (anio === 2024) {
+      salario = '1.300.000';
+      transporte = '162.000';
     }
 
     if (tipo === 'op') {
@@ -512,6 +601,20 @@
     }
     onModificarInput();
     recalcularPuntoEquilibrio();
+  }
+
+  function toggleDetalleMezcla() {
+    const box = document.getElementById('pe-detalle-mezcla-box');
+    const btnTxt = document.getElementById('pe-btn-detalle-mezcla-txt');
+    if (!box) return;
+    const isHidden = box.classList.contains('hidden');
+    if (isHidden) {
+      box.classList.remove('hidden');
+      if (btnTxt) btnTxt.textContent = 'Ocultar Top Platos ▴';
+    } else {
+      box.classList.add('hidden');
+      if (btnTxt) btnTxt.textContent = 'Ver Top Platos de la Mezcla ▾';
+    }
   }
 
   function restablecerValoresBase() {
@@ -560,17 +663,53 @@
         if (centroId) sel.value = centroId;
       }
 
+      // Banner informativo de mezcla de ventas real
+      const bannerTxt = document.getElementById('pe-banner-texto-mezcla');
+      if (bannerTxt) {
+        const uReal = (data.unidades_mes_real || 0).toLocaleString('es-CO');
+        const vReal = formatMiles(data.ventas_mes_real || 0);
+        const pProm = formatMiles(data.precio_promedio || 0);
+        const cProm = formatMiles(data.costo_unitario_promedio || 0);
+        const peds = (data.total_pedidos_real || 0).toLocaleString('es-CO');
+        bannerTxt.innerHTML = `Ventas reales analizadas en los últimos 30 días: <strong>${uReal} platos / unidades vendidas</strong> en ${peds} pedidos (${vReal}). ` +
+          `Precio ponderado de la mezcla: <strong>${pProm}</strong> | Costo ponderado: <strong>${cProm}</strong>.`;
+      }
+
+      // Render top platos de la mezcla
+      const topListEl = document.getElementById('pe-top-platos-lista');
+      if (topListEl && Array.isArray(data.top_productos_mezcla)) {
+        if (data.top_productos_mezcla.length === 0) {
+          topListEl.innerHTML = '<p class="text-xs text-indigo-700 italic">No hay productos vendidos en este periodo.</p>';
+        } else {
+          topListEl.innerHTML = data.top_productos_mezcla.map(p => `
+            <div class="bg-white border border-indigo-200 rounded-xl p-2.5 shadow-2xs">
+              <div class="font-extrabold text-xs text-indigo-950 truncate" title="${escapePeHtml(p.nombre)}">${escapePeHtml(p.nombre)}</div>
+              <div class="flex items-center justify-between text-xs text-indigo-800 font-mono mt-1">
+                <span>Cant: <strong>${p.cantidad} unds</strong></span>
+                <span>P: <strong>${formatMiles(p.precio)}</strong></span>
+                <span>C: <strong>${formatMiles(p.costo)}</strong></span>
+              </div>
+            </div>
+          `).join('');
+        }
+      }
+
       // Si existe estado persistido en localStorage y no estamos forzando base, cargarlo
       const persistido = !forzarBase && restaurarEstadoSimulacion();
 
       if (!persistido) {
-        // Prellenar precio y costo promedio sugeridos
+        // Prellenar unidades proyectadas con las unidades reales vendidas en el último mes
+        const inpUnds = document.getElementById('pe-unidades-proyectadas');
+        if (inpUnds) {
+          inpUnds.value = data.unidades_mes_real || 1200;
+        }
+
+        // Prellenar precio y costo promedio sugeridos de la mezcla
         const inpPrecio = document.getElementById('pe-precio-promedio');
         const inpCosto = document.getElementById('pe-costo-unitario');
         let pBase = Math.round(data.precio_promedio || 18000);
         let cBase = Math.round(data.costo_unitario_promedio || 7000);
         
-        // Garantizar margen positivo saludable por defecto si vinieran iguales
         if (cBase >= pBase || pBase <= 0) {
           pBase = 18000;
           cBase = 7000;
@@ -579,10 +718,10 @@
         if (inpPrecio) inpPrecio.value = pBase.toLocaleString('es-CO');
         if (inpCosto) inpCosto.value = cBase.toLocaleString('es-CO');
 
-        // Valores de nómina por defecto (SMMLV 2024: $1.300.000 + $162.000)
+        // Valores de nómina por defecto (SMMLV 2026: $1.751.000 + $249.000)
         const ref = data.referencias_legales || {};
-        const sBase = Math.round(ref.salario_minimo_base || 1300000).toLocaleString('es-CO');
-        const sTrans = Math.round(ref.auxilio_transporte_base || 162000).toLocaleString('es-CO');
+        const sBase = Math.round(ref.salario_minimo_base || 1751000).toLocaleString('es-CO');
+        const sTrans = Math.round(ref.auxilio_transporte_base || 249000).toLocaleString('es-CO');
 
         const opSal = document.getElementById('pe-nom-op-salario');
         const opTrans = document.getElementById('pe-nom-op-transporte');
@@ -610,7 +749,7 @@
     if (!listEl) return;
 
     if (!progs || progs.length === 0) {
-      listEl.innerHTML = '<p class="text-[11px] text-gray-400 italic py-1">No hay compromisos fijos programados para este centro.</p>';
+      listEl.innerHTML = '<p class="text-xs md:text-sm text-gray-400 italic py-1">No hay compromisos fijos programados para este centro.</p>';
       document.getElementById('pe-tot-programados-badge').textContent = '$0';
       return;
     }
@@ -620,13 +759,13 @@
       const activo = _peProgramadosActivos[p.id] !== false; // Activo por defecto
       if (activo) total += p.monto;
       return `
-        <div class="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition border border-gray-100">
-          <label class="flex items-center gap-2 cursor-pointer text-gray-700 font-medium">
+        <div class="flex items-center justify-between text-xs md:text-sm py-2 px-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition border-2 border-gray-100">
+          <label class="flex items-center gap-2.5 cursor-pointer text-gray-800 font-bold">
             <input type="checkbox" onchange="toggleProgramado(${p.id}, this.checked)" ${activo ? 'checked' : ''}
-                   class="rounded text-rose-600 focus:ring-rose-500">
-            <span class="truncate max-w-[200px]" title="${escapePeHtml(p.descripcion)}">${escapePeHtml(p.descripcion)}</span>
+                   class="w-5 h-5 rounded text-rose-600 focus:ring-rose-500 cursor-pointer">
+            <span class="truncate max-w-[240px]" title="${escapePeHtml(p.descripcion)}">${escapePeHtml(p.descripcion)}</span>
           </label>
-          <span class="font-mono font-bold text-gray-800 text-[11px]">${formatMiles(p.monto)}</span>
+          <span class="font-mono font-black text-gray-900 text-sm md:text-base">${formatMiles(p.monto)}</span>
         </div>
       `;
     }).join('');
@@ -675,18 +814,18 @@
     if (emptyEl) emptyEl.classList.add('hidden');
 
     cEl.innerHTML = _peCostosAdicionales.map(item => `
-      <div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
-        <input type="text" value="${escapePeHtml(item.nombre)}" placeholder="Ej. Empaques, Gas..."
+      <div class="flex items-center gap-2.5 bg-gray-50 p-2.5 rounded-2xl border-2 border-gray-200">
+        <input type="text" value="${escapePeHtml(item.nombre)}" placeholder="Ej. Empaques, Gas, Domicilios..."
                oninput="actualizarItemCosto(${item.id}, 'nombre', this.value)"
-               class="border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold bg-white flex-1 outline-none">
-        <div class="relative w-28">
-          <span class="absolute left-2 top-1 text-gray-400 text-xs">$</span>
+               class="border-2 border-gray-200 rounded-xl px-3 py-2 text-sm md:text-base font-bold bg-white flex-1 outline-none focus:border-blue-500">
+        <div class="relative w-36 sm:w-44">
+          <span class="absolute left-3 top-2 text-gray-400 text-base font-bold">$</span>
           <input type="text" value="${item.monto ? Math.round(item.monto).toLocaleString('es-CO') : ''}" placeholder="0"
                  oninput="onInputMoneda(this); actualizarItemCosto(${item.id}, 'monto', this.value);"
-                 class="border border-gray-200 rounded-lg pl-5 pr-2 py-1 text-xs font-bold font-mono text-right bg-white w-full outline-none">
+                 class="border-2 border-gray-200 rounded-xl pl-7 pr-3 py-2 text-sm md:text-base font-black font-mono text-right bg-white w-full outline-none focus:border-blue-500">
         </div>
         <button type="button" onclick="eliminarLineaCosto(${item.id})"
-                class="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition cursor-pointer text-xs" title="Eliminar">
+                class="text-red-500 hover:text-red-700 p-2 rounded-xl hover:bg-red-50 transition cursor-pointer text-base" title="Eliminar">
           🗑️
         </button>
       </div>
@@ -730,18 +869,18 @@
     if (emptyEl) emptyEl.classList.add('hidden');
 
     gEl.innerHTML = _peGastosAdicionales.map(item => `
-      <div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
-        <input type="text" value="${escapePeHtml(item.nombre)}" placeholder="Ej. Internet, Software, Contador..."
+      <div class="flex items-center gap-2.5 bg-gray-50 p-2.5 rounded-2xl border-2 border-gray-200">
+        <input type="text" value="${escapePeHtml(item.nombre)}" placeholder="Ej. Internet, Software, Contador, Arriendo..."
                oninput="actualizarItemGasto(${item.id}, 'nombre', this.value)"
-               class="border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold bg-white flex-1 outline-none">
-        <div class="relative w-28">
-          <span class="absolute left-2 top-1 text-gray-400 text-xs">$</span>
+               class="border-2 border-gray-200 rounded-xl px-3 py-2 text-sm md:text-base font-bold bg-white flex-1 outline-none focus:border-rose-500">
+        <div class="relative w-36 sm:w-44">
+          <span class="absolute left-3 top-2 text-gray-400 text-base font-bold">$</span>
           <input type="text" value="${item.monto ? Math.round(item.monto).toLocaleString('es-CO') : ''}" placeholder="0"
                  oninput="onInputMoneda(this); actualizarItemGasto(${item.id}, 'monto', this.value);"
-                 class="border border-gray-200 rounded-lg pl-5 pr-2 py-1 text-xs font-bold font-mono text-right bg-white w-full outline-none">
+                 class="border-2 border-gray-200 rounded-xl pl-7 pr-3 py-2 text-sm md:text-base font-black font-mono text-right bg-white w-full outline-none focus:border-rose-500">
         </div>
         <button type="button" onclick="eliminarLineaGastoFijo(${item.id})"
-                class="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition cursor-pointer text-xs" title="Eliminar">
+                class="text-red-500 hover:text-red-700 p-2 rounded-xl hover:bg-red-50 transition cursor-pointer text-base" title="Eliminar">
           🗑️
         </button>
       </div>
@@ -828,7 +967,7 @@
     // 4. Gran Total Fijos
     const granTotalFijos = totalCostosFijos + totalGastosFijos;
 
-    // 5. CÁLCULO PUNTO DE EQUILIBRIO
+    // 5. CÁLCULO PUNTO DE EQUILIBRIO EN PESOS Y EN CANTIDADES
     let pePesos = 0;
     let peUnidades = 0;
 
@@ -846,83 +985,114 @@
     const unidadesProy = parseInt(document.getElementById('pe-unidades-proyectadas')?.value || 0);
     const ventasProyPesos = redondearMiles(unidadesProy * precioUnit);
     const ventasProyDia = redondearMiles(ventasProyPesos / 30);
+    const undsProyDia = Math.ceil(unidadesProy / 30);
 
     const margenTotalProy = unidadesProy * margenUnit;
     const utilidadProy = margenTotalProy - granTotalFijos;
     const utilidadRedondeada = Math.round(utilidadProy / 1000) * 1000;
 
     const coberturaPct = pePesos > 0 ? ((ventasProyPesos / pePesos) * 100) : 0;
+    const undsDiferencia = unidadesProy - peUnidades;
 
-    // Actualizar Tarjetas KPI Principales
+    // Actualizar Tarjeta 1: Punto de Equilibrio en Pesos y Cantidades
     document.getElementById('pe-kpi-pesos').textContent = formatMiles(pePesos);
     document.getElementById('pe-kpi-diario').textContent = formatMiles(peDiario);
+    document.getElementById('pe-kpi-unidades-meta').textContent = peUnidades.toLocaleString('es-CO') + ' unds / mes';
+    document.getElementById('pe-kpi-unidades-dia-sub').textContent = peUnidadesDia.toLocaleString('es-CO') + ' und/día';
 
-    // Tarjeta Ventas Proyectadas
+    // Actualizar Tarjeta 2: Ventas Proyectadas
     document.getElementById('pe-kpi-ventas-proy').textContent = formatMiles(ventasProyPesos);
     document.getElementById('pe-kpi-ventas-proy-dia').textContent = formatMiles(ventasProyDia);
-    document.getElementById('pe-kpi-unidades-proy-sub').textContent = `${unidadesProy.toLocaleString('es-CO')} und proyectadas / mes`;
+    document.getElementById('pe-kpi-unidades-proy-sub').textContent = unidadesProy.toLocaleString('es-CO') + ' unds proyectadas / mes';
+    document.getElementById('pe-kpi-unidades-proy-box').textContent = unidadesProy.toLocaleString('es-CO') + ' unds / mes';
+    document.getElementById('pe-kpi-unidades-proy-dia-box').textContent = undsProyDia.toLocaleString('es-CO') + ' und/día';
 
-    // Tarjeta Utilidad / Pérdida Proyectada
-    const cardUtil = document.getElementById('pe-card-utilidad-box');
+    // Actualizar Tarjeta 3: Resultado Proyectado y Margen de Seguridad
+    const cardUtilBox = document.getElementById('pe-card-utilidad-box');
     const lblUtil = document.getElementById('pe-lbl-utilidad-proy');
     const iconUtil = document.getElementById('pe-icon-utilidad');
     const kpiUtil = document.getElementById('pe-kpi-utilidad-proy');
     const subUtil = document.getElementById('pe-sub-utilidad-proy');
+    const boxMargenSeg = document.getElementById('pe-box-margen-seguridad');
+    const kpiUndsDif = document.getElementById('pe-kpi-unds-diferencia');
+    const subUndsDif = document.getElementById('pe-kpi-unds-diferencia-sub');
 
-    if (utilidadRedondeada >= 0) {
-      cardUtil.className = 'p-4 bg-emerald-50 border border-emerald-200 rounded-2xl shadow-xs flex flex-col justify-between transition-colors';
-      lblUtil.className = 'text-[10px] font-extrabold uppercase tracking-wider text-emerald-800';
-      lblUtil.textContent = '🎉 Superávit Proyectado';
-      iconUtil.textContent = '📈';
-      kpiUtil.className = 'text-2xl md:text-3xl font-black font-mono text-emerald-700';
-      kpiUtil.textContent = '+' + formatMiles(utilidadRedondeada);
-      subUtil.className = 'text-[11px] block text-emerald-800 font-medium mt-0.5';
-      subUtil.textContent = 'Ganancia operativa sobre punto de equilibrio';
-    } else {
-      cardUtil.className = 'p-4 bg-rose-50 border border-rose-200 rounded-2xl shadow-xs flex flex-col justify-between transition-colors';
-      lblUtil.className = 'text-[10px] font-extrabold uppercase tracking-wider text-rose-800';
-      lblUtil.textContent = '⚠️ Déficit Proyectado';
-      iconUtil.textContent = '📉';
-      kpiUtil.className = 'text-2xl md:text-3xl font-black font-mono text-rose-700';
-      kpiUtil.textContent = '-' + formatMiles(Math.abs(utilidadRedondeada));
-      subUtil.className = 'text-[11px] block text-rose-800 font-medium mt-0.5';
-      subUtil.textContent = 'Ventas insuficientes para cubrir fijos';
-    }
-
+    kpiUtil.textContent = formatMiles(Math.abs(utilidadRedondeada));
     document.getElementById('pe-kpi-cobertura-pct').textContent = coberturaPct.toFixed(1) + '%';
 
-    // Tarjeta Fijos y Margen
-    document.getElementById('pe-kpi-margen-pct').textContent = (margenPct * 100).toFixed(1) + '%';
-    document.getElementById('pe-kpi-total-fijos').textContent = formatMiles(granTotalFijos);
+    if (utilidadRedondeada >= 0) {
+      cardUtilBox.className = 'p-5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl shadow-sm flex flex-col justify-between transition-colors';
+      lblUtil.className = 'text-xs font-black uppercase tracking-wider text-emerald-900';
+      lblUtil.textContent = 'Superávit Proyectado';
+      iconUtil.textContent = '📈';
+      kpiUtil.className = 'text-3xl md:text-4xl font-black font-mono text-emerald-700';
+      subUtil.textContent = 'Ganancia neta estimada sobre el equilibrio';
+      subUtil.className = 'text-xs block text-emerald-800 font-bold mt-1';
+      if (boxMargenSeg) boxMargenSeg.className = 'bg-emerald-100/70 border border-emerald-300 rounded-xl p-2.5 mb-2';
+      if (kpiUndsDif) {
+        kpiUndsDif.textContent = '+' + undsDiferencia.toLocaleString('es-CO') + ' unds';
+        kpiUndsDif.className = 'text-xl md:text-2xl font-black font-mono text-emerald-800';
+      }
+      if (subUndsDif) subUndsDif.textContent = 'Por encima de la meta';
+    } else {
+      cardUtilBox.className = 'p-5 bg-rose-50 border-2 border-rose-300 rounded-2xl shadow-sm flex flex-col justify-between transition-colors';
+      lblUtil.className = 'text-xs font-black uppercase tracking-wider text-rose-900';
+      lblUtil.textContent = 'Déficit Proyectado';
+      iconUtil.textContent = '⚠️';
+      kpiUtil.className = 'text-3xl md:text-4xl font-black font-mono text-rose-600';
+      subUtil.textContent = 'Faltante de ventas para cubrir costos fijos';
+      subUtil.className = 'text-xs block text-rose-800 font-bold mt-1';
+      if (boxMargenSeg) boxMargenSeg.className = 'bg-rose-100/70 border border-rose-300 rounded-xl p-2.5 mb-2';
+      if (kpiUndsDif) {
+        kpiUndsDif.textContent = undsDiferencia.toLocaleString('es-CO') + ' unds';
+        kpiUndsDif.className = 'text-xl md:text-2xl font-black font-mono text-rose-800';
+      }
+      if (subUndsDif) subUndsDif.textContent = 'Por debajo de la meta';
+    }
 
-    // Barra de Progreso de Cobertura
+    // Actualizar Tarjeta 4: Fijos Totales y Margen
+    document.getElementById('pe-kpi-total-fijos').textContent = formatMiles(granTotalFijos);
+    document.getElementById('pe-kpi-margen-pct-box').textContent = (margenPct * 100).toFixed(1) + '%';
+    document.getElementById('pe-kpi-margen-unit-bottom').textContent = formatMiles(margenUnit);
+
+    // Actualizar Barra de Cobertura
     const barraFill = document.getElementById('pe-barra-cobertura-fill');
     const barraTxt = document.getElementById('pe-barra-cobertura-txt');
-    const clampedPct = Math.min(Math.max(coberturaPct, 0), 100);
+    const pctCap = Math.min(Math.max(coberturaPct, 0), 100);
 
-    barraFill.style.width = clampedPct + '%';
+    barraFill.style.width = pctCap + '%';
+    barraTxt.textContent = `${coberturaPct.toFixed(1)}% de la meta`;
+
     if (coberturaPct >= 100) {
-      barraFill.className = 'bg-emerald-500 h-3 rounded-full transition-all duration-300';
-      barraTxt.className = 'text-xs font-extrabold font-mono text-emerald-700';
-      barraTxt.textContent = `🎯 ${coberturaPct.toFixed(1)}% (Equilibrio Superado 🎉)`;
+      barraFill.className = 'bg-emerald-500 h-4 rounded-full transition-all duration-300';
+      barraTxt.className = 'text-sm md:text-base font-black font-mono text-emerald-700';
+    } else if (coberturaPct >= 75) {
+      barraFill.className = 'bg-amber-500 h-4 rounded-full transition-all duration-300';
+      barraTxt.className = 'text-sm md:text-base font-black font-mono text-amber-700';
     } else {
-      barraFill.className = 'bg-amber-500 h-3 rounded-full transition-all duration-300';
-      barraTxt.className = 'text-xs font-extrabold font-mono text-amber-700';
-      barraTxt.textContent = `⏳ ${coberturaPct.toFixed(1)}% (Faltan ${formatMiles(pePesos - ventasProyPesos)})`;
+      barraFill.className = 'bg-rose-500 h-4 rounded-full transition-all duration-300';
+      barraTxt.className = 'text-sm md:text-base font-black font-mono text-rose-700';
     }
 
     document.getElementById('pe-barra-lbl-equilibrio').textContent = formatMiles(pePesos);
+    document.getElementById('pe-barra-lbl-unds-eq').textContent = peUnidades.toLocaleString('es-CO') + ' unds';
     document.getElementById('pe-barra-lbl-proyectado').textContent = formatMiles(ventasProyPesos);
+    document.getElementById('pe-barra-lbl-unds-proy').textContent = unidadesProy.toLocaleString('es-CO') + ' unds';
 
-    // Texto Explicativo Inferior
-    const expEl = document.getElementById('pe-explicacion-texto');
-    if (expEl) {
-      expEl.innerHTML = `
-        Para este centro se requiere vender como mínimo <strong class="font-mono font-bold">${formatMiles(pePesos)}</strong> al mes (<strong class="font-mono font-bold">${peUnidades.toLocaleString('es-CO')} und</strong> a ${formatMiles(peDiario)}/día) para cubrir los <strong class="font-mono font-bold">${formatMiles(granTotalFijos)}</strong> de fijos.
-        Con la proyección actual de <strong class="font-mono font-bold text-indigo-900">${formatMiles(ventasProyPesos)}</strong> (${unidadesProy} und), el resultado estimado es de <strong class="font-mono font-bold ${utilidadRedondeada >= 0 ? 'text-emerald-800' : 'text-rose-800'}">${utilidadRedondeada >= 0 ? '+' : '-'}${formatMiles(Math.abs(utilidadRedondeada))}</strong>.
-      `;
-    }
+    // Explicación gerencial
     document.getElementById('pe-exp-total-fijos').textContent = formatMiles(granTotalFijos);
+    const expTexto = document.getElementById('pe-explicacion-texto');
+    if (expTexto) {
+      if (margenPct <= 0) {
+        expTexto.innerHTML = `<span class="text-rose-600 font-extrabold">⚠️ Alerta: El costo unitario es mayor o igual al precio de venta. No hay margen de contribución para absorber los costos fijos.</span>`;
+      } else if (coberturaPct >= 100) {
+        expTexto.innerHTML = `Con la meta de <strong>${unidadesProy.toLocaleString('es-CO')} unidades</strong> (${formatMiles(ventasProyPesos)}), se supera el punto de equilibrio de <strong>${peUnidades.toLocaleString('es-CO')} unidades</strong> (${formatMiles(pePesos)}). Se genera una <strong>utilidad proyectada de ${formatMiles(utilidadRedondeada)}</strong> (${coberturaPct.toFixed(1)}% de cobertura).`;
+      } else {
+        const faltantePesos = formatMiles(pePesos - ventasProyPesos);
+        const faltanteUnds = (peUnidades - unidadesProy).toLocaleString('es-CO');
+        expTexto.innerHTML = `Para no generar pérdidas en este centro, se requiere vender como mínimo <strong>${peUnidades.toLocaleString('es-CO')} unidades</strong> (${formatMiles(pePesos)}). En la simulación actual faltan <strong>${faltanteUnds} unidades</strong> (${faltantePesos}) para alcanzar el punto de equilibrio.`;
+      }
+    }
   }
 
   function escapePeHtml(str) {

@@ -9053,9 +9053,9 @@ def api_punto_equilibrio_datos(negocio_id):
         avg_costo = float(prod_stats['avg_costo'] or 0)
         
         if avg_precio <= 0:
-            avg_precio = 22000.0
-        if avg_costo <= 0:
-            avg_costo = round(avg_precio * 0.38)
+            avg_precio = 18000.0
+        if avg_costo <= 0 or avg_costo >= avg_precio:
+            avg_costo = round((avg_precio * 0.40) / 1000.0) * 1000
             
         # Redondear promedio base a miles cerrados (.000)
         avg_precio = round(avg_precio / 1000.0) * 1000
@@ -9096,8 +9096,10 @@ def api_punto_equilibrio_datos(negocio_id):
         # Auxilio transporte de referencia legal: $200.000 (redondeado a miles)
         # Factor prestacional y seguridad social: 50%
         referencias_legales = {
-            'salario_minimo_base': 1424000,
-            'auxilio_transporte_base': 200000,
+            'salario_minimo_base': 1300000,
+            'auxilio_transporte_base': 162000,
+            'salario_minimo_2025': 1423500,
+            'auxilio_transporte_2025': 200000,
             'factor_prestacional_pct': 50
         }
         

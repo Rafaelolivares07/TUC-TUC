@@ -9190,11 +9190,22 @@ def api_punto_equilibrio_datos(negocio_id):
             if centro_id and p_centro_id and int(p_centro_id) != centro_id:
                 continue
                 
-            monto_cuota = float(vars_data.get('monto_cuota') or vars_data.get('monto') or 0)
+            monto_val = (
+                vars_data.get('monto_recurrente') or 
+                vars_data.get('monto_cuota') or 
+                vars_data.get('monto') or 
+                vars_data.get('valor') or 
+                0
+            )
+            try:
+                monto_cuota = float(monto_val)
+            except (ValueError, TypeError):
+                monto_cuota = 0.0
+
             if monto_cuota > 0:
                 gastos_fijos_programados.append({
                     'id': p['id'],
-                    'descripcion': p['descripcion'] or 'Gasto Programado',
+                    'descripcion': p['descripcion'] or vars_data.get('concepto') or 'Gasto Programado',
                     'monto': round(monto_cuota / 1000.0) * 1000,
                     'centro_id': p_centro_id
                 })

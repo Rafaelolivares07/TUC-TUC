@@ -32,56 +32,56 @@
     </div>
   </div>
 
-  <!-- TARJETAS PRINCIPALES: PUNTO DE EQUILIBRIO VS VENTAS PROYECTADAS (EN VIVO) -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <!-- TARJETAS PRINCIPALES: PUNTO DE EQUILIBRIO, VENTAS, COSTOS VARIABLES, FIJOS Y RESULTADO (EN VIVO) -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mb-6">
     
     <!-- KPI 1: Punto de Equilibrio en Pesos y en Unidades -->
-    <div class="p-5 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl text-white shadow-md flex flex-col justify-between">
+    <div class="p-4 md:p-5 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl text-white shadow-md flex flex-col justify-between">
       <div class="flex items-center justify-between">
-        <span class="text-xs font-black uppercase tracking-wider text-amber-100">Punto de Equilibrio ($)</span>
+        <span class="text-[10px] md:text-xs font-black uppercase tracking-wider text-amber-100">Punto de Equilibrio ($)</span>
         <span class="text-xl">🎯</span>
       </div>
-      <div class="my-3">
-        <span id="pe-kpi-pesos" class="text-3xl md:text-4xl font-black font-mono tracking-tight">$0</span>
-        <span class="text-xs block text-amber-100 font-semibold mt-1">Venta mensual mínima requerida</span>
+      <div class="my-2.5">
+        <span id="pe-kpi-pesos" class="text-2xl md:text-3xl font-black font-mono tracking-tight">$0</span>
+        <span class="text-xs block text-amber-100 font-semibold mt-0.5">Venta mínima requerida</span>
       </div>
       
       <!-- Meta destacada de cantidades mínimas a vender -->
-      <div class="bg-amber-700/40 border border-amber-300/40 rounded-xl p-2.5 mb-2">
-        <div class="flex items-center justify-between text-xs text-amber-100 font-bold mb-0.5">
+      <div class="bg-amber-700/40 border border-amber-300/40 rounded-xl p-2 mb-2">
+        <div class="flex items-center justify-between text-[11px] text-amber-100 font-bold mb-0.5">
           <span>📦 CANTIDADES A VENDER:</span>
         </div>
         <div class="flex items-baseline justify-between">
-          <strong id="pe-kpi-unidades-meta" class="text-xl md:text-2xl font-black font-mono text-white">0 unds / mes</strong>
-          <span id="pe-kpi-unidades-dia-sub" class="text-xs font-bold text-amber-200 font-mono">0 und/día</span>
+          <strong id="pe-kpi-unidades-meta" class="text-lg md:text-xl font-black font-mono text-white">0 unds / mes</strong>
+          <span id="pe-kpi-unidades-dia-sub" class="text-[11px] font-bold text-amber-200 font-mono">0 und/día</span>
         </div>
       </div>
 
       <div class="pt-2 border-t border-amber-400/50 flex items-center justify-between text-xs text-amber-50">
-        <span>Meta en pesos por día (30d):</span>
+        <span>Meta día (30d):</span>
         <strong id="pe-kpi-diario" class="font-mono font-bold">$0</strong>
       </div>
     </div>
 
     <!-- KPI 2: Ventas Proyectadas del Mes (Simulación) -->
-    <div class="p-5 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl text-white shadow-md flex flex-col justify-between">
+    <div class="p-4 md:p-5 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl text-white shadow-md flex flex-col justify-between">
       <div class="flex items-center justify-between">
-        <span class="text-xs font-black uppercase tracking-wider text-indigo-100">Ventas Proyectadas ($)</span>
+        <span class="text-[10px] md:text-xs font-black uppercase tracking-wider text-indigo-100">Ventas Proyectadas ($)</span>
         <span class="text-xl">🚀</span>
       </div>
-      <div class="my-3">
-        <span id="pe-kpi-ventas-proy" class="text-3xl md:text-4xl font-black font-mono tracking-tight">$0</span>
-        <span class="text-xs block text-indigo-100 font-semibold mt-1" id="pe-kpi-unidades-proy-sub">0 unidades proyectadas / mes</span>
+      <div class="my-2.5">
+        <span id="pe-kpi-ventas-proy" class="text-2xl md:text-3xl font-black font-mono tracking-tight">$0</span>
+        <span class="text-xs block text-indigo-100 font-semibold mt-0.5" id="pe-kpi-unidades-proy-sub">0 unds proyectadas / mes</span>
       </div>
 
       <!-- Comparación de cantidades proyectadas -->
-      <div class="bg-indigo-900/40 border border-indigo-400/40 rounded-xl p-2.5 mb-2">
-        <div class="flex items-center justify-between text-xs text-indigo-100 font-bold mb-0.5">
+      <div class="bg-indigo-900/40 border border-indigo-400/40 rounded-xl p-2 mb-2">
+        <div class="flex items-center justify-between text-[11px] text-indigo-100 font-bold mb-0.5">
           <span>📊 UNIDADES PROYECTADAS:</span>
         </div>
         <div class="flex items-baseline justify-between">
-          <strong id="pe-kpi-unidades-proy-box" class="text-xl md:text-2xl font-black font-mono text-white">0 unds / mes</strong>
-          <span id="pe-kpi-unidades-proy-dia-box" class="text-xs font-bold text-indigo-200 font-mono">0 und/día</span>
+          <strong id="pe-kpi-unidades-proy-box" class="text-lg md:text-xl font-black font-mono text-white">0 unds / mes</strong>
+          <span id="pe-kpi-unidades-proy-dia-box" class="text-[11px] font-bold text-indigo-200 font-mono">0 und/día</span>
         </div>
       </div>
 
@@ -91,53 +91,86 @@
       </div>
     </div>
 
-    <!-- KPI 3: Utilidad / Pérdida Neta Proyectada -->
-    <div id="pe-card-utilidad-box" class="p-5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl shadow-sm flex flex-col justify-between transition-colors">
+    <!-- KPI 3: Costo Variable Total Proyectado (Materia Prima / Insumos) -->
+    <div class="p-4 md:p-5 bg-gradient-to-br from-rose-500 to-rose-600 rounded-2xl text-white shadow-md flex flex-col justify-between">
       <div class="flex items-center justify-between">
-        <span id="pe-lbl-utilidad-proy" class="text-xs font-black uppercase tracking-wider text-emerald-900">Resultado Proyectado</span>
+        <span class="text-[10px] md:text-xs font-black uppercase tracking-wider text-rose-100">Costo Variable Total ($)</span>
+        <span class="text-xl">🥩</span>
+      </div>
+      <div class="my-2.5">
+        <span id="pe-kpi-costos-var" class="text-2xl md:text-3xl font-black font-mono tracking-tight">$0</span>
+        <span class="text-xs block text-rose-100 font-semibold mt-0.5">Materia prima e insumos variables</span>
+      </div>
+
+      <!-- % Costo sobre Venta y Costo Unitario -->
+      <div class="bg-rose-900/40 border border-rose-400/40 rounded-xl p-2 mb-2">
+        <div class="flex items-center justify-between text-[11px] text-rose-100 font-bold mb-0.5">
+          <span>% COSTO SOBRE VENTA:</span>
+        </div>
+        <div class="flex items-baseline justify-between">
+          <strong id="pe-kpi-costo-var-pct" class="text-lg md:text-xl font-black font-mono text-white">0% de venta</strong>
+          <span id="pe-kpi-costo-unit-sub" class="text-[11px] font-bold text-rose-200 font-mono">$0 / plato</span>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-rose-400/50 flex items-center justify-between text-xs text-rose-50">
+        <span>Costo día proyectado:</span>
+        <strong id="pe-kpi-costos-var-dia" class="font-mono font-bold">$0</strong>
+      </div>
+    </div>
+
+    <!-- KPI 4: Total Fijos Mes y Margen % -->
+    <div class="p-4 md:p-5 bg-white border-2 border-gray-200 rounded-2xl shadow-sm flex flex-col justify-between">
+      <div class="flex items-center justify-between">
+        <span class="text-[10px] md:text-xs font-black uppercase tracking-wider text-gray-500">Total Fijos Mes</span>
+        <span class="text-xl">🔒</span>
+      </div>
+      <div class="my-2.5">
+        <span id="pe-kpi-total-fijos" class="text-2xl md:text-3xl font-black font-mono text-rose-600">$0</span>
+        <span class="text-xs block text-gray-500 font-bold mt-0.5">Arriendos, nóminas y compromisos</span>
+      </div>
+
+      <div class="bg-gray-100 rounded-xl p-2 mb-2">
+        <div class="flex items-center justify-between text-[11px] text-gray-600 font-bold mb-0.5">
+          <span>% MARGEN CONTRIBUCIÓN:</span>
+        </div>
+        <div class="flex items-baseline justify-between">
+          <strong id="pe-kpi-margen-pct-box" class="text-lg md:text-xl font-black font-mono text-emerald-700">0%</strong>
+          <span id="pe-kpi-margen-unit-bottom" class="text-[11px] font-bold text-gray-600 font-mono">$0 / plato</span>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-600">
+        <span>Fijos día (30d):</span>
+        <strong id="pe-kpi-fijos-diario" class="font-mono font-bold text-gray-800">$0</strong>
+      </div>
+    </div>
+
+    <!-- KPI 5: Utilidad / Pérdida Neta Proyectada -->
+    <div id="pe-card-utilidad-box" class="p-4 md:p-5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl shadow-sm flex flex-col justify-between transition-colors">
+      <div class="flex items-center justify-between">
+        <span id="pe-lbl-utilidad-proy" class="text-[10px] md:text-xs font-black uppercase tracking-wider text-emerald-900">Resultado Proyectado</span>
         <span id="pe-icon-utilidad" class="text-xl">📈</span>
       </div>
-      <div class="my-3">
-        <span id="pe-kpi-utilidad-proy" class="text-3xl md:text-4xl font-black font-mono text-emerald-700">$0</span>
-        <span id="pe-sub-utilidad-proy" class="text-xs block text-emerald-800 font-bold mt-1">Superávit sobre punto de equilibrio</span>
+      <div class="my-2.5">
+        <span id="pe-kpi-utilidad-proy" class="text-2xl md:text-3xl font-black font-mono text-emerald-700">$0</span>
+        <span id="pe-sub-utilidad-proy" class="text-xs block text-emerald-800 font-bold mt-0.5">Superávit sobre equilibrio</span>
       </div>
 
       <!-- Diferencial de Unidades (Margen de Seguridad en cantidades) -->
-      <div id="pe-box-margen-seguridad" class="bg-emerald-100/70 border border-emerald-300 rounded-xl p-2.5 mb-2">
-        <div class="flex items-center justify-between text-xs text-emerald-900 font-bold mb-0.5">
+      <div id="pe-box-margen-seguridad" class="bg-emerald-100/70 border border-emerald-300 rounded-xl p-2 mb-2">
+        <div class="flex items-center justify-between text-[11px] text-emerald-900 font-bold mb-0.5">
           <span>🛡️ MARGEN DE SEGURIDAD:</span>
         </div>
         <div class="flex items-baseline justify-between">
-          <strong id="pe-kpi-unds-diferencia" class="text-xl md:text-2xl font-black font-mono text-emerald-800">+0 unds</strong>
-          <span id="pe-kpi-unds-diferencia-sub" class="text-xs font-bold text-emerald-700">Sobre equilibrio</span>
+          <strong id="pe-kpi-unds-diferencia" class="text-lg md:text-xl font-black font-mono text-emerald-800">+0 unds</strong>
+          <span id="pe-kpi-unds-diferencia-sub" class="text-[11px] font-bold text-emerald-700">Sobre equilibrio</span>
         </div>
       </div>
 
       <div class="pt-2 border-t border-emerald-200/80 flex items-center justify-between text-xs text-emerald-900">
         <span>Cobertura del Equilibrio:</span>
-        <strong id="pe-kpi-cobertura-pct" class="font-mono font-black text-emerald-800 text-sm">0%</strong>
-      </div>
-    </div>
-
-    <!-- KPI 4: Total Fijos y Margen % -->
-    <div class="p-5 bg-white border-2 border-gray-200 rounded-2xl shadow-sm flex flex-col justify-between">
-      <div class="flex items-center justify-between">
-        <span class="text-xs font-black uppercase tracking-wider text-gray-500">Total Fijos Mes</span>
-        <span class="text-xl">🔒</span>
-      </div>
-      <div class="my-3">
-        <span id="pe-kpi-total-fijos" class="text-3xl md:text-4xl font-black font-mono text-rose-600">$0</span>
-        <span class="text-xs block text-gray-500 font-bold mt-1">Costos Fijos + Gastos Fijos</span>
-      </div>
-
-      <div class="bg-gray-100 rounded-xl p-2.5 mb-2">
-        <div class="text-xs text-gray-600 font-bold mb-0.5">% MARGEN CONTRIBUCIÓN:</div>
-        <strong id="pe-kpi-margen-pct-box" class="text-xl md:text-2xl font-black font-mono text-emerald-700">0%</strong>
-      </div>
-
-      <div class="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-600">
-        <span>Margen Unitario ($):</span>
-        <strong id="pe-kpi-margen-unit-bottom" class="font-mono font-bold text-emerald-600 text-sm">$0</strong>
+        <strong id="pe-kpi-cobertura-pct" class="font-mono font-black text-emerald-800 text-xs md:text-sm">0%</strong>
       </div>
     </div>
 
@@ -1036,7 +1069,28 @@
     document.getElementById('pe-kpi-unidades-proy-box').textContent = unidadesProy.toLocaleString('es-CO') + ' unds / mes';
     document.getElementById('pe-kpi-unidades-proy-dia-box').textContent = undsProyDia.toLocaleString('es-CO') + ' und/día';
 
-    // Actualizar Tarjeta 3: Resultado Proyectado y Margen de Seguridad
+    // Actualizar Tarjeta 3: Costo Variable Total Proyectado (Materia Prima / Insumos)
+    const costoTotalVar = redondearMiles(unidadesProy * costoUnit);
+    const costoVarDia = redondearMiles(costoTotalVar / 30);
+    const costoVarPct = precioUnit > 0 ? ((costoUnit / precioUnit) * 100) : 0;
+
+    const elCostoVar = document.getElementById('pe-kpi-costos-var');
+    if (elCostoVar) elCostoVar.textContent = formatMiles(costoTotalVar);
+    const elCostoVarDia = document.getElementById('pe-kpi-costos-var-dia');
+    if (elCostoVarDia) elCostoVarDia.textContent = formatMiles(costoVarDia);
+    const elCostoVarPct = document.getElementById('pe-kpi-costo-var-pct');
+    if (elCostoVarPct) elCostoVarPct.textContent = costoVarPct.toFixed(1) + '% de venta';
+    const elCostoUnitSub = document.getElementById('pe-kpi-costo-unit-sub');
+    if (elCostoUnitSub) elCostoUnitSub.textContent = formatMiles(costoUnit) + ' / plato';
+
+    // Actualizar Tarjeta 4: Fijos Totales y Margen
+    document.getElementById('pe-kpi-total-fijos').textContent = formatMiles(granTotalFijos);
+    document.getElementById('pe-kpi-margen-pct-box').textContent = (margenPct * 100).toFixed(1) + '%';
+    document.getElementById('pe-kpi-margen-unit-bottom').textContent = formatMiles(margenUnit) + ' / plato';
+    const elFijosDia = document.getElementById('pe-kpi-fijos-diario');
+    if (elFijosDia) elFijosDia.textContent = formatMiles(redondearMiles(granTotalFijos / 30));
+
+    // Actualizar Tarjeta 5: Resultado Proyectado y Margen de Seguridad
     const cardUtilBox = document.getElementById('pe-card-utilidad-box');
     const lblUtil = document.getElementById('pe-lbl-utilidad-proy');
     const iconUtil = document.getElementById('pe-icon-utilidad');
@@ -1050,39 +1104,34 @@
     document.getElementById('pe-kpi-cobertura-pct').textContent = coberturaPct.toFixed(1) + '%';
 
     if (utilidadRedondeada >= 0) {
-      cardUtilBox.className = 'p-5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl shadow-sm flex flex-col justify-between transition-colors';
-      lblUtil.className = 'text-xs font-black uppercase tracking-wider text-emerald-900';
+      cardUtilBox.className = 'p-4 md:p-5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl shadow-sm flex flex-col justify-between transition-colors';
+      lblUtil.className = 'text-[10px] md:text-xs font-black uppercase tracking-wider text-emerald-900';
       lblUtil.textContent = 'Superávit Proyectado';
       iconUtil.textContent = '📈';
-      kpiUtil.className = 'text-3xl md:text-4xl font-black font-mono text-emerald-700';
+      kpiUtil.className = 'text-2xl md:text-3xl font-black font-mono text-emerald-700';
       subUtil.textContent = 'Ganancia neta estimada sobre el equilibrio';
-      subUtil.className = 'text-xs block text-emerald-800 font-bold mt-1';
-      if (boxMargenSeg) boxMargenSeg.className = 'bg-emerald-100/70 border border-emerald-300 rounded-xl p-2.5 mb-2';
+      subUtil.className = 'text-xs block text-emerald-800 font-bold mt-0.5';
+      if (boxMargenSeg) boxMargenSeg.className = 'bg-emerald-100/70 border border-emerald-300 rounded-xl p-2 mb-2';
       if (kpiUndsDif) {
         kpiUndsDif.textContent = '+' + undsDiferencia.toLocaleString('es-CO') + ' unds';
-        kpiUndsDif.className = 'text-xl md:text-2xl font-black font-mono text-emerald-800';
+        kpiUndsDif.className = 'text-lg md:text-xl font-black font-mono text-emerald-800';
       }
-      if (subUndsDif) subUndsDif.textContent = 'Por encima de la meta';
+      if (subUndsDif) subUndsDif.textContent = 'Sobre equilibrio';
     } else {
-      cardUtilBox.className = 'p-5 bg-rose-50 border-2 border-rose-300 rounded-2xl shadow-sm flex flex-col justify-between transition-colors';
-      lblUtil.className = 'text-xs font-black uppercase tracking-wider text-rose-900';
+      cardUtilBox.className = 'p-4 md:p-5 bg-rose-50 border-2 border-rose-300 rounded-2xl shadow-sm flex flex-col justify-between transition-colors';
+      lblUtil.className = 'text-[10px] md:text-xs font-black uppercase tracking-wider text-rose-900';
       lblUtil.textContent = 'Déficit Proyectado';
       iconUtil.textContent = '⚠️';
-      kpiUtil.className = 'text-3xl md:text-4xl font-black font-mono text-rose-600';
-      subUtil.textContent = 'Faltante de ventas para cubrir costos fijos';
-      subUtil.className = 'text-xs block text-rose-800 font-bold mt-1';
-      if (boxMargenSeg) boxMargenSeg.className = 'bg-rose-100/70 border border-rose-300 rounded-xl p-2.5 mb-2';
+      kpiUtil.className = 'text-2xl md:text-3xl font-black font-mono text-rose-600';
+      subUtil.textContent = 'Faltante de ventas para cubrir fijos';
+      subUtil.className = 'text-xs block text-rose-800 font-bold mt-0.5';
+      if (boxMargenSeg) boxMargenSeg.className = 'bg-rose-100/70 border border-rose-300 rounded-xl p-2 mb-2';
       if (kpiUndsDif) {
         kpiUndsDif.textContent = undsDiferencia.toLocaleString('es-CO') + ' unds';
-        kpiUndsDif.className = 'text-xl md:text-2xl font-black font-mono text-rose-800';
+        kpiUndsDif.className = 'text-lg md:text-xl font-black font-mono text-rose-800';
       }
-      if (subUndsDif) subUndsDif.textContent = 'Por debajo de la meta';
+      if (subUndsDif) subUndsDif.textContent = 'Bajo equilibrio';
     }
-
-    // Actualizar Tarjeta 4: Fijos Totales y Margen
-    document.getElementById('pe-kpi-total-fijos').textContent = formatMiles(granTotalFijos);
-    document.getElementById('pe-kpi-margen-pct-box').textContent = (margenPct * 100).toFixed(1) + '%';
-    document.getElementById('pe-kpi-margen-unit-bottom').textContent = formatMiles(margenUnit);
 
     // Actualizar Barra de Cobertura
     const barraFill = document.getElementById('pe-barra-cobertura-fill');

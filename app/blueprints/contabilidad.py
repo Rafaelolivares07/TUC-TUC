@@ -6214,6 +6214,8 @@ def api_gastos_conceptos_buscar(negocio_id):
                    COALESCE(p.maneja_terceros, false) AS maneja_terceros
             FROM cuentas_puc p
             WHERE (p.creada_por_negocio_id = %s OR p.creada_por_negocio_id IS NULL)
+              AND p.acepta_movimiento = true
+              AND p.activo = true
               AND (
                   p.codigo LIKE '51%%' OR p.codigo LIKE '52%%' OR p.codigo LIKE '53%%' 
                   OR p.codigo LIKE '6142%%' OR p.codigo LIKE '6143%%' OR p.codigo LIKE '6144%%'
@@ -6225,7 +6227,6 @@ def api_gastos_conceptos_buscar(negocio_id):
                       WHERE pcn.negocio_id = %s AND plc.activo = true
                   )
               )
-              AND p.activo = true
         """
         params = [negocio_id, negocio_id]
         if q:
@@ -6348,7 +6349,7 @@ def api_gastos_linea_post(negocio_id):
         _verificar_periodo_cerrado(conn, negocio_id, fecha)
         
         # Verify if account requires third party
-        acc = conn.execute("SELECT codigo, COALESCE(maneja_terceros, false) AS maneja_terceros FROM cuentas_puc WHERE id = %s", (cuenta_puc_id,)).fetchone()
+        acc = conn.execute("SELECT id, codigo, nombre, COALESCE(maneja_terceros, false) AS maneja_terceros FROM cuentas_puc WHERE id = %s", (cuenta_puc_id,)).fetchone()
         if not acc:
             conn.close()
             return jsonify({'ok': False, 'error': 'Cuenta PUC no encontrada'}), 400
@@ -6401,8 +6402,13 @@ def api_gastos_linea_post(negocio_id):
         cuota_1_monto = data.get('cuota_1_monto')
         categoria_tipo = (data.get('categoria_tipo') or 'gasto').strip().lower()
 
-        cuenta_id_final = cuenta_puc_id
-        cuenta_cod_final = str(acc['codigo']).strip()
+        # Clean concept name for account mapping (remove brackets, soportes, notes in parentheses)
+        import re
+        concepto_raw = (concepto or 'Desembolso').strip()
+        concepto_puc_nombre = re.sub(r'\[Soporte:\s*[^\]]+\]', '', concepto_raw, flags=re.IGNORECASE)
+        concepto_puc_nombre = re.sub(r'\([^)]+\)$', '', concepto_puc_nombre).strip()
+        if not concepto_puc_nombre:
+            concepto_puc_nombre = (acc['nombre'] if acc else concepto_raw).strip()
 
         if categoria_tipo == 'activo':
             pref_costo = '6143'
@@ -6414,50 +6420,51 @@ def api_gastos_linea_post(negocio_id):
             pref_costo = '6142'
             pref_act = None
 
+        cuenta_id_final = acc['id']
+        cuenta_cod_final = str(acc['codigo']).strip()
+
+        # Si no coincide con el prefijo correspondiente a la clasificación elegida, resolver o crear con nombre limpio
         if not cuenta_cod_final.startswith(pref_costo):
-            concepto_raw = concepto or 'Desembolso'
-            import re
-            concepto_base = re.sub(r'\[Soporte:\s*[^\]]+\]', '', concepto_raw)
-            concepto_base = re.sub(r'\([^)]+\)$', '', concepto_base).strip()
-            
-            cta_existente = conn.execute("""
-                SELECT id, codigo FROM cuentas_puc 
-                WHERE codigo LIKE %s AND UPPER(nombre) = %s AND activo = true
-                LIMIT 1
-            """, (f"{pref_costo}%", concepto_base.upper())).fetchone()
-            
-            if cta_existente:
-                cuenta_id_final = cta_existente['id']
-                cuenta_cod_final = cta_existente['codigo']
+            if categoria_tipo == 'gasto' and any(cuenta_cod_final.startswith(p) for p in ['51', '52', '53', '6142']):
+                pass # Es cuenta de gasto válida
             else:
-                cuentas = conn.execute("""
-                    SELECT codigo FROM cuentas_puc WHERE codigo LIKE %s ORDER BY codigo ASC
-                """, (f"{pref_costo}%",)).fetchall()
-                max_num = 0
-                for c in cuentas:
-                    cod = str(c['codigo']).strip()
-                    if cod.startswith(pref_costo) and len(cod) > len(pref_costo):
-                        try:
-                            n = int(cod[len(pref_costo):])
-                            if n > max_num: max_num = n
-                        except: pass
-                siguiente_int = max_num + 1
-                nuevo_cod = f"{pref_costo}{siguiente_int:02d}"
-                
-                row_c = conn.execute("""
-                    INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
-                    VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true) RETURNING id
-                """, (nuevo_cod, concepto_base, pref_costo, negocio_id)).fetchone()
-                cuenta_id_final = row_c['id']
-                cuenta_cod_final = nuevo_cod
-                
-                if pref_act:
-                    cod_act = f"{pref_act}{siguiente_int:02d}"
-                    if not conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s", (cod_act,)).fetchone():
-                        conn.execute("""
-                            INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
-                            VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true)
-                        """, (cod_act, f"{concepto_base} (Activo)", pref_act, negocio_id))
+                cta_existente = conn.execute("""
+                    SELECT id, codigo FROM cuentas_puc 
+                    WHERE codigo LIKE %s AND UPPER(TRIM(nombre)) = %s AND activo = true
+                      AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL)
+                    LIMIT 1
+                """, (f"{pref_costo}%", concepto_puc_nombre.upper(), negocio_id)).fetchone()
+
+                if cta_existente:
+                    cuenta_id_final = cta_existente['id']
+                    cuenta_cod_final = cta_existente['codigo']
+                else:
+                    cuentas = conn.execute("SELECT codigo FROM cuentas_puc WHERE codigo LIKE %s ORDER BY codigo ASC", (f"{pref_costo}%",)).fetchall()
+                    max_num = 0
+                    for c in cuentas:
+                        cod = str(c['codigo']).strip()
+                        if cod.startswith(pref_costo) and len(cod) > len(pref_costo):
+                            try:
+                                n = int(cod[len(pref_costo):])
+                                if n > max_num: max_num = n
+                            except: pass
+                    siguiente_int = max_num + 1
+                    nuevo_cod = f"{pref_costo}{siguiente_int:02d}"
+
+                    row_c = conn.execute("""
+                        INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                        VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true) RETURNING id
+                    """, (nuevo_cod, concepto_puc_nombre, pref_costo, negocio_id)).fetchone()
+                    cuenta_id_final = row_c['id']
+                    cuenta_cod_final = nuevo_cod
+
+                    if pref_act:
+                        cod_act = f"{pref_act}{siguiente_int:02d}"
+                        if not conn.execute("SELECT id FROM cuentas_puc WHERE codigo = %s AND (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL) LIMIT 1", (cod_act, negocio_id)).fetchone():
+                            conn.execute("""
+                                INSERT INTO cuentas_puc (codigo, nombre, nivel, codigo_padre, naturaleza, acepta_movimiento, maneja_terceros, maneja_documentos, creada_por_negocio_id, revisada, activo)
+                                VALUES (%s, %s, 3, %s, 'debito', true, true, false, %s, false, true)
+                            """, (cod_act, f"{concepto_puc_nombre} (Activo)", pref_act, negocio_id))
 
         uid = session['usuario_id']
         conn.execute("""
@@ -7206,7 +7213,7 @@ def api_gastos_cierre_post(negocio_id):
                     UPDATE movimientos_contables
                     SET monto = %s, cuota_numero = 1, cuota_total = %s, metodo_desembolso = %s
                     WHERE id = %s
-                """, (cuota_1, total_cuotas_conteo, metodo_pago_codigo, l['id']))
+                """, (cuota_1, total_cuotas_conteo, metodo_principal, l['id']))
 
                 # 2. Insertar línea de Saldo de Activo (1505 / 1705)
                 conn.execute("""
@@ -7218,7 +7225,7 @@ def api_gastos_cierre_post(negocio_id):
                 """, (negocio_id, comp_id, cuenta_activo_id, cod_activo, f"Saldo por amortizar - {l['concepto']}", 'debito',
                       saldo_activo, uid, l['tercero_id'], tipo_doc_id, num_doc, fecha, tipo_doc,
                       'Relación de Desembolsos - Saldo Activo', 'gasto', l['centro_utilidad_id'],
-                      meses, 1, total_cuotas_conteo, l['id'], metodo_pago_codigo))
+                      meses, 1, total_cuotas_conteo, l['id'], metodo_principal))
 
                 # 3. Crear Programación Recurrente para los meses 2..N
                 from dateutil.relativedelta import relativedelta
@@ -9013,5 +9020,97 @@ def api_conciliacion_disponible_nivelar(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-
-
+@bp.route('/api/contabilidad/<int:negocio_id>/punto-equilibrio/datos', methods=['GET'])
+def api_punto_equilibrio_datos(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    import json
+    
+    centro_id = request.args.get('centro_id')
+    centro_id = int(centro_id) if centro_id and centro_id.isdigit() else None
+    
+    try:
+        conn = get_db_connection()
+        # 1. Centros de utilidad
+        centros = conn.execute("""
+            SELECT id, codigo, nombre, color_badge
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = true
+            ORDER BY id ASC
+        """, (negocio_id,)).fetchall()
+        
+        # 2. Promedios de ventas y costos (productos activos del negocio)
+        prod_stats = conn.execute("""
+            SELECT COALESCE(AVG(precio), 0) AS avg_precio,
+                   COALESCE(AVG(costo), 0) AS avg_costo,
+                   COUNT(*) AS total_prods
+            FROM productos
+            WHERE negocio_id = %s AND activo = true AND precio > 0
+        """, (negocio_id,)).fetchone()
+        
+        avg_precio = float(prod_stats['avg_precio'] or 0)
+        avg_costo = float(prod_stats['avg_costo'] or 0)
+        
+        if avg_precio <= 0:
+            avg_precio = 22000.0
+        if avg_costo <= 0:
+            avg_costo = round(avg_precio * 0.38)
+            
+        # Redondear promedio base a miles cerrados (.000)
+        avg_precio = round(avg_precio / 1000.0) * 1000
+        avg_costo = round(avg_costo / 1000.0) * 1000
+        
+        # 3. Gastos Fijos Programados
+        progs_query = """
+            SELECT id, descripcion, frecuencia, variables_h, proximo_ejecutado
+            FROM programaciones_contables
+            WHERE negocio_id = %s AND activo = true
+        """
+        progs_rows = conn.execute(progs_query, (negocio_id,)).fetchall()
+        
+        gastos_fijos_programados = []
+        for p in progs_rows:
+            vars_data = {}
+            if p['variables_h']:
+                try:
+                    vars_data = json.loads(p['variables_h']) if isinstance(p['variables_h'], str) else p['variables_h']
+                except:
+                    vars_data = {}
+            
+            p_centro_id = vars_data.get('centro_utilidad_id')
+            if centro_id and p_centro_id and int(p_centro_id) != centro_id:
+                continue
+                
+            monto_cuota = float(vars_data.get('monto_cuota') or vars_data.get('monto') or 0)
+            if monto_cuota > 0:
+                gastos_fijos_programados.append({
+                    'id': p['id'],
+                    'descripcion': p['descripcion'] or 'Gasto Programado',
+                    'monto': round(monto_cuota / 1000.0) * 1000,
+                    'centro_id': p_centro_id
+                })
+        
+        # 4. Referencias legales vigentes sugeridas (Colombia)
+        # Salario mínimo de referencia legal: $1.424.000 (redondeado a miles)
+        # Auxilio transporte de referencia legal: $200.000 (redondeado a miles)
+        # Factor prestacional y seguridad social: 50%
+        referencias_legales = {
+            'salario_minimo_base': 1424000,
+            'auxilio_transporte_base': 200000,
+            'factor_prestacional_pct': 50
+        }
+        
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'centros': [dict(c) for c in centros],
+            'precio_promedio': avg_precio,
+            'costo_unitario_promedio': avg_costo,
+            'gastos_fijos_programados': gastos_fijos_programados,
+            'referencias_legales': referencias_legales
+        })
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500

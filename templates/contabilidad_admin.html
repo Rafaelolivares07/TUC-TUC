@@ -76,6 +76,7 @@
       <button onclick="cambiarTab('pago_metodos')" id="tab-pago_metodos" class="tab-btn">💳 Métodos de Pago</button>
       <button onclick="cambiarTab('desembolsos')" id="tab-desembolsos" class="tab-btn">💸 Desembolsos</button>
       <button onclick="cambiarTab('estado_resultados')" id="tab-estado_resultados" class="tab-btn">📊 Estado de Resultados</button>
+      <button onclick="cambiarTab('punto_equilibrio')" id="tab-punto_equilibrio" class="tab-btn font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200">🎯 Punto de Equilibrio</button>
       <button onclick="cambiarTab('grupos')" id="tab-grupos" class="tab-btn">🗂️ Grupos Inv.</button>
       <button onclick="cambiarTab('manual')" id="tab-manual" class="tab-btn">✏️ Comprobante</button>
       <button onclick="cambiarTab('comps')"  id="tab-comps"  class="tab-btn">📚 Comprobantes</button>
@@ -619,6 +620,11 @@
       {% include "estado_resultados_pane.html" %}
     </div>
 
+    <!-- TAB: PUNTO DE EQUILIBRIO -->
+    <div id="panel-punto_equilibrio" class="p-5 hidden">
+      {% include "punto_equilibrio_pane.html" %}
+    </div>
+
     <!-- ═══ TAB: CONSULTA MOVIMIENTOS ═══ -->
     <div id="panel-consulta" class="p-5 hidden">
       <!-- Filtros de Consulta -->
@@ -934,7 +940,7 @@
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
 const TAB_INICIAL_SERVER = {{ (tab_inicial or '') | tojson }};
-const TABS = ['puc','tipos','params','pago_metodos','desembolsos','estado_resultados','grupos','progs','manual','comps', 'consulta', 'balance'];
+const TABS = ['puc','tipos','params','pago_metodos','desembolsos','estado_resultados','punto_equilibrio','grupos','progs','manual','comps', 'consulta', 'balance'];
 let tiposDocs = [];
 let variablesModulo = [];
 let paramActivo = null;
@@ -964,10 +970,10 @@ function cambiarTab(t) {
   const cleanTabName = t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ');
   document.title = `${cleanTabName} — Contabilidad`;
 
-  // Dynamic width control for Consulta / Balance / Estado de Resultados tabs
+  // Dynamic width control for Consulta / Balance / Estado de Resultados / Punto de Equilibrio tabs
   const container = document.getElementById('main-container');
   if (container) {
-    if (t === 'consulta' || t === 'balance' || t === 'estado_resultados' || t === 'desembolsos') {
+    if (t === 'consulta' || t === 'balance' || t === 'estado_resultados' || t === 'desembolsos' || t === 'punto_equilibrio') {
       container.classList.remove('max-w-5xl');
       container.classList.add('w-full', 'max-w-none', 'px-4');
     } else {
@@ -994,6 +1000,11 @@ function cambiarTab(t) {
   if (t === 'estado_resultados') {
     if (typeof initEstadoResultados === 'function') {
       initEstadoResultados();
+    }
+  }
+  if (t === 'punto_equilibrio') {
+    if (typeof initPuntoEquilibrio === 'function') {
+      initPuntoEquilibrio();
     }
   }
 }

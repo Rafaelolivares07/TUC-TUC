@@ -1,0 +1,713 @@
+<!-- ═══ COMPONENTE: PUNTO DE EQUILIBRIO POR CENTRO DE UTILIDAD (SIMPLE Y ÁGIL) ═══ -->
+<div id="pane-punto-equilibrio-content" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6 mb-6">
+
+  <!-- Encabezado y Filtros -->
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-gray-100 pb-5 mb-5">
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-2xl">🎯</span>
+        <h2 class="text-lg md:text-xl font-bold text-gray-800 tracking-tight">Punto de Equilibrio por Centro de Utilidad</h2>
+        <span class="text-[10px] bg-amber-100 text-amber-800 font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Simulador Gerencial</span>
+      </div>
+      <p class="text-xs text-gray-500">
+        Calcule el volumen mínimo de ventas requerido para cubrir la totalidad de costos y gastos fijos sin pérdidas. Valores monetarios redondeados estrictamente a miles.
+      </p>
+    </div>
+
+    <!-- Acciones y Selector de Sede -->
+    <div class="flex items-center flex-wrap gap-3">
+      <div class="flex items-center gap-2">
+        <label for="pe-centro-select" class="text-xs font-semibold text-gray-500 uppercase">Sede / Centro:</label>
+        <select id="pe-centro-select" onchange="cargarDatosPuntoEquilibrio()"
+                class="border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold bg-white focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none">
+          <option value="">🏛️ Consolidado (Todos los Centros)</option>
+        </select>
+      </div>
+
+      <button type="button" onclick="cargarDatosPuntoEquilibrio()"
+              class="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+        <span>🔄</span> Recargar Base
+      </button>
+    </div>
+  </div>
+
+  <!-- TARJETAS KPI DE RESULTADOS EN VIVO (HERO STATS) -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
+    
+    <!-- KPI 1: Punto de Equilibrio en Pesos -->
+    <div class="p-4 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl text-white shadow-sm flex flex-col justify-between">
+      <div class="flex items-center justify-between">
+        <span class="text-[10px] font-extrabold uppercase tracking-wider text-amber-100">Punto de Equilibrio ($)</span>
+        <span class="text-base">💰</span>
+      </div>
+      <div class="my-2">
+        <span id="pe-kpi-pesos" class="text-2xl md:text-3xl font-black font-mono tracking-tight">$0</span>
+        <span class="text-[11px] block text-amber-100 font-medium mt-0.5">Venta mensual mínima requerida</span>
+      </div>
+      <div class="pt-2 border-t border-amber-400/50 flex items-center justify-between text-[11px] text-amber-50">
+        <span>Meta por día (30d):</span>
+        <strong id="pe-kpi-diario" class="font-mono font-bold">$0</strong>
+      </div>
+    </div>
+
+    <!-- KPI 2: Punto de Equilibrio en Unidades / Ventas -->
+    <div class="p-4 bg-white border border-gray-100 rounded-2xl shadow-xs flex flex-col justify-between">
+      <div class="flex items-center justify-between">
+        <span class="text-[10px] font-extrabold uppercase tracking-wider text-gray-400">Volumen en Unidades</span>
+        <span class="text-base">📦</span>
+      </div>
+      <div class="my-2">
+        <span id="pe-kpi-unidades" class="text-2xl md:text-3xl font-black font-mono text-gray-800">0</span>
+        <span class="text-[11px] block text-gray-500 font-medium mt-0.5">Pedidos / platos / unidades al mes</span>
+      </div>
+      <div class="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-600">
+        <span>Unidades por día:</span>
+        <strong id="pe-kpi-unidades-dia" class="font-mono font-bold text-gray-800">0 und/día</strong>
+      </div>
+    </div>
+
+    <!-- KPI 3: Margen de Contribución -->
+    <div class="p-4 bg-white border border-gray-100 rounded-2xl shadow-xs flex flex-col justify-between">
+      <div class="flex items-center justify-between">
+        <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">Margen de Contribución</span>
+        <span class="text-base">📈</span>
+      </div>
+      <div class="my-2">
+        <span id="pe-kpi-margen-pct" class="text-2xl md:text-3xl font-black font-mono text-emerald-600">0%</span>
+        <span class="text-[11px] block text-gray-500 font-medium mt-0.5">Margen sobre el precio de venta</span>
+      </div>
+      <div class="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-600">
+        <span>Margen $ por unidad:</span>
+        <strong id="pe-kpi-margen-unit" class="font-mono font-bold text-emerald-700">$0</strong>
+      </div>
+    </div>
+
+    <!-- KPI 4: Total Costos y Gastos Fijos -->
+    <div class="p-4 bg-white border border-gray-100 rounded-2xl shadow-xs flex flex-col justify-between">
+      <div class="flex items-center justify-between">
+        <span class="text-[10px] font-extrabold uppercase tracking-wider text-rose-700">Total Fijos Mes</span>
+        <span class="text-base">🔒</span>
+      </div>
+      <div class="my-2">
+        <span id="pe-kpi-total-fijos" class="text-2xl md:text-3xl font-black font-mono text-rose-600">$0</span>
+        <span class="text-[11px] block text-gray-500 font-medium mt-0.5">Costos Fijos + Gastos Fijos</span>
+      </div>
+      <div class="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-600">
+        <span>Fijos por día:</span>
+        <strong id="pe-kpi-fijos-dia" class="font-mono font-bold text-rose-700">$0</strong>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SECCIÓN 1: PRECIOS Y COSTOS UNITARIOS PROMEDIO (BASE DEL MARGEN) -->
+  <div class="bg-gray-50/70 border border-gray-200/80 rounded-2xl p-4 sm:p-5 mb-5 shadow-2xs">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+        <span>🏷️</span> Precios y Costos Unitarios Promedio
+      </h3>
+      <span class="text-[11px] text-gray-500 italic">Redondeados automáticamente a miles</span>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+      <!-- Precio Promedio -->
+      <div>
+        <label for="pe-precio-promedio" class="block text-xs font-semibold text-gray-600 mb-1">
+          Precio de Venta Promedio por Unidad ($)
+        </label>
+        <div class="relative">
+          <span class="absolute left-3 top-2 text-gray-400 font-bold">$</span>
+          <input type="text" id="pe-precio-promedio" oninput="onInputMoneda(this); recalcularPuntoEquilibrio();"
+                 class="border border-gray-300 rounded-xl pl-7 pr-3 py-1.5 text-sm font-bold font-mono text-gray-800 bg-white w-full focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+                 placeholder="0">
+        </div>
+        <p class="text-[10px] text-gray-400 mt-1">Ticket promedio o precio base del plato / producto.</p>
+      </div>
+
+      <!-- Costo Variable Unitario -->
+      <div>
+        <label for="pe-costo-unitario" class="block text-xs font-semibold text-gray-600 mb-1">
+          Costo Variable Unitario Promedio ($)
+        </label>
+        <div class="relative">
+          <span class="absolute left-3 top-2 text-gray-400 font-bold">$</span>
+          <input type="text" id="pe-costo-unitario" oninput="onInputMoneda(this); recalcularPuntoEquilibrio();"
+                 class="border border-gray-300 rounded-xl pl-7 pr-3 py-1.5 text-sm font-bold font-mono text-rose-700 bg-white w-full focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+                 placeholder="0">
+        </div>
+        <p class="text-[10px] text-gray-400 mt-1">Materia prima e insumos consumidos por cada venta.</p>
+      </div>
+
+      <!-- Margen Unitario de Contribución -->
+      <div class="p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between">
+        <div>
+          <span class="text-[10px] font-bold text-emerald-800 uppercase block">Margen Unitario ($)</span>
+          <span id="pe-margen-unit-badge" class="text-sm font-bold font-mono text-emerald-700">$0</span>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] font-bold text-emerald-800 uppercase block">% Margen</span>
+          <span id="pe-margen-pct-badge" class="text-sm font-extrabold font-mono text-emerald-700">0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DOS COLUMNAS: COSTOS OPERATIVOS vs GASTOS FIJOS -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+
+    <!-- COLUMNA IZQUIERDA: COSTOS OPERATIVOS (MANO DE OBRA + COSTOS DIRECTOS) -->
+    <div class="bg-white border border-gray-200/90 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between border-b border-gray-100 pb-3 mb-3">
+          <div class="flex items-center gap-2">
+            <span class="p-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm">👨‍🍳</span>
+            <h3 class="text-sm font-bold text-gray-800">Costos Operativos (Mano de Obra Directa)</h3>
+          </div>
+          <span id="pe-tot-costos-col" class="text-xs font-mono font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-full">$0</span>
+        </div>
+
+        <!-- Nómina Operativa -->
+        <div class="bg-blue-50/40 rounded-xl p-3.5 border border-blue-100 mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-blue-900 flex items-center gap-1">
+              <span>👥</span> Nómina Mano de Obra (Operativa / Cocina)
+            </span>
+            <span id="pe-nom-operativa-total-badge" class="text-xs font-mono font-bold text-blue-700">$0 / mes</span>
+          </div>
+          <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">
+            Personal directo de producción/atención. Los valores legales se sugieren de referencia y son 100% editables. Se aplica el factor prestacional y seguridad social del 50%.
+          </p>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">N° Empleados</label>
+              <input type="number" id="pe-nom-op-empleados" value="2" min="0" step="1"
+                     oninput="recalcularPuntoEquilibrio()"
+                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Salario Base ($)</label>
+              <input type="text" id="pe-nom-op-salario" value="1.424.000"
+                     oninput="onInputMoneda(this); recalcularPuntoEquilibrio();"
+                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                     title="Salario base pactado (sugerencia inicial SMMLV)">
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Aux. Transporte ($)</label>
+              <input type="text" id="pe-nom-op-transporte" value="200.000"
+                     oninput="onInputMoneda(this); recalcularPuntoEquilibrio();"
+                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                     title="Auxilio de transporte pactado">
+            </div>
+          </div>
+
+          <!-- Desglose de Nómina Operativa -->
+          <div class="mt-2.5 pt-2 border-t border-blue-100/70 flex items-center justify-between text-[11px] text-blue-900">
+            <span>Carga Prestacional + Seg. Social (50%): <strong id="pe-nom-op-carga" class="font-mono">$0</strong></span>
+            <span>Costo x Empleado: <strong id="pe-nom-op-por-emp" class="font-mono">$0</strong></span>
+          </div>
+        </div>
+
+        <!-- Líneas de Costos Variables / Operativos Adicionales -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-gray-700">Costos Directos Adicionales:</span>
+            <button type="button" onclick="agregarLineaCosto()"
+                    class="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline flex items-center gap-0.5 cursor-pointer">
+              <span>➕</span> Agregar Costo
+            </button>
+          </div>
+
+          <div id="pe-lista-costos-container" class="space-y-2 mb-2">
+            <!-- Dinámico -->
+          </div>
+          <p id="pe-empty-costos-msg" class="text-[11px] text-gray-400 italic py-1">No hay costos adicionales agregados.</p>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+        <span class="font-bold text-gray-500 uppercase text-[10px]">Subtotal Costos Operativos:</span>
+        <span id="pe-subtotal-costos-val" class="font-bold font-mono text-blue-700 text-sm">$0</span>
+      </div>
+    </div>
+
+    <!-- COLUMNA DERECHA: GASTOS FIJOS (PROGRAMADOS + ADMINISTRACIÓN Y VENTAS) -->
+    <div class="bg-white border border-gray-200/90 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between border-b border-gray-100 pb-3 mb-3">
+          <div class="flex items-center gap-2">
+            <span class="p-1.5 bg-rose-50 text-rose-700 rounded-lg text-sm">🏢</span>
+            <h3 class="text-sm font-bold text-gray-800">Gastos Fijos (Admin, Ventas y Sede)</h3>
+          </div>
+          <span id="pe-tot-gastos-col" class="text-xs font-mono font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-full">$0</span>
+        </div>
+
+        <!-- Gastos Fijos Programados en la Base de Datos -->
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-xs font-bold text-gray-700 flex items-center gap-1">
+              <span>📅</span> Gastos Fijos Programados del Centro
+            </span>
+            <span id="pe-tot-programados-badge" class="text-[10px] font-mono font-bold text-gray-500">$0</span>
+          </div>
+          <div id="pe-programados-list" class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+            <p class="text-[11px] text-gray-400 italic">Consultando compromisos fijos programados...</p>
+          </div>
+        </div>
+
+        <!-- Nómina Administrativa y Comercial -->
+        <div class="bg-purple-50/40 rounded-xl p-3.5 border border-purple-100 mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-purple-900 flex items-center gap-1">
+              <span>💼</span> Nómina Administrativa y Comercial
+            </span>
+            <span id="pe-nom-admin-total-badge" class="text-xs font-mono font-bold text-purple-700">$0 / mes</span>
+          </div>
+          <p class="text-[10px] text-gray-500 mb-3 leading-relaxed">
+            Administración, ventas y comercial. Valores de referencia editables con factor prestacional y seguridad social del 50%.
+          </p>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">N° Empleados</label>
+              <input type="number" id="pe-nom-admin-empleados" value="1" min="0" step="1"
+                     oninput="recalcularPuntoEquilibrio()"
+                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-purple-500 outline-none">
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Salario Base ($)</label>
+              <input type="text" id="pe-nom-admin-salario" value="1.424.000"
+                     oninput="onInputMoneda(this); recalcularPuntoEquilibrio();"
+                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-purple-500 outline-none">
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Aux. Transporte ($)</label>
+              <input type="text" id="pe-nom-admin-transporte" value="200.000"
+                     oninput="onInputMoneda(this); recalcularPuntoEquilibrio();"
+                     class="border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono w-full bg-white focus:ring-1 focus:ring-purple-500 outline-none">
+            </div>
+          </div>
+
+          <!-- Desglose de Nómina Administrativa -->
+          <div class="mt-2.5 pt-2 border-t border-purple-100/70 flex items-center justify-between text-[11px] text-purple-900">
+            <span>Carga Prestacional + Seg. Social (50%): <strong id="pe-nom-admin-carga" class="font-mono">$0</strong></span>
+            <span>Costo x Empleado: <strong id="pe-nom-admin-por-emp" class="font-mono">$0</strong></span>
+          </div>
+        </div>
+
+        <!-- Líneas de Gastos Fijos Adicionales -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-gray-700">Gastos Fijos Adicionales:</span>
+            <button type="button" onclick="agregarLineaGastoFijo()"
+                    class="text-[11px] font-bold text-rose-600 hover:text-rose-800 underline flex items-center gap-0.5 cursor-pointer">
+              <span>➕</span> Agregar Gasto
+            </button>
+          </div>
+
+          <div id="pe-lista-gastos-container" class="space-y-2 mb-2">
+            <!-- Dinámico -->
+          </div>
+          <p id="pe-empty-gastos-msg" class="text-[11px] text-gray-400 italic py-1">No hay gastos fijos adicionales agregados.</p>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+        <span class="font-bold text-gray-500 uppercase text-[10px]">Subtotal Gastos Fijos:</span>
+        <span id="pe-subtotal-gastos-val" class="font-bold font-mono text-rose-700 text-sm">$0</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RESUMEN FINAL Y EXPLICACIÓN GERENCIAL -->
+  <div class="bg-amber-50/50 border border-amber-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="p-2.5 bg-amber-100 text-amber-800 rounded-xl text-lg font-bold">
+        ⚖️
+      </div>
+      <div>
+        <h4 class="text-xs font-bold text-amber-900 uppercase">Interpretación del Punto de Equilibrio</h4>
+        <p class="text-[11px] text-amber-800" id="pe-explicacion-texto">
+          Vendiendo <strong id="pe-exp-pesos" class="font-mono font-bold">$0</strong> al mes (<strong id="pe-exp-unidades" class="font-mono font-bold">0 und</strong>), el centro de utilidad cubre el 100% de sus costos y gastos sin utilidades ni pérdidas. A partir de esa cifra, cada venta adicional genera utilidad neta directa.
+        </p>
+      </div>
+    </div>
+    <div class="text-right shrink-0">
+      <span class="text-[10px] text-gray-400 block uppercase font-bold">Total Compromisos Fijos</span>
+      <span id="pe-exp-total-fijos" class="text-base font-mono font-black text-gray-800">$0</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ SCRIPT LOGICA Y CALCULO EN VIVO ═══ -->
+<script>
+  let _peDatosBase = null;
+  let _peCostosAdicionales = [];
+  let _peGastosAdicionales = [];
+  let _peProgramadosActivos = {};
+
+  // Redondeo estricto a miles (cero unidades, decenas y centenas)
+  function redondearMiles(val) {
+    if (!val || isNaN(val) || val <= 0) return 0;
+    return Math.round(val / 1000) * 1000;
+  }
+
+  function formatMiles(val) {
+    const r = redondearMiles(val);
+    return '$' + r.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  function parseMoneda(str) {
+    if (!str) return 0;
+    const clean = str.toString().replace(/[$\s.]/g, '').replace(',', '.');
+    const n = parseFloat(clean);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function onInputMoneda(el) {
+    const val = parseMoneda(el.value);
+    if (!val) {
+      el.value = '';
+      return;
+    }
+    el.value = Math.round(val).toLocaleString('es-CO');
+  }
+
+  // Inicializador llamado al cambiar a la pestaña
+  async function initPuntoEquilibrio() {
+    if (!_peDatosBase) {
+      await cargarDatosPuntoEquilibrio();
+    } else {
+      recalcularPuntoEquilibrio();
+    }
+  }
+
+  // Consulta los datos del backend
+  async function cargarDatosPuntoEquilibrio() {
+    const centroId = document.getElementById('pe-centro-select')?.value || '';
+    try {
+      const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/punto-equilibrio/datos?centro_id=${encodeURIComponent(centroId)}`);
+      const data = await resp.json();
+      if (!data.ok) {
+        toast(data.error || 'Error al consultar datos de punto de equilibrio', false);
+        return;
+      }
+
+      _peDatosBase = data;
+
+      // Cargar centros de utilidad en el select si no estaban llenos
+      const sel = document.getElementById('pe-centro-select');
+      if (sel && sel.options.length <= 1 && data.centros) {
+        data.centros.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = `${c.codigo} - ${c.nombre}`;
+          sel.appendChild(opt);
+        });
+        if (centroId) sel.value = centroId;
+      }
+
+      // Prellenar precio y costo promedio sugeridos
+      const inpPrecio = document.getElementById('pe-precio-promedio');
+      const inpCosto = document.getElementById('pe-costo-unitario');
+      if (inpPrecio && (!inpPrecio.value || inpPrecio.value === '0')) {
+        inpPrecio.value = Math.round(data.precio_promedio || 22000).toLocaleString('es-CO');
+      }
+      if (inpCosto && (!inpCosto.value || inpCosto.value === '0')) {
+        inpCosto.value = Math.round(data.costo_unitario_promedio || 8000).toLocaleString('es-CO');
+      }
+
+      // Prellenar valores de nómina sugeridos si están vacíos
+      if (data.referencias_legales) {
+        const ref = data.referencias_legales;
+        const sBase = Math.round(ref.salario_minimo_base || 1424000).toLocaleString('es-CO');
+        const sTrans = Math.round(ref.auxilio_transporte_base || 200000).toLocaleString('es-CO');
+
+        const opSal = document.getElementById('pe-nom-op-salario');
+        const opTrans = document.getElementById('pe-nom-op-transporte');
+        const adSal = document.getElementById('pe-nom-admin-salario');
+        const adTrans = document.getElementById('pe-nom-admin-transporte');
+
+        if (opSal && !opSal.value) opSal.value = sBase;
+        if (opTrans && !opTrans.value) opTrans.value = sTrans;
+        if (adSal && !adSal.value) adSal.value = sBase;
+        if (adTrans && !adTrans.value) adTrans.value = sTrans;
+      }
+
+      // Renderizar lista de gastos fijos programados
+      renderProgramadosList(data.gastos_fijos_programados || []);
+
+      recalcularPuntoEquilibrio();
+    } catch(err) {
+      console.error(err);
+      toast('Error al consultar datos de punto de equilibrio', false);
+    }
+  }
+
+  function renderProgramadosList(progs) {
+    const listEl = document.getElementById('pe-programados-list');
+    if (!listEl) return;
+
+    if (!progs || progs.length === 0) {
+      listEl.innerHTML = '<p class="text-[11px] text-gray-400 italic py-1">No hay compromisos fijos programados para este centro.</p>';
+      document.getElementById('pe-tot-programados-badge').textContent = '$0';
+      return;
+    }
+
+    let total = 0;
+    listEl.innerHTML = progs.map(p => {
+      const activo = _peProgramadosActivos[p.id] !== false; // Activo por defecto
+      if (activo) total += p.monto;
+      return `
+        <div class="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition border border-gray-100">
+          <label class="flex items-center gap-2 cursor-pointer text-gray-700 font-medium">
+            <input type="checkbox" onchange="toggleProgramado(${p.id}, this.checked)" ${activo ? 'checked' : ''}
+                   class="rounded text-rose-600 focus:ring-rose-500">
+            <span class="truncate max-w-[200px]" title="${escapePeHtml(p.descripcion)}">${escapePeHtml(p.descripcion)}</span>
+          </label>
+          <span class="font-mono font-bold text-gray-800 text-[11px]">${formatMiles(p.monto)}</span>
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('pe-tot-programados-badge').textContent = formatMiles(total);
+  }
+
+  function toggleProgramado(id, checked) {
+    _peProgramadosActivos[id] = checked;
+    if (_peDatosBase && _peDatosBase.gastos_fijos_programados) {
+      let tot = 0;
+      _peDatosBase.gastos_fijos_programados.forEach(p => {
+        if (_peProgramadosActivos[p.id] !== false) tot += p.monto;
+      });
+      document.getElementById('pe-tot-programados-badge').textContent = formatMiles(tot);
+    }
+    recalcularPuntoEquilibrio();
+  }
+
+  // Manejo de líneas dinámicas de costos adicionales
+  function agregarLineaCosto() {
+    _peCostosAdicionales.push({ id: Date.now(), nombre: '', monto: 0 });
+    renderListaCostos();
+    recalcularPuntoEquilibrio();
+  }
+
+  function eliminarLineaCosto(id) {
+    _peCostosAdicionales = _peCostosAdicionales.filter(c => c.id !== id);
+    renderListaCostos();
+    recalcularPuntoEquilibrio();
+  }
+
+  function renderListaCostos() {
+    const cEl = document.getElementById('pe-lista-costos-container');
+    const emptyEl = document.getElementById('pe-empty-costos-msg');
+    if (!cEl) return;
+
+    if (_peCostosAdicionales.length === 0) {
+      cEl.innerHTML = '';
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    cEl.innerHTML = _peCostosAdicionales.map(item => `
+      <div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+        <input type="text" value="${escapePeHtml(item.nombre)}" placeholder="Ej. Empaques, Gas..."
+               oninput="actualizarItemCosto(${item.id}, 'nombre', this.value)"
+               class="border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold bg-white flex-1 outline-none">
+        <div class="relative w-28">
+          <span class="absolute left-2 top-1 text-gray-400 text-xs">$</span>
+          <input type="text" value="${item.monto ? Math.round(item.monto).toLocaleString('es-CO') : ''}" placeholder="0"
+                 oninput="onInputMoneda(this); actualizarItemCosto(${item.id}, 'monto', this.value);"
+                 class="border border-gray-200 rounded-lg pl-5 pr-2 py-1 text-xs font-bold font-mono text-right bg-white w-full outline-none">
+        </div>
+        <button type="button" onclick="eliminarLineaCosto(${item.id})"
+                class="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition cursor-pointer text-xs" title="Eliminar">
+          🗑️
+        </button>
+      </div>
+    `).join('');
+  }
+
+  function actualizarItemCosto(id, campo, val) {
+    const item = _peCostosAdicionales.find(c => c.id === id);
+    if (!item) return;
+    if (campo === 'nombre') item.nombre = val;
+    else if (campo === 'monto') item.monto = parseMoneda(val);
+    recalcularPuntoEquilibrio();
+  }
+
+  // Manejo de líneas dinámicas de gastos fijos adicionales
+  function agregarLineaGastoFijo() {
+    _peGastosAdicionales.push({ id: Date.now(), nombre: '', monto: 0 });
+    renderListaGastos();
+    recalcularPuntoEquilibrio();
+  }
+
+  function eliminarLineaGastoFijo(id) {
+    _peGastosAdicionales = _peGastosAdicionales.filter(g => g.id !== id);
+    renderListaGastos();
+    recalcularPuntoEquilibrio();
+  }
+
+  function renderListaGastos() {
+    const gEl = document.getElementById('pe-lista-gastos-container');
+    const emptyEl = document.getElementById('pe-empty-gastos-msg');
+    if (!gEl) return;
+
+    if (_peGastosAdicionales.length === 0) {
+      gEl.innerHTML = '';
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    gEl.innerHTML = _peGastosAdicionales.map(item => `
+      <div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+        <input type="text" value="${escapePeHtml(item.nombre)}" placeholder="Ej. Internet, Software, Contador..."
+               oninput="actualizarItemGasto(${item.id}, 'nombre', this.value)"
+               class="border border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold bg-white flex-1 outline-none">
+        <div class="relative w-28">
+          <span class="absolute left-2 top-1 text-gray-400 text-xs">$</span>
+          <input type="text" value="${item.monto ? Math.round(item.monto).toLocaleString('es-CO') : ''}" placeholder="0"
+                 oninput="onInputMoneda(this); actualizarItemGasto(${item.id}, 'monto', this.value);"
+                 class="border border-gray-200 rounded-lg pl-5 pr-2 py-1 text-xs font-bold font-mono text-right bg-white w-full outline-none">
+        </div>
+        <button type="button" onclick="eliminarLineaGastoFijo(${item.id})"
+                class="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition cursor-pointer text-xs" title="Eliminar">
+          🗑️
+        </button>
+      </div>
+    `).join('');
+  }
+
+  function actualizarItemGasto(id, campo, val) {
+    const item = _peGastosAdicionales.find(g => g.id === id);
+    if (!item) return;
+    if (campo === 'nombre') item.nombre = val;
+    else if (campo === 'monto') item.monto = parseMoneda(val);
+    recalcularPuntoEquilibrio();
+  }
+
+  // RECALCULO GENERAL EN VIVO
+  function recalcularPuntoEquilibrio() {
+    // 1. Precios y Margen Unitario
+    const precioUnit = parseMoneda(document.getElementById('pe-precio-promedio')?.value || 0);
+    const costoUnit = parseMoneda(document.getElementById('pe-costo-unitario')?.value || 0);
+
+    const margenUnit = Math.max(precioUnit - costoUnit, 0);
+    const margenPct = precioUnit > 0 ? (margenUnit / precioUnit) : 0;
+
+    // Badges de Margen Unitario
+    const mUnitBadge = document.getElementById('pe-margen-unit-badge');
+    const mPctBadge = document.getElementById('pe-margen-pct-badge');
+    if (mUnitBadge) mUnitBadge.textContent = formatMiles(margenUnit);
+    if (mPctBadge) mPctBadge.textContent = (margenPct * 100).toFixed(1) + '%';
+
+    // 2. Nómina Operativa (Costos)
+    const opNum = parseInt(document.getElementById('pe-nom-op-empleados')?.value || 0);
+    const opSal = parseMoneda(document.getElementById('pe-nom-op-salario')?.value || 0);
+    const opTrans = parseMoneda(document.getElementById('pe-nom-op-transporte')?.value || 0);
+    const opBaseSum = opSal + opTrans;
+    const opCarga50 = opBaseSum * 0.50; // Factor prestacional y seguridad social 50%
+    const opPorEmp = opBaseSum + opCarga50;
+    const opTotalNomina = redondearMiles(opNum * opPorEmp);
+
+    document.getElementById('pe-nom-op-carga').textContent = formatMiles(opCarga50);
+    document.getElementById('pe-nom-op-por-emp').textContent = formatMiles(opPorEmp);
+    document.getElementById('pe-nom-operativa-total-badge').textContent = formatMiles(opTotalNomina) + ' / mes';
+
+    // Costos adicionales
+    let totalCostosExtra = 0;
+    _peCostosAdicionales.forEach(c => { totalCostosExtra += (c.monto || 0); });
+    totalCostosExtra = redondearMiles(totalCostosExtra);
+
+    const totalCostosFijos = opTotalNomina + totalCostosExtra;
+    document.getElementById('pe-tot-costos-col').textContent = formatMiles(totalCostosFijos);
+    document.getElementById('pe-subtotal-costos-val').textContent = formatMiles(totalCostosFijos);
+
+    // 3. Gastos Fijos (Programados + Admin + Extra)
+    // Programados
+    let totalProgramados = 0;
+    if (_peDatosBase && _peDatosBase.gastos_fijos_programados) {
+      _peDatosBase.gastos_fijos_programados.forEach(p => {
+        if (_peProgramadosActivos[p.id] !== false) totalProgramados += p.monto;
+      });
+    }
+    totalProgramados = redondearMiles(totalProgramados);
+
+    // Nómina Administrativa
+    const adNum = parseInt(document.getElementById('pe-nom-admin-empleados')?.value || 0);
+    const adSal = parseMoneda(document.getElementById('pe-nom-admin-salario')?.value || 0);
+    const adTrans = parseMoneda(document.getElementById('pe-nom-admin-transporte')?.value || 0);
+    const adBaseSum = adSal + adTrans;
+    const adCarga50 = adBaseSum * 0.50;
+    const adPorEmp = adBaseSum + adCarga50;
+    const adTotalNomina = redondearMiles(adNum * adPorEmp);
+
+    document.getElementById('pe-nom-admin-carga').textContent = formatMiles(adCarga50);
+    document.getElementById('pe-nom-admin-por-emp').textContent = formatMiles(adPorEmp);
+    document.getElementById('pe-nom-admin-total-badge').textContent = formatMiles(adTotalNomina) + ' / mes';
+
+    // Gastos fijos adicionales
+    let totalGastosExtra = 0;
+    _peGastosAdicionales.forEach(g => { totalGastosExtra += (g.monto || 0); });
+    totalGastosExtra = redondearMiles(totalGastosExtra);
+
+    const totalGastosFijos = totalProgramados + adTotalNomina + totalGastosExtra;
+    document.getElementById('pe-tot-gastos-col').textContent = formatMiles(totalGastosFijos);
+    document.getElementById('pe-subtotal-gastos-val').textContent = formatMiles(totalGastosFijos);
+
+    // 4. Gran Total Fijos
+    const granTotalFijos = totalCostosFijos + totalGastosFijos;
+
+    // 5. CÁLCULO PUNTO DE EQUILIBRIO
+    // PE ($) = Total Fijos / % Margen de Contribución
+    let pePesos = 0;
+    let peUnidades = 0;
+
+    if (margenPct > 0) {
+      pePesos = redondearMiles(granTotalFijos / margenPct);
+    }
+    if (margenUnit > 0) {
+      peUnidades = Math.ceil(granTotalFijos / margenUnit);
+    }
+
+    const peDiario = redondearMiles(pePesos / 30);
+    const peUnidadesDia = Math.ceil(peUnidades / 30);
+
+    // Actualizar Tarjetas KPI Principales
+    document.getElementById('pe-kpi-pesos').textContent = formatMiles(pePesos);
+    document.getElementById('pe-kpi-diario').textContent = formatMiles(peDiario);
+
+    document.getElementById('pe-kpi-unidades').textContent = peUnidades.toLocaleString('es-CO');
+    document.getElementById('pe-kpi-unidades-dia').textContent = `${peUnidadesDia.toLocaleString('es-CO')} und/día`;
+
+    document.getElementById('pe-kpi-margen-pct').textContent = (margenPct * 100).toFixed(1) + '%';
+    document.getElementById('pe-kpi-margen-unit').textContent = formatMiles(margenUnit);
+
+    document.getElementById('pe-kpi-total-fijos').textContent = formatMiles(granTotalFijos);
+    document.getElementById('pe-kpi-fijos-dia').textContent = formatMiles(granTotalFijos / 30);
+
+    // Texto Explicativo Inferior
+    document.getElementById('pe-exp-pesos').textContent = formatMiles(pePesos);
+    document.getElementById('pe-exp-unidades').textContent = `${peUnidades.toLocaleString('es-CO')} und`;
+    document.getElementById('pe-exp-total-fijos').textContent = formatMiles(granTotalFijos);
+  }
+
+  function escapePeHtml(str) {
+    if (!str) return '';
+    return str.toString()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+</script>

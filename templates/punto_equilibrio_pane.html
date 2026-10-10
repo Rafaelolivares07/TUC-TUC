@@ -744,22 +744,53 @@
         }
       }
 
-      // Render top platos de la mezcla (costo exacto sin redondear a miles)
+      // Render top platos de la mezcla + Tarjeta destacada de PROMEDIO PONDERADO (costo exacto sin redondear a miles)
       const topListEl = document.getElementById('pe-top-platos-lista');
       if (topListEl && Array.isArray(data.top_productos_mezcla)) {
         if (data.top_productos_mezcla.length === 0) {
           topListEl.innerHTML = '<p class="text-xs text-indigo-700 italic">No hay productos vendidos en este periodo.</p>';
         } else {
-          topListEl.innerHTML = data.top_productos_mezcla.map(p => `
-            <div class="bg-white border border-indigo-200 rounded-xl p-2.5 shadow-2xs">
-              <div class="font-extrabold text-xs text-indigo-950 truncate" title="${escapePeHtml(p.nombre)}">${escapePeHtml(p.nombre)}</div>
-              <div class="flex items-center justify-between text-xs text-indigo-800 font-mono mt-1">
-                <span>Cant: <strong>${p.cantidad} unds</strong></span>
-                <span>P: <strong>${formatMiles(p.precio)}</strong></span>
-                <span>C: <strong>${formatPesosExactos(p.costo)}</strong></span>
+          // 1. Tarjeta destacada: Promedio Ponderado de la Mezcla Total
+          const cardPromedioPonderado = `
+            <div class="bg-gradient-to-br from-indigo-900 to-indigo-950 text-white border-2 border-indigo-700 rounded-xl p-2.5 shadow-md flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <span class="font-black text-[11px] tracking-wider uppercase text-amber-300 flex items-center gap-1">
+                    <span>🌟</span> PROMEDIO PONDERADO
+                  </span>
+                  <span class="text-[9px] bg-indigo-800 text-indigo-200 px-1.5 py-0.5 rounded-full font-bold">100% Mezcla</span>
+                </div>
+                <div class="text-[11px] font-bold text-indigo-100 truncate">Mezcla Global Ponderada</div>
+              </div>
+
+              <div class="flex items-center justify-between text-xs font-mono mt-1.5 pt-1.5 border-t border-indigo-800/80">
+                <span>Total: <strong>${(data.unidades_mes_real || 0).toLocaleString('es-CO')} u</strong></span>
+                <span title="Precio Promedio Ponderado">P: <strong class="text-amber-300">${formatMiles(data.precio_promedio || 0)}</strong></span>
+                <span title="Costo Promedio Ponderado">C: <strong class="text-rose-300">${formatPesosExactos(data.costo_unitario_promedio || 0)}</strong></span>
+              </div>
+
+              <p class="text-[10px] text-indigo-300 font-medium mt-1.5 leading-tight italic">
+                Media ponderada: promedio participativo inclinado hacia los platos más vendidos.
+              </p>
+            </div>
+          `;
+
+          // 2. Tarjetas de los platos individuales
+          const tarjetasIndividuales = data.top_productos_mezcla.map(p => `
+            <div class="bg-white border-2 border-indigo-200 rounded-xl p-2.5 shadow-2xs flex flex-col justify-between">
+              <div>
+                <div class="font-extrabold text-xs text-indigo-950 truncate" title="${escapePeHtml(p.nombre)}">${escapePeHtml(p.nombre)}</div>
+                <span class="text-[10px] text-gray-500 font-semibold block mt-0.5">Plato Individual</span>
+              </div>
+              <div class="flex items-center justify-between text-xs text-indigo-900 font-mono mt-2 pt-1.5 border-t border-gray-100">
+                <span>Cant: <strong class="text-indigo-950">${p.cantidad} unds</strong></span>
+                <span>P: <strong class="text-gray-900">${formatMiles(p.precio)}</strong></span>
+                <span>C: <strong class="text-rose-700">${formatPesosExactos(p.costo)}</strong></span>
               </div>
             </div>
           `).join('');
+
+          topListEl.innerHTML = cardPromedioPonderado + tarjetasIndividuales;
         }
       }
 

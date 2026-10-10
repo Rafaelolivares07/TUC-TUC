@@ -81,6 +81,26 @@
             <p id="val-costo-alerta-msg" class="text-[11px] text-amber-800 mt-0.5"></p>
           </div>
         </div>
+
+        <!-- Advertencia de Costo Cero ($0) con Confirmación Consciente -->
+        <div id="val-costo-cero-warning" class="mt-2.5 p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 hidden">
+          <div class="flex items-start gap-2.5">
+            <span class="text-xl shrink-0">⚠️</span>
+            <div class="flex-1 text-xs">
+              <span class="font-black text-amber-950 block text-sm">¡Atención! Costo Unitario en $0</span>
+              <p class="text-amber-900 mt-0.5 leading-snug">
+                El costo unitario no debe quedar en cero para entradas de inventario porque afectará la valuación contable y el costo promedio de venta. Si conoces el costo real de compra, ingrésalo arriba.
+              </p>
+              <div class="mt-2.5 pt-2 border-t border-amber-200/90 flex items-center gap-2">
+                <input type="checkbox" id="chk-forzar-costo-cero" onchange="verificarBotonConfirmar()" 
+                       class="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer">
+                <label for="chk-forzar-costo-cero" class="font-bold text-amber-950 cursor-pointer select-none text-[11px] sm:text-xs">
+                  Entiendo el impacto y deseo ajustar sin costo unitario ($0) de todas formas
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="flex justify-between pt-2">
         <span class="text-gray-500 font-bold">Valor Total del Ajuste:</span>
@@ -98,8 +118,8 @@
               class="flex-1 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-sm font-bold text-gray-600 transition">
         Cancelar
       </button>
-      <button onclick="guardarAjusteConfirmado()" 
-              class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-lg shadow-emerald-600/20 transition">
+      <button onclick="guardarAjusteConfirmado()" id="btn-confirmar-modal-ajuste"
+              class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-lg shadow-emerald-600/20 transition disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed">
         Confirmar y Ajustar
       </button>
     </div>
@@ -165,7 +185,7 @@
               class="w-full border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all">
         <option value="libre">Libre (Búsqueda manual o código de barras)</option>
         <option value="categoria">Por Categoría de Producto</option>
-        <option value="completo">Inventario Completo (Todo el catálogo)</option>
+        <option value="completo" selected>Inventario Completo (Todo el catálogo)</option>
       </select>
     </div>
     <div class="relative">
@@ -179,7 +199,7 @@
   </div>
 
   <!-- Zona de Conteo Modalidad LIBRE -->
-  <div id="conteo-libre" class="bg-white rounded-2xl shadow-md p-6 mb-5">
+  <div id="conteo-libre" class="bg-white rounded-2xl shadow-md p-6 mb-5 hidden">
     <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wide mb-4">Ingresar Conteo de Ítem</h2>
     
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -226,7 +246,7 @@
   </div>
 
   <!-- Zona de Conteo Categoría / Completo -->
-  <div id="conteo-lista" class="bg-white rounded-2xl shadow-md p-5 mb-5 hidden">
+  <div id="conteo-lista" class="bg-white rounded-2xl shadow-md p-5 mb-5">
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div class="flex items-center gap-3">
         <h2 id="conteo-lista-titulo" class="text-base md:text-lg font-black text-gray-800 uppercase tracking-wide">📦 Productos del Inventario</h2>
@@ -252,7 +272,13 @@
             <th class="px-5 py-3.5 text-right bg-gray-100">Acción</th>
           </tr>
         </thead>
-        <tbody id="tabla-lista-body"></tbody>
+        <tbody id="tabla-lista-body">
+          <tr>
+            <td colspan="6" class="text-center text-gray-500 py-12 text-base font-bold">
+              <span class="animate-spin inline-block mr-2 text-xl">⏳</span> Cargando catálogo de inventario...
+            </td>
+          </tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -313,6 +339,14 @@ function numDocLimpio(num) {
 
 // Cargar al inicializar la página
 document.addEventListener("DOMContentLoaded", () => {
+  // Restaurar modalidad preferida (por defecto 'completo' si el usuario trabaja en la lista completa)
+  const savedMod = localStorage.getItem(`inv_fisico_modalidad_${NEGOCIO_ID}`) || 'completo';
+  const selMod = document.getElementById("select-modalidad");
+  if (selMod && ['libre', 'categoria', 'completo'].includes(savedMod)) {
+    selMod.value = savedMod;
+  }
+  cambiarModalidad(false);
+
   inicializarSesion();
   cargarProductos();
   cargarHistorial();
@@ -326,37 +360,65 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Inicializar sesión y consecutivo
 async function inicializarSesion() {
-  const tipoDocId = document.getElementById("select-tipo-doc").value;
+  const selectDoc = document.getElementById("select-tipo-doc");
+  const tipoDocId = selectDoc ? selectDoc.value : "";
   if (!tipoDocId) return;
-  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/siguiente-documento?tipo_doc_id=${tipoDocId}`);
-  const data = await resp.json();
-  if (data.ok) {
-    activeDocNumber = data.documento_numero;
-    document.getElementById("doc-consecutivo-input").value = numDocLimpio(activeDocNumber);
-    cargarItemsDocumento();
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/siguiente-documento?tipo_doc_id=${tipoDocId}`);
+    const data = await resp.json();
+    if (data.ok) {
+      activeDocNumber = data.documento_numero;
+      const inp = document.getElementById("doc-consecutivo-input");
+      if (inp) inp.value = numDocLimpio(activeDocNumber);
+      await cargarItemsDocumento();
+    }
+  } catch (e) {
+    console.error("Error en inicializarSesion:", e);
   }
 }
 
 // Cargar todos los productos en caché local para velocidad instantánea
 async function cargarProductos() {
   const centroId = document.getElementById("select-centro-utilidad")?.value || 1;
-  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/productos?bodega=${centroId}`);
-  const data = await resp.json();
-  if (data.ok) {
-    currentProducts = data.productos;
-    // Extraer categorías únicas
-    const cats = [...new Set(currentProducts.map(p => p.categoria).filter(Boolean))];
-    categoriasDisponibles = cats;
-    
-    // Rellenar dropdown de categorías
-    const sel = document.getElementById("select-categoria-filtro");
-    const prevVal = sel ? sel.value : "";
-    if (sel) {
-      sel.innerHTML = '<option value="">-- Seleccionar Categoría --</option>' + 
-        cats.map(c => `<option value="${c}">${c}</option>`).join('');
-      if (prevVal && cats.includes(prevVal)) {
-        sel.value = prevVal;
+  const body = document.getElementById("tabla-lista-body");
+  if (body && (!currentProducts || currentProducts.length === 0)) {
+    body.innerHTML = '<tr><td colspan="6" class="text-center text-gray-500 py-12 text-base font-bold"><span class="animate-spin inline-block mr-2 text-xl">⏳</span> Cargando catálogo de inventario...</td></tr>';
+  }
+
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/productos?bodega=${centroId}`);
+    const data = await resp.json();
+    if (data.ok) {
+      currentProducts = data.productos || [];
+      // Extraer categorías únicas
+      const cats = [...new Set(currentProducts.map(p => p.categoria).filter(Boolean))];
+      categoriasDisponibles = cats;
+      
+      // Rellenar dropdown de categorías
+      const sel = document.getElementById("select-categoria-filtro");
+      const prevVal = sel ? sel.value : "";
+      if (sel) {
+        sel.innerHTML = '<option value="">-- Seleccionar Categoría --</option>' + 
+          cats.map(c => `<option value="${c}">${c}</option>`).join('');
+        if (prevVal && cats.includes(prevVal)) {
+          sel.value = prevVal;
+        }
       }
+
+      // Si la modalidad activa es completo o categoría, renderizar de inmediato
+      const mod = document.getElementById("select-modalidad")?.value;
+      if (mod === "completo") {
+        cargarTablaCompleta();
+      } else if (mod === "categoria" && sel && sel.value) {
+        cargarTablaPorCategoria();
+      }
+    } else {
+      toast(data.error || "Error al cargar productos de inventario", false);
+    }
+  } catch (err) {
+    console.error("Error al cargar productos:", err);
+    if (body) {
+      body.innerHTML = '<tr><td colspan="6" class="text-center text-red-500 py-12 text-base font-bold">⚠️ Error de red al cargar el inventario. Por favor recarga la página.</td></tr>';
     }
   }
 }
@@ -371,7 +433,7 @@ function cambiarCentroUtilidad() {
     if (mod === "completo") {
       cargarTablaCompleta();
     } else if (mod === "categoria") {
-      filtrarPorCategoria();
+      cargarTablaPorCategoria();
     }
   });
   cargarHistorial();
@@ -383,8 +445,13 @@ function cambiarTipoDocumento() {
 }
 
 // Cambiar Modalidad
-function cambiarModalidad() {
-  const mod = document.getElementById("select-modalidad").value;
+function cambiarModalidad(guardar = true) {
+  const selMod = document.getElementById("select-modalidad");
+  const mod = selMod ? selMod.value : "completo";
+  if (guardar) {
+    try { localStorage.setItem(`inv_fisico_modalidad_${NEGOCIO_ID}`, mod); } catch(e){}
+  }
+
   document.getElementById("conteo-libre").classList.toggle("hidden", mod !== "libre");
   document.getElementById("conteo-lista").classList.toggle("hidden", mod === "libre");
   document.getElementById("select-cat-container").classList.toggle("hidden", mod !== "categoria");
@@ -394,8 +461,13 @@ function cambiarModalidad() {
   } else if (mod === "completo") {
     cargarTablaCompleta();
   } else {
-    document.getElementById("tabla-lista-body").innerHTML = 
-      '<tr><td colspan="6" class="text-center text-gray-400 py-6 text-xs">Selecciona una categoría para listar los productos.</td></tr>';
+    const selCat = document.getElementById("select-categoria-filtro");
+    if (selCat && selCat.value) {
+      cargarTablaPorCategoria();
+    } else {
+      document.getElementById("tabla-lista-body").innerHTML = 
+        '<tr><td colspan="6" class="text-center text-gray-400 py-8 text-sm font-semibold">Selecciona una categoría arriba para listar los productos.</td></tr>';
+    }
   }
 }
 
@@ -477,14 +549,29 @@ async function abrirValidacionLibre() {
 
 // ── FLUX: MODALIDAD CATEGORIA / COMPLETO ────────────────────────────────────────
 function cargarTablaCompleta() {
+  if (!currentProducts || currentProducts.length === 0) {
+    const body = document.getElementById("tabla-lista-body");
+    if (body) {
+      body.innerHTML = '<tr><td colspan="6" class="text-center text-gray-500 py-12 text-base font-bold"><span class="animate-spin inline-block mr-2 text-xl">⏳</span> Cargando catálogo de inventario...</td></tr>';
+    }
+    return;
+  }
   renderTablaLista(currentProducts);
 }
 
 function cargarTablaPorCategoria() {
-  const cat = document.getElementById("select-categoria-filtro").value;
+  const cat = document.getElementById("select-categoria-filtro")?.value;
+  const body = document.getElementById("tabla-lista-body");
   if (!cat) {
-    document.getElementById("tabla-lista-body").innerHTML = 
-      '<tr><td colspan="6" class="text-center text-gray-400 py-6 text-xs">Selecciona una categoría válida.</td></tr>';
+    if (body) {
+      body.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8 text-sm font-semibold">Selecciona una categoría arriba para listar los productos.</td></tr>';
+    }
+    return;
+  }
+  if (!currentProducts || currentProducts.length === 0) {
+    if (body) {
+      body.innerHTML = '<tr><td colspan="6" class="text-center text-gray-500 py-12 text-base font-bold"><span class="animate-spin inline-block mr-2 text-xl">⏳</span> Cargando catálogo de inventario...</td></tr>';
+    }
     return;
   }
   const filtered = currentProducts.filter(p => p.categoria === cat);
@@ -508,15 +595,14 @@ function renderTablaLista(list) {
     const itemAjustado = itemsAjustadosEnSesion.get(p.id);
     const estaAjustado = !!itemAjustado;
     
-    // Si ya fue ajustado en este documento, prellenar y destacar con estilo verde de éxito
+    // Si ya fue ajustado en este documento, destacar con estilo verde de éxito
     const rowBgClass = estaAjustado 
       ? 'bg-emerald-50/70 border-b-2 border-emerald-200 transition-colors' 
       : 'border-b border-gray-100 hover:bg-gray-50/80 transition-colors';
 
-    const diffAjustada = estaAjustado ? (itemAjustado.cantidad * (itemAjustado.tipo === 'entrada' ? 1 : -1)) : 0;
     const diffBadgeHtml = estaAjustado
-      ? `<span class="inline-flex items-center gap-1 text-sm font-black font-mono px-2.5 py-1 rounded-lg ${diffAjustada >= 0 ? 'bg-emerald-200/80 text-emerald-900' : 'bg-red-200/80 text-red-900'}">
-          ${diffAjustada > 0 ? '+' : ''}${diffAjustada.toFixed(2)}
+      ? `<span id="tbl-diff-badge-${p.id}" class="inline-flex items-center gap-1 text-sm font-bold font-mono px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800">
+          0.0
          </span>`
       : `<span id="tbl-diff-badge-${p.id}" class="text-sm font-bold font-mono text-gray-400">—</span>`;
 
@@ -542,8 +628,8 @@ function renderTablaLista(list) {
         </td>
         <td class="px-5 py-3.5 text-center">
           <input type="number" id="tbl-qty-${p.id}" 
-                 value="${estaAjustado ? itemAjustado.stock_nuevo : ''}"
-                 placeholder="${p.stock}" step="any"
+                 value=""
+                 placeholder="0" step="any"
                  class="border-2 ${estaAjustado ? 'border-emerald-300 bg-white' : 'border-gray-200'} rounded-xl px-3 py-2 text-base md:text-lg w-32 text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs"
                  oninput="calcDiffFila(${p.id}, ${p.stock})"
                  onkeydown="if(event.key==='Enter') abrirValidacionFila(${p.id})">
@@ -553,15 +639,18 @@ function renderTablaLista(list) {
         </td>
         <td class="px-5 py-3.5 text-center">
           <input type="number" id="tbl-cost-${p.id}" value="${p.costo || 0}" step="0.01" min="0"
-                 class="border-2 border-gray-200 rounded-xl px-3 py-2 text-base md:text-lg w-32 text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs">
+                 class="border-2 ${(p.costo || 0) > 0 ? 'border-gray-200' : 'border-amber-300 bg-amber-50/50'} rounded-xl px-3 py-2 text-base md:text-lg w-32 text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs">
+          ${p.costo_origen === 'historico_inventario' ? '<span class="text-[10px] font-bold text-blue-600 block mt-0.5" title="Recuperado del último movimiento en Kardex">📜 Histórico</span>' : ''}
+          ${p.costo_origen === 'cotizacion' ? '<span class="text-[10px] font-bold text-indigo-600 block mt-0.5" title="Recuperado de cotizaciones de compra">🏷️ Cotización</span>' : ''}
+          ${(p.costo || 0) <= 0 ? '<span class="text-[10px] font-bold text-amber-600 block mt-0.5">⚠️ Sin costo</span>' : ''}
         </td>
         <td class="px-5 py-3.5 text-right">
           ${estaAjustado ? `
             <div class="flex items-center justify-end gap-1.5">
-              <button onclick="abrirValidacionFila(${p.id})" id="tbl-btn-save-${p.id}"
-                      class="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 font-extrabold text-sm px-3.5 py-2 rounded-xl transition flex items-center gap-1 shadow-2xs cursor-pointer"
-                      title="Reajustar si hubo un error en la toma">
-                <span>🔄 Reajustar</span>
+              <button onclick="abrirValidacionFila(${p.id})" id="tbl-btn-save-${p.id}" disabled
+                      class="bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-sm px-3.5 py-2 rounded-xl opacity-75 cursor-default transition flex items-center gap-1 shadow-2xs"
+                      title="Item ya ajustado en este documento. Para modificarlo ingrese una nueva cantidad.">
+                <span>✓ Ajustado</span>
               </button>
             </div>
           ` : `
@@ -580,13 +669,28 @@ function calcDiffFila(id, sysStock) {
   const input = document.getElementById(`tbl-qty-${id}`);
   const btn = document.getElementById(`tbl-btn-save-${id}`);
   const badge = document.getElementById(`tbl-diff-badge-${id}`);
+  const estaAjustado = itemsAjustadosEnSesion.has(id);
   
   if (input.value.trim() === "") {
     if (badge) {
-      badge.className = "text-sm font-bold font-mono text-gray-400";
-      badge.textContent = "—";
+      if (estaAjustado) {
+        badge.className = "inline-flex items-center gap-1 text-sm font-bold font-mono px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800";
+        badge.textContent = "0.0";
+      } else {
+        badge.className = "text-sm font-bold font-mono text-gray-400";
+        badge.textContent = "—";
+      }
     }
-    if (btn) btn.disabled = true;
+    if (btn) {
+      btn.disabled = true;
+      if (estaAjustado) {
+        btn.innerHTML = '<span>✓ Ajustado</span>';
+        btn.className = "bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-sm px-3.5 py-2 rounded-xl opacity-75 cursor-default transition flex items-center gap-1 shadow-2xs";
+      } else {
+        btn.textContent = 'Ajustar';
+        btn.className = "bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer";
+      }
+    }
     return;
   }
   
@@ -597,14 +701,26 @@ function calcDiffFila(id, sysStock) {
   }
   
   const diff = physVal - sysStock;
-  if (btn) btn.disabled = Math.abs(diff) < 0.000001;
+  const tieneDif = Math.abs(diff) >= 0.000001;
+  if (btn) {
+    btn.disabled = !tieneDif;
+    if (tieneDif) {
+      btn.textContent = estaAjustado ? '🔄 Reajustar' : 'Ajustar';
+      btn.className = "bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer";
+    } else {
+      btn.innerHTML = estaAjustado ? '<span>✓ Ajustado</span>' : 'Ajustar';
+      btn.className = estaAjustado 
+        ? "bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-sm px-3.5 py-2 rounded-xl opacity-75 cursor-default transition flex items-center gap-1 shadow-2xs"
+        : "bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer";
+    }
+  }
   
   const costInput = document.getElementById(`tbl-cost-${id}`);
   const prod = currentProducts.find(x => x.id === id);
 
   if (Math.abs(diff) < 0.000001) {
     if (badge) {
-      badge.className = "text-sm font-bold font-mono text-gray-400";
+      badge.className = "inline-flex items-center gap-1 text-sm font-bold font-mono px-2.5 py-1 rounded-lg bg-gray-100 text-gray-500";
       badge.textContent = "0.0";
     }
     if (costInput && prod) {
@@ -614,7 +730,7 @@ function calcDiffFila(id, sysStock) {
     }
   } else if (diff > 0) {
     if (badge) {
-      badge.className = "text-sm md:text-base font-black font-mono text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-xl shadow-2xs";
+      badge.className = "inline-flex items-center gap-1 text-sm md:text-base font-black font-mono text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-xl shadow-2xs";
       badge.textContent = `+${diff.toFixed(2)}`;
     }
     // Entrada: editable
@@ -624,7 +740,7 @@ function calcDiffFila(id, sysStock) {
     }
   } else {
     if (badge) {
-      badge.className = "text-sm md:text-base font-black font-mono text-red-800 bg-red-100 px-2.5 py-1 rounded-xl shadow-2xs";
+      badge.className = "inline-flex items-center gap-1 text-sm md:text-base font-black font-mono text-red-800 bg-red-100 px-2.5 py-1 rounded-xl shadow-2xs";
       badge.textContent = diff.toFixed(2);
     }
     // Salida: NUNCA editable (bloqueado con costo promedio)
@@ -661,8 +777,12 @@ function abrirModalValidacionGenerica(product, physicalQty, overrideCosto = null
   activeAjustePayload = {
     producto_id: product.id,
     cantidad_fisica: physicalQty,
-    costo_unitario: costo
+    costo_unitario: costo,
+    diff: diff
   };
+
+  const chkForzar = document.getElementById("chk-forzar-costo-cero");
+  if (chkForzar) chkForzar.checked = false;
 
   document.getElementById("val-prod-nombre").textContent = product.nombre;
   document.getElementById("val-stock-sistema").textContent = `${sysStock} unidades`;
@@ -725,6 +845,8 @@ function abrirModalValidacionGenerica(product, physicalQty, overrideCosto = null
 
 function cerrarModalValidacion() {
   document.getElementById("modal-validacion").classList.add("hidden");
+  const chkForzar = document.getElementById("chk-forzar-costo-cero");
+  if (chkForzar) chkForzar.checked = false;
   activeAjustePayload = null;
 }
 
@@ -743,6 +865,7 @@ function actualizarValorTotalAjuste() {
   }
   
   activeAjustePayload.costo_unitario = cost;
+  activeAjustePayload.diff = diff;
   
   const total = Math.abs(diff) * cost;
   document.getElementById("val-total-ajuste").textContent = `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
@@ -782,6 +905,39 @@ function actualizarValorTotalAjuste() {
   } else {
     variacionBox.classList.add("hidden");
     alerta15.classList.add("hidden");
+  }
+
+  verificarBotonConfirmar();
+}
+
+function verificarBotonConfirmar() {
+  const btn = document.getElementById("btn-confirmar-modal-ajuste");
+  if (!btn || !activeAjustePayload) return;
+  
+  const costInput = document.getElementById("val-costo-input");
+  const cost = Math.abs(parseFloat(costInput?.value) || 0.0);
+  const diff = activeAjustePayload.diff;
+  const warnCero = document.getElementById("val-costo-cero-warning");
+  const chkForzar = document.getElementById("chk-forzar-costo-cero");
+  
+  // Si es entrada (sobrante) y el costo unitario está en cero
+  if (diff > 0 && cost <= 0.000001) {
+    if (warnCero) warnCero.classList.remove("hidden");
+    const permitido = chkForzar && chkForzar.checked;
+    btn.disabled = !permitido;
+    if (permitido) {
+      btn.className = "flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold shadow-lg shadow-amber-600/20 transition cursor-pointer";
+      btn.textContent = "Confirmar Ajuste sin Costo ($0)";
+    } else {
+      btn.className = "flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-400 text-sm font-bold transition shadow-none cursor-not-allowed";
+      btn.textContent = "Confirmar y Ajustar";
+    }
+  } else {
+    if (warnCero) warnCero.classList.add("hidden");
+    if (chkForzar) chkForzar.checked = false;
+    btn.disabled = false;
+    btn.className = "flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-lg shadow-emerald-600/20 transition cursor-pointer";
+    btn.textContent = "Confirmar y Ajustar";
   }
 }
 
@@ -829,6 +985,15 @@ async function verificarCuentasCategoria(catName, esSobrante) {
 // Guardar ajuste definitivo
 async function guardarAjusteConfirmado() {
   if (!activeAjustePayload) return;
+
+  // Si es entrada con costo $0, validar confirmación consciente
+  if (activeAjustePayload.diff > 0 && (activeAjustePayload.costo_unitario <= 0.000001)) {
+    const chk = document.getElementById("chk-forzar-costo-cero");
+    if (!chk || !chk.checked) {
+      toast("El costo unitario no puede quedar en $0 sin confirmar la advertencia.", false);
+      return;
+    }
+  }
   
   const tipoDocId = document.getElementById("select-tipo-doc").value;
   const terceroId = document.getElementById("entrada-responsable-id").value;
@@ -866,7 +1031,7 @@ async function guardarAjusteConfirmado() {
     
     // Recargar datos
     await cargarProductos(); // refrescar stock en caché
-    cargarItemsDocumento();
+    await cargarItemsDocumento();
     cargarHistorial();
     
     // Limpiar entradas según la modalidad
@@ -885,50 +1050,54 @@ async function guardarAjusteConfirmado() {
 // Cargar ítems ajustados bajo la sesión actual
 async function cargarItemsDocumento() {
   if (!activeDocNumber) return;
-  const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/documento/${activeDocNumber}/items`);
-  const data = await resp.json();
-  const body = document.getElementById("body-items-documento");
-  const lbl = document.getElementById("lbl-items-documento");
-  
-  itemsAjustadosEnSesion.clear();
-  
-  if (data.ok && data.items.length > 0) {
-    lbl.textContent = `${data.items.length} ítems ajustados`;
-    data.items.forEach(m => {
-      itemsAjustadosEnSesion.set(m.producto_id, m);
-    });
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ajuste-fisico/documento/${activeDocNumber}/items`);
+    const data = await resp.json();
+    const body = document.getElementById("body-items-documento");
+    const lbl = document.getElementById("lbl-items-documento");
+    
+    itemsAjustadosEnSesion.clear();
+    
+    if (data.ok && data.items.length > 0) {
+      lbl.textContent = `${data.items.length} ítems ajustados`;
+      data.items.forEach(m => {
+        itemsAjustadosEnSesion.set(m.producto_id, m);
+      });
 
-    body.innerHTML = data.items.map(m => {
-      const diff = m.cantidad * (m.tipo === 'entrada' ? 1 : -1);
-      const total = m.valor_total || 0;
-      
-      const badgeDiff = diff > 0 
-        ? `<span class="text-sm font-black font-mono text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg">+${diff.toFixed(2)}</span>`
-        : `<span class="text-sm font-black font-mono text-red-800 bg-red-100 px-2 py-0.5 rounded-lg">${diff.toFixed(2)}</span>`;
+      body.innerHTML = data.items.map(m => {
+        const diff = m.cantidad * (m.tipo === 'entrada' ? 1 : -1);
+        const total = m.valor_total || 0;
         
-      return `
-        <tr class="border-b border-gray-100 hover:bg-gray-50/80 transition-colors">
-          <td class="px-4 py-3 font-bold text-gray-950 text-base">${escapePeHtml(m.nombre_producto)}</td>
-          <td class="px-4 py-3 text-xs text-gray-400 uppercase font-black tracking-wider">${escapePeHtml(m.categoria || 'Sin cat.')}</td>
-          <td class="px-4 py-3 text-center font-mono text-base text-gray-500 font-bold">${m.stock_anterior}</td>
-          <td class="px-4 py-3 text-center font-mono text-base font-black text-gray-950">${m.stock_nuevo}</td>
-          <td class="px-4 py-3 text-center">${badgeDiff}</td>
-          <td class="px-4 py-3 text-right font-mono font-bold text-sm text-gray-700">$${parseFloat(m.costo_und || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</td>
-          <td class="px-4 py-3 text-right font-mono font-black text-base text-gray-950">$${parseFloat(total).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</td>
-        </tr>
-      `;
-    }).join('');
-  } else {
-    lbl.textContent = "Ninguno ajustado";
-    body.innerHTML = `<tr><td colspan="7" class="text-center text-gray-400 py-6 text-sm font-medium">No se han registrado ajustes bajo este consecutivo en esta sesión.</td></tr>`;
-  }
+        const badgeDiff = diff > 0 
+          ? `<span class="text-sm font-black font-mono text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg">+${diff.toFixed(2)}</span>`
+          : `<span class="text-sm font-black font-mono text-red-800 bg-red-100 px-2 py-0.5 rounded-lg">${diff.toFixed(2)}</span>`;
+          
+        return `
+          <tr class="border-b border-gray-100 hover:bg-gray-50/80 transition-colors">
+            <td class="px-4 py-3 font-bold text-gray-950 text-base">${escapePeHtml(m.nombre_producto)}</td>
+            <td class="px-4 py-3 text-xs text-gray-400 uppercase font-black tracking-wider">${escapePeHtml(m.categoria || 'Sin cat.')}</td>
+            <td class="px-4 py-3 text-center font-mono text-base text-gray-500 font-bold">${m.stock_anterior}</td>
+            <td class="px-4 py-3 text-center font-mono text-base font-black text-gray-950">${m.stock_nuevo}</td>
+            <td class="px-4 py-3 text-center">${badgeDiff}</td>
+            <td class="px-4 py-3 text-right font-mono font-bold text-sm text-gray-700">$${parseFloat(m.costo_und || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</td>
+            <td class="px-4 py-3 text-right font-mono font-black text-base text-gray-950">$${parseFloat(total).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</td>
+          </tr>
+        `;
+      }).join('');
+    } else {
+      lbl.textContent = "Ninguno ajustado";
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-gray-400 py-6 text-sm font-medium">No se han registrado ajustes bajo este consecutivo en esta sesión.</td></tr>`;
+    }
 
-  // Refrescar la lista de conteo si está visible para marcar de inmediato los ítems ajustados
-  const mod = document.getElementById("select-modalidad")?.value;
-  if (mod === "completo") {
-    cargarTablaCompleta();
-  } else if (mod === "categoria") {
-    cargarTablaPorCategoria();
+    // Refrescar la lista de conteo si está visible para marcar de inmediato los ítems ajustados
+    const mod = document.getElementById("select-modalidad")?.value;
+    if (mod === "completo") {
+      cargarTablaCompleta();
+    } else if (mod === "categoria") {
+      cargarTablaPorCategoria();
+    }
+  } catch (err) {
+    console.error("Error al cargar ítems del documento:", err);
   }
 }
 

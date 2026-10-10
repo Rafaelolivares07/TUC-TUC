@@ -3,6 +3,7 @@ from ..db import get_db_connection
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
+import re
 
 try:
     from fpdf import FPDF
@@ -433,7 +434,8 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                  proveedor_nombre=None, iva_total=None,
                  documento_total=None, iva_pct=None, iva_valor=None,
                  producto_padre_id=None, presentacion_id=None,
-                 metodo_pago=None, tipo_documento_id=None, valor_total=None):
+                 metodo_pago=None, tipo_documento_id=None, valor_total=None,
+                 asiento_inventario_id=None, asiento_contrapartida_id=None):
     """Movimiento directo sobre un producto, sin pasar por tarjeta estándar."""
     signo  = Decimal('1') if tipo == 'entrada' else Decimal('-1')
     cantidad = Decimal(str(cantidad))
@@ -496,15 +498,17 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         elif tipo_documento_id and s.upper().startswith('AJUSTE_INV-'):
             num_puro = s[len('AJUSTE_INV'):].lstrip('-').strip()
 
-    conn.execute("""
+    mov_res = conn.execute("""
         INSERT INTO movimientos_inventario
             (negocio_id, producto_id, nombre_producto, tipo, motivo,
              cantidad, stock_anterior, stock_nuevo, registrado_por, notas,
              valor_unitario, valor_total, costo_und, referencia_id, referencia_tipo,
              tipo_documento, documento_numero, numero_documento, documento_fecha, proveedor_id,
              proveedor_nombre, iva_total, documento_total, iva_pct, iva_valor,
-             producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id, bodega)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+             producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id, bodega,
+             asiento_inventario_id, asiento_contrapartida_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        RETURNING id
     """, (
         negocio_id, producto_id,
         nombre_prod['nombre'] if nombre_prod else '',
@@ -521,8 +525,10 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         float(documento_total) if documento_total is not None else None,
         float(iva_pct) if iva_pct is not None else 0.0,
         float(iva_valor) if iva_valor is not None else 0.0,
-        producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id, bodega
-    ))
+        producto_padre_id, presentacion_id, metodo_pago, tipo_documento_id, bodega,
+        asiento_inventario_id, asiento_contrapartida_id
+    )).fetchone()
+    mov_id = mov_res['id'] if mov_res else None
 
     if saldo:
         conn.execute("""
@@ -543,6 +549,7 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         UPDATE productos SET costo=%s WHERE id=%s AND negocio_id=%s
     """, (float(costo_nuevo), producto_id, negocio_id))
     _sync_precio(conn, negocio_id, producto_id)
+    return mov_id
 
 
 
@@ -1291,11 +1298,52 @@ def api_inventario_productos(negocio_id):
         if not bodega_param:
             bodega_param = session.get('centro_utilidad_id') or 1
             
+        sql_costo_fallback = """
+            COALESCE(
+                NULLIF(s.costo_und, 0),
+                NULLIF(p.costo, 0),
+                (
+                    SELECT COALESCE(NULLIF(m.costo_und, 0), NULLIF(m.valor_unitario, 0))
+                    FROM movimientos_inventario m
+                    WHERE m.negocio_id = p.negocio_id AND m.producto_id = p.id
+                      AND (m.costo_und > 0 OR m.valor_unitario > 0)
+                    ORDER BY COALESCE(m.documento_fecha, m.created_at::date) DESC, m.id DESC
+                    LIMIT 1
+                ),
+                (
+                    SELECT CASE WHEN c.unidades_item > 0 THEN c.precio / c.unidades_item ELSE c.precio END
+                    FROM cotizaciones_compras c
+                    WHERE c.negocio_id = p.negocio_id AND c.item_id = p.id
+                      AND c.precio > 0
+                    ORDER BY COALESCE(c.fecha_cotizacion, c.created_at::date) DESC, c.id DESC
+                    LIMIT 1
+                ),
+                0
+            )
+        """
+        sql_costo_origen = """
+            CASE
+                WHEN COALESCE(s.costo_und, 0) > 0 OR COALESCE(p.costo, 0) > 0 THEN 'actual'
+                WHEN (
+                    SELECT 1 FROM movimientos_inventario m
+                    WHERE m.negocio_id = p.negocio_id AND m.producto_id = p.id AND (m.costo_und > 0 OR m.valor_unitario > 0)
+                    LIMIT 1
+                ) IS NOT NULL THEN 'historico_inventario'
+                WHEN (
+                    SELECT 1 FROM cotizaciones_compras c
+                    WHERE c.negocio_id = p.negocio_id AND c.item_id = p.id AND c.precio > 0
+                    LIMIT 1
+                ) IS NOT NULL THEN 'cotizacion'
+                ELSE 'sin_costo'
+            END
+        """
+
         es_consolidado = str(bodega_param).lower() in ('consolidado', 'todas', 'all')
         if es_consolidado:
             rows = conn.execute(f"""
                 SELECT p.id, p.nombre, p.categoria, p.precio,
-                       COALESCE(s.costo_und, p.costo) AS costo,
+                       {sql_costo_fallback} AS costo,
+                       {sql_costo_origen} AS costo_origen,
                        p.codigo_barra, p.iva_pct, p.disponible, p.orden,
                        COALESCE(s.stock, 0) AS stock
                 FROM productos p
@@ -1316,7 +1364,8 @@ def api_inventario_productos(negocio_id):
                 bodega_id = 1
             rows = conn.execute(f"""
                 SELECT p.id, p.nombre, p.categoria, p.precio,
-                       COALESCE(s.costo_und, p.costo) AS costo,
+                       {sql_costo_fallback} AS costo,
+                       {sql_costo_origen} AS costo_origen,
                        p.codigo_barra, p.iva_pct, p.disponible, p.orden,
                        COALESCE(s.stock, 0) AS stock
                 FROM productos p
@@ -1849,8 +1898,23 @@ def api_inventario_kardex(producto_id):
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             LEFT JOIN presentaciones pres ON pres.id = m.presentacion_id
             WHERE m.producto_id = %s {filtro_bodega_sql}
-            ORDER BY COALESCE(m.documento_fecha, m.created_at::date) DESC, m.created_at DESC, m.id DESC LIMIT 300
+            ORDER BY COALESCE(m.documento_fecha, m.created_at::date) ASC, m.created_at ASC, m.id ASC
         """, tuple(params_kardex)).fetchall()
+
+        movimientos_con_saldo = []
+        saldo_acumulado = Decimal('0')
+        for r in rows:
+            m_dict = dict(r)
+            cant = Decimal(str(m_dict.get('cantidad') or 0))
+            if m_dict.get('tipo') == 'entrada':
+                saldo_acumulado += cant
+            elif m_dict.get('tipo') == 'salida':
+                saldo_acumulado -= cant
+            m_dict['saldo_calculado'] = float(saldo_acumulado)
+            movimientos_con_saldo.append(m_dict)
+
+        # Invertir para mostrar los más recientes arriba en la tabla interactiva
+        movimientos_ui = list(reversed(movimientos_con_saldo))[:300]
 
         if not es_consolidado_k:
             try:
@@ -1897,7 +1961,7 @@ def api_inventario_kardex(producto_id):
 
         return jsonify({
             'ok': True, 
-            'movimientos': [dict(r) for r in rows],
+            'movimientos': movimientos_ui,
             'costo_actual': costo_actual,
             'stock_actual': stock_actual,
             'valor_existencia': valor_existencia,
@@ -1968,8 +2032,21 @@ def api_inventario_kardex_pdf(producto_id):
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             LEFT JOIN presentaciones pres ON pres.id = m.presentacion_id
             WHERE m.producto_id = %s {filtro_bodega_sql}
-            ORDER BY COALESCE(m.documento_fecha, m.created_at::date), m.created_at, m.id
+            ORDER BY COALESCE(m.documento_fecha, m.created_at::date) ASC, m.created_at ASC, m.id ASC
         """, tuple(params_kardex)).fetchall()
+
+        movimientos_pdf = []
+        saldo_acumulado_pdf = Decimal('0')
+        for r in rows:
+            m_dict = dict(r)
+            cant = Decimal(str(m_dict.get('cantidad') or 0))
+            if m_dict.get('tipo') == 'entrada':
+                saldo_acumulado_pdf += cant
+            elif m_dict.get('tipo') == 'salida':
+                saldo_acumulado_pdf -= cant
+            m_dict['saldo_calculado'] = float(saldo_acumulado_pdf)
+            m_dict['stock_nuevo'] = float(saldo_acumulado_pdf)
+            movimientos_pdf.append(m_dict)
 
         if not es_consolidado_k:
             try:
@@ -2667,8 +2744,13 @@ def api_reparar_costos_venta(negocio_id):
                         FROM pedido_items pi
                         JOIN pedidos p ON p.id = pi.pedido_id
                         WHERE p.negocio_id = %s AND pi.producto_id = %s
-                          AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
-                    """, (negocio_id, ppid, consecutive, doc_num, ref_id_int)).fetchone()
+                          AND (
+                              p.numero_documento = %s 
+                              OR p.numero_documento = %s 
+                              OR SPLIT_PART(p.numero_documento, '-', 2) = %s 
+                              OR p.id = %s
+                          )
+                    """, (negocio_id, ppid, doc_num, consecutive, consecutive, ref_id_int)).fetchone()
                     qty = float(qty_row['cant_vendida']) if (qty_row and qty_row['cant_vendida'] is not None) else 0.0
                     costo_total_pi = float(qty_row['costo_total_ped']) if (qty_row and qty_row['costo_total_ped'] is not None) else 0.0
                     pi_id = qty_row['max_pi_id'] if (qty_row and qty_row['max_pi_id']) else None
@@ -2679,9 +2761,14 @@ def api_reparar_costos_venta(negocio_id):
                         FROM pedido_items pi
                         JOIN pedidos p ON p.id = pi.pedido_id
                         WHERE p.negocio_id = %s AND pi.producto_id = %s
-                          AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
+                          AND (
+                              p.numero_documento = %s 
+                              OR p.numero_documento = %s 
+                              OR SPLIT_PART(p.numero_documento, '-', 2) = %s 
+                              OR p.id = %s
+                          )
                         ORDER BY pi.id
-                    """, (negocio_id, ppid, consecutive, doc_num, ref_id_int)).fetchall()
+                    """, (negocio_id, ppid, doc_num, consecutive, consecutive, ref_id_int)).fetchall()
 
                     lineas_detalle = []
                     for li in lineas_pi:
@@ -2697,7 +2784,11 @@ def api_reparar_costos_venta(negocio_id):
                         SELECT SUM(monto) AS total_cogs, ARRAY_AGG(id) AS ids
                         FROM movimientos_contables
                         WHERE negocio_id = %s
-                          AND (numero_documento = %s OR numero_documento = %s)
+                          AND (
+                              numero_documento = %s 
+                              OR numero_documento = %s 
+                              OR SPLIT_PART(numero_documento, '-', 2) = %s
+                          )
                           AND (
                               REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
                               OR tipo_documento ILIKE '%%VENTA%%'
@@ -2715,7 +2806,7 @@ def api_reparar_costos_venta(negocio_id):
                                   )
                               )
                           )
-                    """, (negocio_id, consecutive, doc_num, td_code, ppid, ppid, padre_nombre, padre_nombre, padre_nombre)).fetchone()
+                    """, (negocio_id, doc_num, consecutive, consecutive, td_code, ppid, ppid, padre_nombre, padre_nombre, padre_nombre)).fetchone()
                     cogs_monto = float(cogs_row['total_cogs']) if (cogs_row and cogs_row['total_cogs'] is not None) else 0.0
                     cogs_ids = list(cogs_row['ids']) if (cogs_row and cogs_row['ids']) else []
                     
@@ -2729,7 +2820,11 @@ def api_reparar_costos_venta(negocio_id):
                         SELECT id, monto, cuenta, concepto, producto_id, producto_padre_id
                         FROM movimientos_contables
                         WHERE negocio_id = %s
-                          AND (numero_documento = %s OR numero_documento = %s)
+                          AND (
+                              numero_documento = %s 
+                              OR numero_documento = %s 
+                              OR SPLIT_PART(numero_documento, '-', 2) = %s
+                          )
                           AND (
                               REPLACE(UPPER(tipo_documento), '_', ' ') = REPLACE(UPPER(%s), '_', ' ')
                               OR tipo_documento ILIKE '%%VENTA%%'
@@ -2740,7 +2835,7 @@ def api_reparar_costos_venta(negocio_id):
                           AND UPPER(concepto) NOT LIKE '%%COSTO%%'
                           AND (producto_padre_id = %s OR producto_padre_id IS NULL)
                         ORDER BY id
-                    """, (negocio_id, consecutive, doc_num, td_code, ppid)).fetchall()
+                    """, (negocio_id, doc_num, consecutive, consecutive, td_code, ppid)).fetchall()
                 # Emparejamiento inteligente 1 a 1 de insumos de Kardex con asientos 14*
                 matched_cids = set()
                 contras_list = []
@@ -2824,7 +2919,7 @@ def api_reparar_costos_venta(negocio_id):
                         'diferencia': dif_cogs,
                     },
                     'contrapartidas': contras_list,
-                    'tiene_diferencia': abs(dif_pi) > 0.01 or abs(dif_cogs) > 0.01,
+                    'tiene_diferencia': round(abs(dif_pi), 2) > 0.50 or round(abs(dif_cogs), 2) > 0.05,
                     'num_lineas': len(lineas_detalle),
                     'lineas_detalle': lineas_detalle,
                 })
@@ -2872,12 +2967,26 @@ def api_reparar_costos_venta(negocio_id):
                                 conn.execute(f"DELETE FROM movimientos_contables WHERE id IN ({placeholders})", ids_borrar)
                             cambios_aplicados += 1
                     else:
-                        if r['pedido_item']['id'] and abs(r['pedido_item']['diferencia']) > 0.01:
-                            nuevo_costo_und = r['costo_real_kardex'] / cant if cant > 0 else 0
-                            conn.execute(
-                                "UPDATE pedido_items SET costo_unitario = %s WHERE id = %s",
-                                (nuevo_costo_und, r['pedido_item']['id'])
-                            )
+                        if cant > 0 and abs(r['pedido_item']['diferencia']) > 0.01:
+                            nuevo_costo_und = round(r['costo_real_kardex'] / cant, 2)
+                            if r['pedido_item']['id']:
+                                conn.execute("UPDATE pedido_items SET costo_unitario = %s WHERE id = %s", (nuevo_costo_und, r['pedido_item']['id']))
+                            conn.execute("""
+                                UPDATE pedido_items
+                                SET costo_unitario = %s
+                                WHERE id IN (
+                                    SELECT pi.id
+                                    FROM pedido_items pi
+                                    JOIN pedidos p ON p.id = pi.pedido_id
+                                    WHERE p.negocio_id = %s AND pi.producto_id = %s
+                                      AND (
+                                          p.numero_documento = %s 
+                                          OR p.numero_documento = %s 
+                                          OR SPLIT_PART(p.numero_documento, '-', 2) = %s 
+                                          OR p.id::text = %s
+                                      )
+                                )
+                            """, (nuevo_costo_und, negocio_id, prod_res['producto_padre_id'], r['documento_numero'], consecutive_r, consecutive_r, consecutive_r))
                             cambios_aplicados += 1
                         if r['cogs_contable']['ids'] and abs(r['cogs_contable']['diferencia']) > 0.01:
                             ids_61 = r['cogs_contable']['ids']
@@ -4542,8 +4651,19 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
             b_set = {1}
         bodegas_a_procesar = sorted(b_set)
 
+    prod_row_meta = conn.execute("SELECT id, nombre, costo FROM productos WHERE id = %s", (producto_id,)).fetchone()
+    prod_nombre = prod_row_meta['nombre'] if prod_row_meta else f"ID {producto_id}"
+    costo_anterior_meta = float(prod_row_meta['costo'] or 0.0) if prod_row_meta else 0.0
+
     costos_bodegas = {}
     stocks_bodegas = {}
+
+    tot_movs_proc = 0
+    tot_movs_ajust = 0
+    tot_as14_ajust = 0
+    tot_ascp_ajust = 0
+    tot_ped_ajust = 0
+    cambios_detalle = []
 
     for b_id in bodegas_a_procesar:
         if b_id == 1:
@@ -4552,7 +4672,9 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
             where_b = f"AND bodega = {b_id}"
 
         movs = conn.execute(f"""
-            SELECT id, tipo, cantidad, valor_unitario
+            SELECT id, tipo, cantidad, valor_unitario, valor_total, costo_und,
+                   asiento_inventario_id, asiento_contrapartida_id, documento_numero,
+                   tipo_documento, producto_padre_id
             FROM movimientos_inventario
             WHERE negocio_id = %s AND producto_id = %s {where_b}
             ORDER BY COALESCE(documento_fecha, created_at::date) ASC, created_at ASC, id ASC
@@ -4563,6 +4685,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
         costo_und = Decimal('0')
 
         for m in movs:
+            tot_movs_proc += 1
             cant_m = Decimal(str(m['cantidad']))
             signo = Decimal('1') if m['tipo'] == 'entrada' else Decimal('-1')
             stock_ant = stock
@@ -4580,8 +4703,25 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
 
             # Para salidas, el valor total y valor unitario del movimiento se valoran al costo promedio del inventario
             costo_linea = vu if (m['tipo'] == 'entrada' and vu is not None) else costo_und
-            valor_total = abs(cant_m * (costo_linea or Decimal('0')))
+            valor_total_dec = abs(cant_m * (costo_linea or Decimal('0'))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            valor_total = float(valor_total_dec)
             vu_guardar = float(vu) if (m['tipo'] == 'entrada' and vu is not None) else (float(costo_und) if costo_und is not None else None)
+
+            val_tot_ant = Decimal(str(m['valor_total'] or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            dif_total = valor_total_dec - val_tot_ant
+            hubo_cambio_mov = abs(dif_total) > Decimal('0.005') or abs(Decimal(str(m['costo_und'] or 0)) - (costo_linea or Decimal('0'))) > Decimal('0.005')
+
+            if hubo_cambio_mov:
+                tot_movs_ajust += 1
+                if len(cambios_detalle) < 10:
+                    cambios_detalle.append({
+                        'mov_id': m['id'],
+                        'doc': f"{m['tipo_documento'] or 'Doc'} #{m['documento_numero'] or m['id']}",
+                        'cant': float(cant_m),
+                        'costo_ant': float(val_tot_ant),
+                        'costo_nuevo': valor_total,
+                        'dif': float(dif_total)
+                    })
 
             conn.execute("""
                 UPDATE movimientos_inventario
@@ -4592,7 +4732,117 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                     valor_total = %s,
                     bodega = %s
                 WHERE id = %s
-            """, (float(stock_ant), float(stock_nuevo), float(costo_und), vu_guardar, float(valor_total), b_id, m['id']))
+            """, (float(stock_ant), float(stock_nuevo), float(costo_und), vu_guardar, valor_total, b_id, m['id']))
+
+            # --- SINCRONIZACIÓN CONTABLE ATÓMICA EN TIEMPO REAL ---
+            as_inv_id = m.get('asiento_inventario_id')
+            as_cp_id = m.get('asiento_contrapartida_id')
+            doc_num = m.get('documento_numero')
+
+            # Autocuración 1 a 1 (Cuenta 14*) si venía en NULL
+            if not as_inv_id and doc_num:
+                mc_inv = conn.execute("""
+                    SELECT id FROM movimientos_contables
+                    WHERE negocio_id = %s AND cuenta LIKE '14%%'
+                      AND (numero_documento = %s OR numero_documento = SPLIT_PART(%s, '-', 2) OR SPLIT_PART(numero_documento, '-', 2) = %s)
+                      AND (producto_id = %s OR (producto_padre_id IS NOT NULL AND producto_padre_id = %s))
+                    ORDER BY id ASC LIMIT 1
+                """, (negocio_id, str(doc_num), str(doc_num), str(doc_num), producto_id, m.get('producto_padre_id'))).fetchone()
+                if mc_inv:
+                    as_inv_id = mc_inv['id']
+                    conn.execute("UPDATE movimientos_inventario SET asiento_inventario_id = %s WHERE id = %s", (as_inv_id, m['id']))
+
+            if as_inv_id:
+                tot_as14_ajust += 1
+                conn.execute("UPDATE movimientos_contables SET monto = %s WHERE id = %s", (valor_total, as_inv_id))
+
+            # Autocuración N a 1 (Contrapartida 61*/53*/etc) si venía en NULL
+            if not as_cp_id and doc_num:
+                padre_id = m.get('producto_padre_id')
+                mc_cp = conn.execute("""
+                    SELECT id FROM movimientos_contables
+                    WHERE negocio_id = %s AND (LEFT(cuenta, 2) IN ('61', '53', '42', '22', '23', '11'))
+                      AND (numero_documento = %s OR numero_documento = SPLIT_PART(%s, '-', 2) OR SPLIT_PART(numero_documento, '-', 2) = %s)
+                      AND (
+                          (producto_padre_id IS NOT NULL AND (producto_padre_id = %s OR producto_id = %s))
+                          OR (producto_padre_id IS NULL AND producto_id = %s)
+                      )
+                    ORDER BY id ASC LIMIT 1
+                """, (negocio_id, str(doc_num), str(doc_num), str(doc_num), padre_id, padre_id, producto_id)).fetchone()
+                if mc_cp:
+                    as_cp_id = mc_cp['id']
+                    conn.execute("UPDATE movimientos_inventario SET asiento_contrapartida_id = %s WHERE id = %s", (as_cp_id, m['id']))
+
+            # Si aún no se encontró contrapartida pero existe as_inv_id, buscar contrapartida dentro del mismo comprobante
+            if as_inv_id and not as_cp_id:
+                mc_cp2 = conn.execute("""
+                    SELECT id FROM movimientos_contables
+                    WHERE negocio_id = %s 
+                      AND comprobante_id = (SELECT comprobante_id FROM movimientos_contables WHERE id = %s)
+                      AND id != %s
+                    ORDER BY monto DESC LIMIT 1
+                """, (negocio_id, as_inv_id, as_inv_id)).fetchone()
+                if mc_cp2:
+                    as_cp_id = mc_cp2['id']
+                    conn.execute("UPDATE movimientos_inventario SET asiento_contrapartida_id = %s WHERE id = %s", (as_cp_id, m['id']))
+
+            if as_cp_id and abs(dif_total) > Decimal('0.005'):
+                tot_ascp_ajust += 1
+                conn.execute("UPDATE movimientos_contables SET monto = round((monto + %s)::numeric, 2) WHERE id = %s", (float(dif_total), as_cp_id))
+
+            # --- SINCRONIZACIÓN CON PEDIDOS (pedido_items.costo_unitario) ---
+            if m['tipo'] == 'salida' and doc_num:
+                consecutive = str(doc_num).split('-')[-1].strip() if '-' in str(doc_num) else str(doc_num)
+                ref_id_int = _int_o_none(m.get('referencia_id'))
+                padre_id = m.get('producto_padre_id')
+                
+                if padre_id:
+                    # Ensamble: Calcular costo total del plato en este documento
+                    tot_plato_row = conn.execute("""
+                        SELECT SUM(valor_total)
+                        FROM movimientos_inventario
+                        WHERE negocio_id = %s AND producto_padre_id = %s
+                          AND (documento_numero = %s OR documento_numero = %s)
+                    """, (negocio_id, padre_id, str(doc_num), str(consecutive))).fetchone()
+                    tot_kardex_padre = float(tot_plato_row[0]) if (tot_plato_row and tot_plato_row[0] is not None) else 0.0
+
+                    qty_row = conn.execute("""
+                        SELECT SUM(pi.cantidad) AS cant_vendida
+                        FROM pedido_items pi
+                        JOIN pedidos p ON p.id = pi.pedido_id
+                        WHERE p.negocio_id = %s AND pi.producto_id = %s
+                          AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
+                    """, (negocio_id, padre_id, str(consecutive), str(doc_num), ref_id_int)).fetchone()
+                    cant_v = float(qty_row['cant_vendida']) if (qty_row and qty_row['cant_vendida']) else 0.0
+
+                    if cant_v > 0 and tot_kardex_padre > 0:
+                        c_und_pi = tot_kardex_padre / cant_v
+                        tot_ped_ajust += 1
+                        conn.execute("""
+                            UPDATE pedido_items
+                            SET costo_unitario = %s
+                            WHERE id IN (
+                                SELECT pi.id
+                                FROM pedido_items pi
+                                JOIN pedidos p ON p.id = pi.pedido_id
+                                WHERE p.negocio_id = %s AND pi.producto_id = %s
+                                  AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
+                            )
+                        """, (c_und_pi, negocio_id, padre_id, str(consecutive), str(doc_num), ref_id_int))
+                else:
+                    # Producto simple vendido directamente
+                    tot_ped_ajust += 1
+                    conn.execute("""
+                        UPDATE pedido_items
+                        SET costo_unitario = %s
+                        WHERE id IN (
+                            SELECT pi.id
+                            FROM pedido_items pi
+                            JOIN pedidos p ON p.id = pi.pedido_id
+                            WHERE p.negocio_id = %s AND pi.producto_id = %s
+                              AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
+                        )
+                    """, (float(costo_und), negocio_id, producto_id, str(consecutive), str(doc_num), ref_id_int))
 
             stock = stock_nuevo
 
@@ -4639,6 +4889,21 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
             SET costo = %s
             WHERE id = %s AND negocio_id = %s
         """, (costo_catalogo, producto_id, negocio_id))
+
+    return {
+        'producto_id': producto_id,
+        'producto_nombre': prod_nombre,
+        'movimientos_procesados': tot_movs_proc,
+        'movimientos_ajustados': tot_movs_ajust,
+        'asientos_14_ajustados': tot_as14_ajust,
+        'asientos_cp_ajustados': tot_ascp_ajust,
+        'pedidos_ajustados': tot_ped_ajust,
+        'stock_final': float(total_stk),
+        'costo_final': float(costo_catalogo),
+        'costo_anterior': costo_anterior_meta,
+        'valor_existencia': float(total_val),
+        'cambios_detalle': cambios_detalle
+    }
 
 
 def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
@@ -4779,12 +5044,19 @@ def api_auditoria_recosteo(negocio_id):
             producto_ids = sorted({int(x) for x in ids_raw.split(',') if x.strip()})
         else:
             rows = conn.execute("""
-                SELECT DISTINCT producto_id
-                FROM movimientos_inventario
-                WHERE negocio_id = %s
-                ORDER BY producto_id
-            """, (negocio_id,)).fetchall()
-            producto_ids = [r['producto_id'] for r in rows]
+                SELECT DISTINCT id FROM (
+                    SELECT producto_id as id FROM movimientos_inventario WHERE negocio_id = %s
+                    UNION
+                    SELECT producto_padre_id as id FROM movimientos_inventario WHERE negocio_id = %s AND producto_padre_id IS NOT NULL
+                    UNION
+                    SELECT producto_id as id FROM tarjeta_estandar WHERE negocio_id = %s
+                    UNION
+                    SELECT id FROM productos WHERE negocio_id = %s AND disponible = TRUE
+                ) u
+                WHERE id IS NOT NULL
+                ORDER BY id
+            """, (negocio_id, negocio_id, negocio_id, negocio_id)).fetchall()
+            producto_ids = [r['id'] for r in rows]
 
         productos_auditados = []
         for producto_id in producto_ids:
@@ -4830,26 +5102,176 @@ def api_ejecutar_recosteo(negocio_id):
 
         if data.get('todos') or not producto_ids:
             rows = conn.execute("""
-                SELECT DISTINCT producto_id
-                FROM movimientos_inventario
-                WHERE negocio_id = %s
-            """, (negocio_id,)).fetchall()
-            producto_ids = [r['producto_id'] for r in rows]
+                SELECT DISTINCT id FROM (
+                    SELECT producto_id as id FROM movimientos_inventario WHERE negocio_id = %s
+                    UNION
+                    SELECT producto_padre_id as id FROM movimientos_inventario WHERE negocio_id = %s AND producto_padre_id IS NOT NULL
+                    UNION
+                    SELECT producto_id as id FROM tarjeta_estandar WHERE negocio_id = %s
+                    UNION
+                    SELECT id FROM productos WHERE negocio_id = %s AND disponible = TRUE
+                ) u
+                WHERE id IS NOT NULL
+                ORDER BY id
+            """, (negocio_id, negocio_id, negocio_id, negocio_id)).fetchall()
+            producto_ids = [r['id'] for r in rows]
         producto_ids = sorted({int(x) for x in producto_ids})
 
+        detalles = []
         for producto_id in producto_ids:
             if not conn.execute(
                 "SELECT 1 FROM productos WHERE id = %s AND negocio_id = %s",
                 (producto_id, negocio_id)
             ).fetchone():
                 return jsonify({'ok': False, 'error': f'Producto no pertenece al negocio: {producto_id}'}), 400
-            _recostear_producto(conn, negocio_id, producto_id, bodega=bodega_id)
+            res_p = _recostear_producto(conn, negocio_id, producto_id, bodega=bodega_id)
+            if res_p:
+                detalles.append(res_p)
 
         conn.commit()
+
+        # --- FASE 2: Sincronizar Lotes de Producción (Entradas = SUM(Insumos Salidas)) ---
+        placeholders_p = ','.join(['%s'] * len(producto_ids))
+        producciones = conn.execute(f"""
+            SELECT mi.id, mi.producto_id, mi.documento_numero, mi.cantidad, mi.referencia_id, mi.asiento_inventario_id
+            FROM movimientos_inventario mi
+            WHERE mi.negocio_id = %s AND mi.tipo = 'entrada' AND mi.referencia_tipo = 'produccion'
+              AND mi.producto_id IN ({placeholders_p})
+            ORDER BY mi.id ASC
+        """, [negocio_id] + producto_ids).fetchall()
+
+        prods_recostear_extra = set()
+        for prod_ent in producciones:
+            p_ent_id = prod_ent['id']
+            pid = prod_ent['producto_id']
+            doc_num = prod_ent['documento_numero']
+            ref_id = prod_ent['referencia_id']
+            cant_el = float(prod_ent['cantidad'] or 0)
+            
+            comps = conn.execute("""
+                SELECT SUM(COALESCE(valor_total, cantidad * costo_und, 0)) as total_comps
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND tipo = 'salida'
+                  AND (
+                      (referencia_id IS NOT NULL AND referencia_id = %s)
+                      OR (producto_padre_id = %s AND documento_numero = %s)
+                  )
+            """, (negocio_id, ref_id, pid, doc_num)).fetchone()
+            
+            tot_c = float(comps['total_comps'] or 0) if comps else 0.0
+            if cant_el > 0 and tot_c > 0:
+                c_und = tot_c / cant_el
+                conn.execute("""
+                    UPDATE movimientos_inventario
+                    SET costo_und = %s, valor_total = %s, valor_unitario = %s
+                    WHERE id = %s
+                """, (c_und, tot_c, c_und, p_ent_id))
+                
+                as_inv_id = prod_ent['asiento_inventario_id']
+                if as_inv_id:
+                    conn.execute("UPDATE movimientos_contables SET monto = %s WHERE id = %s", (tot_c, as_inv_id))
+                else:
+                    consec = normalizar_numero(doc_num)
+                    conn.execute("""
+                        UPDATE movimientos_contables
+                        SET monto = %s
+                        WHERE negocio_id = %s AND (numero_documento = %s OR numero_documento = %s)
+                          AND LEFT(cuenta, 2) = '14' AND tipo = 'debito'
+                          AND (tipo_documento ILIKE '%%PROD%%' OR tipo_documento ILIKE '%%ENSAMBLE%%' OR tipo_documento ILIKE '%%REPORTE%%')
+                          AND (producto_id = %s OR producto_padre_id = %s)
+                    """, (tot_c, negocio_id, str(doc_num), consec, pid, pid))
+                prods_recostear_extra.add(pid)
+
+        conn.commit()
+
+        # Re-recostear recetas que hayan cambiado
+        for extra_pid in prods_recostear_extra:
+            _recostear_producto(conn, negocio_id, extra_pid, bodega=bodega_id)
+        conn.commit()
+
+        # --- FASE 3: Sincronizar Ventas de Ensamble con Contabilidad (61*) y Pedidos POS ---
+        ventas = conn.execute(f"""
+            SELECT mi.producto_padre_id, mi.documento_numero,
+                   SUM(COALESCE(mi.valor_total, mi.cantidad * mi.costo_und, 0)) as total_kardex_plato
+            FROM movimientos_inventario mi
+            WHERE mi.negocio_id = %s AND mi.tipo = 'salida' AND mi.producto_padre_id IS NOT NULL
+              AND (mi.producto_id IN ({placeholders_p}) OR mi.producto_padre_id IN ({placeholders_p}))
+            GROUP BY mi.producto_padre_id, mi.documento_numero
+        """, [negocio_id] + producto_ids + producto_ids).fetchall()
+
+        ventas_sincronizadas = 0
+        pedidos_sincronizados = 0
+        for v in ventas:
+            padre_id = v['producto_padre_id']
+            doc_num = str(v['documento_numero'])
+            consec = normalizar_numero(doc_num)
+            total_k = round(float(v['total_kardex_plato']), 2)
+
+            # Actualizar cuenta 61* (COGS)
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET monto = %s
+                WHERE id IN (
+                    SELECT id FROM movimientos_contables
+                    WHERE negocio_id = %s
+                      AND (numero_documento = %s OR numero_documento = %s OR numero_documento = SPLIT_PART(%s, '-', 2))
+                      AND LEFT(cuenta, 2) = '61'
+                      AND (producto_padre_id = %s OR producto_id = %s)
+                    ORDER BY id ASC
+                    LIMIT 1
+                )
+            """, (total_k, negocio_id, doc_num, consec, doc_num, padre_id, padre_id))
+            ventas_sincronizadas += 1
+
+            # Actualizar pedido_items
+            qty_row = conn.execute("""
+                SELECT SUM(pi.cantidad) AS cant_vendida
+                FROM pedido_items pi
+                JOIN pedidos p ON p.id = pi.pedido_id
+                WHERE p.negocio_id = %s AND pi.producto_id = %s
+                  AND (p.numero_documento = %s OR p.numero_documento = %s OR p.numero_documento = SPLIT_PART(%s, '-', 2) OR p.id::text = %s)
+            """, (negocio_id, padre_id, doc_num, consec, doc_num, consec)).fetchone()
+            
+            cant_v = float(qty_row['cant_vendida']) if (qty_row and qty_row['cant_vendida']) else 0.0
+            if cant_v > 0 and total_k > 0:
+                c_und_pi = round(total_k / cant_v, 2)
+                conn.execute("""
+                    UPDATE pedido_items
+                    SET costo_unitario = %s
+                    WHERE id IN (
+                        SELECT pi.id
+                        FROM pedido_items pi
+                        JOIN pedidos p ON p.id = pi.pedido_id
+                        WHERE p.negocio_id = %s AND pi.producto_id = %s
+                          AND (p.numero_documento = %s OR p.numero_documento = %s OR p.numero_documento = SPLIT_PART(%s, '-', 2) OR p.id::text = %s)
+                    )
+                """, (c_und_pi, negocio_id, padre_id, doc_num, consec, doc_num, consec))
+                pedidos_sincronizados += 1
+
+        conn.commit()
+
+        # Consolidar métricas para el modal de la UI
+        total_movs_proc = sum(d.get('movimientos_procesados', 0) for d in detalles)
+        total_movs_ajust = sum(d.get('movimientos_ajustados', 0) for d in detalles)
+        total_as14 = sum(d.get('asientos_14_ajustados', 0) for d in detalles)
+        total_ascp = sum(d.get('asientos_cp_ajustados', 0) for d in detalles) + ventas_sincronizadas
+        total_ped = sum(d.get('pedidos_ajustados', 0) for d in detalles) + pedidos_sincronizados
+        prods_con_cambios = sum(1 for d in detalles if d.get('movimientos_ajustados', 0) > 0 or d.get('asientos_14_ajustados', 0) > 0 or d.get('pedidos_ajustados', 0) > 0)
+
         return jsonify({
             'ok': True,
             'productos_recosteados': len(producto_ids),
-            'auditoria': 'Ejecute la auditoría nuevamente para verificar resultados.'
+            'resumen': {
+                'total_productos': len(producto_ids),
+                'productos_con_cambios': prods_con_cambios,
+                'total_movimientos_procesados': total_movs_proc,
+                'total_movimientos_ajustados': total_movs_ajust,
+                'total_asientos_inv_ajustados': total_as14,
+                'total_asientos_cp_ajustados': total_ascp,
+                'total_pedidos_ajustados': total_ped,
+            },
+            'productos_detalle': detalles,
+            'auditoria': 'Recosteo y sincronización integral completados exitosamente.'
         })
     except (TypeError, ValueError):
         conn.rollback()
@@ -9069,13 +9491,40 @@ def _pdf_kardex_producto(nombre_negocio, nombre_producto, codigo_producto,
     pdf.set_text_color(40, 40, 40)
     ancho_tabla = sum(col_w)
     for m in movimientos:
-        doc = m['tipo_documento'] or ''
-        if m['documento_numero']:
-            doc = (doc + ' ' + str(m['documento_numero'])).strip()
-        prov = m['proveedor_nombre'] or ''
+        doc_tipo_raw = (m.get('tipo_documento') or '').strip()
+        doc_num_raw = str(m.get('documento_numero') or '').strip()
+        
+        import re
+        m_num = re.match(r'^[A-Za-z0-9_]+[-_](\d+)$', doc_num_raw)
+        clean_num = m_num.group(1) if m_num else doc_num_raw
+        
+        clean_type = re.sub(r'[_-]+', ' ', doc_tipo_raw).strip()
+        if not clean_type and re.match(r'^[A-Za-z_]+[-_]', doc_num_raw):
+            clean_type = re.sub(r'[_-]+', ' ', re.sub(r'[-_]\d+$', '', doc_num_raw)).strip()
+
+        if clean_type and clean_num:
+            if clean_type.lower().endswith(clean_num.lower()):
+                doc = clean_type.lower()
+            else:
+                doc = f"{clean_type.lower()} {clean_num}"
+        elif clean_type:
+            doc = clean_type.lower()
+        elif clean_num:
+            doc = clean_num
+        elif m.get('motivo') == 'ajuste' or m.get('tipo') == 'ajuste':
+            doc = 'ajuste de inventario'
+        else:
+            doc = ''
+
+        prov = m.get('proveedor_nombre') or ''
         if prov:
             doc = (doc + ' / ' + str(prov)).strip() if doc else str(prov)
-        origen = m['producto_padre_nombre'] or ''
+
+        origen = m.get('producto_padre_nombre') or ''
+        if not origen and (m.get('motivo') == 'ajuste' or m.get('tipo') == 'ajuste'):
+            is_ajuste_venta = ('factura' in doc_tipo_raw.lower()) or ('factura' in doc_num_raw.lower()) or ('caja' in (m.get('notas') or '').lower())
+            origen = 'Ajuste en venta' if is_ajuste_venta else 'Ajuste de inventario'
+
         cant = float(m['cantidad'] or 0)
         entrada = f"{cant:,.0f}" if m['tipo'] == 'entrada' else '-'
         salida = f"{cant:,.0f}" if m['tipo'] == 'salida' else '-'
@@ -9244,6 +9693,428 @@ def api_reporte_ventas_costos_pdf(negocio_id):
         resp = Response(bytes(pdf.output()), mimetype='application/pdf')
         filename = f"reporte_ventas_costos_{centro_info['codigo']}.pdf" if centro_info else "reporte_ventas_costos_consolidado.pdf"
         resp.headers['Content-Disposition'] = f'inline; filename={filename}'
+        return resp
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def _extraer_unidad_generica(nombre):
+    """Extrae de manera genérica la unidad de medida a partir de sufijos o palabras clave estándar."""
+    nom = (nombre or '').upper().strip()
+    if re.search(r'\b(GRS|GRAMOS|GR|G)\b', nom):
+        return 'Gr'
+    elif re.search(r'\b(ML|MILILITROS|CC)\b', nom):
+        return 'Ml'
+    elif re.search(r'\b(KG|KILOS|KILO)\b', nom):
+        return 'Kg'
+    elif re.search(r'\b(LT|LTS|LITROS|L)\b', nom):
+        return 'Lt'
+    elif re.search(r'\b(MLGR|MLGRS|MILIGRAMO|MILIGRAMOS|MICROLITRO|MICROLITROS)\b', nom):
+        return 'Mlgr'
+    elif re.search(r'\b(TAJADA|TAJADAS)\b', nom):
+        return 'Tajada'
+    elif re.search(r'\b(PORCION|PORCIONES)\b', nom):
+        return 'Porción'
+    return 'Und'
+
+
+def _query_reporte_costos_unitarios(conn, negocio_id):
+    # 1. Traer solo productos ACTIVOS (disponible IS TRUE)
+    prods = conn.execute("""
+        SELECT p.id, p.nombre, p.categoria, p.precio, p.codigo_barra,
+               COALESCE(s.costo_und, p.costo, 0) AS costo_base,
+               p.disponible
+        FROM productos p
+        LEFT JOIN (
+            SELECT producto_id, negocio_id, AVG(costo_und) as costo_und
+            FROM saldos_inventario
+            WHERE negocio_id = %s
+            GROUP BY producto_id, negocio_id
+        ) s ON s.producto_id = p.id
+        WHERE p.negocio_id = %s AND (p.disponible = TRUE OR p.disponible IS NULL)
+        ORDER BY p.nombre
+    """, (negocio_id, negocio_id)).fetchall()
+
+    # 2. Historial de compras con empaque y presentación de la base de datos
+    compras_rows = conn.execute("""
+        SELECT m.producto_id,
+               COALESCE(NULLIF(m.valor_unitario, 0), m.costo_und, 0) as valor_unitario,
+               COALESCE(m.costo_und, 0) as costo_und,
+               m.cantidad, m.valor_total,
+               COALESCE(pres.equivalencia, 1.0) as pres_equivalencia,
+               pres.nombre as pres_nombre,
+               m.proveedor_nombre, m.documento_fecha, m.documento_numero, m.id
+        FROM movimientos_inventario m
+        LEFT JOIN presentaciones pres ON pres.id = m.presentacion_id
+        WHERE m.negocio_id = %s AND m.tipo = 'entrada' AND (m.valor_unitario > 0 OR m.costo_und > 0)
+        ORDER BY m.producto_id, m.documento_fecha DESC, m.id DESC
+    """, (negocio_id,)).fetchall()
+
+    compras_by_prod = {}
+    for c in compras_rows:
+        pid = c['producto_id']
+        if pid not in compras_by_prod:
+            compras_by_prod[pid] = []
+        compras_by_prod[pid].append(c)
+
+    # 3. Relaciones de receta (tarjeta estándar)
+    te_rows = conn.execute("""
+        SELECT te.producto_id, te.componente_id, te.cantidad,
+               comp.nombre AS componente_nombre,
+               COALESCE(s.costo_und, comp.costo, 0) AS comp_costo
+        FROM tarjeta_estandar te
+        JOIN productos p ON p.id = te.producto_id AND (p.disponible = TRUE OR p.disponible IS NULL)
+        JOIN productos comp ON comp.id = te.componente_id
+        LEFT JOIN (
+            SELECT DISTINCT ON (producto_id, negocio_id) producto_id, negocio_id, costo_und
+            FROM saldos_inventario
+            ORDER BY producto_id, negocio_id, id DESC
+        ) s ON s.producto_id = te.componente_id AND s.negocio_id = p.negocio_id
+        WHERE p.negocio_id = %s
+        ORDER BY te.id ASC
+    """, (negocio_id,)).fetchall()
+
+    padres_con_receta = set(r['producto_id'] for r in te_rows)
+    componentes_usados = set(r['componente_id'] for r in te_rows)
+
+    recipe_costs = {}
+    for r in te_rows:
+        pid = r['producto_id']
+        c_cost = float(r['cantidad'] or 0) * float(r['comp_costo'] or 0)
+        recipe_costs[pid] = recipe_costs.get(pid, 0.0) + c_cost
+
+    # 4. Construcción genérica y dinámica de productos
+    items = []
+    for p in prods:
+        pid = p['id']
+        p_nom = p['nombre']
+        tiene_receta = pid in padres_con_receta
+        es_componente = pid in componentes_usados
+
+        unidad = _extraer_unidad_generica(p_nom)
+        costo_unitario_base = float(p['costo_base'])
+
+        # Revisar historial de compras para obtener presentación y factor comercial
+        c_list = compras_by_prod.get(pid, [])
+        first_comp = c_list[0] if c_list else None
+
+        if first_comp and first_comp['pres_nombre'] and float(first_comp['pres_equivalencia'] or 1.0) > 1.0:
+            empaque_label = first_comp['pres_nombre']
+            factor_empaque = float(first_comp['pres_equivalencia'])
+        else:
+            factor_empaque = 1.0
+            empaque_label = f"Unidad ({unidad})"
+
+        costo_empaque = costo_unitario_base * factor_empaque
+
+        # Clasificación por estructura de receta
+        if tiene_receta and es_componente:
+            tipo = 'intermedio'
+            tipo_label = 'Intermedio Producido'
+            costo_actual = recipe_costs.get(pid, costo_unitario_base)
+            costo_empaque = costo_actual
+            empaque_label = f"Batch Receta ({unidad})"
+        elif tiene_receta and not es_componente:
+            tipo = 'venta'
+            tipo_label = 'Plato de Venta'
+            costo_actual = recipe_costs.get(pid, costo_unitario_base)
+            costo_empaque = costo_actual
+            empaque_label = "Porción / Plato"
+        elif not tiene_receta and es_componente:
+            tipo = 'materia_prima'
+            tipo_label = 'Materia Prima'
+            costo_actual = costo_unitario_base
+        else:
+            if (p['precio'] or 0) > 0:
+                tipo = 'venta'
+                tipo_label = 'Plato / Venta Directa'
+                costo_actual = costo_unitario_base
+                empaque_label = "Porción / Plato"
+            else:
+                tipo = 'materia_prima'
+                tipo_label = 'Materia Prima'
+                costo_actual = costo_unitario_base
+
+        # Construir compras
+        def _build_comp_obj(c_row):
+            if not c_row: return None
+            u_cost = float(c_row['valor_unitario'])
+            eq = float(c_row['pres_equivalencia'] or 1.0)
+            emp_cost = u_cost * eq
+
+            return {
+                'costo': round(u_cost, 4),
+                'costo_empaque': round(emp_cost, 2),
+                'proveedor': c_row['proveedor_nombre'] or 'Proveedor Registrado',
+                'fecha': str(c_row['documento_fecha'])[:10] if c_row['documento_fecha'] else ''
+            }
+
+        ult_compra = _build_comp_obj(c_list[0]) if c_list else None
+
+        best_c = None
+        if c_list:
+            sorted_c = sorted(c_list, key=lambda x: float(x['valor_unitario']))
+            best_c = _build_comp_obj(sorted_c[0])
+
+        items.append({
+            'id': pid,
+            'nombre': p_nom,
+            'categoria': p['categoria'] or 'General',
+            'codigo': p['codigo_barra'] or '',
+            'unidad': unidad,
+            'factor_empaque': factor_empaque,
+            'empaque_label': empaque_label,
+            'costo_empaque': round(costo_empaque, 2),
+            'tipo': tipo,
+            'tipo_label': tipo_label,
+            'costo_actual': round(costo_actual, 4),
+            'ultima_compra': ult_compra if tipo == 'materia_prima' else None,
+            'mejor_compra': best_c if tipo == 'materia_prima' else None
+        })
+
+    tipo_order = {'materia_prima': 1, 'intermedio': 2, 'venta': 3}
+    items.sort(key=lambda x: (tipo_order.get(x['tipo'], 99), x['nombre']))
+
+    totales = {
+        'total': len(items),
+        'materias_primas': sum(1 for x in items if x['tipo'] == 'materia_prima'),
+        'intermedios': sum(1 for x in items if x['tipo'] == 'intermedio'),
+        'platos_venta': sum(1 for x in items if x['tipo'] == 'venta')
+    }
+
+    return {'totales': totales, 'productos': items}
+
+
+def _pdf_reporte_costos_unitarios(nombre_negocio, datos):
+    class CostosUnitariosPDF(FPDF):
+        def __init__(self, *args, **kwargs):
+            super().__init__(format='letter', unit='mm', *args, **kwargs)
+            self.set_auto_page_break(auto=True, margin=15)
+            self.alias_nb_pages()
+            self._negocio = nombre_negocio
+
+        def header(self):
+            # Línea superior de acento corporativo muy sutil (Slate 800)
+            self.set_draw_color(30, 41, 59)
+            self.set_line_width(0.8)
+            self.line(14, 10, 202, 10)
+            self.set_line_width(0.2)
+
+            # Nombre de la empresa
+            self.set_xy(14, 13)
+            self.set_font('Helvetica', 'B', 13)
+            self.set_text_color(15, 23, 42)
+            self.cell(110, 5.5, _pdf_sanitize(self._negocio).upper(), align='L')
+
+            # Título del Reporte
+            self.set_xy(126, 12.5)
+            self.set_font('Helvetica', 'B', 10.5)
+            self.set_text_color(15, 23, 42)
+            self.cell(76, 4.5, "REPORTE DE COSTOS UNITARIOS", align='R')
+
+            self.set_xy(126, 17.5)
+            self.set_font('Helvetica', '', 7.5)
+            self.set_text_color(100, 116, 139)
+            emision_str = f"Emision: {_timestamp_pdf()}"
+            self.cell(76, 3.5, _pdf_sanitize(emision_str), align='R')
+
+            # Subtítulo con resumen de totales
+            tot = datos.get('totales', {})
+            resumen_str = f"Total Catalogo Activo: {tot.get('total', 0)}  |  Materias Primas: {tot.get('materias_primas', 0)}  |  Intermedios: {tot.get('intermedios', 0)}  |  Platos Venta: {tot.get('platos_venta', 0)}"
+            self.set_xy(14, 19.5)
+            self.set_font('Helvetica', '', 8)
+            self.set_text_color(71, 85, 105)
+            self.cell(110, 4, _pdf_sanitize(resumen_str), align='L')
+
+            # Línea divisoria sutil
+            self.set_draw_color(226, 232, 240)
+            self.line(14, 26, 202, 26)
+            self.set_y(28)
+
+        def footer(self):
+            self.set_y(-12)
+            self.set_font('Helvetica', '', 7)
+            self.set_text_color(148, 163, 184)
+            self.cell(90, 4, "TUC TUC Inventarios  |  Matriz de Costos Unitarios y Empaques", align='L')
+            self.cell(98, 4, f"Pagina {self.page_no()} de {{nb}}", align='R')
+
+    pdf = CostosUnitariosPDF()
+    pdf.add_page()
+
+    grupos = [
+        ('materia_prima', 'MATERIAS PRIMAS / INSUMOS BASE'),
+        ('intermedio', 'PRODUCTOS INTERMEDIOS / PRODUCCION PROPIA'),
+        ('venta', 'PLATOS DE VENTA / ENSAMBLES')
+    ]
+
+    col_w = [52, 26, 34, 38, 38] # Total = 188 mm
+    aligns = ['L', 'R', 'L', 'L', 'L']
+
+    def _draw_table_header(p):
+        p.set_fill_color(248, 250, 252) # Slate 50
+        p.set_text_color(15, 23, 42)
+        p.set_font('Helvetica', 'B', 7.5)
+        p.set_draw_color(203, 213, 225)
+        headers = ['PRODUCTO / DESCRIPCION', 'COSTO RECETA', 'EMPAQUE / COMPRA', 'ULTIMA COMPRA', 'MEJOR COMPRA']
+        for i, h in enumerate(headers):
+            pad = " " if aligns[i] == 'L' else ""
+            p.cell(col_w[i], 6.0, pad + h, border='B', align=aligns[i], fill=True)
+        p.ln(6.0)
+
+    for g_key, g_title in grupos:
+        prods_grupo = [p for p in datos.get('productos', []) if p['tipo'] == g_key]
+        if not prods_grupo:
+            continue
+
+        if pdf.get_y() + 20 > 250:
+            pdf.add_page()
+
+        pdf.ln(3)
+        g_y = pdf.get_y()
+        pdf.set_draw_color(203, 213, 225)
+        pdf.line(14, g_y, 202, g_y)
+        
+        pdf.set_xy(14, g_y + 1)
+        pdf.set_font('Helvetica', 'B', 9.5)
+        pdf.set_text_color(15, 23, 42)
+        pdf.cell(188, 5.5, _pdf_sanitize(f"{g_title} ({len(prods_grupo)} productos)"), align='L')
+        pdf.ln(6.5)
+
+        _draw_table_header(pdf)
+
+        for idx, prod in enumerate(prods_grupo):
+            c_act = float(prod.get('costo_actual') or 0)
+            c_act_str = f"${c_act:,.2f}/{prod.get('unidad', 'Und')}" if c_act >= 1 else f"${c_act:,.4f}/{prod.get('unidad', 'Und')}"
+            
+            # Formato empaque
+            emp_lbl = prod.get('empaque_label') or '-'
+            c_emp = float(prod.get('costo_empaque') or 0)
+            if c_emp > 0 and prod.get('factor_empaque', 1.0) > 1.0:
+                emp_str = f"{emp_lbl}\n(${c_emp:,.0f}/emp)"
+            else:
+                emp_str = emp_lbl
+
+            uc = prod.get('ultima_compra')
+            if uc and uc.get('costo'):
+                uc_cost = float(uc['costo'])
+                uc_cost_str = f"${uc_cost:,.2f}/{prod.get('unidad', 'Und')}" if uc_cost >= 1 else f"${uc_cost:,.4f}/{prod.get('unidad', 'Und')}"
+                uc_emp_cost = float(uc.get('costo_empaque') or 0)
+                if uc_emp_cost > 0 and prod.get('factor_empaque', 1.0) > 1.0:
+                    uc_str = f"${uc_emp_cost:,.0f} ({uc_cost_str})\n{_pdf_sanitize(uc.get('proveedor', ''))}"
+                else:
+                    uc_str = f"{uc_cost_str}\n{_pdf_sanitize(uc.get('proveedor', ''))}"
+            elif g_key == 'intermedio':
+                uc_str = "Produccion Propia"
+            elif g_key == 'venta':
+                uc_str = "Ensamble Receta"
+            else:
+                uc_str = "-"
+
+            mc = prod.get('mejor_compra')
+            if mc and mc.get('costo'):
+                mc_cost = float(mc['costo'])
+                mc_cost_str = f"${mc_cost:,.2f}/{prod.get('unidad', 'Und')}" if mc_cost >= 1 else f"${mc_cost:,.4f}/{prod.get('unidad', 'Und')}"
+                mc_emp_cost = float(mc.get('costo_empaque') or 0)
+                if mc_emp_cost > 0 and prod.get('factor_empaque', 1.0) > 1.0:
+                    mc_str = f"${mc_emp_cost:,.0f} ({mc_cost_str})\n{_pdf_sanitize(mc.get('proveedor', ''))}"
+                else:
+                    mc_str = f"{mc_cost_str}\n{_pdf_sanitize(mc.get('proveedor', ''))}"
+            elif g_key == 'intermedio':
+                mc_str = "Produccion Propia"
+            elif g_key == 'venta':
+                mc_str = "Ensamble Receta"
+            else:
+                mc_str = "-"
+
+            row_fields = [
+                _pdf_sanitize(prod['nombre']),
+                c_act_str,
+                _pdf_sanitize(emp_str),
+                _pdf_sanitize(uc_str),
+                _pdf_sanitize(mc_str)
+            ]
+
+            pdf.set_font('Helvetica', '', 8.0)
+            ls0 = pdf.multi_cell(col_w[0] - 2.0, 3.8, row_fields[0], split_only=True)
+            ls2 = pdf.multi_cell(col_w[2] - 2.0, 3.8, row_fields[2], split_only=True)
+            ls3 = pdf.multi_cell(col_w[3] - 2.0, 3.8, row_fields[3], split_only=True)
+            ls4 = pdf.multi_cell(col_w[4] - 2.0, 3.8, row_fields[4], split_only=True)
+            n_max = max(len(ls0), len(ls2), len(ls3), len(ls4), 1)
+            alto_fila = max(n_max * 3.8 + 1.8, 5.6)
+
+            if pdf.get_y() + alto_fila > 252:
+                pdf.add_page()
+                _draw_table_header(pdf)
+
+            x0 = 14
+            y0 = pdf.get_y()
+
+            x_cur = x0
+            for i, val in enumerate(row_fields):
+                w_col = col_w[i]
+                al = aligns[i]
+                
+                if i in (0, 1):
+                    pdf.set_font('Helvetica', 'B', 8.0)
+                    pdf.set_text_color(15, 23, 42)
+                elif i in (2, 3, 4):
+                    pdf.set_font('Helvetica', '', 7.5)
+                    pdf.set_text_color(71, 85, 105)
+                else:
+                    pdf.set_font('Helvetica', '', 8.0)
+                    pdf.set_text_color(51, 65, 85)
+
+                if i in (0, 2, 3, 4):
+                    pdf.set_xy(x_cur + 0.8, y0 + 0.8)
+                    pdf.multi_cell(w_col - 1.6, 3.8, val, border=0, align=al)
+                else:
+                    pdf.set_xy(x_cur, y0)
+                    pdf.cell(w_col - 1.0 if al == 'R' else w_col, alto_fila, val, border=0, align=al)
+                
+                x_cur += w_col
+
+            pdf.set_draw_color(245, 247, 250)
+            pdf.line(x0, y0 + alto_fila, x0 + 188, y0 + alto_fila)
+            pdf.set_xy(x0, y0 + alto_fila)
+
+    _pdf_firma_tuctuc(pdf)
+    return pdf
+
+
+@bp.route('/api/inventario/<int:negocio_id>/reporte-costos-unitarios')
+def api_reporte_costos_unitarios(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        data = _query_reporte_costos_unitarios(conn, negocio_id)
+        conn.close()
+        return jsonify({'ok': True, **data})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/inventario/<int:negocio_id>/reporte-costos-unitarios/pdf')
+def api_reporte_costos_unitarios_pdf(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    if FPDF is None:
+        return jsonify({'ok': False, 'error': 'PDF no disponible (falta fpdf2)'}), 500
+
+    conn = get_db_connection()
+    try:
+        contexto = _contexto_negocio(conn, negocio_id)
+        nombre_negocio = (contexto.get('negocio_nombre') or 'Negocio') if contexto else 'Negocio'
+        datos = _query_reporte_costos_unitarios(conn, negocio_id)
+        conn.close()
+
+        pdf = _pdf_reporte_costos_unitarios(nombre_negocio, datos)
+        resp = Response(bytes(pdf.output()), mimetype='application/pdf')
+        resp.headers['Content-Disposition'] = 'inline; filename=reporte_costos_unitarios.pdf'
         return resp
     except Exception as e:
         try: conn.close()

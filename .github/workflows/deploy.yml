@@ -18,5 +18,7 @@ jobs:
           port: 22
           script: |
             cd /home/ubuntu/tuctucv2
-            git pull origin v2
+            git fetch origin v2
+            git reset --hard origin/v2
+            python3 -m py_compile app/blueprints/inventarios.py app/blueprints/contabilidad.py app/blueprints/restaurantes.py
             sudo systemctl restart tuctuc

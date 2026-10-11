@@ -4353,6 +4353,104 @@ def api_produccion_preview(negocio_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/produccion/sugerencia')
+def api_produccion_sugerencia(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    producto_id = request.args.get('producto_id', type=int)
+    bodega_param = request.args.get('bodega') or request.args.get('centro_utilidad_id') or session.get('centro_utilidad_id') or 1
+    try:
+        bodega_id = int(bodega_param)
+    except (ValueError, TypeError):
+        bodega_id = 1
+    modo = (request.args.get('modo') or 'max').strip().lower()
+    guia_id = request.args.get('guia_id', type=int)
+    cantidad_mp = request.args.get('cantidad_mp', type=float)
+
+    if not producto_id:
+        return jsonify({'ok': False, 'error': 'producto_id requerido'}), 400
+    if modo == 'desde_mp' and (not guia_id or not cantidad_mp or cantidad_mp <= 0):
+        return jsonify({'ok': False, 'error': 'guia_id y cantidad_mp (> 0) requeridos en modo desde_mp'}), 400
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        producto = conn.execute(
+            "SELECT nombre FROM productos WHERE id=%s AND negocio_id=%s",
+            (producto_id, negocio_id)
+        ).fetchone()
+        if not producto:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        componentes = conn.execute("""
+            SELECT te.componente_id AS id, p.nombre,
+                   te.cantidad AS cant_tarjeta,
+                   COALESCE(s.stock, 0) AS stock_actual
+            FROM tarjeta_estandar te
+            JOIN productos p ON p.id = te.componente_id
+            LEFT JOIN saldos_inventario s
+                   ON s.producto_id = te.componente_id
+                  AND s.negocio_id  = %s AND s.bodega = %s
+            WHERE te.producto_id = %s
+        """, (negocio_id, bodega_id, producto_id)).fetchall()
+        if not componentes:
+            return jsonify({'ok': False, 'error': 'Este producto no tiene tarjeta estándar definida'}), 400
+
+        def _floor4(x):
+            try:
+                v = float(x)
+            except (ValueError, TypeError):
+                return 0.0
+            if v < 0:
+                return 0.0
+            return int(v * 10000 + 1e-6) / 10000
+
+        items = []
+        for c in componentes:
+            cant_t = float(c['cant_tarjeta'] or 0)
+            stock = float(c['stock_actual'] or 0)
+            max_q = _floor4(stock / cant_t) if cant_t > 0 else None
+            items.append({
+                'id': c['id'],
+                'nombre': c['nombre'],
+                'stock': stock,
+                'cant_tarjeta': cant_t,
+                'max_qty': max_q,
+            })
+        computables = [i for i in items if i['max_qty'] is not None]
+        if not computables:
+            return jsonify({'ok': False, 'error': 'La tarjeta no tiene consumos válidos'}), 400
+        limitante = min(computables, key=lambda i: i['max_qty'])
+        guia = next((i for i in computables if i['id'] == guia_id), None) or limitante
+        if modo == 'desde_mp':
+            derivada = _floor4(cantidad_mp / guia['cant_tarjeta'])
+            sugerida = min(derivada, limitante['max_qty'])
+            excede = cantidad_mp > guia['stock']
+        else:
+            sugerida = guia['max_qty']
+            derivada = None
+            excede = False
+        return jsonify({
+            'ok': True,
+            'producto_id': producto_id,
+            'producto': producto['nombre'],
+            'bodega': bodega_id,
+            'modo': modo,
+            'componentes': items,
+            'limitante_id': limitante['id'],
+            'guia_id': guia['id'],
+            'sugerida': sugerida,
+            'derivada': derivada,
+            'tope_maximo': limitante['max_qty'],
+            'excede_stock_guia': excede,
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/produccion', methods=['POST'])
 def api_produccion_registrar(negocio_id):
     if 'usuario_id' not in session:

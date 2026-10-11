@@ -2354,6 +2354,22 @@
 
     </div>
 
+    <div id="prod-sugerencia" class="hidden mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3" style="max-width:900px">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <span class="font-bold text-gray-800">Puedes producir hasta <span id="prod-sug-max" class="font-mono font-black text-amber-700"></span> und</span>
+        <span id="prod-sug-limita" class="text-xs text-gray-600"></span>
+      </div>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2 text-sm">
+        <label class="text-xs font-bold text-gray-500 uppercase">Materia prima guía</label>
+        <select id="prod-sug-guia" onchange="sugerenciaCambioGuia()" onwheel="this.blur()" class="border rounded-lg px-2 py-1 text-sm bg-white outline-none"></select>
+        <label class="text-xs font-bold text-gray-500 uppercase">Usar solo</label>
+        <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="máximo" class="w-28 border rounded-lg px-2 py-1 text-sm bg-white outline-none">
+        <span id="prod-sug-mp-nombre" class="text-xs text-gray-500"></span>
+        <button onclick="sugerenciaDesdeMP()" class="px-3 py-1 rounded-lg border border-amber-400 text-amber-700 font-bold text-xs hover:bg-amber-100">Recalcular</button>
+        <button onclick="sugerenciaUsarMaximo()" class="px-3 py-1 rounded-lg border border-gray-300 text-gray-600 font-bold text-xs hover:bg-gray-100">Usar máximo</button>
+      </div>
+    </div>
+
     <div class="mb-4">
 
       <label>Notas (opcional)</label>
@@ -11289,6 +11305,84 @@ function limpiarPreview() {
   activePreviewData = null;
 }
 
+// ── Sugerencia predictiva de producción ─────────────────────────────
+let prodSugerenciaData = null;
+
+function _prodSugBodegaParam() {
+  return (typeof CENTRO_ACTIVO !== 'undefined' && CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+}
+
+async function sugerirProduccion() {
+  const id = document.getElementById('prod-ac-id').value;
+  const strip = document.getElementById('prod-sugerencia');
+  prodSugerenciaData = null;
+  if (!id) { if (strip) strip.classList.add('hidden'); return; }
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}${_prodSugBodegaParam()}`);
+    const d = await r.json();
+    if (!d.ok) { if (strip) strip.classList.add('hidden'); return; }
+    prodSugerenciaData = d;
+    document.getElementById('prod-sug-mp-cant').value = '';
+    renderSugerencia();
+  } catch(e) { console.error(e); }
+}
+
+function renderSugerencia() {
+  const d = prodSugerenciaData;
+  if (!d) return;
+  const comps = d.componentes || [];
+  const guia = comps.find(c => c.id === d.guia_id) || {};
+  const lim = comps.find(c => c.id === d.limitante_id) || {};
+  document.getElementById('prod-sug-max').textContent = _fmtProdNum(d.sugerida);
+  document.getElementById('prod-sug-limita').textContent = `Limita: ${lim.nombre || '-'} (stock ${_fmtProdNum(lim.stock)})`;
+  const sel = document.getElementById('prod-sug-guia');
+  sel.innerHTML = comps.map(c => `<option value="${c.id}"${c.id === d.guia_id ? ' selected' : ''}>${c.nombre} (máx ${_fmtProdNum(c.max_qty)})</option>`).join('');
+  document.getElementById('prod-sug-mp-nombre').textContent = guia.nombre ? `de ${guia.nombre}` : '';
+  document.getElementById('prod-cantidad').value = d.sugerida;
+  document.getElementById('prod-sugerencia').classList.remove('hidden');
+  limpiarPreview();
+}
+
+async function sugerenciaCambioGuia() {
+  const id = document.getElementById('prod-ac-id').value;
+  const guiaId = document.getElementById('prod-sug-guia').value;
+  if (!id || !guiaId) return;
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}&guia_id=${guiaId}${_prodSugBodegaParam()}`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    prodSugerenciaData = d;
+    document.getElementById('prod-sug-mp-cant').value = '';
+    renderSugerencia();
+  } catch(e) { console.error(e); toast('Error de red al recalcular sugerencia', false); }
+}
+
+async function sugerenciaDesdeMP() {
+  const id = document.getElementById('prod-ac-id').value;
+  const guiaId = document.getElementById('prod-sug-guia').value;
+  const val = parseFloat(document.getElementById('prod-sug-mp-cant').value);
+  if (!val || val <= 0) { toast('Digita la cantidad de materia prima a usar', false); return; }
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}&guia_id=${guiaId}&modo=desde_mp&cantidad_mp=${val}${_prodSugBodegaParam()}`);
+    const d = await r.json();
+    if (!d.ok) { toast(d.error, false); return; }
+    prodSugerenciaData = d;
+    renderSugerencia();
+    if (d.excede_stock_guia) toast('La cantidad supera el stock de la guía: se topó al máximo posible', false);
+  } catch(e) { console.error(e); toast('Error de red al recalcular sugerencia', false); }
+}
+
+function sugerenciaUsarMaximo() {
+  document.getElementById('prod-sug-mp-cant').value = '';
+  sugerenciaCambioGuia();
+}
+
+function ocultarSugerencia() {
+  const strip = document.getElementById('prod-sugerencia');
+  if (strip) strip.classList.add('hidden');
+  prodSugerenciaData = null;
+}
+
 async function previsualizarProduccion() {
   const id  = document.getElementById('prod-ac-id').value;
   const qty = parseFloat(document.getElementById('prod-cantidad').value);
@@ -11515,6 +11609,7 @@ async function registrarProduccion() {
       document.getElementById('prod-responsable').value = '{{ session.get("nombre", "") }}';
       document.getElementById('prod-responsable-id').value = '{{ session.get("chat_tercero_id", "") }}';
       limpiarPreview();
+      ocultarSugerencia();
       cargarProductos();
       cargarTiposDocProduccion();
 
@@ -13327,7 +13422,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // AC producción (limpia preview al cambiar producto)
 
-  setupAC('prod-ac-input', 'prod-ac-list', 'prod-ac-id', () => productos, () => limpiarPreview());
+  setupAC('prod-ac-input', 'prod-ac-list', 'prod-ac-id', () => productos, () => { limpiarPreview(); sugerirProduccion(); });
 
 
 

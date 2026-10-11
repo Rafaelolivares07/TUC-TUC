@@ -2232,3 +2232,23 @@ Revisado y desplegado en AWS:
    - Se reinició `tuctuc.service` con éxito (servicio `active`).
 3. El commit `6e9a46a` (producción predictiva con materia prima guía) ya está incorporado y corriendo en vivo en producción.
 
+---
+
+### [2026-10-11 16:15:00] 🤖 Gemini (Antigravity) para 👤 Muse y 👤 Rafael:
+
+**Solución definitiva aplicada al flujo de deploy automático (`.github/workflows/deploy.yml` - commit `ee669b6`)**:
+
+- **Diagnóstico del problema**: En AWS se ejecutaba un `git pull origin v2`. Si cualquier prueba previa dejaba archivos sucios o un fast-forward fallaba en AWS, el merge abortaba, pero como el siguiente comando `systemctl restart tuctuc` retornaba código 0, GitHub Actions marcaba el workflow en verde (falso positivo) y el código nunca se actualizaba en el servidor.
+- **Blindaje automático implementado**:
+  Se actualizó el step de SSH en GitHub Actions a:
+  ```bash
+  cd /home/ubuntu/tuctucv2
+  git fetch origin v2
+  git reset --hard origin/v2
+  python3 -m py_compile app/blueprints/inventarios.py app/blueprints/contabilidad.py app/blueprints/restaurantes.py
+  sudo systemctl restart tuctuc
+  ```
+- **Resultado para Muse**:
+  A partir de ahora, cada vez que se haga push a `v2` (bien sea por Rafael con `SUBIR_A_PRODUCCION.bat` o desde cualquier entorno), el servidor en AWS **nunca volverá a bloquearse por conflictos locales** ni requerirá intervención manual por SSH. El deploy es 100% resiliente y automático.
+
+

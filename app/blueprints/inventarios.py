@@ -1348,6 +1348,24 @@ def api_inventario_productos(negocio_id):
             ), 0)
         """
 
+        join_lateral_empaque = """
+            LEFT JOIN LATERAL (
+                SELECT pres.id AS ultimo_empaque_id, pres.nombre AS ultimo_empaque_nombre, pres.equivalencia AS ultimo_empaque_equiv
+                FROM (
+                    SELECT presentacion_id, COALESCE(documento_fecha, created_at::date) as f, id
+                    FROM movimientos_inventario
+                    WHERE negocio_id = p.negocio_id AND producto_id = p.id AND presentacion_id IS NOT NULL
+                    UNION ALL
+                    SELECT presentacion_id, COALESCE(fecha_cotizacion, created_at::date) as f, id
+                    FROM cotizaciones_compras
+                    WHERE negocio_id = p.negocio_id AND item_id = p.id AND presentacion_id IS NOT NULL
+                    ORDER BY f DESC, id DESC
+                    LIMIT 1
+                ) u_emp
+                JOIN presentaciones pres ON pres.id = u_emp.presentacion_id
+            ) lat_emp ON TRUE
+        """
+
         es_consolidado = str(bodega_param).lower() in ('consolidado', 'todas', 'all')
         if es_consolidado:
             rows = conn.execute(f"""
@@ -1357,8 +1375,12 @@ def api_inventario_productos(negocio_id):
                        p.codigo_barra, p.iva_pct, p.disponible, p.orden,
                        COALESCE(s.stock, 0) AS stock,
                        {sql_rotacion} AS rotacion_30d,
-                       ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total
+                       ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total,
+                       lat_emp.ultimo_empaque_id,
+                       lat_emp.ultimo_empaque_nombre,
+                       COALESCE(lat_emp.ultimo_empaque_equiv, 1.0) AS ultimo_empaque_equiv
                 FROM productos p
+                {join_lateral_empaque}
                 LEFT JOIN (
                     SELECT producto_id, negocio_id, SUM(stock) as stock, 
                            CASE WHEN SUM(stock) > 0 THEN SUM(valor_existencia)/SUM(stock) ELSE AVG(costo_und) END as costo_und
@@ -1381,14 +1403,23 @@ def api_inventario_productos(negocio_id):
                        p.codigo_barra, p.iva_pct, p.disponible, p.orden,
                        COALESCE(s.stock, 0) AS stock,
                        {sql_rotacion} AS rotacion_30d,
-                       ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total
+                       ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total,
+                       lat_emp.ultimo_empaque_id,
+                       lat_emp.ultimo_empaque_nombre,
+                       COALESCE(lat_emp.ultimo_empaque_equiv, 1.0) AS ultimo_empaque_equiv
                 FROM productos p
+                {join_lateral_empaque}
                 LEFT JOIN saldos_inventario s ON s.producto_id = p.id
                     AND s.negocio_id = p.negocio_id AND s.bodega = %s
                 WHERE p.negocio_id = %s{extra_where}
                 ORDER BY p.categoria, p.orden, p.nombre
             """, (bodega_id, negocio_id)).fetchall()
-        return jsonify({'ok': True, 'productos': [dict(r) for r in rows]})
+        pres_rows = conn.execute("SELECT id, nombre, equivalencia FROM presentaciones ORDER BY nombre ASC").fetchall()
+        return jsonify({
+            'ok': True,
+            'productos': [dict(r) for r in rows],
+            'presentaciones': [dict(pr) for pr in pres_rows]
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
@@ -5021,7 +5052,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
 def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
     """Reconstruye un producto sin modificarlo y devuelve sus inconsistencias por bodega."""
     producto = conn.execute(
-        "SELECT id, nombre FROM productos WHERE id = %s AND negocio_id = %s",
+        "SELECT id, nombre, costo FROM productos WHERE id = %s AND negocio_id = %s",
         (producto_id, negocio_id)
     ).fetchone()
     if not producto:
@@ -5160,14 +5191,10 @@ def api_auditoria_recosteo(negocio_id):
                     SELECT producto_id as id FROM movimientos_inventario WHERE negocio_id = %s
                     UNION
                     SELECT producto_padre_id as id FROM movimientos_inventario WHERE negocio_id = %s AND producto_padre_id IS NOT NULL
-                    UNION
-                    SELECT producto_id as id FROM tarjeta_estandar WHERE negocio_id = %s
-                    UNION
-                    SELECT id FROM productos WHERE negocio_id = %s AND disponible = TRUE
                 ) u
                 WHERE id IS NOT NULL
                 ORDER BY id
-            """, (negocio_id, negocio_id, negocio_id, negocio_id)).fetchall()
+            """, (negocio_id, negocio_id)).fetchall()
             producto_ids = [r['id'] for r in rows]
 
         productos_auditados = []
@@ -5218,14 +5245,10 @@ def api_ejecutar_recosteo(negocio_id):
                     SELECT producto_id as id FROM movimientos_inventario WHERE negocio_id = %s
                     UNION
                     SELECT producto_padre_id as id FROM movimientos_inventario WHERE negocio_id = %s AND producto_padre_id IS NOT NULL
-                    UNION
-                    SELECT producto_id as id FROM tarjeta_estandar WHERE negocio_id = %s
-                    UNION
-                    SELECT id FROM productos WHERE negocio_id = %s AND disponible = TRUE
                 ) u
                 WHERE id IS NOT NULL
                 ORDER BY id
-            """, (negocio_id, negocio_id, negocio_id, negocio_id)).fetchall()
+            """, (negocio_id, negocio_id)).fetchall()
             producto_ids = [r['id'] for r in rows]
         producto_ids = sorted({int(x) for x in producto_ids})
 
@@ -8319,8 +8342,7 @@ def _contabilizar_ajuste_item(conn, negocio_id, producto_id, diff, costo_unitari
       - Faltante (diff < 0): Débito a Ajuste en Contra (614101), Crédito a Inventario (140505).
     Resuelve cuentas según grupos_inventario con fallback automático a subcuentas estándar (140505/414101/614101).
     """
-    if abs(float(diff or 0)) < 0.000001:
-        return True, "Diferencia cero"
+    es_cero = abs(float(diff or 0)) < 0.000001
 
     prod = conn.execute(
         "SELECT id, nombre, categoria FROM productos WHERE id=%s AND negocio_id=%s",
@@ -8329,10 +8351,11 @@ def _contabilizar_ajuste_item(conn, negocio_id, producto_id, diff, costo_unitari
     if not prod:
         return False, f"Producto ID {producto_id} no encontrado"
 
-    costo_u = abs(float(costo_unitario or 0))
-    monto_ajuste = round(abs(float(diff)) * costo_u, 2)
-    if monto_ajuste <= 0:
-        return True, "Monto cero"
+    if es_cero:
+        monto_ajuste = 0.0
+    else:
+        costo_u = abs(float(costo_unitario or 0))
+        monto_ajuste = round(abs(float(diff)) * costo_u, 2)
 
     cuenta_inve_id = None
     cuenta_favor_id = None
@@ -8362,7 +8385,11 @@ def _contabilizar_ajuste_item(conn, negocio_id, producto_id, diff, costo_unitari
         c_contra = conn.execute("SELECT id FROM cuentas_puc WHERE codigo = '614101' AND acepta_movimiento=TRUE LIMIT 1").fetchone()
         cuenta_contra_id = c_contra['id'] if c_contra else None
 
-    if diff > 0:
+    if es_cero:
+        db_id = cuenta_inve_id
+        cr_id = cuenta_favor_id or cuenta_contra_id
+        concepto = f"Conteo físico verificado (0 dif): {prod['nombre']}"
+    elif diff > 0:
         db_id = cuenta_inve_id
         cr_id = cuenta_favor_id
         concepto = f"Ajuste entrada (+): {prod['nombre']}"
@@ -8721,9 +8748,7 @@ def api_ajuste_guardar_item(negocio_id):
         saldo = conn.execute("SELECT stock, costo_und, valor_existencia FROM saldos_inventario WHERE negocio_id=%s AND producto_id=%s AND bodega=%s", (negocio_id, producto_id, centro_utilidad_id)).fetchone()
         stock_sistema = float(saldo['stock'] if saldo else 0.0)
         diff = float(cantidad_fisica) - stock_sistema
-        
-        if abs(diff) < 0.000001:
-            return jsonify({'ok': True, 'mensaje': 'Sin diferencias, no requiere ajuste', 'consecutivo_actualizado': False})
+        es_conforme = abs(diff) < 0.000001
             
         # Verificar si el periodo está cerrado
         _verificar_periodo_cerrado(conn, negocio_id, date.today())
@@ -8761,17 +8786,27 @@ def api_ajuste_guardar_item(negocio_id):
             consecutivo_actualizado = True
 
         # 3. Determinar costo unitario definitivo según tipo de movimiento
-        tipo_mov = 'entrada' if diff > 0 else 'salida'
-        if tipo_mov == 'salida':
+        if es_conforme:
+            tipo_mov = 'entrada'
+            motivo_mov = 'conteo_conforme'
+            cant_mov = 0.0
+            costo_definitivo = abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
+        elif diff > 0:
+            tipo_mov = 'entrada'
+            motivo_mov = 'ajuste'
+            cant_mov = abs(diff)
+            # Para entradas (sobrante), se permite el costo provisto o el base de bodega si no viene
+            costo_definitivo = abs(float(costo_unitario)) if costo_unitario is not None else abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
+        else:
+            tipo_mov = 'salida'
+            motivo_mov = 'ajuste'
+            cant_mov = abs(diff)
             # Para salidas de inventario por ajuste (faltante), NUNCA se permite costo arbitrario.
             # Siempre se liquida al costo promedio ponderado vigente en la sede.
             costo_definitivo = abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
-        else:
-            # Para entradas (sobrante), se permite el costo provisto o el base de bodega si no viene
-            costo_definitivo = abs(float(costo_unitario)) if costo_unitario is not None else abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
 
         # Registrar el movimiento en movimientos_inventario (Kardex) asignando la bodega
-        _mov_directo(conn, negocio_id, producto_id, abs(diff), tipo_mov, 'ajuste',
+        _mov_directo(conn, negocio_id, producto_id, cant_mov, tipo_mov, motivo_mov,
                      registrado_por=session.get('usuario_id'),
                      valor_unitario=costo_definitivo,
                      notas=notas,
@@ -8783,12 +8818,13 @@ def api_ajuste_guardar_item(negocio_id):
                      proveedor_id=tercero_id,
                      proveedor_nombre=tercero_nombre)
                      
-        # 4. Recostear el producto
-        _recostear_producto(conn, negocio_id, producto_id)
+        # 4. Recostear el producto (solo si hubo diferencia real de existencias)
+        if not es_conforme:
+            _recostear_producto(conn, negocio_id, producto_id)
         
         # 5. Auto-guardar cotización de compra si hay proveedor y costo en entrada
         cotizacion_creada = False
-        if tercero_id and costo_definitivo > 0 and diff > 0:
+        if not es_conforme and tercero_id and costo_definitivo > 0 and diff > 0:
             from datetime import timedelta
             f_cot = date.today()
             f_vence = f_cot + timedelta(days=180)
@@ -8836,7 +8872,8 @@ def api_ajuste_guardar_item(negocio_id):
         conn.commit()
         return jsonify({
             'ok': True,
-            'mensaje': f'Ajuste en {chk_cu["codigo"]} registrado y contabilizado con éxito',
+            'mensaje': f'{"Conteo verificado (sin diferencias)" if es_conforme else "Ajuste"} en {chk_cu["codigo"]} registrado y contabilizado con éxito',
+            'es_conforme': es_conforme,
             'documento_numero': doc_num_final,
             'consecutivo_actualizado': consecutivo_actualizado,
             'cotizacion_creada': cotizacion_creada,
@@ -8864,7 +8901,7 @@ def api_ajuste_documento_items(negocio_id, documento_numero):
             FROM movimientos_inventario m
             JOIN productos p ON p.id = m.producto_id
             LEFT JOIN centros_utilidad cu ON cu.id = m.bodega AND cu.negocio_id = m.negocio_id
-            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo = 'ajuste'
+            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo IN ('ajuste', 'conteo_conforme')
             ORDER BY m.id DESC
         """, (negocio_id, documento_numero)).fetchall()
         return jsonify({'ok': True, 'items': [dict(r) for r in rows]})
@@ -8893,7 +8930,7 @@ def api_ajuste_historial(negocio_id):
                 SELECT numero_documento,
                        SUM(CASE WHEN tipo IN ('debito', 'D') THEN monto ELSE 0 END) AS total_debitos
                 FROM movimientos_contables
-                WHERE negocio_id = %s AND (origen_tipo IN ('ajuste_fisico', 'ajuste_inventario') OR concepto ILIKE '%%ajuste%%')
+                WHERE negocio_id = %s AND (origen_tipo IN ('ajuste_fisico', 'ajuste_inventario') OR concepto ILIKE '%%ajuste%%' OR concepto ILIKE '%%conteo%%')
                 GROUP BY numero_documento
             )
             SELECT m.documento_numero, 
@@ -8906,7 +8943,7 @@ def api_ajuste_historial(negocio_id):
             FROM movimientos_inventario m
             LEFT JOIN cont c ON c.numero_documento = m.documento_numero
             LEFT JOIN centros_utilidad cu ON cu.id = m.bodega AND cu.negocio_id = m.negocio_id
-            WHERE m.negocio_id = %s AND m.motivo = 'ajuste' {where_extra}
+            WHERE m.negocio_id = %s AND m.motivo IN ('ajuste', 'conteo_conforme') {where_extra}
             GROUP BY m.documento_numero, m.bodega, cu.nombre, cu.codigo
             ORDER BY fecha DESC
         """, tuple(params)).fetchall()
@@ -8932,7 +8969,7 @@ def api_ajuste_documento_detalles(negocio_id, documento_numero):
             FROM movimientos_inventario m
             JOIN productos p ON p.id = m.producto_id
             LEFT JOIN centros_utilidad cu ON cu.id = m.bodega AND cu.negocio_id = m.negocio_id
-            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo = 'ajuste'
+            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo IN ('ajuste', 'conteo_conforme')
             ORDER BY m.id
         """, (negocio_id, documento_numero)).fetchall()
         
@@ -9083,7 +9120,7 @@ def api_ajuste_documento_pdf(negocio_id, documento_numero):
             SELECT MAX(m.created_at) AS fecha, m.bodega, cu.nombre AS centro_nombre, cu.codigo AS centro_codigo
             FROM movimientos_inventario m
             LEFT JOIN centros_utilidad cu ON cu.id = m.bodega AND cu.negocio_id = m.negocio_id
-            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo = 'ajuste'
+            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo IN ('ajuste', 'conteo_conforme')
             GROUP BY m.bodega, cu.nombre, cu.codigo
         """, (negocio_id, documento_numero)).fetchone()
         fecha_str = fecha_row['fecha'].strftime('%Y-%m-%d %H:%M') if fecha_row and fecha_row['fecha'] else ''
@@ -9093,7 +9130,7 @@ def api_ajuste_documento_pdf(negocio_id, documento_numero):
                    m.stock_anterior, m.stock_nuevo, p.categoria
             FROM movimientos_inventario m
             JOIN productos p ON p.id = m.producto_id
-            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo = 'ajuste'
+            WHERE m.negocio_id = %s AND m.documento_numero = %s AND m.motivo IN ('ajuste', 'conteo_conforme')
             ORDER BY m.id
         """, (negocio_id, documento_numero)).fetchall()
         asiento = conn.execute("""

@@ -2459,6 +2459,7 @@ def api_tienda_pedido_crear(slug):
         # Procesar ajustes en caliente antes de validar el stock
         adjustments = data.get('adjustments') or []
         applied_adjustments = False
+        adjusted_product_ids = set()
         if adjustments:
             for adj in adjustments:
                 prod_id = int(adj.get('producto_id') or 0)
@@ -2493,9 +2494,16 @@ def api_tienda_pedido_crear(slug):
                 # Recostear inmediatamente para actualizar el costo promedio en el balance antes de la venta
                 _recostear_producto(conn, negocio['tercero_id'], prod_id)
                 applied_adjustments = True
+                adjusted_product_ids.add(prod_id)
+
+        # Si un componente fue ajustado en caliente, se garantiza que NO sea excluido de la receta
+        raw_excluir = data.get('excluir_componentes') or []
+        excluir_componentes = [
+            exc for exc in raw_excluir
+            if int(exc.get('componente_id') or 0) not in adjusted_product_ids
+        ]
 
         force_negative = data.get('force_negative_stock') == True
-        excluir_componentes = data.get('excluir_componentes') or []
         if not force_negative:
             shortages = _verificar_stock_pedido(conn, negocio['tercero_id'], items_validos, excluir_componentes, bodega=centro_utilidad_id)
             if shortages:
@@ -2578,11 +2586,14 @@ def api_tienda_pedido_crear(slug):
         
         # Enlazar los ajustes aplicados al ID del pedido
         if applied_adjustments:
+            consecutive_p = str(numero_documento).split('-')[-1].strip() if '-' in str(numero_documento) else str(numero_documento)
             conn.execute("""
                 UPDATE movimientos_inventario
                 SET referencia_id = %s
-                WHERE negocio_id = %s AND documento_numero = %s AND motivo = 'ajuste' AND referencia_id IS NULL
-            """, (pedido_id, negocio['tercero_id'], numero_documento))
+                WHERE negocio_id = %s 
+                  AND (documento_numero = %s OR documento_numero = %s) 
+                  AND motivo = 'ajuste' AND referencia_id IS NULL
+            """, (pedido_id, negocio['tercero_id'], numero_documento, consecutive_p))
 
         for it in items_validos:
             # Query the unit cost of the product right now in this bodega
@@ -2604,13 +2615,14 @@ def api_tienda_pedido_crear(slug):
             """, (negocio['tercero_id'], centro_utilidad_id, it['producto_id'], negocio['tercero_id'], centro_utilidad_id, it['producto_id'])).fetchone()
             costo_u = float(costo_row['costo_real']) if (costo_row and costo_row['costo_real'] is not None) else 0.0
 
-            # Excluded components per item or from global list
-            excluded_ids = [int(cid) for cid in (it.get('excluir_componentes_ids') or []) if cid]
+            # Excluded components per item or from global list (garantizando que componentes ajustados no se omitan)
+            raw_item_excluded = [int(cid) for cid in (it.get('excluir_componentes_ids') or []) if cid]
+            excluded_ids = [cid for cid in raw_item_excluded if cid not in adjusted_product_ids]
             if not excluded_ids and excluir_componentes:
                 excluded_ids = [
                     int(exc['componente_id']) 
                     for exc in excluir_componentes 
-                    if int(exc.get('producto_id') or 0) == it['producto_id']
+                    if int(exc.get('producto_id') or 0) == it['producto_id'] and int(exc['componente_id']) not in adjusted_product_ids
                 ]
 
             nombre_prod_item = it['nombre_producto']

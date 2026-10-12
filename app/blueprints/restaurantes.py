@@ -2044,6 +2044,7 @@ def api_pedido_crear(slug):
             # Procesar ajustes en caliente antes de validar el stock
             adjustments = data.get('adjustments') or []
             applied_adjustments = False
+            adjusted_product_ids = set()
             if adjustments and rest['tercero_id']:
                 for adj in adjustments:
                     prod_id = int(adj.get('producto_id') or 0)
@@ -2073,9 +2074,16 @@ def api_pedido_crear(slug):
                     
                     _recostear_producto(conn, rest['tercero_id'], prod_id)
                     applied_adjustments = True
+                    adjusted_product_ids.add(prod_id)
+
+            # Si un componente fue ajustado en caliente, se garantiza que NO sea excluido de la receta
+            raw_excluir = data.get('excluir_componentes') or []
+            excluir_componentes = [
+                exc for exc in raw_excluir
+                if int(exc.get('componente_id') or 0) not in adjusted_product_ids
+            ]
 
             force_negative = data.get('force_negative_stock') == True
-            excluir_componentes = data.get('excluir_componentes') or []
             if not force_negative and rest['tercero_id']:
                 shortages = _verificar_stock_pedido(conn, rest['tercero_id'], stock_check_items, excluir_componentes)
                 if shortages:

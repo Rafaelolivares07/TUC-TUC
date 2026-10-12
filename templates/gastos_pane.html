@@ -248,21 +248,15 @@
 
   <!-- Panel de Cierre de la Relación -->
   <div id="gas-cierre-container" class="border-t border-gray-100 pt-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto" id="gas-metodo-pago-container">
-      <div class="w-full sm:w-64">
-        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Método de Pago para el Cierre</label>
-        <select id="gas-metodo-pago"
-                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none">
-          <!-- Dinámico -->
-        </select>
-      </div>
+    <div class="text-xs text-gray-400 italic">
+      ℹ️ La selección de formas de pago y distribución múltiple se define al hacer clic en liquidar la relación.
     </div>
     
     <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto justify-end">
       <!-- Botón visible antes del cierre -->
-      <button onclick="cerrarRelacionGasto()" id="gas-btn-cerrar-rel"
+      <button onclick="abrirModalCierreRelacion()" id="gas-btn-cerrar-rel"
               class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition shadow-md flex items-center justify-center gap-1.5 h-[40px]">
-        💾 Registrar Pago y Cerrar Relación
+        ⚡ Registrar Pago y Liquidar Toda la Relación
       </button>
 
       <!-- Botones visibles únicamente después del cierre exitoso -->
@@ -1451,12 +1445,14 @@
       
       _metodosPagoGastos = (d.metodos || []).filter(m => (m.activo !== false) && (m.activo_desembolsos !== false) && (m.cuenta_id || m.cuenta_gastos_id));
       const sel = document.getElementById('gas-metodo-pago');
-      if (_metodosPagoGastos.length === 0) {
-        sel.innerHTML = '<option value="">— Ningún método habilitado para desembolsos —</option>';
-      } else {
-        sel.innerHTML = _metodosPagoGastos.map(m => 
-          `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}</option>`
-        ).join('');
+      if (sel) {
+        if (_metodosPagoGastos.length === 0) {
+          sel.innerHTML = '<option value="">— Ningún método habilitado para desembolsos —</option>';
+        } else {
+          sel.innerHTML = _metodosPagoGastos.map(m => 
+            `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}</option>`
+          ).join('');
+        }
       }
     } catch(e) {
       console.error(e);
@@ -2109,14 +2105,6 @@
     
     const list = [];
     let primerMetodo = (_metodosPagoGastos && _metodosPagoGastos.length > 0) ? _metodosPagoGastos[0].codigo : 'efectivo';
-    
-    // Si es cierre de relación, preferir el método seleccionado en el select inferior si existe
-    if (type === 'rel') {
-      const selMain = document.getElementById('gas-metodo-pago');
-      if (selMain && selMain.value) {
-        primerMetodo = selMain.value;
-      }
-    }
 
     const rowObj = {
       id: Date.now(),
@@ -2347,9 +2335,6 @@
       documento_cruce: type === 'ind' ? _defaultDocCierreInd : '',
       editando_tercero: false
     });
-
-    renderFilasPagos(type);
-  }
 
     renderFilasPagos(type);
   }
@@ -2681,15 +2666,14 @@
         try { localStorage.removeItem(`gas_fecha_${NEGOCIO_ID}_${tipoDoc}`); } catch(e){}
         
         // Bloquear interfaz para evitar modificaciones fantasma
-        document.getElementById('gas-form-container').classList.add('opacity-50', 'pointer-events-none');
-        document.getElementById('gas-metodo-pago-container').classList.add('hidden');
-        document.getElementById('gas-btn-cerrar-rel').classList.add('hidden');
+        document.getElementById('gas-form-container')?.classList.add('opacity-50', 'pointer-events-none');
+        document.getElementById('gas-btn-cerrar-rel')?.classList.add('hidden');
         
         // Mostrar botón de imprimir relación cerrada y continuar
-        document.getElementById('gas-btn-pdf-cerrado').classList.remove('hidden');
-        document.getElementById('gas-btn-pdf-cerrado').classList.add('flex');
-        document.getElementById('gas-btn-siguiente').classList.remove('hidden');
-        document.getElementById('gas-btn-siguiente').classList.add('flex');
+        const btnPdf = document.getElementById('gas-btn-pdf-cerrado');
+        if (btnPdf) { btnPdf.classList.remove('hidden'); btnPdf.classList.add('flex'); }
+        const btnSig = document.getElementById('gas-btn-siguiente');
+        if (btnSig) { btnSig.classList.remove('hidden'); btnSig.classList.add('flex'); }
       } else {
         toast(d.error || 'Error al cerrar relación', false);
       }
@@ -2713,14 +2697,13 @@
 
   function irASiguienteRelacion() {
     // Restaurar controles a estado inicial
-    document.getElementById('gas-form-container').classList.remove('opacity-50', 'pointer-events-none');
-    document.getElementById('gas-metodo-pago-container').classList.remove('hidden');
-    document.getElementById('gas-btn-cerrar-rel').classList.remove('hidden');
+    document.getElementById('gas-form-container')?.classList.remove('opacity-50', 'pointer-events-none');
+    document.getElementById('gas-btn-cerrar-rel')?.classList.remove('hidden');
     
-    document.getElementById('gas-btn-pdf-cerrado').classList.add('hidden');
-    document.getElementById('gas-btn-pdf-cerrado').classList.remove('flex');
-    document.getElementById('gas-btn-siguiente').classList.add('hidden');
-    document.getElementById('gas-btn-siguiente').classList.remove('flex');
+    const btnPdf = document.getElementById('gas-btn-pdf-cerrado');
+    if (btnPdf) { btnPdf.classList.add('hidden'); btnPdf.classList.remove('flex'); }
+    const btnSig = document.getElementById('gas-btn-siguiente');
+    if (btnSig) { btnSig.classList.add('hidden'); btnSig.classList.remove('flex'); }
     
     closedTipoDoc = null;
     closedNumDoc = null;

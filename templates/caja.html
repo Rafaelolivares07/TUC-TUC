@@ -848,7 +848,7 @@
                 <h4 class="text-xs font-black text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
                     <span>💳</span> <span>Recaudo por Métodos de Pago</span>
                 </h4>
-                <div id="flash-resumen-metodos-grid" class="grid grid-cols-2 gap-2">
+                <div id="flash-resumen-metodos-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <!-- Dinámico -->
                 </div>
             </div>
@@ -1813,15 +1813,21 @@ function abrirModalResumenVentaRapida() {
     if (metGrid) {
         const metList = Object.values(sess.metodosPago || {});
         if (!metList.length) {
-            metGrid.innerHTML = `<div class="col-span-2 text-center text-xs text-gray-400 py-3 bg-gray-50 rounded-xl">Sin pagos registrados en este turno</div>`;
+            metGrid.innerHTML = `<div class="col-span-full text-center text-xs text-gray-400 py-3 bg-gray-50 rounded-xl border border-dashed border-gray-200">Sin pagos registrados en este turno</div>`;
         } else {
             metGrid.innerHTML = metList.map(m => `
-                <div class="p-2.5 rounded-xl border border-gray-150 bg-gray-50 flex items-center justify-between gap-2">
-                    <div class="flex items-center gap-2 min-w-0 flex-1">
-                        <span class="text-xl shrink-0">${m.icono || '💳'}</span>
-                        <span class="text-xs font-bold text-gray-800 leading-tight break-words">${m.nombre}</span>
+                <div class="p-3 rounded-2xl border border-slate-200/90 bg-white shadow-2xs hover:bg-slate-50/70 transition flex flex-col justify-between gap-2 min-w-0">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="text-xl p-1 bg-indigo-50 text-indigo-700 rounded-xl shrink-0 flex items-center justify-center w-8 h-8 border border-indigo-100/80">${m.icono || '💳'}</span>
+                        <div class="min-w-0 flex-1">
+                            <span class="text-xs font-bold text-gray-900 leading-tight block truncate" title="${m.nombre}">${m.nombre}</span>
+                            <span class="text-[10px] text-gray-400 font-semibold uppercase tracking-wider block mt-0.5">Forma de pago</span>
+                        </div>
                     </div>
-                    <span class="text-xs font-black font-mono text-gray-900 shrink-0">$${(m.total || 0).toLocaleString('es-CO')}</span>
+                    <div class="flex items-baseline justify-between pt-2 border-t border-slate-100 min-w-0">
+                        <span class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Total</span>
+                        <span class="text-xs sm:text-sm font-black font-mono text-indigo-950 block shrink-0">$${(m.total || 0).toLocaleString('es-CO')}</span>
+                    </div>
                 </div>
             `).join('');
         }
@@ -1835,12 +1841,14 @@ function abrirModalResumenVentaRapida() {
             prodListEl.innerHTML = `<div class="text-center text-xs text-gray-400 py-4">No se han registrado productos vendidos aún</div>`;
         } else {
             prodListEl.innerHTML = prods.map(p => `
-                <div class="p-2.5 flex items-center justify-between gap-2.5 hover:bg-gray-100/50">
+                <div class="p-2.5 sm:p-3 flex items-center justify-between gap-3 hover:bg-gray-100/60 transition min-w-0">
                     <div class="min-w-0 flex-1">
-                        <span class="text-xs font-bold text-gray-900 block leading-snug break-words">${p.nombre}</span>
-                        <span class="text-[10px] text-gray-400 font-semibold block mt-0.5">${p.cantidad} unidad${p.cantidad !== 1 ? 'es' : ''}</span>
+                        <span class="text-xs font-extrabold text-gray-900 block leading-snug truncate" title="${p.nombre}">${p.nombre}</span>
+                        <span class="text-[10px] text-gray-500 font-semibold block mt-0.5">${p.cantidad} unidad${p.cantidad !== 1 ? 'es' : ''} vendida${p.cantidad !== 1 ? 's' : ''}</span>
                     </div>
-                    <span class="text-xs font-black font-mono text-indigo-700 shrink-0">$${(p.total || 0).toLocaleString('es-CO')}</span>
+                    <div class="text-right shrink-0 pl-2">
+                        <span class="text-xs sm:text-sm font-black font-mono text-indigo-700 block">$${(p.total || 0).toLocaleString('es-CO')}</span>
+                    </div>
                 </div>
             `).join('');
         }
@@ -3693,22 +3701,26 @@ function forzarVentaNegativa() {
 
 async function ejecutarAjusteStockCaja() {
     const adjustments = [];
+    const adjustedIds = new Set();
     
     shortagesList.forEach((s, idx) => {
         const cantInp = document.getElementById(`adj-cant-${idx}`);
         const costoInp = document.getElementById(`adj-costo-${idx}`);
         if (cantInp && costoInp) {
+            const pId = parseInt(s.producto_id);
             adjustments.push({
-                producto_id: s.producto_id,
+                producto_id: pId,
                 cantidad_fisica: parseFloat(cantInp.value) || 0,
                 costo_unitario: parseFloat(costoInp.value) || 0
             });
+            adjustedIds.add(pId);
         }
     });
     
     if (!adjustments.length) return;
     
-    // Guardar ajustes temporales para enviarlos en el cobro en una sola transacción
+    // Limpiar de la lista de exclusiones temporales cualquier componente que fue ajustado físicamente
+    listExcluidosTemporal = listExcluidosTemporal.filter(e => !adjustedIds.has(parseInt(e.componente_id)));
     listAdjustmentsTemporal = adjustments;
     document.getElementById('modal-alerta-stock').classList.add('hidden');
     cobrar();

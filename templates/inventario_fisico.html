@@ -217,11 +217,38 @@
         <div class="flex gap-2">
           <input type="number" id="libre-cantidad" placeholder="0.0" step="any" disabled
                  class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-50 transition-all font-semibold"
+                 oninput="onLibreBaseQtyInput()"
                  onkeydown="if(event.key==='Enter') abrirValidacionLibre()">
           <button onclick="abrirValidacionLibre()" id="libre-btn-add" disabled
                   class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 text-white font-bold px-4 py-2 rounded-xl transition text-sm flex items-center justify-center">
             Ajustar
           </button>
+        </div>
+        <!-- Asistente de empaque en modo libre -->
+        <div id="libre-empaque-box" class="mt-3 p-3.5 bg-indigo-50/90 border border-indigo-200 rounded-xl hidden">
+          <div class="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-indigo-100">
+            <span id="libre-empaque-label" class="text-xs md:text-sm font-extrabold text-indigo-950 flex items-center gap-1.5">
+              <span>📦</span>
+              <span id="libre-empaque-nombre-txt">Empaque</span>
+            </span>
+            <span id="libre-empaque-equiv-badge" class="text-[11px] font-black text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200 shrink-0"></span>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[10px] font-black uppercase text-indigo-800 mb-1">Empaques</label>
+              <input type="number" id="libre-emp" min="0" step="1" placeholder="0"
+                     class="w-full border-2 border-indigo-200 bg-white rounded-xl px-3 py-2 text-base md:text-lg text-center font-black font-mono outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                     title="Cantidad de empaques"
+                     oninput="calcEmpaqueLibre()">
+            </div>
+            <div>
+              <label class="block text-[10px] font-black uppercase text-indigo-800 mb-1">Sueltas</label>
+              <input type="number" id="libre-sueltas" min="0" step="any" placeholder="0"
+                     class="w-full border-2 border-indigo-200 bg-white rounded-xl px-3 py-2 text-base md:text-lg text-center font-black font-mono outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                     title="Unidades sueltas"
+                     oninput="calcEmpaqueLibre()">
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -360,6 +387,46 @@ function numDocLimpio(num) {
   const s = String(num || '').trim();
   const i = s.lastIndexOf('-');
   return i >= 0 ? s.slice(i + 1).trim() : s;
+}
+
+// ── PERSISTENCIA Y RESTAURACIÓN DE POSICIÓN VISUAL (SCROLL) ───────────────────
+let scrollSaveTimer = null;
+let scrollInicialRestaurado = false;
+
+window.addEventListener('scroll', () => {
+  clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(() => {
+    try {
+      if (window.scrollY > 0) {
+        localStorage.setItem(`inv_fisico_scroll_${NEGOCIO_ID}`, Math.round(window.scrollY));
+      }
+    } catch (e) {}
+  }, 100);
+}, { passive: true });
+
+window.addEventListener('beforeunload', () => {
+  try {
+    if (window.scrollY > 0) {
+      localStorage.setItem(`inv_fisico_scroll_${NEGOCIO_ID}`, Math.round(window.scrollY));
+    }
+  } catch (e) {}
+});
+
+function restaurarPosicionVisualSuave() {
+  try {
+    const saved = localStorage.getItem(`inv_fisico_scroll_${NEGOCIO_ID}`);
+    const pos = parseInt(saved || '0', 10);
+    if (pos > 30) {
+      setTimeout(() => {
+        window.scrollTo({
+          top: pos,
+          behavior: 'smooth'
+        });
+      }, 180);
+    }
+  } catch (e) {
+    console.error("Error restaurando posición visual:", e);
+  }
 }
 
 // Cargar al inicializar la página
@@ -548,13 +615,86 @@ function seleccionarProductoLibre(id) {
   document.getElementById("info-prod-stock").textContent = selectedProduct.stock;
   document.getElementById("info-prod-costo").textContent = `$${parseFloat(selectedProduct.costo || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
   
+  // Asistente empaque
+  const empBox = document.getElementById("libre-empaque-box");
+  const empLbl = document.getElementById("libre-empaque-label");
+  const empIn = document.getElementById("libre-emp");
+  const sueltasIn = document.getElementById("libre-sueltas");
+  if (selectedProduct.ultimo_empaque_nombre) {
+    empBox.classList.remove("hidden");
+    const nameTxt = document.getElementById("libre-empaque-nombre-txt");
+    const eqBadge = document.getElementById("libre-empaque-equiv-badge");
+    if (nameTxt) nameTxt.textContent = selectedProduct.ultimo_empaque_nombre;
+    if (eqBadge) eqBadge.textContent = `1 emp = ${selectedProduct.ultimo_empaque_equiv} und`;
+    if (empIn) empIn.value = "";
+    if (sueltasIn) sueltasIn.value = "";
+  } else {
+    empBox.classList.add("hidden");
+  }
+
   // Habilitar campos de conteo
   const qtyField = document.getElementById("libre-cantidad");
   qtyField.disabled = false;
   qtyField.value = "";
   qtyField.focus();
   
-  document.getElementById("libre-btn-add").disabled = false;
+  const btn = document.getElementById("libre-btn-add");
+  btn.disabled = true;
+  btn.textContent = "Ajustar";
+}
+
+function calcEmpaqueLibre() {
+  if (!selectedProduct) return;
+  const empInput = document.getElementById("libre-emp");
+  const sueltasInput = document.getElementById("libre-sueltas");
+  const qtyField = document.getElementById("libre-cantidad");
+  const emp = parseFloat(empInput?.value || 0);
+  const sueltas = parseFloat(sueltasInput?.value || 0);
+  const eq = parseFloat(selectedProduct.ultimo_empaque_equiv || 1.0);
+  
+  if (empInput?.value === "" && sueltasInput?.value === "") return;
+  
+  const total = (emp * eq) + sueltas;
+  qtyField.value = Number.isInteger(total) ? total : total.toFixed(2);
+  onLibreBaseQtyInput(false);
+}
+
+function onLibreBaseQtyInput(syncEmpaque = true) {
+  if (!selectedProduct) return;
+  const qtyField = document.getElementById("libre-cantidad");
+  const btn = document.getElementById("libre-btn-add");
+  const val = parseFloat(qtyField.value);
+  const eq = parseFloat(selectedProduct.ultimo_empaque_equiv || 1.0);
+  
+  if (syncEmpaque && eq > 1) {
+    const empInput = document.getElementById("libre-emp");
+    const sueltasInput = document.getElementById("libre-sueltas");
+    if (empInput && sueltasInput) {
+      if (!isNaN(val) && val >= 0) {
+        const emps = Math.floor(val / eq);
+        const sueltas = val - (emps * eq);
+        empInput.value = emps > 0 ? emps : '';
+        sueltasInput.value = sueltas > 0 ? (Number.isInteger(sueltas) ? sueltas : sueltas.toFixed(2)) : '';
+      } else if (qtyField.value === "") {
+        empInput.value = "";
+        sueltasInput.value = "";
+      }
+    }
+  }
+
+  if (isNaN(val)) {
+    btn.disabled = true;
+    btn.textContent = "Ajustar";
+    return;
+  }
+  
+  btn.disabled = false;
+  const diff = val - parseFloat(selectedProduct.stock || 0);
+  if (Math.abs(diff) < 0.000001) {
+    btn.textContent = "✓ Confirmar (0 dif)";
+  } else {
+    btn.textContent = "Ajustar";
+  }
 }
 
 function limpiarFormularioLibre() {
@@ -563,7 +703,10 @@ function limpiarFormularioLibre() {
   document.getElementById("libre-cantidad").value = "";
   document.getElementById("libre-cantidad").disabled = true;
   document.getElementById("libre-btn-add").disabled = true;
+  document.getElementById("libre-btn-add").textContent = "Ajustar";
   document.getElementById("libre-prod-info").classList.add("hidden");
+  const empBox = document.getElementById("libre-empaque-box");
+  if (empBox) empBox.classList.add("hidden");
   document.getElementById("libre-ac-drop").classList.add("hidden");
   document.getElementById("libre-search").focus();
 }
@@ -732,6 +875,21 @@ function renderTablaLista(list) {
     const itemAjustado = itemsAjustadosEnSesion.get(p.id);
     const estaAjustado = !!itemAjustado;
     
+    let valQtyDefault = '';
+    let valEmpaqueDefault = '';
+    let valSueltasDefault = '';
+    if (estaAjustado && itemAjustado.stock_nuevo !== undefined) {
+      valQtyDefault = itemAjustado.stock_nuevo;
+      if (p.ultimo_empaque_equiv && parseFloat(p.ultimo_empaque_equiv) > 1) {
+        const eq = parseFloat(p.ultimo_empaque_equiv);
+        const v = parseFloat(valQtyDefault);
+        const emps = Math.floor(v / eq);
+        const sRem = v - (emps * eq);
+        valEmpaqueDefault = emps > 0 ? emps : '';
+        valSueltasDefault = sRem > 0 ? (Number.isInteger(sRem) ? sRem : sRem.toFixed(2)) : '';
+      }
+    }
+    
     // Si ya fue ajustado en este documento, destacar con estilo verde de éxito
     const rowBgClass = estaAjustado 
       ? 'bg-emerald-50/70 border-b-2 border-emerald-200 transition-colors' 
@@ -744,9 +902,13 @@ function renderTablaLista(list) {
       : `<span id="tbl-diff-badge-${p.id}" class="text-sm font-bold font-mono text-gray-400">—</span>`;
 
     const statusBadge = estaAjustado
-      ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-600 text-white shadow-2xs">
-          ✓ Ajustado (${itemAjustado.stock_anterior} ➔ ${itemAjustado.stock_nuevo})
-         </span>`
+      ? (Math.abs(parseFloat(itemAjustado.cantidad || 0)) < 0.000001 || itemAjustado.stock_anterior === itemAjustado.stock_nuevo
+          ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-600 text-white shadow-2xs">
+               ✓ Conforme (${itemAjustado.stock_nuevo})
+             </span>`
+          : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-600 text-white shadow-2xs">
+               ✓ Ajustado (${itemAjustado.stock_anterior} ➔ ${itemAjustado.stock_nuevo})
+             </span>`)
       : '';
 
     const valTotalPesos = parseFloat(p.valor_total || ((p.stock || 0) * (p.costo || 0)) || 0);
@@ -781,12 +943,66 @@ function renderTablaLista(list) {
           ${p.stock}
         </td>
         <td class="px-5 py-3.5 text-center">
-          <input type="number" id="tbl-qty-${p.id}" 
-                 value=""
-                 placeholder="0" step="any"
-                 class="border-2 ${estaAjustado ? 'border-emerald-300 bg-white' : 'border-gray-200'} rounded-xl px-3 py-2 text-base md:text-lg w-32 text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs"
-                 oninput="calcDiffFila(${p.id}, ${p.stock})"
-                 onkeydown="if(event.key==='Enter') abrirValidacionFila(${p.id})">
+          <div class="flex flex-col items-center gap-2 min-w-[280px] sm:min-w-[320px] max-w-sm mx-auto">
+            ${p.ultimo_empaque_nombre ? `
+              <!-- Tarjeta de empaque: descripción 100% visible sin recortes -->
+              <div class="w-full bg-indigo-50/95 border-2 border-indigo-200 rounded-2xl p-3 shadow-2xs">
+                <div class="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-indigo-200">
+                  <span class="text-xs md:text-sm font-extrabold text-indigo-950 flex items-center gap-1.5 text-left leading-snug">
+                    <span class="text-base shrink-0">📦</span>
+                    <span>${escapePeHtml(p.ultimo_empaque_nombre)}</span>
+                  </span>
+                  <span class="text-[11px] font-black text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200 shrink-0 whitespace-nowrap">
+                    1 emp = ${p.ultimo_empaque_equiv} und
+                  </span>
+                </div>
+                
+                <!-- Inputs del mismo tamaño que los existentes -->
+                <div class="flex items-center justify-center gap-2">
+                  <div class="flex flex-col items-center flex-1">
+                    <label class="text-[10px] font-black uppercase text-indigo-800 mb-0.5">Empaques</label>
+                    <input type="number" id="tbl-emp-${p.id}" min="0" step="1" 
+                           value="${valEmpaqueDefault}"
+                           placeholder="0"
+                           class="border-2 border-indigo-200 bg-white rounded-xl px-3 py-2 text-base md:text-lg w-full text-center font-black font-mono outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition shadow-2xs"
+                           title="Cantidad de empaques (${escapePeHtml(p.ultimo_empaque_nombre)})"
+                           oninput="calcEmpaqueFila(${p.id}, ${p.stock}, ${p.ultimo_empaque_equiv})"
+                           onkeydown="if(event.key==='Enter') abrirValidacionFila(${p.id})">
+                  </div>
+                  <span class="text-xl font-black text-indigo-400 mt-4 shrink-0">+</span>
+                  <div class="flex flex-col items-center flex-1">
+                    <label class="text-[10px] font-black uppercase text-indigo-800 mb-0.5">Sueltas</label>
+                    <input type="number" id="tbl-sueltas-${p.id}" min="0" step="any" 
+                           value="${valSueltasDefault}"
+                           placeholder="0"
+                           class="border-2 border-indigo-200 bg-white rounded-xl px-3 py-2 text-base md:text-lg w-full text-center font-black font-mono outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition shadow-2xs"
+                           title="Unidades sueltas"
+                           oninput="calcEmpaqueFila(${p.id}, ${p.stock}, ${p.ultimo_empaque_equiv})"
+                           onkeydown="if(event.key==='Enter') abrirValidacionFila(${p.id})">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Total Físico Base -->
+              <div class="flex flex-col items-center w-full">
+                <label class="text-[10px] font-black uppercase text-gray-500 mb-0.5">= Total Físico (Unidades Base)</label>
+                <input type="number" id="tbl-qty-${p.id}" 
+                       value="${valQtyDefault}"
+                       placeholder="0" step="any"
+                       class="border-2 ${estaAjustado ? 'border-emerald-400 bg-emerald-50/30' : 'border-gray-300 bg-white'} rounded-xl px-3 py-2 text-base md:text-lg w-full max-w-[200px] text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs"
+                       oninput="onBaseQtyInput(${p.id}, ${p.stock}, ${p.ultimo_empaque_equiv || 1})"
+                       onkeydown="if(event.key==='Enter') abrirValidacionFila(${p.id})">
+              </div>
+            ` : `
+              <!-- Sin empaque previo: Entrada directa de unidades -->
+              <input type="number" id="tbl-qty-${p.id}" 
+                     value="${valQtyDefault}"
+                     placeholder="0" step="any"
+                     class="border-2 ${estaAjustado ? 'border-emerald-400 bg-emerald-50/30' : 'border-gray-300 bg-white'} rounded-xl px-3 py-2 text-base md:text-lg w-36 text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs"
+                     oninput="onBaseQtyInput(${p.id}, ${p.stock}, 1)"
+                     onkeydown="if(event.key==='Enter') abrirValidacionFila(${p.id})">
+            `}
+          </div>
         </td>
         <td class="px-5 py-3.5 text-center">
           ${diffBadgeHtml}
@@ -803,7 +1019,7 @@ function renderTablaLista(list) {
             <div class="flex items-center justify-end gap-1.5">
               <button onclick="abrirValidacionFila(${p.id})" id="tbl-btn-save-${p.id}"
                       class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                      title="Item ya ajustado bajo este documento. Haz clic para volver a reajustar si lo necesitas.">
+                      title="Item ya verificado/ajustado bajo este documento. Haz clic para volver a registrar o corregir si lo necesitas.">
                 <span>🔄 Reajustar</span>
               </button>
             </div>
@@ -817,6 +1033,56 @@ function renderTablaLista(list) {
       </tr>
     `;
   }).join('');
+
+  // Al montar la tabla por primera vez al entrar, hacer scroll suave a la posición visual
+  if (!scrollInicialRestaurado) {
+    scrollInicialRestaurado = true;
+    restaurarPosicionVisualSuave();
+  }
+}
+
+function calcEmpaqueFila(id, sysStock, equiv) {
+  const empInput = document.getElementById(`tbl-emp-${id}`);
+  const sueltasInput = document.getElementById(`tbl-sueltas-${id}`);
+  const baseInput = document.getElementById(`tbl-qty-${id}`);
+  
+  if (!baseInput) return;
+  const empStr = empInput?.value.trim() ?? "";
+  const sueltasStr = sueltasInput?.value.trim() ?? "";
+  const eq = parseFloat(equiv) || 1.0;
+  
+  if (empStr === "" && sueltasStr === "") {
+    baseInput.value = "";
+    calcDiffFila(id, sysStock);
+    return;
+  }
+  
+  const emp = parseFloat(empStr || 0);
+  const sueltas = parseFloat(sueltasStr || 0);
+  const total = (emp * eq) + sueltas;
+  baseInput.value = Number.isInteger(total) ? total : total.toFixed(2);
+  calcDiffFila(id, sysStock);
+}
+
+function onBaseQtyInput(id, sysStock, equiv) {
+  const baseInput = document.getElementById(`tbl-qty-${id}`);
+  const empInput = document.getElementById(`tbl-emp-${id}`);
+  const sueltasInput = document.getElementById(`tbl-sueltas-${id}`);
+  
+  if (baseInput && empInput && sueltasInput && equiv > 1) {
+    const val = parseFloat(baseInput.value);
+    const eq = parseFloat(equiv);
+    if (!isNaN(val) && val >= 0) {
+      const emps = Math.floor(val / eq);
+      const sueltas = val - (emps * eq);
+      empInput.value = emps > 0 ? emps : '';
+      sueltasInput.value = sueltas > 0 ? (Number.isInteger(sueltas) ? sueltas : sueltas.toFixed(2)) : '';
+    } else if (baseInput.value === "") {
+      empInput.value = "";
+      sueltasInput.value = "";
+    }
+  }
+  calcDiffFila(id, sysStock);
 }
 
 function calcDiffFila(id, sysStock) {
@@ -856,27 +1122,31 @@ function calcDiffFila(id, sysStock) {
   }
   
   const diff = physVal - sysStock;
-  const tieneDif = Math.abs(diff) >= 0.000001;
+  const esCero = Math.abs(diff) < 0.000001;
+
   if (btn) {
     if (estaAjustado) {
       btn.disabled = false;
       btn.innerHTML = '<span>🔄 Reajustar</span>';
       btn.className = "bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer";
     } else {
-      btn.disabled = !tieneDif;
-      btn.textContent = 'Ajustar';
-      btn.className = tieneDif
-        ? "bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer"
-        : "bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer";
+      btn.disabled = false;
+      if (esCero) {
+        btn.textContent = '✓ Conforme (0 dif)';
+        btn.className = "bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-3.5 py-2 rounded-xl transition shadow-xs cursor-pointer";
+      } else {
+        btn.textContent = 'Ajustar';
+        btn.className = "bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm md:text-base px-4 py-2 rounded-xl transition shadow-xs cursor-pointer";
+      }
     }
   }
   
   const costInput = document.getElementById(`tbl-cost-${id}`);
   const prod = currentProducts.find(x => x.id === id);
 
-  if (Math.abs(diff) < 0.000001) {
+  if (esCero) {
     if (badge) {
-      badge.className = "inline-flex items-center gap-1 text-sm font-bold font-mono px-2.5 py-1 rounded-lg bg-gray-100 text-gray-500";
+      badge.className = "inline-flex items-center gap-1 text-sm font-bold font-mono px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800";
       badge.textContent = "0.0";
     }
     if (costInput && prod) {
@@ -962,7 +1232,16 @@ function abrirModalValidacionGenerica(product, physicalQty, overrideCosto = null
   const badgeTitulo = document.getElementById("val-badge-titulo");
   const badgeMonto = document.getElementById("val-badge-monto");
 
-  if (diff > 0) {
+  const esCero = Math.abs(diff) < 0.000001;
+
+  if (esCero) {
+    diffSpan.className = "font-bold text-emerald-600";
+    diffSpan.textContent = "0.00 unidades (Conforme / Stock idéntico)";
+    
+    badgeContainer.className = "rounded-xl p-4 mb-4 text-center bg-emerald-50 border border-emerald-200 text-emerald-800";
+    badgeTitulo.textContent = "✓ Conteo Físico Verificado (Conforme)";
+    badgeMonto.textContent = "0.0 (Sin diferencia)";
+  } else if (diff > 0) {
     diffSpan.className = "font-bold text-emerald-600";
     diffSpan.textContent = `+${diff.toFixed(2)} unidades (Sobrante)`;
     
@@ -986,7 +1265,14 @@ function abrirModalValidacionGenerica(product, physicalQty, overrideCosto = null
   costInput.dataset.baseCosto = baseCosto;
   costInput.value = (overrideCosto !== null ? overrideCosto : baseCosto).toFixed(4);
 
-  if (diff > 0) {
+  if (esCero) {
+    costInput.readOnly = true;
+    costInput.value = baseCosto.toFixed(4);
+    costInput.classList.add("bg-gray-100", "cursor-not-allowed", "text-gray-500");
+    costInput.classList.remove("bg-white", "text-gray-900");
+    costBadge.className = "text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-emerald-100 text-emerald-800";
+    costBadge.textContent = "Auditado ($0.00)";
+  } else if (diff > 0) {
     // ENTRADA: permitir modificar costo
     costInput.readOnly = false;
     costInput.classList.remove("bg-gray-100", "cursor-not-allowed", "text-gray-500");
@@ -1036,10 +1322,11 @@ function actualizarValorTotalAjuste() {
   activeAjustePayload.costo_unitario = cost;
   activeAjustePayload.diff = diff;
   
-  const total = Math.abs(diff) * cost;
+  const esCero = Math.abs(diff) < 0.000001;
+  const total = esCero ? 0.0 : Math.abs(diff) * cost;
   document.getElementById("val-total-ajuste").textContent = `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`;
 
-  // Análisis porcentual de variación del costo (solo para entradas)
+  // Análisis porcentual de variación del costo (solo para entradas con diferencia real)
   const baseCosto = parseFloat(costInput.dataset.baseCosto || 0.0);
   const variacionBox = document.getElementById("val-costo-variacion-box");
   const baseEl = document.getElementById("val-costo-base");
@@ -1047,7 +1334,7 @@ function actualizarValorTotalAjuste() {
   const alerta15 = document.getElementById("val-costo-alerta-15");
   const alertaMsg = document.getElementById("val-costo-alerta-msg");
 
-  if (diff > 0 && baseCosto > 0) {
+  if (!esCero && diff > 0 && baseCosto > 0) {
     const varAbs = cost - baseCosto;
     const pct = (varAbs / baseCosto) * 100;
     const pctAbs = Math.abs(pct);
@@ -1088,7 +1375,17 @@ function verificarBotonConfirmar() {
   const diff = activeAjustePayload.diff;
   const warnCero = document.getElementById("val-costo-cero-warning");
   const chkForzar = document.getElementById("chk-forzar-costo-cero");
+  const esCero = Math.abs(diff) < 0.000001;
   
+  if (esCero) {
+    if (warnCero) warnCero.classList.add("hidden");
+    if (chkForzar) chkForzar.checked = false;
+    btn.disabled = false;
+    btn.className = "flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-lg shadow-emerald-600/20 transition cursor-pointer";
+    btn.textContent = "✓ Confirmar Conteo Conforme ($0)";
+    return;
+  }
+
   // Si es entrada (sobrante) y el costo unitario está en cero
   if (diff > 0 && cost <= 0.000001) {
     if (warnCero) warnCero.classList.remove("hidden");
@@ -1155,8 +1452,8 @@ async function verificarCuentasCategoria(catName, esSobrante) {
 async function guardarAjusteConfirmado() {
   if (!activeAjustePayload) return;
 
-  // Si es entrada con costo $0, validar confirmación consciente
-  if (activeAjustePayload.diff > 0 && (activeAjustePayload.costo_unitario <= 0.000001)) {
+  // Si es entrada con costo $0, validar confirmación consciente (solo para sobrantes reales)
+  if (activeAjustePayload.diff > 0 && Math.abs(activeAjustePayload.diff) >= 0.000001 && (activeAjustePayload.costo_unitario <= 0.000001)) {
     const chk = document.getElementById("chk-forzar-costo-cero");
     if (!chk || !chk.checked) {
       toast("El costo unitario no puede quedar en $0 sin confirmar la advertencia.", false);
@@ -1198,6 +1495,9 @@ async function guardarAjusteConfirmado() {
     
     cerrarModalValidacion();
     
+    // Guardar posición visual exacta antes de recargar la tabla
+    const posVisualPrevia = window.scrollY;
+    
     // Recargar datos
     await cargarProductos(); // refrescar stock en caché
     await cargarItemsDocumento();
@@ -1208,8 +1508,11 @@ async function guardarAjusteConfirmado() {
     if (mod === "libre") {
       limpiarFormularioLibre();
     } else {
-      // Refrescar tabla de lista
+      // Refrescar tabla de lista y mantener la posición visual intacta
       cambiarModalidad();
+      if (posVisualPrevia > 0) {
+        window.scrollTo({ top: posVisualPrevia, behavior: 'instant' });
+      }
     }
   } else {
     toast(data.error || "Error al aplicar el ajuste", false);
@@ -1228,18 +1531,32 @@ async function cargarItemsDocumento() {
     itemsAjustadosEnSesion.clear();
     
     if (data.ok && data.items.length > 0) {
-      lbl.textContent = `${data.items.length} ítems ajustados`;
+      const ajustadosCount = data.items.filter(m => Math.abs(parseFloat(m.cantidad || 0)) >= 0.000001).length;
+      const conformesCount = data.items.length - ajustadosCount;
+      let lblText = `${data.items.length} ítems procesados`;
+      if (conformesCount > 0 && ajustadosCount > 0) {
+        lblText = `${data.items.length} ítems (${ajustadosCount} ajustados, ${conformesCount} conformes)`;
+      } else if (conformesCount > 0) {
+        lblText = `${data.items.length} ítems verificados conformes`;
+      } else {
+        lblText = `${data.items.length} ítems ajustados`;
+      }
+      lbl.textContent = lblText;
+
       data.items.forEach(m => {
         itemsAjustadosEnSesion.set(m.producto_id, m);
       });
 
       body.innerHTML = data.items.map(m => {
-        const diff = m.cantidad * (m.tipo === 'entrada' ? 1 : -1);
+        const diff = parseFloat(m.cantidad || 0) * (m.tipo === 'entrada' ? 1 : -1);
         const total = m.valor_total || 0;
+        const esConforme = Math.abs(diff) < 0.000001;
         
-        const badgeDiff = diff > 0 
-          ? `<span class="text-sm font-black font-mono text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg">+${diff.toFixed(2)}</span>`
-          : `<span class="text-sm font-black font-mono text-red-800 bg-red-100 px-2 py-0.5 rounded-lg">${diff.toFixed(2)}</span>`;
+        const badgeDiff = esConforme
+          ? `<span class="text-sm font-black font-mono text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-lg">✓ 0.0 Conforme</span>`
+          : (diff > 0 
+            ? `<span class="text-sm font-black font-mono text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg">+${diff.toFixed(2)}</span>`
+            : `<span class="text-sm font-black font-mono text-red-800 bg-red-100 px-2 py-0.5 rounded-lg">${diff.toFixed(2)}</span>`);
           
         return `
           <tr class="border-b border-gray-100 hover:bg-gray-50/80 transition-colors">

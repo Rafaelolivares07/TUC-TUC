@@ -4011,65 +4011,40 @@ function renderizarListaRecosteo(productos) {
   if (!el) return;
 
   if (!productos.length) {
-
     el.innerHTML = '<p class="text-sm text-emerald-600 text-center py-8 font-semibold">No hay productos con movimientos para auditar.</p>';
-
     return;
-
   }
 
   el.innerHTML = productos.map(p => {
-
     const alertas = [];
-
     if (p.negativo_final) alertas.push('Saldo final negativo');
-
     if ((p.negativos_intermedios && p.negativos_intermedios.length)) alertas.push(`${p.negativos_intermedios.length} negativo(s) histórico(s)`);
-
     if (p.inconsistencias_movimientos?.length) alertas.push('Cadena inconsistente');
-
     if (p.stock_inconsistente) alertas.push('Stock no coincide');
-
     if (p.costo_inconsistente) alertas.push('Costo no coincide');
-
     if (p.valor_inconsistente) alertas.push('Valor no coincide');
 
     const alertasHtml = alertas.length
-
       ? alertas.map(alerta => `<span class="recosteo-alerta inline-flex rounded-md bg-red-50 px-2 py-1 text-red-600">${alerta}</span>`).join('')
-
       : '<span class="recosteo-alerta inline-flex rounded-md bg-emerald-50 px-2 py-1 text-emerald-600">Sin alertas</span>';
 
     const movimientoAlerta = p.negativos_intermedios?.[0]?.movimiento_id || p.inconsistencias_movimientos?.[0]?.movimiento_id || '';
 
     const recomendacion = p.negativo_final
-
       ? 'Requiere entrada o ajuste físico'
-
       : (p.negativos_intermedios && p.negativos_intermedios.length)
-
         ? 'Revisar fecha o cantidad'
-
         : p.inconsistencias_movimientos?.length
-
           ? 'Recosteo recomendado'
-
           : 'Revisar valoración';
 
     return `<label class="recosteo-producto flex gap-3 p-3 hover:bg-gray-50 cursor-pointer" data-nombre="${(p.producto_nombre || '').toLowerCase()}">
-
       <input type="checkbox" class="recosteo-check mt-1 flex-shrink-0" value="${p.producto_id}">
-
       <span class="recosteo-detalle">
-
         <span class="block text-sm font-bold text-gray-700 break-words">${p.producto_nombre}</span>
-
         <span class="block text-[11px] text-gray-500 mt-1">Stock: ${fmt(p.stock_almacenado)} / ${fmt(p.stock_final)} · Costo: ${fmtUnitCost(p.costo_almacenado)} / ${fmtUnitCost(p.costo_reconstruido)}</span>
-
         <span class="block text-[11px] text-gray-500">Valor: ${fmtMonExact(p.valor_almacenado)} / ${fmtMonExact(p.valor_reconstruido)} · Diferencia: ${fmtMonExact(p.diferencia_valor)} · Movimientos: ${p.movimientos}</span>
-
       </span>
-
       <span class="recosteo-alertas text-right text-[10px] font-bold">${alertasHtml}<span class="recosteo-alerta text-gray-500 font-medium">${recomendacion}</span>${alertas.length ? `<button type="button" onclick="irKardexDesdeAuditoria(event, ${p.producto_id}, ${movimientoAlerta || 'null'})" class="recosteo-alerta rounded-md bg-gray-800 px-2.5 py-1 text-white hover:bg-gray-700 inline-flex items-center gap-1 shadow-xs" title="Abrir Kardex en pestaña nueva para auditar o reordenar movimientos">Ver Kardex ↗</button>` : ''}</span>
     </label>`;
   }).join('');
@@ -4119,11 +4094,8 @@ async function ejecutarRecosteoSeleccionados() {
 
 
 async function ejecutarRecosteoTodos() {
-
   if (!confirm('¿Deseas recostear todos los productos con movimientos?')) return;
-
-  await ejecutarRecosteo({ todos: true }, 'todos los productos');
-
+  await ejecutarRecosteo({ todos: true }, 'todos los productos con movimientos');
 }
 
 

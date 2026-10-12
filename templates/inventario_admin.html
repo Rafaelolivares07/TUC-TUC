@@ -11213,13 +11213,17 @@ function editarSubtotalCompra(pIdx, productoId) {
 
 
 
-function seleccionarSugerencia(productoId, productoNombre, cantidad) {
+async function seleccionarSugerencia(productoId, productoNombre, cantidad) {
 
   // 1. Cargar datos en el formulario
 
   document.getElementById('prod-ac-input').value = productoNombre;
 
   document.getElementById('prod-ac-id').value = productoId;
+
+  document.getElementById('prod-cantidad').value = cantidad;
+
+  await sugerirProduccion();
 
   document.getElementById('prod-cantidad').value = cantidad;
 
@@ -11320,6 +11324,7 @@ function limpiarPreview() {
 
 // ── Sugerencia predictiva de producción ─────────────────────────────
 let prodSugerenciaData = null;
+let _sugSeq = 0;
 
 function _prodSugBodegaParam() {
   return (typeof CENTRO_ACTIVO !== 'undefined' && CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
@@ -11330,14 +11335,16 @@ async function sugerirProduccion() {
   const strip = document.getElementById('prod-sugerencia');
   prodSugerenciaData = null;
   if (!id) { if (strip) strip.classList.add('hidden'); return; }
+  const seq = ++_sugSeq;
   try {
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}${_prodSugBodegaParam()}`);
     const d = await r.json();
-    if (!d.ok) { if (strip) strip.classList.add('hidden'); return; }
+    if (seq !== _sugSeq) return;
+    if (!d.ok) { if (strip) strip.classList.add('hidden'); toast(d.error || 'Sin sugerencia para este producto', false); return; }
     prodSugerenciaData = d;
     document.getElementById('prod-sug-mp-cant').value = '';
     renderSugerencia();
-  } catch(e) { console.error(e); }
+  } catch(e) { console.error(e); if (seq === _sugSeq) toast('Error de red al cargar sugerencia', false); }
 }
 
 function renderSugerencia() {
@@ -11393,6 +11400,7 @@ function sugerenciaUsarMaximo() {
 function ocultarSugerencia() {
   const strip = document.getElementById('prod-sugerencia');
   if (strip) strip.classList.add('hidden');
+  _sugSeq++;
   prodSugerenciaData = null;
 }
 
@@ -13436,6 +13444,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // AC producción (limpia preview al cambiar producto)
 
   setupAC('prod-ac-input', 'prod-ac-list', 'prod-ac-id', () => productos, () => { limpiarPreview(); sugerirProduccion(); });
+
+  document.getElementById('prod-ac-input').addEventListener('input', ocultarSugerencia);
 
 
 

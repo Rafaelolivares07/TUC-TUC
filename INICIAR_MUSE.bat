@@ -23,14 +23,13 @@ git -C "%V2%" config --get-all credential.helper 2>nul | findstr /C:"muse-git-cr
 echo   sslbackend + credential-helper OK
 
 echo [3/6] PAT para push solo de Muse
-if exist "%CREDS%" (
-  echo   credenciales OK
-) else (
-  echo   Falta %CREDS% - Muse no podra pushear solo (pedira aprobacion).
-  echo   Crea un PAT fine-grained en github.com: repo TUC-TUC, Contents read+write.
-  powershell -NoProfile -Command "$s=Read-Host 'Pega el PAT (no se muestra, Enter para omitir)' -AsSecureString; $p=[Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)); if($p.Length -lt 10){exit 1}; 'https://Rafaelolivares07:'+$p+'@github.com' | Out-File -FilePath 'C:\Tools\muse-git-credentials' -Encoding ascii -NoNewline"
-  if !errorlevel! equ 0 (echo   PAT guardado.) else (echo   Omitido. Re-ejecuta este script cuando tengas el PAT.)
-)
+if exist "%CREDS%" echo   credenciales OK
+if exist "%CREDS%" goto :pat_ok
+echo   Falta %CREDS% - Muse no podra pushear solo (pedira aprobacion).
+echo   Crea un PAT fine-grained en github.com: repo TUC-TUC, Contents read+write.
+powershell -NoProfile -Command "$s=Read-Host 'Pega el PAT (no se muestra, Enter para omitir)' -AsSecureString; $p=[Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)); if($p.Length -lt 10){exit 1}; 'https://Rafaelolivares07:'+$p+'@github.com' | Out-File -FilePath 'C:\Tools\muse-git-credentials' -Encoding ascii -NoNewline"
+if %errorlevel% equ 0 (echo   PAT guardado.) else (echo   Omitido. Re-ejecuta este script cuando tengas el PAT.)
+:pat_ok
 
 echo [4/6] Fetch + estado V2
 git -C "%V2%" fetch origin
@@ -53,12 +52,11 @@ if defined MUSECMD (echo   CLI: !MUSECMD!) else (echo   AVISO: 'muse' no esta en
 
 echo [6/6] Acceso directo en Escritorio
 set "LNK=%USERPROFILE%\Desktop\INICIAR MUSE.lnk"
-if exist "!LNK!" (
-  echo   acceso OK
-) else (
-  powershell -NoProfile -Command "$w=New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut($env:USERPROFILE+'\Desktop\INICIAR MUSE.lnk'); $s.TargetPath='C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\INICIAR_MUSE.bat'; $s.WorkingDirectory='C:\Users\RAFAEL OLIVARES'; $s.Save()"
-  if !errorlevel! equ 0 (echo   acceso creado.) else (echo   no se pudo crear acceso.)
-)
+if exist "%LNK%" echo   acceso OK
+if exist "%LNK%" goto :lnk_ok
+powershell -NoProfile -Command "$w=New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut($env:USERPROFILE+'\Desktop\INICIAR MUSE.lnk'); $s.TargetPath='C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\INICIAR_MUSE.bat'; $s.WorkingDirectory='C:\Users\RAFAEL OLIVARES'; $s.Save()"
+if %errorlevel% equ 0 (echo   acceso creado.) else (echo   no se pudo crear acceso.)
+:lnk_ok
 
 echo.
 if not defined MUSECMD (pause & exit /b 1)

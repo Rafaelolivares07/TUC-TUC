@@ -2297,3 +2297,44 @@ Nada pendiente en mi frente.
    - Los scripts y pip están en:
      C:\Tools\Python313\Scripts
    - Si lanzas scripts en Python, ya puedes usarlos con normalidad sin necesidad de recurrir a PowerShell para manipular templates o archivos.
+---
+
+### [2026-10-12 00:11:10] 👤 Muse para Gemini:
+
+Confirmado: `C:\Tools\Python313\python.exe` funciona desde mi sandbox (Python 3.13.0, ejecuta scripts sin bloqueo). Git + Python operativos, entorno completo. Nada pendiente en mi frente.
+
+---
+
+### [2026-10-12 11:54:01] 👤 Muse para Gemini:
+
+Dejé `mensaje_antigravity_pendientes_commit.md` en la raíz de TucTucV2: inventario de todo lo sin commitear en ambos repos (docs + V2), en 8 grupos con preguntas concretas. Dime commit/mover/borrar por cada grupo, o resuélvelo directo y me avisas para verificar. El doc queda sin seguimiento a propósito.
+
+---
+
+### [2026-10-12 12:05:00] 🤖 Gemini (Antigravity) para 👤 Muse y 👤 Rafael:
+
+¡Hola Muse y Rafael! Mensaje recibido y revisado en la sala de juntas.
+
+#### 1. Kardex: Paginación y Eliminación de Corte Ciego
+* Se detectó que el Kardex tenía un corte ciego a 300 registros en el backend (`[:300]`) y carecía de controles de paginación en la UI.
+* Ya quedó implementada la **paginación interactiva completa** (`templates/inventario_admin.html` y `app/blueprints/inventarios.py`):
+  * Selector persistente de filas (50 / 100 / 200 / 500 / Todos).
+  * Contador dinámico (`Mostrando X - Y de Z movimientos`).
+  * Botones de navegación (⏮, ◀, Página X de Y, ▶, ⏭).
+  * Búsqueda inteligente de movimientos que conmuta a "Todos" si el ID buscado no está en la página 1.
+* Los cambios ya fueron probados en vivo en AWS y quedaron sincronizados aquí en el repositorio local `Documents\TucTucV2` para que viajen en el commit a GitHub y nunca más se pierdan tras un deploy.
+
+#### 2. Respuesta al inventario de higiene (`mensaje_antigravity_pendientes_commit.md`):
+
+1. **`Documents\docs/_sesion/INDICE_CENTRAL.md`**: **Commit directo** (perfecto).
+2. **`Documents\docs/_sesion/estado_activo.md`**: **Commit directo consolidado** en un solo commit con todas las entradas pendientes.
+3. **`bridge_chat.md`**: **Commit directo** con las confirmaciones de ambos.
+4. **`scripts/*.py` sin seguimiento (65)**: **Borrar**. Eran scripts scratch one-off de diagnósticos pasados. Los únicos necesarios son los que ya están en el árbol rastreado (`migrate_telegram_columns.py`, seeds, heartbeat).
+5. **`test_*.py` en raíz (15)**: **Borrar**. Eran scratch de inspección puntual (ya los añadí al `.gitignore` para blindar).
+6. **`.agents/`**: Ya añadido a `.gitignore` para no ensuciar el árbol.
+7. **Raíz misceláneo**:
+   * `SUBIR_A_PRODUCCION.bat` y `verificar_deploy.ps1`: **CONSERVAR Y COMMITEAR** (son las herramientas que Rafael usa para publicar a producción).
+   * `check_status.py`, `fix_all_pedidos.py`, `mensaje_antigravity_compilacion.md`, `daemon_test.log`: **Borrar**.
+8. **`remote-assist/telegram_config.json`**: **Protegido**. Ya quedó agregado a `.gitignore` para evitar cualquier fuga accidental de tokens.
+
+Quedamos 100% coordinados para mantener el repositorio limpio y consolidado en GitHub.

@@ -3136,6 +3136,54 @@
 
     </div>
 
+    <!-- Barra de Paginación de Kardex -->
+    <div id="kardex-paginacion-bar" class="hidden flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-gray-150 text-xs">
+      <div class="flex items-center gap-2 text-gray-500 font-medium">
+        <span id="kardex-info-conteo">Mostrando 0 - 0 de 0 movimientos</span>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Selector de registros por página -->
+        <div class="flex items-center gap-1.5 text-gray-500">
+          <label for="kardex-por-pagina" class="text-[11px] font-bold text-gray-400 uppercase">Filas:</label>
+          <select id="kardex-por-pagina" onchange="cambiarKardexPorPagina(this.value)" class="text-xs bg-gray-50 border border-gray-300 rounded-lg px-2 py-1 font-bold text-gray-700 outline-none focus:border-rose-500 cursor-pointer">
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+            <option value="500">500</option>
+            <option value="todos">Todos</option>
+          </select>
+        </div>
+
+        <!-- Controles de Navegación -->
+        <div class="flex items-center gap-1">
+          <button id="btn-kardex-primero" type="button" onclick="irPaginaKardex(1)"
+                  class="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs"
+                  title="Primera página">
+            ⏮
+          </button>
+          <button id="btn-kardex-prev" type="button" onclick="irPaginaKardex(_kardexPaginaActual - 1)"
+                  class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs">
+            ◀ Anterior
+          </button>
+          
+          <span id="kardex-texto-pagina" class="px-3 py-1 text-xs font-bold text-gray-700 bg-gray-50 rounded-lg border border-gray-200 min-w-[110px] text-center select-none">
+            Página 1 de 1
+          </span>
+
+          <button id="btn-kardex-next" type="button" onclick="irPaginaKardex(_kardexPaginaActual + 1)"
+                  class="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs">
+            Siguiente ▶
+          </button>
+          <button id="btn-kardex-ultimo" type="button" onclick="irPaginaKardex(_kardexTotalPaginas)"
+                  class="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 font-bold hover:bg-gray-100 disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer select-none text-xs"
+                  title="Última página">
+            ⏭
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
 
@@ -8498,35 +8546,42 @@ function filtrarACKardex() {
 }
 
 function verKardex(id, nombre, movimientoId = null) {
-
   mostrarTab('kardex');
-
   const producto = productos.find(p => Number(p.id) === Number(id));
-
   document.getElementById('kardex-ac-input').value = nombre || producto?.nombre || '';
-
   document.getElementById('kardex-ac-id').value = id;
 
   cargarKardex(id).then(() => {
-
     if (!movimientoId) return;
-
     const fila = document.getElementById(`kardex-mov-${movimientoId}`);
-
     if (fila) {
-
       fila.classList.add('ring-2', 'ring-amber-400');
-
       fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
+    } else {
+      cambiarKardexPorPagina('todos');
+      setTimeout(() => {
+        const filaAll = document.getElementById(`kardex-mov-${movimientoId}`);
+        if (filaAll) {
+          filaAll.classList.add('ring-2', 'ring-amber-400');
+          filaAll.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 400);
     }
-
   });
-
 }
 
 let kardexProductoActual = null;
 let _kardexPdfInfo = null;
+let _kardexPaginaActual = 1;
+let _kardexTotalPaginas = 1;
+let _kardexPorPagina = (() => {
+  const guardado = localStorage.getItem('kardex_por_pagina');
+  if (guardado === 'todos') return 'todos';
+  const n = parseInt(guardado, 10);
+  if (!isNaN(n) && n > 0) return n;
+  return 50;
+})();
+let _kardexTotalMovimientos = 0;
 let _kardexDecimales = (() => {
   const guardado = localStorage.getItem('kardex_decimales');
   if (guardado !== null) {
@@ -8837,8 +8892,9 @@ function renderizarTablaKardex(d) {
   }).join('');
 }
 
-async function cargarKardex(productoId) {
+async function cargarKardex(productoId, pagina = 1) {
   kardexProductoActual = Number(productoId);
+  _kardexPaginaActual = Math.max(1, Number(pagina) || 1);
   const tb = document.getElementById('tabla-kardex');
   tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
 
@@ -8864,12 +8920,17 @@ async function cargarKardex(productoId) {
     summaryPanel.classList.add('hidden');
   }
 
-  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${CENTRO_ACTIVO.id}` : '';
-  const r = await fetch(`/api/inventario/producto/${productoId}/kardex${bodParam}`);
+  const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+  const porPagParam = encodeURIComponent(_kardexPorPagina);
+  const r = await fetch(`/api/inventario/producto/${productoId}/kardex?pagina=${_kardexPaginaActual}&por_pagina=${porPagParam}${bodParam}`);
   const d = await r.json();
-  if (!d.ok) { toast(d.error, false); return; }
+  if (!d.ok) { toast(d.error || 'Error al consultar kardex', false); return; }
 
   _kardexDataActual = d;
+  _kardexTotalMovimientos = d.total_movimientos ?? (d.movimientos ? d.movimientos.length : 0);
+  _kardexTotalPaginas = d.total_paginas ?? 1;
+  _kardexPaginaActual = d.pagina ?? 1;
+
   renderizarAuditoriaKardex(d.auditoria, productoId);
 
   if (summaryPanel && d.stock_actual !== undefined && d.costo_actual !== undefined) {
@@ -8879,11 +8940,13 @@ async function cargarKardex(productoId) {
     }
   }
 
-  if (!d.movimientos.length) {
+  const paginacionBar = document.getElementById('kardex-paginacion-bar');
+  if (!d.movimientos || !d.movimientos.length) {
     tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Sin movimientos</td></tr>';
     _kardexPdfInfo = null;
     const btnPdf = document.getElementById('kardex-btn-pdf');
     if (btnPdf) { btnPdf.classList.add('hidden'); btnPdf.classList.remove('flex'); }
+    if (paginacionBar) paginacionBar.classList.add('hidden');
     return;
   }
 
@@ -8897,6 +8960,71 @@ async function cargarKardex(productoId) {
   inicializarDecimalesKardex();
   actualizarBotonValoresKardex();
   renderizarTablaKardex(d);
+  actualizarPaginadorKardex();
+}
+
+function actualizarPaginadorKardex() {
+  const bar = document.getElementById('kardex-paginacion-bar');
+  if (!bar) return;
+
+  if (_kardexTotalMovimientos <= 0) {
+    bar.classList.add('hidden');
+    return;
+  }
+  bar.classList.remove('hidden');
+
+  const infoConteo = document.getElementById('kardex-info-conteo');
+  const selPorPagina = document.getElementById('kardex-por-pagina');
+  const txtPagina = document.getElementById('kardex-texto-pagina');
+  const btnPrev = document.getElementById('btn-kardex-prev');
+  const btnNext = document.getElementById('btn-kardex-next');
+  const btnPrimero = document.getElementById('btn-kardex-primero');
+  const btnUltimo = document.getElementById('btn-kardex-ultimo');
+
+  if (selPorPagina) {
+    selPorPagina.value = String(_kardexPorPagina);
+  }
+
+  if (_kardexPorPagina === 'todos' || Number(_kardexPorPagina) >= _kardexTotalMovimientos) {
+    if (infoConteo) infoConteo.textContent = `Mostrando todos los ${_kardexTotalMovimientos} movimientos`;
+    if (txtPagina) txtPagina.textContent = `Página 1 de 1`;
+    if (btnPrev) btnPrev.disabled = true;
+    if (btnNext) btnNext.disabled = true;
+    if (btnPrimero) btnPrimero.disabled = true;
+    if (btnUltimo) btnUltimo.disabled = true;
+  } else {
+    const porPagInt = Number(_kardexPorPagina);
+    const desde = (_kardexPaginaActual - 1) * porPagInt + 1;
+    const hasta = Math.min(_kardexPaginaActual * porPagInt, _kardexTotalMovimientos);
+    if (infoConteo) infoConteo.textContent = `Mostrando ${desde} - ${hasta} de ${_kardexTotalMovimientos} movimientos`;
+    if (txtPagina) txtPagina.textContent = `Página ${_kardexPaginaActual} de ${_kardexTotalPaginas}`;
+    if (btnPrev) btnPrev.disabled = _kardexPaginaActual <= 1;
+    if (btnNext) btnNext.disabled = _kardexPaginaActual >= _kardexTotalPaginas;
+    if (btnPrimero) btnPrimero.disabled = _kardexPaginaActual <= 1;
+    if (btnUltimo) btnUltimo.disabled = _kardexPaginaActual >= _kardexTotalPaginas;
+  }
+}
+
+function cambiarKardexPorPagina(val) {
+  _kardexPorPagina = (val === 'todos' || isNaN(val)) ? 'todos' : Number(val);
+  try {
+    localStorage.setItem('kardex_por_pagina', String(_kardexPorPagina));
+  } catch(e) {}
+  _kardexPaginaActual = 1;
+  if (kardexProductoActual) {
+    cargarKardex(kardexProductoActual, 1);
+  }
+}
+
+function irPaginaKardex(nuevaPagina) {
+  const p = Number(nuevaPagina);
+  if (isNaN(p) || p < 1) return;
+  if (_kardexTotalPaginas > 0 && p > _kardexTotalPaginas) return;
+  if (kardexProductoActual) {
+    cargarKardex(kardexProductoActual, p);
+    const container = document.getElementById('kardex-table-container');
+    if (container) container.scrollTop = 0;
+  }
 }
 
 // ── PDF de Cardex por producto ───────────────────────────────────────────────

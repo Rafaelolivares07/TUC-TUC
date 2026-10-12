@@ -1958,8 +1958,35 @@ def api_inventario_kardex(producto_id):
             m_dict['saldo_calculado'] = float(saldo_acumulado)
             movimientos_con_saldo.append(m_dict)
 
-        # Invertir para mostrar los más recientes arriba en la tabla interactiva
-        movimientos_ui = list(reversed(movimientos_con_saldo))[:300]
+        # Paginación interactiva del Kardex
+        total_movimientos = len(movimientos_con_saldo)
+        movimientos_ordenados = list(reversed(movimientos_con_saldo))
+
+        pagina_param = request.args.get('pagina', default=1)
+        por_pagina_param = request.args.get('por_pagina', default=50)
+
+        try:
+            pagina = max(1, int(pagina_param))
+        except (ValueError, TypeError):
+            pagina = 1
+
+        if str(por_pagina_param).lower() in ('todos', 'all', '0', '-1'):
+            por_pagina_val = 'todos'
+            por_pagina = total_movimientos if total_movimientos > 0 else 50
+            total_paginas = 1
+            pagina = 1
+            movimientos_ui = movimientos_ordenados
+        else:
+            try:
+                por_pagina = max(1, int(por_pagina_param))
+            except (ValueError, TypeError):
+                por_pagina = 50
+            por_pagina_val = por_pagina
+            total_paginas = max(1, (total_movimientos + por_pagina - 1) // por_pagina) if total_movimientos > 0 else 1
+            if pagina > total_paginas:
+                pagina = total_paginas
+            offset = (pagina - 1) * por_pagina
+            movimientos_ui = movimientos_ordenados[offset:offset + por_pagina]
 
         if not es_consolidado_k:
             try:
@@ -2007,6 +2034,10 @@ def api_inventario_kardex(producto_id):
         return jsonify({
             'ok': True, 
             'movimientos': movimientos_ui,
+            'total_movimientos': total_movimientos,
+            'pagina': pagina,
+            'total_paginas': total_paginas,
+            'por_pagina': por_pagina_val,
             'costo_actual': costo_actual,
             'stock_actual': stock_actual,
             'valor_existencia': valor_existencia,

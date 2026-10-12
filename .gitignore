@@ -71,3 +71,11 @@ deploy_watcher.log
 # Scratch diagnostic files
 scratch/
 temp_*.py
+test_*.py
+daemon_test.log
+*.aws_tmp
+mensaje_antigravity_*.md
+
+# Remote assist secrets & private agent settings
+remote-assist/telegram_config.json
+.agents/

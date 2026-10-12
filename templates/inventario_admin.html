@@ -224,20 +224,33 @@
       margin-bottom: 3px;
     }
 
-    /* Pestaña Producción y Vista Previa */
+    /* Pestaña Producción y Vista Previa (+175% legible) */
     #tab-produccion input:not([type="hidden"]),
     #tab-produccion select {
-      font-size: 0.95rem;
-      padding: 9px 12px;
-      border-radius: 10px;
-      min-height: 42px;
+      font-size: 1.15rem;
+      padding: 10px 14px;
+      border-radius: 12px;
+      min-height: 48px;
     }
     #tab-produccion label {
-      font-size: 0.88rem;
+      font-size: 1.05rem;
       font-weight: 700;
-      color: #374151;
-      margin-bottom: 4px;
+      color: #1f2937;
+      margin-bottom: 5px;
       display: block;
+    }
+    #tab-produccion #prod-preview-tabla td {
+      font-size: 1.1rem;
+      padding: 12px 14px;
+    }
+    #tab-produccion #prod-preview-tabla input {
+      font-size: 1.15rem;
+      min-height: 44px;
+      padding: 6px 12px;
+    }
+    #tab-produccion th {
+      font-size: 0.95rem;
+      padding: 12px 14px;
     }
 
     label { font-size: .75rem; font-weight: 600; color: #6b7280; margin-bottom: 2px; display: block; }
@@ -2307,7 +2320,7 @@
 
 
     <!-- Bloque Arm?nico y Centrado: Registrar Producci?n -->
-    <div class="max-w-4xl mx-auto mb-6">
+    <div class="w-full mb-6">
       <div class="bg-gradient-to-b from-white to-slate-50/70 border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-sm">
         
         <!-- Cabecera del bloque -->
@@ -2315,8 +2328,8 @@
           <div class="flex items-center gap-2.5">
             <span class="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-base shadow-2xs">??</span>
             <div>
-              <h2 class="font-bold text-slate-800 text-sm sm:text-base leading-tight">Registrar Producci?n</h2>
-              <p class="text-[11px] text-slate-400">Selecciona el producto con receta est?ndar y define la cantidad a fabricar</p>
+              <h2 class="font-bold text-slate-800 text-lg sm:text-xl leading-tight">Registrar Producción</h2>
+              <p class="text-sm text-slate-500">Selecciona el producto con receta estándar y define la cantidad a fabricar</p>
             </div>
           </div>
           <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
@@ -2325,46 +2338,46 @@
         </div>
 
         <!-- Fila 1: Metadatos del Documento -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
           <div>
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Tipo doc. producci?n</label>
-            <select id="prod-tipo-doc" onchange="mostrarConsecutivoProduccion()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white font-medium text-slate-700 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-300 transition">
+            <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Tipo doc. producción</label>
+            <select id="prod-tipo-doc" onchange="mostrarConsecutivoProduccion()" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-white font-semibold text-slate-800 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition">
               <option value="">Cargando tipos...</option>
             </select>
           </div>
           <div>
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">No. documento</label>
-            <input id="prod-num-doc" type="text" readonly placeholder="Auto-consecutivo" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 font-mono font-bold text-slate-600 outline-none">
+            <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">No. documento</label>
+            <input id="prod-num-doc" type="text" readonly placeholder="Auto-consecutivo" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-slate-50 font-mono font-bold text-slate-700 outline-none">
           </div>
           <div>
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Fecha documento</label>
-            <input id="prod-fecha" type="date" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white font-medium text-slate-700 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-300 transition">
+            <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Fecha documento</label>
+            <input id="prod-fecha" type="date" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-white font-semibold text-slate-800 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition">
           </div>
           <div class="relative">
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Responsable (Tercero)</label>
-            <input id="prod-responsable" type="text" placeholder="Buscar responsable..." autocomplete="off" onfocus="this.select()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white font-medium text-slate-700 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-300 transition" value="{{ session.get('nombre', '') }}">
+            <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Responsable (Tercero)</label>
+            <input id="prod-responsable" type="text" placeholder="Buscar responsable..." autocomplete="off" onfocus="this.select()" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-white font-semibold text-slate-800 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition" value="{{ session.get('nombre', '') }}">
             <div id="prod-responsable-list" class="ac-list hidden absolute left-0 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg"></div>
             <input type="hidden" id="prod-responsable-id" value="{{ session.get('chat_tercero_id', '') }}">
           </div>
         </div>
 
-        <!-- Fila 2: ?tem y Cantidad con dise?o integrado -->
-        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mb-3">
+        <!-- Fila 2: Ítem y Cantidad con tipografía ampliada -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
           <div class="md:col-span-8 relative">
-            <label class="block text-[11px] font-bold text-slate-600 uppercase tracking-wide mb-1">
-              <span>??</span> Producto a producir <span class="text-rose-500">*</span>
+            <label class="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+              <span>🔍</span> Producto a producir <span class="text-rose-500">*</span>
             </label>
             <div class="relative">
-              <input id="prod-ac-input" type="text" placeholder="Escribe para buscar producto con tarjeta est?ndar?" autocomplete="off" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm bg-white font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-2xs">
+              <input id="prod-ac-input" type="text" placeholder="Escribe para buscar producto con tarjeta estándar…" autocomplete="off" class="w-full border-2 border-slate-300 rounded-xl px-4 py-3 text-base sm:text-lg bg-white font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-sm">
               <div id="prod-ac-list" class="ac-list hidden"></div>
               <input type="hidden" id="prod-ac-id">
             </div>
           </div>
           <div class="md:col-span-4">
-            <label class="block text-[11px] font-bold text-slate-600 uppercase tracking-wide mb-1">
-              <span>??</span> Cantidad a producir <span class="text-rose-500">*</span>
+            <label class="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+              <span>🔢</span> Cantidad a producir <span class="text-rose-500">*</span>
             </label>
-            <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1" oninput="limpiarPreview()" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm bg-white font-mono font-bold text-slate-800 text-right outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-2xs">
+            <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1" oninput="limpiarPreview()" class="w-full border-2 border-slate-300 rounded-xl px-4 py-3 text-base sm:text-lg bg-white font-mono font-black text-slate-900 text-right outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-sm">
           </div>
         </div>
 
@@ -2388,21 +2401,21 @@
           <div class="bg-white/80 border border-amber-200/90 rounded-xl p-3 mb-2.5 shadow-2xs">
             <div class="flex flex-wrap items-center gap-2.5 text-xs">
               <div class="flex flex-col">
-                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-0.5">Ingrediente Guía (Materia Prima)</label>
-                <select id="prod-sug-guia" onchange="sugerenciaCambioGuia()" onwheel="this.blur()" class="border border-amber-300 rounded-lg px-2.5 py-1 text-xs bg-white font-medium text-slate-800 outline-none shadow-2xs focus:border-amber-500 cursor-pointer"></select>
+                <label class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-1">Ingrediente Guía (Materia Prima)</label>
+                <select id="prod-sug-guia" onchange="sugerenciaCambioGuia()" onwheel="this.blur()" class="border border-amber-300 rounded-xl px-3 py-2 text-sm sm:text-base bg-white font-bold text-slate-800 outline-none shadow-sm focus:border-amber-500 cursor-pointer"></select>
               </div>
               <div class="flex flex-col">
-                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-0.5">Cantidad a consumir</label>
-                <div class="flex items-center gap-1.5">
-                  <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="máx stock" class="w-28 border border-amber-300 rounded-lg px-2.5 py-1 text-xs bg-white font-mono font-bold text-slate-800 text-right outline-none shadow-2xs focus:border-amber-500">
-                  <span id="prod-sug-mp-nombre" class="text-[11px] text-slate-500 font-medium truncate max-w-[150px]"></span>
+                <label class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-1">Cantidad a consumir</label>
+                <div class="flex items-center gap-2">
+                  <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="máx stock" class="w-36 border border-amber-300 rounded-xl px-3 py-2 text-sm sm:text-base bg-white font-mono font-black text-slate-900 text-right outline-none shadow-sm focus:border-amber-500">
+                  <span id="prod-sug-mp-nombre" class="text-xs sm:text-sm text-slate-600 font-semibold truncate max-w-[180px]"></span>
                 </div>
               </div>
-              <div class="flex items-end gap-1.5 ml-auto pt-3 sm:pt-0">
-                <button type="button" onclick="sugerenciaDesdeMP()" class="px-3.5 py-1.5 rounded-lg border border-amber-400 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition shadow-2xs">
+              <div class="flex items-end gap-2 ml-auto pt-3 sm:pt-0">
+                <button type="button" onclick="sugerenciaDesdeMP()" class="px-4 py-2 rounded-xl border border-amber-400 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition shadow">
                   Recalcular y Ver
                 </button>
-                <button type="button" onclick="sugerenciaUsarMaximo()" class="px-3.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition shadow-2xs">
+                <button type="button" onclick="sugerenciaUsarMaximo()" class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm transition shadow-sm">
                   Usar Máximo Posible
                 </button>
               </div>
@@ -2416,15 +2429,15 @@
           </div>
         </div>
 
-        <!-- Fila 3: Notas y Bot?n Generar Vista Previa Balanceados -->
-        <div class="flex flex-col sm:flex-row items-end gap-3 pt-1">
+        <!-- Fila 3: Notas y Botón Generar Vista Previa con tipografía destacada -->
+        <div class="flex flex-col sm:flex-row items-end gap-4 pt-1">
           <div class="w-full sm:flex-1">
-            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Notas u observaciones (opcional)</label>
-            <input id="prod-notas" type="text" placeholder="Ej. Lote matutino, ajuste de f?rmula..." class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white text-slate-700 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-300 transition">
+            <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Notas u observaciones (opcional)</label>
+            <input id="prod-notas" type="text" placeholder="Ej. Lote matutino, ajuste de fórmula..." class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-white text-slate-800 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-300 transition">
           </div>
           <div class="w-full sm:w-auto">
-            <button type="button" onclick="previsualizarProduccion()" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm hover:shadow transition transform active:scale-98">
-              <span>???</span> Generar Vista Previa
+            <button type="button" onclick="previsualizarProduccion()" class="w-full sm:w-auto px-7 py-3 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 shadow hover:shadow-md transition transform active:scale-98">
+              <span>👁️</span> Generar Vista Previa
             </button>
           </div>
         </div>

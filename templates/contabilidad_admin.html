@@ -11,11 +11,21 @@
   body { font-family: 'Inter', sans-serif; background: #f3f4f6; }
   .tab-btn {
     flex-shrink:0; padding:8px 16px; font-size:.82rem; font-weight:600;
-    border-radius:999px; transition:background .2s,color .2s; white-space:nowrap;
-    color:#6b7280; background:transparent;
+    border-radius:999px; transition:background .2s,color .2s, transform .15s, opacity .15s; white-space:nowrap;
+    color:#6b7280; background:transparent; cursor:grab; user-select:none; -webkit-user-select:none;
   }
+  .tab-btn:active { cursor:grabbing; }
   .tab-btn.tab-active { background:#2563eb; color:#fff; }
   .tab-btn:hover:not(.tab-active) { background:#f3f4f6; color:#374151; }
+  .tab-btn.tab-dragging { opacity:0.45; transform:scale(0.96); outline:2px dashed #6366f1; outline-offset:2px; }
+  .tab-drag-indicator-left { position:relative; }
+  .tab-drag-indicator-left::before {
+    content:''; position:absolute; left:-4px; top:15%; bottom:15%; width:3px; background:#4f46e5; border-radius:999px;
+  }
+  .tab-drag-indicator-right { position:relative; }
+  .tab-drag-indicator-right::after {
+    content:''; position:absolute; right:-4px; top:15%; bottom:15%; width:3px; background:#4f46e5; border-radius:999px;
+  }
   .toast {
     position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
     padding:12px 24px; border-radius:8px; color:#fff; font-weight:600;
@@ -69,23 +79,32 @@
 
   <!-- Tabs -->
   <div class="bg-white rounded-2xl shadow-lg overflow-hidden mb-5">
-    <div class="flex gap-2 px-3 py-3 overflow-x-auto border-b border-gray-100">
-      <button onclick="cambiarTab('puc')"    id="tab-puc"    class="tab-btn tab-active">📋 PUC</button>
-      <button onclick="cambiarTab('tipos')"  id="tab-tipos"  class="tab-btn">📄 Tipos Doc</button>
-      <button onclick="cambiarTab('params')" id="tab-params" class="tab-btn">⚙️ Parametrización</button>
-      <button onclick="cambiarTab('pago_metodos')" id="tab-pago_metodos" class="tab-btn">💳 Métodos de Pago</button>
-      <button onclick="cambiarTab('desembolsos')" id="tab-desembolsos" class="tab-btn">💸 Desembolsos</button>
-      <button onclick="cambiarTab('estado_resultados')" id="tab-estado_resultados" class="tab-btn">📊 Estado de Resultados</button>
-      <button onclick="cambiarTab('punto_equilibrio')" id="tab-punto_equilibrio" class="tab-btn font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200">🎯 Punto de Equilibrio</button>
-      <button onclick="cambiarTab('grupos')" id="tab-grupos" class="tab-btn">🗂️ Grupos Inv.</button>
-      <button onclick="cambiarTab('manual')" id="tab-manual" class="tab-btn">✏️ Comprobante</button>
-      <button onclick="cambiarTab('comps')"  id="tab-comps"  class="tab-btn">📚 Comprobantes</button>
-      <button onclick="cambiarTab('progs')"  id="tab-progs"  class="tab-btn">⏱️ Programaciones</button>
-      <button onclick="cambiarTab('consulta')" id="tab-consulta" class="tab-btn">🔍 Consulta Mov.</button>
-      <button onclick="cambiarTab('balance')" id="tab-balance" class="tab-btn">⚖️ Balance y Cierre</button>
-      <a href="/admin/inventario-fisico/{{ negocio_id }}" class="tab-btn">📋 Inv. Físico</a>
-      <a href="/admin/saldos-documentos/{{ negocio_id }}" class="tab-btn">💵 Saldos x Doc</a>
-      <a href="/admin/conciliacion-disponible/{{ negocio_id }}" class="tab-btn bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold border border-emerald-200">⚖️ Conciliar Disponible</a>
+    <div class="flex items-center justify-between px-3 pt-2 pb-1 text-[11px] text-gray-400 border-b border-gray-50">
+      <span class="flex items-center gap-1.5 font-medium">
+        <span>↔️</span> Puedes arrastrar y soltar las pestañas para organizarlas a tu gusto (el orden se guarda automáticamente)
+      </span>
+      <button onclick="restablecerOrdenTabs()" class="text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 cursor-pointer font-semibold text-[11px]" title="Restablecer orden predeterminado de pestañas">
+        <span>↺</span> Restablecer orden
+      </button>
+    </div>
+    <div id="contabilidad-tabs-bar" class="flex gap-2 px-3 py-3 overflow-x-auto border-b border-gray-100 select-none items-center">
+      <button onclick="cambiarTab('puc')"    id="tab-puc" data-tab-id="puc" class="tab-btn tab-active">📋 PUC</button>
+      <button onclick="cambiarTab('tipos')"  id="tab-tipos" data-tab-id="tipos" class="tab-btn">📄 Tipos Doc</button>
+      <button onclick="cambiarTab('params')" id="tab-params" data-tab-id="params" class="tab-btn">⚙️ Parametrización</button>
+      <button onclick="cambiarTab('pago_metodos')" id="tab-pago_metodos" data-tab-id="pago_metodos" class="tab-btn">💳 Métodos de Pago</button>
+      <button onclick="cambiarTab('desembolsos')" id="tab-desembolsos" data-tab-id="desembolsos" class="tab-btn">💸 Desembolsos</button>
+      <button onclick="cambiarTab('amortizaciones')" id="tab-amortizaciones" data-tab-id="amortizaciones" class="tab-btn font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200">⏳ Amortizaciones</button>
+      <button onclick="cambiarTab('estado_resultados')" id="tab-estado_resultados" data-tab-id="estado_resultados" class="tab-btn">📊 Estado de Resultados</button>
+      <button onclick="cambiarTab('punto_equilibrio')" id="tab-punto_equilibrio" data-tab-id="punto_equilibrio" class="tab-btn font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200">🎯 Punto de Equilibrio</button>
+      <button onclick="cambiarTab('grupos')" id="tab-grupos" data-tab-id="grupos" class="tab-btn">🗂️ Grupos Inv.</button>
+      <button onclick="cambiarTab('manual')" id="tab-manual" data-tab-id="manual" class="tab-btn">✏️ Comprobante</button>
+      <button onclick="cambiarTab('comps')"  id="tab-comps" data-tab-id="comps" class="tab-btn">📚 Comprobantes</button>
+      <button onclick="cambiarTab('progs')"  id="tab-progs" data-tab-id="progs" class="tab-btn">⏱️ Programaciones</button>
+      <button onclick="cambiarTab('consulta')" id="tab-consulta" data-tab-id="consulta" class="tab-btn">🔍 Consulta Mov.</button>
+      <button onclick="cambiarTab('balance')" id="tab-balance" data-tab-id="balance" class="tab-btn">⚖️ Balance y Cierre</button>
+      <a href="/admin/inventario-fisico/{{ negocio_id }}" id="tab-inv-fisico" data-tab-id="inv_fisico" class="tab-btn">📋 Inv. Físico</a>
+      <a href="/admin/saldos-documentos/{{ negocio_id }}" id="tab-saldos-doc" data-tab-id="saldos_doc" class="tab-btn">💵 Saldos x Doc</a>
+      <a href="/admin/conciliacion-disponible/{{ negocio_id }}" id="tab-concil-disp" data-tab-id="concil_disp" class="tab-btn bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold border border-emerald-200">⚖️ Conciliar Disponible</a>
     </div>
 
     <!-- ═══ TAB: PUC ═══ -->
@@ -615,6 +634,11 @@
       {% include "gastos_pane.html" %}
     </div>
 
+    <!-- TAB: AMORTIZACIONES PROGRAMADAS -->
+    <div id="panel-amortizaciones" class="p-5 hidden">
+      {% include "amortizaciones_pane.html" %}
+    </div>
+
     <!-- TAB: ESTADO DE RESULTADOS GERENCIAL -->
     <div id="panel-estado_resultados" class="p-5 hidden">
       {% include "estado_resultados_pane.html" %}
@@ -940,7 +964,7 @@
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
 const TAB_INICIAL_SERVER = {{ (tab_inicial or '') | tojson }};
-const TABS = ['puc','tipos','params','pago_metodos','desembolsos','estado_resultados','punto_equilibrio','grupos','progs','manual','comps', 'consulta', 'balance'];
+const TABS = ['puc','tipos','params','pago_metodos','desembolsos','amortizaciones','estado_resultados','punto_equilibrio','grupos','progs','manual','comps', 'consulta', 'balance'];
 let tiposDocs = [];
 let variablesModulo = [];
 let paramActivo = null;
@@ -949,6 +973,7 @@ let acTimers = {};
 
 // ── Tabs ──────────────────────────────────────────────────────
 function cambiarTab(t) {
+  if (window.isTabDraggingNow) return;
   if (t === 'gastos') t = 'desembolsos';
   TABS.forEach(x => {
     const el = document.getElementById(`panel-${x}`);
@@ -973,7 +998,7 @@ function cambiarTab(t) {
   // Dynamic width control for Consulta / Balance / Estado de Resultados / Punto de Equilibrio tabs
   const container = document.getElementById('main-container');
   if (container) {
-    if (t === 'consulta' || t === 'balance' || t === 'estado_resultados' || t === 'desembolsos' || t === 'punto_equilibrio') {
+    if (t === 'consulta' || t === 'balance' || t === 'estado_resultados' || t === 'desembolsos' || t === 'punto_equilibrio' || t === 'amortizaciones') {
       container.classList.remove('max-w-5xl');
       container.classList.add('w-full', 'max-w-none', 'px-4');
     } else {
@@ -995,6 +1020,11 @@ function cambiarTab(t) {
   if (t === 'desembolsos') {
     if (typeof inicializarModuloGastos === 'function') {
       inicializarModuloGastos();
+    }
+  }
+  if (t === 'amortizaciones') {
+    if (typeof cargarAmortizaciones === 'function') {
+      cargarAmortizaciones();
     }
   }
   if (t === 'estado_resultados') {
@@ -3608,7 +3638,122 @@ async function cargarCentrosUtilidadContabilidad() {
   }
 }
 
-// Inicializar centros de utilidad
+
+// ── Drag and Drop Reordering of Tabs with Persistence ───────
+let isTabDraggingNow = false;
+
+function inicializarDragAndDropTabs() {
+  const container = document.getElementById('contabilidad-tabs-bar');
+  if (!container) return;
+
+  const storageKey = `tuc_contabilidad_tabs_order_${NEGOCIO_ID}`;
+  const saved = localStorage.getItem(storageKey);
+
+  if (saved) {
+    try {
+      const order = JSON.parse(saved);
+      if (Array.isArray(order) && order.length > 0) {
+        const tabsMap = {};
+        Array.from(container.children).forEach(el => {
+          const key = el.getAttribute('data-tab-id') || el.id;
+          if (key) tabsMap[key] = el;
+        });
+        order.forEach(key => {
+          if (tabsMap[key]) {
+            container.appendChild(tabsMap[key]);
+            delete tabsMap[key];
+          }
+        });
+        // Agregar pestañas que no estuvieran en el orden guardado
+        Object.values(tabsMap).forEach(el => container.appendChild(el));
+      }
+    } catch (e) {
+      console.warn('Error restaurando orden de pestañas:', e);
+    }
+  }
+
+  let draggedItem = null;
+
+  Array.from(container.children).forEach(tab => {
+    tab.setAttribute('draggable', 'true');
+    tab.setAttribute('title', 'Arrastra para reordenar');
+
+    tab.addEventListener('dragstart', (e) => {
+      draggedItem = tab;
+      window.isTabDraggingNow = true;
+      tab.classList.add('tab-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', tab.getAttribute('data-tab-id') || tab.id);
+    });
+
+    tab.addEventListener('dragend', () => {
+      tab.classList.remove('tab-dragging');
+      limpiarIndicadoresTabs();
+      draggedItem = null;
+      setTimeout(() => { window.isTabDraggingNow = false; }, 100);
+      guardarOrdenPestanas();
+    });
+
+    tab.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (!draggedItem || draggedItem === tab) return;
+
+      limpiarIndicadoresTabs();
+      const rect = tab.getBoundingClientRect();
+      const mid = rect.left + rect.width / 2;
+      if (e.clientX < mid) {
+        tab.classList.add('tab-drag-indicator-left');
+      } else {
+        tab.classList.add('tab-drag-indicator-right');
+      }
+    });
+
+    tab.addEventListener('dragleave', () => {
+      tab.classList.remove('tab-drag-indicator-left', 'tab-drag-indicator-right');
+    });
+
+    tab.addEventListener('drop', (e) => {
+      e.preventDefault();
+      limpiarIndicadoresTabs();
+      if (!draggedItem || draggedItem === tab) return;
+
+      const rect = tab.getBoundingClientRect();
+      const mid = rect.left + rect.width / 2;
+      if (e.clientX < mid) {
+        container.insertBefore(draggedItem, tab);
+      } else {
+        container.insertBefore(draggedItem, tab.nextSibling);
+      }
+      guardarOrdenPestanas();
+      toast('Orden de pestañas guardado', true);
+    });
+  });
+
+  function limpiarIndicadoresTabs() {
+    container.querySelectorAll('.tab-btn').forEach(el => {
+      el.classList.remove('tab-drag-indicator-left', 'tab-drag-indicator-right');
+    });
+  }
+
+  function guardarOrdenPestanas() {
+    const order = Array.from(container.children)
+      .map(el => el.getAttribute('data-tab-id') || el.id)
+      .filter(Boolean);
+    localStorage.setItem(storageKey, JSON.stringify(order));
+  }
+}
+
+function restablecerOrdenTabs() {
+  const storageKey = `tuc_contabilidad_tabs_order_${NEGOCIO_ID}`;
+  localStorage.removeItem(storageKey);
+  toast('Orden restablecido. Recargando...', true);
+  setTimeout(() => window.location.reload(), 300);
+}
+
+
+// Inicializar centros de utilidad y Drag & Drop de pestañas
+inicializarDragAndDropTabs();
 cargarCentrosUtilidadContabilidad();
 
 const urlParams = new URLSearchParams(window.location.search);

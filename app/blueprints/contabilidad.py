@@ -1588,6 +1588,30 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
 
     total_deb  = sum(m['monto'] for m in mov_list if m['tipo_mov'] == 'D')
     total_cred = sum(m['monto'] for m in mov_list if m['tipo_mov'] == 'C')
+
+    # Garantía universal de partida doble: evitar comprobantes descuadrados
+    dif_asiento = round(total_deb - total_cred, 2)
+    if abs(dif_asiento) > 0.005:
+        tipo_mov_actual = tipo_doc.get('tipo_movimiento')
+        if tipo_mov_actual in ('entrada', 'compra'):
+            lineas_14 = [m for m in mov_list if m['tipo_mov'] == 'D' and str(m.get('cuenta_codigo', '')).startswith('14')]
+            if lineas_14:
+                linea_max = max(lineas_14, key=lambda x: x['monto'])
+                linea_max['monto'] = round(linea_max['monto'] - dif_asiento, 2)
+        elif tipo_mov_actual == 'venta':
+            lineas_61 = [m for m in mov_list if m['tipo_mov'] == 'D' and str(m.get('cuenta_codigo', '')).startswith('61')]
+            if lineas_61:
+                linea_max = max(lineas_61, key=lambda x: x['monto'])
+                linea_max['monto'] = round(linea_max['monto'] - dif_asiento, 2)
+        else:
+            linea_max = max(mov_list, key=lambda x: x['monto'])
+            if linea_max['tipo_mov'] == 'D':
+                linea_max['monto'] = round(linea_max['monto'] - dif_asiento, 2)
+            else:
+                linea_max['monto'] = round(linea_max['monto'] + dif_asiento, 2)
+
+    total_deb  = sum(m['monto'] for m in mov_list if m['tipo_mov'] == 'D')
+    total_cred = sum(m['monto'] for m in mov_list if m['tipo_mov'] == 'C')
     desc       = descripcion_override or param['descripcion_asiento'] or tipo_doc_codigo
     fecha_uso  = fecha or _date.today()
     _verificar_periodo_cerrado(conn, negocio_id, fecha_uso)
@@ -4102,6 +4126,293 @@ def api_suscripciones_ejecutar_ahora(negocio_id, pid):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+
+
+# ── API: Amortizaciones Programadas (Diferidos / Activos) ───────
+
+@bp.route('/api/contabilidad/<int:negocio_id>/amortizaciones', methods=['GET'])
+def api_amortizaciones_list(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    import datetime as _datetime
+    conn = get_db_connection()
+    try:
+        _asegurar_tablas(conn)
+        rows = conn.execute("""
+            SELECT p.id, p.tipo_doc_id, t.codigo AS tipo_doc_codigo, t.nombre AS tipo_doc_nombre,
+                   p.descripcion, p.frecuencia, p.dia_mes,
+                   p.hora::text AS hora, p.variables_h, p.activo,
+                   p.ultimo_ejecutado, p.proximo_ejecutado, p.ultimo_resultado, p.created_at
+            FROM programaciones_contables p
+            LEFT JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
+            WHERE p.negocio_id = %s
+            ORDER BY p.id DESC
+        """, (negocio_id,)).fetchall()
+
+        # Filtrar solo las programaciones que corresponden a amortizaciones
+        amort_rows = []
+        for r in rows:
+            vh = r['variables_h'] or {}
+            is_amort = bool(
+                vh.get('movimiento_origen_id') or
+                vh.get('doc_origen') or
+                (vh.get('cuenta_debito') and vh.get('cuenta_credito') and vh.get('cuota_total'))
+            )
+            if is_amort:
+                amort_rows.append(r)
+
+        # Mapas auxiliares para enriquecer datos
+        terceros_rows = conn.execute("SELECT id, nombre, telefono FROM terceros").fetchall()
+        terceros_map = {r['id']: r for r in terceros_rows}
+
+        cuentas_rows = conn.execute("SELECT codigo, nombre FROM cuentas_puc WHERE (creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL)", (negocio_id,)).fetchall()
+        cuentas_map = {r['codigo']: r['nombre'] for r in cuentas_rows}
+
+        centros_rows = conn.execute("SELECT id, nombre, codigo FROM centros_utilidad WHERE negocio_id = %s", (negocio_id,)).fetchall()
+        centros_map = {r['id']: r for r in centros_rows}
+
+        # Consultar comprobantes / movimientos de origen
+        mov_ids = [r['variables_h']['movimiento_origen_id'] for r in amort_rows if r['variables_h'] and r['variables_h'].get('movimiento_origen_id')]
+        mov_map = {}
+        if mov_ids:
+            placeholders = ','.join(['%s'] * len(mov_ids))
+            m_rows = conn.execute(f"""
+                SELECT id, comprobante_id, tipo_documento, numero_documento, fecha, monto, cuota_numero, cuota_total
+                FROM movimientos_contables
+                WHERE id IN ({placeholders})
+            """, tuple(mov_ids)).fetchall()
+            mov_map = {r['id']: dict(r) for r in m_rows}
+
+        amortizaciones = []
+        totales = {
+            'total_programado': 0.0,
+            'total_amortizado': 0.0,
+            'total_pendiente': 0.0,
+            'cuotas_activas': 0
+        }
+
+        from dateutil.relativedelta import relativedelta
+        from datetime import datetime
+
+        for r in amort_rows:
+            d = dict(r)
+            vh = d.get('variables_h') or {}
+            tid = vh.get('tercero_id')
+            t_obj = terceros_map.get(tid)
+            d['tercero_id'] = tid
+            d['tercero_nombre'] = t_obj['nombre'] if t_obj else 'Sin tercero'
+            d['tercero_tel'] = t_obj['telefono'] if t_obj else ''
+
+            c_deb_cod = str(vh.get('cuenta_debito') or '').strip()
+            c_cred_cod = str(vh.get('cuenta_credito') or '').strip()
+            d['cuenta_debito'] = c_deb_cod
+            d['cuenta_debito_nombre'] = cuentas_map.get(c_deb_cod, 'Amortización Gasto')
+            d['cuenta_credito'] = c_cred_cod
+            d['cuenta_credito_nombre'] = cuentas_map.get(c_cred_cod, 'Activo Diferido')
+
+            cuid = vh.get('centro_utilidad_id') or 1
+            cu_obj = centros_map.get(cuid)
+            d['centro_utilidad_id'] = cuid
+            d['centro_utilidad_nombre'] = cu_obj['nombre'] if cu_obj else f'Sede #{cuid}'
+            d['centro_utilidad_codigo'] = cu_obj['codigo'] if cu_obj else ''
+
+            cuota_total = int(vh.get('cuota_total') or 1)
+            cuotas_restantes = int(vh.get('cuotas_restantes') or 0)
+            cuotas_asentadas = max(0, cuota_total - cuotas_restantes)
+            porcentaje = round((cuotas_asentadas / cuota_total) * 100, 1) if cuota_total > 0 else 0
+
+            d['cuota_total'] = cuota_total
+            d['cuotas_restantes'] = cuotas_restantes
+            d['cuotas_asentadas'] = cuotas_asentadas
+            d['porcentaje_progreso'] = porcentaje
+
+            d['concepto'] = vh.get('concepto') or d['descripcion'] or 'Amortización'
+            d['doc_origen'] = vh.get('doc_origen') or ''
+            d['fecha_inicio'] = str(vh.get('fecha_inicio') or '')[:10]
+            d['proxima_fecha_cuota'] = str(vh.get('proxima_fecha_cuota') or '')[:10]
+            d['movimiento_origen_id'] = vh.get('movimiento_origen_id')
+            
+            mov_orig = mov_map.get(d['movimiento_origen_id'])
+            d['comprobante_id'] = mov_orig.get('comprobante_id') if mov_orig else None
+
+            # Cálculo de montos y cronograma completo
+            cronograma = vh.get('cronograma') or []
+            monto_cuota = float(vh.get('monto_cuota') or 0.0)
+            d['monto_cuota'] = monto_cuota
+            d['cuota_final'] = float(vh.get('cuota_final') or 0.0)
+
+            cronograma_completo = []
+            monto_c1 = float(mov_orig['monto']) if mov_orig else monto_cuota
+            cronograma_completo.append({
+                'numero': 1,
+                'monto': monto_c1,
+                'fecha': d['fecha_inicio'],
+                'tipo': 'inicial',
+                'estado': 'asentada',
+                'comprobante_id': d['comprobante_id']
+            })
+
+            dt_base = None
+            try:
+                dt_base = datetime.strptime(str(d['fecha_inicio'])[:10], '%Y-%m-%d').date()
+            except Exception:
+                dt_base = None
+
+            total_amort = monto_c1
+            total_pend = 0.0
+
+            if cronograma:
+                for i, c_item in enumerate(cronograma):
+                    c_num = c_item.get('numero', i + 2)
+                    c_monto = float(c_item.get('monto', monto_cuota))
+                    c_fecha = ''
+                    if dt_base:
+                        c_fecha = (dt_base + relativedelta(months=c_num - 1)).isoformat()
+                    es_asentada = (c_num <= cuotas_asentadas)
+                    cronograma_completo.append({
+                        'numero': c_num,
+                        'monto': c_monto,
+                        'fecha': c_fecha,
+                        'tipo': c_item.get('tipo', 'intermedia'),
+                        'estado': 'asentada' if es_asentada else 'pendiente'
+                    })
+                    if es_asentada:
+                        total_amort += c_monto
+                    else:
+                        total_pend += c_monto
+            else:
+                for num_c in range(2, cuota_total + 1):
+                    es_asentada = (num_c <= cuotas_asentadas)
+                    c_monto = d['cuota_final'] if (num_c == cuota_total and d['cuota_final'] > 0) else monto_cuota
+                    c_fecha = ''
+                    if dt_base:
+                        c_fecha = (dt_base + relativedelta(months=num_c - 1)).isoformat()
+                    cronograma_completo.append({
+                        'numero': num_c,
+                        'monto': c_monto,
+                        'fecha': c_fecha,
+                        'tipo': 'uniforme',
+                        'estado': 'asentada' if es_asentada else 'pendiente'
+                    })
+                    if es_asentada:
+                        total_amort += c_monto
+                    else:
+                        total_pend += c_monto
+
+            monto_total_bien = total_amort + total_pend
+            d['monto_total'] = round(monto_total_bien, 2)
+            d['monto_amortizado'] = round(total_amort, 2)
+            d['saldo_pendiente'] = round(total_pend, 2)
+            d['cronograma_completo'] = cronograma_completo
+
+            for k in ('ultimo_ejecutado', 'proximo_ejecutado', 'created_at'):
+                if d.get(k):
+                    d[k] = d[k].isoformat()
+
+            if d['activo'] and d['cuotas_restantes'] > 0:
+                totales['cuotas_activas'] += 1
+            totales['total_programado'] += d['monto_total']
+            totales['total_amortizado'] += d['monto_amortizado']
+            totales['total_pendiente'] += d['saldo_pendiente']
+
+            amortizaciones.append(d)
+
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'amortizaciones': amortizaciones,
+            'totales': {
+                'total_programado': round(totales['total_programado'], 2),
+                'total_amortizado': round(totales['total_amortizado'], 2),
+                'total_pendiente': round(totales['total_pendiente'], 2),
+                'cuotas_activas': totales['cuotas_activas']
+            }
+        })
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/amortizaciones/<int:pid>/ejecutar', methods=['POST'])
+def api_amortizaciones_ejecutar_ahora(negocio_id, pid):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        prog = conn.execute("""
+            SELECT p.*, t.codigo AS tipo_codigo
+            FROM programaciones_contables p
+            JOIN tipos_documento_negocio t ON t.id = p.tipo_doc_id
+            WHERE p.id = %s AND p.negocio_id = %s
+        """, (pid, negocio_id)).fetchone()
+        if not prog:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Amortización no encontrada'}), 404
+        
+        vars_dict = dict(prog['variables_h'] or {})
+        if vars_dict.get('cuotas_restantes', 0) <= 0:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Esta amortización ya tiene todas sus cuotas completadas.'}), 400
+
+        comp_id = _ejecutar_asiento_amortizacion(conn, prog, vars_dict)
+        if comp_id:
+            from datetime import datetime, time
+            ahora = _dt.now()
+            p_up = conn.execute("SELECT variables_h, activo FROM programaciones_contables WHERE id = %s", (pid,)).fetchone()
+            vars_up = dict(p_up['variables_h'] or {}) if p_up else {}
+            proximo_ejec = None
+            if vars_up.get('cuotas_restantes', 0) > 0 and vars_up.get('proxima_fecha_cuota'):
+                try:
+                    dt_sig = datetime.strptime(str(vars_up['proxima_fecha_cuota'])[:10], '%Y-%m-%d')
+                    proximo_ejec = datetime.combine(dt_sig.date(), time(8, 0))
+                except Exception:
+                    pass
+
+            conn.execute("""
+                UPDATE programaciones_contables
+                SET ultimo_ejecutado = %s, proximo_ejecutado = %s, ultimo_resultado = 'ok ejecutado manual'
+                WHERE id = %s
+            """, (ahora, proximo_ejec, pid))
+            conn.commit()
+            conn.close()
+            return jsonify({'ok': True, 'comprobante_id': comp_id, 'mensaje': f'Cuota amortizada exitosamente en Comprobante #{comp_id}.'})
+        else:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No fue posible generar el asiento de amortización. Verifique que las cuentas sigan activas.'}), 400
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/amortizaciones/<int:pid>/toggle', methods=['POST'])
+def api_amortizaciones_toggle(negocio_id, pid):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT activo FROM programaciones_contables WHERE id = %s AND negocio_id = %s", (pid, negocio_id)).fetchone()
+        if not row:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Programación no encontrada'}), 404
+        nuevo_estado = not row['activo']
+        conn.execute("UPDATE programaciones_contables SET activo = %s WHERE id = %s AND negocio_id = %s", (nuevo_estado, pid, negocio_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'activo': nuevo_estado})
+    except Exception as e:
+        try: conn.rollback(); conn.close()
+        except Exception: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+
 @bp.route('/api/contabilidad/<int:negocio_id>/config', methods=['GET', 'POST'])
 def api_contabilidad_config(negocio_id):
     if not session.get('usuario_id'):
@@ -5685,6 +5996,7 @@ def _fit_pdf_cell(pdf, text, max_w):
 def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
     if not session.get('usuario_id'):
         return "No autorizado", 403
+    num_doc_str = str(numero_documento).strip()
         
     try:
         from fpdf import FPDF
@@ -5730,7 +6042,7 @@ def api_documento_pdf(negocio_id, tipo_doc, numero_documento):
                   AND (mc.numero_documento = %s OR %s = '0' OR %s = '') 
                   AND mc.negocio_id = %s
                 ORDER BY mc.tipo DESC, mc.id ASC
-            """, (tipo_doc, tipo_doc, f"%{tipo_doc}%", numero_documento, numero_documento, numero_documento, negocio_id)).fetchall()
+            """, (tipo_doc, tipo_doc, f"%{tipo_doc}%", num_doc_str, num_doc_str, num_doc_str, negocio_id)).fetchall()
         
         conn.close()
         
@@ -6195,6 +6507,86 @@ def api_gastos_documentos(negocio_id):
             
         conn.close()
         return jsonify({'ok': True, 'documentos': result})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/gastos/liquidados', methods=['GET'])
+def api_gastos_liquidados(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    tipo_doc = request.args.get('tipo_doc')
+    q = (request.args.get('q') or '').strip().lower()
+    
+    try:
+        conn = get_db_connection()
+        pms = conn.execute("""
+            SELECT metodo_codigo, nombre, icono FROM parametros_metodos_pago_negocio WHERE negocio_id = %s
+        """, (negocio_id,)).fetchall()
+        pms_map = {p['metodo_codigo']: {'nombre': p['nombre'], 'icono': p['icono'] or '??'} for p in pms}
+
+        sql = """
+            SELECT 
+                mc.tipo_documento,
+                mc.numero_documento,
+                mc.comprobante_id,
+                MIN(mc.fecha) AS fecha,
+                SUM(CASE WHEN mc.tipo IN ('debito', 'D') AND mc.movimiento_origen_id IS NULL THEN mc.monto ELSE 0 END) AS total_deb,
+                SUM(CASE WHEN mc.tipo IN ('credito', 'C') THEN mc.monto ELSE 0 END) AS total_cred,
+                COUNT(CASE WHEN mc.tipo IN ('debito', 'D') AND mc.movimiento_origen_id IS NULL THEN 1 END) AS cant_lineas,
+                MAX(mc.metodo_desembolso) AS metodo_desembolso,
+                STRING_AGG(DISTINCT CASE WHEN mc.tipo IN ('debito', 'D') AND mc.movimiento_origen_id IS NULL THEN t.nombre END, ', ') AS terceros,
+                STRING_AGG(DISTINCT CASE WHEN mc.tipo IN ('debito', 'D') AND mc.movimiento_origen_id IS NULL THEN SUBSTRING(mc.concepto, 1, 60) END, ' ? ') AS conceptos_preview,
+                MAX(u.nombre) AS registrado_por_nombre
+            FROM movimientos_contables mc
+            LEFT JOIN terceros t ON t.id = mc.tercero_id
+            LEFT JOIN usuarios u ON u.id = mc.registrado_por
+            WHERE mc.negocio_id = %s
+              AND (mc.tipo_documento = %s OR %s IS NULL OR %s = '')
+              AND mc.tipo_documento IN (
+                  SELECT codigo FROM tipos_documento_negocio WHERE negocio_id = %s AND tipo_movimiento = 'gasto'
+              )
+            GROUP BY mc.tipo_documento, mc.numero_documento, mc.comprobante_id
+            HAVING BOOL_OR(mc.tipo IN ('credito', 'C')) = TRUE
+            ORDER BY MIN(mc.fecha) DESC, CAST(NULLIF(regexp_replace(mc.numero_documento, '[^0-9]', '', 'g'), '') AS BIGINT) DESC NULLS LAST
+            LIMIT 150
+        """
+        rows = conn.execute(sql, (negocio_id, tipo_doc, tipo_doc, tipo_doc, negocio_id)).fetchall()
+        
+        results = []
+        for r in rows:
+            metodo_cod = r['metodo_desembolso']
+            metodo_info = pms_map.get(metodo_cod, {})
+            metodo_nombre = metodo_info.get('nombre') or (metodo_cod.replace('_', ' ').title() if metodo_cod else 'Sin especificar')
+            metodo_icono = metodo_info.get('icono') or '??'
+
+            if q:
+                match_text = f"{r['numero_documento']} {r['tipo_documento']} {r['terceros'] or ''} {r['conceptos_preview'] or ''} {metodo_nombre}".lower()
+                if q not in match_text:
+                    continue
+
+            fecha_str = r['fecha'].strftime('%Y-%m-%d') if hasattr(r['fecha'], 'strftime') else str(r['fecha'])
+            tot = float(r['total_deb'] or r['total_cred'] or 0)
+            results.append({
+                'tipo_documento': r['tipo_documento'],
+                'numero_documento': r['numero_documento'],
+                'comprobante_id': r['comprobante_id'],
+                'fecha': fecha_str,
+                'total': tot,
+                'cant_lineas': int(r['cant_lineas'] or 0),
+                'metodo_desembolso': metodo_cod,
+                'metodo_nombre': metodo_nombre,
+                'metodo_icono': metodo_icono,
+                'terceros': r['terceros'] or 'Varios / No especificado',
+                'conceptos_preview': r['conceptos_preview'] or '',
+                'registrado_por': r['registrado_por_nombre'] or ''
+            })
+
+        conn.close()
+        return jsonify({'ok': True, 'liquidados': results, 'total_count': len(results)})
     except Exception as e:
         try: conn.close()
         except: pass
@@ -9171,6 +9563,9 @@ def api_punto_equilibrio_datos(negocio_id):
         avg_costo = round(avg_costo)
 
         # 3. Gastos Fijos Programados
+        puc_rows = conn.execute("SELECT codigo, nombre FROM cuentas_puc WHERE activo = true").fetchall()
+        puc_map = {r['codigo']: r['nombre'] for r in puc_rows}
+
         progs_query = """
             SELECT id, descripcion, frecuencia, variables_h, proximo_ejecutado
             FROM programaciones_contables
@@ -9190,7 +9585,7 @@ def api_punto_equilibrio_datos(negocio_id):
             p_centro_id = vars_data.get('centro_utilidad_id')
             distribucion = vars_data.get('distribucion_centros')
 
-            # Si el gasto tiene distribución por centros (ej. USO DE APLICACION)
+            # Si el gasto tiene distribuci?n por centros (ej. USO DE APLICACION)
             monto_cuota = 0.0
             desc_extra = ''
             if isinstance(distribucion, list) and len(distribucion) > 0:
@@ -9209,7 +9604,7 @@ def api_punto_equilibrio_datos(negocio_id):
                     monto_val = vars_data.get('monto_recurrente') or vars_data.get('monto_cuota') or vars_data.get('monto') or vars_data.get('valor') or 0
                     monto_cuota = float(monto_val or 0)
             else:
-                # Gasto asignado a un centro o sin distribución
+                # Gasto asignado a un centro o sin distribuci?n
                 if centro_id and p_centro_id and int(p_centro_id) != centro_id:
                     continue
                 monto_val = (
@@ -9225,12 +9620,37 @@ def api_punto_equilibrio_datos(negocio_id):
                     monto_cuota = 0.0
 
             if monto_cuota > 0:
-                desc = (p['descripcion'] or vars_data.get('concepto') or 'Gasto Programado') + desc_extra
+                cuenta_deb = str(vars_data.get('cuenta_debito') or '').strip()
+                desc_str = p['descripcion'] or vars_data.get('concepto') or 'Gasto Programado'
+                desc_upper = desc_str.upper()
+                is_amort = bool(cuenta_deb and (
+                    cuenta_deb.startswith('6143') or 
+                    vars_data.get('cuota_total') or 
+                    vars_data.get('movimiento_origen_id') or 
+                    'AMORTIZACION' in desc_upper or 
+                    'AMORTIZACI?N' in desc_upper
+                ))
+                
+                cuenta_nom = puc_map.get(cuenta_deb) or ('ADECUACIONES LOCAL' if cuenta_deb == '614304' else puc_map.get(cuenta_deb[:4], 'Amortizaciones'))
+                concepto = vars_data.get('concepto') or desc_str
+                doc_origen = vars_data.get('doc_origen') or ''
+                cuota_total = vars_data.get('cuota_total')
+                cuotas_restantes = vars_data.get('cuotas_restantes')
+
+                desc = desc_str + desc_extra
                 gastos_fijos_programados.append({
                     'id': p['id'],
                     'descripcion': desc,
                     'monto': round(monto_cuota / 1000.0) * 1000,
-                    'centro_id': p_centro_id
+                    'monto_exacto': float(monto_cuota),
+                    'centro_id': p_centro_id,
+                    'es_amortizacion': is_amort,
+                    'cuenta_codigo': cuenta_deb if is_amort else None,
+                    'cuenta_nombre': cuenta_nom if is_amort else None,
+                    'concepto': concepto,
+                    'doc_origen': doc_origen,
+                    'cuota_total': cuota_total,
+                    'cuotas_restantes': cuotas_restantes
                 })
         
         # 4. Referencias legales vigentes (Colombia)

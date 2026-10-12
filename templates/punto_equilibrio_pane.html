@@ -24,7 +24,13 @@
         </select>
       </div>
 
-      <button type="button" onclick="restablecerValoresBase()"
+      <!-- Indicador sutil de sincronización y persistencia de sede -->
+      <div id="pe-sync-status-box" class="flex items-center gap-2 text-xs text-gray-600 font-bold bg-gray-50 border border-gray-200 px-3.5 py-2.5 rounded-xl shadow-2xs">
+        <span id="pe-sync-dot" class="inline-block w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+        <span id="pe-sync-text">Sincronizado por centro</span>
+      </div>
+
+      <button type="button" id="pe-btn-restablecer-base" onclick="restablecerValoresBase()"
               class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs md:text-sm font-extrabold rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer"
               title="Restablecer a la mezcla real del último mes calculada por el sistema">
         <span>🔄</span> Restablecer Base
@@ -32,38 +38,40 @@
     </div>
   </div>
 
-  <!-- TARJETAS PRINCIPALES: PUNTO DE EQUILIBRIO, VENTAS, COSTOS VARIABLES, FIJOS Y RESULTADO (EN VIVO) -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 mb-6">
-    
-    <!-- KPI 1: Punto de Equilibrio en Pesos y en Unidades -->
-    <div class="p-4 md:p-5 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl text-white shadow-md flex flex-col justify-between">
-      <div class="flex items-center justify-between">
-        <span class="text-[10px] md:text-xs font-black uppercase tracking-wider text-amber-100">Punto de Equilibrio ($)</span>
-        <span class="text-xl">🎯</span>
-      </div>
-      <div class="my-2.5">
-        <span id="pe-kpi-pesos" class="text-2xl md:text-3xl font-black font-mono tracking-tight">$0</span>
-        <span class="text-xs block text-amber-100 font-semibold mt-0.5">Venta mínima requerida</span>
-      </div>
-      
-      <!-- Meta destacada de cantidades mínimas a vender -->
-      <div class="bg-amber-700/40 border border-amber-300/40 rounded-xl p-2 mb-2">
-        <div class="flex items-center justify-between text-[11px] text-amber-100 font-bold mb-0.5">
-          <span>📦 CANTIDADES A VENDER:</span>
+  <!-- HERO BANNER: PUNTO DE EQUILIBRIO (META MÍNIMA DE SUPERVIVENCIA) -->
+  <div class="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 rounded-2xl p-4 md:p-5 text-white shadow-md mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+    <div class="flex items-center gap-3.5">
+      <div class="p-3 bg-white/20 rounded-2xl text-2xl md:text-3xl flex-shrink-0">🎯</div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-black uppercase tracking-wider text-amber-100 block">Punto de Equilibrio</span>
+          <span class="text-[10px] bg-amber-800/80 text-amber-100 font-bold px-2 py-0.5 rounded-full uppercase">Meta Mínima Requerida</span>
         </div>
-        <div class="flex items-baseline justify-between">
-          <strong id="pe-kpi-unidades-meta" class="text-lg md:text-xl font-black font-mono text-white">0 unds / mes</strong>
-          <span id="pe-kpi-unidades-dia-sub" class="text-[11px] font-bold text-amber-200 font-mono">0 und/día</span>
+        <div class="flex items-baseline gap-2.5 flex-wrap mt-0.5">
+          <span id="pe-kpi-pesos" class="text-2xl md:text-4xl font-black font-mono tracking-tight text-white">$0</span>
+          <span class="text-xs text-amber-100 font-medium">Venta mínima requerida para no ganar ni perder</span>
         </div>
-      </div>
-
-      <div class="pt-2 border-t border-amber-400/50 flex items-center justify-between text-xs text-amber-50">
-        <span>Meta día (30d):</span>
-        <strong id="pe-kpi-diario" class="font-mono font-bold">$0</strong>
       </div>
     </div>
 
-    <!-- KPI 2: Ventas Proyectadas del Mes (Simulación) -->
+    <div class="flex items-center gap-4 sm:gap-6 border-t md:border-t-0 md:border-l border-amber-400/50 pt-3 md:pt-0 md:pl-6 w-full md:w-auto justify-between md:justify-end flex-shrink-0">
+      <div class="text-left md:text-right">
+        <span class="text-[10px] uppercase font-bold text-amber-200 block">Cantidades a Vender</span>
+        <strong id="pe-kpi-unidades-meta" class="text-base sm:text-xl md:text-2xl font-black font-mono text-white block">0 unds / mes</strong>
+        <span id="pe-kpi-unidades-dia-sub" class="text-xs font-bold text-amber-200 font-mono">0 und/día</span>
+      </div>
+      <div class="text-right">
+        <span class="text-[10px] uppercase font-bold text-amber-200 block">Meta Diaria (30d)</span>
+        <strong id="pe-kpi-diario" class="text-base sm:text-xl md:text-2xl font-black font-mono text-white block">$0 / día</strong>
+        <span class="text-xs text-amber-200 font-medium">promedio</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TARJETAS DEL ESCENARIO SIMULADO (4 TARJETAS AMPLIAS) -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    
+    <!-- TARJETA 1: Ventas Proyectadas del Mes -->
     <div class="p-4 md:p-5 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl text-white shadow-md flex flex-col justify-between">
       <div class="flex items-center justify-between">
         <span class="text-[10px] md:text-xs font-black uppercase tracking-wider text-indigo-100">Ventas Proyectadas ($)</span>
@@ -74,7 +82,6 @@
         <span class="text-xs block text-indigo-100 font-semibold mt-0.5" id="pe-kpi-unidades-proy-sub">0 unds proyectadas / mes</span>
       </div>
 
-      <!-- Comparación de cantidades proyectadas -->
       <div class="bg-indigo-900/40 border border-indigo-400/40 rounded-xl p-2 mb-2">
         <div class="flex items-center justify-between text-[11px] text-indigo-100 font-bold mb-0.5">
           <span>📊 UNIDADES PROYECTADAS:</span>
@@ -91,48 +98,57 @@
       </div>
     </div>
 
-    <!-- KPI 3: Costo Variable Total Proyectado (Materia Prima / Insumos) -->
+    <!-- TARJETA 2: Costo Variable Total Proyectado (Materia Prima + Mano de Obra Operativa + Extras) -->
     <div class="p-4 md:p-5 bg-gradient-to-br from-rose-500 to-rose-600 rounded-2xl text-white shadow-md flex flex-col justify-between">
       <div class="flex items-center justify-between">
         <span class="text-[10px] md:text-xs font-black uppercase tracking-wider text-rose-100">Costo Variable Total ($)</span>
         <span class="text-xl">🥩</span>
       </div>
-      <div class="my-2.5">
+      <div class="my-2">
         <span id="pe-kpi-costos-var" class="text-2xl md:text-3xl font-black font-mono tracking-tight">$0</span>
-        <span class="text-xs block text-rose-100 font-semibold mt-0.5">Materia prima e insumos variables</span>
+        <span class="text-xs block text-rose-100 font-semibold mt-0.5">Materia Prima + MOD Cocina + Extras</span>
       </div>
 
-      <!-- % Costo sobre Venta y Costo Unitario -->
-      <div class="bg-rose-900/40 border border-rose-400/40 rounded-xl p-2 mb-2">
-        <div class="flex items-center justify-between text-[11px] text-rose-100 font-bold mb-0.5">
-          <span>% COSTO SOBRE VENTA:</span>
+      <!-- EXPLICATIVO / DESGLOSE EN VIVO -->
+      <div class="bg-rose-900/40 border border-rose-400/40 rounded-xl p-2 mb-2 text-xs">
+        <div class="flex items-center justify-between text-rose-100 font-bold mb-0.5">
+          <span>🥩 Mat. Prima / Insumos:</span>
+          <strong id="pe-desglose-mp-val" class="font-mono text-white">$0</strong>
         </div>
-        <div class="flex items-baseline justify-between">
-          <strong id="pe-kpi-costo-var-pct" class="text-lg md:text-xl font-black font-mono text-white">0% de venta</strong>
-          <span id="pe-kpi-costo-unit-sub" class="text-[11px] font-bold text-rose-200 font-mono">$0 / plato</span>
+        <div class="flex items-center justify-between text-rose-100 font-bold mb-0.5">
+          <span>👨‍🍳 Mano de Obra (Cocina):</span>
+          <strong id="pe-desglose-mod-val" class="font-mono text-white">$0</strong>
+        </div>
+        <div id="pe-desglose-otros-row" class="hidden flex items-center justify-between text-rose-100 font-bold mb-0.5">
+          <span>📦 Costos Extra Directos:</span>
+          <strong id="pe-desglose-otros-val" class="font-mono text-white">$0</strong>
+        </div>
+        <div class="border-t border-rose-400/50 pt-1 mt-1 flex items-center justify-between text-[11px] text-rose-200">
+          <span>Costo Unitario Total:</span>
+          <strong id="pe-kpi-costo-unit-sub" class="font-mono text-white font-bold">$0 / plato</strong>
         </div>
       </div>
 
       <div class="pt-2 border-t border-rose-400/50 flex items-center justify-between text-xs text-rose-50">
-        <span>Costo día proyectado:</span>
-        <strong id="pe-kpi-costos-var-dia" class="font-mono font-bold">$0</strong>
+        <span id="pe-kpi-costo-var-pct" class="font-bold">0% de venta</span>
+        <span>Día: <strong id="pe-kpi-costos-var-dia" class="font-mono font-bold">$0</strong></span>
       </div>
     </div>
 
-    <!-- KPI 4: Total Fijos Mes y Margen % -->
+    <!-- TARJETA 3: Total Fijos Mes (Arriendos, Compromisos y Nómina Administrativa) -->
     <div class="p-4 md:p-5 bg-white border-2 border-gray-200 rounded-2xl shadow-sm flex flex-col justify-between">
       <div class="flex items-center justify-between">
         <span class="text-[10px] md:text-xs font-black uppercase tracking-wider text-gray-500">Total Fijos Mes</span>
         <span class="text-xl">🔒</span>
       </div>
-      <div class="my-2.5">
+      <div class="my-2">
         <span id="pe-kpi-total-fijos" class="text-2xl md:text-3xl font-black font-mono text-rose-600">$0</span>
-        <span class="text-xs block text-gray-500 font-bold mt-0.5">Arriendos, nóminas y compromisos</span>
+        <span class="text-xs block text-gray-500 font-bold mt-0.5">Arriendos, sede y nómina administrativa</span>
       </div>
 
-      <div class="bg-gray-100 rounded-xl p-2 mb-2">
+      <div class="bg-gray-100 rounded-xl p-2 mb-2 text-xs">
         <div class="flex items-center justify-between text-[11px] text-gray-600 font-bold mb-0.5">
-          <span>% MARGEN CONTRIBUCIÓN:</span>
+          <span>% MARGEN COBERTURA FIJOS:</span>
         </div>
         <div class="flex items-baseline justify-between">
           <strong id="pe-kpi-margen-pct-box" class="text-lg md:text-xl font-black font-mono text-emerald-700">0%</strong>
@@ -146,7 +162,7 @@
       </div>
     </div>
 
-    <!-- KPI 5: Utilidad / Pérdida Neta Proyectada -->
+    <!-- TARJETA 4: Resultado Proyectado (Superávit / Margen de Seguridad) -->
     <div id="pe-card-utilidad-box" class="p-4 md:p-5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl shadow-sm flex flex-col justify-between transition-colors">
       <div class="flex items-center justify-between">
         <span id="pe-lbl-utilidad-proy" class="text-[10px] md:text-xs font-black uppercase tracking-wider text-emerald-900">Resultado Proyectado</span>
@@ -157,7 +173,6 @@
         <span id="pe-sub-utilidad-proy" class="text-xs block text-emerald-800 font-bold mt-0.5">Superávit sobre equilibrio</span>
       </div>
 
-      <!-- Diferencial de Unidades (Margen de Seguridad en cantidades) -->
       <div id="pe-box-margen-seguridad" class="bg-emerald-100/70 border border-emerald-300 rounded-xl p-2 mb-2">
         <div class="flex items-center justify-between text-[11px] text-emerald-900 font-bold mb-0.5">
           <span>🛡️ MARGEN DE SEGURIDAD:</span>
@@ -223,6 +238,25 @@
     </div>
   </div>
 
+  <!-- BANNER EXPLICATIVO MODO CONSOLIDADO -->
+  <div id="pe-banner-modo-consolidado" class="hidden bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-950 border-2 border-indigo-400 rounded-2xl p-4 md:p-5 mb-6 text-white shadow-md">
+    <div class="flex items-start gap-3.5">
+      <div class="p-2.5 bg-white/20 rounded-xl text-2xl shrink-0">🏛️</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <h4 class="text-sm md:text-base font-black text-amber-300 uppercase tracking-wide">
+            Modo Consolidado (Resultado Integrado de Todas las Sedes)
+          </h4>
+          <span class="text-[10px] bg-amber-400 text-indigo-950 font-black px-2 py-0.5 rounded-full uppercase">Solo Lectura</span>
+        </div>
+        <p class="text-xs md:text-sm text-indigo-100 font-medium mt-1 leading-relaxed">
+          Esta vista presenta la <strong>suma y ponderación automática</strong> de las ventas, nóminas y compromisos de todas tus sedes configuradas.
+          Los campos de entrada están protegidos; para ajustar la nómina, empleados o metas de una sede en particular, <strong>selecciónala en el menú desplegable superior</strong> ("Sede / Centro").
+        </p>
+      </div>
+    </div>
+  </div>
+
   <!-- SECCIÓN 1: PROYECCIÓN DE VENTAS, PRECIO Y COSTO VARIABLE UNITARIO (AMPLIADO 300%) -->
   <div class="bg-gray-50/90 border-2 border-indigo-100 rounded-2xl p-5 md:p-6 mb-6 shadow-2xs">
     <div class="mb-5">
@@ -246,10 +280,11 @@
         </label>
         <div class="relative">
           <input type="number" id="pe-unidades-proyectadas" min="1" step="1" value="1200"
-                 oninput="onModificarInput(); recalcularPuntoEquilibrio();"
+                 oninput="onModificarInput('unidades'); recalcularPuntoEquilibrio();"
                  class="border-2 border-indigo-300 rounded-2xl px-4 py-3 text-2xl md:text-3xl font-black font-mono text-indigo-950 bg-white w-full h-[58px] focus:ring-4 focus:ring-indigo-100 focus:border-indigo-600 outline-none shadow-xs">
         </div>
-        <p class="text-xs md:text-sm text-gray-500 font-semibold mt-1.5 truncate">Prellenado con las ventas reales.</p>
+        <div id="pe-audit-unidades" class="text-[11px] text-indigo-600 italic mt-1 min-h-[16px] truncate"></div>
+        <p class="text-xs text-gray-500 font-semibold mt-0.5 truncate">Prellenado con las ventas reales.</p>
       </div>
 
       <!-- 2. Precio Promedio Ponderado -->
@@ -260,26 +295,28 @@
         <div class="relative">
           <span class="absolute left-4 top-3.5 text-gray-400 font-black text-xl">$</span>
           <input type="text" id="pe-precio-promedio"
-                 oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
+                 oninput="onInputMoneda(this); onModificarInput('precio'); recalcularPuntoEquilibrio();"
                  class="border-2 border-gray-300 rounded-2xl pl-9 pr-4 py-3 text-2xl md:text-3xl font-black font-mono text-gray-900 bg-white w-full h-[58px] focus:ring-4 focus:ring-amber-100 focus:border-amber-500 outline-none shadow-xs"
                  placeholder="0">
         </div>
-        <p class="text-xs md:text-sm text-gray-500 font-semibold mt-1.5 truncate">Ticket o precio ponderado.</p>
+        <div id="pe-audit-precio" class="text-[11px] text-amber-700 italic mt-1 min-h-[16px] truncate"></div>
+        <p class="text-xs text-gray-500 font-semibold mt-0.5 truncate">Ticket o precio ponderado.</p>
       </div>
 
-      <!-- 3. Costo Variable Unitario -->
+      <!-- 3. Costo Materia Prima e Insumos -->
       <div>
-        <label for="pe-costo-unitario" class="block text-sm md:text-base font-extrabold text-gray-800 mb-2 truncate" title="Costo Variable Unidad ($)">
-          🥩 Costo Variable Unidad ($)
+        <label for="pe-costo-unitario" class="block text-sm md:text-base font-extrabold text-gray-800 mb-2 truncate" title="Costo Materia Prima e Insumos ($ / und)">
+          🥩 Mat. Prima e Insumos ($)
         </label>
         <div class="relative">
           <span class="absolute left-4 top-3.5 text-rose-400 font-black text-xl">$</span>
           <input type="text" id="pe-costo-unitario"
-                 oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
+                 oninput="onInputMoneda(this); onModificarInput('costo'); recalcularPuntoEquilibrio();"
                  class="border-2 border-gray-300 rounded-2xl pl-9 pr-4 py-3 text-2xl md:text-3xl font-black font-mono text-rose-700 bg-white w-full h-[58px] focus:ring-4 focus:ring-rose-100 focus:border-rose-500 outline-none shadow-xs"
                  placeholder="0">
         </div>
-        <p class="text-xs md:text-sm text-gray-500 font-semibold mt-1.5 truncate">Materia prima e insumos por unidad.</p>
+        <div id="pe-audit-costo" class="text-[11px] text-rose-600 italic mt-1 min-h-[16px] truncate"></div>
+        <p class="text-xs text-gray-500 font-semibold mt-0.5 truncate">Receta e insumos por plato.</p>
       </div>
 
       <!-- 4. Margen Unitario de Contribución -->
@@ -301,7 +338,8 @@
       </div>
 
     </div>
-  </div>
+
+    </div>
 
   <!-- DOS COLUMNAS: COSTOS OPERATIVOS vs GASTOS FIJOS (AMPLIADO 300%) -->
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -327,7 +365,7 @@
           </div>
 
           <!-- Botones de Acceso Rápido SMMLV -->
-          <div class="flex items-center gap-2 mb-4 flex-wrap">
+          <div id="pe-smmlv-op-container" class="flex items-center gap-2 mb-4 flex-wrap">
             <span class="text-xs text-blue-900 font-extrabold uppercase">Sugerir SMMLV Legal:</span>
             <button type="button" onclick="aplicarSMMLV('op', 2026)"
                     class="px-2.5 py-1 rounded-lg text-xs font-black bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer shadow-xs"
@@ -347,22 +385,22 @@
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <div>
               <label class="block text-xs md:text-sm font-extrabold text-blue-950 uppercase mb-1">N° Empleados</label>
-              <input type="number" id="pe-nom-op-empleados" value="2" min="0" step="1"
-                     oninput="onModificarInput(); recalcularPuntoEquilibrio();"
+              <input type="number" id="pe-nom-op-empleados" value="0" min="0" step="1"
+                     oninput="onModificarInput('nom_op'); recalcularPuntoEquilibrio();"
                      class="border-2 border-blue-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
 
             <div>
               <label class="block text-xs md:text-sm font-extrabold text-blue-950 uppercase mb-1">Salario Base ($)</label>
               <input type="text" id="pe-nom-op-salario" value="1.751.000"
-                     oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
+                     oninput="onInputMoneda(this); onModificarInput('nom_op'); recalcularPuntoEquilibrio();"
                      class="border-2 border-blue-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
 
             <div>
               <label class="block text-xs md:text-sm font-extrabold text-blue-950 uppercase mb-1">Aux. Transporte ($)</label>
               <input type="text" id="pe-nom-op-transporte" value="249.000"
-                     oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
+                     oninput="onInputMoneda(this); onModificarInput('nom_op'); recalcularPuntoEquilibrio();"
                      class="border-2 border-blue-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
           </div>
@@ -372,13 +410,14 @@
             <span>Carga Prestacional + Seg. Social (50%): <strong id="pe-nom-op-carga" class="font-mono font-bold">$0</strong></span>
             <span>Costo Total por Empleado: <strong id="pe-nom-op-por-emp" class="font-mono font-black text-blue-900">$0</strong></span>
           </div>
+          <div id="pe-audit-nom-op" class="text-[11px] text-blue-700 italic mt-1.5 min-h-[16px]"></div>
         </div>
 
         <!-- Líneas de Costos Directos Adicionales -->
         <div>
           <div class="flex items-center justify-between mb-3">
             <span class="text-sm md:text-base font-extrabold text-gray-800">Costos Directos / Fijos Adicionales:</span>
-            <button type="button" onclick="agregarLineaCosto()"
+            <button type="button" id="pe-btn-add-costo" onclick="agregarLineaCosto()"
                     class="text-xs md:text-sm font-extrabold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-lg border border-blue-200 transition flex items-center gap-1 cursor-pointer">
               <span>➕</span> Agregar Costo
             </button>
@@ -387,6 +426,7 @@
           <div id="pe-lista-costos-container" class="space-y-2.5 mb-2">
             <!-- Dinámico -->
           </div>
+          <div id="pe-audit-costos-adic" class="text-[11px] text-gray-500 italic mb-1 min-h-[16px]"></div>
           <p id="pe-empty-costos-msg" class="text-xs md:text-sm text-gray-400 italic py-1">No hay costos adicionales agregados.</p>
         </div>
       </div>
@@ -418,7 +458,7 @@
           </div>
 
           <!-- Botones de Acceso Rápido SMMLV -->
-          <div class="flex items-center gap-2 mb-4 flex-wrap">
+          <div id="pe-smmlv-admin-container" class="flex items-center gap-2 mb-4 flex-wrap">
             <span class="text-xs text-purple-900 font-extrabold uppercase">Sugerir SMMLV Legal:</span>
             <button type="button" onclick="aplicarSMMLV('admin', 2026)"
                     class="px-2.5 py-1 rounded-lg text-xs font-black bg-purple-600 hover:bg-purple-700 text-white transition cursor-pointer shadow-xs"
@@ -438,22 +478,22 @@
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             <div>
               <label class="block text-xs md:text-sm font-extrabold text-purple-950 uppercase mb-1">N° Empleados</label>
-              <input type="number" id="pe-nom-admin-empleados" value="1" min="0" step="1"
-                     oninput="onModificarInput(); recalcularPuntoEquilibrio();"
+              <input type="number" id="pe-nom-admin-empleados" value="0" min="0" step="1"
+                     oninput="onModificarInput('nom_admin'); recalcularPuntoEquilibrio();"
                      class="border-2 border-purple-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-purple-500 outline-none">
             </div>
 
             <div>
               <label class="block text-xs md:text-sm font-extrabold text-purple-950 uppercase mb-1">Salario Base ($)</label>
               <input type="text" id="pe-nom-admin-salario" value="1.751.000"
-                     oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
+                     oninput="onInputMoneda(this); onModificarInput('nom_admin'); recalcularPuntoEquilibrio();"
                      class="border-2 border-purple-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-purple-500 outline-none">
             </div>
 
             <div>
               <label class="block text-xs md:text-sm font-extrabold text-purple-950 uppercase mb-1">Aux. Transporte ($)</label>
               <input type="text" id="pe-nom-admin-transporte" value="249.000"
-                     oninput="onInputMoneda(this); onModificarInput(); recalcularPuntoEquilibrio();"
+                     oninput="onInputMoneda(this); onModificarInput('nom_admin'); recalcularPuntoEquilibrio();"
                      class="border-2 border-purple-200 rounded-xl px-3 py-2 text-lg md:text-xl font-black font-mono w-full bg-white focus:ring-2 focus:ring-purple-500 outline-none">
             </div>
           </div>
@@ -463,6 +503,7 @@
             <span>Carga Prestacional + Seg. Social (50%): <strong id="pe-nom-admin-carga" class="font-mono font-bold">$0</strong></span>
             <span>Costo Total por Empleado: <strong id="pe-nom-admin-por-emp" class="font-mono font-black text-purple-900">$0</strong></span>
           </div>
+          <div id="pe-audit-nom-admin" class="text-[11px] text-purple-700 italic mt-1.5 min-h-[16px]"></div>
         </div>
 
         <!-- Gastos Fijos Programados en la Base de Datos -->
@@ -473,16 +514,17 @@
             </span>
             <span id="pe-tot-programados-badge" class="text-xs md:text-sm font-mono font-black text-gray-700 bg-gray-100 px-2.5 py-0.5 rounded-lg">$0</span>
           </div>
-          <div id="pe-programados-list" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+          <div id="pe-programados-list" class="space-y-2 max-h-96 overflow-y-auto pr-1">
             <p class="text-xs md:text-sm text-gray-400 italic">Consultando compromisos fijos programados...</p>
           </div>
+          <div id="pe-audit-programados" class="text-[11px] text-gray-500 italic mt-1 min-h-[16px]"></div>
         </div>
 
         <!-- Líneas de Gastos Fijos Adicionales -->
         <div>
           <div class="flex items-center justify-between mb-3">
             <span class="text-sm md:text-base font-extrabold text-gray-800">Gastos Fijos Adicionales:</span>
-            <button type="button" onclick="agregarLineaGastoFijo()"
+            <button type="button" id="pe-btn-add-gasto" onclick="agregarLineaGastoFijo()"
                     class="text-xs md:text-sm font-extrabold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 px-3 py-1 rounded-lg border border-rose-200 transition flex items-center gap-1 cursor-pointer">
               <span>➕</span> Agregar Gasto
             </button>
@@ -491,6 +533,7 @@
           <div id="pe-lista-gastos-container" class="space-y-2.5 mb-2">
             <!-- Dinámico -->
           </div>
+          <div id="pe-audit-gastos-adic" class="text-[11px] text-gray-500 italic mb-1 min-h-[16px]"></div>
           <p id="pe-empty-gastos-msg" class="text-xs md:text-sm text-gray-400 italic py-1">No hay gastos fijos adicionales agregados.</p>
         </div>
       </div>
@@ -530,6 +573,7 @@
   let _peCostosAdicionales = [];
   let _peGastosAdicionales = [];
   let _peProgramadosActivos = {};
+  let _peAmortAcordeonAbierto = {};
 
   // Redondeo estricto a miles (cero unidades, decenas y centenas) para fijos y ventas globales
   function redondearMiles(val) {
@@ -565,66 +609,255 @@
     el.value = Math.round(val).toLocaleString('es-CO');
   }
 
-  function getStorageKey() {
-    const centroId = document.getElementById('pe-centro-select')?.value || 'consolidado';
-    return `pe_simulacion_${NEGOCIO_ID}_${centroId}`;
-  }
+  let _peSimulacionesEnBD = {};
+  let _peDebounceSaveTimer = null;
+  let _peUltimaAuditoriaCargada = null;
 
-  function onModificarInput() {
-    guardarEstadoSimulacion();
-  }
-
-  // Guardar en localStorage
-  function guardarEstadoSimulacion() {
-    try {
-      const estado = {
-        unidades_proyectadas: document.getElementById('pe-unidades-proyectadas')?.value || '',
-        precio_promedio: document.getElementById('pe-precio-promedio')?.value || '',
-        costo_unitario: document.getElementById('pe-costo-unitario')?.value || '',
-        nom_op_empleados: document.getElementById('pe-nom-op-empleados')?.value || '2',
-        nom_op_salario: document.getElementById('pe-nom-op-salario')?.value || '',
-        nom_op_transporte: document.getElementById('pe-nom-op-transporte')?.value || '',
-        nom_ad_empleados: document.getElementById('pe-nom-admin-empleados')?.value || '1',
-        nom_ad_salario: document.getElementById('pe-nom-admin-salario')?.value || '',
-        nom_ad_transporte: document.getElementById('pe-nom-admin-transporte')?.value || '',
-        costos_adicionales: _peCostosAdicionales,
-        gastos_adicionales: _peGastosAdicionales,
-        programados_activos: _peProgramadosActivos
-      };
-      localStorage.setItem(getStorageKey(), JSON.stringify(estado));
-    } catch(e) {
-      console.warn('Error al guardar estado de simulación:', e);
+  function setSyncStatus(estado, texto) {
+    const dot = document.getElementById('pe-sync-dot');
+    const txt = document.getElementById('pe-sync-text');
+    if (!dot || !txt) return;
+    if (estado === 'saving') {
+      dot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping';
+      txt.textContent = texto || 'Guardando en sede...';
+    } else if (estado === 'saved') {
+      dot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-emerald-500';
+      txt.textContent = texto || 'Sincronizado por sede';
+    } else if (estado === 'error') {
+      dot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-rose-500';
+      txt.textContent = texto || 'Error al guardar';
+    } else {
+      dot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-gray-400';
+      txt.textContent = texto || 'Consolidado (Lectura)';
     }
   }
 
-  // Restaurar desde localStorage
-  function restaurarEstadoSimulacion() {
+  function renderAuditoriaVisual(audit) {
+    _peUltimaAuditoriaCargada = audit || null;
+    const campos = (audit && audit.campos) ? audit.campos : {};
+    const gen = (audit && audit.general) ? audit.general : null;
+
+    const mapeo = {
+      'unidades': 'pe-audit-unidades',
+      'precio': 'pe-audit-precio',
+      'costo': 'pe-audit-costo',
+      'nom_op': 'pe-audit-nom-op',
+      'nom_admin': 'pe-audit-nom-admin',
+      'costos_adic': 'pe-audit-costos-adic',
+      'gastos_adic': 'pe-audit-gastos-adic',
+      'programados': 'pe-audit-programados'
+    };
+
+    Object.keys(mapeo).forEach(k => {
+      const el = document.getElementById(mapeo[k]);
+      if (!el) return;
+      const cInfo = campos[k];
+      if (cInfo && cInfo.usuario) {
+        el.innerHTML = `✏️ Modificado por <strong class="font-semibold text-gray-700">${escapePeHtml(cInfo.usuario)}</strong> • ${cInfo.fecha}`;
+        el.classList.remove('hidden');
+      } else {
+        el.innerHTML = '';
+      }
+    });
+
+    if (gen && gen.usuario) {
+      setSyncStatus('saved', `Guardado en sede por ${gen.usuario} • ${gen.fecha}`);
+    }
+  }
+
+  function limpiarAuditoriaVisual() {
+    _peUltimaAuditoriaCargada = null;
+    ['pe-audit-unidades', 'pe-audit-precio', 'pe-audit-costo', 'pe-audit-nom-op',
+     'pe-audit-nom-admin', 'pe-audit-costos-adic', 'pe-audit-gastos-adic', 'pe-audit-programados'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '';
+    });
+  }
+
+  function getStorageKey(cId) {
+    const sel = document.getElementById('pe-centro-select');
+    const cid = cId !== undefined ? cId : (sel ? sel.value : '');
+    if (!cid) return null; // Consolidado no guarda estado manual aislado: se deriva de los centros
+    return `pe_simulacion_${NEGOCIO_ID}_${cid}`;
+  }
+
+  function onModificarInput(campo = null) {
+    const sel = document.getElementById('pe-centro-select');
+    const cid = sel ? sel.value : '';
+    if (!cid) return; // En modo consolidado no se edita
+
+    setSyncStatus('saving', 'Guardando cambios...');
+    if (_peDebounceSaveTimer) clearTimeout(_peDebounceSaveTimer);
+    _peDebounceSaveTimer = setTimeout(() => {
+      guardarEstadoSimulacion(campo);
+    }, 700);
+  }
+
+  // Guardar en Base de Datos (persistente por centro de utilidad, accesible en cualquier dispositivo)
+  async function guardarEstadoSimulacion(campoModificado = null) {
+    const sel = document.getElementById('pe-centro-select');
+    const cid = sel ? sel.value : '';
+    if (!cid) return; // En modo consolidado no se sobreescribe nada
+
+    const estado = {
+      unidades_proyectadas: document.getElementById('pe-unidades-proyectadas')?.value || '0',
+      precio_promedio: document.getElementById('pe-precio-promedio')?.value || '0',
+      costo_unitario: document.getElementById('pe-costo-unitario')?.value || '0',
+      nom_op_empleados: document.getElementById('pe-nom-op-empleados')?.value ?? '0',
+      nom_op_salario: document.getElementById('pe-nom-op-salario')?.value || '',
+      nom_op_transporte: document.getElementById('pe-nom-op-transporte')?.value || '',
+      nom_ad_empleados: document.getElementById('pe-nom-admin-empleados')?.value ?? '0',
+      nom_ad_salario: document.getElementById('pe-nom-admin-salario')?.value || '',
+      nom_ad_transporte: document.getElementById('pe-nom-admin-transporte')?.value || '',
+      costos_adicionales: _peCostosAdicionales || [],
+      gastos_adicionales: _peGastosAdicionales || [],
+      programados_activos: _peProgramadosActivos || {}
+    };
+
+    // Respaldo en localStorage del navegador como caché offline
+    const key = getStorageKey(cid);
+    if (key) {
+      try { localStorage.setItem(key, JSON.stringify(estado)); } catch(e){}
+    }
+
+    // Persistencia centralizada en Servidor y BD
     try {
-      const dataStr = localStorage.getItem(getStorageKey());
-      if (!dataStr) return false;
-      const estado = JSON.parse(dataStr);
+      const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/punto-equilibrio/guardar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          centro_id: cid,
+          campo_modificado: campoModificado,
+          estado: estado
+        })
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        if (!_peSimulacionesEnBD) _peSimulacionesEnBD = {};
+        _peSimulacionesEnBD[cid] = {
+          datos: estado,
+          auditoria: data.auditoria,
+          usuario_nombre: data.usuario_nombre,
+          updated_at: data.fecha
+        };
+        renderAuditoriaVisual(data.auditoria);
+        setSyncStatus('saved', `Guardado en sede por ${data.usuario_nombre} • ${data.fecha}`);
+      } else {
+        setSyncStatus('error', 'Error al sincronizar con sede');
+      }
+    } catch(err) {
+      console.warn('Error al guardar simulación en BD:', err);
+      setSyncStatus('saved', 'Guardado localmente (sin conexión)');
+    }
+  }
 
-      if (estado.unidades_proyectadas) document.getElementById('pe-unidades-proyectadas').value = estado.unidades_proyectadas;
-      if (estado.precio_promedio) document.getElementById('pe-precio-promedio').value = estado.precio_promedio;
-      if (estado.costo_unitario) document.getElementById('pe-costo-unitario').value = estado.costo_unitario;
-      if (estado.nom_op_empleados) document.getElementById('pe-nom-op-empleados').value = estado.nom_op_empleados;
-      if (estado.nom_op_salario) document.getElementById('pe-nom-op-salario').value = estado.nom_op_salario;
-      if (estado.nom_op_transporte) document.getElementById('pe-nom-op-transporte').value = estado.nom_op_transporte;
-      if (estado.nom_ad_empleados) document.getElementById('pe-nom-admin-empleados').value = estado.nom_ad_empleados;
-      if (estado.nom_ad_salario) document.getElementById('pe-nom-admin-salario').value = estado.nom_ad_salario;
-      if (estado.nom_ad_transporte) document.getElementById('pe-nom-admin-transporte').value = estado.nom_ad_transporte;
+  // Restaurar desde BD de la sede específica (con migración transparente desde localStorage si existe)
+  function restaurarEstadoSimulacion(cId) {
+    if (!cId) return false;
 
-      if (Array.isArray(estado.costos_adicionales)) _peCostosAdicionales = estado.costos_adicionales;
-      if (Array.isArray(estado.gastos_adicionales)) _peGastosAdicionales = estado.gastos_adicionales;
-      if (estado.programados_activos) _peProgramadosActivos = estado.programados_activos;
+    let estado = null;
+    let auditoria = null;
+
+    // 1. Prioridad: Buscar datos persistidos en la Base de Datos
+    if (_peSimulacionesEnBD && _peSimulacionesEnBD[cId]) {
+      estado = _peSimulacionesEnBD[cId].datos;
+      auditoria = _peSimulacionesEnBD[cId].auditoria;
+    }
+
+    // 2. Fallback de migración de sesiones previas en localStorage
+    if (!estado) {
+      const key = getStorageKey(cId);
+      if (key) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            estado = JSON.parse(raw);
+            // Sincronizar silenciosamente a BD para que quede disponible en todos los dispositivos
+            setTimeout(() => guardarEstadoSimulacion(), 500);
+          }
+        } catch(e){}
+      }
+    }
+
+    if (!estado) {
+      limpiarAuditoriaVisual();
+      setSyncStatus('saved', 'Sin modificaciones guardadas en sede');
+      return false;
+    }
+
+    try {
+      if (estado.unidades_proyectadas !== undefined) document.getElementById('pe-unidades-proyectadas').value = estado.unidades_proyectadas;
+      if (estado.precio_promedio !== undefined) document.getElementById('pe-precio-promedio').value = estado.precio_promedio;
+      if (estado.costo_unitario !== undefined) document.getElementById('pe-costo-unitario').value = estado.costo_unitario;
+      if (estado.nom_op_empleados !== undefined) document.getElementById('pe-nom-op-empleados').value = estado.nom_op_empleados;
+      if (estado.nom_op_salario !== undefined) document.getElementById('pe-nom-op-salario').value = estado.nom_op_salario;
+      if (estado.nom_op_transporte !== undefined) document.getElementById('pe-nom-op-transporte').value = estado.nom_op_transporte;
+      if (estado.nom_ad_empleados !== undefined) document.getElementById('pe-nom-admin-empleados').value = estado.nom_ad_empleados;
+      if (estado.nom_ad_salario !== undefined) document.getElementById('pe-nom-admin-salario').value = estado.nom_ad_salario;
+      if (estado.nom_ad_transporte !== undefined) document.getElementById('pe-nom-admin-transporte').value = estado.nom_ad_transporte;
+
+      _peCostosAdicionales = Array.isArray(estado.costos_adicionales) ? estado.costos_adicionales : [];
+      _peGastosAdicionales = Array.isArray(estado.gastos_adicionales) ? estado.gastos_adicionales : [];
+      _peProgramadosActivos = (typeof estado.programados_activos === 'object' && estado.programados_activos !== null) ? estado.programados_activos : {};
 
       renderListaCostos();
       renderListaGastos();
+      renderAuditoriaVisual(auditoria);
       return true;
     } catch(e) {
       console.warn('Error al restaurar estado de simulación:', e);
       return false;
     }
+  }
+
+  // Activar o desactivar interfaz según sea modo Consolidado o Sede Individual
+  function setModoConsolidadoUI(esConsolidado) {
+    const banner = document.getElementById('pe-banner-modo-consolidado');
+    if (banner) {
+      if (esConsolidado) banner.classList.remove('hidden');
+      else banner.classList.add('hidden');
+    }
+
+    const inputs = [
+      'pe-unidades-proyectadas',
+      'pe-precio-promedio',
+      'pe-costo-unitario',
+      'pe-nom-op-empleados',
+      'pe-nom-op-salario',
+      'pe-nom-op-transporte',
+      'pe-nom-admin-empleados',
+      'pe-nom-admin-salario',
+      'pe-nom-admin-transporte'
+    ];
+
+    inputs.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.disabled = esConsolidado;
+        if (esConsolidado) {
+          el.classList.add('bg-gray-100', 'cursor-not-allowed', 'text-gray-600', 'border-gray-300');
+          el.classList.remove('bg-white');
+        } else {
+          el.classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-600', 'border-gray-300');
+          el.classList.add('bg-white');
+        }
+      }
+    });
+
+    const btnRestablecer = document.getElementById('pe-btn-restablecer-base');
+    if (btnRestablecer) btnRestablecer.style.display = esConsolidado ? 'none' : 'inline-flex';
+
+    const btnAddCosto = document.getElementById('pe-btn-add-costo');
+    if (btnAddCosto) btnAddCosto.style.display = esConsolidado ? 'none' : 'inline-flex';
+
+    const btnAddGasto = document.getElementById('pe-btn-add-gasto');
+    if (btnAddGasto) btnAddGasto.style.display = esConsolidado ? 'none' : 'inline-flex';
+
+    const smmlvOp = document.getElementById('pe-smmlv-op-container');
+    if (smmlvOp) smmlvOp.style.display = esConsolidado ? 'none' : 'flex';
+
+    const smmlvAd = document.getElementById('pe-smmlv-admin-container');
+    if (smmlvAd) smmlvAd.style.display = esConsolidado ? 'none' : 'flex';
   }
 
   function aplicarSMMLV(tipo, anio) {
@@ -663,16 +896,39 @@
     }
   }
 
-  function restablecerValoresBase() {
+  async function restablecerValoresBase() {
+    const sel = document.getElementById('pe-centro-select');
+    const cid = sel ? sel.value : '';
+    if (!cid) return;
+
+    if (!confirm('¿Desea restablecer todos los valores de este centro a la mezcla real calculada por el sistema?')) return;
+
+    const key = getStorageKey(cid);
+    if (key) {
+      try { localStorage.removeItem(key); } catch(e){}
+    }
+    if (_peSimulacionesEnBD && _peSimulacionesEnBD[cid]) {
+      delete _peSimulacionesEnBD[cid];
+    }
+    limpiarAuditoriaVisual();
+    setSyncStatus('saving', 'Restableciendo base...');
+
     try {
-      localStorage.removeItem(getStorageKey());
+      await fetch(`/api/contabilidad/${NEGOCIO_ID}/punto-equilibrio/restablecer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ centro_id: cid })
+      });
     } catch(e){}
+
     _peCostosAdicionales = [];
     _peGastosAdicionales = [];
     _peProgramadosActivos = {};
     renderListaCostos();
     renderListaGastos();
-    cargarDatosPuntoEquilibrio(true);
+    setSyncStatus('saved', 'Valores base restablecidos');
+    toast('Valores base restablecidos para esta sede', true);
+    await cargarDatosPuntoEquilibrio(true);
   }
 
   function cambiarCentroPuntoEquilibrio() {
@@ -684,7 +940,53 @@
     await cargarDatosPuntoEquilibrio();
   }
 
-  // Consulta los datos del backend
+  // Sincronización automática por primera vez: busca en localStorage datos previos de cada sede y los sube a la BD central
+  async function migrarLocalStorageABdSiEsNecesario(centros) {
+    if (!Array.isArray(centros) || centros.length === 0) return;
+    let huboMigracion = false;
+    for (const c of centros) {
+      const cid = c.id;
+      // Si la sede ya está guardada en la base de datos central, no sobreescribir
+      if (_peSimulacionesEnBD && _peSimulacionesEnBD[cid]) continue;
+      
+      const key = `pe_simulacion_${NEGOCIO_ID}_${cid}`;
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const estado = JSON.parse(raw);
+          if (estado && typeof estado === 'object') {
+            console.log(`[Punto de Equilibrio] Sincronizando sede ${cid} desde localStorage hacia la BD central...`);
+            const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/punto-equilibrio/guardar`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                centro_id: cid,
+                campo_modificado: 'migracion_inicial',
+                estado: estado
+              })
+            });
+            const resJson = await resp.json();
+            if (resJson && resJson.ok) {
+              _peSimulacionesEnBD[cid] = {
+                datos: estado,
+                auditoria: resJson.auditoria,
+                usuario_nombre: resJson.usuario_nombre,
+                updated_at: resJson.fecha
+              };
+              huboMigracion = true;
+            }
+          }
+        }
+      } catch(e) {
+        console.warn('Error al migrar localStorage de sede ' + cid, e);
+      }
+    }
+    if (huboMigracion) {
+      toast('💾 Se sincronizaron automáticamente los datos que tenías en este equipo a la Base de Datos.', true);
+    }
+  }
+
+  // Consulta los datos del backend y gestiona modo Consolidado vs Sede
   async function cargarDatosPuntoEquilibrio(forzarBase = false) {
     const centroId = document.getElementById('pe-centro-select')?.value || '';
     try {
@@ -696,6 +998,10 @@
       }
 
       _peDatosBase = data;
+      _peSimulacionesEnBD = data.simulaciones || {};
+
+      // Migración automática inicial: si este navegador tiene datos en localStorage no guardados en BD, los sube automáticamente
+      await migrarLocalStorageABdSiEsNecesario(data.centros);
 
       // Cargar centros de utilidad en el select si no estaban llenos
       const sel = document.getElementById('pe-centro-select');
@@ -721,9 +1027,7 @@
         const peds = (data.total_pedidos_real || 0).toLocaleString('es-CO');
 
         if (data.es_fallback_consolidado) {
-          if (bannerBox) {
-            bannerBox.className = 'bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-4 mb-6 transition-all';
-          }
+          if (bannerBox) bannerBox.className = 'bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-4 mb-6 transition-all';
           if (bannerTitle) {
             bannerTitle.className = 'text-sm md:text-base font-black text-amber-950 flex items-center gap-2';
             bannerTitle.innerHTML = '🏛️ Mezcla Adoptada del Consolidado (Sede en Apertura / Sin Ventas)';
@@ -731,9 +1035,7 @@
           bannerTxt.className = 'text-xs md:text-sm text-amber-900 mt-1 font-medium';
           bannerTxt.innerHTML = `Esta sede aún no registra ventas en los últimos 30 días. Para proyectar su punto de equilibrio se adoptaron automáticamente los precios y costos de la <strong>mezcla real consolidada del negocio</strong> (${uReal} platos vendidos en ${peds} pedidos por ${vReal}). Precio promedio: <strong>${pProm}</strong> | Costo promedio: <strong>${cProm}</strong>.`;
         } else {
-          if (bannerBox) {
-            bannerBox.className = 'bg-indigo-50/80 border-2 border-indigo-200 rounded-2xl p-4 mb-6 transition-all';
-          }
+          if (bannerBox) bannerBox.className = 'bg-indigo-50/80 border-2 border-indigo-200 rounded-2xl p-4 mb-6 transition-all';
           if (bannerTitle) {
             bannerTitle.className = 'text-sm md:text-base font-black text-indigo-950';
             bannerTitle.innerHTML = 'Datos Alimentados Automáticamente por la Mezcla Real de Ventas del Último Mes';
@@ -744,13 +1046,12 @@
         }
       }
 
-      // Render top platos de la mezcla + Tarjeta destacada de PROMEDIO PONDERADO (costo exacto sin redondear a miles)
+      // Render top platos de la mezcla + Tarjeta destacada de PROMEDIO PONDERADO
       const topListEl = document.getElementById('pe-top-platos-lista');
       if (topListEl && Array.isArray(data.top_productos_mezcla)) {
         if (data.top_productos_mezcla.length === 0) {
           topListEl.innerHTML = '<p class="text-xs text-indigo-700 italic">No hay productos vendidos en este periodo.</p>';
         } else {
-          // 1. Tarjeta destacada: Promedio Ponderado de la Mezcla Total (Ampliación 200%)
           const cardPromedioPonderado = `
             <div class="bg-gradient-to-br from-indigo-900 to-indigo-950 text-white border-2 border-indigo-600 rounded-2xl p-4 shadow-md flex flex-col justify-between">
               <div>
@@ -762,20 +1063,17 @@
                 </div>
                 <div class="text-sm md:text-base font-black text-indigo-100">Mezcla Global Ponderada</div>
               </div>
-
               <div class="flex items-center justify-between text-base md:text-lg font-mono mt-3 pt-3 border-t-2 border-indigo-800/80">
                 <span class="text-indigo-200">Total: <strong class="text-white text-lg font-black">${(data.unidades_mes_real || 0).toLocaleString('es-CO')} u</strong></span>
                 <span title="Precio Promedio Ponderado" class="text-indigo-200">P: <strong class="text-amber-300 text-lg font-black">${formatMiles(data.precio_promedio || 0)}</strong></span>
                 <span title="Costo Promedio Ponderado" class="text-indigo-200">C: <strong class="text-rose-300 text-lg font-black">${formatPesosExactos(data.costo_unitario_promedio || 0)}</strong></span>
               </div>
-
               <p class="text-xs md:text-sm text-indigo-200 font-semibold mt-3 leading-relaxed italic bg-indigo-950/60 p-2 rounded-xl border border-indigo-800/60">
                 Media ponderada: promedio participativo inclinado hacia los platos más vendidos.
               </p>
             </div>
           `;
 
-          // 2. Tarjetas de los platos individuales (Ampliación 200%)
           const tarjetasIndividuales = data.top_productos_mezcla.map(p => `
             <div class="bg-white border-2 border-indigo-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between hover:border-indigo-400 transition">
               <div>
@@ -794,53 +1092,73 @@
         }
       }
 
-      // Si existe estado persistido en localStorage y no estamos forzando base, cargarlo
-      const persistido = !forzarBase && restaurarEstadoSimulacion();
+      // DISTINCIÓN CLAVE: MODO CONSOLIDADO VS SEDE INDIVIDUAL
+      if (!centroId) {
+        // === 1. MODO CONSOLIDADO (SOLO LECTURA, SUMATORIA INTEGRADA) ===
+        setModoConsolidadoUI(true);
+        setSyncStatus('consolidado', '🏛️ Consolidado (Suma de todos los centros)');
+        limpiarAuditoriaVisual();
+        _peCostosAdicionales = [];
+        _peGastosAdicionales = [];
+        _peProgramadosActivos = {};
+        renderListaCostos();
+        renderListaGastos();
+        renderProgramadosList(data.gastos_fijos_programados || []);
+        calcularPuntoEquilibrioConsolidado(data);
+      } else {
+        // === 2. MODO SEDE INDIVIDUAL (TOTALMENTE EDITABLE Y AISLADO) ===
+        setModoConsolidadoUI(false);
+        _peCostosAdicionales = [];
+        _peGastosAdicionales = [];
+        _peProgramadosActivos = {};
 
-      if (!persistido) {
-        // Prellenar unidades proyectadas con las unidades reales vendidas en el último mes
-        const inpUnds = document.getElementById('pe-unidades-proyectadas');
-        if (inpUnds) {
-          inpUnds.value = data.unidades_mes_real || 1200;
+        const persistido = !forzarBase && restaurarEstadoSimulacion(centroId);
+
+        if (!persistido) {
+          limpiarAuditoriaVisual();
+          setSyncStatus('saved', 'Valores base calculados del último mes');
+          // Prellenar con los datos específicos de esta sede
+          const inpUnds = document.getElementById('pe-unidades-proyectadas');
+          if (inpUnds) inpUnds.value = data.unidades_mes_real || 0;
+
+          const inpPrecio = document.getElementById('pe-precio-promedio');
+          const inpCosto = document.getElementById('pe-costo-unitario');
+          let pBase = Math.round(data.precio_promedio || 0);
+          let cBase = Math.round(data.costo_unitario_promedio || 0);
+
+          if (inpPrecio) inpPrecio.value = pBase > 0 ? pBase.toLocaleString('es-CO') : '0';
+          if (inpCosto) inpCosto.value = cBase > 0 ? cBase.toLocaleString('es-CO') : '0';
+
+          // Nómina inicial en 0 empleados si no tiene datos configurados
+          const ref = data.referencias_legales || {};
+          const sBase = Math.round(ref.salario_minimo_base || 1751000).toLocaleString('es-CO');
+          const sTrans = Math.round(ref.auxilio_transporte_base || 249000).toLocaleString('es-CO');
+
+          const opEmp = document.getElementById('pe-nom-op-empleados');
+          const opSal = document.getElementById('pe-nom-op-salario');
+          const opTrans = document.getElementById('pe-nom-op-transporte');
+          const adEmp = document.getElementById('pe-nom-admin-empleados');
+          const adSal = document.getElementById('pe-nom-admin-salario');
+          const adTrans = document.getElementById('pe-nom-admin-transporte');
+
+          if (opEmp) opEmp.value = '0'; // 0 empleados por defecto
+          if (opSal) opSal.value = sBase;
+          if (opTrans) opTrans.value = sTrans;
+          if (adEmp) adEmp.value = '0'; // 0 empleados por defecto
+          if (adSal) adSal.value = sBase;
+          if (adTrans) adTrans.value = sTrans;
+
+          renderListaCostos();
+          renderListaGastos();
         }
 
-        // Prellenar precio y costo promedio sugeridos de la mezcla
-        const inpPrecio = document.getElementById('pe-precio-promedio');
-        const inpCosto = document.getElementById('pe-costo-unitario');
-        let pBase = Math.round(data.precio_promedio || 18000);
-        let cBase = Math.round(data.costo_unitario_promedio || 7000);
-        
-        if (cBase >= pBase || pBase <= 0) {
-          pBase = 18000;
-          cBase = 7000;
-        }
-
-        if (inpPrecio) inpPrecio.value = pBase.toLocaleString('es-CO');
-        if (inpCosto) inpCosto.value = cBase.toLocaleString('es-CO');
-
-        // Valores de nómina por defecto (SMMLV 2026: $1.751.000 + $249.000)
-        const ref = data.referencias_legales || {};
-        const sBase = Math.round(ref.salario_minimo_base || 1751000).toLocaleString('es-CO');
-        const sTrans = Math.round(ref.auxilio_transporte_base || 249000).toLocaleString('es-CO');
-
-        const opSal = document.getElementById('pe-nom-op-salario');
-        const opTrans = document.getElementById('pe-nom-op-transporte');
-        const adSal = document.getElementById('pe-nom-admin-salario');
-        const adTrans = document.getElementById('pe-nom-admin-transporte');
-
-        if (opSal) opSal.value = sBase;
-        if (opTrans) opTrans.value = sTrans;
-        if (adSal) adSal.value = sBase;
-        if (adTrans) adTrans.value = sTrans;
+        renderProgramadosList(data.gastos_fijos_programados || []);
+        recalcularPuntoEquilibrio();
       }
 
-      // Renderizar lista de gastos fijos programados
-      renderProgramadosList(data.gastos_fijos_programados || []);
-
-      recalcularPuntoEquilibrio();
     } catch(err) {
-      console.error(err);
-      toast('Error al consultar datos de punto de equilibrio', false);
+      console.error('Error en cargarDatosPuntoEquilibrio:', err);
+      toast('Error al consultar datos de punto de equilibrio: ' + (err.message || err), false);
     }
   }
 
@@ -854,35 +1172,211 @@
       return;
     }
 
-    let total = 0;
-    listEl.innerHTML = progs.map(p => {
-      const activo = _peProgramadosActivos[p.id] !== false; // Activo por defecto
-      if (activo) total += p.monto;
-      return `
-        <div class="flex items-center justify-between text-xs md:text-sm py-2 px-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition border-2 border-gray-100">
-          <label class="flex items-center gap-2.5 cursor-pointer text-gray-800 font-bold">
-            <input type="checkbox" onchange="toggleProgramado(${p.id}, this.checked)" ${activo ? 'checked' : ''}
-                   class="w-5 h-5 rounded text-rose-600 focus:ring-rose-500 cursor-pointer">
-            <span class="truncate max-w-[240px]" title="${escapePeHtml(p.descripcion)}">${escapePeHtml(p.descripcion)}</span>
-          </label>
-          <span class="font-mono font-black text-gray-900 text-sm md:text-base">${formatMiles(p.monto)}</span>
-        </div>
-      `;
-    }).join('');
+    // Separar gastos fijos ordinarios de amortizaciones agrupadas por cuenta contable
+    const standardProgs = [];
+    const amortGrupos = {}; // cuenta_codigo -> { codigo, nombre, items: [] }
 
-    document.getElementById('pe-tot-programados-badge').textContent = formatMiles(total);
+    progs.forEach(p => {
+      if (p.es_amortizacion && p.cuenta_codigo) {
+        const cta = p.cuenta_codigo;
+        if (!amortGrupos[cta]) {
+          amortGrupos[cta] = {
+            codigo: cta,
+            nombre: p.cuenta_nombre || ('Amortizaci?n ' + cta),
+            items: []
+          };
+        }
+        amortGrupos[cta].items.push(p);
+      } else {
+        standardProgs.push(p);
+      }
+    });
+
+    let html = '';
+
+    // 1. Renderizar Gastos Fijos Ordinarios (Arriendo, Software, etc.)
+    if (standardProgs.length > 0) {
+      html += standardProgs.map(p => {
+        const activo = _peProgramadosActivos[p.id] !== false;
+        return `
+          <div class="flex items-center justify-between text-xs md:text-sm py-2 px-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition border-2 border-gray-100">
+            <label class="flex items-center gap-2.5 cursor-pointer text-gray-800 font-bold flex-1 min-w-0">
+              <input type="checkbox" onchange="toggleProgramado(${p.id}, this.checked)" ${activo ? 'checked' : ''}
+                     class="w-5 h-5 rounded text-rose-600 focus:ring-rose-500 cursor-pointer flex-shrink-0">
+              <span class="truncate max-w-[260px] md:max-w-[320px]" title="${escapePeHtml(p.descripcion)}">${escapePeHtml(p.descripcion)}</span>
+            </label>
+            <span class="font-mono font-black text-gray-900 text-sm md:text-base ml-2 whitespace-nowrap">${formatMiles(p.monto)}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 2. Renderizar Rubros de Amortizaciones (Agrupados por cuenta contable, colapsados por defecto)
+    const amortCodigos = Object.keys(amortGrupos).sort();
+    if (amortCodigos.length > 0) {
+      amortCodigos.forEach(ctaCodigo => {
+        const grupo = amortGrupos[ctaCodigo];
+        const items = grupo.items;
+        const totalItems = items.length;
+        const itemsActivos = items.filter(it => _peProgramadosActivos[it.id] !== false);
+        const countActivos = itemsActivos.length;
+        const allChecked = countActivos === totalItems;
+        const totalGrupo = itemsActivos.reduce((s, it) => s + it.monto, 0);
+        const isAbierto = Boolean(_peAmortAcordeonAbierto[ctaCodigo]);
+
+        const itemsHtml = items.map(it => {
+          const subActivo = _peProgramadosActivos[it.id] !== false;
+          let cuotaBadge = '';
+          if (it.cuota_total) {
+            const actual = (it.cuota_total || 12) - (it.cuotas_restantes || 0) + 1;
+            cuotaBadge = `<span class="text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">Cuota ${actual}/${it.cuota_total}</span>`;
+          }
+          const docBadge = it.doc_origen ? `<span class="bg-gray-200/80 text-gray-700 px-1.5 py-0.5 rounded font-mono font-bold">Doc: ${escapePeHtml(it.doc_origen)}</span>` : '';
+
+          return `
+            <div class="flex items-center justify-between text-xs py-1.5 px-2.5 rounded-lg bg-gray-50 hover:bg-purple-50/50 transition border border-gray-200">
+              <label class="flex items-center gap-2.5 cursor-pointer text-gray-800 flex-1 min-w-0">
+                <input type="checkbox" onchange="togglePeSubAmort(${it.id}, '${ctaCodigo}', this.checked)" ${subActivo ? 'checked' : ''}
+                       class="pe-subchk-${ctaCodigo} w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer flex-shrink-0">
+                <div class="flex flex-col min-w-0 pr-2">
+                  <span class="font-bold text-gray-800 truncate text-xs" title="${escapePeHtml(it.concepto || it.descripcion)}">
+                    ${escapePeHtml(it.concepto || it.descripcion)}
+                  </span>
+                  <div class="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5">
+                    ${docBadge}
+                    ${cuotaBadge}
+                  </div>
+                </div>
+              </label>
+              <span class="font-mono font-bold text-gray-900 text-xs ml-2 whitespace-nowrap">${formatMiles(it.monto)}</span>
+            </div>
+          `;
+        }).join('');
+
+        html += `
+          <div class="rounded-xl border-2 border-purple-200/80 bg-purple-50/20 overflow-hidden transition shadow-xs hover:border-purple-300">
+            <!-- Encabezado del Rubro (Colapsado por defecto) -->
+            <div class="flex items-center justify-between py-2 px-3 hover:bg-purple-50/70 transition cursor-pointer select-none"
+                 onclick="togglePeAmortAcordeon('${ctaCodigo}', event)">
+              <div class="flex items-center gap-2 min-w-0">
+                <input type="checkbox" id="pe-chk-grupo-${ctaCodigo}"
+                       ${allChecked ? 'checked' : ''}
+                       onclick="event.stopPropagation();"
+                       onchange="togglePeAmortGrupo('${ctaCodigo}', this.checked)"
+                       class="w-5 h-5 rounded text-purple-600 focus:ring-purple-500 cursor-pointer flex-shrink-0">
+                
+                <button type="button" class="p-1 text-purple-600 hover:text-purple-800 transition focus:outline-none flex-shrink-0"
+                        title="Descolapsar desglose de amortizaciones">
+                  <svg id="pe-chev-${ctaCodigo}" class="w-4 h-4 transform transition-transform duration-200 text-purple-600 ${isAbierto ? 'rotate-90' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+                  </svg>
+                </button>
+
+                <div class="flex items-center gap-2 truncate">
+                  <span class="font-mono font-black text-xs px-2 py-0.5 rounded-md bg-purple-100 text-purple-800 border border-purple-200 flex-shrink-0">${ctaCodigo}</span>
+                  <span class="font-extrabold text-xs md:text-sm text-gray-900 truncate" title="${escapePeHtml(grupo.nombre)}">${escapePeHtml(grupo.nombre)}</span>
+                  <span class="text-[11px] font-bold text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded-full border border-purple-200 whitespace-nowrap">
+                    ${totalItems} ${totalItems === 1 ? 'amortizaci?n' : 'amortizaciones'}
+                  </span>
+                </div>
+              </div>
+
+              <div class="text-right flex-shrink-0 ml-2">
+                <span id="pe-tot-grupo-${ctaCodigo}" class="font-mono font-black text-purple-950 text-sm md:text-base whitespace-nowrap">${formatMiles(totalGrupo)}</span>
+              </div>
+            </div>
+
+            <!-- Desglose Descolapsable (Colapsado por defecto) -->
+            <div id="pe-det-${ctaCodigo}" class="${isAbierto ? '' : 'hidden'} bg-white border-t border-purple-100 px-3 py-2 space-y-1.5">
+              ${itemsHtml}
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    listEl.innerHTML = html;
+
+    // Actualizar estado indeterminate de los checkboxes maestros
+    if (amortCodigos.length > 0) {
+      amortCodigos.forEach(ctaCodigo => {
+        actualizarEstadoGrupoAmort(ctaCodigo);
+      });
+    }
+
+    actualizarTotalesProgramados();
+  }
+
+  function togglePeAmortAcordeon(ctaCodigo, event) {
+    if (event) event.stopPropagation();
+    const det = document.getElementById('pe-det-' + ctaCodigo);
+    const chev = document.getElementById('pe-chev-' + ctaCodigo);
+    if (!det) return;
+    const isHidden = det.classList.contains('hidden');
+    if (isHidden) {
+      det.classList.remove('hidden');
+      if (chev) chev.classList.add('rotate-90');
+      _peAmortAcordeonAbierto[ctaCodigo] = true;
+    } else {
+      det.classList.add('hidden');
+      if (chev) chev.classList.remove('rotate-90');
+      _peAmortAcordeonAbierto[ctaCodigo] = false;
+    }
+  }
+
+  function togglePeAmortGrupo(ctaCodigo, checked) {
+    if (!_peDatosBase || !_peDatosBase.gastos_fijos_programados) return;
+    const items = _peDatosBase.gastos_fijos_programados.filter(p => p.es_amortizacion && p.cuenta_codigo === ctaCodigo);
+    items.forEach(p => {
+      _peProgramadosActivos[p.id] = checked;
+    });
+    document.querySelectorAll('.pe-subchk-' + ctaCodigo).forEach(chk => {
+      chk.checked = checked;
+    });
+    actualizarEstadoGrupoAmort(ctaCodigo);
+    actualizarTotalesProgramados();
+    onModificarInput('programados');
+    recalcularPuntoEquilibrio();
+  }
+
+  function togglePeSubAmort(id, ctaCodigo, checked) {
+    _peProgramadosActivos[id] = checked;
+    actualizarEstadoGrupoAmort(ctaCodigo);
+    actualizarTotalesProgramados();
+    onModificarInput('programados');
+    recalcularPuntoEquilibrio();
+  }
+
+  function actualizarEstadoGrupoAmort(ctaCodigo) {
+    if (!_peDatosBase || !_peDatosBase.gastos_fijos_programados) return;
+    const items = _peDatosBase.gastos_fijos_programados.filter(p => p.es_amortizacion && p.cuenta_codigo === ctaCodigo);
+    const activos = items.filter(p => _peProgramadosActivos[p.id] !== false);
+    const masterChk = document.getElementById('pe-chk-grupo-' + ctaCodigo);
+    if (masterChk) {
+      masterChk.checked = (activos.length === items.length);
+      masterChk.indeterminate = (activos.length > 0 && activos.length < items.length);
+    }
+    const totGrupoEl = document.getElementById('pe-tot-grupo-' + ctaCodigo);
+    if (totGrupoEl) {
+      const tot = activos.reduce((sum, p) => sum + p.monto, 0);
+      totGrupoEl.textContent = formatMiles(tot);
+    }
+  }
+
+  function actualizarTotalesProgramados() {
+    if (!_peDatosBase || !_peDatosBase.gastos_fijos_programados) return;
+    let tot = 0;
+    _peDatosBase.gastos_fijos_programados.forEach(p => {
+      if (_peProgramadosActivos[p.id] !== false) tot += p.monto;
+    });
+    const badge = document.getElementById('pe-tot-programados-badge');
+    if (badge) badge.textContent = formatMiles(tot);
   }
 
   function toggleProgramado(id, checked) {
     _peProgramadosActivos[id] = checked;
-    if (_peDatosBase && _peDatosBase.gastos_fijos_programados) {
-      let tot = 0;
-      _peDatosBase.gastos_fijos_programados.forEach(p => {
-        if (_peProgramadosActivos[p.id] !== false) tot += p.monto;
-      });
-      document.getElementById('pe-tot-programados-badge').textContent = formatMiles(tot);
-    }
-    onModificarInput();
+    actualizarTotalesProgramados();
+    onModificarInput('programados');
     recalcularPuntoEquilibrio();
   }
 
@@ -890,14 +1384,14 @@
   function agregarLineaCosto() {
     _peCostosAdicionales.push({ id: Date.now(), nombre: '', monto: 0 });
     renderListaCostos();
-    onModificarInput();
+    onModificarInput('costos_adic');
     recalcularPuntoEquilibrio();
   }
 
   function eliminarLineaCosto(id) {
     _peCostosAdicionales = _peCostosAdicionales.filter(c => c.id !== id);
     renderListaCostos();
-    onModificarInput();
+    onModificarInput('costos_adic');
     recalcularPuntoEquilibrio();
   }
 
@@ -937,7 +1431,7 @@
     if (!item) return;
     if (campo === 'nombre') item.nombre = val;
     else if (campo === 'monto') item.monto = parseMoneda(val);
-    onModificarInput();
+    onModificarInput('costos_adic');
     recalcularPuntoEquilibrio();
   }
 
@@ -945,14 +1439,14 @@
   function agregarLineaGastoFijo() {
     _peGastosAdicionales.push({ id: Date.now(), nombre: '', monto: 0 });
     renderListaGastos();
-    onModificarInput();
+    onModificarInput('gastos_adic');
     recalcularPuntoEquilibrio();
   }
 
   function eliminarLineaGastoFijo(id) {
     _peGastosAdicionales = _peGastosAdicionales.filter(g => g.id !== id);
     renderListaGastos();
-    onModificarInput();
+    onModificarInput('gastos_adic');
     recalcularPuntoEquilibrio();
   }
 
@@ -992,31 +1486,40 @@
     if (!item) return;
     if (campo === 'nombre') item.nombre = val;
     else if (campo === 'monto') item.monto = parseMoneda(val);
-    onModificarInput();
+    onModificarInput('gastos_adic');
     recalcularPuntoEquilibrio();
   }
 
   // RECALCULO GENERAL EN VIVO
   function recalcularPuntoEquilibrio() {
-    // 1. Precios y Margen Unitario
+    const centroId = document.getElementById('pe-centro-select')?.value || '';
+    if (!centroId) {
+      if (_peDatosBase) calcularPuntoEquilibrioConsolidado(_peDatosBase);
+      return;
+    }
+
+    // 1. Unidades Proyectadas
+    const unidadesProy = parseInt(document.getElementById('pe-unidades-proyectadas')?.value || 0);
+
+    // 2. Precios y Margen Bruto de Materia Prima en Sección 1
     const precioUnit = parseMoneda(document.getElementById('pe-precio-promedio')?.value || 0);
-    const costoUnit = parseMoneda(document.getElementById('pe-costo-unitario')?.value || 0);
+    const costoMpUnit = parseMoneda(document.getElementById('pe-costo-unitario')?.value || 0);
 
-    const margenUnit = Math.max(precioUnit - costoUnit, 0);
-    const margenPct = precioUnit > 0 ? (margenUnit / precioUnit) : 0;
+    // Margen unitario de receta/materia prima (para Sección 1)
+    const margenMpUnit = Math.max(precioUnit - costoMpUnit, 0);
+    const margenMpPct = precioUnit > 0 ? (margenMpUnit / precioUnit) : 0;
 
-    // Badges de Margen Unitario (exacto en pesos)
     const mUnitBadge = document.getElementById('pe-margen-unit-badge');
     const mPctBadge = document.getElementById('pe-margen-pct-badge');
-    if (mUnitBadge) mUnitBadge.textContent = formatPesosExactos(margenUnit);
-    if (mPctBadge) mPctBadge.textContent = (margenPct * 100).toFixed(1) + '%';
+    if (mUnitBadge) mUnitBadge.textContent = formatPesosExactos(margenMpUnit);
+    if (mPctBadge) mPctBadge.textContent = (margenMpPct * 100).toFixed(1) + '%';
 
-    // 2. Nómina Operativa (Costos)
+    // 3. Columna Izquierda: Costos Operativos (Mano de Obra Cocina/MOD + Extras)
     const opNum = parseInt(document.getElementById('pe-nom-op-empleados')?.value || 0);
     const opSal = parseMoneda(document.getElementById('pe-nom-op-salario')?.value || 0);
     const opTrans = parseMoneda(document.getElementById('pe-nom-op-transporte')?.value || 0);
     const opBaseSum = opSal + opTrans;
-    const opCarga50 = opBaseSum * 0.50; // Factor prestacional y seguridad social 50%
+    const opCarga50 = opBaseSum * 0.50;
     const opPorEmp = opBaseSum + opCarga50;
     const opTotalNomina = redondearMiles(opNum * opPorEmp);
 
@@ -1024,16 +1527,15 @@
     document.getElementById('pe-nom-op-por-emp').textContent = formatMiles(opPorEmp);
     document.getElementById('pe-nom-operativa-total-badge').textContent = formatMiles(opTotalNomina) + ' / mes';
 
-    // Costos adicionales
     let totalCostosExtra = 0;
     _peCostosAdicionales.forEach(c => { totalCostosExtra += (c.monto || 0); });
     totalCostosExtra = redondearMiles(totalCostosExtra);
 
-    const totalCostosFijos = opTotalNomina + totalCostosExtra;
-    document.getElementById('pe-tot-costos-col').textContent = formatMiles(totalCostosFijos);
-    document.getElementById('pe-subtotal-costos-val').textContent = formatMiles(totalCostosFijos);
+    const totalColumnaOperativa = opTotalNomina + totalCostosExtra;
+    document.getElementById('pe-tot-costos-col').textContent = formatMiles(totalColumnaOperativa);
+    document.getElementById('pe-subtotal-costos-val').textContent = formatMiles(totalColumnaOperativa);
 
-    // 3. Gastos Fijos (Programados + Admin + Extra)
+    // 4. Columna Derecha: Gastos Fijos (Programados + Nómina Admin + Extras)
     let totalProgramados = 0;
     if (_peDatosBase && _peDatosBase.gastos_fijos_programados) {
       _peDatosBase.gastos_fijos_programados.forEach(p => {
@@ -1042,7 +1544,6 @@
     }
     totalProgramados = redondearMiles(totalProgramados);
 
-    // Nómina Administrativa
     const adNum = parseInt(document.getElementById('pe-nom-admin-empleados')?.value || 0);
     const adSal = parseMoneda(document.getElementById('pe-nom-admin-salario')?.value || 0);
     const adTrans = parseMoneda(document.getElementById('pe-nom-admin-transporte')?.value || 0);
@@ -1055,63 +1556,214 @@
     document.getElementById('pe-nom-admin-por-emp').textContent = formatMiles(adPorEmp);
     document.getElementById('pe-nom-admin-total-badge').textContent = formatMiles(adTotalNomina) + ' / mes';
 
-    // Gastos fijos adicionales
     let totalGastosExtra = 0;
     _peGastosAdicionales.forEach(g => { totalGastosExtra += (g.monto || 0); });
     totalGastosExtra = redondearMiles(totalGastosExtra);
 
-    const totalGastosFijos = totalProgramados + adTotalNomina + totalGastosExtra;
-    document.getElementById('pe-tot-gastos-col').textContent = formatMiles(totalGastosFijos);
-    document.getElementById('pe-subtotal-gastos-val').textContent = formatMiles(totalGastosFijos);
+    // TOTAL FIJOS MES (TARJETA BLANCA): estrictamente la columna de fijos!
+    const granTotalFijos = totalProgramados + adTotalNomina + totalGastosExtra;
+    document.getElementById('pe-tot-gastos-col').textContent = formatMiles(granTotalFijos);
+    document.getElementById('pe-subtotal-gastos-val').textContent = formatMiles(granTotalFijos);
 
-    // 4. Gran Total Fijos
-    const granTotalFijos = totalCostosFijos + totalGastosFijos;
+    // 5. COSTO VARIABLE TOTAL (TARJETA ROJA): Materia Prima + Toda la Columna Operativa (Nómina Cocina + Extras)!
+    const costoTotalMp = redondearMiles(unidadesProy * costoMpUnit);
+    const costoTotalVar = costoTotalMp + totalColumnaOperativa;
 
-    // 5. CÁLCULO PUNTO DE EQUILIBRIO EN PESOS Y EN CANTIDADES
+    // Costo variable real por plato para desglose en tarjeta roja
+    const costoVarUnitTotal = unidadesProy > 0 ? (costoTotalVar / unidadesProy) : costoMpUnit;
+
+    // Margen de contribución unitario del producto (independiente del volumen de cantidades vendidas)
+    const margenUnitProd = Math.max(precioUnit - costoMpUnit, 0);
+    const margenPctProd = precioUnit > 0 ? (margenUnitProd / precioUnit) : 0;
+
+    // Total de costos y gastos mensuales que el negocio debe cubrir (Operativos + Fijos):
+    const costosTotalesACubrir = granTotalFijos + totalColumnaOperativa;
+
+    // 6. CÁLCULO PUNTO DE EQUILIBRIO EN PESOS Y CANTIDADES (Fijo ante cambios en cantidades vendidas)
     let pePesos = 0;
     let peUnidades = 0;
+    if (margenPctProd > 0) pePesos = redondearMiles(costosTotalesACubrir / margenPctProd);
+    if (margenUnitProd > 0) peUnidades = Math.ceil(costosTotalesACubrir / margenUnitProd);
 
-    if (margenPct > 0) {
-      pePesos = redondearMiles(granTotalFijos / margenPct);
-    }
-    if (margenUnit > 0) {
-      peUnidades = Math.ceil(granTotalFijos / margenUnit);
+    const ventasProyPesos = redondearMiles(unidadesProy * precioUnit);
+
+    // Actualizar Tarjetas con desglose interactivo
+    actualizarTarjetasKPI(pePesos, peUnidades, unidadesProy, precioUnit, costoVarUnitTotal, ventasProyPesos, costoTotalVar, costoTotalMp, opTotalNomina, totalCostosExtra, granTotalFijos, margenUnitProd, margenPctProd);
+  }
+
+  // CÁLCULO CONSOLIDADO: Integra y suma los escenarios configurados de todas las sedes
+  function calcularPuntoEquilibrioConsolidado(data) {
+    const centros = Array.isArray(data.centros) ? data.centros : [];
+    const ref = data.referencias_legales || {};
+    const sBaseDef = ref.salario_minimo_base || 1751000;
+    const sTransDef = ref.auxilio_transporte_base || 249000;
+
+    let totUnds = 0;
+    let totVentas = 0;
+    let totCostoMp = 0;
+    let totOpEmp = 0;
+    let totOpNomina = 0;
+    let totAdEmp = 0;
+    let totAdNomina = 0;
+    let totCostosExtra = 0;
+    let totGastosExtra = 0;
+
+    if (centros.length === 0) {
+      totUnds = data.unidades_mes_real || 0;
+      totVentas = data.ventas_mes_real || 0;
+      totCostoMp = redondearMiles(totUnds * (data.costo_unitario_promedio || 0));
+    } else {
+      centros.forEach(c => {
+        let st = null;
+        if (_peSimulacionesEnBD && _peSimulacionesEnBD[c.id]) {
+          st = _peSimulacionesEnBD[c.id].datos;
+        }
+        if (!st) {
+          try {
+            const raw = localStorage.getItem(`pe_simulacion_${NEGOCIO_ID}_${c.id}`);
+            if (raw) st = JSON.parse(raw);
+          } catch(e) {}
+        }
+
+        let unds = 0;
+        let precio = 0;
+        let costo = 0;
+        let opEmp = 0;
+        let adEmp = 0;
+
+        if (st) {
+          unds = parseInt(st.unidades_proyectadas) || 0;
+          precio = parseMoneda(st.precio_promedio) || 0;
+          costo = parseMoneda(st.costo_unitario) || 0;
+          opEmp = parseInt(st.nom_op_empleados) || 0;
+          const opSal = parseMoneda(st.nom_op_salario) || sBaseDef;
+          const opTr = parseMoneda(st.nom_op_transporte) || sTransDef;
+          const opCarga50 = (opSal + opTr) * 0.50;
+          totOpNomina += redondearMiles(opEmp * (opSal + opTr + opCarga50));
+
+          adEmp = parseInt(st.nom_ad_empleados) || 0;
+          const adSal = parseMoneda(st.nom_ad_salario) || sBaseDef;
+          const adTr = parseMoneda(st.nom_ad_transporte) || sTransDef;
+          const adCarga50 = (adSal + adTr) * 0.50;
+          totAdNomina += redondearMiles(adEmp * (adSal + adTr + adCarga50));
+
+          if (Array.isArray(st.costos_adicionales)) {
+            st.costos_adicionales.forEach(x => { totCostosExtra += (x.monto || 0); });
+          }
+          if (Array.isArray(st.gastos_adicionales)) {
+            st.gastos_adicionales.forEach(x => { totGastosExtra += (x.monto || 0); });
+          }
+        } else {
+          unds = c.unidades_mes_real || (c.id === 1 ? (data.unidades_mes_real || 0) : 0);
+          precio = c.precio_promedio || (data.precio_promedio || 0);
+          costo = c.costo_unitario_promedio || (data.costo_unitario_promedio || 0);
+          opEmp = 0;
+          adEmp = 0;
+        }
+
+        totUnds += unds;
+        totVentas += redondearMiles(unds * precio);
+        totCostoMp += redondearMiles(unds * costo);
+        totOpEmp += opEmp;
+        totAdEmp += adEmp;
+      });
     }
 
+    if (totUnds === 0 && (data.unidades_mes_real || 0) > 0) {
+      totUnds = data.unidades_mes_real;
+      totVentas = data.ventas_mes_real || redondearMiles(totUnds * (data.precio_promedio || 0));
+      totCostoMp = redondearMiles(totUnds * (data.costo_unitario_promedio || 0));
+    }
+
+    const precioPond = totUnds > 0 ? Math.round(totVentas / totUnds) : Math.round(data.precio_promedio || 0);
+    const costoMpPond = totUnds > 0 ? Math.round(totCostoMp / totUnds) : Math.round(data.costo_unitario_promedio || 0);
+
+    let totProgramados = 0;
+    if (data.gastos_fijos_programados) {
+      data.gastos_fijos_programados.forEach(p => {
+        totProgramados += (p.monto || 0);
+      });
+    }
+    totProgramados = redondearMiles(totProgramados);
+
+    // Total Columna Operativa (Nómina Cocina + Costos Extras)
+    const totalColumnaOperativa = totOpNomina + redondearMiles(totCostosExtra);
+    // Costo Variable Total Consolidado (Materia Prima + Columna Operativa)
+    const totCostoVar = totCostoMp + totalColumnaOperativa;
+
+    // Total Fijos Consolidado (Programados + Nómina Admin + Extras)
+    const granTotalFijos = totProgramados + totAdNomina + redondearMiles(totGastosExtra);
+
+    // Margen unitario de producto consolidado (ponderado)
+    const margenMpPond = Math.max(precioPond - costoMpPond, 0);
+    const margenMpPctPond = precioPond > 0 ? (margenMpPond / precioPond) : 0;
+
+    // Costos totales estructurales a cubrir (operativos + fijos)
+    const costosTotalesACubrir = granTotalFijos + totalColumnaOperativa;
+
+    // Costo variable unitario total para desglose
+    const costoVarUnitPond = totUnds > 0 ? (totCostoVar / totUnds) : costoMpPond;
+
+    // Badges e inputs en pantalla
+    document.getElementById('pe-unidades-proyectadas').value = totUnds;
+    document.getElementById('pe-precio-promedio').value = formatMiles(precioPond);
+    document.getElementById('pe-costo-unitario').value = formatPesosExactos(costoMpPond);
+    document.getElementById('pe-nom-op-empleados').value = totOpEmp;
+    document.getElementById('pe-nom-admin-empleados').value = totAdEmp;
+
+    const mUnitBadge = document.getElementById('pe-margen-unit-badge');
+    const mPctBadge = document.getElementById('pe-margen-pct-badge');
+    if (mUnitBadge) mUnitBadge.textContent = formatPesosExactos(margenMpPond);
+    if (mPctBadge) mPctBadge.textContent = (margenMpPctPond * 100).toFixed(1) + '%';
+
+    document.getElementById('pe-nom-operativa-total-badge').textContent = formatMiles(totOpNomina) + ' / mes';
+    document.getElementById('pe-tot-costos-col').textContent = formatMiles(totalColumnaOperativa);
+    document.getElementById('pe-subtotal-costos-val').textContent = formatMiles(totalColumnaOperativa);
+
+    document.getElementById('pe-nom-admin-total-badge').textContent = formatMiles(totAdNomina) + ' / mes';
+    document.getElementById('pe-tot-gastos-col').textContent = formatMiles(granTotalFijos);
+    document.getElementById('pe-subtotal-gastos-val').textContent = formatMiles(granTotalFijos);
+
+    // Punto de Equilibrio Consolidado
+    let pePesos = 0;
+    let peUnidades = 0;
+    if (margenMpPctPond > 0) pePesos = redondearMiles(costosTotalesACubrir / margenMpPctPond);
+    if (margenMpPond > 0) peUnidades = Math.ceil(costosTotalesACubrir / margenMpPond);
+
+    actualizarTarjetasKPI(pePesos, peUnidades, totUnds, precioPond, costoVarUnitPond, totVentas, totCostoVar, totCostoMp, totOpNomina, totCostosExtra, granTotalFijos, margenMpPond, margenMpPctPond);
+  }
+
+  // Actualiza todas las tarjetas KPI, Hero Banner y explicaciones
+  function actualizarTarjetasKPI(pePesos, peUnidades, unidadesProy, precioUnit, costoVarUnitTotal, ventasProyPesos, costoTotalVar, costoTotalMp, opTotalNomina, totalCostosExtra, granTotalFijos, margenUnit, margenPct) {
     const peDiario = redondearMiles(pePesos / 30);
     const peUnidadesDia = Math.ceil(peUnidades / 30);
-
-    // 6. CÁLCULO VENTAS PROYECTADAS Y RESULTADO OPERATIVO
-    const unidadesProy = parseInt(document.getElementById('pe-unidades-proyectadas')?.value || 0);
-    const ventasProyPesos = redondearMiles(unidadesProy * precioUnit);
     const ventasProyDia = redondearMiles(ventasProyPesos / 30);
     const undsProyDia = Math.ceil(unidadesProy / 30);
 
-    const margenTotalProy = unidadesProy * margenUnit;
+    const costoVarDia = redondearMiles(costoTotalVar / 30);
+    const costoVarPct = ventasProyPesos > 0 ? ((costoTotalVar / ventasProyPesos) * 100) : 0;
+
+    const margenTotalProy = redondearMiles(ventasProyPesos - costoTotalVar);
     const utilidadProy = margenTotalProy - granTotalFijos;
     const utilidadRedondeada = Math.round(utilidadProy / 1000) * 1000;
 
     const coberturaPct = pePesos > 0 ? ((ventasProyPesos / pePesos) * 100) : 0;
     const undsDiferencia = unidadesProy - peUnidades;
 
-    // Actualizar Tarjeta 1: Punto de Equilibrio en Pesos y Cantidades
+    // Actualizar Tarjeta Hero: Punto de Equilibrio
     document.getElementById('pe-kpi-pesos').textContent = formatMiles(pePesos);
     document.getElementById('pe-kpi-diario').textContent = formatMiles(peDiario);
     document.getElementById('pe-kpi-unidades-meta').textContent = peUnidades.toLocaleString('es-CO') + ' unds / mes';
     document.getElementById('pe-kpi-unidades-dia-sub').textContent = peUnidadesDia.toLocaleString('es-CO') + ' und/día';
 
-    // Actualizar Tarjeta 2: Ventas Proyectadas
+    // Actualizar Tarjeta 1: Ventas Proyectadas
     document.getElementById('pe-kpi-ventas-proy').textContent = formatMiles(ventasProyPesos);
     document.getElementById('pe-kpi-ventas-proy-dia').textContent = formatMiles(ventasProyDia);
     document.getElementById('pe-kpi-unidades-proy-sub').textContent = unidadesProy.toLocaleString('es-CO') + ' unds proyectadas / mes';
     document.getElementById('pe-kpi-unidades-proy-box').textContent = unidadesProy.toLocaleString('es-CO') + ' unds / mes';
     document.getElementById('pe-kpi-unidades-proy-dia-box').textContent = undsProyDia.toLocaleString('es-CO') + ' und/día';
 
-    // Actualizar Tarjeta 3: Costo Variable Total Proyectado (Materia Prima / Insumos)
-    const costoTotalVar = redondearMiles(unidadesProy * costoUnit);
-    const costoVarDia = redondearMiles(costoTotalVar / 30);
-    const costoVarPct = precioUnit > 0 ? ((costoUnit / precioUnit) * 100) : 0;
-
+    // Actualizar Tarjeta 2: Costo Variable Total Proyectado con DESGLOSE EN VIVO
     const elCostoVar = document.getElementById('pe-kpi-costos-var');
     if (elCostoVar) elCostoVar.textContent = formatMiles(costoTotalVar);
     const elCostoVarDia = document.getElementById('pe-kpi-costos-var-dia');
@@ -1119,16 +1771,32 @@
     const elCostoVarPct = document.getElementById('pe-kpi-costo-var-pct');
     if (elCostoVarPct) elCostoVarPct.textContent = costoVarPct.toFixed(1) + '% de venta';
     const elCostoUnitSub = document.getElementById('pe-kpi-costo-unit-sub');
-    if (elCostoUnitSub) elCostoUnitSub.textContent = formatPesosExactos(costoUnit) + ' / plato';
+    if (elCostoUnitSub) elCostoUnitSub.textContent = formatPesosExactos(costoVarUnitTotal) + ' / plato';
 
-    // Actualizar Tarjeta 4: Fijos Totales y Margen
+    // Desglose interactivo dentro de la Tarjeta Roja
+    const elDesgMp = document.getElementById('pe-desglose-mp-val');
+    if (elDesgMp) elDesgMp.textContent = formatMiles(costoTotalMp);
+    const elDesgMod = document.getElementById('pe-desglose-mod-val');
+    if (elDesgMod) elDesgMod.textContent = formatMiles(opTotalNomina);
+    const elDesgOtros = document.getElementById('pe-desglose-otros-val');
+    const elRowOtros = document.getElementById('pe-desglose-otros-row');
+    if (elDesgOtros && elRowOtros) {
+      if (totalCostosExtra > 0) {
+        elDesgOtros.textContent = formatMiles(totalCostosExtra);
+        elRowOtros.classList.remove('hidden');
+      } else {
+        elRowOtros.classList.add('hidden');
+      }
+    }
+
+    // Actualizar Tarjeta 3: Fijos Totales (solo Columna Derecha) y Margen Real de Cobertura
     document.getElementById('pe-kpi-total-fijos').textContent = formatMiles(granTotalFijos);
     document.getElementById('pe-kpi-margen-pct-box').textContent = (margenPct * 100).toFixed(1) + '%';
     document.getElementById('pe-kpi-margen-unit-bottom').textContent = formatPesosExactos(margenUnit) + ' / plato';
     const elFijosDia = document.getElementById('pe-kpi-fijos-diario');
     if (elFijosDia) elFijosDia.textContent = formatMiles(redondearMiles(granTotalFijos / 30));
 
-    // Actualizar Tarjeta 5: Resultado Proyectado y Margen de Seguridad
+    // Actualizar Tarjeta 4: Resultado Proyectado y Margen de Seguridad
     const cardUtilBox = document.getElementById('pe-card-utilidad-box');
     const lblUtil = document.getElementById('pe-lbl-utilidad-proy');
     const iconUtil = document.getElementById('pe-icon-utilidad');
@@ -1200,7 +1868,7 @@
     const expTexto = document.getElementById('pe-explicacion-texto');
     if (expTexto) {
       if (margenPct <= 0) {
-        expTexto.innerHTML = `<span class="text-rose-600 font-extrabold">⚠️ Alerta: El costo unitario es mayor o igual al precio de venta. No hay margen de contribución para absorber los costos fijos.</span>`;
+        expTexto.innerHTML = `<span class="text-rose-600 font-extrabold">⚠️ Alerta: El costo variable unitario supera o iguala al precio de venta. No hay margen para absorber los gastos fijos.</span>`;
       } else if (coberturaPct >= 100) {
         expTexto.innerHTML = `Con la meta de <strong>${unidadesProy.toLocaleString('es-CO')} unidades</strong> (${formatMiles(ventasProyPesos)}), se supera el punto de equilibrio de <strong>${peUnidades.toLocaleString('es-CO')} unidades</strong> (${formatMiles(pePesos)}). Se genera una <strong>utilidad proyectada de ${formatMiles(utilidadRedondeada)}</strong> (${coberturaPct.toFixed(1)}% de cobertura).`;
       } else {

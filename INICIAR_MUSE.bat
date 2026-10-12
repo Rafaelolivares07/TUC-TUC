@@ -27,8 +27,8 @@ if exist "%CREDS%" echo   credenciales OK
 if exist "%CREDS%" goto :pat_ok
 echo   Falta %CREDS% - Muse no podra pushear solo (pedira aprobacion).
 echo   Crea un PAT fine-grained en github.com: repo TUC-TUC, Contents read+write.
-powershell -NoProfile -Command "$s=Read-Host 'Pega el PAT (no se muestra, Enter para omitir)' -AsSecureString; $p=[Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)); if($p.Length -lt 10){exit 1}; 'https://Rafaelolivares07:'+$p+'@github.com' | Out-File -FilePath 'C:\Tools\muse-git-credentials' -Encoding ascii -NoNewline"
-if %errorlevel% equ 0 (echo   PAT guardado.) else (echo   Omitido. Re-ejecuta este script cuando tengas el PAT.)
+powershell -NoProfile -Command "if ([Console]::IsInputRedirected) { exit 2 }; $s=Read-Host 'Pega el PAT (no se muestra, Enter para omitir)' -AsSecureString; $p=[Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)); if($p.Length -lt 10){exit 1}; 'https://Rafaelolivares07:'+$p+'@github.com' | Out-File -FilePath 'C:\Tools\muse-git-credentials' -Encoding ascii -NoNewline"
+if %errorlevel% equ 0 (echo   PAT guardado.) else if %errorlevel% equ 2 (echo   Omitido: sin consola interactiva.) else (echo   Omitido. Re-ejecuta este script cuando tengas el PAT.)
 :pat_ok
 
 echo [4/6] Fetch + estado V2

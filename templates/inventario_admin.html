@@ -2154,15 +2154,19 @@
 
         <div id="seccion-sugerencias-produccion" class="mb-6 bg-slate-50 border border-slate-200 rounded-2xl p-5">
 
-      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+      <div class="flex items-center justify-between flex-wrap gap-2">
 
-        <h3 class="font-bold text-slate-800 text-xs flex items-center gap-1.5 mb-0">
+        <button type="button" onclick="togglePronosticoProduccion()" aria-expanded="false" aria-controls="pronostico-produccion-body" class="font-bold text-slate-800 text-xs flex items-center gap-1.5 outline-none hover:text-indigo-700 cursor-pointer">
 
-          <span>💡</span> Pronóstico de Producción (Consumo y frecuencia)
+          <span id="pronostico-toggle-icon">▶</span><span>💡</span> Pronóstico de Producción (Consumo y frecuencia)
 
-        </h3>
+        </button>
 
-        
+      </div>
+
+      <div id="pronostico-produccion-body" class="hidden mt-3">
+
+      <div class="flex items-center justify-end flex-wrap gap-2 mb-3">
 
         <!-- Detalles de Ajuste Colapsables -->
 
@@ -2293,6 +2297,8 @@
           </table>
 
         </div>
+
+      </div>
 
       </div>
 
@@ -3894,7 +3900,15 @@ function mostrarTab(t) {
 
   if (t === 'produccion') {
 
-    cargarSugerenciasProduccion();
+    const pronBody = document.getElementById('pronostico-produccion-body');
+
+    if (!pronBody || !pronBody.classList.contains('hidden')) {
+
+      cargarSugerenciasProduccion();
+
+      if (pronBody) pronBody.dataset.cargado = '1';
+
+    }
 
   }
 
@@ -9390,6 +9404,33 @@ function mostrarInformeRecosteo(resumen, productosDetalle) {
       </div>
     </div>
   `;
+}
+
+
+function togglePronosticoProduccion() {
+
+  const body = document.getElementById('pronostico-produccion-body');
+
+  const icon = document.getElementById('pronostico-toggle-icon');
+
+  const btn = document.querySelector('[aria-controls="pronostico-produccion-body"]');
+
+  if (!body) return;
+
+  const collapsed = body.classList.toggle('hidden');
+
+  if (icon) icon.textContent = collapsed ? '▶' : '▼';
+
+  if (btn) btn.setAttribute('aria-expanded', String(!collapsed));
+
+  if (!collapsed && body.dataset.cargado !== '1') {
+
+    body.dataset.cargado = '1';
+
+    cargarSugerenciasProduccion();
+
+  }
+
 }
 
 

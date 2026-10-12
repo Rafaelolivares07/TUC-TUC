@@ -3007,34 +3007,38 @@
 
       
 
-      <!-- Product Summary Panel -->
-
-      <div id="kardex-resumen-producto" class="hidden flex items-center gap-4 bg-gray-50 border border-gray-150 p-2.5 rounded-xl ml-auto">
-
-        <div class="text-xs text-gray-500 border-r border-gray-200 pr-3">
-
-          <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Stock Disponible</span>
-
-          <span id="kp-stock" class="text-sm font-extrabold text-gray-800">0</span>
-
+      <!-- Paneles Superiores: Resumen de Stock y Auditoría Inmediata de Registros BD vs Render -->
+      <div class="flex items-center gap-3 flex-wrap ml-auto">
+        <!-- Product Summary Panel -->
+        <div id="kardex-resumen-producto" class="hidden flex items-center gap-4 bg-gray-50 border border-gray-150 p-2.5 rounded-xl">
+          <div class="text-xs text-gray-500 border-r border-gray-200 pr-3">
+            <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Stock Disponible</span>
+            <span id="kp-stock" class="text-sm font-extrabold text-gray-800">0</span>
+          </div>
+          <div class="text-xs text-gray-500 border-r border-gray-200 pr-3">
+            <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Costo Prom. Actual</span>
+            <span id="kp-costo-prom" class="text-sm font-extrabold text-indigo-600 font-mono">0</span>
+          </div>
+          <div class="text-xs text-gray-500 pr-1">
+            <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Valor Inventario</span>
+            <span id="kp-valor-existencia" class="text-sm font-extrabold text-emerald-600 font-mono">0</span>
+          </div>
         </div>
 
-        <div class="text-xs text-gray-500 border-r border-gray-200 pr-3">
-
-          <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Costo Prom. Actual</span>
-
-          <span id="kp-costo-prom" class="text-sm font-extrabold text-indigo-600 font-mono">0</span>
-
+        <!-- Conteo Ultra Rápido en BD vs Registros Renderizados -->
+        <div id="kardex-conteo-cotejo" class="hidden flex items-center gap-2.5 bg-slate-50 border border-slate-200 p-2 rounded-xl text-xs shadow-2xs" title="Cotejo en tiempo real de registros contados en Base de Datos vs renderizados en tabla">
+          <div class="text-xs border-r border-slate-200 pr-2.5">
+            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Total BD</span>
+            <span id="kardex-conteo-bd" class="text-sm font-extrabold text-blue-700 font-mono">...</span>
+          </div>
+          <div class="text-xs border-r border-slate-200 pr-2.5">
+            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Renderizados</span>
+            <span id="kardex-conteo-render" class="text-sm font-extrabold text-slate-800 font-mono">...</span>
+          </div>
+          <div class="flex items-center">
+            <span id="kardex-badge-cotejo" class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-blue-100 text-blue-800">⏳ Contando BD...</span>
+          </div>
         </div>
-
-        <div class="text-xs text-gray-500 pr-1">
-
-          <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Valor Inventario</span>
-
-          <span id="kp-valor-existencia" class="text-sm font-extrabold text-emerald-600 font-mono">0</span>
-
-        </div>
-
       </div>
 
       <div class="flex items-center gap-2">
@@ -8582,6 +8586,67 @@ let _kardexPorPagina = (() => {
   return 'todos';
 })();
 let _kardexTotalMovimientos = 0;
+let _kardexTotalBdContado = null;
+
+async function consultarConteoRapidoKardex(productoId) {
+  const panel = document.getElementById('kardex-conteo-cotejo');
+  const lblBd = document.getElementById('kardex-conteo-bd');
+  const lblRender = document.getElementById('kardex-conteo-render');
+  const badge = document.getElementById('kardex-badge-cotejo');
+
+  if (!panel || !lblBd || !lblRender || !badge) return;
+
+  panel.classList.remove('hidden');
+  lblBd.textContent = '...';
+  lblRender.textContent = '...';
+  badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-lg bg-blue-100 text-blue-800 animate-pulse';
+  badge.textContent = '⏳ Contando BD...';
+  _kardexTotalBdContado = null;
+
+  try {
+    const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
+    const r = await fetch(`/api/inventario/producto/${productoId}/conteo${bodParam}`);
+    const d = await r.json();
+    if (d.ok) {
+      _kardexTotalBdContado = Number(d.total_bd);
+      lblBd.textContent = _kardexTotalBdContado.toLocaleString('es-CO');
+      compararConteoKardex();
+    } else {
+      lblBd.textContent = 'Error';
+    }
+  } catch (e) {
+    lblBd.textContent = 'Error';
+  }
+}
+
+function compararConteoKardex(totalRenderizados = null) {
+  const lblRender = document.getElementById('kardex-conteo-render');
+  const badge = document.getElementById('kardex-badge-cotejo');
+  if (!badge) return;
+
+  if (totalRenderizados !== null) {
+    if (lblRender) lblRender.textContent = Number(totalRenderizados).toLocaleString('es-CO');
+  }
+
+  const renderText = lblRender ? lblRender.textContent.replace(/\D/g, '') : '';
+  const renderVal = totalRenderizados !== null ? Number(totalRenderizados) : (renderText !== '' ? parseInt(renderText, 10) : null);
+
+  if (_kardexTotalBdContado === null || renderVal === null) {
+    badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800';
+    badge.textContent = '⏳ Cargando tabla...';
+    return;
+  }
+
+  if (renderVal === _kardexTotalBdContado) {
+    badge.className = 'text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs flex items-center gap-1';
+    badge.innerHTML = `<span>✅ 100% Coinciden</span> <span class="font-mono font-black">(${renderVal} / ${_kardexTotalBdContado})</span>`;
+    badge.title = 'Todos los registros contados en la base de datos coinciden exactamente con los registros renderizados en pantalla';
+  } else {
+    badge.className = 'text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs flex items-center gap-1 animate-pulse';
+    badge.innerHTML = `<span>⚠️ Discrepancia</span> <span class="font-mono font-black">BD:${_kardexTotalBdContado} ≠ Render:${renderVal}</span>`;
+    badge.title = 'Atención: El número de registros en base de datos no es igual a los registros cargados en pantalla';
+  }
+}
 let _kardexDecimales = (() => {
   const guardado = localStorage.getItem('kardex_decimales');
   if (guardado !== null) {
@@ -8895,6 +8960,10 @@ function renderizarTablaKardex(d) {
 async function cargarKardex(productoId, pagina = 1) {
   kardexProductoActual = Number(productoId);
   _kardexPaginaActual = Math.max(1, Number(pagina) || 1);
+
+  // Consulta ultra rápida inicial para contar registros en BD de inmediato
+  consultarConteoRapidoKardex(productoId);
+
   const tb = document.getElementById('tabla-kardex');
   tb.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-4">Cargando…</td></tr>';
 
@@ -8947,6 +9016,7 @@ async function cargarKardex(productoId, pagina = 1) {
     const btnPdf = document.getElementById('kardex-btn-pdf');
     if (btnPdf) { btnPdf.classList.add('hidden'); btnPdf.classList.remove('flex'); }
     if (paginacionBar) paginacionBar.classList.add('hidden');
+    compararConteoKardex(0);
     return;
   }
 
@@ -8960,6 +9030,7 @@ async function cargarKardex(productoId, pagina = 1) {
   inicializarDecimalesKardex();
   actualizarBotonValoresKardex();
   renderizarTablaKardex(d);
+  compararConteoKardex(d.movimientos ? d.movimientos.length : 0);
   actualizarPaginadorKardex();
 }
 
@@ -13614,9 +13685,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('kardex-ac-input').addEventListener('input', (e) => {
 
     if (!e.target.value.trim()) {
-
       document.getElementById('kardex-resumen-producto')?.classList.add('hidden');
-
+      document.getElementById('kardex-conteo-cotejo')?.classList.add('hidden');
     }
 
   });

@@ -2051,6 +2051,51 @@ def api_inventario_kardex(producto_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/inventario/producto/<int:producto_id>/conteo')
+def api_inventario_producto_conteo(producto_id):
+    """Consulta ultra rápida que solo cuenta registros en base de datos para verificación inmediata."""
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        negocio_id = _negocio_id_de_producto(conn, producto_id)
+        if not negocio_id:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+
+        bodega_kardex = request.args.get('bodega') or session.get('centro_utilidad_id') or 1
+        es_consolidado_k = str(bodega_kardex).lower() in ('consolidado', 'todas', 'all')
+
+        filtro_bodega_sql = ""
+        params = [negocio_id, producto_id]
+        if not es_consolidado_k:
+            try:
+                bod_int = int(bodega_kardex)
+                filtro_bodega_sql = " AND (bodega = %s OR bodega IS NULL)"
+                params.append(bod_int)
+            except Exception:
+                pass
+
+        row = conn.execute(f"""
+            SELECT COUNT(*) AS total
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s {filtro_bodega_sql}
+        """, tuple(params)).fetchone()
+
+        total_bd = int(row['total'] or 0) if row else 0
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'producto_id': producto_id,
+            'negocio_id': negocio_id,
+            'total_bd': total_bd
+        })
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/inventario/producto/<int:producto_id>/kardex/pdf')
 def api_inventario_kardex_pdf(producto_id):
     """Genera un PDF del Kardex del producto.

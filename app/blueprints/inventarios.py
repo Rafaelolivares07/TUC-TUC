@@ -2066,29 +2066,45 @@ def api_inventario_producto_conteo(producto_id):
         bodega_kardex = request.args.get('bodega') or session.get('centro_utilidad_id') or 1
         es_consolidado_k = str(bodega_kardex).lower() in ('consolidado', 'todas', 'all')
 
-        filtro_bodega_sql = ""
-        params = [negocio_id, producto_id]
-        if not es_consolidado_k:
-            try:
-                bod_int = int(bodega_kardex)
-                filtro_bodega_sql = " AND (bodega = %s OR bodega IS NULL)"
-                params.append(bod_int)
-            except Exception:
-                pass
-
-        row = conn.execute(f"""
+        # 1. Total Global Empresa (todos los centros/bodegas sin filtro)
+        row_global = conn.execute("""
             SELECT COUNT(*) AS total
             FROM movimientos_inventario
-            WHERE negocio_id = %s AND producto_id = %s {filtro_bodega_sql}
-        """, tuple(params)).fetchone()
+            WHERE negocio_id = %s AND producto_id = %s
+        """, (negocio_id, producto_id)).fetchone()
+        total_global = int(row_global['total'] or 0) if row_global else 0
 
-        total_bd = int(row['total'] or 0) if row else 0
+        # 2. Total Centro Activo
+        if es_consolidado_k:
+            total_centro = total_global
+            nombre_centro = 'Consolidado (Todas)'
+        else:
+            try:
+                bod_int = int(bodega_kardex)
+            except Exception:
+                bod_int = 1
+
+            row_centro = conn.execute("""
+                SELECT COUNT(*) AS total
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND producto_id = %s AND (bodega = %s OR bodega IS NULL)
+            """, (negocio_id, producto_id, bod_int)).fetchone()
+            total_centro = int(row_centro['total'] or 0) if row_centro else 0
+
+            row_nom = conn.execute("SELECT nombre FROM centros_utilidad WHERE id = %s", (bod_int,)).fetchone()
+            nombre_centro = row_nom['nombre'] if row_nom and row_nom['nombre'] else f"Sede {bod_int}"
+
         conn.close()
         return jsonify({
             'ok': True,
             'producto_id': producto_id,
             'negocio_id': negocio_id,
-            'total_bd': total_bd
+            'total_global': total_global,
+            'total_centro': total_centro,
+            'total_bd': total_centro,
+            'centro_id': bodega_kardex,
+            'centro_nombre': nombre_centro,
+            'es_consolidado': es_consolidado_k
         })
     except Exception as e:
         try: conn.close()

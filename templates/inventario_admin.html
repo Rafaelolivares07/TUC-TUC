@@ -253,6 +253,46 @@
       padding: 12px 14px;
     }
 
+    /* Estilos 150% ancho completo para Kardex */
+    #tab-kardex {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    #tab-kardex table {
+      width: 100% !important;
+    }
+    #tab-kardex input, #tab-kardex select, #tab-kardex button {
+      font-size: 1.15rem !important;
+      min-height: 44px;
+    }
+    #tab-kardex label {
+      font-size: 1.05rem !important;
+      font-weight: 600;
+    }
+    #tab-kardex th {
+      font-size: 0.95rem !important;
+      padding: 10px 12px !important;
+      line-height: 1.35 !important;
+    }
+    #tab-kardex td {
+      font-size: 1.15rem !important;
+      padding: 11px 12px !important;
+      line-height: 1.45 !important;
+    }
+    #tab-kardex td .text-xs,
+    #tab-kardex td .text-\[10px\],
+    #tab-kardex td .text-\[11px\],
+    #tab-kardex td .text-\[9px\] {
+      font-size: 1.0rem !important;
+    }
+    #tab-kardex .badge {
+      font-size: 0.95rem !important;
+      padding: 4px 10px !important;
+    }
+    #tab-kardex .ac-list {
+      font-size: 1.1rem !important;
+    }
+
     label { font-size: .75rem; font-weight: 600; color: #6b7280; margin-bottom: 2px; display: block; }
 
     table { width: 100%; border-collapse: collapse; }
@@ -2991,9 +3031,9 @@
 
     <div class="flex items-end justify-between mb-4 flex-wrap gap-4 border-b border-gray-100 pb-4">
 
-      <div class="relative w-full sm:max-w-xs">
+      <div class="relative w-full sm:max-w-md">
 
-        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide">Consultar Producto</label>
+        <label class="text-sm font-bold text-gray-600 uppercase tracking-wide">Consultar Producto</label>
 
         <input id="kardex-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off"
 
@@ -3010,33 +3050,38 @@
       <!-- Paneles Superiores: Resumen de Stock y Auditoría Inmediata de Registros BD vs Render -->
       <div class="flex items-center gap-3 flex-wrap ml-auto">
         <!-- Product Summary Panel -->
-        <div id="kardex-resumen-producto" class="hidden flex items-center gap-4 bg-gray-50 border border-gray-150 p-2.5 rounded-xl">
-          <div class="text-xs text-gray-500 border-r border-gray-200 pr-3">
-            <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Stock Disponible</span>
-            <span id="kp-stock" class="text-sm font-extrabold text-gray-800">0</span>
+        <div id="kardex-resumen-producto" class="hidden flex items-center gap-4 bg-gray-50 border border-gray-150 p-3 rounded-xl">
+          <div class="border-r border-gray-200 pr-3">
+            <span class="block text-gray-400 font-bold uppercase tracking-wider text-[11px] mb-0.5">Stock Disponible</span>
+            <span id="kp-stock" class="text-base font-extrabold text-gray-800 font-mono">0</span>
           </div>
-          <div class="text-xs text-gray-500 border-r border-gray-200 pr-3">
-            <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Costo Prom. Actual</span>
-            <span id="kp-costo-prom" class="text-sm font-extrabold text-indigo-600 font-mono">0</span>
+          <div class="border-r border-gray-200 pr-3">
+            <span class="block text-gray-400 font-bold uppercase tracking-wider text-[11px] mb-0.5">Costo Prom. Actual</span>
+            <span id="kp-costo-prom" class="text-base font-extrabold text-indigo-600 font-mono">0</span>
           </div>
-          <div class="text-xs text-gray-500 pr-1">
-            <span class="block text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Valor Inventario</span>
-            <span id="kp-valor-existencia" class="text-sm font-extrabold text-emerald-600 font-mono">0</span>
+          <div class="pr-1">
+            <span class="block text-gray-400 font-bold uppercase tracking-wider text-[11px] mb-0.5">Valor Inventario</span>
+            <span id="kp-valor-existencia" class="text-base font-extrabold text-emerald-600 font-mono">0</span>
           </div>
         </div>
 
-        <!-- Conteo Ultra Rápido en BD vs Registros Renderizados -->
-        <div id="kardex-conteo-cotejo" class="hidden flex items-center gap-2.5 bg-slate-50 border border-slate-200 p-2 rounded-xl text-xs shadow-2xs" title="Cotejo en tiempo real de registros contados en Base de Datos vs renderizados en tabla">
-          <div class="text-xs border-r border-slate-200 pr-2.5">
-            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Total BD</span>
-            <span id="kardex-conteo-bd" class="text-sm font-extrabold text-blue-700 font-mono">...</span>
+        <!-- Conteo Ultra Rápido en BD vs Registros Renderizados con Filtro por Centro de Utilidad -->
+        <div id="kardex-conteo-cotejo" class="hidden flex items-center gap-3 bg-slate-50 border border-slate-200 p-2.5 rounded-xl shadow-2xs" title="Cotejo en tiempo real de registros contados en Base de Datos vs renderizados en tabla">
+          <div class="border-r border-slate-200 pr-3">
+            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[11px] mb-0.5">Total BD Global</span>
+            <span id="kardex-conteo-global" class="text-base font-extrabold text-blue-700 font-mono">...</span>
           </div>
-          <div class="text-xs border-r border-slate-200 pr-2.5">
-            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[9px] mb-0.5">Renderizados</span>
-            <span id="kardex-conteo-render" class="text-sm font-extrabold text-slate-800 font-mono">...</span>
+          <div class="border-r border-slate-200 pr-3">
+            <span id="kardex-label-centro" class="block text-slate-400 font-bold uppercase tracking-wider text-[11px] mb-0.5">Sede Activa</span>
+            <span id="kardex-conteo-centro" class="text-base font-extrabold text-indigo-700 font-mono">...</span>
+            <span id="kardex-conteo-bd" class="hidden">...</span>
+          </div>
+          <div class="border-r border-slate-200 pr-3">
+            <span class="block text-slate-400 font-bold uppercase tracking-wider text-[11px] mb-0.5">Renderizados</span>
+            <span id="kardex-conteo-render" class="text-base font-extrabold text-slate-800 font-mono">...</span>
           </div>
           <div class="flex items-center">
-            <span id="kardex-badge-cotejo" class="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-blue-100 text-blue-800">⏳ Contando BD...</span>
+            <span id="kardex-badge-cotejo" class="text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800">⏳ Contando BD...</span>
           </div>
         </div>
       </div>
@@ -3045,24 +3090,24 @@
 
         <!-- Botón Conmutador de Ocultar/Mostrar Valores y Costos en Kardex -->
         <button type="button" id="btn-toggle-valores-kardex" onclick="toggleValoresKardex()"
-                class="px-3 py-2 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-800 cursor-pointer select-none text-xs shadow-xs"
+                class="px-3.5 py-2.5 rounded-xl font-bold border transition flex items-center gap-1.5 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-800 cursor-pointer select-none text-sm shadow-xs"
                 title="Colapsar u ocultar columnas de costos y valores monetarios para enfocarse únicamente en cantidades físicas">
           <span id="icon-toggle-valores-kardex" class="text-slate-500">💵</span>
           <span id="text-toggle-valores-kardex">Solo Cantidades</span>
         </button>
 
         <!-- Selector interactivo de decimales para Kardex -->
-        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
-          <label for="kardex-decimales-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1" title="Número de decimales visibles en el Kardex (0 a 6)">
+        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl shadow-2xs shrink-0">
+          <label for="kardex-decimales-input" class="text-xs font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1" title="Número de decimales visibles en el Kardex (0 a 6)">
             <span>🔢 Decimales:</span>
           </label>
           <input id="kardex-decimales-input" type="number" min="0" max="6" step="1" value="2"
                  oninput="cambiarDecimalesKardex(this.value)" onchange="cambiarDecimalesKardex(this.value)" onblur="validarDecimalesKardexInput(this)"
-                 class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                 class="w-14 text-center font-mono font-bold text-sm bg-white border border-slate-300 rounded-lg px-2 py-1 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
                  title="Número de decimales visibles para cantidades, costos y valores en Kardex (0 a 6)">
         </div>
 
-        <button id="kardex-btn-pdf" onclick="generarPdfKardex()" class="hidden px-3.5 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-xl transition-colors shadow-sm items-center gap-1.5">
+        <button id="kardex-btn-pdf" onclick="generarPdfKardex()" class="hidden px-4 py-2.5 bg-gray-800 hover:bg-gray-900 text-white text-sm font-bold rounded-xl transition-colors shadow-sm items-center gap-2">
 
           <span>📄</span> PDF
 
@@ -3078,53 +3123,53 @@
 
 
 
-    <div id="kardex-table-container" ondragover="handleKardexAutoScroll(event)" class="overflow-x-auto overflow-y-auto max-h-[600px] border border-gray-150 rounded-xl custom-scrollbar scroll-smooth bg-white">
+    <div id="kardex-table-container" ondragover="handleKardexAutoScroll(event)" class="overflow-x-auto overflow-y-auto max-h-[700px] border border-gray-150 rounded-xl custom-scrollbar scroll-smooth bg-white w-full">
 
-      <table class="w-full text-xs min-w-[960px]">
+      <table class="w-full text-sm min-w-[1380px]">
 
         <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 select-none">
 
-          <tr class="text-gray-500 uppercase text-[10px]">
+          <tr class="text-gray-500 uppercase text-xs">
 
-            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 whitespace-nowrap w-[95px]">Fecha</th>
+            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50 whitespace-nowrap min-w-[135px]">Fecha</th>
 
-            <th rowspan="2" class="px-2.5 py-1 text-left align-middle bg-gray-50 min-w-[155px]">Documento / Proveedor</th>
+            <th rowspan="2" class="px-3.5 py-2 text-left align-middle bg-gray-50 min-w-[220px]">Documento / Proveedor</th>
 
-            <th rowspan="2" class="px-2 py-1 text-left align-middle bg-gray-50 min-w-[150px]">Origen / Empaque</th>
+            <th rowspan="2" class="px-3 py-2 text-left align-middle bg-gray-50 min-w-[210px]">Origen / Empaque</th>
 
-            <th colspan="3" class="px-1.5 py-0.5 text-center border-b border-gray-200/60 font-bold bg-gray-100">CANTIDADES</th>
+            <th colspan="3" class="px-2 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100 text-xs">CANTIDADES</th>
 
-            <th colspan="2" class="px-1.5 py-0.5 text-center border-b border-gray-200/60 font-bold bg-gray-100 kardex-col-valores">COSTOS UNITARIOS</th>
+            <th colspan="2" class="px-2 py-1 text-center border-b border-gray-200/60 font-bold bg-gray-100 text-xs kardex-col-valores">COSTOS UNITARIOS</th>
 
-            <th rowspan="2" class="px-2 py-1 text-right num align-middle bg-gray-50 whitespace-nowrap min-w-[78px] kardex-col-valores">Total Línea</th>
+            <th rowspan="2" class="px-3 py-2 text-right num align-middle bg-gray-50 whitespace-nowrap min-w-[125px] kardex-col-valores">Total Línea</th>
 
-            <th rowspan="2" class="px-2 py-1 text-right num align-middle bg-gray-50 whitespace-nowrap text-emerald-800 font-bold min-w-[85px] kardex-col-valores" title="Valor monetario del stock en existencia (Saldo x Promedio)">Total Stock $</th>
+            <th rowspan="2" class="px-3 py-2 text-right num align-middle bg-gray-50 whitespace-nowrap text-emerald-800 font-bold min-w-[135px] kardex-col-valores" title="Valor monetario del stock en existencia (Saldo x Promedio)">Total Stock $</th>
 
           </tr>
 
-          <tr class="text-gray-500 uppercase text-[10px]">
+          <tr class="text-gray-500 uppercase text-xs">
 
-            <th class="px-2 py-1 text-right num font-semibold bg-gray-50 text-emerald-800 border-r border-gray-100 min-w-[68px]">
+            <th class="px-3 py-2 text-right num font-semibold bg-gray-50 text-emerald-800 border-r border-gray-100 min-w-[105px]">
 
               Entradas
 
-              <span id="kardex-sum-entradas" class="block text-xs font-mono font-bold text-emerald-600 mt-0.5" title="Total entradas en consulta">0</span>
+              <span id="kardex-sum-entradas" class="block text-sm font-mono font-bold text-emerald-600 mt-0.5" title="Total entradas en consulta">0</span>
 
             </th>
 
-            <th class="px-2 py-1 text-right num font-semibold bg-gray-50 text-rose-800 border-r border-gray-100 min-w-[68px]">
+            <th class="px-3 py-2 text-right num font-semibold bg-gray-50 text-rose-800 border-r border-gray-100 min-w-[105px]">
 
               Salidas
 
-              <span id="kardex-sum-salidas" class="block text-xs font-mono font-bold text-rose-600 mt-0.5" title="Total salidas en consulta">0</span>
+              <span id="kardex-sum-salidas" class="block text-sm font-mono font-bold text-rose-600 mt-0.5" title="Total salidas en consulta">0</span>
 
             </th>
 
-            <th class="px-2 py-1 text-right num font-semibold bg-gray-50 text-gray-800 min-w-[68px]">Saldo</th>
+            <th class="px-3 py-2 text-right num font-semibold bg-gray-50 text-gray-800 min-w-[110px]">Saldo</th>
 
-            <th class="px-1.5 py-1 text-right num font-semibold bg-gray-50 text-blue-800 border-r border-gray-100 min-w-[72px] kardex-col-valores" title="Costo unitario de la transacción">Transacción</th>
+            <th class="px-2.5 py-2 text-right num font-semibold bg-gray-50 text-blue-800 border-r border-gray-100 min-w-[115px] kardex-col-valores" title="Costo unitario de la transacción">Transacción</th>
 
-            <th class="px-1.5 py-1 text-right num font-semibold bg-gray-50 text-purple-800 min-w-[72px] kardex-col-valores" title="Costo promedio ponderado resultante">Promedio</th>
+            <th class="px-2.5 py-2 text-right num font-semibold bg-gray-50 text-purple-800 min-w-[115px] kardex-col-valores" title="Costo promedio ponderado resultante">Promedio</th>
 
           </tr>
 
@@ -3917,7 +3962,7 @@ function mostrarTab(t) {
   // Dynamic width control for Desembolsos / Estado de Resultados / Recosteo tabs
   const container = document.getElementById('main-container');
   if (container) {
-    if (t === 'desembolsos' || t === 'estado_resultados' || t === 'recosteo') {
+    if (t === 'desembolsos' || t === 'estado_resultados' || t === 'recosteo' || t === 'kardex') {
       container.classList.remove('max-w-screen-xl');
       container.classList.add('w-full', 'max-w-none', 'px-2', 'sm:px-4');
     } else {
@@ -8583,21 +8628,32 @@ try {
   localStorage.setItem('kardex_por_pagina', 'todos');
 } catch(e) {}
 let _kardexTotalMovimientos = 0;
+let _kardexTotalGlobalContado = null;
+let _kardexTotalCentroContado = null;
 let _kardexTotalBdContado = null;
+let _kardexCentroNombreContado = '';
+let _kardexEsConsolidado = false;
 
 async function consultarConteoRapidoKardex(productoId) {
   const panel = document.getElementById('kardex-conteo-cotejo');
+  const lblGlobal = document.getElementById('kardex-conteo-global');
+  const lblCentro = document.getElementById('kardex-conteo-centro');
+  const lblCentroTitulo = document.getElementById('kardex-label-centro');
   const lblBd = document.getElementById('kardex-conteo-bd');
   const lblRender = document.getElementById('kardex-conteo-render');
   const badge = document.getElementById('kardex-badge-cotejo');
 
-  if (!panel || !lblBd || !lblRender || !badge) return;
+  if (!panel || !badge) return;
 
   panel.classList.remove('hidden');
-  lblBd.textContent = '...';
-  lblRender.textContent = '...';
-  badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-lg bg-blue-100 text-blue-800 animate-pulse';
+  if (lblGlobal) lblGlobal.textContent = '...';
+  if (lblCentro) lblCentro.textContent = '...';
+  if (lblBd) lblBd.textContent = '...';
+  if (lblRender) lblRender.textContent = '...';
+  badge.className = 'text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 animate-pulse';
   badge.textContent = '⏳ Contando BD...';
+  _kardexTotalGlobalContado = null;
+  _kardexTotalCentroContado = null;
   _kardexTotalBdContado = null;
 
   try {
@@ -8605,14 +8661,29 @@ async function consultarConteoRapidoKardex(productoId) {
     const r = await fetch(`/api/inventario/producto/${productoId}/conteo${bodParam}`);
     const d = await r.json();
     if (d.ok) {
-      _kardexTotalBdContado = Number(d.total_bd);
-      lblBd.textContent = _kardexTotalBdContado.toLocaleString('es-CO');
+      _kardexTotalGlobalContado = Number(d.total_global ?? d.total_bd ?? 0);
+      _kardexTotalCentroContado = Number(d.total_centro ?? d.total_bd ?? 0);
+      _kardexTotalBdContado = _kardexTotalCentroContado;
+      _kardexCentroNombreContado = d.centro_nombre || (CENTRO_ACTIVO ? CENTRO_ACTIVO.nombre : 'Sede Activa');
+      _kardexEsConsolidado = !!d.es_consolidado;
+
+      if (lblGlobal) lblGlobal.textContent = _kardexTotalGlobalContado.toLocaleString('es-CO');
+      if (lblCentro) lblCentro.textContent = _kardexTotalCentroContado.toLocaleString('es-CO');
+      if (lblBd) lblBd.textContent = _kardexTotalCentroContado.toLocaleString('es-CO');
+      if (lblCentroTitulo) {
+        lblCentroTitulo.textContent = _kardexEsConsolidado ? 'Consolidado' : (_kardexCentroNombreContado || 'Sede Activa');
+        lblCentroTitulo.title = `Centro de Utilidad: ${_kardexCentroNombreContado}`;
+      }
       compararConteoKardex();
     } else {
-      lblBd.textContent = 'Error';
+      if (lblGlobal) lblGlobal.textContent = 'Error';
+      if (lblCentro) lblCentro.textContent = 'Error';
+      if (lblBd) lblBd.textContent = 'Error';
     }
   } catch (e) {
-    lblBd.textContent = 'Error';
+    if (lblGlobal) lblGlobal.textContent = 'Error';
+    if (lblCentro) lblCentro.textContent = 'Error';
+    if (lblBd) lblBd.textContent = 'Error';
   }
 }
 
@@ -8628,20 +8699,22 @@ function compararConteoKardex(totalRenderizados = null) {
   const renderText = lblRender ? lblRender.textContent.replace(/\D/g, '') : '';
   const renderVal = totalRenderizados !== null ? Number(totalRenderizados) : (renderText !== '' ? parseInt(renderText, 10) : null);
 
-  if (_kardexTotalBdContado === null || renderVal === null) {
-    badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800';
+  const targetBd = _kardexEsConsolidado ? _kardexTotalGlobalContado : _kardexTotalCentroContado;
+
+  if (targetBd === null || renderVal === null) {
+    badge.className = 'text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800';
     badge.textContent = '⏳ Cargando tabla...';
     return;
   }
 
-  if (renderVal === _kardexTotalBdContado) {
-    badge.className = 'text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs flex items-center gap-1';
-    badge.innerHTML = `<span>✅ 100% Coinciden</span> <span class="font-mono font-black">(${renderVal} / ${_kardexTotalBdContado})</span>`;
-    badge.title = 'Todos los registros contados en la base de datos coinciden exactamente con los registros renderizados en pantalla';
+  if (renderVal === targetBd) {
+    badge.className = 'text-xs font-bold px-3 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs flex items-center gap-1.5';
+    badge.innerHTML = `<span>✅ 100% Coinciden</span> <span class="font-mono font-black">(${renderVal} / ${targetBd})</span>`;
+    badge.title = `Todos los registros del centro (${targetBd}) coinciden exactamente con los registros renderizados en pantalla (${renderVal}). Global BD: ${_kardexTotalGlobalContado}`;
   } else {
-    badge.className = 'text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs flex items-center gap-1 animate-pulse';
-    badge.innerHTML = `<span>⚠️ Discrepancia</span> <span class="font-mono font-black">BD:${_kardexTotalBdContado} ≠ Render:${renderVal}</span>`;
-    badge.title = 'Atención: El número de registros en base de datos no es igual a los registros cargados en pantalla';
+    badge.className = 'text-xs font-bold px-3 py-1 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs flex items-center gap-1.5 animate-pulse';
+    badge.innerHTML = `<span>⚠️ Discrepancia</span> <span class="font-mono font-black">Sede:${targetBd} ≠ Render:${renderVal}</span>`;
+    badge.title = `Atención: El número de registros en la sede activa (${targetBd}) no coincide con los registros renderizados (${renderVal}). Total Global BD: ${_kardexTotalGlobalContado}`;
   }
 }
 let _kardexDecimales = (() => {
@@ -8806,7 +8879,7 @@ function renderizarTablaKardex(d) {
     const notaTexto = (m.notes || m.notas || '').trim();
     const tieneNota = notaTexto.length > 0;
     const btnNota = tieneNota
-      ? `<button type="button" onclick="toggleKardexNota(${m.id})" class="inline-flex items-center gap-0.5 px-1 py-0.2 text-[9px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition cursor-pointer select-none" title="Clic para ver/ocultar nota">📝 Nota</button>`
+      ? `<button type="button" onclick="toggleKardexNota(${m.id})" class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer select-none" title="Clic para ver/ocultar nota">📝 Nota</button>`
       : '';
 
     // Formatear nombre puro del documento sin slugs ni concatenaciones redundantes
@@ -8844,9 +8917,9 @@ function renderizarTablaKardex(d) {
       const linkUrl = `/admin/mantenimiento/${NEGOCIO_ID}?tool=auditor-documentos&tipo_documento=${encodeURIComponent(docTypeRaw)}&documento_numero=${encodeURIComponent(docNumRaw)}&tercero_id=${encodeURIComponent(m.proveedor_id || '')}`;
 
       docOrProveedorInfo += `
-        <div class="font-semibold text-gray-700 flex items-center gap-1 flex-wrap leading-tight text-[11px]">
+        <div class="font-semibold text-gray-800 flex items-center gap-1.5 flex-wrap leading-snug text-sm">
           <span>${docDisplay}</span>
-          ${docNumRaw ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-[11px] inline-flex items-center">🔗</a>` : ''}
+          ${docNumRaw ? `<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" title="Auditar documento en pestaña nueva" class="text-blue-500 hover:text-blue-700 transition font-bold text-sm inline-flex items-center">🔗</a>` : ''}
           ${btnNota}
         </div>
       `;
@@ -8855,14 +8928,14 @@ function renderizarTablaKardex(d) {
     }
 
     if (m.proveedor_nombre) {
-      docOrProveedorInfo += `<div class="text-gray-400 text-[10px] leading-tight truncate max-w-[220px]" title="${m.proveedor_nombre}">${m.proveedor_nombre}</div>`;
+      docOrProveedorInfo += `<div class="text-gray-500 text-xs leading-snug truncate max-w-[260px] mt-0.5" title="${m.proveedor_nombre}">${m.proveedor_nombre}</div>`;
     }
 
     let origenInfo = '';
     if (m.producto_padre_nombre) {
       origenInfo += `
         <div class="flex items-center gap-1">
-          <span class="inline-block px-1.5 py-0.5 rounded bg-indigo-50 text-[10px] font-bold text-indigo-700 border border-indigo-100 whitespace-normal break-words leading-tight" title="Preparación / Ensamble: ${m.producto_padre_nombre}">
+          <span class="inline-block px-2 py-0.5 rounded-lg bg-indigo-50 text-xs font-bold text-indigo-700 border border-indigo-100 whitespace-normal break-words leading-snug" title="Preparación / Ensamble: ${m.producto_padre_nombre}">
             🍳 ${m.producto_padre_nombre}
           </span>
         </div>
@@ -8875,7 +8948,7 @@ function renderizarTablaKardex(d) {
       const textoAjuste = isAjusteEnVenta ? 'Ajuste en venta' : 'Ajuste de inventario';
       origenInfo += `
         <div class="flex items-center gap-1">
-          <span class="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-[10px] font-bold text-amber-900 border border-amber-300 whitespace-normal break-words leading-tight" title="Ajuste de inventarios">
+          <span class="inline-block px-2 py-0.5 rounded-lg bg-amber-100 text-xs font-bold text-amber-900 border border-amber-300 whitespace-normal break-words leading-snug" title="Ajuste de inventarios">
             ⚖️ ${textoAjuste}
           </span>
         </div>
@@ -8888,8 +8961,8 @@ function renderizarTablaKardex(d) {
       const cantEmpaquesStr = cantEmpaques ? `${_fmtKardexQty(cantEmpaques)} ` : '';
       
       origenInfo += `
-        <div class="flex items-center gap-1 ${(m.producto_padre_nombre || m.motivo === 'ajuste') ? 'mt-0.5' : ''}">
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-[10px] font-bold text-amber-800 border border-amber-200/80 whitespace-normal break-words leading-tight" title="Empaque de compra: ${cantEmpaquesStr}${m.presentacion_nombre} (Equiv: ${equiv})">
+        <div class="flex items-center gap-1 ${(m.producto_padre_nombre || m.motivo === 'ajuste') ? 'mt-1' : ''}">
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 text-xs font-bold text-amber-800 border border-amber-200/80 whitespace-normal break-words leading-snug" title="Empaque de compra: ${cantEmpaquesStr}${m.presentacion_nombre} (Equiv: ${equiv})">
             <span class="shrink-0">📦</span> <span>${cantEmpaquesStr}${m.presentacion_nombre}</span>
           </span>
         </div>
@@ -8903,12 +8976,12 @@ function renderizarTablaKardex(d) {
     const horaDoc = m.hora_documento || (createdAtIso ? createdAtIso.slice(11, 16) : '00:00');
 
     const dragHandle = esDocValido
-      ? `<span class="inline-block text-gray-300 hover:text-indigo-600 cursor-grab active:cursor-grabbing mr-1 select-none font-bold text-sm" title="Arrastra para reordenar la hora de este documento en el Kardex">⠿</span>`
+      ? `<span class="inline-block text-gray-300 hover:text-indigo-600 cursor-grab active:cursor-grabbing mr-1.5 select-none font-bold text-base" title="Arrastra para reordenar la hora de este documento en el Kardex">⠿</span>`
       : '';
 
     const fechaCelda = esDocValido
-      ? `<button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold" title="Clic para cambiar fecha/hora o arrastra la fila">${m.fecha}</button>`
-      : m.fecha;
+      ? `<button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm" title="Clic para cambiar fecha/hora o arrastra la fila">${m.fecha}</button>`
+      : `<span class="text-sm font-medium text-gray-600">${m.fecha}</span>`;
 
     const dragAttrs = esDocValido
       ? `draggable="true" ondragstart="kardexDragStart(event)" ondragover="kardexDragOver(event)" ondragleave="kardexDragLeave(event)" ondrop="kardexDrop(event)" ondragend="kardexDragEnd(event)"`
@@ -8925,25 +8998,25 @@ function renderizarTablaKardex(d) {
           data-created-at-iso="${createdAtIso}"
           class="hover:bg-gray-50/70 transition-colors ${alertaMovimiento ? 'bg-amber-50/60' : ''} ${esDocValido ? 'cursor-default' : ''}" 
           title="${movimientosNegativos.has(Number(m.id)) ? 'Stock negativo en este punto. ' : ''}${movimientosInconsistentes.has(Number(m.id)) ? 'Stock guardado diferente al stock reconstruido.' : ''}">
-        <td class="px-2 py-1 text-xs text-gray-500 whitespace-nowrap align-middle">
+        <td class="px-3 py-2 text-sm text-gray-600 whitespace-nowrap align-middle">
           <div class="flex items-center">${dragHandle}${fechaCelda}</div>
         </td>
-        <td class="px-2.5 py-1 text-xs text-gray-600 align-middle">${docOrProveedorInfo}</td>
-        <td class="px-2 py-1 text-xs text-gray-600 align-middle">${origenInfo}</td>
-        <td class="px-2 py-1 text-right num font-mono border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
-        <td class="px-2 py-1 text-right num font-mono border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
-        <td class="px-2 py-1 text-right num font-mono font-semibold text-gray-800 bg-gray-100/5">${_fmtKardexQty(m.saldo_calculado ?? m.stock_nuevo)}</td>
-        <td class="px-1.5 py-1 text-right num font-mono text-xs text-gray-600 border-r border-gray-100/50 kardex-col-valores">${_fmtKardexUnit(transCostVal)}</td>
-        <td class="px-1.5 py-1 text-right num font-mono text-xs text-gray-600 kardex-col-valores">${_fmtKardexUnit(avgCostVal)}</td>
-        <td class="px-2 py-1 text-right num font-mono font-semibold text-gray-800 kardex-col-valores">${_fmtKardexMon(lineTotal)}</td>
-        <td class="px-2 py-1 text-right num font-mono font-bold text-emerald-700 bg-emerald-50/20 kardex-col-valores">${_fmtKardexMon(Number((m.saldo_calculado ?? m.stock_nuevo) || 0) * Number(avgCostVal || 0))}</td>
+        <td class="px-3.5 py-2 text-sm text-gray-700 align-middle">${docOrProveedorInfo}</td>
+        <td class="px-3 py-2 text-sm text-gray-700 align-middle">${origenInfo}</td>
+        <td class="px-3 py-2 text-right num font-mono text-sm border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
+        <td class="px-3 py-2 text-right num font-mono text-sm border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
+        <td class="px-3 py-2 text-right num font-mono text-sm font-semibold text-gray-900 bg-gray-100/5">${_fmtKardexQty(m.saldo_calculado ?? m.stock_nuevo)}</td>
+        <td class="px-2.5 py-2 text-right num font-mono text-sm text-gray-600 border-r border-gray-100/50 kardex-col-valores">${_fmtKardexUnit(transCostVal)}</td>
+        <td class="px-2.5 py-2 text-right num font-mono text-sm text-gray-600 kardex-col-valores">${_fmtKardexUnit(avgCostVal)}</td>
+        <td class="px-3 py-2 text-right num font-mono text-sm font-semibold text-gray-900 kardex-col-valores">${_fmtKardexMon(lineTotal)}</td>
+        <td class="px-3 py-2 text-right num font-mono text-sm font-bold text-emerald-700 bg-emerald-50/20 kardex-col-valores">${_fmtKardexMon(Number((m.saldo_calculado ?? m.stock_nuevo) || 0) * Number(avgCostVal || 0))}</td>
       </tr>
     `;
 
     const filaNota = tieneNota
       ? `
-      <tr id="kardex-nota-${m.id}" class="hidden bg-amber-50/40 text-gray-600 text-[11px] border-b border-amber-100/60">
-        <td colspan="10" class="px-6 py-1 italic">
+      <tr id="kardex-nota-${m.id}" class="hidden bg-amber-50/40 text-gray-700 text-xs border-b border-amber-100/60">
+        <td colspan="10" class="px-6 py-2 italic">
           <span class="font-bold not-italic text-amber-800">📝 Nota:</span> ${notaTexto}
         </td>
       </tr>

@@ -3147,11 +3147,11 @@
         <div class="flex items-center gap-1.5 text-gray-500">
           <label for="kardex-por-pagina" class="text-[11px] font-bold text-gray-400 uppercase">Filas:</label>
           <select id="kardex-por-pagina" onchange="cambiarKardexPorPagina(this.value)" class="text-xs bg-gray-50 border border-gray-300 rounded-lg px-2 py-1 font-bold text-gray-700 outline-none focus:border-rose-500 cursor-pointer">
-            <option value="50" selected>50</option>
-            <option value="100">100</option>
-            <option value="200">200</option>
-            <option value="500">500</option>
-            <option value="todos">Todos</option>
+            <option value="todos" selected>Todos los registros (Sin excepción)</option>
+            <option value="500">500 filas</option>
+            <option value="200">200 filas</option>
+            <option value="100">100 filas</option>
+            <option value="50">50 filas</option>
           </select>
         </div>
 
@@ -8576,10 +8576,10 @@ let _kardexPaginaActual = 1;
 let _kardexTotalPaginas = 1;
 let _kardexPorPagina = (() => {
   const guardado = localStorage.getItem('kardex_por_pagina');
-  if (guardado === 'todos') return 'todos';
+  if (guardado === 'todos' || !guardado) return 'todos';
   const n = parseInt(guardado, 10);
-  if (!isNaN(n) && n > 0) return n;
-  return 50;
+  if (!isNaN(n) && n >= 50) return n;
+  return 'todos';
 })();
 let _kardexTotalMovimientos = 0;
 let _kardexDecimales = (() => {
@@ -8985,18 +8985,16 @@ function actualizarPaginadorKardex() {
     selPorPagina.value = String(_kardexPorPagina);
   }
 
+  const navContainer = btnPrev?.parentElement;
   if (_kardexPorPagina === 'todos' || Number(_kardexPorPagina) >= _kardexTotalMovimientos) {
-    if (infoConteo) infoConteo.textContent = `Mostrando todos los ${_kardexTotalMovimientos} movimientos`;
-    if (txtPagina) txtPagina.textContent = `Página 1 de 1`;
-    if (btnPrev) btnPrev.disabled = true;
-    if (btnNext) btnNext.disabled = true;
-    if (btnPrimero) btnPrimero.disabled = true;
-    if (btnUltimo) btnUltimo.disabled = true;
+    if (infoConteo) infoConteo.innerHTML = `Mostrando <strong class="text-emerald-700 font-extrabold">todos los ${_kardexTotalMovimientos} registros sin excepción</strong> <span class="text-gray-400 font-normal">(Histórico completo)</span>`;
+    if (navContainer) navContainer.classList.add('hidden');
   } else {
+    if (navContainer) navContainer.classList.remove('hidden');
     const porPagInt = Number(_kardexPorPagina);
     const desde = (_kardexPaginaActual - 1) * porPagInt + 1;
     const hasta = Math.min(_kardexPaginaActual * porPagInt, _kardexTotalMovimientos);
-    if (infoConteo) infoConteo.textContent = `Mostrando ${desde} - ${hasta} de ${_kardexTotalMovimientos} movimientos`;
+    if (infoConteo) infoConteo.innerHTML = `Mostrando <b>${desde} - ${hasta}</b> de <b>${_kardexTotalMovimientos}</b> movimientos`;
     if (txtPagina) txtPagina.textContent = `Página ${_kardexPaginaActual} de ${_kardexTotalPaginas}`;
     if (btnPrev) btnPrev.disabled = _kardexPaginaActual <= 1;
     if (btnNext) btnNext.disabled = _kardexPaginaActual >= _kardexTotalPaginas;

@@ -1963,16 +1963,16 @@ def api_inventario_kardex(producto_id):
         movimientos_ordenados = list(reversed(movimientos_con_saldo))
 
         pagina_param = request.args.get('pagina', default=1)
-        por_pagina_param = request.args.get('por_pagina', default=50)
+        por_pagina_param = request.args.get('por_pagina', default='todos')
 
         try:
             pagina = max(1, int(pagina_param))
         except (ValueError, TypeError):
             pagina = 1
 
-        if str(por_pagina_param).lower() in ('todos', 'all', '0', '-1'):
+        if not por_pagina_param or str(por_pagina_param).lower() in ('todos', 'all', '0', '-1'):
             por_pagina_val = 'todos'
-            por_pagina = total_movimientos if total_movimientos > 0 else 50
+            por_pagina = total_movimientos if total_movimientos > 0 else 1
             total_paginas = 1
             pagina = 1
             movimientos_ui = movimientos_ordenados

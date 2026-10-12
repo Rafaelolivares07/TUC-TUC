@@ -2373,28 +2373,28 @@
           <!-- Cabecera de la sugerencia -->
           <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-amber-200/80 text-xs">
             <div class="flex items-center gap-2">
-              <span class="text-lg">?</span>
+              <span class="text-lg">⚡</span>
               <div>
                 <span class="font-black text-amber-950 text-sm">
-                  Capacidad sugerida de producci?n: <span id="prod-sug-max" class="font-mono font-black text-amber-800 text-base"></span> und
+                  Capacidad sugerida de producción: <span id="prod-sug-max" class="font-mono font-black text-amber-800 text-base"></span> und
                 </span>
-                <p class="text-[11px] text-amber-900/80 font-normal">Calculado autom?ticamente seg?n el ingrediente m?s escaso en inventario.</p>
+                <p class="text-[11px] text-amber-900/80 font-normal">Calculado automáticamente según el ingrediente más escaso en inventario.</p>
               </div>
             </div>
             <span id="prod-sug-limita" class="text-[11px] font-bold text-amber-900 bg-amber-200/70 px-3 py-1 rounded-full border border-amber-300 shadow-2xs"></span>
           </div>
 
-          <!-- Controles de simulaci?n por materia prima -->
+          <!-- Controles de simulación por materia prima -->
           <div class="bg-white/80 border border-amber-200/90 rounded-xl p-3 mb-2.5 shadow-2xs">
             <div class="flex flex-wrap items-center gap-2.5 text-xs">
               <div class="flex flex-col">
-                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-0.5">Ingrediente Gu?a (Materia Prima)</label>
+                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-0.5">Ingrediente Guía (Materia Prima)</label>
                 <select id="prod-sug-guia" onchange="sugerenciaCambioGuia()" onwheel="this.blur()" class="border border-amber-300 rounded-lg px-2.5 py-1 text-xs bg-white font-medium text-slate-800 outline-none shadow-2xs focus:border-amber-500 cursor-pointer"></select>
               </div>
               <div class="flex flex-col">
                 <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-0.5">Cantidad a consumir</label>
                 <div class="flex items-center gap-1.5">
-                  <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="m?x stock" class="w-28 border border-amber-300 rounded-lg px-2.5 py-1 text-xs bg-white font-mono font-bold text-slate-800 text-right outline-none shadow-2xs focus:border-amber-500">
+                  <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="máx stock" class="w-28 border border-amber-300 rounded-lg px-2.5 py-1 text-xs bg-white font-mono font-bold text-slate-800 text-right outline-none shadow-2xs focus:border-amber-500">
                   <span id="prod-sug-mp-nombre" class="text-[11px] text-slate-500 font-medium truncate max-w-[150px]"></span>
                 </div>
               </div>
@@ -2403,16 +2403,16 @@
                   Recalcular y Ver
                 </button>
                 <button type="button" onclick="sugerenciaUsarMaximo()" class="px-3.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition shadow-2xs">
-                  Usar M?ximo Posible
+                  Usar Máximo Posible
                 </button>
               </div>
             </div>
           </div>
 
-          <!-- Micro-gu?a explicativa para el usuario -->
+          <!-- Micro-guía explicativa para el usuario -->
           <div class="flex items-start gap-1.5 text-[11px] text-amber-900/90 bg-amber-100/50 rounded-lg px-3 py-1.5 border border-amber-200/50">
-            <span class="text-xs">??</span>
-            <span><b>?Qu? significan las cantidades en el selector?</b> Cada opci?n indica cu?ntas unidades del producto final podr?as fabricar si agotaras todo el stock disponible de ese ingrediente. Al elegir uno, la vista previa y los consumos se sincronizan autom?ticamente.</span>
+            <span class="text-xs">💡</span>
+            <span><b>¿Qué significan las cantidades en el selector?</b> Cada opción indica cuántas unidades del producto final podrías fabricar si agotaras todo el stock disponible de ese ingrediente. Al elegir uno, la vista previa y los consumos se sincronizan automáticamente.</span>
           </div>
         </div>
 
@@ -11359,31 +11359,24 @@ let prodSugerenciaData = null;
 let _sugSeq = 0;
 
 function _prodSugBodegaParam() {
-  return (typeof CENTRO_ACTIVO !== 'undefined' && CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? &bodega= : '';
+  return (typeof CENTRO_ACTIVO !== 'undefined' && CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
 }
 
-async function sugerirProduccion(autoPreview = true) {
+async function sugerirProduccion() {
   const id = document.getElementById('prod-ac-id').value;
   const strip = document.getElementById('prod-sugerencia');
   prodSugerenciaData = null;
   if (!id) { if (strip) strip.classList.add('hidden'); return; }
   const seq = ++_sugSeq;
   try {
-    const r = await fetch(/api/inventario//produccion/sugerencia?producto_id=);
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}${_prodSugBodegaParam()}`);
     const d = await r.json();
     if (seq !== _sugSeq) return;
-    if (!d.ok) {
-      if (strip) strip.classList.add('hidden');
-      if (autoPreview) previsualizarProduccion(false);
-      return;
-    }
+    if (!d.ok) { if (strip) strip.classList.add('hidden'); toast(d.error || 'Sin sugerencia para este producto', false); return; }
     prodSugerenciaData = d;
     document.getElementById('prod-sug-mp-cant').value = '';
-    renderSugerencia(autoPreview);
-  } catch(e) {
-    console.error(e);
-    if (seq === _sugSeq) toast('Error de red al cargar sugerencia', false);
-  }
+    renderSugerencia(true);
+  } catch(e) { console.error(e); if (seq === _sugSeq) toast('Error de red al cargar sugerencia', false); }
 }
 
 function renderSugerencia(autoPreview = true) {
@@ -11393,13 +11386,12 @@ function renderSugerencia(autoPreview = true) {
   const guia = comps.find(c => c.id === d.guia_id) || {};
   const lim = comps.find(c => c.id === d.limitante_id) || {};
   document.getElementById('prod-sug-max').textContent = _fmtProdNum(d.sugerida);
-  document.getElementById('prod-sug-limita').textContent = Insumo limitante:  (Stock: );
+  document.getElementById('prod-sug-limita').textContent = `Insumo limitante: ${lim.nombre || '-'} (Stock: ${_fmtProdNum(lim.stock)})`;
   const sel = document.getElementById('prod-sug-guia');
-  sel.innerHTML = comps.map(c => <option value=""> ? Permite hasta  und</option>).join('');
-  document.getElementById('prod-sug-mp-nombre').textContent = guia.nombre ? de  : '';
+  sel.innerHTML = comps.map(c => `<option value="${c.id}"${c.id === d.guia_id ? ' selected' : ''}>${c.nombre} → Permite hasta ${_fmtProdNum(c.max_qty)} und</option>`).join('');
+  document.getElementById('prod-sug-mp-nombre').textContent = guia.nombre ? `de ${guia.nombre}` : '';
   document.getElementById('prod-cantidad').value = d.sugerida;
   document.getElementById('prod-sugerencia').classList.remove('hidden');
-
   if (autoPreview && d.sugerida > 0) {
     previsualizarProduccion(false);
   } else {
@@ -11412,16 +11404,13 @@ async function sugerenciaCambioGuia() {
   const guiaId = document.getElementById('prod-sug-guia').value;
   if (!id || !guiaId) return;
   try {
-    const r = await fetch(/api/inventario//produccion/sugerencia?producto_id=&guia_id=);
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}&guia_id=${guiaId}${_prodSugBodegaParam()}`);
     const d = await r.json();
     if (!d.ok) { toast(d.error, false); return; }
     prodSugerenciaData = d;
     document.getElementById('prod-sug-mp-cant').value = '';
-    renderSugerencia(true);
-  } catch(e) {
-    console.error(e);
-    toast('Error de red al recalcular sugerencia', false);
-  }
+    renderSugerencia();
+  } catch(e) { console.error(e); toast('Error de red al recalcular sugerencia', false); }
 }
 
 async function sugerenciaDesdeMP() {
@@ -11430,16 +11419,13 @@ async function sugerenciaDesdeMP() {
   const val = parseFloat(document.getElementById('prod-sug-mp-cant').value);
   if (!val || val <= 0) { toast('Digita la cantidad de materia prima a usar', false); return; }
   try {
-    const r = await fetch(/api/inventario//produccion/sugerencia?producto_id=&guia_id=&modo=desde_mp&cantidad_mp=);
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/sugerencia?producto_id=${id}&guia_id=${guiaId}&modo=desde_mp&cantidad_mp=${val}${_prodSugBodegaParam()}`);
     const d = await r.json();
     if (!d.ok) { toast(d.error, false); return; }
     prodSugerenciaData = d;
     renderSugerencia(true);
-    if (d.excede_stock_guia) toast('La cantidad supera el stock de la gu?a: se top? al m?ximo posible', false);
-  } catch(e) {
-    console.error(e);
-    toast('Error de red al recalcular sugerencia', false);
-  }
+    if (d.excede_stock_guia) toast('La cantidad supera el stock de la guía: se topó al máximo posible', false);
+  } catch(e) { console.error(e); toast('Error de red al recalcular sugerencia', false); }
 }
 
 function sugerenciaUsarMaximo() {

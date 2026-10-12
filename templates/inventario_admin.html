@@ -2306,91 +2306,107 @@
 
 
 
-    <h2 class="font-bold text-gray-700 mb-4">Registrar producción</h2>
+    <!-- Bloque Arm?nico y Centrado: Registrar Producci?n -->
+    <div class="max-w-4xl mx-auto mb-6">
+      <div class="bg-gradient-to-b from-white to-slate-50/70 border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-sm">
+        
+        <!-- Cabecera del bloque -->
+        <div class="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-200/80">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-base shadow-2xs">??</span>
+            <div>
+              <h2 class="font-bold text-slate-800 text-sm sm:text-base leading-tight">Registrar Producci?n</h2>
+              <p class="text-[11px] text-slate-400">Selecciona el producto con receta est?ndar y define la cantidad a fabricar</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+            TucTuc V2
+          </span>
+        </div>
 
-    
+        <!-- Fila 1: Metadatos del Documento -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Tipo doc. producci?n</label>
+            <select id="prod-tipo-doc" onchange="mostrarConsecutivoProduccion()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white font-medium text-slate-700 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-300 transition">
+              <option value="">Cargando tipos...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">No. documento</label>
+            <input id="prod-num-doc" type="text" readonly placeholder="Auto-consecutivo" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 font-mono font-bold text-slate-600 outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Fecha documento</label>
+            <input id="prod-fecha" type="date" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white font-medium text-slate-700 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-300 transition">
+          </div>
+          <div class="relative">
+            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Responsable (Tercero)</label>
+            <input id="prod-responsable" type="text" placeholder="Buscar responsable..." autocomplete="off" onfocus="this.select()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white font-medium text-slate-700 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-300 transition" value="{{ session.get('nombre', '') }}">
+            <div id="prod-responsable-list" class="ac-list hidden absolute left-0 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg"></div>
+            <input type="hidden" id="prod-responsable-id" value="{{ session.get('chat_tercero_id', '') }}">
+          </div>
+        </div>
 
-    <!-- Selección de Documento de Producción -->
-    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-4" style="max-width:900px">
-      <div>
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tipo doc. producción</label>
-        <select id="prod-tipo-doc" onchange="mostrarConsecutivoProduccion()" class="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none">
-          <option value="">Cargando tipos...</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">No. documento</label>
-        <input id="prod-num-doc" type="text" readonly placeholder="Auto-consecutivo" class="w-full border rounded-xl px-3 py-2 text-sm bg-gray-50 text-gray-500 outline-none">
-      </div>
-      <div>
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Fecha documento</label>
-        <input id="prod-fecha" type="date" class="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none">
-      </div>
-      <div class="relative">
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Responsable (Tercero)</label>
-        <input id="prod-responsable" type="text" placeholder="Buscar responsable..." autocomplete="off" onfocus="this.select()" class="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none" value="{{ session.get('nombre', '') }}">
-        <div id="prod-responsable-list" class="ac-list hidden absolute left-0 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg"></div>
-        <input type="hidden" id="prod-responsable-id" value="{{ session.get('chat_tercero_id', '') }}">
+        <!-- Fila 2: ?tem y Cantidad con dise?o integrado -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mb-3">
+          <div class="md:col-span-8 relative">
+            <label class="block text-[11px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+              <span>??</span> Producto a producir <span class="text-rose-500">*</span>
+            </label>
+            <div class="relative">
+              <input id="prod-ac-input" type="text" placeholder="Escribe para buscar producto con tarjeta est?ndar?" autocomplete="off" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm bg-white font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-2xs">
+              <div id="prod-ac-list" class="ac-list hidden"></div>
+              <input type="hidden" id="prod-ac-id">
+            </div>
+          </div>
+          <div class="md:col-span-4">
+            <label class="block text-[11px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+              <span>??</span> Cantidad a producir <span class="text-rose-500">*</span>
+            </label>
+            <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1" oninput="limpiarPreview()" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm bg-white font-mono font-bold text-slate-800 text-right outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-2xs">
+          </div>
+        </div>
+
+        <!-- Tira Predictiva Integrada y Arm?nica -->
+        <div id="prod-sugerencia" class="hidden mb-3 rounded-xl border border-amber-300/80 bg-gradient-to-r from-amber-50/90 to-yellow-50/80 p-3.5 shadow-2xs transition-all">
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-2 mb-2 border-b border-amber-200/70 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-base">?</span>
+              <span class="font-bold text-amber-950">
+                Puedes producir hasta <span id="prod-sug-max" class="font-mono font-black text-amber-700 text-sm"></span> und
+              </span>
+            </div>
+            <span id="prod-sug-limita" class="text-[11px] font-semibold text-amber-900 bg-amber-100/90 px-2.5 py-0.5 rounded-full border border-amber-200"></span>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="text-[10px] font-bold text-amber-900/80 uppercase tracking-wide">Materia prima gu?a:</span>
+            <select id="prod-sug-guia" onchange="sugerenciaCambioGuia()" onwheel="this.blur()" class="border border-amber-300 rounded-lg px-2.5 py-1 text-xs bg-white font-medium text-slate-700 outline-none shadow-2xs focus:border-amber-500"></select>
+            <span class="text-[10px] font-bold text-amber-900/80 uppercase tracking-wide ml-1">Usar solo:</span>
+            <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="m?x" class="w-24 border border-amber-300 rounded-lg px-2.5 py-1 text-xs bg-white font-mono font-bold text-slate-800 text-right outline-none shadow-2xs focus:border-amber-500">
+            <span id="prod-sug-mp-nombre" class="text-[11px] text-amber-900 font-medium truncate max-w-[140px]"></span>
+            <div class="flex items-center gap-1.5 ml-auto">
+              <button type="button" onclick="sugerenciaDesdeMP()" class="px-3 py-1 rounded-lg border border-amber-400 bg-white hover:bg-amber-100 text-amber-800 font-bold text-[11px] transition shadow-2xs">Recalcular</button>
+              <button type="button" onclick="sugerenciaUsarMaximo()" class="px-3 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 font-bold text-[11px] transition shadow-2xs">Usar m?ximo</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fila 3: Notas y Bot?n Generar Vista Previa Balanceados -->
+        <div class="flex flex-col sm:flex-row items-end gap-3 pt-1">
+          <div class="w-full sm:flex-1">
+            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Notas u observaciones (opcional)</label>
+            <input id="prod-notas" type="text" placeholder="Ej. Lote matutino, ajuste de f?rmula..." class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white text-slate-700 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-300 transition">
+          </div>
+          <div class="w-full sm:w-auto">
+            <button type="button" onclick="previsualizarProduccion()" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm hover:shadow transition transform active:scale-98">
+              <span>???</span> Generar Vista Previa
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
-
-
-
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-
-      <div class="sm:col-span-2 relative">
-
-        <label>Producto a producir</label>
-
-        <input id="prod-ac-input" type="text" placeholder="Buscar producto con tarjeta estándar…" autocomplete="off">
-
-        <div id="prod-ac-list" class="ac-list hidden"></div>
-
-        <input type="hidden" id="prod-ac-id">
-
-      </div>
-
-      <div>
-
-        <label>Cantidad a producir</label>
-
-        <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1" oninput="limpiarPreview()">
-
-      </div>
-
-    </div>
-
-    <div id="prod-sugerencia" class="hidden mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3" style="max-width:900px">
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <span class="font-bold text-gray-800">Puedes producir hasta <span id="prod-sug-max" class="font-mono font-black text-amber-700"></span> und</span>
-        <span id="prod-sug-limita" class="text-xs text-gray-600"></span>
-      </div>
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2 text-sm">
-        <label class="text-xs font-bold text-gray-500 uppercase">Materia prima guía</label>
-        <select id="prod-sug-guia" onchange="sugerenciaCambioGuia()" onwheel="this.blur()" class="border rounded-lg px-2 py-1 text-sm bg-white outline-none"></select>
-        <label class="text-xs font-bold text-gray-500 uppercase">Usar solo</label>
-        <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="máximo" class="w-28 border rounded-lg px-2 py-1 text-sm bg-white outline-none">
-        <span id="prod-sug-mp-nombre" class="text-xs text-gray-500"></span>
-        <button onclick="sugerenciaDesdeMP()" class="px-3 py-1 rounded-lg border border-amber-400 text-amber-700 font-bold text-xs hover:bg-amber-100">Recalcular</button>
-        <button onclick="sugerenciaUsarMaximo()" class="px-3 py-1 rounded-lg border border-gray-300 text-gray-600 font-bold text-xs hover:bg-gray-100">Usar máximo</button>
-      </div>
-    </div>
-
-    <div class="mb-4">
-
-      <label>Notas (opcional)</label>
-
-      <input id="prod-notas" type="text" placeholder="" style="max-width:400px">
-
-    </div>
-
-    <button onclick="previsualizarProduccion()"
-
-            class="px-5 py-2 rounded-xl border-2 border-rose-400 text-rose-500 font-bold text-sm hover:bg-rose-50 mb-5">
-
-      Vista previa
-
-    </button>
 
     <div id="prod-preview" class="hidden mb-6" style="scroll-margin-top: 90px;">
       <!-- Tarjeta Destacada del Producto a Producir -->
@@ -2556,65 +2572,43 @@
     <!-- Historial de Producción -->
 
     <div class="mt-8 border-t border-gray-150 pt-6">
-
-      <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">Historial Reciente de Producción</h3>
-
-      <div class="overflow-x-auto rounded-xl border border-gray-100 shadow-sm bg-white">
-
-        <table class="w-full text-sm">
-
-          <thead>
-
-            <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100">
-
-              <th class="px-4 py-3 text-left">Documento</th>
-
-              <th class="px-4 py-3 text-left">Fecha</th>
-
-              <th class="px-4 py-3 text-left">Responsable</th>
-
-              <th class="px-4 py-3 text-left">Producto Terminado</th>
-
-              <th class="px-4 py-3 text-right">Cantidad</th>
-
-              <th class="px-4 py-3 text-right">Costo Total</th>
-
-              <th class="px-4 py-3 text-center">Acciones</th>
-
-            </tr>
-
-          </thead>
-
-          <tbody id="prod-historial-body" class="divide-y divide-gray-100 text-gray-700">
-
-            <tr>
-
-              <td colspan="7" class="text-center py-4 text-gray-400 italic">Cargando historial...</td>
-
-            </tr>
-
-          </tbody>
-
-        </table>
-
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <button type="button" onclick="toggleHistorialProduccion()" aria-expanded="false" aria-controls="prod-historial-wrapper" class="font-bold text-slate-800 text-xs flex items-center gap-1.5 outline-none hover:text-indigo-700 cursor-pointer">
+          <span id="historial-toggle-icon">?</span><span>??</span> Historial Reciente de Producci?n
+        </button>
       </div>
 
-      <div class="flex items-center justify-between gap-3 mt-3">
-
-        <span id="prod-hist-total" class="text-xs text-gray-500 font-semibold"></span>
-
-        <div class="flex items-center gap-2">
-
-          <button id="btn-prod-prev" onclick="cargarHistorialProduccion(histProdPagina - 1)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:pointer-events-none">← Anterior</button>
-
-          <span id="prod-hist-pagina" class="text-xs font-bold text-gray-700"></span>
-
-          <button id="btn-prod-next" onclick="cargarHistorialProduccion(histProdPagina + 1)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:pointer-events-none">Siguiente →</button>
-
+      <div id="prod-historial-wrapper" class="hidden">
+        <div class="overflow-x-auto rounded-xl border border-gray-100 shadow-sm bg-white">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-xs uppercase text-gray-500 border-b border-gray-100">
+                <th class="px-4 py-3 text-left">Documento</th>
+                <th class="px-4 py-3 text-left">Fecha</th>
+                <th class="px-4 py-3 text-left">Responsable</th>
+                <th class="px-4 py-3 text-left">Producto Terminado</th>
+                <th class="px-4 py-3 text-right">Cantidad</th>
+                <th class="px-4 py-3 text-right">Costo Total</th>
+                <th class="px-4 py-3 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="prod-historial-body" class="divide-y divide-gray-100 text-gray-700">
+              <tr>
+                <td colspan="7" class="text-center py-4 text-gray-400 italic">Cargando historial...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
+        <div class="flex items-center justify-between gap-3 mt-3">
+          <span id="prod-hist-total" class="text-xs text-gray-500 font-semibold"></span>
+          <div class="flex items-center gap-2">
+            <button id="btn-prod-prev" onclick="cargarHistorialProduccion(histProdPagina - 1)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:pointer-events-none">? Anterior</button>
+            <span id="prod-hist-pagina" class="text-xs font-bold text-gray-700"></span>
+            <button id="btn-prod-next" onclick="cargarHistorialProduccion(histProdPagina + 1)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 disabled:pointer-events-none">Siguiente ?</button>
+          </div>
+        </div>
       </div>
-
     </div>
 
   </div>
@@ -9406,6 +9400,20 @@ function mostrarInformeRecosteo(resumen, productosDetalle) {
   `;
 }
 
+
+function toggleHistorialProduccion() {
+  const body = document.getElementById('prod-historial-wrapper');
+  const icon = document.getElementById('historial-toggle-icon');
+  const btn = document.querySelector('[aria-controls="prod-historial-wrapper"]');
+  if (!body) return;
+  const collapsed = body.classList.toggle('hidden');
+  if (icon) icon.textContent = collapsed ? '?' : '?';
+  if (btn) btn.setAttribute('aria-expanded', String(!collapsed));
+  if (!collapsed && body.dataset.cargado !== '1') {
+    body.dataset.cargado = '1';
+    cargarHistorialProduccion();
+  }
+}
 
 function togglePronosticoProduccion() {
 

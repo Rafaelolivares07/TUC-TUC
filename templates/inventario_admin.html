@@ -8578,13 +8578,10 @@ let kardexProductoActual = null;
 let _kardexPdfInfo = null;
 let _kardexPaginaActual = 1;
 let _kardexTotalPaginas = 1;
-let _kardexPorPagina = (() => {
-  const guardado = localStorage.getItem('kardex_por_pagina');
-  if (guardado === 'todos' || !guardado) return 'todos';
-  const n = parseInt(guardado, 10);
-  if (!isNaN(n) && n >= 50) return n;
-  return 'todos';
-})();
+let _kardexPorPagina = 'todos';
+try {
+  localStorage.setItem('kardex_por_pagina', 'todos');
+} catch(e) {}
 let _kardexTotalMovimientos = 0;
 let _kardexTotalBdContado = null;
 

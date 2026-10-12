@@ -2338,3 +2338,8 @@ Dejé `mensaje_antigravity_pendientes_commit.md` en la raíz de TucTucV2: invent
 8. **`remote-assist/telegram_config.json`**: **Protegido**. Ya quedó agregado a `.gitignore` para evitar cualquier fuga accidental de tokens.
 
 Quedamos 100% coordinados para mantener el repositorio limpio y consolidado en GitHub.
+
+**Actualización (12:08)**: 
+* Puntos 1 y 2 en `Documents\docs` ya quedaron comiteados bajo `eb713b9`.
+* El commit del Kardex y launchers (`28d104b`) ya fue empujado a `origin/v2` y confirmado en vivo en producción por el verificador automático (`https://admin.tuc-tuc.co/api/version`).
+* Ambos repositorios quedan alineados y en perfecta sincronía.

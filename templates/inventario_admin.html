@@ -11399,7 +11399,12 @@ function renderSugerencia(autoPreview = true) {
   const guia = comps.find(c => c.id === d.guia_id) || {};
   const lim = comps.find(c => c.id === d.limitante_id) || {};
   document.getElementById('prod-sug-max').textContent = _fmtProdNum(d.sugerida);
-  document.getElementById('prod-sug-limita').textContent = `Insumo limitante: ${lim.nombre || '-'} (Stock: ${_fmtProdNum(lim.stock)})`;
+  if (d.modo === 'desde_mp') {
+    const cantMP = parseFloat(document.getElementById('prod-sug-mp-cant').value) || 0;
+    document.getElementById('prod-sug-limita').textContent = `Simulaci?n activa: ${_fmtProdNum(cantMP)} de ${guia.nombre || 'gu?a'} ? ${_fmtProdNum(d.sugerida)} und`;
+  } else {
+    document.getElementById('prod-sug-limita').textContent = `Insumo limitante: ${lim.nombre || '-'} (Stock: ${_fmtProdNum(lim.stock)})`;
+  }
   const sel = document.getElementById('prod-sug-guia');
   sel.innerHTML = comps.map(c => `<option value="${c.id}"${c.id === d.guia_id ? ' selected' : ''}>${c.nombre} → Permite hasta ${_fmtProdNum(c.max_qty)} und</option>`).join('');
   document.getElementById('prod-sug-mp-nombre').textContent = guia.nombre ? `de ${guia.nombre}` : '';

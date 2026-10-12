@@ -4456,7 +4456,7 @@ def api_produccion_sugerencia(negocio_id):
         guia = next((i for i in computables if i['id'] == guia_id), None) or limitante
         if modo == 'desde_mp':
             derivada = _floor4(cantidad_mp / guia['cant_tarjeta'])
-            sugerida = min(derivada, limitante['max_qty'])
+            sugerida = derivada
             excede = cantidad_mp > guia['stock']
         else:
             sugerida = guia['max_qty']

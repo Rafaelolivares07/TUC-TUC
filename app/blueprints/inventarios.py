@@ -8007,6 +8007,37 @@ def api_ultima_presentacion(negocio_id, producto_id, proveedor_id):
         conn.close()
 
 
+@bp.route('/api/inventario/<int:negocio_id>/producto/<int:producto_id>/proveedor/<int:proveedor_id>/historial-presentaciones')
+def api_historial_presentaciones(negocio_id, producto_id, proveedor_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("""
+            SELECT c.presentacion_id, p.nombre AS presentacion_nombre, p.equivalencia,
+                   c.precio, c.fecha_cotizacion, c.numero_cotizacion,
+                   CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN TRUE ELSE FALSE END AS vigente
+            FROM cotizaciones_compras c
+            JOIN presentaciones p ON p.id = c.presentacion_id
+            WHERE c.negocio_id = %s AND c.tercero_id = %s AND c.item_id = %s
+            ORDER BY c.fecha_cotizacion DESC, c.id DESC
+            LIMIT 8
+        """, (negocio_id, proveedor_id, producto_id)).fetchall()
+        return jsonify({'ok': True, 'historial': [{
+            'presentacion_id': r['presentacion_id'],
+            'presentacion_nombre': r['presentacion_nombre'],
+            'equivalencia': float(r['equivalencia']),
+            'precio': float(r['precio']) if r['precio'] is not None else None,
+            'fecha_cotizacion': r['fecha_cotizacion'].isoformat() if r['fecha_cotizacion'] else None,
+            'numero_cotizacion': r['numero_cotizacion'],
+            'vigente': bool(r['vigente'])
+        } for r in rows]})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 # ── COTIZACIONES DE COMPRA POR PRESENTACIÓN ───────────────────────────────────
 
 @bp.route('/api/inventario/<int:negocio_id>/cotizaciones')

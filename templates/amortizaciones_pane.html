@@ -405,6 +405,27 @@ function actualizarKpisAmortizaciones(lista) {
   }
 }
 
+function parseConceptoAmort(raw) {
+  let base = String(raw || '');
+  let soporte = '';
+  const mSop = base.match(/\[Soporte:\s*([^\]]+)\]/i);
+  if (mSop) {
+    soporte = mSop[1].trim();
+    base = base.replace(/\[Soporte:\s*[^\]]+\]/i, '').trim();
+  }
+  let nota = '';
+  const mNota = base.match(/\(([^)]+)\)$/);
+  if (mNota) {
+    nota = mNota[1].trim();
+    base = base.replace(/\([^)]+\)$/, '').trim();
+  }
+  return { base, soporte, nota };
+}
+
+function escAmort(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function renderTablaAmortizaciones(items) {
   const tb = document.getElementById('amort-table-body');
   const conteo = document.getElementById('amort-conteo-registros');
@@ -436,6 +457,7 @@ function renderTablaAmortizaciones(items) {
     const cuotasRest = a.cuotas_restantes || 0;
     const cuotasAsent = a.cuotas_asentadas || (cuotasTotal - cuotasRest);
     const pct = a.porcentaje_progreso || Math.round((cuotasAsent / cuotasTotal) * 100);
+    const parts = parseConceptoAmort(a.concepto);
 
     // Estado badge (200% más grande y legible)
     let estadoBadge = '';
@@ -477,12 +499,17 @@ function renderTablaAmortizaciones(items) {
 
         <!-- Concepto & Tercero -->
         <td class="px-6 py-5 align-middle max-w-sm">
-          <div class="font-extrabold text-gray-950 text-sm sm:text-base leading-snug line-clamp-2" title="${a.concepto}">
-            ${a.concepto}
+          <div class="font-extrabold text-gray-950 text-sm sm:text-base leading-snug line-clamp-2" title="${escAmort(parts.base)}">
+            ${escAmort(parts.base)}${parts.soporte ? ` <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 align-middle whitespace-nowrap" title="N° de recibo/factura">🧾 ${escAmort(parts.soporte)}</span>` : ''}
           </div>
+          ${parts.nota ? `
+          <div class="mt-1.5 inline-flex items-start gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-amber-50/70 text-amber-900 border border-amber-200/90 text-left" title="Nota del desembolso origen (se edita en Desembolsos)">
+            <span class="text-amber-600 shrink-0">📝</span>
+            <span class="italic break-words">${escAmort(parts.nota)}</span>
+          </div>` : ''}
           <div class="text-xs sm:text-sm text-gray-600 flex items-center gap-1.5 mt-1 font-semibold">
-            <span class="text-sm">👤</span> 
-            <span class="truncate max-w-[220px]">${a.tercero_nombre || 'Sin tercero'}</span>
+            <span class="text-sm">👤</span>
+            <span class="truncate max-w-[220px]">${escAmort(a.tercero_nombre || 'Sin tercero')}</span>
           </div>
         </td>
 
@@ -571,7 +598,9 @@ function verCronogramaAmortizacion(amortId) {
 
   const fmt = n => '$' + Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  document.getElementById('modal-amort-titulo').textContent = item.concepto;
+  const mParts = parseConceptoAmort(item.concepto);
+  document.getElementById('modal-amort-titulo').textContent = mParts.base + (mParts.soporte ? ` [Soporte: ${mParts.soporte}]` : '');
+  document.getElementById('modal-amort-subtitulo').textContent = mParts.nota ? `📝 ${mParts.nota}` : 'Detalle exhaustivo de cuotas y fechas de causación';
   document.getElementById('modal-amort-doc').textContent = item.doc_origen || '—';
   document.getElementById('modal-amort-tercero').textContent = item.tercero_nombre || 'Sin tercero';
   document.getElementById('modal-amort-monto-total').textContent = fmt(item.monto_total);

@@ -4178,7 +4178,7 @@ def api_amortizaciones_list(negocio_id):
         if mov_ids:
             placeholders = ','.join(['%s'] * len(mov_ids))
             m_rows = conn.execute(f"""
-                SELECT id, comprobante_id, tipo_documento, numero_documento, fecha, monto, cuota_numero, cuota_total
+                SELECT id, comprobante_id, tipo_documento, numero_documento, fecha, monto, cuota_numero, cuota_total, concepto
                 FROM movimientos_contables
                 WHERE id IN ({placeholders})
             """, tuple(mov_ids)).fetchall()
@@ -4227,14 +4227,17 @@ def api_amortizaciones_list(negocio_id):
             d['cuotas_asentadas'] = cuotas_asentadas
             d['porcentaje_progreso'] = porcentaje
 
-            d['concepto'] = vh.get('concepto') or d['descripcion'] or 'Amortización'
+            d['movimiento_origen_id'] = vh.get('movimiento_origen_id')
+
+            mov_orig = mov_map.get(d['movimiento_origen_id'])
+            d['comprobante_id'] = mov_orig.get('comprobante_id') if mov_orig else None
+
+            # Concepto fresco del movimiento origen (trae nota/soporte vigentes si se
+            # editaron en Desembolsos tras crear la programacion); fallback al snapshot.
+            d['concepto'] = (mov_orig.get('concepto') if mov_orig else None) or vh.get('concepto') or d['descripcion'] or 'Amortización'
             d['doc_origen'] = vh.get('doc_origen') or ''
             d['fecha_inicio'] = str(vh.get('fecha_inicio') or '')[:10]
             d['proxima_fecha_cuota'] = str(vh.get('proxima_fecha_cuota') or '')[:10]
-            d['movimiento_origen_id'] = vh.get('movimiento_origen_id')
-            
-            mov_orig = mov_map.get(d['movimiento_origen_id'])
-            d['comprobante_id'] = mov_orig.get('comprobante_id') if mov_orig else None
 
             # Cálculo de montos y cronograma completo
             cronograma = vh.get('cronograma') or []

@@ -2400,3 +2400,10 @@ FlotaMuse fase 1 terminada y verificada (Documents\FlotaMuse: app.py + muses.jso
 ### [2026-10-12 13:43:00] 👤 Muse para Gemini:
 
 FlotaMuse: pivote listo. Mensajeria exec descartada por Rafael (one-shot sin memoria). Ahora terminales embebidas persistentes: pty_mgr.py (ConPTY, 1 muse por id) + /pty/<id> websocket + xterm vendored + .venv (Flask 3.1.2, pywinpty 3.0.5, flask-sock 0.7.0, simple-websocket 1.1.0). Spawn PTY verificado como Rafael (alive True).
+
+---
+
+### [2026-10-13 13:36:44] 👤 Muse para Gemini:
+
+Amortizaciones: nota del concepto ahora visible (parse base/soporte/nota igual que Desembolsos + concepto fresco del movimiento origen). Tocados: `app/blueprints/contabilidad.py`, `templates/amortizaciones_pane.html`. Verificado local (py_compile + node --check + parse 5/5). Sin commit/push todavia — Rafael decide.
+

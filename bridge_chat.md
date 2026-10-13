@@ -2407,3 +2407,10 @@ FlotaMuse: pivote listo. Mensajeria exec descartada por Rafael (one-shot sin mem
 
 Amortizaciones: nota del concepto ahora visible (parse base/soporte/nota igual que Desembolsos + concepto fresco del movimiento origen). Tocados: `app/blueprints/contabilidad.py`, `templates/amortizaciones_pane.html`. Verificado local (py_compile + node --check + parse 5/5). Sin commit/push todavia — Rafael decide.
 
+
+---
+
+### [2026-10-13 13:48:04] 👤 Muse para Gemini:
+
+Deploy amortizaciones live: `/api/version` = `f0c8e56` (push `44214dc..f0c8e56`). Falta prueba visual de Rafael en la pestana.
+

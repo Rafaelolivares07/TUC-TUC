@@ -202,6 +202,25 @@ def _crear_tablas(conn):
         "ALTER TABLE movimientos_inventario ADD COLUMN IF NOT EXISTS bodega INTEGER DEFAULT 1",
         "ALTER TABLE inventario_distribuido_estado ADD COLUMN IF NOT EXISTS centro_utilidad_id INTEGER DEFAULT 1",
         "CREATE INDEX IF NOT EXISTS idx_inv_dist_centro ON inventario_distribuido_estado(negocio_id, centro_utilidad_id)",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS dias_min_stock INTEGER",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS stock_minimo NUMERIC(12,4)",
+        """CREATE TABLE IF NOT EXISTS inventario_alertas_agotados (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            bodega INTEGER NOT NULL DEFAULT 1,
+            producto_id INTEGER NOT NULL REFERENCES productos(id),
+            estado VARCHAR(20) NOT NULL DEFAULT 'agotado',
+            primer_aviso_at TIMESTAMP DEFAULT NOW(),
+            ultimo_aviso_at TIMESTAMP DEFAULT NOW(),
+            veces_avisado INTEGER DEFAULT 1,
+            stock_alerta NUMERIC(12,4),
+            stock_minimo NUMERIC(12,4),
+            cobertura_dias NUMERIC(8,2),
+            recuperado_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_inv_alertas_estado ON inventario_alertas_agotados(negocio_id, bodega, estado)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_inv_alertas_agotado_unique ON inventario_alertas_agotados(negocio_id, bodega, producto_id) WHERE estado = 'agotado'",
     ]
     for sql in alters:
         try:
@@ -426,6 +445,315 @@ def _componentes_de(conn, producto_id):
     """, (producto_id,)).fetchall()
 
 
+def _formatear_tiempo_transcurrido(dt):
+    if not dt:
+        return "reciente"
+    from datetime import datetime
+    try:
+        if isinstance(dt, str):
+            dt = datetime.fromisoformat(dt[:19])
+        diff = datetime.now() - dt
+        minutos = max(0, int(diff.total_seconds() / 60))
+        if minutos < 60:
+            return f"hace {minutos}m"
+        horas = int(minutos / 60)
+        if horas < 24:
+            return f"hace {horas}h"
+        dias = int(horas / 24)
+        return f"hace {dias}d"
+    except Exception:
+        return "anteriormente"
+
+
+def _obtener_config_stock_minimo(conn, negocio_id, producto_id):
+    """
+    Retorna (stock_min_unidades, dias_min_aplicados, ddp, es_fijo)
+    """
+    p_info = conn.execute(
+        "SELECT dias_min_stock, stock_minimo FROM productos WHERE id = %s",
+        (producto_id,)
+    ).fetchone()
+    
+    # 1. Si tiene stock mínimo fijo en unidades
+    if p_info and p_info['stock_minimo'] is not None and float(p_info['stock_minimo']) > 0:
+        return float(p_info['stock_minimo']), (p_info['dias_min_stock'] or 3), 0.0, True
+
+    # 2. Días mínimos globales por negocio
+    dias_min_global = 3
+    try:
+        p_row = conn.execute("""
+            SELECT valor_texto FROM parametros_sistema 
+            WHERE nombre = 'inventario_stock_min_dias' AND negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        if p_row and p_row[0]:
+            dias_min_global = int(p_row[0])
+        else:
+            p_ent = conn.execute("""
+                SELECT valor_texto FROM parametros_sistema 
+                WHERE nombre = 'inventario_dias_entrega' AND negocio_id = %s
+            """, (negocio_id,)).fetchone()
+            if p_ent and p_ent[0]:
+                dias_min_global = int(p_ent[0])
+    except Exception:
+        dias_min_global = 3
+
+    dias_aplicados = p_info['dias_min_stock'] if (p_info and p_info['dias_min_stock'] is not None) else dias_min_global
+    if dias_aplicados is None or dias_aplicados <= 0:
+        dias_aplicados = 3
+
+    # 3. Demanda diaria promedio últimos 30 días
+    total_salidas = 0.0
+    try:
+        row_dem = conn.execute("""
+            SELECT COALESCE(SUM(cantidad), 0)
+            FROM movimientos_inventario
+            WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida'
+              AND created_at >= NOW() - INTERVAL '30 days'
+        """, (negocio_id, producto_id)).fetchone()
+        if row_dem and row_dem[0]:
+            total_salidas = float(row_dem[0])
+    except Exception:
+        total_salidas = 0.0
+
+    ddp = total_salidas / 30.0
+    stock_min_calculado = ddp * float(dias_aplicados)
+
+    if stock_min_calculado <= 0.0001:
+        stock_min_calculado = 1.0
+
+    return stock_min_calculado, dias_aplicados, ddp, False
+
+
+def _verificar_alerta_stock_agotado(conn, negocio_id, producto_id, nombre_producto,
+                                    bodega, tipo, motivo, doc_ref,
+                                    stock_ant, stock_nuevo):
+    """
+    Controla el ciclo de vida de alertas de stock agotado.
+    Dispara cuando stock_nuevo < stock_minimo y el producto no estaba ya en la lista de agotados.
+    Recupera automáticamente cuando stock_nuevo >= stock_minimo tras una entrada.
+    """
+    try:
+        stock_min_req, dias_min, ddp, es_fijo = _obtener_config_stock_minimo(conn, negocio_id, producto_id)
+        st_ant = float(stock_ant)
+        st_nuevo = float(stock_nuevo)
+
+        if tipo == 'entrada':
+            if st_nuevo >= stock_min_req:
+                conn.execute("""
+                    UPDATE inventario_alertas_agotados
+                    SET estado = 'recuperado', recuperado_at = NOW()
+                    WHERE negocio_id = %s AND bodega = %s AND producto_id = %s AND estado = 'agotado'
+                """, (negocio_id, bodega, producto_id))
+            return
+
+        if tipo == 'salida':
+            if st_nuevo < stock_min_req:
+                activo = conn.execute("""
+                    SELECT id FROM inventario_alertas_agotados
+                    WHERE negocio_id = %s AND bodega = %s AND producto_id = %s AND estado = 'agotado'
+                """, (negocio_id, bodega, producto_id)).fetchone()
+
+                if not activo:
+                    cobertura_dias = round(max(0.0, st_nuevo / ddp), 1) if ddp > 0 else 0.0
+                    conn.execute("""
+                        INSERT INTO inventario_alertas_agotados
+                            (negocio_id, bodega, producto_id, estado, primer_aviso_at, ultimo_aviso_at,
+                             veces_avisado, stock_alerta, stock_minimo, cobertura_dias)
+                        VALUES (%s, %s, %s, 'agotado', NOW(), NOW(), 1, %s, %s, %s)
+                    """, (negocio_id, bodega, producto_id, st_nuevo, round(stock_min_req, 2), cobertura_dias))
+
+                    item_info = {
+                        'negocio_id': negocio_id,
+                        'bodega': bodega,
+                        'producto_id': producto_id,
+                        'producto_nombre': nombre_producto or f"Producto #{producto_id}",
+                        'stock_actual': st_nuevo,
+                        'stock_minimo': round(stock_min_req, 2),
+                        'cobertura_dias': cobertura_dias,
+                        'dias_min': dias_min,
+                        'motivo': motivo or 'salida',
+                        'documento': doc_ref or ''
+                    }
+
+                    from flask import g, has_request_context
+                    if has_request_context():
+                        if not hasattr(g, '_nuevos_agotados_buffer'):
+                            g._nuevos_agotados_buffer = []
+                        g._nuevos_agotados_buffer.append(item_info)
+                    else:
+                        _despachar_alerta_agotados(conn, negocio_id, bodega, [item_info])
+    except Exception as e:
+        print(f"[alerta agotado] error verificando producto {producto_id}: {e}")
+
+
+def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
+    if not nuevos_items:
+        return
+    import os
+    import requests as req
+
+    ids_nuevos = [it['producto_id'] for it in nuevos_items]
+    format_ids = ','.join(['%s'] * len(ids_nuevos))
+    sql_pendientes = f"""
+        SELECT a.id, a.producto_id, p.nombre AS producto_nombre,
+               a.primer_aviso_at, a.veces_avisado, a.stock_minimo,
+               COALESCE(s.stock, 0) AS stock_actual
+        FROM inventario_alertas_agotados a
+        JOIN productos p ON p.id = a.producto_id
+        LEFT JOIN saldos_inventario s ON s.producto_id = a.producto_id AND s.negocio_id = a.negocio_id AND s.bodega = a.bodega
+        WHERE a.negocio_id = %s AND a.bodega = %s AND a.estado = 'agotado'
+          AND a.producto_id NOT IN ({format_ids})
+        ORDER BY a.primer_aviso_at ASC
+    """
+    pendientes = conn.execute(sql_pendientes, [negocio_id, bodega] + ids_nuevos).fetchall()
+
+    if pendientes:
+        p_ids = [p['id'] for p in pendientes]
+        format_p_ids = ','.join(['%s'] * len(p_ids))
+        conn.execute(f"""
+            UPDATE inventario_alertas_agotados
+            SET ultimo_aviso_at = NOW(), veces_avisado = veces_avisado + 1
+            WHERE id IN ({format_p_ids})
+        """, p_ids)
+
+    neg_nombre = "Tu Negocio"
+    try:
+        t_neg = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (negocio_id,)).fetchone()
+        if t_neg and t_neg['nombre']:
+            neg_nombre = t_neg['nombre']
+    except Exception:
+        pass
+
+    bodega_nombre = f"Bodega #{bodega}"
+    cu_chat_id = None
+    try:
+        cu_row = conn.execute("SELECT codigo, nombre, tipo, telegram_chat_id FROM centros_utilidad WHERE id = %s", (bodega,)).fetchone()
+        if cu_row:
+            nom_c = (cu_row['nombre'] or '').strip()
+            cod_c = (cu_row['codigo'] or '').strip()
+            bodega_nombre = f"{cod_c} — {nom_c}" if (cod_c and nom_c) else (nom_c or cod_c or bodega_nombre)
+            cu_chat_id = cu_row['telegram_chat_id']
+    except Exception:
+        pass
+
+    motivo_ref = f"{nuevos_items[0].get('motivo', 'Salida')}"
+    if nuevos_items[0].get('documento'):
+        motivo_ref += f" ({nuevos_items[0]['documento']})"
+
+    lineas_nuevos = []
+    for it in nuevos_items:
+        cobertura_str = f"Quedan ~{it['cobertura_dias']} días" if it['cobertura_dias'] > 0 else "Sin cobertura suficiente"
+        lineas_nuevos.append(
+            f"• <b>{it['producto_nombre']}</b>\n"
+            f"   Stock actual: <b>{it['stock_actual']:,.2f}</b> | Mínimo requerido: <b>{it['stock_minimo']:,.2f}</b>\n"
+            f"   <i>({cobertura_str} • Objetivo: {it['dias_min']} días)</i>"
+        )
+    bloque_nuevos = "\n".join(lineas_nuevos)
+
+    lineas_pendientes = []
+    for p in pendientes:
+        hace_str = _formatear_tiempo_transcurrido(p['primer_aviso_at'])
+        veces_str = f"{p['veces_avisado'] + 1} avisos" if p['veces_avisado'] else "1 aviso"
+        lineas_pendientes.append(
+            f"• <b>{p['producto_nombre']}</b>: Stock: <b>{float(p['stock_actual']):,.2f}</b> | Mín: {float(p['stock_minimo'] or 0):,.2f} <i>({hace_str} • {veces_str})</i>"
+        )
+    bloque_pendientes = "\n".join(lineas_pendientes) if lineas_pendientes else "✨ <i>No hay otros ítems pendientes por comprar en esta sede.</i>"
+
+    cant_pendientes_str = f" ({len(pendientes)} aún en lista)" if pendientes else ""
+
+    msg = (
+        f"🚨 <b>ALERTA DE REABASTECIMIENTO CRÍTICO</b>\n"
+        f"🏢 <b>Negocio:</b> {neg_nombre}\n"
+        f"📍 <b>Sede / Bodega:</b> {bodega_nombre}\n"
+        f"🧾 <b>Disparado por:</b> {motivo_ref}\n\n"
+        f"🔴 <b>1. ACABAN DE ENTRAR EN AGOTADO:</b>\n"
+        f"{bloque_nuevos}\n\n"
+        f"⚠️ <b>2. PENDIENTES POR COMPRAR{cant_pendientes_str}:</b>\n"
+        f"{bloque_pendientes}\n\n"
+        f"🛒 <i>Ingresa a Compras Sugeridas para emitir órdenes de pedido a proveedores.</i>"
+    )
+
+    chats = set()
+    if cu_chat_id:
+        chats.add(str(cu_chat_id).strip())
+
+    try:
+        t_row = conn.execute("SELECT telegram_chat_id, admin_id FROM tiendas WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        if not t_row:
+            t_row = conn.execute("SELECT telegram_chat_id, admin_id FROM restaurantes WHERE tercero_id = %s", (negocio_id,)).fetchone()
+        if t_row and t_row['telegram_chat_id']:
+            chats.add(str(t_row['telegram_chat_id']).strip())
+        if t_row and t_row['admin_id']:
+            adm_row = conn.execute("SELECT telegram_chat_id FROM terceros WHERE id = %s", (t_row['admin_id'],)).fetchone()
+            if adm_row and adm_row['telegram_chat_id']:
+                chats.add(str(adm_row['telegram_chat_id']).strip())
+    except Exception:
+        pass
+
+    try:
+        cfg = conn.execute('SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1').fetchone()
+        if cfg and cfg['telegram_chat_id']:
+            chats.add(str(cfg['telegram_chat_id']).strip())
+    except Exception:
+        pass
+
+    token = None
+    try:
+        cfg_tok = conn.execute('SELECT telegram_token FROM "CONFIGURACION_SISTEMA" WHERE id = 1').fetchone()
+        if cfg_tok:
+            try: token = cfg_tok['telegram_token']
+            except Exception: token = cfg_tok[0]
+    except Exception:
+        pass
+    token = token or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+
+    if not token or not chats:
+        return
+
+    for c_id in chats:
+        try:
+            req.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={'chat_id': c_id, 'text': msg, 'parse_mode': 'HTML'},
+                timeout=5
+            )
+        except Exception as _e_envio:
+            print(f"[telegram agotado] envio fallido a {c_id}: {_e_envio}")
+
+
+def _despachar_alertas_agotados_batch(buffer):
+    if not buffer:
+        return
+    from collections import defaultdict
+    grupos = defaultdict(list)
+    for it in buffer:
+        grupos[(it['negocio_id'], it['bodega'])].append(it)
+        
+    conn = get_db_connection()
+    try:
+        for (neg_id, bod), items in grupos.items():
+            _despachar_alerta_agotados(conn, neg_id, bod, items)
+        conn.commit()
+    except Exception as e:
+        print(f"[alerta agotado batch] error: {e}")
+    finally:
+        try: conn.close()
+        except: pass
+
+
+@bp.after_app_request
+def _despachar_buffer_agotados_request(response):
+    from flask import g
+    try:
+        buf = getattr(g, '_nuevos_agotados_buffer', None)
+        if buf:
+            g._nuevos_agotados_buffer = None
+            _despachar_alertas_agotados_batch(buf)
+    except Exception as _e:
+        print(f"[alerta buffer request] error: {_e}")
+    return response
+
+
 def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
                  registrado_por, valor_unitario=None, notas=None, bodega=None,
                  referencia_id=None, referencia_tipo=None,
@@ -549,6 +877,19 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         UPDATE productos SET costo=%s WHERE id=%s AND negocio_id=%s
     """, (float(costo_nuevo), producto_id, negocio_id))
     _sync_precio(conn, negocio_id, producto_id)
+
+    # Control y disparo de alertas de stock agotado / reorden
+    try:
+        _verificar_alerta_stock_agotado(
+            conn, negocio_id, producto_id,
+            nombre_prod['nombre'] if nombre_prod else '',
+            bodega, tipo, motivo,
+            num_puro or str(referencia_id or ''),
+            stock_ant, stock_nuevo
+        )
+    except Exception as _e_alerta:
+        print(f"[alerta agotado] error verificando alerta producto {producto_id}: {_e_alerta}")
+
     return mov_id
 
 
@@ -1128,10 +1469,18 @@ def api_inventario_producto_crear():
         if dup:
             return jsonify({'ok': False, 'error': f'Ya existe un producto con el nombre "{nombre}" en este negocio. Los nombres de productos deben ser únicos.'}), 400
 
+        dias_min = data.get('dias_min_stock')
+        dias_min = int(dias_min) if (dias_min is not None and str(dias_min).strip() != '') else None
+        dias_max = data.get('dias_max_stock')
+        dias_max = int(dias_max) if (dias_max is not None and str(dias_max).strip() != '') else None
+        st_min = data.get('stock_minimo')
+        st_min = float(st_min) if (st_min is not None and str(st_min).strip() != '') else None
+
         row = conn.execute("""
             INSERT INTO productos (negocio_id, nombre, categoria, precio, costo,
-                                   descripcion, codigo_barra, iva_pct, orden)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                                   descripcion, codigo_barra, iva_pct, orden,
+                                   dias_min_stock, dias_max_stock, stock_minimo)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
         """, (
             negocio_id, nombre,
             data.get('categoria') or None,
@@ -1141,6 +1490,7 @@ def api_inventario_producto_crear():
             data.get('codigo_barra') or None,
             float(data.get('iva_pct') or 0),
             int(data.get('orden') or 0),
+            dias_min, dias_max, st_min
         )).fetchone()
         _sync_precio(conn, int(negocio_id), row[0])
         conn.commit()
@@ -1373,6 +1723,7 @@ def api_inventario_productos(negocio_id):
                        {sql_costo_fallback} AS costo,
                        {sql_costo_origen} AS costo_origen,
                        p.codigo_barra, p.iva_pct, p.disponible, p.orden,
+                       p.dias_min_stock, p.dias_max_stock, p.stock_minimo,
                        COALESCE(s.stock, 0) AS stock,
                        {sql_rotacion} AS rotacion_30d,
                        ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total,
@@ -1401,6 +1752,7 @@ def api_inventario_productos(negocio_id):
                        {sql_costo_fallback} AS costo,
                        {sql_costo_origen} AS costo_origen,
                        p.codigo_barra, p.iva_pct, p.disponible, p.orden,
+                       p.dias_min_stock, p.dias_max_stock, p.stock_minimo,
                        COALESCE(s.stock, 0) AS stock,
                        {sql_rotacion} AS rotacion_30d,
                        ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total,
@@ -4350,10 +4702,18 @@ def api_inventario_producto_editar(producto_id):
         if dup:
             return jsonify({'ok': False, 'error': f'Ya existe otro producto con el nombre "{nombre}" en este negocio. Los nombres de productos deben ser únicos.'}), 400
 
+        dias_min = data.get('dias_min_stock')
+        dias_min = int(dias_min) if (dias_min is not None and str(dias_min).strip() != '') else None
+        dias_max = data.get('dias_max_stock')
+        dias_max = int(dias_max) if (dias_max is not None and str(dias_max).strip() != '') else None
+        st_min = data.get('stock_minimo')
+        st_min = float(st_min) if (st_min is not None and str(st_min).strip() != '') else None
+
         conn.execute("""
             UPDATE productos SET
                 nombre=%s, categoria=%s, precio=%s, costo=%s,
-                descripcion=%s, codigo_barra=%s, iva_pct=%s, disponible=%s
+                descripcion=%s, codigo_barra=%s, iva_pct=%s, disponible=%s,
+                dias_min_stock=%s, dias_max_stock=%s, stock_minimo=%s
             WHERE id=%s
         """, (
             nombre,
@@ -4364,6 +4724,9 @@ def api_inventario_producto_editar(producto_id):
             data.get('codigo_barra') or None,
             float(data.get('iva_pct') or 0),
             bool(data.get('disponible', True)),
+            dias_min,
+            dias_max,
+            st_min,
             producto_id,
         ))
         conn.commit()
@@ -8237,9 +8600,11 @@ def api_parametros_compras(negocio_id):
         return jsonify({'ok': False, 'error': 'No autorizado'}), 403
     conn = get_db_connection()
     try:
-        params = {'dias_stock_max_global': 15, 'dias_entrega_global': 2, 'usar_dias_con_stock': True}
+        params = {'dias_stock_max_global': 15, 'dias_stock_min_global': 3, 'dias_entrega_global': 2, 'usar_dias_con_stock': True}
         row = conn.execute("SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inventario_stock_max_dias' AND negocio_id = %s", (negocio_id,)).fetchone()
         if row and row[0]: params['dias_stock_max_global'] = int(row[0])
+        row = conn.execute("SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inventario_stock_min_dias' AND negocio_id = %s", (negocio_id,)).fetchone()
+        if row and row[0]: params['dias_stock_min_global'] = int(row[0])
         row = conn.execute("SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inventario_dias_entrega' AND negocio_id = %s", (negocio_id,)).fetchone()
         if row and row[0]: params['dias_entrega_global'] = int(row[0])
         row = conn.execute("SELECT valor_booleano FROM parametros_sistema WHERE nombre = 'inventario_usar_dias_con_stock' AND negocio_id = %s", (negocio_id,)).fetchone()
@@ -11129,28 +11494,54 @@ def _calcular_demanda_y_ciclo(conn, negocio_id, producto_id, current_stock,
 
 
 @bp.route('/api/producto/<int:producto_id>/update-max-stock', methods=['POST'])
+@bp.route('/api/producto/<int:producto_id>/update-stock-params', methods=['POST'])
 def api_update_product_max_stock(producto_id):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     
     data = request.get_json() or {}
-    val = data.get('dias_max_stock')
+    updates = []
+    params = []
     
-    if val is not None and val != '':
-        try:
-            val = int(val)
-            if val < 0:
-                return jsonify({'ok': False, 'error': 'El valor debe ser un número entero no negativo'}), 400
-        except (ValueError, TypeError):
+    if 'dias_max_stock' in data:
+        val = data.get('dias_max_stock')
+        if val is not None and str(val).strip() != '':
+            try: val = int(val)
+            except: val = None
+        else:
             val = None
-    else:
-        val = None
+        updates.append("dias_max_stock = %s")
+        params.append(val)
 
+    if 'dias_min_stock' in data:
+        val = data.get('dias_min_stock')
+        if val is not None and str(val).strip() != '':
+            try: val = int(val)
+            except: val = None
+        else:
+            val = None
+        updates.append("dias_min_stock = %s")
+        params.append(val)
+
+    if 'stock_minimo' in data:
+        val = data.get('stock_minimo')
+        if val is not None and str(val).strip() != '':
+            try: val = float(val)
+            except: val = None
+        else:
+            val = None
+        updates.append("stock_minimo = %s")
+        params.append(val)
+
+    if not updates:
+        return jsonify({'ok': True, 'mensaje': 'Sin cambios'})
+
+    params.append(producto_id)
     conn = get_db_connection()
     try:
-        conn.execute("UPDATE productos SET dias_max_stock = %s WHERE id = %s", (val, producto_id))
+        conn.execute(f"UPDATE productos SET {', '.join(updates)} WHERE id = %s", params)
         conn.commit()
-        return jsonify({'ok': True, 'mensaje': 'Días máximos de stock actualizados correctamente'})
+        return jsonify({'ok': True, 'mensaje': 'Parámetros de stock actualizados correctamente'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
@@ -11254,6 +11645,15 @@ def api_compras_sugerencias(negocio_id):
         if param_entrega and param_entrega[0]:
             dias_entrega_global = int(param_entrega[0])
 
+        dias_stock_min_global = dias_entrega_global or 3
+        param_min = conn.execute("""
+            SELECT valor_texto FROM parametros_sistema 
+            WHERE nombre = 'inventario_stock_min_dias' AND negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        if param_min and param_min[0]:
+            try: dias_stock_min_global = int(param_min[0])
+            except: pass
+
         param_dias_stock = conn.execute("""
             SELECT valor_booleano FROM parametros_sistema 
             WHERE nombre = 'inventario_usar_dias_con_stock' AND negocio_id = %s
@@ -11267,7 +11667,8 @@ def api_compras_sugerencias(negocio_id):
 
         # 1. Obtener todos los productos comprados (sin receta)
         purchased_products = conn.execute("""
-            SELECT p.id, p.nombre, COALESCE(p.costo, 0) AS costo, p.dias_max_stock, COALESCE(s.stock, 0) AS stock_actual,
+            SELECT p.id, p.nombre, COALESCE(p.costo, 0) AS costo, p.dias_max_stock, p.dias_min_stock, p.stock_minimo,
+                   COALESCE(s.stock, 0) AS stock_actual,
                    COALESCE(p.iva_pct, 0) AS iva_pct
             FROM productos p
             LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
@@ -11431,6 +11832,9 @@ def api_compras_sugerencias(negocio_id):
                 'growth_rate_pct': round(growth_rate * 100, 1),
                 'dias_max_stock': p_dias_max_stock,
                 'dias_max_stock_aplicado': dias_max,
+                'dias_min_stock': prod['dias_min_stock'],
+                'dias_min_stock_aplicado': prod['dias_min_stock'] if prod['dias_min_stock'] is not None else dias_stock_min_global,
+                'stock_minimo_fijo': float(prod['stock_minimo']) if prod['stock_minimo'] is not None else None,
                 'cobertura_dias': round(cobertura_dias, 1),
                 'dias_entrega_global': dias_entrega_global,
                 'fecha_limite': fecha_limite,
@@ -11465,12 +11869,29 @@ def api_compras_sugerencias(negocio_id):
             p['productos'].sort(key=lambda x: x['cobertura_dias'])
             
         proveedores_lista.sort(key=lambda x: x['fecha_limite_comparable'])
+
+        # Alertas activas de ítems agotados para esta sede
+        alertas_rows = conn.execute("""
+            SELECT a.producto_id, p.nombre, a.stock_alerta, a.stock_minimo, a.primer_aviso_at, a.veces_avisado,
+                   COALESCE(s.stock, 0) as stock_actual
+            FROM inventario_alertas_agotados a
+            JOIN productos p ON p.id = a.producto_id
+            LEFT JOIN saldos_inventario s ON s.producto_id = a.producto_id AND s.negocio_id = a.negocio_id AND s.bodega = 1
+            WHERE a.negocio_id = %s AND a.bodega = 1 AND a.estado = 'agotado'
+            ORDER BY a.primer_aviso_at DESC
+        """, (negocio_id,)).fetchall()
+        
+        alertas_activas = [dict(r) for r in alertas_rows]
+        for al in alertas_activas:
+            al['primer_aviso_str'] = _formatear_tiempo_transcurrido(al.get('primer_aviso_at'))
         
         return jsonify({
             'ok': True,
             'proveedores': proveedores_lista,
+            'alertas_activas': alertas_activas,
             'parametros': {
                 'dias_stock_max_global': dias_stock_max_global,
+                'dias_stock_min_global': dias_stock_min_global,
                 'dias_entrega_global': dias_entrega_global,
                 'usar_dias_con_stock': usar_dias_con_stock
             }

@@ -565,6 +565,29 @@
 
       </div>
 
+      <div class="sm:col-span-2 bg-indigo-50/50 border border-indigo-150 p-3 rounded-xl flex flex-col gap-2">
+        <div class="flex items-center gap-1.5 text-xs font-bold text-indigo-900">
+          <span>📦</span> Parámetros de Stock y Alerta de Compra (Compras Sugeridas)
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Días Stock Mínimo (Alerta)</label>
+            <input id="mp-dias-min-stock" type="number" min="0" max="180" placeholder="Global (~3 d)" class="w-full text-xs border rounded px-2 py-1 outline-none">
+            <span class="text-[9px] text-slate-400">Si cobertura &lt; este valor, entra en agotado y avisa.</span>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Días Stock Máximo (Meta)</label>
+            <input id="mp-dias-max-stock" type="number" min="0" max="180" placeholder="Global (~15 d)" class="w-full text-xs border rounded px-2 py-1 outline-none">
+            <span class="text-[9px] text-slate-400">Días deseados a tener cubiertos en bodega.</span>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Stock Mínimo Fijo (Und)</label>
+            <input id="mp-stock-minimo" type="number" min="0" step="0.01" placeholder="Opcional (fijo)" class="w-full text-xs border rounded px-2 py-1 outline-none">
+            <span class="text-[9px] text-slate-400">Umbral fijo en unidades (opcional).</span>
+          </div>
+        </div>
+      </div>
+
       <div class="sm:col-span-2">
 
         <label>Descripción</label>
@@ -2811,6 +2834,17 @@
               </details>
             </div>
             <div>
+              <label class="block text-[10px] font-bold text-rose-500 uppercase mb-0.5">🚨 Stock Mínimo / Alerta (días)</label>
+              <div class="flex items-center gap-1">
+                <input type="number" id="cfg-compras-stock-min" value="3" min="1" max="60" class="border border-rose-200 rounded px-1.5 py-0.5 text-xs flex-1 outline-none font-bold text-rose-700 bg-rose-50/30">
+                <button type="button" onclick="guardarParametroNegocio('inventario_stock_min_dias', 'cfg-compras-stock-min')" class="text-rose-500 hover:text-rose-700 text-xs font-bold transition" title="Guardar en BD">&#x1f4be;</button>
+              </div>
+              <details class="cursor-pointer text-[9px] text-slate-400 mt-0.5 hover:text-slate-600">
+                <summary>¿Qué es?</summary>
+                <p class="mt-0.5 text-slate-500 normal-case leading-relaxed">Días mínimos de stock a mantener como colchón de seguridad. Si la cobertura cae por debajo, entra en estado AGOTADO y dispara alerta por Telegram.</p>
+              </details>
+            </div>
+            <div>
               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Entrega Proveedor (días)</label>
               <div class="flex items-center gap-1">
                 <input type="number" id="cfg-compras-dias-entrega" value="2" min="0" max="30" class="border rounded px-1.5 py-0.5 text-xs flex-1 outline-none">
@@ -2878,6 +2912,21 @@
       <h3 class="font-bold text-slate-800 text-xs flex items-center gap-1.5 mb-3">
         <span>💡</span> Sugerencias de Compra por Proveedor
       </h3>
+
+      <!-- Banner de Alertas Activas de Stock Agotado -->
+      <div id="compras-alertas-agotados-banner" class="hidden mb-4 bg-rose-50 border border-rose-200 rounded-xl p-3 text-rose-800 text-xs shadow-xs">
+        <div class="flex items-center justify-between font-bold cursor-pointer" onclick="toggleDetalleAlertasAgotados()">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🚨</span>
+            <span id="compras-alertas-agotados-titulo">Ítems actualmente en estado Agotado / Reorden Urgente</span>
+          </div>
+          <div class="flex items-center gap-1.5 text-[11px] text-rose-600">
+            <span id="compras-alertas-agotados-badge" class="px-2 py-0.5 bg-rose-200 text-rose-900 rounded-full font-black text-[10px]">0</span>
+            <i id="compras-alertas-flecha" class="bi bi-chevron-down transition-transform duration-200"></i>
+          </div>
+        </div>
+        <div id="compras-alertas-agotados-lista" class="hidden mt-2 pt-2 border-t border-rose-200 space-y-1.5 font-normal"></div>
+      </div>
 
       <!-- Buscador de Proveedor/Producto y Gran Total -->
       <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
@@ -6590,8 +6639,10 @@ function abrirModalProducto(pOrId = null) {
   document.getElementById('mp-iva').value      = p ? (p.iva_pct || '0') : '0';
 
   document.getElementById('mp-disponible').checked = p ? !!p.disponible : true;
-
   document.getElementById('mp-descripcion').value  = p ? (p.descripcion || '') : '';
+  document.getElementById('mp-dias-min-stock').value = (p && p.dias_min_stock !== null && p.dias_min_stock !== undefined) ? p.dias_min_stock : '';
+  document.getElementById('mp-dias-max-stock').value = (p && p.dias_max_stock !== null && p.dias_max_stock !== undefined) ? p.dias_max_stock : '';
+  document.getElementById('mp-stock-minimo').value   = (p && p.stock_minimo !== null && p.stock_minimo !== undefined) ? p.stock_minimo : '';
 
   document.getElementById('overlay-producto').classList.remove('hidden');
 
@@ -6634,6 +6685,12 @@ async function guardarProducto() {
     disponible:   document.getElementById('mp-disponible').checked,
 
     descripcion:  document.getElementById('mp-descripcion').value.trim() || null,
+
+    dias_min_stock: document.getElementById('mp-dias-min-stock')?.value.trim() ? parseInt(document.getElementById('mp-dias-min-stock').value) : null,
+
+    dias_max_stock: document.getElementById('mp-dias-max-stock')?.value.trim() ? parseInt(document.getElementById('mp-dias-max-stock').value) : null,
+
+    stock_minimo:   document.getElementById('mp-stock-minimo')?.value.trim() ? parseFloat(document.getElementById('mp-stock-minimo').value) : null,
 
   };
 
@@ -10170,6 +10227,7 @@ async function guardarYRecalcularCompras() {
   const toggleChecked = document.getElementById('cfg-compras-usar-dias-con-stock')?.checked;
   await Promise.all([
     guardarParametroNegocio('inventario_stock_max_dias', 'cfg-compras-stock-max'),
+    guardarParametroNegocio('inventario_stock_min_dias', 'cfg-compras-stock-min'),
     guardarParametroNegocio('inventario_dias_entrega', 'cfg-compras-dias-entrega'),
     guardarParametroNegocio('inventario_usar_dias_con_stock', null, toggleChecked ? 'true' : 'false')
   ]);
@@ -10179,6 +10237,14 @@ async function guardarYRecalcularCompras() {
     formulaLabel.textContent = toggleChecked ? 'Días con stock' : 'Todos los días del período';
   }
   cargarSugerenciasCompras();
+}
+
+function toggleDetalleAlertasAgotados() {
+  const lista = document.getElementById('compras-alertas-agotados-lista');
+  const flecha = document.getElementById('compras-alertas-flecha');
+  if (!lista) return;
+  const isHidden = lista.classList.toggle('hidden');
+  if (flecha) flecha.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
 async function cargarSugerenciasCompras() {
@@ -10200,10 +10266,12 @@ async function cargarSugerenciasCompras() {
     if (pData.ok && pData.parametros) {
       const p = pData.parametros;
       const stockMaxInput = document.getElementById('cfg-compras-stock-max');
+      const stockMinInput = document.getElementById('cfg-compras-stock-min');
       const diasEntregaInput = document.getElementById('cfg-compras-dias-entrega');
       const toggleInput = document.getElementById('cfg-compras-usar-dias-con-stock');
       const formulaLabel = document.getElementById('formula-dias-label');
       if (stockMaxInput && p.dias_stock_max_global !== undefined) stockMaxInput.value = p.dias_stock_max_global;
+      if (stockMinInput && p.dias_stock_min_global !== undefined) stockMinInput.value = p.dias_stock_min_global;
       if (diasEntregaInput && p.dias_entrega_global !== undefined) diasEntregaInput.value = p.dias_entrega_global;
       if (toggleInput) {
         toggleInput.checked = !!p.usar_dias_con_stock;
@@ -10224,13 +10292,14 @@ async function cargarSugerenciasCompras() {
   const minGrowth = document.getElementById('cfg-compras-min-growth')?.value || '-50';
 
   const stockMax = document.getElementById('cfg-compras-stock-max')?.value || '15';
+  const stockMin = document.getElementById('cfg-compras-stock-min')?.value || '3';
 
   const diasEntrega = document.getElementById('cfg-compras-dias-entrega')?.value || '2';
   const usarDiasConStock = document.getElementById('cfg-compras-usar-dias-con-stock')?.checked ? 'true' : 'false';
 
   
 
-  const queryParams = `?dias_historial=${diasHistorial}&dias_defecto=${diasDefecto}&growth_window=${growthWindow}&max_growth=${maxGrowth}&min_growth=${minGrowth}&dias_stock_max_global=${stockMax}&dias_entrega_global=${diasEntrega}&usar_dias_con_stock=${usarDiasConStock}`;
+  const queryParams = `?dias_historial=${diasHistorial}&dias_defecto=${diasDefecto}&growth_window=${growthWindow}&max_growth=${maxGrowth}&min_growth=${minGrowth}&dias_stock_max_global=${stockMax}&dias_stock_min_global=${stockMin}&dias_entrega_global=${diasEntrega}&usar_dias_con_stock=${usarDiasConStock}`;
 
   
 
@@ -10255,11 +10324,15 @@ async function cargarSugerenciasCompras() {
     // Cargar parametros guardados desde BD en los inputs de config
     if (d.parametros) {
       const stockMaxInput = document.getElementById('cfg-compras-stock-max');
+      const stockMinInput = document.getElementById('cfg-compras-stock-min');
       const diasEntregaInput = document.getElementById('cfg-compras-dias-entrega');
       const toggleInput = document.getElementById('cfg-compras-usar-dias-con-stock');
       const formulaLabel = document.getElementById('formula-dias-label');
       if (stockMaxInput && d.parametros.dias_stock_max_global !== undefined) {
         stockMaxInput.value = d.parametros.dias_stock_max_global;
+      }
+      if (stockMinInput && d.parametros.dias_stock_min_global !== undefined) {
+        stockMinInput.value = d.parametros.dias_stock_min_global;
       }
       if (diasEntregaInput && d.parametros.dias_entrega_global !== undefined) {
         diasEntregaInput.value = d.parametros.dias_entrega_global;
@@ -10270,6 +10343,30 @@ async function cargarSugerenciasCompras() {
           formulaLabel.textContent = d.parametros.usar_dias_con_stock ? 'Días con stock' : 'Todos los días del período';
         }
       }
+    }
+
+    // Renderizar banner de alertas activas
+    const bannerAlertas = document.getElementById('compras-alertas-agotados-banner');
+    const badgeAlertas = document.getElementById('compras-alertas-agotados-badge');
+    const listaAlertas = document.getElementById('compras-alertas-agotados-lista');
+    if (d.alertas_activas && d.alertas_activas.length > 0) {
+      if (bannerAlertas) bannerAlertas.classList.remove('hidden');
+      if (badgeAlertas) badgeAlertas.textContent = `${d.alertas_activas.length} ítems`;
+      if (listaAlertas) {
+        listaAlertas.innerHTML = d.alertas_activas.map(a => `
+          <div class="flex items-center justify-between bg-white/80 p-2 rounded-lg text-[11px] border border-rose-200">
+            <div>
+              <span class="font-bold text-slate-800">${a.nombre}</span>
+              <span class="text-slate-500 ml-1.5">Stock actual: <b class="${a.stock_actual <= 0 ? 'text-rose-600' : 'text-slate-700'}">${a.stock_actual}</b> | Mínimo requerido: <b>${a.stock_minimo}</b></span>
+            </div>
+            <div class="text-[10px] text-rose-600 font-semibold">
+              Primer aviso: ${a.primer_aviso_str} (${a.veces_avisado || 1} aviso${(a.veces_avisado || 1) > 1 ? 's' : ''})
+            </div>
+          </div>
+        `).join('');
+      }
+    } else {
+      if (bannerAlertas) bannerAlertas.classList.add('hidden');
     }
 
     
@@ -10401,10 +10498,9 @@ function renderizarComprasTabla(proveedores) {
 
 
       const maxStockVal = prod.dias_max_stock !== null ? prod.dias_max_stock : '';
-
+      const minStockVal = (prod.dias_min_stock !== null && prod.dias_min_stock !== undefined) ? prod.dias_min_stock : '';
       const inputId = `max-stock-prod-${prod.producto_id}`;
-
-
+      const minInputId = `min-stock-prod-${prod.producto_id}`;
 
       // Formato editable inteligente del pedido sugerido (Empaques)
 
@@ -10527,22 +10623,24 @@ function renderizarComprasTabla(proveedores) {
           </td>
 
           <td class="px-3 py-2.5 text-center">
-
             <div class="flex flex-col gap-1 items-center justify-center">
-
-              <input type="number" id="${inputId}" value="${maxStockVal}" placeholder="${prod.dias_max_stock_aplicado}" min="1" max="180" oninput="recalcularLineaMaxStock(${pIdx}, ${prod.producto_id}, '${inputId}')"
-                     class="border rounded px-1.5 py-0.5 text-center font-bold text-slate-700 outline-none w-14 text-[10px]">
-              <div class="text-[8px] text-slate-400 font-normal leading-tight">Global: ${prod.dias_max_stock_aplicado} días</div>
-              <button onclick="guardarMaxStockProducto(${prod.producto_id}, '${inputId}')"
-
+              <div class="flex items-center gap-1">
+                <div class="flex flex-col items-center">
+                  <span class="text-[7.5px] font-bold text-rose-500 uppercase leading-none">Mín</span>
+                  <input type="number" id="${minInputId}" value="${minStockVal}" placeholder="${prod.dias_min_stock_aplicado || 3}" min="1" max="60"
+                         class="border border-rose-200 rounded px-1 py-0.5 text-center font-bold text-rose-700 outline-none w-11 text-[10px] bg-rose-50/20" title="Días mínimos de alerta">
+                </div>
+                <div class="flex flex-col items-center">
+                  <span class="text-[7.5px] font-bold text-slate-400 uppercase leading-none">Máx</span>
+                  <input type="number" id="${inputId}" value="${maxStockVal}" placeholder="${prod.dias_max_stock_aplicado}" min="1" max="180" oninput="recalcularLineaMaxStock(${pIdx}, ${prod.producto_id}, '${inputId}')"
+                         class="border rounded px-1 py-0.5 text-center font-bold text-slate-700 outline-none w-11 text-[10px]" title="Días máximos meta">
+                </div>
+              </div>
+              <button onclick="guardarStockParamsProducto(${prod.producto_id}, '${minInputId}', '${inputId}')"
                       class="text-[9px] text-indigo-500 hover:text-indigo-700 hover:underline font-bold transition">
-
                 Guardar
-
               </button>
-
             </div>
-
           </td>
 
           <td class="px-3 py-2.5 text-center font-semibold text-slate-700" id="compras-fecha-limite-${prod.producto_id}">${prod.fecha_limite === 'Inmediato' ? '<span class="text-red-600 font-bold">Inmediato</span>' : prod.fecha_limite}</td>
@@ -10655,7 +10753,7 @@ function renderizarComprasTabla(proveedores) {
 
                 <th class="px-3 py-2 text-right">Consumo Diario</th>
 
-                <th class="px-3 py-2 text-center">Stock Máx (Días)</th>
+                <th class="px-3 py-2 text-center">Cobertura (Mín / Máx Días)</th>
 
                 <th class="px-3 py-2 text-center">Límite Compra</th>
 
@@ -10717,69 +10815,39 @@ function toggleAcordeonProveedor(pIdx) {
 
 
 
-async function guardarMaxStockProducto(productoId, inputId) {
-
-  const inp = document.getElementById(inputId);
-
-  if (!inp) return;
-
-  
-
-  const val = inp.value.trim();
-
-  
+async function guardarStockParamsProducto(productoId, minInputId, maxInputId) {
+  const minInp = document.getElementById(minInputId);
+  const maxInp = document.getElementById(maxInputId);
+  const minVal = minInp && minInp.value.trim() !== '' ? parseInt(minInp.value) : null;
+  const maxVal = maxInp && maxInp.value.trim() !== '' ? parseInt(maxInp.value) : null;
 
   try {
-
-    const r = await fetch(`/api/producto/${productoId}/update-max-stock`, {
-
+    const r = await fetch(`/api/producto/${productoId}/update-stock-params`, {
       method: 'POST',
-
       headers: { 'Content-Type': 'application/json' },
-
-      body: JSON.stringify({ dias_max_stock: val })
-
+      body: JSON.stringify({ dias_min_stock: minVal, dias_max_stock: maxVal })
     });
-
     const d = await r.json();
 
-    
-
     if (!d.ok) {
-
       alert(`Error al guardar: ${d.error}`);
-
       return;
-
     }
 
-    
-
-    inp.classList.add('border-emerald-500', 'bg-emerald-50');
-
-    setTimeout(() => {
-
-      inp.classList.remove('border-emerald-500', 'bg-emerald-50');
-
-    }, 1500);
-
-    
-
-    // Omitimos cargarSugerenciasCompras() para no redibujar el reporte, ya que se recalculó en vivo localmente.
-
-    
-
+    if (minInp) {
+      minInp.classList.add('border-emerald-500', 'bg-emerald-50');
+      setTimeout(() => minInp.classList.remove('border-emerald-500', 'bg-emerald-50'), 1500);
+    }
+    if (maxInp) {
+      maxInp.classList.add('border-emerald-500', 'bg-emerald-50');
+      setTimeout(() => maxInp.classList.remove('border-emerald-500', 'bg-emerald-50'), 1500);
+    }
   } catch (err) {
-
     console.error(err);
-
-    alert('Error de conexión al guardar los días máximos de stock.');
-
+    alert('Error de conexión al guardar los parámetros de cobertura.');
   }
-
 }
-
-
+const guardarMaxStockProducto = (prodId, inputId) => guardarStockParamsProducto(prodId, `min-stock-prod-${prodId}`, inputId);
 
 async function guardarParametroNegocio(nombre, inputId, overrideVal) {
   let val;

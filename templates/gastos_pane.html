@@ -60,16 +60,27 @@
 
   <!-- Cabecera de la Relación -->
   <div class="border-b border-gray-100 pb-5 mb-5">
-    <div class="flex items-center gap-2.5 mb-2">
-      <div class="p-2 bg-rose-50 text-rose-600 rounded-xl">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+      <div class="flex items-center gap-2.5">
+        <div class="p-2 bg-rose-50 text-rose-600 rounded-xl">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+        </div>
+        <div>
+          <h2 class="text-lg font-bold text-gray-800">Relación de Desembolsos</h2>
+          <p class="text-xs text-gray-500">Capture y controle las salidas de dinero de la operación (gastos diarios, compras de equipos e inversiones multi-mes). Cada erogación se asienta en la fecha de la relación y se liquida contra el medio de pago o fondo al cerrar el documento.</p>
+        </div>
       </div>
-      <div>
-        <h2 class="text-lg font-bold text-gray-800">Relación de Desembolsos</h2>
-        <p class="text-xs text-gray-500">Capture y controle las salidas de dinero de la operación (gastos diarios, compras de equipos e inversiones multi-mes). Cada erogación se asienta en la fecha de la relación y se liquida contra el medio de pago o fondo al cerrar el documento.</p>
-      </div>
+
+      <!-- BOTÓN DESTACADO PARA HISTORIAL DE LIQUIDADOS -->
+      <button type="button" onclick="abrirModalLiquidadosAnteriores()" 
+              class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-sm transition cursor-pointer flex-shrink-0"
+              title="Consultar y reimprimir desembolsos liquidados anteriores">
+        <span>📜</span>
+        <span>Desembolsos Liquidados Anteriores</span>
+        <span id="gas-badge-liquidados-count" class="bg-indigo-900/80 text-white text-[11px] px-2 py-0.5 rounded-full font-mono font-bold">0</span>
+      </button>
     </div>
     
     <!-- Filtros/Cabecera de Ajuste -->
@@ -83,12 +94,15 @@
       </div>
       
       <div class="sm:col-span-2">
-        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Consecutivo Activo</label>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-semibold text-gray-500 uppercase">Consecutivo Activo</label>
+          <button type="button" onclick="abrirModalLiquidadosAnteriores()" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer" title="Ver historial de liquidados">Historial 📜</button>
+        </div>
         <input id="gas-num-doc" type="text" readonly
                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-gray-50 font-mono text-gray-600 focus:outline-none">
       </div>
       
-      <div class="sm:col-span-3">
+      <div class="sm:col-span-2">
         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha de la Relación</label>
         <input id="gas-fecha" type="date" onchange="actualizarFechaRelacion()"
                class="border border-gray-200 rounded-xl px-3 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none">
@@ -99,10 +113,16 @@
         <span class="text-base font-mono font-bold text-rose-800" id="gas-total-gastos">$0.00</span>
       </div>
 
-      <div class="sm:col-span-2">
+      <div class="sm:col-span-3 flex items-center gap-2">
         <button onclick="imprimirPdfRelacion()" id="gas-btn-pdf"
-                class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2 rounded-xl text-sm w-full transition shadow-sm flex items-center justify-center gap-1.5 h-[38px] border border-gray-200">
+                class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-3 py-2 rounded-xl text-xs flex-1 transition shadow-sm flex items-center justify-center gap-1.5 h-[38px] border border-gray-200"
+                title="Imprimir el documento actual en pantalla">
           🖨️ Relación Abierta
+        </button>
+        <button type="button" onclick="abrirModalLiquidadosAnteriores()"
+                class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-3 py-2 rounded-xl text-xs flex-1 transition border border-indigo-200 flex items-center justify-center gap-1.5 h-[38px]"
+                title="Consultar y reimprimir desembolsos liquidados anteriores">
+          📜 Liquidados
         </button>
       </div>
     </div>
@@ -248,15 +268,25 @@
 
   <!-- Panel de Cierre de la Relación -->
   <div id="gas-cierre-container" class="border-t border-gray-100 pt-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-    <div class="text-xs text-gray-400 italic">
-      ℹ️ La selección de formas de pago y distribución múltiple se define al hacer clic en liquidar la relación.
+    <!-- Contenedor oculto de método de pago (gestionado 100% mediante el modal multi-método) -->
+    <div id="gas-metodo-pago-container" class="hidden">
+      <select id="gas-metodo-pago" class="hidden"></select>
+    </div>
+
+    <div>
+      <button type="button" onclick="abrirModalLiquidadosAnteriores()"
+              class="bg-gray-50 hover:bg-gray-100 active:scale-95 text-gray-700 font-bold px-4 py-2.5 rounded-xl text-xs sm:text-sm transition border border-gray-200 flex items-center gap-2 cursor-pointer shadow-2xs"
+              title="Abrir historial de desembolsos liquidados para reimprimir comprobantes">
+        <span>📜</span>
+        <span>Reimprimir Desembolsos Liquidados Anteriores</span>
+      </button>
     </div>
     
     <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto justify-end">
       <!-- Botón visible antes del cierre -->
-      <button onclick="abrirModalCierreRelacion()" id="gas-btn-cerrar-rel"
+      <button onclick="cerrarRelacionGasto()" id="gas-btn-cerrar-rel"
               class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition shadow-md flex items-center justify-center gap-1.5 h-[40px]">
-        ⚡ Registrar Pago y Liquidar Toda la Relación
+        💾 Registrar Pago y Cerrar Relación
       </button>
 
       <!-- Botones visibles únicamente después del cierre exitoso -->
@@ -1150,6 +1180,69 @@
 
 </div>
 
+  <!-- Modal: Desembolsos Liquidados Anteriores -->
+  <div id="modal-desembolsos-liquidados" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-3 sm:p-4 backdrop-blur-xs">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in duration-200 border border-gray-100">
+      
+      <!-- Encabezado del Modal -->
+      <div class="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-indigo-50/40">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-xl shadow-xs">
+            📜
+          </div>
+          <div>
+            <h3 class="text-base sm:text-lg font-black text-gray-900 flex items-center gap-2">
+              Desembolsos Liquidados Anteriores
+              <span id="modal-liq-count-pill" class="text-xs bg-indigo-100 text-indigo-800 font-bold px-2.5 py-0.5 rounded-full border border-indigo-200">0</span>
+            </h3>
+            <p class="text-xs text-gray-500">Historial de erogaciones cerradas. Reimprima cualquier comprobante con el formato oficial en PDF o cárguelo en pantalla.</p>
+          </div>
+        </div>
+        <button onclick="cerrarModalLiquidadosAnteriores()" class="text-gray-400 hover:text-gray-600 text-2xl p-1 leading-none rounded-xl hover:bg-gray-100 transition cursor-pointer">&times;</button>
+      </div>
+
+      <!-- Barra de Filtros y B?squeda -->
+      <div class="p-4 bg-gray-50/80 border-b border-gray-200/80 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+        <div class="sm:col-span-8 relative">
+          <span class="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
+          <input type="text" id="modal-liq-search-input" oninput="filtrarTablaLiquidados()" placeholder="Buscar por consecutivo (#), proveedor, concepto o m?todo de desembolso..."
+                 class="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-xl text-xs sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+        </div>
+        <div class="sm:col-span-4 flex items-center gap-2">
+          <select id="modal-liq-tipo-select" onchange="cargarDesembolsosLiquidados(true)"
+                  class="w-full py-2 px-3 bg-white border border-gray-300 rounded-xl text-xs sm:text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500">
+            <!-- Din?mico -->
+          </select>
+        </div>
+      </div>
+
+      <!-- Contenedor / Tabla de Resultados con Scroll -->
+      <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div id="modal-liq-loading" class="py-12 text-center text-gray-400 text-sm italic">
+          Consultando desembolsos liquidados...
+        </div>
+        <div id="modal-liq-empty" class="hidden py-12 text-center text-gray-400 text-sm italic">
+          No se encontraron desembolsos liquidados con los criterios especificados.
+        </div>
+
+        <div id="modal-liq-list" class="space-y-2.5">
+          <!-- Generado din?micamente -->
+        </div>
+      </div>
+
+      <!-- Pie del Modal -->
+      <div class="p-3.5 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500 flex-wrap gap-2">
+        <span class="flex items-center gap-1.5 font-medium">
+          <span>💡</span> Al pulsar <strong>🖨️ Imprimir PDF</strong> se abre el comprobante oficial con el mismo formato estándar de caja.
+        </span>
+        <button onclick="cerrarModalLiquidadosAnteriores()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition cursor-pointer">
+          Cerrar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
 <script>
   let gasRelacionFecha = null;
   let gasTerceroTimer = null;
@@ -1158,6 +1251,8 @@
   let gasConceptoIdx = -1;
   let gasConceptoTimer = null;
   let gasTerceroIdx = -1;
+  let _modoConsultaLiquidado = null;
+  let _desembolsosLiquidadosCache = [];
 
   // Auto-inicialización: correr en DOMContentLoaded, evento o cuando el panel se hace visible
   (function() {
@@ -1246,7 +1341,8 @@
       }
       
       await cargarRelacionGastoActiva();
-      await cargarSuscripcionesGastos();
+      try { await cargarSuscripcionesGastos(); } catch(e){ console.warn('Error en suscripciones:', e); }
+      try { actualizarBadgeLiquidadosCount(); } catch(e){ console.warn('Error en conteo liquidados:', e); }
     } catch(e) {
       console.error(e);
       toast('Error al conectar con la API de documentos', false);
@@ -1262,38 +1358,73 @@
   }
 
   // Carga los detalles (líneas y fecha) de la relación seleccionada
-  async function cargarRelacionGastoActiva() {
+  // Carga los detalles (l?neas y fecha) de la relaci?n seleccionada (o documento anterior en modo consulta)
+  async function cargarRelacionGastoActiva(numDocOverride) {
     const sel = document.getElementById('gas-tipo-doc');
     const codigo = sel.value;
     if (!codigo) return;
     
     const doc = gasDocumentos.find(d => d.codigo === codigo);
     if (!doc) return;
+
+    if (numDocOverride !== undefined && numDocOverride !== null) {
+      _modoConsultaLiquidado = { tipoDoc: codigo, numDoc: String(numDocOverride) };
+    }
     
-    document.getElementById('gas-num-doc').value = doc.numero_documento;
+    const numDocFinal = _modoConsultaLiquidado ? _modoConsultaLiquidado.numDoc : doc.numero_documento;
+    document.getElementById('gas-num-doc').value = numDocFinal;
     
     const inputFecha = document.getElementById('gas-fecha');
     
-    if (doc.status === 'abierto' && doc.fecha) {
+    if (doc.status === 'abierto' && doc.fecha && !_modoConsultaLiquidado) {
       inputFecha.value = doc.fecha;
       gasRelacionFecha = doc.fecha;
       try { localStorage.setItem(`gas_fecha_${NEGOCIO_ID}_${codigo}`, doc.fecha); } catch(e){}
-    } else {
-      // Si aún no tiene movimientos guardados, persistir la fecha elegida por el usuario o la fecha local
+    } else if (!_modoConsultaLiquidado) {
       let fechaPersistida = null;
       try { fechaPersistida = localStorage.getItem(`gas_fecha_${NEGOCIO_ID}_${codigo}`); } catch(e){}
       const fechaDefinitiva = fechaPersistida || getFechaHoyLocal();
       inputFecha.value = fechaDefinitiva;
       gasRelacionFecha = fechaDefinitiva;
     }
+
+    // Gestionar visualizaci?n de banner y controles en modo consulta vs modo activo
+    const bannerConsulta = document.getElementById('gas-banner-modo-consulta');
+    const formCont = document.getElementById('gas-form-container');
+    const metCont = document.getElementById('gas-metodo-pago-container');
+    const btnCerrar = document.getElementById('gas-btn-cerrar-rel');
+    const btnPdf = document.getElementById('gas-btn-pdf');
+
+    if (_modoConsultaLiquidado) {
+      if (bannerConsulta) {
+        bannerConsulta.classList.remove('hidden');
+        const bNum = document.getElementById('gas-banner-num-doc');
+        if (bNum) bNum.textContent = '#' + numDocFinal;
+      }
+      if (formCont) formCont.classList.add('hidden');
+      if (metCont) metCont.classList.add('hidden');
+      if (btnCerrar) btnCerrar.classList.add('hidden');
+      if (btnPdf) btnPdf.textContent = '🖨️ Imprimir Este Documento';
+    } else {
+      if (bannerConsulta) bannerConsulta.classList.add('hidden');
+      if (formCont) formCont.classList.remove('hidden');
+      if (metCont) metCont.classList.add('hidden');
+      if (btnCerrar) btnCerrar.classList.remove('hidden');
+      if (btnPdf) btnPdf.textContent = '🖨️ Relación Abierta';
+    }
     
-    // Obtener las líneas y cuentas del documento
+    // Obtener las l?neas y cuentas del documento
     try {
-      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/relacion/${doc.codigo}/${doc.numero_documento}/lineas`);
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/relacion/${codigo}/${numDocFinal}/lineas`);
       const d = await r.json();
       if (!d.ok) {
-        toast(d.error || 'Error al obtener líneas del gasto', false);
+        toast(d.error || 'Error al obtener l?neas del gasto', false);
         return;
+      }
+
+      // Si estamos en modo consulta, sincronizar la fecha mostrada con la del documento cerrado
+      if (_modoConsultaLiquidado && d.lineas && d.lineas.length > 0 && d.lineas[0].fecha) {
+        inputFecha.value = String(d.lineas[0].fecha).substring(0, 10);
       }
       
       // Guardar conceptos en variable local para autocomplete
@@ -1315,12 +1446,12 @@
       });
       clearGasConcepto();
       
-      // Renderizar Líneas
+      // Renderizar L?neas
       const tbody = document.getElementById('gas-lineas-body');
       tbody.innerHTML = '';
       
       if (!d.lineas || d.lineas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-gray-400 text-xs">No hay desembolsos agregados en esta relación.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-gray-400 text-xs">No hay desembolsos agregados en esta relaci?n.</td></tr>';
         document.getElementById('gas-total-gastos').textContent = '$0.00';
       } else {
         let total = 0.0;
@@ -1335,10 +1466,10 @@
           const matchSoporte = displayConcepto.match(/\[Soporte:\s*([^\]]+)\]/i);
           if (matchSoporte) {
             soporteValor = matchSoporte[1].trim();
-            soporteBadge = `<button type="button" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition shadow-2xs" onclick="abrirModalEditarSoporte(${l.id}, '${escapeJsString(soporteValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para modificar el N° de recibo/factura">🧾 ${escapeGasHtml(soporteValor)} <span class="text-[9px] text-amber-600 opacity-70">✏️</span></button>`;
+            soporteBadge = `<button type="button" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition shadow-2xs" onclick="abrirModalEditarSoporte(${l.id}, '${escapeJsString(soporteValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para modificar el N? de recibo/factura">?? ${escapeGasHtml(soporteValor)} <span class="text-[9px] text-amber-600 opacity-70">??</span></button>`;
             displayConcepto = displayConcepto.replace(/\[Soporte:\s*[^\]]+\]/i, '').trim();
           } else {
-            soporteBadge = `<button type="button" onclick="abrirModalEditarSoporte(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-amber-700 bg-gray-50 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-gray-200 ml-1 font-mono" title="Asociar número de recibo o factura a este desembolso">🧾 + Soporte</button>`;
+            soporteBadge = `<button type="button" onclick="abrirModalEditarSoporte(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-amber-700 bg-gray-50 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-gray-200 ml-1 font-mono" title="Asociar n?mero de recibo o factura a este desembolso">?? + Soporte</button>`;
           }
 
           let notaValor = '';
@@ -1350,47 +1481,44 @@
 
           let notaCell = '';
           if (notaValor) {
-            notaCell = `<button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-amber-50/70 text-amber-900 border border-amber-200/90 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition max-w-xs text-left shadow-2xs group" onclick="abrirModalEditarNota(${l.id}, '${escapeJsString(notaValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para editar la nota explicativa"><span class="text-amber-600">📝</span> <span class="italic truncate max-w-[180px]">${escapeGasHtml(notaValor)}</span> <span class="text-[9px] text-amber-500 opacity-60 group-hover:opacity-100 transition">✏️</span></button>`;
+            notaCell = `<button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-amber-50/70 text-amber-900 border border-amber-200/90 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition max-w-xs text-left shadow-2xs group" onclick="abrirModalEditarNota(${l.id}, '${escapeJsString(notaValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para editar la nota explicativa"><span class="text-amber-600">??</span> <span class="italic truncate max-w-[180px]">${escapeGasHtml(notaValor)}</span> <span class="text-[9px] text-amber-500 opacity-60 group-hover:opacity-100 transition">??</span></button>`;
           } else {
-            notaCell = `<button type="button" onclick="abrirModalEditarNota(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 active:scale-95 border border-amber-200/80 rounded-lg transition shadow-2xs" title="Añadir nota explicativa a este desembolso"><span>📝</span> <span>+ Añadir Nota</span></button>`;
+            notaCell = `<button type="button" onclick="abrirModalEditarNota(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 active:scale-95 border border-amber-200/80 rounded-lg transition shadow-2xs" title="A?adir nota explicativa a este desembolso"><span>??</span> <span>+ A?adir Nota</span></button>`;
           }
 
-          const cCod = l.centro_codigo || (l.centro_utilidad_id == 2 ? 'LOC-01' : 'MOV-01');
-          const cColor = l.centro_color || (l.centro_utilidad_id == 2 ? '#10b981' : '#0284c7');
-          const cNom = l.centro_nombre || (l.centro_utilidad_id == 2 ? 'Local Comercial' : 'Puntos Móviles');
-          const centroBadge = `<button type="button" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold text-white shadow-xs cursor-pointer hover:opacity-85 hover:scale-105 transition" style="background: ${cColor};" onclick="abrirModalCambiarCentroLinea(${l.id}, ${l.centro_utilidad_id || 1}, '${escapeJsString(displayConcepto)}')" title="Haga clic para reasignar la sede: ${escapeGasHtml(cNom)}">${cCod} <span class="text-[9px] opacity-75">✏️</span></button>`;
+          // Badge de Centro de Utilidad (Sede)
+          const centroBadgeColor = l.centro_color || 'indigo';
+          const centroNombre = l.centro_nombre || (l.centro_codigo ? ('Sede ' + l.centro_codigo) : 'Sede Principal');
+          const centroBadge = `<button type="button" onclick="abrirModalCambiarCentroLinea(${l.id}, ${l.centro_utilidad_id || 1}, '${escapeJsString(displayConcepto)}')"
+                                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border transition cursor-pointer shadow-2xs bg-${centroBadgeColor}-50 text-${centroBadgeColor}-700 border-${centroBadgeColor}-200 hover:bg-${centroBadgeColor}-100"
+                                       title="Haga clic para reasignar este gasto a otra sede">
+                                 <span>??</span> <span>${escapeGasHtml(centroNombre)}</span>
+                               </button>`;
 
-          // Badge Tipo / Plazo
-          let tipoPlazoBadge = '';
+          // Badge de Categor?a y Plazo (Gasto / Activo / Diferido)
           const duracion = parseInt(l.meses_duracion || 1);
-          const ctaCod = String(l.cuenta || '');
-          const esActivo = ctaCod.startsWith('6143') || ctaCod.startsWith('1505');
-          const esDiferido = ctaCod.startsWith('6144') || ctaCod.startsWith('1705');
-          const catStr = esActivo ? 'activo' : (esDiferido ? 'diferido' : 'gasto');
+          const cuotaAct = parseInt(l.cuota_numero || 1);
+          const cuotaTot = parseInt(l.cuota_total || 1);
           const modalidadStr = l.modalidad_amortizacion || 'prorrateo';
-          const cuota1Val = (l.cuota_1_monto !== null && l.cuota_1_monto !== undefined) ? parseFloat(l.cuota_1_monto) : 'null';
+          const cuota1Val = l.cuota_1_monto !== null && l.cuota_1_monto !== undefined ? parseFloat(l.cuota_1_monto) : 'null';
+          let catStr = 'gasto';
+          let tipoPlazoBadge = '';
+          const codCta = String(l.cuenta || '');
+          if (codCta.startsWith('6143') || codCta.startsWith('1505')) catStr = 'activo';
+          else if (codCta.startsWith('6144') || codCta.startsWith('1705')) catStr = 'diferido';
 
-          if (duracion > 1) {
-            const cuotaMes = (parseFloat(l.monto) / duracion).toLocaleString('es-CO', {minimumFractionDigits:0, maximumFractionDigits:0});
-            const icono = esActivo ? '🏭' : (esDiferido ? '⏳' : '⏱️');
-            const catColor = esActivo ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100' : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100';
-            const modLabel = modalidadStr === 'fija' ? 'Fija' : 'Prorr.';
-            tipoPlazoBadge = `
-              <button type="button" onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)}, '${modalidadStr}', ${cuota1Val})"
-                      class="inline-flex flex-col items-center p-1 rounded-lg hover:shadow-2xs transition cursor-pointer" title="Haga clic para cambiar la clasificación o plazo">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${catColor} border shadow-2xs">
-                  <span>${icono}</span> ${duracion}m (${modLabel}) <span class="text-[9px] opacity-70">✏️</span>
-                </span>
-                <span class="text-[9px] text-gray-500 font-mono mt-0.5 font-semibold">$${cuotaMes}/mes</span>
-              </button>
-            `;
+          if (catStr === 'activo') {
+            tipoPlazoBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200" title="Activo Fijo / Equipos (Amortizado a ${duracion} meses)">
+                                <span>??</span> Activo (${duracion}m)
+                              </span>`;
+          } else if (catStr === 'diferido') {
+            tipoPlazoBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="Gasto Anticipado / Diferido (${duracion} meses)">
+                                <span>?</span> Diferido (${duracion}m)
+                              </span>`;
           } else {
-            tipoPlazoBadge = `
-              <button type="button" onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', 1, ${parseFloat(l.monto)}, '${modalidadStr}', ${cuota1Val})"
-                      class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 transition cursor-pointer shadow-2xs" title="Haga clic para clasificar como activo o diferido">
-                <span>🧾 Gasto Mes</span> <span class="text-[9px] text-gray-400">✏️</span>
-              </button>
-            `;
+            tipoPlazoBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Gasto corriente del mes">
+                                <span>??</span> Mes
+                              </span>`;
           }
 
           tr.innerHTML = `
@@ -1404,21 +1532,27 @@
             <td class="px-4 py-2.5 text-xs text-gray-600">${escapeGasHtml(l.tercero_nombre || 'N/A')}</td>
             <td class="px-4 py-2.5 text-right font-mono text-xs text-rose-700 font-bold">$${parseFloat(l.monto).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             <td class="px-4 py-2.5 text-center whitespace-nowrap">
-              <div class="inline-flex items-center gap-1.5 justify-center">
-                <button onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)}, '${modalidadStr}', ${cuota1Val})"
-                        class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg border border-blue-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
-                        title="Reclasificar este desembolso (Gasto / Activo / Diferido y plazo)">
-                  <span>🔄</span> Reclasificar
-                </button>
-                <button onclick="abrirModalCierreIndividual(${l.id}, '${escapeJsString(displayConcepto)}', ${parseFloat(l.monto)}, ${duracion}, ${l.tercero_id || 'null'}, '${escapeJsString(l.tercero_nombre || '')}', '${escapeJsString(soporteValor || '')}')"
-                        class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
-                        title="Liquidar individualmente esta erogación con el consecutivo actual">
-                  <span>⚡</span> Liquidar
-                </button>
-                <button onclick="eliminarLineaGasto(${l.id})" class="text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2 py-1 rounded transition text-xs cursor-pointer" title="Eliminar este desembolso">
-                  ❌
-                </button>
-              </div>
+              ${_modoConsultaLiquidado ? `
+                <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  <span>?</span> Liquidado
+                </span>
+              ` : `
+                <div class="inline-flex items-center gap-1.5 justify-center">
+                  <button onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)}, '${modalidadStr}', ${cuota1Val})"
+                          class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg border border-blue-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                          title="Reclasificar este desembolso (Gasto / Activo / Diferido y plazo)">
+                    <span>??</span> Reclasificar
+                  </button>
+                  <button onclick="abrirModalCierreIndividual(${l.id}, '${escapeJsString(displayConcepto)}', ${parseFloat(l.monto)}, ${duracion}, ${l.tercero_id || 'null'}, '${escapeJsString(l.tercero_nombre || '')}', '${escapeJsString(soporteValor || '')}')"
+                          class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                          title="Liquidar individualmente esta erogaci?n con el consecutivo actual">
+                    <span>?</span> Liquidar
+                  </button>
+                  <button onclick="eliminarLineaGasto(${l.id})" class="text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2 py-1 rounded transition text-xs cursor-pointer" title="Eliminar este desembolso">
+                    ?
+                  </button>
+                </div>
+              `}
             </td>
           `;
           tbody.appendChild(tr);
@@ -1426,11 +1560,11 @@
         document.getElementById('gas-total-gastos').textContent = '$' + total.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
       }
       
-      // Cargar métodos de pago válidos para gastos
+      // Cargar m?todos de pago v?lidos para gastos
       await cargarMetodosPagoGastos();
     } catch(e) {
       console.error(e);
-      toast('Error al consultar datos de la relación', false);
+      toast('Error al consultar datos de la relaci?n', false);
     }
   }
 
@@ -1445,14 +1579,12 @@
       
       _metodosPagoGastos = (d.metodos || []).filter(m => (m.activo !== false) && (m.activo_desembolsos !== false) && (m.cuenta_id || m.cuenta_gastos_id));
       const sel = document.getElementById('gas-metodo-pago');
-      if (sel) {
-        if (_metodosPagoGastos.length === 0) {
-          sel.innerHTML = '<option value="">— Ningún método habilitado para desembolsos —</option>';
-        } else {
-          sel.innerHTML = _metodosPagoGastos.map(m => 
-            `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}</option>`
-          ).join('');
-        }
+      if (_metodosPagoGastos.length === 0) {
+        sel.innerHTML = '<option value="">— Ningún método habilitado para desembolsos —</option>';
+      } else {
+        sel.innerHTML = _metodosPagoGastos.map(m => 
+          `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}</option>`
+        ).join('');
       }
     } catch(e) {
       console.error(e);
@@ -2105,6 +2237,14 @@
     
     const list = [];
     let primerMetodo = (_metodosPagoGastos && _metodosPagoGastos.length > 0) ? _metodosPagoGastos[0].codigo : 'efectivo';
+    
+    // Si es cierre de relación, preferir el método seleccionado en el select inferior si existe
+    if (type === 'rel') {
+      const selMain = document.getElementById('gas-metodo-pago');
+      if (selMain && selMain.value) {
+        primerMetodo = selMain.value;
+      }
+    }
 
     const rowObj = {
       id: Date.now(),
@@ -2666,14 +2806,15 @@
         try { localStorage.removeItem(`gas_fecha_${NEGOCIO_ID}_${tipoDoc}`); } catch(e){}
         
         // Bloquear interfaz para evitar modificaciones fantasma
-        document.getElementById('gas-form-container')?.classList.add('opacity-50', 'pointer-events-none');
-        document.getElementById('gas-btn-cerrar-rel')?.classList.add('hidden');
+        document.getElementById('gas-form-container').classList.add('opacity-50', 'pointer-events-none');
+        document.getElementById('gas-metodo-pago-container').classList.add('hidden');
+        document.getElementById('gas-btn-cerrar-rel').classList.add('hidden');
         
         // Mostrar botón de imprimir relación cerrada y continuar
-        const btnPdf = document.getElementById('gas-btn-pdf-cerrado');
-        if (btnPdf) { btnPdf.classList.remove('hidden'); btnPdf.classList.add('flex'); }
-        const btnSig = document.getElementById('gas-btn-siguiente');
-        if (btnSig) { btnSig.classList.remove('hidden'); btnSig.classList.add('flex'); }
+        document.getElementById('gas-btn-pdf-cerrado').classList.remove('hidden');
+        document.getElementById('gas-btn-pdf-cerrado').classList.add('flex');
+        document.getElementById('gas-btn-siguiente').classList.remove('hidden');
+        document.getElementById('gas-btn-siguiente').classList.add('flex');
       } else {
         toast(d.error || 'Error al cerrar relación', false);
       }
@@ -2697,13 +2838,15 @@
 
   function irASiguienteRelacion() {
     // Restaurar controles a estado inicial
-    document.getElementById('gas-form-container')?.classList.remove('opacity-50', 'pointer-events-none');
-    document.getElementById('gas-btn-cerrar-rel')?.classList.remove('hidden');
+    document.getElementById('gas-form-container').classList.remove('opacity-50', 'pointer-events-none');
+    const metCont = document.getElementById('gas-metodo-pago-container');
+    if (metCont) metCont.classList.add('hidden');
+    document.getElementById('gas-btn-cerrar-rel').classList.remove('hidden');
     
-    const btnPdf = document.getElementById('gas-btn-pdf-cerrado');
-    if (btnPdf) { btnPdf.classList.add('hidden'); btnPdf.classList.remove('flex'); }
-    const btnSig = document.getElementById('gas-btn-siguiente');
-    if (btnSig) { btnSig.classList.add('hidden'); btnSig.classList.remove('flex'); }
+    document.getElementById('gas-btn-pdf-cerrado').classList.add('hidden');
+    document.getElementById('gas-btn-pdf-cerrado').classList.remove('flex');
+    document.getElementById('gas-btn-siguiente').classList.add('hidden');
+    document.getElementById('gas-btn-siguiente').classList.remove('flex');
     
     closedTipoDoc = null;
     closedNumDoc = null;
@@ -4583,10 +4726,208 @@
     if (e.target.id === 'modal-nuevo-tercero') {
       cerrarModalNuevoTercero();
     }
+    if (e.target.id === 'modal-desembolsos-liquidados') {
+      cerrarModalLiquidadosAnteriores();
+    }
     // Cerrar autocomplete de terceros en filas dinámicas de cierre si se hace clic afuera
     if (!e.target.closest('[id^="cierre-ind-tercero-txt-"]') && !e.target.closest('[id^="cierre-ind-tercero-ac-"]') &&
         !e.target.closest('[id^="cierre-rel-tercero-txt-"]') && !e.target.closest('[id^="cierre-rel-tercero-ac-"]')) {
       document.querySelectorAll('[id^="cierre-ind-tercero-ac-"], [id^="cierre-rel-tercero-ac-"]').forEach(el => el.classList.add('hidden'));
     }
   });
+
+  // ??? GESTI?N E IMPRESI?N DE DESEMBOLSOS LIQUIDADOS ANTERIORES ???
+  async function actualizarBadgeLiquidadosCount() {
+    try {
+      const tipoDoc = document.getElementById('gas-tipo-doc')?.value || '';
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/liquidados?tipo_doc=${encodeURIComponent(tipoDoc)}`);
+      const d = await r.json();
+      if (d.ok && Array.isArray(d.liquidados)) {
+        const badge = document.getElementById('gas-badge-liquidados-count');
+        if (badge) badge.textContent = String(d.liquidados.length);
+      }
+    } catch(e) {
+      console.warn('Error cargando conteo de liquidados:', e);
+    }
+  }
+
+  async function abrirModalLiquidadosAnteriores() {
+    const modal = document.getElementById('modal-desembolsos-liquidados');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    const sel = document.getElementById('modal-liq-tipo-select');
+    if (sel && gasDocumentos && gasDocumentos.length > 0) {
+      const currentTipo = document.getElementById('gas-tipo-doc')?.value || '';
+      sel.innerHTML = '<option value="">— Todas las Tipologías de Desembolsos —</option>' + 
+        gasDocumentos.map(doc => `<option value="${doc.codigo}" ${doc.codigo === currentTipo ? 'selected' : ''}>${escapeGasHtml(doc.nombre)} (${doc.codigo})</option>`).join('');
+    }
+
+    const searchInput = document.getElementById('modal-liq-search-input');
+    if (searchInput) searchInput.value = '';
+
+    await cargarDesembolsosLiquidados(true);
+  }
+
+  function cerrarModalLiquidadosAnteriores() {
+    const modal = document.getElementById('modal-desembolsos-liquidados');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+  }
+
+  async function cargarDesembolsosLiquidados(force) {
+    const loadingEl = document.getElementById('modal-liq-loading');
+    const emptyEl = document.getElementById('modal-liq-empty');
+    const listEl = document.getElementById('modal-liq-list');
+    const countPill = document.getElementById('modal-liq-count-pill');
+    
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (emptyEl) emptyEl.classList.add('hidden');
+    if (listEl) listEl.innerHTML = '';
+
+    const tipoDoc = document.getElementById('modal-liq-tipo-select')?.value || '';
+    
+    try {
+      const q = encodeURIComponent(tipoDoc);
+      const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/liquidados?tipo_doc=${q}`);
+      const d = await r.json();
+      if (!d.ok) {
+        toast(d.error || 'Error al consultar desembolsos liquidados', false);
+        if (loadingEl) loadingEl.classList.add('hidden');
+        return;
+      }
+
+      _desembolsosLiquidadosCache = d.liquidados || [];
+      if (countPill) countPill.textContent = String(_desembolsosLiquidadosCache.length);
+      const badge = document.getElementById('gas-badge-liquidados-count');
+      if (badge) badge.textContent = String(_desembolsosLiquidadosCache.length);
+
+      renderTablaLiquidados(_desembolsosLiquidadosCache);
+    } catch(e) {
+      console.error(e);
+      toast('Error de red al consultar desembolsos liquidados', false);
+    } finally {
+      if (loadingEl) loadingEl.classList.add('hidden');
+    }
+  }
+
+  function filtrarTablaLiquidados() {
+    const q = (document.getElementById('modal-liq-search-input')?.value || '').trim().toLowerCase();
+    if (!q) {
+      renderTablaLiquidados(_desembolsosLiquidadosCache);
+      return;
+    }
+    const filtered = _desembolsosLiquidadosCache.filter(it => {
+      const match = `${it.numero_documento} ${it.tipo_documento} ${it.terceros} ${it.conceptos_preview} ${it.metodo_nombre} ${it.fecha}`.toLowerCase();
+      return match.includes(q);
+    });
+    renderTablaLiquidados(filtered);
+  }
+
+  function renderTablaLiquidados(items) {
+    const emptyEl = document.getElementById('modal-liq-empty');
+    const listEl = document.getElementById('modal-liq-list');
+    if (!listEl) return;
+
+    if (!items || items.length === 0) {
+      listEl.innerHTML = '';
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    listEl.innerHTML = items.map(item => {
+      const totalStr = '$' + (item.total || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      return `
+        <div class="p-3.5 bg-white hover:bg-indigo-50/40 rounded-2xl border-2 border-gray-100 hover:border-indigo-200 transition shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <!-- Información Principal -->
+          <div class="flex items-start gap-3 min-w-0 flex-1">
+            <div class="flex flex-col items-center flex-shrink-0">
+              <span class="font-mono font-black text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-xl text-sm md:text-base whitespace-nowrap shadow-2xs">
+                #${escapeGasHtml(item.numero_documento)}
+              </span>
+              <span class="text-[9px] font-mono text-gray-400 mt-1 uppercase font-bold tracking-tight">${escapeGasHtml(item.tipo_documento)}</span>
+            </div>
+            
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap mb-1">
+                <span class="font-mono text-xs font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-lg">
+                  📅 ${escapeGasHtml(item.fecha)}
+                </span>
+                <span class="inline-flex items-center gap-1 text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-0.5 rounded-full">
+                  <span>${escapeGasHtml(item.metodo_icono || '💳')}</span> <span>${escapeGasHtml(item.metodo_nombre)}</span>
+                </span>
+                <span class="text-[10px] font-semibold text-gray-500 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-lg">
+                  ${item.cant_lineas} ${item.cant_lineas === 1 ? 'erogación' : 'erogaciones'}
+                </span>
+              </div>
+              
+              <div class="text-xs md:text-sm font-black text-gray-900 truncate" title="${escapeGasHtml(item.terceros)}">
+                👤 ${escapeGasHtml(item.terceros)}
+              </div>
+              <div class="text-[11px] text-gray-500 truncate italic mt-0.5" title="${escapeGasHtml(item.conceptos_preview)}">
+                ${escapeGasHtml(item.conceptos_preview || 'Sin conceptos descriptivos')}
+              </div>
+            </div>
+          </div>
+
+          <!-- Valores y Acciones -->
+          <div class="flex items-center justify-between md:justify-end gap-3.5 pt-2.5 md:pt-0 border-t md:border-t-0 border-gray-100 flex-shrink-0">
+            <div class="text-right">
+              <span class="block text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Total Liquidado</span>
+              <span class="font-mono font-black text-emerald-700 text-sm md:text-base">${totalStr}</span>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="imprimirDesembolsoLiquidado('${escapeJsString(item.tipo_documento)}', '${escapeJsString(item.numero_documento)}', ${item.comprobante_id || 'null'})"
+                      class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                      title="Imprimir comprobante oficial en formato PDF">
+                <span>🖨️</span> Imprimir PDF
+              </button>
+              <button type="button" onclick="cargarDesembolsoLiquidadoEnPantalla('${escapeJsString(item.tipo_documento)}', '${escapeJsString(item.numero_documento)}')"
+                      class="bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-800 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1 transition border border-gray-200 cursor-pointer"
+                      title="Ver detalle de líneas en la pantalla de desembolsos">
+                <span>👁️</span> Ver Detalle
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function imprimirDesembolsoLiquidado(tipoDoc, numDoc, compId) {
+    if (!tipoDoc || !numDoc) {
+      toast('Documento no válido para imprimir', false);
+      return;
+    }
+    const qComp = compId ? `?comprobante_id=${compId}` : '';
+    window.open(`/api/contabilidad/${NEGOCIO_ID}/documento/${tipoDoc}/${numDoc}/pdf${qComp}`, '_blank');
+  }
+
+  async function cargarDesembolsoLiquidadoEnPantalla(tipoDoc, numDoc) {
+    cerrarModalLiquidadosAnteriores();
+    const sel = document.getElementById('gas-tipo-doc');
+    if (sel && tipoDoc) {
+      sel.value = tipoDoc;
+    }
+    await cargarRelacionGastoActiva(numDoc);
+    toast(`Cargando desembolso liquidado #${numDoc} en pantalla (solo lectura).`);
+  }
+
+  function imprimirDesembolsoActualEnPantalla() {
+    const tipoDoc = document.getElementById('gas-tipo-doc').value;
+    const numDoc = document.getElementById('gas-num-doc').value;
+    imprimirDesembolsoLiquidado(tipoDoc, numDoc);
+  }
+
+  async function salirModoConsultaLiquidados() {
+    _modoConsultaLiquidado = null;
+    await cargarRelacionGastoActiva();
+    toast('Relación activa restaurada.');
+  }
+
 </script>

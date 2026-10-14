@@ -179,6 +179,31 @@ def _asegurar_tablas(conn):
     """)
     conn.commit()
 
+    # punto_equilibrio_simulaciones: persistencia de simulaciones por centro de utilidad
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS punto_equilibrio_simulaciones (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL REFERENCES terceros(id) ON DELETE CASCADE,
+            centro_utilidad_id INTEGER REFERENCES centros_utilidad(id) ON DELETE CASCADE,
+            datos_simulacion JSONB NOT NULL DEFAULT '{}'::jsonb,
+            auditoria JSONB DEFAULT '{}'::jsonb,
+            ultimo_usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+    """)
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_pe_simulaciones_centro 
+        ON punto_equilibrio_simulaciones (negocio_id, centro_utilidad_id)
+        WHERE centro_utilidad_id IS NOT NULL
+    """)
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_pe_simulaciones_consolidado 
+        ON punto_equilibrio_simulaciones (negocio_id)
+        WHERE centro_utilidad_id IS NULL
+    """)
+    conn.commit()
+
     # Columnas nuevas en tipos_documento_negocio y otras tablas
     for sql in [
         "ALTER TABLE tipos_documento_negocio ADD COLUMN IF NOT EXISTS consecutivo    INTEGER DEFAULT 0",
@@ -4178,7 +4203,7 @@ def api_amortizaciones_list(negocio_id):
         if mov_ids:
             placeholders = ','.join(['%s'] * len(mov_ids))
             m_rows = conn.execute(f"""
-                SELECT id, comprobante_id, tipo_documento, numero_documento, fecha, monto, cuota_numero, cuota_total, concepto
+                SELECT id, comprobante_id, tipo_documento, numero_documento, fecha, monto, cuota_numero, cuota_total
                 FROM movimientos_contables
                 WHERE id IN ({placeholders})
             """, tuple(mov_ids)).fetchall()
@@ -4227,17 +4252,14 @@ def api_amortizaciones_list(negocio_id):
             d['cuotas_asentadas'] = cuotas_asentadas
             d['porcentaje_progreso'] = porcentaje
 
-            d['movimiento_origen_id'] = vh.get('movimiento_origen_id')
-
-            mov_orig = mov_map.get(d['movimiento_origen_id'])
-            d['comprobante_id'] = mov_orig.get('comprobante_id') if mov_orig else None
-
-            # Concepto fresco del movimiento origen (trae nota/soporte vigentes si se
-            # editaron en Desembolsos tras crear la programacion); fallback al snapshot.
-            d['concepto'] = (mov_orig.get('concepto') if mov_orig else None) or vh.get('concepto') or d['descripcion'] or 'Amortización'
+            d['concepto'] = vh.get('concepto') or d['descripcion'] or 'Amortización'
             d['doc_origen'] = vh.get('doc_origen') or ''
             d['fecha_inicio'] = str(vh.get('fecha_inicio') or '')[:10]
             d['proxima_fecha_cuota'] = str(vh.get('proxima_fecha_cuota') or '')[:10]
+            d['movimiento_origen_id'] = vh.get('movimiento_origen_id')
+            
+            mov_orig = mov_map.get(d['movimiento_origen_id'])
+            d['comprobante_id'] = mov_orig.get('comprobante_id') if mov_orig else None
 
             # Cálculo de montos y cronograma completo
             cronograma = vh.get('cronograma') or []
@@ -9673,6 +9695,31 @@ def api_punto_equilibrio_datos(negocio_id):
             'factor_prestacional_pct': 50
         }
         
+        # 5. Simulaciones persistidas por centro de utilidad
+        sim_rows = conn.execute("""
+            SELECT pes.centro_utilidad_id, pes.datos_simulacion, pes.auditoria, pes.updated_at,
+                   pes.ultimo_usuario_id,
+                   COALESCE(u.nombre, u.usuario, t.nombre, 'Usuario') AS usuario_nombre
+            FROM punto_equilibrio_simulaciones pes
+            LEFT JOIN usuarios u ON u.id = pes.ultimo_usuario_id
+            LEFT JOIN terceros t ON t.id = pes.ultimo_usuario_id
+            WHERE pes.negocio_id = %s
+        """, (negocio_id,)).fetchall()
+
+        simulaciones = {}
+        for sr in sim_rows:
+            c_id = sr['centro_utilidad_id']
+            key = str(c_id) if c_id is not None else 'consolidado'
+            datos = sr['datos_simulacion'] if isinstance(sr['datos_simulacion'], dict) else json.loads(sr['datos_simulacion'] or '{}')
+            audit = sr['auditoria'] if isinstance(sr['auditoria'], dict) else json.loads(sr['auditoria'] or '{}')
+            simulaciones[key] = {
+                'centro_utilidad_id': c_id,
+                'datos': datos,
+                'auditoria': audit,
+                'updated_at': sr['updated_at'].strftime('%d/%m/%Y %H:%M') if sr['updated_at'] else None,
+                'usuario_nombre': sr['usuario_nombre']
+            }
+        
         conn.close()
         return jsonify({
             'ok': True,
@@ -9686,9 +9733,873 @@ def api_punto_equilibrio_datos(negocio_id):
             'top_productos_mezcla': top_productos_mezcla,
             'es_fallback_consolidado': es_fallback_consolidado,
             'gastos_fijos_programados': gastos_fijos_programados,
-            'referencias_legales': referencias_legales
+            'referencias_legales': referencias_legales,
+            'simulaciones': simulaciones
         })
     except Exception as e:
         try: conn.close()
         except: pass
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/punto-equilibrio/guardar', methods=['POST'])
+def api_punto_equilibrio_guardar(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    import json
+    from datetime import datetime
+
+    usuario_id = session.get('usuario_id')
+    body = request.get_json() or {}
+    centro_id = body.get('centro_id')
+    if centro_id is not None and str(centro_id).strip() != '':
+        try:
+            centro_id = int(centro_id)
+        except (ValueError, TypeError):
+            centro_id = None
+    else:
+        centro_id = None
+
+    estado = body.get('estado') or {}
+    campo_modificado = body.get('campo_modificado')
+
+    if not estado:
+        return jsonify({'ok': False, 'error': 'Sin datos de simulación'}), 400
+
+    try:
+        conn = get_db_connection()
+        # Nombre del usuario
+        u_row = conn.execute("""
+            SELECT COALESCE(u.nombre, u.usuario, t.nombre, 'Usuario') AS nombre
+            FROM (SELECT %s::int AS uid) q
+            LEFT JOIN usuarios u ON u.id = q.uid
+            LEFT JOIN terceros t ON t.id = q.uid
+        """, (usuario_id,)).fetchone()
+        u_nombre = u_row['nombre'] if (u_row and u_row['nombre']) else 'Usuario'
+
+        # Formato de fecha corto amigable
+        meses_es = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+        ahora = datetime.now()
+        ahora_fmt = f"{ahora.day} {meses_es[ahora.month]}, {ahora.strftime('%H:%M')}"
+
+        if centro_id is not None:
+            prev = conn.execute("""
+                SELECT auditoria FROM punto_equilibrio_simulaciones
+                WHERE negocio_id = %s AND centro_utilidad_id = %s
+            """, (negocio_id, centro_id)).fetchone()
+        else:
+            prev = conn.execute("""
+                SELECT auditoria FROM punto_equilibrio_simulaciones
+                WHERE negocio_id = %s AND centro_utilidad_id IS NULL
+            """, (negocio_id,)).fetchone()
+
+        audit_dict = {}
+        if prev and prev['auditoria']:
+            audit_dict = prev['auditoria'] if isinstance(prev['auditoria'], dict) else json.loads(prev['auditoria'])
+
+        if 'campos' not in audit_dict or not isinstance(audit_dict['campos'], dict):
+            audit_dict['campos'] = {}
+
+        meta_cambio = {
+            'usuario': u_nombre,
+            'usuario_id': usuario_id,
+            'fecha': ahora_fmt,
+            'updated_at': ahora.isoformat()
+        }
+
+        if campo_modificado:
+            audit_dict['campos'][campo_modificado] = meta_cambio
+
+        audit_dict['general'] = meta_cambio
+
+        if centro_id is not None:
+            conn.execute("""
+                INSERT INTO punto_equilibrio_simulaciones 
+                    (negocio_id, centro_utilidad_id, datos_simulacion, auditoria, ultimo_usuario_id, updated_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (negocio_id, centro_utilidad_id) WHERE centro_utilidad_id IS NOT NULL
+                DO UPDATE SET
+                    datos_simulacion = EXCLUDED.datos_simulacion,
+                    auditoria = EXCLUDED.auditoria,
+                    ultimo_usuario_id = EXCLUDED.ultimo_usuario_id,
+                    updated_at = NOW()
+            """, (negocio_id, centro_id, json.dumps(estado), json.dumps(audit_dict), usuario_id))
+        else:
+            conn.execute("""
+                INSERT INTO punto_equilibrio_simulaciones 
+                    (negocio_id, centro_utilidad_id, datos_simulacion, auditoria, ultimo_usuario_id, updated_at)
+                VALUES (%s, NULL, %s, %s, %s, NOW())
+                ON CONFLICT (negocio_id) WHERE centro_utilidad_id IS NULL
+                DO UPDATE SET
+                    datos_simulacion = EXCLUDED.datos_simulacion,
+                    auditoria = EXCLUDED.auditoria,
+                    ultimo_usuario_id = EXCLUDED.ultimo_usuario_id,
+                    updated_at = NOW()
+            """, (negocio_id, json.dumps(estado), json.dumps(audit_dict), usuario_id))
+
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'auditoria': audit_dict,
+            'usuario_nombre': u_nombre,
+            'fecha': ahora_fmt
+        })
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/punto-equilibrio/restablecer', methods=['POST'])
+def api_punto_equilibrio_restablecer(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    from ..db import get_db_connection
+    body = request.get_json() or {}
+    centro_id = body.get('centro_id')
+    if centro_id is not None and str(centro_id).strip() != '':
+        try:
+            centro_id = int(centro_id)
+        except (ValueError, TypeError):
+            centro_id = None
+    else:
+        centro_id = None
+
+    try:
+        conn = get_db_connection()
+        if centro_id is not None:
+            conn.execute("""
+                DELETE FROM punto_equilibrio_simulaciones
+                WHERE negocio_id = %s AND centro_utilidad_id = %s
+            """, (negocio_id, centro_id))
+        else:
+            conn.execute("""
+                DELETE FROM punto_equilibrio_simulaciones
+                WHERE negocio_id = %s AND centro_utilidad_id IS NULL
+            """, (negocio_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        try: conn.close()
+        except: pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ── RECLASIFICACIONES: Cuentas, Terceros, Productos, Centros de Utilidad ───
+# ═════════════════════════════════════════════════════════════════════════════
+
+def _check_table_has_column(conn, table_name, column_name):
+    r = conn.execute("""
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = %s AND column_name = %s
+    """, (table_name, column_name)).fetchone()
+    return bool(r)
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/reclasificaciones/previa', methods=['POST'])
+def api_reclasificaciones_previa(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+
+    data = request.get_json() or {}
+    tipo = data.get('tipo', '').strip().lower()
+    origen_id = data.get('origen_id')
+    destino_id = data.get('destino_id')
+
+    if not origen_id:
+        return jsonify({'ok': False, 'error': 'Debe especificar la entidad origen'}), 400
+
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        origen_id = int(origen_id)
+        if destino_id:
+            destino_id = int(destino_id)
+            if origen_id == destino_id:
+                return jsonify({'ok': False, 'error': 'El origen y el destino no pueden ser el mismo'}), 400
+
+        resumen_tablas = []
+        info_origen = {}
+        info_destino = {}
+
+        if tipo == 'cuentas':
+            # Verificar origen y destino
+            o_row = conn.execute("SELECT id, codigo, nombre FROM cuentas_puc WHERE id = %s", (origen_id,)).fetchone()
+            if not o_row:
+                return jsonify({'ok': False, 'error': 'Cuenta origen no encontrada'}), 404
+            info_origen = {'id': o_row['id'], 'codigo': o_row['codigo'], 'nombre': o_row['nombre']}
+
+            if destino_id:
+                d_row = conn.execute("SELECT id, codigo, nombre FROM cuentas_puc WHERE id = %s", (destino_id,)).fetchone()
+                if not d_row:
+                    return jsonify({'ok': False, 'error': 'Cuenta destino no encontrada'}), 404
+                info_destino = {'id': d_row['id'], 'codigo': d_row['codigo'], 'nombre': d_row['nombre']}
+
+            # 1. movimientos_contables
+            c_movs = conn.execute("""
+                SELECT COUNT(*) FROM movimientos_contables 
+                WHERE negocio_id = %s AND (cuenta_id = %s OR cuenta = %s)
+            """, (negocio_id, origen_id, o_row['codigo'])).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'movimientos_contables',
+                'significado': 'Libro Diario y Asientos Contables',
+                'registros': c_movs,
+                'campo': 'cuenta_id, cuenta',
+                'impacto': 'Los débitos y créditos se imputarán a la cuenta destino manteniendo intactos fecha, cuadre y documento.'
+            })
+
+            # 2. saldo_por_documentos
+            c_saldoc = conn.execute("""
+                SELECT COUNT(*) FROM saldo_por_documentos 
+                WHERE negocio_id = %s AND cuenta_id = %s
+            """, (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'saldo_por_documentos',
+                'significado': 'Control de Cartera y Cuentas por Cobrar/Pagar',
+                'registros': c_saldoc,
+                'campo': 'cuenta_id',
+                'impacto': 'Las obligaciones y saldos pendientes por documento pasarán a controlarse bajo la cuenta receptora.'
+            })
+
+            # 3. grupos_inventario
+            c_grp = conn.execute("""
+                SELECT COUNT(*) FROM grupos_inventario 
+                WHERE negocio_id = %s AND (
+                    cuenta_inve_id = %s OR cuenta_cos_id = %s OR cuenta_ingre_id = %s 
+                    OR cuenta_ajuste_favor_id = %s OR cuenta_ajuste_contra_id = %s
+                )
+            """, (negocio_id, origen_id, origen_id, origen_id, origen_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'grupos_inventario',
+                'significado': 'Parametrización Contable de Grupos de Inventario',
+                'registros': c_grp,
+                'campo': 'cuentas inventario/costo/ingreso',
+                'impacto': 'Las reglas de contabilización automática de inventarios empezarán a usar la cuenta destino.'
+            })
+
+            # 4. parametros_metodos_pago_negocio
+            c_pago = conn.execute("""
+                SELECT COUNT(*) FROM parametros_metodos_pago_negocio 
+                WHERE negocio_id = %s AND (
+                    cuenta_id = %s OR cuenta_gastos_id = %s OR cuenta_pago_id = %s 
+                    OR cuenta_pago_saldos_id = %s OR cuenta_recaudo_id = %s OR cuenta_recaudo_saldos_id = %s
+                )
+            """, (negocio_id, origen_id, origen_id, origen_id, origen_id, origen_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'parametros_metodos_pago_negocio',
+                'significado': 'Cajas y Métodos de Pago POS',
+                'registros': c_pago,
+                'campo': 'cuenta_id, cuenta_pago/recaudo',
+                'impacto': 'Los medios de pago configurados (Efectivo, Nequi, etc.) contabilizarán sus movimientos contra la cuenta destino.'
+            })
+
+            # 5. parametros_lineas_contables
+            c_parl = conn.execute("""
+                SELECT COUNT(*) FROM parametros_lineas_contables plc
+                JOIN parametros_contables_negocio pcn ON pcn.id = plc.parametro_id
+                WHERE pcn.negocio_id = %s AND plc.cuenta_puc_id = %s
+            """, (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'parametros_lineas_contables',
+                'significado': 'Líneas de Plantillas de Contabilización',
+                'registros': c_parl,
+                'campo': 'cuenta_puc_id',
+                'impacto': 'Las plantillas de documentos configuradas se actualizarán para usar la nueva cuenta.'
+            })
+
+            # 6. programaciones_contables (Amortizaciones y Gastos Fijos Recurrentes)
+            c_progs = conn.execute("""
+                SELECT COUNT(*) FROM programaciones_contables 
+                WHERE negocio_id = %s AND (
+                    variables_h::text LIKE %s OR variables_h::text LIKE %s
+                )
+            """, (negocio_id, f'%"cuenta_debito": "{o_row["codigo"]}"%', f'%"cuenta_credito": "{o_row["codigo"]}"%')).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'programaciones_contables',
+                'significado': 'Amortizaciones y Gastos Fijos del Punto de Equilibrio',
+                'registros': c_progs,
+                'campo': 'cuenta_debito, cuenta_credito (variables_h)',
+                'impacto': 'Las amortizaciones activas pasarán a imputar sus cuotas futuras a la cuenta destino.'
+            })
+
+        elif tipo == 'terceros':
+            o_row = conn.execute("SELECT id, nombre, telefono, direccion FROM terceros WHERE id = %s", (origen_id,)).fetchone()
+            if not o_row:
+                return jsonify({'ok': False, 'error': 'Tercero origen no encontrado'}), 404
+            info_origen = {'id': o_row['id'], 'nombre': o_row['nombre']}
+
+            if destino_id:
+                d_row = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (destino_id,)).fetchone()
+                if not d_row:
+                    return jsonify({'ok': False, 'error': 'Tercero destino no encontrado'}), 404
+                info_destino = {'id': d_row['id'], 'nombre': d_row['nombre']}
+
+            # 1. movimientos_contables
+            c_movs = conn.execute("SELECT COUNT(*) FROM movimientos_contables WHERE negocio_id = %s AND tercero_id = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'movimientos_contables',
+                'significado': 'Historial Contable con Terceros',
+                'registros': c_movs,
+                'campo': 'tercero_id',
+                'impacto': 'Todos los comprobantes y asientos se reasignarán a nombre del tercero destino (crucial para reportes fiscales y exógena).'
+            })
+
+            # 2. saldo_por_documentos
+            c_saldos = conn.execute("SELECT COUNT(*) FROM saldo_por_documentos WHERE negocio_id = %s AND tercero_id = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'saldo_por_documentos',
+                'significado': 'Cartera Comercial (Cuentas por Cobrar / Pagar)',
+                'registros': c_saldos,
+                'campo': 'tercero_id',
+                'impacto': 'Las deudas y cobros pendientes se unificarán en el estado de cuenta del tercero receptor.'
+            })
+
+            # 3. movimientos_inventario
+            c_movinv = conn.execute("SELECT COUNT(*) FROM movimientos_inventario WHERE negocio_id = %s AND proveedor_id = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'movimientos_inventario',
+                'significado': 'Facturas de Compra y Entradas de Proveedor',
+                'registros': c_movinv,
+                'campo': 'proveedor_id',
+                'impacto': 'Las compras y recepciones de almacén se asociarán al proveedor destino conservando costos y cantidades.'
+            })
+
+            # 4. pedidos / pedidos_tienda
+            c_ped = 0
+            if _check_table_has_column(conn, 'pedidos', 'cliente_id'):
+                c_ped += conn.execute("SELECT COUNT(*) FROM pedidos WHERE negocio_id = %s AND (cliente_id = %s OR id_tercero_cajero = %s)", (negocio_id, origen_id, origen_id)).fetchone()[0]
+            if _check_table_has_column(conn, 'pedidos_tienda', 'cliente_id'):
+                c_ped += conn.execute("SELECT COUNT(*) FROM pedidos_tienda WHERE negocio_id = %s AND (cliente_id = %s OR id_tercero_cajero = %s)", (negocio_id, origen_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'pedidos / pedidos_tienda',
+                'significado': 'Ventas, Comandas y Turnos POS',
+                'registros': c_ped,
+                'campo': 'cliente_id, id_tercero_cajero',
+                'impacto': 'Las ventas y cierres de caja quedarán adjudicados al nuevo tercero.'
+            })
+
+            # 5. cotizaciones
+            c_cot = 0
+            if _check_table_has_column(conn, 'cotizaciones_tienda', 'cliente_id'):
+                c_cot += conn.execute("SELECT COUNT(*) FROM cotizaciones_tienda WHERE negocio_id = %s AND cliente_id = %s", (negocio_id, origen_id)).fetchone()[0]
+            if _check_table_has_column(conn, 'cotizaciones_compras', 'tercero_id'):
+                c_cot += conn.execute("SELECT COUNT(*) FROM cotizaciones_compras WHERE negocio_id = %s AND tercero_id = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'cotizaciones',
+                'significado': 'Cotizaciones de Ventas y Compras',
+                'registros': c_cot,
+                'campo': 'cliente_id / tercero_id',
+                'impacto': 'Las cotizaciones registradas se reasignarán al tercero receptor.'
+            })
+
+            # 6. tarjeta_estandar
+            c_rec = conn.execute("SELECT COUNT(*) FROM tarjeta_estandar WHERE tercero_id = %s", (origen_id,)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'tarjeta_estandar',
+                'significado': 'Fichas Técnicas / Proveedor de Recetas',
+                'registros': c_rec,
+                'campo': 'tercero_id',
+                'impacto': 'Los insumos de recetas configurados con este proveedor se actualizarán al nuevo tercero.'
+            })
+
+        elif tipo == 'productos':
+            o_row = conn.execute("SELECT id, nombre, precio, costo FROM productos WHERE id = %s AND negocio_id = %s", (origen_id, negocio_id)).fetchone()
+            if not o_row:
+                return jsonify({'ok': False, 'error': 'Producto origen no encontrado en este negocio'}), 404
+            info_origen = {'id': o_row['id'], 'nombre': o_row['nombre'], 'precio': float(o_row['precio'] or 0), 'costo': float(o_row['costo'] or 0)}
+
+            if destino_id:
+                d_row = conn.execute("SELECT id, nombre, precio, costo FROM productos WHERE id = %s AND negocio_id = %s", (destino_id, negocio_id)).fetchone()
+                if not d_row:
+                    return jsonify({'ok': False, 'error': 'Producto destino no encontrado en este negocio'}), 404
+                info_destino = {'id': d_row['id'], 'nombre': d_row['nombre'], 'precio': float(d_row['precio'] or 0), 'costo': float(d_row['costo'] or 0)}
+
+            # 1. movimientos_inventario (Kardex propio)
+            c_kardex = conn.execute("SELECT COUNT(*) FROM movimientos_inventario WHERE negocio_id = %s AND producto_id = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'movimientos_inventario',
+                'significado': 'Kardex Cronológico (Entradas, Salidas y Ajustes)',
+                'registros': c_kardex,
+                'campo': 'producto_id',
+                'impacto': 'Todo el historial de compras, ventas y ajustes pasará al Kardex del producto destino.'
+            })
+
+            # 2. movimientos_inventario (Como producto padre / ensamble)
+            c_padre = conn.execute("SELECT COUNT(*) FROM movimientos_inventario WHERE negocio_id = %s AND producto_padre_id = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'movimientos_inventario (Ensambles)',
+                'significado': 'Producciones / Platos Preparados',
+                'registros': c_padre,
+                'campo': 'producto_padre_id',
+                'impacto': 'Las salidas de insumos donde este producto fue el plato elaborado se vincularán al producto destino.'
+            })
+
+            # 3. saldos_inventario
+            c_saldos = conn.execute("SELECT COUNT(*) FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'saldos_inventario',
+                'significado': 'Existencias Físicas y Costo en Bodegas',
+                'registros': c_saldos,
+                'campo': 'producto_id, bodega',
+                'impacto': 'El stock de cada bodega se fusionará y el sistema ejecutará un recosteo automático para calibrar el nuevo costo unitario.'
+            })
+
+            # 4. tarjeta_estandar (Recetas / Escandallos)
+            c_bom = conn.execute("SELECT COUNT(*) FROM tarjeta_estandar WHERE producto_id = %s OR componente_id = %s", (origen_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'tarjeta_estandar',
+                'significado': 'Fórmulas de Recetas (Platos e Ingredientes)',
+                'registros': c_bom,
+                'campo': 'producto_id, componente_id',
+                'impacto': 'Si es un ingrediente, se sustituirá en todas las recetas donde aparecía; si es un plato, sus componentes se transferirán.'
+            })
+
+            # 5. pedido_items / items_pedido_tienda
+            c_items = 0
+            if _check_table_has_column(conn, 'pedido_items', 'producto_id'):
+                c_items += conn.execute("""
+                    SELECT COUNT(*) FROM pedido_items pi
+                    JOIN pedidos p ON p.id = pi.pedido_id
+                    WHERE p.negocio_id = %s AND pi.producto_id = %s
+                """, (negocio_id, origen_id)).fetchone()[0]
+            if _check_table_has_column(conn, 'items_pedido_tienda', 'producto_id'):
+                c_items += conn.execute("""
+                    SELECT COUNT(*) FROM items_pedido_tienda ipt
+                    JOIN pedidos_tienda pt ON pt.id = ipt.pedido_id
+                    WHERE pt.negocio_id = %s AND ipt.producto_id = %s
+                """, (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'pedido_items / ventas',
+                'significado': 'Líneas de Venta Históricas y Estadísticas',
+                'registros': c_items,
+                'campo': 'producto_id',
+                'impacto': 'Los consumos y estadísticas de venta se consolidarán bajo la referencia destino para preservar reportes de rotación.'
+            })
+
+            # 6. movimientos_contables
+            c_mcont = conn.execute("SELECT COUNT(*) FROM movimientos_contables WHERE negocio_id = %s AND (producto_id = %s OR producto_padre_id = %s)", (negocio_id, origen_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'movimientos_contables',
+                'significado': 'Asientos de Costo y Venta del Producto',
+                'registros': c_mcont,
+                'campo': 'producto_id, producto_padre_id',
+                'impacto': 'Las partidas contables vinculadas al producto se actualizarán a la referencia destino.'
+            })
+
+        elif tipo == 'centros_utilidad':
+            o_row = conn.execute("SELECT id, codigo, nombre FROM centros_utilidad WHERE id = %s AND negocio_id = %s", (origen_id, negocio_id)).fetchone()
+            if not o_row:
+                return jsonify({'ok': False, 'error': 'Centro de utilidad origen no encontrado'}), 404
+            info_origen = {'id': o_row['id'], 'codigo': o_row['codigo'], 'nombre': o_row['nombre']}
+
+            if destino_id:
+                d_row = conn.execute("SELECT id, codigo, nombre FROM centros_utilidad WHERE id = %s AND negocio_id = %s", (destino_id, negocio_id)).fetchone()
+                if not d_row:
+                    return jsonify({'ok': False, 'error': 'Centro de utilidad destino no encontrado'}), 404
+                info_destino = {'id': d_row['id'], 'codigo': d_row['codigo'], 'nombre': d_row['nombre']}
+
+            # 1. movimientos_inventario (Bodega)
+            c_movb = conn.execute("SELECT COUNT(*) FROM movimientos_inventario WHERE negocio_id = %s AND bodega = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'movimientos_inventario',
+                'significado': 'Kardex de Bodega y Almacén',
+                'registros': c_movb,
+                'campo': 'bodega',
+                'impacto': 'Todos los movimientos de compras, traslados y ventas de esta bodega se reubicarán en la bodega receptora.'
+            })
+
+            # 2. saldos_inventario (Stock actual en la bodega)
+            c_sbod = conn.execute("SELECT COUNT(*) FROM saldos_inventario WHERE negocio_id = %s AND bodega = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'saldos_inventario',
+                'significado': 'Existencias Físicas Actuales',
+                'registros': c_sbod,
+                'campo': 'bodega',
+                'impacto': 'El stock almacenado en esta bodega se fusionará con el saldo de la bodega destino.'
+            })
+
+            # 3. movimientos_contables (Centro de Costos)
+            c_mcu = conn.execute("SELECT COUNT(*) FROM movimientos_contables WHERE negocio_id = %s AND centro_utilidad_id = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'movimientos_contables',
+                'significado': 'Contabilidad por Centro de Utilidad / Sucursal',
+                'registros': c_mcu,
+                'campo': 'centro_utilidad_id',
+                'impacto': 'Los asientos contables imputados a esta sucursal se reasignarán a la sede destino para informes de resultados.'
+            })
+
+            # 4. pedidos / terminales
+            c_pedcu = conn.execute("SELECT COUNT(*) FROM pedidos WHERE negocio_id = %s AND centro_utilidad_id = %s", (negocio_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'pedidos / cajas',
+                'significado': 'Órdenes de Venta POS y Facturas de Caja',
+                'registros': c_pedcu,
+                'campo': 'centro_utilidad_id',
+                'impacto': 'Las ventas de caja registradas en esta sede pasarán a formar parte de la sede receptora.'
+            })
+
+            # 5. traslados_inventario
+            c_tras = conn.execute("SELECT COUNT(*) FROM traslados_inventario WHERE bodega_origen_id = %s OR bodega_destino_id = %s", (origen_id, origen_id)).fetchone()[0]
+            resumen_tablas.append({
+                'tabla': 'traslados_inventario',
+                'significado': 'Guías de Traslado entre Sedes',
+                'registros': c_tras,
+                'campo': 'bodega_origen_id, bodega_destino_id',
+                'impacto': 'Los traslados que salieron o llegaron a esta sede actualizarán sus llaves a la nueva bodega.'
+            })
+        else:
+            return jsonify({'ok': False, 'error': f'Tipo de reclasificación no válido: {tipo}'}), 400
+
+        total_registros = sum(t['registros'] for t in resumen_tablas)
+
+        return jsonify({
+            'ok': True,
+            'tipo': tipo,
+            'origen': info_origen,
+            'destino': info_destino,
+            'tablas': resumen_tablas,
+            'total_registros': total_registros
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/contabilidad/<int:negocio_id>/reclasificaciones/ejecutar', methods=['POST'])
+def api_reclasificaciones_ejecutar(negocio_id):
+    if not session.get('usuario_id'):
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+
+    data = request.get_json() or {}
+    tipo = data.get('tipo', '').strip().lower()
+    origen_id = data.get('origen_id')
+    destino_id = data.get('destino_id')
+    eliminar_origen = bool(data.get('eliminar_origen', False))
+
+    if not origen_id or not destino_id:
+        return jsonify({'ok': False, 'error': 'Debe especificar entidad origen y destino'}), 400
+
+    from ..db import get_db_connection
+    conn = get_db_connection()
+    try:
+        origen_id = int(origen_id)
+        destino_id = int(destino_id)
+        if origen_id == destino_id:
+            return jsonify({'ok': False, 'error': 'El origen y el destino no pueden ser el mismo'}), 400
+
+        log_afectados = []
+        entidad_eliminada = False
+
+        if tipo == 'cuentas':
+            o_row = conn.execute("SELECT id, codigo, nombre FROM cuentas_puc WHERE id = %s", (origen_id,)).fetchone()
+            d_row = conn.execute("SELECT id, codigo, nombre FROM cuentas_puc WHERE id = %s", (destino_id,)).fetchone()
+            if not o_row or not d_row:
+                return jsonify({'ok': False, 'error': 'Cuenta origen o destino no encontrada'}), 404
+
+            # 1. movimientos_contables
+            cur = conn.execute("""
+                UPDATE movimientos_contables 
+                SET cuenta_id = %s, cuenta = %s 
+                WHERE negocio_id = %s AND (cuenta_id = %s OR cuenta = %s)
+            """, (destino_id, d_row['codigo'], negocio_id, origen_id, o_row['codigo']))
+            log_afectados.append({'tabla': 'movimientos_contables', 'significado': 'Libro Diario y Asientos', 'afectados': cur.rowcount})
+
+            # 2. saldo_por_documentos
+            # Para evitar violar el índice único (negocio_id, tercero_id, cuenta_id, tipo_documento_id, numero_documento),
+            # procesamos combinando saldos si ya existe la fila en la cuenta destino
+            rows_saldos = conn.execute("""
+                SELECT id, tercero_id, tipo_documento, numero_documento, tipo_documento_id, saldo, monto_original
+                FROM saldo_por_documentos
+                WHERE negocio_id = %s AND cuenta_id = %s
+            """, (negocio_id, origen_id)).fetchall()
+
+            cant_saldos_act = 0
+            for s in rows_saldos:
+                # Comprobar si ya existe fila para cuenta destino
+                existente = conn.execute("""
+                    SELECT id FROM saldo_por_documentos 
+                    WHERE negocio_id = %s AND cuenta_id = %s AND tercero_id = %s 
+                      AND COALESCE(tipo_documento_id, 0) = COALESCE(%s, 0)
+                      AND LOWER(TRIM(numero_documento)) = LOWER(TRIM(%s))
+                """, (negocio_id, destino_id, s['tercero_id'], s['tipo_documento_id'], s['numero_documento'])).fetchone()
+
+                if existente:
+                    conn.execute("""
+                        UPDATE saldo_por_documentos 
+                        SET saldo = saldo + %s, monto_original = monto_original + %s, updated_at = NOW()
+                        WHERE id = %s
+                    """, (s['saldo'], s['monto_original'], existente['id']))
+                    conn.execute("DELETE FROM saldo_por_documentos WHERE id = %s", (s['id'],))
+                else:
+                    conn.execute("UPDATE saldo_por_documentos SET cuenta_id = %s, updated_at = NOW() WHERE id = %s", (destino_id, s['id']))
+                cant_saldos_act += 1
+
+            log_afectados.append({'tabla': 'saldo_por_documentos', 'significado': 'Cartera por Documento', 'afectados': cant_saldos_act})
+
+            # 3. grupos_inventario
+            cur = conn.execute("""
+                UPDATE grupos_inventario 
+                SET cuenta_inve_id = CASE WHEN cuenta_inve_id = %s THEN %s ELSE cuenta_inve_id END,
+                    cuenta_cos_id  = CASE WHEN cuenta_cos_id = %s THEN %s ELSE cuenta_cos_id END,
+                    cuenta_ingre_id = CASE WHEN cuenta_ingre_id = %s THEN %s ELSE cuenta_ingre_id END,
+                    cuenta_ajuste_favor_id = CASE WHEN cuenta_ajuste_favor_id = %s THEN %s ELSE cuenta_ajuste_favor_id END,
+                    cuenta_ajuste_contra_id = CASE WHEN cuenta_ajuste_contra_id = %s THEN %s ELSE cuenta_ajuste_contra_id END
+                WHERE negocio_id = %s AND (
+                    cuenta_inve_id = %s OR cuenta_cos_id = %s OR cuenta_ingre_id = %s 
+                    OR cuenta_ajuste_favor_id = %s OR cuenta_ajuste_contra_id = %s
+                )
+            """, (origen_id, destino_id, origen_id, destino_id, origen_id, destino_id,
+                  origen_id, destino_id, origen_id, destino_id, negocio_id,
+                  origen_id, origen_id, origen_id, origen_id, origen_id))
+            log_afectados.append({'tabla': 'grupos_inventario', 'significado': 'Configuración de Grupos', 'afectados': cur.rowcount})
+
+            # 4. parametros_metodos_pago_negocio
+            cur = conn.execute("""
+                UPDATE parametros_metodos_pago_negocio 
+                SET cuenta_id = CASE WHEN cuenta_id = %s THEN %s ELSE cuenta_id END,
+                    cuenta_gastos_id = CASE WHEN cuenta_gastos_id = %s THEN %s ELSE cuenta_gastos_id END,
+                    cuenta_pago_id = CASE WHEN cuenta_pago_id = %s THEN %s ELSE cuenta_pago_id END,
+                    cuenta_pago_saldos_id = CASE WHEN cuenta_pago_saldos_id = %s THEN %s ELSE cuenta_pago_saldos_id END,
+                    cuenta_recaudo_id = CASE WHEN cuenta_recaudo_id = %s THEN %s ELSE cuenta_recaudo_id END,
+                    cuenta_recaudo_saldos_id = CASE WHEN cuenta_recaudo_saldos_id = %s THEN %s ELSE cuenta_recaudo_saldos_id END
+                WHERE negocio_id = %s AND (
+                    cuenta_id = %s OR cuenta_gastos_id = %s OR cuenta_pago_id = %s 
+                    OR cuenta_pago_saldos_id = %s OR cuenta_recaudo_id = %s OR cuenta_recaudo_saldos_id = %s
+                )
+            """, (origen_id, destino_id, origen_id, destino_id, origen_id, destino_id,
+                  origen_id, destino_id, origen_id, destino_id, origen_id, destino_id,
+                  negocio_id, origen_id, origen_id, origen_id, origen_id, origen_id, origen_id))
+            log_afectados.append({'tabla': 'parametros_metodos_pago_negocio', 'significado': 'Métodos de Pago POS', 'afectados': cur.rowcount})
+
+            # 5. parametros_lineas_contables
+            cur = conn.execute("""
+                UPDATE parametros_lineas_contables 
+                SET cuenta_puc_id = %s 
+                WHERE cuenta_puc_id = %s AND parametro_id IN (
+                    SELECT id FROM parametros_contables_negocio WHERE negocio_id = %s
+                )
+            """, (destino_id, origen_id, negocio_id))
+            log_afectados.append({'tabla': 'parametros_lineas_contables', 'significado': 'Plantillas Contables', 'afectados': cur.rowcount})
+
+            # 6. programaciones_contables (Actualizar cuenta_debito y cuenta_credito en variables_h)
+            cur_progs = conn.execute("""
+                UPDATE programaciones_contables
+                SET variables_h = regexp_replace(
+                    regexp_replace(variables_h::text, %s, %s, 'g'),
+                    %s, %s, 'g'
+                )::jsonb
+                WHERE negocio_id = %s AND (
+                    variables_h::text LIKE %s OR variables_h::text LIKE %s
+                )
+            """, (f'"cuenta_debito": "{o_row["codigo"]}"', f'"cuenta_debito": "{d_row["codigo"]}"',
+                  f'"cuenta_credito": "{o_row["codigo"]}"', f'"cuenta_credito": "{d_row["codigo"]}"',
+                  negocio_id,
+                  f'%"cuenta_debito": "{o_row["codigo"]}"%', f'%"cuenta_credito": "{o_row["codigo"]}"%'))
+            log_afectados.append({'tabla': 'programaciones_contables', 'significado': 'Amortizaciones y Gastos Fijos', 'afectados': cur_progs.rowcount})
+
+            # Eliminar origen si solicitado
+            if eliminar_origen:
+                conn.execute("UPDATE cuentas_puc SET codigo_padre = %s WHERE codigo_padre = %s", (d_row['codigo'], o_row['codigo']))
+                conn.execute("DELETE FROM cuentas_puc WHERE id = %s", (origen_id,))
+                entidad_eliminada = True
+
+        elif tipo == 'terceros':
+            o_row = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (origen_id,)).fetchone()
+            d_row = conn.execute("SELECT id, nombre FROM terceros WHERE id = %s", (destino_id,)).fetchone()
+            if not o_row or not d_row:
+                return jsonify({'ok': False, 'error': 'Tercero origen o destino no encontrado'}), 404
+
+            # 1. movimientos_contables
+            cur = conn.execute("UPDATE movimientos_contables SET tercero_id = %s WHERE negocio_id = %s AND tercero_id = %s", (destino_id, negocio_id, origen_id))
+            log_afectados.append({'tabla': 'movimientos_contables', 'significado': 'Historial Contable', 'afectados': cur.rowcount})
+
+            # 2. saldo_por_documentos (unificando con seguridad de índice único)
+            rows_saldos = conn.execute("SELECT id, cuenta_id, tipo_documento_id, numero_documento, saldo, monto_original FROM saldo_por_documentos WHERE negocio_id = %s AND tercero_id = %s", (negocio_id, origen_id)).fetchall()
+            cant_saldos = 0
+            for s in rows_saldos:
+                existente = conn.execute("""
+                    SELECT id FROM saldo_por_documentos 
+                    WHERE negocio_id = %s AND tercero_id = %s AND cuenta_id = %s 
+                      AND COALESCE(tipo_documento_id, 0) = COALESCE(%s, 0)
+                      AND LOWER(TRIM(numero_documento)) = LOWER(TRIM(%s))
+                """, (negocio_id, destino_id, s['cuenta_id'], s['tipo_documento_id'], s['numero_documento'])).fetchone()
+                if existente:
+                    conn.execute("""
+                        UPDATE saldo_por_documentos 
+                        SET saldo = saldo + %s, monto_original = monto_original + %s, updated_at = NOW()
+                        WHERE id = %s
+                    """, (s['saldo'], s['monto_original'], existente['id']))
+                    conn.execute("DELETE FROM saldo_por_documentos WHERE id = %s", (s['id'],))
+                else:
+                    conn.execute("UPDATE saldo_por_documentos SET tercero_id = %s, updated_at = NOW() WHERE id = %s", (destino_id, s['id']))
+                cant_saldos += 1
+            log_afectados.append({'tabla': 'saldo_por_documentos', 'significado': 'Cartera Comercial', 'afectados': cant_saldos})
+
+            # 3. movimientos_inventario
+            cur = conn.execute("UPDATE movimientos_inventario SET proveedor_id = %s, proveedor_nombre = %s WHERE negocio_id = %s AND proveedor_id = %s", (destino_id, d_row['nombre'], negocio_id, origen_id))
+            log_afectados.append({'tabla': 'movimientos_inventario', 'significado': 'Facturas de Compra', 'afectados': cur.rowcount})
+
+            # 4. pedidos y pedidos_tienda
+            cant_pedidos = 0
+            if _check_table_has_column(conn, 'pedidos', 'cliente_id'):
+                cur1 = conn.execute("UPDATE pedidos SET cliente_id = %s WHERE negocio_id = %s AND cliente_id = %s", (destino_id, negocio_id, origen_id))
+                cur2 = conn.execute("UPDATE pedidos SET id_tercero_cajero = %s WHERE negocio_id = %s AND id_tercero_cajero = %s", (destino_id, negocio_id, origen_id))
+                cant_pedidos += cur1.rowcount + cur2.rowcount
+            if _check_table_has_column(conn, 'pedidos_tienda', 'cliente_id'):
+                cur1 = conn.execute("UPDATE pedidos_tienda SET cliente_id = %s WHERE negocio_id = %s AND cliente_id = %s", (destino_id, negocio_id, origen_id))
+                cur2 = conn.execute("UPDATE pedidos_tienda SET id_tercero_cajero = %s WHERE negocio_id = %s AND id_tercero_cajero = %s", (destino_id, negocio_id, origen_id))
+                cant_pedidos += cur1.rowcount + cur2.rowcount
+            log_afectados.append({'tabla': 'pedidos / POS', 'significado': 'Ventas y Comandas', 'afectados': cant_pedidos})
+
+            # 5. cotizaciones
+            cant_cot = 0
+            if _check_table_has_column(conn, 'cotizaciones_tienda', 'cliente_id'):
+                c1 = conn.execute("UPDATE cotizaciones_tienda SET cliente_id = %s WHERE negocio_id = %s AND cliente_id = %s", (destino_id, negocio_id, origen_id))
+                cant_cot += c1.rowcount
+            if _check_table_has_column(conn, 'cotizaciones_compras', 'tercero_id'):
+                c2 = conn.execute("UPDATE cotizaciones_compras SET tercero_id = %s WHERE negocio_id = %s AND tercero_id = %s", (destino_id, negocio_id, origen_id))
+                cant_cot += c2.rowcount
+            log_afectados.append({'tabla': 'cotizaciones', 'significado': 'Cotizaciones Ventas/Compras', 'afectados': cant_cot})
+
+            # 6. tarjeta_estandar
+            cur = conn.execute("UPDATE tarjeta_estandar SET tercero_id = %s WHERE tercero_id = %s", (destino_id, origen_id))
+            log_afectados.append({'tabla': 'tarjeta_estandar', 'significado': 'Fichas de Costo / Proveedor', 'afectados': cur.rowcount})
+
+            # Tablas satélites de terceros si existen
+            for sat in ['terceros_telefonos', 'terceros_direcciones', 'terceros_negocios', 'contactos', 'tienda_cajeros']:
+                if _check_table_has_column(conn, sat, 'tercero_id'):
+                    try:
+                        conn.execute(f"UPDATE {sat} SET tercero_id = %s WHERE tercero_id = %s", (destino_id, origen_id))
+                    except Exception: pass
+
+            if eliminar_origen:
+                conn.execute("DELETE FROM terceros WHERE id = %s", (origen_id,))
+                entidad_eliminada = True
+
+        elif tipo == 'productos':
+            o_row = conn.execute("SELECT id, nombre FROM productos WHERE id = %s AND negocio_id = %s", (origen_id, negocio_id)).fetchone()
+            d_row = conn.execute("SELECT id, nombre FROM productos WHERE id = %s AND negocio_id = %s", (destino_id, negocio_id)).fetchone()
+            if not o_row or not d_row:
+                return jsonify({'ok': False, 'error': 'Producto origen o destino no encontrado'}), 404
+
+            # 1. movimientos_inventario (producto_id)
+            cur1 = conn.execute("UPDATE movimientos_inventario SET producto_id = %s WHERE negocio_id = %s AND producto_id = %s", (destino_id, negocio_id, origen_id))
+            # 2. movimientos_inventario (producto_padre_id)
+            cur2 = conn.execute("UPDATE movimientos_inventario SET producto_padre_id = %s WHERE negocio_id = %s AND producto_padre_id = %s", (destino_id, negocio_id, origen_id))
+            log_afectados.append({'tabla': 'movimientos_inventario', 'significado': 'Kardex e Insumos Elaborados', 'afectados': cur1.rowcount + cur2.rowcount})
+
+            # 3. pedido_items / items_pedido_tienda
+            cant_pitems = 0
+            if _check_table_has_column(conn, 'pedido_items', 'producto_id'):
+                c1 = conn.execute("""
+                    UPDATE pedido_items SET producto_id = %s 
+                    WHERE producto_id = %s AND pedido_id IN (SELECT id FROM pedidos WHERE negocio_id = %s)
+                """, (destino_id, origen_id, negocio_id))
+                cant_pitems += c1.rowcount
+            if _check_table_has_column(conn, 'items_pedido_tienda', 'producto_id'):
+                c2 = conn.execute("""
+                    UPDATE items_pedido_tienda SET producto_id = %s 
+                    WHERE producto_id = %s AND pedido_id IN (SELECT id FROM pedidos_tienda WHERE negocio_id = %s)
+                """, (destino_id, origen_id, negocio_id))
+                cant_pitems += c2.rowcount
+            log_afectados.append({'tabla': 'pedido_items / ventas', 'significado': 'Líneas de Venta', 'afectados': cant_pitems})
+
+            # 4. tarjeta_estandar
+            cur_bom1 = conn.execute("UPDATE tarjeta_estandar SET producto_id = %s WHERE producto_id = %s", (destino_id, origen_id))
+            cur_bom2 = conn.execute("UPDATE tarjeta_estandar SET componente_id = %s WHERE componente_id = %s", (destino_id, origen_id))
+            log_afectados.append({'tabla': 'tarjeta_estandar', 'significado': 'Recetas (Platos e Ingredientes)', 'afectados': cur_bom1.rowcount + cur_bom2.rowcount})
+
+            # 5. movimientos_contables
+            cur_mc = conn.execute("""
+                UPDATE movimientos_contables 
+                SET producto_id = CASE WHEN producto_id = %s THEN %s ELSE producto_id END,
+                    producto_padre_id = CASE WHEN producto_padre_id = %s THEN %s ELSE producto_padre_id END
+                WHERE negocio_id = %s AND (producto_id = %s OR producto_padre_id = %s)
+            """, (origen_id, destino_id, origen_id, destino_id, negocio_id, origen_id, origen_id))
+            log_afectados.append({'tabla': 'movimientos_contables', 'significado': 'Asientos de Costo de Venta', 'afectados': cur_mc.rowcount})
+
+            # 6. saldos_inventario (Limpiar saldo origen antes del recosteo)
+            conn.execute("DELETE FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s", (negocio_id, origen_id))
+
+            # Ejecutar recosteo integral del producto destino
+            try:
+                from .inventarios import _recostear_producto
+                _recostear_producto(conn, negocio_id, destino_id, bodega=None)
+                log_afectados.append({'tabla': 'saldos_inventario (Recosteo)', 'significado': 'Recálculo Cronológico de Kardex', 'afectados': 1})
+            except Exception as e_rec:
+                log_afectados.append({'tabla': 'saldos_inventario (Recosteo)', 'significado': f'Advertencia: {str(e_rec)}', 'afectados': 0})
+
+            if eliminar_origen:
+                conn.execute("DELETE FROM productos WHERE id = %s AND negocio_id = %s", (origen_id, negocio_id))
+                entidad_eliminada = True
+
+        elif tipo == 'centros_utilidad':
+            o_row = conn.execute("SELECT id, codigo, nombre FROM centros_utilidad WHERE id = %s AND negocio_id = %s", (origen_id, negocio_id)).fetchone()
+            d_row = conn.execute("SELECT id, codigo, nombre FROM centros_utilidad WHERE id = %s AND negocio_id = %s", (destino_id, negocio_id)).fetchone()
+            if not o_row or not d_row:
+                return jsonify({'ok': False, 'error': 'Centro de utilidad origen o destino no encontrado'}), 404
+
+            # 1. movimientos_inventario (bodega)
+            cur_mbod = conn.execute("UPDATE movimientos_inventario SET bodega = %s WHERE negocio_id = %s AND bodega = %s", (destino_id, negocio_id, origen_id))
+            log_afectados.append({'tabla': 'movimientos_inventario', 'significado': 'Kardex de Bodega', 'afectados': cur_mbod.rowcount})
+
+            # 2. saldos_inventario (Fusionar stocks por producto)
+            saldos_o = conn.execute("SELECT producto_id, stock, costo_und, valor_existencia FROM saldos_inventario WHERE negocio_id = %s AND bodega = %s", (negocio_id, origen_id)).fetchall()
+            cant_sbod = 0
+            for s in saldos_o:
+                s_dest = conn.execute("SELECT id, stock, valor_existencia FROM saldos_inventario WHERE negocio_id = %s AND bodega = %s AND producto_id = %s", (negocio_id, destino_id, s['producto_id'])).fetchone()
+                if s_dest:
+                    stock_nuevo = float(s_dest['stock'] or 0) + float(s['stock'] or 0)
+                    valor_nuevo = float(s_dest['valor_existencia'] or 0) + float(s['valor_existencia'] or 0)
+                    costo_nuevo = valor_nuevo / stock_nuevo if stock_nuevo > 0 else 0
+                    conn.execute("UPDATE saldos_inventario SET stock = %s, costo_und = %s, valor_existencia = %s WHERE id = %s", (stock_nuevo, costo_nuevo, valor_nuevo, s_dest['id']))
+                else:
+                    conn.execute("INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock, costo_und, valor_existencia) VALUES (%s, %s, %s, %s, %s, %s)",
+                                 (negocio_id, s['producto_id'], destino_id, s['stock'], s['costo_und'], s['valor_existencia']))
+                cant_sbod += 1
+            conn.execute("DELETE FROM saldos_inventario WHERE negocio_id = %s AND bodega = %s", (negocio_id, origen_id))
+            log_afectados.append({'tabla': 'saldos_inventario', 'significado': 'Existencias Físicas Consolidadas', 'afectados': cant_sbod})
+
+            # 3. movimientos_contables
+            cur_mcu = conn.execute("UPDATE movimientos_contables SET centro_utilidad_id = %s WHERE negocio_id = %s AND centro_utilidad_id = %s", (destino_id, negocio_id, origen_id))
+            log_afectados.append({'tabla': 'movimientos_contables', 'significado': 'Asientos por Centro de Utilidad', 'afectados': cur_mcu.rowcount})
+
+            # 4. pedidos y comprobantes
+            cur_pcu = conn.execute("UPDATE pedidos SET centro_utilidad_id = %s WHERE negocio_id = %s AND centro_utilidad_id = %s", (destino_id, negocio_id, origen_id))
+            if _check_table_has_column(conn, 'comprobantes_contables', 'centro_utilidad_id'):
+                conn.execute("UPDATE comprobantes_contables SET centro_utilidad_id = %s WHERE negocio_id = %s AND centro_utilidad_id = %s", (destino_id, negocio_id, origen_id))
+            log_afectados.append({'tabla': 'pedidos / comprobantes', 'significado': 'Ventas y Comprobantes de Sucursal', 'afectados': cur_pcu.rowcount})
+
+            # 5. traslados_inventario
+            cur_tr1 = conn.execute("UPDATE traslados_inventario SET bodega_origen_id = %s WHERE bodega_origen_id = %s", (destino_id, origen_id))
+            cur_tr2 = conn.execute("UPDATE traslados_inventario SET bodega_destino_id = %s WHERE bodega_destino_id = %s", (destino_id, origen_id))
+            log_afectados.append({'tabla': 'traslados_inventario', 'significado': 'Guías de Traslado', 'afectados': cur_tr1.rowcount + cur_tr2.rowcount})
+
+            if eliminar_origen:
+                conn.execute("DELETE FROM centros_utilidad WHERE id = %s AND negocio_id = %s", (origen_id, negocio_id))
+                entidad_eliminada = True
+        else:
+            return jsonify({'ok': False, 'error': 'Tipo no reconocido'}), 400
+
+        conn.commit()
+
+        total_actualizados = sum(x['afectados'] for x in log_afectados)
+        return jsonify({
+            'ok': True,
+            'tipo': tipo,
+            'total_actualizados': total_actualizados,
+            'tablas_afectadas': log_afectados,
+            'origen_eliminado': entidad_eliminada,
+            'mensaje': f'Reclasificación de {tipo} ejecutada exitosamente. Total registros reubicados: {total_actualizados}.'
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': f'Error en transacción de reclasificación: {str(e)}'}), 500
+    finally:
+        conn.close()
+

@@ -102,6 +102,7 @@
       <button onclick="cambiarTab('progs')"  id="tab-progs" data-tab-id="progs" class="tab-btn">⏱️ Programaciones</button>
       <button onclick="cambiarTab('consulta')" id="tab-consulta" data-tab-id="consulta" class="tab-btn">🔍 Consulta Mov.</button>
       <button onclick="cambiarTab('balance')" id="tab-balance" data-tab-id="balance" class="tab-btn">⚖️ Balance y Cierre</button>
+      <button onclick="cambiarTab('reclasificaciones')" id="tab-reclasificaciones" data-tab-id="reclasificaciones" class="tab-btn font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200">🔀 Reclasificaciones</button>
       <a href="/admin/inventario-fisico/{{ negocio_id }}" id="tab-inv-fisico" data-tab-id="inv_fisico" class="tab-btn">📋 Inv. Físico</a>
       <a href="/admin/saldos-documentos/{{ negocio_id }}" id="tab-saldos-doc" data-tab-id="saldos_doc" class="tab-btn">💵 Saldos x Doc</a>
       <a href="/admin/conciliacion-disponible/{{ negocio_id }}" id="tab-concil-disp" data-tab-id="concil_disp" class="tab-btn bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold border border-emerald-200">⚖️ Conciliar Disponible</a>
@@ -885,6 +886,208 @@
       </div>
     </div>
 
+    <!-- ═══ TAB: RECLASIFICACIONES ═══ -->
+    <div id="panel-reclasificaciones" class="hidden p-4 md:p-6 space-y-6">
+      
+      <!-- Encabezado compacto y Subpestañas / Píldoras -->
+      <div class="bg-gradient-to-r from-violet-950 via-indigo-900 to-purple-950 text-white rounded-2xl p-4 shadow-md flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl md:text-3xl">🔀</span>
+          <h2 class="text-base md:text-xl font-black tracking-tight flex items-center gap-2">
+            Centro de Reclasificaciones
+            <span class="px-2.5 py-0.5 rounded-full bg-violet-800/80 border border-violet-600 text-xs font-bold text-violet-200 hidden sm:flex items-center gap-1.5 shadow-2xs">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Modo Atómico
+            </span>
+          </h2>
+        </div>
+
+        <!-- Subpestañas / Píldoras (Grandes y Cómodas) -->
+        <div class="flex items-center gap-2 overflow-x-auto select-none">
+          <button type="button" onclick="cambiarSubtabReclasificacion('cuentas')" id="subtab-reclas-cuentas"
+                  class="px-4 py-2.5 rounded-xl text-sm md:text-base font-black transition flex items-center gap-2 bg-white text-violet-950 shadow-md">
+            <span>📋</span> Cuentas Contables
+          </button>
+          <button type="button" onclick="cambiarSubtabReclasificacion('terceros')" id="subtab-reclas-terceros"
+                  class="px-4 py-2.5 rounded-xl text-sm md:text-base font-bold transition flex items-center gap-2 text-violet-200 hover:text-white hover:bg-violet-800/60">
+            <span>👤</span> Terceros
+          </button>
+          <button type="button" onclick="cambiarSubtabReclasificacion('productos')" id="subtab-reclas-productos"
+                  class="px-4 py-2.5 rounded-xl text-sm md:text-base font-bold transition flex items-center gap-2 text-violet-200 hover:text-white hover:bg-violet-800/60">
+            <span>📦</span> Productos
+          </button>
+          <button type="button" onclick="cambiarSubtabReclasificacion('centros_utilidad')" id="subtab-reclas-centros_utilidad"
+                  class="px-4 py-2.5 rounded-xl text-sm md:text-base font-bold transition flex items-center gap-2 text-violet-200 hover:text-white hover:bg-violet-800/60">
+            <span>🏢</span> Centros / Bodegas
+          </button>
+        </div>
+      </div>
+
+      <!-- Banner explicativo dinámico 1 sola línea compacta -->
+      <div id="reclas-banner-explicativo" class="px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-950 flex items-center justify-between gap-3 text-sm md:text-base font-medium shadow-2xs">
+        <div class="flex items-center gap-2 truncate">
+          <span class="text-base font-bold shrink-0">ℹ️</span>
+          <span class="font-black text-amber-950 shrink-0" id="reclas-banner-titulo">Cuentas Contables (PUC):</span>
+          <span class="text-amber-900 truncate" id="reclas-banner-descripcion">Traslada todo el movimiento contable manteniendo intactos partida doble, fechas y comprobantes.</span>
+        </div>
+        <span class="text-xs font-mono font-black text-amber-800 bg-amber-200/80 px-2.5 py-0.5 rounded-md shrink-0">100% Seguro</span>
+      </div>
+
+      <!-- Formulario de Selección Origen -> Destino con Tipografía Grande (200%) -->
+      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-6">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          
+          <!-- Selector Origen -->
+          <div class="lg:col-span-5 relative">
+            <div class="flex items-center justify-between mb-2">
+              <label id="lbl-reclas-origen" class="block text-sm md:text-base font-black text-gray-900 uppercase tracking-wide">
+                Cuenta Origen (Se vaciará)
+              </label>
+              <span class="text-xs text-violet-600 font-mono font-bold bg-violet-50 px-2 py-0.5 rounded">Teclado: ↑ ↓ Enter</span>
+            </div>
+            <div class="relative">
+              <input type="text" id="inp-reclas-origen-txt"
+                     placeholder="Escribe código o nombre para buscar..."
+                     autocomplete="off"
+                     class="w-full px-4 py-3.5 text-base md:text-lg rounded-xl border-2 border-gray-300 focus:border-violet-600 focus:ring-4 focus:ring-violet-100 transition font-bold text-gray-900 placeholder:text-gray-400 placeholder:font-normal pr-12 shadow-2xs"
+                     oninput="onInputReclasAutocomplete('origen', this)"
+                     onkeydown="onKeydownReclasAutocomplete('origen', event)"
+                     onfocus="onFocusReclasAutocomplete('origen', this)">
+              <button type="button" onclick="limpiarReclasInput('origen')" class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 font-black text-xl cursor-pointer p-1">
+                ✕
+              </button>
+            </div>
+            <input type="hidden" id="inp-reclas-origen-id">
+            <!-- Dropdown flotante grande y claro -->
+            <div id="drop-reclas-origen" class="absolute left-0 right-0 top-full mt-1.5 bg-white border-2 border-violet-200 rounded-2xl shadow-2xl z-50 max-h-80 overflow-y-auto hidden divide-y divide-gray-100 text-sm md:text-base"></div>
+          </div>
+
+          <!-- Flecha conectora central -->
+          <div class="lg:col-span-2 flex flex-col items-center justify-center py-2 text-center">
+            <div class="w-12 h-12 rounded-2xl bg-violet-600 text-white flex items-center justify-center font-black text-2xl shadow-md border-2 border-violet-500">
+              ➜
+            </div>
+            <span class="text-xs font-black text-violet-900 mt-1.5 uppercase tracking-wider">Trasladar a</span>
+          </div>
+
+          <!-- Selector Destino -->
+          <div class="lg:col-span-5 relative">
+            <div class="flex items-center justify-between mb-2">
+              <label id="lbl-reclas-destino" class="block text-sm md:text-base font-black text-gray-900 uppercase tracking-wide">
+                Cuenta Destino (Recibirá los saldos)
+              </label>
+              <span class="text-xs text-violet-600 font-mono font-bold bg-violet-50 px-2 py-0.5 rounded">Teclado: ↑ ↓ Enter</span>
+            </div>
+            <div class="relative">
+              <input type="text" id="inp-reclas-destino-txt"
+                     placeholder="Escribe código o nombre para buscar..."
+                     autocomplete="off"
+                     class="w-full px-4 py-3.5 text-base md:text-lg rounded-xl border-2 border-gray-300 focus:border-violet-600 focus:ring-4 focus:ring-violet-100 transition font-bold text-gray-900 placeholder:text-gray-400 placeholder:font-normal pr-12 shadow-2xs"
+                     oninput="onInputReclasAutocomplete('destino', this)"
+                     onkeydown="onKeydownReclasAutocomplete('destino', event)"
+                     onfocus="onFocusReclasAutocomplete('destino', this)">
+              <button type="button" onclick="limpiarReclasInput('destino')" class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 font-black text-xl cursor-pointer p-1">
+                ✕
+              </button>
+            </div>
+            <input type="hidden" id="inp-reclas-destino-id">
+            <!-- Dropdown flotante grande y claro -->
+            <div id="drop-reclas-destino" class="absolute left-0 right-0 top-full mt-1.5 bg-white border-2 border-violet-200 rounded-2xl shadow-2xl z-50 max-h-80 overflow-y-auto hidden divide-y divide-gray-100 text-sm md:text-base"></div>
+          </div>
+
+        </div>
+
+        <!-- Opción de eliminar entidad origen y Botón de Acción -->
+        <div class="pt-5 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <label class="inline-flex items-center gap-3 cursor-pointer select-none">
+            <input type="checkbox" id="chk-reclas-eliminar-origen" class="w-5 h-5 rounded text-rose-600 focus:ring-rose-500 border-gray-300">
+            <span class="text-sm md:text-base font-bold text-gray-800">
+              🗑️ Eliminar la entidad origen permanentemente tras vaciar todos sus registros
+            </span>
+          </label>
+
+          <button type="button" id="btn-ejecutar-reclasificacion" onclick="solicitarEjecutarReclasificacion()"
+                  disabled
+                  class="px-8 py-3.5 rounded-xl font-black text-sm md:text-base text-white bg-gray-300 cursor-not-allowed transition flex items-center justify-center gap-2 shadow-xs shrink-0">
+            <span>⚡</span> Ejecutar Reclasificación
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Previa de Impacto y Tablas Afectadas (SIEMPRE VISIBLE Y PROMINENTE) -->
+      <div id="reclas-panel-previa" class="bg-white rounded-2xl border-2 border-violet-200 shadow-sm p-6 space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-gray-150">
+          <div>
+            <h3 class="text-base md:text-xl font-black text-violet-950 flex items-center gap-2">
+              <span>📊</span> Log Explicativo y Previa de Tablas del Sistema
+            </h3>
+            <p class="text-xs md:text-sm text-gray-600 mt-1">
+              Escaneo dinámico en vivo sobre todas las tablas de producción que serán auditadas y reasignadas.
+            </p>
+          </div>
+          <div class="px-4 py-2 bg-violet-50 text-violet-900 border-2 border-violet-300 rounded-xl text-sm md:text-base font-black font-mono flex items-center gap-2 shadow-2xs">
+            <span>Total Registros a Reubicar:</span>
+            <span id="reclas-total-impacto" class="text-violet-950 font-black text-lg md:text-2xl">0</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto border-2 border-gray-200 rounded-xl shadow-2xs">
+          <table class="w-full text-left text-sm md:text-base">
+            <thead class="bg-violet-900 text-white uppercase font-black text-xs md:text-sm tracking-wider">
+              <tr>
+                <th class="px-4 py-3.5">Tabla del Sistema</th>
+                <th class="px-4 py-3.5">¿Qué Representa en el Negocio?</th>
+                <th class="px-4 py-3.5 text-center">Registros Detectados</th>
+                <th class="px-4 py-3.5">Impacto Operativo / Contable</th>
+              </tr>
+            </thead>
+            <tbody id="reclas-previa-tbody" class="divide-y divide-gray-150 text-gray-800 font-medium">
+              <!-- Renderizado dinámico -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Log de Resultados Auditados (Posterior a la Ejecución) -->
+      <div id="reclas-panel-resultado" class="bg-emerald-50/60 rounded-2xl border border-emerald-200 shadow-xs p-5 space-y-4 hidden">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-2.5">
+            <span class="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">✓</span>
+            <div>
+              <h3 class="text-sm md:text-base font-black text-emerald-950">
+                Reclasificación Ejecutada y Auditada Exitosamente
+              </h3>
+              <p class="text-xs text-emerald-800" id="reclas-resultado-mensaje">
+                Todos los registros fueron trasladados sin comprometer la integridad ni la partida doble.
+              </p>
+            </div>
+          </div>
+          <div class="px-3 py-1 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-lg text-xs font-mono font-bold">
+            Total Actualizados: <span id="reclas-res-total-afectados" class="font-black">0</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto border border-emerald-200 rounded-xl bg-white">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-emerald-50 text-emerald-900 uppercase font-semibold text-[10px] border-b border-emerald-200">
+              <tr>
+                <th class="px-3 py-2.5">Tabla Afectada</th>
+                <th class="px-3 py-2.5">Descripción de la Operación</th>
+                <th class="px-3 py-2.5 text-center">Registros Reubicados</th>
+                <th class="px-3 py-2.5 text-center">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="reclas-resultado-tbody" class="divide-y divide-gray-100 text-gray-700">
+              <!-- Renderizado de resultados -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
   </div>
 
 <!-- Modal: nueva cuenta PUC -->
@@ -964,7 +1167,17 @@
 <script>
 const NEGOCIO_ID = {{ negocio_id }};
 const TAB_INICIAL_SERVER = {{ (tab_inicial or '') | tojson }};
-const TABS = ['puc','tipos','params','pago_metodos','desembolsos','amortizaciones','estado_resultados','punto_equilibrio','grupos','progs','manual','comps', 'consulta', 'balance'];
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+const TABS = ['puc','tipos','params','pago_metodos','desembolsos','amortizaciones','estado_resultados','punto_equilibrio','grupos','progs','manual','comps', 'consulta', 'balance', 'reclasificaciones'];
 let tiposDocs = [];
 let variablesModulo = [];
 let paramActivo = null;
@@ -995,10 +1208,10 @@ function cambiarTab(t) {
   const cleanTabName = t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ');
   document.title = `${cleanTabName} — Contabilidad`;
 
-  // Dynamic width control for Consulta / Balance / Estado de Resultados / Punto de Equilibrio tabs
+  // Dynamic width control for Consulta / Balance / Estado de Resultados / Punto de Equilibrio / Reclasificaciones tabs
   const container = document.getElementById('main-container');
   if (container) {
-    if (t === 'consulta' || t === 'balance' || t === 'estado_resultados' || t === 'desembolsos' || t === 'punto_equilibrio' || t === 'amortizaciones') {
+    if (t === 'consulta' || t === 'balance' || t === 'estado_resultados' || t === 'desembolsos' || t === 'punto_equilibrio' || t === 'amortizaciones' || t === 'reclasificaciones') {
       container.classList.remove('max-w-5xl');
       container.classList.add('w-full', 'max-w-none', 'px-4');
     } else {
@@ -1008,6 +1221,7 @@ function cambiarTab(t) {
   }
 
   if (t === 'puc')               buscarPUC();
+  if (t === 'reclasificaciones') inicializarReclasificaciones();
   if (t === 'pago_metodos')      cargarPagoMetodos();
   if (t === 'tipos')             cargarTiposDocs();
   if (t === 'params')            { cargarTiposDocs(); cargarParametros(); }
@@ -3751,8 +3965,558 @@ function restablecerOrdenTabs() {
   setTimeout(() => window.location.reload(), 300);
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// ── CONTROLADOR DE RECLASIFICACIONES (Cuentas, Terceros, Productos, Centros) 
+// ═════════════════════════════════════════════════════════════════════════════
 
-// Inicializar centros de utilidad y Drag & Drop de pestañas
+let _reclasSubtabActiva = 'cuentas';
+let _reclasTimerAC = null;
+let _reclasItemsAC = { origen: [], destino: [] };
+let _reclasFocusIdx = { origen: -1, destino: -1 };
+let _reclasPreviaCache = null;
+
+const RECLAS_INFO_TABS = {
+  cuentas: {
+    titulo: 'Cuentas Contables (PUC):',
+    descripcion: 'Traslada todo el movimiento contable manteniendo intactos partida doble, fechas y comprobantes.',
+    placeholder: 'Escribe código o nombre de cuenta...',
+    lblOrigen: 'Cuenta Origen (Se vaciará)',
+    lblDestino: 'Cuenta Destino (Recibirá los saldos)'
+  },
+  terceros: {
+    titulo: 'Terceros (Clientes / Proveedores):',
+    descripcion: 'Unifica dos personas naturales o jurídicas. Todo el historial de compras, ventas y cartera quedará unificado.',
+    placeholder: 'Escribe nombre, razón social o teléfono...',
+    lblOrigen: 'Tercero Origen (Se unificará)',
+    lblDestino: 'Tercero Destino (Recibirá el historial)'
+  },
+  productos: {
+    titulo: 'Productos (Kardex e Insumos):',
+    descripcion: 'Fusiona dos referencias. Su Kardex y recetas se traspasan, ejecutando recosteo cronológico automático.',
+    placeholder: 'Escribe nombre del producto o referencia...',
+    lblOrigen: 'Producto Origen (Se vaciará)',
+    lblDestino: 'Producto Destino (Recibirá el inventario)'
+  },
+  centros_utilidad: {
+    titulo: 'Centros de Utilidad / Bodegas:',
+    descripcion: 'Consolida una sede o almacén en otro. Inventarios, cajas POS y movimientos se reubican en la sede receptora.',
+    placeholder: 'Escribe nombre o código de la sede...',
+    lblOrigen: 'Sede / Bodega Origen (Se cerrará)',
+    lblDestino: 'Sede / Bodega Destino (Receptora)'
+  }
+};
+
+const RECLAS_TABLAS_DEF = {
+  cuentas: [
+    { tabla: 'movimientos_contables', significado: 'Libro Diario y Asientos Contables', impacto: 'Los débitos y créditos se imputarán a la cuenta destino manteniendo intactos fecha, cuadre y documento.' },
+    { tabla: 'saldo_por_documentos', significado: 'Control de Cartera y Cuentas por Cobrar/Pagar', impacto: 'Las obligaciones y saldos pendientes por documento pasarán a controlarse bajo la cuenta receptora.' },
+    { tabla: 'grupos_inventario', significado: 'Parametrización Contable de Grupos de Inventario', impacto: 'Las reglas de contabilización automática de inventarios empezarán a usar la cuenta destino.' },
+    { tabla: 'parametros_metodos_pago_negocio', significado: 'Cajas y Métodos de Pago POS', impacto: 'Los medios de pago configurados (Efectivo, Nequi, etc.) contabilizarán sus movimientos contra la cuenta destino.' },
+    { tabla: 'parametros_lineas_contables', significado: 'Líneas de Plantillas de Contabilización', impacto: 'Las plantillas de documentos configuradas se actualizarán para usar la nueva cuenta.' },
+    { tabla: 'programaciones_contables', significado: 'Amortizaciones y Gastos Fijos del Punto de Equilibrio', impacto: 'Las amortizaciones activas pasarán a imputar sus cuotas futuras a la cuenta destino.' }
+  ],
+  terceros: [
+    { tabla: 'movimientos_contables', significado: 'Historial Contable con Terceros', impacto: 'Toda la causación contable histórica quedará registrada bajo el tercero receptor unificado.' },
+    { tabla: 'saldo_por_documentos', significado: 'Documentos Pendientes por Cobrar / Pagar', impacto: 'Todas las facturas, cuentas de cobro y obligaciones pendientes se unifican al tercero destino.' },
+    { tabla: 'ventas', significado: 'Facturas de Venta y Clientes', impacto: 'Las ventas históricas quedan asociadas al cliente destino para historial comercial y CRM.' },
+    { tabla: 'compras', significado: 'Facturas de Proveedores y Gastos', impacto: 'Las compras históricas quedan vinculadas al proveedor destino para certificados y retenciones.' },
+    { tabla: 'programaciones_contables', significado: 'Amortizaciones y Contratos Recurrentes', impacto: 'Las cuotas recurrentes de amortización se generarán con el tercero unificado.' }
+  ],
+  productos: [
+    { tabla: 'inventarios_movimientos', significado: 'Kardex y Trazabilidad de Stock', impacto: 'Todo el historial de entradas, salidas y mermas se fusiona y se recostea cronológicamente.' },
+    { tabla: 'recetas_insumos', significado: 'Fórmulas y Recetas de Producción', impacto: 'Las recetas que utilizaban este ingrediente o producto pasarán a usar el insumo destino.' },
+    { tabla: 'saldos_inventario', significado: 'Stock Actual en Bodegas y Sedes', impacto: 'Se consolida el balance de unidades físicas y el costo promedio unitario.' },
+    { tabla: 'ventas_detalles', significado: 'Detalle Histórico de Ventas de Ítem', impacto: 'Los reportes de ventas por producto consolidan el histórico en el ítem unificado.' },
+    { tabla: 'compras_detalles', significado: 'Detalle de Compras e Ingresos de Ítem', impacto: 'El historial de precios de compra pasará al producto receptor.' }
+  ],
+  centros_utilidad: [
+    { tabla: 'movimientos_contables', significado: 'Asientos Contables Imputados a la Sede', impacto: 'Los movimientos contables de la sede se reubican en el centro de utilidad destino.' },
+    { tabla: 'inventarios_movimientos', significado: 'Kardex Físico de Almacén en la Sede', impacto: 'Todos los movimientos de stock del almacén se trasladan a la bodega receptora.' },
+    { tabla: 'saldos_inventario', significado: 'Stock Físico Actual en la Sede', impacto: 'Las existencias físicas de la bodega cerrada se sumarán a la bodega receptora.' },
+    { tabla: 'cajas_pos', significado: 'Cajas Registradoras y Turnos POS', impacto: 'El historial de aperturas, cierres y turnos de caja queda unificado en la sede destino.' },
+    { tabla: 'ventas', significado: 'Ventas Realizadas en la Sucursal', impacto: 'El historial de ventas de la sucursal cerrada se transfiere a la sede receptora.' }
+  ]
+};
+
+function renderPreviaInicial(subtab) {
+  const tbody = document.getElementById('reclas-previa-tbody');
+  const totalImpactoEl = document.getElementById('reclas-total-impacto');
+  if (totalImpactoEl) totalImpactoEl.textContent = '0';
+  if (!tbody) return;
+
+  const tablas = RECLAS_TABLAS_DEF[subtab] || RECLAS_TABLAS_DEF.cuentas;
+  tbody.innerHTML = tablas.map(t => `
+    <tr class="hover:bg-violet-50/50 transition">
+      <td class="px-4 py-3.5 font-mono font-black text-sm md:text-base text-violet-950 align-top">${t.tabla}</td>
+      <td class="px-4 py-3.5 font-bold text-sm md:text-base text-gray-900 align-top">${t.significado}</td>
+      <td class="px-4 py-3.5 text-center align-top">
+        <span class="inline-block px-3 py-1 rounded-xl font-mono font-bold text-xs md:text-sm text-gray-400 bg-gray-100 border border-gray-200">
+          Esperando selección...
+        </span>
+      </td>
+      <td class="px-4 py-3.5 text-gray-600 text-xs md:text-sm font-medium leading-relaxed align-top">${t.impacto}</td>
+    </tr>
+  `).join('');
+}
+
+function inicializarReclasificaciones() {
+  cambiarSubtabReclasificacion(_reclasSubtabActiva);
+}
+
+function cambiarSubtabReclasificacion(subtab) {
+  _reclasSubtabActiva = subtab;
+  
+  // Actualizar estilos de subpestañas
+  ['cuentas', 'terceros', 'productos', 'centros_utilidad'].forEach(st => {
+    const btn = document.getElementById(`subtab-reclas-${st}`);
+    if (btn) {
+      if (st === subtab) {
+        btn.className = 'px-4 py-2.5 rounded-xl text-sm md:text-base font-black transition flex items-center gap-2 bg-white text-violet-950 shadow-md';
+      } else {
+        btn.className = 'px-4 py-2.5 rounded-xl text-sm md:text-base font-bold transition flex items-center gap-2 text-violet-200 hover:text-white hover:bg-violet-800/60';
+      }
+    }
+  });
+
+  // Actualizar textos informativos
+  const info = RECLAS_INFO_TABS[subtab] || RECLAS_INFO_TABS.cuentas;
+  const titEl = document.getElementById('reclas-banner-titulo');
+  const descEl = document.getElementById('reclas-banner-descripcion');
+  const lblO = document.getElementById('lbl-reclas-origen');
+  const lblD = document.getElementById('lbl-reclas-destino');
+  const inpO = document.getElementById('inp-reclas-origen-txt');
+  const inpD = document.getElementById('inp-reclas-destino-txt');
+
+  if (titEl) titEl.textContent = info.titulo;
+  if (descEl) descEl.textContent = info.descripcion;
+  if (lblO) lblO.textContent = info.lblOrigen;
+  if (lblD) lblD.textContent = info.lblDestino;
+  if (inpO) inpO.placeholder = info.placeholder;
+  if (inpD) inpD.placeholder = info.placeholder;
+
+  // Limpiar campos y renderizar previa educativa
+  limpiarReclasInput('origen');
+  limpiarReclasInput('destino');
+  renderPreviaInicial(subtab);
+  const panelRes = document.getElementById('reclas-panel-resultado');
+  if (panelRes) panelRes.classList.add('hidden');
+}
+
+function limpiarReclasInput(tipo) {
+  const inp = document.getElementById(`inp-reclas-${tipo}-txt`);
+  const hid = document.getElementById(`inp-reclas-${tipo}-id`);
+  const drop = document.getElementById(`drop-reclas-${tipo}`);
+  if (inp) inp.value = '';
+  if (hid) hid.value = '';
+  if (drop) { drop.innerHTML = ''; drop.classList.add('hidden'); }
+  _reclasItemsAC[tipo] = [];
+  _reclasFocusIdx[tipo] = -1;
+  evaluarBotonReclasificar();
+}
+
+function onFocusReclasAutocomplete(tipo, el) {
+  buscarEntidadesReclas(tipo, el.value.trim());
+}
+
+function onInputReclasAutocomplete(tipo, el) {
+  const hid = document.getElementById(`inp-reclas-${tipo}-id`);
+  if (hid) hid.value = ''; // Reset ID al escribir
+  evaluarBotonReclasificar();
+
+  clearTimeout(_reclasTimerAC);
+  _reclasTimerAC = setTimeout(() => {
+    buscarEntidadesReclas(tipo, el.value.trim());
+  }, 180);
+}
+
+// ── REGLAS DE TECLADO PARA DROPDOWN AUTOCOMPLETE ──────────────
+function onKeydownReclasAutocomplete(tipo, e) {
+  const drop = document.getElementById(`drop-reclas-${tipo}`);
+  if (drop.classList.contains('hidden')) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      buscarEntidadesReclas(tipo, e.target.value.trim());
+    }
+    return;
+  }
+
+  const items = Array.from(drop.querySelectorAll('.reclas-ac-item'));
+  if (!items.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    let nextIdx = _reclasFocusIdx[tipo] + 1;
+    while (nextIdx < items.length && items[nextIdx].dataset.mov !== 'true') {
+      nextIdx++;
+    }
+    if (nextIdx < items.length) {
+      _reclasFocusIdx[tipo] = nextIdx;
+      resaltarItemReclasAC(items, _reclasFocusIdx[tipo]);
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    let prevIdx = _reclasFocusIdx[tipo] - 1;
+    while (prevIdx >= 0 && items[prevIdx].dataset.mov !== 'true') {
+      prevIdx--;
+    }
+    if (prevIdx >= 0) {
+      _reclasFocusIdx[tipo] = prevIdx;
+      resaltarItemReclasAC(items, _reclasFocusIdx[tipo]);
+    }
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_reclasFocusIdx[tipo] >= 0 && items[_reclasFocusIdx[tipo]] && items[_reclasFocusIdx[tipo]].dataset.mov === 'true') {
+      items[_reclasFocusIdx[tipo]].click();
+    }
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    drop.classList.add('hidden');
+  } else if (e.key === 'Tab') {
+    drop.classList.add('hidden');
+  }
+}
+
+function resaltarItemReclasAC(items, idx) {
+  items.forEach((it, i) => {
+    if (i === idx) {
+      it.classList.add('bg-violet-100', 'text-violet-950', 'font-black');
+      it.scrollIntoView({ block: 'nearest' });
+    } else {
+      it.classList.remove('bg-violet-100', 'text-violet-950', 'font-black');
+    }
+  });
+}
+
+async function buscarEntidadesReclas(tipo, query) {
+  const drop = document.getElementById(`drop-reclas-${tipo}`);
+  if (!drop) return;
+
+  try {
+    let url = '';
+    const st = _reclasSubtabActiva;
+    if (st === 'cuentas') {
+      const modo = /^\d/.test(query) ? 'codigo' : (query ? 'nombre' : '');
+      url = `/api/contabilidad/puc?q=${encodeURIComponent(query)}${modo ? `&modo=${modo}` : ''}`;
+    } else if (st === 'terceros') {
+      url = `/api/inventario/terceros/buscar?q=${encodeURIComponent(query)}`;
+    } else if (st === 'productos') {
+      url = `/api/inventario/${NEGOCIO_ID}/productos`;
+    } else if (st === 'centros_utilidad') {
+      url = `/api/centros_utilidad/${NEGOCIO_ID}`;
+    }
+
+    const r = await fetch(url);
+    const data = await r.json();
+
+    let items = [];
+    if (st === 'cuentas') {
+      items = (data.cuentas || []).map(c => {
+        const esMov = Boolean(c.acepta_movimiento);
+        const nivel = c.nivel || (c.codigo.length <= 1 ? 1 : c.codigo.length <= 2 ? 2 : c.codigo.length <= 4 ? 3 : 4);
+        return {
+          id: c.id,
+          codigo: c.codigo,
+          nombre: c.nombre,
+          nivel: nivel,
+          label: `[${c.codigo}] ${c.nombre}`,
+          sub: c.naturaleza ? `Naturaleza: ${c.naturaleza}` : '',
+          esMovimiento: esMov
+        };
+      });
+    } else if (st === 'terceros') {
+      const arr = Array.isArray(data) ? data : (data.terceros || []);
+      items = arr.map(t => ({
+        id: t.id,
+        label: t.nombre,
+        sub: t.telefono ? `Tel: ${t.telefono}` : (t.direccion || ''),
+        esMovimiento: true
+      }));
+    } else if (st === 'productos') {
+      const prods = (data.productos || []).filter(p => {
+        if (!query) return true;
+        const ql = query.toLowerCase();
+        return (p.nombre || '').toLowerCase().includes(ql) || (p.categoria || '').toLowerCase().includes(ql);
+      });
+      items = prods.slice(0, 40).map(p => ({
+        id: p.id,
+        label: p.nombre,
+        sub: `${p.categoria || 'Sin cat'} — Precio: $${Number(p.precio || 0).toLocaleString('es-CO')}`,
+        esMovimiento: true
+      }));
+    } else if (st === 'centros_utilidad') {
+      const centros = (data.centros || []).filter(c => {
+        if (!query) return true;
+        const ql = query.toLowerCase();
+        return (c.nombre || '').toLowerCase().includes(ql) || (c.codigo || '').toLowerCase().includes(ql);
+      });
+      items = centros.map(c => ({
+        id: c.id,
+        label: `[${c.codigo || 'SEDE'}] ${c.nombre}`,
+        sub: c.tipo || 'Sucursal',
+        esMovimiento: true
+      }));
+    }
+
+    if (!items.length) {
+      drop.innerHTML = '<div class="p-4 text-center text-gray-400 font-bold text-sm md:text-base italic">No se encontraron resultados coincidentes</div>';
+      drop.classList.remove('hidden');
+      return;
+    }
+
+    _reclasItemsAC[tipo] = items;
+    _reclasFocusIdx[tipo] = -1;
+
+    drop.innerHTML = items.map((it, i) => {
+      if (st === 'cuentas') {
+        const indentPx = Math.max(0, (it.nivel - 1) * 18);
+        if (it.esMovimiento) {
+          return `
+            <div class="reclas-ac-item py-3 px-4 hover:bg-violet-100/70 cursor-pointer transition flex items-center justify-between gap-3 border-b border-gray-100 text-sm md:text-base"
+                 style="padding-left: ${indentPx + 16}px;"
+                 data-idx="${i}" data-mov="true" onclick="seleccionarItemReclas('${tipo}', ${i})">
+              <div class="truncate pr-2 flex items-center gap-2">
+                <span class="text-violet-500 font-mono text-sm md:text-base select-none font-bold">└─</span>
+                <span class="font-black font-mono text-violet-950 text-base md:text-lg">[${escapeHtml(it.codigo)}]</span>
+                <span class="font-bold text-gray-900 text-sm md:text-base">${escapeHtml(it.nombre)}</span>
+                ${it.sub ? `<span class="text-xs text-gray-500 font-normal ml-1">(${escapeHtml(it.sub)})</span>` : ''}
+              </div>
+              <div class="flex items-center gap-2.5 shrink-0">
+                <span class="px-2.5 py-1 rounded-lg text-xs font-black tracking-wider bg-emerald-100 text-emerald-900 border-2 border-emerald-300 shrink-0">MOVIMIENTO</span>
+                <span class="px-3 py-1 rounded-lg text-xs md:text-sm text-white font-mono font-black bg-violet-600 hover:bg-violet-700 shadow-2xs">Elegir ↵</span>
+              </div>
+            </div>
+          `;
+        } else {
+          const indentPx = Math.max(0, (it.nivel - 1) * 18);
+          const nivelNombre = it.nivel === 1 ? 'CLASE' : it.nivel === 2 ? 'GRUPO' : 'CUENTA MAYOR';
+          const icon = it.nivel === 1 ? '📁' : it.nivel === 2 ? '📂' : '📄';
+          return `
+            <div class="reclas-ac-item py-2 px-4 bg-gray-50 text-gray-500 cursor-not-allowed select-none flex items-center justify-between gap-3 border-b border-gray-100 text-sm md:text-base"
+                 style="padding-left: ${indentPx + 16}px;"
+                 data-idx="${i}" data-mov="false" title="Cuenta de mayor (No imputable directamente. Selecciona una subcuenta auxiliar)">
+              <div class="truncate pr-2 flex items-center gap-2">
+                <span class="text-base select-none">${icon}</span>
+                <span class="font-bold font-mono text-gray-700 text-sm md:text-base">[${escapeHtml(it.codigo)}]</span>
+                <span class="font-bold text-gray-700 text-sm md:text-base">${escapeHtml(it.nombre)}</span>
+              </div>
+              <span class="px-2.5 py-1 rounded-md text-xs font-black tracking-wider bg-gray-200 text-gray-700 border border-gray-300 shrink-0">${nivelNombre}</span>
+            </div>
+          `;
+        }
+      }
+
+      return `
+        <div class="reclas-ac-item px-4 py-3 hover:bg-violet-100/70 cursor-pointer transition flex items-center justify-between border-b border-gray-100 text-sm md:text-base"
+             data-idx="${i}" data-mov="true" onclick="seleccionarItemReclas('${tipo}', ${i})">
+          <div class="truncate pr-2">
+            <div class="font-black text-gray-900 text-base md:text-lg">${escapeHtml(it.label)}</div>
+            ${it.sub ? `<div class="text-xs text-gray-500 font-medium">${escapeHtml(it.sub)}</div>` : ''}
+          </div>
+          <span class="px-3 py-1 rounded-lg text-xs md:text-sm text-white font-mono font-black bg-violet-600 hover:bg-violet-700 shrink-0 shadow-2xs">Elegir ↵</span>
+        </div>
+      `;
+    }).join('');
+
+    drop.classList.remove('hidden');
+
+  } catch (err) {
+    console.error('Error buscando entidades reclas:', err);
+  }
+}
+
+function seleccionarItemReclas(tipo, arg1, arg2) {
+  let id = null;
+  let label = '';
+  if (typeof arg1 === 'number' && typeof arg2 === 'string') {
+    id = arg1;
+    label = arg2;
+  } else if (_reclasItemsAC[tipo] && _reclasItemsAC[tipo][arg1]) {
+    const it = _reclasItemsAC[tipo][arg1];
+    id = it.id;
+    label = it.label;
+  } else {
+    id = arg1;
+    label = arg2 || '';
+  }
+
+  const inp = document.getElementById(`inp-reclas-${tipo}-txt`);
+  const hid = document.getElementById(`inp-reclas-${tipo}-id`);
+  const drop = document.getElementById(`drop-reclas-${tipo}`);
+  if (inp) inp.value = label;
+  if (hid) hid.value = id;
+  if (drop) drop.classList.add('hidden');
+
+  evaluarBotonReclasificar();
+  solicitarPreviaReclasificacion();
+}
+
+function evaluarBotonReclasificar() {
+  const oId = document.getElementById('inp-reclas-origen-id')?.value;
+  const dId = document.getElementById('inp-reclas-destino-id')?.value;
+  const btn = document.getElementById('btn-ejecutar-reclasificacion');
+
+  const valido = Boolean(oId && dId && oId !== dId);
+  if (btn) {
+    btn.disabled = !valido;
+    if (valido) {
+      btn.className = 'px-8 py-3.5 rounded-xl font-black text-sm md:text-base text-white bg-violet-600 hover:bg-violet-700 cursor-pointer transition flex items-center justify-center gap-2 shadow-md shrink-0';
+    } else {
+      btn.className = 'px-8 py-3.5 rounded-xl font-black text-sm md:text-base text-white bg-gray-300 cursor-not-allowed transition flex items-center justify-center gap-2 shadow-xs shrink-0';
+    }
+  }
+}
+
+async function solicitarPreviaReclasificacion() {
+  const oId = document.getElementById('inp-reclas-origen-id')?.value;
+  const dId = document.getElementById('inp-reclas-destino-id')?.value;
+  const tbody = document.getElementById('reclas-previa-tbody');
+  const totalImpactoEl = document.getElementById('reclas-total-impacto');
+
+  if (!oId) {
+    renderPreviaInicial(_reclasSubtabActiva);
+    return;
+  }
+
+  try {
+    tbody.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-violet-700 font-bold text-sm md:text-base animate-pulse">⏳ Escaneando tablas del sistema en vivo...</td></tr>';
+
+    const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/reclasificaciones/previa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tipo: _reclasSubtabActiva,
+        origen_id: oId,
+        destino_id: dId || null
+      })
+    });
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || 'Error escaneando tablas');
+
+    _reclasPreviaCache = d;
+    if (totalImpactoEl) totalImpactoEl.textContent = Number(d.total_registros || 0).toLocaleString('es-CO');
+
+    if (!d.tablas || !d.tablas.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-gray-400 font-bold text-sm md:text-base">No se detectaron tablas dependientes para esta entidad.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = d.tablas.map(t => `
+      <tr class="hover:bg-violet-50/60 transition">
+        <td class="px-4 py-3.5 font-mono font-black text-sm md:text-base text-violet-950 align-top">${t.tabla}</td>
+        <td class="px-4 py-3.5 font-bold text-sm md:text-base text-gray-900 align-top">${t.significado}</td>
+        <td class="px-4 py-3.5 text-center align-top">
+          <span class="inline-block px-3.5 py-1.5 rounded-xl font-mono font-black text-base md:text-lg ${t.registros > 0 ? 'text-violet-950 bg-violet-200 border-2 border-violet-300 shadow-2xs' : 'text-gray-400 bg-gray-100'}">
+            ${Number(t.registros || 0).toLocaleString('es-CO')}
+          </span>
+        </td>
+        <td class="px-4 py-3.5 text-gray-700 text-xs md:text-sm font-medium leading-relaxed align-top">${t.impacto}</td>
+      </tr>
+    `).join('');
+
+  } catch (err) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-rose-500 font-bold text-sm md:text-base">${err.message}</td></tr>`;
+  }
+}
+
+async function solicitarEjecutarReclasificacion() {
+  const oId = document.getElementById('inp-reclas-origen-id')?.value;
+  const dId = document.getElementById('inp-reclas-destino-id')?.value;
+  const eliminar = document.getElementById('chk-reclas-eliminar-origen')?.checked;
+
+  if (!oId || !dId) {
+    alert('Por favor selecciona la entidad origen y la entidad destino.');
+    return;
+  }
+  if (oId === dId) {
+    alert('La entidad origen y la entidad destino no pueden ser la misma.');
+    return;
+  }
+
+  const oTxt = document.getElementById('inp-reclas-origen-txt')?.value || 'Origen';
+  const dTxt = document.getElementById('inp-reclas-destino-txt')?.value || 'Destino';
+  const advertenciaEliminar = eliminar 
+    ? '\n\n⚠️ ATENCIÓN: Marcaste la casilla para ELIMINAR permanentemente la entidad origen después de vaciarla.' 
+    : '';
+
+  const confirmacion = confirm(`¿Estás seguro de ejecutar la reclasificación?\n\n• ORIGEN: ${oTxt}\n• DESTINO: ${dTxt}${advertenciaEliminar}\n\nEsta operación reasignará todos los registros históricos en la base de datos.`);
+  if (!confirmacion) return;
+
+  const btn = document.getElementById('btn-ejecutar-reclasificacion');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> Procesando transacción...';
+  }
+
+  try {
+    const res = await fetch(`/api/contabilidad/${NEGOCIO_ID}/reclasificaciones/ejecutar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tipo: _reclasSubtabActiva,
+        origen_id: oId,
+        destino_id: dId,
+        eliminar_origen: eliminar
+      })
+    });
+    const d = await res.json();
+    if (!res.ok || !d.ok) throw new Error(d.error || 'Error al ejecutar la reclasificación');
+
+    // Mostrar panel de resultados auditados
+    const panelRes = document.getElementById('reclas-panel-resultado');
+    const msgEl = document.getElementById('reclas-resultado-mensaje');
+    const totalEl = document.getElementById('reclas-res-total-afectados');
+    const tbodyRes = document.getElementById('reclas-resultado-tbody');
+
+    if (msgEl) msgEl.textContent = d.mensaje;
+    if (totalEl) totalEl.textContent = Number(d.total_actualizados || 0).toLocaleString('es-CO');
+
+    if (tbodyRes && d.tablas_afectadas) {
+      tbodyRes.innerHTML = d.tablas_afectadas.map(t => `
+        <tr class="hover:bg-emerald-50/30">
+          <td class="px-3 py-2.5 font-mono font-bold text-gray-800">${t.tabla}</td>
+          <td class="px-3 py-2.5 text-gray-600">${t.significado}</td>
+          <td class="px-3 py-2.5 text-center font-mono font-bold text-emerald-700">${Number(t.afectados || 0).toLocaleString('es-CO')}</td>
+          <td class="px-3 py-2.5 text-center">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Actualizado ✓</span>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    if (panelRes) {
+      panelRes.classList.remove('hidden');
+      panelRes.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Resetear formulario para siguiente reclasificación
+    limpiarReclasInput('origen');
+    limpiarReclasInput('destino');
+    document.getElementById('reclas-panel-previa')?.classList.add('hidden');
+
+    alert(`✓ Reclasificación completada exitosamente.\nTotal registros reubicados: ${d.total_actualizados}`);
+
+  } catch (err) {
+    alert(`Error: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.innerHTML = '<span>⚡</span> Ejecutar Reclasificación';
+      evaluarBotonReclasificar();
+    }
+  }
+}
+
+// Cerrar dropdowns flotantes al hacer clic por fuera
+document.addEventListener('click', (e) => {
+  ['origen', 'destino'].forEach(tipo => {
+    const drop = document.getElementById(`drop-reclas-${tipo}`);
+    const inp = document.getElementById(`inp-reclas-${tipo}-txt`);
+    if (drop && !drop.contains(e.target) && e.target !== inp) {
+      drop.classList.add('hidden');
+    }
+  });
+});
+
+// ── INICIALIZACIÓN GENERAL DE LA PÁGINA (BOOTSTRAP) ───────────
 inicializarDragAndDropTabs();
 cargarCentrosUtilidadContabilidad();
 
@@ -3775,7 +4539,6 @@ if (activeTab && TABS.includes(activeTab)) {
       document.getElementById('cons-cuenta-txt').value = `${cuentaCodigo} - ${cuentaNombre}`;
     }
     
-    // Ejecutar consulta automáticamente
     setTimeout(consultarMovimientos, 150);
   } else if (activeTab === 'manual') {
     const compId = urlParams.get('comprobante_id');
@@ -3786,6 +4549,8 @@ if (activeTab && TABS.includes(activeTab)) {
     }
   } else if (activeTab === 'comps') {
     cargarComprobantes();
+  } else if (activeTab === 'reclasificaciones') {
+    inicializarReclasificaciones();
   }
 } else {
   buscarPUC();

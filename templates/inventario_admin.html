@@ -269,9 +269,17 @@
     #tab-kardex table {
       width: 100% !important;
     }
-    #tab-kardex input, #tab-kardex select, #tab-kardex button {
+    #tab-kardex input:not([type="hidden"]), #tab-kardex select, #tab-kardex button {
       font-size: 1.15rem !important;
       min-height: 44px;
+    }
+    #tab-kardex input[type="hidden"] {
+      display: none !important;
+      min-height: 0 !important;
+      height: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border: none !important;
     }
     #tab-kardex label {
       font-size: 1.05rem !important;
@@ -3034,11 +3042,11 @@
         <label class="text-sm font-bold text-gray-600 uppercase tracking-wide">Consultar Producto</label>
 
         <input id="kardex-ac-input" type="text" placeholder="Buscar producto…" autocomplete="off"
-
-               oninput="filtrarACKardex()">
-
+               oninput="filtrarACKardex()"
+               onfocus="filtrarACKardex()"
+               onkeydown="onKeydownACKardex(event)"
+               onblur="setTimeout(() => document.getElementById('kardex-ac-list')?.classList.add('hidden'), 250)">
         <div id="kardex-ac-list" class="ac-list hidden"></div>
-
         <input type="hidden" id="kardex-ac-id">
 
       </div>
@@ -8616,10 +8624,105 @@ function validarFechaCompraSugerida(input) {
 
 // ── Kardex ────────────────────────────────────────────────────────────────────
 
+let _timerACKardex = null;
+let _kardexACIdx = -1;
+
 function filtrarACKardex() {
+  clearTimeout(_timerACKardex);
+  _timerACKardex = setTimeout(() => {
+    const inp = document.getElementById('kardex-ac-input');
+    const list = document.getElementById('kardex-ac-list');
+    if (!inp || !list) return;
 
-  // Handled by setupAC with 280ms debounce
+    const rawQ = inp.value;
+    if (!rawQ || !rawQ.trim()) {
+      list.classList.add('hidden');
+      _kardexACIdx = -1;
+      document.getElementById('kardex-resumen-producto')?.classList.add('hidden');
+      document.getElementById('kardex-conteo-cotejo')?.classList.add('hidden');
+      return;
+    }
 
+    if (!productos || !productos.length) {
+      if (typeof cargarProductos === 'function') {
+        cargarProductos().then(() => filtrarACKardex());
+      }
+      return;
+    }
+
+    const normalizeStr = str => {
+      if (!str) return '';
+      try {
+        return str.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      } catch (e) {
+        return str.toString().toLowerCase().trim();
+      }
+    };
+
+    const qNorm = normalizeStr(rawQ);
+    const matches = productos.filter(p => {
+      if (!p || !p.nombre) return false;
+      const n = normalizeStr(p.nombre);
+      const c = normalizeStr(p.categoria);
+      return n.includes(qNorm) || c.includes(qNorm);
+    }).slice(0, 35);
+
+    _kardexACIdx = -1;
+
+    if (!matches.length) {
+      list.innerHTML = '<div class="px-3 py-2 text-xs text-gray-400 italic">No se encontraron productos coincidentes.</div>';
+      list.classList.remove('hidden');
+      return;
+    }
+
+    list.innerHTML = matches.map((p, idx) => `
+      <div class="ac-item text-left px-3 py-2 hover:bg-indigo-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+           data-idx="${idx}"
+           data-id="${p.id}"
+           onmousedown="seleccionarProductoKardex(${p.id})">
+        <span class="font-bold text-gray-800">${escapeHtml(p.nombre)}</span>
+        ${p.categoria ? `<span class="text-xs text-gray-400 ml-1">(${escapeHtml(p.categoria)})</span>` : ''}
+      </div>
+    `).join('');
+    list.classList.remove('hidden');
+  }, 90);
+}
+
+function onKeydownACKardex(e) {
+  const list = document.getElementById('kardex-ac-list');
+  if (!list || list.classList.contains('hidden')) return;
+  const items = list.querySelectorAll('.ac-item');
+  if (!items.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _kardexACIdx = Math.min(_kardexACIdx + 1, items.length - 1);
+    items.forEach((it, i) => it.classList.toggle('bg-indigo-100', i === _kardexACIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _kardexACIdx = Math.max(_kardexACIdx - 1, 0);
+    items.forEach((it, i) => it.classList.toggle('bg-indigo-100', i === _kardexACIdx));
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_kardexACIdx >= 0 && items[_kardexACIdx]) {
+      items[_kardexACIdx].dispatchEvent(new Event('mousedown'));
+    }
+  } else if (e.key === 'Escape') {
+    list.classList.add('hidden');
+  }
+}
+
+function seleccionarProductoKardex(id) {
+  const p = (productos || []).find(x => Number(x.id) === Number(id));
+  const nombre = p ? p.nombre : '';
+  const inp = document.getElementById('kardex-ac-input');
+  const hid = document.getElementById('kardex-ac-id');
+  const list = document.getElementById('kardex-ac-list');
+  if (inp) inp.value = nombre;
+  if (hid) hid.value = id;
+  if (list) list.classList.add('hidden');
+  _kardexACIdx = -1;
+  cargarKardex(id);
 }
 
 function verKardex(id, nombre, movimientoId = null) {

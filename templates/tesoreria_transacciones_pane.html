@@ -1,0 +1,881 @@
+<!-- ═══ MÓDULO UNIFICADO DE TESORERÍA: PAGOS (CxP) Y RECAUDOS (CxC) ═══ -->
+<div id="tesoreria-transacciones-root" class="space-y-6">
+
+  <!-- Cabecera de la Transacción: Tipo de Movimiento, Tipología de Doc, Consecutivo, Fecha y Medio de Pago -->
+  <div class="bg-gradient-to-r from-slate-50 to-gray-50/80 rounded-2xl border border-gray-200/80 p-5 shadow-xs">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4 pb-4 border-b border-gray-200/60">
+      <div class="flex items-center gap-3">
+        <div id="tes-header-icon" class="p-3 bg-rose-100 text-rose-700 rounded-2xl text-xl shadow-xs">
+          💸
+        </div>
+        <div>
+          <h2 id="tes-header-title" class="text-base sm:text-lg font-extrabold text-gray-900">Pagos a Cuentas por Pagar (CxP)</h2>
+          <p id="tes-header-subtitle" class="text-xs text-gray-500">Liquide obligaciones pendientes con proveedores, acreedores o cuentas de pasivo directo con control de consecutivo contable.</p>
+        </div>
+      </div>
+
+      <!-- Resumen / Monto Objetivo Digitado -->
+      <div class="flex items-center gap-3 self-end lg:self-auto bg-white px-4 py-2.5 rounded-2xl border border-gray-200/80 shadow-xs">
+        <div>
+          <label class="block text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">Monto a Liquidar (Objetivo)</label>
+          <div class="flex items-center gap-1">
+            <span class="text-sm font-bold text-gray-400">$</span>
+            <input type="text" id="tes-monto-objetivo" placeholder="0.00" oninput="tes_formatearMontoObjetivo(this)"
+                   class="font-mono font-extrabold text-base sm:text-lg text-gray-900 outline-none w-36 sm:w-44 bg-transparent">
+          </div>
+        </div>
+        <button type="button" onclick="tes_limpiarMontoObjetivo()" title="Limpiar objetivo" class="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+      </div>
+    </div>
+
+    <!-- Parámetros de Emisión del Documento Contable -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+      <!-- Tipología de Documento Mapeada -->
+      <div>
+        <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+          Tipo de Documento <span class="text-rose-500">*</span>
+        </label>
+        <select id="tes-select-tipo-doc" onchange="tes_cambiarTipoDocumento()"
+                class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
+          <option value="">Cargando tipos...</option>
+        </select>
+      </div>
+
+      <!-- Consecutivo a Generar -->
+      <div>
+        <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">Consecutivo Próximo</label>
+        <div class="relative">
+          <input type="text" id="tes-input-num-doc" readonly
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-gray-100/80 font-mono font-bold text-indigo-900 outline-none">
+          <span class="absolute right-3 top-2 text-[10px] font-extrabold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200">Auto</span>
+        </div>
+      </div>
+
+      <!-- Fecha de la Transacción -->
+      <div>
+        <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+          Fecha de Operación <span class="text-rose-500">*</span>
+        </label>
+        <input type="date" id="tes-input-fecha"
+               class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 transition">
+      </div>
+
+      <!-- Método de Pago / Fondo Financiero -->
+      <div>
+        <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+          Medio de Pago / Salida <span class="text-rose-500">*</span>
+        </label>
+        <select id="tes-select-metodo-pago" onchange="tes_actualizarMedioPagoInfo()"
+                class="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
+          <option value="">Cargando métodos...</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Buscador Unificado Inteligente -->
+  <div class="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs relative">
+    <label class="block text-xs font-bold text-gray-700 uppercase mb-1.5 flex items-center justify-between">
+      <span>🔍 Buscador Unificado de Terceros y Cuentas Contables</span>
+      <span class="text-[10px] font-normal text-gray-400">Escriba nombre de proveedor, entidad, EPS, DIAN o código contable</span>
+    </label>
+    
+    <div class="relative">
+      <input type="text" id="tes-busqueda-input" placeholder="Ej: Avícola, Colmena, Aura Margarita, American Express, 2345, PILA..."
+             autocomplete="off" oninput="tes_debouncedBuscar(this.value)" onfocus="tes_abrirDropdownResultados()"
+             class="w-full pl-11 pr-10 py-3 border border-gray-300 rounded-2xl text-sm font-medium text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition shadow-inner">
+      <span class="absolute left-4 top-3.5 text-gray-400 text-base">🔍</span>
+      <button type="button" onclick="tes_limpiarBusqueda()" id="tes-btn-clear-search" class="hidden absolute right-3.5 top-3 text-gray-400 hover:text-gray-600 text-sm font-bold">✕</button>
+
+      <!-- Dropdown Flotante de Resultados de Búsqueda -->
+      <div id="tes-dropdown-resultados" class="hidden absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl border border-gray-200 shadow-2xl z-50 max-h-80 overflow-y-auto divide-y divide-gray-100">
+        <!-- Renderizado dinámico -->
+      </div>
+    </div>
+
+    <!-- Ente Seleccionado Actualmente (Banner) -->
+    <div id="tes-banner-ente" class="hidden mt-4 p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div id="tes-ente-badge-icon" class="p-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-xs">
+          👤
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 id="tes-ente-nombre" class="text-sm sm:text-base font-extrabold text-indigo-950">--</h3>
+            <span id="tes-ente-tipo-tag" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">Tercero</span>
+          </div>
+          <p id="tes-ente-subtitulo" class="text-xs text-indigo-700">Saldo total pendiente: <strong id="tes-ente-saldo-total" class="font-mono">$0.00</strong></p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 self-end sm:self-auto">
+        <button type="button" onclick="tes_marcarTodoAl100()" class="px-3 py-1.5 bg-white hover:bg-gray-50 border border-indigo-200 text-indigo-900 rounded-xl text-xs font-bold shadow-xs transition">
+          ☑ Marcar 100%
+        </button>
+        <button type="button" onclick="tes_distribuirMontoObjetivo()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition" title="Abona el monto objetivo por orden de vencimiento">
+          ⚡ Distribuir Objetivo
+        </button>
+        <button type="button" onclick="tes_deseleccionarEnte()" class="p-1.5 text-gray-400 hover:text-gray-600 text-xs rounded-lg transition" title="Cambiar selección">
+          ✕
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Árbol Desplegado de Rubros (Documentos y Cuentas Directas) -->
+  <div id="tes-contenedor-arbol" class="hidden bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs space-y-5">
+    
+    <!-- Sección A: Documentos con Control de Saldos por Documento -->
+    <div id="tes-seccion-docs" class="space-y-3">
+      <div class="flex items-center justify-between border-b border-gray-100 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="text-base">📄</span>
+          <h4 class="text-xs sm:text-sm font-extrabold text-gray-800 uppercase tracking-wide">Documentos y Facturas con Control Individual</h4>
+          <span id="tes-badge-cant-docs" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200">0 docs</span>
+        </div>
+        <button type="button" onclick="tes_toggleDocs(this)" class="text-xs text-indigo-600 hover:underline font-bold">Seleccionar todos</button>
+      </div>
+
+      <div class="overflow-x-auto custom-scrollbar">
+        <table class="w-full text-xs text-left">
+          <thead class="bg-gray-50 text-gray-500 text-[10px] uppercase font-bold border-b border-gray-200/60">
+            <tr>
+              <th class="p-2.5 text-center w-10">
+                <input type="checkbox" id="tes-master-check-docs" onchange="tes_masterCheckDocs(this.checked)" class="rounded text-indigo-600">
+              </th>
+              <th class="px-3 py-2.5">Documento / Tipo</th>
+              <th class="px-3 py-2.5">Cuenta Contable</th>
+              <th class="px-3 py-2.5 text-center">Fecha Emisión</th>
+              <th class="px-3 py-2.5 text-right">Monto Original</th>
+              <th class="px-3 py-2.5 text-right font-bold text-gray-700">Saldo Pendiente</th>
+              <th class="px-3 py-2.5 text-right w-44">Monto a Abonar</th>
+              <th class="px-2 py-2.5 text-center w-20">Atajo</th>
+            </tr>
+          </thead>
+          <tbody id="tes-tbody-docs" class="divide-y divide-gray-100">
+            <!-- Dinámico -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Sección B: Cuentas Directas de Pasivo sin Control de Documentos -->
+    <div id="tes-seccion-cuentas" class="space-y-3 pt-3 border-t border-gray-200/60">
+      <div class="flex items-center justify-between border-b border-gray-100 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="text-base">💳</span>
+          <h4 class="text-xs sm:text-sm font-extrabold text-gray-800 uppercase tracking-wide">Cuentas Contables sin Control de Documentos (Pasivos Directos)</h4>
+          <span id="tes-badge-cant-cuentas" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">0 cuentas</span>
+        </div>
+        <button type="button" onclick="tes_toggleCuentas(this)" class="text-xs text-indigo-600 hover:underline font-bold">Seleccionar todas</button>
+      </div>
+
+      <div class="overflow-x-auto custom-scrollbar">
+        <table class="w-full text-xs text-left">
+          <thead class="bg-gray-50 text-gray-500 text-[10px] uppercase font-bold border-b border-gray-200/60">
+            <tr>
+              <th class="p-2.5 text-center w-10">
+                <input type="checkbox" id="tes-master-check-cuentas" onchange="tes_masterCheckCuentas(this.checked)" class="rounded text-indigo-600">
+              </th>
+              <th class="px-3 py-2.5">Cuenta PUC</th>
+              <th class="px-3 py-2.5">Beneficiario / Tercero</th>
+              <th class="px-3 py-2.5 text-right font-bold text-gray-700">Saldo en Libros</th>
+              <th class="px-3 py-2.5 text-right w-44">Monto a Abonar</th>
+              <th class="px-2 py-2.5 text-center w-20">Atajo</th>
+            </tr>
+          </thead>
+          <tbody id="tes-tbody-cuentas" class="divide-y divide-gray-100">
+            <!-- Dinámico -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Barra Flotante / Sticky de Conciliación y Liquidación -->
+  <div id="tes-barra-conciliacion" class="sticky bottom-4 z-40 bg-gray-900/95 backdrop-blur-md text-white rounded-2xl p-4 sm:p-5 shadow-2xl border border-gray-800 flex flex-col md:flex-row items-center justify-between gap-4">
+    
+    <!-- Bloques de Cifras en Vivo -->
+    <div class="grid grid-cols-3 gap-4 sm:gap-8 w-full md:w-auto text-center md:text-left">
+      <div>
+        <span class="text-[9px] uppercase font-extrabold text-gray-400 block tracking-wider">Monto Objetivo</span>
+        <span id="tes-bar-objetivo" class="text-sm sm:text-base font-mono font-extrabold text-gray-200">$0.00</span>
+      </div>
+      <div>
+        <span class="text-[9px] uppercase font-extrabold text-gray-400 block tracking-wider">Total Seleccionado</span>
+        <span id="tes-bar-seleccionado" class="text-sm sm:text-base font-mono font-extrabold text-indigo-400">$0.00</span>
+      </div>
+      <div>
+        <span class="text-[9px] uppercase font-extrabold text-gray-400 block tracking-wider">Diferencia / Cuadre</span>
+        <span id="tes-bar-diferencia" class="text-sm sm:text-base font-mono font-extrabold text-emerald-400">$0.00 ✅</span>
+      </div>
+    </div>
+
+    <!-- Botón de Liquidación Principal -->
+    <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+      <button type="button" id="tes-btn-liquidar" onclick="tes_ejecutarLiquidacion()" disabled
+              class="w-full md:w-auto px-6 py-3 rounded-xl font-extrabold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer">
+        <span id="tes-btn-liquidar-icon">🚀</span>
+        <span id="tes-btn-liquidar-text">Liquidar Comprobante de Egreso</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal / Alerta de Éxito de Liquidación con Botón de Descarga PDF -->
+  <div id="tes-modal-exito" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4 backdrop-blur-xs">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 text-center shadow-2xl border border-gray-100 space-y-4">
+      <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner">
+        ✅
+      </div>
+      <div>
+        <h3 class="text-lg font-extrabold text-gray-900" id="tes-exito-titulo">Comprobante Liquidado</h3>
+        <p class="text-xs text-gray-500 mt-1" id="tes-exito-mensaje">La transacción se ha asentado exitosamente en contabilidad.</p>
+      </div>
+      
+      <div class="bg-gray-50 rounded-2xl p-4 border border-gray-200/70 text-left space-y-1.5 text-xs">
+        <div class="flex justify-between"><span class="text-gray-500 font-semibold">Documento generado:</span><strong id="tes-exito-doc-num" class="font-mono text-gray-900">--</strong></div>
+        <div class="flex justify-between"><span class="text-gray-500 font-semibold">Total procesado:</span><strong id="tes-exito-doc-monto" class="font-mono text-emerald-700">--</strong></div>
+      </div>
+
+      <div class="flex flex-col gap-2 pt-2">
+        <a id="tes-exito-btn-pdf" href="#" target="_blank"
+           class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition flex items-center justify-center gap-2">
+          <span>🖨️</span> Descargar / Imprimir PDF
+        </a>
+        <button type="button" onclick="tes_cerrarModalExito()"
+                class="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition">
+          Realizar otra transacción
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ SCRIPTS DEL MÓDULO UNIFICADO DE TESORERÍA ═══ -->
+<script>
+// Namespace global de Tesorería
+window.TesoreriaState = {
+  negocioId: {{ negocio_id }},
+  modoActual: 'cxp', // 'cxp' o 'cxc'
+  catalogoDocumentos: [],
+  catalogoMetodos: [],
+  enteActivo: null,
+  documentosActivos: [],
+  cuentasActivas: [],
+  tercerosSubActivos: [],
+  searchDebounceTimer: null
+};
+
+// 1. Conmutar Modo General de Tesorería ('operativos', 'cxp', 'cxc')
+function cambiarModoTesoreria(modo) {
+  const btnOp = document.getElementById('btn-tes-modo-operativos');
+  const btnCxp = document.getElementById('btn-tes-modo-cxp');
+  const btnCxc = document.getElementById('btn-tes-modo-cxc');
+  const secOp = document.getElementById('tesoreria-seccion-operativos');
+  const secTr = document.getElementById('tesoreria-seccion-transacciones');
+
+  // Reset styles
+  [btnOp, btnCxp, btnCxc].forEach(btn => {
+    if (btn) {
+      btn.className = "px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-900 hover:bg-white/60";
+    }
+  });
+
+  if (modo === 'operativos') {
+    if (btnOp) btnOp.className = "px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all duration-200 flex items-center gap-2 bg-white text-gray-900 shadow-sm border border-gray-200/50";
+    if (secOp) secOp.classList.remove('hidden');
+    if (secTr) secTr.classList.add('hidden');
+    return;
+  }
+
+  // Activar modo CxP o CxC
+  if (secOp) secOp.classList.add('hidden');
+  if (secTr) secTr.classList.remove('hidden');
+
+  TesoreriaState.modoActual = modo;
+
+  if (modo === 'cxp') {
+    if (btnCxp) btnCxp.className = "px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all duration-200 flex items-center gap-2 bg-white text-rose-800 shadow-sm border border-rose-200";
+    document.getElementById('tes-header-icon').textContent = '💸';
+    document.getElementById('tes-header-icon').className = 'p-3 bg-rose-100 text-rose-700 rounded-2xl text-xl shadow-xs';
+    document.getElementById('tes-header-title').textContent = 'Pagos a Cuentas por Pagar (CxP)';
+    document.getElementById('tes-header-subtitle').textContent = 'Liquide obligaciones pendientes con proveedores, acreedores o cuentas de pasivo directo con control de consecutivo contable.';
+    document.getElementById('tes-btn-liquidar-text').textContent = 'Liquidar Comprobante de Egreso';
+  } else if (modo === 'cxc') {
+    if (btnCxc) btnCxc.className = "px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all duration-200 flex items-center gap-2 bg-white text-emerald-800 shadow-sm border border-emerald-200";
+    document.getElementById('tes-header-icon').textContent = '💵';
+    document.getElementById('tes-header-icon').className = 'p-3 bg-emerald-100 text-emerald-700 rounded-2xl text-xl shadow-xs';
+    document.getElementById('tes-header-title').textContent = 'Recaudos de Cartera (CxC)';
+    document.getElementById('tes-header-subtitle').textContent = 'Registre entradas de dinero por cobranza a clientes o anticipos con control de recibo de caja.';
+    document.getElementById('tes-btn-liquidar-text').textContent = 'Liquidar Recibo de Caja';
+  }
+
+  tes_deseleccionarEnte();
+  tes_cargarCatalogos();
+}
+
+// 2. Cargar Tipos de Documento y Métodos de Pago
+async function tes_cargarCatalogos() {
+  const tipoMov = (TesoreriaState.modoActual === 'cxc') ? 'cobro' : 'pago';
+  try {
+    const res = await fetch(`/api/tesoreria/${TesoreriaState.negocioId}/preparar?tipo=${tipoMov}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    TesoreriaState.catalogoDocumentos = data.documentos || [];
+    TesoreriaState.catalogoMetodos = data.metodos || [];
+
+    // Llenar select tipos doc
+    const sDoc = document.getElementById('tes-select-tipo-doc');
+    sDoc.innerHTML = '';
+    if (TesoreriaState.catalogoDocumentos.length === 0) {
+      sDoc.innerHTML = `<option value="">Sin documentos activos para ${tipoMov}</option>`;
+    } else {
+      TesoreriaState.catalogoDocumentos.forEach((d, idx) => {
+        const sel = d.predeterminado || idx === 0 ? 'selected' : '';
+        sDoc.innerHTML += `<option value="${d.id}" data-sig="${d.siguiente_numero}" ${sel}>${d.nombre} (${d.codigo})</option>`;
+      });
+    }
+    tes_cambiarTipoDocumento();
+
+    // Llenar select métodos de pago
+    const sMet = document.getElementById('tes-select-metodo-pago');
+    sMet.innerHTML = '';
+    if (TesoreriaState.catalogoMetodos.length === 0) {
+      sMet.innerHTML = `<option value="">Sin métodos configurados</option>`;
+    } else {
+      TesoreriaState.catalogoMetodos.forEach(m => {
+        const cuentaTxt = m.cuenta_codigo ? `[${m.cuenta_codigo} - ${m.cuenta_nombre}]` : '(Sin cuenta contable)';
+        sMet.innerHTML += `<option value="${m.codigo}">${m.nombre} ${cuentaTxt}</option>`;
+      });
+    }
+
+    // Fecha hoy por defecto
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('tes-input-fecha').value = hoy;
+
+  } catch (err) {
+    console.error("Error al preparar tesorería:", err);
+  }
+}
+
+function tes_cambiarTipoDocumento() {
+  const sel = document.getElementById('tes-select-tipo-doc');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt) {
+    document.getElementById('tes-input-num-doc').value = opt.getAttribute('data-sig') || '1';
+  }
+}
+
+function tes_actualizarMedioPagoInfo() {
+  // Hook para actualizar cualquier info de cuenta si se requiere
+}
+
+// 3. Búsqueda Unificada con Debounce
+function tes_debouncedBuscar(q) {
+  clearTimeout(TesoreriaState.searchDebounceTimer);
+  const clearBtn = document.getElementById('tes-btn-clear-search');
+  if (clearBtn) clearBtn.classList.toggle('hidden', !q);
+
+  if (!q || q.trim().length < 2) {
+    document.getElementById('tes-dropdown-resultados').classList.add('hidden');
+    return;
+  }
+
+  TesoreriaState.searchDebounceTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`/api/tesoreria/${TesoreriaState.negocioId}/buscar?q=${encodeURIComponent(q.trim())}`);
+      const data = await res.json();
+      tes_renderizarResultadosBusqueda(data.resultados || []);
+    } catch (err) {
+      console.error("Error en búsqueda de tesorería:", err);
+    }
+  }, 250);
+}
+
+function tes_renderizarResultadosBusqueda(resultados) {
+  const drop = document.getElementById('tes-dropdown-resultados');
+  if (!drop) return;
+
+  if (resultados.length === 0) {
+    drop.innerHTML = `<div class="p-4 text-center text-xs text-gray-400">No se encontraron obligaciones ni cuentas con saldo pendiente para esta búsqueda.</div>`;
+    drop.classList.remove('hidden');
+    return;
+  }
+
+  drop.innerHTML = resultados.map(r => {
+    const esTercero = (r.tipo === 'tercero');
+    const icon = esTercero ? '👤' : '💳';
+    const badgeBg = esTercero ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-purple-50 text-purple-700 border-purple-200';
+    const tagTxt = esTercero ? 'Tercero' : `Cuenta ${r.codigo}`;
+
+    return `
+      <div onclick="tes_seleccionarResultado('${r.tipo}', ${r.id})" 
+           class="p-3.5 hover:bg-indigo-50/50 cursor-pointer flex items-center justify-between gap-3 transition">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center text-sm shadow-xs">${icon}</div>
+          <div>
+            <div class="flex items-center gap-2">
+              <strong class="text-xs sm:text-sm text-gray-800 font-bold">${r.nombre}</strong>
+              <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${badgeBg}">${tagTxt}</span>
+            </div>
+            <p class="text-[11px] text-gray-400">${r.subtitulo || ''}</p>
+          </div>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] text-gray-400 uppercase font-bold block">Saldo Pendiente</span>
+          <strong class="text-xs sm:text-sm font-mono font-extrabold text-rose-700">$${Number(r.saldo_total).toLocaleString('es-CO', {minimumFractionDigits: 2})}</strong>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  drop.classList.remove('hidden');
+}
+
+function tes_abrirDropdownResultados() {
+  const q = document.getElementById('tes-busqueda-input').value;
+  if (q && q.trim().length >= 2) {
+    tes_debouncedBuscar(q);
+  }
+}
+
+function tes_limpiarBusqueda() {
+  document.getElementById('tes-busqueda-input').value = '';
+  document.getElementById('tes-dropdown-resultados').classList.add('hidden');
+  document.getElementById('tes-btn-clear-search').classList.add('hidden');
+}
+
+// Cerrar dropdown al hacer clic afuera
+document.addEventListener('click', (e) => {
+  const drop = document.getElementById('tes-dropdown-resultados');
+  const input = document.getElementById('tes-busqueda-input');
+  if (drop && input && !drop.contains(e.target) && e.target !== input) {
+    drop.classList.add('hidden');
+  }
+});
+
+// 4. Seleccionar un Ente (Tercero o Cuenta) y Cargar su Árbol
+async function tes_seleccionarResultado(tipo, id) {
+  tes_limpiarBusqueda();
+  try {
+    const res = await fetch(`/api/tesoreria/${TesoreriaState.negocioId}/detalle?tipo=${tipo}&id=${id}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    TesoreriaState.enteActivo = data.ente;
+    TesoreriaState.documentosActivos = data.documentos || [];
+    TesoreriaState.cuentasActivas = data.cuentas_sin_doc || [];
+    TesoreriaState.tercerosSubActivos = data.terceros_sub || [];
+
+    // Renderizar Banner
+    document.getElementById('tes-banner-ente').classList.remove('hidden');
+    document.getElementById('tes-ente-nombre').textContent = data.ente.nombre;
+    document.getElementById('tes-ente-badge-icon').textContent = (tipo === 'tercero') ? '👤' : '💳';
+    document.getElementById('tes-ente-tipo-tag').textContent = (tipo === 'tercero') ? 'Tercero / Proveedor' : `Cuenta PUC ${data.ente.codigo}`;
+    document.getElementById('tes-ente-saldo-total').textContent = `$${Number(data.total_pasivo).toLocaleString('es-CO', {minimumFractionDigits: 2})}`;
+
+    // Renderizar Árbol de Documentos
+    tes_renderizarArbol();
+
+  } catch (err) {
+    console.error("Error al cargar detalle de tesorería:", err);
+  }
+}
+
+function tes_deseleccionarEnte() {
+  TesoreriaState.enteActivo = null;
+  TesoreriaState.documentosActivos = [];
+  TesoreriaState.cuentasActivas = [];
+  TesoreriaState.tercerosSubActivos = [];
+
+  const banner = document.getElementById('tes-banner-ente');
+  if (banner) banner.classList.add('hidden');
+
+  const arbol = document.getElementById('tes-contenedor-arbol');
+  if (arbol) arbol.classList.add('hidden');
+
+  tes_recalcularCuadreTesoreria();
+}
+
+function tes_renderizarArbol() {
+  const cont = document.getElementById('tes-contenedor-arbol');
+  cont.classList.remove('hidden');
+
+  const secDocs = document.getElementById('tes-seccion-docs');
+  const tbodyDocs = document.getElementById('tes-tbody-docs');
+  const badgeDocs = document.getElementById('tes-badge-cant-docs');
+
+  // Renderizar Documentos
+  if (TesoreriaState.documentosActivos.length > 0) {
+    secDocs.classList.remove('hidden');
+    badgeDocs.textContent = `${TesoreriaState.documentosActivos.length} doc${TesoreriaState.documentosActivos.length > 1 ? 's' : ''}`;
+    tbodyDocs.innerHTML = TesoreriaState.documentosActivos.map((d, idx) => {
+      return `
+        <tr class="hover:bg-gray-50/60 transition">
+          <td class="p-2.5 text-center">
+            <input type="checkbox" id="tes-doc-chk-${d.id}" data-id="${d.id}" onchange="tes_onCheckDoc(${d.id})" class="tes-item-check tes-check-doc rounded text-indigo-600 w-4 h-4">
+          </td>
+          <td class="px-3 py-2.5">
+            <strong class="text-gray-900 block font-bold">${d.tipo_doc_nombre} No. ${d.numero_documento}</strong>
+          </td>
+          <td class="px-3 py-2.5 text-gray-500 font-mono text-[11px]">${d.cuenta_codigo} - ${d.cuenta_nombre}</td>
+          <td class="px-3 py-2.5 text-center text-gray-500 font-mono text-[11px]">${d.fecha || '--'}</td>
+          <td class="px-3 py-2.5 text-right font-mono text-gray-400">$${Number(d.monto_original).toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+          <td class="px-3 py-2.5 text-right font-mono font-extrabold text-rose-800">$${Number(d.saldo).toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+          <td class="px-3 py-2.5 text-right">
+            <input type="text" id="tes-doc-abono-${d.id}" data-id="${d.id}" data-saldo="${d.saldo}"
+                   oninput="tes_onInputAbono(this)" placeholder="0.00"
+                   class="w-full text-right border border-gray-300 rounded-xl px-2.5 py-1.5 font-mono font-bold text-gray-800 text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+          </td>
+          <td class="px-2 py-2.5 text-center">
+            <button type="button" onclick="tes_abono100Doc(${d.id})" class="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] rounded-lg border border-indigo-200 shadow-2xs">
+              100%
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } else {
+    secDocs.classList.add('hidden');
+  }
+
+  // Renderizar Cuentas sin Documento
+  const secCuentas = document.getElementById('tes-seccion-cuentas');
+  const tbodyCuentas = document.getElementById('tes-tbody-cuentas');
+  const badgeCuentas = document.getElementById('tes-badge-cant-cuentas');
+
+  // Si la cuenta tiene desglose de terceros, mostramos los terceros
+  const listaCuentasMostrar = (TesoreriaState.tercerosSubActivos.length > 0) ? TesoreriaState.tercerosSubActivos : TesoreriaState.cuentasActivas;
+
+  if (listaCuentasMostrar.length > 0) {
+    secCuentas.classList.remove('hidden');
+    badgeCuentas.textContent = `${listaCuentasMostrar.length} rubro${listaCuentasMostrar.length > 1 ? 's' : ''}`;
+    tbodyCuentas.innerHTML = listaCuentasMostrar.map((c, idx) => {
+      const itemId = `cta_${c.cuenta_id}_${c.tercero_id || 0}`;
+      const terceroNombre = c.tercero_nombre || (TesoreriaState.enteActivo.tipo === 'tercero' ? TesoreriaState.enteActivo.nombre : 'Saldo General');
+      return `
+        <tr class="hover:bg-gray-50/60 transition">
+          <td class="p-2.5 text-center">
+            <input type="checkbox" id="tes-chk-${itemId}" data-item-id="${itemId}" onchange="tes_onCheckCuenta('${itemId}')" class="tes-item-check tes-check-cuenta rounded text-purple-600 w-4 h-4">
+          </td>
+          <td class="px-3 py-2.5">
+            <strong class="text-gray-900 block font-bold">${c.cuenta_codigo} - ${c.cuenta_nombre}</strong>
+          </td>
+          <td class="px-3 py-2.5 text-gray-700 font-semibold">${terceroNombre}</td>
+          <td class="px-3 py-2.5 text-right font-mono font-extrabold text-purple-900">$${Number(c.saldo).toLocaleString('es-CO', {minimumFractionDigits: 2})}</td>
+          <td class="px-3 py-2.5 text-right">
+            <input type="text" id="tes-abono-${itemId}" data-item-id="${itemId}" data-cuenta-id="${c.cuenta_id}" data-tercero-id="${c.tercero_id || 0}" data-saldo="${c.saldo}"
+                   oninput="tes_onInputAbono(this)" placeholder="0.00"
+                   class="w-full text-right border border-gray-300 rounded-xl px-2.5 py-1.5 font-mono font-bold text-gray-800 text-xs outline-none focus:ring-2 focus:ring-purple-500">
+          </td>
+          <td class="px-2 py-2.5 text-center">
+            <button type="button" onclick="tes_abono100Cuenta('${itemId}')" class="px-2 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-extrabold text-[10px] rounded-lg border border-purple-200 shadow-2xs">
+              100%
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } else {
+    secCuentas.classList.add('hidden');
+  }
+
+  tes_recalcularCuadreTesoreria();
+}
+
+// 5. Atajos y Eventos de Abonos
+function tes_onCheckDoc(id) {
+  const chk = document.getElementById(`tes-doc-chk-${id}`);
+  const inp = document.getElementById(`tes-doc-abono-${id}`);
+  if (!chk || !inp) return;
+
+  if (chk.checked) {
+    if (!inp.value || parseFloat(inp.value.replace(/[^0-9.]/g, '')) <= 0) {
+      inp.value = Number(inp.getAttribute('data-saldo')).toLocaleString('es-CO', {minimumFractionDigits: 2});
+    }
+  } else {
+    inp.value = '';
+  }
+  tes_recalcularCuadreTesoreria();
+}
+
+function tes_abono100Doc(id) {
+  const chk = document.getElementById(`tes-doc-chk-${id}`);
+  const inp = document.getElementById(`tes-doc-abono-${id}`);
+  if (!chk || !inp) return;
+  chk.checked = true;
+  inp.value = Number(inp.getAttribute('data-saldo')).toLocaleString('es-CO', {minimumFractionDigits: 2});
+  tes_recalcularCuadreTesoreria();
+}
+
+function tes_onCheckCuenta(itemId) {
+  const chk = document.getElementById(`tes-chk-${itemId}`);
+  const inp = document.getElementById(`tes-abono-${itemId}`);
+  if (!chk || !inp) return;
+
+  if (chk.checked) {
+    if (!inp.value || parseFloat(inp.value.replace(/[^0-9.]/g, '')) <= 0) {
+      inp.value = Number(inp.getAttribute('data-saldo')).toLocaleString('es-CO', {minimumFractionDigits: 2});
+    }
+  } else {
+    inp.value = '';
+  }
+  tes_recalcularCuadreTesoreria();
+}
+
+function tes_abono100Cuenta(itemId) {
+  const chk = document.getElementById(`tes-chk-${itemId}`);
+  const inp = document.getElementById(`tes-abono-${itemId}`);
+  if (!chk || !inp) return;
+  chk.checked = true;
+  inp.value = Number(inp.getAttribute('data-saldo')).toLocaleString('es-CO', {minimumFractionDigits: 2});
+  tes_recalcularCuadreTesoreria();
+}
+
+function tes_onInputAbono(inp) {
+  const val = parseFloat(inp.value.replace(/[^0-9.]/g, '')) || 0;
+  const maxSaldo = parseFloat(inp.getAttribute('data-saldo')) || 0;
+  const itemId = inp.getAttribute('data-item-id');
+  const docId = inp.getAttribute('data-id');
+
+  const chk = itemId ? document.getElementById(`tes-chk-${itemId}`) : document.getElementById(`tes-doc-chk-${docId}`);
+  if (chk) {
+    chk.checked = (val > 0);
+  }
+  tes_recalcularCuadreTesoreria();
+}
+
+function tes_masterCheckDocs(checked) {
+  document.querySelectorAll('.tes-check-doc').forEach(chk => {
+    chk.checked = checked;
+    const id = chk.getAttribute('data-id');
+    const inp = document.getElementById(`tes-doc-abono-${id}`);
+    if (inp) {
+      inp.value = checked ? Number(inp.getAttribute('data-saldo')).toLocaleString('es-CO', {minimumFractionDigits: 2}) : '';
+    }
+  });
+  tes_recalcularCuadreTesoreria();
+}
+
+function tes_masterCheckCuentas(checked) {
+  document.querySelectorAll('.tes-check-cuenta').forEach(chk => {
+    chk.checked = checked;
+    const itemId = chk.getAttribute('data-item-id');
+    const inp = document.getElementById(`tes-abono-${itemId}`);
+    if (inp) {
+      inp.value = checked ? Number(inp.getAttribute('data-saldo')).toLocaleString('es-CO', {minimumFractionDigits: 2}) : '';
+    }
+  });
+  tes_recalcularCuadreTesoreria();
+}
+
+function tes_marcarTodoAl100() {
+  tes_masterCheckDocs(true);
+  tes_masterCheckCuentas(true);
+}
+
+// 6. Distribución Inteligente del Monto Objetivo (FIFO)
+function tes_distribuirMontoObjetivo() {
+  const objInp = document.getElementById('tes-monto-objetivo');
+  let remanente = parseFloat(objInp.value.replace(/[^0-9.]/g, '')) || 0;
+
+  if (remanente <= 0) {
+    alert("Por favor ingrese primero un monto objetivo arriba.");
+    objInp.focus();
+    return;
+  }
+
+  // Limpiar selecciones previas
+  tes_masterCheckDocs(false);
+  tes_masterCheckCuentas(false);
+
+  // 1. Distribuir a Documentos primero
+  TesoreriaState.documentosActivos.forEach(d => {
+    if (remanente <= 0) return;
+    const chk = document.getElementById(`tes-doc-chk-${d.id}`);
+    const inp = document.getElementById(`tes-doc-abono-${d.id}`);
+    const saldo = parseFloat(d.saldo);
+
+    const abono = Math.min(remanente, saldo);
+    remanente -= abono;
+
+    if (chk) chk.checked = true;
+    if (inp) inp.value = Number(abono).toLocaleString('es-CO', {minimumFractionDigits: 2});
+  });
+
+  // 2. Distribuir a Cuentas
+  const listaCuentas = (TesoreriaState.tercerosSubActivos.length > 0) ? TesoreriaState.tercerosSubActivos : TesoreriaState.cuentasActivas;
+  listaCuentas.forEach(c => {
+    if (remanente <= 0) return;
+    const itemId = `cta_${c.cuenta_id}_${c.tercero_id || 0}`;
+    const chk = document.getElementById(`tes-chk-${itemId}`);
+    const inp = document.getElementById(`tes-abono-${itemId}`);
+    const saldo = parseFloat(c.saldo);
+
+    const abono = Math.min(remanente, saldo);
+    remanente -= abono;
+
+    if (chk) chk.checked = true;
+    if (inp) inp.value = Number(abono).toLocaleString('es-CO', {minimumFractionDigits: 2});
+  });
+
+  tes_recalcularCuadreTesoreria();
+}
+
+// 7. Formateo y Control del Monto Objetivo
+function tes_formatearMontoObjetivo(inp) {
+  tes_recalcularCuadreTesoreria();
+}
+
+function tes_limpiarMontoObjetivo() {
+  document.getElementById('tes-monto-objetivo').value = '';
+  tes_recalcularCuadreTesoreria();
+}
+
+// 8. Conciliación en Vivo y Semáforo de Cuadre
+function tes_recalcularCuadreTesoreria() {
+  // Sumar todos los abonos activos
+  let totalSeleccionado = 0.0;
+
+  document.querySelectorAll('#tes-tbody-docs input[id^="tes-doc-abono-"]').forEach(inp => {
+    const val = parseFloat(inp.value.replace(/[^0-9.]/g, '')) || 0;
+    const chk = document.getElementById(`tes-doc-chk-${inp.getAttribute('data-id')}`);
+    if (chk && chk.checked && val > 0) {
+      totalSeleccionado += val;
+    }
+  });
+
+  document.querySelectorAll('#tes-tbody-cuentas input[id^="tes-abono-"]').forEach(inp => {
+    const val = parseFloat(inp.value.replace(/[^0-9.]/g, '')) || 0;
+    const chk = document.getElementById(`tes-chk-${inp.getAttribute('data-item-id')}`);
+    if (chk && chk.checked && val > 0) {
+      totalSeleccionado += val;
+    }
+  });
+
+  const objInp = document.getElementById('tes-monto-objetivo');
+  const objValStr = objInp ? objInp.value.replace(/[^0-9.]/g, '') : '';
+  const tieneObjetivo = (objValStr.length > 0 && parseFloat(objValStr) > 0);
+  const montoObjetivo = tieneObjetivo ? parseFloat(objValStr) : totalSeleccionado;
+
+  // Actualizar indicadores barra
+  document.getElementById('tes-bar-objetivo').textContent = `$${Number(montoObjetivo).toLocaleString('es-CO', {minimumFractionDigits: 2})}`;
+  document.getElementById('tes-bar-seleccionado').textContent = `$${Number(totalSeleccionado).toLocaleString('es-CO', {minimumFractionDigits: 2})}`;
+
+  const diferencia = montoObjetivo - totalSeleccionado;
+  const difEl = document.getElementById('tes-bar-diferencia');
+  const btnLiquidar = document.getElementById('tes-btn-liquidar');
+
+  if (Math.abs(diferencia) < 0.01 && totalSeleccionado > 0) {
+    difEl.textContent = '$0.00 ✅';
+    difEl.className = 'text-sm sm:text-base font-mono font-extrabold text-emerald-400';
+    btnLiquidar.disabled = false;
+  } else if (diferencia > 0) {
+    difEl.textContent = `Faltan $${Number(diferencia).toLocaleString('es-CO', {minimumFractionDigits: 2})} ⚠️`;
+    difEl.className = 'text-sm sm:text-base font-mono font-extrabold text-amber-400';
+    btnLiquidar.disabled = tieneObjetivo; // Si definió objetivo estricto, no deja liquidar hasta cuadrar
+  } else {
+    difEl.textContent = `Sobran $${Number(Math.abs(diferencia)).toLocaleString('es-CO', {minimumFractionDigits: 2})} ❌`;
+    difEl.className = 'text-sm sm:text-base font-mono font-extrabold text-rose-400';
+    btnLiquidar.disabled = true;
+  }
+}
+
+// 9. Ejecutar Liquidación Contable Atómica
+async function tes_ejecutarLiquidacion() {
+  const btn = document.getElementById('tes-btn-liquidar');
+  const tipoDocId = document.getElementById('tes-select-tipo-doc').value;
+  const metodoPago = document.getElementById('tes-select-metodo-pago').value;
+  const fecha = document.getElementById('tes-input-fecha').value;
+
+  if (!tipoDocId || !metodoPago) {
+    alert("Por favor seleccione tipo de documento y medio de pago.");
+    return;
+  }
+
+  // Recolectar abonos de documentos
+  const abonosDocs = [];
+  document.querySelectorAll('#tes-tbody-docs input[id^="tes-doc-abono-"]').forEach(inp => {
+    const val = parseFloat(inp.value.replace(/[^0-9.]/g, '')) || 0;
+    const id = parseInt(inp.getAttribute('data-id'));
+    const chk = document.getElementById(`tes-doc-chk-${id}`);
+    if (chk && chk.checked && val > 0) {
+      abonosDocs.push({ id: id, monto: val });
+    }
+  });
+
+  // Recolectar abonos de cuentas
+  const abonosCuentas = [];
+  document.querySelectorAll('#tes-tbody-cuentas input[id^="tes-abono-"]').forEach(inp => {
+    const val = parseFloat(inp.value.replace(/[^0-9.]/g, '')) || 0;
+    const itemId = inp.getAttribute('data-item-id');
+    const chk = document.getElementById(`tes-chk-${itemId}`);
+    if (chk && chk.checked && val > 0) {
+      abonosCuentas.push({
+        cuenta_id: parseInt(inp.getAttribute('data-cuenta-id')),
+        tercero_id: parseInt(inp.getAttribute('data-tercero-id')) || (TesoreriaState.enteActivo ? TesoreriaState.enteActivo.id : null),
+        monto: val
+      });
+    }
+  });
+
+  if (abonosDocs.length === 0 && abonosCuentas.length === 0) {
+    alert("No ha seleccionado ningún documento o cuenta para abonar.");
+    return;
+  }
+
+  const payload = {
+    tipo_movimiento: (TesoreriaState.modoActual === 'cxc') ? 'cobro' : 'pago',
+    tipo_documento_id: parseInt(tipoDocId),
+    metodo_pago: metodoPago,
+    fecha: fecha,
+    tercero_id: TesoreriaState.enteActivo && TesoreriaState.enteActivo.tipo === 'tercero' ? TesoreriaState.enteActivo.id : null,
+    beneficiario: TesoreriaState.enteActivo ? TesoreriaState.enteActivo.nombre : 'Varios',
+    abonos_documentos: abonosDocs,
+    abonos_cuentas: abonosCuentas
+  };
+
+  btn.disabled = true;
+  btn.innerHTML = `<span>⏳</span><span>Procesando liquidación...</span>`;
+
+  try {
+    const res = await fetch(`/api/tesoreria/${TesoreriaState.negocioId}/procesar-pago`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    // Éxito: Mostrar Modal
+    document.getElementById('tes-exito-titulo').textContent = `${(TesoreriaState.modoActual === 'cxc') ? 'Recaudo' : 'Egreso'} Liquidado Exitosamente`;
+    document.getElementById('tes-exito-mensaje').textContent = data.mensaje;
+    document.getElementById('tes-exito-doc-num').textContent = `${data.tipo_documento} No. ${data.numero_documento}`;
+    document.getElementById('tes-exito-doc-monto').textContent = `$${Number(data.total_procesado).toLocaleString('es-CO', {minimumFractionDigits: 2})}`;
+
+    // PDF URL
+    const pdfUrl = `/api/contabilidad/${TesoreriaState.negocioId}/comprobantes/pdf/${data.tipo_documento}/${data.numero_documento}`;
+    document.getElementById('tes-exito-btn-pdf').href = pdfUrl;
+
+    document.getElementById('tes-modal-exito').classList.remove('hidden');
+    document.getElementById('tes-modal-exito').classList.add('flex');
+
+  } catch (err) {
+    alert("Error al liquidar: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<span id="tes-btn-liquidar-icon">🚀</span><span id="tes-btn-liquidar-text">${(TesoreriaState.modoActual === 'cxc') ? 'Liquidar Recibo de Caja' : 'Liquidar Comprobante de Egreso'}</span>`;
+  }
+}
+
+function tes_cerrarModalExito() {
+  document.getElementById('tes-modal-exito').classList.add('hidden');
+  document.getElementById('tes-modal-exito').classList.remove('flex');
+  tes_deseleccionarEnte();
+  tes_limpiarMontoObjetivo();
+  tes_cargarCatalogos();
+}
+</script>

@@ -2070,52 +2070,56 @@
       </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-12 gap-x-3 gap-y-2 mb-3">
+    <div class="grid grid-cols-1 sm:grid-cols-12 gap-x-3 gap-y-3 mb-3">
 
       <div class="sm:col-span-2">
-        <label>Tipo doc.</label>
-        <select id="entrada-tipo-doc">
+        <label for="entrada-tipo-doc">Tipo doc.</label>
+        <select id="entrada-tipo-doc" tabindex="1">
           <option value="">Cargando tipos...</option>
         </select>
       </div>
 
       <div class="sm:col-span-2">
-        <label>No. documento</label>
-        <input id="entrada-num-doc" type="text" placeholder="FAC-0234">
+        <label for="entrada-num-doc">No. documento</label>
+        <input id="entrada-num-doc" tabindex="2" type="text" placeholder="FAC-0234">
       </div>
 
       <div class="sm:col-span-2">
-        <label>Fecha documento</label>
-        <input id="entrada-fecha-doc" type="date">
+        <label for="entrada-fecha-doc">Fecha documento</label>
+        <input id="entrada-fecha-doc" tabindex="3" type="date">
       </div>
 
       <div class="sm:col-span-3">
-        <label class="font-bold text-indigo-900 flex items-center gap-1">
-          <span>🏢 Sede / Bodega Destino</span>
-          <span class="text-rose-500 font-extrabold">*</span>
-        </label>
-        <select id="entrada-centro-utilidad" class="font-bold text-gray-800 border-indigo-300 bg-indigo-50/30 focus:ring-2 focus:ring-indigo-500">
+        <div class="flex items-center justify-between mb-1">
+          <label for="entrada-centro-utilidad" class="font-bold text-indigo-900 flex items-center gap-1 mb-0">
+            <span>🏢 Sede / Bodega Destino</span>
+            <span class="text-rose-500 font-extrabold">*</span>
+          </label>
+          <span id="badge-confirma-sede" class="text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800 transition-all">Por confirmar ⚠️</span>
+        </div>
+        <select id="entrada-centro-utilidad" tabindex="4" onchange="actualizarConfirmacionSede()"
+                class="w-full font-bold text-gray-800 border-2 border-amber-400 bg-amber-50/40 rounded-xl px-2.5 py-2 transition-all focus:ring-2 focus:ring-indigo-500 outline-none">
           <option value="">Cargando sedes...</option>
         </select>
       </div>
 
-      <div class="sm:col-span-3 flex items-end">
-        <button type="button" onclick="registrarEntrada()"
-                class="w-full py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 shadow-sm transition">
-          Registrar entrada
-        </button>
-      </div>
-
-      <div class="sm:col-span-2">
-        <label>Método de Pago</label>
-        <select id="entrada-metodo-pago">
+      <div class="sm:col-span-3">
+        <div class="flex items-center justify-between mb-1">
+          <label for="entrada-metodo-pago" class="font-bold text-indigo-900 flex items-center gap-1 mb-0">
+            <span>💳 Método de Pago</span>
+            <span class="text-rose-500 font-extrabold">*</span>
+          </label>
+          <span id="badge-confirma-metodo" class="text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800 transition-all">Por confirmar ⚠️</span>
+        </div>
+        <select id="entrada-metodo-pago" tabindex="5" onchange="actualizarConfirmacionMetodoPago()"
+                class="w-full font-bold text-gray-800 border-2 border-amber-400 bg-amber-50/40 rounded-xl px-2.5 py-2 transition-all focus:ring-2 focus:ring-indigo-500 outline-none">
           <!-- Cargado dinámicamente -->
         </select>
       </div>
 
-      <div class="sm:col-span-5 relative">
-        <label class="flex justify-between items-center">
-          <span>Proveedor</span>
+      <div class="sm:col-span-6 relative">
+        <label class="flex justify-between items-center mb-1">
+          <span class="font-bold text-gray-700">Proveedor</span>
           <button type="button" id="btn-crear-proveedor" onclick="crearProveedorNuevo()" class="hidden text-xs text-rose-500 hover:text-rose-700 font-bold bg-transparent border-0 p-0 cursor-pointer">
             ➕ Crear proveedor
           </button>
@@ -2123,14 +2127,14 @@
             ✅ ¡Creado!
           </span>
         </label>
-        <input id="entrada-proveedor" type="text" placeholder="Nombre del proveedor" autocomplete="off" onfocus="this.select()">
+        <input id="entrada-proveedor" tabindex="6" type="text" placeholder="Nombre del proveedor" autocomplete="off" onfocus="this.select()">
         <div id="entrada-proveedor-list" class="ac-list hidden"></div>
         <input type="hidden" id="entrada-proveedor-id">
       </div>
 
-      <div class="sm:col-span-5">
-        <label>Notas (opcional)</label>
-        <input id="entrada-notas" type="text" placeholder="">
+      <div class="sm:col-span-6">
+        <label class="font-bold text-gray-700 mb-1 block">Notas (opcional)</label>
+        <input id="entrada-notas" tabindex="7" type="text" placeholder="Notas u observaciones de la factura...">
       </div>
 
     </div>
@@ -2175,25 +2179,45 @@
 
 
 
-    <!-- Totales del Documento en tiempo real -->
+    <!-- Totales del Documento en tiempo real y Botón de Registro -->
 
-    <div class="bg-gray-50 p-4 rounded-xl mb-4 border border-gray-200 flex flex-wrap justify-between items-center gap-4">
+    <div class="bg-slate-50 p-4 rounded-2xl mb-4 border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-xs">
 
-      <div class="text-base font-semibold text-gray-600">
+      <div class="flex items-center gap-6 flex-wrap">
 
-        Subtotal: <span id="entrada-subtotal-val" class="font-bold text-gray-900 text-lg">$0.00</span>
+        <div class="text-sm font-semibold text-gray-600">
+
+          Subtotal: <span id="entrada-subtotal-val" class="font-bold text-gray-900 text-lg">$0.00</span>
+
+        </div>
+
+        <div class="text-sm font-semibold text-gray-600">
+
+          IVA: <span id="entrada-iva-val" class="font-bold text-gray-900 text-lg">$0.00</span>
+
+        </div>
+
+        <div class="text-base font-bold text-gray-800">
+
+          Total Documento: <span id="entrada-total-val" class="text-rose-600 font-black text-2xl">$0.00</span>
+
+        </div>
 
       </div>
 
-      <div class="text-base font-semibold text-gray-600">
+      <div>
 
-        IVA: <span id="entrada-iva-val" class="font-bold text-gray-900 text-lg">$0.00</span>
+        <button type="button" onclick="registrarEntrada()" id="btn-registrar-entrada"
 
-      </div>
+                class="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-sm rounded-xl shadow-sm hover:shadow-md transition-all flex items-center gap-2 cursor-pointer">
 
-      <div class="text-lg font-bold text-gray-800">
+          <span>📥</span>
 
-        Total Documento: <span id="entrada-total-val" class="text-rose-600 font-black text-2xl">$0.00</span>
+          <span>Registrar Entrada</span>
+
+          <span class="text-[10px] font-mono bg-rose-800/60 px-1.5 py-0.5 rounded text-rose-100">Ctrl + Enter</span>
+
+        </button>
 
       </div>
 
@@ -7722,7 +7746,95 @@ async function onSelectProductoEntrada(idx, selected) {
   calcularCostoFilaEmpaque(idx, 'equiv');
 }
 
+let sedeConfirmada = false;
+let metodoPagoConfirmado = false;
+
+function actualizarConfirmacionSede() {
+  const sel = document.getElementById('entrada-centro-utilidad');
+  const badge = document.getElementById('badge-confirma-sede');
+  if (!sel) return;
+  const val = sel.value;
+  if (val && val !== 'consolidado') {
+    sedeConfirmada = true;
+    sel.classList.remove('border-amber-400', 'bg-amber-50/40', 'border-rose-500', 'ring-2', 'ring-rose-500');
+    sel.classList.add('border-emerald-500', 'bg-emerald-50/20');
+    if (badge) {
+      badge.className = 'text-[10px] font-bold px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-100 text-emerald-800 transition-all';
+      badge.textContent = 'Confirmado ✓';
+    }
+  } else {
+    sedeConfirmada = false;
+    sel.classList.remove('border-emerald-500', 'bg-emerald-50/20', 'border-rose-500', 'ring-2', 'ring-rose-500');
+    sel.classList.add('border-amber-400', 'bg-amber-50/40');
+    if (badge) {
+      badge.className = 'text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800 transition-all';
+      badge.textContent = 'Por confirmar ⚠️';
+    }
+  }
+}
+
+function actualizarConfirmacionMetodoPago() {
+  const sel = document.getElementById('entrada-metodo-pago');
+  const badge = document.getElementById('badge-confirma-metodo');
+  if (!sel) return;
+  const val = sel.value;
+  if (val) {
+    metodoPagoConfirmado = true;
+    sel.classList.remove('border-amber-400', 'bg-amber-50/40', 'border-rose-500', 'ring-2', 'ring-rose-500');
+    sel.classList.add('border-emerald-500', 'bg-emerald-50/20');
+    if (badge) {
+      badge.className = 'text-[10px] font-bold px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-100 text-emerald-800 transition-all';
+      badge.textContent = 'Confirmado ✓';
+    }
+  } else {
+    metodoPagoConfirmado = false;
+    sel.classList.remove('border-emerald-500', 'bg-emerald-50/20', 'border-rose-500', 'ring-2', 'ring-rose-500');
+    sel.classList.add('border-amber-400', 'bg-amber-50/40');
+    if (badge) {
+      badge.className = 'text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800 transition-all';
+      badge.textContent = 'Por confirmar ⚠️';
+    }
+  }
+}
+
+function validarConfirmacionEncabezadoEntrada() {
+  const entCu = document.getElementById('entrada-centro-utilidad');
+  if (!entCu || !entCu.value || !sedeConfirmada) {
+    toast('⚠️ Debe seleccionar y confirmar la Sede / Bodega Destino antes de continuar.', false);
+    if (entCu) {
+      entCu.focus();
+      entCu.classList.remove('border-amber-400', 'bg-amber-50/40');
+      entCu.classList.add('border-rose-500', 'ring-2', 'ring-rose-500');
+      setTimeout(() => {
+        entCu.classList.remove('ring-2', 'ring-rose-500');
+        if (!sedeConfirmada) entCu.classList.add('border-amber-400');
+      }, 2000);
+    }
+    return false;
+  }
+
+  const entMp = document.getElementById('entrada-metodo-pago');
+  if (!entMp || !entMp.value || !metodoPagoConfirmado) {
+    toast('⚠️ Debe seleccionar y confirmar el Método de Pago antes de continuar.', false);
+    if (entMp) {
+      entMp.focus();
+      entMp.classList.remove('border-amber-400', 'bg-amber-50/40');
+      entMp.classList.add('border-rose-500', 'ring-2', 'ring-rose-500');
+      setTimeout(() => {
+        entMp.classList.remove('ring-2', 'ring-rose-500');
+        if (!metodoPagoConfirmado) entMp.classList.add('border-amber-400');
+      }, 2000);
+    }
+    return false;
+  }
+  return true;
+}
+
 function agregarLineaEntrada() {
+
+  if (!validarConfirmacionEncabezadoEntrada()) {
+    return;
+  }
 
   const cont = document.getElementById('entrada-lineas');
 
@@ -8365,18 +8477,11 @@ async function initDefaultProveedor() {
 
 
 async function registrarEntrada() {
-  const centroSel = document.getElementById('entrada-centro-utilidad');
-  const centroIdVal = centroSel ? centroSel.value : (CENTRO_ACTIVO && CENTRO_ACTIVO.id !== 'consolidado' ? CENTRO_ACTIVO.id : '');
-  if (!centroIdVal || centroIdVal === 'consolidado') {
-    toast('⚠️ Debe seleccionar una Sede / Bodega física de destino para registrar la entrada.', false);
-    if (centroSel) {
-      centroSel.focus();
-      centroSel.classList.add('ring-2', 'ring-rose-500');
-      setTimeout(() => centroSel.classList.remove('ring-2', 'ring-rose-500'), 3000);
-    }
+  if (!validarConfirmacionEncabezadoEntrada()) {
     return;
   }
-  const centro_utilidad_id = parseInt(centroIdVal);
+  const centroSel = document.getElementById('entrada-centro-utilidad');
+  const centro_utilidad_id = parseInt(centroSel.value);
 
   const tipo_doc_id = parseInt(document.getElementById('entrada-tipo-doc').value) || null;
 
@@ -8394,7 +8499,7 @@ async function registrarEntrada() {
 
   const proveedor_id = document.getElementById('entrada-proveedor-id').value || null;
 
-  const metodo_pago = document.getElementById('entrada-metodo-pago').value || 'efectivo';
+  const metodo_pago = document.getElementById('entrada-metodo-pago').value;
 
 
 
@@ -8554,7 +8659,14 @@ async function registrarEntrada() {
 
     cargarProductos();
 
-    
+    // Reset confirmación de selects
+    sedeConfirmada = false;
+    metodoPagoConfirmado = false;
+    if (centroSel) centroSel.value = '';
+    const entMp = document.getElementById('entrada-metodo-pago');
+    if (entMp) entMp.value = '';
+    actualizarConfirmacionSede();
+    actualizarConfirmacionMetodoPago();
 
     // Clear URL parameters to prevent reload loops
 
@@ -12983,41 +13095,46 @@ async function ejecutarConciliacionInventario() {
 
 
 async function cargarMetodosPagoEntrada() {
-
   try {
-
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/config-metodos`);
-
     const d = await r.json();
-
     if (d.ok) {
+      const exigirCompras = (d.exigir_cuenta && d.exigir_cuenta.compras !== undefined) ? d.exigir_cuenta.compras : true;
+      const todosMetodos = d.metodos || [];
 
-      metodosPagoEntrada = d.metodos || [];
-
-      const select = document.getElementById('entrada-metodo-pago');
-
-      if (select) {
-
-        const alguienConCuenta = metodosPagoEntrada.some(m => m.cuenta_pago_id);
-
-        select.innerHTML = metodosPagoEntrada.map(m => {
-
-          const sinCuenta = alguienConCuenta && !m.cuenta_pago_id;
-
-          return `<option value="${m.codigo}"${sinCuenta ? ' style="color:#b45309"' : ''}>${m.nombre}${sinCuenta ? ' ⚠️ Sin cuenta contable' : ''}</option>`;
-
-        }).join('');
-
+      let metodosFiltrados = [];
+      if (exigirCompras) {
+        // Exige cuenta contable mapeada Y habilitado para compras
+        metodosFiltrados = todosMetodos.filter(m => (m.activo !== false) && (m.activo_compras === true) && (m.cuenta_pago_id || m.cuenta_id));
+      } else {
+        // No exige cuenta contable: muestra los habilitados para compras (o todos si ninguno marcado)
+        metodosFiltrados = todosMetodos.filter(m => (m.activo !== false) && (m.activo_compras === true));
+        if (metodosFiltrados.length === 0) {
+          metodosFiltrados = todosMetodos.filter(m => m.activo !== false);
+        }
       }
 
+      metodosPagoEntrada = metodosFiltrados;
+      const select = document.getElementById('entrada-metodo-pago');
+      if (select) {
+        let opts = '<option value="" disabled selected>-- Seleccione Método de Pago (Obligatorio) --</option>';
+        if (metodosFiltrados.length === 0) {
+          opts += '<option value="" disabled>⚠️ No hay métodos configurados con cuenta contable para Compras</option>';
+        } else {
+          opts += metodosFiltrados.map(m => {
+            const sinCuenta = !m.cuenta_pago_id && !m.cuenta_id;
+            const extra = sinCuenta ? ' ⚠️ Sin cuenta contable' : '';
+            return `<option value="${m.codigo}">${m.icono || '💳'} ${m.nombre}${extra}</option>`;
+          }).join('');
+        }
+        select.innerHTML = opts;
+        select.value = '';
+        actualizarConfirmacionMetodoPago();
+      }
     }
-
   } catch(e) {
-
     console.error('Error al cargar métodos de pago para entradas:', e);
-
   }
-
 }
 
 
@@ -13120,18 +13237,16 @@ function actualizarHeaderCentroActivo() {
   const entCu = document.getElementById('entrada-centro-utilidad');
   const entBanner = document.getElementById('banner-entrada-consolidado');
   if (entCu && CENTROS_UTILIDAD && CENTROS_UTILIDAD.length) {
-    if (esConsolidado) {
-      entCu.innerHTML = '<option value="">-- Seleccione Sede de Destino (Obligatorio) --</option>' + CENTROS_UTILIDAD.map(c => `
-        <option value="${c.id}">${c.tipo === 'movil' ? '🛵' : '🏪'} ${c.codigo} — ${c.nombre}</option>
-      `).join('');
-      entCu.value = '';
-      if (entBanner) entBanner.classList.remove('hidden');
-    } else {
-      entCu.innerHTML = CENTROS_UTILIDAD.map(c => `
-        <option value="${c.id}" ${String(c.id) === String(CENTRO_ACTIVO.id) ? 'selected' : ''}>${c.tipo === 'movil' ? '🛵' : '🏪'} ${c.codigo} — ${c.nombre}</option>
-      `).join('');
-      entCu.value = String(CENTRO_ACTIVO.id);
-      if (entBanner) entBanner.classList.add('hidden');
+    let opts = '<option value="" disabled selected>-- Seleccione Sede de Destino (Obligatorio) --</option>';
+    opts += CENTROS_UTILIDAD.map(c => `
+      <option value="${c.id}">${c.tipo === 'movil' ? '🛵' : '🏪'} ${c.codigo} — ${c.nombre}</option>
+    `).join('');
+    entCu.innerHTML = opts;
+    entCu.value = '';
+    actualizarConfirmacionSede();
+    if (entBanner) {
+      if (esConsolidado) entBanner.classList.remove('hidden');
+      else entBanner.classList.add('hidden');
     }
   }
 
@@ -13780,6 +13895,72 @@ async function cargarHistorialTraslados() {
 
 
 
+function setupNavegacionTecladoEntradas() {
+  const bindEnter = (fromId, toId, beforeJump) => {
+    const el = document.getElementById(fromId);
+    if (!el) return;
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (beforeJump && !beforeJump()) return;
+        const target = document.getElementById(toId);
+        if (target) {
+          target.focus();
+          if (target.select) target.select();
+        }
+      }
+    });
+  };
+
+  bindEnter('entrada-tipo-doc', 'entrada-num-doc');
+  bindEnter('entrada-num-doc', 'entrada-fecha-doc');
+  bindEnter('entrada-fecha-doc', 'entrada-centro-utilidad');
+  bindEnter('entrada-centro-utilidad', 'entrada-metodo-pago', () => {
+    actualizarConfirmacionSede();
+    return true;
+  });
+  bindEnter('entrada-metodo-pago', 'entrada-proveedor', () => {
+    actualizarConfirmacionMetodoPago();
+    return true;
+  });
+  bindEnter('entrada-proveedor', 'entrada-notas', () => {
+    const list = document.getElementById('entrada-proveedor-list');
+    if (list && !list.classList.contains('hidden')) return false;
+    return true;
+  });
+
+  const notasEl = document.getElementById('entrada-notas');
+  if (notasEl) {
+    notasEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!validarConfirmacionEncabezadoEntrada()) return;
+        if (entradaLineas.length === 0) {
+          agregarLineaEntrada();
+        }
+        setTimeout(() => {
+          const firstAc = document.getElementById('ent-ac-0') || document.querySelector('textarea[id^="ent-ac-"]');
+          if (firstAc) {
+            firstAc.focus();
+            if (firstAc.select) firstAc.select();
+          }
+        }, 60);
+      }
+    });
+  }
+
+  // Atajo global Ctrl+Enter para registrar entrada dentro de la pestaña
+  const tabEntradas = document.getElementById('tab-entradas');
+  if (tabEntradas) {
+    tabEntradas.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        registrarEntrada();
+      }
+    });
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -14080,6 +14261,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     setTimeout(() => verificarDocumentoExistente(), 150);
   }
+
+  setupNavegacionTecladoEntradas();
 });
 
 // ── Auto-refresco inteligente al volver a la pestaña tras editar en otra ventana ──

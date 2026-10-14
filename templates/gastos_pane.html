@@ -1,5 +1,29 @@
 <!-- ═══ COMPONENTE DESEMBOLSOS (OPERATIVO & CONTROL MULTI-MES) ═══ -->
 <div class="w-full bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 my-2">
+
+  <!-- SELECTOR MAESTRO DE MODOS DE TESORERÍA -->
+  <div class="bg-gray-100/80 p-1.5 rounded-2xl flex flex-wrap gap-1.5 mb-6 border border-gray-200/80 select-none">
+    <button type="button" onclick="cambiarModoTesoreria('operativos')" id="btn-tes-modo-operativos"
+            class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all duration-200 flex items-center gap-2 bg-white text-gray-900 shadow-sm border border-gray-200/50">
+      <span>💸</span>
+      <span>Gastos Operativos (Caja Menor / Relación)</span>
+    </button>
+    <button type="button" onclick="cambiarModoTesoreria('cxp')" id="btn-tes-modo-cxp"
+            class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-900 hover:bg-white/60">
+      <span>📑</span>
+      <span>Pagos a Cuentas por Pagar (Proveedores y Pasivos)</span>
+      <span class="px-1.5 py-0.5 rounded-full text-[10px] bg-rose-100 text-rose-800 font-bold">Egreso</span>
+    </button>
+    <button type="button" onclick="cambiarModoTesoreria('cxc')" id="btn-tes-modo-cxc"
+            class="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-900 hover:bg-white/60">
+      <span>💵</span>
+      <span>Recaudos de Cartera (Clientes y Activos)</span>
+      <span class="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-bold">Recibo</span>
+    </button>
+  </div>
+
+  <!-- SECCIÓN OPERATIVA HABITUAL (Intacta) -->
+  <div id="tesoreria-seccion-operativos">
   
   <!-- Sub-sección Colapsable: Suscripciones y Gastos Fijos Recurrentes (Sin desembolso previo) -->
   <div class="w-full bg-slate-50/80 rounded-2xl border border-slate-200/80 mb-6 overflow-hidden transition-all duration-200 shadow-xs">
@@ -1176,6 +1200,13 @@
         </button>
       </div>
     </div>
+  </div>
+
+  </div><!-- Fin #tesoreria-seccion-operativos -->
+
+  <!-- SECCIÓN TRANSACCIONES DE TESORERÍA (Pagos CxP y Recaudos CxC) -->
+  <div id="tesoreria-seccion-transacciones" class="hidden">
+    {% include "tesoreria_transacciones_pane.html" %}
   </div>
 
 </div>

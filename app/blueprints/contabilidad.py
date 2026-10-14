@@ -6041,22 +6041,37 @@ def api_tesoreria_buscar(negocio_id):
             LIMIT 10
         """, (negocio_id, negocio_id, like_q)).fetchall()
         
-        # 2. Cuentas PUC de Pasivo (Clase 2) que no manejen documentos
+        # 2. Cuentas PUC de Pasivo (Clase 2) que tengan saldo en libros O en documentos
         rows_cuentas = conn.execute("""
+            WITH saldos_docs_cta AS (
+                SELECT cuenta_id, SUM(saldo) as saldo_docs, COUNT(*) as cant_docs
+                FROM saldo_por_documentos
+                WHERE negocio_id = %s AND saldo > 0
+                GROUP BY cuenta_id
+            ),
+            saldos_libros_cta AS (
+                SELECT m.cuenta_id,
+                       SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) as saldo_libros
+                FROM movimientos_contables m
+                JOIN cuentas_puc c ON c.id = m.cuenta_id
+                WHERE m.negocio_id = %s AND c.codigo LIKE '2%%'
+                GROUP BY m.cuenta_id
+            )
             SELECT 
                 c.id, c.codigo, c.nombre, c.maneja_documentos, c.maneja_terceros, 'cuenta' as tipo,
-                SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) as saldo_total
+                COALESCE(sdc.saldo_docs, 0) as saldo_docs,
+                COALESCE(sdc.cant_docs, 0) as cant_docs,
+                COALESCE(slc.saldo_libros, 0) as saldo_libros,
+                GREATEST(COALESCE(sdc.saldo_docs, 0), COALESCE(slc.saldo_libros, 0)) as saldo_total
             FROM cuentas_puc c
-            JOIN movimientos_contables m ON m.cuenta_id = c.id
-            WHERE m.negocio_id = %s 
-              AND c.codigo LIKE '2%%' 
-              AND (c.maneja_documentos IS NOT TRUE)
+            LEFT JOIN saldos_docs_cta sdc ON sdc.cuenta_id = c.id
+            LEFT JOIN saldos_libros_cta slc ON slc.cuenta_id = c.id
+            WHERE c.codigo LIKE '2%%'
+              AND (COALESCE(sdc.saldo_docs, 0) > 0.01 OR COALESCE(slc.saldo_libros, 0) > 0.01)
               AND (c.nombre ILIKE %s OR c.codigo ILIKE %s)
-            GROUP BY c.id, c.codigo, c.nombre, c.maneja_documentos, c.maneja_terceros
-            HAVING SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) > 0.01
             ORDER BY saldo_total DESC
             LIMIT 10
-        """, (negocio_id, like_q, like_q)).fetchall()
+        """, (negocio_id, negocio_id, like_q, like_q)).fetchall()
         
         conn.close()
         
@@ -6078,14 +6093,33 @@ def api_tesoreria_buscar(negocio_id):
             })
             
         for r in rows_cuentas:
+            s_tot = float(r['saldo_total'])
+            s_docs = float(r['saldo_docs'])
+            s_lib = float(r['saldo_libros'])
+            c_docs = int(r['cant_docs'])
+            m_docs = bool(r['maneja_documentos'])
+            
+            if m_docs and s_docs > 0 and abs(s_lib - s_docs) < 0.01:
+                sub = f"Cuenta PUC {r['codigo']} ({c_docs} facturas por pagar)"
+            elif m_docs and s_docs == 0 and s_lib > 0:
+                sub = f"Cuenta PUC {r['codigo']} ⚠️ Saldo en libros sin facturas asociadas"
+            elif m_docs and s_docs > 0 and s_lib > s_docs:
+                sub = f"Cuenta PUC {r['codigo']} ({c_docs} facturas + ${s_lib - s_docs:,.2f} histórico)"
+            else:
+                sub = f"Cuenta PUC {r['codigo']}" + (" (Con desglose por terceros)" if r['maneja_terceros'] else " (Saldo directo)")
+                
             resultados.append({
                 'tipo': 'cuenta',
                 'id': r['id'],
                 'codigo': r['codigo'],
                 'nombre': r['nombre'],
-                'saldo_total': float(r['saldo_total']),
+                'saldo_total': s_tot,
+                'saldo_docs': s_docs,
+                'saldo_libros': s_lib,
+                'cant_docs': c_docs,
+                'maneja_documentos': m_docs,
                 'maneja_terceros': bool(r['maneja_terceros']),
-                'subtitulo': f"Cuenta PUC {r['codigo']}" + (" (Con desglose por terceros)" if r['maneja_terceros'] else " (Saldo directo)")
+                'subtitulo': sub
             })
             
         return jsonify({'ok': True, 'resultados': resultados})
@@ -6138,9 +6172,11 @@ def api_tesoreria_detalle(negocio_id):
                 ORDER BY s.fecha_hora ASC
             """, (negocio_id, origen_id)).fetchall()
             
+            docs_por_cuenta = {}
             for d in docs_rows:
                 s_val = float(d['saldo'])
                 total_pasivo += s_val
+                docs_por_cuenta[d['cuenta_id']] = docs_por_cuenta.get(d['cuenta_id'], 0.0) + s_val
                 documentos.append({
                     'id': d['id'],
                     'tipo_doc_nombre': d['tipo_doc_nombre'],
@@ -6153,28 +6189,36 @@ def api_tesoreria_detalle(negocio_id):
                     'cuenta_nombre': d['cuenta_nombre']
                 })
                 
-            # 2. Cuentas directas de pasivo sin documento para este tercero
+            # 2. Cuentas directas de pasivo en movimientos_contables para este tercero
             csd_rows = conn.execute("""
-                SELECT c.id as cuenta_id, c.codigo as cuenta_codigo, c.nombre as cuenta_nombre,
-                       SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) as saldo
+                SELECT c.id as cuenta_id, c.codigo as cuenta_codigo, c.nombre as cuenta_nombre, c.maneja_documentos,
+                       SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) as saldo_libros
                 FROM movimientos_contables m
                 JOIN cuentas_puc c ON c.id = m.cuenta_id
                 WHERE m.negocio_id = %s AND m.tercero_id = %s
-                  AND c.codigo LIKE '2%%' AND (c.maneja_documentos IS NOT TRUE)
-                GROUP BY c.id, c.codigo, c.nombre
+                  AND c.codigo LIKE '2%%'
+                GROUP BY c.id, c.codigo, c.nombre, c.maneja_documentos
                 HAVING SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) > 0.01
                 ORDER BY c.codigo ASC
             """, (negocio_id, origen_id)).fetchall()
             
             for c in csd_rows:
-                s_val = float(c['saldo'])
-                total_pasivo += s_val
-                cuentas_sin_doc.append({
-                    'cuenta_id': c['cuenta_id'],
-                    'cuenta_codigo': c['cuenta_codigo'],
-                    'cuenta_nombre': c['cuenta_nombre'],
-                    'saldo': s_val
-                })
+                s_lib = float(c['saldo_libros'])
+                s_docs_cta = docs_por_cuenta.get(c['cuenta_id'], 0.0)
+                remanente = max(0.0, s_lib - s_docs_cta)
+                if remanente > 0.01:
+                    total_pasivo += remanente
+                    nom = c['cuenta_nombre']
+                    if c['maneja_documentos'] and s_docs_cta == 0:
+                        nom += " (Saldo en libros sin factura)"
+                    elif c['maneja_documentos'] and s_docs_cta > 0:
+                        nom += " (Excedente en libros sin factura)"
+                    cuentas_sin_doc.append({
+                        'cuenta_id': c['cuenta_id'],
+                        'cuenta_codigo': c['cuenta_codigo'],
+                        'cuenta_nombre': nom,
+                        'saldo': remanente
+                    })
                 
         elif tipo == 'cuenta':
             c_row = conn.execute("SELECT id, codigo, nombre, maneja_terceros, maneja_documentos FROM cuentas_puc WHERE id = %s", (origen_id,)).fetchone()
@@ -6184,45 +6228,88 @@ def api_tesoreria_detalle(negocio_id):
             ente_info = dict(c_row)
             ente_info['tipo'] = 'cuenta'
             
-            if c_row['maneja_terceros']:
-                # Desglose por tercero
-                t_sub_rows = conn.execute("""
-                    SELECT m.tercero_id, COALESCE(t.nombre, 'Sin Tercero Asignado') as tercero_nombre,
-                           SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) as saldo
-                    FROM movimientos_contables m
-                    LEFT JOIN terceros t ON t.id = m.tercero_id
-                    WHERE m.negocio_id = %s AND m.cuenta_id = %s
-                    GROUP BY m.tercero_id, t.nombre
-                    HAVING SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) > 0.01
-                    ORDER BY saldo DESC
-                """, (negocio_id, origen_id)).fetchall()
+            # 1. Facturas y documentos en saldo_por_documentos para esta cuenta
+            docs_rows = conn.execute("""
+                SELECT s.id, td.nombre as tipo_doc_nombre, s.numero_documento, 
+                       s.monto_original, s.saldo, s.fecha_hora,
+                       c.id as cuenta_id, c.codigo as cuenta_codigo, c.nombre as cuenta_nombre
+                FROM saldo_por_documentos s
+                JOIN cuentas_puc c ON c.id = s.cuenta_id
+                JOIN tipos_documento_negocio td ON td.id = s.tipo_documento_id
+                WHERE s.negocio_id = %s AND s.cuenta_id = %s AND s.saldo > 0
+                ORDER BY s.fecha_hora ASC
+            """, (negocio_id, origen_id)).fetchall()
+            
+            s_docs_total = 0.0
+            for d in docs_rows:
+                s_val = float(d['saldo'])
+                s_docs_total += s_val
+                documentos.append({
+                    'id': d['id'],
+                    'tipo_doc_nombre': d['tipo_doc_nombre'],
+                    'numero_documento': d['numero_documento'],
+                    'monto_original': float(d['monto_original']),
+                    'saldo': s_val,
+                    'fecha': str(d['fecha_hora'])[:10] if d['fecha_hora'] else '',
+                    'cuenta_id': d['cuenta_id'],
+                    'cuenta_codigo': d['cuenta_codigo'],
+                    'cuenta_nombre': d['cuenta_nombre']
+                })
                 
-                for ts in t_sub_rows:
-                    s_val = float(ts['saldo'])
-                    total_pasivo += s_val
-                    terceros_sub.append({
-                        'tercero_id': ts['tercero_id'],
-                        'tercero_nombre': ts['tercero_nombre'],
+            # 2. Saldo total en libros en movimientos_contables
+            sd_row = conn.execute("""
+                SELECT SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) as saldo_libros
+                FROM movimientos_contables m
+                WHERE m.negocio_id = %s AND m.cuenta_id = %s
+            """, (negocio_id, origen_id)).fetchone()
+            
+            s_libros_total = float(sd_row['saldo_libros']) if sd_row and sd_row['saldo_libros'] else 0.0
+            remanente_sin_docs = max(0.0, s_libros_total - s_docs_total)
+            
+            # Si hay documentos registrados, se suman
+            total_pasivo = s_docs_total
+            
+            if remanente_sin_docs > 0.01:
+                total_pasivo += remanente_sin_docs
+                
+                if c_row['maneja_terceros']:
+                    # Desglose por tercero de ese remanente
+                    t_sub_rows = conn.execute("""
+                        SELECT m.tercero_id, COALESCE(t.nombre, 'Sin Tercero Asignado') as tercero_nombre,
+                               SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) as saldo
+                        FROM movimientos_contables m
+                        LEFT JOIN terceros t ON t.id = m.tercero_id
+                        WHERE m.negocio_id = %s AND m.cuenta_id = %s
+                        GROUP BY m.tercero_id, t.nombre
+                        HAVING SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) > 0.01
+                        ORDER BY saldo DESC
+                    """, (negocio_id, origen_id)).fetchall()
+                    
+                    for ts in t_sub_rows:
+                        s_val = float(ts['saldo'])
+                        terceros_sub.append({
+                            'tercero_id': ts['tercero_id'],
+                            'tercero_nombre': ts['tercero_nombre'],
+                            'cuenta_id': c_row['id'],
+                            'cuenta_codigo': c_row['codigo'],
+                            'cuenta_nombre': c_row['nombre'] + (" (Saldo sin factura)" if c_row['maneja_documentos'] else ""),
+                            'saldo': s_val
+                        })
+                else:
+                    # Saldo directo de la cuenta
+                    cuentas_sin_doc.append({
                         'cuenta_id': c_row['id'],
                         'cuenta_codigo': c_row['codigo'],
-                        'cuenta_nombre': c_row['nombre'],
-                        'saldo': s_val
+                        'cuenta_nombre': c_row['nombre'] + (" (Saldo en Libros sin factura)" if c_row['maneja_documentos'] else ""),
+                        'saldo': remanente_sin_docs
                     })
-            else:
-                # Saldo directo de la cuenta
-                sd_row = conn.execute("""
-                    SELECT SUM(CASE WHEN m.tipo IN ('credito','C') THEN m.monto ELSE -m.monto END) as saldo
-                    FROM movimientos_contables m
-                    WHERE m.negocio_id = %s AND m.cuenta_id = %s
-                """, (negocio_id, origen_id)).fetchone()
-                
-                s_val = float(sd_row['saldo']) if sd_row and sd_row['saldo'] else 0.0
-                total_pasivo = s_val
+            elif s_docs_total == 0 and s_libros_total > 0:
+                total_pasivo = s_libros_total
                 cuentas_sin_doc.append({
                     'cuenta_id': c_row['id'],
                     'cuenta_codigo': c_row['codigo'],
                     'cuenta_nombre': c_row['nombre'],
-                    'saldo': s_val
+                    'saldo': s_libros_total
                 })
                 
         conn.close()

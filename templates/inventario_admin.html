@@ -178,9 +178,16 @@
     }
 
     #tab-entradas input[id^="ent-ac-"],
+    #tab-entradas textarea[id^="ent-ac-"],
     #tab-entradas input[id^="ent-pres-"] {
       text-align: left;
       padding-left: 12px;
+    }
+
+    #tab-entradas textarea[id^="ent-ac-"] {
+      resize: none;
+      overflow: hidden;
+      line-height: 1.3;
     }
 
     #tab-entradas input[id^="ent-cant-emp-"] {
@@ -188,8 +195,12 @@
     }
 
     #tab-entradas select[id^="ent-iva-pct-"] {
-      max-width: 100%;
+      width: 70px;
+      flex: none;
       font-size: 0.95rem;
+      padding-left: 6px;
+      padding-right: 2px;
+      text-align: left;
     }
 
     #tab-entradas .grid-cols-12 > div:last-child { white-space: nowrap; }
@@ -200,9 +211,7 @@
 
     #tab-entradas input[id^="ent-total-"],
 
-    #tab-entradas input[id^="ent-vu-"],
-
-    #tab-entradas select[id^="ent-iva-pct-"] {
+    #tab-entradas input[id^="ent-vu-"] {
 
       text-align: right;
 
@@ -2125,7 +2134,7 @@
 
       <div class="grid grid-cols-12 gap-1 mb-1 px-1">
 
-        <span class="col-span-2 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Producto</span>
+        <span class="col-span-3 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Producto</span>
 
         <span class="col-span-1 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Cant.Emp</span>
 
@@ -2140,8 +2149,6 @@
         <span class="col-span-1 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Cost.Base</span>
 
         <span class="col-span-1 text-xs font-black text-gray-600 uppercase text-center tracking-wide">IVA</span>
-
-        <span class="col-span-1"></span>
 
       </div>
 
@@ -6639,6 +6646,8 @@ async function guardarProducto() {
 
       if (inputId.startsWith('ent-ac-')) {
 
+        autoGrowEntProd(document.getElementById(inputId));
+
         const idx = inputId.replace('ent-ac-', '');
 
         const select = document.getElementById(`ent-iva-pct-${idx}`);
@@ -7600,7 +7609,56 @@ function calcularYAplicarProcedimiento() {
 
 const historialEntradas = {};
 
+function autoGrowEntProd(el) {
+
+  if (!el) return;
+
+  el.style.height = 'auto';
+
+  el.style.height = el.scrollHeight + 'px';
+
+}
+
+
+
+function wireProductoEntrada(idx) {
+
+  const ta = document.getElementById(`ent-ac-${idx}`);
+
+  if (!ta) return;
+
+  ta.addEventListener('input', () => autoGrowEntProd(ta));
+
+  ta.addEventListener('keydown', e => {
+
+    if (e.key !== 'Enter') return;
+
+    const lst = document.getElementById(`ent-ac-list-${idx}`);
+
+    if (lst && lst.querySelector('.ac-item.ac-focus')) return;
+
+    e.preventDefault();
+
+    if (lst && lst.classList.contains('hidden')) {
+
+      const cc = document.getElementById(`ent-cant-emp-${idx}`);
+
+      if (cc) cc.focus();
+
+    }
+
+  });
+
+  autoGrowEntProd(ta);
+
+}
+
+
+
 async function onSelectProductoEntrada(idx, selected) {
+
+  autoGrowEntProd(document.getElementById(`ent-ac-${idx}`));
+
   const campoCant = document.getElementById(`ent-cant-emp-${idx}`);
   if (campoCant) campoCant.focus();
 
@@ -7670,9 +7728,9 @@ function agregarLineaEntrada() {
 
   div.innerHTML = `
 
-    <div class="col-span-2 relative">
+    <div class="col-span-3 relative">
 
-      <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off">
+      <textarea id="ent-ac-${idx}" rows="1" placeholder="Buscar producto…" autocomplete="off"></textarea>
 
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
 
@@ -7722,9 +7780,9 @@ function agregarLineaEntrada() {
 
     </div>
 
-    <div class="col-span-1">
+    <div class="col-span-1 flex items-center gap-1">
 
-      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full text-sm font-semibold">
+      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="text-sm font-semibold">
 
         <option value="0" selected>0%</option>
 
@@ -7733,10 +7791,6 @@ function agregarLineaEntrada() {
         <option value="19">19%</option>
 
       </select>
-
-    </div>
-
-    <div class="col-span-1 flex justify-center">
 
       <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
 
@@ -7758,6 +7812,8 @@ function agregarLineaEntrada() {
   setupPresentacionAC(idx);
 
   calcularTotalesEntrada();
+
+  wireProductoEntrada(idx);
 
   const primerCampo = document.getElementById(`ent-ac-${idx}`);
   if (primerCampo) primerCampo.focus();
@@ -7790,9 +7846,9 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
   div.innerHTML = `
 
-    <div class="col-span-2 relative">
+    <div class="col-span-3 relative">
 
-      <input type="text" id="ent-ac-${idx}" placeholder="Buscar producto…" autocomplete="off" value="${productoNombre.replace(/"/g,'&quot;')}">
+      <textarea id="ent-ac-${idx}" rows="1" placeholder="Buscar producto…" autocomplete="off">${productoNombre.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
 
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
 
@@ -7842,9 +7898,9 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
     </div>
 
-    <div class="col-span-1">
+    <div class="col-span-1 flex items-center gap-1">
 
-      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="w-full text-sm font-semibold">
+      <select id="ent-iva-pct-${idx}" onchange="calcularTotalesEntrada()" class="text-sm font-semibold">
 
         <option value="0" ${ivaPct === 0 ? 'selected' : ''}>0%</option>
 
@@ -7853,10 +7909,6 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
         <option value="19" ${ivaPct === 19 ? 'selected' : ''}>19%</option>
 
       </select>
-
-    </div>
-
-    <div class="col-span-1 flex justify-center whitespace-nowrap">
 
       <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
 
@@ -7877,6 +7929,8 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
 
   setupPresentacionAC(idx);
+
+  wireProductoEntrada(idx);
 
 }
 

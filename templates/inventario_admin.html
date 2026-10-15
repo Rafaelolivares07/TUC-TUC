@@ -11437,13 +11437,13 @@ function renderizarComprasTabla(proveedores) {
 
               </label>
 
-            <a href="${window.location.pathname}?tab=entradas&desde_compras=1" target="_blank" onclick="return hacerEntradaProveedor(${pIdx})"
+            <button type="button" onclick="hacerEntradaProveedor(${pIdx})"
 
-                    class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm">
+                    class="px-4 py-2 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer">
 
               📥 Registrar Entrada (FAC)
 
-            </a>
+            </button>
 
             </div>
 
@@ -12510,11 +12510,12 @@ function recalcularTotalProveedor(pIdx) {
 
 function cargarEntradaDesdeComprasPendiente() {
 
-  const raw = sessionStorage.getItem('entrada_desde_compras');
+  const raw = sessionStorage.getItem('entrada_desde_compras') || localStorage.getItem('entrada_desde_compras');
 
   if (!raw) return;
 
   sessionStorage.removeItem('entrada_desde_compras');
+  localStorage.removeItem('entrada_desde_compras');
 
 
 
@@ -12542,17 +12543,22 @@ function cargarEntradaDesdeComprasPendiente() {
 
 
 
-  document.getElementById('entrada-lineas').innerHTML = '';
+  const contLineas = document.getElementById('entrada-lineas');
+  if (contLineas) contLineas.innerHTML = '';
 
   entradaLineas = [];
 
-  document.getElementById('entrada-proveedor-id').value = p.proveedor_id || '';
+  const inpProvId = document.getElementById('entrada-proveedor-id');
+  if (inpProvId) inpProvId.value = p.proveedor_id || '';
 
-  document.getElementById('entrada-proveedor').value = p.proveedor_nombre || '';
+  const inpProvNom = document.getElementById('entrada-proveedor');
+  if (inpProvNom) inpProvNom.value = p.proveedor_nombre || '';
 
-  document.getElementById('entrada-num-doc').value = transferencia.documento || '';
+  const inpDoc = document.getElementById('entrada-num-doc');
+  if (inpDoc) inpDoc.value = transferencia.documento || '';
 
-  document.getElementById('entrada-fecha-doc').value = transferencia.fecha || '';
+  const inpFecha = document.getElementById('entrada-fecha-doc');
+  if (inpFecha) inpFecha.value = transferencia.fecha || '';
 
 
 
@@ -12598,7 +12604,7 @@ function cargarEntradaDesdeComprasPendiente() {
 
   mostrarTab('entradas');
 
-  toast(`Cargados ${productos.length} ítems en la pestaña de Entradas.`);
+  toast(`Cargados ${productos.length} ítems de ${p.proveedor_nombre} en la pestaña de Entradas.`);
 
 }
 
@@ -12652,7 +12658,7 @@ function hacerEntradaProveedor(pIdx) {
 
 
 
-  if (!confirm(`¿Desea transferir ${checkedProds.length} ítems de ${p.proveedor_nombre} a una nueva pestaña de Entradas?`)) {
+  if (!confirm(`¿Desea transferir ${checkedProds.length} ítems de ${p.proveedor_nombre} a la pestaña de Entradas?`)) {
 
     return false;
 
@@ -12660,7 +12666,7 @@ function hacerEntradaProveedor(pIdx) {
 
 
 
-  sessionStorage.setItem('entrada_desde_compras', JSON.stringify({
+  const payload = {
 
     proveedor: p,
 
@@ -12670,7 +12676,14 @@ function hacerEntradaProveedor(pIdx) {
 
     fecha: fechaDocumento
 
-  }));
+  };
+
+  const payloadStr = JSON.stringify(payload);
+  sessionStorage.setItem('entrada_desde_compras', payloadStr);
+  localStorage.setItem('entrada_desde_compras', payloadStr);
+
+  cargarEntradaDesdeComprasPendiente();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 
   return true;
 

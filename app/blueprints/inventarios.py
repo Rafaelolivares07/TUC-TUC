@@ -673,7 +673,12 @@ def _obtener_info_reabastecimiento_producto(conn, negocio_id, producto_id, stock
             FROM cotizaciones_compras c 
             JOIN terceros t ON t.id = c.tercero_id 
             WHERE c.item_id = %s AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
-            ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC LIMIT 2
+            ORDER BY 
+                CASE WHEN COALESCE(c.unidades_item, 1) > 1.0001 AND LOWER(COALESCE(c.descripcion_presentacion, '')) NOT IN ('unidad', 'unid') THEN 0 ELSE 1 END ASC,
+                (c.precio / COALESCE(c.unidades_item, 1)) ASC,
+                c.fecha_cotizacion DESC NULLS LAST,
+                c.id DESC
+            LIMIT 2
         """, (producto_id,)).fetchall()
         if quotes:
             q = quotes[0]
@@ -712,9 +717,10 @@ def _obtener_info_reabastecimiento_producto(conn, negocio_id, producto_id, stock
             pass
 
     empaques_sug = 0
-    if cant_sugerida > 0 and unidades_pres > 1.0:
+    if cant_sugerida > 0 and unidades_pres > 1.0001:
         import math
         empaques_sug = math.ceil(cant_sugerida / unidades_pres)
+        cant_sugerida = empaques_sug * unidades_pres
 
     return {
         'es_produccion': False,
@@ -806,8 +812,14 @@ def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
             )
         else:
             prov_txt = f" a <b>{info['proveedor']}</b>" if info['proveedor'] else ""
-            pres_txt = f" ({info['empaques_sug']} {info['presentacion']})" if info.get('empaques_sug') and info['empaques_sug'] > 0 else ""
-            sug_txt = f"👉 <i>Comprar:</i> <b>~{info['cant_sugerida']:,.2f}</b>{pres_txt}{prov_txt}" if info['cant_sugerida'] > 0 else (f"👉 <i>Pedir a:</i> <b>{info['proveedor']}</b>" if info['proveedor'] else "👉 <i>Requiere orden de compra</i>")
+            if info.get('empaques_sug') and info['empaques_sug'] > 0:
+                sug_txt = f"👉 <i>Comprar:</i> <b>{info['empaques_sug']} empaques de {info['presentacion']}</b>{prov_txt} (~{info['cant_sugerida']:,.2f} und)"
+            elif info['cant_sugerida'] > 0:
+                sug_txt = f"👉 <i>Comprar:</i> <b>~{info['cant_sugerida']:,.2f} und</b>{prov_txt}"
+            elif info['proveedor']:
+                sug_txt = f"👉 <i>Pedir a:</i> <b>{info['proveedor']}</b>"
+            else:
+                sug_txt = "👉 <i>Requiere orden de compra</i>"
             
             promo_tag = ""
             if info.get('promo_dia_semana'):
@@ -851,7 +863,13 @@ def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
                 f"• <b>{p['producto_nombre']}</b>: Stock <b>{st_val:,.2f}</b> | Mín {min_val:,.2f} <i>({hace_str})</i> 👉 <i>Cocinar en sede</i>"
             )
         else:
-            prov_str = f" 👉 <i>Pedir a {info_p['proveedor']}</i>" if info_p['proveedor'] else ""
+            if info_p['proveedor']:
+                if info_p.get('empaques_sug') and info_p['empaques_sug'] > 0:
+                    prov_str = f" 👉 <i>Pedir {info_p['empaques_sug']} {info_p['presentacion']} a {info_p['proveedor']}</i>"
+                else:
+                    prov_str = f" 👉 <i>Pedir a {info_p['proveedor']}</i>"
+            else:
+                prov_str = ""
             promo_tag = ""
             if info_p.get('promo_dia_semana'):
                 dia_caps = str(info_p['promo_dia_semana']).strip().upper()
@@ -1019,7 +1037,7 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
         if al_id in vistos_por_alerta:
             continue
 
-        # Obtener todas las cotizaciones activas de este producto ordenadas por precio unitario ascendente
+        # Obtener todas las cotizaciones activas de este producto ordenadas por empaque y precio unitario
         quotes = conn.execute("""
             SELECT c.id, c.tercero_id, t.nombre AS proveedor_nombre, t.telefono AS proveedor_telefono,
                    c.precio, COALESCE(c.unidades_item, 1) AS unidades_item,
@@ -1029,9 +1047,13 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
                    COALESCE(c.promo_avisos_por_dia, 1) AS promo_avisos_por_dia
             FROM cotizaciones_compras c
             JOIN terceros t ON t.id = c.tercero_id
-            WHERE c.item_id = %s AND c.negocio_id = %s
+            WHERE c.item_id = %s AND (c.negocio_id = %s OR c.negocio_id IS NULL)
               AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
-            ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC
+            ORDER BY 
+                CASE WHEN COALESCE(c.unidades_item, 1) > 1.0001 AND LOWER(COALESCE(c.descripcion_presentacion, '')) NOT IN ('unidad', 'unid') THEN 0 ELSE 1 END ASC,
+                (c.precio / COALESCE(c.unidades_item, 1)) ASC,
+                c.fecha_cotizacion DESC NULLS LAST,
+                c.id DESC
         """, (r['producto_id'], r['negocio_id'])).fetchall()
 
         if not quotes:
@@ -1162,18 +1184,20 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
                 tiempo_str = f"⏳ <b>Faltan {it['dias_faltantes']} días (Despacho el {it['dia_promo']})</b>"
 
             if it['puesto_promo'] == 1:
+                pres_str = f" ({it['presentacion']})" if it['unidades_item'] <= 1.0001 else f" ({it['presentacion']} x {it['unidades_item']:,.0f} und)"
                 lineas_items.append(
                     f"• <b>{it['producto_nombre']}</b>\n"
                     f"   Stock: <b>{it['stock_actual']:,.2f}</b> | Mínimo: <b>{it['stock_minimo']:,.2f}</b>\n"
-                    f"   🥇 <b>🔥 MEJOR PRECIO — PROMO DESPACHO {it['dia_promo'].upper()}</b>: ${it['precio_promo']:,.2f} con <b>{it['proveedor']}</b> (${it['precio_unit_promo']:,.2f}/u - {it['presentacion']})\n"
+                    f"   🥇 <b>🔥 MEJOR PRECIO — PROMO DESPACHO {it['dia_promo'].upper()}</b>: ${it['precio_promo']:,.2f} con <b>{it['proveedor']}</b>{pres_str} (${it['precio_unit_promo']:,.2f}/u)\n"
                     f"   {tiempo_str} — Pasar pedido a tiempo para asegurar tarifa preferencial."
                 )
             else:
+                pres_str_promo = f" ({it['presentacion']})" if it['unidades_item'] <= 1.0001 else f" ({it['presentacion']} x {it['unidades_item']:,.0f} und)"
                 lineas_items.append(
                     f"• <b>{it['producto_nombre']}</b>\n"
                     f"   Stock: <b>{it['stock_actual']:,.2f}</b> | Mínimo: <b>{it['stock_minimo']:,.2f}</b>\n"
                     f"   🥇 <i>Opción habitual más económica:</i> <b>{it['mejor_reg_proveedor']}</b> (${it['mejor_reg_precio_unit']:,.2f}/u - {it['mejor_reg_presentacion']})\n"
-                    f"   🥈 <b>🔥 OPORTUNIDAD PROMO DESPACHO {it['dia_promo'].upper()}</b>: ${it['precio_promo']:,.2f} con <b>{it['proveedor']}</b> (${it['precio_unit_promo']:,.2f}/u - {it['presentacion']})\n"
+                    f"   🥈 <b>🔥 OPORTUNIDAD PROMO DESPACHO {it['dia_promo'].upper()}</b>: ${it['precio_promo']:,.2f} con <b>{it['proveedor']}</b>{pres_str_promo} (${it['precio_unit_promo']:,.2f}/u)\n"
                     f"   {tiempo_str} — Evaluar según conveniencia de despacho y presentación."
                 )
 

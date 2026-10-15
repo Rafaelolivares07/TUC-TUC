@@ -571,6 +571,7 @@ def _verificar_alerta_stock_agotado(conn, negocio_id, producto_id, nombre_produc
                         'stock_minimo': round(stock_min_req, 2),
                         'cobertura_dias': cobertura_dias,
                         'dias_min': dias_min,
+                        'ddp': ddp,
                         'motivo': motivo or 'salida',
                         'documento': doc_ref or ''
                     }
@@ -584,6 +585,117 @@ def _verificar_alerta_stock_agotado(conn, negocio_id, producto_id, nombre_produc
                         _despachar_alerta_agotados(conn, negocio_id, bodega, [item_info])
     except Exception as e:
         print(f"[alerta agotado] error verificando producto {producto_id}: {e}")
+
+
+def _es_producto_preparado(conn, producto_id):
+    """
+    Regla canónica y unificada del sistema:
+    Si un producto tiene componentes en tarjeta_estandar, se considera producto
+    de preparación / producción interna en cocina.
+    Si no tiene componentes, se considera insumo / materia prima que se compra a proveedores.
+    """
+    row = conn.execute("SELECT 1 FROM tarjeta_estandar WHERE producto_id = %s LIMIT 1", (producto_id,)).fetchone()
+    return bool(row)
+
+
+def _obtener_info_reabastecimiento_producto(conn, negocio_id, producto_id, stock_actual=0.0, stock_minimo=0.0, ddp=0.0):
+    """
+    Extrae la sugerencia de reabastecimiento usando el motor existente:
+    - Clasifica si es PRODUCCIÓN (receta interna) o COMPRA (proveedor).
+    - Para COMPRA: Busca el proveedor activo (mejor cotización o último historial de compra)
+      y calcula la cantidad sugerida de compra.
+    - Para PRODUCCIÓN: Calcula la cantidad sugerida a elaborar en cocina.
+    """
+    es_prod = _es_producto_preparado(conn, producto_id)
+    
+    # 1. Días objetivo de stock
+    dias_obj = 7
+    try:
+        p_row = conn.execute("SELECT dias_max_stock FROM productos WHERE id = %s", (producto_id,)).fetchone()
+        if p_row and p_row['dias_max_stock']:
+            dias_obj = int(p_row['dias_max_stock'])
+        else:
+            p_glob = conn.execute("SELECT valor_texto FROM parametros_sistema WHERE nombre = 'inventario_stock_max_dias' AND negocio_id = %s", (negocio_id,)).fetchone()
+            if p_glob and p_glob[0]:
+                dias_obj = int(p_glob[0])
+    except Exception:
+        dias_obj = 7
+
+    # 2. Si no viene ddp, calcular sobre los últimos 30 días
+    if not ddp or ddp <= 0:
+        try:
+            row_dem = conn.execute("""
+                SELECT COALESCE(SUM(cantidad), 0)
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND producto_id = %s AND tipo = 'salida'
+                  AND created_at >= NOW() - INTERVAL '30 days'
+            """, (negocio_id, producto_id)).fetchone()
+            if row_dem and row_dem[0]:
+                ddp = float(row_dem[0]) / 30.0
+        except Exception:
+            ddp = 0.0
+
+    cant_sugerida = 0.0
+    if ddp > 0:
+        cant_sugerida = max(0.0, (ddp * float(dias_obj)) - float(stock_actual))
+    elif stock_minimo > 0:
+        cant_sugerida = max(0.0, (float(stock_minimo) * 1.5) - float(stock_actual))
+
+    if es_prod:
+        return {
+            'es_produccion': True,
+            'cant_sugerida': round(cant_sugerida, 2),
+            'proveedor': None,
+            'presentacion': None
+        }
+
+    # 3. Búsqueda de proveedor para compras
+    proveedor = None
+    presentacion = None
+    unidades_pres = 1.0
+
+    # A. Mejor cotización activa
+    try:
+        q = conn.execute("""
+            SELECT t.nombre, c.descripcion_presentacion, COALESCE(c.unidades_item, 1) AS unidades_item
+            FROM cotizaciones_compras c 
+            JOIN terceros t ON t.id = c.tercero_id 
+            WHERE c.item_id = %s AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
+            ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC LIMIT 1
+        """, (producto_id,)).fetchone()
+        if q:
+            proveedor = q['nombre']
+            presentacion = q['descripcion_presentacion']
+            unidades_pres = float(q['unidades_item'] or 1.0)
+    except Exception:
+        pass
+
+    # B. Último proveedor histórico en movimientos de inventario
+    if not proveedor:
+        try:
+            lp = conn.execute("""
+                SELECT proveedor_nombre FROM movimientos_inventario 
+                WHERE negocio_id = %s AND producto_id = %s AND tipo = 'entrada' AND proveedor_nombre IS NOT NULL 
+                ORDER BY id DESC LIMIT 1
+            """, (negocio_id, producto_id)).fetchone()
+            if lp and lp['proveedor_nombre']:
+                proveedor = lp['proveedor_nombre']
+        except Exception:
+            pass
+
+    empaques_sug = 0
+    if cant_sugerida > 0 and unidades_pres > 1.0:
+        import math
+        empaques_sug = math.ceil(cant_sugerida / unidades_pres)
+
+    return {
+        'es_produccion': False,
+        'cant_sugerida': round(cant_sugerida, 2),
+        'proveedor': proveedor,
+        'presentacion': presentacion,
+        'unidades_pres': unidades_pres,
+        'empaques_sug': empaques_sug
+    }
 
 
 def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
@@ -640,37 +752,86 @@ def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
     if nuevos_items[0].get('documento'):
         motivo_ref += f" ({nuevos_items[0]['documento']})"
 
-    lineas_nuevos = []
-    for it in nuevos_items:
-        cobertura_str = f"Quedan ~{it['cobertura_dias']} días" if it['cobertura_dias'] > 0 else "Sin cobertura suficiente"
-        lineas_nuevos.append(
-            f"• <b>{it['producto_nombre']}</b>\n"
-            f"   Stock actual: <b>{it['stock_actual']:,.2f}</b> | Mínimo requerido: <b>{it['stock_minimo']:,.2f}</b>\n"
-            f"   <i>({cobertura_str} • Objetivo: {it['dias_min']} días)</i>"
-        )
-    bloque_nuevos = "\n".join(lineas_nuevos)
+    # ── Clasificar nuevos ítems en Compras vs Producción ──
+    lineas_nuevos_comp = []
+    lineas_nuevos_prod = []
 
-    lineas_pendientes = []
+    for it in nuevos_items:
+        cobertura_str = f"~{it['cobertura_dias']} días restantes" if it.get('cobertura_dias', 0) > 0 else "Sin cobertura suficiente"
+        info = _obtener_info_reabastecimiento_producto(
+            conn, negocio_id, it['producto_id'],
+            stock_actual=it.get('stock_actual', 0.0),
+            stock_minimo=it.get('stock_minimo', 0.0),
+            ddp=it.get('ddp', 0.0)
+        )
+        if info['es_produccion']:
+            sug_txt = f"👉 <i>Mise en place / Preparar:</i> <b>~{info['cant_sugerida']:,.2f}</b>" if info['cant_sugerida'] > 0 else "👉 <i>Preparar en cocina</i>"
+            lineas_nuevos_prod.append(
+                f"• <b>{it['producto_nombre']}</b>\n"
+                f"   Stock: <b>{it['stock_actual']:,.2f}</b> | Mínimo: <b>{it['stock_minimo']:,.2f}</b> <i>({cobertura_str})</i>\n"
+                f"   {sug_txt}"
+            )
+        else:
+            prov_txt = f" a <b>{info['proveedor']}</b>" if info['proveedor'] else ""
+            pres_txt = f" ({info['empaques_sug']} {info['presentacion']})" if info.get('empaques_sug') and info['empaques_sug'] > 0 else ""
+            sug_txt = f"👉 <i>Comprar:</i> <b>~{info['cant_sugerida']:,.2f}</b>{pres_txt}{prov_txt}" if info['cant_sugerida'] > 0 else (f"👉 <i>Pedir a:</i> <b>{info['proveedor']}</b>" if info['proveedor'] else "👉 <i>Requiere orden de compra</i>")
+            lineas_nuevos_comp.append(
+                f"• <b>{it['producto_nombre']}</b>\n"
+                f"   Stock: <b>{it['stock_actual']:,.2f}</b> | Mínimo: <b>{it['stock_minimo']:,.2f}</b> <i>({cobertura_str})</i>\n"
+                f"   {sug_txt}"
+            )
+
+    bloque_nuevos_partes = []
+    if lineas_nuevos_comp:
+        bloque_nuevos_partes.append("🛒 <b>POR COMPRAR (A Proveedores):</b>\n" + "\n".join(lineas_nuevos_comp))
+    if lineas_nuevos_prod:
+        bloque_nuevos_partes.append("👨‍🍳 <b>POR PRODUCIR (En Cocina):</b>\n" + "\n".join(lineas_nuevos_prod))
+    bloque_nuevos = "\n\n".join(bloque_nuevos_partes) if bloque_nuevos_partes else "<i>Sin ítems</i>"
+
+    # ── Clasificar pendientes en Compras vs Producción ──
+    lineas_pend_comp = []
+    lineas_pend_prod = []
+
     for p in pendientes:
         hace_str = _formatear_tiempo_transcurrido(p['primer_aviso_at'])
-        veces_str = f"{p['veces_avisado'] + 1} avisos" if p['veces_avisado'] else "1 aviso"
-        lineas_pendientes.append(
-            f"• <b>{p['producto_nombre']}</b>: Stock: <b>{float(p['stock_actual']):,.2f}</b> | Mín: {float(p['stock_minimo'] or 0):,.2f} <i>({hace_str} • {veces_str})</i>"
+        info_p = _obtener_info_reabastecimiento_producto(
+            conn, negocio_id, p['producto_id'],
+            stock_actual=float(p['stock_actual'] or 0),
+            stock_minimo=float(p['stock_minimo'] or 0),
+            ddp=0.0
         )
-    bloque_pendientes = "\n".join(lineas_pendientes) if lineas_pendientes else "✨ <i>No hay otros ítems pendientes por comprar en esta sede.</i>"
+        st_val = float(p['stock_actual'] or 0)
+        min_val = float(p['stock_minimo'] or 0)
+        
+        if info_p['es_produccion']:
+            lineas_pend_prod.append(
+                f"• <b>{p['producto_nombre']}</b>: Stock <b>{st_val:,.2f}</b> | Mín {min_val:,.2f} <i>({hace_str})</i> 👉 <i>Cocinar en sede</i>"
+            )
+        else:
+            prov_str = f" 👉 <i>Pedir a {info_p['proveedor']}</i>" if info_p['proveedor'] else ""
+            lineas_pend_comp.append(
+                f"• <b>{p['producto_nombre']}</b>: Stock <b>{st_val:,.2f}</b> | Mín {min_val:,.2f} <i>({hace_str})</i>{prov_str}"
+            )
+
+    bloque_pend_partes = []
+    if lineas_pend_comp:
+        bloque_pend_partes.append("🛒 <b>Insumos por comprar:</b>\n" + "\n".join(lineas_pend_comp))
+    if lineas_pend_prod:
+        bloque_pend_partes.append("👨‍🍳 <b>Preparaciones por cocinar:</b>\n" + "\n".join(lineas_pend_prod))
+    bloque_pendientes = "\n\n".join(bloque_pend_partes) if bloque_pend_partes else "✨ <i>No hay otros ítems pendientes por reabastecer en esta sede.</i>"
 
     cant_pendientes_str = f" ({len(pendientes)} aún en lista)" if pendientes else ""
 
     msg = (
-        f"🚨 <b>ALERTA DE REABASTECIMIENTO CRÍTICO</b>\n"
+        f"🚨 <b>ALERTA DE REABASTECIMIENTO</b>\n"
         f"🏢 <b>Negocio:</b> {neg_nombre}\n"
         f"📍 <b>Sede / Bodega:</b> {bodega_nombre}\n"
         f"🧾 <b>Disparado por:</b> {motivo_ref}\n\n"
-        f"🔴 <b>1. ACABAN DE ENTRAR EN AGOTADO:</b>\n"
+        f"🔴 <b>1. ACABAN DE ENTRAR EN ESTADO CRÍTICO:</b>\n"
         f"{bloque_nuevos}\n\n"
-        f"⚠️ <b>2. PENDIENTES POR COMPRAR{cant_pendientes_str}:</b>\n"
+        f"⚠️ <b>2. PENDIENTES SIN REABASTECER{cant_pendientes_str}:</b>\n"
         f"{bloque_pendientes}\n\n"
-        f"🛒 <i>Ingresa a Compras Sugeridas para emitir órdenes de pedido a proveedores.</i>"
+        f"📋 <i>Ingresa a Compras / Producción Sugerida para gestionar órdenes y recetas.</i>"
     )
 
     chats = set()
@@ -11886,6 +12047,7 @@ def api_compras_sugerencias(negocio_id):
         alertas_activas = [dict(r) for r in alertas_rows]
         for al in alertas_activas:
             al['primer_aviso_str'] = _formatear_tiempo_transcurrido(al.get('primer_aviso_at'))
+            al['es_produccion'] = _es_producto_preparado(conn, al['producto_id'])
         
         return jsonify({
             'ok': True,

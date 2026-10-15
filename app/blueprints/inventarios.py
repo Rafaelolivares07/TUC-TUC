@@ -659,21 +659,24 @@ def _obtener_info_reabastecimiento_producto(conn, negocio_id, producto_id, stock
     presentacion = None
     unidades_pres = 1.0
 
-    # A. Mejor cotización activa
+    # A. Mejor cotización activa y evaluación de 1er vs 2do puesto con promoción
     promo_dia = None
     promo_anticipacion = 1
     promo_avisos = 1
     precio_promo = 0.0
+    promo_segundo_lugar = None
     try:
-        q = conn.execute("""
+        quotes = conn.execute("""
             SELECT t.nombre, c.descripcion_presentacion, COALESCE(c.unidades_item, 1) AS unidades_item,
-                   c.promo_dia_semana, c.promo_dias_anticipacion, c.promo_avisos_por_dia, c.precio
+                   c.promo_dia_semana, c.promo_dias_anticipacion, c.promo_avisos_por_dia, c.precio,
+                   (c.precio / COALESCE(c.unidades_item, 1)) AS precio_unitario
             FROM cotizaciones_compras c 
             JOIN terceros t ON t.id = c.tercero_id 
             WHERE c.item_id = %s AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
-            ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC LIMIT 1
-        """, (producto_id,)).fetchone()
-        if q:
+            ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC LIMIT 2
+        """, (producto_id,)).fetchall()
+        if quotes:
+            q = quotes[0]
             proveedor = q['nombre']
             presentacion = q['descripcion_presentacion']
             unidades_pres = float(q['unidades_item'] or 1.0)
@@ -681,6 +684,17 @@ def _obtener_info_reabastecimiento_producto(conn, negocio_id, producto_id, stock
             promo_anticipacion = q['promo_dias_anticipacion'] or 1
             promo_avisos = q['promo_avisos_por_dia'] or 1
             precio_promo = float(q['precio'] or 0.0)
+
+            # Si la del 1er puesto no tiene promo, pero la del 2do puesto sí tiene promo:
+            if not promo_dia and len(quotes) > 1 and quotes[1]['promo_dia_semana']:
+                q2 = quotes[1]
+                promo_segundo_lugar = {
+                    'proveedor': q2['nombre'],
+                    'dia': q2['promo_dia_semana'],
+                    'precio': float(q2['precio'] or 0.0),
+                    'precio_unitario': float(q2['precio_unitario'] or 0.0),
+                    'presentacion': q2['descripcion_presentacion'] or 'Unidad'
+                }
     except Exception:
         pass
 
@@ -712,7 +726,8 @@ def _obtener_info_reabastecimiento_producto(conn, negocio_id, producto_id, stock
         'promo_dia_semana': promo_dia,
         'promo_dias_anticipacion': promo_anticipacion,
         'promo_avisos_por_dia': promo_avisos,
-        'precio_promo': precio_promo
+        'precio_promo': precio_promo,
+        'promo_segundo_lugar': promo_segundo_lugar
     }
 
 
@@ -798,6 +813,10 @@ def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
             if info.get('promo_dia_semana'):
                 dia_caps = str(info['promo_dia_semana']).strip().upper()
                 promo_tag = f"\n   <b>🔥 PROMO VÁLIDA SOLO DESPACHOS {dia_caps}</b>"
+            elif info.get('promo_segundo_lugar'):
+                p2 = info['promo_segundo_lugar']
+                dia_caps = str(p2['dia']).strip().upper()
+                promo_tag = f"\n   🥈 <b>🔥 Promo despacho {dia_caps}:</b> ${p2['precio_unitario']:,.2f}/u con <b>{p2['proveedor']}</b> ({p2['presentacion']})"
 
             lineas_nuevos_comp.append(
                 f"• <b>{it['producto_nombre']}</b>\n"
@@ -837,6 +856,10 @@ def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
             if info_p.get('promo_dia_semana'):
                 dia_caps = str(info_p['promo_dia_semana']).strip().upper()
                 promo_tag = f" — <b>🔥 PROMO DESPACHO {dia_caps}</b>"
+            elif info_p.get('promo_segundo_lugar'):
+                p2 = info_p['promo_segundo_lugar']
+                dia_caps = str(p2['dia']).strip().upper()
+                promo_tag = f" — 🥈 <b>🔥 Promo {dia_caps}:</b> ${p2['precio_unitario']:,.2f}/u ({p2['proveedor']})"
 
             lineas_pend_comp.append(
                 f"• <b>{p['producto_nombre']}</b>: Stock <b>{st_val:,.2f}</b> | Mín {min_val:,.2f} <i>({hace_str})</i>{prov_str}{promo_tag}"
@@ -971,56 +994,82 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
         SELECT a.id AS alerta_id, a.negocio_id, a.bodega, a.producto_id, p.nombre AS producto_nombre,
                COALESCE(s.stock, 0) AS stock_actual, a.stock_minimo,
                COALESCE(a.avisos_promo_hoy, 0) AS avisos_promo_hoy,
-               a.fecha_ultimo_aviso_promo,
-               c.id AS cotizacion_id, c.precio AS precio_promo, c.promo_dia_semana,
-               COALESCE(c.promo_dias_anticipacion, 1) AS promo_dias_anticipacion,
-               COALESCE(c.promo_avisos_por_dia, 1) AS promo_avisos_por_dia,
-               c.descripcion_presentacion, COALESCE(c.unidades_item, 1) AS unidades_item,
-               t.nombre AS proveedor_nombre, t.telefono AS proveedor_telefono
+               a.fecha_ultimo_aviso_promo
         FROM inventario_alertas_agotados a
         JOIN productos p ON p.id = a.producto_id
         LEFT JOIN saldos_inventario s ON s.producto_id = a.producto_id AND s.negocio_id = a.negocio_id AND s.bodega = a.bodega
-        JOIN cotizaciones_compras c ON c.item_id = a.producto_id AND c.negocio_id = a.negocio_id
-        JOIN terceros t ON t.id = c.tercero_id
         WHERE a.estado = 'agotado'
-          AND c.promo_dia_semana IS NOT NULL
-          AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
     """
     params = []
     if negocio_id_param:
         sql += " AND a.negocio_id = %s"
         params.append(negocio_id_param)
         
-    sql += " ORDER BY a.negocio_id, a.bodega, (c.precio / COALESCE(c.unidades_item, 1)) ASC"
+    sql += " ORDER BY a.negocio_id, a.bodega, a.id ASC"
     
-    rows = conn.execute(sql, params).fetchall()
-    if not rows:
-        return {'ok': True, 'enviados': 0, 'motivo': 'No hay insumos agotados con promociones condicionadas'}
+    alertas = conn.execute(sql, params).fetchall()
+    if not alertas:
+        return {'ok': True, 'enviados': 0, 'motivo': 'No hay insumos agotados para evaluar'}
 
     agrupados = {}
     vistos_por_alerta = set()
 
-    for r in rows:
+    for r in alertas:
         al_id = r['alerta_id']
         if al_id in vistos_por_alerta:
             continue
 
-        dia_promo_str = str(r['promo_dia_semana'] or '').strip().lower()
-        dia_promo_idx = DIAS_SEMANA_MAP.get(dia_promo_str)
-        if dia_promo_idx is None:
+        # Obtener todas las cotizaciones activas de este producto ordenadas por precio unitario ascendente
+        quotes = conn.execute("""
+            SELECT c.id, c.tercero_id, t.nombre AS proveedor_nombre, t.telefono AS proveedor_telefono,
+                   c.precio, COALESCE(c.unidades_item, 1) AS unidades_item,
+                   (c.precio / COALESCE(c.unidades_item, 1)) AS precio_unitario,
+                   c.descripcion_presentacion, c.promo_dia_semana,
+                   COALESCE(c.promo_dias_anticipacion, 1) AS promo_dias_anticipacion,
+                   COALESCE(c.promo_avisos_por_dia, 1) AS promo_avisos_por_dia
+            FROM cotizaciones_compras c
+            JOIN terceros t ON t.id = c.tercero_id
+            WHERE c.item_id = %s AND c.negocio_id = %s
+              AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
+            ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC
+        """, (r['producto_id'], r['negocio_id'])).fetchall()
+
+        if not quotes:
             continue
 
-        dias_faltantes = (dia_promo_idx - dia_hoy_idx) % 7
-        anticipacion = int(r['promo_dias_anticipacion'] or 1)
+        # Evaluar en qué puesto se encuentra la cotización promocional
+        promo_candidata = None
+        promo_candidata_dia_idx = None
+        promo_candidata_dias_faltantes = None
+        puesto_promo = None
 
-        # Si faltan más días que la anticipación configurada, aún no entra en ventana
-        if dias_faltantes > anticipacion:
+        for idx, q in enumerate(quotes):
+            if q['promo_dia_semana']:
+                dia_promo_str = str(q['promo_dia_semana']).strip().lower()
+                dia_promo_idx = DIAS_SEMANA_MAP.get(dia_promo_str)
+                if dia_promo_idx is None:
+                    continue
+                dias_faltantes = (dia_promo_idx - dia_hoy_idx) % 7
+                anticipacion = int(q['promo_dias_anticipacion'] or 1)
+                
+                # Ventana de días de aviso
+                if dias_faltantes <= anticipacion:
+                    puesto = idx + 1 # 1 = 1er lugar, 2 = 2do lugar
+                    if puesto <= 2:
+                        promo_candidata = q
+                        promo_candidata_dia_idx = dia_promo_idx
+                        promo_candidata_dias_faltantes = dias_faltantes
+                        puesto_promo = puesto
+                    break
+
+        # Regla: Si está en 3er puesto o superior, DESCARTAR
+        if not promo_candidata or not puesto_promo or puesto_promo > 2:
             continue
 
         # Verificar si superó los avisos permitidos para hoy
         f_ult = r['fecha_ultimo_aviso_promo']
         avisos_hoy = 0 if (not f_ult or str(f_ult)[:10] != str(hoy_date)) else int(r['avisos_promo_hoy'] or 0)
-        max_avisos = int(r['promo_avisos_por_dia'] or 1)
+        max_avisos = int(promo_candidata['promo_avisos_por_dia'] or 1)
         if avisos_hoy >= max_avisos:
             continue
 
@@ -1028,21 +1077,31 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
         key = (r['negocio_id'], r['bodega'])
         if key not in agrupados:
             agrupados[key] = []
-        agrupados[key].append({
+
+        item_entry = {
             'alerta_id': al_id,
             'producto_id': r['producto_id'],
             'producto_nombre': r['producto_nombre'],
             'stock_actual': float(r['stock_actual']),
             'stock_minimo': float(r['stock_minimo'] or 0),
-            'precio_promo': float(r['precio_promo'] or 0),
-            'proveedor': r['proveedor_nombre'],
-            'proveedor_tel': r['proveedor_telefono'],
-            'dia_promo': NOMBRES_DIAS[dia_promo_idx],
-            'dias_faltantes': dias_faltantes,
+            'puesto_promo': puesto_promo,
+            'precio_promo': float(promo_candidata['precio'] or 0),
+            'precio_unit_promo': float(promo_candidata['precio_unitario'] or 0),
+            'proveedor': promo_candidata['proveedor_nombre'],
+            'proveedor_tel': promo_candidata['proveedor_telefono'],
+            'dia_promo': NOMBRES_DIAS[promo_candidata_dia_idx],
+            'dias_faltantes': promo_candidata_dias_faltantes,
             'avisos_hoy': avisos_hoy + 1,
-            'presentacion': r['descripcion_presentacion'],
-            'unidades_item': float(r['unidades_item'] or 1.0)
-        })
+            'presentacion': promo_candidata['descripcion_presentacion'] or 'Unidad',
+            'unidades_item': float(promo_candidata['unidades_item'] or 1.0)
+        }
+        if puesto_promo == 2:
+            mejor_reg = quotes[0]
+            item_entry['mejor_reg_proveedor'] = mejor_reg['proveedor_nombre']
+            item_entry['mejor_reg_precio_unit'] = float(mejor_reg['precio_unitario'] or 0)
+            item_entry['mejor_reg_presentacion'] = mejor_reg['descripcion_presentacion'] or 'Unidad'
+
+        agrupados[key].append(item_entry)
 
     total_enviados = 0
     token = None
@@ -1102,12 +1161,21 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
             else:
                 tiempo_str = f"⏳ <b>Faltan {it['dias_faltantes']} días (Despacho el {it['dia_promo']})</b>"
 
-            lineas_items.append(
-                f"• <b>{it['producto_nombre']}</b>\n"
-                f"   Stock actual: <b>{it['stock_actual']:,.2f}</b> | Mínimo: <b>{it['stock_minimo']:,.2f}</b>\n"
-                f"   💰 <b>🔥 PROMO VÁLIDA SOLO DESPACHOS {it['dia_promo'].upper()}</b>: ${it['precio_promo']:,.2f} con <b>{it['proveedor']}</b>\n"
-                f"   {tiempo_str} — Pasar pedido a tiempo para asegurar tarifa preferencial."
-            )
+            if it['puesto_promo'] == 1:
+                lineas_items.append(
+                    f"• <b>{it['producto_nombre']}</b>\n"
+                    f"   Stock: <b>{it['stock_actual']:,.2f}</b> | Mínimo: <b>{it['stock_minimo']:,.2f}</b>\n"
+                    f"   🥇 <b>🔥 MEJOR PRECIO — PROMO DESPACHO {it['dia_promo'].upper()}</b>: ${it['precio_promo']:,.2f} con <b>{it['proveedor']}</b> (${it['precio_unit_promo']:,.2f}/u - {it['presentacion']})\n"
+                    f"   {tiempo_str} — Pasar pedido a tiempo para asegurar tarifa preferencial."
+                )
+            else:
+                lineas_items.append(
+                    f"• <b>{it['producto_nombre']}</b>\n"
+                    f"   Stock: <b>{it['stock_actual']:,.2f}</b> | Mínimo: <b>{it['stock_minimo']:,.2f}</b>\n"
+                    f"   🥇 <i>Opción habitual más económica:</i> <b>{it['mejor_reg_proveedor']}</b> (${it['mejor_reg_precio_unit']:,.2f}/u - {it['mejor_reg_presentacion']})\n"
+                    f"   🥈 <b>🔥 OPORTUNIDAD PROMO DESPACHO {it['dia_promo'].upper()}</b>: ${it['precio_promo']:,.2f} con <b>{it['proveedor']}</b> (${it['precio_unit_promo']:,.2f}/u - {it['presentacion']})\n"
+                    f"   {tiempo_str} — Evaluar según conveniencia de despacho y presentación."
+                )
 
         bloque = "\n\n".join(lineas_items)
         msg_promo = (
@@ -9010,6 +9078,83 @@ def api_cotizaciones_resumen(negocio_id):
         productos = conn.execute("SELECT COUNT(DISTINCT item_id) AS n FROM cotizaciones_compras WHERE item_id IN (SELECT id FROM productos WHERE negocio_id = %s AND disponible = TRUE)", (negocio_id,)).fetchone()['n']
         proveedores = conn.execute("SELECT COUNT(DISTINCT tercero_id) AS n FROM cotizaciones_compras WHERE item_id IN (SELECT id FROM productos WHERE negocio_id = %s AND disponible = TRUE)", (negocio_id,)).fetchone()['n']
         return jsonify({'ok': True, 'total': total, 'vigentes': vigentes, 'vencidas': vencidas, 'productos': productos, 'proveedores': proveedores})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/productos/<int:producto_id>/evaluar-sobre-stock')
+def api_evaluar_sobre_stock(negocio_id, producto_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    unidades = request.args.get('unidades', type=float)
+    if not unidades or unidades <= 0:
+        return jsonify({'ok': True, 'sobre_stock': False})
+    
+    conn = get_db_connection()
+    try:
+        p = conn.execute("""
+            SELECT id, nombre, dias_max_stock, stock_minimo
+            FROM productos
+            WHERE id = %s AND negocio_id = %s
+        """, (producto_id, negocio_id)).fetchone()
+        if not p:
+            return jsonify({'ok': False, 'error': 'Producto no encontrado'}), 404
+        
+        # Obtener dias_max_stock global si el producto no tiene uno específico
+        dias_max_global = 15
+        row_param = conn.execute("""
+            SELECT valor_texto FROM parametros_sistema 
+            WHERE nombre = 'inventario_stock_max_dias' AND negocio_id = %s
+        """, (negocio_id,)).fetchone()
+        if row_param and row_param[0]:
+            try: dias_max_global = int(row_param[0])
+            except: pass
+        
+        dias_max_aplicado = p['dias_max_stock'] if p['dias_max_stock'] is not None else dias_max_global
+        
+        # Calcular demanda promedio diaria (DDP)
+        ddp, frecuencia, growth_rate = _calcular_demanda_y_ciclo(
+            conn, negocio_id, producto_id, current_stock=0,
+            dias_historial=30, dias_defecto=15, growth_window=14,
+            max_growth=0.5, min_growth=-0.5, usar_dias_con_stock=True
+        )
+        demanda_proyectada = ddp * (1.0 + growth_rate)
+        
+        if demanda_proyectada <= 0.0001:
+            return jsonify({
+                'ok': True,
+                'sobre_stock': False,
+                'demanda_diaria': 0,
+                'mensaje': 'Sin historial de consumo suficiente para proyectar sobre-stock'
+            })
+        
+        max_comprar_permitido = demanda_proyectada * dias_max_aplicado
+        if unidades > max_comprar_permitido:
+            import math
+            dias_cubiertos = round(unidades / demanda_proyectada, 1)
+            dias_sugeridos = max(int(math.ceil(dias_cubiertos)), dias_max_aplicado + 1)
+            return jsonify({
+                'ok': True,
+                'sobre_stock': True,
+                'producto_id': producto_id,
+                'producto_nombre': p['nombre'],
+                'unidades_presentacion': unidades,
+                'demanda_diaria': round(demanda_proyectada, 2),
+                'dias_max_actual': dias_max_aplicado,
+                'max_unidades_permitidas': round(max_comprar_permitido, 1),
+                'dias_cubiertos': dias_cubiertos,
+                'dias_sugeridos': dias_sugeridos
+            })
+        else:
+            return jsonify({
+                'ok': True,
+                'sobre_stock': False,
+                'demanda_diaria': round(demanda_proyectada, 2),
+                'dias_max_actual': dias_max_aplicado,
+                'max_unidades_permitidas': round(max_comprar_permitido, 1)
+            })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

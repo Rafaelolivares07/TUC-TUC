@@ -3002,13 +3002,33 @@
           <div>
             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Unidades por presentación (Entero)</label>
             <input id="cotz-unidades" type="number" step="1" min="1" value="1" placeholder="1"
-                   class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400">
+                   class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400"
+                   oninput="verificarSobreStockCotz()">
           </div>
           <!-- Vencimiento -->
           <div>
             <label class="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Vence</label>
             <input id="cotz-vencimiento" type="date"
                    class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400">
+          </div>
+        </div>
+        <!-- Banner de Advertencia Preventiva de Sobre-Stock -->
+        <div id="cotz-sobre-stock-banner" class="hidden rounded-xl border border-rose-300 bg-rose-50/90 p-3 text-xs text-rose-950 transition-all">
+          <div class="flex items-start gap-2.5">
+            <span class="text-base leading-none">⚠️</span>
+            <div class="flex-1">
+              <div class="font-bold text-rose-900 flex items-center justify-between">
+                <span>Aviso de Sobre-Stock Preventivo</span>
+                <span id="cotz-sobre-stock-dias-badge" class="text-[10px] bg-rose-200 text-rose-900 font-extrabold px-2 py-0.5 rounded-full"></span>
+              </div>
+              <div id="cotz-sobre-stock-texto" class="mt-1 text-slate-700 leading-relaxed text-[11px]"></div>
+              <div class="mt-2.5 flex items-center gap-2 flex-wrap">
+                <button type="button" id="cotz-btn-ajustar-stock-max" onclick="ajustarStockMaxEnCaliente()" class="bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold px-3 py-1.5 rounded-lg text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                  <span>⚡ Ajustar stock máximo a <b id="cotz-dias-sug-txt"></b> días</span>
+                </button>
+                <span class="text-[10px] text-slate-500 italic">Habilitará esta cotización en el motor de compras</span>
+              </div>
+            </div>
           </div>
         </div>
         <div>
@@ -11273,6 +11293,7 @@ function seleccionarProdCotz(id, nombre) {
   document.getElementById('cotz-producto-id').value = id;
   document.getElementById('cotz-producto-search').value = nombre;
   document.getElementById('cotz-producto-ac').classList.add('hidden');
+  verificarSobreStockCotz();
 }
 
 // Autocomplete presentaciones
@@ -11298,6 +11319,7 @@ function seleccionarPresCotz(id, nombre, equiv) {
   document.getElementById('cotz-presentacion-equiv').value = equiv;
   document.getElementById('cotz-unidades').value = equiv;
   document.getElementById('cotz-presentacion-ac').classList.add('hidden');
+  verificarSobreStockCotz();
 }
 
 function togglePromoFieldsCotz(activo) {
@@ -11415,8 +11437,9 @@ async function editarCotizacion(id) {
     btn.onclick = () => guardarCotizacion(id);
   }
 
-  // 5. Scroll hacia el formulario
+  // 5. Scroll hacia el formulario y evaluar sobre-stock
   details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  verificarSobreStockCotz();
   toast(`Cargada cotización para editar: ${c.producto_nombre}`);
 }
 
@@ -11440,6 +11463,9 @@ function limpiarFormCotz() {
   const avEl = document.getElementById('cotz-promo-avisos');
   if (avEl) avEl.value = '1';
 
+  const banner = document.getElementById('cotz-sobre-stock-banner');
+  if (banner) banner.classList.add('hidden');
+
   const title = document.getElementById('cotz-form-title');
   if (title) title.textContent = 'Nueva Cotización';
 
@@ -11460,6 +11486,105 @@ async function eliminarCotizacion(id, nombre) {
     cargarCotizaciones();
   } else {
     toast(data.error || 'Error al eliminar', false);
+  }
+}
+
+// ── Control Preventivo de Sobre-Stock en Cotizaciones ──
+let cotz_sobre_stock_timeout = null;
+let cotz_prod_sobre_stock_id = null;
+let cotz_dias_sugeridos_val = null;
+
+function verificarSobreStockCotz() {
+  clearTimeout(cotz_sobre_stock_timeout);
+  const banner = document.getElementById('cotz-sobre-stock-banner');
+  const prodId = document.getElementById('cotz-producto-id')?.value;
+  const unidades = parseFloat(document.getElementById('cotz-unidades')?.value || 0);
+
+  if (!prodId || !unidades || unidades <= 0) {
+    if (banner) banner.classList.add('hidden');
+    return;
+  }
+
+  cotz_sobre_stock_timeout = setTimeout(async () => {
+    try {
+      const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/productos/${prodId}/evaluar-sobre-stock?unidades=${unidades}`);
+      const data = await resp.json();
+      const b = document.getElementById('cotz-sobre-stock-banner');
+      if (!b) return;
+      if (data.ok && data.sobre_stock) {
+        cotz_prod_sobre_stock_id = prodId;
+        cotz_dias_sugeridos_val = data.dias_sugeridos;
+
+        b.className = 'rounded-xl border border-rose-300 bg-rose-50/90 p-3 text-xs text-rose-950 transition-all';
+        const badge = document.getElementById('cotz-sobre-stock-dias-badge');
+        if (badge) badge.textContent = `Cubre ~${data.dias_cubiertos} días`;
+
+        const txt = document.getElementById('cotz-sobre-stock-texto');
+        if (txt) {
+          txt.innerHTML = `
+            Esta presentación de <b>${data.unidades_presentacion} unidades</b> cubre aproximadamente <b>${data.dias_cubiertos} días</b> de consumo (demanda de ~${data.demanda_diaria} unid/día).<br>
+            La política actual de stock máximo es de <b>${data.dias_max_actual} días</b> (máx ${data.max_unidades_permitidas} unid), por lo que el motor de compras <b>descartará esta cotización</b> por sobre-stock.
+          `;
+        }
+        const sugTxt = document.getElementById('cotz-dias-sug-txt');
+        if (sugTxt) sugTxt.textContent = data.dias_sugeridos;
+        const btn = document.getElementById('cotz-btn-ajustar-stock-max');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span>⚡ Ajustar stock máximo a <b>${data.dias_sugeridos}</b> días</span>`;
+        }
+
+        b.classList.remove('hidden');
+      } else {
+        b.classList.add('hidden');
+      }
+    } catch (e) {
+      console.error("Error evaluando sobre-stock:", e);
+    }
+  }, 350);
+}
+
+async function ajustarStockMaxEnCaliente() {
+  if (!cotz_prod_sobre_stock_id || !cotz_dias_sugeridos_val) return;
+  const btn = document.getElementById('cotz-btn-ajustar-stock-max');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳ Guardando...</span>';
+  }
+
+  try {
+    const resp = await fetch(`/api/producto/${cotz_prod_sobre_stock_id}/update-max-stock`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ dias_max_stock: cotz_dias_sugeridos_val })
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      toast(`✅ Stock máximo ajustado a ${cotz_dias_sugeridos_val} días.`);
+      const banner = document.getElementById('cotz-sobre-stock-banner');
+      if (banner) {
+        banner.className = 'rounded-xl border border-emerald-300 bg-emerald-50/90 p-3 text-xs text-emerald-950 transition-all';
+        banner.innerHTML = `
+          <div class="flex items-center gap-2 font-bold text-emerald-800">
+            <span>✅</span>
+            <span>¡Política actualizada! Stock máximo fijado en ${cotz_dias_sugeridos_val} días para este producto. Esta presentación ahora es elegible para compras.</span>
+          </div>
+        `;
+        setTimeout(() => banner.classList.add('hidden'), 5000);
+      }
+    } else {
+      toast(data.error || 'No se pudo actualizar', false);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<span>⚡ Ajustar stock máximo a <b>${cotz_dias_sugeridos_val}</b> días</span>`;
+      }
+    }
+  } catch (err) {
+    toast('Error al comunicar con el servidor', false);
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<span>⚡ Ajustar stock máximo a <b>${cotz_dias_sugeridos_val}</b> días</span>`;
+    }
   }
 }
 

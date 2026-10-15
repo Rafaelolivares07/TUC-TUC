@@ -690,12 +690,14 @@ def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
     except Exception:
         pass
 
-    try:
-        cfg = conn.execute('SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1').fetchone()
-        if cfg and cfg['telegram_chat_id']:
-            chats.add(str(cfg['telegram_chat_id']).strip())
-    except Exception:
-        pass
+    # Chat de respaldo global: solo si el negocio, restaurante o sede no tiene ningún chat configurado
+    if not chats:
+        try:
+            cfg = conn.execute('SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1').fetchone()
+            if cfg and cfg['telegram_chat_id']:
+                chats.add(str(cfg['telegram_chat_id']).strip())
+        except Exception:
+            pass
 
     token = None
     try:

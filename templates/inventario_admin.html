@@ -3016,6 +3016,44 @@
           <input id="cotz-observaciones" type="text" placeholder="Opcional..."
                  class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400">
         </div>
+        <!-- Promoción condicionada por día de despacho -->
+        <div class="rounded-xl border border-amber-200 bg-amber-50/40 p-3">
+          <div class="flex items-center gap-2 mb-2">
+            <input id="cotz-es-promo" type="checkbox" onchange="togglePromoFieldsCotz(this.checked)" class="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer">
+            <label for="cotz-es-promo" class="text-xs font-bold text-amber-900 cursor-pointer select-none">
+              🔥 ¿Precio promocional condicionado por día de despacho?
+            </label>
+          </div>
+          <div id="cotz-promo-fields" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-amber-100">
+            <div>
+              <label class="block text-[10px] font-bold text-amber-800 uppercase mb-0.5">Día de Despacho Promo</label>
+              <select id="cotz-promo-dia" class="w-full border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-amber-400">
+                <option value="lunes">Lunes</option>
+                <option value="martes" selected>Martes</option>
+                <option value="miercoles">Miércoles</option>
+                <option value="jueves">Jueves</option>
+                <option value="viernes">Viernes</option>
+                <option value="sabado">Sábado</option>
+                <option value="domingo">Domingo</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-amber-800 uppercase mb-0.5">Días Anticipación Aviso</label>
+              <input id="cotz-promo-anticipacion" type="number" min="0" max="7" step="1" value="1" placeholder="1"
+                     class="w-full border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-amber-400">
+              <span class="text-[9px] text-amber-600 block mt-0.5">Ej: 1 = avisar desde el día anterior</span>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-amber-800 uppercase mb-0.5">Avisos por día (Frecuencia)</label>
+              <select id="cotz-promo-avisos" class="w-full border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-amber-400">
+                <option value="1" selected>1 vez al día</option>
+                <option value="2">2 veces al día</option>
+                <option value="3">3 veces al día</option>
+              </select>
+              <span class="text-[9px] text-amber-600 block mt-0.5">Límite diario de avisos</span>
+            </div>
+          </div>
+        </div>
         <div class="flex gap-2 pt-1">
           <button type="button" id="btn-guardar-cotz" onclick="guardarCotizacion()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition shadow-xs">
             Guardar Cotización
@@ -11138,8 +11176,12 @@ function renderCotizaciones() {
     });
     const unidadesFmt = unidades.toLocaleString('es-CO');
 
+    const promoBadge = c.promo_dia_semana
+      ? `<div class="mt-0.5"><span class="inline-flex items-center gap-1 text-[9px] font-extrabold text-amber-700 bg-amber-100/90 px-1.5 py-0.5 rounded border border-amber-300" title="Aviso anticipado ${c.promo_dias_anticipacion || 1}d antes, max ${c.promo_avisos_por_dia || 1}x/día">🔥 PROMO ${c.promo_dia_semana.toUpperCase()} (-${c.promo_dias_anticipacion || 1}d)</span></div>`
+      : '';
+
     return `<tr class="border-b border-slate-100 hover:bg-slate-50/50">
-      <td class="px-3 py-1.5 font-semibold text-slate-800">${c.producto_nombre}</td>
+      <td class="px-3 py-1.5 font-semibold text-slate-800">${c.producto_nombre}${promoBadge}</td>
       <td class="px-3 py-1.5 text-slate-600">${c.proveedor_nombre}</td>
       <td class="px-3 py-1.5 text-slate-600">${c.presentacion_nombre || c.descripcion_presentacion || 'Unidad'}</td>
       <td class="px-3 py-1.5 text-center font-mono font-medium">${unidadesFmt}</td>
@@ -11258,6 +11300,17 @@ function seleccionarPresCotz(id, nombre, equiv) {
   document.getElementById('cotz-presentacion-ac').classList.add('hidden');
 }
 
+function togglePromoFieldsCotz(activo) {
+  const container = document.getElementById('cotz-promo-fields');
+  if (container) {
+    if (activo) {
+      container.classList.remove('hidden');
+    } else {
+      container.classList.add('hidden');
+    }
+  }
+}
+
 async function guardarCotizacion(id) {
   const provId = document.getElementById('cotz-proveedor-id').value;
   const prodId = document.getElementById('cotz-producto-id').value;
@@ -11273,6 +11326,11 @@ async function guardarCotizacion(id) {
     return;
   }
 
+  const esPromo = document.getElementById('cotz-es-promo')?.checked;
+  const promoDia = esPromo ? (document.getElementById('cotz-promo-dia')?.value || 'martes') : null;
+  const promoAnticipacion = esPromo ? (parseInt(document.getElementById('cotz-promo-anticipacion')?.value, 10) || 1) : 1;
+  const promoAvisos = esPromo ? (parseInt(document.getElementById('cotz-promo-avisos')?.value, 10) || 1) : 1;
+
   const body = {
     tercero_id: parseInt(provId),
     item_id: parseInt(prodId),
@@ -11281,7 +11339,10 @@ async function guardarCotizacion(id) {
     unidades_item: Math.round(parseFloat(unidades) || 1),
     descripcion_presentacion: presNombre || 'Unidad',
     observaciones: obs,
-    fecha_vencimiento: vencimiento || null
+    fecha_vencimiento: vencimiento || null,
+    promo_dia_semana: promoDia,
+    promo_dias_anticipacion: promoAnticipacion,
+    promo_avisos_por_dia: promoAvisos
   };
 
   const url = id
@@ -11320,6 +11381,20 @@ async function editarCotizacion(id) {
   document.getElementById('cotz-vencimiento').value = c.fecha_vencimiento ? c.fecha_vencimiento.split('T')[0] : '';
   document.getElementById('cotz-observaciones').value = c.observaciones || '';
 
+  // Configuración de promoción
+  const esPromo = !!c.promo_dia_semana;
+  const chkPromo = document.getElementById('cotz-es-promo');
+  if (chkPromo) chkPromo.checked = esPromo;
+  togglePromoFieldsCotz(esPromo);
+  if (c.promo_dia_semana) {
+    const diaEl = document.getElementById('cotz-promo-dia');
+    if (diaEl) diaEl.value = c.promo_dia_semana.toLowerCase();
+  }
+  const antEl = document.getElementById('cotz-promo-anticipacion');
+  if (antEl) antEl.value = (c.promo_dias_anticipacion !== undefined && c.promo_dias_anticipacion !== null) ? c.promo_dias_anticipacion : 1;
+  const avEl = document.getElementById('cotz-promo-avisos');
+  if (avEl) avEl.value = c.promo_avisos_por_dia || 1;
+
   // 2. Abrir el details del formulario automáticamente
   const details = document.getElementById('cotz-form-details');
   if (details) {
@@ -11354,6 +11429,16 @@ function limpiarFormCotz() {
   });
   const u = document.getElementById('cotz-unidades'); if (u) u.value = '1';
   const v = document.getElementById('cotz-vencimiento'); if (v) v.value = '';
+
+  const chkPromo = document.getElementById('cotz-es-promo');
+  if (chkPromo) chkPromo.checked = false;
+  togglePromoFieldsCotz(false);
+  const diaEl = document.getElementById('cotz-promo-dia');
+  if (diaEl) diaEl.value = 'martes';
+  const antEl = document.getElementById('cotz-promo-anticipacion');
+  if (antEl) antEl.value = '1';
+  const avEl = document.getElementById('cotz-promo-avisos');
+  if (avEl) avEl.value = '1';
 
   const title = document.getElementById('cotz-form-title');
   if (title) title.textContent = 'Nueva Cotización';

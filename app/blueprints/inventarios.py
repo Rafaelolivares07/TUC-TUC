@@ -204,6 +204,9 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_inv_dist_centro ON inventario_distribuido_estado(negocio_id, centro_utilidad_id)",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS dias_min_stock INTEGER",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS stock_minimo NUMERIC(12,4)",
+        "ALTER TABLE cotizaciones_compras ADD COLUMN IF NOT EXISTS promo_dia_semana VARCHAR(20) DEFAULT NULL",
+        "ALTER TABLE cotizaciones_compras ADD COLUMN IF NOT EXISTS promo_dias_anticipacion INTEGER DEFAULT 1",
+        "ALTER TABLE cotizaciones_compras ADD COLUMN IF NOT EXISTS promo_avisos_por_dia INTEGER DEFAULT 1",
         """CREATE TABLE IF NOT EXISTS inventario_alertas_agotados (
             id SERIAL PRIMARY KEY,
             negocio_id INTEGER NOT NULL,
@@ -219,6 +222,8 @@ def _crear_tablas(conn):
             recuperado_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT NOW()
         )""",
+        "ALTER TABLE inventario_alertas_agotados ADD COLUMN IF NOT EXISTS avisos_promo_hoy INTEGER DEFAULT 0",
+        "ALTER TABLE inventario_alertas_agotados ADD COLUMN IF NOT EXISTS fecha_ultimo_aviso_promo DATE DEFAULT NULL",
         "CREATE INDEX IF NOT EXISTS idx_inv_alertas_estado ON inventario_alertas_agotados(negocio_id, bodega, estado)",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_inv_alertas_agotado_unique ON inventario_alertas_agotados(negocio_id, bodega, producto_id) WHERE estado = 'agotado'",
     ]
@@ -655,9 +660,14 @@ def _obtener_info_reabastecimiento_producto(conn, negocio_id, producto_id, stock
     unidades_pres = 1.0
 
     # A. Mejor cotización activa
+    promo_dia = None
+    promo_anticipacion = 1
+    promo_avisos = 1
+    precio_promo = 0.0
     try:
         q = conn.execute("""
-            SELECT t.nombre, c.descripcion_presentacion, COALESCE(c.unidades_item, 1) AS unidades_item
+            SELECT t.nombre, c.descripcion_presentacion, COALESCE(c.unidades_item, 1) AS unidades_item,
+                   c.promo_dia_semana, c.promo_dias_anticipacion, c.promo_avisos_por_dia, c.precio
             FROM cotizaciones_compras c 
             JOIN terceros t ON t.id = c.tercero_id 
             WHERE c.item_id = %s AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
@@ -667,6 +677,10 @@ def _obtener_info_reabastecimiento_producto(conn, negocio_id, producto_id, stock
             proveedor = q['nombre']
             presentacion = q['descripcion_presentacion']
             unidades_pres = float(q['unidades_item'] or 1.0)
+            promo_dia = q['promo_dia_semana']
+            promo_anticipacion = q['promo_dias_anticipacion'] or 1
+            promo_avisos = q['promo_avisos_por_dia'] or 1
+            precio_promo = float(q['precio'] or 0.0)
     except Exception:
         pass
 
@@ -694,7 +708,11 @@ def _obtener_info_reabastecimiento_producto(conn, negocio_id, producto_id, stock
         'proveedor': proveedor,
         'presentacion': presentacion,
         'unidades_pres': unidades_pres,
-        'empaques_sug': empaques_sug
+        'empaques_sug': empaques_sug,
+        'promo_dia_semana': promo_dia,
+        'promo_dias_anticipacion': promo_anticipacion,
+        'promo_avisos_por_dia': promo_avisos,
+        'precio_promo': precio_promo
     }
 
 
@@ -775,10 +793,16 @@ def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
             prov_txt = f" a <b>{info['proveedor']}</b>" if info['proveedor'] else ""
             pres_txt = f" ({info['empaques_sug']} {info['presentacion']})" if info.get('empaques_sug') and info['empaques_sug'] > 0 else ""
             sug_txt = f"👉 <i>Comprar:</i> <b>~{info['cant_sugerida']:,.2f}</b>{pres_txt}{prov_txt}" if info['cant_sugerida'] > 0 else (f"👉 <i>Pedir a:</i> <b>{info['proveedor']}</b>" if info['proveedor'] else "👉 <i>Requiere orden de compra</i>")
+            
+            promo_tag = ""
+            if info.get('promo_dia_semana'):
+                dia_caps = str(info['promo_dia_semana']).strip().upper()
+                promo_tag = f"\n   <b>🔥 PROMO VÁLIDA SOLO DESPACHOS {dia_caps}</b>"
+
             lineas_nuevos_comp.append(
                 f"• <b>{it['producto_nombre']}</b>\n"
                 f"   Stock: <b>{it['stock_actual']:,.2f}</b> | Mínimo: <b>{it['stock_minimo']:,.2f}</b> <i>({cobertura_str})</i>\n"
-                f"   {sug_txt}"
+                f"   {sug_txt}{promo_tag}"
             )
 
     bloque_nuevos_partes = []
@@ -809,8 +833,13 @@ def _despachar_alerta_agotados(conn, negocio_id, bodega, nuevos_items):
             )
         else:
             prov_str = f" 👉 <i>Pedir a {info_p['proveedor']}</i>" if info_p['proveedor'] else ""
+            promo_tag = ""
+            if info_p.get('promo_dia_semana'):
+                dia_caps = str(info_p['promo_dia_semana']).strip().upper()
+                promo_tag = f" — <b>🔥 PROMO DESPACHO {dia_caps}</b>"
+
             lineas_pend_comp.append(
-                f"• <b>{p['producto_nombre']}</b>: Stock <b>{st_val:,.2f}</b> | Mín {min_val:,.2f} <i>({hace_str})</i>{prov_str}"
+                f"• <b>{p['producto_nombre']}</b>: Stock <b>{st_val:,.2f}</b> | Mín {min_val:,.2f} <i>({hace_str})</i>{prov_str}{promo_tag}"
             )
 
     bloque_pend_partes = []
@@ -915,6 +944,215 @@ def _despachar_buffer_agotados_request(response):
     except Exception as _e:
         print(f"[alerta buffer request] error: {_e}")
     return response
+
+
+def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
+    """
+    Motor proactivo de alertas para cotizaciones promocionales condicionadas por día de despacho.
+    Revisa insumos en estado 'agotado' que tengan cotizaciones activas con promo_dia_semana.
+    Si hoy está dentro del rango de anticipación (o es el día del despacho), y no ha superado
+    el número máximo de avisos por día configurado, envía la alerta especial de oportunidad a Telegram.
+    """
+    from datetime import datetime, date
+    import requests as req
+    import os
+
+    ahora_bog = datetime.now()
+    dia_hoy_idx = ahora_bog.weekday()  # 0=Lunes .. 6=Domingo
+    hoy_date = date.today()
+
+    DIAS_SEMANA_MAP = {
+        'lunes': 0, 'martes': 1, 'miercoles': 2, 'miércoles': 2,
+        'jueves': 3, 'viernes': 4, 'sabado': 5, 'sábado': 5, 'domingo': 6
+    }
+    NOMBRES_DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
+    sql = """
+        SELECT a.id AS alerta_id, a.negocio_id, a.bodega, a.producto_id, p.nombre AS producto_nombre,
+               COALESCE(s.stock, 0) AS stock_actual, a.stock_minimo,
+               COALESCE(a.avisos_promo_hoy, 0) AS avisos_promo_hoy,
+               a.fecha_ultimo_aviso_promo,
+               c.id AS cotizacion_id, c.precio AS precio_promo, c.promo_dia_semana,
+               COALESCE(c.promo_dias_anticipacion, 1) AS promo_dias_anticipacion,
+               COALESCE(c.promo_avisos_por_dia, 1) AS promo_avisos_por_dia,
+               c.descripcion_presentacion, COALESCE(c.unidades_item, 1) AS unidades_item,
+               t.nombre AS proveedor_nombre, t.telefono AS proveedor_telefono
+        FROM inventario_alertas_agotados a
+        JOIN productos p ON p.id = a.producto_id
+        LEFT JOIN saldos_inventario s ON s.producto_id = a.producto_id AND s.negocio_id = a.negocio_id AND s.bodega = a.bodega
+        JOIN cotizaciones_compras c ON c.item_id = a.producto_id AND c.negocio_id = a.negocio_id
+        JOIN terceros t ON t.id = c.tercero_id
+        WHERE a.estado = 'agotado'
+          AND c.promo_dia_semana IS NOT NULL
+          AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
+    """
+    params = []
+    if negocio_id_param:
+        sql += " AND a.negocio_id = %s"
+        params.append(negocio_id_param)
+        
+    sql += " ORDER BY a.negocio_id, a.bodega, (c.precio / COALESCE(c.unidades_item, 1)) ASC"
+    
+    rows = conn.execute(sql, params).fetchall()
+    if not rows:
+        return {'ok': True, 'enviados': 0, 'motivo': 'No hay insumos agotados con promociones condicionadas'}
+
+    agrupados = {}
+    vistos_por_alerta = set()
+
+    for r in rows:
+        al_id = r['alerta_id']
+        if al_id in vistos_por_alerta:
+            continue
+
+        dia_promo_str = str(r['promo_dia_semana'] or '').strip().lower()
+        dia_promo_idx = DIAS_SEMANA_MAP.get(dia_promo_str)
+        if dia_promo_idx is None:
+            continue
+
+        dias_faltantes = (dia_promo_idx - dia_hoy_idx) % 7
+        anticipacion = int(r['promo_dias_anticipacion'] or 1)
+
+        # Si faltan más días que la anticipación configurada, aún no entra en ventana
+        if dias_faltantes > anticipacion:
+            continue
+
+        # Verificar si superó los avisos permitidos para hoy
+        f_ult = r['fecha_ultimo_aviso_promo']
+        avisos_hoy = 0 if (not f_ult or str(f_ult)[:10] != str(hoy_date)) else int(r['avisos_promo_hoy'] or 0)
+        max_avisos = int(r['promo_avisos_por_dia'] or 1)
+        if avisos_hoy >= max_avisos:
+            continue
+
+        vistos_por_alerta.add(al_id)
+        key = (r['negocio_id'], r['bodega'])
+        if key not in agrupados:
+            agrupados[key] = []
+        agrupados[key].append({
+            'alerta_id': al_id,
+            'producto_id': r['producto_id'],
+            'producto_nombre': r['producto_nombre'],
+            'stock_actual': float(r['stock_actual']),
+            'stock_minimo': float(r['stock_minimo'] or 0),
+            'precio_promo': float(r['precio_promo'] or 0),
+            'proveedor': r['proveedor_nombre'],
+            'proveedor_tel': r['proveedor_telefono'],
+            'dia_promo': NOMBRES_DIAS[dia_promo_idx],
+            'dias_faltantes': dias_faltantes,
+            'avisos_hoy': avisos_hoy + 1,
+            'presentacion': r['descripcion_presentacion'],
+            'unidades_item': float(r['unidades_item'] or 1.0)
+        })
+
+    total_enviados = 0
+    token = None
+    try:
+        cfg_tok = conn.execute('SELECT telegram_token FROM "CONFIGURACION_SISTEMA" WHERE id = 1').fetchone()
+        if cfg_tok:
+            try: token = cfg_tok['telegram_token']
+            except: token = cfg_tok[0]
+    except Exception:
+        pass
+    token = token or os.environ.get('TELEGRAM_BOT_TOKEN', '')
+
+    for (neg_id, bod_id), items in agrupados.items():
+        if not items:
+            continue
+
+        chats = set()
+        cu_chat = conn.execute("SELECT telegram_chat_id, nombre, codigo FROM centros_utilidad WHERE id = %s", (bod_id,)).fetchone()
+        if cu_chat and cu_chat['telegram_chat_id']:
+            chats.add(str(cu_chat['telegram_chat_id']).strip())
+
+        t_row = conn.execute("SELECT telegram_chat_id, admin_id FROM tiendas WHERE tercero_id = %s", (neg_id,)).fetchone()
+        if not t_row:
+            t_row = conn.execute("SELECT telegram_chat_id, admin_id FROM restaurantes WHERE tercero_id = %s", (neg_id,)).fetchone()
+        if t_row and t_row['telegram_chat_id']:
+            chats.add(str(t_row['telegram_chat_id']).strip())
+        if t_row and t_row['admin_id']:
+            adm_row = conn.execute("SELECT telegram_chat_id FROM terceros WHERE id = %s", (t_row['admin_id'],)).fetchone()
+            if adm_row and adm_row['telegram_chat_id']:
+                chats.add(str(adm_row['telegram_chat_id']).strip())
+
+        if not chats:
+            try:
+                cfg = conn.execute('SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1').fetchone()
+                if cfg and cfg['telegram_chat_id']:
+                    chats.add(str(cfg['telegram_chat_id']).strip())
+            except Exception:
+                pass
+
+        if not chats or not token:
+            continue
+
+        neg_nom = "Tu Negocio"
+        t_neg = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (neg_id,)).fetchone()
+        if t_neg and t_neg['nombre']:
+            neg_nom = t_neg['nombre']
+        bod_nom = f"Bodega #{bod_id}"
+        if cu_chat and cu_chat['nombre']:
+            bod_nom = cu_chat['nombre']
+
+        lineas_items = []
+        for it in items:
+            if it['dias_faltantes'] == 0:
+                tiempo_str = "🔥 <b>¡HOY ES EL DÍA DE DESPACHO!</b>"
+            elif it['dias_faltantes'] == 1:
+                tiempo_str = f"⏳ <b>Despacha MAÑANA {it['dia_promo'].upper()}</b>"
+            else:
+                tiempo_str = f"⏳ <b>Faltan {it['dias_faltantes']} días (Despacho el {it['dia_promo']})</b>"
+
+            lineas_items.append(
+                f"• <b>{it['producto_nombre']}</b>\n"
+                f"   Stock actual: <b>{it['stock_actual']:,.2f}</b> | Mínimo: <b>{it['stock_minimo']:,.2f}</b>\n"
+                f"   💰 <b>🔥 PROMO VÁLIDA SOLO DESPACHOS {it['dia_promo'].upper()}</b>: ${it['precio_promo']:,.2f} con <b>{it['proveedor']}</b>\n"
+                f"   {tiempo_str} — Pasar pedido a tiempo para asegurar tarifa preferencial."
+            )
+
+        bloque = "\n\n".join(lineas_items)
+        msg_promo = (
+            f"🔔 <b>RECORDATORIO DE COMPRAS EN PROMOCIÓN</b>\n"
+            f"🏢 <b>Negocio:</b> {neg_nom}\n"
+            f"📍 <b>Sede:</b> {bod_nom}\n\n"
+            f"Los siguientes insumos están en nivel crítico y se acerca su ventana de despacho promocional:\n\n"
+            f"{bloque}\n\n"
+            f"🛒 <i>Ingresa a Compras Sugeridas para emitir la orden al proveedor.</i>"
+        )
+
+        for c_id in chats:
+            try:
+                req.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    json={'chat_id': c_id, 'text': msg_promo, 'parse_mode': 'HTML'},
+                    timeout=5
+                )
+                total_enviados += 1
+            except Exception as _e:
+                print(f"[alerta promo] error enviando a {c_id}: {_e}")
+
+        for it in items:
+            conn.execute("""
+                UPDATE inventario_alertas_agotados
+                SET avisos_promo_hoy = %s, fecha_ultimo_aviso_promo = %s
+                WHERE id = %s
+            """, (it['avisos_hoy'], hoy_date, it['alerta_id']))
+
+    conn.commit()
+    return {'ok': True, 'enviados': total_enviados, 'items_avisados': len(vistos_por_alerta)}
+
+
+@bp.route('/api/inventario/cron/alertas-promociones')
+def api_cron_alertas_promociones():
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        neg_param = request.args.get('negocio_id', type=int)
+        res = _evaluar_y_despachar_alertas_promociones(conn, neg_param)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 
 
 def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
@@ -8580,6 +8818,7 @@ def api_cotizaciones_listar(negocio_id):
                    c.unidades_item, c.precio, c.descripcion_presentacion,
                    c.fecha_cotizacion, c.fecha_vencimiento, c.origen,
                    c.validada_proveedor, c.observaciones, c.created_at, c.negocio_id,
+                   c.promo_dia_semana, c.promo_dias_anticipacion, c.promo_avisos_por_dia,
                    CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN TRUE ELSE FALSE END AS vigente
             FROM cotizaciones_compras c
             JOIN terceros t ON t.id = c.tercero_id
@@ -8614,6 +8853,9 @@ def api_cotizaciones_crear(negocio_id):
     descripcion = (data.get('descripcion_presentacion') or '').strip()
     observaciones = (data.get('observaciones') or '').strip()
     fecha_vencimiento = data.get('fecha_vencimiento')
+    promo_dia_semana = (data.get('promo_dia_semana') or '').strip().lower() or None
+    promo_dias_anticipacion = _int_o_none(data.get('promo_dias_anticipacion')) or 1
+    promo_avisos_por_dia = _int_o_none(data.get('promo_avisos_por_dia')) or 1
     
     if not tercero_id or not item_id or precio is None:
         return jsonify({'ok': False, 'error': 'Proveedor, producto y precio son requeridos'}), 400
@@ -8648,20 +8890,25 @@ def api_cotizaciones_crear(negocio_id):
             conn.execute("""
                 UPDATE cotizaciones_compras
                 SET precio = %s, unidades_item = %s, descripcion_presentacion = %s,
-                    observaciones = %s, fecha_vencimiento = %s, updated_at = NOW()
+                    observaciones = %s, fecha_vencimiento = %s,
+                    promo_dia_semana = %s, promo_dias_anticipacion = %s, promo_avisos_por_dia = %s,
+                    updated_at = NOW()
                 WHERE id = %s
-            """, (float(precio), float(unidades_item), descripcion, observaciones, f_vence, existing['id']))
+            """, (float(precio), float(unidades_item), descripcion, observaciones, f_vence,
+                  promo_dia_semana, promo_dias_anticipacion, promo_avisos_por_dia, existing['id']))
             cot_id = existing['id']
         else:
             row = conn.execute("""
                 INSERT INTO cotizaciones_compras
                     (negocio_id, tercero_id, item_id, presentacion_id, precio,
                      unidades_item, descripcion_presentacion, observaciones,
+                     promo_dia_semana, promo_dias_anticipacion, promo_avisos_por_dia,
                      fecha_cotizacion, fecha_vencimiento, origen, validada_proveedor, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'manual', TRUE, NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, %s, 'manual', TRUE, NOW())
                 RETURNING id
             """, (negocio_id, tercero_id, item_id, presentacion_id, float(precio),
-                  float(unidades_item), descripcion, observaciones, f_vence)).fetchone()
+                  float(unidades_item), descripcion, observaciones,
+                  promo_dia_semana, promo_dias_anticipacion, promo_avisos_por_dia, f_vence)).fetchone()
             cot_id = row['id']
         
         conn.commit()
@@ -8707,6 +8954,18 @@ def api_cotizaciones_actualizar(negocio_id, cot_id):
         if 'validada_proveedor' in data:
             updates.append("validada_proveedor = %s")
             params.append(data['validada_proveedor'])
+        if 'promo_dia_semana' in data:
+            val = (data['promo_dia_semana'] or '').strip().lower() or None
+            updates.append("promo_dia_semana = %s")
+            params.append(val)
+        if 'promo_dias_anticipacion' in data:
+            val = _int_o_none(data['promo_dias_anticipacion']) or 1
+            updates.append("promo_dias_anticipacion = %s")
+            params.append(val)
+        if 'promo_avisos_por_dia' in data:
+            val = _int_o_none(data['promo_avisos_por_dia']) or 1
+            updates.append("promo_avisos_por_dia = %s")
+            params.append(val)
         
         if not updates:
             return jsonify({'ok': False, 'error': 'Nada que actualizar'}), 400

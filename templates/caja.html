@@ -819,7 +819,7 @@
 <div id="modal-resumen-venta-rapida" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-2.5 sm:p-4 overflow-y-auto" onclick="if(event.target===this)cerrarModalResumenVentaRapida()">
     <div class="bg-white rounded-3xl shadow-2xl w-full max-w-[92vw] sm:max-w-lg p-4 sm:p-6 flex flex-col max-h-[90vh] my-auto box-border overflow-hidden" onclick="event.stopPropagation()">
         <!-- Header -->
-        <div class="flex items-center justify-between border-b border-gray-150 pb-3 mb-3 shrink-0">
+        <div class="flex items-center justify-between border-b border-gray-150 pb-3 mb-2.5 shrink-0">
             <div class="flex items-center gap-2 min-w-0">
                 <span class="text-2xl p-2 bg-indigo-50 text-indigo-700 rounded-2xl shrink-0">📊</span>
                 <div class="min-w-0">
@@ -827,7 +827,31 @@
                     <p id="flash-resumen-fecha-inicio" class="text-[10px] sm:text-[11px] text-gray-500 truncate">Sesión iniciada hoy</p>
                 </div>
             </div>
-            <button onclick="cerrarModalResumenVentaRapida()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 shrink-0">&times;</button>
+            <button onclick="cerrarModalResumenVentaRapida()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 shrink-0 cursor-pointer">&times;</button>
+        </div>
+
+        <!-- Selector de Alcance: Turno Actual vs Todo el Día en Servidor -->
+        <div class="flex items-center justify-between gap-1.5 p-1 bg-slate-100 rounded-2xl mb-2.5 shrink-0">
+            <div class="flex items-center gap-1 flex-1">
+                <button type="button" id="btn-resumen-scope-turno" onclick="cambiarAlcanceResumen('turno')"
+                        class="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold transition shadow-xs bg-white text-indigo-950 cursor-pointer">
+                    ⚡ Mi Turno Actual
+                </button>
+                <button type="button" id="btn-resumen-scope-hoy" onclick="cambiarAlcanceResumen('hoy')"
+                        class="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-900 cursor-pointer">
+                    📅 Todo el Día de Hoy
+                </button>
+            </div>
+            <button type="button" onclick="sincronizarResumenDesdeServidor(true)" 
+                    class="py-1.5 px-2.5 rounded-xl text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition flex items-center gap-1 shrink-0 cursor-pointer active:scale-95"
+                    title="Consultar y sincronizar con los pedidos reales guardados en el servidor">
+                <span>🔄</span> <span class="hidden sm:inline">Sincronizar</span>
+            </button>
+        </div>
+
+        <!-- Banner Dinámico de discrepancia / servidor -->
+        <div id="flash-resumen-discrepancia-banner" class="hidden mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 shrink-0">
+            <!-- Dinámico -->
         </div>
 
         <div class="overflow-y-auto space-y-4 flex-1 pr-1 custom-scrollbar min-w-0">
@@ -1791,29 +1815,179 @@ function finalizarFacturacionFlashExitosa(d, total, items, pagos, omitidos = [])
 
 // ── MODAL RESUMEN Y CIERRE DE VENTA RÁPIDA ───────────────────────────────────
 
-function abrirModalResumenVentaRapida() {
+let resumenScope = 'turno'; // 'turno' | 'hoy'
+let servidorResumenCache = null;
+
+function cambiarAlcanceResumen(scope) {
+    resumenScope = scope;
+    const bTurno = document.getElementById('btn-resumen-scope-turno');
+    const bHoy = document.getElementById('btn-resumen-scope-hoy');
+    
+    const claseActivo = 'flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold transition shadow-xs bg-white text-indigo-950 cursor-pointer';
+    const claseInactivo = 'flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold transition text-slate-600 hover:text-slate-900 cursor-pointer';
+    
+    if (bTurno) bTurno.className = (scope === 'turno') ? claseActivo : claseInactivo;
+    if (bHoy) bHoy.className = (scope === 'hoy') ? claseActivo : claseInactivo;
+    
+    renderizarModalResumen();
+}
+
+async function abrirModalResumenVentaRapida() {
+    cargarSesionVentaRapida();
+    renderizarModalResumen();
+    document.getElementById('modal-resumen-venta-rapida').classList.remove('hidden');
+    // Consultar el servidor en background para enriquecer y asegurar sincronía
+    await sincronizarResumenDesdeServidor(false);
+}
+
+async function sincronizarResumenDesdeServidor(mostrarNotificacion = false) {
+    const hoyStr = new Date().toISOString().split('T')[0];
+    try {
+        const resp = await fetch(`/api/caja/${SLUG}/facturas-guardadas?fecha=${hoyStr}`);
+        const data = await resp.json();
+        if (data.ok) {
+            servidorResumenCache = data;
+            renderizarModalResumen();
+            if (mostrarNotificacion) {
+                toast(`Sincronizado: ${data.total_facturas} facturas hoy en servidor ($${(data.gran_total||0).toLocaleString('es-CO')})`);
+            }
+        }
+    } catch (e) {
+        console.warn('Error sincronizando resumen con servidor:', e);
+    }
+}
+
+function sincronizarTurnoConServidor() {
+    if (!servidorResumenCache || !servidorResumenCache.facturas) {
+        toast('No hay datos del servidor para sincronizar', true);
+        return;
+    }
+    
+    const facturas = servidorResumenCache.facturas;
+    sessionVentaRapida.ventasCount = facturas.length;
+    sessionVentaRapida.granTotal = servidorResumenCache.gran_total || 0;
+    
+    // Reconstruir productos
+    sessionVentaRapida.productos = {};
+    (servidorResumenCache.resumen_productos || []).forEach(rp => {
+        sessionVentaRapida.productos[rp.nombre] = {
+            id: rp.nombre,
+            nombre: rp.nombre,
+            cantidad: rp.cantidad,
+            total: rp.total
+        };
+    });
+    
+    // Reconstruir métodos de pago
+    sessionVentaRapida.metodosPago = {};
+    (servidorResumenCache.resumen_metodos || []).forEach(rm => {
+        const cod = rm.codigo || 'efectivo';
+        const mInfo = metodosDisponibles.find(m => m.codigo === cod) || {};
+        sessionVentaRapida.metodosPago[cod] = {
+            codigo: cod,
+            nombre: rm.nombre || cod,
+            icono: mInfo.icono || (cod === 'efectivo' ? '💵' : '📱'),
+            total: rm.total
+        };
+    });
+    
+    // Si la primera factura de hoy es más temprana que la fecha de inicio del turno, expandir fechaInicio
+    if (facturas.length > 0) {
+        const ultimaFecha = facturas[facturas.length - 1].fecha_hora;
+        if (ultimaFecha) {
+            sessionVentaRapida.fechaInicio = new Date(ultimaFecha.replace(' ', 'T')).toISOString();
+        }
+    }
+    
+    guardarSesionVentaRapida();
+    cambiarAlcanceResumen('turno');
+    toast('¡Turno sincronizado exitosamente con las ventas del servidor!');
+}
+
+function renderizarModalResumen() {
     cargarSesionVentaRapida();
     const sess = sessionVentaRapida;
-
-    // Fecha inicio
-    const lblFecha = document.getElementById('flash-resumen-fecha-inicio');
-    if (lblFecha) {
+    const srv = servidorResumenCache;
+    
+    let granTotal = 0;
+    let ventasCount = 0;
+    let metList = [];
+    let prodsList = [];
+    let subtitulo = '';
+    
+    if (resumenScope === 'hoy' && srv) {
+        granTotal = srv.gran_total || 0;
+        ventasCount = srv.total_facturas || 0;
+        metList = (srv.resumen_metodos || []).map(m => {
+            const mInfo = metodosDisponibles.find(x => x.codigo === m.codigo) || {};
+            return {
+                codigo: m.codigo,
+                nombre: m.nombre,
+                icono: mInfo.icono || (m.codigo === 'efectivo' ? '💵' : '📱'),
+                total: m.total
+            };
+        });
+        prodsList = srv.resumen_productos || [];
+        subtitulo = `Todo el día de hoy (${new Date().toLocaleDateString('es-CO')}) • Servidor`;
+    } else {
+        // Ámbito 'turno'
+        granTotal = sess.granTotal || 0;
+        ventasCount = sess.ventasCount || 0;
+        metList = Object.values(sess.metodosPago || {});
+        prodsList = Object.values(sess.productos || {});
         const d = new Date(sess.fechaInicio);
-        lblFecha.textContent = `Turno iniciado: ${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
+        subtitulo = `Turno iniciado: ${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
     }
-
+    
+    // Banner de discrepancia
+    const bannerDiscrepancia = document.getElementById('flash-resumen-discrepancia-banner');
+    if (bannerDiscrepancia) {
+        if (srv && srv.total_facturas > (sess.ventasCount || 0)) {
+            const diffVentas = srv.total_facturas - (sess.ventasCount || 0);
+            bannerDiscrepancia.innerHTML = `
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                    <div class="min-w-0">
+                        <span class="font-extrabold flex items-center gap-1.5 text-amber-950">
+                            <span>ℹ️</span> <span>En el servidor hay registradas ${srv.total_facturas} ventas hoy ($${(srv.gran_total||0).toLocaleString('es-CO')})</span>
+                        </span>
+                        <span class="text-[11px] text-amber-800 block mt-0.5">
+                            Hay ${diffVentas} venta(s) guardadas en la base de datos previas a este turno o en otro dispositivo.
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0 w-full sm:w-auto">
+                        <button type="button" onclick="cambiarAlcanceResumen('hoy')"
+                                class="flex-1 sm:flex-none px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition cursor-pointer active:scale-95 text-center">
+                            Ver Todo el Día
+                        </button>
+                        <button type="button" onclick="sincronizarTurnoConServidor()"
+                                class="flex-1 sm:flex-none px-2.5 py-1.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold rounded-xl text-xs transition cursor-pointer active:scale-95 text-center"
+                                title="Actualizar este turno con todas las facturas del día">
+                            🔄 Sincronizar Turno
+                        </button>
+                    </div>
+                </div>
+            `;
+            bannerDiscrepancia.classList.remove('hidden');
+        } else {
+            bannerDiscrepancia.classList.add('hidden');
+        }
+    }
+    
+    // Subtítulo
+    const lblFecha = document.getElementById('flash-resumen-fecha-inicio');
+    if (lblFecha) lblFecha.textContent = subtitulo;
+    
     // Totales
     const elGranTotal = document.getElementById('flash-resumen-gran-total');
     const elTotalVentas = document.getElementById('flash-resumen-total-ventas-badge');
-    if (elGranTotal) elGranTotal.textContent = '$' + (sess.granTotal || 0).toLocaleString('es-CO');
-    if (elTotalVentas) elTotalVentas.textContent = sess.ventasCount || 0;
-
+    if (elGranTotal) elGranTotal.textContent = '$' + (granTotal || 0).toLocaleString('es-CO');
+    if (elTotalVentas) elTotalVentas.textContent = ventasCount || 0;
+    
     // Desglose Métodos de Pago
     const metGrid = document.getElementById('flash-resumen-metodos-grid');
     if (metGrid) {
-        const metList = Object.values(sess.metodosPago || {});
         if (!metList.length) {
-            metGrid.innerHTML = `<div class="col-span-full text-center text-xs text-gray-400 py-3 bg-gray-50 rounded-xl border border-dashed border-gray-200">Sin pagos registrados en este turno</div>`;
+            metGrid.innerHTML = `<div class="col-span-full text-center text-xs text-gray-400 py-3 bg-gray-50 rounded-xl border border-dashed border-gray-200">Sin pagos registrados</div>`;
         } else {
             metGrid.innerHTML = metList.map(m => `
                 <div class="p-3 rounded-2xl border border-slate-200/90 bg-white shadow-2xs hover:bg-slate-50/70 transition flex flex-col justify-between gap-2 min-w-0">
@@ -1832,15 +2006,14 @@ function abrirModalResumenVentaRapida() {
             `).join('');
         }
     }
-
+    
     // Desglose Productos
     const prodListEl = document.getElementById('flash-resumen-productos-lista');
     if (prodListEl) {
-        const prods = Object.values(sess.productos || {});
-        if (!prods.length) {
+        if (!prodsList.length) {
             prodListEl.innerHTML = `<div class="text-center text-xs text-gray-400 py-4">No se han registrado productos vendidos aún</div>`;
         } else {
-            prodListEl.innerHTML = prods.map(p => `
+            prodListEl.innerHTML = prodsList.map(p => `
                 <div class="p-2.5 sm:p-3 flex items-center justify-between gap-3 hover:bg-gray-100/60 transition min-w-0">
                     <div class="min-w-0 flex-1">
                         <span class="text-xs font-extrabold text-gray-900 block leading-snug truncate" title="${p.nombre}">${p.nombre}</span>
@@ -1853,7 +2026,7 @@ function abrirModalResumenVentaRapida() {
             `).join('');
         }
     }
-
+    
     // Desglose Componentes Omitidos
     const omitListEl = document.getElementById('flash-resumen-omitidos-lista');
     if (omitListEl) {
@@ -1883,8 +2056,6 @@ function abrirModalResumenVentaRapida() {
             }).join('');
         }
     }
-
-    document.getElementById('modal-resumen-venta-rapida').classList.remove('hidden');
 }
 
 function cerrarModalResumenVentaRapida() {
@@ -1904,29 +2075,56 @@ function reiniciarSesionVentaRapida() {
         componentesOmitidos: {}
     };
     guardarSesionVentaRapida();
-    abrirModalResumenVentaRapida();
+    cambiarAlcanceResumen('turno');
     toast('Turno de Venta Rápida reiniciado con éxito');
 }
 
 function imprimirResumenVentaRapida() {
+    cargarSesionVentaRapida();
     const sess = sessionVentaRapida;
-    if (!sess) return;
+    const srv = servidorResumenCache;
     const ahora = new Date().toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const fechaInic = new Date(sess.fechaInicio).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-    let prodsHtml = Object.values(sess.productos || {}).map(p => `
-        <div class="linea">
-            <span>${p.cantidad}x ${p.nombre}</span>
-            <span>$${(p.total || 0).toLocaleString('es-CO')}</span>
-        </div>
-    `).join('');
+    let titulo = (resumenScope === 'hoy') ? '📊 RESUMEN VENTA - TODO EL DÍA' : '📊 RESUMEN VENTA RÁPIDA (TURNO)';
+    let fechaInic = '';
+    let granTotal = 0;
+    let ventasCount = 0;
+    let prodsHtml = '';
+    let pagosHtml = '';
 
-    let pagosHtml = Object.values(sess.metodosPago || {}).map(m => `
-        <div class="linea">
-            <span>${m.nombre}</span>
-            <span>$${(m.total || 0).toLocaleString('es-CO')}</span>
-        </div>
-    `).join('');
+    if (resumenScope === 'hoy' && srv) {
+        granTotal = srv.gran_total || 0;
+        ventasCount = srv.total_facturas || 0;
+        fechaInic = `Fecha: ${srv.fecha || new Date().toISOString().split('T')[0]}`;
+        prodsHtml = (srv.resumen_productos || []).map(p => `
+            <div class="linea">
+                <span>${p.cantidad}x ${p.nombre}</span>
+                <span>$${(p.total || 0).toLocaleString('es-CO')}</span>
+            </div>
+        `).join('');
+        pagosHtml = (srv.resumen_metodos || []).map(m => `
+            <div class="linea">
+                <span>${m.nombre}</span>
+                <span>$${(m.total || 0).toLocaleString('es-CO')}</span>
+            </div>
+        `).join('');
+    } else {
+        granTotal = sess.granTotal || 0;
+        ventasCount = sess.ventasCount || 0;
+        fechaInic = `Inicio Turno: ${new Date(sess.fechaInicio).toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+        prodsHtml = Object.values(sess.productos || {}).map(p => `
+            <div class="linea">
+                <span>${p.cantidad}x ${p.nombre}</span>
+                <span>$${(p.total || 0).toLocaleString('es-CO')}</span>
+            </div>
+        `).join('');
+        pagosHtml = Object.values(sess.metodosPago || {}).map(m => `
+            <div class="linea">
+                <span>${m.nombre}</span>
+                <span>$${(m.total || 0).toLocaleString('es-CO')}</span>
+            </div>
+        `).join('');
+    }
 
     let omitHtml = '';
     const omits = Object.values(sess.componentesOmitidos || {});
@@ -1941,8 +2139,8 @@ function imprimirResumenVentaRapida() {
     const html = `
         <div class="ticket-seccion">
             <div class="centro"><strong>${TIENDA_NOMBRE}</strong></div>
-            <div class="centro" style="font-size:13px; font-weight:900; margin:4px 0;">📊 RESUMEN VENTA RÁPIDA</div>
-            <div class="centro" style="font-size:10px;">Inicio Turno: ${fechaInic}</div>
+            <div class="centro" style="font-size:13px; font-weight:900; margin:4px 0;">${titulo}</div>
+            <div class="centro" style="font-size:10px;">${fechaInic}</div>
             <div class="centro" style="font-size:10px;">Cierre/Impresión: ${ahora}</div>
             <div class="centro" style="font-size:10px;">Cajero: ${cajeroNombre || 'Caja'}</div>
             <div class="sep-bold"></div>
@@ -1954,15 +2152,15 @@ function imprimirResumenVentaRapida() {
             <div class="sep-bold"></div>
             <div class="linea total-line">
                 <span>TOTAL RECAUDADO</span>
-                <span>$${(sess.granTotal || 0).toLocaleString('es-CO')}</span>
+                <span>$${(granTotal || 0).toLocaleString('es-CO')}</span>
             </div>
             <div class="linea" style="font-size:11px; margin-top:2px;">
                 <span>Total Ventas / Transacciones:</span>
-                <span>${sess.ventasCount || 0}</span>
+                <span>${ventasCount || 0}</span>
             </div>
             ${omitHtml}
             <div class="sep"></div>
-            <div class="centro" style="font-size:10px; margin-top:6px;">*** FIN RESUMEN TURNO ***</div>
+            <div class="centro" style="font-size:10px; margin-top:6px;">*** FIN RESUMEN ***</div>
         </div>
     `;
 
@@ -2124,6 +2322,20 @@ function renderizarFacturasGuardadas() {
     }
     
     if (!list.length) {
+        if (estadoFacturasModal.filtro === 'turno' && estadoFacturasModal.todas.length > 0) {
+            cont.innerHTML = `
+                <div class="py-10 px-4 text-center bg-amber-50/70 rounded-2xl border border-amber-200">
+                    <span class="text-3xl block mb-2">⏱️</span>
+                    <p class="text-xs font-bold text-amber-900">No hay facturas en este turno específico</p>
+                    <p class="text-[11px] text-amber-700 mt-1 mb-3">Existen ${estadoFacturasModal.todas.length} factura(s) registradas hoy antes del inicio de este turno.</p>
+                    <button type="button" onclick="cambiarFiltroFacturas('hoy')" 
+                            class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs shadow-xs cursor-pointer active:scale-95 transition">
+                        Ver todas las ${estadoFacturasModal.todas.length} facturas de hoy
+                    </button>
+                </div>
+            `;
+            return;
+        }
         cont.innerHTML = `
             <div class="py-12 px-4 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
                 <span class="text-3xl block mb-2">📑</span>
@@ -2134,7 +2346,27 @@ function renderizarFacturasGuardadas() {
         return;
     }
     
-    cont.innerHTML = list.map(fac => {
+    let bannerAviso = '';
+    if (estadoFacturasModal.filtro === 'turno' && estadoFacturasModal.todas.length > list.length) {
+        const diff = estadoFacturasModal.todas.length - list.length;
+        bannerAviso = `
+            <div class="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-2.5 text-xs text-amber-900 shadow-2xs mb-2.5">
+                <div class="min-w-0 flex items-center gap-2">
+                    <span class="text-base shrink-0">⚠️</span>
+                    <div class="min-w-0">
+                        <span class="font-extrabold block leading-tight">Filtrando por turno actual (${list.length} facturas)</span>
+                        <span class="text-[11px] text-amber-700 block mt-0.5">Hay ${diff} factura(s) de hoy registradas previamente o en otro dispositivo.</span>
+                    </div>
+                </div>
+                <button type="button" onclick="cambiarFiltroFacturas('hoy')" 
+                        class="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs shrink-0 cursor-pointer transition active:scale-95 shadow-xs">
+                    Ver las ${estadoFacturasModal.todas.length} de hoy
+                </button>
+            </div>
+        `;
+    }
+    
+    const cardsHtml = list.map(fac => {
         const totalFmt = '$' + (parseFloat(fac.total) || 0).toLocaleString('es-CO');
         const horaFmt = fac.hora || (fac.fecha_hora ? fac.fecha_hora.split(' ')[1] : '--');
         const clienteFmt = fac.nombre_cliente && fac.nombre_cliente !== 'Cliente en local' ? fac.nombre_cliente : (fac.nombre_cajero ? `Cajero: ${fac.nombre_cajero}` : 'Venta en local');
@@ -2185,6 +2417,7 @@ function renderizarFacturasGuardadas() {
             </div>
         `;
     }).join('');
+    cont.innerHTML = bannerAviso + cardsHtml;
 }
 
 function descargarZipFacturas() {
@@ -3522,6 +3755,17 @@ async function cobrar() {
             publicarPantallaCliente('cobrada', {...ultimoRecibo, telefono: ''});
             mostrarRecibo();
             avisarMetodosSinCuenta(pagos);
+            try {
+                const flashItems = (ultimoRecibo.items || []).map(it => ({
+                    producto_id: it.id,
+                    nombre_producto: it.nombre,
+                    precio_unitario: it.precio,
+                    cantidad: it.cantidad
+                }));
+                registrarVentaEnSesionFlash(flashItems, pagos, []);
+            } catch (errFlash) {
+                console.warn('Error registrando venta en sesión:', errFlash);
+            }
             cargarProductos(); // Actualizar stock de inmediato
             cargarTiposDocumento(); // Actualizar consecutivo
         } else if (d.error === 'insufficient_stock') {

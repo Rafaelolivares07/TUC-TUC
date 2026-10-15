@@ -3217,6 +3217,15 @@ def api_caja_facturas_guardadas(slug):
                 'recibido_con': float(pg['recibido_con'] or 0) if pg['recibido_con'] is not None else None,
                 'devuelta': float(pg['devuelta'] or 0) if pg['devuelta'] is not None else None
             } for pg in pagos_rows]
+            if not pagos_list:
+                met_nom = p['metodo_pago'] or 'Efectivo'
+                pagos_list = [{
+                    'codigo': met_nom.lower().replace(' ', '_'),
+                    'nombre': met_nom,
+                    'monto': float(p['total'] or 0),
+                    'recibido_con': None,
+                    'devuelta': None
+                }]
             
             doc_label = p['numero_documento'] or f"pedido_{p_id}"
             doc_clean = doc_label.replace('/', '-').replace('\\', '-').replace(':', '-').strip()
@@ -3242,12 +3251,30 @@ def api_caja_facturas_guardadas(slug):
                 'filename': filename
             })
             
+        resumen_metodos = {}
+        resumen_productos = {}
+        for f in facturas:
+            for it in f['items']:
+                n_prod = it['nombre'] or 'Producto'
+                if n_prod not in resumen_productos:
+                    resumen_productos[n_prod] = {'nombre': n_prod, 'cantidad': 0, 'total': 0.0}
+                resumen_productos[n_prod]['cantidad'] += it['cantidad']
+                resumen_productos[n_prod]['total'] += (it['cantidad'] * it['precio'])
+            for pg in f['pagos']:
+                cod = pg['codigo'] or pg['nombre'] or 'efectivo'
+                if cod not in resumen_metodos:
+                    resumen_metodos[cod] = {'codigo': cod, 'nombre': pg['nombre'] or cod, 'total': 0.0, 'count': 0}
+                resumen_metodos[cod]['total'] += pg['monto']
+                resumen_metodos[cod]['count'] += 1
+
         gran_total = sum(f['total'] for f in facturas)
         return jsonify({
             'ok': True,
             'fecha': fecha_req,
             'total_facturas': len(facturas),
             'gran_total': gran_total,
+            'resumen_metodos': list(resumen_metodos.values()),
+            'resumen_productos': list(resumen_productos.values()),
             'facturas': facturas
         })
     except Exception as e:

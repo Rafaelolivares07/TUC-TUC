@@ -8056,7 +8056,7 @@ function agregarLineaEntrada() {
 
 
 
-function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valorUnitario, ivaPct, presentacionId = null, presentacionNombre = '', presentacionEquivalencia = 1.0) {
+function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valorUnitario, ivaPct, presentacionId = null, presentacionNombre = '', presentacionEquivalencia = 1.0, cantEmpaque = null, costoEmpaque = null, totalLinea = null) {
 
   const cont = document.getElementById('entrada-lineas');
 
@@ -8070,11 +8070,11 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
   const equiv = parseFloat(presentacionEquivalencia) || 1.0;
 
-  const cantEmp = (parseFloat(cantidad) || 0) / equiv;
+  const cantEmp = (cantEmpaque !== null && cantEmpaque !== undefined) ? parseFloat(cantEmpaque) : ((parseFloat(cantidad) || 0) / equiv);
 
-  const costoEmp = (parseFloat(valorUnitario) || 0) * equiv;
+  const costoEmp = (costoEmpaque !== null && costoEmpaque !== undefined) ? parseFloat(costoEmpaque) : ((parseFloat(valorUnitario) || 0) * equiv);
 
-  const totalL = (parseFloat(cantidad) || 0) * (parseFloat(valorUnitario) || 0);
+  const totalL = (totalLinea !== null && totalLinea !== undefined) ? parseFloat(totalLinea) : ((parseFloat(cantidad) || 0) * (parseFloat(valorUnitario) || 0));
 
 
 
@@ -10305,6 +10305,41 @@ function toggleDetalleAlertasAgotados() {
   if (flecha) flecha.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
+function irAProveedorCompra(proveedorId, productoId) {
+  if (!window.COMPRAS_DATA || !window.COMPRAS_DATA.length) return;
+  const pIdx = window.COMPRAS_DATA.findIndex(p => p.proveedor_id === proveedorId);
+  if (pIdx === -1) {
+    toast('El proveedor no tiene compras sugeridas activas en este ciclo', false);
+    return;
+  }
+  // 1. Abrir acordeón del proveedor
+  const detalle = document.getElementById(`compras-detalle-${pIdx}`);
+  const flecha = document.getElementById(`compras-flecha-${pIdx}`);
+  if (detalle && detalle.classList.contains('hidden')) {
+    detalle.classList.remove('hidden');
+    if (flecha) flecha.style.transform = 'rotate(180deg)';
+  }
+  // 2. Scroll suave hacia la tarjeta del proveedor y efecto ring/highlight
+  const card = document.getElementById(`compras-proveedor-card-${proveedorId}`) || detalle?.closest('.rounded-2xl');
+  if (card) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.add('ring-2', 'ring-rose-500', 'shadow-md');
+    setTimeout(() => {
+      card.classList.remove('ring-2', 'ring-rose-500', 'shadow-md');
+    }, 2500);
+  }
+  // 3. Si se especificó productoId, enfocar el input de cantidad
+  if (productoId) {
+    const qtyInput = document.getElementById(`compras-qty-${productoId}`);
+    if (qtyInput) {
+      setTimeout(() => {
+        qtyInput.focus();
+        qtyInput.select();
+      }, 400);
+    }
+  }
+}
+
 async function cargarSugerenciasCompras() {
 
   const el = document.getElementById('compras-proveedores-list');
@@ -10411,20 +10446,58 @@ async function cargarSugerenciasCompras() {
       if (bannerAlertas) bannerAlertas.classList.remove('hidden');
       if (badgeAlertas) badgeAlertas.textContent = `${d.alertas_activas.length} ítems`;
       if (listaAlertas) {
-        listaAlertas.innerHTML = d.alertas_activas.map(a => `
-          <div class="flex items-center justify-between bg-white/80 p-2 rounded-lg text-[11px] border border-rose-200">
-            <div>
-              <span class="font-bold text-slate-800">${a.nombre}</span>
-              <span class="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded-full ml-1 ${a.es_produccion ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}">
-                ${a.es_produccion ? '👨‍🍳 Producción' : '🛒 Compra'}
-              </span>
-              <span class="text-slate-500 ml-1.5">Stock actual: <b class="${a.stock_actual <= 0 ? 'text-rose-600' : 'text-slate-700'}">${a.stock_actual}</b> | Mínimo requerido: <b>${a.stock_minimo}</b></span>
+        listaAlertas.innerHTML = d.alertas_activas.map(a => {
+          if (a.es_produccion) {
+            return `
+              <div class="flex items-center justify-between bg-white p-2.5 rounded-xl text-[11px] border border-amber-200 shadow-2xs">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">👨‍🍳 Producción</span>
+                  <span class="font-bold text-slate-800">${a.nombre}</span>
+                  <span class="text-slate-500 text-[10.5px]">Stock actual: <b class="${a.stock_actual <= 0 ? 'text-rose-600' : 'text-slate-700'}">${fmt(a.stock_actual)}</b> | Mín: <b>${fmt(a.stock_minimo)}</b></span>
+                </div>
+                <div class="flex items-center gap-2.5">
+                  <span class="text-[10px] text-amber-700 font-medium">Primer aviso: ${a.primer_aviso_str}</span>
+                  <a href="${window.location.pathname}?tab=produccion" target="_blank"
+                     class="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[10px] flex items-center gap-1 transition shadow-2xs">
+                    👨‍🍳 Ir a Producción
+                  </a>
+                </div>
+              </div>
+            `;
+          }
+
+          const provNom = a.proveedor_nombre || 'Sin proveedor cotizado';
+          const presText = `${a.presentacion_nombre || 'Unidad'} x ${fmt(a.unidades_presentacion || 1)} und`;
+          const costoText = a.precio_presentacion ? `$${fmtMon(a.precio_presentacion)}` : (a.costo_unitario ? `$${fmtMon(a.costo_unitario)}` : '');
+
+          return `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-2.5 rounded-xl text-[11px] border border-rose-200 shadow-2xs gap-2">
+              <div class="flex flex-col gap-0.5">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-200">🛒 Insumo Compra</span>
+                  <span class="font-bold text-slate-800 text-xs">${a.nombre}</span>
+                  <span class="text-slate-500 text-[10.5px]">Stock actual: <b class="${a.stock_actual <= 0 ? 'text-rose-600 font-extrabold' : 'text-slate-700 font-bold'}">${fmt(a.stock_actual)}</b> | Mín: <b>${fmt(a.stock_minimo)}</b></span>
+                </div>
+                <div class="flex items-center gap-2 text-[10px] text-slate-600 mt-0.5 flex-wrap">
+                  ${a.proveedor_nombre ? `<span>🏢 Proveedor: <strong class="text-slate-800">${a.proveedor_nombre}</strong></span> <span class="text-slate-300">•</span>` : ''}
+                  <span>📦 Empaque: <strong class="text-slate-800">${presText}</strong></span>
+                  ${costoText ? `<span class="text-slate-300">•</span> <span>Costo: <strong class="text-emerald-700">${costoText}</strong></span>` : ''}
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <span class="text-[10px] text-rose-600 font-medium hidden md:inline">Primer aviso: ${a.primer_aviso_str}</span>
+                ${a.proveedor_id ? `
+                  <button onclick="irAProveedorCompra(${a.proveedor_id}, ${a.producto_id})"
+                          class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[10.5px] flex items-center gap-1.5 transition shadow-xs active:scale-95 cursor-pointer">
+                    <span>🛒</span> Armar Pedido (${provNom})
+                  </button>
+                ` : `
+                  <span class="text-[10px] text-slate-400 italic">Sin cotización vigente</span>
+                `}
+              </div>
             </div>
-            <div class="text-[10px] text-rose-600 font-semibold">
-              Primer aviso: ${a.primer_aviso_str} (${a.veces_avisado || 1} aviso${(a.veces_avisado || 1) > 1 ? 's' : ''})
-            </div>
-          </div>
-        `).join('');
+          `;
+        }).join('');
       }
     } else {
       if (bannerAlertas) bannerAlertas.classList.add('hidden');
@@ -10728,36 +10801,56 @@ function renderizarComprasTabla(proveedores) {
 
 
 
+    const pillsHtml = (p.productos || []).map(prod => `
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-[10px] text-slate-700 shadow-2xs">
+        <span class="font-semibold text-slate-800">${prod.producto_nombre}</span>
+        <span class="text-slate-400 text-[9px]">(${prod.presentacion_nombre} x ${fmt(prod.unidades_presentacion)})</span>
+      </span>
+    `).join('');
+
     return `
 
-      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+      <div id="compras-proveedor-card-${p.proveedor_id}" class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs transition-shadow">
 
         <button onclick="toggleAcordeonProveedor(${pIdx})"
 
-                class="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition text-slate-800 text-xs font-bold focus:outline-none">
+                class="w-full text-left p-4 bg-slate-50 hover:bg-slate-100 transition text-slate-800 text-xs font-bold focus:outline-none">
 
-          <div class="flex items-center gap-3 flex-wrap">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
 
-            <span class="font-extrabold text-slate-800 text-sm">${p.proveedor_nombre}</span>
+            <div class="flex items-center gap-3 flex-wrap">
 
-            <span class="text-slate-400">|</span>
+              <span class="font-extrabold text-slate-800 text-sm">${p.proveedor_nombre}</span>
 
-            <span class="text-slate-500 font-normal">📞 ${p.proveedor_telefono || 'Sin teléfono'}</span>
+              <span class="text-slate-300">|</span>
 
-            <span class="text-slate-400">|</span>
+              <span class="text-slate-500 font-normal">📞 ${p.proveedor_telefono || 'Sin teléfono'}</span>
 
-            <span class="text-rose-500 font-extrabold" id="compras-supplier-total-lbl-${pIdx}">Total: ${totalFormateado}</span>
+              <span class="text-slate-300">|</span>
+
+              <span class="text-rose-600 font-extrabold" id="compras-supplier-total-lbl-${pIdx}">Total: ${totalFormateado}</span>
+
+              <span class="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold">
+                ${p.productos.length} ítem${p.productos.length > 1 ? 's' : ''}
+              </span>
+
+            </div>
+
+            <div class="flex items-center gap-2">
+
+              <span class="font-normal text-slate-500 text-[10px]">Fecha límite:</span>
+
+              ${deadlineBadge}
+
+              <i id="compras-flecha-${pIdx}" class="bi bi-chevron-down text-slate-500 transition-transform duration-200"></i>
+
+            </div>
 
           </div>
 
-          <div class="flex items-center gap-2">
-
-            <span class="font-normal text-slate-500 text-[10px]">Fecha límite:</span>
-
-            ${deadlineBadge}
-
-            <i id="compras-flecha-${pIdx}" class="bi bi-chevron-down text-slate-500 transition-transform duration-200"></i>
-
+          <!-- Preview Pills de insumos incluidos en este proveedor -->
+          <div class="flex items-center gap-1.5 flex-wrap mt-2.5 pt-2 border-t border-slate-200/60 font-normal">
+            ${pillsHtml}
           </div>
 
         </button>
@@ -11929,7 +12022,13 @@ function cargarEntradaDesdeComprasPendiente() {
 
       prod.presentacion_nombre,
 
-      prod.unidades_presentacion
+      prod.unidades_presentacion,
+
+      prod.cantidad_sugerida_usuario,
+
+      prod.costo_empaque_usuario,
+
+      prod.total_costo
 
     );
 
@@ -11965,7 +12064,7 @@ function hacerEntradaProveedor(pIdx) {
 
     fechaInput.focus();
 
-    return;
+    return false;
 
   }
 
@@ -11983,7 +12082,7 @@ function hacerEntradaProveedor(pIdx) {
 
     alert("Por favor, seleccione al menos un producto con cantidad mayor a cero para hacer la entrada.");
 
-    return;
+    return false;
 
   }
 
@@ -11997,7 +12096,7 @@ function hacerEntradaProveedor(pIdx) {
 
   if (!confirm(`¿Desea transferir ${checkedProds.length} ítems de ${p.proveedor_nombre} a una nueva pestaña de Entradas?`)) {
 
-    return;
+    return false;
 
   }
 

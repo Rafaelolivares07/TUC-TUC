@@ -12232,6 +12232,19 @@ def api_compras_sugerencias(negocio_id):
         else:
             usar_dias_con_stock = True
 
+        # Alertas activas de ítems agotados para esta sede
+        alertas_rows = conn.execute("""
+            SELECT a.producto_id, p.nombre, a.stock_alerta, a.stock_minimo, a.primer_aviso_at, a.veces_avisado,
+                   COALESCE(s.stock, 0) as stock_actual
+            FROM inventario_alertas_agotados a
+            JOIN productos p ON p.id = a.producto_id
+            LEFT JOIN saldos_inventario s ON s.producto_id = a.producto_id AND s.negocio_id = a.negocio_id AND s.bodega = 1
+            WHERE a.negocio_id = %s AND a.bodega = 1 AND a.estado = 'agotado'
+            ORDER BY a.primer_aviso_at DESC
+        """, (negocio_id,)).fetchall()
+        alertas_map = {r['producto_id']: dict(r) for r in alertas_rows}
+        alertas_pids = set(alertas_map.keys())
+
         # 1. Obtener todos los productos comprados (sin receta)
         purchased_products = conn.execute("""
             SELECT p.id, p.nombre, COALESCE(p.costo, 0) AS costo, p.dias_max_stock, p.dias_min_stock, p.stock_minimo,
@@ -12245,6 +12258,7 @@ def api_compras_sugerencias(negocio_id):
         """, (negocio_id, negocio_id)).fetchall()
         
         proveedores_map = {}
+        productos_sugeridos_info = {}
         
         for prod in purchased_products:
             p_id = prod['id']
@@ -12265,6 +12279,16 @@ def api_compras_sugerencias(negocio_id):
                 continue
                 
             demanda_proyectada = ddp * (1.0 + growth_rate)
+
+            # Determinar stock mínimo aplicable y si el producto está en alerta de agotado
+            p_stock_min_fijo = float(prod['stock_minimo']) if prod['stock_minimo'] is not None else None
+            p_dias_min = prod['dias_min_stock'] if prod['dias_min_stock'] is not None else dias_stock_min_global
+            stock_min_calculado = p_stock_min_fijo if p_stock_min_fijo is not None else (demanda_proyectada * p_dias_min)
+            if p_id in alertas_map:
+                al_min = float(alertas_map[p_id].get('stock_minimo') or 0.0)
+                stock_min_calculado = max(stock_min_calculado, al_min)
+                
+            esta_agotado = (stock_actual < stock_min_calculado) or (p_id in alertas_pids)
             
             # Obtener cotizaciones activas para este producto (globales)
             quotes = conn.execute("""
@@ -12292,13 +12316,22 @@ def api_compras_sugerencias(negocio_id):
             dias_max = p_dias_max_stock if p_dias_max_stock is not None else dias_stock_max_global
             max_comprar = demanda_proyectada * dias_max
             
+            # Piso de reposición de seguridad para ítems agotados / bajo mínimo
+            if esta_agotado:
+                piso_reposicion = stock_min_calculado + (demanda_proyectada * dias_entrega_global)
+                stock_objetivo = max(max_comprar, piso_reposicion)
+            else:
+                stock_objetivo = max_comprar
+                
+            capacidad_compra = max(max_comprar, stock_objetivo)
+            
             # Clasificar cotizaciones entre elegibles y descartadas
             eligible_quotes = []
             discarded_quotes = []
             
             for q in quotes:
                 unidades = float(q['unidades_item'])
-                if unidades <= max_comprar or max_comprar <= 0.0001:
+                if unidades <= capacidad_compra or capacidad_compra <= 0.0001:
                     eligible_quotes.append(q)
                 else:
                     discarded_quotes.append(q)
@@ -12349,9 +12382,16 @@ def api_compras_sugerencias(negocio_id):
                 prov_telefono = last_purchase['proveedor_telefono'] or ""
                 
             # Calcular cantidad a comprar
-            cantidad_comprar_neta = max_comprar - stock_actual
-            if cantidad_comprar_neta < 0.0001:
+            cantidad_comprar_neta = stock_objetivo - stock_actual
+            if not esta_agotado and cantidad_comprar_neta < 0.0001:
                 continue
+            if esta_agotado and cantidad_comprar_neta < 0.0001:
+                cantidad_comprar_neta = max(
+                    0.0,
+                    stock_min_calculado - stock_actual + (demanda_proyectada * dias_entrega_global)
+                )
+                if cantidad_comprar_neta < 0.0001:
+                    cantidad_comprar_neta = demanda_proyectada * max(dias_entrega_global, 1)
             cantidad_comprar = cantidad_comprar_neta
                 
             # Convertir cantidad sugerida a paquetes
@@ -12370,7 +12410,7 @@ def api_compras_sugerencias(negocio_id):
                 
             dias_para_reorden = cobertura_dias - dias_entrega_global
             
-            if dias_para_reorden <= 0.0001:
+            if esta_agotado or dias_para_reorden <= 0.0001:
                 fecha_limite = "Inmediato"
             elif dias_para_reorden == 9999.0:
                 fecha_limite = "Sin consumo"
@@ -12419,6 +12459,18 @@ def api_compras_sugerencias(negocio_id):
             
             proveedores_map[prov_id]['productos'].append(item_data)
             proveedores_map[prov_id]['total_compras'] += total_costo
+
+            productos_sugeridos_info[p_id] = {
+                'proveedor_id': prov_id,
+                'proveedor_nombre': prov_nombre,
+                'proveedor_telefono': prov_telefono,
+                'presentacion_nombre': presentacion_nombre,
+                'unidades_presentacion': unidades_presentacion,
+                'precio_presentacion': precio_presentacion,
+                'costo_unitario': round(costo_unitario, 2),
+                'paquetes_sugeridos': paquetes,
+                'cantidad_sugerida_unidades': round(cantidad_comprar_unidades, 2)
+            }
             
             if fecha_limite == 'Inmediato':
                 proveedores_map[prov_id]['fecha_limite'] = 'Inmediato'
@@ -12434,24 +12486,69 @@ def api_compras_sugerencias(negocio_id):
         for p in proveedores_lista:
             p['total_compras'] = round(p['total_compras'], 2)
             p['productos'].sort(key=lambda x: x['cobertura_dias'])
+            p['productos_resumen'] = [
+                {
+                    'producto_id': x['producto_id'],
+                    'producto_nombre': x['producto_nombre'],
+                    'presentacion_nombre': x['presentacion_nombre'],
+                    'unidades_presentacion': x['unidades_presentacion']
+                }
+                for x in p['productos']
+            ]
             
         proveedores_lista.sort(key=lambda x: x['fecha_limite_comparable'])
 
-        # Alertas activas de ítems agotados para esta sede
-        alertas_rows = conn.execute("""
-            SELECT a.producto_id, p.nombre, a.stock_alerta, a.stock_minimo, a.primer_aviso_at, a.veces_avisado,
-                   COALESCE(s.stock, 0) as stock_actual
-            FROM inventario_alertas_agotados a
-            JOIN productos p ON p.id = a.producto_id
-            LEFT JOIN saldos_inventario s ON s.producto_id = a.producto_id AND s.negocio_id = a.negocio_id AND s.bodega = 1
-            WHERE a.negocio_id = %s AND a.bodega = 1 AND a.estado = 'agotado'
-            ORDER BY a.primer_aviso_at DESC
-        """, (negocio_id,)).fetchall()
-        
-        alertas_activas = [dict(r) for r in alertas_rows]
-        for al in alertas_activas:
-            al['primer_aviso_str'] = _formatear_tiempo_transcurrido(al.get('primer_aviso_at'))
-            al['es_produccion'] = _es_producto_preparado(conn, al['producto_id'])
+        # Enriquecer alertas activas de ítems agotados con cotización preferida y proveedor
+        alertas_activas = []
+        for al in alertas_rows:
+            al_dict = dict(al)
+            al_dict['primer_aviso_str'] = _formatear_tiempo_transcurrido(al_dict.get('primer_aviso_at'))
+            al_dict['es_produccion'] = _es_producto_preparado(conn, al_dict['producto_id'])
+
+            sug_info = productos_sugeridos_info.get(al_dict['producto_id'])
+            if sug_info:
+                al_dict['proveedor_id'] = sug_info['proveedor_id']
+                al_dict['proveedor_nombre'] = sug_info['proveedor_nombre']
+                al_dict['proveedor_telefono'] = sug_info['proveedor_telefono']
+                al_dict['presentacion_nombre'] = sug_info['presentacion_nombre']
+                al_dict['unidades_presentacion'] = sug_info['unidades_presentacion']
+                al_dict['precio_presentacion'] = sug_info['precio_presentacion']
+                al_dict['costo_unitario'] = sug_info['costo_unitario']
+                al_dict['paquetes_sugeridos'] = sug_info['paquetes_sugeridos']
+                al_dict['cantidad_sugerida_unidades'] = sug_info['cantidad_sugerida_unidades']
+            else:
+                q_backup = conn.execute("""
+                    SELECT c.tercero_id, t.nombre AS proveedor_nombre, t.telefono AS proveedor_telefono,
+                           COALESCE(c.unidades_item, 1) AS unidades_item, COALESCE(c.precio, 0) AS precio,
+                           COALESCE(c.descripcion_presentacion, 'Unidad') AS descripcion_presentacion
+                    FROM cotizaciones_compras c
+                    JOIN terceros t ON t.id = c.tercero_id
+                    WHERE c.item_id = %s
+                      AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
+                    ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC
+                    LIMIT 1
+                """, (al_dict['producto_id'],)).fetchone()
+                if q_backup:
+                    al_dict['proveedor_id'] = q_backup['tercero_id']
+                    al_dict['proveedor_nombre'] = q_backup['proveedor_nombre']
+                    al_dict['proveedor_telefono'] = q_backup['proveedor_telefono'] or ''
+                    al_dict['presentacion_nombre'] = q_backup['descripcion_presentacion']
+                    al_dict['unidades_presentacion'] = float(q_backup['unidades_item'])
+                    al_dict['precio_presentacion'] = float(q_backup['precio'])
+                    al_dict['costo_unitario'] = round(float(q_backup['precio']) / float(q_backup['unidades_item']), 2) if float(q_backup['unidades_item']) > 0 else 0.0
+                    al_dict['paquetes_sugeridos'] = 1
+                    al_dict['cantidad_sugerida_unidades'] = float(q_backup['unidades_item'])
+                else:
+                    al_dict['proveedor_id'] = None
+                    al_dict['proveedor_nombre'] = None
+                    al_dict['proveedor_telefono'] = ''
+                    al_dict['presentacion_nombre'] = 'Unidad'
+                    al_dict['unidades_presentacion'] = 1.0
+                    al_dict['precio_presentacion'] = 0.0
+                    al_dict['costo_unitario'] = 0.0
+                    al_dict['paquetes_sugeridos'] = 0
+                    al_dict['cantidad_sugerida_unidades'] = 0.0
+            alertas_activas.append(al_dict)
         
         return jsonify({
             'ok': True,

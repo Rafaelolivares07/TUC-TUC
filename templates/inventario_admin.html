@@ -2213,7 +2213,7 @@
 
     <div class="bg-slate-50 p-4 rounded-2xl mb-4 border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-xs">
 
-      <div class="flex items-center gap-6 flex-wrap">
+      <div class="flex items-center gap-5 flex-wrap">
 
         <div class="text-sm font-semibold text-gray-600">
 
@@ -2227,9 +2227,41 @@
 
         </div>
 
-        <div class="text-base font-bold text-gray-800">
+        <div class="text-base font-bold text-gray-800 flex items-center gap-2">
 
-          Total Documento: <span id="entrada-total-val" class="text-rose-600 font-black text-2xl">$0.00</span>
+          <span>Total:</span>
+
+          <span id="entrada-total-val" class="text-rose-600 font-black text-2xl">$0.00</span>
+
+          <!-- Botón de cuadre rápido de centavos -->
+
+          <button type="button" id="btn-cuadrar-centavos" onclick="cuadrarCentavosEntrada()"
+
+                  class="hidden text-xs font-bold px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg border border-amber-300 transition-all cursor-pointer shadow-xs animate-pulse"
+
+                  title="Ajustar centavos automáticamente en la última línea para redondear exactamente al peso"></button>
+
+        </div>
+
+        <!-- Input opcional para fijar el Total Factura Proveedor exacto -->
+
+        <div class="flex items-center gap-1.5 text-xs text-gray-600 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-2xs">
+
+          <span class="font-bold text-gray-700">Factura Exacta $:</span>
+
+          <input type="text" inputmode="decimal" id="entrada-total-factura-esperado" placeholder="Ej: 52000"
+
+                 class="w-24 px-2 py-0.5 text-xs font-black text-right border border-gray-300 rounded focus:border-rose-500 focus:outline-none"
+
+                 onkeydown="if(event.key==='Enter'){event.preventDefault(); cuadrarConTotalFactura();}"
+
+                 title="Si la factura del proveedor dice un valor exacto (ej: 52000), escríbelo aquí y presiona Enter para cuadrar los centavos automáticamente">
+
+          <button type="button" onclick="cuadrarConTotalFactura()" class="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 font-bold rounded text-[11px] border border-gray-300 cursor-pointer" title="Cuadrar centavos con el total digitado">
+
+            Cuadrar
+
+          </button>
 
         </div>
 
@@ -2935,11 +2967,38 @@
         <div id="compras-alertas-agotados-lista" class="hidden mt-2 pt-2 border-t border-rose-200 space-y-1.5 font-normal"></div>
       </div>
 
-      <!-- Buscador de Proveedor/Producto y Gran Total -->
-      <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
-        <input type="text" id="filtro-compras-proveedor" placeholder="Buscar proveedor o producto..." oninput="filtrarCompras()"
-               class="text-xs border border-gray-200 rounded-xl px-3 py-2 w-full sm:max-w-xs focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white">
-        <div id="compras-gran-total-banner" class="hidden px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-extrabold shadow-sm">
+      <!-- Buscador de Proveedor/Producto, Selector de Decimales y Gran Total -->
+      <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div class="flex items-center gap-2.5 flex-wrap flex-1 min-w-[280px]">
+          <input type="text" id="filtro-compras-proveedor" placeholder="Buscar proveedor o producto..." oninput="filtrarCompras()"
+                 class="text-xs border border-gray-200 rounded-xl px-3 py-2 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white shadow-2xs">
+          
+          <!-- Controles de Decimales definidos por el Usuario -->
+          <div class="flex items-center gap-2.5 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs text-xs font-semibold text-slate-700">
+            <span class="text-slate-400 text-[11px] font-bold">⚙️ Decimales:</span>
+            <label class="flex items-center gap-1 text-[11px] text-slate-600 font-medium cursor-pointer" title="Número de decimales para mostrar cantidades">
+              <span>Cant:</span>
+              <select id="cfg-compras-dec-cant" onchange="cambiarDecimalesCompras()" class="border border-slate-200 rounded px-1.5 py-0.5 text-xs bg-slate-50 font-bold text-slate-800 outline-none cursor-pointer">
+                <option value="0">0 (12)</option>
+                <option value="1">1 (12.5)</option>
+                <option value="2" selected>2 (12.50)</option>
+                <option value="3">3 (12.500)</option>
+                <option value="4">4 (12.5000)</option>
+              </select>
+            </label>
+            <span class="text-slate-300">|</span>
+            <label class="flex items-center gap-1 text-[11px] text-slate-600 font-medium cursor-pointer" title="Número de decimales para mostrar pesos / moneda">
+              <span>Pesos ($):</span>
+              <select id="cfg-compras-dec-mon" onchange="cambiarDecimalesCompras()" class="border border-slate-200 rounded px-1.5 py-0.5 text-xs bg-slate-50 font-bold text-slate-800 outline-none cursor-pointer">
+                <option value="0">0 ($1.225)</option>
+                <option value="2" selected>2 ($1.225,00)</option>
+                <option value="4">4 ($1.225,0000)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div id="compras-gran-total-banner" class="hidden px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-extrabold shadow-sm shrink-0">
           💰 Total Proyectado de Compras: <span id="compras-gran-total-val" class="font-black text-sm text-emerald-700"></span>
         </div>
       </div>
@@ -5276,11 +5335,21 @@ function setupPresentacionAC(idx) {
 
           if (el.dataset.precio) {
 
-            const costoEmpEl = document.getElementById(`ent-costo-emp-${idx}`);
+            const totalInput = document.getElementById(`ent-total-${idx}`);
 
-            if (costoEmpEl) costoEmpEl.value = parseFloat(el.dataset.precio).toFixed(4);
+            if (!totalInput || totalInput.dataset.manual !== 'true' || !(parseFloat(totalInput.value) > 0)) {
 
-            calcularCostoFilaEmpaque(idx, 'costo_emp');
+              const costoEmpEl = document.getElementById(`ent-costo-emp-${idx}`);
+
+              if (costoEmpEl) costoEmpEl.value = parseFloat(el.dataset.precio).toFixed(4);
+
+              calcularCostoFilaEmpaque(idx, 'costo_emp');
+
+            } else {
+
+              calcularCostoFilaEmpaque(idx, 'equiv');
+
+            }
 
           } else {
 
@@ -8304,6 +8373,11 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
   wireProductoEntrada(idx);
 
+  const totInp = document.getElementById(`ent-total-${idx}`);
+  if (totInp && parseFloat(totInp.value) > 0) {
+    totInp.dataset.manual = 'true';
+  }
+
 }
 
 
@@ -8342,61 +8416,167 @@ function calcularCostoFilaEmpaque(idx, target) {
 
   
 
-  if (target === 'cant' || target === 'costo_emp' || target === 'equiv') {
+  if (target === 'total') {
 
-    const costoEmp = parseFloat(costoEmpInput.value) || 0;
+    const rawTotalStr = totalInput.value.trim();
 
-    
+    if (rawTotalStr === '') {
 
-    if (cantEmp > 0 && costoEmp > 0) {
-
-      totalInput.value = (cantEmp * costoEmp).toFixed(2);
-
-    } else {
-
-      totalInput.value = '';
-
-    }
-
-    
-
-    if (costoEmp > 0 && equiv > 0) {
-
-      vuInput.value = (costoEmp / equiv).toFixed(6);
-
-      vuInput.title = vuInput.value;
-
-    } else {
-
-      vuInput.value = '';
-
-      vuInput.title = '';
-
-    }
-
-  } else if (target === 'total') {
-
-    const totalVal = parseFloat(totalInput.value) || 0;
-
-    
-
-    if (cantEmp > 0 && totalVal > 0) {
-
-      costoEmpInput.value = (totalVal / cantEmp).toFixed(4);
-
-      const costoEmp = parseFloat(costoEmpInput.value) || 0;
-
-      vuInput.value = (costoEmp / equiv).toFixed(6);
-
-      vuInput.title = vuInput.value;
-
-    } else {
+      totalInput.dataset.manual = 'false';
 
       costoEmpInput.value = '';
 
       vuInput.value = '';
 
       vuInput.title = '';
+
+    } else {
+
+      totalInput.dataset.manual = 'true';
+
+      costoEmpInput.dataset.manual = 'false';
+
+      const totalVal = parseFloat(rawTotalStr) || 0;
+
+      if (cantEmp > 0 && totalVal > 0) {
+
+        const rawCostoEmp = totalVal / cantEmp;
+
+        costoEmpInput.dataset.rawCost = String(rawCostoEmp);
+
+        costoEmpInput.value = rawCostoEmp.toFixed(4);
+
+        const rawVu = rawCostoEmp / equiv;
+
+        vuInput.value = rawVu.toFixed(6);
+
+        vuInput.title = String(rawVu);
+
+      } else {
+
+        costoEmpInput.value = '';
+
+        vuInput.value = '';
+
+        vuInput.title = '';
+
+      }
+
+    }
+
+  } else if (target === 'costo_emp') {
+
+    const rawCostoStr = costoEmpInput.value.trim();
+
+    if (rawCostoStr === '') {
+
+      costoEmpInput.dataset.manual = 'false';
+
+      if (totalInput.dataset.manual !== 'true') {
+
+        totalInput.value = '';
+
+        vuInput.value = '';
+
+        vuInput.title = '';
+
+      }
+
+    } else {
+
+      costoEmpInput.dataset.manual = 'true';
+
+      totalInput.dataset.manual = 'false';
+
+      const costoEmp = parseFloat(rawCostoStr) || 0;
+
+      if (cantEmp > 0 && costoEmp > 0) {
+
+        totalInput.value = (cantEmp * costoEmp).toFixed(2);
+
+      } else {
+
+        totalInput.value = '';
+
+      }
+
+      if (costoEmp > 0 && equiv > 0) {
+
+        vuInput.value = (costoEmp / equiv).toFixed(6);
+
+        vuInput.title = vuInput.value;
+
+      } else {
+
+        vuInput.value = '';
+
+        vuInput.title = '';
+
+      }
+
+    }
+
+  } else if (target === 'cant' || target === 'equiv') {
+
+    // Si el usuario fijó el total a mano, el total se respeta al 100% y se recalcula costo unitario hacia atrás
+
+    if (totalInput.dataset.manual === 'true' && parseFloat(totalInput.value) > 0) {
+
+      const totalVal = parseFloat(totalInput.value) || 0;
+
+      if (cantEmp > 0) {
+
+        const rawCostoEmp = totalVal / cantEmp;
+
+        costoEmpInput.dataset.rawCost = String(rawCostoEmp);
+
+        costoEmpInput.value = rawCostoEmp.toFixed(4);
+
+        const rawVu = rawCostoEmp / equiv;
+
+        vuInput.value = rawVu.toFixed(6);
+
+        vuInput.title = String(rawVu);
+
+      } else {
+
+        costoEmpInput.value = '';
+
+        vuInput.value = '';
+
+        vuInput.title = '';
+
+      }
+
+    } else {
+
+      // Flujo tradicional: el costo empaque es el driver
+
+      const costoEmp = parseFloat(costoEmpInput.value) || 0;
+
+      if (cantEmp > 0 && costoEmp > 0) {
+
+        totalInput.value = (cantEmp * costoEmp).toFixed(2);
+
+      } else {
+
+        totalInput.value = '';
+
+      }
+
+      if (costoEmp > 0 && equiv > 0) {
+
+        vuInput.value = (costoEmp / equiv).toFixed(6);
+
+        vuInput.title = vuInput.value;
+
+      } else {
+
+        vuInput.value = '';
+
+        vuInput.title = '';
+
+      }
 
     }
 
@@ -8409,28 +8589,65 @@ function calcularCostoFilaEmpaque(idx, target) {
 }
 
 async function buscarCotizacionParaLinea(idx) {
+
   const prodId = document.getElementById(`ent-id-${idx}`)?.value;
+
   const presId = document.getElementById(`ent-pres-id-${idx}`)?.value;
+
   const provId = document.getElementById('entrada-proveedor-id')?.value;
+
   if (!prodId || !provId) return;
+
+  const totalInput = document.getElementById(`ent-total-${idx}`);
+
+  const costoEmpInput = document.getElementById(`ent-costo-emp-${idx}`);
+
+  // Si el usuario ya digitó el total de la línea o el costo a mano, NO sobreescribir con cotización tardía
+
+  if (totalInput && totalInput.dataset.manual === 'true' && parseFloat(totalInput.value) > 0) return;
+
+  if (costoEmpInput && costoEmpInput.dataset.manual === 'true' && parseFloat(costoEmpInput.value) > 0) return;
+
   try {
+
     const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones?q=`);
+
     const data = await resp.json();
+
     if (!data.ok) return;
+
+    // Volver a verificar antes de aplicar (por si el usuario digitó mientras cargaba el fetch)
+
+    if (totalInput && totalInput.dataset.manual === 'true' && parseFloat(totalInput.value) > 0) return;
+
+    if (costoEmpInput && costoEmpInput.dataset.manual === 'true' && parseFloat(costoEmpInput.value) > 0) return;
+
     const match = data.cotizaciones.find(c =>
+
       String(c.item_id) === String(prodId) &&
+
       String(c.tercero_id) === String(provId) &&
+
       (!presId || String(c.presentacion_id) === String(presId))
+
     );
+
     if (match && match.precio > 0) {
-      const costoEmpInput = document.getElementById(`ent-costo-emp-${idx}`);
+
       if (costoEmpInput) {
+
         costoEmpInput.value = parseFloat(match.precio).toFixed(4);
+
         calcularCostoFilaEmpaque(idx, 'costo_emp');
+
         toast(`Cotización: $${parseFloat(match.precio).toLocaleString('es-CO')} / ${match.presentacion_nombre || 'presentación'}`);
+
       }
+
     }
+
   } catch(e) { /* ignore */ }
+
 }
 
 
@@ -8612,6 +8829,7 @@ function calcularCostoFila(idx, target) {
 function calcularTotalesEntrada() {
 
   const cont = document.getElementById('entrada-lineas');
+  if (!cont) return;
 
   const divs = cont.querySelectorAll('.grid');
 
@@ -8679,6 +8897,121 @@ function calcularTotalesEntrada() {
 
   if (totalEl) totalEl.textContent = `$${total.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+  // Cuadre de centavos dinámico con respecto al peso entero
+  const btnCuadrar = document.getElementById('btn-cuadrar-centavos');
+  if (btnCuadrar) {
+    if (total > 0) {
+      const totalRedondeado = Math.round(total);
+      const diff = Number((totalRedondeado - total).toFixed(2));
+      if (Math.abs(diff) > 0.001 && Math.abs(diff) <= 1.0) {
+        btnCuadrar.classList.remove('hidden');
+        btnCuadrar.textContent = `⚡ Cuadrar a $${totalRedondeado.toLocaleString('es-CO')} (${diff > 0 ? '+' : ''}${diff.toFixed(2)})`;
+        btnCuadrar.dataset.diff = String(diff);
+      } else {
+        btnCuadrar.classList.add('hidden');
+      }
+    } else {
+      btnCuadrar.classList.add('hidden');
+    }
+  }
+
+}
+
+function obtenerUltimaLineaValidaEntrada() {
+  const cont = document.getElementById('entrada-lineas');
+  if (!cont) return null;
+  const divs = [...cont.querySelectorAll('.grid')];
+  for (let i = divs.length - 1; i >= 0; i--) {
+    const div = divs[i];
+    const totalInput = div.querySelector('input[id^="ent-total-"]');
+    const cantInput = div.querySelector('input[id^="ent-cant-emp-"]');
+    if (totalInput && cantInput && (parseFloat(cantInput.value) || 0) > 0) {
+      const idxMatch = totalInput.id.match(/^ent-total-(\d+)$/);
+      const idx = idxMatch ? parseInt(idxMatch[1]) : i;
+      return { div, totalInput, cantInput, idx };
+    }
+  }
+  return null;
+}
+
+function cuadrarCentavosEntrada() {
+  const btn = document.getElementById('btn-cuadrar-centavos');
+  if (!btn) return;
+  const diff = parseFloat(btn.dataset.diff) || 0;
+  if (!diff) return;
+  aplicarDiferenciaCentavos(diff);
+}
+
+function cuadrarConTotalFactura() {
+  const inp = document.getElementById('entrada-total-factura-esperado');
+  if (!inp || !inp.value.trim()) {
+    toast('Digita el valor total exacto de la factura', false);
+    return;
+  }
+  const esperado = parseFloat(inp.value.replace(/[^0-9.-]/g, '')) || 0;
+  if (esperado <= 0) {
+    toast('El valor total debe ser mayor a cero', false);
+    return;
+  }
+  
+  const cont = document.getElementById('entrada-lineas');
+  const divs = cont ? [...cont.querySelectorAll('.grid')] : [];
+  let subtotal = 0;
+  let ivaTotal = 0;
+  divs.forEach(div => {
+    const totalInput = div.querySelector('input[id^="ent-total-"]');
+    const ivaSelect = div.querySelector('select[id^="ent-iva-pct-"]');
+    const cantBaseInput = div.querySelector('input[id^="ent-cant-base-"]');
+    const vuInput = div.querySelector('input[id^="ent-vu-"]');
+    if (ivaSelect) {
+      const totalVal = totalInput ? (parseFloat(totalInput.value) || 0) : 0;
+      const cantBase = cantBaseInput ? (parseFloat(cantBaseInput.value) || 0) : 0;
+      const vu = vuInput ? (parseFloat(vuInput.value) || 0) : 0;
+      const ivaPct = parseFloat(ivaSelect.value) || 0;
+      const lineSubtotal = totalVal > 0 ? totalVal : (cantBase * vu);
+      subtotal += lineSubtotal;
+      ivaTotal += lineSubtotal * (ivaPct / 100);
+    }
+  });
+  const actual = subtotal + ivaTotal;
+  const diff = Number((esperado - actual).toFixed(2));
+  
+  if (Math.abs(diff) === 0) {
+    toast('El total ya coincide exactamente con la factura', true);
+    return;
+  }
+  if (Math.abs(diff) > 100) {
+    if (!confirm(`La diferencia con la factura es de $${diff.toLocaleString('es-CO')}. ¿Deseas aplicar este ajuste en la última línea para cuadrar?`)) {
+      return;
+    }
+  }
+  aplicarDiferenciaCentavos(diff);
+}
+
+function aplicarDiferenciaCentavos(diffTotal) {
+  const ultimaLinea = obtenerUltimaLineaValidaEntrada();
+  if (!ultimaLinea) {
+    toast('No hay líneas válidas para ajustar centavos', false);
+    return;
+  }
+  const { totalInput, idx, div } = ultimaLinea;
+  const ivaSelect = div.querySelector('select[id^="ent-iva-pct-"]');
+  const ivaPct = ivaSelect ? (parseFloat(ivaSelect.value) || 0) : 0;
+  
+  const factor = 1 + (ivaPct / 100);
+  const deltaSubtotal = diffTotal / factor;
+  
+  const currentTotal = parseFloat(totalInput.value) || 0;
+  const newTotal = Number((currentTotal + deltaSubtotal).toFixed(2));
+  if (newTotal <= 0) {
+    toast('El ajuste dejaría la línea en 0 o negativo', false);
+    return;
+  }
+  
+  totalInput.value = newTotal.toFixed(2);
+  totalInput.dataset.manual = 'true';
+  calcularCostoFilaEmpaque(idx, 'total');
+  toast(`Centavos ajustados (${diffTotal > 0 ? '+' : ''}$${diffTotal.toFixed(2)}) en la última línea`);
 }
 
 
@@ -10478,13 +10811,77 @@ function irAProveedorCompra(proveedorId, productoId) {
   }
 }
 
+function getDecCantCompras() {
+  const el = document.getElementById('cfg-compras-dec-cant');
+  if (el && el.value !== undefined) return parseInt(el.value);
+  return parseInt(localStorage.getItem('compras_dec_cant') || '2');
+}
+
+function getDecMonCompras() {
+  const el = document.getElementById('cfg-compras-dec-mon');
+  if (el && el.value !== undefined) return parseInt(el.value);
+  return parseInt(localStorage.getItem('compras_dec_mon') || '2');
+}
+
+function fmtCantC(n) {
+  if (n == null || isNaN(n)) return '—';
+  const dec = getDecCantCompras();
+  return Number(n).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: dec });
+}
+
+function fmtMonC(n, forceDec = null) {
+  if (n == null || isNaN(n)) return '—';
+  const dec = forceDec !== null ? forceDec : getDecMonCompras();
+  return '$' + Number(n).toLocaleString('es-CO', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+function cambiarDecimalesCompras() {
+  const cantVal = document.getElementById('cfg-compras-dec-cant')?.value || '2';
+  const monVal = document.getElementById('cfg-compras-dec-mon')?.value || '2';
+  localStorage.setItem('compras_dec_cant', cantVal);
+  localStorage.setItem('compras_dec_mon', monVal);
+  if (window.COMPRAS_DATA && window.COMPRAS_DATA.length) {
+    filtrarCompras();
+  }
+}
+
+function cambiarPresentacionProducto(pIdx, productoId, quoteId) {
+  const p = window.COMPRAS_DATA[pIdx];
+  if (!p) return;
+  const prod = p.productos.find(x => x.producto_id === productoId);
+  if (!prod || !prod.cotizaciones) return;
+  const q = prod.cotizaciones.find(x => x.id == quoteId);
+  if (!q) return;
+
+  prod.selected_quote_id = q.id;
+  prod.presentacion_id = q.presentacion_id;
+  prod.presentacion_nombre = q.descripcion_presentacion;
+  prod.unidades_presentacion = parseFloat(q.unidades_item);
+  prod.precio_presentacion = parseFloat(q.precio);
+  prod.costo_unitario = parseFloat(q.costo_unitario);
+  prod.costo_empaque_usuario = parseFloat(q.precio);
+
+  const cantBase = prod.cantidad_sugerida_unidades || (prod.paquetes_sugeridos * prod.unidades_presentacion);
+  prod.paquetes_sugeridos = Math.ceil(cantBase / prod.unidades_presentacion);
+  prod.cantidad_sugerida_usuario = prod.paquetes_sugeridos;
+  prod.total_costo = prod.paquetes_sugeridos * prod.precio_presentacion;
+
+  recalcularTotalProveedor(pIdx);
+  filtrarCompras();
+  toast(`Presentación cambiada a ${q.descripcion_presentacion} x ${fmtCantC(q.unidades_item)} und`);
+}
+
 async function cargarSugerenciasCompras() {
 
   const el = document.getElementById('compras-proveedores-list');
 
   if (!el) return;
 
-  
+  // Restaurar valores de selectores de decimales
+  const decCantSel = document.getElementById('cfg-compras-dec-cant');
+  const decMonSel = document.getElementById('cfg-compras-dec-mon');
+  if (decCantSel) decCantSel.value = localStorage.getItem('compras_dec_cant') || '2';
+  if (decMonSel) decMonSel.value = localStorage.getItem('compras_dec_mon') || '2';
 
   el.innerHTML = '<p class="text-xs text-slate-400 italic text-center py-4">Analizando cotizaciones y consumos...</p>';
 
@@ -10591,7 +10988,7 @@ async function cargarSugerenciasCompras() {
                 <div class="flex items-center gap-2">
                   <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">👨‍🍳 Producción</span>
                   <span class="font-bold text-slate-800">${a.nombre}</span>
-                  <span class="text-slate-500 text-[10.5px]">Stock actual: <b class="${a.stock_actual <= 0 ? 'text-rose-600' : 'text-slate-700'}">${fmt(a.stock_actual)}</b> | Mín: <b>${fmt(a.stock_minimo)}</b></span>
+                  <span class="text-slate-500 text-[10.5px]">Stock actual: <b class="${a.stock_actual <= 0 ? 'text-rose-600' : 'text-slate-700'}">${fmtCantC(a.stock_actual)}</b> | Mín: <b>${fmtCantC(a.stock_minimo)}</b></span>
                 </div>
                 <div class="flex items-center gap-2.5">
                   <span class="text-[10px] text-amber-700 font-medium">Primer aviso: ${a.primer_aviso_str}</span>
@@ -10605,8 +11002,8 @@ async function cargarSugerenciasCompras() {
           }
 
           const provNom = a.proveedor_nombre || 'Sin proveedor cotizado';
-          const presText = `${a.presentacion_nombre || 'Unidad'} x ${fmt(a.unidades_presentacion || 1)} und`;
-          const costoText = a.precio_presentacion ? `$${fmtMon(a.precio_presentacion)}` : (a.costo_unitario ? `$${fmtMon(a.costo_unitario)}` : '');
+          const presText = `${a.presentacion_nombre || 'Unidad'} x ${fmtCantC(a.unidades_presentacion || 1)} und`;
+          const costoText = a.precio_presentacion ? fmtMonC(a.precio_presentacion) : (a.costo_unitario ? fmtMonC(a.costo_unitario) : '');
 
           return `
             <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-2.5 rounded-xl text-[11px] border border-rose-200 shadow-2xs gap-2">
@@ -10614,7 +11011,7 @@ async function cargarSugerenciasCompras() {
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-200">🛒 Insumo Compra</span>
                   <span class="font-bold text-slate-800 text-xs">${a.nombre}</span>
-                  <span class="text-slate-500 text-[10.5px]">Stock actual: <b class="${a.stock_actual <= 0 ? 'text-rose-600 font-extrabold' : 'text-slate-700 font-bold'}">${fmt(a.stock_actual)}</b> | Mín: <b>${fmt(a.stock_minimo)}</b></span>
+                  <span class="text-slate-500 text-[10.5px]">Stock actual: <b class="${a.stock_actual <= 0 ? 'text-rose-600 font-extrabold' : 'text-slate-700 font-bold'}">${fmtCantC(a.stock_actual)}</b> | Mín: <b>${fmtCantC(a.stock_minimo)}</b></span>
                 </div>
                 <div class="flex items-center gap-2 text-[10px] text-slate-600 mt-0.5 flex-wrap">
                   ${a.proveedor_nombre ? `<span>🏢 Proveedor: <strong class="text-slate-800">${a.proveedor_nombre}</strong></span> <span class="text-slate-300">•</span>` : ''}
@@ -10641,50 +11038,27 @@ async function cargarSugerenciasCompras() {
       if (bannerAlertas) bannerAlertas.classList.add('hidden');
     }
 
-    
-
     if (!d.proveedores || d.proveedores.length === 0) {
-
       document.getElementById('compras-gran-total-banner')?.classList.add('hidden');
-
       el.innerHTML = `
-
         <div class="bg-white rounded-xl p-4 border border-slate-100 text-center">
-
           <p class="text-xs text-slate-500 font-medium">✅ No se requieren compras de insumos para este ciclo logístico.</p>
-
         </div>
-
       `;
-
       return;
-
     }
 
-    
-
     // Calcular Gran Total Consolidado
-
     let grandTotal = 0;
-
     d.proveedores.forEach(p => {
-
       grandTotal += parseFloat(p.total_compras || 0);
-
     });
 
-    
-
     const bannerEl = document.getElementById('compras-gran-total-banner');
-
     const valEl = document.getElementById('compras-gran-total-val');
-
     if (bannerEl && valEl) {
-
-      valEl.textContent = fmtMon(grandTotal);
-
+      valEl.textContent = fmtMonC(grandTotal);
       bannerEl.classList.remove('hidden');
-
     }
 
     
@@ -10729,7 +11103,7 @@ function renderizarComprasTabla(proveedores) {
 
   el.innerHTML = proveedores.map((p, pIdx) => {
 
-    const totalFormateado = fmtMon(p.total_compras);
+    const totalFormateado = fmtMonC(p.total_compras);
 
     let deadlineBadge = '';
 
@@ -10759,7 +11133,7 @@ function renderizarComprasTabla(proveedores) {
 
             <span class="font-bold">💡 Oportunidad de ahorro:</span>
 
-            <span>Si aumentas el límite a <b>${prod.oportunidad_ahorro.dias_necesarios} días</b> de stock, puedes comprar <b>${prod.oportunidad_ahorro.descripcion_presentacion}</b> a un costo unitario de <b>$${prod.oportunidad_ahorro.costo_unitario}</b> con el proveedor <b>${prod.oportunidad_ahorro.proveedor_nombre}</b>.</span>
+            <span>Si aumentas el límite a <b>${prod.oportunidad_ahorro.dias_necesarios} días</b> de stock, puedes comprar <b>${prod.oportunidad_ahorro.descripcion_presentacion}</b> a un costo unitario de <b>${fmtMonC(prod.oportunidad_ahorro.costo_unitario)}</b> con el proveedor <b>${prod.oportunidad_ahorro.proveedor_nombre}</b>.</span>
 
           </div>
 
@@ -10767,7 +11141,44 @@ function renderizarComprasTabla(proveedores) {
 
       }
 
+      // Columna Empaque / Presentación interactiva
+      let empaqueColHtml = '';
+      if (prod.cotizaciones && prod.cotizaciones.length > 1) {
+        const opts = prod.cotizaciones.map(q => {
+          const isSel = (q.id === prod.selected_quote_id) ? 'selected' : '';
+          const uItem = parseFloat(q.unidades_item || 1);
+          const prec = parseFloat(q.precio || 0);
+          const costU = uItem > 0 ? (prec / uItem) : prec;
+          return `<option value="${q.id}" ${isSel}>${q.descripcion_presentacion} x ${fmtCantC(uItem)} (${fmtMonC(prec)} | ${fmtMonC(costU)}/u)</option>`;
+        }).join('');
 
+        empaqueColHtml = `
+          <div class="flex flex-col gap-1">
+            <select onchange="cambiarPresentacionProducto(${pIdx}, ${prod.producto_id}, this.value)"
+                    class="text-[11px] font-bold text-indigo-950 bg-indigo-50/90 border border-indigo-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer w-full max-w-[210px] shadow-2xs">
+              ${opts}
+            </select>
+            <div class="text-[9.5px] text-slate-500 flex items-center gap-1 font-medium">
+              <span>Contiene: <strong class="text-indigo-900 font-bold">${fmtCantC(prod.unidades_presentacion)}</strong> und</span>
+              <span>•</span>
+              <span>Unit: <strong class="text-emerald-700 font-bold">${fmtMonC(prod.costo_unitario)}</strong></span>
+            </div>
+          </div>
+        `;
+      } else {
+        empaqueColHtml = `
+          <div class="flex flex-col gap-0.5">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200/90 text-[11px] font-bold text-indigo-900 shadow-2xs">
+              📦 ${prod.presentacion_nombre}
+            </span>
+            <div class="text-[9.5px] text-slate-500 flex items-center gap-1 mt-0.5 font-medium">
+              <span>Contiene: <strong class="text-indigo-900 font-bold">${fmtCantC(prod.unidades_presentacion)}</strong> und</span>
+              <span>•</span>
+              <span>Unit: <strong class="text-emerald-700 font-bold">${fmtMonC(prod.costo_unitario)}</strong></span>
+            </div>
+          </div>
+        `;
+      }
 
       const maxStockVal = prod.dias_max_stock !== null ? prod.dias_max_stock : '';
       const minStockVal = (prod.dias_min_stock !== null && prod.dias_min_stock !== undefined) ? prod.dias_min_stock : '';
@@ -10802,7 +11213,7 @@ function renderizarComprasTabla(proveedores) {
 
           <span class="text-[9.5px] text-slate-500 font-bold" id="compras-qty-equiv-lbl-${prod.producto_id}">
 
-            ${prod.presentacion_nombre} (${fmt(unitsVal)} und)
+            ${prod.presentacion_nombre} (${fmtCantC(unitsVal)} und)
 
           </span>
 
@@ -10817,6 +11228,7 @@ function renderizarComprasTabla(proveedores) {
       const initialCostoEmp = prod.precio_presentacion !== undefined ? prod.precio_presentacion : (prod.costo_unitario * prod.unidades_presentacion);
 
       const costoEmp = prod.costo_empaque_usuario !== undefined ? prod.costo_empaque_usuario : initialCostoEmp;
+      const costoEmpVal = (costoEmp !== null && !isNaN(costoEmp)) ? Number(costoEmp).toFixed(getDecMonCompras()) : '0';
 
       const costoEmpHtml = `
 
@@ -10824,7 +11236,7 @@ function renderizarComprasTabla(proveedores) {
 
           <span class="text-slate-400 text-xs">$</span>
 
-           <input type="number" id="compras-costo-emp-${prod.producto_id}" value="${costoEmp}" min="0" step="0.01"
+           <input type="number" id="compras-costo-emp-${prod.producto_id}" value="${costoEmpVal}" min="0" step="0.01"
 
                   oninput="editarCantidadCostoCompra(${pIdx}, ${prod.producto_id})"
 
@@ -10836,9 +11248,11 @@ function renderizarComprasTabla(proveedores) {
 
 
 
+       const subtotalFormatted = (prod.total_costo !== null && !isNaN(prod.total_costo)) ? Number(prod.total_costo).toFixed(getDecMonCompras()) : '0';
+
        const subtotalHtml = `
 
-         <input type="text" inputmode="decimal" id="compras-subtotal-${prod.producto_id}" value="${prod.total_costo || 0}"
+         <input type="text" inputmode="decimal" id="compras-subtotal-${prod.producto_id}" value="${subtotalFormatted}"
 
                 oninput="editarSubtotalCompra(${pIdx}, ${prod.producto_id})" onfocus="this.select()"
 
@@ -10866,23 +11280,27 @@ function renderizarComprasTabla(proveedores) {
 
           <td class="px-3 py-2.5 font-semibold text-slate-800 text-left">
 
-            <div>${prod.producto_nombre}</div>
-
-            <div class="text-[10px] text-slate-400 font-normal mt-0.5">Presentación: ${prod.presentacion_nombre} x ${fmt(prod.unidades_presentacion)} und</div>
+            <div class="text-xs font-bold text-slate-800">${prod.producto_nombre}</div>
 
             ${ahorroHtml}
 
           </td>
 
-          <td class="px-3 py-2.5 text-right font-medium ${prod.stock_actual < 0 ? 'text-red-500 font-bold' : 'text-slate-700'}">${fmt(prod.stock_actual)}</td>
+          <td class="px-3 py-2.5 text-left border-x border-indigo-50/60 bg-indigo-50/20">
+
+            ${empaqueColHtml}
+
+          </td>
+
+          <td class="px-3 py-2.5 text-right font-medium ${prod.stock_actual < 0 ? 'text-red-500 font-bold' : 'text-slate-700'}">${fmtCantC(prod.stock_actual)}</td>
 
           <td class="px-3 py-2.5 text-right">
 
-            <div class="text-xs text-slate-600 font-medium">${fmt(prod.demanda_diaria)} <span class="text-[9px] text-slate-400 font-normal">hist</span></div>
+            <div class="text-xs text-slate-600 font-medium">${fmtCantC(prod.demanda_diaria)} <span class="text-[9px] text-slate-400 font-normal">hist</span></div>
 
             <div class="text-[10px] text-slate-500 font-semibold mt-0.5" id="compras-proy-demand-lbl-${prod.producto_id}">
 
-              ${fmt(prod.demanda_proyectada)} <span class="text-[9px] text-slate-400 font-normal">proy</span>
+              ${fmtCantC(prod.demanda_proyectada)} <span class="text-[9px] text-slate-400 font-normal">proy</span>
 
               <span class="${prod.growth_rate_pct >= 0 ? 'text-emerald-500 font-bold' : 'text-rose-500 font-bold'} ml-0.5">
 
@@ -10940,9 +11358,9 @@ function renderizarComprasTabla(proveedores) {
 
 
     const pillsHtml = (p.productos || []).map(prod => `
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-[10px] text-slate-700 shadow-2xs">
+      <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-[10px] text-slate-700 shadow-2xs">
         <span class="font-semibold text-slate-800">${prod.producto_nombre}</span>
-        <span class="text-slate-400 text-[9px]">(${prod.presentacion_nombre} x ${fmt(prod.unidades_presentacion)})</span>
+        <span class="text-indigo-700 font-bold text-[9px] bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-150">📦 ${prod.presentacion_nombre} x ${fmtCantC(prod.unidades_presentacion)}</span>
       </span>
     `).join('');
 
@@ -11039,7 +11457,9 @@ function renderizarComprasTabla(proveedores) {
 
                 <th class="px-3 py-2 text-center w-10"></th>
 
-                <th class="px-3 py-2 text-left">Producto / Presentación</th>
+                <th class="px-3 py-2 text-left">Producto</th>
+
+                <th class="px-3 py-2 text-left bg-indigo-50/60 text-indigo-900 border-x border-indigo-100">📦 Empaque / Presentación</th>
 
                 <th class="px-3 py-2 text-right">Stock</th>
 
@@ -11886,7 +12306,7 @@ function filtrarCompras() {
 
   if (bannerEl && valEl) {
 
-    valEl.textContent = fmtMon(grandTotal);
+    valEl.textContent = fmtMonC(grandTotal);
 
     if (filtrados.length > 0) {
 
@@ -11954,7 +12374,7 @@ function recalcularTotalProveedor(pIdx) {
 
       costEmp = qty > 0 ? lineTotal / qty : 0;
 
-      if (costEmpInput) costEmpInput.value = costEmp.toFixed(4);
+      if (costEmpInput) costEmpInput.value = costEmp.toFixed(getDecMonCompras());
 
     } else if (prod.unidades_presentacion <= 1.0001) {
 
@@ -11992,7 +12412,7 @@ function recalcularTotalProveedor(pIdx) {
 
     if (lbl) {
 
-      lbl.textContent = `${prod.presentacion_nombre} (${fmt(units)} und)`;
+      lbl.textContent = `${prod.presentacion_nombre} (${fmtCantC(units)} und)`;
 
     }
 
@@ -12006,7 +12426,7 @@ function recalcularTotalProveedor(pIdx) {
 
     const cell = document.getElementById(`compras-subtotal-cell-${prod.producto_id}`);
 
-    if (subtotalInput && !prod.subtotal_manual) subtotalInput.value = lineTotal.toFixed(2);
+    if (subtotalInput && !prod.subtotal_manual) subtotalInput.value = lineTotal.toFixed(getDecMonCompras());
 
     
 
@@ -12070,7 +12490,7 @@ function recalcularTotalProveedor(pIdx) {
 
   if (valEl) {
 
-    valEl.textContent = fmtMon(grandTotal);
+    valEl.textContent = fmtMonC(grandTotal);
 
   }
 
@@ -12080,7 +12500,7 @@ function recalcularTotalProveedor(pIdx) {
 
   if (supLbl) {
 
-    supLbl.textContent = `Total: ${fmtMon(supplierTotal)}`;
+    supLbl.textContent = `Total: ${fmtMonC(supplierTotal)}`;
 
   }
 

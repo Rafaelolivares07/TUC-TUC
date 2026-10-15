@@ -12291,16 +12291,21 @@ def api_compras_sugerencias(negocio_id):
             esta_agotado = (stock_actual < stock_min_calculado) or (p_id in alertas_pids)
             
             # Obtener cotizaciones activas para este producto (globales)
+            # Priorizar empaques comerciales (> 1 und y no 'unidad') sobre registros genéricos de 1 unidad
             quotes = conn.execute("""
                 SELECT c.id, c.tercero_id, t.nombre AS proveedor_nombre, t.telefono AS proveedor_telefono,
                        COALESCE(c.unidades_item, 1) AS unidades_item, COALESCE(c.precio, 0) AS precio,
                        COALESCE(c.descripcion_presentacion, 'Unidad') AS descripcion_presentacion,
-                       c.presentacion_id
+                       c.presentacion_id, c.fecha_cotizacion
                 FROM cotizaciones_compras c
                 JOIN terceros t ON t.id = c.tercero_id
                 WHERE c.item_id = %s
                   AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
-                ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC
+                ORDER BY 
+                    CASE WHEN COALESCE(c.unidades_item, 1) > 1.0001 AND LOWER(COALESCE(c.descripcion_presentacion, '')) NOT IN ('unidad', 'unid') THEN 0 ELSE 1 END ASC,
+                    (c.precio / COALESCE(c.unidades_item, 1)) ASC,
+                    c.fecha_cotizacion DESC NULLS LAST,
+                    c.id DESC
             """, (p_id,)).fetchall()
             
             # Obtener el último proveedor histórico como respaldo
@@ -12454,7 +12459,21 @@ def api_compras_sugerencias(negocio_id):
                 'total_costo': round(total_costo, 2),
                 'oportunidad_ahorro': oportunidad_ahorro,
                 'iva_pct': float(prod['iva_pct'] or 0.0),
-                'presentacion_id': selected_quote['presentacion_id'] if (selected_quote and selected_quote['presentacion_id']) else None
+                'presentacion_id': selected_quote['presentacion_id'] if (selected_quote and selected_quote['presentacion_id']) else None,
+                'selected_quote_id': selected_quote['id'] if selected_quote else None,
+                'cotizaciones': [
+                    {
+                        'id': q['id'],
+                        'tercero_id': q['tercero_id'],
+                        'proveedor_nombre': q['proveedor_nombre'],
+                        'descripcion_presentacion': q['descripcion_presentacion'],
+                        'unidades_item': float(q['unidades_item']),
+                        'precio': float(q['precio']),
+                        'costo_unitario': round(float(q['precio']) / float(q['unidades_item']), 4) if float(q['unidades_item']) > 0 else 0.0,
+                        'presentacion_id': q['presentacion_id']
+                    }
+                    for q in quotes
+                ]
             }
             
             proveedores_map[prov_id]['productos'].append(item_data)
@@ -12525,7 +12544,11 @@ def api_compras_sugerencias(negocio_id):
                     JOIN terceros t ON t.id = c.tercero_id
                     WHERE c.item_id = %s
                       AND (c.fecha_vencimiento >= CURRENT_DATE OR c.fecha_vencimiento IS NULL)
-                    ORDER BY (c.precio / COALESCE(c.unidades_item, 1)) ASC
+                    ORDER BY 
+                        CASE WHEN COALESCE(c.unidades_item, 1) > 1.0001 AND LOWER(COALESCE(c.descripcion_presentacion, '')) NOT IN ('unidad', 'unid') THEN 0 ELSE 1 END ASC,
+                        (c.precio / COALESCE(c.unidades_item, 1)) ASC,
+                        c.fecha_cotizacion DESC NULLS LAST,
+                        c.id DESC
                     LIMIT 1
                 """, (al_dict['producto_id'],)).fetchone()
                 if q_backup:

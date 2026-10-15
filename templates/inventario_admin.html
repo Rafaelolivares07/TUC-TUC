@@ -2166,9 +2166,16 @@
 
     <div class="mb-3">
 
-      <div class="grid grid-cols-12 gap-1 mb-1 px-1">
+      <div class="grid grid-cols-12 gap-1 mb-1 px-1 items-center">
 
-        <span class="col-span-3 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Producto</span>
+        <div class="col-span-3 flex items-center justify-between px-1">
+          <span class="text-xs font-black text-gray-600 uppercase tracking-wide">Producto</span>
+          <button type="button" onclick="recargarCatalogoEntrada(this)" 
+                  class="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
+                  title="Actualizar catálogo de productos sin perder los datos de esta entrada">
+            <span class="sync-icon text-[11px]">🔄</span> <span>Actualizar</span>
+          </button>
+        </div>
 
         <span class="col-span-1 text-xs font-black text-gray-600 uppercase text-center tracking-wide">Cant.Emp</span>
 
@@ -4486,7 +4493,13 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
 
   inp.addEventListener('focus', () => {
 
-    if (typeof cargarProductos === 'function' && (!productos || !productos.length)) {
+    if (typeof cargarProductosSilencioso === 'function') {
+      cargarProductosSilencioso().then(() => {
+        if (inp === document.activeElement && inp.value.trim().length >= 1) {
+          renderAC();
+        }
+      });
+    } else if (typeof cargarProductos === 'function' && (!productos || !productos.length)) {
 
       cargarProductos();
 
@@ -4572,21 +4585,21 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
 
     if (!qNorm) { list.classList.add('hidden'); return; }
 
-    
-
     const itemsList = typeof data === 'function' ? data() : (data || []);
 
     if (!itemsList || !itemsList.length) {
-
-      list.classList.add('hidden');
-
-      return;
-
+      if (typeof cargarProductosSilencioso === 'function' && !inp._buscandoEnServidor) {
+        inp._buscandoEnServidor = true;
+        cargarProductosSilencioso(true).then(() => {
+          inp._buscandoEnServidor = false;
+          if (inp === document.activeElement && inp.value === rawQ) {
+            renderAC();
+          }
+        });
+      }
     }
 
-
-
-    const matches = itemsList.filter(p => {
+    const matches = (itemsList || []).filter(p => {
 
       if (!p || !p.nombre) return false;
 
@@ -4598,11 +4611,20 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
 
     }).slice(0, 20);
 
-
+    // Si no hubo matches locales pero el usuario escribió 2+ caracteres, consultar al servidor automáticamente
+    if (matches.length === 0 && rawQ.trim().length >= 2 && !inp._buscandoEnServidor) {
+      inp._buscandoEnServidor = true;
+      if (typeof cargarProductosSilencioso === 'function') {
+        cargarProductosSilencioso(true).then(() => {
+          inp._buscandoEnServidor = false;
+          if (inp === document.activeElement && inp.value === rawQ) {
+            renderAC();
+          }
+        });
+      }
+    }
 
     idx = -1;
-
-    
 
     let html = matches.map(p =>
 
@@ -4614,7 +4636,15 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
 
     ).join('');
 
-
+    // Opción para recargar productos si se creó en otra pestaña
+    if (rawQ.trim().length >= 1) {
+      html += `
+        <div class="ac-item text-left px-3 py-1.5 hover:bg-indigo-50 cursor-pointer text-indigo-700 font-bold border-t border-gray-100 text-xs flex items-center justify-between gap-1" data-recargar="true">
+          <span>🔄 ¿Lo creaste en otra pestaña? Recargar catálogo</span>
+          <span class="text-[10px] text-indigo-500 bg-indigo-100/70 px-1.5 py-0.5 rounded font-mono">Actualizar</span>
+        </div>
+      `;
+    }
 
     if (rawQ.trim().length >= 2) {
 
@@ -4630,8 +4660,6 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
 
     }
 
-
-
     list.innerHTML = html;
 
     list.querySelectorAll('.ac-item').forEach(el => {
@@ -4639,6 +4667,17 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
       el.addEventListener('mousedown', (e) => {
 
         e.preventDefault();
+
+        if (el.dataset.recargar) {
+          el.innerHTML = '<span class="text-indigo-600 font-bold">⏳ Actualizando productos desde el servidor...</span>';
+          if (typeof cargarProductosSilencioso === 'function') {
+            cargarProductosSilencioso(true).then(() => {
+              renderAC();
+              toast('Catálogo de productos actualizado', true);
+            });
+          }
+          return;
+        }
 
         if (el.dataset.crear) {
 
@@ -5903,23 +5942,118 @@ let prodSortAsc = true;
 
 
 
-async function cargarProductos() {
+let _isFetchingProductosSilencioso = false;
+let _ultimoFetchProductosTimestamp = 0;
 
+async function cargarProductos(silencioso = false) {
   const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `?bodega=${CENTRO_ACTIVO.id}` : '';
-
-  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos${bodParam}`);
-
-  const d = await r.json();
-
-  if (!d.ok) { toast(d.error, false); return []; }
-
-  productos = d.productos;
-
-  filtrarTablaProductos();
-
-  return productos;
-
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/productos${bodParam}`);
+    const d = await r.json();
+    if (!d.ok) {
+      if (!silencioso) toast(d.error, false);
+      return [];
+    }
+    productos = d.productos || [];
+    _ultimoFetchProductosTimestamp = Date.now();
+    
+    // Solo actualizamos la tabla si el usuario está físicamente viendo la pestaña de productos
+    const tabProd = document.getElementById('tab-productos');
+    if (tabProd && !tabProd.classList.contains('hidden') && typeof filtrarTablaProductos === 'function') {
+      filtrarTablaProductos();
+    }
+    return productos;
+  } catch(e) {
+    if (!silencioso) toast('Error al cargar productos', false);
+    return [];
+  }
 }
+
+async function cargarProductosSilencioso(force = false) {
+  const ahora = Date.now();
+  if (_isFetchingProductosSilencioso) return productos;
+  if (!force && ahora - _ultimoFetchProductosTimestamp < 1200) return productos;
+  
+  _isFetchingProductosSilencioso = true;
+  try {
+    await cargarProductos(true);
+  } catch(e) {
+    console.warn('Error silencioso cargando productos:', e);
+  } finally {
+    _isFetchingProductosSilencioso = false;
+  }
+  return productos;
+}
+
+function notificarCambioProductos() {
+  try {
+    localStorage.setItem('tuctuc_producto_cambiado', Date.now().toString());
+  } catch(e) {}
+  try {
+    if (window.BroadcastChannel) {
+      const bc = new BroadcastChannel('tuctuc_productos_channel');
+      bc.postMessage({ action: 'reload_productos', timestamp: Date.now() });
+      bc.close();
+    }
+  } catch(e) {}
+}
+
+async function recargarCatalogoEntrada(btn) {
+  if (btn) {
+    btn.disabled = true;
+    const icon = btn.querySelector('.sync-icon');
+    if (icon) icon.classList.add('animate-spin');
+  }
+  try {
+    await cargarProductosSilencioso(true);
+    toast(`Catálogo actualizado: ${productos.length} productos disponibles`, true);
+  } catch(e) {
+    toast('Error actualizando productos', false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      const icon = btn.querySelector('.sync-icon');
+      if (icon) icon.classList.remove('animate-spin');
+    }
+  }
+}
+
+// Sincronización entre pestañas y al volver a enfocar la ventana
+window.addEventListener('storage', (e) => {
+  if (e.key === 'tuctuc_producto_cambiado') {
+    cargarProductosSilencioso(true);
+  }
+});
+
+try {
+  if (window.BroadcastChannel) {
+    const bc = new BroadcastChannel('tuctuc_productos_channel');
+    bc.onmessage = (ev) => {
+      if (ev.data && ev.data.action === 'reload_productos') {
+        cargarProductosSilencioso(true);
+      }
+    };
+  }
+} catch(e) {}
+
+let _ultimoSyncWindowFocus = 0;
+window.addEventListener('focus', () => {
+  const ahora = Date.now();
+  if (ahora - _ultimoSyncWindowFocus > 1500) {
+    _ultimoSyncWindowFocus = ahora;
+    cargarProductosSilencioso();
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    const ahora = Date.now();
+    if (ahora - _ultimoSyncWindowFocus > 1500) {
+      _ultimoSyncWindowFocus = ahora;
+      cargarProductosSilencioso();
+    }
+  }
+});
 
 
 
@@ -6260,6 +6394,8 @@ async function eliminarProducto(id, nombre) {
     if (d.ok) {
 
       toast('Producto eliminado correctamente');
+
+      notificarCambioProductos();
 
       cargarProductos();
 
@@ -6775,6 +6911,8 @@ async function guardarProducto() {
     toast(id ? 'Producto actualizado' : 'Producto creado');
 
     cerrarModalProducto();
+
+    notificarCambioProductos();
 
     
 

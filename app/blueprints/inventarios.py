@@ -6216,23 +6216,25 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
 
                 if comp_id_inv:
                     target_prod_v = padre_id if padre_id else producto_id
-                    sum_14_plato = conn.execute("""
-                        SELECT round(SUM(monto)::numeric, 2)
-                        FROM movimientos_contables
-                        WHERE negocio_id = %s AND comprobante_id = %s
-                          AND tipo IN ('credito', 'C') AND LEFT(cuenta, 2) = '14'
-                          AND (producto_padre_id = %s OR producto_id = %s)
-                    """, (negocio_id, comp_id_inv, target_prod_v, target_prod_v)).fetchone()
-                    if sum_14_plato and sum_14_plato[0] is not None:
-                        conn.execute("""
-                            UPDATE movimientos_contables
-                            SET monto = %s
+                    # Sincronizar cada línea 61* de este comprobante con la suma exacta de sus propios créditos 14* por plato/producto
+                    conn.execute("""
+                        UPDATE movimientos_contables mc61
+                        SET monto = sub.sum_14
+                        FROM (
+                            SELECT COALESCE(producto_padre_id, producto_id) AS ppid,
+                                   round(SUM(monto)::numeric, 2) AS sum_14
+                            FROM movimientos_contables
                             WHERE negocio_id = %s AND comprobante_id = %s
-                              AND tipo IN ('debito', 'D') AND LEFT(cuenta, 2) = '61'
-                              AND (producto_padre_id = %s OR producto_id = %s)
-                        """, (float(sum_14_plato[0]), negocio_id, comp_id_inv, target_prod_v, target_prod_v))
+                              AND tipo IN ('credito', 'C') AND LEFT(cuenta, 2) = '14'
+                              AND COALESCE(producto_padre_id, producto_id) IS NOT NULL
+                            GROUP BY COALESCE(producto_padre_id, producto_id)
+                        ) sub
+                        WHERE mc61.negocio_id = %s AND mc61.comprobante_id = %s
+                          AND mc61.tipo IN ('debito', 'D') AND LEFT(mc61.cuenta, 2) = '61'
+                          AND COALESCE(mc61.producto_padre_id, mc61.producto_id) = sub.ppid
+                    """, (negocio_id, comp_id_inv, negocio_id, comp_id_inv))
 
-                    # Garantizar que el total de débitos 61* iguale al total de créditos 14* en este comprobante de venta
+                    # Si aún quedara diferencia residual entre 61* y 14* (por ej. líneas 61* sin producto_id), cuadrar contra la línea 61*
                     diff_61_14 = conn.execute("""
                         SELECT
                             COALESCE(SUM(CASE WHEN tipo IN ('credito', 'C') AND LEFT(cuenta, 2) = '14' THEN monto ELSE 0 END), 0) -
@@ -6281,7 +6283,30 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                         as_cp_id = mc_cp['id']
                         conn.execute("UPDATE movimientos_inventario SET asiento_contrapartida_id = %s WHERE id = %s", (as_cp_id, m['id']))
 
-                # Cuadrar el comprobante de ajuste contra su contrapartida de gasto/ingreso (53*/42*/61*)
+                # Sincronizar cada línea de contrapartida que tenga producto_id con su 14* del mismo producto en el comprobante
+                conn.execute("""
+                    UPDATE movimientos_contables mccp
+                    SET monto = sub.sum_14
+                    FROM (
+                        SELECT producto_id, round(SUM(monto)::numeric, 2) AS sum_14
+                        FROM movimientos_contables
+                        WHERE negocio_id = %s AND comprobante_id = %s
+                          AND LEFT(cuenta, 2) = '14' AND producto_id IS NOT NULL
+                        GROUP BY producto_id
+                        HAVING COUNT(*) = 1
+                    ) sub
+                    WHERE mccp.negocio_id = %s AND mccp.comprobante_id = %s
+                      AND LEFT(mccp.cuenta, 2) IN ('53', '42', '61', '51', '52', '41')
+                      AND mccp.producto_id = sub.producto_id
+                      AND (
+                          SELECT COUNT(*) FROM movimientos_contables mc2
+                          WHERE mc2.negocio_id = %s AND mc2.comprobante_id = %s
+                            AND LEFT(mc2.cuenta, 2) IN ('53', '42', '61', '51', '52', '41')
+                            AND mc2.producto_id = sub.producto_id
+                      ) = 1
+                """, (negocio_id, comp_id_inv, negocio_id, comp_id_inv, negocio_id, comp_id_inv))
+
+                # Cuadrar el comprobante de ajuste contra su contrapartida de gasto/ingreso (53*/42*/61*) si queda diferencia
                 diff_aj = conn.execute("""
                     SELECT
                         COALESCE(SUM(CASE WHEN tipo IN ('debito', 'D') THEN monto ELSE 0 END), 0) -

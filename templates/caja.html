@@ -626,10 +626,15 @@
                         <span class="text-[10px] text-gray-500 block truncate" id="modal-bt-device-name">Ningún dispositivo enlazado</span>
                     </div>
                 </div>
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                    <button type="button" id="btn-bt-conectar-serial" onclick="conectarImpresoraSerial()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1">
+                        <span>🔌</span> <span>Conectar COM8 (Windows)</span>
+                    </button>
                     <button type="button" id="btn-bt-conectar" onclick="conectarImpresoraBluetooth()"
-                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer">
-                        Conectar
+                            class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-2.5 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer text-[11px]"
+                            title="Conectar vía Web Bluetooth (BLE para móviles)">
+                        BLE
                     </button>
                     <button type="button" id="btn-bt-desconectar" onclick="desconectarImpresoraBluetooth()"
                             class="hidden bg-gray-200 hover:bg-red-50 text-gray-700 hover:text-red-600 font-bold px-2.5 py-1.5 rounded-xl transition active:scale-95 cursor-pointer">
@@ -679,12 +684,12 @@
 
             <!-- Ayuda / Instrucciones -->
             <div class="bg-amber-50/90 border border-amber-200/80 rounded-2xl p-3 text-amber-900 space-y-1">
-                <span class="font-extrabold flex items-center gap-1"><span>💡</span> Instrucciones de enlace:</span>
+                <span class="font-extrabold flex items-center gap-1"><span>💡</span> Enlace en Windows (StarPOS TP80NC):</span>
                 <ol class="list-decimal pl-4 space-y-0.5 text-[11px] leading-tight text-amber-950">
-                    <li>Enciende la impresora <strong>StarPOS TP80NC</strong>.</li>
-                    <li>Asegúrate de que el Bluetooth del dispositivo (PC / Tablet / Celular) esté encendido.</li>
-                    <li>Toca <strong>Conectar</strong> y selecciona tu impresora en la lista del navegador (suele llamarse <em>TP80NC</em>, <em>StarPOS</em> o <em>Printer_XXXX</em>).</li>
-                    <li>¡Listo! Si no usas Bluetooth directo por navegador, el botón de imprimir usa el formato de 80mm continuo de Windows.</li>
+                    <li>Tu impresora ya está emparejada en Windows como <strong>BT Printer-1CF7</strong> en el puerto <strong>COM8</strong>.</li>
+                    <li>Toca el botón morado <strong>Conectar COM8 (Windows)</strong>.</li>
+                    <li>En la ventana emergente de Chrome/Edge, selecciona <em>"Serie estándar sobre el vínculo Bluetooth (COM8)"</em> y presiona <strong>Conectar</strong>.</li>
+                    <li>¡Listo! Toca <strong>Imprimir Ticket de Prueba con Corte</strong> para verificarla.</li>
                 </ol>
             </div>
         </div>
@@ -4282,6 +4287,7 @@ function generarHtmlTicketCocina(r, ahora) {
 let btPrinterDevice = null;
 let btPrinterServer = null;
 let btCharacteristic = null;
+let serialPort = null;
 let btPrinterConfig = {
     autocut: true,
     drawer: true,
@@ -4344,7 +4350,9 @@ function cerrarModalConfigImpresoraBT() {
 }
 
 function estaImpresoraBTConectada() {
-    return !!(btPrinterDevice && btPrinterDevice.gatt && btPrinterDevice.gatt.connected && btCharacteristic);
+    const isBle = !!(btPrinterDevice && btPrinterDevice.gatt && btPrinterDevice.gatt.connected && btCharacteristic);
+    const isSer = !!(serialPort && serialPort.writable);
+    return isBle || isSer;
 }
 
 function onBTPrinterDisconnected() {
@@ -4356,7 +4364,14 @@ function onBTPrinterDisconnected() {
 
 function actualizarUIImpresoraBT() {
     const isConn = estaImpresoraBTConectada();
-    const devName = btPrinterDevice ? (btPrinterDevice.name || 'StarPOS TP80NC') : (localStorage.getItem('tuctuc_bt_printer_name') || 'Ningún dispositivo enlazado');
+    let devName = 'Ningún dispositivo enlazado';
+    if (serialPort) {
+        devName = 'BT Printer-1CF7 (COM8)';
+    } else if (btPrinterDevice) {
+        devName = btPrinterDevice.name || 'StarPOS TP80NC';
+    } else {
+        devName = localStorage.getItem('tuctuc_bt_printer_name') || 'Ningún dispositivo enlazado';
+    }
 
     // Header top button indicator
     const topDot = document.getElementById('bt-printer-dot');
@@ -4381,6 +4396,7 @@ function actualizarUIImpresoraBT() {
     const modalDot = document.getElementById('modal-bt-dot');
     const modalTitle = document.getElementById('modal-bt-status-title');
     const modalName = document.getElementById('modal-bt-device-name');
+    const btnConectarSerial = document.getElementById('btn-bt-conectar-serial');
     const btnConectar = document.getElementById('btn-bt-conectar');
     const btnDesconectar = document.getElementById('btn-bt-desconectar');
 
@@ -4388,12 +4404,13 @@ function actualizarUIImpresoraBT() {
         modalDot.className = isConn ? 'w-3 h-3 rounded-full bg-emerald-500 inline-block ring-2 ring-emerald-200' : 'w-3 h-3 rounded-full bg-gray-400 inline-block';
     }
     if (modalTitle) {
-        modalTitle.textContent = isConn ? 'Conectada y Lista (ESC/POS 80mm)' : 'Desconectada';
+        modalTitle.textContent = isConn ? `Conectada y Lista (${serialPort ? 'COM8' : 'BLE'} / ESC-POS 80mm)` : 'Desconectada';
         modalTitle.className = isConn ? 'font-black text-emerald-700 block text-xs' : 'font-black text-gray-800 block text-xs';
     }
     if (modalName) {
         modalName.textContent = isConn ? devName : (localStorage.getItem('tuctuc_bt_printer_name') ? `Última: ${localStorage.getItem('tuctuc_bt_printer_name')} (haz clic en Conectar)` : 'Ningún dispositivo enlazado');
     }
+    if (btnConectarSerial) btnConectarSerial.classList.toggle('hidden', isConn);
     if (btnConectar) btnConectar.classList.toggle('hidden', isConn);
     if (btnDesconectar) btnDesconectar.classList.toggle('hidden', !isConn);
 
@@ -4411,6 +4428,41 @@ function actualizarUIImpresoraBT() {
         } else {
             btnPrintAmbosIcon.textContent = '🖨️';
             btnPrintAmbosText.textContent = 'Imprimir Todo (Factura + Cocina)';
+        }
+    }
+}
+
+async function conectarImpresoraSerial() {
+    if (!navigator.serial) {
+        alert('Web Serial no está soportado en este navegador.\n\nPor favor usa Google Chrome o Microsoft Edge en tu computador con Windows.');
+        return;
+    }
+    const btnConectar = document.getElementById('btn-bt-conectar-serial');
+    if (btnConectar) {
+        btnConectar.disabled = true;
+        btnConectar.innerHTML = '<span>⏳</span> <span>Buscando...</span>';
+    }
+
+    try {
+        toast('En la ventana emergente, selecciona "Serie estándar sobre el vínculo Bluetooth (COM8)" y haz clic en Conectar');
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+        serialPort = port;
+
+        localStorage.setItem('tuctuc_printer_type', 'serial');
+        localStorage.setItem('tuctuc_bt_printer_name', 'BT Printer-1CF7 (COM8)');
+        actualizarUIImpresoraBT();
+        toast('✅ Impresora StarPOS TP80NC conectada exitosamente en COM8', 'success');
+    } catch (err) {
+        console.warn('Fallo al conectar puerto serial:', err);
+        if (err.name !== 'NotFoundError') {
+            alert('Aviso al conectar puerto Bluetooth COM: ' + (err.message || err));
+        }
+        actualizarUIImpresoraBT();
+    } finally {
+        if (btnConectar) {
+            btnConectar.disabled = false;
+            btnConectar.innerHTML = '<span>🔌</span> <span>Conectar COM8 (Windows)</span>';
         }
     }
 }
@@ -4503,23 +4555,42 @@ async function conectarImpresoraBluetooth() {
     } finally {
         if (btnConectar) {
             btnConectar.disabled = false;
-            btnConectar.textContent = 'Conectar';
+            btnConectar.textContent = 'BLE';
         }
     }
 }
 
-function desconectarImpresoraBluetooth() {
+async function desconectarImpresoraBluetooth() {
+    if (serialPort) {
+        try {
+            await serialPort.close();
+        } catch (e) {}
+        serialPort = null;
+    }
     if (btPrinterDevice && btPrinterDevice.gatt && btPrinterDevice.gatt.connected) {
         try {
             btPrinterDevice.gatt.disconnect();
         } catch (e) {}
     }
-    onBTPrinterDisconnected();
+    btCharacteristic = null;
+    btPrinterServer = null;
+    actualizarUIImpresoraBT();
+    toast('Impresora desvinculada');
 }
 
 async function enviarBytesImpresoraBT(bytes) {
+    if (serialPort && serialPort.writable) {
+        const writer = serialPort.writable.getWriter();
+        try {
+            await writer.write(bytes);
+        } finally {
+            writer.releaseLock();
+        }
+        return;
+    }
+
     if (!btCharacteristic) {
-        throw new Error('La impresora Bluetooth no está conectada.');
+        throw new Error('La impresora no está conectada.');
     }
     // StarPOS TP80NC BLE MTU chunking:
     // Dividir en paquetes de 100 bytes con 25ms de retardo para evitar desbordamiento del buffer de impresión
@@ -4952,6 +5023,7 @@ function imprimirTicketNavegador(modo, r, ahora) {
 // Attach functions to window for global inline onclick accessibility
 window.abrirModalConfigImpresoraBT = abrirModalConfigImpresoraBT;
 window.cerrarModalConfigImpresoraBT = cerrarModalConfigImpresoraBT;
+window.conectarImpresoraSerial = conectarImpresoraSerial;
 window.conectarImpresoraBluetooth = conectarImpresoraBluetooth;
 window.desconectarImpresoraBluetooth = desconectarImpresoraBluetooth;
 window.probarImpresionBluetoothTP80NC = probarImpresionBluetoothTP80NC;
@@ -4960,10 +5032,25 @@ window.actualizarUIImpresoraBT = actualizarUIImpresoraBT;
 window.cargarConfigImpresoraBT = cargarConfigImpresoraBT;
 window.guardarConfigImpresoraBT = guardarConfigImpresoraBT;
 
-// Inicialización de impresora Bluetooth al cargar
+// Inicialización de impresora al cargar
 try {
     cargarConfigImpresoraBT();
     actualizarUIImpresoraBT();
+    // Auto-reconectar puerto serie si ya fue autorizado previamente
+    if (navigator.serial && navigator.serial.getPorts) {
+        navigator.serial.getPorts().then(async ports => {
+            if (ports && ports.length > 0 && !serialPort) {
+                try {
+                    await ports[0].open({ baudRate: 9600 });
+                    serialPort = ports[0];
+                    actualizarUIImpresoraBT();
+                } catch (e) {
+                    serialPort = ports[0];
+                    actualizarUIImpresoraBT();
+                }
+            }
+        }).catch(() => {});
+    }
 } catch (e) {}
 
 // ── WhatsApp ─────────────────────────────────────────────────────────────────

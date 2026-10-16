@@ -4637,7 +4637,7 @@ class EscPosBuilder {
     }
 
     init() {
-        return this.raw([0x1B, 0x40]); // ESC @ (Initialize printer)
+        return this.raw([0x1B, 0x40, 0x1B, 0x74, 0x00]); // ESC @ (Initialize) + ESC t 0 (Code page 437)
     }
 
     align(mode) {
@@ -4666,8 +4666,8 @@ class EscPosBuilder {
     }
 
     cut() {
-        // Feed 3 lines then partial cut GS V 66 0
-        return this.feed(3).raw([0x1D, 0x56, 0x42, 0x00]);
+        // Feed 4 lines then cut: GS V 66 0 + fallback GS V 1
+        return this.feed(4).raw([0x1D, 0x56, 0x42, 0x00, 0x1D, 0x56, 0x01]);
     }
 
     drawerPulse() {
@@ -4681,6 +4681,7 @@ class EscPosBuilder {
         for (let i = 0; i < clean.length; i++) {
             const code = clean.charCodeAt(i);
             if (code === 10) {
+                this.buffer.push(0x0D);
                 this.buffer.push(0x0A);
             } else if (code === 13) {
                 // skip
@@ -4692,7 +4693,7 @@ class EscPosBuilder {
     }
 
     line(str = '') {
-        return this.text(str).raw([0x0A]);
+        return this.text(str).raw([0x0D, 0x0A]);
     }
 
     separator(char = '-') {

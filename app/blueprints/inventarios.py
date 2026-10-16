@@ -995,6 +995,9 @@ def _despachar_alertas_agotados_batch(buffer):
 def _despachar_buffer_agotados_request(response):
     from flask import g
     try:
+        if response.status_code >= 400:
+            g._nuevos_agotados_buffer = None
+            return response
         buf = getattr(g, '_nuevos_agotados_buffer', None)
         if buf:
             g._nuevos_agotados_buffer = None
@@ -5990,7 +5993,8 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
             # Autocuración N a 1 (Contrapartida 61*/53*/etc) si venía en NULL
             if not as_cp_id and doc_num:
                 padre_id = m.get('producto_padre_id')
-                mc_cp = conn.execute("""
+                params_cp = [negocio_id, str(doc_num), str(doc_num), str(doc_num), padre_id, padre_id, producto_id]
+                sql_cp = """
                     SELECT id FROM movimientos_contables
                     WHERE negocio_id = %s AND (LEFT(cuenta, 2) IN ('61', '53', '42', '22', '23', '11', '14'))
                       AND (numero_documento = %s OR numero_documento = SPLIT_PART(%s, '-', 2) OR SPLIT_PART(numero_documento, '-', 2) = %s)
@@ -5998,9 +6002,12 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                           (producto_padre_id IS NOT NULL AND (producto_padre_id = %s OR producto_id = %s))
                           OR (producto_padre_id IS NULL AND producto_id = %s)
                       )
-                      AND (as_inv_id IS NULL OR id != as_inv_id)
-                    ORDER BY id ASC LIMIT 1
-                """, (negocio_id, str(doc_num), str(doc_num), str(doc_num), padre_id, padre_id, producto_id)).fetchone()
+                """
+                if as_inv_id:
+                    sql_cp += " AND id != %s "
+                    params_cp.append(as_inv_id)
+                sql_cp += " ORDER BY id ASC LIMIT 1 "
+                mc_cp = conn.execute(sql_cp, tuple(params_cp)).fetchone()
                 if mc_cp:
                     as_cp_id = mc_cp['id']
                     conn.execute("UPDATE movimientos_inventario SET asiento_contrapartida_id = %s WHERE id = %s", (as_cp_id, m['id']))

@@ -6070,19 +6070,23 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
 
             expected_mc_tipos = ('debito', 'D') if m['tipo'] == 'entrada' else ('credito', 'C')
 
-            # Validar que as_inv_id existente pertenezca al mismo tipo de documento y no esté duplicado en otro movimiento
+            # Validar que as_inv_id existente pertenezca al mismo tipo de documento, plato padre y no esté duplicado en otro movimiento
             comp_id_inv = None
+            m_padre_id = m.get('producto_padre_id')
             if as_inv_id:
                 chk_inv = conn.execute(f"""
                     SELECT id, comprobante_id
                     FROM movimientos_contables
                     WHERE id = %s AND negocio_id = %s AND cuenta LIKE '14%%'
+                      AND tipo IN (%s, %s)
+                      AND (producto_id = %s OR producto_id IS NULL)
+                      AND (%s IS NULL OR producto_padre_id IS NULL OR producto_padre_id = %s)
                       AND {td_filter_sql}
                       AND NOT EXISTS (
                           SELECT 1 FROM movimientos_inventario mi2
                           WHERE mi2.negocio_id = %s AND mi2.asiento_inventario_id = %s AND mi2.id < %s
                       )
-                """, (as_inv_id, negocio_id, negocio_id, as_inv_id, m['id'])).fetchone()
+                """, (as_inv_id, negocio_id, expected_mc_tipos[0], expected_mc_tipos[1], producto_id, m_padre_id, m_padre_id, negocio_id, as_inv_id, m['id'])).fetchone()
                 if chk_inv:
                     comp_id_inv = chk_inv['comprobante_id']
                 else:
@@ -6090,7 +6094,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                     as_cp_id = None
                     conn.execute("UPDATE movimientos_inventario SET asiento_inventario_id = NULL, asiento_contrapartida_id = NULL WHERE id = %s", (m['id'],))
 
-            # Autocuración 1 a 1 (Cuenta 14*) con aislamiento estricto por tipo de documento
+            # Autocuración 1 a 1 (Cuenta 14*) con aislamiento estricto por tipo de documento y producto_padre_id
             if not as_inv_id and doc_num:
                 mc_inv = conn.execute(f"""
                     SELECT id, comprobante_id FROM movimientos_contables
@@ -6098,13 +6102,15 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                       AND tipo IN (%s, %s)
                       AND {td_filter_sql}
                       AND (numero_documento = %s OR numero_documento = %s OR SPLIT_PART(numero_documento, '-', 2) = %s)
-                      AND (producto_id = %s OR (producto_padre_id IS NOT NULL AND producto_padre_id = %s))
+                      AND (producto_id = %s OR (producto_id IS NULL AND producto_padre_id = %s))
+                      AND (%s IS NULL OR producto_padre_id IS NULL OR producto_padre_id = %s)
                       AND id NOT IN (
                           SELECT asiento_inventario_id FROM movimientos_inventario
                           WHERE negocio_id = %s AND asiento_inventario_id IS NOT NULL AND id != %s
                       )
-                    ORDER BY id ASC LIMIT 1
-                """, (negocio_id, expected_mc_tipos[0], expected_mc_tipos[1], str(doc_num), str(consecutive), str(consecutive), producto_id, m.get('producto_padre_id'), negocio_id, m['id'])).fetchone()
+                    ORDER BY CASE WHEN producto_id = %s AND producto_padre_id = %s THEN 0 WHEN producto_id = %s THEN 1 ELSE 2 END, id ASC
+                    LIMIT 1
+                """, (negocio_id, expected_mc_tipos[0], expected_mc_tipos[1], str(doc_num), str(consecutive), str(consecutive), producto_id, m_padre_id, m_padre_id, m_padre_id, negocio_id, m['id'], producto_id, m_padre_id, producto_id)).fetchone()
                 if mc_inv:
                     as_inv_id = mc_inv['id']
                     comp_id_inv = mc_inv['comprobante_id']

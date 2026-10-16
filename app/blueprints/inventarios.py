@@ -4715,7 +4715,7 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
         ORDER BY id
     """, params_cred).fetchall()
 
-    # 4. Buscar salidas kardex de materias primas
+    # 4. Buscar salidas kardex de materias primas (aislado estrictamente a producción)
     if ref_id:
         mp_kardex = conn.execute("""
             SELECT producto_id, nombre_producto,
@@ -4723,6 +4723,7 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
             FROM movimientos_inventario
             WHERE negocio_id = %s
               AND tipo = 'salida'
+              AND (referencia_tipo = 'produccion' OR motivo = 'produccion' OR tipo_documento_id = 5 OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%PRODUC%%')
               AND (
                   referencia_id = %s
                   OR (producto_padre_id = %s AND (documento_numero = %s OR documento_numero = %s))
@@ -4736,10 +4737,10 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
             FROM movimientos_inventario
             WHERE negocio_id = %s
               AND tipo = 'salida'
-              AND (producto_padre_id = %s OR referencia_tipo = 'produccion')
+              AND (referencia_tipo = 'produccion' OR motivo = 'produccion' OR tipo_documento_id = 5 OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%PRODUC%%')
               AND (documento_numero = %s OR documento_numero = %s)
             ORDER BY nombre_producto
-        """, (negocio_id, prod_padre_id, numero_doc, consecutive)).fetchall()
+        """, (negocio_id, numero_doc, consecutive)).fetchall()
 
     # Indexar kardex MP por nombre y por producto_id
     mp_por_nombre = {}
@@ -4770,7 +4771,9 @@ def _reparar_produccion(conn, negocio_id, prod_padre_id, numero_doc):
         comp_ref = conn.execute("""
             SELECT comprobante_id, tipo_documento_id, tipo_documento, fecha
             FROM movimientos_contables
-            WHERE negocio_id = %s AND (numero_documento = %s OR numero_documento = %s)
+            WHERE negocio_id = %s
+              AND (tipo_documento_id = 5 OR origen_tipo = 'produccion' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%PRODUC%%')
+              AND (numero_documento = %s OR numero_documento = %s)
             LIMIT 1
         """, (negocio_id, numero_doc, consecutive_p)).fetchone()
 
@@ -4945,7 +4948,7 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
     """
     consecutive = numero_doc.split('-')[-1].strip() if '-' in numero_doc else numero_doc
 
-    # 1. Buscar salidas kardex
+    # 1. Buscar salidas kardex (aislado estrictamente a ventas)
     kardex_rows = conn.execute("""
         SELECT producto_id, nombre_producto,
                cantidad, costo_und,
@@ -4955,6 +4958,7 @@ def _reparar_venta(conn, negocio_id, prod_padre_id, numero_doc, td_codigo_map):
         WHERE negocio_id = %s
           AND producto_padre_id = %s
           AND tipo = 'salida'
+          AND (motivo = 'venta' OR referencia_tipo LIKE 'pedido%%' OR tipo_documento_id = 6 OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%VENTA%%')
           AND (documento_numero = %s OR documento_numero = %s)
         ORDER BY nombre_producto
     """, (negocio_id, prod_padre_id, consecutive, numero_doc)).fetchall()
@@ -5778,7 +5782,8 @@ def api_produccion_registrar(negocio_id):
                     f"{nombre['nombre'] if nombre else c['componente_id']}: "
                     f"necesita {float(a_consumir)}, tiene {float(stock_actual)}"
                 )
-            costo_total += a_consumir * costo_und
+            costo_comp_dec = (a_consumir * costo_und).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            costo_total += costo_comp_dec
             comps_cont.append({
                 'producto_id': c['componente_id'],
                 'cantidad':    float(a_consumir),
@@ -5814,6 +5819,7 @@ def api_produccion_registrar(negocio_id):
         _mov_directo(conn, negocio_id, producto_id, cantidad,
                      'entrada', 'produccion', session['usuario_id'],
                      valor_unitario=costo_unitario,
+                     valor_total=float(costo_total),
                      bodega=centro_utilidad_id,
                      notas=notas, referencia_tipo='produccion', referencia_id=prod_token,
                      tipo_documento=tipo_documento, documento_numero=documento_numero,
@@ -5915,9 +5921,10 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
             where_b = f"AND bodega = {b_id}"
 
         movs = conn.execute(f"""
-            SELECT id, tipo, cantidad, valor_unitario, valor_total, costo_und,
+            SELECT id, producto_id, tipo, motivo, cantidad, valor_unitario, valor_total, costo_und,
                    asiento_inventario_id, asiento_contrapartida_id, documento_numero,
-                   tipo_documento, producto_padre_id
+                   tipo_documento, tipo_documento_id, producto_padre_id,
+                   referencia_tipo, referencia_id
             FROM movimientos_inventario
             WHERE negocio_id = %s AND producto_id = %s {where_b}
             ORDER BY COALESCE(documento_fecha, created_at::date) ASC, created_at ASC, id ASC
@@ -5934,11 +5941,75 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
             stock_ant = stock
             stock_nuevo = stock_ant + cant_m * signo
 
+            td_str = str(m.get('tipo_documento') or '').upper()
+            mot_str = str(m.get('motivo') or '').lower()
+            ref_tipo_str = str(m.get('referencia_tipo') or '').lower()
+            td_id_m = m.get('tipo_documento_id')
+            doc_num = m.get('documento_numero')
+            consecutive = str(doc_num).split('-')[-1].strip() if (doc_num and '-' in str(doc_num)) else (str(doc_num) if doc_num else '')
+
+            es_prod_mov = (
+                mot_str == 'produccion'
+                or ref_tipo_str == 'produccion'
+                or 'PRODUC' in td_str
+                or td_id_m == 5
+            )
+            es_venta_mov = (
+                mot_str == 'venta'
+                or ref_tipo_str.startswith('pedido')
+                or 'VENTA' in td_str
+                or td_id_m == 6
+            )
+            es_compra_mov = (
+                m['tipo'] == 'entrada'
+                and not es_prod_mov
+                and (mot_str == 'compra' or 'PROVEEDOR' in td_str or 'COMPRA' in td_str or td_id_m in (1, 2))
+            )
+            es_ajuste_mov = (
+                not es_prod_mov
+                and not es_venta_mov
+                and not es_compra_mov
+                and ('AJUSTE' in mot_str.upper() or 'AJUSTE' in td_str or 'IFD' in td_str or 'DISTRIBUIDO' in td_str or td_id_m in (3, 13))
+            )
+
             vu_raw = Decimal(str(m['valor_unitario'])) if m['valor_unitario'] is not None else None
             vu = abs(vu_raw) if vu_raw is not None else None
 
+            val_tot_prod_in = None
+            val_tot_compra = None
+
+            if m['tipo'] == 'entrada' and es_prod_mov and cant_m > 0:
+                ref_id_m = m.get('referencia_id')
+                sum_sal_row = None
+                if ref_id_m:
+                    sum_sal_row = conn.execute("""
+                        SELECT round(SUM(valor_total)::numeric, 2)
+                        FROM movimientos_inventario
+                        WHERE negocio_id = %s AND tipo = 'salida'
+                          AND referencia_tipo = 'produccion' AND referencia_id = %s
+                    """, (negocio_id, ref_id_m)).fetchone()
+                if (not sum_sal_row or sum_sal_row[0] is None) and doc_num:
+                    sum_sal_row = conn.execute("""
+                        SELECT round(SUM(valor_total)::numeric, 2)
+                        FROM movimientos_inventario
+                        WHERE negocio_id = %s AND tipo = 'salida'
+                          AND (documento_numero = %s OR documento_numero = %s)
+                          AND (motivo = 'produccion' OR referencia_tipo = 'produccion' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%PRODUC%%' OR tipo_documento_id = 5)
+                          AND (producto_padre_id = %s OR producto_padre_id IS NULL)
+                    """, (negocio_id, str(doc_num), str(consecutive), producto_id)).fetchone()
+                if sum_sal_row and sum_sal_row[0] is not None and Decimal(str(sum_sal_row[0])) > 0:
+                    val_tot_prod_in = Decimal(str(sum_sal_row[0])).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    vu = val_tot_prod_in / cant_m
+
+            elif m['tipo'] == 'entrada' and es_compra_mov and cant_m > 0:
+                vt_existing = Decimal(str(m['valor_total'] or 0))
+                if vt_existing > 0:
+                    val_tot_compra = abs(vt_existing).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    vu = val_tot_compra / cant_m
+
             if m['tipo'] == 'entrada' and vu is not None:
-                costo_und = (val_existencia + cant_m * vu) / stock_nuevo if stock_nuevo > 0 else vu
+                costo_in_total = val_tot_prod_in if val_tot_prod_in is not None else (val_tot_compra if val_tot_compra is not None else cant_m * vu)
+                costo_und = (val_existencia + costo_in_total) / stock_nuevo if stock_nuevo > 0 else vu
                 costo_und = abs(costo_und)
                 val_existencia = stock_nuevo * costo_und if stock_nuevo > 0 else Decimal('0')
             else:
@@ -5946,7 +6017,12 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
 
             # Para salidas, el valor total y valor unitario del movimiento se valoran al costo promedio del inventario
             costo_linea = vu if (m['tipo'] == 'entrada' and vu is not None) else costo_und
-            valor_total_dec = abs(cant_m * (costo_linea or Decimal('0'))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            if val_tot_prod_in is not None:
+                valor_total_dec = val_tot_prod_in
+            elif val_tot_compra is not None:
+                valor_total_dec = val_tot_compra
+            else:
+                valor_total_dec = abs(cant_m * (costo_linea or Decimal('0'))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             valor_total = float(valor_total_dec)
             vu_guardar = float(vu) if (m['tipo'] == 'entrada' and vu is not None) else (float(costo_und) if costo_und is not None else None)
 
@@ -5977,97 +6053,129 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                 WHERE id = %s
             """, (float(stock_ant), float(stock_nuevo), float(costo_und), vu_guardar, valor_total, b_id, m['id']))
 
-            # --- SINCRONIZACIÓN CONTABLE ATÓMICA EN TIEMPO REAL ---
+            # --- SINCRONIZACIÓN CONTABLE ATÓMICA CON AISLAMIENTO POR TIPO DE DOCUMENTO ---
             as_inv_id = m.get('asiento_inventario_id')
             as_cp_id = m.get('asiento_contrapartida_id')
-            doc_num = m.get('documento_numero')
 
-            # Autocuración 1 a 1 (Cuenta 14*) si venía en NULL
+            if es_prod_mov:
+                td_filter_sql = "(UPPER(COALESCE(tipo_documento, '')) LIKE '%%PRODUC%%' OR tipo_documento_id = 5)"
+            elif es_venta_mov:
+                td_filter_sql = "(UPPER(COALESCE(tipo_documento, '')) LIKE '%%VENTA%%' OR tipo_documento_id = 6)"
+            elif es_compra_mov:
+                td_filter_sql = "(UPPER(COALESCE(tipo_documento, '')) LIKE '%%PROVEEDOR%%' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%COMPRA%%' OR tipo_documento_id IN (1, 2))"
+            elif es_ajuste_mov:
+                td_filter_sql = "(UPPER(COALESCE(tipo_documento, '')) LIKE '%%AJUSTE%%' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%IFD%%' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%DISTRIBUIDO%%' OR tipo_documento_id IN (3, 13))"
+            else:
+                td_filter_sql = "TRUE"
+
+            expected_mc_tipos = ('debito', 'D') if m['tipo'] == 'entrada' else ('credito', 'C')
+
+            # Validar que as_inv_id existente pertenezca al mismo tipo de documento y no esté duplicado en otro movimiento
+            comp_id_inv = None
+            if as_inv_id:
+                chk_inv = conn.execute(f"""
+                    SELECT id, comprobante_id
+                    FROM movimientos_contables
+                    WHERE id = %s AND negocio_id = %s AND cuenta LIKE '14%%'
+                      AND {td_filter_sql}
+                      AND NOT EXISTS (
+                          SELECT 1 FROM movimientos_inventario mi2
+                          WHERE mi2.negocio_id = %s AND mi2.asiento_inventario_id = %s AND mi2.id < %s
+                      )
+                """, (as_inv_id, negocio_id, negocio_id, as_inv_id, m['id'])).fetchone()
+                if chk_inv:
+                    comp_id_inv = chk_inv['comprobante_id']
+                else:
+                    as_inv_id = None
+                    as_cp_id = None
+                    conn.execute("UPDATE movimientos_inventario SET asiento_inventario_id = NULL, asiento_contrapartida_id = NULL WHERE id = %s", (m['id'],))
+
+            # Autocuración 1 a 1 (Cuenta 14*) con aislamiento estricto por tipo de documento
             if not as_inv_id and doc_num:
-                mc_inv = conn.execute("""
-                    SELECT id FROM movimientos_contables
+                mc_inv = conn.execute(f"""
+                    SELECT id, comprobante_id FROM movimientos_contables
                     WHERE negocio_id = %s AND cuenta LIKE '14%%'
-                      AND (numero_documento = %s OR numero_documento = SPLIT_PART(%s, '-', 2) OR SPLIT_PART(numero_documento, '-', 2) = %s)
+                      AND tipo IN (%s, %s)
+                      AND {td_filter_sql}
+                      AND (numero_documento = %s OR numero_documento = %s OR SPLIT_PART(numero_documento, '-', 2) = %s)
                       AND (producto_id = %s OR (producto_padre_id IS NOT NULL AND producto_padre_id = %s))
                       AND id NOT IN (
                           SELECT asiento_inventario_id FROM movimientos_inventario
                           WHERE negocio_id = %s AND asiento_inventario_id IS NOT NULL AND id != %s
                       )
                     ORDER BY id ASC LIMIT 1
-                """, (negocio_id, str(doc_num), str(doc_num), str(doc_num), producto_id, m.get('producto_padre_id'), negocio_id, m['id'])).fetchone()
+                """, (negocio_id, expected_mc_tipos[0], expected_mc_tipos[1], str(doc_num), str(consecutive), str(consecutive), producto_id, m.get('producto_padre_id'), negocio_id, m['id'])).fetchone()
                 if mc_inv:
                     as_inv_id = mc_inv['id']
+                    comp_id_inv = mc_inv['comprobante_id']
                     conn.execute("UPDATE movimientos_inventario SET asiento_inventario_id = %s WHERE id = %s", (as_inv_id, m['id']))
 
-            if as_inv_id:
+            # Actualizar línea 14* en contabilidad (excepto en facturas de compra a proveedor para no alterar valores facturados)
+            if as_inv_id and not es_compra_mov:
                 tot_as14_ajust += 1
                 conn.execute("UPDATE movimientos_contables SET monto = %s WHERE id = %s", (valor_total, as_inv_id))
 
-            # Autocuración N a 1 (Contrapartida 61*/53*/etc) si venía en NULL
-            if not as_cp_id and doc_num:
-                padre_id = m.get('producto_padre_id')
-                params_cp = [negocio_id, str(doc_num), str(doc_num), str(doc_num), padre_id, padre_id, producto_id]
-                sql_cp = """
-                    SELECT id FROM movimientos_contables
-                    WHERE negocio_id = %s AND (LEFT(cuenta, 2) IN ('61', '53', '42', '22', '23', '11', '14'))
-                      AND (numero_documento = %s OR numero_documento = SPLIT_PART(%s, '-', 2) OR SPLIT_PART(numero_documento, '-', 2) = %s)
-                      AND (
-                          (producto_padre_id IS NOT NULL AND (producto_padre_id = %s OR producto_id = %s))
-                          OR (producto_padre_id IS NULL AND producto_id = %s)
-                      )
-                """
-                if as_inv_id:
-                    sql_cp += " AND id != %s "
-                    params_cp.append(as_inv_id)
-                sql_cp += " ORDER BY id ASC LIMIT 1 "
-                mc_cp = conn.execute(sql_cp, tuple(params_cp)).fetchone()
-                if mc_cp:
-                    as_cp_id = mc_cp['id']
-                    conn.execute("UPDATE movimientos_inventario SET asiento_contrapartida_id = %s WHERE id = %s", (as_cp_id, m['id']))
+            # --- 1) PRODUCCIÓN: Sincronizar entrada de producto terminado y Débito 14* del comprobante ---
+            if es_prod_mov:
+                if m['tipo'] == 'salida' and doc_num:
+                    p_term_id = m.get('producto_padre_id')
+                    ref_id_m = m.get('referencia_id')
+                    if p_term_id:
+                        if ref_id_m:
+                            tot_prod_row = conn.execute("""
+                                SELECT round(SUM(valor_total)::numeric, 2)
+                                FROM movimientos_inventario
+                                WHERE negocio_id = %s AND tipo = 'salida'
+                                  AND referencia_tipo = 'produccion' AND referencia_id = %s
+                            """, (negocio_id, ref_id_m)).fetchone()
+                        else:
+                            tot_prod_row = conn.execute("""
+                                SELECT round(SUM(valor_total)::numeric, 2)
+                                FROM movimientos_inventario
+                                WHERE negocio_id = %s AND tipo = 'salida'
+                                  AND (documento_numero = %s OR documento_numero = %s)
+                                  AND (motivo = 'produccion' OR referencia_tipo = 'produccion' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%PRODUC%%' OR tipo_documento_id = 5)
+                            """, (negocio_id, str(doc_num), str(consecutive))).fetchone()
+                        tot_prod_val = float(tot_prod_row[0]) if (tot_prod_row and tot_prod_row[0] is not None) else 0.0
+                        if tot_prod_val > 0:
+                            conn.execute("""
+                                UPDATE movimientos_inventario
+                                SET valor_total = %s,
+                                    valor_unitario = CASE WHEN cantidad > 0 THEN %s / cantidad ELSE valor_unitario END
+                                WHERE negocio_id = %s AND tipo = 'entrada' AND producto_id = %s
+                                  AND (documento_numero = %s OR documento_numero = %s)
+                                  AND (motivo = 'produccion' OR referencia_tipo = 'produccion' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%PRODUC%%' OR tipo_documento_id = 5)
+                            """, (tot_prod_val, tot_prod_val, negocio_id, p_term_id, str(doc_num), str(consecutive)))
 
-            # Si aún no se encontró contrapartida pero existe as_inv_id, buscar contrapartida dentro del mismo comprobante
-            if as_inv_id and not as_cp_id:
-                mc_cp2 = conn.execute("""
-                    SELECT id FROM movimientos_contables
-                    WHERE negocio_id = %s 
-                      AND comprobante_id = (SELECT comprobante_id FROM movimientos_contables WHERE id = %s)
-                      AND id != %s
-                    ORDER BY monto DESC LIMIT 1
-                """, (negocio_id, as_inv_id, as_inv_id)).fetchone()
-                if mc_cp2:
-                    as_cp_id = mc_cp2['id']
-                    conn.execute("UPDATE movimientos_inventario SET asiento_contrapartida_id = %s WHERE id = %s", (as_cp_id, m['id']))
-
-            if as_cp_id and abs(dif_total) > Decimal('0.005'):
-                tot_ascp_ajust += 1
-                conn.execute("UPDATE movimientos_contables SET monto = round((monto + %s)::numeric, 2) WHERE id = %s", (float(dif_total), as_cp_id))
-
-            # --- SINCRONIZACIÓN CON PEDIDOS (pedido_items.costo_unitario) Y CONTABILIDAD ATÓMICA ---
-            if m['tipo'] == 'salida' and doc_num:
-                consecutive = str(doc_num).split('-')[-1].strip() if '-' in str(doc_num) else str(doc_num)
-                ref_id_int = _int_o_none(m.get('referencia_id'))
-                padre_id = m.get('producto_padre_id')
-                
-                if padre_id:
-                    # Ensamble: Calcular costo total del plato en este documento
-                    tot_plato_row = conn.execute("""
-                        SELECT SUM(valor_total)
-                        FROM movimientos_inventario
-                        WHERE negocio_id = %s AND producto_padre_id = %s
-                          AND (documento_numero = %s OR documento_numero = %s)
-                    """, (negocio_id, padre_id, str(doc_num), str(consecutive))).fetchone()
-                    tot_kardex_padre = float(tot_plato_row[0]) if (tot_plato_row and tot_plato_row[0] is not None) else 0.0
-
-                    # Sincronizar débito 61* (Costo de Venta) con la suma exacta de sus ingredientes
-                    if tot_kardex_padre > 0:
+                if comp_id_inv:
+                    sum_cred_prod = conn.execute("""
+                        SELECT round(SUM(monto)::numeric, 2)
+                        FROM movimientos_contables
+                        WHERE negocio_id = %s AND comprobante_id = %s
+                          AND tipo IN ('credito', 'C') AND cuenta LIKE '14%%'
+                    """, (negocio_id, comp_id_inv)).fetchone()
+                    if sum_cred_prod and sum_cred_prod[0] is not None and float(sum_cred_prod[0]) > 0:
                         conn.execute("""
                             UPDATE movimientos_contables
                             SET monto = %s
-                            WHERE negocio_id = %s
-                              AND (numero_documento = %s OR numero_documento = %s)
-                              AND LEFT(cuenta, 2) = '61'
-                              AND (producto_padre_id = %s OR producto_id = %s)
-                        """, (tot_kardex_padre, negocio_id, str(consecutive), str(doc_num), padre_id, padre_id))
+                            WHERE negocio_id = %s AND comprobante_id = %s
+                              AND tipo IN ('debito', 'D') AND cuenta LIKE '14%%'
+                        """, (float(sum_cred_prod[0]), negocio_id, comp_id_inv))
+
+            # --- 2) VENTAS: Sincronizar pedido_items.costo_unitario y Débito 61* del comprobante ---
+            elif es_venta_mov and m['tipo'] == 'salida' and doc_num:
+                ref_id_int = _int_o_none(m.get('referencia_id'))
+                padre_id = m.get('producto_padre_id')
+
+                if padre_id:
+                    tot_plato_row = conn.execute("""
+                        SELECT round(SUM(valor_total)::numeric, 2)
+                        FROM movimientos_inventario
+                        WHERE negocio_id = %s AND producto_padre_id = %s AND tipo = 'salida'
+                          AND (documento_numero = %s OR documento_numero = %s)
+                          AND (motivo = 'venta' OR referencia_tipo LIKE 'pedido%%' OR UPPER(COALESCE(tipo_documento, '')) LIKE '%%VENTA%%' OR tipo_documento_id = 6)
+                    """, (negocio_id, padre_id, str(doc_num), str(consecutive))).fetchone()
+                    tot_kardex_padre = float(tot_plato_row[0]) if (tot_plato_row and tot_plato_row[0] is not None) else 0.0
 
                     qty_row = conn.execute("""
                         SELECT SUM(pi.cantidad) AS cant_vendida
@@ -6093,7 +6201,6 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                             )
                         """, (c_und_pi, negocio_id, padre_id, str(consecutive), str(doc_num), ref_id_int))
                 else:
-                    # Producto simple vendido directamente
                     tot_ped_ajust += 1
                     conn.execute("""
                         UPDATE pedido_items
@@ -6107,27 +6214,91 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                         )
                     """, (float(costo_und), negocio_id, producto_id, str(consecutive), str(doc_num), ref_id_int))
 
-            # --- SINCRONIZACIÓN DE PRODUCCIÓN (Debito 14* = Suma de Créditos Insumos 14*) ---
-            if doc_num and (m.get('referencia_tipo') == 'produccion' or 'PRODUC' in str(m.get('tipo_documento', '')).upper()):
-                consecutive = str(doc_num).split('-')[-1].strip() if '-' in str(doc_num) else str(doc_num)
-                p_term_id = m.get('producto_id') if m['tipo'] == 'entrada' else m.get('producto_padre_id')
-                if p_term_id:
-                    tot_prod_row = conn.execute("""
-                        SELECT SUM(valor_total)
-                        FROM movimientos_inventario
-                        WHERE negocio_id = %s AND tipo = 'salida'
-                          AND (documento_numero = %s OR documento_numero = %s)
-                    """, (negocio_id, str(doc_num), str(consecutive))).fetchone()
-                    tot_prod_val = float(tot_prod_row[0]) if (tot_prod_row and tot_prod_row[0] is not None) else 0.0
-                    if tot_prod_val > 0:
+                if comp_id_inv:
+                    target_prod_v = padre_id if padre_id else producto_id
+                    sum_14_plato = conn.execute("""
+                        SELECT round(SUM(monto)::numeric, 2)
+                        FROM movimientos_contables
+                        WHERE negocio_id = %s AND comprobante_id = %s
+                          AND tipo IN ('credito', 'C') AND LEFT(cuenta, 2) = '14'
+                          AND (producto_padre_id = %s OR producto_id = %s)
+                    """, (negocio_id, comp_id_inv, target_prod_v, target_prod_v)).fetchone()
+                    if sum_14_plato and sum_14_plato[0] is not None:
                         conn.execute("""
                             UPDATE movimientos_contables
                             SET monto = %s
-                            WHERE negocio_id = %s AND tipo IN ('debito', 'D')
-                              AND cuenta LIKE '14%%'
-                              AND (numero_documento = %s OR numero_documento = %s)
-                              AND (producto_id = %s OR producto_padre_id = %s)
-                        """, (tot_prod_val, negocio_id, str(consecutive), str(doc_num), p_term_id, p_term_id))
+                            WHERE negocio_id = %s AND comprobante_id = %s
+                              AND tipo IN ('debito', 'D') AND LEFT(cuenta, 2) = '61'
+                              AND (producto_padre_id = %s OR producto_id = %s)
+                        """, (float(sum_14_plato[0]), negocio_id, comp_id_inv, target_prod_v, target_prod_v))
+
+                    # Garantizar que el total de débitos 61* iguale al total de créditos 14* en este comprobante de venta
+                    diff_61_14 = conn.execute("""
+                        SELECT
+                            COALESCE(SUM(CASE WHEN tipo IN ('credito', 'C') AND LEFT(cuenta, 2) = '14' THEN monto ELSE 0 END), 0) -
+                            COALESCE(SUM(CASE WHEN tipo IN ('debito', 'D') AND LEFT(cuenta, 2) = '61' THEN monto ELSE 0 END), 0) AS dif
+                        FROM movimientos_contables
+                        WHERE negocio_id = %s AND comprobante_id = %s
+                    """, (negocio_id, comp_id_inv)).fetchone()
+                    if diff_61_14 and abs(float(diff_61_14['dif'] or 0)) >= 0.01:
+                        lin_61 = conn.execute("""
+                            SELECT id FROM movimientos_contables
+                            WHERE negocio_id = %s AND comprobante_id = %s
+                              AND tipo IN ('debito', 'D') AND LEFT(cuenta, 2) = '61'
+                            ORDER BY CASE WHEN (producto_padre_id = %s OR producto_id = %s) THEN 0 ELSE 1 END, id DESC
+                            LIMIT 1
+                        """, (negocio_id, comp_id_inv, target_prod_v, target_prod_v)).fetchone()
+                        if lin_61:
+                            tot_ascp_ajust += 1
+                            conn.execute("""
+                                UPDATE movimientos_contables
+                                SET monto = round((monto + %s)::numeric, 2)
+                                WHERE id = %s
+                            """, (float(diff_61_14['dif']), lin_61['id']))
+
+            # --- 3) AJUSTES DE INVENTARIO (E IFD): Sincronizar contrapartida 53*/42*/41*/61* dentro del mismo comprobante ---
+            elif es_ajuste_mov and comp_id_inv:
+                if as_cp_id:
+                    chk_cp = conn.execute("""
+                        SELECT id FROM movimientos_contables
+                        WHERE id = %s AND negocio_id = %s AND comprobante_id = %s
+                          AND LEFT(cuenta, 2) IN ('53', '42', '61', '51', '52', '41')
+                    """, (as_cp_id, negocio_id, comp_id_inv)).fetchone()
+                    if not chk_cp:
+                        as_cp_id = None
+                        conn.execute("UPDATE movimientos_inventario SET asiento_contrapartida_id = NULL WHERE id = %s", (m['id'],))
+
+                if not as_cp_id:
+                    mc_cp = conn.execute("""
+                        SELECT id FROM movimientos_contables
+                        WHERE negocio_id = %s AND comprobante_id = %s
+                          AND LEFT(cuenta, 2) IN ('53', '42', '61', '51', '52', '41')
+                          AND id != %s
+                        ORDER BY CASE WHEN producto_id = %s THEN 0 ELSE 1 END, id ASC
+                        LIMIT 1
+                    """, (negocio_id, comp_id_inv, as_inv_id, producto_id)).fetchone()
+                    if mc_cp:
+                        as_cp_id = mc_cp['id']
+                        conn.execute("UPDATE movimientos_inventario SET asiento_contrapartida_id = %s WHERE id = %s", (as_cp_id, m['id']))
+
+                # Cuadrar el comprobante de ajuste contra su contrapartida de gasto/ingreso (53*/42*/61*)
+                diff_aj = conn.execute("""
+                    SELECT
+                        COALESCE(SUM(CASE WHEN tipo IN ('debito', 'D') THEN monto ELSE 0 END), 0) -
+                        COALESCE(SUM(CASE WHEN tipo IN ('credito', 'C') THEN monto ELSE 0 END), 0) AS dif
+                    FROM movimientos_contables
+                    WHERE negocio_id = %s AND comprobante_id = %s
+                """, (negocio_id, comp_id_inv)).fetchone()
+                if diff_aj and abs(float(diff_aj['dif'] or 0)) >= 0.01 and as_cp_id:
+                    cp_row = conn.execute("SELECT id, tipo FROM movimientos_contables WHERE id = %s", (as_cp_id,)).fetchone()
+                    if cp_row:
+                        tot_ascp_ajust += 1
+                        delta_cp = -float(diff_aj['dif']) if cp_row['tipo'] in ('debito', 'D') else float(diff_aj['dif'])
+                        conn.execute("""
+                            UPDATE movimientos_contables
+                            SET monto = round((monto + %s)::numeric, 2)
+                            WHERE id = %s
+                        """, (delta_cp, as_cp_id))
 
             stock = stock_nuevo
 

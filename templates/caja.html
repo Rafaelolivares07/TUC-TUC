@@ -99,27 +99,37 @@
             #carrito-items { max-height: 42vh; }
         }
 
-        /* ── Ticket de impresión térmico ── */
+        /* ── Ticket de impresión térmico (Optimizado 80mm / StarPOS TP80NC) ── */
         #ticket-print { display: none; }
         @media print {
-            @page { margin: 0; size: auto; }
+            @page { margin: 0; size: 80mm auto; }
+            html, body {
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+            }
             body > *:not(#ticket-print) { display: none !important; }
             #ticket-print {
                 display: block !important;
                 font-family: 'Courier New', Courier, monospace;
-                font-size: 12px;
-                width: 280px;
-                margin: 0 auto;
-                padding: 6px 2px;
-                color: #000;
+                font-size: 13px;
+                line-height: 1.25;
+                width: 100% !important;
+                max-width: 76mm !important;
+                margin: 0 auto !important;
+                padding: 4px 2px 20px 2px !important;
+                color: #000 !important;
+                background: #fff !important;
             }
-            #ticket-print .sep { border-top: 1px dashed #000; margin: 5px 0; }
-            #ticket-print .sep-bold { border-top: 2px solid #000; margin: 6px 0; }
-            #ticket-print .sep-cut { border-top: 2px dashed #000; margin: 10px 0 6px 0; text-align: center; }
+            #ticket-print .sep { border-top: 1px dashed #000; margin: 6px 0; }
+            #ticket-print .sep-bold { border-top: 2px solid #000; margin: 7px 0; }
+            #ticket-print .sep-cut { border-top: 2px dashed #000; margin: 12px 0 8px 0; text-align: center; }
             #ticket-print .page-break { page-break-before: always; break-before: page; }
-            #ticket-print .linea { display: flex; justify-content: space-between; }
-            #ticket-print .total-line { font-size: 15px; font-weight: bold; }
+            #ticket-print .linea { display: flex; justify-content: space-between; align-items: baseline; }
+            #ticket-print .total-line { font-size: 16px; font-weight: 900; }
             #ticket-print .centro { text-align: center; }
+            #ticket-print strong { font-weight: 900; }
         }
     </style>
 </head>
@@ -175,6 +185,14 @@
                     Sedes
                 </button>
             </div>
+            <!-- Botón Impresora Bluetooth TP80NC -->
+            <button type="button" id="btn-bt-printer-status" onclick="abrirModalConfigImpresoraBT()"
+                    class="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-2 py-0.5 text-[11px] font-bold text-slate-700 shadow-xs transition shrink-0 active:scale-95"
+                    title="Configurar y conectar impresora Bluetooth StarPOS TP80NC">
+                <span id="bt-printer-icon">🖨️</span>
+                <span id="bt-printer-label" class="hidden sm:inline">Impresora</span>
+                <span id="bt-printer-dot" class="w-2 h-2 rounded-full bg-gray-400 inline-block" title="Desconectada"></span>
+            </button>
         </div>
         <button onclick="cerrarSesionCaja()" class="text-xs text-gray-400 hover:text-gray-600 shrink-0 py-1 px-1.5">Salir</button>
     </div>
@@ -550,9 +568,13 @@
         <div class="space-y-2">
             <!-- Botón principal: Imprimir Todo (Factura + Cocina) -->
             <button onclick="imprimirTicket('ambos')"
-                    class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3 rounded-xl text-sm md:text-base shadow-sm transition active:scale-98">
-                <span>🖨️</span> Imprimir Todo (Factura + Cocina)
+                    class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-3 rounded-xl text-sm md:text-base shadow-sm transition active:scale-98 cursor-pointer">
+                <span id="btn-print-ambos-icon">🖨️</span>
+                <span id="btn-print-ambos-text">Imprimir Todo (Factura + Cocina)</span>
             </button>
+            <div id="recibo-bt-indicator" class="hidden text-center text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg py-1 px-2">
+                ⚡ Impresora Bluetooth TP80NC conectada (impresión directa ESC/POS con corte)
+            </div>
 
             <!-- Opciones individuales y WhatsApp -->
             <div class="grid grid-cols-3 gap-2">
@@ -574,6 +596,103 @@
 
             <button onclick="nuevaVenta()" class="w-full bg-slate-900 hover:bg-black text-white font-extrabold py-3 rounded-xl text-base transition active:scale-98 mt-1">
                 Nueva venta
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Configuración de Impresora Bluetooth TP80NC StarPOS -->
+<div id="modal-config-impresora-bt" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-3 sm:p-4" onclick="if(event.target===this)cerrarModalConfigImpresoraBT()">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-5 sm:p-6 flex flex-col max-h-[92vh] overflow-hidden" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-gray-150 mb-3 shrink-0">
+            <div class="flex items-center gap-2.5">
+                <span class="text-2xl p-2 bg-indigo-50 text-indigo-700 rounded-2xl shrink-0">🖨️</span>
+                <div>
+                    <h3 class="font-extrabold text-base text-gray-900 leading-tight">Impresora StarPOS TP80NC</h3>
+                    <p class="text-[11px] text-gray-500">Conexión Bluetooth / Térmica 80mm ESC/POS</p>
+                </div>
+            </div>
+            <button onclick="cerrarModalConfigImpresoraBT()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none p-1 cursor-pointer">&times;</button>
+        </div>
+
+        <div class="overflow-y-auto space-y-3.5 flex-1 pr-1 custom-scrollbar text-xs">
+            <!-- Estado actual de conexión -->
+            <div class="p-3 rounded-2xl border bg-slate-50 border-slate-200 flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <span id="modal-bt-dot" class="w-3 h-3 rounded-full bg-gray-400 inline-block"></span>
+                    <div>
+                        <span class="font-black text-gray-800 block text-xs" id="modal-bt-status-title">Desconectada</span>
+                        <span class="text-[10px] text-gray-500 block truncate" id="modal-bt-device-name">Ningún dispositivo enlazado</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" id="btn-bt-conectar" onclick="conectarImpresoraBluetooth()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer">
+                        Conectar
+                    </button>
+                    <button type="button" id="btn-bt-desconectar" onclick="desconectarImpresoraBluetooth()"
+                            class="hidden bg-gray-200 hover:bg-red-50 text-gray-700 hover:text-red-600 font-bold px-2.5 py-1.5 rounded-xl transition active:scale-95 cursor-pointer">
+                        Desvincular
+                    </button>
+                </div>
+            </div>
+
+            <!-- Botón de prueba rápida de impresión ESC/POS -->
+            <button type="button" onclick="probarImpresionBluetoothTP80NC()"
+                    class="w-full py-2.5 px-3 bg-white hover:bg-indigo-50/70 text-indigo-700 font-bold border border-indigo-200 rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs active:scale-98 cursor-pointer">
+                <span>⚡</span> <span>Imprimir Ticket de Prueba con Corte</span>
+            </button>
+
+            <!-- Opciones avanzadas de hardware 80mm -->
+            <div class="bg-white border border-gray-200 rounded-2xl p-3 space-y-2.5">
+                <span class="font-black text-gray-800 block text-[11px] uppercase tracking-wider">Opciones de Impresión (80mm)</span>
+                
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                    <div class="min-w-0 flex-1">
+                        <span class="font-bold text-gray-800 block">Corte automático de papel</span>
+                        <span class="text-[10px] text-gray-400 block">Envía comando ESC/POS de guillotina al terminar el ticket.</span>
+                    </div>
+                    <input type="checkbox" id="cfg-bt-autocut" checked class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 shrink-0">
+                </label>
+
+                <div class="border-t border-gray-100 pt-2">
+                    <label class="flex items-center justify-between gap-2 cursor-pointer">
+                        <div class="min-w-0 flex-1">
+                            <span class="font-bold text-gray-800 block">Apertura de cajón monedero (RJ11)</span>
+                            <span class="text-[10px] text-gray-400 block">Envía pulso al puerto de gaveta en ventas en efectivo.</span>
+                        </div>
+                        <input type="checkbox" id="cfg-bt-drawer" checked class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 shrink-0">
+                    </label>
+                </div>
+
+                <div class="border-t border-gray-100 pt-2">
+                    <label class="flex items-center justify-between gap-2 cursor-pointer">
+                        <div class="min-w-0 flex-1">
+                            <span class="font-bold text-gray-800 block">Impresión silenciosa en Venta Rápida</span>
+                            <span class="text-[10px] text-gray-400 block">Al cobrar en Venta Rápida, manda el ticket directo a la StarPOS sin abrir diálogo.</span>
+                        </div>
+                        <input type="checkbox" id="cfg-bt-autoprint-flash" checked class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 shrink-0">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Ayuda / Instrucciones -->
+            <div class="bg-amber-50/90 border border-amber-200/80 rounded-2xl p-3 text-amber-900 space-y-1">
+                <span class="font-extrabold flex items-center gap-1"><span>💡</span> Instrucciones de enlace:</span>
+                <ol class="list-decimal pl-4 space-y-0.5 text-[11px] leading-tight text-amber-950">
+                    <li>Enciende la impresora <strong>StarPOS TP80NC</strong>.</li>
+                    <li>Asegúrate de que el Bluetooth del dispositivo (PC / Tablet / Celular) esté encendido.</li>
+                    <li>Toca <strong>Conectar</strong> y selecciona tu impresora en la lista del navegador (suele llamarse <em>TP80NC</em>, <em>StarPOS</em> o <em>Printer_XXXX</em>).</li>
+                    <li>¡Listo! Si no usas Bluetooth directo por navegador, el botón de imprimir usa el formato de 80mm continuo de Windows.</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="pt-3 border-t border-gray-150 flex items-center justify-end gap-2 mt-2 shrink-0">
+            <button type="button" onclick="cerrarModalConfigImpresoraBT()" 
+                    class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white font-extrabold text-xs shadow-xs transition cursor-pointer">
+                Listo
             </button>
         </div>
     </div>
@@ -1802,6 +1921,31 @@ function finalizarFacturacionFlashExitosa(d, total, items, pagos, omitidos = [])
         });
     }
 
+    // Auto-impresión directa en StarPOS TP80NC por Bluetooth si está conectada y activa
+    try {
+        if (typeof estaImpresoraBTConectada === 'function' && estaImpresoraBTConectada() && btPrinterConfig && btPrinterConfig.autoprintFlash) {
+            const ahoraF = new Date().toLocaleString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+            const recFlash = ultimoRecibo || {
+                total,
+                iva: 0,
+                subtotal: total,
+                pagos,
+                metodo: pagos.length ? pagos.map(p => p.nombre).join(' + ') : 'Efectivo',
+                cliente: 'Venta Flash',
+                telefono: '',
+                cajero: cajeroNombre,
+                pedido_id: d.pedido_id || null,
+                numero_documento: d.numero_documento || null,
+                fecha: new Date().toISOString(),
+                tienda: TIENDA_NOMBRE,
+                items: items.map(i => ({...i, precio: i.precio_unitario}))
+            };
+            imprimirTicketBluetooth('ambos', recFlash, ahoraF).catch(e => console.warn('BT flash print err:', e));
+        }
+    } catch (eFlash) {
+        console.warn('Excepción auto-impresión flash:', eFlash);
+    }
+
     reiniciarPedidoFlash();
     if (btn) btn.disabled = true;
     if (label) label.textContent = 'FACTURAR ($0)';
@@ -2164,6 +2308,17 @@ function imprimirResumenVentaRapida() {
         </div>
     `;
 
+    if (typeof estaImpresoraBTConectada === 'function' && estaImpresoraBTConectada()) {
+        imprimirResumenVentaRapidaBluetooth(titulo, fechaInic, ahora, sess, srv, omits).then(() => {
+            toast('⚡ Resumen impreso en StarPOS TP80NC');
+        }).catch(err => {
+            console.error('Error imprimiendo resumen por BT:', err);
+            document.getElementById('ticket-print').innerHTML = html;
+            window.print();
+        });
+        return;
+    }
+
     document.getElementById('ticket-print').innerHTML = html;
     window.print();
 }
@@ -2474,6 +2629,17 @@ async function reimprimirFacturaGuardada(pedidoId) {
         </div>
     `;
     
+    if (typeof estaImpresoraBTConectada === 'function' && estaImpresoraBTConectada()) {
+        reimprimirFacturaBluetooth(fac).then(() => {
+            toast('⚡ Factura reimpresa en StarPOS TP80NC');
+        }).catch(err => {
+            console.error('Error reimprimiendo por BT:', err);
+            document.getElementById('ticket-print').innerHTML = html;
+            window.print();
+        });
+        return;
+    }
+    
     document.getElementById('ticket-print').innerHTML = html;
     window.print();
 }
@@ -2698,6 +2864,8 @@ async function iniciarCajaAdmin() {
     cargarProductos();
     cargarTiposDocumento();
     cargarConfigVentaRapida();
+    if (typeof cargarConfigImpresoraBT === 'function') cargarConfigImpresoraBT();
+    if (typeof actualizarUIImpresoraBT === 'function') actualizarUIImpresoraBT();
     cambiarModoCaja(modoCajaActivo);
 }
 
@@ -2733,6 +2901,8 @@ async function verificarPin() {
             cargarProductos();
             cargarTiposDocumento();
             cargarConfigVentaRapida();
+            if (typeof cargarConfigImpresoraBT === 'function') cargarConfigImpresoraBT();
+            if (typeof actualizarUIImpresoraBT === 'function') actualizarUIImpresoraBT();
             cambiarModoCaja(modoCajaActivo);
         } else {
             document.getElementById('pin-error').textContent = d.error;
@@ -4020,6 +4190,10 @@ function mostrarRecibo() {
     // Mostrar botón WA solo si hay teléfono
     document.getElementById('btn-wa-recibo').style.display = r.telefono ? '' : 'none';
 
+    if (typeof actualizarUIImpresoraBT === 'function') {
+        actualizarUIImpresoraBT();
+    }
+
     document.getElementById('modal-recibo').classList.remove('hidden');
 }
 
@@ -4103,11 +4277,657 @@ function generarHtmlTicketCocina(r, ahora) {
     `;
 }
 
+// ── INTEGRACIÓN IMPRESORA BLUETOOTH STARPOS TP80NC (ESC/POS 80mm) ────────────
+
+let btPrinterDevice = null;
+let btPrinterServer = null;
+let btCharacteristic = null;
+let btPrinterConfig = {
+    autocut: true,
+    drawer: true,
+    autoprintFlash: true
+};
+
+const BT_PRINTER_SERVICES = [
+    '000018f0-0000-1000-8000-00805f9b34fb',
+    'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+    '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+    '0000ffe0-0000-1000-8000-00805f9b34fb',
+    '0000ff00-0000-1000-8000-00805f9b34fb',
+    '0000fff0-0000-1000-8000-00805f9b34fb',
+    '0000ae00-0000-1000-8000-00805f9b34fb',
+    '0000ae30-0000-1000-8000-00805f9b34fb',
+    '000018f1-0000-1000-8000-00805f9b34fb',
+    '0000fee7-0000-1000-8000-00805f9b34fb'
+];
+
+function cargarConfigImpresoraBT() {
+    try {
+        const raw = localStorage.getItem('tuctuc_bt_printer_cfg');
+        if (raw) {
+            btPrinterConfig = Object.assign(btPrinterConfig, JSON.parse(raw));
+        }
+    } catch (e) {}
+
+    const chkCut = document.getElementById('cfg-bt-autocut');
+    const chkDrawer = document.getElementById('cfg-bt-drawer');
+    const chkFlash = document.getElementById('cfg-bt-autoprint-flash');
+    if (chkCut) chkCut.checked = btPrinterConfig.autocut !== false;
+    if (chkDrawer) chkDrawer.checked = btPrinterConfig.drawer !== false;
+    if (chkFlash) chkFlash.checked = btPrinterConfig.autoprintFlash !== false;
+}
+
+function guardarConfigImpresoraBT() {
+    const chkCut = document.getElementById('cfg-bt-autocut');
+    const chkDrawer = document.getElementById('cfg-bt-drawer');
+    const chkFlash = document.getElementById('cfg-bt-autoprint-flash');
+    if (chkCut) btPrinterConfig.autocut = chkCut.checked;
+    if (chkDrawer) btPrinterConfig.drawer = chkDrawer.checked;
+    if (chkFlash) btPrinterConfig.autoprintFlash = chkFlash.checked;
+
+    try {
+        localStorage.setItem('tuctuc_bt_printer_cfg', JSON.stringify(btPrinterConfig));
+    } catch (e) {}
+}
+
+function abrirModalConfigImpresoraBT() {
+    cargarConfigImpresoraBT();
+    actualizarUIImpresoraBT();
+    const modal = document.getElementById('modal-config-impresora-bt');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function cerrarModalConfigImpresoraBT() {
+    guardarConfigImpresoraBT();
+    const modal = document.getElementById('modal-config-impresora-bt');
+    if (modal) modal.classList.add('hidden');
+}
+
+function estaImpresoraBTConectada() {
+    return !!(btPrinterDevice && btPrinterDevice.gatt && btPrinterDevice.gatt.connected && btCharacteristic);
+}
+
+function onBTPrinterDisconnected() {
+    btCharacteristic = null;
+    btPrinterServer = null;
+    actualizarUIImpresoraBT();
+    toast('Impresora Bluetooth StarPOS desconectada', 'info');
+}
+
+function actualizarUIImpresoraBT() {
+    const isConn = estaImpresoraBTConectada();
+    const devName = btPrinterDevice ? (btPrinterDevice.name || 'StarPOS TP80NC') : (localStorage.getItem('tuctuc_bt_printer_name') || 'Ningún dispositivo enlazado');
+
+    // Header top button indicator
+    const topDot = document.getElementById('bt-printer-dot');
+    const topLabel = document.getElementById('bt-printer-label');
+    const topBtn = document.getElementById('btn-bt-printer-status');
+    if (topDot) {
+        topDot.className = isConn ? 'w-2 h-2 rounded-full bg-emerald-500 inline-block shadow-xs' : 'w-2 h-2 rounded-full bg-gray-400 inline-block';
+        topDot.title = isConn ? `Conectada: ${devName}` : 'Desconectada';
+    }
+    if (topLabel) {
+        topLabel.textContent = isConn ? (devName.length > 12 ? devName.substring(0, 10) + '..' : devName) : 'Impresora';
+    }
+    if (topBtn) {
+        if (isConn) {
+            topBtn.className = 'inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl px-2 py-0.5 text-[11px] font-bold text-emerald-800 shadow-xs transition shrink-0 active:scale-95 cursor-pointer';
+        } else {
+            topBtn.className = 'inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-2 py-0.5 text-[11px] font-bold text-slate-700 shadow-xs transition shrink-0 active:scale-95 cursor-pointer';
+        }
+    }
+
+    // Modal UI elements
+    const modalDot = document.getElementById('modal-bt-dot');
+    const modalTitle = document.getElementById('modal-bt-status-title');
+    const modalName = document.getElementById('modal-bt-device-name');
+    const btnConectar = document.getElementById('btn-bt-conectar');
+    const btnDesconectar = document.getElementById('btn-bt-desconectar');
+
+    if (modalDot) {
+        modalDot.className = isConn ? 'w-3 h-3 rounded-full bg-emerald-500 inline-block ring-2 ring-emerald-200' : 'w-3 h-3 rounded-full bg-gray-400 inline-block';
+    }
+    if (modalTitle) {
+        modalTitle.textContent = isConn ? 'Conectada y Lista (ESC/POS 80mm)' : 'Desconectada';
+        modalTitle.className = isConn ? 'font-black text-emerald-700 block text-xs' : 'font-black text-gray-800 block text-xs';
+    }
+    if (modalName) {
+        modalName.textContent = isConn ? devName : (localStorage.getItem('tuctuc_bt_printer_name') ? `Última: ${localStorage.getItem('tuctuc_bt_printer_name')} (haz clic en Conectar)` : 'Ningún dispositivo enlazado');
+    }
+    if (btnConectar) btnConectar.classList.toggle('hidden', isConn);
+    if (btnDesconectar) btnDesconectar.classList.toggle('hidden', !isConn);
+
+    // Modal Recibo indicator
+    const reciboBtInd = document.getElementById('recibo-bt-indicator');
+    const btnPrintAmbosIcon = document.getElementById('btn-print-ambos-icon');
+    const btnPrintAmbosText = document.getElementById('btn-print-ambos-text');
+    if (reciboBtInd) {
+        reciboBtInd.classList.toggle('hidden', !isConn);
+    }
+    if (btnPrintAmbosIcon && btnPrintAmbosText) {
+        if (isConn) {
+            btnPrintAmbosIcon.textContent = '⚡';
+            btnPrintAmbosText.textContent = 'Imprimir Directo Bluetooth (TP80NC)';
+        } else {
+            btnPrintAmbosIcon.textContent = '🖨️';
+            btnPrintAmbosText.textContent = 'Imprimir Todo (Factura + Cocina)';
+        }
+    }
+}
+
+async function conectarImpresoraBluetooth() {
+    if (!navigator.bluetooth) {
+        alert('Tu navegador o dispositivo actual no tiene soporte para Web Bluetooth.\n\nRecomendado: Google Chrome o Microsoft Edge en Android, Windows o Mac, ingresando por HTTPS.');
+        return;
+    }
+
+    const btnConectar = document.getElementById('btn-bt-conectar');
+    if (btnConectar) {
+        btnConectar.disabled = true;
+        btnConectar.textContent = 'Buscando...';
+    }
+
+    try {
+        toast('Buscando impresora Bluetooth... selecciona tu StarPOS TP80NC en la lista');
+        const device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: BT_PRINTER_SERVICES
+        });
+
+        if (!device) {
+            actualizarUIImpresoraBT();
+            return;
+        }
+
+        device.addEventListener('gattserverdisconnected', onBTPrinterDisconnected);
+
+        if (btnConectar) btnConectar.textContent = 'Enlazando...';
+        const server = await device.gatt.connect();
+
+        let writableChar = null;
+
+        // Inspeccionar servicios disponibles
+        let services = [];
+        try {
+            services = await server.getPrimaryServices();
+        } catch (e) {}
+
+        for (const service of services) {
+            try {
+                const chars = await service.getCharacteristics();
+                for (const ch of chars) {
+                    if (ch.properties.write || ch.properties.writeWithoutResponse) {
+                        writableChar = ch;
+                        break;
+                    }
+                }
+            } catch (e) {}
+            if (writableChar) break;
+        }
+
+        // Si no se encontró por enumeración general, buscar por UUIDs conocidos
+        if (!writableChar) {
+            for (const sUuid of BT_PRINTER_SERVICES) {
+                try {
+                    const s = await server.getPrimaryService(sUuid);
+                    const chars = await s.getCharacteristics();
+                    for (const ch of chars) {
+                        if (ch.properties.write || ch.properties.writeWithoutResponse) {
+                            writableChar = ch;
+                            break;
+                        }
+                    }
+                    if (writableChar) break;
+                } catch (e) {}
+            }
+        }
+
+        if (!writableChar) {
+            throw new Error('No se detectó un canal de escritura ESC/POS compatible en el dispositivo seleccionado.');
+        }
+
+        btPrinterDevice = device;
+        btPrinterServer = server;
+        btCharacteristic = writableChar;
+
+        localStorage.setItem('tuctuc_bt_printer_name', device.name || 'StarPOS TP80NC');
+        actualizarUIImpresoraBT();
+        toast(`✅ Impresora "${device.name || 'StarPOS TP80NC'}" conectada exitosamente`, 'success');
+
+    } catch (err) {
+        console.warn('Fallo de conexión Bluetooth:', err);
+        if (err.name !== 'NotFoundError') {
+            alert('Error de enlace Bluetooth: ' + (err.message || err));
+        }
+        actualizarUIImpresoraBT();
+    } finally {
+        if (btnConectar) {
+            btnConectar.disabled = false;
+            btnConectar.textContent = 'Conectar';
+        }
+    }
+}
+
+function desconectarImpresoraBluetooth() {
+    if (btPrinterDevice && btPrinterDevice.gatt && btPrinterDevice.gatt.connected) {
+        try {
+            btPrinterDevice.gatt.disconnect();
+        } catch (e) {}
+    }
+    onBTPrinterDisconnected();
+}
+
+async function enviarBytesImpresoraBT(bytes) {
+    if (!btCharacteristic) {
+        throw new Error('La impresora Bluetooth no está conectada.');
+    }
+    // StarPOS TP80NC BLE MTU chunking:
+    // Dividir en paquetes de 100 bytes con 25ms de retardo para evitar desbordamiento del buffer de impresión
+    const CHUNK_SIZE = 100;
+    for (let offset = 0; offset < bytes.length; offset += CHUNK_SIZE) {
+        const chunk = bytes.slice(offset, offset + CHUNK_SIZE);
+        try {
+            if (btCharacteristic.properties.writeWithoutResponse && btCharacteristic.writeValueWithoutResponse) {
+                await btCharacteristic.writeValueWithoutResponse(chunk);
+            } else {
+                await btCharacteristic.writeValue(chunk);
+            }
+        } catch (wErr) {
+            await btCharacteristic.writeValue(chunk);
+        }
+        await new Promise(res => setTimeout(res, 25));
+    }
+}
+
+function limpiarTextoEscPos(s) {
+    if (!s) return '';
+    return String(s)
+        .replace(/[áÁàÀâÂäÄ]/g, 'A')
+        .replace(/[éÉèÈêÊëË]/g, 'E')
+        .replace(/[íÍìÌîÎïÏ]/g, 'I')
+        .replace(/[óÓòÒôÔöÖ]/g, 'O')
+        .replace(/[úÚùÙûÛüÜ]/g, 'U')
+        .replace(/[ñÑ]/g, 'N')
+        .replace(/[¿¡]/g, '')
+        .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+        .replace(/[^\x20-\x7E\n\r]/g, '');
+}
+
+class EscPosBuilder {
+    constructor() {
+        this.buffer = [];
+    }
+
+    raw(bytes) {
+        for (let i = 0; i < bytes.length; i++) {
+            this.buffer.push(bytes[i]);
+        }
+        return this;
+    }
+
+    init() {
+        return this.raw([0x1B, 0x40]); // ESC @ (Initialize printer)
+    }
+
+    align(mode) {
+        const val = mode === 'center' ? 1 : (mode === 'right' ? 2 : 0);
+        return this.raw([0x1B, 0x61, val]); // ESC a n
+    }
+
+    bold(enable) {
+        return this.raw([0x1B, 0x45, enable ? 1 : 0]); // ESC E n
+    }
+
+    doubleSize(enable) {
+        return this.raw([0x1D, 0x21, enable ? 0x11 : 0x00]); // GS ! n
+    }
+
+    doubleHeight(enable) {
+        return this.raw([0x1D, 0x21, enable ? 0x01 : 0x00]);
+    }
+
+    invert(enable) {
+        return this.raw([0x1D, 0x42, enable ? 1 : 0]); // GS B n
+    }
+
+    feed(n = 1) {
+        return this.raw([0x1B, 0x64, n]); // ESC d n
+    }
+
+    cut() {
+        // Feed 3 lines then partial cut GS V 66 0
+        return this.feed(3).raw([0x1D, 0x56, 0x42, 0x00]);
+    }
+
+    drawerPulse() {
+        // Pulse cash drawer pin 2: ESC p 0 25 250
+        return this.raw([0x1B, 0x70, 0x00, 0x19, 0xFA]);
+    }
+
+    text(str) {
+        if (!str) return this;
+        const clean = limpiarTextoEscPos(str);
+        for (let i = 0; i < clean.length; i++) {
+            const code = clean.charCodeAt(i);
+            if (code === 10) {
+                this.buffer.push(0x0A);
+            } else if (code === 13) {
+                // skip
+            } else if (code >= 32 && code <= 126) {
+                this.buffer.push(code);
+            }
+        }
+        return this;
+    }
+
+    line(str = '') {
+        return this.text(str).raw([0x0A]);
+    }
+
+    separator(char = '-') {
+        return this.line(char.repeat(48));
+    }
+
+    twoCol(left, right, width = 48) {
+        const lStr = limpiarTextoEscPos(String(left || ''));
+        const rStr = limpiarTextoEscPos(String(right || ''));
+        const spaceLen = width - lStr.length - rStr.length;
+        if (spaceLen > 0) {
+            return this.line(lStr + ' '.repeat(spaceLen) + rStr);
+        } else {
+            const maxL = Math.max(1, width - rStr.length - 1);
+            return this.line(lStr.substring(0, maxL) + ' ' + rStr);
+        }
+    }
+
+    getBytes() {
+        return new Uint8Array(this.buffer);
+    }
+}
+
+function construirBytesEscPosFactura(r, ahora) {
+    const builder = new EscPosBuilder();
+    builder.init();
+    builder.align('center').bold(true).doubleHeight(true).line(TIENDA_NOMBRE).doubleHeight(false);
+    builder.line(ahora);
+    if (r.numero_documento) {
+        builder.bold(true).line(`Doc: ${r.numero_documento}`).bold(false);
+    } else {
+        builder.line(`Pedido: #${r.pedido_id}`);
+    }
+    if (r.cajero) builder.line(`Cajero: ${r.cajero}`);
+    if (r.cliente) builder.line(`Cliente: ${r.cliente}`);
+    builder.separator('-');
+
+    for (const i of r.items || []) {
+        const total = `$${((i.precio || 0) * (i.cantidad || 1)).toLocaleString('es-CO')}`;
+        const desc = `${i.cantidad}x ${i.nombre}`;
+        builder.twoCol(desc, total, 48);
+
+        if (i.excluidos_nombres && i.excluidos_nombres.length) {
+            builder.bold(true).line(`  * SIN: ${i.excluidos_nombres.join(', ').toUpperCase()} *`).bold(false);
+        }
+        if (i.adiciones && i.adiciones.length) {
+            for (const a of i.adiciones) {
+                const cantTxt = a.cantidad > 1 ? `${a.cantidad}x ` : '';
+                const precioTxt = `(+$${((a.precio || 0) * (a.cantidad || 1)).toLocaleString('es-CO')})`;
+                builder.line(`  + ${cantTxt}${a.nombre.toUpperCase()} ${precioTxt}`);
+            }
+        }
+    }
+
+    builder.separator('-');
+    if (r.iva > 0) {
+        builder.twoCol('Subtotal', `$${(r.subtotal || 0).toLocaleString('es-CO')}`, 48);
+        builder.twoCol('IVA incluido', `$${(r.iva || 0).toLocaleString('es-CO')}`, 48);
+    }
+    builder.bold(true).doubleHeight(true).twoCol('TOTAL', `$${(r.total || 0).toLocaleString('es-CO')}`, 48).doubleHeight(false).bold(false);
+
+    const pagosTxt = (r.pagos && r.pagos.length > 1)
+        ? r.pagos.map(p => `${p.nombre}: $${(p.monto || 0).toLocaleString('es-CO')}`).join(' | ')
+        : `Pago: ${r.metodo || 'Efectivo'}`;
+    builder.line(pagosTxt);
+    builder.separator('-');
+    builder.align('center').line('¡Gracias por su compra!').feed(3);
+
+    const tieneEfectivo = r.pagos && r.pagos.length > 0 
+        ? r.pagos.some(p => (p.nombre || '').toLowerCase().includes('efectivo'))
+        : (r.metodo || '').toLowerCase().includes('efectivo');
+
+    if (btPrinterConfig.drawer && tieneEfectivo) {
+        builder.drawerPulse();
+    }
+    if (btPrinterConfig.autocut) {
+        builder.cut();
+    }
+    return builder.getBytes();
+}
+
+function construirBytesEscPosCocina(r, ahora) {
+    const builder = new EscPosBuilder();
+    builder.init();
+    builder.align('center').bold(true).doubleSize(true).line('ORDEN DE COCINA').doubleSize(false);
+    builder.line(ahora);
+    builder.bold(true).line(r.numero_documento ? `Doc: ${r.numero_documento}` : `Ped: #${r.pedido_id}`).bold(false);
+    if (r.cliente) builder.line(`Cliente: ${r.cliente}`);
+    if (r.cajero) builder.line(`Cajero: ${r.cajero}`);
+    builder.separator('=');
+
+    for (const i of r.items || []) {
+        builder.align('left').bold(true).doubleHeight(true).line(`${i.cantidad}x ${i.nombre.toUpperCase()}`).doubleHeight(false).bold(false);
+        if (i.excluidos_nombres && i.excluidos_nombres.length) {
+            builder.bold(true).line(`>>> SIN: ${i.excluidos_nombres.join(', ').toUpperCase()} <<<`).bold(false);
+        }
+        if (i.adiciones && i.adiciones.length) {
+            for (const a of i.adiciones) {
+                const cantTxt = a.cantidad > 1 ? `${a.cantidad}x ` : '';
+                builder.bold(true).line(`+ CON: ${cantTxt}${a.nombre.toUpperCase()}`).bold(false);
+            }
+        }
+        builder.separator('-');
+    }
+
+    const totalCant = (r.items || []).reduce((s, i) => s + (parseFloat(i.cantidad) || 0), 0);
+    builder.bold(true).twoCol('TOTAL ITEMS:', `${totalCant} unds`, 48).bold(false);
+    builder.feed(1);
+    builder.align('center').bold(true).line('*** FIN ORDEN COCINA ***').bold(false).feed(3);
+    if (btPrinterConfig.autocut) {
+        builder.cut();
+    }
+    return builder.getBytes();
+}
+
+async function imprimirTicketBluetooth(modo, r, ahora) {
+    if (!estaImpresoraBTConectada()) {
+        throw new Error('Impresora Bluetooth no conectada');
+    }
+
+    if (modo === 'ambos') {
+        const bytesFac = construirBytesEscPosFactura(r, ahora);
+        await enviarBytesImpresoraBT(bytesFac);
+        if (btPrinterConfig.autocut) {
+            await new Promise(res => setTimeout(res, 350));
+        }
+        const bytesCoc = construirBytesEscPosCocina(r, ahora);
+        await enviarBytesImpresoraBT(bytesCoc);
+        toast('⚡ Factura y Cocina impresas en StarPOS TP80NC', 'success');
+    } else if (modo === 'cocina') {
+        const bytesCoc = construirBytesEscPosCocina(r, ahora);
+        await enviarBytesImpresoraBT(bytesCoc);
+        toast('⚡ Ticket de Cocina impreso en StarPOS TP80NC', 'success');
+    } else {
+        const bytesFac = construirBytesEscPosFactura(r, ahora);
+        await enviarBytesImpresoraBT(bytesFac);
+        toast('⚡ Factura impresa en StarPOS TP80NC', 'success');
+    }
+}
+
+async function probarImpresionBluetoothTP80NC() {
+    if (!estaImpresoraBTConectada()) {
+        const confirmar = confirm('La impresora StarPOS no está conectada en este momento.\n\n¿Deseas buscar y conectar la impresora por Bluetooth ahora?');
+        if (confirmar) {
+            await conectarImpresoraBluetooth();
+            if (!estaImpresoraBTConectada()) return;
+        } else {
+            return;
+        }
+    }
+
+    try {
+        const builder = new EscPosBuilder();
+        builder.init();
+        builder.align('center').bold(true).doubleSize(true).line(TIENDA_NOMBRE).doubleSize(false);
+        builder.bold(true).line('STARPOS TP80NC - PRUEBA').bold(false);
+        builder.line('Ticket de Prueba Termica 80mm');
+        builder.line(new Date().toLocaleString('es-CO'));
+        builder.separator('=');
+        builder.align('left');
+        builder.twoCol('Conexion:', 'Bluetooth LE / ESC/POS', 48);
+        builder.twoCol('Ancho:', '80 mm (48 columnas)', 48);
+        builder.twoCol('Corte automatico:', btPrinterConfig.autocut ? 'Activado' : 'Desactivado', 48);
+        builder.twoCol('Cajon monedero RJ11:', btPrinterConfig.drawer ? 'Activado' : 'Desactivado', 48);
+        builder.twoCol('Auto-impresion Flash:', btPrinterConfig.autoprintFlash ? 'Activada' : 'Desactivada', 48);
+        builder.separator('-');
+        builder.align('center');
+        builder.bold(true).line('LINEA DE TEXTO EN NEGRITA').bold(false);
+        builder.invert(true).line(' TEXTO INVERTIDO BLANCO/NEGRO ').invert(false);
+        builder.separator('=');
+        builder.bold(true).line('*** PRUEBA SATISFACTORIA ***').bold(false);
+        builder.line('Impresora configurada y lista.');
+        builder.feed(3);
+
+        if (btPrinterConfig.drawer) {
+            builder.drawerPulse();
+        }
+        if (btPrinterConfig.autocut) {
+            builder.cut();
+        }
+
+        toast('Enviando ticket de prueba a StarPOS TP80NC...');
+        await enviarBytesImpresoraBT(builder.getBytes());
+        toast('✅ ¡Ticket de prueba impreso con éxito!', 'success');
+    } catch (err) {
+        console.error('Error al imprimir prueba:', err);
+        alert('Error al enviar datos a la impresora Bluetooth: ' + (err.message || err));
+    }
+}
+
+async function reimprimirFacturaBluetooth(fac) {
+    const builder = new EscPosBuilder();
+    builder.init();
+    builder.align('center').bold(true).doubleSize(true).line(TIENDA_NOMBRE).doubleSize(false);
+    builder.bold(true).line('FACTURA DE VENTA (REIMPRESION)').bold(false);
+    builder.line(fac.numero_documento || '');
+    builder.line(`Fecha: ${fac.fecha_hora || fac.hora || ''}`);
+    if (fac.nombre_cajero) builder.line(`Cajero: ${fac.nombre_cajero}`);
+    if (fac.nombre_cliente) builder.line(`Cliente: ${fac.nombre_cliente}`);
+    builder.separator('=');
+    builder.align('center').bold(true).line('DETALLE DE PRODUCTOS').bold(false);
+
+    for (const it of fac.items || []) {
+        const total = `$${(((it.cantidad || 1) * (it.precio || 0))).toLocaleString('es-CO')}`;
+        builder.twoCol(`${it.cantidad}x ${it.nombre}`, total, 48);
+    }
+    builder.separator('=');
+    const granTotal = `$${(parseFloat(fac.total) || 0).toLocaleString('es-CO')}`;
+    builder.bold(true).doubleHeight(true).twoCol('TOTAL:', granTotal, 48).doubleHeight(false).bold(false);
+    builder.separator('-');
+    builder.align('center').bold(true).line('FORMA DE PAGO').bold(false);
+    if (fac.pagos && fac.pagos.length) {
+        for (const p of fac.pagos) {
+            builder.twoCol(p.nombre, `$${(p.monto || 0).toLocaleString('es-CO')}`, 48);
+        }
+    } else {
+        builder.twoCol(fac.metodo_pago || 'Efectivo', granTotal, 48);
+    }
+    builder.separator('-');
+    builder.align('center').bold(true).line('*** COPIA REIMPRESA ***').bold(false);
+    builder.line('¡Gracias por su compra!').feed(3);
+    if (btPrinterConfig.autocut) builder.cut();
+
+    await enviarBytesImpresoraBT(builder.getBytes());
+}
+
+async function imprimirResumenVentaRapidaBluetooth(titulo, fechaInic, ahora, sess, srv, omits) {
+    const builder = new EscPosBuilder();
+    builder.init();
+    builder.align('center').bold(true).doubleHeight(true).line(TIENDA_NOMBRE).doubleHeight(false);
+    builder.bold(true).line(titulo).bold(false);
+    builder.line(fechaInic);
+    builder.line(`Cierre/Impresion: ${ahora}`);
+    builder.line(`Cajero: ${cajeroNombre || 'Caja'}`);
+    builder.separator('=');
+    builder.align('center').bold(true).line('PRODUCTOS VENDIDOS').bold(false);
+
+    let prods = [];
+    let pagos = [];
+    let granTotal = 0;
+    let ventasCount = 0;
+
+    if (resumenScope === 'hoy' && srv) {
+        granTotal = srv.gran_total || 0;
+        ventasCount = srv.total_facturas || 0;
+        prods = (srv.resumen_productos || []).map(p => ({ desc: `${p.cantidad}x ${p.nombre}`, tot: `$${(p.total || 0).toLocaleString('es-CO')}` }));
+        pagos = (srv.resumen_metodos || []).map(m => ({ desc: m.nombre, tot: `$${(m.total || 0).toLocaleString('es-CO')}` }));
+    } else {
+        granTotal = sess.granTotal || 0;
+        ventasCount = sess.ventasCount || 0;
+        prods = Object.values(sess.productos || {}).map(p => ({ desc: `${p.cantidad}x ${p.nombre}`, tot: `$${(p.total || 0).toLocaleString('es-CO')}` }));
+        pagos = Object.values(sess.metodosPago || {}).map(m => ({ desc: m.nombre, tot: `$${(m.total || 0).toLocaleString('es-CO')}` }));
+    }
+
+    if (prods.length === 0) {
+        builder.align('center').line('Sin ventas');
+    } else {
+        for (const p of prods) {
+            builder.twoCol(p.desc, p.tot, 48);
+        }
+    }
+    builder.separator('-');
+    builder.align('center').bold(true).line('RECAUDO POR FORMA DE PAGO').bold(false);
+    if (pagos.length === 0) {
+        builder.align('center').line('Sin pagos');
+    } else {
+        for (const m of pagos) {
+            builder.twoCol(m.desc, m.tot, 48);
+        }
+    }
+    builder.separator('=');
+    builder.bold(true).doubleHeight(true).twoCol('TOTAL RECAUDADO:', `$${(granTotal || 0).toLocaleString('es-CO')}`, 48).doubleHeight(false).bold(false);
+    builder.twoCol('Transacciones:', `${ventasCount || 0}`, 48);
+
+    if (omits && omits.length > 0) {
+        builder.separator('-');
+        builder.align('center').bold(true).line('COMPONENTES OMITIDOS POR STOCK').bold(false);
+        for (const o of omits) {
+            builder.twoCol(`* ${o.nombre}`, `${o.cantidadOmitida} veces`, 48);
+        }
+    }
+    builder.separator('-');
+    builder.align('center').line('*** FIN RESUMEN ***').feed(3);
+    if (btPrinterConfig.autocut) builder.cut();
+
+    await enviarBytesImpresoraBT(builder.getBytes());
+}
+
 function imprimirTicket(modo = 'ambos') {
     const r = ultimoRecibo;
     if (!r) return;
     const ahora = new Date().toLocaleString('es-CO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
 
+    if (estaImpresoraBTConectada()) {
+        imprimirTicketBluetooth(modo, r, ahora).catch(err => {
+            console.error('Error al imprimir por Bluetooth:', err);
+            toast('Fallo al imprimir por Bluetooth: ' + (err.message || err) + '. Usando diálogo...', 'warning');
+            imprimirTicketNavegador(modo, r, ahora);
+        });
+        return;
+    }
+
+    imprimirTicketNavegador(modo, r, ahora);
+}
+
+function imprimirTicketNavegador(modo, r, ahora) {
     let html = '';
     if (modo === 'ambos') {
         html = `
@@ -4128,6 +4948,23 @@ function imprimirTicket(modo = 'ambos') {
     document.getElementById('ticket-print').innerHTML = html;
     window.print();
 }
+
+// Attach functions to window for global inline onclick accessibility
+window.abrirModalConfigImpresoraBT = abrirModalConfigImpresoraBT;
+window.cerrarModalConfigImpresoraBT = cerrarModalConfigImpresoraBT;
+window.conectarImpresoraBluetooth = conectarImpresoraBluetooth;
+window.desconectarImpresoraBluetooth = desconectarImpresoraBluetooth;
+window.probarImpresionBluetoothTP80NC = probarImpresionBluetoothTP80NC;
+window.imprimirTicket = imprimirTicket;
+window.actualizarUIImpresoraBT = actualizarUIImpresoraBT;
+window.cargarConfigImpresoraBT = cargarConfigImpresoraBT;
+window.guardarConfigImpresoraBT = guardarConfigImpresoraBT;
+
+// Inicialización de impresora Bluetooth al cargar
+try {
+    cargarConfigImpresoraBT();
+    actualizarUIImpresoraBT();
+} catch (e) {}
 
 // ── WhatsApp ─────────────────────────────────────────────────────────────────
 

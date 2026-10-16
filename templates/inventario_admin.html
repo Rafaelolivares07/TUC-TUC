@@ -8152,9 +8152,78 @@ function validarConfirmacionEncabezadoEntrada() {
   return true;
 }
 
+function resaltarLineaInvalidaEntrada(div, motivo = 'general') {
+  if (!div) return;
+  div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  div.classList.add('ring-4', 'ring-rose-500', 'bg-rose-50/70', 'rounded-xl', 'p-1', 'transition-all', 'duration-300');
+
+  const acInput = div.querySelector('textarea[id^="ent-ac-"]');
+  const cantInput = div.querySelector('input[id^="ent-cant-emp-"]');
+
+  if (motivo === 'producto' && acInput) {
+    acInput.focus();
+    acInput.classList.add('border-rose-500', 'bg-rose-50');
+    const limpiar = () => {
+      div.classList.remove('ring-4', 'ring-rose-500', 'bg-rose-50/70');
+      acInput.classList.remove('border-rose-500', 'bg-rose-50');
+    };
+    acInput.addEventListener('input', limpiar, { once: true });
+    setTimeout(limpiar, 5000);
+  } else if (motivo === 'cantidad' && cantInput) {
+    cantInput.focus();
+    cantInput.select();
+    cantInput.classList.add('border-rose-500', 'bg-rose-50');
+    const limpiar = () => {
+      div.classList.remove('ring-4', 'ring-rose-500', 'bg-rose-50/70');
+      cantInput.classList.remove('border-rose-500', 'bg-rose-50');
+    };
+    cantInput.addEventListener('input', limpiar, { once: true });
+    setTimeout(limpiar, 5000);
+  } else {
+    if (acInput) acInput.focus();
+    const limpiar = () => div.classList.remove('ring-4', 'ring-rose-500', 'bg-rose-50/70');
+    div.addEventListener('click', limpiar, { once: true });
+    setTimeout(limpiar, 5000);
+  }
+}
+
+function validarUltimaLineaEntradaCompleta() {
+  const cont = document.getElementById('entrada-lineas');
+  if (!cont) return true;
+  const divs = [...cont.querySelectorAll('.grid')];
+  if (!divs.length) return true;
+
+  const lastDiv = divs[divs.length - 1];
+  const prodIdInput = lastDiv.querySelector('input[id^="ent-id-"]');
+  const cantEmpInput = lastDiv.querySelector('input[id^="ent-cant-emp-"]');
+  const cantBaseInput = lastDiv.querySelector('input[id^="ent-cant-base-"]');
+
+  const prodId = prodIdInput ? prodIdInput.value.trim() : '';
+  const cantEmp = cantEmpInput ? (parseFloat(cantEmpInput.value) || 0) : 0;
+  const cantBase = cantBaseInput ? (parseFloat(cantBaseInput.value) || 0) : 0;
+
+  if (!prodId) {
+    resaltarLineaInvalidaEntrada(lastDiv, 'producto');
+    toast(`⚠️ Línea ${divs.length}: Debes seleccionar un producto válido antes de agregar otra fila`, false);
+    return false;
+  }
+
+  if (cantEmp <= 0 && cantBase <= 0) {
+    resaltarLineaInvalidaEntrada(lastDiv, 'cantidad');
+    toast(`⚠️ Línea ${divs.length}: La cantidad debe ser mayor a cero antes de agregar otra fila`, false);
+    return false;
+  }
+
+  return true;
+}
+
 function agregarLineaEntrada() {
 
   if (!validarConfirmacionEncabezadoEntrada()) {
+    return;
+  }
+
+  if (!validarUltimaLineaEntradaCompleta()) {
     return;
   }
 
@@ -9151,7 +9220,11 @@ async function registrarEntrada() {
 
 
 
-    if (!id || !cant) { toast(`Línea ${i+1}: producto y cantidad requeridos`, false); return; }
+    if (!id || !cant) {
+      resaltarLineaInvalidaEntrada(div, !id ? 'producto' : 'cantidad');
+      toast(`⚠️ Línea ${i+1}: Debe seleccionar el producto y definir la cantidad requerida`, false);
+      return;
+    }
 
 
 

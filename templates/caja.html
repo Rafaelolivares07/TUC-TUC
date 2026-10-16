@@ -4410,8 +4410,29 @@ function actualizarUIImpresoraBT() {
     if (modalName) {
         modalName.textContent = isConn ? devName : (localStorage.getItem('tuctuc_bt_printer_name') ? `Última: ${localStorage.getItem('tuctuc_bt_printer_name')} (haz clic en Conectar)` : 'Ningún dispositivo enlazado');
     }
-    if (btnConectarSerial) btnConectarSerial.classList.toggle('hidden', isConn);
-    if (btnConectar) btnConectar.classList.toggle('hidden', isConn);
+    const hasSerial = !!navigator.serial;
+    if (btnConectarSerial) {
+        if (!hasSerial || isConn) {
+            btnConectarSerial.classList.add('hidden');
+        } else {
+            btnConectarSerial.classList.remove('hidden');
+        }
+    }
+    if (btnConectar) {
+        if (isConn) {
+            btnConectar.classList.add('hidden');
+        } else {
+            btnConectar.classList.remove('hidden');
+            if (!hasSerial) {
+                // Dispositivo móvil (Android / Tablet): Botón principal directo
+                btnConectar.className = 'bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3.5 py-2 rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs';
+                btnConectar.innerHTML = '<span>📱</span> <span>Conectar Bluetooth</span>';
+            } else {
+                btnConectar.className = 'bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-2.5 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer text-[11px]';
+                btnConectar.textContent = 'BLE';
+            }
+        }
+    }
     if (btnDesconectar) btnDesconectar.classList.toggle('hidden', !isConn);
 
     // Modal Recibo indicator

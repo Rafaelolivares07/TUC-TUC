@@ -627,17 +627,17 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap justify-end">
-                    <button type="button" id="btn-bt-conectar-serial" onclick="conectarImpresoraSerial()"
-                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1">
-                        <span>🔌</span> <span>Conectar COM8 (Windows)</span>
-                    </button>
                     <button type="button" id="btn-bt-conectar" onclick="conectarImpresoraBluetooth()"
-                            class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-2.5 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer text-[11px]"
-                            title="Conectar vía Web Bluetooth (BLE para móviles)">
-                        BLE
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1 text-xs">
+                        <span>📱</span> <span>Conectar Bluetooth</span>
+                    </button>
+                    <button type="button" id="btn-bt-conectar-serial" onclick="conectarImpresoraSerial()"
+                            class="hidden bg-slate-800 hover:bg-slate-900 text-white font-bold px-2.5 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer text-[11px] flex items-center gap-1"
+                            title="Conexión por puerto serie COM en Windows">
+                        <span>💻</span> <span>COM8 (PC)</span>
                     </button>
                     <button type="button" id="btn-bt-desconectar" onclick="desconectarImpresoraBluetooth()"
-                            class="hidden bg-gray-200 hover:bg-red-50 text-gray-700 hover:text-red-600 font-bold px-2.5 py-1.5 rounded-xl transition active:scale-95 cursor-pointer">
+                            class="hidden bg-gray-200 hover:bg-red-50 text-gray-700 hover:text-red-600 font-bold px-2.5 py-1.5 rounded-xl transition active:scale-95 cursor-pointer text-xs">
                         Desvincular
                     </button>
                 </div>
@@ -4416,6 +4416,8 @@ function actualizarUIImpresoraBT() {
             btnConectarSerial.classList.add('hidden');
         } else {
             btnConectarSerial.classList.remove('hidden');
+            btnConectarSerial.className = 'bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1 text-xs';
+            btnConectarSerial.innerHTML = '<span>🔌</span> <span>Conectar COM8 (Windows)</span>';
         }
     }
     if (btnConectar) {

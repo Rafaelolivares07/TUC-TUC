@@ -2078,11 +2078,40 @@
   <div id="tab-entradas" class="hidden bg-white rounded-2xl shadow p-5">
 
     <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
-      <h2 class="font-bold text-gray-700">Registrar entrada de mercancía</h2>
+      <div class="flex items-center gap-3">
+        <h2 class="font-bold text-gray-700">Registrar entrada de mercancía</h2>
+        <span id="indicador-auto-guardado-borrador" class="hidden text-[11px] font-bold text-emerald-600 font-mono transition-all"></span>
+      </div>
       <button type="button" onclick="abrirModalGestionPresentaciones()"
               class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 flex items-center gap-1.5 transition shadow-2xs">
         <span>📦</span> Unidades de Empaque / Presentaciones
       </button>
+    </div>
+
+    <!-- Banner de Borrador Pendiente en Base de Datos -->
+    <div id="banner-borrador-entrada" class="hidden mb-3 p-3.5 bg-indigo-50 border border-indigo-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-xs">
+      <div class="flex items-center gap-2.5">
+        <span class="text-xl">💾</span>
+        <div>
+          <div class="font-extrabold text-indigo-900 text-sm flex items-center gap-2">
+            <span>Borrador guardado en la nube</span>
+            <span id="badge-borrador-hora" class="text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full border border-indigo-300"></span>
+          </div>
+          <div id="texto-borrador-resumen" class="text-indigo-700 mt-0.5 font-medium">
+            Se encontraron líneas digitadas previamente que no han sido registradas.
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="restaurarBorradorEntrada()"
+                class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+          <span>📥</span> Restaurar borrador
+        </button>
+        <button type="button" onclick="descartarBorradorEntrada()"
+                class="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 font-bold rounded-xl border border-gray-200 hover:border-rose-300 transition cursor-pointer">
+          <span>🗑️</span> Descartar
+        </button>
+      </div>
     </div>
 
     <!-- Banner si está en modo Consolidado -->
@@ -4206,6 +4235,7 @@ function mostrarTab(t) {
 
   if (t === 'entradas') {
     actualizarHeaderCentroActivo();
+    verificarBorradorEntradaServidor();
   }
 
   if (t === 'ensambles') {
@@ -8984,6 +9014,9 @@ function calcularTotalesEntrada() {
     }
   }
 
+  if (typeof programarGuardadoBorradorEntrada === 'function') {
+    programarGuardadoBorradorEntrada();
+  }
 }
 
 function obtenerUltimaLineaValidaEntrada() {
@@ -9081,6 +9114,233 @@ function aplicarDiferenciaCentavos(diffTotal) {
   totalInput.dataset.manual = 'true';
   calcularCostoFilaEmpaque(idx, 'total');
   toast(`Centavos ajustados (${diffTotal > 0 ? '+' : ''}$${diffTotal.toFixed(2)}) en la última línea`);
+}
+
+// ── Borrador de Entrada en Base de Datos (Cloud Draft) ──────────────────────────
+let _timerGuardarBorradorEntrada = null;
+let _borradorCargadoActual = null;
+let _restaurandoBorrador = false;
+
+function programarGuardadoBorradorEntrada() {
+  if (_restaurandoBorrador) return;
+  clearTimeout(_timerGuardarBorradorEntrada);
+  _timerGuardarBorradorEntrada = setTimeout(() => {
+    guardarBorradorEntradaServidor();
+  }, 1000);
+}
+
+async function guardarBorradorEntradaServidor() {
+  if (_restaurandoBorrador) return;
+  const cont = document.getElementById('entrada-lineas');
+  if (!cont) return;
+  const divs = [...cont.querySelectorAll('.grid')];
+
+  const lineas = [];
+  for (const div of divs) {
+    const idInput = div.querySelector('input[id^="ent-id-"]');
+    const acInput = div.querySelector('textarea[id^="ent-ac-"]');
+    const cantEmpInput = div.querySelector('input[id^="ent-cant-emp-"]');
+    const presInput = div.querySelector('input[id^="ent-pres-"]');
+    const presIdInput = div.querySelector('input[id^="ent-pres-id-"]');
+    const equivInput = div.querySelector('input[id^="ent-pres-equiv-"]');
+    const cantBaseInput = div.querySelector('input[id^="ent-cant-base-"]');
+    const costoEmpInput = div.querySelector('input[id^="ent-costo-emp-"]');
+    const totalInput = div.querySelector('input[id^="ent-total-"]');
+    const vuInput = div.querySelector('input[id^="ent-vu-"]');
+    const ivaSelect = div.querySelector('select[id^="ent-iva-pct-"]');
+
+    const prodId = idInput?.value ? parseInt(idInput.value) : null;
+    const prodNom = acInput?.value?.trim() || '';
+    const cantEmp = cantEmpInput ? (parseFloat(cantEmpInput.value) || 0) : 0;
+    const cantBase = cantBaseInput ? (parseFloat(cantBaseInput.value) || 0) : 0;
+    const totalVal = totalInput ? (parseFloat(totalInput.value) || 0) : 0;
+    const costoEmp = costoEmpInput ? (parseFloat(costoEmpInput.value) || 0) : 0;
+    const vu = vuInput ? (parseFloat(vuInput.value) || 0) : 0;
+    const ivaPct = ivaSelect ? (parseFloat(ivaSelect.value) || 0) : 0;
+
+    if (prodNom || cantEmp > 0 || totalVal > 0) {
+      lineas.push({
+        producto_id: prodId,
+        producto_nombre: prodNom,
+        cantidad_empaque: cantEmp,
+        presentacion_id: presIdInput?.value ? parseInt(presIdInput.value) : null,
+        presentacion_nombre: presInput?.value?.trim() || 'Unidad',
+        presentacion_equivalencia: equivInput ? (parseFloat(equivInput.value) || 1.0) : 1.0,
+        cantidad_base: cantBase,
+        costo_empaque: costoEmp,
+        total_linea: totalVal,
+        valor_unitario: vu,
+        iva_pct: ivaPct
+      });
+    }
+  }
+
+  const centroSel = document.getElementById('entrada-centro-utilidad');
+  const centro_utilidad_id = centroSel?.value && centroSel.value !== 'consolidado' ? parseInt(centroSel.value) : null;
+  const tipo_doc_id = document.getElementById('entrada-tipo-doc')?.value ? parseInt(document.getElementById('entrada-tipo-doc').value) : null;
+  const numero_documento = document.getElementById('entrada-num-doc')?.value?.trim() || null;
+  const fecha_documento = document.getElementById('entrada-fecha-doc')?.value || null;
+  const proveedor_nombre = document.getElementById('entrada-proveedor')?.value?.trim() || null;
+  const proveedor_id = document.getElementById('entrada-proveedor-id')?.value ? parseInt(document.getElementById('entrada-proveedor-id').value) : null;
+  const metodo_pago = document.getElementById('entrada-metodo-pago')?.value || null;
+  const notas = document.getElementById('entrada-notas')?.value?.trim() || null;
+
+  const totalEl = document.getElementById('entrada-total-val');
+  let totalDoc = 0;
+  if (totalEl && totalEl.textContent) {
+    totalDoc = parseFloat(totalEl.textContent.replace(/[^0-9.-]/g, '')) || 0;
+  }
+
+  if (!lineas.length && !numero_documento && !proveedor_id) {
+    return;
+  }
+
+  const ind = document.getElementById('indicador-auto-guardado-borrador');
+  if (ind) {
+    ind.classList.remove('hidden');
+    ind.textContent = '☁️ Guardando en la nube...';
+  }
+
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/entrada/borrador`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        centro_utilidad_id,
+        tipo_documento_id,
+        documento_numero: numero_documento,
+        documento_fecha: fecha_documento,
+        proveedor_id,
+        proveedor_nombre,
+        metodo_pago,
+        notas,
+        lineas,
+        total_documento: totalDoc
+      })
+    });
+    const d = await resp.json();
+    if (d.ok && ind) {
+      ind.textContent = '☁️ Borrador guardado en servidor ✓';
+      setTimeout(() => { if (ind.textContent.includes('servidor')) ind.classList.add('hidden'); }, 3000);
+    }
+  } catch(e) {
+    console.warn('Error respaldando borrador:', e);
+    if (ind) ind.textContent = '⚠️ Sin conexión para borrador';
+  }
+}
+
+async function verificarBorradorEntradaServidor() {
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/entrada/borrador`);
+    const d = await resp.json();
+    if (!d.ok || !d.tiene_borrador || !d.borrador) {
+      document.getElementById('banner-borrador-entrada')?.classList.add('hidden');
+      return;
+    }
+
+    _borradorCargadoActual = d.borrador;
+    const b = d.borrador;
+    const banner = document.getElementById('banner-borrador-entrada');
+    const badgeHora = document.getElementById('badge-borrador-hora');
+    const textoResumen = document.getElementById('texto-borrador-resumen');
+
+    if (banner && badgeHora && textoResumen) {
+      badgeHora.textContent = b.updated_at ? `Guardado: ${b.updated_at}` : 'Pendiente';
+      const cantItems = (b.lineas || []).length;
+      const provTxt = b.proveedor_nombre ? `Proveedor: ${b.proveedor_nombre}` : 'Sin proveedor';
+      const totTxt = b.total_documento ? `Total: $${parseFloat(b.total_documento).toLocaleString('es-CO')}` : '';
+      textoResumen.textContent = `Tienes ${cantItems} ítems respaldados en la nube (${provTxt} ${totTxt ? '• ' + totTxt : ''}). Puedes restaurarlo para continuar o descartarlo.`;
+      banner.classList.remove('hidden');
+    }
+  } catch(e) {
+    console.warn('Error verificando borrador en servidor:', e);
+  }
+}
+
+function restaurarBorradorEntrada() {
+  if (!_borradorCargadoActual) return;
+  const b = _borradorCargadoActual;
+  _restaurandoBorrador = true;
+
+  try {
+    if (b.centro_utilidad_id) {
+      const sel = document.getElementById('entrada-centro-utilidad');
+      if (sel) {
+        sel.value = b.centro_utilidad_id;
+        actualizarConfirmacionSede();
+      }
+    }
+    if (b.tipo_documento_id) {
+      const sel = document.getElementById('entrada-tipo-doc');
+      if (sel) sel.value = b.tipo_documento_id;
+    }
+    if (b.documento_numero) {
+      const inp = document.getElementById('entrada-num-doc');
+      if (inp) inp.value = b.documento_numero;
+    }
+    if (b.documento_fecha) {
+      const inp = document.getElementById('entrada-fecha-doc');
+      if (inp) inp.value = b.documento_fecha;
+    }
+    if (b.proveedor_id) {
+      const inpId = document.getElementById('entrada-proveedor-id');
+      if (inpId) inpId.value = b.proveedor_id;
+    }
+    if (b.proveedor_nombre) {
+      const inpNom = document.getElementById('entrada-proveedor');
+      if (inpNom) inpNom.value = b.proveedor_nombre;
+    }
+    if (b.metodo_pago) {
+      const sel = document.getElementById('entrada-metodo-pago');
+      if (sel) {
+        sel.value = b.metodo_pago;
+        actualizarConfirmacionMetodoPago();
+      }
+    }
+    if (b.notas) {
+      const inp = document.getElementById('entrada-notas');
+      if (inp) inp.value = b.notas;
+    }
+
+    const cont = document.getElementById('entrada-lineas');
+    if (cont) cont.innerHTML = '';
+    entradaLineas = [];
+
+    const lineas = b.lineas || [];
+    lineas.forEach(ln => {
+      agregarLineaEntradaConDatos(
+        ln.producto_id,
+        ln.producto_nombre,
+        ln.cantidad_base || ln.cantidad_empaque || 1,
+        ln.valor_unitario || 0,
+        ln.iva_pct || 0,
+        ln.presentacion_id,
+        ln.presentacion_nombre,
+        ln.presentacion_equivalencia || 1.0,
+        ln.cantidad_empaque,
+        ln.costo_empaque,
+        ln.total_linea
+      );
+    });
+
+    calcularTotalesEntrada();
+    document.getElementById('banner-borrador-entrada')?.classList.add('hidden');
+    toast(`Borrador restaurado con éxito: ${lineas.length} ítems cargados`, true);
+  } finally {
+    _restaurandoBorrador = false;
+  }
+}
+
+async function descartarBorradorEntrada() {
+  if (!confirm('¿Estás seguro de que deseas descartar este borrador guardado en la nube?')) return;
+  try {
+    await fetch(`/api/inventario/${NEGOCIO_ID}/entrada/borrador`, { method: 'DELETE' });
+    _borradorCargadoActual = null;
+    document.getElementById('banner-borrador-entrada')?.classList.add('hidden');
+    toast('Borrador descartado', true);
+  } catch(e) {
+    toast('Error al descartar borrador', false);
+  }
 }
 
 
@@ -9303,6 +9563,12 @@ async function registrarEntrada() {
     entradaLineas = [];
 
     esModificacionDoc = false;
+    _borradorCargadoActual = null;
+    document.getElementById('banner-borrador-entrada')?.classList.add('hidden');
+    document.getElementById('indicador-auto-guardado-borrador')?.classList.add('hidden');
+    try {
+      fetch(`/api/inventario/${NEGOCIO_ID}/entrada/borrador`, { method: 'DELETE' });
+    } catch(e) {}
 
     document.getElementById('entrada-num-doc').value = '';
 
@@ -15148,6 +15414,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initDefaultProveedor();
 
   cargarEntradaDesdeComprasPendiente();
+
+  verificarBorradorEntradaServidor();
+
+  ['entrada-num-doc', 'entrada-fecha-doc', 'entrada-notas'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', programarGuardadoBorradorEntrada);
+  });
 
 
 

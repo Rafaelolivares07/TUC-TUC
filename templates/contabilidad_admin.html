@@ -421,16 +421,22 @@
 
     <!-- ═══ TAB: COMPROBANTES ═══ -->
     <div id="panel-comps" class="p-5 hidden">
-      <div class="flex gap-3 mb-4 flex-col sm:flex-row">
-        <input id="comp-desde" type="date" class="border rounded-lg px-3 py-2 text-sm">
-        <input id="comp-hasta" type="date" class="border rounded-lg px-3 py-2 text-sm">
-        <select id="comp-centro-f" onchange="cargarComprobantes()" class="border rounded-lg px-3 py-2 text-sm bg-white font-medium text-gray-700">
+      <div class="flex gap-2 mb-4 flex-wrap items-center">
+        <input id="comp-desde" type="date" class="border rounded-lg px-2.5 py-1.5 text-xs text-gray-700" title="Fecha Desde">
+        <input id="comp-hasta" type="date" class="border rounded-lg px-2.5 py-1.5 text-xs text-gray-700" title="Fecha Hasta">
+        <select id="comp-centro-f" onchange="currentCompPage=1; cargarComprobantes()" class="border rounded-lg px-2.5 py-1.5 text-xs bg-white font-medium text-gray-700">
           <option value="">🏛️ Todos los Centros</option>
         </select>
-        <input id="comp-tipo-f" type="text" placeholder="Tipo (ej: VENTA_POS)"
-               class="border rounded-lg px-3 py-2 text-sm flex-1">
-        <button onclick="cargarComprobantes()"
-                class="bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-lg">Buscar</button>
+        <input id="comp-tipo-f" type="text" placeholder="Tipo (ej: Factura de Proveedor)"
+               class="border rounded-lg px-2.5 py-1.5 text-xs w-44">
+        <input id="comp-num-f" type="text" placeholder="Doc # (ej: 00001)"
+               class="border rounded-lg px-2.5 py-1.5 text-xs w-32 font-mono">
+        <input id="comp-id-f" type="text" placeholder="ID Comp (ej: 945)"
+               class="border rounded-lg px-2.5 py-1.5 text-xs w-28 font-mono">
+        <button onclick="currentCompPage=1; cargarComprobantes()"
+                class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">Buscar</button>
+        <button onclick="limpiarFiltrosComps()"
+                class="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-medium px-2.5 py-1.5 rounded-lg transition">Limpiar</button>
       </div>
 
       <!-- Summary Indicators Banner -->
@@ -2137,17 +2143,39 @@ function ordenarComprobantes(col) {
   cargarComprobantes();
 }
 
+function limpiarFiltrosComps() {
+  const elDesde = document.getElementById('comp-desde');
+  const elHasta = document.getElementById('comp-hasta');
+  const elTipo = document.getElementById('comp-tipo-f');
+  const elNum = document.getElementById('comp-num-f');
+  const elId = document.getElementById('comp-id-f');
+  const elCentro = document.getElementById('comp-centro-f');
+  if (elDesde) elDesde.value = '';
+  if (elHasta) elHasta.value = '';
+  if (elTipo) elTipo.value = '';
+  if (elNum) elNum.value = '';
+  if (elId) elId.value = '';
+  if (elCentro) elCentro.value = '';
+  currentCompPage = 1;
+  compSoloDescuadrados = false;
+  cargarComprobantes();
+}
+
 async function cargarComprobantes() {
-  const desde = document.getElementById('comp-desde').value;
-  const hasta = document.getElementById('comp-hasta').value;
-  const tipo  = document.getElementById('comp-tipo-f').value.trim();
+  const desde = document.getElementById('comp-desde')?.value || '';
+  const hasta = document.getElementById('comp-hasta')?.value || '';
+  const tipo  = document.getElementById('comp-tipo-f')?.value?.trim() || '';
   const centro= document.getElementById('comp-centro-f')?.value || '';
+  const numDoc= document.getElementById('comp-num-f')?.value?.trim() || '';
+  const compId= document.getElementById('comp-id-f')?.value?.trim() || '';
   
   let qs = `?page=${currentCompPage}&limit=${compPageLimit}&solo_descuadrados=${compSoloDescuadrados}&sort_col=${compSortCol}&sort_dir=${compSortDir}&`;
   if (desde) qs += `desde=${desde}&`;
   if (hasta) qs += `hasta=${hasta}&`;
   if (tipo)  qs += `tipo=${encodeURIComponent(tipo)}&`;
   if (centro) qs += `centro_utilidad_id=${encodeURIComponent(centro)}&`;
+  if (numDoc) qs += `documento_numero=${encodeURIComponent(numDoc)}&`;
+  if (compId) qs += `comprobante_id=${encodeURIComponent(compId)}&`;
   
   const resp = await fetch(`/api/contabilidad/${NEGOCIO_ID}/comprobantes${qs}`);
   const data = await resp.json();
@@ -4645,7 +4673,22 @@ if (activeTab && TABS.includes(activeTab)) {
       setTimeout(() => cargarDocumentoParaEdicion(tipoDoc, numDoc, compId ? parseInt(compId) : null), 150);
     }
   } else if (activeTab === 'comps') {
-    cargarComprobantes();
+    const compId = urlParams.get('comprobante_id');
+    const tipoDoc = urlParams.get('tipo_documento') || urlParams.get('tipo') || '';
+    const numDoc = urlParams.get('documento_numero') || urlParams.get('numero_documento') || '';
+    const desde = urlParams.get('desde');
+    const hasta = urlParams.get('hasta');
+    const centro = urlParams.get('centro_utilidad_id');
+    if (compId && document.getElementById('comp-id-f')) document.getElementById('comp-id-f').value = compId;
+    if (tipoDoc && document.getElementById('comp-tipo-f')) document.getElementById('comp-tipo-f').value = tipoDoc;
+    if (numDoc && document.getElementById('comp-num-f')) document.getElementById('comp-num-f').value = numDoc;
+    if (desde && document.getElementById('comp-desde')) document.getElementById('comp-desde').value = desde;
+    if (hasta && document.getElementById('comp-hasta')) document.getElementById('comp-hasta').value = hasta;
+    if (centro && document.getElementById('comp-centro-f')) document.getElementById('comp-centro-f').value = centro;
+    setTimeout(() => {
+      currentCompPage = 1;
+      cargarComprobantes();
+    }, 150);
   } else if (activeTab === 'reclasificaciones') {
     inicializarReclasificaciones();
   }

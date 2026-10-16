@@ -226,6 +226,23 @@ def _crear_tablas(conn):
         "ALTER TABLE inventario_alertas_agotados ADD COLUMN IF NOT EXISTS fecha_ultimo_aviso_promo DATE DEFAULT NULL",
         "CREATE INDEX IF NOT EXISTS idx_inv_alertas_estado ON inventario_alertas_agotados(negocio_id, bodega, estado)",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_inv_alertas_agotado_unique ON inventario_alertas_agotados(negocio_id, bodega, producto_id) WHERE estado = 'agotado'",
+        """CREATE TABLE IF NOT EXISTS entradas_borradores (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL,
+            usuario_id INTEGER,
+            centro_utilidad_id INTEGER,
+            tipo_documento_id INTEGER,
+            documento_numero VARCHAR(100),
+            documento_fecha VARCHAR(20),
+            proveedor_id INTEGER,
+            proveedor_nombre VARCHAR(255),
+            metodo_pago VARCHAR(50),
+            notas TEXT,
+            lineas JSONB NOT NULL DEFAULT '[]'::jsonb,
+            total_documento NUMERIC(14,2) DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_entradas_borradores_neg_user ON entradas_borradores(negocio_id, COALESCE(usuario_id, 0))",
     ]
     for sql in alters:
         try:
@@ -2579,8 +2596,127 @@ def api_inventario_entrada(negocio_id):
         if not resultado.get('ok'):
             conn.rollback()
             return jsonify(resultado), status
+        try:
+            conn.execute("""
+                DELETE FROM entradas_borradores
+                WHERE negocio_id = %s AND COALESCE(usuario_id, 0) = %s
+            """, (negocio_id, session.get('usuario_id', 0)))
+        except Exception:
+            pass
         conn.commit()
         return jsonify(resultado), status
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/entrada/borrador', methods=['GET', 'POST', 'DELETE'])
+def api_inventario_entrada_borrador(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    import json
+    usuario_id = session.get('usuario_id', 0)
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+
+        if request.method == 'GET':
+            row = conn.execute("""
+                SELECT id, centro_utilidad_id, tipo_documento_id, documento_numero, documento_fecha,
+                       proveedor_id, proveedor_nombre, metodo_pago, notas, lineas, total_documento,
+                       to_char(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at
+                FROM entradas_borradores
+                WHERE negocio_id = %s AND COALESCE(usuario_id, 0) = %s
+                LIMIT 1
+            """, (negocio_id, usuario_id)).fetchone()
+            if not row:
+                return jsonify({'ok': True, 'tiene_borrador': False})
+
+            raw_lineas = row['lineas']
+            lineas_list = raw_lineas if isinstance(raw_lineas, list) else json.loads(raw_lineas or '[]')
+            if not lineas_list:
+                return jsonify({'ok': True, 'tiene_borrador': False})
+
+            return jsonify({
+                'ok': True,
+                'tiene_borrador': True,
+                'borrador': {
+                    'centro_utilidad_id': row['centro_utilidad_id'],
+                    'tipo_documento_id': row['tipo_documento_id'],
+                    'documento_numero': row['documento_numero'],
+                    'documento_fecha': row['documento_fecha'],
+                    'proveedor_id': row['proveedor_id'],
+                    'proveedor_nombre': row['proveedor_nombre'],
+                    'metodo_pago': row['metodo_pago'],
+                    'notas': row['notas'],
+                    'lineas': lineas_list,
+                    'total_documento': float(row['total_documento'] or 0),
+                    'updated_at': row['updated_at']
+                }
+            })
+
+        elif request.method == 'POST':
+            data = request.get_json() or {}
+            lineas = data.get('lineas', [])
+            if not lineas:
+                conn.execute("""
+                    DELETE FROM entradas_borradores
+                    WHERE negocio_id = %s AND COALESCE(usuario_id, 0) = %s
+                """, (negocio_id, usuario_id))
+                conn.commit()
+                return jsonify({'ok': True, 'mensaje': 'Borrador limpiado'})
+
+            lineas_json = json.dumps(lineas, ensure_ascii=False)
+            total_doc = float(data.get('total_documento') or 0)
+            cu_id = _int_o_none(data.get('centro_utilidad_id'))
+            td_id = _int_o_none(data.get('tipo_documento_id'))
+            num_doc = _txt(data.get('documento_numero'))
+            fec_doc = _txt(data.get('documento_fecha'))
+            prov_id = _int_o_none(data.get('proveedor_id'))
+            prov_nom = _txt(data.get('proveedor_nombre'))
+            mp = _txt(data.get('metodo_pago'))
+            notas = _txt(data.get('notas'))
+
+            conn.execute("""
+                INSERT INTO entradas_borradores (
+                    negocio_id, usuario_id, centro_utilidad_id, tipo_documento_id, documento_numero,
+                    documento_fecha, proveedor_id, proveedor_nombre, metodo_pago, notas, lineas, total_documento, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, NOW()
+                )
+                ON CONFLICT (negocio_id, COALESCE(usuario_id, 0))
+                DO UPDATE SET
+                    centro_utilidad_id = EXCLUDED.centro_utilidad_id,
+                    tipo_documento_id = EXCLUDED.tipo_documento_id,
+                    documento_numero = EXCLUDED.documento_numero,
+                    documento_fecha = EXCLUDED.documento_fecha,
+                    proveedor_id = EXCLUDED.proveedor_id,
+                    proveedor_nombre = EXCLUDED.proveedor_nombre,
+                    metodo_pago = EXCLUDED.metodo_pago,
+                    notas = EXCLUDED.notas,
+                    lineas = EXCLUDED.lineas,
+                    total_documento = EXCLUDED.total_documento,
+                    updated_at = NOW()
+            """, (
+                negocio_id, usuario_id, cu_id, td_id, num_doc,
+                fec_doc, prov_id, prov_nom, mp, notas, lineas_json, total_doc
+            ))
+            conn.commit()
+            return jsonify({'ok': True, 'mensaje': 'Borrador guardado en base de datos'})
+
+        elif request.method == 'DELETE':
+            conn.execute("""
+                DELETE FROM entradas_borradores
+                WHERE negocio_id = %s AND COALESCE(usuario_id, 0) = %s
+            """, (negocio_id, usuario_id))
+            conn.commit()
+            return jsonify({'ok': True, 'mensaje': 'Borrador eliminado'})
+
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -5837,8 +5973,12 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                     WHERE negocio_id = %s AND cuenta LIKE '14%%'
                       AND (numero_documento = %s OR numero_documento = SPLIT_PART(%s, '-', 2) OR SPLIT_PART(numero_documento, '-', 2) = %s)
                       AND (producto_id = %s OR (producto_padre_id IS NOT NULL AND producto_padre_id = %s))
+                      AND id NOT IN (
+                          SELECT asiento_inventario_id FROM movimientos_inventario
+                          WHERE negocio_id = %s AND asiento_inventario_id IS NOT NULL AND id != %s
+                      )
                     ORDER BY id ASC LIMIT 1
-                """, (negocio_id, str(doc_num), str(doc_num), str(doc_num), producto_id, m.get('producto_padre_id'))).fetchone()
+                """, (negocio_id, str(doc_num), str(doc_num), str(doc_num), producto_id, m.get('producto_padre_id'), negocio_id, m['id'])).fetchone()
                 if mc_inv:
                     as_inv_id = mc_inv['id']
                     conn.execute("UPDATE movimientos_inventario SET asiento_inventario_id = %s WHERE id = %s", (as_inv_id, m['id']))
@@ -5852,12 +5992,13 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                 padre_id = m.get('producto_padre_id')
                 mc_cp = conn.execute("""
                     SELECT id FROM movimientos_contables
-                    WHERE negocio_id = %s AND (LEFT(cuenta, 2) IN ('61', '53', '42', '22', '23', '11'))
+                    WHERE negocio_id = %s AND (LEFT(cuenta, 2) IN ('61', '53', '42', '22', '23', '11', '14'))
                       AND (numero_documento = %s OR numero_documento = SPLIT_PART(%s, '-', 2) OR SPLIT_PART(numero_documento, '-', 2) = %s)
                       AND (
                           (producto_padre_id IS NOT NULL AND (producto_padre_id = %s OR producto_id = %s))
                           OR (producto_padre_id IS NULL AND producto_id = %s)
                       )
+                      AND (as_inv_id IS NULL OR id != as_inv_id)
                     ORDER BY id ASC LIMIT 1
                 """, (negocio_id, str(doc_num), str(doc_num), str(doc_num), padre_id, padre_id, producto_id)).fetchone()
                 if mc_cp:
@@ -5881,7 +6022,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                 tot_ascp_ajust += 1
                 conn.execute("UPDATE movimientos_contables SET monto = round((monto + %s)::numeric, 2) WHERE id = %s", (float(dif_total), as_cp_id))
 
-            # --- SINCRONIZACIÓN CON PEDIDOS (pedido_items.costo_unitario) ---
+            # --- SINCRONIZACIÓN CON PEDIDOS (pedido_items.costo_unitario) Y CONTABILIDAD ATÓMICA ---
             if m['tipo'] == 'salida' and doc_num:
                 consecutive = str(doc_num).split('-')[-1].strip() if '-' in str(doc_num) else str(doc_num)
                 ref_id_int = _int_o_none(m.get('referencia_id'))
@@ -5896,6 +6037,17 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                           AND (documento_numero = %s OR documento_numero = %s)
                     """, (negocio_id, padre_id, str(doc_num), str(consecutive))).fetchone()
                     tot_kardex_padre = float(tot_plato_row[0]) if (tot_plato_row and tot_plato_row[0] is not None) else 0.0
+
+                    # Sincronizar débito 61* (Costo de Venta) con la suma exacta de sus ingredientes
+                    if tot_kardex_padre > 0:
+                        conn.execute("""
+                            UPDATE movimientos_contables
+                            SET monto = %s
+                            WHERE negocio_id = %s
+                              AND (numero_documento = %s OR numero_documento = %s)
+                              AND LEFT(cuenta, 2) = '61'
+                              AND (producto_padre_id = %s OR producto_id = %s)
+                        """, (tot_kardex_padre, negocio_id, str(consecutive), str(doc_num), padre_id, padre_id))
 
                     qty_row = conn.execute("""
                         SELECT SUM(pi.cantidad) AS cant_vendida
@@ -5934,6 +6086,28 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                               AND (p.numero_documento = %s OR p.numero_documento = %s OR p.id = %s)
                         )
                     """, (float(costo_und), negocio_id, producto_id, str(consecutive), str(doc_num), ref_id_int))
+
+            # --- SINCRONIZACIÓN DE PRODUCCIÓN (Debito 14* = Suma de Créditos Insumos 14*) ---
+            if doc_num and (m.get('referencia_tipo') == 'produccion' or 'PRODUC' in str(m.get('tipo_documento', '')).upper()):
+                consecutive = str(doc_num).split('-')[-1].strip() if '-' in str(doc_num) else str(doc_num)
+                p_term_id = m.get('producto_id') if m['tipo'] == 'entrada' else m.get('producto_padre_id')
+                if p_term_id:
+                    tot_prod_row = conn.execute("""
+                        SELECT SUM(valor_total)
+                        FROM movimientos_inventario
+                        WHERE negocio_id = %s AND tipo = 'salida'
+                          AND (documento_numero = %s OR documento_numero = %s)
+                    """, (negocio_id, str(doc_num), str(consecutive))).fetchone()
+                    tot_prod_val = float(tot_prod_row[0]) if (tot_prod_row and tot_prod_row[0] is not None) else 0.0
+                    if tot_prod_val > 0:
+                        conn.execute("""
+                            UPDATE movimientos_contables
+                            SET monto = %s
+                            WHERE negocio_id = %s AND tipo IN ('debito', 'D')
+                              AND cuenta LIKE '14%%'
+                              AND (numero_documento = %s OR numero_documento = %s)
+                              AND (producto_id = %s OR producto_padre_id = %s)
+                        """, (tot_prod_val, negocio_id, str(consecutive), str(doc_num), p_term_id, p_term_id))
 
             stock = stock_nuevo
 

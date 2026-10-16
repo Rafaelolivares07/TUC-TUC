@@ -1542,6 +1542,7 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
                             'concepto':      concepto,
                             'tipo_mov':      'D',
                             'monto':         monto_deb,
+                            'producto_id':   datos['producto_padre_id'],
                             'producto_padre_id': datos['producto_padre_id'],
                         })
             except Exception as e_costos:
@@ -1564,6 +1565,9 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
             print(f"[cont] Error leyendo pedido_pagos para pedido {origen_id}: {_e_pp}")
 
     if pagos_desglosados and tipo_mov_negocio == 'venta':
+        # Remover de mov_list cualquier cuenta de recaudo previa o genérica de caja/bancos (11*) sin producto_id
+        # para que los pagos reales desglosados tomen su lugar sin duplicar débitos.
+        mov_list = [m for m in mov_list if not (m.get('tipo_mov') == 'D' and str(m.get('cuenta_codigo', '')).startswith('11') and not m.get('producto_id'))]
         for pago_item in pagos_desglosados:
             cod_met = pago_item.get('metodo_codigo')
             monto_p = float(pago_item.get('monto') or 0.0)
@@ -1626,20 +1630,57 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
     total_cred = sum(m['monto'] for m in mov_list if m['tipo_mov'] == 'C')
 
     # Garantía universal de partida doble: evitar comprobantes descuadrados
-    dif_asiento = round(total_deb - total_cred, 2)
-    if abs(dif_asiento) > 0.005:
-        tipo_mov_actual = tipo_doc.get('tipo_movimiento')
-        if tipo_mov_actual in ('entrada', 'compra'):
+    # En ventas existen dos patas independientes:
+    # 1. Pata Comercial: Débito 11*/13* (Recaudos/CxC) = Crédito 41*/24* (Ingresos/Impuestos)
+    # 2. Pata de Costos: Débito 61* (Costo de Ventas) = Crédito 14* (Baja de Inventario)
+    tipo_mov_actual = tipo_doc.get('tipo_movimiento')
+    if tipo_mov_actual == 'venta':
+        # Cuadre interno pata de costos (61 vs 14)
+        lineas_61 = [m for m in mov_list if m['tipo_mov'] == 'D' and str(m.get('cuenta_codigo', '')).startswith('61')]
+        lineas_14_cred = [m for m in mov_list if m['tipo_mov'] == 'C' and str(m.get('cuenta_codigo', '')).startswith('14')]
+        if lineas_61 and lineas_14_cred:
+            tot_61 = sum(m['monto'] for m in lineas_61)
+            tot_14 = sum(m['monto'] for m in lineas_14_cred)
+            dif_costos = round(tot_61 - tot_14, 2)
+            if abs(dif_costos) > 0.005:
+                linea_max_61 = max(lineas_61, key=lambda x: x['monto'])
+                linea_max_61['monto'] = round(linea_max_61['monto'] - dif_costos, 2)
+
+        # Cuadre interno pata comercial (11/13 vs 41/24) - NUNCA tocar 61 ni 14
+        lineas_com_deb = [m for m in mov_list if m['tipo_mov'] == 'D' and not str(m.get('cuenta_codigo', '')).startswith(('61', '14'))]
+        lineas_com_cred = [m for m in mov_list if m['tipo_mov'] == 'C' and not str(m.get('cuenta_codigo', '')).startswith(('61', '14'))]
+        if lineas_com_deb and lineas_com_cred:
+            tot_com_deb = sum(m['monto'] for m in lineas_com_deb)
+            tot_com_cred = sum(m['monto'] for m in lineas_com_cred)
+            dif_com = round(tot_com_deb - tot_com_cred, 2)
+            if abs(dif_com) > 0.005:
+                # Ajustar en la línea de ingreso (41) de mayor monto, o en el débito comercial
+                lineas_41 = [m for m in lineas_com_cred if str(m.get('cuenta_codigo', '')).startswith('41')]
+                if lineas_41:
+                    linea_max_41 = max(lineas_41, key=lambda x: x['monto'])
+                    linea_max_41['monto'] = round(linea_max_41['monto'] + dif_com, 2)
+                else:
+                    linea_max_com = max(lineas_com_deb if dif_com > 0 else lineas_com_cred, key=lambda x: x['monto'])
+                    if linea_max_com['tipo_mov'] == 'D':
+                        linea_max_com['monto'] = round(linea_max_com['monto'] - dif_com, 2)
+                    else:
+                        linea_max_com['monto'] = round(linea_max_com['monto'] + dif_com, 2)
+    elif tipo_mov_actual in ('entrada', 'compra'):
+        dif_asiento = round(total_deb - total_cred, 2)
+        if abs(dif_asiento) > 0.005:
             lineas_14 = [m for m in mov_list if m['tipo_mov'] == 'D' and str(m.get('cuenta_codigo', '')).startswith('14')]
             if lineas_14:
                 linea_max = max(lineas_14, key=lambda x: x['monto'])
                 linea_max['monto'] = round(linea_max['monto'] - dif_asiento, 2)
-        elif tipo_mov_actual == 'venta':
-            lineas_61 = [m for m in mov_list if m['tipo_mov'] == 'D' and str(m.get('cuenta_codigo', '')).startswith('61')]
-            if lineas_61:
-                linea_max = max(lineas_61, key=lambda x: x['monto'])
-                linea_max['monto'] = round(linea_max['monto'] - dif_asiento, 2)
-        else:
+            else:
+                linea_max = max(mov_list, key=lambda x: x['monto'])
+                if linea_max['tipo_mov'] == 'D':
+                    linea_max['monto'] = round(linea_max['monto'] - dif_asiento, 2)
+                else:
+                    linea_max['monto'] = round(linea_max['monto'] + dif_asiento, 2)
+    else:
+        dif_asiento = round(total_deb - total_cred, 2)
+        if abs(dif_asiento) > 0.005:
             linea_max = max(mov_list, key=lambda x: x['monto'])
             if linea_max['tipo_mov'] == 'D':
                 linea_max['monto'] = round(linea_max['monto'] - dif_asiento, 2)
@@ -2989,8 +3030,10 @@ def api_comprobantes_get(negocio_id):
         conn = get_db_connection()
         fecha_desde = request.args.get('desde')
         fecha_hasta = request.args.get('hasta')
-        tipo_f      = request.args.get('tipo', '')
+        tipo_f      = request.args.get('tipo') or request.args.get('tipo_documento') or ''
         solo_descuadrados = request.args.get('solo_descuadrados', 'false') == 'true'
+        comprobante_id = request.args.get('comprobante_id')
+        documento_numero = request.args.get('documento_numero') or request.args.get('numero_documento')
         
         try:
             page = max(1, int(request.args.get('page', 1)))
@@ -3002,6 +3045,16 @@ def api_comprobantes_get(negocio_id):
 
         where = ["mc.negocio_id = %s"]
         params = [negocio_id]
+        if comprobante_id and str(comprobante_id).strip():
+            try:
+                where.append("mc.comprobante_id = %s")
+                params.append(int(comprobante_id))
+            except (ValueError, TypeError):
+                pass
+        if documento_numero and str(documento_numero).strip():
+            where.append("(mc.numero_documento LIKE %s OR SPLIT_PART(mc.numero_documento, '-', 2) LIKE %s)")
+            params.append(f"%{str(documento_numero).strip()}%")
+            params.append(f"%{str(documento_numero).strip()}%")
         if fecha_desde:
             where.append("mc.fecha >= %s")
             params.append(fecha_desde)

@@ -5378,6 +5378,8 @@ def api_produccion_preview(negocio_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     producto_id = request.args.get('producto_id', type=int)
     cantidad    = request.args.get('cantidad', type=float, default=1)
+    guia_id     = request.args.get('guia_id', type=int)
+    cantidad_mp = request.args.get('cantidad_mp', type=float)
     bodega_param = request.args.get('bodega') or request.args.get('centro_utilidad_id') or session.get('centro_utilidad_id') or 1
     try:
         bodega_id = int(bodega_param)
@@ -5413,11 +5415,22 @@ def api_produccion_preview(negocio_id):
         if not componentes:
             return jsonify({'ok': False, 'error': 'Este producto no tiene tarjeta estándar definida'}), 400
         qty = Decimal(str(cantidad))
+        factor_escala = qty
+        guia_cant_mp_dec = None
+        if guia_id and cantidad_mp and cantidad_mp > 0:
+            guia_comp = next((c for c in componentes if c['id'] == guia_id), None)
+            if guia_comp and Decimal(str(guia_comp['cant_tarjeta'] or 0)) > 0:
+                guia_cant_mp_dec = Decimal(str(cantidad_mp))
+                factor_escala = guia_cant_mp_dec / Decimal(str(guia_comp['cant_tarjeta']))
+
         lineas = []
         puede_producir = True
         costo_total_produccion = Decimal('0')
         for c in componentes:
-            a_consumir  = Decimal(str(c['cant_tarjeta'])) * qty
+            if guia_cant_mp_dec is not None and c['id'] == guia_id:
+                a_consumir = guia_cant_mp_dec
+            else:
+                a_consumir = Decimal(str(c['cant_tarjeta'])) * factor_escala
             stock_actual = Decimal(str(c['stock_actual']))
             costo_und    = Decimal(str(c['costo_und']))
             costo_total  = a_consumir * costo_und

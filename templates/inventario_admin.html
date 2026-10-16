@@ -2535,14 +2535,19 @@
             </div>
           </div>
           <div class="md:col-span-4">
-            <label class="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-1.5">
-              <span>🔢</span> Cantidad a producir <span class="text-rose-500">*</span>
+            <label class="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center justify-between">
+              <span><span>🔢</span> Cantidad a producir <span class="text-rose-500">*</span></span>
+              <span id="prod-cantidad-lock-pill" class="hidden text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full">🔒 Insumos fijos</span>
             </label>
-            <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1" oninput="limpiarPreview()" class="w-full border-2 border-slate-300 rounded-xl px-4 py-3 text-base sm:text-lg bg-white font-mono font-black text-slate-900 text-right outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-sm">
+            <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1" oninput="onInputProdCantidad(this.value)" class="w-full border-2 border-slate-300 rounded-xl px-4 py-3 text-base sm:text-lg bg-white font-mono font-black text-slate-900 text-right outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-sm">
+            <div id="prod-cantidad-modo-hint" class="hidden mt-1 flex items-center justify-between text-[11px] text-slate-600 bg-slate-100/90 border border-slate-200 rounded-lg px-2.5 py-1">
+              <span>Ajustando salida real sin mover insumos</span>
+              <button type="button" onclick="previsualizarProduccion(false, true)" class="text-rose-600 hover:text-rose-800 font-extrabold underline cursor-pointer">Recalcular receta</button>
+            </div>
           </div>
         </div>
 
-        <!-- Tira Predictiva Integrada y Arm?nica -->
+        <!-- Tira Predictiva Integrada y Armónica -->
         <div id="prod-sugerencia" class="hidden mb-3 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50/95 via-yellow-50/90 to-amber-50/70 p-4 shadow-2xs transition-all">
           <!-- Cabecera de la sugerencia -->
           <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-amber-200/80 text-xs">
@@ -2562,23 +2567,33 @@
           <div class="bg-white/80 border border-amber-200/90 rounded-xl p-3 mb-2.5 shadow-2xs">
             <div class="flex flex-wrap items-center gap-2.5 text-xs">
               <div class="flex flex-col">
-                <label class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-1">Ingrediente Guía (Materia Prima)</label>
+                <label class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-1">1. Ingrediente Guía (Materia Prima)</label>
                 <select id="prod-sug-guia" onchange="sugerenciaCambioGuia()" onwheel="this.blur()" class="border border-amber-300 rounded-xl px-3 py-2 text-sm sm:text-base bg-white font-bold text-slate-800 outline-none shadow-sm focus:border-amber-500 cursor-pointer"></select>
               </div>
               <div class="flex flex-col">
-                <label class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-1">Cantidad a consumir</label>
+                <label class="text-xs font-bold text-slate-600 uppercase tracking-wide mb-1">2. Cantidad MP a consumir</label>
                 <div class="flex items-center gap-2">
-                  <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="máx stock" class="w-36 border border-amber-300 rounded-xl px-3 py-2 text-sm sm:text-base bg-white font-mono font-black text-slate-900 text-right outline-none shadow-sm focus:border-amber-500">
-                  <span id="prod-sug-mp-nombre" class="text-xs sm:text-sm text-slate-600 font-semibold truncate max-w-[180px]"></span>
+                  <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="máx stock" onkeydown="if(event.key==='Enter'){event.preventDefault();sugerenciaDesdeMP();}" class="w-36 border border-amber-300 rounded-xl px-3 py-2 text-sm sm:text-base bg-white font-mono font-black text-slate-900 text-right outline-none shadow-sm focus:border-amber-500">
+                  <span id="prod-sug-mp-nombre" class="text-xs sm:text-sm text-slate-600 font-semibold truncate max-w-[160px]"></span>
                 </div>
               </div>
-              <div class="flex items-end gap-2 ml-auto pt-3 sm:pt-0">
+              <div class="flex items-end gap-2 pt-3 sm:pt-0">
                 <button type="button" onclick="sugerenciaDesdeMP()" class="px-4 py-2 rounded-xl border border-amber-400 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition shadow">
-                  Recalcular y Ver
+                  Recalcular Insumos
                 </button>
-                <button type="button" onclick="sugerenciaUsarMaximo()" class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm transition shadow-sm">
-                  Usar Máximo Posible
+                <button type="button" onclick="sugerenciaUsarMaximo()" class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm transition shadow-sm">
+                  Usar Máximo
                 </button>
+              </div>
+              <!-- Paso 3: Ajuste de cantidad real obtenida sin alterar los insumos fijados por la MP -->
+              <div class="flex flex-col ml-auto pl-0 lg:pl-3 border-t lg:border-t-0 lg:border-l border-amber-200/80 pt-2.5 lg:pt-0 w-full lg:w-auto">
+                <label class="text-xs font-extrabold text-rose-700 uppercase tracking-wide mb-1 flex items-center gap-1">
+                  <span>🔥</span> 3. Cantidad Final Real Obtenida <span class="text-[10px] font-bold bg-rose-100 text-rose-800 px-1.5 py-0.2 rounded">🔒 Fija insumos</span>
+                </label>
+                <div class="flex items-center gap-2">
+                  <input id="prod-sug-real-cant" type="number" min="0.0001" step="any" placeholder="Peso/Cant real" oninput="ajustarCantidadRealProducida(this.value, 'sug')" class="w-40 border-2 border-rose-400 rounded-xl px-3 py-1.5 text-sm sm:text-base bg-rose-50/40 font-mono font-black text-rose-700 text-right outline-none shadow-sm focus:border-rose-600 focus:bg-white" title="Digita la cantidad real que salió del proceso. Los insumos ya calculados no se moverán.">
+                  <span class="text-[11px] text-slate-500 font-semibold leading-tight max-w-[145px]">Ajusta lo que salió realmente del horno/proceso</span>
+                </div>
               </div>
             </div>
           </div>
@@ -2586,7 +2601,7 @@
           <!-- Micro-guía explicativa para el usuario -->
           <div class="flex items-start gap-1.5 text-[11px] text-amber-900/90 bg-amber-100/50 rounded-lg px-3 py-1.5 border border-amber-200/50">
             <span class="text-xs">💡</span>
-            <span><b>¿Qué significan las cantidades en el selector?</b> Cada opción indica cuántas unidades del producto final podrías fabricar si agotaras todo el stock disponible de ese ingrediente. Al elegir uno, la vista previa y los consumos se sincronizan automáticamente.</span>
+            <span><b>Flujo por Materia Prima:</b> 1) Elige el ingrediente guía (ej. carne cruda), 2) digita cuánto vas a meter y pulsa <b>Recalcular Insumos</b> para fijar todos los adobos/ingredientes, y 3) escribe en <b>Cantidad Final Real Obtenida</b> cuánto producto terminado salió realmente (sin alterar los insumos consumidos).</span>
           </div>
         </div>
 
@@ -2597,7 +2612,7 @@
             <input id="prod-notas" type="text" placeholder="Ej. Lote matutino, ajuste de fórmula..." class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-white text-slate-800 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-300 transition">
           </div>
           <div class="w-full sm:w-auto">
-            <button type="button" onclick="previsualizarProduccion()" class="w-full sm:w-auto px-7 py-3 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 shadow hover:shadow-md transition transform active:scale-98">
+            <button type="button" onclick="previsualizarProduccion(true, true)" class="w-full sm:w-auto px-7 py-3 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 shadow hover:shadow-md transition transform active:scale-98">
               <span>👁️</span> Generar Vista Previa
             </button>
           </div>
@@ -2619,12 +2634,25 @@
             </h3>
           </div>
           <div class="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-            <!-- Cantidad a producir Badge -->
-            <div class="bg-white border-2 border-rose-400 rounded-xl px-4 py-2 shadow-xs flex flex-col items-center">
-              <span class="text-[10px] font-black uppercase text-gray-500 tracking-wider">Cantidad a Producir</span>
-              <span id="prod-preview-cant-badge" class="text-lg sm:text-2xl font-black text-rose-600 font-mono">
-                <!-- 10 Unidades -->
-              </span>
+            <!-- Cantidad Real Obtenida Editable -->
+            <div class="bg-white border-2 border-rose-400 rounded-xl px-3.5 py-2 shadow-xs flex flex-col items-end min-w-[220px]">
+              <div class="w-full flex items-center justify-between gap-2 mb-1">
+                <span class="text-[10px] font-black uppercase text-rose-700 tracking-wider flex items-center gap-1">
+                  <span>🔥</span> Cantidad Real Obtenida
+                </span>
+                <span class="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded" title="Al editar esta cantidad final, los insumos de la tabla se mantienen fijos">🔒 Insumos fijos</span>
+              </div>
+              <div class="flex items-center gap-1.5 w-full justify-end">
+                <input id="prod-preview-cant-input" type="number" min="0.0001" step="any"
+                       oninput="ajustarCantidadRealProducida(this.value, 'preview')"
+                       class="w-36 sm:w-40 text-right border-2 border-rose-300 focus:border-rose-600 rounded-lg px-2.5 py-1 text-base sm:text-xl font-black text-rose-600 font-mono bg-rose-50/30 focus:bg-white outline-none transition shadow-2xs"
+                       title="Ajusta la cantidad real producida sin recalcular los insumos">
+                <span class="text-xs font-bold text-slate-500">Und/g</span>
+              </div>
+              <span id="prod-preview-cant-badge" class="hidden"></span>
+              <div id="prod-preview-rendimiento-info" class="w-full mt-1 text-[11px] font-bold text-slate-600 flex items-center justify-end gap-1.5 flex-wrap">
+                <!-- Esperado y merma/rendimiento -->
+              </div>
             </div>
             <!-- Sede / Centro -->
             <div class="bg-white border border-gray-200 rounded-xl px-3.5 py-2 shadow-xs flex flex-col">
@@ -13143,6 +13171,7 @@ function cambiarDecimalesPreviewProduccion(val) {
     if (cantBadgeEl) {
       cantBadgeEl.textContent = `${_fmtProdNum(activePreviewData.cantidad)} Unidades`;
     }
+    renderInfoRendimientoProduccion();
     renderTablaPrevisualizacion();
   }
 }
@@ -13161,10 +13190,95 @@ function inicializarDecimalesPreviewProduccion() {
 }
 
 function limpiarPreview() {
-  document.getElementById('prod-preview').classList.add('hidden');
-  document.getElementById('prod-btn-registrar').disabled = true;
+  const prevEl = document.getElementById('prod-preview');
+  if (prevEl) prevEl.classList.add('hidden');
+  const btnReg = document.getElementById('prod-btn-registrar');
+  if (btnReg) btnReg.disabled = true;
+  const lockPill = document.getElementById('prod-cantidad-lock-pill');
+  if (lockPill) lockPill.classList.add('hidden');
+  const modoHint = document.getElementById('prod-cantidad-modo-hint');
+  if (modoHint) modoHint.classList.add('hidden');
+  const sugRealEl = document.getElementById('prod-sug-real-cant');
+  if (sugRealEl) sugRealEl.value = '';
   prodPuedeRegistrar = false;
   activePreviewData = null;
+}
+
+function onInputProdCantidad(valStr) {
+  if (activePreviewData) {
+    ajustarCantidadRealProducida(valStr, 'top');
+  }
+}
+
+function ajustarCantidadRealProducida(valStr, origen = 'preview') {
+  const topInp = document.getElementById('prod-cantidad');
+  const sugInp = document.getElementById('prod-sug-real-cant');
+  const prevInp = document.getElementById('prod-preview-cant-input');
+
+  if (origen !== 'top' && topInp) topInp.value = valStr;
+  if (origen !== 'sug' && sugInp) sugInp.value = valStr;
+  if (origen !== 'preview' && prevInp) prevInp.value = valStr;
+
+  if (!activePreviewData) return;
+
+  const val = parseFloat(valStr);
+  if (!val || isNaN(val) || val <= 0) {
+    activePreviewData.cantidad = 0;
+    const unitEl = document.getElementById('prod-resumen-unitario');
+    if (unitEl) unitEl.textContent = '-';
+    const infoEl = document.getElementById('prod-preview-rendimiento-info');
+    if (infoEl) {
+      infoEl.innerHTML = `<span class="text-rose-600 font-extrabold">⚠️ Digita una cantidad real obtenida &gt; 0</span>`;
+    }
+    prodPuedeRegistrar = false;
+    const btnReg = document.getElementById('prod-btn-registrar');
+    if (btnReg) btnReg.disabled = true;
+    return;
+  }
+
+  activePreviewData.cantidad = val;
+  const cantBadgeEl = document.getElementById('prod-preview-cant-badge');
+  if (cantBadgeEl) cantBadgeEl.textContent = `${_fmtProdNum(val)} Unidades`;
+
+  renderInfoRendimientoProduccion();
+  actualizarTotalesPrevisualizacion();
+}
+
+function restaurarCantidadEsperadaProduccion() {
+  if (!activePreviewData) return;
+  const esp = activePreviewData.cantidad_esperada || activePreviewData.cantidad || 1;
+  ajustarCantidadRealProducida(String(esp), 'restore');
+}
+
+function renderInfoRendimientoProduccion() {
+  const infoEl = document.getElementById('prod-preview-rendimiento-info');
+  if (!infoEl || !activePreviewData) return;
+  const real = Number(activePreviewData.cantidad || 0);
+  const esp = Number(activePreviewData.cantidad_esperada || real);
+  if (real <= 0) return;
+
+  const diff = real - esp;
+  if (Math.abs(diff) < 0.0001 || esp <= 0) {
+    infoEl.innerHTML = `<span class="text-slate-500">Esperado según receta: <b class="text-slate-800 font-mono">${_fmtProdNum(esp)}</b></span>`;
+    return;
+  }
+
+  const pct = (diff / esp) * 100;
+  const sign = diff > 0 ? '+' : '';
+  const badgeClass = diff < 0
+    ? 'bg-amber-100 text-amber-900 border-amber-300'
+    : 'bg-emerald-100 text-emerald-900 border-emerald-300';
+  const labelTipo = diff < 0 ? '📉 Merma' : '📈 Rendimiento';
+
+  infoEl.innerHTML = `
+    <span class="text-slate-500">Esperado: <b class="text-slate-700 font-mono">${_fmtProdNum(esp)}</b></span>
+    <span class="px-1.5 py-0.5 rounded border text-[10px] font-mono font-extrabold ${badgeClass}">
+      ${labelTipo}: ${sign}${_fmtProdNum(diff)} (${sign}${pct.toFixed(1)}%)
+    </span>
+    <button type="button" onclick="restaurarCantidadEsperadaProduccion()" class="text-rose-600 hover:text-rose-800 underline font-extrabold text-[10px] cursor-pointer" title="Restaurar a la cantidad esperada por tarjeta">
+      ↺ Restaurar
+    </button>
+  `;
 }
 
 // ── Sugerencia predictiva de producción ─────────────────────────────
@@ -13201,7 +13315,7 @@ function renderSugerencia(autoPreview = true) {
   document.getElementById('prod-sug-max').textContent = _fmtProdNum(d.sugerida);
   if (d.modo === 'desde_mp') {
     const cantMP = parseFloat(document.getElementById('prod-sug-mp-cant').value) || 0;
-    document.getElementById('prod-sug-limita').textContent = `Simulaci?n activa: ${_fmtProdNum(cantMP)} de ${guia.nombre || 'gu?a'} ? ${_fmtProdNum(d.sugerida)} und`;
+    document.getElementById('prod-sug-limita').textContent = `Simulación activa: ${_fmtProdNum(cantMP)} de ${guia.nombre || 'guía'} → Esperado: ${_fmtProdNum(d.sugerida)} und`;
   } else {
     document.getElementById('prod-sug-limita').textContent = `Insumo limitante: ${lim.nombre || '-'} (Stock: ${_fmtProdNum(lim.stock)})`;
   }
@@ -13209,9 +13323,11 @@ function renderSugerencia(autoPreview = true) {
   sel.innerHTML = comps.map(c => `<option value="${c.id}"${c.id === d.guia_id ? ' selected' : ''}>${c.nombre} → Permite hasta ${_fmtProdNum(c.max_qty)} und</option>`).join('');
   document.getElementById('prod-sug-mp-nombre').textContent = guia.nombre ? `de ${guia.nombre}` : '';
   document.getElementById('prod-cantidad').value = d.sugerida;
+  const sugRealEl = document.getElementById('prod-sug-real-cant');
+  if (sugRealEl) sugRealEl.value = d.sugerida;
   document.getElementById('prod-sugerencia').classList.remove('hidden');
   if (autoPreview && d.sugerida > 0) {
-    previsualizarProduccion(false);
+    previsualizarProduccion(false, false);
   } else {
     limpiarPreview();
   }
@@ -13242,7 +13358,7 @@ async function sugerenciaDesdeMP() {
     if (!d.ok) { toast(d.error, false); return; }
     prodSugerenciaData = d;
     renderSugerencia(true);
-    if (d.excede_stock_guia) toast('La cantidad supera el stock de la guía: se topó al máximo posible', false);
+    if (d.excede_stock_guia) toast('La cantidad supera el stock de la guía: verifica disponibilidad en la tabla', false);
   } catch(e) { console.error(e); toast('Error de red al recalcular sugerencia', false); }
 }
 
@@ -13258,18 +13374,28 @@ function ocultarSugerencia() {
   prodSugerenciaData = null;
 }
 
-async function previsualizarProduccion(scrollSmooth = true) {
+async function previsualizarProduccion(scrollSmooth = true, forzarDesdeTarjeta = false) {
   const id  = document.getElementById('prod-ac-id').value;
   const qty = parseFloat(document.getElementById('prod-cantidad').value);
   if (!id) { toast('Selecciona un producto', false); return; }
   if (!qty || qty <= 0) { toast('Cantidad inválida', false); return; }
 
   const bodParam = (CENTRO_ACTIVO && CENTRO_ACTIVO.id) ? `&bodega=${encodeURIComponent(CENTRO_ACTIVO.id)}` : '';
-  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/preview?producto_id=${id}&cantidad=${qty}${bodParam}`);
+  let mpParams = '';
+  if (!forzarDesdeTarjeta && prodSugerenciaData && prodSugerenciaData.modo === 'desde_mp') {
+    const guiaId = document.getElementById('prod-sug-guia')?.value || prodSugerenciaData.guia_id;
+    const cantMP = parseFloat(document.getElementById('prod-sug-mp-cant')?.value || 0);
+    if (guiaId && cantMP > 0) {
+      mpParams = `&guia_id=${encodeURIComponent(guiaId)}&cantidad_mp=${encodeURIComponent(cantMP)}`;
+    }
+  }
+
+  const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/preview?producto_id=${id}&cantidad=${qty}${bodParam}${mpParams}`);
   const d = await r.json();
   if (!d.ok) { toast(d.error, false); return; }
 
-  // Almacenar datos de previsualización en la variable global
+  // Guardar cantidad esperada según receta para poder comparar cuando el usuario ajuste la cantidad real obtenida
+  d.cantidad_esperada = d.cantidad;
   activePreviewData = d;
 
   const centroBadge = document.getElementById('prod-preview-centro-badge');
@@ -13288,7 +13414,18 @@ async function previsualizarProduccion(scrollSmooth = true) {
   
   const cantBadgeEl = document.getElementById('prod-preview-cant-badge');
   if (cantBadgeEl) cantBadgeEl.textContent = `${_fmtProdNum(qty)} Unidades`;
-  
+
+  const prevCantInput = document.getElementById('prod-preview-cant-input');
+  if (prevCantInput) prevCantInput.value = qty;
+
+  const sugRealEl = document.getElementById('prod-sug-real-cant');
+  if (sugRealEl) sugRealEl.value = qty;
+
+  const lockPill = document.getElementById('prod-cantidad-lock-pill');
+  if (lockPill) lockPill.classList.remove('hidden');
+  const modoHint = document.getElementById('prod-cantidad-modo-hint');
+  if (modoHint) modoHint.classList.remove('hidden');
+
   const countEl = document.getElementById('prod-preview-items-count');
   const numLineas = (d.lineas || []).length;
   if (countEl) {
@@ -13296,6 +13433,7 @@ async function previsualizarProduccion(scrollSmooth = true) {
   }
 
   inicializarDecimalesPreviewProduccion();
+  renderInfoRendimientoProduccion();
   renderTablaPrevisualizacion();
   const previewEl = document.getElementById('prod-preview');
   if (previewEl) {
@@ -13379,63 +13517,47 @@ function actualizarTotalesPrevisualizacion() {
   });
 
   activePreviewData.costo_total_produccion = costoTotal;
-  const qty = activePreviewData.cantidad;
+  const qty = Number(activePreviewData.cantidad || 0);
   activePreviewData.costo_unitario_produccion = qty > 0 ? (costoTotal / qty) : 0;
 
   document.getElementById('prod-resumen-total').textContent = _fmtProdMon(activePreviewData.costo_total_produccion);
-  document.getElementById('prod-resumen-unitario').textContent = _fmtProdMon(activePreviewData.costo_unitario_produccion);
+  document.getElementById('prod-resumen-unitario').textContent = qty > 0 ? _fmtProdMon(activePreviewData.costo_unitario_produccion) : '-';
 
-  // Validar si todos son suficientes
-  activePreviewData.puede_producir = activePreviewData.lineas.every(l => l.suficiente);
-
-  
+  // Validar si todos son suficientes y cantidad real > 0
+  activePreviewData.puede_producir = qty > 0 && activePreviewData.lineas.every(l => l.suficiente);
 
   const alerta = document.getElementById('prod-alerta');
-
-  if (!activePreviewData.puede_producir) {
-
+  if (!activePreviewData.lineas.every(l => l.suficiente)) {
     alerta.textContent = 'Stock insuficiente en uno o más componentes. No se puede registrar la producción.';
-
     alerta.classList.remove('hidden');
-
   } else {
-
     alerta.classList.add('hidden');
-
   }
 
-  
-
   prodPuedeRegistrar = activePreviewData.puede_producir;
-
   document.getElementById('prod-btn-registrar').disabled = !prodPuedeRegistrar;
-
 }
 
-
-
 async function registrarProduccion() {
-
   const idVal = document.getElementById('prod-ac-id').value;
-
   if (!idVal) {
-
     toast('Selecciona un producto a producir de la lista', false);
-
     return;
-
   }
 
   if (!prodPuedeRegistrar || !activePreviewData) {
-
     toast('No se puede registrar. Primero genera la vista previa y asegúrate de contar con stock suficiente de componentes.', false);
-
     return;
-
   }
 
   const id    = parseInt(idVal);
-  const qty   = parseFloat(document.getElementById('prod-cantidad').value);
+  const qty   = (activePreviewData && Number(activePreviewData.cantidad) > 0)
+    ? Number(activePreviewData.cantidad)
+    : parseFloat(document.getElementById('prod-cantidad').value);
+  if (!qty || qty <= 0) {
+    toast('La cantidad real producida debe ser mayor a cero.', false);
+    return;
+  }
   const fecha = (document.getElementById('prod-fecha')?.value || '').trim() || null;
   const notas = document.getElementById('prod-notas').value.trim() || null;
   const tipo_doc_id = parseInt(document.getElementById('prod-tipo-doc').value) || null;

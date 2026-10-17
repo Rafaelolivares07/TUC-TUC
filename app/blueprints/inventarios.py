@@ -6120,6 +6120,8 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
             if as_inv_id and not es_compra_mov:
                 tot_as14_ajust += 1
                 conn.execute("UPDATE movimientos_contables SET monto = %s WHERE id = %s", (valor_total, as_inv_id))
+                if es_ajuste_mov and as_cp_id:
+                    conn.execute("UPDATE movimientos_contables SET monto = %s WHERE id = %s", (valor_total, as_cp_id))
 
             # --- 1) PRODUCCIÓN: Sincronizar entrada de producto terminado y Débito 14* del comprobante ---
             if es_prod_mov:

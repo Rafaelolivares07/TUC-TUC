@@ -1691,6 +1691,12 @@ def restaurante_mesero(slug):
         if not rest:
             conn.close()
             return "Restaurante no encontrado", 404
+        rest = dict(rest)
+        try:
+            cfg_n = conn.execute("SELECT permitir_inventario_negativo FROM config_negocio WHERE tercero_id = %s", (rest['tercero_id'],)).fetchone()
+            rest['permitir_inventario_negativo'] = bool(cfg_n['permitir_inventario_negativo'] if cfg_n and cfg_n['permitir_inventario_negativo'] is not None else True)
+        except Exception:
+            rest['permitir_inventario_negativo'] = True
         uid = session.get('usuario_id')
         skip_pin = uid and (session.get('rol') == 'Administrador' or uid == rest['admin_id'])
         requerir = rest['requerir_pin_mesero'] if rest['requerir_pin_mesero'] is not None else True
@@ -2094,6 +2100,15 @@ def api_pedido_crear(slug):
             ]
 
             force_negative = data.get('force_negative_stock') == True
+            if force_negative and rest['tercero_id']:
+                try:
+                    cfg_n = conn.execute("SELECT permitir_inventario_negativo FROM config_negocio WHERE tercero_id = %s", (rest['tercero_id'],)).fetchone()
+                    if cfg_n and cfg_n['permitir_inventario_negativo'] is False:
+                        conn.close()
+                        return jsonify({'ok': False, 'error': 'El negocio no tiene habilitado forzar ventas con saldo negativo en inventario.'}), 400
+                except Exception:
+                    pass
+
             if not force_negative and rest['tercero_id']:
                 shortages = _verificar_stock_pedido(conn, rest['tercero_id'], stock_check_items, excluir_componentes)
                 if shortages:

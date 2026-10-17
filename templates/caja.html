@@ -818,13 +818,13 @@
                 🛠️ Realizar Ajuste Físico y Vender
             </button>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-2 gap-3" id="stock-alerta-botones-secundarios">
                 <!-- Opción 1: Cancelar -->
-                <button onclick="cerrarAlertaStock()" class="border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-xl hover:bg-gray-50 text-sm">
+                <button id="btn-stock-cancelar" onclick="cerrarAlertaStock()" class="border border-gray-300 text-gray-700 font-semibold py-2.5 rounded-xl hover:bg-gray-50 text-sm">
                     ❌ Cancelar Venta
                 </button>
                 <!-- Opción 3: Forzar Negativos -->
-                <button onclick="forzarVentaNegativa()" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 rounded-xl text-sm transition">
+                <button id="btn-stock-forzar" onclick="forzarVentaNegativa()" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 rounded-xl text-sm transition">
                     ⚠️ Forzar (Permitir Negativos)
                 </button>
             </div>
@@ -1194,6 +1194,7 @@ const TIENDA_NOMBRE = '{{ tienda.nombre }}';
 const TERCERO_ID = {{ tienda.tercero_id | tojson }};
 const MODO_ADMIN = {{ (modo_admin|default(false)) | tojson }};
 const NEGOCIO_FACTURACION_COPIAS = parseInt("{{ tienda.facturacion_copias|default(1) }}") || 1;
+const PERMITIR_INVENTARIO_NEGATIVO = {{ 'true' if tienda.permitir_inventario_negativo is not false else 'false' }};
 let productos = [];
 let carrito = [];
 let activePedidoPremontadoId = null;
@@ -4206,7 +4207,8 @@ function renderShortages(shortages) {
 
 function actualizarBotonesAccionStock() {
     const btnAjustar = document.getElementById('btn-stock-ajustar');
-    const btnForzar = document.querySelector('#modal-alerta-stock button[onclick="forzarVentaNegativa()"]');
+    const btnForzar = document.getElementById('btn-stock-forzar') || document.querySelector('#modal-alerta-stock button[onclick="forzarVentaNegativa()"]');
+    const btnCancelar = document.getElementById('btn-stock-cancelar');
     
     let totalShortages = shortagesList.length;
     let totalExcluded = 0;
@@ -4223,21 +4225,34 @@ function actualizarBotonesAccionStock() {
         btnAjustar.className = "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-sm transition";
         btnAjustar.setAttribute('onclick', 'confirmarVOmitidaCaja()');
         if (btnForzar) btnForzar.classList.add('hidden');
+        if (btnCancelar) btnCancelar.classList.add('col-span-2');
     } else if (totalExcluded > 0) {
         btnAjustar.innerHTML = "🛠️ Ajustar Faltantes No Omitidos y Vender";
         btnAjustar.className = "w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition";
         btnAjustar.setAttribute('onclick', 'ejecutarAjusteStockCaja()');
         if (btnForzar) {
-            btnForzar.classList.remove('hidden');
-            btnForzar.innerHTML = "⚠️ Forzar Resto (Permitir Negativos)";
+            if (!PERMITIR_INVENTARIO_NEGATIVO) {
+                btnForzar.classList.add('hidden');
+                if (btnCancelar) btnCancelar.classList.add('col-span-2');
+            } else {
+                btnForzar.classList.remove('hidden');
+                btnForzar.innerHTML = "⚠️ Forzar Resto (Permitir Negativos)";
+                if (btnCancelar) btnCancelar.classList.remove('col-span-2');
+            }
         }
     } else {
         btnAjustar.innerHTML = "🛠️ Realizar Ajuste Físico y Vender";
         btnAjustar.className = "w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm transition";
         btnAjustar.setAttribute('onclick', 'ejecutarAjusteStockCaja()');
         if (btnForzar) {
-            btnForzar.classList.remove('hidden');
-            btnForzar.innerHTML = "⚠️ Forzar (Permitir Negativos)";
+            if (!PERMITIR_INVENTARIO_NEGATIVO) {
+                btnForzar.classList.add('hidden');
+                if (btnCancelar) btnCancelar.classList.add('col-span-2');
+            } else {
+                btnForzar.classList.remove('hidden');
+                btnForzar.innerHTML = "⚠️ Forzar (Permitir Negativos)";
+                if (btnCancelar) btnCancelar.classList.remove('col-span-2');
+            }
         }
     }
 }
@@ -4296,6 +4311,10 @@ function cerrarAlertaStock() {
 }
 
 function forzarVentaNegativa() {
+    if (!PERMITIR_INVENTARIO_NEGATIVO) {
+        alert('Este negocio no tiene habilitado forzar ventas con saldo negativo en inventario.');
+        return;
+    }
     forceNegativeStockFlag = true;
     document.getElementById('modal-alerta-stock').classList.add('hidden');
     cobrar();

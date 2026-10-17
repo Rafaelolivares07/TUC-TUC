@@ -870,12 +870,14 @@ def _obtener_negocio_por_slug(conn, slug):
             return None
 
     try:
-        cfg = conn.execute("SELECT facturacion_copias, mostrar_productos_precio_cero FROM config_negocio WHERE tercero_id = %s", (res['tercero_id'],)).fetchone()
+        cfg = conn.execute("SELECT facturacion_copias, mostrar_productos_precio_cero, permitir_inventario_negativo FROM config_negocio WHERE tercero_id = %s", (res['tercero_id'],)).fetchone()
         res['facturacion_copias'] = int(cfg['facturacion_copias'] or 1) if cfg and cfg['facturacion_copias'] else 1
         res['mostrar_productos_precio_cero'] = bool(cfg['mostrar_productos_precio_cero'] if cfg and cfg['mostrar_productos_precio_cero'] is not None else True)
+        res['permitir_inventario_negativo'] = bool(cfg['permitir_inventario_negativo'] if cfg and cfg['permitir_inventario_negativo'] is not None else True)
     except Exception:
         res['facturacion_copias'] = 1
         res['mostrar_productos_precio_cero'] = True
+        res['permitir_inventario_negativo'] = True
     return res
 
 @bp.route('/caja/<slug>')
@@ -2520,6 +2522,11 @@ def api_tienda_pedido_crear(slug):
         ]
 
         force_negative = data.get('force_negative_stock') == True
+        permitir_neg = negocio.get('permitir_inventario_negativo', True)
+        if force_negative and not permitir_neg:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'El negocio no tiene habilitado forzar ventas con saldo negativo en inventario.'}), 400
+
         if not force_negative:
             shortages = _verificar_stock_pedido(conn, negocio['tercero_id'], items_validos, excluir_componentes, bodega=centro_utilidad_id)
             if shortages:

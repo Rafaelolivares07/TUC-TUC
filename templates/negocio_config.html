@@ -134,6 +134,42 @@
               class="w-full border border-gray-200 rounded-xl p-3 text-sm text-gray-700 focus:outline-none focus:border-indigo-400 resize-none"></textarea>
   </div>
 
+  <!-- Parámetros de Facturación -->
+  <div class="bg-white rounded-2xl shadow p-5 border-l-4 border-indigo-600 space-y-4">
+    <div class="flex items-center gap-2 mb-1">
+      <span class="text-xl">🧾</span>
+      <h2 class="text-base font-extrabold text-gray-800">Parámetros de Facturación</h2>
+    </div>
+    <p class="text-sm text-gray-500 mb-2 leading-relaxed">Configuración central del negocio para emisión de facturas y control de catálogo en la Caja POS y en la URL pública.</p>
+
+    <!-- Número de copias de factura -->
+    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <label for="facturacion-copias" class="text-xs font-bold text-gray-800 uppercase tracking-wide block">Copias de Factura a Imprimir</label>
+          <p class="text-xs text-gray-500">Número de impresiones idénticas que emite la impresora por cada venta.</p>
+        </div>
+        <select id="facturacion-copias" class="border border-gray-300 rounded-xl px-3 py-2 text-xs font-black bg-white text-gray-800 focus:outline-none focus:border-indigo-500 shrink-0">
+          <option value="1">1 (Solo Original)</option>
+          <option value="2">2 (Original + 1 Copia)</option>
+          <option value="3">3 (Original + 2 Copias)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Toggle Productos con Precio $0 -->
+    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+      <label class="flex items-center justify-between gap-3 cursor-pointer">
+        <div>
+          <span class="text-xs font-bold text-gray-800 uppercase tracking-wide block">Mostrar productos con precio $0</span>
+          <p class="text-xs text-gray-500 leading-snug">Si está desactivado, oculta automáticamente los artículos sin precio ($0) en la Caja POS y en la carta digital pública.</p>
+        </div>
+        <div class="relative inline-flex items-center shrink-0">
+          <input type="checkbox" id="mostrar-precio-cero" class="sr-only peer">
+          <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+        </div>
+      </label>
+    </div>
   </div>
 
   <div class="bg-white rounded-2xl shadow p-5">
@@ -213,6 +249,10 @@ async function cargar() {
     document.getElementById('cambio-efectivo-modo').value = d.config.cambio_efectivo_modo || 'N';
     const tgInp = document.getElementById('telegram-chat-id');
     if (tgInp) tgInp.value = d.config.telegram_chat_id || '';
+    const copiasInp = document.getElementById('facturacion-copias');
+    if (copiasInp) copiasInp.value = String(d.config.facturacion_copias || 1);
+    const ceroInp = document.getElementById('mostrar-precio-cero');
+    if (ceroInp) ceroInp.checked = d.config.mostrar_productos_precio_cero !== false;
     actualizarConfigDomicilioVisible();
   } catch(e) { toast('Error de red', true); }
 }
@@ -451,7 +491,9 @@ async function toggleMetodo(codigo, nuevoEstado) {
         domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera').value,
         domicilio_zona: domicilioZonaActual,
         cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value,
-        mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos').value
+        mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos').value,
+        facturacion_copias: Number(document.getElementById('facturacion-copias')?.value || 1),
+        mostrar_productos_precio_cero: document.getElementById('mostrar-precio-cero')?.checked ?? true
       })
     });
   } catch(e) {}
@@ -528,6 +570,8 @@ async function guardar() {
         domicilio_zona: domicilioZonaActual,
         cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value,
         mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos').value,
+        facturacion_copias: Number(document.getElementById('facturacion-copias')?.value || 1),
+        mostrar_productos_precio_cero: document.getElementById('mostrar-precio-cero')?.checked ?? true,
         telegram_chat_id: document.getElementById('telegram-chat-id')?.value?.trim() || ''
       })
     });

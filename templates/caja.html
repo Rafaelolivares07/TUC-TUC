@@ -33,8 +33,8 @@
         .toast.show { opacity: 1; pointer-events: auto; }
         .toast-ok { background: #059669; }
         .toast-err { background: #b91c1c; border: 1px solid #7f1d1d; }
-        #lista-productos { max-height: 62vh; overflow-y: auto; overscroll-behavior: contain; }
-        #carrito-items { max-height: 38vh; overflow-y: auto; overscroll-behavior: contain; }
+        #lista-productos { max-height: 65vh; overflow-y: auto; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; }
+        #carrito-items { max-height: 38vh; overflow-y: auto; overscroll-behavior: auto; -webkit-overflow-scrolling: touch; }
         .prod-btn { transition: transform 0.1s, box-shadow 0.15s; }
         .prod-btn:active { transform: scale(0.96); }
         
@@ -209,26 +209,74 @@
         </button>
     </div>
 
+    <!-- Pestañas Móviles: Alternar entre Catálogo y Carrito/Inputs (Solo Celulares) -->
+    <div id="mobile-pos-tabs" class="md:hidden flex items-center bg-slate-200/90 p-1 rounded-2xl mb-3 gap-1 shadow-inner">
+        <button type="button" id="tab-pos-catalogo" onclick="cambiarTabMovil('catalogo')"
+                class="flex-1 py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm bg-white text-gray-800 cursor-pointer">
+            <span>🥪</span> <span>1. Catálogo Productos</span>
+        </button>
+        <button type="button" id="tab-pos-carrito" onclick="cambiarTabMovil('carrito')"
+                class="flex-1 py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all text-gray-600 hover:text-gray-900 cursor-pointer">
+            <span>🛒</span> <span>2. Cobro e Inputs</span>
+            <span id="badge-tab-carrito-count" class="bg-blue-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full hidden">0</span>
+        </button>
+    </div>
+
     <div id="layout">
         <!-- ── Panel izquierdo: catálogo ── -->
-        <div>
-            <!-- Búsqueda -->
-            <div class="relative mb-3">
-                <input id="busqueda" type="search" placeholder="Buscar por nombre o código de barras…"
-                       class="w-full border border-gray-200 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:outline-none focus:border-blue-400"
-                       oninput="filtrarProductos(this.value)">
-                <span class="absolute right-3 top-2.5 text-gray-400">🔍</span>
+        <div id="panel-catalogo" class="flex flex-col">
+            <!-- Búsqueda y Alternador de Vista (Tarjetas vs Lista) -->
+            <div class="flex items-center gap-2 mb-2.5">
+                <div class="relative flex-1">
+                    <input id="busqueda" type="search" placeholder="Buscar sandwich o producto…"
+                           class="w-full border border-gray-200 rounded-xl pl-4 pr-10 py-2.5 text-xs sm:text-sm focus:outline-none focus:border-blue-400 bg-white"
+                           oninput="filtrarProductos(this.value)">
+                    <span class="absolute right-3 top-2.5 text-gray-400 text-sm">🔍</span>
+                </div>
+                <!-- Alternador de vista -->
+                <div class="flex items-center bg-slate-200/90 p-0.5 rounded-xl shrink-0">
+                    <button type="button" id="btn-vista-grid" onclick="cambiarVistaCatalogo('grid')"
+                            class="px-2 py-1.5 rounded-lg text-xs font-bold transition bg-white text-gray-800 shadow-2xs cursor-pointer"
+                            title="Vista en tarjetas cuadradas">
+                        🖼️ <span class="hidden sm:inline">Tarjetas</span>
+                    </button>
+                    <button type="button" id="btn-vista-list" onclick="cambiarVistaCatalogo('list')"
+                            class="px-2 py-1.5 rounded-lg text-xs font-bold transition text-gray-600 hover:text-gray-900 cursor-pointer"
+                            title="Vista en lista compacta (nombres completos sin imágenes gigantes)">
+                        📋 <span class="hidden sm:inline">Lista</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Filtro categorías -->
             <div id="categorias" class="flex gap-2 overflow-x-auto pb-1 mb-2 text-sm"></div>
 
-            <!-- Grid productos -->
-            <div id="lista-productos" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2"></div>
+            <!-- Grid productos (2 columnas en celular para que los nombres no se corten) -->
+            <div id="lista-productos" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5"></div>
+
+            <!-- Barra Flotante Móvil: Salto Directo a Cobro / Inputs -->
+            <div id="mobile-floating-cart-bar" onclick="cambiarTabMovil('carrito')" 
+                 class="md:hidden fixed bottom-3 left-3 right-3 z-40 bg-indigo-900 hover:bg-indigo-950 text-white p-3 rounded-2xl shadow-2xl flex items-center justify-between cursor-pointer border border-indigo-700/60 transition-all transform active:scale-98 hidden">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center font-black text-xs shadow-inner" id="floating-cart-badge">0</span>
+                    <div class="leading-tight">
+                        <span class="text-[10px] uppercase font-bold text-indigo-300 block">Total en Carrito</span>
+                        <span class="text-base font-black font-mono text-white" id="floating-cart-total">$0</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5 font-black text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-3.5 py-2 rounded-xl shadow-md">
+                    <span>Ir a Cobro</span> <span>➔</span>
+                </div>
+            </div>
         </div>
 
-        <!-- ── Panel derecho: carrito ── -->
-        <div class="mt-3 md:mt-0 flex flex-col">
+        <!-- ── Panel derecho: carrito e inputs ── -->
+        <div id="panel-carrito" class="mt-3 md:mt-0 flex flex-col">
+            <!-- Botón móvil para regresar al catálogo rápidamente -->
+            <button type="button" onclick="cambiarTabMovil('catalogo')" 
+                    class="md:hidden w-full mb-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-2xs border border-slate-200 active:scale-98">
+                <span>⬅️</span> <span>Volver a agregar productos</span>
+            </button>
             <div class="bg-white rounded-2xl shadow-sm border border-gray-150 p-3.5 sticky top-2 flex flex-col max-h-[92vh]">
                 <!-- Header del carrito -->
                 <div class="flex items-center justify-between pb-2 border-b border-gray-150 mb-2">
@@ -628,13 +676,13 @@
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap justify-end">
                     <button type="button" id="btn-bt-conectar" onclick="conectarImpresoraBluetooth()"
-                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1 text-xs">
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3.5 py-2 rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs">
                         <span>📱</span> <span>Conectar Bluetooth</span>
                     </button>
                     <button type="button" id="btn-bt-conectar-serial" onclick="conectarImpresoraSerial()"
                             class="hidden bg-slate-800 hover:bg-slate-900 text-white font-bold px-2.5 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer text-[11px] flex items-center gap-1"
-                            title="Conexión por puerto serie COM en Windows">
-                        <span>💻</span> <span>COM8 (PC)</span>
+                            title="Conexión por puerto serie COM en Windows PC">
+                        <span>💻</span> <span>Puerto COM (PC)</span>
                     </button>
                     <button type="button" id="btn-bt-desconectar" onclick="desconectarImpresoraBluetooth()"
                             class="hidden bg-gray-200 hover:bg-red-50 text-gray-700 hover:text-red-600 font-bold px-2.5 py-1.5 rounded-xl transition active:scale-95 cursor-pointer text-xs">
@@ -680,16 +728,39 @@
                         <input type="checkbox" id="cfg-bt-autoprint-flash" checked class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 shrink-0">
                     </label>
                 </div>
+
+                <div class="border-t border-gray-100 pt-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="min-w-0 flex-1">
+                            <span class="font-bold text-gray-800 block">Copias de Factura a Imprimir</span>
+                            <span class="text-[10px] text-gray-400 block">Número de tickets por venta (1 = Original, 2 = Original + Copia).</span>
+                        </div>
+                        <select id="cfg-bt-copias" class="border border-gray-300 rounded-xl px-2.5 py-1 text-xs font-black bg-white text-gray-800 focus:outline-none focus:border-indigo-500">
+                            <option value="1">1 (Solo Original)</option>
+                            <option value="2">2 (Original + Copia)</option>
+                            <option value="3">3 (Original + 2 Copias)</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
-            <!-- Ayuda / Instrucciones -->
-            <div class="bg-amber-50/90 border border-amber-200/80 rounded-2xl p-3 text-amber-900 space-y-1">
-                <span class="font-extrabold flex items-center gap-1"><span>💡</span> Enlace en Windows (StarPOS TP80NC):</span>
-                <ol class="list-decimal pl-4 space-y-0.5 text-[11px] leading-tight text-amber-950">
-                    <li>Tu impresora ya está emparejada en Windows como <strong>BT Printer-1CF7</strong> en el puerto <strong>COM8</strong>.</li>
-                    <li>Toca el botón morado <strong>Conectar COM8 (Windows)</strong>.</li>
-                    <li>En la ventana emergente de Chrome/Edge, selecciona <em>"Serie estándar sobre el vínculo Bluetooth (COM8)"</em> y presiona <strong>Conectar</strong>.</li>
-                    <li>¡Listo! Toca <strong>Imprimir Ticket de Prueba con Corte</strong> para verificarla.</li>
+            <!-- Ayuda / Instrucciones Dinámicas -->
+            <div id="ayuda-bt-movil" class="bg-indigo-50/80 border border-indigo-200/80 rounded-2xl p-3 text-indigo-950 space-y-1">
+                <span class="font-extrabold flex items-center gap-1 text-xs"><span>📱</span> Enlace Bluetooth en Celular:</span>
+                <ol class="list-decimal pl-4 space-y-1 text-[11px] leading-tight text-indigo-900">
+                    <li>Verifica que tu impresora esté <strong>encendida</strong> y el <strong>Bluetooth</strong> de tu celular activo.</li>
+                    <li>Toca el botón azul <strong>Conectar Bluetooth</strong>.</li>
+                    <li>Selecciona tu impresora en la lista (ej: <strong>StarPOS TP80NC</strong> o <strong>BT Printer</strong>) y pulsa <strong>Vincular</strong>.</li>
+                    <li>Toca <strong>Imprimir Ticket de Prueba con Corte</strong> para verificar que imprima y corte.</li>
+                </ol>
+            </div>
+
+            <div id="ayuda-bt-windows" class="hidden bg-amber-50/90 border border-amber-200/80 rounded-2xl p-3 text-amber-900 space-y-1">
+                <span class="font-extrabold flex items-center gap-1 text-xs"><span>💻</span> Enlace en Windows PC:</span>
+                <ol class="list-decimal pl-4 space-y-1 text-[11px] leading-tight text-amber-950">
+                    <li>Empareja tu impresora en la configuración de Bluetooth de Windows.</li>
+                    <li>Toca <strong>Conectar Bluetooth</strong> (o el botón de puerto COM si está asignada en Windows).</li>
+                    <li>Toca <strong>Imprimir Ticket de Prueba con Corte</strong> para verificarla.</li>
                 </ol>
             </div>
         </div>
@@ -1122,6 +1193,7 @@ const TIENDA_ID = {{ (tienda.id | default(0)) | tojson }};
 const TIENDA_NOMBRE = '{{ tienda.nombre }}';
 const TERCERO_ID = {{ tienda.tercero_id | tojson }};
 const MODO_ADMIN = {{ (modo_admin|default(false)) | tojson }};
+const NEGOCIO_FACTURACION_COPIAS = parseInt("{{ tienda.facturacion_copias|default(1) }}") || 1;
 let productos = [];
 let carrito = [];
 let activePedidoPremontadoId = null;
@@ -3107,28 +3179,84 @@ function filtrarProductos(q) {
     renderProductos(lista);
 }
 
+let vistaCatalogo = localStorage.getItem('tuctuc_vista_catalogo') || 'grid';
+
+function cambiarVistaCatalogo(vista) {
+    vistaCatalogo = vista;
+    localStorage.setItem('tuctuc_vista_catalogo', vista);
+    const btnGrid = document.getElementById('btn-vista-grid');
+    const btnList = document.getElementById('btn-vista-list');
+    const cont = document.getElementById('lista-productos');
+
+    if (btnGrid) {
+        btnGrid.className = (vista === 'grid') 
+            ? "px-2 py-1.5 rounded-lg text-xs font-bold transition bg-white text-gray-800 shadow-2xs cursor-pointer"
+            : "px-2 py-1.5 rounded-lg text-xs font-bold transition text-gray-600 hover:text-gray-900 cursor-pointer";
+    }
+    if (btnList) {
+        btnList.className = (vista === 'list') 
+            ? "px-2 py-1.5 rounded-lg text-xs font-bold transition bg-white text-gray-800 shadow-2xs cursor-pointer"
+            : "px-2 py-1.5 rounded-lg text-xs font-bold transition text-gray-600 hover:text-gray-900 cursor-pointer";
+    }
+    if (cont) {
+        cont.className = (vista === 'list')
+            ? "grid grid-cols-1 gap-2"
+            : "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-2.5";
+    }
+    const q = document.getElementById('busqueda') ? document.getElementById('busqueda').value : '';
+    filtrarProductos(q);
+}
+
 function renderProductos(lista) {
     const cont = document.getElementById('lista-productos');
     if (!lista.length) {
         cont.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8 text-xs font-semibold">Sin resultados</p>';
         return;
     }
-    cont.innerHTML = lista.map(p => `
-        <button type="button" onclick="agregarAlCarrito(${p.id})"
-                class="prod-btn bg-white rounded-xl shadow-2xs border border-gray-150 p-2 text-left hover:shadow-md hover:border-blue-300 active:bg-blue-50 transition flex flex-col justify-between select-none group">
-            ${p.imagen 
-                ? `<img src="${p.imagen}" class="w-full h-14 sm:h-16 object-cover rounded-lg mb-1.5" alt="">` 
-                : '<div class="w-full h-11 sm:h-12 bg-slate-100 rounded-lg mb-1.5 flex items-center justify-center text-xl group-hover:bg-blue-100/50 transition">🛍️</div>'
-            }
-            <div class="w-full min-w-0 flex-1 flex flex-col justify-between">
-                <div>
-                    <p class="font-bold text-gray-800 text-xs leading-snug line-clamp-2" title="${p.nombre.replace(/"/g, '&quot;')}">${p.nombre}</p>
-                    ${p.categoria ? `<p class="text-[10px] text-gray-400 truncate mt-0.5">${p.categoria}</p>` : ''}
+
+    if (vistaCatalogo === 'list') {
+        // Vista Lista Compacta: Nombres 100% legibles, sin imágenes dominando la pantalla
+        cont.innerHTML = lista.map(p => `
+            <div onclick="agregarAlCarrito(${p.id})"
+                 class="prod-btn bg-white rounded-xl shadow-2xs border border-gray-150 p-2.5 flex items-center justify-between gap-2.5 hover:border-blue-300 hover:shadow-xs active:bg-blue-50 transition cursor-pointer select-none">
+                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                    ${p.imagen 
+                        ? `<img src="${p.imagen}" class="w-12 h-12 object-cover rounded-xl shrink-0 border border-gray-100" alt="">`
+                        : '<div class="w-12 h-12 bg-slate-100 rounded-xl shrink-0 flex items-center justify-center text-2xl">🥪</div>'
+                    }
+                    <div class="min-w-0 flex-1">
+                        <p class="font-black text-gray-900 text-xs sm:text-sm leading-tight break-words">${p.nombre}</p>
+                        ${p.categoria ? `<span class="text-[10px] text-gray-400 font-semibold block mt-0.5">${p.categoria}</span>` : ''}
+                    </div>
                 </div>
-                <p class="font-black text-blue-700 text-xs mt-1">$${p.precio.toLocaleString('es-CO')}</p>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="font-black text-blue-700 text-xs sm:text-sm font-mono">$${p.precio.toLocaleString('es-CO')}</span>
+                    <button type="button" class="w-7 h-7 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-black text-sm flex items-center justify-center shadow-xs transition active:scale-95 cursor-pointer">+</button>
+                </div>
             </div>
-        </button>
-    `).join('');
+        `).join('');
+    } else {
+        // Vista Tarjetas (2 columnas en celular para que el nombre tenga espacio suficiente)
+        cont.innerHTML = lista.map(p => `
+            <button type="button" onclick="agregarAlCarrito(${p.id})"
+                    class="prod-btn bg-white rounded-2xl shadow-2xs border border-gray-150 p-2.5 text-left hover:shadow-md hover:border-blue-300 active:bg-blue-50 transition flex flex-col justify-between select-none group min-h-[140px]">
+                ${p.imagen 
+                    ? `<img src="${p.imagen}" class="w-full h-20 sm:h-22 object-cover rounded-xl mb-2" alt="">` 
+                    : '<div class="w-full h-16 sm:h-18 bg-slate-100 rounded-xl mb-2 flex items-center justify-center text-2xl group-hover:bg-blue-100/50 transition">🥪</div>'
+                }
+                <div class="w-full min-w-0 flex-1 flex flex-col justify-between">
+                    <div class="mb-1.5">
+                        <p class="font-black text-gray-900 text-xs sm:text-sm leading-snug break-words" title="${p.nombre.replace(/"/g, '&quot;')}">${p.nombre}</p>
+                        ${p.categoria ? `<p class="text-[10px] text-gray-400 font-semibold truncate mt-0.5">${p.categoria}</p>` : ''}
+                    </div>
+                    <div class="flex items-center justify-between mt-auto pt-1.5 border-t border-gray-100">
+                        <span class="font-black text-blue-700 text-xs sm:text-sm font-mono">$${p.precio.toLocaleString('es-CO')}</span>
+                        <span class="w-6 h-6 rounded-full bg-blue-50 text-blue-700 font-bold text-xs flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition shadow-2xs">+</span>
+                    </div>
+                </div>
+            </button>
+        `).join('');
+    }
 }
 
 // ── Carrito & Personalización de Ingredientes y Adiciones ───────────────────────
@@ -3543,6 +3671,10 @@ function renderCarrito() {
         const ivaElEmpty = document.getElementById('iva-display');
         if (ivaElEmpty) ivaElEmpty.classList.add('hidden');
         document.getElementById('btn-cobrar').disabled = true;
+        const floatBar = document.getElementById('mobile-floating-cart-bar');
+        const tabBadge = document.getElementById('badge-tab-carrito-count');
+        if (floatBar) floatBar.classList.add('hidden');
+        if (tabBadge) tabBadge.classList.add('hidden');
         publicarPantallaCliente();
         return;
     }
@@ -3642,8 +3774,59 @@ function renderCarrito() {
             ivaEl.classList.add('hidden');
         }
     }
+
+    // Actualizar badges y barra flotante móvil
+    const floatBar = document.getElementById('mobile-floating-cart-bar');
+    const floatBadge = document.getElementById('floating-cart-badge');
+    const floatTotal = document.getElementById('floating-cart-total');
+    const tabBadge = document.getElementById('badge-tab-carrito-count');
+
+    if (tabBadge) {
+        tabBadge.textContent = count;
+        tabBadge.classList.toggle('hidden', count === 0);
+    }
+    if (floatBadge) floatBadge.textContent = count;
+    if (floatTotal) floatTotal.textContent = `$${total.toLocaleString('es-CO')}`;
+    if (floatBar && window.innerWidth < 768) {
+        floatBar.classList.toggle('hidden', tabMovilActiva !== 'catalogo' || count === 0);
+    }
+
     validarPagos();
     publicarPantallaCliente();
+}
+
+let tabMovilActiva = 'catalogo';
+
+function cambiarTabMovil(tab) {
+    tabMovilActiva = tab;
+    const isMobile = window.innerWidth < 768;
+    const pCat = document.getElementById('panel-catalogo');
+    const pCar = document.getElementById('panel-carrito');
+    const tabCat = document.getElementById('tab-pos-catalogo');
+    const tabCar = document.getElementById('tab-pos-carrito');
+    const floatBar = document.getElementById('mobile-floating-cart-bar');
+    const count = carrito ? carrito.reduce((s, i) => s + (parseFloat(i.cantidad) || 0), 0) : 0;
+
+    if (isMobile) {
+        if (tab === 'catalogo') {
+            if (pCat) pCat.classList.remove('hidden');
+            if (pCar) pCar.classList.add('hidden');
+            if (tabCat) tabCat.className = "flex-1 py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm bg-white text-gray-800 cursor-pointer";
+            if (tabCar) tabCar.className = "flex-1 py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all text-gray-600 hover:text-gray-900 cursor-pointer";
+            if (floatBar) floatBar.classList.toggle('hidden', count === 0);
+        } else {
+            if (pCat) pCat.classList.add('hidden');
+            if (pCar) pCar.classList.remove('hidden');
+            if (tabCat) tabCat.className = "flex-1 py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all text-gray-600 hover:text-gray-900 cursor-pointer";
+            if (tabCar) tabCar.className = "flex-1 py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-sm bg-white text-gray-800 cursor-pointer";
+            if (floatBar) floatBar.classList.add('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    } else {
+        if (pCat) pCat.classList.remove('hidden');
+        if (pCar) pCar.classList.remove('hidden');
+        if (floatBar) floatBar.classList.add('hidden');
+    }
 }
 
 function cambiarPrecioUnitario(rowId, nuevoPrecioStr) {
@@ -4291,7 +4474,8 @@ let serialPort = null;
 let btPrinterConfig = {
     autocut: true,
     drawer: true,
-    autoprintFlash: true
+    autoprintFlash: true,
+    copiasFactura: (typeof NEGOCIO_FACTURACION_COPIAS !== 'undefined' ? NEGOCIO_FACTURACION_COPIAS : 1)
 };
 
 const BT_PRINTER_SERVICES = [
@@ -4312,24 +4496,30 @@ function cargarConfigImpresoraBT() {
         const raw = localStorage.getItem('tuctuc_bt_printer_cfg');
         if (raw) {
             btPrinterConfig = Object.assign(btPrinterConfig, JSON.parse(raw));
+        } else if (typeof NEGOCIO_FACTURACION_COPIAS !== 'undefined') {
+            btPrinterConfig.copiasFactura = NEGOCIO_FACTURACION_COPIAS;
         }
     } catch (e) {}
 
     const chkCut = document.getElementById('cfg-bt-autocut');
     const chkDrawer = document.getElementById('cfg-bt-drawer');
     const chkFlash = document.getElementById('cfg-bt-autoprint-flash');
+    const selCopias = document.getElementById('cfg-bt-copias');
     if (chkCut) chkCut.checked = btPrinterConfig.autocut !== false;
     if (chkDrawer) chkDrawer.checked = btPrinterConfig.drawer !== false;
     if (chkFlash) chkFlash.checked = btPrinterConfig.autoprintFlash !== false;
+    if (selCopias) selCopias.value = String(btPrinterConfig.copiasFactura || 1);
 }
 
 function guardarConfigImpresoraBT() {
     const chkCut = document.getElementById('cfg-bt-autocut');
     const chkDrawer = document.getElementById('cfg-bt-drawer');
     const chkFlash = document.getElementById('cfg-bt-autoprint-flash');
+    const selCopias = document.getElementById('cfg-bt-copias');
     if (chkCut) btPrinterConfig.autocut = chkCut.checked;
     if (chkDrawer) btPrinterConfig.drawer = chkDrawer.checked;
     if (chkFlash) btPrinterConfig.autoprintFlash = chkFlash.checked;
+    if (selCopias) btPrinterConfig.copiasFactura = parseInt(selCopias.value) || 1;
 
     try {
         localStorage.setItem('tuctuc_bt_printer_cfg', JSON.stringify(btPrinterConfig));
@@ -4366,7 +4556,7 @@ function actualizarUIImpresoraBT() {
     const isConn = estaImpresoraBTConectada();
     let devName = 'Ningún dispositivo enlazado';
     if (serialPort) {
-        devName = 'BT Printer-1CF7 (COM8)';
+        devName = 'BT Printer (COM)';
     } else if (btPrinterDevice) {
         devName = btPrinterDevice.name || 'StarPOS TP80NC';
     } else {
@@ -4404,35 +4594,43 @@ function actualizarUIImpresoraBT() {
         modalDot.className = isConn ? 'w-3 h-3 rounded-full bg-emerald-500 inline-block ring-2 ring-emerald-200' : 'w-3 h-3 rounded-full bg-gray-400 inline-block';
     }
     if (modalTitle) {
-        modalTitle.textContent = isConn ? `Conectada y Lista (${serialPort ? 'COM8' : 'BLE'} / ESC-POS 80mm)` : 'Desconectada';
+        modalTitle.textContent = isConn ? `Conectada y Lista (${serialPort ? 'COM' : 'Bluetooth'} / ESC-POS 80mm)` : 'Desconectada';
         modalTitle.className = isConn ? 'font-black text-emerald-700 block text-xs' : 'font-black text-gray-800 block text-xs';
     }
     if (modalName) {
-        modalName.textContent = isConn ? devName : (localStorage.getItem('tuctuc_bt_printer_name') ? `Última: ${localStorage.getItem('tuctuc_bt_printer_name')} (haz clic en Conectar)` : 'Ningún dispositivo enlazado');
+        modalName.textContent = isConn ? devName : (localStorage.getItem('tuctuc_bt_printer_name') ? `Última: ${localStorage.getItem('tuctuc_bt_printer_name')} (toca Conectar)` : 'Ningún dispositivo enlazado');
     }
-    const hasSerial = !!navigator.serial;
+
+    const isWindows = /windows/i.test(navigator.userAgent || '');
+    const canUseSerial = isWindows && !!navigator.serial;
+
+    // Ayuda contextual móvil vs Windows PC
+    const ayudaMovil = document.getElementById('ayuda-bt-movil');
+    const ayudaWin = document.getElementById('ayuda-bt-windows');
+    if (ayudaMovil && ayudaWin) {
+        ayudaMovil.classList.toggle('hidden', isWindows);
+        ayudaWin.classList.toggle('hidden', !isWindows);
+    }
+
+    // Puerto COM serial: SOLO visible en Windows PC si soporta Web Serial
     if (btnConectarSerial) {
-        if (!hasSerial || isConn) {
+        if (!canUseSerial || isConn) {
             btnConectarSerial.classList.add('hidden');
         } else {
             btnConectarSerial.classList.remove('hidden');
-            btnConectarSerial.className = 'bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1 text-xs';
-            btnConectarSerial.innerHTML = '<span>🔌</span> <span>Conectar COM8 (Windows)</span>';
+            btnConectarSerial.className = 'bg-slate-800 hover:bg-slate-900 text-white font-bold px-2.5 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer text-[11px] flex items-center gap-1';
+            btnConectarSerial.innerHTML = '<span>💻</span> <span>Puerto COM (PC)</span>';
         }
     }
+
+    // Conectar Bluetooth: Botón principal en Android/Móvil
     if (btnConectar) {
         if (isConn) {
             btnConectar.classList.add('hidden');
         } else {
             btnConectar.classList.remove('hidden');
-            if (!hasSerial) {
-                // Dispositivo móvil (Android / Tablet): Botón principal directo
-                btnConectar.className = 'bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3.5 py-2 rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs';
-                btnConectar.innerHTML = '<span>📱</span> <span>Conectar Bluetooth</span>';
-            } else {
-                btnConectar.className = 'bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-2.5 py-1.5 rounded-xl shadow-xs transition active:scale-95 cursor-pointer text-[11px]';
-                btnConectar.textContent = 'BLE';
-            }
+            btnConectar.className = 'bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3.5 py-2 rounded-xl shadow-xs transition active:scale-95 cursor-pointer flex items-center gap-1.5 text-xs';
+            btnConectar.innerHTML = '<span>📱</span> <span>Conectar Bluetooth</span>';
         }
     }
     if (btnDesconectar) btnDesconectar.classList.toggle('hidden', !isConn);
@@ -4457,7 +4655,7 @@ function actualizarUIImpresoraBT() {
 
 async function conectarImpresoraSerial() {
     if (!navigator.serial) {
-        alert('Web Serial no está soportado en este navegador.\n\nPor favor usa Google Chrome o Microsoft Edge en tu computador con Windows.');
+        alert('Web Serial no está disponible en este dispositivo.\n\nPor favor usa Google Chrome en Windows PC.');
         return;
     }
     const btnConectar = document.getElementById('btn-bt-conectar-serial');
@@ -4467,43 +4665,43 @@ async function conectarImpresoraSerial() {
     }
 
     try {
-        toast('En la ventana emergente, selecciona "Serie estándar sobre el vínculo Bluetooth (COM8)" y haz clic en Conectar');
+        toast('En la ventana emergente, selecciona el puerto COM de tu impresora y haz clic en Conectar');
         const port = await navigator.serial.requestPort();
         await port.open({ baudRate: 9600 });
         serialPort = port;
 
         localStorage.setItem('tuctuc_printer_type', 'serial');
-        localStorage.setItem('tuctuc_bt_printer_name', 'BT Printer-1CF7 (COM8)');
+        localStorage.setItem('tuctuc_bt_printer_name', 'BT Printer (COM)');
         actualizarUIImpresoraBT();
-        toast('✅ Impresora StarPOS TP80NC conectada exitosamente en COM8', 'success');
+        toast('✅ Impresora conectada exitosamente en puerto COM', 'success');
     } catch (err) {
         console.warn('Fallo al conectar puerto serial:', err);
         if (err.name !== 'NotFoundError') {
-            alert('Aviso al conectar puerto Bluetooth COM: ' + (err.message || err));
+            alert('Aviso al conectar puerto COM: ' + (err.message || err));
         }
         actualizarUIImpresoraBT();
     } finally {
         if (btnConectar) {
             btnConectar.disabled = false;
-            btnConectar.innerHTML = '<span>🔌</span> <span>Conectar COM8 (Windows)</span>';
+            btnConectar.innerHTML = '<span>💻</span> <span>Puerto COM (PC)</span>';
         }
     }
 }
 
 async function conectarImpresoraBluetooth() {
     if (!navigator.bluetooth) {
-        alert('Tu navegador o dispositivo actual no tiene soporte para Web Bluetooth.\n\nRecomendado: Google Chrome o Microsoft Edge en Android, Windows o Mac, ingresando por HTTPS.');
+        alert('Tu navegador o dispositivo actual no tiene soporte para Web Bluetooth.\n\nRecomendado: Google Chrome en tu celular Android, ingresando por HTTPS.');
         return;
     }
 
     const btnConectar = document.getElementById('btn-bt-conectar');
     if (btnConectar) {
         btnConectar.disabled = true;
-        btnConectar.textContent = 'Buscando...';
+        btnConectar.innerHTML = '<span>⏳</span> <span>Buscando...</span>';
     }
 
     try {
-        toast('Buscando impresora Bluetooth... selecciona tu StarPOS TP80NC en la lista');
+        toast('Buscando impresora Bluetooth... selecciona tu impresora en la lista');
         const device = await navigator.bluetooth.requestDevice({
             acceptAllDevices: true,
             optionalServices: BT_PRINTER_SERVICES
@@ -4516,7 +4714,7 @@ async function conectarImpresoraBluetooth() {
 
         device.addEventListener('gattserverdisconnected', onBTPrinterDisconnected);
 
-        if (btnConectar) btnConectar.textContent = 'Enlazando...';
+        if (btnConectar) btnConectar.innerHTML = '<span>⏳</span> <span>Enlazando...</span>';
         const server = await device.gatt.connect();
 
         let writableChar = null;
@@ -4578,7 +4776,7 @@ async function conectarImpresoraBluetooth() {
     } finally {
         if (btnConectar) {
             btnConectar.disabled = false;
-            btnConectar.textContent = 'BLE';
+            btnConectar.innerHTML = '<span>📱</span> <span>Conectar Bluetooth</span>';
         }
     }
 }
@@ -4740,7 +4938,7 @@ class EscPosBuilder {
     }
 }
 
-function construirBytesEscPosFactura(r, ahora) {
+function construirBytesEscPosFactura(r, ahora, esCopia = false) {
     const builder = new EscPosBuilder();
     builder.init();
     builder.align('center').bold(true).doubleHeight(true).line(TIENDA_NOMBRE).doubleHeight(false);
@@ -4789,7 +4987,8 @@ function construirBytesEscPosFactura(r, ahora) {
         ? r.pagos.some(p => (p.nombre || '').toLowerCase().includes('efectivo'))
         : (r.metodo || '').toLowerCase().includes('efectivo');
 
-    if (btPrinterConfig.drawer && tieneEfectivo) {
+    // El cajón monedero solo se dispara en el ticket original
+    if (!esCopia && btPrinterConfig.drawer && tieneEfectivo) {
         builder.drawerPulse();
     }
     if (btPrinterConfig.autocut) {
@@ -4801,7 +5000,7 @@ function construirBytesEscPosFactura(r, ahora) {
 function construirBytesEscPosCocina(r, ahora) {
     const builder = new EscPosBuilder();
     builder.init();
-    builder.align('center').bold(true).doubleSize(true).line('ORDEN DE COCINA').doubleSize(false);
+    builder.align('center').bold(true).doubleSize(true).line('ORDEN DE PREPARACIÓN').doubleSize(false);
     builder.line(ahora);
     builder.bold(true).line(r.numero_documento ? `Doc: ${r.numero_documento}` : `Ped: #${r.pedido_id}`).bold(false);
     if (r.cliente) builder.line(`Cliente: ${r.cliente}`);
@@ -4837,23 +5036,34 @@ async function imprimirTicketBluetooth(modo, r, ahora) {
         throw new Error('Impresora Bluetooth no conectada');
     }
 
+    const numCopias = Math.max(1, parseInt(btPrinterConfig.copiasFactura) || 1);
+
     if (modo === 'ambos') {
-        const bytesFac = construirBytesEscPosFactura(r, ahora);
-        await enviarBytesImpresoraBT(bytesFac);
-        if (btPrinterConfig.autocut) {
-            await new Promise(res => setTimeout(res, 350));
+        for (let c = 1; c <= numCopias; c++) {
+            const esCopia = (c > 1);
+            const bytesFac = construirBytesEscPosFactura(r, ahora, esCopia);
+            await enviarBytesImpresoraBT(bytesFac);
+            if (btPrinterConfig.autocut) {
+                await new Promise(res => setTimeout(res, 400));
+            }
         }
         const bytesCoc = construirBytesEscPosCocina(r, ahora);
         await enviarBytesImpresoraBT(bytesCoc);
-        toast('⚡ Factura y Cocina impresas en StarPOS TP80NC', 'success');
+        toast(`⚡ Factura (${numCopias} ${numCopias > 1 ? 'copias' : 'copia'}) y Cocina impresas`, 'success');
     } else if (modo === 'cocina') {
         const bytesCoc = construirBytesEscPosCocina(r, ahora);
         await enviarBytesImpresoraBT(bytesCoc);
         toast('⚡ Ticket de Cocina impreso en StarPOS TP80NC', 'success');
     } else {
-        const bytesFac = construirBytesEscPosFactura(r, ahora);
-        await enviarBytesImpresoraBT(bytesFac);
-        toast('⚡ Factura impresa en StarPOS TP80NC', 'success');
+        for (let c = 1; c <= numCopias; c++) {
+            const esCopia = (c > 1);
+            const bytesFac = construirBytesEscPosFactura(r, ahora, esCopia);
+            await enviarBytesImpresoraBT(bytesFac);
+            if (btPrinterConfig.autocut && c < numCopias) {
+                await new Promise(res => setTimeout(res, 400));
+            }
+        }
+        toast(`⚡ Factura (${numCopias} ${numCopias > 1 ? 'copias' : 'copia'}) impresa en StarPOS TP80NC`, 'success');
     }
 }
 

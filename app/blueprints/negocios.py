@@ -312,6 +312,8 @@ def init_config_negocio(conn):
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS mapa_region VARCHAR(30)")
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS cambio_efectivo_modo CHAR(1) DEFAULT 'N'")
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS mensaje_sin_pedidos TEXT DEFAULT 'Aún no has pedido nada'")
+    conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS facturacion_copias INTEGER DEFAULT 1")
+    conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS mostrar_productos_precio_cero BOOLEAN DEFAULT TRUE")
 
     # Garantizar que el catálogo de métodos de pago esté completo en prod
     conn.execute("""
@@ -369,7 +371,9 @@ def _get_config(conn, tercero_id):
     row = conn.execute(
         """SELECT modalidades, metodos_pago, aviso_pedido, metodos_info,
                   domicilio_tarifa, domicilio_modo_fuera, domicilio_zona, mapa_region,
-                  cambio_efectivo_modo, mensaje_sin_pedidos
+                  cambio_efectivo_modo, mensaje_sin_pedidos,
+                  COALESCE(facturacion_copias, 1) AS facturacion_copias,
+                  COALESCE(mostrar_productos_precio_cero, TRUE) AS mostrar_productos_precio_cero
            FROM config_negocio WHERE tercero_id=%s""",
         (tercero_id,)
     ).fetchone()
@@ -385,6 +389,8 @@ def _get_config(conn, tercero_id):
             'mapa_region': row['mapa_region'],
             'cambio_efectivo_modo': (row['cambio_efectivo_modo'] or 'N').strip().upper(),
             'mensaje_sin_pedidos': row['mensaje_sin_pedidos'] if row['mensaje_sin_pedidos'] is not None else 'Aún no has pedido nada',
+            'facturacion_copias': int(row['facturacion_copias'] or 1),
+            'mostrar_productos_precio_cero': bool(row['mostrar_productos_precio_cero'] if row['mostrar_productos_precio_cero'] is not None else True),
         }
     # Migrar datos existentes de metodos_pago_tienda si los hay
     try:
@@ -706,6 +712,12 @@ def api_config_save(tercero_id):
     mensaje_sin_pedidos = data.get('mensaje_sin_pedidos')
     if mensaje_sin_pedidos is not None:
         mensaje_sin_pedidos = str(mensaje_sin_pedidos).strip()[:180]
+    try:
+        facturacion_copias = max(1, min(5, int(data.get('facturacion_copias') or 1)))
+    except (ValueError, TypeError):
+        facturacion_copias = 1
+    mostrar_productos_precio_cero = bool(data.get('mostrar_productos_precio_cero', True))
+
     conn = get_db_connection()
     try:
         init_config_negocio(conn)
@@ -713,9 +725,10 @@ def api_config_save(tercero_id):
             INSERT INTO config_negocio (
                 tercero_id, modalidades, metodos_pago, aviso_pedido,
                 domicilio_tarifa, domicilio_modo_fuera, domicilio_zona,
-                cambio_efectivo_modo, mensaje_sin_pedidos, updated_at
+                cambio_efectivo_modo, mensaje_sin_pedidos,
+                facturacion_copias, mostrar_productos_precio_cero, updated_at
             )
-            VALUES (%s, %s::jsonb, %s::jsonb, %s, %s, %s, %s::jsonb, %s, %s, NOW())
+            VALUES (%s, %s::jsonb, %s::jsonb, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, NOW())
             ON CONFLICT (tercero_id) DO UPDATE SET
                 modalidades  = EXCLUDED.modalidades,
                 metodos_pago = EXCLUDED.metodos_pago,
@@ -725,11 +738,14 @@ def api_config_save(tercero_id):
                 domicilio_zona = EXCLUDED.domicilio_zona,
                 cambio_efectivo_modo = EXCLUDED.cambio_efectivo_modo,
                 mensaje_sin_pedidos = EXCLUDED.mensaje_sin_pedidos,
+                facturacion_copias = EXCLUDED.facturacion_copias,
+                mostrar_productos_precio_cero = EXCLUDED.mostrar_productos_precio_cero,
                 updated_at   = NOW()
         """, (
             tercero_id, json.dumps(modalidades), json.dumps(metodos_pago), aviso_pedido,
             domicilio_tarifa, domicilio_modo_fuera, json.dumps(domicilio_zona),
-            cambio_efectivo_modo, mensaje_sin_pedidos
+            cambio_efectivo_modo, mensaje_sin_pedidos,
+            facturacion_copias, mostrar_productos_precio_cero
         ))
         conn.commit()
 

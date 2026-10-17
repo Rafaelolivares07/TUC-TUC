@@ -748,7 +748,17 @@ def api_opciones(slug):
             conn.close()
             return jsonify({'ok': False, 'error': 'Restaurante no encontrado'}), 404
         solo_publicos = request.args.get('publico') == '1'
-        filtro_publico = " AND precio > 0" if solo_publicos else ""
+        mostrar_cero = True
+        try:
+            cfg_row = conn.execute("SELECT mostrar_productos_precio_cero FROM config_negocio WHERE tercero_id = %s", (rest['tercero_id'],)).fetchone()
+            if cfg_row and cfg_row['mostrar_productos_precio_cero'] is not None:
+                mostrar_cero = bool(cfg_row['mostrar_productos_precio_cero'])
+        except Exception:
+            pass
+
+        filtro_publico = ""
+        if solo_publicos or not mostrar_cero:
+            filtro_publico += " AND precio > 0"
         if solo_publicos and not rest['mostrar_adiciones_en_carta']:
             filtro_publico += " AND COALESCE(es_adicion, FALSE) = FALSE"
         opciones = conn.execute(

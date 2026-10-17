@@ -857,16 +857,26 @@ def _obtener_negocio_por_slug(conn, slug):
         "SELECT id, nombre, 'tienda' as tipo_negocio, tercero_id, color_primario, imagen_header, telegram_chat_id, admin_id, token_acceso FROM tiendas WHERE slug = %s AND activo = TRUE", (slug,)
     ).fetchone()
     if tienda:
-        return dict(tienda)
-    restaurante = conn.execute(
-        "SELECT id, nombre, 'restaurante' as tipo_negocio, tercero_id, NULL as color_primario, NULL as imagen_header, telegram_chat_id, admin_id, token_acceso FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
-    ).fetchone()
-    if restaurante:
-        res = dict(restaurante)
-        res['color_primario'] = '#e11d48'
-        res['imagen_header'] = None
-        return res
-    return None
+        res = dict(tienda)
+    else:
+        restaurante = conn.execute(
+            "SELECT id, nombre, 'restaurante' as tipo_negocio, tercero_id, NULL as color_primario, NULL as imagen_header, telegram_chat_id, admin_id, token_acceso FROM restaurantes WHERE slug = %s AND activo = TRUE", (slug,)
+        ).fetchone()
+        if restaurante:
+            res = dict(restaurante)
+            res['color_primario'] = '#e11d48'
+            res['imagen_header'] = None
+        else:
+            return None
+
+    try:
+        cfg = conn.execute("SELECT facturacion_copias, mostrar_productos_precio_cero FROM config_negocio WHERE tercero_id = %s", (res['tercero_id'],)).fetchone()
+        res['facturacion_copias'] = int(cfg['facturacion_copias'] or 1) if cfg and cfg['facturacion_copias'] else 1
+        res['mostrar_productos_precio_cero'] = bool(cfg['mostrar_productos_precio_cero'] if cfg and cfg['mostrar_productos_precio_cero'] is not None else True)
+    except Exception:
+        res['facturacion_copias'] = 1
+        res['mostrar_productos_precio_cero'] = True
+    return res
 
 @bp.route('/caja/<slug>')
 @bp.route('/tienda/<slug>/caja')
@@ -1315,10 +1325,16 @@ def api_tienda_productos(slug):
         if not negocio:
             return jsonify({'ok': False, 'error': 'Negocio no encontrado'}), 404
         solo_publicos = request.args.get('publico') == '1'
-        filtro_publico = " AND disponible = TRUE AND precio > 0" if solo_publicos else ""
+        mostrar_cero = negocio.get('mostrar_productos_precio_cero', True)
+        filtro_adicional = ""
+        if solo_publicos or not mostrar_cero:
+            filtro_adicional += " AND precio > 0"
+        if solo_publicos:
+            filtro_adicional += " AND disponible = TRUE"
+
         productos = conn.execute(
             "SELECT id, nombre, categoria, precio, costo, imagen, disponible, orden, descripcion, codigo_barra, catalogo_id, iva_pct "
-            f"FROM productos WHERE negocio_id = %s{filtro_publico} ORDER BY categoria, orden, nombre",
+            f"FROM productos WHERE negocio_id = %s{filtro_adicional} ORDER BY categoria, orden, nombre",
             (negocio['tercero_id'],)
         ).fetchall()
         

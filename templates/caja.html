@@ -4689,8 +4689,18 @@ async function conectarImpresoraSerial() {
 }
 
 async function conectarImpresoraBluetooth() {
+    const ua = navigator.userAgent || '';
+    if (/MiuiBrowser/i.test(ua)) {
+        alert('⚠️ Estás usando el Navegador Mi de Xiaomi.\n\nEste navegador de fábrica no soporta el selector de Bluetooth web.\n\n👉 Por favor abre https://admin.tuc-tuc.co en la aplicación oficial de GOOGLE CHROME.');
+        return;
+    }
+    if (/WhatsApp/i.test(ua) || /; wv\)/i.test(ua)) {
+        alert('⚠️ Estás dentro del navegador integrado de WhatsApp.\n\n👉 Toca los tres puntos (⋮) arriba a la derecha y selecciona "Abrir en Chrome".');
+        return;
+    }
+
     if (!navigator.bluetooth) {
-        alert('Tu navegador o dispositivo actual no tiene soporte para Web Bluetooth.\n\nRecomendado: Google Chrome en tu celular Android, ingresando por HTTPS.');
+        alert('Tu navegador o dispositivo actual no tiene soporte para Web Bluetooth.\n\n👉 Recomendado: Google Chrome oficial en tu celular Android, ingresando por HTTPS.');
         return;
     }
 
@@ -4700,6 +4710,7 @@ async function conectarImpresoraBluetooth() {
         btnConectar.innerHTML = '<span>⏳</span> <span>Buscando...</span>';
     }
 
+    const t0 = Date.now();
     try {
         toast('Buscando impresora Bluetooth... selecciona tu impresora en la lista');
         const device = await navigator.bluetooth.requestDevice({
@@ -4768,9 +4779,28 @@ async function conectarImpresoraBluetooth() {
         toast(`✅ Impresora "${device.name || 'StarPOS TP80NC'}" conectada exitosamente`, 'success');
 
     } catch (err) {
-        console.warn('Fallo de conexión Bluetooth:', err);
-        if (err.name !== 'NotFoundError') {
-            alert('Error de enlace Bluetooth: ' + (err.message || err));
+        const elapsed = Date.now() - t0;
+        const errStr = String(err.message || err.name || err);
+        console.warn(`Fallo de conexión Bluetooth (duró ${elapsed}ms):`, err);
+
+        const isCancel = err.name === 'NotFoundError' && (errStr.toLowerCase().includes('user cancelled') || errStr.toLowerCase().includes('cancel'));
+
+        if (isCancel && elapsed > 1500) {
+            // El usuario realmente tuvo la lista en pantalla y la cerró
+            toast('Búsqueda cancelada', 'warning');
+        } else {
+            // Android o el navegador bloquearon la apertura del selector
+            alert(
+                '⚠️ No se pudo abrir la lista de dispositivos Bluetooth.\n\n' +
+                'Detalle: ' + errStr + '\n\n' +
+                '💡 Pasos para solucionar en tu Xiaomi / Android:\n' +
+                '1. Asegúrate de estar usando GOOGLE CHROME oficial (no el navegador de WhatsApp ni Mi Browser).\n' +
+                '2. Enciende el BLUETOOTH de tu celular.\n' +
+                '3. Enciende la UBICACIÓN (GPS) en la barra superior (Android exige GPS activo para escanear Bluetooth LE).\n' +
+                '4. En Ajustes de tu Xiaomi > Aplicaciones > Administrar aplicaciones > Chrome > Permisos de la aplicación:\n' +
+                '   - Dispositivos cercanos: Actívalo en "Permitir".\n' +
+                '   - Ubicación: Actívalo en "Permitir".'
+            );
         }
         actualizarUIImpresoraBT();
     } finally {

@@ -5246,10 +5246,11 @@ function setupPresentacionAC(idx) {
 
   if (!inp || !list || !hid) return;
 
-  
+  inp.addEventListener('focus', () => {
+    setTimeout(() => inp.select(), 0);
+  });
 
   let currentFocus = -1;
-
   let timer = null;
 
 
@@ -8317,7 +8318,7 @@ function agregarLineaEntrada() {
 
     <div class="col-span-2 relative">
 
-      <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="Unidad">
+      <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="Unidad" onfocus="this.select()">
 
       <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
 
@@ -8435,7 +8436,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
     <div class="col-span-2 relative">
 
-      <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="${(presentacionNombre || 'Unidad').replace(/"/g,'&quot;')}">
+      <input type="text" id="ent-pres-${idx}" placeholder="Presentación" autocomplete="off" value="${(presentacionNombre || 'Unidad').replace(/"/g,'&quot;')}" onfocus="this.select()">
 
       <div id="ent-pres-list-${idx}" class="ac-list hidden"></div>
 

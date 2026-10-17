@@ -6612,12 +6612,24 @@ def api_ejecutar_recosteo(negocio_id):
         # --- FASE 2: Sincronizar Lotes de Producción (Entradas = SUM(Insumos Salidas)) ---
         placeholders_p = ','.join(['%s'] * len(producto_ids))
         producciones = conn.execute(f"""
-            SELECT mi.id, mi.producto_id, mi.documento_numero, mi.cantidad, mi.referencia_id, mi.asiento_inventario_id
+            SELECT DISTINCT mi.id, mi.producto_id, mi.documento_numero, mi.cantidad, mi.referencia_id, mi.asiento_inventario_id
             FROM movimientos_inventario mi
             WHERE mi.negocio_id = %s AND mi.tipo = 'entrada' AND mi.referencia_tipo = 'produccion'
-              AND mi.producto_id IN ({placeholders_p})
+              AND (
+                  mi.producto_id IN ({placeholders_p})
+                  OR mi.referencia_id IN (
+                      SELECT mi_sal.referencia_id FROM movimientos_inventario mi_sal
+                      WHERE mi_sal.negocio_id = %s AND mi_sal.tipo = 'salida' AND mi_sal.referencia_tipo = 'produccion'
+                        AND mi_sal.producto_id IN ({placeholders_p}) AND mi_sal.referencia_id IS NOT NULL
+                  )
+                  OR mi.documento_numero IN (
+                      SELECT mi_sal2.documento_numero FROM movimientos_inventario mi_sal2
+                      WHERE mi_sal2.negocio_id = %s AND mi_sal2.tipo = 'salida' AND mi_sal2.producto_id IN ({placeholders_p})
+                        AND (mi_sal2.producto_padre_id = mi.producto_id OR mi_sal2.referencia_tipo = 'produccion')
+                  )
+              )
             ORDER BY mi.id ASC
-        """, [negocio_id] + producto_ids).fetchall()
+        """, [negocio_id] + producto_ids + [negocio_id] + producto_ids + [negocio_id] + producto_ids).fetchall()
 
         prods_recostear_extra = set()
         for prod_ent in producciones:
@@ -6669,24 +6681,35 @@ def api_ejecutar_recosteo(negocio_id):
         conn.commit()
 
         # --- FASE 3: Sincronizar Ventas de Ensamble con Contabilidad (61*) y Pedidos POS ---
-        ventas = conn.execute(f"""
-            SELECT mi.producto_padre_id, mi.documento_numero,
-                   SUM(COALESCE(mi.valor_total, mi.cantidad * mi.costo_und, 0)) as total_kardex_plato
+        # Identificar las ventas y platos afectados por los productos recosteados
+        ventas_afectadas = conn.execute(f"""
+            SELECT DISTINCT mi.producto_padre_id, mi.documento_numero
             FROM movimientos_inventario mi
             WHERE mi.negocio_id = %s AND mi.tipo = 'salida' AND mi.producto_padre_id IS NOT NULL
               AND (mi.producto_id IN ({placeholders_p}) OR mi.producto_padre_id IN ({placeholders_p}))
-            GROUP BY mi.producto_padre_id, mi.documento_numero
         """, [negocio_id] + producto_ids + producto_ids).fetchall()
 
         ventas_sincronizadas = 0
         pedidos_sincronizados = 0
-        for v in ventas:
+        for v in ventas_afectadas:
             padre_id = v['producto_padre_id']
             doc_num = str(v['documento_numero'])
             consec = normalizar_numero(doc_num)
-            total_k = round(float(v['total_kardex_plato']), 2)
 
-            # Actualizar cuenta 61* (COGS)
+            # Sumar TODOS los insumos de este plato en este documento (no solo los recosteados)
+            tot_row = conn.execute("""
+                SELECT SUM(COALESCE(mi.valor_total, mi.cantidad * mi.costo_und, 0)) as total_kardex_plato
+                FROM movimientos_inventario mi
+                WHERE mi.negocio_id = %s AND mi.tipo = 'salida'
+                  AND mi.producto_padre_id = %s
+                  AND (mi.documento_numero = %s OR mi.documento_numero = %s)
+            """, (negocio_id, padre_id, doc_num, consec)).fetchone()
+
+            total_k = round(float(tot_row['total_kardex_plato'] or 0.0), 2) if tot_row else 0.0
+            if total_k <= 0:
+                continue
+
+            # Actualizar cuenta 61* (COGS) con el costo real del plato completo
             conn.execute("""
                 UPDATE movimientos_contables
                 SET monto = %s
@@ -6695,6 +6718,7 @@ def api_ejecutar_recosteo(negocio_id):
                     WHERE negocio_id = %s
                       AND (numero_documento = %s OR numero_documento = %s OR numero_documento = SPLIT_PART(%s, '-', 2))
                       AND LEFT(cuenta, 2) = '61'
+                      AND tipo IN ('debito', 'D')
                       AND (producto_padre_id = %s OR producto_id = %s)
                     ORDER BY id ASC
                     LIMIT 1
@@ -6702,7 +6726,7 @@ def api_ejecutar_recosteo(negocio_id):
             """, (total_k, negocio_id, doc_num, consec, doc_num, padre_id, padre_id))
             ventas_sincronizadas += 1
 
-            # Actualizar pedido_items
+            # Actualizar pedido_items con el costo unitario del plato completo
             qty_row = conn.execute("""
                 SELECT SUM(pi.cantidad) AS cant_vendida
                 FROM pedido_items pi
@@ -6726,6 +6750,28 @@ def api_ejecutar_recosteo(negocio_id):
                     )
                 """, (c_und_pi, negocio_id, padre_id, doc_num, consec, doc_num, consec))
                 pedidos_sincronizados += 1
+
+        # GARANTÍA TOTAL DE PARTIDA DOBLE:
+        # Asegurar que en cada comprobante afectado, cada línea 61* coincida exactamente con la suma de créditos 14* de sus ingredientes
+        conn.execute("""
+            UPDATE movimientos_contables mc61
+            SET monto = sub.sum_14
+            FROM (
+                SELECT comprobante_id,
+                       COALESCE(producto_padre_id, producto_id) AS ppid,
+                       ROUND(SUM(monto)::numeric, 2) AS sum_14
+                FROM movimientos_contables
+                WHERE negocio_id = %s
+                  AND tipo IN ('credito', 'C') AND LEFT(cuenta, 2) = '14'
+                  AND COALESCE(producto_padre_id, producto_id) IS NOT NULL
+                GROUP BY comprobante_id, COALESCE(producto_padre_id, producto_id)
+            ) sub
+            WHERE mc61.negocio_id = %s
+              AND mc61.comprobante_id = sub.comprobante_id
+              AND mc61.tipo IN ('debito', 'D') AND LEFT(mc61.cuenta, 2) = '61'
+              AND COALESCE(mc61.producto_padre_id, mc61.producto_id) = sub.ppid
+              AND mc61.monto != sub.sum_14
+        """, (negocio_id, negocio_id))
 
         conn.commit()
 

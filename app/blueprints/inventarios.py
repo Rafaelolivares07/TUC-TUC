@@ -9759,26 +9759,85 @@ def api_anular_produccion(negocio_id, prod_token):
     if 'usuario_id' not in session:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     
+    data = request.get_json() or {}
+    forzar = bool(data.get('forzar', False))
+
     conn = get_db_connection()
     try:
         # Get all movements for this production to identify products
         movs = conn.execute("""
-            SELECT id, producto_id
+            SELECT id, producto_id, tipo, cantidad, documento_fecha, bodega
             FROM movimientos_inventario
-            WHERE negocio_id = %s AND referencia_tipo = 'produccion' AND referencia_id = %s
-        """, (negocio_id, str(prod_token))).fetchall()
+            WHERE negocio_id = %s AND referencia_tipo = 'produccion' AND (referencia_id = %s OR referencia_id = %s)
+        """, (negocio_id, str(prod_token), f"{prod_token}")).fetchall()
         
         if not movs:
-            # Fallback check if it was stored as integer
-            movs = conn.execute("""
-                SELECT id, producto_id
-                FROM movimientos_inventario
-                WHERE negocio_id = %s AND referencia_tipo = 'produccion' AND (referencia_id = %s OR referencia_id = %s)
-            """, (negocio_id, str(prod_token), f"{prod_token}")).fetchall()
-            
-        if not movs:
             return jsonify({'ok': False, 'error': 'No se encontraron movimientos para esta producción'}), 404
+
+        # Identificar el movimiento de entrada del producto terminado
+        mov_entrada = next((m for m in movs if m['tipo'] == 'entrada'), None)
+        
+        # Validación de seguridad: verificar consumo posterior o fecha histórica si no viene forzado
+        if mov_entrada and not forzar:
+            p_id = mov_entrada['producto_id']
+            cant_prod = Decimal(str(mov_entrada['cantidad']))
+            fecha_prod = mov_entrada['documento_fecha']
+            bodega_prod = mov_entrada['bodega'] or 1
             
+            p_row = conn.execute("SELECT nombre FROM productos WHERE id = %s", (p_id,)).fetchone()
+            p_nombre = p_row['nombre'] if p_row else f"Producto #{p_id}"
+            
+            # Stock actual en bodega
+            saldo_row = conn.execute("""
+                SELECT stock FROM saldos_inventario
+                WHERE negocio_id = %s AND producto_id = %s AND bodega = %s
+            """, (negocio_id, p_id, bodega_prod)).fetchone()
+            stock_actual = Decimal(str(saldo_row['stock'])) if saldo_row else Decimal('0')
+            
+            # Ventas / salidas posteriores a esta entrada
+            ventas_post = conn.execute("""
+                SELECT COUNT(*) as cant, COALESCE(SUM(cantidad), 0) as total_consumido
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND producto_id = %s AND (bodega = %s OR bodega IS NULL)
+                  AND tipo = 'salida'
+                  AND (documento_fecha > %s OR (documento_fecha = %s AND id > %s))
+            """, (negocio_id, p_id, bodega_prod, fecha_prod, fecha_prod, mov_entrada['id'])).fetchone()
+            
+            cant_salidas = int(ventas_post['cant'] or 0)
+            total_consumido = Decimal(str(ventas_post['total_consumido'] or 0))
+            
+            hoy = _hoy_bogota()
+            es_antigua = (fecha_prod < hoy) if fecha_prod else False
+            stock_insuficiente = (stock_actual < cant_prod)
+            
+            if cant_salidas > 0 or stock_insuficiente or es_antigua:
+                dias_atras = (hoy - fecha_prod).days if (fecha_prod and fecha_prod <= hoy) else 0
+                motivos = []
+                if es_antigua:
+                    motivos.append(f"La producción se registró hace {dias_atras} días ({fecha_prod.strftime('%d/%m/%Y')}).")
+                if cant_salidas > 0:
+                    motivos.append(f"Ya se han registrado {cant_salidas} ventas o salidas posteriores que consumieron {float(total_consumido):,.2f} unidades de este producto.")
+                if stock_insuficiente:
+                    deficit = cant_prod - stock_actual
+                    motivos.append(f"El stock actual ({float(stock_actual):,.2f}) es menor a la cantidad producida ({float(cant_prod):,.2f}). Anularla dejará el stock en déficit temporal (-{float(deficit):,.2f}).")
+                
+                return jsonify({
+                    'ok': False,
+                    'requiere_confirmacion': True,
+                    'alerta': {
+                        'producto_id': p_id,
+                        'producto_nombre': p_nombre,
+                        'cantidad_producida': float(cant_prod),
+                        'stock_actual': float(stock_actual),
+                        'total_consumido': float(total_consumido),
+                        'cant_salidas': cant_salidas,
+                        'fecha_produccion': str(fecha_prod),
+                        'fecha_produccion_fmt': fecha_prod.strftime('%d/%m/%Y') if fecha_prod else '',
+                        'dias_atras': dias_atras,
+                        'motivos': motivos
+                    }
+                }), 200
+
         prod_ids = list({m['producto_id'] for m in movs})
         mov_ids = [m['id'] for m in movs]
         
@@ -9797,7 +9856,16 @@ def api_anular_produccion(negocio_id, prod_token):
             _recostear_producto(conn, negocio_id, prod_id)
             
         conn.commit()
-        return jsonify({'ok': True, 'mensaje': 'Producción anulada y costos recalculados correctamente'})
+
+        fecha_orig = str(mov_entrada['documento_fecha']) if (mov_entrada and mov_entrada['documento_fecha']) else None
+        p_id_ret = mov_entrada['producto_id'] if mov_entrada else None
+
+        return jsonify({
+            'ok': True,
+            'mensaje': 'Producción anulada y costos recalculados correctamente.',
+            'fecha_original': fecha_orig,
+            'producto_id': p_id_ret
+        })
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500

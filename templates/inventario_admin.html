@@ -2513,6 +2513,10 @@
           <div>
             <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Fecha documento</label>
             <input id="prod-fecha" type="date" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-white font-semibold text-slate-800 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition">
+            <div id="aviso-prod-reemplazo" class="hidden mt-1.5 text-xs font-bold text-amber-900 bg-amber-50 border border-amber-300 rounded-xl p-2 cursor-pointer hover:bg-amber-100 transition shadow-xs flex items-center justify-between" onclick="aplicarFechaProduccionReemplazo()">
+              <span>💡 Reemplazo de producción: Clic para aplicar fecha original (<b id="aviso-prod-reemplazo-fecha"></b>)</span>
+              <span class="text-xs bg-amber-200 text-amber-900 px-2 py-0.5 rounded-lg shrink-0">Usar</span>
+            </div>
           </div>
           <div class="relative">
             <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Responsable (Tercero)</label>
@@ -13618,6 +13622,8 @@ async function registrarProduccion() {
       document.getElementById('prod-responsable-id').value = '{{ session.get("chat_tercero_id", "") }}';
       limpiarPreview();
       ocultarSugerencia();
+      sessionStorage.removeItem('tuctuc_produccion_reemplazo');
+      actualizarAvisoProduccionReemplazo();
       cargarProductos();
       cargarTiposDocProduccion();
 
@@ -13896,6 +13902,7 @@ async function cargarTiposDocProduccion() {
       if (!prodFechaEl.value) prodFechaEl.value = getFechaHoyBogota();
       prodFechaEl.max = getFechaHoyBogota();
     }
+    actualizarAvisoProduccionReemplazo();
     const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/tipos-doc`);
     const d = await r.json();
     if (d.ok) {
@@ -14062,47 +14069,115 @@ function imprimirProduccion(token) {
 
 
 async function anularProduccion(token, nombre) {
-
-  const confirmed = confirm(`¿Estás seguro de que deseas ANULAR la producción de "${nombre}"?\n\nEsta acción eliminará el registro de producción, devolverá los insumos al inventario, borrará el asiento contable y recalculará los costos promedio ponderados de todos los productos afectados de forma retroactiva.`);
-
+  const confirmed = confirm(`¿Estás seguro de que deseas ANULAR la producción de "${nombre}"?\n\nEsta acción eliminará el registro de producción, devolverá los insumos al inventario, borrará el asiento contable y recalculará los costos promedio ponderados de todos los productos afectados.`);
   if (!confirmed) return;
 
-  
-
   try {
-
     const r = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/anular`, {
-
       method: 'POST',
-
-      headers: {'Content-Type': 'application/json'}
-
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ forzar: false })
     });
-
     const d = await r.json();
 
-    if (d.ok) {
+    if (d.requiere_confirmacion && d.alerta) {
+      const a = d.alerta;
+      let msg = `⚠️ ALERTA DE KARDEX Y CONSISTENCIA DE COSTOS\n`;
+      msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      msg += `Estás a punto de anular la producción de "${nombre}".\n\n`;
+      if (a.motivos && a.motivos.length) {
+        msg += `Detalles detectados:\n`;
+        a.motivos.forEach(m => { msg += `• ${m}\n`; });
+      }
+      msg += `\n🚨 IMPACTO CRUCIAL:\n`;
+      msg += `Si anulas esta producción para afinar mermas o corregir cantidades, es OBLIGATORIO que la nueva producción que registres TENGA LA FECHA ORIGINAL: ${a.fecha_produccion_fmt || a.fecha_produccion}.\n\n`;
+      msg += `De lo contrario, las ventas intermedias se desfasarán en costos y el Kardex entrará en saldo negativo.\n\n`;
+      msg += `¿Deseas continuar y ANULAR esta producción bajo tu confirmación?`;
 
-      toast('Producción anulada con éxito y costos recalculados');
+      if (!confirm(msg)) return;
 
-      cargarHistorialProduccion();
-
-      cargarProductos();
-
-    } else {
-
-      toast(d.error || 'Error al anular producción', false);
-
+      const r2 = await fetch(`/api/inventario/${NEGOCIO_ID}/produccion/${token}/anular`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ forzar: true })
+      });
+      const d2 = await r2.json();
+      if (d2.ok) {
+        if (d2.fecha_original) {
+          sessionStorage.setItem('tuctuc_produccion_reemplazo', JSON.stringify({
+            producto_id: d2.producto_id,
+            nombre: nombre,
+            fecha: d2.fecha_original
+          }));
+          actualizarAvisoProduccionReemplazo();
+        }
+        toast(`Producción anulada. Si vas a rehacerla, usa la fecha original: ${d2.fecha_original || a.fecha_produccion}`, true);
+        cargarHistorialProduccion();
+        cargarProductos();
+      } else {
+        toast(d2.error || 'Error al anular producción', false);
+      }
+      return;
     }
 
+    if (d.ok) {
+      if (d.fecha_original) {
+        sessionStorage.setItem('tuctuc_produccion_reemplazo', JSON.stringify({
+          producto_id: d.producto_id,
+          nombre: nombre,
+          fecha: d.fecha_original
+        }));
+        actualizarAvisoProduccionReemplazo();
+      }
+      toast('Producción anulada con éxito y costos recalculados');
+      cargarHistorialProduccion();
+      cargarProductos();
+    } else {
+      toast(d.error || 'Error al anular producción', false);
+    }
   } catch (e) {
-
     console.error(e);
-
     toast('Error de red al anular producción', false);
-
   }
+}
 
+function actualizarAvisoProduccionReemplazo() {
+  const box = document.getElementById('aviso-prod-reemplazo');
+  const spanFecha = document.getElementById('aviso-prod-reemplazo-fecha');
+  if (!box || !spanFecha) return;
+  const raw = sessionStorage.getItem('tuctuc_produccion_reemplazo');
+  if (!raw) {
+    box.classList.add('hidden');
+    return;
+  }
+  try {
+    const data = JSON.parse(raw);
+    if (data && data.fecha) {
+      spanFecha.textContent = data.fecha;
+      box.classList.remove('hidden');
+    } else {
+      box.classList.add('hidden');
+    }
+  } catch(e) {
+    box.classList.add('hidden');
+  }
+}
+
+function aplicarFechaProduccionReemplazo() {
+  const raw = sessionStorage.getItem('tuctuc_produccion_reemplazo');
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    if (data && data.fecha) {
+      const el = document.getElementById('prod-fecha');
+      if (el) {
+        el.value = data.fecha;
+        el.classList.add('ring-4', 'ring-amber-300');
+        setTimeout(() => el.classList.remove('ring-4', 'ring-amber-300'), 1500);
+        toast(`Fecha original (${data.fecha}) aplicada al documento.`);
+      }
+    }
+  } catch(e) {}
 }
 
 

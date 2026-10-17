@@ -134,6 +134,15 @@
               class="w-full border border-gray-200 rounded-xl p-3 text-sm text-gray-700 focus:outline-none focus:border-indigo-400 resize-none"></textarea>
   </div>
 
+  <!-- Mensaje sin pedidos -->
+  <div class="bg-white rounded-2xl shadow p-5">
+    <h2 class="text-base font-bold text-gray-800 mb-1">Mensaje sin pedidos</h2>
+    <p class="text-sm text-gray-500 mb-3">Texto que ve el cliente cuando todavía no tiene pedidos en seguimiento. Déjalo vacío para no mostrar nada.</p>
+    <input id="mensaje-sin-pedidos" type="text" maxlength="180"
+           placeholder="Aún no has pedido nada"
+           class="w-full border border-gray-200 rounded-xl p-3 text-sm text-gray-700 focus:outline-none focus:border-indigo-400">
+  </div>
+
   <!-- Parámetros de Facturación -->
   <div class="bg-white rounded-2xl shadow p-5 border-l-4 border-indigo-600 space-y-4">
     <div class="flex items-center gap-2 mb-1">
@@ -149,7 +158,7 @@
           <label for="facturacion-copias" class="text-xs font-bold text-gray-800 uppercase tracking-wide block">Copias de Factura a Imprimir</label>
           <p class="text-xs text-gray-500">Número de impresiones idénticas que emite la impresora por cada venta.</p>
         </div>
-        <select id="facturacion-copias" class="border border-gray-300 rounded-xl px-3 py-2 text-xs font-black bg-white text-gray-800 focus:outline-none focus:border-indigo-500 shrink-0">
+        <select id="facturacion-copias" onchange="guardar(true)" class="border border-gray-300 rounded-xl px-3 py-2 text-xs font-black bg-white text-gray-800 focus:outline-none focus:border-indigo-500 shrink-0">
           <option value="1">1 (Solo Original)</option>
           <option value="2">2 (Original + 1 Copia)</option>
           <option value="3">3 (Original + 2 Copias)</option>
@@ -165,7 +174,7 @@
           <p class="text-xs text-gray-500 leading-snug">Si está desactivado, oculta automáticamente los artículos sin precio ($0) en la Caja POS y en la carta digital pública.</p>
         </div>
         <div class="relative inline-flex items-center shrink-0">
-          <input type="checkbox" id="mostrar-precio-cero" class="sr-only peer">
+          <input type="checkbox" id="mostrar-precio-cero" class="sr-only peer" onchange="cambiarMostrarPrecioCero(this.checked)">
           <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
         </div>
       </label>
@@ -242,19 +251,35 @@ async function cargar() {
     domicilioZonaActual = d.config.domicilio_zona || [];
     renderMetodos(d.catalogo_metodos, activosMetodos);
 
-    document.getElementById('aviso-pedido').value = d.config.aviso_pedido || '';
-    document.getElementById('mensaje-sin-pedidos').value = d.config.mensaje_sin_pedidos ?? 'Aun no has pedido nada';
-    document.getElementById('domicilio-tarifa').value = Number(d.config.domicilio_tarifa || 0) || '';
-    document.getElementById('domicilio-modo-fuera').value = d.config.domicilio_modo_fuera || 'por_confirmar';
-    document.getElementById('cambio-efectivo-modo').value = d.config.cambio_efectivo_modo || 'N';
+    const avisoInp = document.getElementById('aviso-pedido');
+    if (avisoInp) avisoInp.value = d.config.aviso_pedido || '';
+
+    const msgSinPedInp = document.getElementById('mensaje-sin-pedidos');
+    if (msgSinPedInp) msgSinPedInp.value = d.config.mensaje_sin_pedidos ?? 'Aun no has pedido nada';
+
+    const domTarifaInp = document.getElementById('domicilio-tarifa');
+    if (domTarifaInp) domTarifaInp.value = Number(d.config.domicilio_tarifa || 0) || '';
+
+    const domModoInp = document.getElementById('domicilio-modo-fuera');
+    if (domModoInp) domModoInp.value = d.config.domicilio_modo_fuera || 'por_confirmar';
+
+    const cambioModoInp = document.getElementById('cambio-efectivo-modo');
+    if (cambioModoInp) cambioModoInp.value = d.config.cambio_efectivo_modo || 'N';
+
     const tgInp = document.getElementById('telegram-chat-id');
     if (tgInp) tgInp.value = d.config.telegram_chat_id || '';
+
     const copiasInp = document.getElementById('facturacion-copias');
     if (copiasInp) copiasInp.value = String(d.config.facturacion_copias || 1);
+
     const ceroInp = document.getElementById('mostrar-precio-cero');
     if (ceroInp) ceroInp.checked = d.config.mostrar_productos_precio_cero !== false;
+
     actualizarConfigDomicilioVisible();
-  } catch(e) { toast('Error de red', true); }
+  } catch(e) {
+    console.error('Error cargando config:', e);
+    toast('Error de red', true);
+  }
 }
 
 async function cargarDominios() {
@@ -478,7 +503,7 @@ async function toggleMetodo(codigo, nuevoEstado) {
     activosMetodos = activosMetodos.filter(c => c !== codigo);
   }
   const modalidades = [...document.querySelectorAll('input[name="modalidad"]:checked')].map(cb => cb.value);
-  const aviso_pedido = document.getElementById('aviso-pedido').value.trim();
+  const aviso_pedido = (document.getElementById('aviso-pedido')?.value || '').trim();
   try {
     await fetch(`/api/negocio/${TERCERO_ID}/config`, {
       method: 'POST',
@@ -487,16 +512,19 @@ async function toggleMetodo(codigo, nuevoEstado) {
         modalidades: modalidades.length ? modalidades : ['domicilio', 'recoger'],
         metodos_pago: activosMetodos,
         aviso_pedido,
-        domicilio_tarifa: Number(document.getElementById('domicilio-tarifa').value || 0),
-        domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera').value,
+        domicilio_tarifa: Number(document.getElementById('domicilio-tarifa')?.value || 0),
+        domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera')?.value || 'por_confirmar',
         domicilio_zona: domicilioZonaActual,
-        cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value,
-        mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos').value,
+        cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo')?.value || 'N',
+        mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos')?.value ?? '',
         facturacion_copias: Number(document.getElementById('facturacion-copias')?.value || 1),
-        mostrar_productos_precio_cero: document.getElementById('mostrar-precio-cero')?.checked ?? true
+        mostrar_productos_precio_cero: document.getElementById('mostrar-precio-cero')?.checked ?? true,
+        telegram_chat_id: document.getElementById('telegram-chat-id')?.value?.trim() || ''
       })
     });
-  } catch(e) {}
+  } catch(e) {
+    console.error('Error guardando en toggleMetodo:', e);
+  }
   fetch(`/api/negocio/${TERCERO_ID}/config`)
     .then(r => r.json())
     .then(d => { metodos_info_actual = d.metodos_info || {}; renderMetodos(d.catalogo_metodos, activosMetodos); });
@@ -552,33 +580,45 @@ function verImagen(codigo) {
   document.body.appendChild(overlay);
 }
 
-async function guardar() {
+async function cambiarMostrarPrecioCero(checked) {
+  await guardar(true);
+  toast(checked ? 'Productos con precio $0 visibles' : 'Productos con precio $0 ocultos');
+}
+
+async function guardar(silencioso = false) {
   const modalidades = [...document.querySelectorAll('input[name="modalidad"]:checked')].map(cb => cb.value);
-  const aviso_pedido = document.getElementById('aviso-pedido').value.trim();
+  const aviso_pedido = (document.getElementById('aviso-pedido')?.value || '').trim();
 
   if (!modalidades.length) { toast('Selecciona al menos una modalidad de entrega', true); return; }
   if (!activosMetodos.length) { toast('Selecciona al menos un método de pago', true); return; }
 
   try {
+    const payload = {
+      modalidades,
+      metodos_pago: activosMetodos,
+      aviso_pedido,
+      domicilio_tarifa: Number(document.getElementById('domicilio-tarifa')?.value || 0),
+      domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera')?.value || 'por_confirmar',
+      domicilio_zona: domicilioZonaActual,
+      cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo')?.value || 'N',
+      mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos')?.value ?? '',
+      facturacion_copias: Number(document.getElementById('facturacion-copias')?.value || 1),
+      mostrar_productos_precio_cero: document.getElementById('mostrar-precio-cero')?.checked ?? true,
+      telegram_chat_id: document.getElementById('telegram-chat-id')?.value?.trim() || ''
+    };
+
     const r = await fetch(`/api/negocio/${TERCERO_ID}/config`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        modalidades, metodos_pago: activosMetodos, aviso_pedido,
-        domicilio_tarifa: Number(document.getElementById('domicilio-tarifa').value || 0),
-        domicilio_modo_fuera: document.getElementById('domicilio-modo-fuera').value,
-        domicilio_zona: domicilioZonaActual,
-        cambio_efectivo_modo: document.getElementById('cambio-efectivo-modo').value,
-        mensaje_sin_pedidos: document.getElementById('mensaje-sin-pedidos').value,
-        facturacion_copias: Number(document.getElementById('facturacion-copias')?.value || 1),
-        mostrar_productos_precio_cero: document.getElementById('mostrar-precio-cero')?.checked ?? true,
-        telegram_chat_id: document.getElementById('telegram-chat-id')?.value?.trim() || ''
-      })
+      body: JSON.stringify(payload)
     });
     const d = await r.json();
-    if (!d.ok) { toast(d.error, true); return; }
-    toast('Configuración guardada');
-  } catch(e) { toast('Error de red', true); }
+    if (!d.ok) { toast(d.error || 'Error al guardar', true); return; }
+    if (!silencioso) toast('Configuración guardada');
+  } catch(e) {
+    console.error('Error guardando config:', e);
+    toast('Error de red', true);
+  }
 }
 
 cargar();

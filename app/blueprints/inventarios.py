@@ -6222,7 +6222,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
 
                 if comp_id_inv:
                     target_prod_v = padre_id if padre_id else producto_id
-                    # Sincronizar cada línea 61* de este comprobante con la suma exacta de sus propios créditos 14* por plato/producto
+                    # Sincronizar cada línea 61* de costo de ventas de este comprobante con la suma exacta de sus propios créditos 14* por plato/producto
                     conn.execute("""
                         UPDATE movimientos_contables mc61
                         SET monto = sub.sum_14
@@ -6237,22 +6237,27 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
                         ) sub
                         WHERE mc61.negocio_id = %s AND mc61.comprobante_id = %s
                           AND mc61.tipo IN ('debito', 'D') AND LEFT(mc61.cuenta, 2) = '61'
+                          AND mc61.cuenta NOT LIKE '6142%%' AND mc61.cuenta NOT LIKE '6143%%'
+                          AND (mc61.tipo_documento ILIKE '%%VENTA%%' OR mc61.tipo_documento ILIKE '%%FACTURA%%')
                           AND COALESCE(mc61.producto_padre_id, mc61.producto_id) = sub.ppid
                     """, (negocio_id, comp_id_inv, negocio_id, comp_id_inv))
 
-                    # Si aún quedara diferencia residual entre 61* y 14* (por ej. líneas 61* sin producto_id), cuadrar contra la línea 61*
+                    # Si aún quedara diferencia residual entre 61* (costo de venta) y 14*, cuadrar contra la línea 61* del plato
                     diff_61_14 = conn.execute("""
                         SELECT
                             COALESCE(SUM(CASE WHEN tipo IN ('credito', 'C') AND LEFT(cuenta, 2) = '14' THEN monto ELSE 0 END), 0) -
-                            COALESCE(SUM(CASE WHEN tipo IN ('debito', 'D') AND LEFT(cuenta, 2) = '61' THEN monto ELSE 0 END), 0) AS dif
+                            COALESCE(SUM(CASE WHEN tipo IN ('debito', 'D') AND LEFT(cuenta, 2) = '61' AND cuenta NOT LIKE '6142%%' AND cuenta NOT LIKE '6143%%' THEN monto ELSE 0 END), 0) AS dif
                         FROM movimientos_contables
                         WHERE negocio_id = %s AND comprobante_id = %s
+                          AND (tipo_documento ILIKE '%%VENTA%%' OR tipo_documento ILIKE '%%FACTURA%%')
                     """, (negocio_id, comp_id_inv)).fetchone()
                     if diff_61_14 and abs(float(diff_61_14['dif'] or 0)) >= 0.01:
                         lin_61 = conn.execute("""
                             SELECT id FROM movimientos_contables
                             WHERE negocio_id = %s AND comprobante_id = %s
                               AND tipo IN ('debito', 'D') AND LEFT(cuenta, 2) = '61'
+                              AND cuenta NOT LIKE '6142%%' AND cuenta NOT LIKE '6143%%'
+                              AND (tipo_documento ILIKE '%%VENTA%%' OR tipo_documento ILIKE '%%FACTURA%%')
                             ORDER BY CASE WHEN (producto_padre_id = %s OR producto_id = %s) THEN 0 ELSE 1 END, id DESC
                             LIMIT 1
                         """, (negocio_id, comp_id_inv, target_prod_v, target_prod_v)).fetchone()
@@ -6709,7 +6714,7 @@ def api_ejecutar_recosteo(negocio_id):
             if total_k <= 0:
                 continue
 
-            # Actualizar cuenta 61* (COGS) con el costo real del plato completo
+            # Actualizar cuenta 61* (COGS de alimentos/ventas) con el costo real del plato completo
             conn.execute("""
                 UPDATE movimientos_contables
                 SET monto = %s
@@ -6718,6 +6723,8 @@ def api_ejecutar_recosteo(negocio_id):
                     WHERE negocio_id = %s
                       AND (numero_documento = %s OR numero_documento = %s OR numero_documento = SPLIT_PART(%s, '-', 2))
                       AND LEFT(cuenta, 2) = '61'
+                      AND cuenta NOT LIKE '6142%%' AND cuenta NOT LIKE '6143%%'
+                      AND (tipo_documento ILIKE '%%VENTA%%' OR tipo_documento ILIKE '%%FACTURA%%')
                       AND tipo IN ('debito', 'D')
                       AND (producto_padre_id = %s OR producto_id = %s)
                     ORDER BY id ASC
@@ -6751,8 +6758,8 @@ def api_ejecutar_recosteo(negocio_id):
                 """, (c_und_pi, negocio_id, padre_id, doc_num, consec, doc_num, consec))
                 pedidos_sincronizados += 1
 
-        # GARANTÍA TOTAL DE PARTIDA DOBLE:
-        # Asegurar que en cada comprobante afectado, cada línea 61* coincida exactamente con la suma de créditos 14* de sus ingredientes
+        # GARANTÍA TOTAL DE PARTIDA DOBLE EN VENTAS:
+        # Asegurar que en cada comprobante de venta afectado, cada línea 61* coincida exactamente con la suma de créditos 14* de sus ingredientes
         conn.execute("""
             UPDATE movimientos_contables mc61
             SET monto = sub.sum_14
@@ -6764,11 +6771,14 @@ def api_ejecutar_recosteo(negocio_id):
                 WHERE negocio_id = %s
                   AND tipo IN ('credito', 'C') AND LEFT(cuenta, 2) = '14'
                   AND COALESCE(producto_padre_id, producto_id) IS NOT NULL
+                  AND (tipo_documento ILIKE '%%VENTA%%' OR tipo_documento ILIKE '%%FACTURA%%')
                 GROUP BY comprobante_id, COALESCE(producto_padre_id, producto_id)
             ) sub
             WHERE mc61.negocio_id = %s
               AND mc61.comprobante_id = sub.comprobante_id
               AND mc61.tipo IN ('debito', 'D') AND LEFT(mc61.cuenta, 2) = '61'
+              AND mc61.cuenta NOT LIKE '6142%%' AND mc61.cuenta NOT LIKE '6143%%'
+              AND (mc61.tipo_documento ILIKE '%%VENTA%%' OR mc61.tipo_documento ILIKE '%%FACTURA%%')
               AND COALESCE(mc61.producto_padre_id, mc61.producto_id) = sub.ppid
               AND mc61.monto != sub.sum_14
         """, (negocio_id, negocio_id))

@@ -59,9 +59,14 @@ def chat_panel_v2():
 def chat_invitado(token):
     try:
         conn = get_db_connection()
-        conv = conn.execute(
-            'SELECT invitado_id, activa FROM conversaciones WHERE token = %s', (token,)
-        ).fetchone()
+        conv = conn.execute('''
+            SELECT c.creador_id, c.invitado_id, c.activa,
+                   t_cre.nombre AS nombre_creador, t_inv.nombre AS nombre_invitado
+            FROM conversaciones c
+            LEFT JOIN terceros t_cre ON t_cre.id = c.creador_id
+            LEFT JOIN terceros t_inv ON t_inv.id = c.invitado_id
+            WHERE c.token = %s
+        ''', (token,)).fetchone()
         conn.close()
     except Exception:
         conv = None
@@ -69,17 +74,22 @@ def chat_invitado(token):
     if not conv or not conv['activa']:
         return "Conversación no encontrada", 404
 
-    if 'usuario_id' not in session:
+    # Si quien abre el link no es participante de esta conversación
+    # (sin sesión, o con sesión de otra persona/otro invitado), entra como el invitado.
+    actual = get_chat_tercero_id()
+    if actual not in (conv['creador_id'], conv['invitado_id']):
         session['chat_tercero_id'] = conv['invitado_id']
         session['chat_token'] = token
+        actual = conv['invitado_id']
 
-    mi_id = session.get('usuario_id') or conv['invitado_id']
-    es_inv = 'usuario_id' not in session
+    es_inv = actual == conv['invitado_id']
+    nombre_otro = conv['nombre_creador'] if es_inv else conv['nombre_invitado']
 
-    return render_template('chat.html',
-                           mi_tercero_id=mi_id,
+    return render_template('chat_v3.html',
+                           mi_tercero_id=actual,
                            es_invitado=es_inv,
-                           token_inicial=token)
+                           token_inicial=token,
+                           nombre_inicial=nombre_otro or '')
 
 
 # ── Helpers de schema ─────────────────────────────────────────────────────
@@ -588,18 +598,28 @@ def api_chat_perfil_foto():
 
 @bp.route('/api/chat/eliminar/<token>', methods=['DELETE'])
 def api_chat_eliminar(token):
-    if 'usuario_id' not in session:
+    mid = get_chat_tercero_id()
+    uid = session.get('usuario_id')
+    ids_validos = tuple({x for x in (mid, uid) if x})
+    if not ids_validos:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     try:
         conn = get_db_connection()
+        placeholders = ', '.join(['%s'] * len(ids_validos))
         conv = conn.execute(
-            'SELECT * FROM conversaciones WHERE token = %s AND creador_id = %s',
-            (token, session['usuario_id'])
+            f'''SELECT * FROM conversaciones
+                WHERE token = %s
+                  AND (creador_id IN ({placeholders}) OR invitado_id IN ({placeholders}))''',
+            (token,) + ids_validos + ids_validos
         ).fetchone()
         if not conv:
             conn.close()
             return jsonify({'ok': False, 'error': 'No encontrado'}), 404
         conn.execute('DELETE FROM mensajes WHERE conversacion_id = %s', (conv['id'],))
+        try:
+            conn.execute('DELETE FROM apuntes WHERE token_conv = %s', (token,))
+        except Exception:
+            pass
         conn.execute('DELETE FROM conversaciones WHERE id = %s', (conv['id'],))
         conn.execute("DELETE FROM terceros WHERE id = %s AND tipo_tercero = 'invitado'",
                      (conv['invitado_id'],))
@@ -615,7 +635,7 @@ def api_chat_eliminar(token):
 @bp.route('/api/chat/fotos/agregar', methods=['POST'])
 def api_chat_fotos_agregar():
     token_inv = request.form.get('token_invitado', '').strip()
-    usuario_id = session.get('usuario_id')
+    usuario_id = get_chat_tercero_id()
     if not usuario_id and not token_inv:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     if 'foto' not in request.files:
@@ -691,7 +711,7 @@ def api_chat_fotos_ver():
 def api_chat_fotos_eliminar(foto_id):
     body = request.get_json(silent=True, force=True) or {}
     token_inv = body.get('token_invitado', '') if isinstance(body, dict) else ''
-    usuario_id = session.get('usuario_id')
+    usuario_id = get_chat_tercero_id()
     if not usuario_id and not token_inv:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     try:
@@ -721,9 +741,9 @@ def api_chat_fotos_eliminar(foto_id):
 
 @bp.route('/api/chat/merlin/iniciar', methods=['POST'])
 def api_chat_merlin_iniciar():
-    if 'usuario_id' not in session:
+    usuario_id = get_chat_tercero_id()
+    if not usuario_id:
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
-    usuario_id = session['usuario_id']
     try:
         conn = get_db_connection()
         merlin = conn.execute(

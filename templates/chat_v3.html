@@ -1240,6 +1240,7 @@
 const MI_TERCERO_ID = {{ mi_tercero_id or 0 }};
 const ES_INVITADO   = {{ 'true' if es_invitado else 'false' }};
 const TOKEN_INICIAL = "{{ token_inicial }}";
+const NOMBRE_INICIAL = {{ (nombre_inicial or '') | tojson }};
 
 // ── Estado compartido ────────────────────────────────────────────
 let grabando = false, mediaRecorder = null, audioChunks = [];
@@ -1456,7 +1457,7 @@ function abrirConv(token, nombre) {
 function volverSidebar() {
   document.title = 'Chat — TUC TUC';
   document.getElementById('sidebar').style.display = '';
-  document.getElementById('panel-chat').style.display = 'none';
+  document.getElementById('panel-chat').style.display = window.innerWidth < 768 ? 'none' : '';
   if (pollingInterval) clearInterval(pollingInterval);
   tokenActivo = '';
 }
@@ -2470,6 +2471,16 @@ async function cargarConversaciones() {
       lista.appendChild(item);
     });
 
+    if (!(data.conversaciones || []).length) {
+      lista.innerHTML = '<div style="padding:18px;color:var(--muted);font-size:13px;text-align:center">Sin conversaciones aún.<br>Toca ＋ para invitar a alguien.</div>';
+    }
+
+    // Auto-abrir la conversación del link de invitación (aunque no salga en la lista)
+    if (TOKEN_INICIAL && !tokenActivo) {
+      const ci = convData[TOKEN_INICIAL];
+      abrirConv(TOKEN_INICIAL, (ci && ci.nombre_otro) || NOMBRE_INICIAL || 'Chat');
+    }
+
     const search = document.getElementById('sidebar-search');
     if (search && !search._bound6c) {
       search._bound6c = true;
@@ -2855,7 +2866,7 @@ async function enviarCard(payload) {
         mensaje: payload.nombre,
         tipo: 'card',
         card_payload: payload,
-        es_creador: window._esCreador || false
+        es_creador: (convData[token]?.creador_id === MI_TERCERO_ID)
       })
     });
   } catch (e) { console.error('enviarCard', e); }

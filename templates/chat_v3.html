@@ -1128,25 +1128,82 @@
 <!-- MODAL NUEVA CONVERSACIÓN                                       -->
 <!-- ══════════════════════════════════════════════════════════════ -->
 <div id="modal-invitado" class="modal-backdrop" style="display:none" onclick="cerrarModal()">
-  <div class="modal-box" onclick="event.stopPropagation()">
+  <div class="modal-box" style="max-width:400px;width:92%" onclick="event.stopPropagation()">
     <h2 class="modal-title">Nueva conversación</h2>
-    <label class="modal-label">Nombre del contacto</label>
-    <input id="inv-nombre" type="text" placeholder="ej: María" autocomplete="off"
-           class="modal-input"
-           onkeydown="if(event.key==='Enter')document.getElementById('inv-origen').focus()">
-    <label class="modal-label">Origen (opcional)</label>
-    <input id="inv-origen" type="text" placeholder="ej: Tinder, WhatsApp…"
-           class="modal-input"
-           onkeydown="if(event.key==='Enter')crearInvitado()">
-    <div id="inv-link-wrap" style="display:none;margin-bottom:12px">
-      <div id="inv-link-texto" class="modal-link-box" onclick="copiarLinkInv()"></div>
-      <button onclick="copiarLinkInv()"
-              style="width:100%;background:var(--accent);color:#fcf9f3;padding:13px;border-radius:12px;
-                     font-size:14px;font-weight:600">📋 Copiar link</button>
+
+    <!-- Pestañas: Buscar Usuario vs Invitado externo -->
+    <div style="display:flex;gap:6px;background:var(--surface2);padding:4px;border-radius:12px;margin-bottom:14px">
+      <button id="tab-nuevo-usuario" onclick="cambiarTabNuevaConv('usuario')"
+              style="flex:1;padding:8px 10px;border-radius:9px;font-size:12.5px;font-weight:600;
+                     background:var(--accent);color:#fcf9f3;transition:all 0.15s">
+        👤 Buscar Usuario
+      </button>
+      <button id="tab-nuevo-invitado" onclick="cambiarTabNuevaConv('invitado')"
+              style="flex:1;padding:8px 10px;border-radius:9px;font-size:12.5px;font-weight:600;
+                     background:transparent;color:var(--ink-soft);transition:all 0.15s">
+        🔗 Invitado con Link
+      </button>
     </div>
-    <div id="inv-btns" class="modal-btn-row">
-      <button onclick="cerrarModal()" class="btn-cancel">Cancelar</button>
-      <button onclick="crearInvitado()" class="btn-primary">Crear link</button>
+
+    <!-- Panel 1: Buscar un Usuario existente -->
+    <div id="pane-nuevo-usuario">
+      <label class="modal-label">Buscar un Usuario existente</label>
+      <input id="inp-buscar-usuario" type="search" placeholder="Nombre o teléfono del usuario…" autocomplete="off"
+             class="modal-input" style="margin-bottom:10px"
+             oninput="buscarUsuariosApp(this.value)">
+      <div id="lista-usuarios-app"
+           style="max-height:240px;overflow-y:auto;border:1px solid var(--hairline);border-radius:12px;
+                  background:var(--surface2);margin-bottom:14px;padding:4px">
+        <div style="padding:14px;text-align:center;font-size:12.5px;color:var(--muted)">Cargando usuarios…</div>
+      </div>
+      <div class="modal-btn-row">
+        <button onclick="cerrarModal()" class="btn-cancel" style="width:100%">Cerrar</button>
+      </div>
+    </div>
+
+    <!-- Panel 2: Crear link de invitado externo -->
+    <div id="pane-nuevo-invitado" style="display:none">
+      <label class="modal-label">Nombre del contacto</label>
+      <input id="inv-nombre" type="text" placeholder="ej: María" autocomplete="off"
+             class="modal-input"
+             onkeydown="if(event.key==='Enter')document.getElementById('inv-origen').focus()">
+      <label class="modal-label">Origen (opcional)</label>
+      <input id="inv-origen" type="text" placeholder="ej: WhatsApp, Cliente…"
+             class="modal-input"
+             onkeydown="if(event.key==='Enter')crearInvitado()">
+      <div id="inv-link-wrap" style="display:none;margin-bottom:12px">
+        <div id="inv-link-texto" class="modal-link-box" onclick="copiarLinkInv()"></div>
+        <button onclick="copiarLinkInv()"
+                style="width:100%;background:var(--accent);color:#fcf9f3;padding:13px;border-radius:12px;
+                       font-size:14px;font-weight:600">📋 Copiar link</button>
+      </div>
+      <div id="inv-btns" class="modal-btn-row">
+        <button onclick="cerrarModal()" class="btn-cancel">Cancelar</button>
+        <button onclick="crearInvitado()" class="btn-primary">Crear link</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- MODAL ENLAZAR CONVERSACIÓN CON USUARIO                         -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div id="modal-enlazar-usuario" class="modal-backdrop" style="display:none" onclick="cerrarModalEnlazarUsuario()">
+  <div class="modal-box" style="max-width:400px;width:92%" onclick="event.stopPropagation()">
+    <h2 class="modal-title">🔗 Enlazar con Usuario</h2>
+    <p style="font-size:12.5px;color:var(--muted);margin-bottom:12px;line-height:1.45">
+      Selecciona el Usuario de los módulos con quien corresponde esta conversación para unificar sus mensajes.
+    </p>
+    <input id="inp-enlazar-usuario" type="search" placeholder="Buscar usuario por nombre o teléfono…" autocomplete="off"
+           class="modal-input" style="margin-bottom:10px"
+           oninput="buscarUsuariosParaEnlazar(this.value)">
+    <div id="lista-enlazar-usuarios"
+         style="max-height:240px;overflow-y:auto;border:1px solid var(--hairline);border-radius:12px;
+                background:var(--surface2);margin-bottom:14px;padding:4px">
+      <div style="padding:14px;text-align:center;font-size:12.5px;color:var(--muted)">Cargando usuarios…</div>
+    </div>
+    <div class="modal-btn-row">
+      <button onclick="cerrarModalEnlazarUsuario()" class="btn-cancel" style="width:100%">Cancelar</button>
     </div>
   </div>
 </div>
@@ -1369,9 +1426,10 @@ function abrirConv(token, nombre) {
   const tipoOtro= c.tipo_otro || 'invitado';
   const esAi    = tipoOtro === 'merlin';
 
-  const estadoTxt = tipoOtro === 'merlin'    ? 'IA · Merlin'
-                  : tipoOtro === 'registrado' ? 'registrado'
-                  :                             'sin registro';
+  const estadoTxt = tipoOtro === 'merlin'                 ? 'IA · Merlin'
+                  : (tipoOtro && tipoOtro !== 'invitado') ? 'usuario vinculado'
+                  : c.origen === 'usuario_app'            ? 'usuario vinculado'
+                  :                                         'sin registro';
 
   const avOtro = avatarHtml(fotoOtro, nombre, 36, esAi);
 
@@ -1404,6 +1462,10 @@ function abrirConv(token, nombre) {
       <button class="dots-item" id="btn-compartir" onclick="copiarLinkActivo();cerrarDotsMenu()">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
         Compartir link
+      </button>
+      <button class="dots-item" onclick="abrirModalEnlazarUsuario();cerrarDotsMenu()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Enlazar con Usuario
       </button>
       <div class="dots-separator"></div>
       <button class="dots-item" id="btn-tts" onclick="toggleTTS();cerrarDotsMenu()">
@@ -1443,6 +1505,9 @@ function abrirConv(token, nombre) {
       </button>
       <div id="apuntes-body" style="display:none"></div>
     </div>
+
+    <!-- ── Barra contextual para compartir reporte / consulta de pantalla ── -->
+    <div id="share-ctx-bar" style="display:none"></div>
 
     <!-- ── Mensajes ────────────────────────────────────────── -->
     <div id="mensajes"></div>
@@ -1487,6 +1552,7 @@ function abrirConv(token, nombre) {
   document.title = `${nombre} — TUC TUC`;
   modoApunte = false;
   cargarApuntes();
+  _renderShareCtxBar();
   pollMensajes();
   pollingInterval = setInterval(pollMensajes, 3000);
   setInterval(actualizarEstados, 8000);
@@ -1573,6 +1639,11 @@ function abrirPlusMenu() {
           <span class="plus-item-icon">🛒</span>
           <span class="plus-item-label">Producto</span>
           <span class="plus-item-sub">De tus negocios</span>
+        </button>
+        <button class="plus-item" onclick="cerrarSheet();prepararCompartirUrlManual()">
+          <span class="plus-item-icon">📊</span>
+          <span class="plus-item-label">Reporte / URL</span>
+          <span class="plus-item-sub">Compartir o consultar</span>
         </button>
         <button class="plus-item" onclick="cerrarSheet();toggleModoApunte()">
           <span class="plus-item-icon">📌</span>
@@ -2529,11 +2600,17 @@ async function cargarConversaciones() {
       lista.innerHTML = '<div style="padding:18px;color:var(--muted);font-size:13px;text-align:center">Sin conversaciones aún.<br>Toca ＋ para invitar a alguien.</div>';
     }
 
-    // Auto-abrir la conversación del link de invitación (aunque no salga en la lista)
-    if (TOKEN_INICIAL && !tokenActivo) {
-      const ci = convData[TOKEN_INICIAL];
-      abrirConv(TOKEN_INICIAL, (ci && ci.nombre_otro) || NOMBRE_INICIAL || 'Chat');
+    // Auto-abrir la conversación del link de invitación o del globo flotante (open_token)
+    const _qp = new URLSearchParams(location.search);
+    const _tokIni = TOKEN_INICIAL || _qp.get('open_token') || '';
+    if (_tokIni && !tokenActivo) {
+      const ci = convData[_tokIni];
+      abrirConv(_tokIni, (ci && ci.nombre_otro) || NOMBRE_INICIAL || 'Chat');
+    } else if (_pendingShareContext && !tokenActivo && (data.conversaciones || []).length === 1) {
+      const unica = data.conversaciones[0];
+      abrirConv(unica.token, unica.nombre_otro || unica.nombre || 'Chat');
     }
+    _renderSidebarShareBanner();
 
     const search = document.getElementById('sidebar-search');
     if (search && !search._bound6c) {
@@ -2972,7 +3049,290 @@ function cerrarModalCard() {
   _cardNegocioTipo = null;
 }
 
-// ── Modal invitado ────────────────────────────────────────────────────────
+// ── Modal Nueva Conversación (Buscar Usuario + Invitado con Link) ─────────
+
+var _buscarUsuTimer = null;
+var _enlazarUsuTimer = null;
+
+function cambiarTabNuevaConv(modo) {
+  const esUsu = modo !== 'invitado';
+  const tUsu = document.getElementById('tab-nuevo-usuario');
+  const tInv = document.getElementById('tab-nuevo-invitado');
+  const pUsu = document.getElementById('pane-nuevo-usuario');
+  const pInv = document.getElementById('pane-nuevo-invitado');
+  if (tUsu) {
+    tUsu.style.background = esUsu ? 'var(--accent)' : 'transparent';
+    tUsu.style.color = esUsu ? '#fcf9f3' : 'var(--ink-soft)';
+  }
+  if (tInv) {
+    tInv.style.background = !esUsu ? 'var(--accent)' : 'transparent';
+    tInv.style.color = !esUsu ? '#fcf9f3' : 'var(--ink-soft)';
+  }
+  if (pUsu) pUsu.style.display = esUsu ? 'block' : 'none';
+  if (pInv) pInv.style.display = !esUsu ? 'block' : 'none';
+  if (esUsu) {
+    const inp = document.getElementById('inp-buscar-usuario');
+    if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 80); }
+    _ejecutarBusquedaUsuarios('', 'lista-usuarios-app', false);
+  } else {
+    const nom = document.getElementById('inv-nombre');
+    setTimeout(() => nom && nom.focus(), 80);
+  }
+}
+
+function buscarUsuariosApp(q) {
+  if (_buscarUsuTimer) clearTimeout(_buscarUsuTimer);
+  _buscarUsuTimer = setTimeout(() => {
+    _ejecutarBusquedaUsuarios(q, 'lista-usuarios-app', false);
+  }, 180);
+}
+
+async function _ejecutarBusquedaUsuarios(q, containerId, modoEnlazar) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+  try {
+    const r = await fetch('/api/chat/usuarios/buscar?q=' + encodeURIComponent((q || '').trim()));
+    const d = await r.json();
+    if (!d.ok) {
+      cont.innerHTML = `<div style="padding:14px;text-align:center;font-size:12.5px;color:#ef4444">${escHtml(d.error || 'Error')}</div>`;
+      return;
+    }
+    const lista = d.usuarios || [];
+    if (!lista.length) {
+      cont.innerHTML = `<div style="padding:16px;text-align:center;font-size:12.5px;color:var(--muted)">No se encontraron usuarios.</div>`;
+      return;
+    }
+    cont.innerHTML = lista.map(u => {
+      const av = avatarHtml(u.foto_perfil || '', u.nombre || 'U', 36, false);
+      const sub = [
+        u.telefono ? `📱 ${escHtml(u.telefono)}` : '',
+        u.en_negocio ? '🏢 Equipo / Módulos' : (u.tipo_tercero === 'admin' ? '⭐ Admin' : '👤 Usuario')
+      ].filter(Boolean).join(' · ');
+      const fnCall = modoEnlazar
+        ? `enlazarConversacionConUsuario(${u.id}, '${escHtml(u.nombre).replace(/'/g, "\\'")}')`
+        : `iniciarChatConUsuario(${u.id}, '${escHtml(u.nombre).replace(/'/g, "\\'")}')`;
+      return `
+        <div onclick="${fnCall}"
+             style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;
+                    cursor:pointer;transition:background 0.15s"
+             onmouseover="this.style.background='var(--surface)'"
+             onmouseout="this.style.background='transparent'">
+          ${av}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              ${escHtml(u.nombre)}
+            </div>
+            <div style="font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              ${sub}
+            </div>
+          </div>
+          <span style="font-size:11.5px;font-weight:600;color:var(--accent);padding:4px 8px;border-radius:99px;background:var(--accent-soft)">
+            ${modoEnlazar ? 'Enlazar' : 'Chatear'}
+          </span>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    cont.innerHTML = `<div style="padding:14px;text-align:center;font-size:12.5px;color:#ef4444">Error de red</div>`;
+  }
+}
+
+async function iniciarChatConUsuario(usuarioTerceroId, nombre) {
+  try {
+    const r = await fetch('/api/chat/iniciar-con-usuario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario_tercero_id: usuarioTerceroId })
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      alert('Error: ' + (d.error || 'No se pudo iniciar la conversación'));
+      return;
+    }
+    cerrarModal();
+    await cargarConversaciones();
+    abrirConv(d.token, d.nombre || nombre || 'Usuario');
+  } catch (e) {
+    console.error('iniciarChatConUsuario', e);
+    alert('Error de red al iniciar conversación');
+  }
+}
+
+// ── Modal Enlazar conversación existente con un Usuario ───────────────────
+
+function abrirModalEnlazarUsuario() {
+  const modal = document.getElementById('modal-enlazar-usuario');
+  if (!modal) return;
+  const inp = document.getElementById('inp-enlazar-usuario');
+  if (inp) inp.value = '';
+  modal.style.display = 'flex';
+  _ejecutarBusquedaUsuarios('', 'lista-enlazar-usuarios', true);
+  setTimeout(() => inp && inp.focus(), 80);
+}
+
+function cerrarModalEnlazarUsuario() {
+  const modal = document.getElementById('modal-enlazar-usuario');
+  if (modal) modal.style.display = 'none';
+}
+
+function buscarUsuariosParaEnlazar(q) {
+  if (_enlazarUsuTimer) clearTimeout(_enlazarUsuTimer);
+  _enlazarUsuTimer = setTimeout(() => {
+    _ejecutarBusquedaUsuarios(q, 'lista-enlazar-usuarios', true);
+  }, 180);
+}
+
+async function enlazarConversacionConUsuario(usuarioTerceroId, nombre) {
+  if (!tokenActivo) return;
+  if (!confirm(`¿Enlazar esta conversación con el usuario "${nombre}"?\nTodos los mensajes quedarán vinculados a su cuenta de los módulos.`)) return;
+  try {
+    const r = await fetch('/api/chat/enlazar-usuario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: tokenActivo, usuario_tercero_id: usuarioTerceroId })
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      alert('Error al enlazar: ' + (d.error || 'desconocido'));
+      return;
+    }
+    cerrarModalEnlazarUsuario();
+    await cargarConversaciones();
+    abrirConv(d.token, d.nombre || nombre);
+  } catch (e) {
+    console.error('enlazarConversacionConUsuario', e);
+    alert('Error de red al enlazar usuario');
+  }
+}
+
+// ── Compartir Reporte / Consultar sobre URL de la UI ──────────────────────
+
+var _pendingShareContext = (function() {
+  const qp = new URLSearchParams(location.search);
+  const url = qp.get('share_url');
+  if (!url) return null;
+  return {
+    url,
+    title: qp.get('share_title') || url,
+    mode: qp.get('share_mode') || 'reporte'
+  };
+})();
+
+function _renderSidebarShareBanner() {
+  let banner = document.getElementById('sidebar-share-banner');
+  if (!_pendingShareContext) {
+    if (banner) banner.remove();
+    return;
+  }
+  const sidebar = document.getElementById('sidebar');
+  const lista = document.getElementById('lista-convs');
+  if (!sidebar || !lista) return;
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'sidebar-share-banner';
+    banner.style.cssText = 'margin:8px 12px;padding:10px 12px;border-radius:12px;background:var(--accent-soft);border:1px solid var(--accent);font-size:12px;color:var(--ink)';
+    sidebar.insertBefore(banner, lista);
+  }
+  const icono = _pendingShareContext.mode === 'pregunta' ? '❓' : '📊';
+  const accion = _pendingShareContext.mode === 'pregunta' ? 'Consultar sobre pantalla' : 'Compartir reporte / vista';
+  banner.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px">
+      <strong style="color:var(--accent)">${icono} ${accion}</strong>
+      <button onclick="cancelarShareContexto()" style="font-size:13px;color:var(--muted)">✕</button>
+    </div>
+    <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(_pendingShareContext.title)}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:3px">Toca un usuario de la lista (o ＋) para enviarlo.</div>
+  `;
+}
+
+function _renderShareCtxBar() {
+  const bar = document.getElementById('share-ctx-bar');
+  if (!bar) return;
+  if (!_pendingShareContext || !tokenActivo) {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
+  }
+  const esPregunta = _pendingShareContext.mode === 'pregunta';
+  const icono = esPregunta ? '❓' : '📊';
+  const etiqueta = esPregunta ? 'Consulta sobre pantalla de la App' : 'Compartir reporte / vista de la App';
+  const placeholder = esPregunta
+    ? 'Escribe tu duda sobre esta pantalla (ej: ¿Cómo ajusto este saldo?)…'
+    : 'Añade un comentario opcional sobre este reporte…';
+
+  bar.style.display = 'block';
+  bar.style.cssText = 'display:block;padding:10px 14px;background:var(--accent-soft);border-bottom:1px solid var(--accent);flex-shrink:0';
+  bar.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+      <div style="min-width:0;flex:1">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.3px">
+          ${icono} ${etiqueta}
+        </div>
+        <div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          ${escHtml(_pendingShareContext.title)}
+        </div>
+        <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          ${escHtml(_pendingShareContext.url)}
+        </div>
+      </div>
+      <button onclick="cancelarShareContexto()" title="Cancelar"
+              style="width:26px;height:26px;border-radius:50%;background:var(--surface);color:var(--ink-soft);font-size:13px">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="inp-share-ctx-nota" type="text" placeholder="${placeholder}"
+             style="flex:1;background:var(--surface);border:1px solid var(--hairline);border-radius:10px;
+                    padding:8px 11px;font-size:13px;color:var(--ink);font-family:var(--sans)"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();enviarShareContexto()}">
+      <button onclick="enviarShareContexto()"
+              style="background:var(--accent);color:#fcf9f3;font-size:12.5px;font-weight:700;
+                     padding:8px 14px;border-radius:10px;white-space:nowrap">
+        Enviar →
+      </button>
+    </div>
+  `;
+  setTimeout(() => document.getElementById('inp-share-ctx-nota')?.focus(), 80);
+}
+
+async function enviarShareContexto() {
+  if (!_pendingShareContext || !tokenActivo) return;
+  const nota = (document.getElementById('inp-share-ctx-nota')?.value || '').trim();
+  const esPregunta = _pendingShareContext.mode === 'pregunta';
+  const payload = {
+    negocio: esPregunta ? '❓ Consulta sobre pantalla' : '📊 Reporte / Vista TUC TUC',
+    nombre: _pendingShareContext.title || 'Pantalla de la App',
+    titulo: _pendingShareContext.title || 'Pantalla de la App',
+    descripcion: nota || _pendingShareContext.url,
+    url: _pendingShareContext.url,
+    accion: esPregunta ? 'Ir a la pantalla →' : 'Abrir reporte / vista →'
+  };
+  cancelarShareContexto();
+  await enviarCard(payload);
+}
+
+function cancelarShareContexto() {
+  _pendingShareContext = null;
+  _renderSidebarShareBanner();
+  const bar = document.getElementById('share-ctx-bar');
+  if (bar) {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+  }
+}
+
+function prepararCompartirUrlManual() {
+  let defaultUrl = '';
+  let defaultTitle = '';
+  try {
+    if (window.parent && window.parent !== window && window.parent.location) {
+      defaultUrl = window.parent.location.href;
+      defaultTitle = (window.parent.document.title || '').replace('— TUC TUC', '').trim();
+    }
+  } catch (e) {}
+  const url = prompt('Pega o confirma la URL del reporte o pantalla de la App:', defaultUrl || location.origin + '/');
+  if (!url || !url.trim()) return;
+  const title = prompt('Título o nombre del reporte / pantalla:', defaultTitle || 'Vista / Reporte de la App') || 'Vista / Reporte de la App';
+  _pendingShareContext = { url: url.trim(), title: title.trim(), mode: 'reporte' };
+  _renderShareCtxBar();
+}
 
 function abrirNuevoInvitado() {
   const modal = document.getElementById('modal-invitado');
@@ -2986,7 +3346,7 @@ function abrirNuevoInvitado() {
   const btns = document.getElementById('inv-btns');
   if (btns) btns.style.display = '';
   modal.style.display = 'flex';
-  setTimeout(() => nom && nom.focus(), 100);
+  cambiarTabNuevaConv('usuario');
 }
 
 async function crearInvitado() {
@@ -3018,6 +3378,7 @@ async function crearInvitado() {
 function cerrarModal() {
   const inv = document.getElementById('modal-invitado');
   if (inv) inv.style.display = 'none';
+  cerrarModalEnlazarUsuario();
   document.querySelectorAll('.sheet-modal.open').forEach(m => m.classList.remove('open'));
 }
 

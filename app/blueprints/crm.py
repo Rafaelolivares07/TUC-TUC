@@ -955,3 +955,601 @@ def api_chat_apunte_eliminar(apunte_id):
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ── Usuarios (Terceros) de los módulos + Enlazar + Globo flotante ──────────
+
+@bp.route('/api/chat/usuarios/buscar', methods=['GET'])
+def api_chat_usuarios_buscar():
+    mid = get_chat_tercero_id()
+    if not mid:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    q = (request.args.get('q') or '').strip()
+    try:
+        conn = get_db_connection()
+        _asegurar_schema_chat(conn)
+        like_q = f'%{q}%'
+        rows = conn.execute('''
+            SELECT t.id, t.nombre, COALESCE(t.telefono, '') AS telefono,
+                   COALESCE(t.tipo_tercero, '') AS tipo_tercero,
+                   COALESCE(t.foto_perfil, '') AS foto_perfil,
+                   EXISTS(
+                       SELECT 1 FROM terceros_negocios tn
+                       WHERE tn.tercero_id = t.id AND tn.activo = TRUE
+                   ) AS en_negocio
+            FROM terceros t
+            WHERE t.id != %(mid)s
+              AND COALESCE(t.nombre, '') != ''
+              AND COALESCE(t.tipo_tercero, '') NOT IN ('negocio', 'merlin')
+              AND (
+                  COALESCE(t.tipo_tercero, '') != 'invitado'
+                  OR (t.telefono IS NOT NULL AND t.telefono != '')
+                  OR EXISTS(SELECT 1 FROM terceros_negocios tn WHERE tn.tercero_id = t.id)
+                  OR EXISTS(SELECT 1 FROM permisos_terceros pt WHERE pt.tercero_id = t.id)
+              )
+              AND (
+                  %(q)s = ''
+                  OR t.nombre ILIKE %(like_q)s
+                  OR COALESCE(t.telefono, '') ILIKE %(like_q)s
+                  OR CAST(t.id AS TEXT) = %(q)s
+              )
+            ORDER BY
+              en_negocio DESC,
+              (CASE WHEN COALESCE(t.telefono, '') != '' THEN 1 ELSE 0 END) DESC,
+              t.nombre ASC
+            LIMIT 30
+        ''', {'mid': mid, 'q': q, 'like_q': like_q}).fetchall()
+        conn.close()
+        return jsonify({'ok': True, 'usuarios': [dict(r) for r in rows]})
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e), 'usuarios': []}), 500
+
+
+@bp.route('/api/chat/iniciar-con-usuario', methods=['POST'])
+def api_chat_iniciar_con_usuario():
+    mid = get_chat_tercero_id()
+    if not mid:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    target_id = data.get('usuario_tercero_id')
+    try:
+        target_id = int(target_id)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Usuario inválido'}), 400
+    if target_id == int(mid):
+        return jsonify({'ok': False, 'error': 'No puedes iniciar un chat contigo mismo'}), 400
+
+    try:
+        conn = get_db_connection()
+        _asegurar_schema_chat(conn)
+        target = conn.execute(
+            'SELECT id, nombre, tipo_tercero FROM terceros WHERE id = %s', (target_id,)
+        ).fetchone()
+        if not target:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Usuario no encontrado'}), 404
+
+        if not target['tipo_tercero'] or target['tipo_tercero'] == 'invitado':
+            conn.execute(
+                "UPDATE terceros SET tipo_tercero = 'registrado' WHERE id = %s", (target_id,)
+            )
+
+        conv = conn.execute('''
+            SELECT id, token, activa FROM conversaciones
+            WHERE (creador_id = %s AND invitado_id = %s)
+               OR (creador_id = %s AND invitado_id = %s)
+            ORDER BY activa DESC, id DESC LIMIT 1
+        ''', (mid, target_id, target_id, mid)).fetchone()
+
+        host = request.host_url.rstrip('/')
+        if conv:
+            if not conv['activa']:
+                conn.execute('UPDATE conversaciones SET activa = TRUE WHERE id = %s', (conv['id'],))
+            conn.commit()
+            conn.close()
+            return jsonify({
+                'ok': True,
+                'token': conv['token'],
+                'nombre': target['nombre'],
+                'link': f"{host}/chat/{conv['token']}",
+                'existente': True
+            })
+
+        token = _sec.token_urlsafe(12)
+        nueva = conn.execute('''
+            INSERT INTO conversaciones (creador_id, invitado_id, token, nombre_invitado, origen, activa)
+            VALUES (%s, %s, %s, %s, 'usuario_app', TRUE)
+            RETURNING id
+        ''', (mid, target_id, token, target['nombre'])).fetchone()
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'token': token,
+            'nombre': target['nombre'],
+            'link': f'{host}/chat/{token}',
+            'conv_id': nueva['id'],
+            'existente': False
+        })
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/chat/enlazar-usuario', methods=['POST'])
+def api_chat_enlazar_usuario():
+    mid = get_chat_tercero_id()
+    uid = session.get('usuario_id')
+    ids_validos = tuple({int(x) for x in (mid, uid) if x})
+    if not ids_validos:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+
+    data = request.get_json() or {}
+    token = (data.get('token') or '').strip()
+    target_id = data.get('usuario_tercero_id')
+    try:
+        target_id = int(target_id)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Usuario inválido'}), 400
+    if not token:
+        return jsonify({'ok': False, 'error': 'Conversación requerida'}), 400
+
+    try:
+        conn = get_db_connection()
+        _asegurar_schema_chat(conn)
+        target = conn.execute(
+            'SELECT id, nombre, tipo_tercero FROM terceros WHERE id = %s', (target_id,)
+        ).fetchone()
+        if not target:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Usuario no encontrado'}), 404
+
+        placeholders = ', '.join(['%s'] * len(ids_validos))
+        conv = conn.execute(
+            f'''SELECT * FROM conversaciones
+                WHERE token = %s
+                  AND (creador_id IN ({placeholders}) OR invitado_id IN ({placeholders}))''',
+            (token,) + ids_validos + ids_validos
+        ).fetchone()
+        if not conv:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'Conversación no encontrada'}), 404
+
+        es_creador = conv['creador_id'] in ids_validos
+        mi_id_conv = conv['creador_id'] if es_creador else conv['invitado_id']
+        old_otro_id = conv['invitado_id'] if es_creador else conv['creador_id']
+
+        if target_id == mi_id_conv:
+            conn.close()
+            return jsonify({'ok': False, 'error': 'No puedes enlazar la conversación contigo mismo'}), 400
+
+        if not target['tipo_tercero'] or target['tipo_tercero'] == 'invitado':
+            conn.execute("UPDATE terceros SET tipo_tercero = 'registrado' WHERE id = %s", (target_id,))
+
+        if old_otro_id == target_id:
+            conn.execute('UPDATE conversaciones SET nombre_invitado = %s WHERE id = %s',
+                         (target['nombre'], conv['id']))
+            conn.commit()
+            conn.close()
+            return jsonify({'ok': True, 'token': token, 'nombre': target['nombre'], 'otro_id': target_id})
+
+        # Verificar si ya existe otra conversación activa entre mi_id_conv y target_id
+        conv_existente = conn.execute('''
+            SELECT id, token FROM conversaciones
+            WHERE id != %s AND activa = TRUE
+              AND ((creador_id = %s AND invitado_id = %s) OR (creador_id = %s AND invitado_id = %s))
+            ORDER BY id DESC LIMIT 1
+        ''', (conv['id'], mi_id_conv, target_id, target_id, mi_id_conv)).fetchone()
+
+        if conv_existente:
+            final_conv_id = conv_existente['id']
+            final_token = conv_existente['token']
+            conn.execute('''
+                UPDATE mensajes
+                SET conversacion_id = %s,
+                    remitente_id = CASE WHEN remitente_id = %s THEN %s ELSE remitente_id END,
+                    destinatario_id = CASE WHEN destinatario_id = %s THEN %s ELSE destinatario_id END
+                WHERE conversacion_id = %s
+            ''', (final_conv_id, old_otro_id, target_id, old_otro_id, target_id, conv['id']))
+            try:
+                conn.execute('UPDATE apuntes SET token_conv = %s WHERE token_conv = %s',
+                             (final_token, token))
+            except Exception:
+                pass
+            conn.execute('DELETE FROM conversaciones WHERE id = %s', (conv['id'],))
+        else:
+            final_token = token
+            if es_creador:
+                conn.execute('''
+                    UPDATE conversaciones
+                    SET invitado_id = %s, nombre_invitado = %s
+                    WHERE id = %s
+                ''', (target_id, target['nombre'], conv['id']))
+            else:
+                conn.execute('''
+                    UPDATE conversaciones
+                    SET creador_id = %s
+                    WHERE id = %s
+                ''', (target_id, conv['id']))
+            conn.execute('''
+                UPDATE mensajes
+                SET remitente_id = CASE WHEN remitente_id = %s THEN %s ELSE remitente_id END,
+                    destinatario_id = CASE WHEN destinatario_id = %s THEN %s ELSE destinatario_id END
+                WHERE conversacion_id = %s
+            ''', (old_otro_id, target_id, old_otro_id, target_id, conv['id']))
+
+        # Limpiar tercero temporal 'invitado' si quedó huérfano
+        otras = conn.execute('''
+            SELECT 1 FROM conversaciones
+            WHERE creador_id = %s OR invitado_id = %s LIMIT 1
+        ''', (old_otro_id, old_otro_id)).fetchone()
+        if not otras:
+            conn.execute("DELETE FROM terceros WHERE id = %s AND tipo_tercero = 'invitado'", (old_otro_id,))
+
+        conn.commit()
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'token': final_token,
+            'nombre': target['nombre'],
+            'otro_id': target_id
+        })
+    except Exception as e:
+        try:
+            conn.rollback()
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/chat/resumen-globo', methods=['GET'])
+def api_chat_resumen_globo():
+    mid = get_chat_tercero_id()
+    if not mid:
+        return jsonify({'ok': True, 'autenticado': False, 'total_no_leidos': 0})
+    try:
+        conn = get_db_connection()
+        _asegurar_schema_chat(conn)
+        row = conn.execute('''
+            SELECT COUNT(*) AS total
+            FROM mensajes m
+            JOIN conversaciones c ON c.id = m.conversacion_id
+            WHERE c.activa = TRUE
+              AND (c.creador_id = %(mid)s OR c.invitado_id = %(mid)s)
+              AND m.remitente_id != %(mid)s
+              AND m.estado = 'pendiente'
+        ''', {'mid': mid}).fetchone()
+        total = int(row['total'] or 0) if row else 0
+
+        ultimo = None
+        if total > 0:
+            u = conn.execute('''
+                SELECT m.id, m.mensaje, m.tipo, c.token, t.nombre AS remitente
+                FROM mensajes m
+                JOIN conversaciones c ON c.id = m.conversacion_id
+                JOIN terceros t ON t.id = m.remitente_id
+                WHERE c.activa = TRUE
+                  AND (c.creador_id = %(mid)s OR c.invitado_id = %(mid)s)
+                  AND m.remitente_id != %(mid)s
+                  AND m.estado = 'pendiente'
+                ORDER BY m.id DESC LIMIT 1
+            ''', {'mid': mid}).fetchone()
+            if u:
+                ultimo = dict(u)
+        conn.close()
+        return jsonify({
+            'ok': True,
+            'autenticado': True,
+            'mi_tercero_id': mid,
+            'total_no_leidos': total,
+            'ultimo': ultimo
+        })
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': str(e), 'total_no_leidos': 0})
+
+
+_GLOBO_CHAT_SNIPPET = """
+<!-- ── Globo flotante global de Mensajería TUC TUC ── -->
+<style>
+  #tuctuc-chat-globo {
+    position: fixed;
+    bottom: 24px;
+    right: 80px;
+    z-index: 9450;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #c96442, #a84c2c);
+    color: #fcf9f3;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(201, 100, 66, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  #tuctuc-chat-globo:hover {
+    transform: scale(1.07);
+    box-shadow: 0 8px 26px rgba(201, 100, 66, 0.6);
+  }
+  #tuctuc-chat-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #ffffff;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.5);
+    animation: tuctucPulseBadge 1.8s infinite;
+  }
+  @keyframes tuctucPulseBadge {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+  }
+  #tuctuc-chat-toast {
+    position: fixed;
+    bottom: 84px;
+    right: 24px;
+    z-index: 9455;
+    max-width: 300px;
+    background: #1f1e1b;
+    color: #fcf9f3;
+    border: 1px solid rgba(201, 100, 66, 0.45);
+    border-radius: 14px;
+    padding: 10px 14px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    display: none;
+  }
+  #tuctuc-chat-drawer {
+    position: fixed;
+    bottom: 84px;
+    right: 24px;
+    width: min(430px, calc(100vw - 24px));
+    height: min(650px, calc(100vh - 110px));
+    z-index: 9460;
+    background: #f5f1e8;
+    border-radius: 18px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.32);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  #tuctuc-chat-drawer.open {
+    display: flex;
+  }
+  .tuctuc-drawer-bar {
+    background: #1f1e1b;
+    color: #fcf9f3;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .tuctuc-drawer-actions {
+    background: #2b2925;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+  .tuctuc-ctx-btn {
+    border: 1px solid rgba(252, 249, 243, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fcf9f3;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .tuctuc-ctx-btn:hover {
+    background: #c96442;
+    border-color: #c96442;
+  }
+  @media (max-width: 640px) {
+    #tuctuc-chat-globo { right: 74px; bottom: 18px; width: 46px; height: 46px; }
+    #tuctuc-chat-drawer {
+      right: 8px;
+      left: 8px;
+      bottom: 72px;
+      width: auto;
+      height: calc(100vh - 88px);
+    }
+  }
+</style>
+
+<button id="tuctuc-chat-globo" onclick="tuctucToggleChatDrawer()" title="Mensajería y soporte TUC TUC">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+  </svg>
+  <span id="tuctuc-chat-badge">0</span>
+</button>
+
+<div id="tuctuc-chat-toast" onclick="tuctucAbrirConversacionToast()"></div>
+
+<div id="tuctuc-chat-drawer">
+  <div class="tuctuc-drawer-bar">
+    <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700">
+      <span>💬 Mensajería TUC TUC</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <button onclick="window.open('/chat2','_blank')" title="Abrir en pantalla completa"
+              style="background:transparent;border:none;color:#fcf9f3;cursor:pointer;font-size:14px;padding:4px 6px">↗</button>
+      <button onclick="tuctucToggleChatDrawer(false)" title="Cerrar"
+              style="background:transparent;border:none;color:#fcf9f3;cursor:pointer;font-size:16px;padding:4px 6px">✕</button>
+    </div>
+  </div>
+  <div class="tuctuc-drawer-actions">
+    <button class="tuctuc-ctx-btn" onclick="tuctucCompartirContexto('pregunta')">
+      ❓ Consultar sobre esta pantalla
+    </button>
+    <button class="tuctuc-ctx-btn" onclick="tuctucCompartirContexto('reporte')">
+      📊 Compartir este reporte / vista
+    </button>
+  </div>
+  <iframe id="tuctuc-chat-iframe" src="about:blank" style="flex:1;width:100%;border:none;background:#f5f1e8"></iframe>
+</div>
+
+<script>
+(function() {
+  if (window._tuctucGloboInit) return;
+  window._tuctucGloboInit = true;
+
+  let _ultimoMsgToastId = parseInt(sessionStorage.getItem('tuctuc_last_toast_msg') || '0', 10);
+  let _ultimoTokenToast = '';
+  let _iframeCargado = false;
+
+  // Si no hay botón de inspector de ayuda, acercar el globo al borde derecho
+  window.addEventListener('DOMContentLoaded', () => {
+    if (!document.getElementById('btn-ayuda-inspector')) {
+      const g = document.getElementById('tuctuc-chat-globo');
+      if (g) g.style.right = '24px';
+    }
+  });
+
+  function _cargarIframe(url) {
+    const ifr = document.getElementById('tuctuc-chat-iframe');
+    if (!ifr) return;
+    ifr.src = url;
+    _iframeCargado = true;
+  }
+
+  window.tuctucToggleChatDrawer = function(forzar) {
+    const dr = document.getElementById('tuctuc-chat-drawer');
+    const toast = document.getElementById('tuctuc-chat-toast');
+    if (toast) toast.style.display = 'none';
+    if (!dr) return;
+    const abrir = typeof forzar === 'boolean' ? forzar : !dr.classList.contains('open');
+    dr.classList.toggle('open', abrir);
+    if (abrir && !_iframeCargado) {
+      _cargarIframe('/chat2?embed=1');
+    }
+  };
+
+  window.tuctucCompartirContexto = function(modo) {
+    const dr = document.getElementById('tuctuc-chat-drawer');
+    if (dr && !dr.classList.contains('open')) dr.classList.add('open');
+    const urlActual = window.location.href;
+    const titulo = (document.title || window.location.pathname).replace('— TUC TUC', '').trim();
+    const targetUrl = '/chat2?embed=1&share_mode=' + encodeURIComponent(modo)
+      + '&share_url=' + encodeURIComponent(urlActual)
+      + '&share_title=' + encodeURIComponent(titulo);
+    _cargarIframe(targetUrl);
+  };
+
+  window.tuctucAbrirConversacionToast = function() {
+    const toast = document.getElementById('tuctuc-chat-toast');
+    if (toast) toast.style.display = 'none';
+    const dr = document.getElementById('tuctuc-chat-drawer');
+    if (dr) dr.classList.add('open');
+    _cargarIframe('/chat2?embed=1' + (_ultimoTokenToast ? '&open_token=' + encodeURIComponent(_ultimoTokenToast) : ''));
+  };
+
+  async function _pollGlobo() {
+    try {
+      const r = await fetch('/api/chat/resumen-globo');
+      if (!r.ok) return;
+      const d = await r.json();
+      if (!d || !d.ok) return;
+      const badge = document.getElementById('tuctuc-chat-badge');
+      const total = Number(d.total_no_leidos || 0);
+      if (badge) {
+        if (total > 0) {
+          badge.style.display = 'flex';
+          badge.textContent = total > 99 ? '99+' : String(total);
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+      if (d.ultimo && d.ultimo.id && d.ultimo.id > _ultimoMsgToastId) {
+        _ultimoMsgToastId = d.ultimo.id;
+        sessionStorage.setItem('tuctuc_last_toast_msg', String(_ultimoMsgToastId));
+        _ultimoTokenToast = d.ultimo.token || '';
+        const dr = document.getElementById('tuctuc-chat-drawer');
+        if (!dr || !dr.classList.contains('open')) {
+          const toast = document.getElementById('tuctuc-chat-toast');
+          if (toast) {
+            const txt = d.ultimo.tipo === 'audio' ? '🎵 Audio recibido'
+                      : d.ultimo.tipo === 'imagen' ? '🖼 Imagen recibida'
+                      : d.ultimo.tipo === 'card' ? '📌 ' + (d.ultimo.mensaje || 'Enlace / Reporte')
+                      : (d.ultimo.mensaje || 'Nuevo mensaje');
+            toast.innerHTML = '<div style="font-weight:700;color:#e8856a;margin-bottom:2px">💬 '
+              + String(d.ultimo.remitente || 'Mensaje nuevo').replace(/</g,'&lt;')
+              + '</div><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+              + String(txt).replace(/</g,'&lt;') + '</div>';
+            toast.style.display = 'block';
+            setTimeout(() => { if (toast) toast.style.display = 'none'; }, 7000);
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  _pollGlobo();
+  setInterval(_pollGlobo, 8000);
+})();
+</script>
+"""
+
+
+@bp.after_app_request
+def _inyectar_globo_chat_global(response):
+    try:
+        if request.method != 'GET':
+            return response
+        p = request.path or ''
+        if (p.startswith('/api/') or p.startswith('/static/') or
+                p.startswith('/chat') or p.startswith('/login') or
+                p.startswith('/admin/login') or p.startswith('/rockola')):
+            return response
+        if not (session.get('chat_tercero_id') or session.get('usuario_id')):
+            return response
+        if response.direct_passthrough:
+            return response
+        ctype = response.content_type or ''
+        if 'text/html' not in ctype.lower():
+            return response
+        html = response.get_data(as_text=True)
+        if '</body>' not in html or 'id="tuctuc-chat-globo"' in html:
+            return response
+        html = html.replace('</body>', _GLOBO_CHAT_SNIPPET + '\n</body>', 1)
+        response.set_data(html)
+    except Exception:
+        pass
+    return response
+

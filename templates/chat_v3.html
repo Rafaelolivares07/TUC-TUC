@@ -719,6 +719,22 @@
       border-color: var(--accent);
       color: #fcf9f3;
     }
+    #btn-header-trad {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 10px 5px 9px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-button);
+      font-size: 11.5px; font-weight: 600;
+      color: var(--ink-soft);
+      background: transparent;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+    #btn-header-trad.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fcf9f3;
+    }
 
     /* ── Bottom sheets ──────────────────────────────────────────── */
     .sheet-backdrop {
@@ -1246,7 +1262,7 @@ const NOMBRE_INICIAL = {{ (nombre_inicial or '') | tojson }};
 let grabando = false, mediaRecorder = null, audioChunks = [];
 let modoApunte = false;
 let ttsActivo        = localStorage.getItem('chat_tts')        === '1';
-let traduccionActiva = localStorage.getItem('chat_traduccion') !== '0';
+let traduccionActiva = localStorage.getItem('chat_traduccion') === '1';
 const _tradCache = new Map();
 let _pendientesEstado = new Set();
 const idsRenderizados = new Set();
@@ -1351,6 +1367,12 @@ function abrirConv(token, nombre) {
         <div class="nombre">${escHtml(nombre)}</div>
         <div class="estado">${estadoTxt}</div>
       </div>
+      <button id="btn-header-trad" class="${traduccionActiva ? 'active' : ''}" onclick="toggleTraduccion()" title="Activar o desactivar traducción automática">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>
+        </svg>
+        <span id="lbl-header-trad">${traduccionActiva ? 'Traducir: ON' : 'Traducir'}</span>
+      </button>
       <button id="btn-dots" class="header-icon-btn" onclick="toggleDotsMenu()" title="Más opciones">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--ink-soft)">
           <circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>
@@ -2255,6 +2277,7 @@ async function _mostrarTraduccionEl(anchor, texto) {
   if (anchor.querySelector('.trad-bubble')) return;
   const traducido = await _traducir(texto, 'en', 'es');
   if (!traducido || !traduccionActiva) return;
+  if (traducido.trim().toLowerCase() === (texto || '').trim().toLowerCase()) return;
   if (anchor.querySelector('.trad-bubble')) return;
   const div = document.createElement('div');
   div.className   = 'trad-bubble';
@@ -2559,24 +2582,60 @@ function toggleTTS() {
 
 function toggleTraduccion() {
   traduccionActiva = !traduccionActiva;
+  localStorage.setItem('chat_traduccion', traduccionActiva ? '1' : '0');
   const btn = document.getElementById('btn-traduccion');
   if (btn) btn.classList.toggle('active-item', traduccionActiva);
+  const hBtn = document.getElementById('btn-header-trad');
+  if (hBtn) hBtn.classList.toggle('active', traduccionActiva);
+  const hLbl = document.getElementById('lbl-header-trad');
+  if (hLbl) hLbl.textContent = traduccionActiva ? 'Traducir: ON' : 'Traducir';
   document.querySelectorAll('.trad-bubble').forEach(el => {
     el.style.display = traduccionActiva ? '' : 'none';
   });
+  if (traduccionActiva) {
+    document.querySelectorAll('.trad-anchor').forEach(anchor => {
+      if (!anchor.querySelector('.trad-bubble')) {
+        const bubble = anchor.previousElementSibling;
+        const span = bubble ? bubble.querySelector('span') : null;
+        if (span && span.textContent.trim()) {
+          _mostrarTraduccionEl(anchor, span.textContent.trim());
+        }
+      }
+    });
+  }
 }
 
 async function _traducir(texto, desde, hacia) {
   const key = `${desde}|${hacia}|${texto}`;
-  if (_tradCache[key]) return _tradCache[key];
+  if (_tradCache.has(key)) return _tradCache.get(key);
+  try {
+    const gUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(hacia)}&dt=t&q=${encodeURIComponent(texto)}`;
+    const gr = await fetch(gUrl);
+    if (gr.ok) {
+      const gData = await gr.json();
+      const partes = Array.isArray(gData?.[0]) ? gData[0].map(p => p?.[0] || '').join('') : '';
+      const srcLang = (gData?.[2] || '').toLowerCase();
+      if (partes) {
+        if (srcLang.startsWith(hacia.toLowerCase()) && partes.trim().toLowerCase() === texto.trim().toLowerCase()) {
+          _tradCache.set(key, '');
+          return '';
+        }
+        _tradCache.set(key, partes);
+        return partes;
+      }
+    }
+  } catch {}
   try {
     const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=${desde}|${hacia}`;
     const r = await fetch(url);
     const data = await r.json();
-    const trad = data?.responseData?.translatedText || texto;
-    _tradCache[key] = trad;
+    const trad = (data?.responseData?.translatedText || '').trim();
+    if (!trad || data?.quotaFinished || /MYMEMORY WARNING|USED ALL AVAILABLE FREE TRANSLATIONS/i.test(trad)) {
+      return '';
+    }
+    _tradCache.set(key, trad);
     return trad;
-  } catch { return texto; }
+  } catch { return ''; }
 }
 
 function toggleModoApunte() {

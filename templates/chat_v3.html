@@ -88,6 +88,7 @@
 
     /* ── Layout ─────────────────────────────────────────────────── */
     #sidebar {
+      position: relative;
       width: 100%;
       flex-shrink: 0;
       background: var(--bg);
@@ -1091,7 +1092,7 @@
 <!-- ══════════════════════════════════════════════════════════════ -->
 <!-- MODAL NUEVA CONVERSACIÓN                                       -->
 <!-- ══════════════════════════════════════════════════════════════ -->
-<div id="modal-invitado" class="modal-backdrop" style="display:none">
+<div id="modal-invitado" class="modal-backdrop" style="display:none" onclick="cerrarModal()">
   <div class="modal-box" onclick="event.stopPropagation()">
     <h2 class="modal-title">Nueva conversación</h2>
     <label class="modal-label">Nombre del contacto</label>
@@ -2872,45 +2873,64 @@ function cerrarModalCard() {
 
 function abrirNuevoInvitado() {
   const modal = document.getElementById('modal-invitado');
-  if (modal) {
-    modal.classList.add('open');
-    const inp = document.getElementById('inv-nombre');
-    if (inp) { inp.value = ''; inp.focus(); }
-    const link = document.getElementById('inv-link-wrap');
-    if (link) link.classList.add('hidden');
-  }
+  if (!modal) return;
+  const nom = document.getElementById('inv-nombre');
+  const ori = document.getElementById('inv-origen');
+  if (nom) nom.value = '';
+  if (ori) ori.value = '';
+  const wrap = document.getElementById('inv-link-wrap');
+  if (wrap) wrap.style.display = 'none';
+  const btns = document.getElementById('inv-btns');
+  if (btns) btns.style.display = '';
+  modal.style.display = 'flex';
+  setTimeout(() => nom && nom.focus(), 100);
 }
 
 async function crearInvitado() {
   const nombre = (document.getElementById('inv-nombre')?.value || '').trim();
-  if (!nombre) return;
+  const origen = (document.getElementById('inv-origen')?.value || '').trim();
+  if (!nombre) { document.getElementById('inv-nombre')?.focus(); return; }
   try {
     const r = await fetch('/api/chat/invitar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre, origen: 'chat' })
+      body: JSON.stringify({ nombre, origen })
     });
     const data = await r.json();
     if (data.ok && data.link) {
-      const linkEl = document.getElementById('inv-link');
+      const linkEl = document.getElementById('inv-link-texto');
       if (linkEl) linkEl.textContent = data.link;
       const wrap = document.getElementById('inv-link-wrap');
-      if (wrap) wrap.classList.remove('hidden');
+      if (wrap) wrap.style.display = 'block';
       await cargarConversaciones();
+    } else {
+      alert('Error al crear el link: ' + (data.error || 'desconocido'));
     }
-  } catch (e) { console.error('crearInvitado', e); }
+  } catch (e) {
+    console.error('crearInvitado', e);
+    alert('Error de red al crear el link');
+  }
 }
 
 function cerrarModal() {
+  const inv = document.getElementById('modal-invitado');
+  if (inv) inv.style.display = 'none';
   document.querySelectorAll('.sheet-modal.open').forEach(m => m.classList.remove('open'));
 }
 
 function copiarLinkInv() {
-  const linkEl = document.getElementById('inv-link');
-  if (!linkEl) return;
-  navigator.clipboard.writeText(linkEl.textContent.trim()).catch(() => {});
-  const btn = document.getElementById('btn-copiar-link');
-  if (btn) { btn.textContent = '✓ Copiado'; setTimeout(() => { btn.textContent = 'Copiar'; }, 1800); }
+  const linkEl = document.getElementById('inv-link-texto');
+  const link = linkEl ? linkEl.textContent.trim() : '';
+  if (!link) return;
+  const btn = document.querySelector('#inv-link-wrap button');
+  const ok = () => {
+    if (btn) { const o = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => { btn.textContent = o; }, 1800); }
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(link).then(ok).catch(() => { prompt('Copia este link:', link); });
+  } else {
+    prompt('Copia este link:', link);
+  }
 }
 
 // ── Modal registro ────────────────────────────────────────────────────────

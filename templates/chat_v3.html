@@ -506,13 +506,23 @@
 
     #wrap-txt-msg {
       flex: 1;
-      background: var(--surface);
-      border-radius: var(--radius-input);
-      padding: 9px 14px;
+      background: #ffffff;
+      border-radius: 24px;
+      padding: 10px 16px;
+      min-height: 44px;
       display: flex;
       align-items: center;
-      border: 1px solid transparent;
-      transition: border-color 0.2s, background 0.2s;
+      border: 1px solid rgba(20, 20, 19, 0.08);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    }
+    [data-theme="dark"] #wrap-txt-msg {
+      background: var(--surface);
+      border-color: var(--hairline);
+    }
+    #wrap-txt-msg:focus-within {
+      border-color: rgba(201, 100, 66, 0.35);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
     #wrap-txt-msg.apunte-mode {
       background: rgba(201,100,66,0.08);
@@ -521,12 +531,20 @@
     #txt-msg {
       width: 100%;
       background: transparent;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      -webkit-appearance: none;
+      appearance: none;
+      padding: 0;
+      margin: 0;
+      display: block;
       font-size: 15px;
       color: var(--ink);
       resize: none;
-      max-height: 96px;
+      max-height: 110px;
       overflow-y: auto;
-      line-height: 1.4;
+      line-height: 1.45;
     }
     #txt-msg::placeholder { color: var(--muted); }
 
@@ -2425,13 +2443,13 @@ function _setMicUI(rec) {
   const nBtn = document.getElementById('btn-nativo-mic');
   if (btn) {
     btn.classList.toggle('grabado', rec);
-    const svg = btn.querySelector('svg');
-    if (svg) svg.outerHTML = rec ? _stopIconSvg(18) : _micIconSvg(22);
+    const iconEl = btn.querySelector('svg, .mic-wait');
+    if (iconEl) iconEl.outerHTML = rec ? _stopIconSvg(18) : _micIconSvg(22);
     if (onda) onda.style.display = rec ? 'flex' : 'none';
   }
   if (nBtn) {
-    const nSvg = nBtn.querySelector('svg');
-    if (nSvg) nSvg.outerHTML = rec ? _stopIconSvg(56) : _micIconSvg(72);
+    const nIconEl = nBtn.querySelector('svg, .mic-wait');
+    if (nIconEl) nIconEl.outerHTML = rec ? _stopIconSvg(56) : _micIconSvg(72);
     nBtn.style.opacity = rec ? '0.75' : '1';
   }
 }
@@ -2464,7 +2482,7 @@ async function toggleGrabacion() {
         if (totalBytes < 300) { _setMicUI(false); return; }
         // Pending: mostrar ⏳ mientras sube
         [document.getElementById('btn-mic'), document.getElementById('btn-nativo-mic')]
-          .forEach(b => { if (!b) return; const s = b.querySelector('svg'); if (s) s.outerHTML = '<span style="font-size:18px;line-height:1">⏳</span>'; });
+          .forEach(b => { if (!b) return; const s = b.querySelector('svg, .mic-wait'); if (s) s.outerHTML = '<span class="mic-wait" style="font-size:18px;line-height:1">⏳</span>'; });
 
         await Promise.all(_chunkPromises);
         const form = new FormData();

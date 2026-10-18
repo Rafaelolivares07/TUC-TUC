@@ -348,23 +348,53 @@
     display: block;
   }
 
+  .item-imgs .thumb {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+    background: #f5f5f5;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .item-imgs .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
   .item-imgs .thumb .x {
     position: absolute;
     top: 2px;
     right: 2px;
-    background: rgba(0,0,0,.6);
+    background: rgba(0,0,0,.65);
     color: #fff;
     border: none;
     border-radius: 50%;
-    width: 18px;
-    height: 18px;
-    font-size: 11px;
+    width: 22px;
+    height: 22px;
+    font-size: 13px;
+    font-weight: bold;
     line-height: 1;
     cursor: pointer;
     display: none;
+    align-items: center;
+    justify-content: center;
   }
 
-  .item-imgs .thumb:hover .x { display: block; }
+  .item-imgs .thumb:hover .x { display: flex; }
+
+  @media (max-width: 768px) {
+    .item-imgs .thumb .x {
+      display: flex;
+      background: rgba(0,0,0,.7);
+    }
+  }
 
   .btn-img {
     background: none;
@@ -389,15 +419,35 @@
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 999;
+    z-index: 9999;
+    padding: 16px;
     cursor: zoom-out;
   }
   .visor img {
-    max-width: 92vw;
-    max-height: 92vh;
-    border-radius: 4px;
-    box-shadow: 0 4px 30px rgba(0,0,0,.5);
+    max-width: 95vw;
+    max-height: 88vh;
+    border-radius: 6px;
+    box-shadow: 0 4px 30px rgba(0,0,0,.6);
+    object-fit: contain;
   }
+  .visor-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+    border: none;
+    font-size: 24px;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  }
+  .visor-close:hover { background: rgba(255,255,255,0.4); }
 </style>
 </head>
 <body>
@@ -461,7 +511,7 @@
       <div class="item-body">
         <div class="item-actions" aria-label="Acciones de la tarea">
           <input type="file" accept="image/*" id="file-{{ item[0] }}" style="display:none" onchange="subirImagen({{ item[0] }}, this)">
-          <button class="btn-img" onclick="document.getElementById('file-{{ item[0] }}').click()" title="Adjuntar imagen">📎<span class="accion-label">Adjuntar</span></button>
+          <button type="button" class="btn-img" id="btn-img-{{ item[0] }}" onclick="document.getElementById('file-{{ item[0] }}').click()" title="Adjuntar imagen">📎<span class="accion-label">Adjuntar</span></button>
           <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️<span class="accion-label">Editar</span></button>
           <button class="btn-activar" onclick="activar({{ item[0] }}, this)" title="Enviar a ASISTENTES">🚀<span class="accion-label">Activar</span></button>
           <button class="btn-borrar" onclick="borrar({{ item[0] }})" title="Eliminar tarea">×<span class="accion-label">Eliminar</span></button>
@@ -476,8 +526,8 @@
         <div class="item-imgs" id="imgs-{{ item[0] }}">
           {% for img in imagenes.get(item[0], []) %}
           <div class="thumb">
-            <img src="{{ img['url'] }}" onclick="verImagen(this)" alt="">
-            <button class="x" onclick="borrarImagen({{ img['id'] }}, {{ item[0] }})">×</button>
+            <img src="{{ img['url'] }}" onclick="verImagen(this)" onerror="this.onerror=null; this.alt='No se pudo cargar la imagen';" alt="">
+            <button type="button" class="x" onclick="event.stopPropagation(); borrarImagen({{ img['id'] }}, {{ item[0] }})">×</button>
           </div>
           {% endfor %}
         </div>
@@ -493,6 +543,8 @@
       <span class="estado-completado" aria-label="Completada">✓</span>
       <div class="item-body">
         <div class="item-actions" aria-label="Acciones de la tarea completada">
+          <input type="file" accept="image/*" id="file-{{ item[0] }}" style="display:none" onchange="subirImagen({{ item[0] }}, this)">
+          <button type="button" class="btn-img" id="btn-img-{{ item[0] }}" onclick="document.getElementById('file-{{ item[0] }}').click()" title="Adjuntar imagen">📎<span class="accion-label">Adjuntar</span></button>
           <button class="btn-editar" onclick="comenzarEdicion({{ item[0] }})" title="Editar tarea">✏️<span class="accion-label">Editar</span></button>
           <button class="btn-borrar" onclick="borrar({{ item[0] }})" title="Eliminar tarea">×<span class="accion-label">Eliminar</span></button>
         </div>
@@ -503,8 +555,8 @@
         <div class="item-imgs" id="imgs-{{ item[0] }}">
           {% for img in imagenes.get(item[0], []) %}
           <div class="thumb">
-            <img src="{{ img['url'] }}" onclick="verImagen(this)" alt="">
-            <button class="x" onclick="borrarImagen({{ img['id'] }}, {{ item[0] }})">×</button>
+            <img src="{{ img['url'] }}" onclick="verImagen(this)" onerror="this.onerror=null; this.alt='No se pudo cargar la imagen';" alt="">
+            <button type="button" class="x" onclick="event.stopPropagation(); borrarImagen({{ img['id'] }}, {{ item[0] }})">×</button>
           </div>
           {% endfor %}
         </div>
@@ -516,7 +568,8 @@
 </div>
 
 <div class="visor" id="visor" onclick="cerrarVisor()">
-  <img id="visor-img" src="" alt="">
+  <button type="button" class="visor-close" onclick="cerrarVisor()" aria-label="Cerrar visor">✕</button>
+  <img id="visor-img" src="" alt="Vista previa">
 </div>
 
 <script>
@@ -801,48 +854,116 @@
     });
   }
 
+  function procesarImagenParaSubir(file) {
+    return new Promise((resolve) => {
+      if (!file || !file.type.startsWith('image/')) {
+        resolve(file);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onerror = () => resolve(file);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => resolve(file);
+        img.onload = () => {
+          try {
+            const maxDim = 1600;
+            let w = img.width;
+            let h = img.height;
+
+            if (w > maxDim || h > maxDim) {
+              if (w > h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+
+            canvas.toBlob((blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                resolve(file);
+              }
+            }, 'image/jpeg', 0.85);
+          } catch (err) {
+            console.warn('Fallback imagen original:', err);
+            resolve(file);
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function subirImagen(id, input) {
     const file = input.files && input.files[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      alert('La imagen supera 10 MB');
+
+    if (file.size > 50 * 1024 * 1024) {
+      alert('La imagen es demasiado pesada (máximo 50 MB)');
       input.value = '';
       return;
     }
-    const fd = new FormData();
-    fd.append('imagen', file);
-    const btn = document.querySelector(`#file-${id}`).previousElementSibling;
-    const original = btn.innerHTML;
-    btn.innerHTML = '⏳';
+
+    const btn = document.getElementById(`btn-img-${id}`) || input.closest('.item-actions')?.querySelector('.btn-img');
+    const original = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.innerHTML = '⏳<span class="accion-label">Subiendo...</span>';
+      btn.disabled = true;
+    }
+
     try {
+      const blob = await procesarImagenParaSubir(file);
+      const fd = new FormData();
+      fd.append('imagen', blob, file.name || 'foto.jpg');
+
       const r = await fetch(`/agenda/item/${id}/imagen`, {method: 'POST', body: fd});
       const d = await r.json();
       if (d.ok) {
         const cont = document.getElementById(`imgs-${id}`);
-        const div = document.createElement('div');
-        div.className = 'thumb';
-        div.innerHTML = `<img src="${d.url}" onclick="verImagen(this)" alt=""><button class="x" onclick="borrarImagen(${d.id || 0}, ${id})">×</button>`;
-        cont.appendChild(div);
+        if (cont) {
+          const div = document.createElement('div');
+          div.className = 'thumb';
+          div.innerHTML = `<img src="${d.url}" onclick="verImagen(this)" onerror="this.onerror=null; this.alt='No se pudo cargar la imagen';" alt=""><button type="button" class="x" onclick="event.stopPropagation(); borrarImagen(${d.id || 0}, ${id})">×</button>`;
+          cont.appendChild(div);
+        }
       } else {
         alert('Error al subir imagen: ' + (d.error || 'Desconocido'));
       }
     } catch (e) {
+      console.error(e);
       alert('Error de red al subir la imagen');
+    } finally {
+      if (btn) {
+        btn.innerHTML = original;
+        btn.disabled = false;
+      }
+      input.value = '';
     }
-    btn.innerHTML = original;
-    input.value = '';
   }
 
   async function borrarImagen(imgId, itemId) {
     if (!confirm('¿Eliminar esta imagen?')) return;
-    const r = await fetch(`/agenda/imagen/${imgId}`, {method: 'DELETE'});
-    const d = await r.json();
-    if (d.ok) {
-      const cont = document.getElementById(`imgs-${itemId}`);
-      if (cont) cont.innerHTML = '';
-      location.reload();
-    } else {
-      alert('Error: ' + (d.error || 'No se pudo eliminar'));
+    try {
+      const r = await fetch(`/agenda/imagen/${imgId}`, {method: 'DELETE'});
+      const d = await r.json();
+      if (d.ok) {
+        location.reload();
+      } else {
+        alert('Error: ' + (d.error || 'No se pudo eliminar'));
+      }
+    } catch (e) {
+      alert('Error de red al eliminar la imagen');
     }
   }
 
@@ -854,7 +975,8 @@
   }
 
   function cerrarVisor() {
-    document.getElementById('visor').style.display = 'none';
+    const visor = document.getElementById('visor');
+    if (visor) visor.style.display = 'none';
   }
 </script>
 </body>

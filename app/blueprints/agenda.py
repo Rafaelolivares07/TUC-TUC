@@ -137,8 +137,8 @@ def agenda():
             url = r['url']
             if r['ruta']:
                 url = url_for('agenda.servir_imagen_item', img_id=r['id'])
-            imagenes.setdefault(r[0], []).append({
-                'id': r[1], 'url': url,
+            imagenes.setdefault(r['item_id'], []).append({
+                'id': r['id'], 'url': url,
                 'ocr_texto': r['ocr_texto'] or ''
             })
             
@@ -222,12 +222,37 @@ def subir_imagen_item(item_id):
         return jsonify({'ok': False, 'error': 'No se recibió archivo'}), 400
     try:
         file = request.files['imagen']
-        ext = os.path.splitext(file.filename or '')[-1].lower() or '.png'
+        ext = os.path.splitext(file.filename or '')[-1].lower() or '.jpg'
         if ext not in ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'):
-            ext = '.png'
+            ext = '.jpg'
+
         nombre = f'item{item_id}_{os.urandom(6).hex()}{ext}'
         ruta = os.path.join(_AGENDA_IMG_DIR, nombre)
-        file.save(ruta)
+        guardado = False
+
+        try:
+            from PIL import Image, ImageOps
+            img = Image.open(file)
+            img = ImageOps.exif_transpose(img)
+            if ext in ('.jpg', '.jpeg') or img.mode in ('RGB', 'YCbCr', 'CMYK'):
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                ext = '.jpg'
+                nombre = f'item{item_id}_{os.urandom(6).hex()}{ext}'
+                ruta = os.path.join(_AGENDA_IMG_DIR, nombre)
+                img.save(ruta, 'JPEG', quality=85, optimize=True)
+                guardado = True
+            elif ext == '.webp':
+                nombre = f'item{item_id}_{os.urandom(6).hex()}.webp'
+                ruta = os.path.join(_AGENDA_IMG_DIR, nombre)
+                img.save(ruta, 'WEBP', quality=85)
+                guardado = True
+        except Exception:
+            pass
+
+        if not guardado:
+            file.seek(0)
+            file.save(ruta)
 
         ocr_texto = _ocr_imagen(ruta) or ''
 
@@ -256,10 +281,24 @@ def servir_imagen_item(img_id):
         row = cur.fetchone()
     if not row:
         return 'Not found', 404
-    if row['ruta'] and os.path.exists(row['ruta']):
-        return send_from_directory(os.path.dirname(row['ruta']), os.path.basename(row['ruta']))
+
+    ruta_guardada = row['ruta'] or ''
+    nombre = os.path.basename(ruta_guardada) if ruta_guardada else ''
+
+    # 1. Buscar en _AGENDA_IMG_DIR por nombre de archivo
+    if nombre:
+        ruta_directorio = os.path.join(_AGENDA_IMG_DIR, nombre)
+        if os.path.exists(ruta_directorio):
+            return send_from_directory(_AGENDA_IMG_DIR, nombre)
+
+    # 2. Buscar por ruta absoluta directa si existe
+    if ruta_guardada and os.path.exists(ruta_guardada):
+        return send_from_directory(os.path.dirname(ruta_guardada), os.path.basename(ruta_guardada))
+
+    # 3. Si hay URL externa (ej. Cloudinary / S3)
     if row['url']:
         return redirect(row['url'])
+
     return 'Not found', 404
 
 

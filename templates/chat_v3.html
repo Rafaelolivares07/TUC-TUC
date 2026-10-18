@@ -381,9 +381,28 @@
       margin-top: 3px;
       padding: 0 2px;
     }
-    .chulito { font-size: 11px; }
-    .chulito.leido { color: var(--mine-ink); }
-    .chulito.enviado { opacity: 0.5; }
+    .bubble-mine .msg-hora,
+    .bubble-audio.mine .msg-hora {
+      color: rgba(255, 252, 245, 0.92);
+    }
+    .chulito {
+      font-size: 12px;
+      font-weight: 700;
+      margin-left: 4px;
+      letter-spacing: -1px;
+      display: inline-block;
+    }
+    .chulito.enviado {
+      color: rgba(255, 252, 245, 0.88);
+      opacity: 1;
+    }
+    .chulito.leido {
+      color: #ffffff;
+      font-weight: 800;
+      text-shadow: 0 0 4px rgba(255, 255, 255, 0.35);
+    }
+    .bubble-card .chulito.enviado { color: var(--ink-soft); }
+    .bubble-card .chulito.leido { color: var(--accent); text-shadow: none; }
 
     /* Traducción */
     .trad-bubble {
@@ -2112,8 +2131,14 @@ function seleccionarLang(code) {
 
 function chulito(estado, esMio) {
   if (!esMio) return '';
-  if (estado === 'leido') return '<span class="chulito leido">✓✓</span>';
-  return '<span class="chulito enviado">✓</span>';
+  if (estado === 'leido') return '<span class="chulito leido" title="Recibido y leído">✓✓</span>';
+  return '<span class="chulito enviado" title="Enviado al servidor">✓</span>';
+}
+
+function _esCreadorConv(tok) {
+  const c = convData[tok] || convInfo;
+  if (c && c.creador_id && MI_TERCERO_ID) return c.creador_id === MI_TERCERO_ID;
+  return !ES_INVITADO;
 }
 
 async function actualizarEstados() {
@@ -2124,7 +2149,7 @@ async function actualizarEstados() {
   for (const [id, estado] of Object.entries(r.estados)) {
     if (estado === 'leido') {
       const el = document.getElementById(`est-${id}`);
-      if (el) el.outerHTML = `<span id="est-${id}" class="chulito leido">✓✓</span>`;
+      if (el) el.innerHTML = chulito('leido', true);
       _pendientesEstado.delete(Number(id));
     }
   }
@@ -2132,7 +2157,7 @@ async function actualizarEstados() {
 
 function pollMensajes() {
   if (!tokenActivo) return;
-  fetch(`/api/chat/invitado/mensajes/${tokenActivo}?desde=${ultimoMsgId}`)
+  fetch(`/api/chat/invitado/mensajes/${tokenActivo}?desde=${ultimoMsgId}&viewer_id=${MI_TERCERO_ID}`)
     .then(r => r.json())
     .then(d => {
       if (!d.ok) return;
@@ -2183,9 +2208,12 @@ function renderMensajes(msgs, cont) {
     } else if (m.tipo === 'audio' && m.url_archivo) {
       div.innerHTML = `
         <div class="bubble-audio ${lado}">
-          <audio controls src="${m.url_archivo}" preload="metadata" style="max-width:210px;height:32px"></audio>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <audio controls src="${m.url_archivo}" preload="metadata" style="max-width:210px;height:32px"></audio>
+            <span id="est-${m.id}" style="flex-shrink:0;line-height:1">${chulito(m.estado, esMio)}</span>
+          </div>
           <div class="msg-hora" style="text-align:${esMio ? 'right' : 'left'};margin-top:4px">
-            ${formatHora(m.fecha)}<span id="est-${m.id}">${chulito(m.estado, esMio)}</span>
+            ${formatHora(m.fecha)}
           </div>
         </div>`;
 
@@ -2225,9 +2253,12 @@ function renderMensajes(msgs, cont) {
       if (esMio) {
         div.innerHTML = `
           <div class="bubble-mine">
-            <span style="white-space:pre-wrap;word-break:break-word">${escHtml(m.mensaje)}</span>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+              <span style="white-space:pre-wrap;word-break:break-word">${escHtml(m.mensaje)}</span>
+              <span id="est-${m.id}" style="flex-shrink:0;line-height:1">${chulito(m.estado, esMio)}</span>
+            </div>
             <div class="msg-hora" style="text-align:right;margin-top:4px">
-              ${formatHora(m.fecha)}<span id="est-${m.id}">${chulito(m.estado, esMio)}</span>
+              ${formatHora(m.fecha)}
             </div>
           </div>`;
       } else {
@@ -2235,7 +2266,7 @@ function renderMensajes(msgs, cont) {
           <div class="bubble-theirs">
             <span style="white-space:pre-wrap;word-break:break-word">${escHtml(m.mensaje)}</span>
             <div class="msg-hora" style="margin-top:4px">
-              ${formatHora(m.fecha)}<span id="est-${m.id}">${chulito(m.estado, esMio)}</span>
+              ${formatHora(m.fecha)}
             </div>
           </div>
           <div class="trad-anchor" data-mid="${m.id}"></div>`;
@@ -2293,11 +2324,11 @@ function enviarTexto() {
   if (!msg || !tokenActivo) return;
   el.value = ''; el.style.height = 'auto';
   if (modoApunte) { guardarApunte('texto', msg, null); return; }
-  const esCreador = (convData[tokenActivo]?.creador_id === MI_TERCERO_ID);
+  const esCreador = _esCreadorConv(tokenActivo);
   fetch('/api/chat/invitado/enviar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: tokenActivo, mensaje: msg, tipo: 'texto', es_creador: esCreador })
+    body: JSON.stringify({ token: tokenActivo, mensaje: msg, tipo: 'texto', es_creador: esCreador, remitente_id: MI_TERCERO_ID })
   }).then(() => pollMensajes());
 }
 
@@ -2380,7 +2411,7 @@ async function toggleGrabacion() {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 token: tok, mensaje: '', tipo: 'audio', url_archivo: rUp.url,
-                es_creador: (convData[tok]?.creador_id === MI_TERCERO_ID)
+                es_creador: _esCreadorConv(tok), remitente_id: MI_TERCERO_ID
               })
             });
             pollMensajes();
@@ -2418,10 +2449,10 @@ async function enviarImagenFile(file) {
     .then(r => r.json()).catch(() => null);
   if (!rUp?.ok) { alert('Error subiendo imagen: ' + (rUp?.error || 'desconocido')); return; }
   if (modoApunte) { await guardarApunte('imagen', '', rUp.url); return; }
-  const esCreador = (convData[tokenActivo]?.creador_id === MI_TERCERO_ID);
+  const esCreador = _esCreadorConv(tokenActivo);
   await fetch('/api/chat/invitado/enviar', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: tokenActivo, mensaje: '', tipo: 'imagen', url_archivo: rUp.url, es_creador: esCreador })
+    body: JSON.stringify({ token: tokenActivo, mensaje: '', tipo: 'imagen', url_archivo: rUp.url, es_creador: esCreador, remitente_id: MI_TERCERO_ID })
   });
   pollMensajes();
 }
@@ -2925,9 +2956,11 @@ async function enviarCard(payload) {
         mensaje: payload.nombre,
         tipo: 'card',
         card_payload: payload,
-        es_creador: (convData[token]?.creador_id === MI_TERCERO_ID)
+        es_creador: _esCreadorConv(token),
+        remitente_id: MI_TERCERO_ID
       })
     });
+    pollMensajes();
   } catch (e) { console.error('enviarCard', e); }
 }
 

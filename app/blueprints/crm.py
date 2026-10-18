@@ -294,11 +294,11 @@ def api_chat_invitado_mensajes(token):
             WHERE m.conversacion_id = %s AND m.id > %s
             ORDER BY m.fecha ASC
         ''', (conv['id'], desde_id)).fetchall()
-        viewer_id = get_chat_tercero_id()
-        if viewer_id:
+        viewer_id = request.args.get('viewer_id', type=int) or get_chat_tercero_id()
+        if viewer_id in (conv['creador_id'], conv['invitado_id']):
             otro_id = conv['creador_id'] if viewer_id == conv['invitado_id'] else conv['invitado_id']
         else:
-            otro_id = conv['invitado_id']
+            otro_id = conv['creador_id']
         conn.execute('''
             UPDATE mensajes SET estado = 'leido'
             WHERE conversacion_id = %s AND remitente_id = %s AND estado = 'pendiente'
@@ -329,6 +329,7 @@ def api_chat_invitado_enviar():
     url_archivo = data.get('url_archivo', '')
     card_payload = data.get('card_payload') or None
     es_creador = data.get('es_creador', False)
+    req_remitente = data.get('remitente_id')
     if not token or (not mensaje and not url_archivo and not card_payload):
         return jsonify({'ok': False, 'error': 'Faltan datos'}), 400
     try:
@@ -341,11 +342,11 @@ def api_chat_invitado_enviar():
         if not conv:
             conn.close()
             return jsonify({'ok': False, 'error': 'Conversación no válida'}), 404
-        if es_creador:
-            sender = get_chat_tercero_id()
-            if not sender or sender != conv['creador_id']:
-                conn.close()
-                return jsonify({'ok': False, 'error': 'No autorizado'}), 401
+        sender = get_chat_tercero_id()
+        if req_remitente and int(req_remitente) in (conv['creador_id'], conv['invitado_id']):
+            remitente_id = int(req_remitente)
+            destinatario_id = conv['invitado_id'] if remitente_id == conv['creador_id'] else conv['creador_id']
+        elif es_creador or (sender and sender == conv['creador_id']):
             remitente_id = conv['creador_id']
             destinatario_id = conv['invitado_id']
         else:

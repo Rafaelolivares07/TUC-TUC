@@ -1313,9 +1313,9 @@ _GLOBO_CHAT_SNIPPET = """
   #tuctuc-chat-toast {
     position: fixed;
     bottom: 84px;
-    right: 24px;
+    right: 16px;
     z-index: 9455;
-    max-width: 300px;
+    max-width: min(300px, calc(100vw - 32px));
     background: #1f1e1b;
     color: #fcf9f3;
     border: 1px solid rgba(201, 100, 66, 0.45);
@@ -1326,13 +1326,20 @@ _GLOBO_CHAT_SNIPPET = """
     font-size: 13px;
     cursor: pointer;
     display: none;
+    box-sizing: border-box;
+  }
+  #tuctuc-chat-drawer,
+  #tuctuc-chat-drawer * {
+    box-sizing: border-box;
   }
   #tuctuc-chat-drawer {
     position: fixed;
     bottom: 84px;
-    right: 24px;
-    width: min(430px, calc(100vw - 24px));
-    height: min(650px, calc(100vh - 110px));
+    right: 16px;
+    width: min(410px, calc(100vw - 32px));
+    max-width: calc(100% - 32px);
+    height: min(640px, calc(100vh - 104px));
+    height: min(640px, calc(100dvh - 104px));
     z-index: 9460;
     background: #f5f1e8;
     border-radius: 18px;
@@ -1355,26 +1362,37 @@ _GLOBO_CHAT_SNIPPET = """
     justify-content: space-between;
     gap: 6px;
     flex-shrink: 0;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
   .tuctuc-drawer-actions {
     background: #2b2925;
-    padding: 6px 10px;
+    padding: 6px 8px;
     display: flex;
     align-items: center;
     gap: 6px;
-    overflow-x: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
     flex-shrink: 0;
   }
   .tuctuc-ctx-btn {
+    flex: 1;
+    min-width: 0;
     border: 1px solid rgba(252, 249, 243, 0.2);
     background: rgba(255, 255, 255, 0.08);
     color: #fcf9f3;
     font-size: 11.5px;
     font-weight: 600;
-    padding: 5px 10px;
+    padding: 5px 8px;
     border-radius: 999px;
     cursor: pointer;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
     transition: background 0.15s;
   }
   .tuctuc-ctx-btn:hover {
@@ -1384,11 +1402,14 @@ _GLOBO_CHAT_SNIPPET = """
   @media (max-width: 640px) {
     #tuctuc-chat-globo { right: 74px; bottom: 18px; width: 46px; height: 46px; }
     #tuctuc-chat-drawer {
-      right: 8px;
       left: 8px;
-      bottom: 72px;
-      width: auto;
-      height: calc(100vh - 88px);
+      right: 8px;
+      bottom: 70px;
+      width: calc(100vw - 16px);
+      max-width: calc(100% - 16px);
+      height: calc(100vh - 84px);
+      height: calc(100dvh - 84px);
+      border-radius: 16px;
     }
   }
 </style>
@@ -1404,10 +1425,10 @@ _GLOBO_CHAT_SNIPPET = """
 
 <div id="tuctuc-chat-drawer">
   <div class="tuctuc-drawer-bar">
-    <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700">
-      <span>💬 Mensajería TUC TUC</span>
+    <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+      <span>💬 MiniChat TUC TUC</span>
     </div>
-    <div style="display:flex;align-items:center;gap:6px">
+    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
       <button onclick="window.open('/chat2','_blank')" title="Abrir en pantalla completa"
               style="background:transparent;border:none;color:#fcf9f3;cursor:pointer;font-size:14px;padding:4px 6px">↗</button>
       <button onclick="tuctucToggleChatDrawer(false)" title="Cerrar"
@@ -1416,13 +1437,13 @@ _GLOBO_CHAT_SNIPPET = """
   </div>
   <div class="tuctuc-drawer-actions">
     <button class="tuctuc-ctx-btn" onclick="tuctucCompartirContexto('pregunta')">
-      ❓ Consultar sobre esta pantalla
+      ❓ Consultar pantalla
     </button>
     <button class="tuctuc-ctx-btn" onclick="tuctucCompartirContexto('reporte')">
-      📊 Compartir este reporte / vista
+      📊 Compartir vista
     </button>
   </div>
-  <iframe id="tuctuc-chat-iframe" src="about:blank" style="flex:1;width:100%;border:none;background:#f5f1e8"></iframe>
+  <iframe id="tuctuc-chat-iframe" src="about:blank" style="flex:1;width:100%;max-width:100%;min-width:0;border:none;background:#f5f1e8;display:block"></iframe>
 </div>
 
 <script>
@@ -1434,12 +1455,40 @@ _GLOBO_CHAT_SNIPPET = """
   let _ultimoTokenToast = '';
   let _iframeCargado = false;
 
+  function _ajustarDrawerViewport() {
+    const dr = document.getElementById('tuctuc-chat-drawer');
+    if (!dr) return;
+    const vw = Math.min(
+      window.innerWidth || 9999,
+      document.documentElement.clientWidth || 9999,
+      window.visualViewport ? window.visualViewport.width : 9999
+    );
+    if (vw <= 640) {
+      const w = Math.max(260, vw - 16);
+      dr.style.left = '8px';
+      dr.style.right = 'auto';
+      dr.style.width = w + 'px';
+      dr.style.maxWidth = w + 'px';
+    } else {
+      dr.style.left = '';
+      dr.style.right = '16px';
+      dr.style.width = Math.min(410, vw - 32) + 'px';
+      dr.style.maxWidth = (vw - 32) + 'px';
+    }
+  }
+
+  window.addEventListener('resize', _ajustarDrawerViewport);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', _ajustarDrawerViewport);
+  }
+
   // Si no hay botón de inspector de ayuda, acercar el globo al borde derecho
   window.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('btn-ayuda-inspector')) {
       const g = document.getElementById('tuctuc-chat-globo');
-      if (g) g.style.right = '24px';
+      if (g) g.style.right = '18px';
     }
+    _ajustarDrawerViewport();
   });
 
   function _cargarIframe(url) {
@@ -1454,6 +1503,7 @@ _GLOBO_CHAT_SNIPPET = """
     const toast = document.getElementById('tuctuc-chat-toast');
     if (toast) toast.style.display = 'none';
     if (!dr) return;
+    _ajustarDrawerViewport();
     const abrir = typeof forzar === 'boolean' ? forzar : !dr.classList.contains('open');
     dr.classList.toggle('open', abrir);
     if (abrir && !_iframeCargado) {
@@ -1463,6 +1513,7 @@ _GLOBO_CHAT_SNIPPET = """
 
   window.tuctucCompartirContexto = function(modo) {
     const dr = document.getElementById('tuctuc-chat-drawer');
+    _ajustarDrawerViewport();
     if (dr && !dr.classList.contains('open')) dr.classList.add('open');
     const urlActual = window.location.href;
     const titulo = (document.title || window.location.pathname).replace('— TUC TUC', '').trim();

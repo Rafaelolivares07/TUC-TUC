@@ -313,20 +313,35 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   border-radius: 20px;
   padding: 16px;
 }
-.queue-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
-.queue-list { list-style: none; }
-.queue-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 11px 14px;
-  background: var(--surface2);
-  border-radius: 12px;
-  margin-bottom: 6px;
+.queue-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 0; display:flex; align-items:center; gap:8px; }
+.queue-list {
+  list-style: none;
+  max-height: 480px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.3) transparent;
 }
-.q-num { font-size: 12px; color: var(--muted); font-weight: 600; width: 24px; flex-shrink: 0; }
-.handle { color: var(--muted); cursor: grab; font-size: 16px; flex-shrink: 0; }
-.q-nombre { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.q-remove { border:1px solid rgba(255,77,109,.35); background:rgba(255,77,109,.1); color:#ff4d6d; border-radius:8px; padding:7px 9px; font-weight:800; cursor:pointer; }
-.q-download-btn { border:1px solid rgba(0,180,216,.35); background:rgba(0,180,216,.1); color:#00b4d8; border-radius:8px; padding:7px 9px; font-weight:800; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+.queue-list::-webkit-scrollbar {
+  width: 6px;
+}
+.queue-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 10px;
+}
+.queue-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px;
+  background: var(--surface2);
+  border-radius: 10px;
+  margin-bottom: 4px;
+  min-height: 34px;
+}
+.q-num { font-size: 11px; color: var(--muted); font-weight: 700; width: 22px; flex-shrink: 0; }
+.handle { color: var(--muted); cursor: grab; font-size: 14px; flex-shrink: 0; }
+.q-nombre { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-remove { border:1px solid rgba(255,77,109,.35); background:rgba(255,77,109,.1); color:#ff4d6d; border-radius:6px; padding:4px 8px; font-size:11px; font-weight:800; cursor:pointer; }
+.q-download-btn { border:1px solid rgba(0,180,216,.35); background:rgba(0,180,216,.1); color:#00b4d8; border-radius:6px; padding:4px 8px; font-size:11px; font-weight:800; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
 .queue-empty { text-align: center; color: var(--muted2); font-size: 13px; padding: 20px 0; }
 
 #estado { text-align: center; font-size: 11px; color: var(--muted2); margin-top: 12px; }
@@ -936,11 +951,21 @@ input:checked + .slider:before {
       </div>
     </div>
 
-    <div class="queue-box">
-      <div class="queue-label" id="queue-label">Próximas canciones</div>
-      <ul class="queue-list" id="lista-cola">
-        <li class="queue-empty">Cola vacía</li>
-      </ul>
+    <div class="queue-box" id="queue-box-container">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; cursor:pointer;" onclick="toggleQueueBox()">
+        <div class="queue-label" id="queue-label">
+          <span>Próximas canciones</span>
+          <span id="queue-count-badge" style="background:rgba(0,212,255,0.15); color:var(--ac1); padding:2px 8px; border-radius:10px; font-size:10px; font-weight:800;">0</span>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button type="button" class="btn-control" id="btn-toggle-queue" style="padding:4px 10px; font-size:11px; border-radius:8px; line-height:1.2;" onclick="event.stopPropagation(); toggleQueueBox();" title="Colapsar o ver canciones en cola">Colapsar ▾</button>
+        </div>
+      </div>
+      <div id="queue-collapse-wrap">
+        <ul class="queue-list" id="lista-cola">
+          <li class="queue-empty">Cola vacía</li>
+        </ul>
+      </div>
     </div>
 
     <div class="panel-box">
@@ -978,7 +1003,19 @@ input:checked + .slider:before {
       <div class="status-msg" id="upload-msg"></div>
     </div>
 
-    <div class="panel-box">
+        <div class="panel-box" id="sec-listas-reproductor">
+      <div class="panel-title">📂 Listas de reproducción / Carpetas</div>
+      <p style="font-size:12px; color:var(--muted); margin:-6px 0 10px;">Tus subcarpetas de música (ej. Salsa, Rock, Vallenato) se organizan aquí automáticamente como listas.</p>
+      <div class="playlist-create">
+        <input class="playlist-input" id="playlist-name" type="text" placeholder="Salsa, diciembre, planchar...">
+        <button class="btn-control" onclick="crearLista()">Crear lista</button>
+      </div>
+      <ul class="library-list" id="lista-playlists">
+        <li class="library-empty">Crea una lista y agrega canciones desde tu biblioteca local.</li>
+      </ul>
+    </div>
+
+<div class="panel-box">
       <div class="panel-title">Biblioteca de este dispositivo</div>
       <div class="local-actions">
         <button class="btn-control" onclick="abrirSelectorCarpeta()" title="Importar carpeta y auto-organizar listas por género">📁 Agregar carpeta</button>
@@ -1003,16 +1040,7 @@ input:checked + .slider:before {
       </ul>
     </div>
 
-    <div class="panel-box">
-      <div class="panel-title">Listas de reproduccion</div>
-      <div class="playlist-create">
-        <input class="playlist-input" id="playlist-name" type="text" placeholder="Salsa, diciembre, planchar...">
-        <button class="btn-control" onclick="crearLista()">Crear</button>
-      </div>
-      <ul class="library-list" id="lista-playlists">
-        <li class="library-empty">Crea una lista y agrega canciones desde tu biblioteca local.</li>
-      </ul>
-    </div>
+    
 
     <div class="panel-box" style="border-color: rgba(255,77,109,.25); background: rgba(255,77,109,.04);">
       <div class="panel-title" style="color: #ff4d6d;">Mantenimiento</div>
@@ -3298,8 +3326,24 @@ function ejecutarPoner(modo) {
 
 let isDraggingQueue = false;
 
+let queueBoxCollapsed = false;
+function toggleQueueBox() {
+  queueBoxCollapsed = !queueBoxCollapsed;
+  const wrap = document.getElementById('queue-collapse-wrap');
+  const btn = document.getElementById('btn-toggle-queue');
+  if (!wrap || !btn) return;
+  if (queueBoxCollapsed) {
+    wrap.style.display = 'none';
+    btn.textContent = 'Desplegar ▸';
+  } else {
+    wrap.style.display = 'block';
+    btn.textContent = 'Colapsar ▾';
+  }
+}
+
 function renderCola(cola) {
-  queueLabel.textContent = 'Cola · ' + cola.length + (cola.length === 1 ? ' canción' : ' canciones');
+  const badge = document.getElementById('queue-count-badge');
+  if (badge) badge.textContent = cola.length;
   if (isDraggingQueue) return;
   if (cola.length === 0) {
     listaCola.innerHTML = '<li class="queue-empty">Cola vacía</li>';

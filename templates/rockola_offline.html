@@ -930,6 +930,12 @@ function getDeviceId() {
   return id;
 }
 
+function escapeHtml(valor) {
+  return String(valor || '').replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[ch]));
+}
+
 function limpiarNombre(n) {
   if (!n) return '';
   return n.replace(/\.[^.]+$/, '').replace(/^[0-9]+[\s._-]+/, '');
@@ -1039,12 +1045,9 @@ function esArchivoAudio(nombre, tipo) {
 function extraerGeneroDePath(relativePath) {
   if (!relativePath) return null;
   const parts = relativePath.split('/').filter(Boolean);
-  if (parts.length >= 3) {
-    // Carpeta de género (ej. Musica/Salsa/Cancion.mp3 -> Salsa)
-    return parts[1];
-  } else if (parts.length === 2) {
-    // (ej. Salsa/Cancion.mp3 -> Salsa)
-    return parts[0];
+  if (parts.length >= 2) {
+    // Siempre tomar la carpeta padre directa (ej. Musica/Salsa/Cancion.mp3 -> Salsa)
+    return parts[parts.length - 2];
   }
   return null;
 }
@@ -1291,25 +1294,70 @@ function renderSongs() {
   `).join('');
 }
 
+let expandedPlaylistId = null;
+
+function toggleVerCancionesListaOffline(pId) {
+  expandedPlaylistId = (expandedPlaylistId === pId) ? null : pId;
+  renderPlaylists();
+}
+
 function renderPlaylists() {
   if (!allPlaylists.length) {
-    playlistListEl.innerHTML = '<div class="empty-state">No hay listas creadas. Las subcarpetas agregadas crean listas de géneros automáticamente.</div>';
+    playlistListEl.innerHTML = `
+      <div class="empty-state" style="padding:24px 14px; text-align:center; background:var(--surface); border:1px dashed var(--border); border-radius:14px;">
+        <div style="font-size:28px; margin-bottom:8px;">📂</div>
+        <p style="font-weight:700; color:var(--text); margin-bottom:6px;">No hay carpetas ni listas creadas todavía.</p>
+        <p style="font-size:12px; color:var(--muted); margin-bottom:14px;">Si tienes tu música en el celular en carpetas (ej. Salsa, Rock, Vallenato), cárgala aquí para organizarla automáticamente.</p>
+        <button class="btn-action primary" style="max-width:280px; margin:0 auto;" onclick="abrirSelectorCarpetaOffline()">📁 Cargar mi carpeta de música</button>
+      </div>
+    `;
     return;
   }
 
   playlistListEl.innerHTML = allPlaylists.map(p => {
-    const cant = (p.canciones || []).filter(id => allSongs.some(s => s.id === id)).length;
+    const songsInP = allSongs.filter(s => (p.canciones || []).includes(s.id));
+    const cant = songsInP.length;
+    const isExpanded = expandedPlaylistId === p.id;
+
+    let songsHtml = '';
+    if (isExpanded) {
+      if (!songsInP.length) {
+        songsHtml = '<div style="font-size:11px; color:var(--muted2); padding:8px 0;">No hay canciones vinculadas a esta lista.</div>';
+      } else {
+        songsHtml = `
+          <div style="margin-top:10px; border-top:1px solid rgba(0,212,255,0.12); padding-top:8px;">
+            <div style="font-size:11px; font-weight:700; color:var(--ac1); margin-bottom:6px;">Canciones en "${escapeHtml(p.nombre)}":</div>
+            <ul style="list-style:none; max-height:220px; overflow-y:auto; padding-right:4px;">
+              ${songsInP.map((s, idx) => `
+                <li style="display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.04); font-size:12px;">
+                  <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%;">${idx + 1}. ${limpiarNombre(s.nombre)}</span>
+                  <div style="display:flex; gap:4px;">
+                    <button class="mini-btn" style="padding:2px 6px; font-size:10px;" onclick="sonarCancionDirecta('${s.id}')">▶</button>
+                    <button class="mini-btn" style="padding:2px 6px; font-size:10px;" onclick="agregarACola('${s.id}')">+ Cola</button>
+                  </div>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        `;
+      }
+    }
+
     return `
-      <div class="genre-card">
-        <div>
-          <div class="genre-title">${p.nombre}</div>
-          <div class="genre-count">${cant} canción(es) disponible(s)</div>
+      <div class="genre-card" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div class="genre-title" style="cursor:pointer;" onclick="toggleVerCancionesListaOffline('${p.id}')">📂 ${escapeHtml(p.nombre)}</div>
+            <div class="genre-count">${cant} canción(es) disponible(s)</div>
+          </div>
+          <div class="genre-btns">
+            <button class="mini-btn" onclick="toggleVerCancionesListaOffline('${p.id}')" title="Ver canciones de esta lista">${isExpanded ? '▲ Cerrar' : '👁 Ver (' + cant + ')'}</button>
+            <button class="mini-btn primary" onclick="sonarLista('${p.id}', false)" title="Reproducir toda la lista">▶</button>
+            <button class="mini-btn" onclick="sonarLista('${p.id}', true)" title="Modo aleatorio">🔀</button>
+            <button class="mini-btn del" onclick="eliminarLista('${p.id}')" title="Eliminar lista">✕</button>
+          </div>
         </div>
-        <div class="genre-btns">
-          <button class="mini-btn" onclick="sonarLista('${p.id}', false)" title="Reproducir toda la lista">▶ Reproducir</button>
-          <button class="mini-btn" onclick="sonarLista('${p.id}', true)" title="Reproducir en modo aleatorio">🔀</button>
-          <button class="mini-btn del" onclick="eliminarLista('${p.id}')" title="Eliminar lista">✕</button>
-        </div>
+        ${songsHtml}
       </div>
     `;
   }).join('');

@@ -1003,15 +1003,23 @@ input:checked + .slider:before {
       <div class="status-msg" id="upload-msg"></div>
     </div>
 
-        <div class="panel-box" id="sec-listas-reproductor">
-      <div class="panel-title">📂 Listas de reproducción / Carpetas</div>
-      <p style="font-size:12px; color:var(--muted); margin:-6px 0 10px;">Tus subcarpetas de música (ej. Salsa, Rock, Vallenato) se organizan aquí automáticamente como listas.</p>
+    <div class="panel-box" id="sec-listas-reproductor">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+        <div class="panel-title" style="margin:0;">📂 Listas de reproducción / Carpetas (<span id="count-playlists-reproductor">0</span>)</div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-control" style="font-size:11px; padding:4px 8px; font-weight:800;" onclick="abrirSelectorCarpeta()" title="Seleccionar carpeta principal de música">📁 Agregar carpeta</button>
+          <button class="btn-control" style="font-size:11px; padding:4px 8px;" onclick="abrirSelectorAudios()" title="Agregar canciones sueltas">🎵 Agregar canciones</button>
+        </div>
+      </div>
+      <p style="font-size:12px; color:var(--muted); margin:0 0 10px;">Tus subcarpetas de música (ej. Salsa, Rock, Vallenato) se organizan aquí automáticamente como listas.</p>
+      
       <div class="playlist-create">
-        <input class="playlist-input" id="playlist-name" type="text" placeholder="Salsa, diciembre, planchar...">
+        <input class="playlist-input" id="playlist-name" type="text" placeholder="Nombre de lista nueva...">
         <button class="btn-control" onclick="crearLista()">Crear lista</button>
       </div>
+
       <ul class="library-list" id="lista-playlists">
-        <li class="library-empty">Crea una lista y agrega canciones desde tu biblioteca local.</li>
+        <li class="library-empty">Cargando listas...</li>
       </ul>
     </div>
 
@@ -2302,10 +2310,8 @@ function esArchivoAudio(nombre, tipo) {
 function extraerGeneroDePath(relativePath) {
   if (!relativePath) return null;
   const parts = relativePath.split('/').filter(Boolean);
-  if (parts.length >= 3) {
+  if (parts.length >= 2) {
     return parts[parts.length - 2];
-  } else if (parts.length === 2) {
-    return parts[0];
   }
   return null;
 }
@@ -2999,23 +3005,35 @@ async function agregarCancionALista(songId) {
 }
 
 function renderListasLocales() {
+  const badgeCount = document.getElementById('count-playlists-reproductor');
+  if (badgeCount) badgeCount.textContent = playlistsLocales.length;
+
   if (!playlistsLocales.length) {
-    listaPlaylists.innerHTML = '<li class="library-empty">Crea una lista y agrega canciones desde tu biblioteca local.</li>';
+    listaPlaylists.innerHTML = `
+      <li class="library-empty" style="padding:16px 8px; text-align:center;">
+        <p style="margin-bottom:8px; font-weight:700; color:var(--text);">No hay carpetas ni listas en este dispositivo.</p>
+        <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Para ver tus géneros y carpetas aquí, selecciona tu carpeta de música de tu celular:</p>
+        <button type="button" class="btn-control" onclick="abrirSelectorCarpeta()" style="margin:0 auto 6px; font-weight:800; background:var(--ac1-bg); color:var(--ac1); border-color:var(--border); padding:6px 14px;">📁 Cargar carpeta de música</button>
+      </li>
+    `;
     return;
   }
-  listaPlaylists.innerHTML = playlistsLocales.map(p => `
-    <li class="library-item">
-      <div class="library-name" title="${escapeHtml(p.nombre)}">
-        ${escapeHtml(p.nombre)}
-        <div class="local-meta">${(p.canciones || []).length} cancion(es)</div>
-      </div>
-      <div class="playlist-actions">
-        <button class="playlist-mini" onclick="ponerLista('${p.id}')">Agregar</button>
-        <button class="library-btn" onclick="ponerListaAhora('${p.id}')">Ahora</button>
-        <button class="playlist-mini" onclick="abrirEditorLista('${p.id}')">Editar</button>
-      </div>
-    </li>
-  `).join('');
+  listaPlaylists.innerHTML = playlistsLocales.map(p => {
+    const cant = (p.canciones || []).length;
+    return `
+      <li class="library-item">
+        <div class="library-name" title="${escapeHtml(p.nombre)}" style="cursor:pointer;" onclick="abrirEditorLista('${p.id}')">
+          📁 ${escapeHtml(p.nombre)}
+          <div class="local-meta">${cant} cancion(es) · Toca para ver</div>
+        </div>
+        <div class="playlist-actions">
+          <button class="playlist-mini" onclick="abrirEditorLista('${p.id}')" title="Ver canciones de esta carpeta/lista">👁 Ver</button>
+          <button class="library-btn" onclick="ponerListaAhora('${p.id}')" title="Reproducir esta lista ahora">▶ Ahora</button>
+          <button class="playlist-mini" onclick="ponerLista('${p.id}')" title="Añadir canciones a la cola">+ Cola</button>
+        </div>
+      </li>
+    `;
+  }).join('');
 }
 
 function listaActual() {

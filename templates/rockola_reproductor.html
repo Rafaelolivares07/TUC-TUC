@@ -558,6 +558,12 @@ input:checked + .slider:before {
   position: relative !important;
   z-index: 10 !important;
 }
+.yt-wrap-visible iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border: none !important;
+  display: block !important;
+}
 .yt-wrap-audio-only {
   display: block !important;
   position: fixed !important;
@@ -866,10 +872,15 @@ input:checked + .slider:before {
           <span class="time-label" id="time-total">0:00</span>
         </div>
 
-        <!-- Controles Prev / Next -->
+        <!-- Controles Prev / Play-Pause / Next -->
         <div class="player-controls">
           <button class="btn-control-round" onclick="anteriorCancion()" title="Anterior (Retroceder)">
             <svg style="width:24px;height:24px;display:block;margin:auto;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          </button>
+          <button class="btn-control-round btn-play-round" id="btn-play-pause-ctrl" onclick="togglePlayPause()" title="Reproducir / Pausar">
+            <span id="ctrl-play-icon" style="display:flex;align-items:center;justify-content:center;">
+              <svg style="width:30px;height:30px;margin-left:4px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </span>
           </button>
           <button class="btn-control-round" onclick="saltarActual()" title="Siguiente (Saltar)">
             <svg style="width:24px;height:24px;display:block;margin:auto;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6zm9-12h2v12h-2z"/></svg>
@@ -1325,7 +1336,7 @@ async function activar(skipUnlock = false) {
   document.getElementById('pantalla-principal').style.display = 'block';
   
   if (window.YT && window.YT.Player) {
-    crearYtPlayer();
+    crearAmbosYtPlayers();
   }
 
   [player1, player2].forEach(p => {
@@ -1804,7 +1815,7 @@ async function intentarReproducir(c) {
           }
         }
       }
-    }, 5000);
+    }, 3500);
     return;
   }
 
@@ -2054,9 +2065,23 @@ function ytInputChange() {
   const thumb = document.getElementById('yt-thumb');
   const titulo = document.getElementById('yt-titulo');
 
+  const verVideoCheck = document.getElementById('yt-ver-video');
+  const verVideo = verVideoCheck ? verVideoCheck.checked : false;
+  const videoContainer = document.getElementById('yt-video-container');
+
   if (esYt && vidId) {
     thumb.src = `https://img.youtube.com/vi/${vidId}/mqdefault.jpg`;
-    thumb.style.display = 'block';
+    if (verVideo && videoContainer) {
+      videoContainer.innerHTML = `<iframe style="width:100%; height:180px; border:none; border-radius:8px; display:block;" src="https://www.youtube-nocookie.com/embed/${vidId}?autoplay=1&mute=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+      videoContainer.style.display = 'block';
+      thumb.style.display = 'none';
+    } else {
+      if (videoContainer) {
+        videoContainer.innerHTML = '';
+        videoContainer.style.display = 'none';
+      }
+      thumb.style.display = 'block';
+    }
     titulo.textContent = 'Cargando título...';
     fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${vidId}`)
       .then(r => r.json())
@@ -2069,6 +2094,10 @@ function ytInputChange() {
       });
     preview.className = 'yt-preview visible';
   } else {
+    if (videoContainer) {
+      videoContainer.innerHTML = '';
+      videoContainer.style.display = 'none';
+    }
     preview.className = 'yt-preview';
   }
 }
@@ -3645,17 +3674,29 @@ async function togglePlayPause() {
 function actualizarPlayPauseBtn(isPlaying) {
   const icon = document.getElementById('vinyl-play-icon');
   const container = document.querySelector('.vinyl-container');
-  if (!icon || !container) return;
-  if (isPlaying) {
-    icon.innerHTML = '<svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-    icon.style.marginLeft = '0';
-    container.classList.remove('paused');
-    container.classList.add('playing');
-  } else {
-    icon.innerHTML = '<svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-    icon.style.marginLeft = '6px';
-    container.classList.remove('playing');
-    container.classList.add('paused');
+  const ctrlIcon = document.getElementById('ctrl-play-icon');
+
+  if (icon && container) {
+    if (isPlaying) {
+      icon.innerHTML = '<svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+      icon.style.marginLeft = '0';
+      container.classList.remove('paused');
+      container.classList.add('playing');
+    } else {
+      icon.innerHTML = '<svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+      icon.style.marginLeft = '6px';
+      container.classList.remove('playing');
+      container.classList.add('paused');
+    }
+  }
+
+  if (ctrlIcon) {
+    if (isPlaying) {
+      ctrlIcon.innerHTML = '<svg style="width:28px;height:28px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+      ctrlIcon.style.marginLeft = '0';
+    } else {
+      ctrlIcon.innerHTML = '<svg style="width:28px;height:28px;margin-left:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+    }
   }
 }
 

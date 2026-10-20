@@ -124,7 +124,9 @@ def create_app():
         if host_limpio == 'rockola.tuc-tuc.co':
             from .blueprints.rockola import entrada, sync, cliente_sala, reproductor_sala, control_sala, pwa_manifest, pwa_sw
 
-            if request.path.startswith('/api/') or request.path.startswith('/static/'):
+            if (request.path.startswith('/api/') or request.path.startswith('/static/') or
+                    request.path.startswith('/chat') or request.path.startswith('/login') or
+                    request.path.startswith('/admin/login')):
                 return
             if request.path in ('/manifest.json', '/rockola/pwa/manifest.json', '/pwa/manifest.json'):
                 return pwa_manifest()
@@ -136,7 +138,7 @@ def create_app():
 
             RUTAS_FIJAS_ROCKOLA = {
                 'verificar-telefono', 'identificar', 'actualizar-perfil', 'salas',
-                'pwa', 'compartir', 'catalogo', 'admin'
+                'pwa', 'compartir', 'catalogo', 'admin', 'chat', 'chat2'
             }
 
             if partes[0] == 'rockola':
@@ -188,8 +190,10 @@ def create_app():
         except Exception:
             es_tienda = None
 
-        # No interceptar llamadas API ni estáticos — dejar que Flask las enrute normal
-        if request.path.startswith('/api/') or request.path.startswith('/static/') or request.path.startswith('/pagar/') or request.path.startswith('/proyecto/') or request.path.startswith('/solar/proyecto/'):
+        # No interceptar llamadas API ni estáticos ni chat — dejar que Flask las enrute normal
+        if (request.path.startswith('/api/') or request.path.startswith('/static/') or
+                request.path.startswith('/chat') or request.path.startswith('/pagar/') or
+                request.path.startswith('/proyecto/') or request.path.startswith('/solar/proyecto/')):
             return
 
         if es_tienda:

@@ -77,6 +77,7 @@ input { width:100%; padding:13px; border-radius:11px; border:1px solid var(--bor
       <div class="actions">
         <button class="btn secondary" onclick="anteriorCancion()">⏮ Anterior</button>
         <button class="btn danger" onclick="saltarActual()">⏭ Saltar actual</button>
+        <button class="btn secondary" onclick="compartirCancionControl()" style="border-color:rgba(201,100,66,0.5);color:#ff9e7d">💬 Compartir</button>
         <button class="btn secondary" onclick="actualizar()">Actualizar</button>
       </div>
     </div>
@@ -158,6 +159,24 @@ async function actualizar() {
   aplicarVolumen(d.volumen);
   document.getElementById('sonando').textContent = cola[0] ? limpiarNombre(cola[0].nombre) : 'Esperando canciones...';
   renderCola(cola);
+}
+
+function compartirCancionControl() {
+  const tit = (document.getElementById('sonando')?.textContent || '').replace('Esperando canciones...', '').trim();
+  const sala = typeof SALA !== 'undefined' ? SALA : '{{ sala_id }}';
+  if (typeof window.tuctucCompartirContexto === 'function') {
+    window.tuctucCompartirContexto('cancion', {
+      cancion: tit || ('Sala de Rockola #' + sala),
+      sala: sala
+    });
+  } else if (navigator.share) {
+    navigator.share({
+      title: '🎶 ' + (tit || 'Rockola TUC TUC'),
+      url: window.location.href
+    }).catch(() => {});
+  } else {
+    prompt('Copia el enlace de esta sala para compartir:', window.location.href);
+  }
 }
 
 function limpiarNombre(nombre) {

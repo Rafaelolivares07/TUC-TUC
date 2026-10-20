@@ -720,9 +720,14 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
         </span>
         <span class="np-badge-text">Sonando en el local</span>
       </div>
-      <button class="btn-guardar-cel" id="btn-guardar-actual" onclick="guardarActualEnMiCelular()" title="Guardar este MP3 en mi celular">
-        📥 Bajar a mi celular
-      </button>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button class="btn-guardar-cel" id="btn-compartir-chat-actual" onclick="compartirCancionActualEnChat()" title="Compartir canción en el Chat" style="border-color:rgba(201,100,66,0.5); background:rgba(201,100,66,0.18); color:#ff9e7d;">
+          💬 Compartir
+        </button>
+        <button class="btn-guardar-cel" id="btn-guardar-actual" onclick="guardarActualEnMiCelular()" title="Guardar este MP3 en mi celular">
+          📥 Bajar a mi celular
+        </button>
+      </div>
     </div>
     <div class="np-titulo" id="np-titulo-texto">Cargando...</div>
     <div class="np-autor" id="np-autor-texto"></div>
@@ -1148,7 +1153,10 @@ function renderMiBiblioteca() {
         ${limpiarNombre(c.nombre)}
         <div class="library-origin">este dispositivo</div>
       </div>
-      <button class="library-btn" onclick="enviarMiCancion('${c.id}')">Enviar</button>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button class="library-btn" onclick='compartirCancionEnChat(${JSON.stringify(c.nombre)}, "")' title="Compartir en el Chat" style="border-color:rgba(201,100,66,0.35); color:#ff9e7d;">💬</button>
+        <button class="library-btn" onclick="enviarMiCancion('${c.id}')">Enviar</button>
+      </div>
     </li>
   `).join('');
 }
@@ -1507,6 +1515,34 @@ Sortable.create(listaCola, {
 let cancionActualGlobal = null;
 const guardandoCancionesSet = new Set();
 
+function compartirCancionActualEnChat() {
+  const titEl = document.getElementById('np-titulo-texto');
+  const autEl = document.getElementById('np-autor-texto');
+  const titulo = (titEl && titEl.textContent !== 'Cargando...') ? titEl.textContent.trim() : (cancionActualGlobal?.nombre || 'Canción');
+  const autor = autEl ? autEl.textContent.trim() : (cancionActualGlobal?.owner || '');
+  compartirCancionEnChat(titulo, autor);
+}
+
+function compartirCancionEnChat(titulo, artista) {
+  const safeTitulo = (titulo || 'Canción de la Rockola').replace(/\.[^.]+$/, '');
+  const safeArtista = (artista || '').replace(/^Puesta por:\s*/i, '').replace(/^Puesta por ti/i, '').trim();
+  if (typeof window.tuctucCompartirContexto === 'function') {
+    window.tuctucCompartirContexto('cancion', {
+      cancion: safeTitulo,
+      artista: safeArtista,
+      sala: typeof SALA !== 'undefined' ? SALA : ''
+    });
+  } else if (navigator.share) {
+    navigator.share({
+      title: '🎶 ' + safeTitulo,
+      text: `Escucha "${safeTitulo}" en la Rockola TUC TUC`,
+      url: window.location.href
+    }).catch(() => {});
+  } else {
+    prompt('Copia el enlace de esta sala para compartir:', window.location.href);
+  }
+}
+
 function guardarActualEnMiCelular() {
   if (!cancionActualGlobal) {
     showToast('No hay ninguna canción sonando ahora en la sala', 'error');
@@ -1654,6 +1690,7 @@ function renderCola(cola) {
         <div class="q-sub">${mia ? 'Tu canción' : (c.owner ? 'Puesta por: ' + c.owner : 'Anónimo')}</div>
       </div>
       <div class="q-actions-row" style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+        <button class="q-dl-btn" onclick='compartirCancionEnChat(${safeNombre}, "${c.owner || ""}")' title="Compartir en el Chat" style="border-color:rgba(201,100,66,0.35); color:#ff9e7d;">💬</button>
         <button class="q-dl-btn" onclick='guardarEnMiCelular("${c.id}", ${safeNombre}, "${c.youtube_url || ""}", this)' title="Guardar MP3 en este celular">📥</button>
         <span class="q-pos">${playing
           ? `<span class="wave-mini"><span style="animation-delay:0s"></span><span style="animation-delay:.15s"></span><span style="animation-delay:.3s"></span></span>`
@@ -1701,6 +1738,7 @@ function renderBiblioteca(canciones) {
         <div class="library-name" title="${c.nombre}">${c.nombre.replace(/\.[^.]+$/,'')}</div>
         <div class="library-origin">${c.origen || 'audio'}</div>
         <div style="display:flex; gap:6px; align-items:center;">
+          <button class="library-btn" onclick='compartirCancionEnChat(${safeNombre}, "")' title="Compartir en el Chat" style="border-color:rgba(201,100,66,0.35); color:#ff9e7d;">💬</button>
           ${esDescargable ? `<button class="library-btn" onclick='guardarEnMiCelular("${c.id}", ${safeNombre}, ${JSON.stringify(c.youtube_url || "")}, this)' title="Guardar MP3 en este celular" style="border-color:rgba(0,212,255,0.35); color:var(--ac1);">📥 Bajar</button>` : ''}
           <button class="library-btn" onclick="ponerRecordada('${c.id}')">Poner</button>
         </div>

@@ -1436,6 +1436,9 @@ _GLOBO_CHAT_SNIPPET = """
     </div>
   </div>
   <div class="tuctuc-drawer-actions">
+    <button class="tuctuc-ctx-btn" id="tuctuc-btn-ctx-cancion" style="display:none;background:rgba(201,100,66,0.35);border-color:#c96442" onclick="tuctucCompartirCancionActual()">
+      🎵 Compartir canción
+    </button>
     <button class="tuctuc-ctx-btn" onclick="tuctucCompartirContexto('pregunta')">
       ❓ Consultar pantalla
     </button>
@@ -1477,6 +1480,16 @@ _GLOBO_CHAT_SNIPPET = """
     }
   }
 
+  function _detectarContextoRockola() {
+    const isRockola = window.location.hostname === 'rockola.tuc-tuc.co' ||
+                      window.location.pathname.includes('/rockola') ||
+                      typeof window.SALA !== 'undefined';
+    const btnCancion = document.getElementById('tuctuc-btn-ctx-cancion');
+    if (btnCancion) {
+      btnCancion.style.display = isRockola ? 'inline-block' : 'none';
+    }
+  }
+
   window.addEventListener('resize', _ajustarDrawerViewport);
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', _ajustarDrawerViewport);
@@ -1489,6 +1502,7 @@ _GLOBO_CHAT_SNIPPET = """
       if (g) g.style.right = '18px';
     }
     _ajustarDrawerViewport();
+    _detectarContextoRockola();
   });
 
   function _cargarIframe(url) {
@@ -1504,6 +1518,7 @@ _GLOBO_CHAT_SNIPPET = """
     if (toast) toast.style.display = 'none';
     if (!dr) return;
     _ajustarDrawerViewport();
+    _detectarContextoRockola();
     const abrir = typeof forzar === 'boolean' ? forzar : !dr.classList.contains('open');
     dr.classList.toggle('open', abrir);
     if (abrir && !_iframeCargado) {
@@ -1511,16 +1526,44 @@ _GLOBO_CHAT_SNIPPET = """
     }
   };
 
-  window.tuctucCompartirContexto = function(modo) {
+  window.tuctucCompartirContexto = function(modo, extraData) {
     const dr = document.getElementById('tuctuc-chat-drawer');
     _ajustarDrawerViewport();
+    _detectarContextoRockola();
     if (dr && !dr.classList.contains('open')) dr.classList.add('open');
     const urlActual = window.location.href;
     const titulo = (document.title || window.location.pathname).replace('— TUC TUC', '').trim();
-    const targetUrl = '/chat2?embed=1&share_mode=' + encodeURIComponent(modo)
+    let targetUrl = '/chat2?embed=1&share_mode=' + encodeURIComponent(modo)
       + '&share_url=' + encodeURIComponent(urlActual)
       + '&share_title=' + encodeURIComponent(titulo);
+    if (extraData && typeof extraData === 'object') {
+      if (extraData.cancion) targetUrl += '&share_cancion=' + encodeURIComponent(extraData.cancion);
+      if (extraData.artista) targetUrl += '&share_artista=' + encodeURIComponent(extraData.artista);
+      if (extraData.sala) targetUrl += '&share_sala=' + encodeURIComponent(extraData.sala);
+    }
     _cargarIframe(targetUrl);
+  };
+
+  window.tuctucCompartirCancionActual = function() {
+    let titulo = '';
+    let artista = '';
+    if (typeof window.cancionActualGlobal === 'object' && window.cancionActualGlobal?.nombre) {
+      titulo = window.cancionActualGlobal.nombre.replace(/\.[^.]+$/, '');
+      artista = window.cancionActualGlobal.owner || '';
+    } else {
+      const titEl = document.getElementById('np-titulo-texto') || document.getElementById('sonando');
+      if (titEl && titEl.textContent && !titEl.textContent.includes('Cargando') && !titEl.textContent.includes('Esperando')) {
+        titulo = titEl.textContent.trim();
+      }
+      const autEl = document.getElementById('np-autor-texto');
+      if (autEl) artista = autEl.textContent.trim();
+    }
+    const sala = typeof window.SALA !== 'undefined' ? window.SALA : '';
+    window.tuctucCompartirContexto('cancion', {
+      cancion: titulo || ('Música en Sala ' + (sala ? '#' + sala : 'Rockola')),
+      artista: artista,
+      sala: sala
+    });
   };
 
   window.tuctucAbrirConversacionToast = function() {
@@ -1586,7 +1629,7 @@ def _inyectar_globo_chat_global(response):
         p = request.path or ''
         if (p.startswith('/api/') or p.startswith('/static/') or
                 p.startswith('/chat') or p.startswith('/login') or
-                p.startswith('/admin/login') or p.startswith('/rockola')):
+                p.startswith('/admin/login') or request.args.get('embed') == '1'):
             return response
         if not (session.get('chat_tercero_id') or session.get('usuario_id')):
             return response

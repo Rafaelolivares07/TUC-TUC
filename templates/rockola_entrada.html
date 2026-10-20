@@ -423,7 +423,7 @@ function renderSala(sala, disponible) {
       <div class="room-actions">
         ${disponible
           ? `<button class="btn small" onclick="abrirReproductor('${nombre}')">Reproducir</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar</button>`
-          : `<button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar canciones</button><button class="btn ghost small" onclick="reclamarSala('${nombre}')">Reclamar</button>`
+          : `<button class="btn small" style="background:linear-gradient(135deg, #ff9800, #ff5722); color:#fff; font-weight:800;" onclick="reclamarSala('${nombre}')">Tomar control</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar canciones</button>`
         }
       </div>
     </div>

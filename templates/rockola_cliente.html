@@ -694,6 +694,9 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
     <div class="logo-text">Tuc Tuc <span>Rockola</span></div>
     <div style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 8px; flex-wrap: wrap;">
       <div class="sala-tag">{{ sala_id | upper }}</div>
+      <button class="perfil-tag" onclick="irAReproductor()" style="background:rgba(0,212,255,0.12); border:1px solid rgba(0,212,255,0.35); color:var(--ac1); cursor:pointer; font-weight:700;" title="Abrir pantalla de reproducción y biblioteca local">
+        📻 Modo Reproductor
+      </button>
       <button id="btn-perfil" class="perfil-tag" onclick="abrirPerfil()" style="display: none;">👤 <span id="perfil-nombre"></span></button>
     </div>
   </div>
@@ -934,6 +937,11 @@ function abrirDbLocal() {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+}
+
+function irAReproductor() {
+  const base = window.location.host.includes('rockola.tuc-tuc.co') ? '' : '/rockola';
+  window.location.href = `${base}/${encodeURIComponent(SALA)}/reproductor`;
 }
 
 function urlSala() {

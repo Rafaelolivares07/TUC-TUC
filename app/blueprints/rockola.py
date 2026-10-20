@@ -899,6 +899,7 @@ def cliente_sala(sala_id):
 
 
 @bp.route('/<sala_id>/reproductor')
+@bp.route('/reproductor/<sala_id>')
 def reproductor_sala(sala_id):
     conn = _connect()
     try:

@@ -1139,6 +1139,7 @@ def _titulo_youtube(url):
 def resolver(sala_id):
     data = request.get_json(silent=True) or {}
     item_id = (data.get('id') or '').strip()
+    target_url = (data.get('url') or '').strip()
     if not item_id or '/' in item_id or '\\' in item_id:
         return jsonify(ok=False, error='Id invalido'), 400
     upload_dir = _upload_dir(sala_id)
@@ -1148,15 +1149,31 @@ def resolver(sala_id):
     conn = _connect()
     try:
         item = _get_item_cola(conn, sala_id, item_id)
+        if not item:
+            row = conn.execute(
+                """
+                SELECT archivo_id AS id, nombre, youtube_url
+                FROM rockola_biblioteca
+                WHERE sala_id = %s AND archivo_id = %s
+                """,
+                (sala_id, item_id),
+            ).fetchone()
+            if row:
+                item = _row_dict(row)
     finally:
         conn.close()
-    if not item or not item.get('youtube_url'):
+
+    if not target_url and item:
+        target_url = (item.get('youtube_url') or '').strip()
+
+    if not target_url:
         return jsonify(ok=False, error='Sin audio disponible para este item'), 404
+
     destino = os.path.join(upload_dir, item_id + '.mp3')
     try:
-        descarga, error_cobalt = _descargar_youtube_con_cobalt(item['youtube_url'], destino)
+        descarga, error_cobalt = _descargar_youtube_con_cobalt(target_url, destino)
         if not descarga:
-            descarga, error_ytdlp = _descargar_youtube_con_ytdlp(item['youtube_url'], upload_dir, item_id)
+            descarga, error_ytdlp = _descargar_youtube_con_ytdlp(target_url, upload_dir, item_id)
             if not descarga:
                 return jsonify(ok=False, error=error_ytdlp or error_cobalt or 'No se pudo resolver el audio'), 502
         _limpiar_archivos_antiguos(upload_dir)

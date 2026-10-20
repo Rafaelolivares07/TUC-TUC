@@ -149,6 +149,84 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
 
 .back-btn { display:block; text-align:center; margin-top:20px; background:none; border:none; color:var(--muted); font-family:'Space Grotesk',sans-serif; font-size:13px; cursor:pointer; }
 
+/* Tarjeta Sonando Ahora & Boton Descargar en Celular */
+.now-playing-card {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.12), rgba(0, 102, 255, 0.08));
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  backdrop-filter: blur(8px);
+  animation: fadeUp .3s ease;
+}
+.np-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.np-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.np-badge-text {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ac1);
+}
+.btn-guardar-cel {
+  background: linear-gradient(135deg, #00d4ff, #0066ff);
+  color: #00101b;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 7px 14px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 14px rgba(0,212,255,0.25);
+  transition: transform .15s, opacity .15s;
+}
+.btn-guardar-cel:active { transform: scale(0.96); }
+.btn-guardar-cel:disabled { opacity: 0.6; cursor: not-allowed; }
+.np-titulo {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-autor {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.q-dl-btn {
+  border: 1px solid rgba(0,212,255,0.35);
+  background: rgba(0,212,255,0.1);
+  color: var(--ac1);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s;
+  flex-shrink: 0;
+}
+.q-dl-btn:hover { background: rgba(0,212,255,0.2); }
+.q-dl-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Toast y Progreso flotante */
 .rockola-toast {
   position: fixed;
@@ -628,6 +706,25 @@ body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(-
   </div>
   <div class="qr-panel" id="qr-panel"><div id="qr-sala"></div></div>
 
+  <!-- Tarjeta Sonando Ahora (con boton para guardar directo en el celular) -->
+  <div class="now-playing-card" id="card-now-playing" style="display:none;">
+    <div class="np-header">
+      <div class="np-badge-wrap">
+        <span class="wave-mini">
+          <span style="animation-delay:0s"></span>
+          <span style="animation-delay:.15s"></span>
+          <span style="animation-delay:.3s"></span>
+        </span>
+        <span class="np-badge-text">Sonando en el local</span>
+      </div>
+      <button class="btn-guardar-cel" id="btn-guardar-actual" onclick="guardarActualEnMiCelular()" title="Guardar este MP3 en mi celular">
+        📥 Bajar a mi celular
+      </button>
+    </div>
+    <div class="np-titulo" id="np-titulo-texto">Cargando...</div>
+    <div class="np-autor" id="np-autor-texto"></div>
+  </div>
+
   <!-- Tabs -->
   <div class="source-tabs">
     <button class="stab activo" onclick="setTab('archivo')">📁 Archivo</button>
@@ -817,7 +914,7 @@ function metadataCancionLocal(cancion) {
 
 function abrirDbLocal() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('rockola_local_library_v1', 2);
+    const req = indexedDB.open('rockola_local_library_v1', 3);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains('songs')) {
@@ -829,6 +926,9 @@ function abrirDbLocal() {
         const store = db.createObjectStore('playlists', { keyPath:'id' });
         store.createIndex('deviceId', 'deviceId', { unique:false });
         store.createIndex('nombre', 'nombre', { unique:false });
+      }
+      if (!db.objectStoreNames.contains('config')) {
+        db.createObjectStore('config', { keyPath:'key' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -1400,9 +1500,136 @@ Sortable.create(listaCola, {
   }
 });
 
-/* ── Render cola ── */
+/* ── Render cola y Sonando Ahora ── */
+let cancionActualGlobal = null;
+const guardandoCancionesSet = new Set();
+
+function guardarActualEnMiCelular() {
+  if (!cancionActualGlobal) {
+    showToast('No hay ninguna canción sonando ahora en la sala', 'error');
+    return;
+  }
+  const btn = document.getElementById('btn-guardar-actual');
+  guardarEnMiCelular(cancionActualGlobal.id, cancionActualGlobal.nombre, cancionActualGlobal.youtube_url, btn);
+}
+
+async function guardarEnMiCelular(id, nombre, youtubeUrl, btn) {
+  if (guardandoCancionesSet.has(id)) return;
+  guardandoCancionesSet.add(id);
+
+  const originalContent = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳';
+  }
+  showToast(`Descargando audio MP3: ${limpiarNombre(nombre)}...`, 'ok');
+
+  try {
+    let downloadUrl = null;
+
+    if (youtubeUrl || (id && id.startsWith('yt-'))) {
+      const resp = await fetch(`/rockola/${SALA}/resolver`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, url: youtubeUrl })
+      });
+      const data = await resp.json();
+      if (!data.ok || !data.url) {
+        throw new Error(data.error || 'No se pudo extraer el audio de YouTube');
+      }
+      downloadUrl = data.url;
+    } else if (id && !id.startsWith('local-')) {
+      downloadUrl = `/rockola/${SALA}/archivo/${encodeURIComponent(id)}`;
+    } else {
+      throw new Error('Esta canción es local de otro dispositivo y no está en el servidor.');
+    }
+
+    const audioResp = await fetch(downloadUrl);
+    if (!audioResp.ok) throw new Error('Error al descargar el archivo de audio');
+    const blob = await audioResp.blob();
+
+    const cleanTitle = limpiarNombre(nombre).trim() || 'Cancion_Rockola';
+    const filename = cleanTitle.toLowerCase().endsWith('.mp3') ? cleanTitle : `${cleanTitle}.mp3`;
+    const localSongId = `local-${getDeviceId()}-saved-${hashTexto([id, cleanTitle, blob.size].join('|'))}`;
+
+    const db = await abrirDbLocal();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('songs', 'readwrite');
+      tx.objectStore('songs').put({
+        id: localSongId,
+        deviceId: getDeviceId(),
+        nombre: filename,
+        tipo: blob.type || 'audio/mpeg',
+        size: blob.size,
+        actualizado: Date.now(),
+        blob: blob
+      });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+
+    try {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }, 1000);
+    } catch(errA) {
+      console.warn('No se pudo disparar descarga directa:', errA);
+    }
+
+    await cargarMiBiblioteca();
+    sincronizarCatalogoLocal();
+
+    showToast(`✅ ¡Guardada! Añadida a tu biblioteca offline y descargada en tu celular`, 'ok');
+    if (btn) {
+      btn.innerHTML = '✅';
+      setTimeout(() => {
+        if (btn) {
+          btn.innerHTML = originalContent;
+          btn.disabled = false;
+        }
+      }, 3000);
+    }
+  } catch(err) {
+    console.error('Error al guardar en el celular:', err);
+    showToast(`Error al guardar: ${err.message || 'Fallo de red'}`, 'error');
+    if (btn) {
+      btn.innerHTML = originalContent;
+      btn.disabled = false;
+    }
+  } finally {
+    guardandoCancionesSet.delete(id);
+  }
+}
+
 function renderCola(cola) {
   queueLabel.textContent = `Cola · ${cola.length} canción${cola.length!==1?'es':''}`;
+
+  // Actualizar tarjeta "Sonando ahora"
+  const nowCard = document.getElementById('card-now-playing');
+  if (cola && cola.length > 0) {
+    cancionActualGlobal = cola[0];
+    if (nowCard) {
+      nowCard.style.display = 'block';
+      const titEl = document.getElementById('np-titulo-texto');
+      const autEl = document.getElementById('np-autor-texto');
+      if (titEl) titEl.textContent = cola[0].nombre.replace(/\.[^.]+$/, '');
+      if (autEl) {
+        const esMia = cola[0].tercero_id === CURRENT_TERCERO_ID;
+        autEl.textContent = esMia ? 'Puesta por ti' : (cola[0].owner ? `Puesta por: ${cola[0].owner}` : 'Sonando ahora');
+      }
+    }
+  } else {
+    cancionActualGlobal = null;
+    if (nowCard) nowCard.style.display = 'none';
+  }
+
   if (isDraggingClientQueue) return;
   if (!cola.length) {
     listaCola.innerHTML = '<li class="queue-empty">Sin canciones en cola</li>';
@@ -1410,17 +1637,21 @@ function renderCola(cola) {
   }
   listaCola.innerHTML = cola.map((c,i) => {
     const mia = c.tercero_id === CURRENT_TERCERO_ID, playing = i===0;
+    const safeNombre = JSON.stringify(c.nombre || '');
     return `<li class="queue-item ${playing?'playing':''} ${mia?'mia':''}" data-id="${c.id}">
       <span class="handle ${mia?'':'locked'}">⠿</span>
       <div class="q-info">
         <div class="q-nombre">${c.nombre.replace(/\.[^.]+$/,'')}${c.youtube_url ? ' <span class="q-link" title="Enlace de YouTube">🔗</span>' : ''}</div>
         <div class="q-sub">${mia ? 'Tu canción' : (c.owner ? 'Puesta por: ' + c.owner : 'Anónimo')}</div>
       </div>
-      <span class="q-pos">${playing
-        ? `<span class="wave-mini"><span style="animation-delay:0s"></span><span style="animation-delay:.15s"></span><span style="animation-delay:.3s"></span></span>`
-        : '#'+(i+1)
-      }</span>
-      ${mia && !playing ? `<button class="q-remove" onclick="quitarMia('${c.id}')">Quitar</button>` : ''}
+      <div class="q-actions-row" style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+        <button class="q-dl-btn" onclick='guardarEnMiCelular("${c.id}", ${safeNombre}, "${c.youtube_url || ""}", this)' title="Guardar MP3 en este celular">📥</button>
+        <span class="q-pos">${playing
+          ? `<span class="wave-mini"><span style="animation-delay:0s"></span><span style="animation-delay:.15s"></span><span style="animation-delay:.3s"></span></span>`
+          : '#'+(i+1)
+        }</span>
+        ${mia && !playing ? `<button class="q-remove" onclick="quitarMia('${c.id}')">✕</button>` : ''}
+      </div>
     </li>`;
   }).join('');
 }
@@ -1453,13 +1684,19 @@ function renderBiblioteca(canciones) {
     listaBiblioteca.innerHTML = '<li class="library-empty">Esta sala todavía no tiene canciones recordadas</li>';
     return;
   }
-  listaBiblioteca.innerHTML = canciones.map(c => `
-    <li class="library-item">
-      <div class="library-name" title="${c.nombre}">${c.nombre.replace(/\.[^.]+$/,'')}</div>
-      <div class="library-origin">${c.origen || 'audio'}</div>
-      <button class="library-btn" onclick="ponerRecordada('${c.id}')">Poner</button>
-    </li>
-  `).join('');
+  listaBiblioteca.innerHTML = canciones.map(c => {
+    const safeNombre = JSON.stringify(c.nombre || '');
+    return `
+      <li class="library-item">
+        <div class="library-name" title="${c.nombre}">${c.nombre.replace(/\.[^.]+$/,'')}</div>
+        <div class="library-origin">${c.origen || 'audio'}</div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button class="library-btn" onclick='guardarEnMiCelular("${c.id}", ${safeNombre}, "${c.youtube_url || ""}", this)' title="Guardar MP3 en este celular" style="border-color:rgba(0,212,255,0.35); color:var(--ac1);">📥 Bajar</button>
+          <button class="library-btn" onclick="ponerRecordada('${c.id}')">Poner</button>
+        </div>
+      </li>
+    `;
+  }).join('');
 }
 
 async function actualizarBiblioteca() {

@@ -1055,13 +1055,8 @@ async function cargarMiBiblioteca() {
       const tx = db.transaction('songs', 'readonly');
       const req = tx.objectStore('songs').getAll();
       req.onsuccess = () => {
-        const todas = req.result || [];
-        let propias = todas.filter(c => c.deviceId === getDeviceId());
-        if (!propias.length && todas.length && todas[0].deviceId) {
-          localStorage.setItem('rockola_device_id', todas[0].deviceId);
-          propias = todas.filter(c => c.deviceId === getDeviceId());
-        }
-        resolve(propias);
+        // En este dispositivo se cargan todas las canciones almacenadas localmente
+        resolve(req.result || []);
       };
       req.onerror = () => reject(req.error);
     });
@@ -1081,7 +1076,7 @@ async function cargarMisListas() {
     playlistsLocales = await new Promise((resolve, reject) => {
       const tx = db.transaction('playlists', 'readonly');
       const req = tx.objectStore('playlists').getAll();
-      req.onsuccess = () => resolve((req.result || []).filter(p => p.deviceId === getDeviceId()));
+      req.onsuccess = () => resolve(req.result || []);
       req.onerror = () => reject(req.error);
     });
     db.close();
@@ -1533,7 +1528,13 @@ async function guardarEnMiCelular(id, nombre, youtubeUrl, btn) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, url: youtubeUrl })
       });
-      const data = await resp.json();
+      let data;
+      const textResp = await resp.text();
+      try {
+        data = JSON.parse(textResp);
+      } catch (errJson) {
+        throw new Error('El servidor tardó o respondió con un formato no reconocido. Por favor reintenta en unos segundos.');
+      }
       if (!data.ok || !data.url) {
         throw new Error(data.error || 'No se pudo extraer el audio de YouTube');
       }
@@ -1541,7 +1542,7 @@ async function guardarEnMiCelular(id, nombre, youtubeUrl, btn) {
     } else if (id && !id.startsWith('local-')) {
       downloadUrl = `/rockola/${SALA}/archivo/${encodeURIComponent(id)}`;
     } else {
-      throw new Error('Esta canción es local de otro dispositivo y no está en el servidor.');
+      throw new Error('Esta canción es un archivo local del reproductor de la sala y no está alojada en el servidor.');
     }
 
     const audioResp = await fetch(downloadUrl);
@@ -1686,12 +1687,13 @@ function renderBiblioteca(canciones) {
   }
   listaBiblioteca.innerHTML = canciones.map(c => {
     const safeNombre = JSON.stringify(c.nombre || '');
+    const esDescargable = c.youtube_url || (c.id && c.id.startsWith('yt-')) || (c.origen && c.origen !== 'local' && !c.id.startsWith('local-'));
     return `
       <li class="library-item">
         <div class="library-name" title="${c.nombre}">${c.nombre.replace(/\.[^.]+$/,'')}</div>
         <div class="library-origin">${c.origen || 'audio'}</div>
         <div style="display:flex; gap:6px; align-items:center;">
-          <button class="library-btn" onclick='guardarEnMiCelular("${c.id}", ${safeNombre}, "${c.youtube_url || ""}", this)' title="Guardar MP3 en este celular" style="border-color:rgba(0,212,255,0.35); color:var(--ac1);">📥 Bajar</button>
+          ${esDescargable ? `<button class="library-btn" onclick='guardarEnMiCelular("${c.id}", ${safeNombre}, ${JSON.stringify(c.youtube_url || "")}, this)' title="Guardar MP3 en este celular" style="border-color:rgba(0,212,255,0.35); color:var(--ac1);">📥 Bajar</button>` : ''}
           <button class="library-btn" onclick="ponerRecordada('${c.id}')">Poner</button>
         </div>
       </li>

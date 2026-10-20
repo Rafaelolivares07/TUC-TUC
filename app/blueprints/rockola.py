@@ -1175,7 +1175,7 @@ def resolver(sala_id):
         if not descarga:
             descarga, error_ytdlp = _descargar_youtube_con_ytdlp(target_url, upload_dir, item_id)
             if not descarga:
-                return jsonify(ok=False, error=error_ytdlp or error_cobalt or 'No se pudo resolver el audio'), 502
+                return jsonify(ok=False, error=error_ytdlp or error_cobalt or 'No se pudo resolver el audio'), 200
         _limpiar_archivos_antiguos(upload_dir)
     except Exception as error:
         return jsonify(ok=False, error=f'No se pudo resolver el audio: {error}'), 502

@@ -463,8 +463,8 @@ function renderSalas(salas) {
 }
 
 async function reclamarSala(salaId) {
-  const confirmar = prompt(`Esta sala suena en otro dispositivo. Escribe ${salaId} para moverla a este dispositivo.`);
-  if ((confirmar || '').trim().toLowerCase() !== salaId.toLowerCase()) return;
+  const confirmar = confirm(`Esta sala está activa en otro dispositivo (ej. tu laptop).\n\n¿Deseas pasar la reproducción a este celular?`);
+  if (!confirmar) return;
   const res = await fetch(`/rockola/${encodeURIComponent(salaId)}/vincular-reproductor`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},

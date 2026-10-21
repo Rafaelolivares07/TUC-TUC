@@ -775,6 +775,19 @@
                     </div>
                     <div id="historial-{{ r.slug }}" class="hidden mt-2"></div>
                 </div>
+                <!-- Centros de Utilidad / Sedes -->
+                <div class="mt-2 pt-2 border-t border-amber-200 flex items-center justify-between flex-wrap gap-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-gray-700">🏢 Centros de Utilidad:</span>
+                        <input type="number" id="max-centros-{{ r.slug }}" value="{{ r.max_centros_utilidad or 1 }}" min="1"
+                               class="border border-gray-300 rounded px-2 py-1 text-xs w-16 text-center font-bold text-gray-800">
+                        <button onclick="guardarMaxCentrosRest('{{ r.slug }}')"
+                                class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1 rounded font-semibold transition">
+                            Guardar Cupo
+                        </button>
+                    </div>
+                    <span id="msg-max-centros-{{ r.slug }}" class="text-xs font-semibold"></span>
+                </div>
                 {% if r.admin_nombre %}
                 <div class="pt-2 border-t border-amber-200 flex items-center justify-between">
                     <div class="text-xs text-gray-500">
@@ -901,6 +914,38 @@ async function verHistorial(slug) {
         cont.innerHTML = '<p class="text-xs text-red-400 py-2">Error</p>';
     }
 }
+
+
+async function guardarMaxCentrosRest(slug) {
+    const input = document.getElementById(`max-centros-${slug}`);
+    const msg = document.getElementById(`msg-max-centros-${slug}`);
+    const val = parseInt(input.value);
+    if (!val || val < 1) return toast('Ingresa un número válido (mínimo 1)', false);
+    if (msg) msg.textContent = 'Guardando...';
+    try {
+        const r = await fetch(`/api/admin/restaurante/${slug}/max-centros`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ max_centros_utilidad: val })
+        });
+        const data = await r.json();
+        if (data.ok) {
+            toast(`Cupo actualizado a ${data.max_centros_utilidad} centros`);
+            if (msg) {
+                msg.textContent = '✓ Guardado';
+                msg.className = 'text-xs text-green-600 font-bold';
+                setTimeout(() => { msg.textContent = ''; }, 3000);
+            }
+        } else {
+            toast(data.error || 'Error al guardar', false);
+            if (msg) msg.textContent = '';
+        }
+    } catch (e) {
+        toast('Error de conexión', false);
+        if (msg) msg.textContent = '';
+    }
+}
+
 
 // ===== VISITANTES =====
 let datosVisitas = null;

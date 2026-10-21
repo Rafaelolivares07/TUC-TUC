@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Orden de Compra {{ orden.numero_oc }} — {{ orden.negocio_nombre }}</title>
+  <script src="/static/js/tailwind.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    html, body {
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: #0f172a;
+      color: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .custom-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .bubble-in  { animation: fadeIn .18s ease-out; }
+    .bubble-out { animation: fadeIn .18s ease-out; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform: none; } }
+  </style>
+</head>
+<body class="flex flex-col h-full bg-slate-900 select-none">
+
+  <!-- ========================================== -->
+  <!-- SECCIÓN SUPERIOR: ORDEN DE COMPRA (52%)    -->
+  <!-- ========================================== -->
+  <div id="seccion-orden" class="flex-1 overflow-y-auto custom-scroll bg-slate-100 flex flex-col transition-all duration-300">
+    
+    <!-- Topbar Identidad -->
+    <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-2xs">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-800 text-white flex items-center justify-center font-black text-sm shadow-sm">
+          {{ (orden.negocio_nombre or 'TT')[0]|upper }}
+        </div>
+        <div>
+          <h1 class="text-xs font-bold uppercase tracking-wider text-slate-800 leading-tight">{{ orden.negocio_nombre }}</h1>
+          <div class="flex items-center gap-1.5 mt-0.5">
+            <span class="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md font-mono">{{ orden.numero_oc }}</span>
+            <span class="text-[11px] text-slate-600 font-bold">• {{ orden.fecha_emision_str or 'Hoy' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Badge de Estado -->
+      <div id="badge-estado">
+        {% if orden.estado == 'confirmada' %}
+          <span class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1">
+            <i class="bi bi-check-circle-fill"></i> Confirmada
+          </span>
+        {% elif orden.estado == 'propuesta_cambios' %}
+          <span class="bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1">
+            <i class="bi bi-exclamation-triangle-fill"></i> Con Cambios
+          </span>
+        {% elif orden.estado == 'recibida' %}
+          <span class="bg-blue-100 text-blue-800 border border-blue-300 text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1">
+            <i class="bi bi-box-seam-fill"></i> Recibida
+          </span>
+        {% else %}
+          <span class="bg-sky-100 text-sky-800 border border-sky-300 text-[11px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1">
+            <i class="bi bi-clock-fill"></i> Pendiente
+          </span>
+        {% endif %}
+      </div>
+    </header>
+
+    <!-- Contenedor Principal de la Orden -->
+    <main class="p-3.5 space-y-3 max-w-xl mx-auto w-full">
+      
+      <!-- Condiciones de Entrega y Pago -->
+      <div class="bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs space-y-2">
+        <div class="flex items-start gap-2.5">
+          <span class="text-lg">📍</span>
+          <div class="flex-1 min-w-0">
+            <span class="text-[10px] uppercase tracking-wider font-extrabold text-slate-600">Modalidad de Entrega</span>
+            <p class="text-xs font-bold text-slate-800">
+              {% if orden.modalidad_entrega == 'recoger' %}
+                Recoger en punto del proveedor: <span class="font-normal text-slate-600">{{ orden.proveedor_direccion or 'Bodega principal' }}</span>
+              {% else %}
+                Entrega en sede: <span class="text-indigo-900 font-extrabold">{{ orden.sede_nombre or 'Sede Principal' }}</span>
+                {% if orden.direccion_entrega %}<br><span class="font-medium text-slate-600">{{ orden.direccion_entrega }}</span>{% endif %}
+              {% endif %}
+            </p>
+          </div>
+        </div>
+        
+        <div class="border-t border-slate-100 pt-2 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-1.5 text-slate-600">
+            <span>💳</span>
+            <span class="font-semibold text-slate-800">Pago:</span>
+            <span>
+              {% if orden.forma_pago == 'credito' %}
+                Crédito {{ orden.dias_credito or 15 }} días
+              {% elif orden.forma_pago == 'contraentrega' %}
+                Contraentrega
+              {% else %}
+                Contado / Transferencia
+              {% endif %}
+            </span>
+          </div>
+          <div class="text-[11px] text-slate-600">
+            Proveedor: <b class="text-slate-800">{{ orden.proveedor_nombre }}</b>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alerta de Bloqueo si ya está confirmada o recibida -->
+      {% if orden.estado in ['confirmada', 'recibida'] %}
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 flex items-center gap-2">
+          <i class="bi bi-check2-circle text-base text-emerald-600"></i>
+          <div>
+            <b>Esta orden ya se encuentra en firme:</b>
+            <p class="text-[11px] text-emerald-700">Entrega programada para: <b>{{ orden.fecha_entrega_estimada or 'Acordada' }}</b> ({{ orden.franja_entrega or '' }}).</p>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Lista de Ítems Solicitados -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between px-1">
+          <span class="text-xs font-extrabold text-slate-700 uppercase tracking-wide flex items-center gap-1">
+            <i class="bi bi-cart-check"></i> Productos Solicitados ({{ items|length }})
+          </span>
+          <span class="text-[11px] text-slate-600">Confirma disponibilidad</span>
+        </div>
+
+        {% for it in items %}
+        <div class="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs space-y-2 item-row"
+             data-id="{{ it.id }}"
+             data-peso-var="{{ '1' if it.peso_variable else '0' }}"
+             data-tol="{{ it.tolerancia_peso_pct or 10.0 }}"
+             data-cant-sol="{{ it.cantidad_solicitada }}"
+             data-prec-sol="{{ it.precio_unitario }}"
+             data-unidades-pres="{{ it.unidades_presentacion or 1.0 }}">
+          
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <h3 class="text-xs font-bold text-slate-900 leading-snug">{{ it.producto_nombre }}</h3>
+              <div class="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 font-medium">
+                <span>📦 {{ it.presentacion_nombre or 'Unidad' }}</span>
+                {% if it.unidades_presentacion and it.unidades_presentacion > 1 %}
+                  <span class="text-slate-400">({{ it.unidades_presentacion|round(1) }} und/paq)</span>
+                {% endif %}
+              </div>
+            </div>
+            
+            <!-- Precio unitario solicitado -->
+            <div class="text-right">
+              <span class="text-xs font-black text-slate-800 block">${{ "{:,.0f}".format(it.precio_unitario) }}</span>
+              <span class="text-[10px] text-slate-600 font-bold">Solicitado: <b>{{ it.cantidad_solicitada|round(2) }}</b></span>
+            </div>
+          </div>
+
+          <!-- Badge Tolerancia de Peso Variable si aplica -->
+          {% if it.peso_variable %}
+            <div class="bg-amber-50/80 border border-amber-200/90 rounded-lg px-2.5 py-1 text-[11px] text-amber-900 flex items-center justify-between">
+              <span class="font-bold flex items-center gap-1">
+                ⚖️ Peso Variable (±{{ it.tolerancia_peso_pct|round(0) }}%)
+              </span>
+              <span class="font-mono font-semibold text-[10px] text-amber-800">
+                Rango: {{ (it.cantidad_solicitada * (1.0 - (it.tolerancia_peso_pct/100.0)))|round(2) }} — {{ (it.cantidad_solicitada * (1.0 + (it.tolerancia_peso_pct/100.0)))|round(2) }}
+              </span>
+            </div>
+          {% endif %}
+
+          <!-- Inputs de confirmación: Cantidad y Precio -->
+          <div class="bg-slate-50 border border-slate-150 rounded-xl p-2 grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label class="block text-[10px] font-extrabold uppercase text-slate-600 mb-0.5">Cant. a Despachar</label>
+              {% set max_val = (it.cantidad_solicitada * (1.0 + (it.tolerancia_peso_pct/100.0)))|round(2) if it.peso_variable else it.cantidad_solicitada %}
+              <input type="number" step="any" min="0" max="{{ max_val }}"
+                     value="{{ it.cantidad_confirmada if it.cantidad_confirmada is not None else it.cantidad_solicitada }}"
+                     {% if orden.estado in ['confirmada', 'recibida'] %}disabled{% endif %}
+                     oninput="recalcularFila(this)"
+                     class="inp-cant w-full text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-indigo-500">
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-extrabold uppercase text-slate-600 mb-0.5">Precio Unitario ($)</label>
+              <input type="number" step="any" min="0"
+                     value="{{ it.precio_confirmado if it.precio_confirmado is not None else it.precio_unitario }}"
+                     {% if orden.estado in ['confirmada', 'recibida'] %}disabled{% endif %}
+                     oninput="recalcularFila(this)"
+                     class="inp-prec w-full text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-indigo-500">
+            </div>
+          </div>
+
+          <!-- Subtotal fila y alertas de variación -->
+          <div class="flex items-center justify-between text-xs pt-0.5 px-0.5">
+            <div class="alerta-cambio text-[10px] font-bold text-amber-800 hidden">
+              ⚠️ Modificado (requiere aprobación)
+            </div>
+            <div class="ml-auto text-right">
+              <span class="text-[10px] text-slate-600 uppercase font-extrabold mr-1">Subtotal:</span>
+              <span class="subtotal-val font-black text-indigo-900">${{ "{:,.0f}".format(it.total_confirmado if it.total_confirmado is not None else it.total_solicitado) }}</span>
+            </div>
+          </div>
+
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Resumen Total y Programación de Despacho -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+          <span class="text-xs font-bold text-slate-600 uppercase">Total de la Orden</span>
+          <span id="total-general-conf" class="text-lg font-black text-slate-900 font-mono">
+            ${{ "{:,.0f}".format(orden.total_confirmado if orden.total_confirmado is not None else orden.total_estimado) }}
+          </span>
+        </div>
+
+        {% if orden.estado not in ['confirmada', 'recibida'] %}
+          <!-- Programación de Fecha y Hora -->
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label class="block text-[10px] font-extrabold uppercase text-slate-600 mb-1">📅 Fecha de Entrega</label>
+              <input type="date" id="fecha-entrega-inp"
+                     value="{{ orden.fecha_entrega_estimada or '' }}"
+                     class="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 font-semibold text-slate-800 bg-white">
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-extrabold uppercase text-slate-600 mb-1">⏱️ Franja Horaria</label>
+              <select id="franja-entrega-inp" class="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 font-semibold text-slate-800 bg-white">
+                <option value="Mañana (8:00 AM - 12:00 PM)">Mañana (8am - 12pm)</option>
+                <option value="Tarde (1:00 PM - 5:00 PM)">Tarde (1pm - 5pm)</option>
+                <option value="Inmediato / En curso">Inmediato / Hoy mismo</option>
+                <option value="Por acordar en chat">Por acordar en chat</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-extrabold uppercase text-slate-600 mb-1">Notas / Observaciones del Proveedor</label>
+            <textarea id="obs-prov-inp" rows="1" placeholder="Ej: Pedido horneado temprano, llega en furgón frío..."
+                      class="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-500 text-slate-800"></textarea>
+          </div>
+
+          <!-- Botón de Acción Dinámico -->
+          <button id="btn-accion-orden" onclick="enviarConfirmacionOrden()"
+                  class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition">
+            <i class="bi bi-check-circle-fill"></i>
+            <span>Confirmar y Programar Despacho</span>
+          </button>
+          
+          <p id="msg-descargo-cambios" class="text-[11px] text-amber-700 text-center font-medium leading-snug hidden">
+            ⚠️ Se han modificado precios al alza o cantidades. La orden pasará a revisión del comprador antes de despacho en firme.
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="h-2"></div>
+    </main>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- BARRA DIVISORIA / TOGGLE CHAT              -->
+  <!-- ========================================== -->
+  <div id="barra-splitter" onclick="toggleChatExpandido()"
+       class="bg-slate-900 border-t border-slate-800 px-4 py-2 flex items-center justify-between cursor-pointer text-white shadow-lg shrink-0">
+    <div class="flex items-center gap-2">
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span class="text-xs font-black uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
+        <i class="bi bi-chat-dots-fill text-indigo-400"></i> Chat con {{ orden.negocio_nombre }}
+      </span>
+      <span id="badge-mensajes-no-leidos" class="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full hidden">0</span>
+    </div>
+    <div class="flex items-center gap-1 text-slate-400 hover:text-white text-xs font-semibold">
+      <span id="lbl-toggle-chat" class="text-[11px]">Minimizar</span>
+      <i id="ico-toggle-chat" class="bi bi-chevron-down text-xs"></i>
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- SECCIÓN INFERIOR: CHAT TUC TUC (48%)       -->
+  <!-- ========================================== -->
+  <div id="seccion-chat" class="h-[48%] flex flex-col bg-slate-950 transition-all duration-300 shrink-0">
+    
+    <!-- Feed de Mensajes -->
+    <div id="feed-mensajes" class="flex-1 overflow-y-auto custom-scroll p-3.5 space-y-2.5">
+      <div id="loading-chat" class="text-center py-4 text-xs text-slate-500">
+        <i class="bi bi-arrow-repeat animate-spin inline-block mr-1"></i> Conectando al chat de la orden...
+      </div>
+    </div>
+
+    <!-- Barra de Input del Chat -->
+    <div class="bg-slate-900 border-t border-slate-800 p-2.5 flex items-end gap-2">
+      <div class="flex-1 bg-slate-800 border border-slate-700/80 rounded-2xl px-3 py-1.5 flex items-center focus-within:border-indigo-500">
+        <textarea id="txt-chat-input" rows="1" placeholder="Escribe al comprador..."
+                  class="w-full bg-transparent text-xs text-white placeholder-slate-400 outline-none resize-none max-h-24"
+                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarMensajeChat();}"></textarea>
+      </div>
+
+      <!-- Botón Enviar -->
+      <button onclick="enviarMensajeChat()"
+              class="w-9 h-9 rounded-full bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white flex items-center justify-center shrink-0 shadow-md transition">
+        <i class="bi bi-send-fill text-xs"></i>
+      </button>
+    </div>
+
+  </div>
+
+
+  <!-- ========================================== -->
+  <!-- SCRIPT LOGIC                               -->
+  <!-- ========================================== -->
+  <script>
+    const OC_TOKEN = "{{ token }}";
+    const CHAT_TOKEN = "{{ conversacion_token }}";
+    const MI_TERCERO_ID = {{ orden.proveedor_id }};
+    let ultimoIdChat = 0;
+    let idsRenderizados = new Set();
+    let hayCambiosAlza = false;
+
+    // --- 1. Inicialización de la Pantalla ---
+    document.addEventListener('DOMContentLoaded', () => {
+      // Ajustar fecha mínima para hoy en Bogotá
+      const hoy = new Date().toISOString().split('T')[0];
+      const inpFecha = document.getElementById('fecha-entrega-inp');
+      if (inpFecha && !inpFecha.value) {
+        inpFecha.value = hoy;
+      }
+      if (inpFecha) inpFecha.min = hoy;
+
+      evaluarCambiosTotales();
+
+      if (CHAT_TOKEN) {
+        cargarMensajesIniciales();
+        setInterval(pollMensajesNuevos, 3000);
+      } else {
+        document.getElementById('loading-chat').textContent = 'No hay canal de chat activo para esta orden.';
+      }
+    });
+
+    // --- 2. Lógica de Cantidades, Precios y Tolerancias ---
+    function recalcularFila(input) {
+      const row = input.closest('.item-row');
+      if (!row) return;
+
+      const pesoVar = row.dataset.pesoVar === '1';
+      const tolPct = parseFloat(row.dataset.tol || '10');
+      const cantSol = parseFloat(row.dataset.cantSol || '1');
+      const precSol = parseFloat(row.dataset.precSol || '0');
+
+      const inpCant = row.querySelector('.inp-cant');
+      const inpPrec = row.querySelector('.inp-prec');
+      const subtotalEl = row.querySelector('.subtotal-val');
+      const alertaEl = row.querySelector('.alerta-cambio');
+
+      let cantVal = parseFloat(inpCant.value) || 0;
+      let precVal = parseFloat(inpPrec.value) || 0;
+
+      // REGLA A: Tope estricto si no es peso variable
+      if (!pesoVar && cantVal > cantSol) {
+        alert(`No es posible agregar cantidades superiores a las solicitadas (${cantSol}) para productos de peso fijo.`);
+        cantVal = cantSol;
+        inpCant.value = cantSol;
+      }
+
+      // Si es peso variable, tope con tolerancia superior
+      if (pesoVar) {
+        const maxTol = Math.round(cantSol * (1.0 + (tolPct / 100.0)) * 1000) / 1000;
+        if (cantVal > maxTol) {
+          alert(`La cantidad máxima permitida con la tolerancia de +${tolPct}% es de ${maxTol}.`);
+          cantVal = maxTol;
+          inpCant.value = maxTol;
+        }
+      }
+
+      // REGLA B y C: Detectar si precio subió o cantidad bajó fuera de rango
+      const subioPrecio = precVal > precSol;
+      let bajoCantidad = false;
+      if (pesoVar) {
+        const minTol = Math.round(cantSol * (1.0 - (tolPct / 100.0)) * 1000) / 1000;
+        if (cantVal < minTol) bajoCantidad = true;
+      } else {
+        if (cantVal < cantSol) bajoCantidad = true;
+      }
+
+      if (subioPrecio || bajoCantidad) {
+        alertaEl?.classList.remove('hidden');
+        row.classList.add('border-amber-300', 'bg-amber-50/20');
+      } else {
+        alertaEl?.classList.add('hidden');
+        row.classList.remove('border-amber-300', 'bg-amber-50/20');
+      }
+
+      const subtotal = cantVal * precVal;
+      subtotalEl.textContent = '$' + subtotal.toLocaleString('es-CO', { maximumFractionDigits: 0 });
+
+      evaluarCambiosTotales();
+    }
+
+    function evaluarCambiosTotales() {
+      let totalGral = 0;
+      let detectoCambios = false;
+
+      document.querySelectorAll('.item-row').forEach(row => {
+        const cantSol = parseFloat(row.dataset.cantSol || '1');
+        const precSol = parseFloat(row.dataset.precSol || '0');
+        const pesoVar = row.dataset.pesoVar === '1';
+        const tolPct = parseFloat(row.dataset.tol || '10');
+
+        const inpCant = row.querySelector('.inp-cant');
+        const inpPrec = row.querySelector('.inp-prec');
+
+        const cant = parseFloat(inpCant?.value || cantSol);
+        const prec = parseFloat(inpPrec?.value || precSol);
+
+        totalGral += (cant * prec);
+
+        const subioPrecio = prec > precSol;
+        let bajoCantidad = false;
+        if (pesoVar) {
+          const minTol = cantSol * (1.0 - (tolPct / 100.0));
+          if (cant < minTol) bajoCantidad = true;
+        } else {
+          if (cant < cantSol) bajoCantidad = true;
+        }
+
+        if (subioPrecio || bajoCantidad) {
+          detectoCambios = true;
+        }
+      });
+
+      const totEl = document.getElementById('total-general-conf');
+      if (totEl) totEl.textContent = '$' + totalGral.toLocaleString('es-CO', { maximumFractionDigits: 0 });
+
+      const btnAccion = document.getElementById('btn-accion-orden');
+      const msgDescargo = document.getElementById('msg-descargo-cambios');
+
+      if (btnAccion) {
+        if (detectoCambios) {
+          btnAccion.className = "w-full bg-amber-600 hover:bg-amber-500 active:scale-[0.99] text-white py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition";
+          btnAccion.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> <span>Enviar Cambios para Aprobación</span>';
+          msgDescargo?.classList.remove('hidden');
+        } else {
+          btnAccion.className = "w-full bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition";
+          btnAccion.innerHTML = '<i class="bi bi-check-circle-fill"></i> <span>Confirmar y Programar Despacho</span>';
+          msgDescargo?.classList.add('hidden');
+        }
+      }
+    }
+
+    async function enviarConfirmacionOrden() {
+      const btn = document.getElementById('btn-accion-orden');
+      if (btn) btn.disabled = true;
+
+      const items = [];
+      document.querySelectorAll('.item-row').forEach(row => {
+        items.push({
+          id: parseInt(row.dataset.id),
+          cantidad_confirmada: parseFloat(row.querySelector('.inp-cant')?.value || 0),
+          precio_confirmado: parseFloat(row.querySelector('.inp-prec')?.value || 0)
+        });
+      });
+
+      const payload = {
+        items: items,
+        fecha_entrega_estimada: document.getElementById('fecha-entrega-inp')?.value || null,
+        franja_entrega: document.getElementById('franja-entrega-inp')?.value || null,
+        observaciones_proveedor: document.getElementById('obs-prov-inp')?.value || null
+      };
+
+      try {
+        const resp = await fetch(`/api/oc/${OC_TOKEN}/confirmar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const res = await resp.json();
+        if (res.ok) {
+          alert(res.mensaje || 'Orden procesada con éxito');
+          window.location.reload();
+        } else {
+          alert('Error: ' + (res.error || 'No se pudo confirmar'));
+          if (btn) btn.disabled = false;
+        }
+      } catch (err) {
+        alert('Error de conexión');
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    // --- 3. Chat Integrado Nativo ---
+    let chatExpandido = true;
+    function toggleChatExpandido() {
+      chatExpandido = !chatExpandido;
+      const secChat = document.getElementById('seccion-chat');
+      const secOrden = document.getElementById('seccion-orden');
+      const lbl = document.getElementById('lbl-toggle-chat');
+      const ico = document.getElementById('ico-toggle-chat');
+
+      if (chatExpandido) {
+        secChat.style.height = '48%';
+        secOrden.style.flex = '1';
+        lbl.textContent = 'Minimizar';
+        ico.className = 'bi bi-chevron-down text-xs';
+      } else {
+        secChat.style.height = '0px';
+        lbl.textContent = 'Ver Chat';
+        ico.className = 'bi bi-chevron-up text-xs';
+      }
+    }
+
+    async function cargarMensajesIniciales() {
+      try {
+        const r = await fetch(`/api/chat/invitado/mensajes/${CHAT_TOKEN}?desde=0`);
+        const d = await r.json();
+        document.getElementById('loading-chat')?.remove();
+        if (d.ok && d.mensajes) {
+          renderMensajesChat(d.mensajes);
+        }
+      } catch (e) {
+        console.error('Error cargando chat:', e);
+      }
+    }
+
+    async function pollMensajesNuevos() {
+      if (!CHAT_TOKEN) return;
+      try {
+        const r = await fetch(`/api/chat/invitado/mensajes/${CHAT_TOKEN}?desde=${ultimoIdChat}`);
+        const d = await r.json();
+        if (d.ok && d.mensajes && d.mensajes.length > 0) {
+          renderMensajesChat(d.mensajes);
+          if (!chatExpandido) {
+            const badge = document.getElementById('badge-mensajes-no-leidos');
+            if (badge) {
+              badge.classList.remove('hidden');
+              badge.textContent = parseInt(badge.textContent || 0) + d.mensajes.length;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    function renderMensajesChat(msgs) {
+      const feed = document.getElementById('feed-mensajes');
+      if (!feed) return;
+
+      msgs.forEach(m => {
+        if (idsRenderizados.has(m.id)) return;
+        idsRenderizados.add(m.id);
+        ultimoIdChat = Math.max(ultimoIdChat, m.id);
+
+        const esMio = (m.remitente_tipo === 'invitado') || (m.remitente_id === MI_TERCERO_ID);
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `flex flex-col ${esMio ? 'items-end' : 'items-start'} ${esMio ? 'bubble-out' : 'bubble-in'}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = esMio
+          ? "bg-indigo-600 text-white rounded-2xl rounded-br-xs px-3.5 py-2 max-w-[85%] text-xs shadow-sm whitespace-pre-wrap leading-relaxed"
+          : "bg-slate-800 text-slate-100 rounded-2xl rounded-bl-xs px-3.5 py-2 max-w-[85%] text-xs border border-slate-700 shadow-sm whitespace-pre-wrap leading-relaxed";
+        
+        bubble.textContent = m.mensaje;
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = "text-[9px] text-slate-500 mt-0.5 px-1";
+        const f = m.fecha ? new Date(m.fecha) : new Date();
+        timeSpan.textContent = f.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        msgDiv.appendChild(bubble);
+        msgDiv.appendChild(timeSpan);
+        feed.appendChild(msgDiv);
+      });
+
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    async function enviarMensajeChat() {
+      const input = document.getElementById('txt-chat-input');
+      const texto = (input.value || '').trim();
+      if (!texto) return;
+
+      input.value = '';
+
+      try {
+        const resp = await fetch('/api/chat/invitado/enviar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: CHAT_TOKEN,
+            mensaje: texto,
+            tipo: 'texto',
+            es_creador: false,
+            remitente_id: MI_TERCERO_ID
+          })
+        });
+        const res = await resp.json();
+        if (res.ok) {
+          pollMensajesNuevos();
+        }
+      } catch (e) {
+        console.error('Error enviando mensaje:', e);
+      }
+    }
+  </script>
+</body>
+</html>

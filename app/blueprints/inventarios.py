@@ -381,6 +381,26 @@ def _contexto_negocio(conn, negocio_id):
     }
 
 
+def _get_max_centros_negocio(conn, negocio_id):
+    try:
+        row_r = conn.execute(
+            "SELECT max_centros_utilidad FROM restaurantes WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
+            (negocio_id,)
+        ).fetchone()
+        if row_r and row_r['max_centros_utilidad'] is not None:
+            return max(1, int(row_r['max_centros_utilidad']))
+
+        row_t = conn.execute(
+            "SELECT max_centros_utilidad FROM tiendas WHERE tercero_id = %s AND activo = TRUE LIMIT 1",
+            (negocio_id,)
+        ).fetchone()
+        if row_t and row_t['max_centros_utilidad'] is not None:
+            return max(1, int(row_t['max_centros_utilidad']))
+    except Exception:
+        pass
+    return 1
+
+
 def _mismo_id(a, b):
     try:
         return int(a) == int(b)
@@ -2146,12 +2166,15 @@ def api_inventario_producto_crear():
         dias_max = int(dias_max) if (dias_max is not None and str(dias_max).strip() != '') else None
         st_min = data.get('stock_minimo')
         st_min = float(st_min) if (st_min is not None and str(st_min).strip() != '') else None
+        peso_variable = bool(data.get('peso_variable', False))
+        tol_peso = float(data.get('tolerancia_peso_pct') or 10.0)
 
         row = conn.execute("""
             INSERT INTO productos (negocio_id, nombre, categoria, precio, costo,
                                    descripcion, codigo_barra, iva_pct, orden,
-                                   dias_min_stock, dias_max_stock, stock_minimo)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                                   dias_min_stock, dias_max_stock, stock_minimo,
+                                   peso_variable, tolerancia_peso_pct)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
         """, (
             negocio_id, nombre,
             data.get('categoria') or None,
@@ -2161,7 +2184,8 @@ def api_inventario_producto_crear():
             data.get('codigo_barra') or None,
             float(data.get('iva_pct') or 0),
             int(data.get('orden') or 0),
-            dias_min, dias_max, st_min
+            dias_min, dias_max, st_min,
+            peso_variable, tol_peso
         )).fetchone()
         _sync_precio(conn, int(negocio_id), row[0])
         conn.commit()
@@ -2395,6 +2419,8 @@ def api_inventario_productos(negocio_id):
                        {sql_costo_origen} AS costo_origen,
                        p.codigo_barra, p.iva_pct, p.disponible, p.orden,
                        p.dias_min_stock, p.dias_max_stock, p.stock_minimo,
+                       COALESCE(p.peso_variable, FALSE) AS peso_variable,
+                       COALESCE(p.tolerancia_peso_pct, 10.0) AS tolerancia_peso_pct,
                        COALESCE(s.stock, 0) AS stock,
                        {sql_rotacion} AS rotacion_30d,
                        ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total,
@@ -2424,6 +2450,8 @@ def api_inventario_productos(negocio_id):
                        {sql_costo_origen} AS costo_origen,
                        p.codigo_barra, p.iva_pct, p.disponible, p.orden,
                        p.dias_min_stock, p.dias_max_stock, p.stock_minimo,
+                       COALESCE(p.peso_variable, FALSE) AS peso_variable,
+                       COALESCE(p.tolerancia_peso_pct, 10.0) AS tolerancia_peso_pct,
                        COALESCE(s.stock, 0) AS stock,
                        {sql_rotacion} AS rotacion_30d,
                        ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total,
@@ -5502,12 +5530,15 @@ def api_inventario_producto_editar(producto_id):
         dias_max = int(dias_max) if (dias_max is not None and str(dias_max).strip() != '') else None
         st_min = data.get('stock_minimo')
         st_min = float(st_min) if (st_min is not None and str(st_min).strip() != '') else None
+        peso_variable = bool(data.get('peso_variable', False))
+        tol_peso = float(data.get('tolerancia_peso_pct') or 10.0)
 
         conn.execute("""
             UPDATE productos SET
                 nombre=%s, categoria=%s, precio=%s, costo=%s,
                 descripcion=%s, codigo_barra=%s, iva_pct=%s, disponible=%s,
-                dias_min_stock=%s, dias_max_stock=%s, stock_minimo=%s
+                dias_min_stock=%s, dias_max_stock=%s, stock_minimo=%s,
+                peso_variable=%s, tolerancia_peso_pct=%s
             WHERE id=%s
         """, (
             nombre,
@@ -5521,6 +5552,8 @@ def api_inventario_producto_editar(producto_id):
             dias_min,
             dias_max,
             st_min,
+            peso_variable,
+            tol_peso,
             producto_id,
         ))
         conn.commit()
@@ -8721,7 +8754,7 @@ def admin_inventario(negocio_id, tab_name=None):
 
         # Consultar centros de utilidad configurados
         centros_rows = conn.execute("""
-            SELECT id, codigo, nombre, tipo, color_badge, imagen_url
+            SELECT id, codigo, nombre, tipo, color_badge, imagen_url, telefono, direccion
             FROM centros_utilidad
             WHERE negocio_id = %s AND activo = TRUE
             ORDER BY id ASC
@@ -8749,6 +8782,7 @@ def admin_inventario(negocio_id, tab_name=None):
             if u_row:
                 es_desarrollo = True
 
+        max_centros_utilidad = _get_max_centros_negocio(conn, negocio_id)
         return render_template('inventario_admin.html',
                                negocio_id=negocio_id,
                                negocio_nombre=contexto['negocio_nombre'],
@@ -8756,6 +8790,7 @@ def admin_inventario(negocio_id, tab_name=None):
                                volver_label=contexto['volver_label'],
                                centros_utilidad=centros,
                                centro_activo=centro_activo,
+                               max_centros_utilidad=max_centros_utilidad,
                                tab_inicial=tab_name,
                                es_desarrollo=es_desarrollo)
     except Exception as e:
@@ -13024,7 +13059,9 @@ def api_compras_sugerencias(negocio_id):
         purchased_products = conn.execute("""
             SELECT p.id, p.nombre, COALESCE(p.costo, 0) AS costo, p.dias_max_stock, p.dias_min_stock, p.stock_minimo,
                    COALESCE(s.stock, 0) AS stock_actual,
-                   COALESCE(p.iva_pct, 0) AS iva_pct
+                   COALESCE(p.iva_pct, 0) AS iva_pct,
+                   COALESCE(p.peso_variable, FALSE) AS peso_variable,
+                   COALESCE(p.tolerancia_peso_pct, 10.0) AS tolerancia_peso_pct
             FROM productos p
             LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = %s AND s.bodega = 1
             WHERE p.negocio_id = %s AND p.disponible = TRUE
@@ -13069,6 +13106,7 @@ def api_compras_sugerencias(negocio_id):
             # Priorizar empaques comerciales (> 1 und y no 'unidad') sobre registros genéricos de 1 unidad
             quotes = conn.execute("""
                 SELECT c.id, c.tercero_id, t.nombre AS proveedor_nombre, t.telefono AS proveedor_telefono,
+                       t.forma_pago_defecto, t.dias_credito, t.modalidad_entrega_defecto, t.direccion_recogida,
                        COALESCE(c.unidades_item, 1) AS unidades_item, COALESCE(c.precio, 0) AS precio,
                        COALESCE(c.descripcion_presentacion, 'Unidad') AS descripcion_presentacion,
                        c.presentacion_id, c.fecha_cotizacion
@@ -13085,7 +13123,8 @@ def api_compras_sugerencias(negocio_id):
             
             # Obtener el último proveedor histórico como respaldo
             last_purchase = conn.execute("""
-                SELECT m.proveedor_id, m.proveedor_nombre, t.telefono AS proveedor_telefono
+                SELECT m.proveedor_id, m.proveedor_nombre, t.telefono AS proveedor_telefono,
+                       t.forma_pago_defecto, t.dias_credito, t.modalidad_entrega_defecto, t.direccion_recogida
                 FROM movimientos_inventario m
                 LEFT JOIN terceros t ON t.id = m.proveedor_id
                 WHERE m.negocio_id = %s AND m.producto_id = %s AND m.tipo = 'entrada' AND m.proveedor_id IS NOT NULL
@@ -13143,6 +13182,10 @@ def api_compras_sugerencias(negocio_id):
             prov_id = 0
             prov_nombre = "Sin Proveedor Registrado"
             prov_telefono = ""
+            prov_forma_pago = "contado"
+            prov_dias_credito = 15
+            prov_modalidad = "sede"
+            prov_direccion_recogida = ""
             costo_unitario = p_costo
             presentacion_nombre = "Unidad"
             unidades_presentacion = 1.0
@@ -13152,6 +13195,10 @@ def api_compras_sugerencias(negocio_id):
                 prov_id = selected_quote['tercero_id']
                 prov_nombre = selected_quote['proveedor_nombre']
                 prov_telefono = selected_quote['proveedor_telefono'] or ""
+                prov_forma_pago = selected_quote['forma_pago_defecto'] or "contado"
+                prov_dias_credito = selected_quote['dias_credito'] or 15
+                prov_modalidad = selected_quote['modalidad_entrega_defecto'] or "sede"
+                prov_direccion_recogida = selected_quote['direccion_recogida'] or ""
                 unidades_presentacion = float(selected_quote['unidades_item'])
                 precio_presentacion = float(selected_quote['precio'])
                 costo_unitario = precio_presentacion / unidades_presentacion
@@ -13160,6 +13207,10 @@ def api_compras_sugerencias(negocio_id):
                 prov_id = last_purchase['proveedor_id']
                 prov_nombre = last_purchase['proveedor_nombre']
                 prov_telefono = last_purchase['proveedor_telefono'] or ""
+                prov_forma_pago = last_purchase['forma_pago_defecto'] or "contado"
+                prov_dias_credito = last_purchase['dias_credito'] or 15
+                prov_modalidad = last_purchase['modalidad_entrega_defecto'] or "sede"
+                prov_direccion_recogida = last_purchase['direccion_recogida'] or ""
                 
             # Calcular cantidad a comprar
             cantidad_comprar_neta = stock_objetivo - stock_actual
@@ -13203,6 +13254,10 @@ def api_compras_sugerencias(negocio_id):
                     'proveedor_id': prov_id,
                     'proveedor_nombre': prov_nombre,
                     'proveedor_telefono': prov_telefono,
+                    'forma_pago_defecto': prov_forma_pago,
+                    'dias_credito': prov_dias_credito,
+                    'modalidad_entrega_defecto': prov_modalidad,
+                    'direccion_recogida': prov_direccion_recogida,
                     'total_compras': 0.0,
                     'fecha_limite': 'Sin límite',
                     'fecha_limite_comparable': 99999.0,
@@ -13234,6 +13289,8 @@ def api_compras_sugerencias(negocio_id):
                 'total_costo': round(total_costo, 2),
                 'oportunidad_ahorro': oportunidad_ahorro,
                 'iva_pct': float(prod['iva_pct'] or 0.0),
+                'peso_variable': bool(prod.get('peso_variable', False)),
+                'tolerancia_peso_pct': float(prod.get('tolerancia_peso_pct') or 10.0),
                 'presentacion_id': selected_quote['presentacion_id'] if (selected_quote and selected_quote['presentacion_id']) else None,
                 'selected_quote_id': selected_quote['id'] if selected_quote else None,
                 'cotizaciones': [
@@ -15393,11 +15450,15 @@ def api_listar_centros_utilidad(negocio_id):
             session['centro_utilidad_codigo'] = centro_activo['codigo']
             session['centro_utilidad_color'] = centro_activo.get('color_badge', '#0284c7')
 
+        max_centros = _get_max_centros_negocio(conn, negocio_id)
         return jsonify({
             'ok': True,
             'centros': centros_res,
             'centro_activo': centro_activo,
-            'es_multisede': len([c for c in centros_res if c['autorizado']]) > 1
+            'es_multisede': len([c for c in centros_res if c['autorizado']]) > 1,
+            'max_centros_utilidad': max_centros,
+            'total_centros': len(centros_db),
+            'puede_crear': len(centros_db) < max_centros
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -15485,6 +15546,8 @@ def api_editar_centro_utilidad(centro_id):
     tipo = (data.get('tipo') or 'local').strip().lower()
     color_badge = (data.get('color_badge') or '').strip()
     telegram_chat_id = (data.get('telegram_chat_id') or '').strip() or None
+    telefono = (data.get('telefono') or '').strip() or None
+    direccion = (data.get('direccion') or '').strip() or None
 
     if not negocio_id or not nombre or not codigo:
         return jsonify({'ok': False, 'error': 'Nombre y código son obligatorios'}), 400
@@ -15509,10 +15572,12 @@ def api_editar_centro_utilidad(centro_id):
             SET nombre = %s,
                 codigo = %s,
                 tipo = %s,
+                telefono = %s,
+                direccion = %s,
                 color_badge = COALESCE(NULLIF(%s, ''), color_badge),
                 telegram_chat_id = %s
             WHERE id = %s AND negocio_id = %s
-        """, (nombre, codigo, tipo, color_badge, telegram_chat_id, centro_id, negocio_id))
+        """, (nombre, codigo, tipo, telefono, direccion, color_badge, telegram_chat_id, centro_id, negocio_id))
         conn.commit()
 
         if str(session.get('centro_utilidad_id')) == str(centro_id):
@@ -15529,9 +15594,94 @@ def api_editar_centro_utilidad(centro_id):
                 'nombre': nombre,
                 'codigo': codigo,
                 'tipo': tipo,
+                'telefono': telefono,
+                'direccion': direccion,
                 'color_badge': color_badge,
                 'telegram_chat_id': telegram_chat_id
             }
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+
+@bp.route('/api/centros_utilidad/crear', methods=['POST'])
+def api_crear_centro_utilidad():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    negocio_id = data.get('negocio_id')
+    nombre = (data.get('nombre') or '').strip()
+    codigo = (data.get('codigo') or '').strip().upper()
+    tipo = (data.get('tipo') or 'local').strip().lower()
+    telefono = (data.get('telefono') or '').strip() or None
+    direccion = (data.get('direccion') or '').strip() or None
+    color_badge = (data.get('color_badge') or '#0284c7').strip()
+    telegram_chat_id = (data.get('telegram_chat_id') or '').strip() or None
+
+    if not negocio_id or not nombre:
+        return jsonify({'ok': False, 'error': 'El nombre del centro de utilidad es obligatorio'}), 400
+
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        if not _puede_gestionar_negocio(_contexto):
+            return jsonify({'ok': False, 'error': 'Solo administradores pueden crear centros de utilidad'}), 403
+
+        # Validar cupo
+        max_centros = _get_max_centros_negocio(conn, negocio_id)
+        conteo = conn.execute(
+            "SELECT COUNT(*) as total FROM centros_utilidad WHERE negocio_id = %s AND activo = TRUE",
+            (negocio_id,)
+        ).fetchone()['total']
+
+        if conteo >= max_centros:
+            return jsonify({
+                'ok': False,
+                'error': f'Límite alcanzado: Tienes {conteo} de {max_centros} centro(s) permitidos. Solicita a administración ampliar tu cupo.'
+            }), 400
+
+        # Si no se pasó código, autogenerar
+        if not codigo:
+            prefijo = "MOV" if tipo == 'movil' else "SEDE"
+            codigo = f"{prefijo}-{conteo + 1:02d}"
+
+        # Validar unicidad de código dentro del negocio
+        duplicado = conn.execute("""
+            SELECT id FROM centros_utilidad
+            WHERE negocio_id = %s AND UPPER(codigo) = %s AND activo = TRUE
+        """, (negocio_id, codigo)).fetchone()
+        if duplicado:
+            return jsonify({'ok': False, 'error': f'El código "{codigo}" ya está registrado para este negocio'}), 400
+
+        # Sincronizar secuencia antes de insertar
+        conn.execute("SELECT setval('centros_utilidad_id_seq', (SELECT COALESCE(MAX(id), 1) FROM centros_utilidad))")
+
+        nuevo = conn.execute("""
+            INSERT INTO centros_utilidad (negocio_id, codigo, nombre, tipo, telefono, direccion, color_badge, telegram_chat_id, activo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+            RETURNING id, codigo, nombre, tipo, telefono, direccion, color_badge
+        """, (negocio_id, codigo, nombre, tipo, telefono, direccion, color_badge, telegram_chat_id)).fetchone()
+
+        # Asignar permiso a usuario_id actual si no lo tiene
+        u_id = session.get('usuario_id')
+        if u_id and nuevo:
+            conn.execute("""
+                INSERT INTO usuarios_centros_utilidad (usuario_id, centro_utilidad_id, rol_en_centro, es_predeterminado)
+                VALUES (%s, %s, 'administrador', FALSE)
+            """, (u_id, nuevo['id']))
+
+        conn.commit()
+
+        return jsonify({
+            'ok': True,
+            'mensaje': f'Centro de utilidad "{nombre}" creado exitosamente.',
+            'centro': dict(nuevo)
         })
     except Exception as e:
         conn.rollback()

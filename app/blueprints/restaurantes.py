@@ -536,7 +536,7 @@ def admin_restaurante_lista():
         conn = get_db_connection()
         _crear_tablas(conn)
         restaurantes_raw = conn.execute(
-            "SELECT id, nombre, slug, admin_nombre, admin_telefono, token_acceso, dias_pagados "
+            "SELECT id, nombre, slug, admin_nombre, admin_telefono, token_acceso, dias_pagados, COALESCE(max_centros_utilidad, 1) as max_centros_utilidad "
             "FROM restaurantes WHERE activo = TRUE ORDER BY nombre"
         ).fetchall()
         restaurantes = []
@@ -553,6 +553,34 @@ def admin_restaurante_lista():
         return render_template('restaurante_admin.html', restaurantes=restaurantes, restaurante=None)
     except Exception as e:
         return f"Error: {e}", 500
+
+
+
+@bp.route('/api/admin/restaurante/<slug>/max-centros', methods=['POST'])
+def api_admin_restaurante_max_centros(slug):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    data = request.get_json() or {}
+    try:
+        max_centros = int(data.get('max_centros_utilidad', 1))
+        if max_centros < 1:
+            max_centros = 1
+    except (ValueError, TypeError):
+        return jsonify({'ok': False, 'error': 'Número inválido'}), 400
+
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "UPDATE restaurantes SET max_centros_utilidad = %s WHERE slug = %s",
+            (max_centros, slug)
+        )
+        conn.commit()
+        return jsonify({'ok': True, 'max_centros_utilidad': max_centros})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 
 
 @bp.route('/admin/restaurante/<slug>')

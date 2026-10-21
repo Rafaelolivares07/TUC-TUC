@@ -4217,6 +4217,19 @@ pollingInterval = setInterval(() => {
                     + Agregar
                 </button>
             </div>
+            <!-- Centros de Utilidad / Cupo -->
+            <div class="flex items-center justify-between gap-2 mt-2 pt-2 border-t flex-wrap" onclick="event.stopPropagation()">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-gray-700">🏢 Centros de Utilidad:</span>
+                    <input type="number" id="max-centros-{{ t.slug }}" value="{{ t.max_centros_utilidad or 1 }}" min="1"
+                           class="border border-gray-300 rounded px-2 py-1 text-xs w-16 text-center font-bold text-gray-800">
+                    <button onclick="event.stopPropagation(); guardarMaxCentrosTienda('{{ t.slug }}')"
+                            class="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-1.5 rounded font-bold whitespace-nowrap transition">
+                        Guardar Cupo
+                    </button>
+                </div>
+                <span id="msg-max-centros-{{ t.slug }}" class="text-xs font-semibold"></span>
+            </div>
         </div>
         {% endfor %}
     </div>
@@ -4297,6 +4310,36 @@ function copiar(token) {
 function copiarPublica(slug) {
     navigator.clipboard.writeText('https://' + slug + '.tuc-tuc.co');
     toast('URL pública copiada');
+}
+
+
+async function guardarMaxCentrosTienda(slug) {
+    const input = document.getElementById(`max-centros-${slug}`);
+    const msg = document.getElementById(`msg-max-centros-${slug}`);
+    const val = parseInt(input.value);
+    if (!val || val < 1) return alert('Ingresa un número válido (mínimo 1)');
+    if (msg) msg.textContent = 'Guardando...';
+    try {
+        const r = await fetch(`/api/admin/tienda/${slug}/max-centros`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ max_centros_utilidad: val })
+        });
+        const data = await r.json();
+        if (data.ok) {
+            if (msg) {
+                msg.textContent = '✓ Guardado (' + data.max_centros_utilidad + ')';
+                msg.className = 'text-xs text-green-600 font-bold';
+                setTimeout(() => { msg.textContent = ''; }, 3000);
+            }
+        } else {
+            alert(data.error || 'Error al guardar');
+            if (msg) msg.textContent = '';
+        }
+    } catch (e) {
+        alert('Error de conexión');
+        if (msg) msg.textContent = '';
+    }
 }
 
 async function agregarDias(slug) {

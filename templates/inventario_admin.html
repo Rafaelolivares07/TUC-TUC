@@ -588,6 +588,27 @@
         </div>
       </div>
 
+      <!-- Tolerancia / Variación de Peso en Despacho (Catch Weight) -->
+      <div class="sm:col-span-2 bg-amber-50/60 border border-amber-200/80 p-3 rounded-xl flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+            <span>⚖️</span> Tolerancia de Peso Variable en Despacho (Catch Weight)
+          </div>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <span class="text-xs text-amber-900 font-semibold">Permitir variación:</span>
+            <input type="checkbox" id="mp-peso-variable" class="w-4 h-4 accent-amber-600 rounded" onchange="toggleToleranciaPeso(this.checked)">
+          </label>
+        </div>
+        <p class="text-[11px] text-amber-800/90 leading-tight">
+          Actívalo para carnes, pollo, quesos o verduras que no se despachan con peso exacto. El proveedor podrá ajustar el despacho dentro del margen pactado.
+        </p>
+        <div id="cont-tolerancia-peso" class="hidden flex items-center gap-2 pt-1 border-t border-amber-200/60">
+          <label class="text-[10px] font-bold text-amber-900 uppercase">Tolerancia permitida (± %):</label>
+          <input id="mp-tolerancia-peso" type="number" min="1" max="50" step="1" value="10" class="w-20 text-xs border border-amber-300 rounded px-2 py-1 outline-none bg-white font-bold text-amber-950">
+          <span class="text-[10px] text-amber-700 italic">Ej: 10% permite despachar entre 18 Kg y 22 Kg para un pedido de 20 Kg.</span>
+        </div>
+      </div>
+
       <div class="sm:col-span-2">
 
         <label>Descripción</label>
@@ -1358,15 +1379,23 @@
 <!-- ── MODAL SELECTOR / CARRUSEL CENTROS DE UTILIDAD ────────────────── -->
 <div id="overlay-centros-utilidad" class="overlay hidden" onclick="if(event.target===this)cerrarModalCentrosUtilidad()">
   <div class="modal shadow-2xl border border-gray-100" style="max-width: 680px; max-height: 90vh; display: flex; flex-direction: column; position: relative;">
-    <div class="flex-shrink-0 flex items-center justify-between pb-3 border-b border-gray-100">
+    <div class="flex-shrink-0 flex items-center justify-between pb-3 border-b border-gray-100 flex-wrap gap-2">
       <div>
         <div class="flex items-center gap-2">
           <span class="text-xl">🏢</span>
           <h3 class="text-base font-extrabold text-gray-800">Centros de Utilidad y Bodegas</h3>
+          <span id="cu-quota-badge" class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+            Cupo: <span id="cu-quota-count">0</span> de <span id="cu-quota-max">1</span> sedes
+          </span>
         </div>
         <p class="text-xs text-gray-500 mt-0.5">Selecciona el punto de operación activo para inventario, kardex y ventas.</p>
       </div>
-      <button onclick="cerrarModalCentrosUtilidad()" class="text-gray-400 hover:text-gray-600 p-1.5 rounded-xl hover:bg-gray-100 transition text-lg">&times;</button>
+      <div class="flex items-center gap-2">
+        <button id="cu-btn-crear-centro" onclick="abrirModalCrearCentro()" class="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl shadow-sm transition flex items-center gap-1.5">
+          <span>➕</span> Nueva Sede
+        </button>
+        <button onclick="cerrarModalCentrosUtilidad()" class="text-gray-400 hover:text-gray-600 p-1.5 rounded-xl hover:bg-gray-100 transition text-lg">&times;</button>
+      </div>
     </div>
 
     <div class="flex-1 overflow-y-auto py-4 space-y-3 custom-scrollbar">
@@ -1432,13 +1461,13 @@
   </div>
 </div>
 
-<!-- ── MODAL EDITAR CENTRO DE UTILIDAD ───────────────────────────────── -->
+<!-- ── MODAL CREAR / EDITAR CENTRO DE UTILIDAD ───────────────────────── -->
 <div id="overlay-editar-centro" class="overlay hidden" onclick="if(event.target===this)cerrarModalEditarCentro()">
   <div class="modal shadow-2xl border border-gray-100" style="max-width: 480px;">
     <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
       <div class="flex items-center gap-2">
-        <span class="text-xl">✏️</span>
-        <h3 class="text-sm font-bold text-gray-800">Modificar Centro de Utilidad</h3>
+        <span class="text-xl" id="modal-centro-icono">✏️</span>
+        <h3 class="text-sm font-bold text-gray-800" id="modal-centro-titulo">Modificar Centro de Utilidad</h3>
       </div>
       <button onclick="cerrarModalEditarCentro()" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
     </div>
@@ -1451,7 +1480,7 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-bold text-gray-700 mb-1">Código</label>
-          <input type="text" id="edit-centro-codigo" required class="text-xs font-semibold uppercase" placeholder="Ej: LOC-01">
+          <input type="text" id="edit-centro-codigo" class="text-xs font-semibold uppercase" placeholder="Ej: LOC-01 (opcional)">
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-700 mb-1">Tipo de Operación</label>
@@ -1461,17 +1490,27 @@
           </select>
         </div>
       </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">📱 Celular / WhatsApp</label>
+          <input type="text" id="edit-centro-telefono" class="text-xs font-semibold" placeholder="Ej: 3001234567">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">📍 Dirección</label>
+          <input type="text" id="edit-centro-direccion" class="text-xs font-semibold" placeholder="Ej: Calle 10 # 40-20">
+        </div>
+      </div>
       <div>
         <label class="block text-xs font-bold text-gray-700 mb-1">Color Distintivo</label>
         <div class="flex items-center gap-2">
-          <input type="color" id="edit-centro-color" class="h-9 w-14 rounded-lg cursor-pointer border border-gray-200 p-1">
+          <input type="color" id="edit-centro-color" value="#0284c7" class="h-9 w-14 rounded-lg cursor-pointer border border-gray-200 p-1">
           <span class="text-xs text-gray-500">Color de identificación en cabecera y reportes</span>
         </div>
       </div>
       <div class="pt-3 flex justify-end gap-2 border-t border-gray-100">
         <button type="button" onclick="cerrarModalEditarCentro()" class="px-3.5 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 text-xs font-semibold text-gray-600">Cancelar</button>
         <button type="submit" id="btn-guardar-edit-centro" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5">
-          💾 Guardar Cambios
+          <span id="btn-guardar-edit-centro-text">💾 Guardar Cambios</span>
         </button>
       </div>
     </form>
@@ -1557,7 +1596,7 @@
 
       <button class="tab-btn" onclick="mostrarTab('produccion')">Producción</button>
 
-      <button class="tab-btn" onclick="mostrarTab('compras_sugerencias')">🛒 Compras Sugeridas</button>
+      <button class="tab-btn" onclick="mostrarTab('compras_sugerencias')">🛒 Compras</button>
       <button class="tab-btn" onclick="mostrarTab('cotizaciones')">📋 Cotizaciones</button>
 
       <button class="tab-btn" onclick="mostrarTab('kardex')">Kardex</button>
@@ -3069,6 +3108,28 @@
 
     </div>
 
+    <!-- ── SECCIÓN DE ÓRDENES DE COMPRA Y DESPACHOS ACTIVOS ───────────────── -->
+    <div class="mt-8 bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-xs">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4 flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+            <i class="bi bi-file-earmark-text"></i>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wide">Órdenes de Compra y Despachos</h2>
+            <p class="text-[11px] text-slate-500">Historial y seguimiento de órdenes enviadas a proveedores, propuestas con cambios y recepciones.</p>
+          </div>
+        </div>
+        <button onclick="cargarOrdenesCompraNegocio()" class="px-3 py-1.5 text-xs bg-white border border-slate-200 hover:bg-slate-100 rounded-lg font-bold text-slate-700 flex items-center gap-1 shadow-2xs transition">
+          <i class="bi bi-arrow-clockwise"></i> Actualizar Órdenes
+        </button>
+      </div>
+
+      <div id="lista-ordenes-compra" class="space-y-3">
+        <p class="text-xs text-slate-400 italic text-center py-4">Cargando órdenes de compra...</p>
+      </div>
+    </div>
+
   </div>
 
 
@@ -4137,6 +4198,7 @@ const NEGOCIO_ID = {{ negocio_id }};
 const TAB_INICIAL_SERVER = {{ (tab_inicial or '') | tojson }};
 
 let CENTROS_UTILIDAD = {{ centros_utilidad | tojson if centros_utilidad else '[]' }};
+let MAX_CENTROS_UTILIDAD = {{ max_centros_utilidad if max_centros_utilidad is defined and max_centros_utilidad else 1 }};
 let CENTRO_ACTIVO = {{ centro_activo | tojson if centro_activo else 'null' }};
 let DISPOSITIVO_ACTUAL = null;
 
@@ -11830,11 +11892,15 @@ function renderizarComprasTabla(proveedores) {
               </label>
 
             <button type="button" onclick="hacerEntradaProveedor(${pIdx})"
+                    class="px-3.5 py-2 bg-slate-600 hover:bg-slate-700 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                    title="Transferir directamente a la pestaña de Entradas sin enviar Orden de Compra">
+              📥 Entrada Directa (FAC)
+            </button>
 
-                    class="px-4 py-2 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer">
-
-              📥 Registrar Entrada (FAC)
-
+            <button type="button" onclick="abrirModalOrdenCompra(${pIdx})"
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                    title="Generar consecutivo formal #OC-XXXX, abrir chat y enviar link interactivo al proveedor por WhatsApp">
+              📄 ORDEN DE COMPRA
             </button>
 
             </div>
@@ -14929,7 +14995,10 @@ function abrirModalCentrosUtilidad() {
             </div>
           </div>
           <h4 class="text-sm font-extrabold text-gray-900 mb-1">${c.nombre}</h4>
-          <p class="text-xs text-gray-500 mb-3">${c.direccion || (esMovil ? 'Ruta de neveras móviles en puntos de venta' : 'Sede y cocina principal')}</p>
+          <div class="space-y-0.5 mb-3 text-xs text-gray-500">
+            <p class="flex items-center gap-1.5"><span>📍</span> <span>${c.direccion || (esMovil ? 'Ruta móvil' : 'Sin dirección configurada')}</span></p>
+            ${c.telefono ? `<p class="flex items-center gap-1.5"><span>📱</span> <span class="font-semibold text-gray-700">${c.telefono}</span></p>` : ''}
+          </div>
         </div>
 
         <div class="pt-2 border-t border-slate-150 flex items-center justify-between">
@@ -14988,6 +15057,24 @@ function abrirModalCentrosUtilidad() {
     if (dispSub) dispSub.textContent = `Puedes vincular este navegador como una tablet fija para este punto de venta.`;
   }
 
+  // Actualizar indicador de cupo
+  const countEl = document.getElementById('cu-quota-count');
+  const maxEl = document.getElementById('cu-quota-max');
+  const btnCrear = document.getElementById('cu-btn-crear-centro');
+  if (countEl) countEl.textContent = CENTROS_UTILIDAD.length;
+  if (maxEl) maxEl.textContent = MAX_CENTROS_UTILIDAD || 1;
+  if (btnCrear) {
+    if (CENTROS_UTILIDAD.length >= (MAX_CENTROS_UTILIDAD || 1)) {
+      btnCrear.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+      btnCrear.classList.add('bg-gray-400', 'cursor-not-allowed');
+      btnCrear.title = `Has alcanzado el límite de sedes permitidas (${MAX_CENTROS_UTILIDAD}). Contacta al administrador para ampliar tu cupo.`;
+    } else {
+      btnCrear.classList.remove('bg-gray-400', 'cursor-not-allowed');
+      btnCrear.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+      btnCrear.title = `Crear nueva sede (${CENTROS_UTILIDAD.length}/${MAX_CENTROS_UTILIDAD})`;
+    }
+  }
+
   const modal = document.getElementById('overlay-centros-utilidad');
   if (modal) modal.classList.remove('hidden');
 }
@@ -14997,13 +15084,38 @@ function cerrarModalCentrosUtilidad() {
   if (modal) modal.classList.add('hidden');
 }
 
+function abrirModalCrearCentro() {
+  if (CENTROS_UTILIDAD.length >= (MAX_CENTROS_UTILIDAD || 1)) {
+    toast(`Has alcanzado el límite de sedes permitidas (${MAX_CENTROS_UTILIDAD}). Solicita a administración ampliar tu cupo.`, false);
+    return;
+  }
+  document.getElementById('modal-centro-icono').textContent = '➕';
+  document.getElementById('modal-centro-titulo').textContent = 'Nueva Sede / Centro de Utilidad';
+  document.getElementById('btn-guardar-edit-centro-text').textContent = '✨ Crear Centro';
+  document.getElementById('edit-centro-id').value = '';
+  document.getElementById('edit-centro-nombre').value = '';
+  document.getElementById('edit-centro-codigo').value = '';
+  document.getElementById('edit-centro-tipo').value = 'local';
+  document.getElementById('edit-centro-telefono').value = '';
+  document.getElementById('edit-centro-direccion').value = '';
+  document.getElementById('edit-centro-color').value = '#0284c7';
+
+  const modal = document.getElementById('overlay-editar-centro');
+  if (modal) modal.classList.remove('hidden');
+}
+
 function abrirModalEditarCentro(centroId) {
   const c = CENTROS_UTILIDAD.find(x => String(x.id) === String(centroId));
   if (!c) return;
+  document.getElementById('modal-centro-icono').textContent = '✏️';
+  document.getElementById('modal-centro-titulo').textContent = 'Modificar Centro de Utilidad';
+  document.getElementById('btn-guardar-edit-centro-text').textContent = '💾 Guardar Cambios';
   document.getElementById('edit-centro-id').value = c.id;
   document.getElementById('edit-centro-nombre').value = c.nombre || '';
   document.getElementById('edit-centro-codigo').value = c.codigo || '';
   document.getElementById('edit-centro-tipo').value = c.tipo || 'local';
+  document.getElementById('edit-centro-telefono').value = c.telefono || '';
+  document.getElementById('edit-centro-direccion').value = c.direccion || '';
   document.getElementById('edit-centro-color').value = c.color_badge || '#0284c7';
 
   const modal = document.getElementById('overlay-editar-centro');
@@ -15021,10 +15133,12 @@ async function guardarEdicionCentro(e) {
   const nombre = document.getElementById('edit-centro-nombre').value.trim();
   const codigo = document.getElementById('edit-centro-codigo').value.trim().toUpperCase();
   const tipo = document.getElementById('edit-centro-tipo').value;
+  const telefono = document.getElementById('edit-centro-telefono').value.trim();
+  const direccion = document.getElementById('edit-centro-direccion').value.trim();
   const color = document.getElementById('edit-centro-color').value;
 
-  if (!nombre || !codigo) {
-    toast('Nombre y código son obligatorios', false);
+  if (!nombre) {
+    toast('El nombre del centro es obligatorio', false);
     return;
   }
 
@@ -15032,38 +15146,52 @@ async function guardarEdicionCentro(e) {
   if (btn) btn.disabled = true;
 
   try {
-    const res = await fetch(`/api/centros_utilidad/${centroId}/editar`, {
+    const esCrear = !centroId;
+    const url = esCrear ? '/api/centros_utilidad/crear' : `/api/centros_utilidad/${centroId}/editar`;
+    const payload = {
+      negocio_id: NEGOCIO_ID,
+      nombre: nombre,
+      codigo: codigo,
+      tipo: tipo,
+      telefono: telefono,
+      direccion: direccion,
+      color_badge: color
+    };
+
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        negocio_id: NEGOCIO_ID,
-        nombre: nombre,
-        codigo: codigo,
-        tipo: tipo,
-        color_badge: color
-      })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (data.ok) {
-      toast(data.mensaje || 'Centro de utilidad actualizado', true);
-      const idx = CENTROS_UTILIDAD.findIndex(x => String(x.id) === String(centroId));
-      if (idx !== -1) {
-        CENTROS_UTILIDAD[idx].nombre = nombre;
-        CENTROS_UTILIDAD[idx].codigo = codigo;
-        CENTROS_UTILIDAD[idx].tipo = tipo;
-        CENTROS_UTILIDAD[idx].color_badge = color;
-      }
-      if (CENTRO_ACTIVO && String(CENTRO_ACTIVO.id) === String(centroId)) {
-        CENTRO_ACTIVO.nombre = nombre;
-        CENTRO_ACTIVO.codigo = codigo;
-        CENTRO_ACTIVO.tipo = tipo;
-        CENTRO_ACTIVO.color_badge = color;
-        actualizarHeaderCentroActivo();
+      toast(data.mensaje || (esCrear ? 'Centro creado exitosamente' : 'Centro actualizado'), true);
+      if (esCrear && data.centro) {
+        CENTROS_UTILIDAD.push(data.centro);
+      } else {
+        const idx = CENTROS_UTILIDAD.findIndex(x => String(x.id) === String(centroId));
+        if (idx !== -1) {
+          CENTROS_UTILIDAD[idx].nombre = nombre;
+          CENTROS_UTILIDAD[idx].codigo = codigo || CENTROS_UTILIDAD[idx].codigo;
+          CENTROS_UTILIDAD[idx].tipo = tipo;
+          CENTROS_UTILIDAD[idx].telefono = telefono;
+          CENTROS_UTILIDAD[idx].direccion = direccion;
+          CENTROS_UTILIDAD[idx].color_badge = color;
+        }
+        if (CENTRO_ACTIVO && String(CENTRO_ACTIVO.id) === String(centroId)) {
+          CENTRO_ACTIVO.nombre = nombre;
+          CENTRO_ACTIVO.codigo = codigo || CENTRO_ACTIVO.codigo;
+          CENTRO_ACTIVO.tipo = tipo;
+          CENTRO_ACTIVO.telefono = telefono;
+          CENTRO_ACTIVO.direccion = direccion;
+          CENTRO_ACTIVO.color_badge = color;
+          actualizarHeaderCentroActivo();
+        }
       }
       cerrarModalEditarCentro();
       abrirModalCentrosUtilidad();
     } else {
-      toast(data.error || 'Error al guardar cambios', false);
+      toast(data.error || 'Error al guardar centro', false);
     }
   } catch (err) {
     toast('Error de conexión al guardar centro', false);
@@ -19863,6 +19991,628 @@ async function cargarReporteEnsambles() {
 
     {% include 'inv_distribuido_modal.html' %}
     <script src="/static/js/calculadora_widget.js"></script>
+
+<!-- ============================================================== -->
+<!-- MODAL: GENERAR ORDEN DE COMPRA (OC)                            -->
+<!-- ============================================================== -->
+<div id="modal-generar-oc" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center hidden p-3 backdrop-blur-xs">
+  <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+    
+    <!-- Modal Header -->
+    <div class="px-5 py-3.5 bg-gradient-to-r from-indigo-900 to-slate-900 text-white flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-black text-sm">
+          📄
+        </div>
+        <div>
+          <h3 class="text-sm font-bold uppercase tracking-wider text-white">Generar Orden de Compra</h3>
+          <p id="modal-oc-prov-nombre" class="text-xs text-indigo-200 font-medium">Proveedor: ...</p>
+        </div>
+      </div>
+      <button onclick="cerrarModalOrdenCompra()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+    </div>
+
+    <!-- Modal Body -->
+    <div class="p-5 overflow-y-auto custom-scroll space-y-4 flex-1 text-xs">
+      
+      <!-- Condiciones de Entrega y Pago -->
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+        <span class="text-[10px] font-extrabold uppercase tracking-wide text-slate-500 block border-b border-slate-200 pb-1">
+          📍 Parámetros de Despacho y Entrega
+        </span>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Modalidad -->
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Modalidad de Despacho</label>
+            <select id="modal-oc-modalidad" onchange="cambiarModalidadEntregaOC()" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold bg-white outline-none focus:border-indigo-500">
+              <option value="sede">🛵 Proveedor entrega en nuestra Sede</option>
+              <option value="recoger">🛍️ Recogemos en Bodega del Proveedor</option>
+            </select>
+          </div>
+
+          <!-- Sede Destino -->
+          <div id="cont-oc-sede">
+            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Sede / Centro de Utilidad Destino</label>
+            <select id="modal-oc-sede" onchange="cambiarSedeOC(this.value)" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold bg-white outline-none focus:border-indigo-500">
+              <option value="">Cargando sedes...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Dirección de entrega en sede (Persistente y editable) -->
+        <div id="cont-oc-dir-sede">
+          <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Dirección y detalles de entrega para el transportador</label>
+          <textarea id="modal-oc-dir-sede" rows="2" placeholder="Ej: Calle 45 # 12-34 - Portón de descargue / timbre 2"
+                    class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white outline-none focus:border-indigo-500"></textarea>
+          <span class="text-[9px] text-slate-400">Esta dirección se guardará para esta sede para futuros despachos.</span>
+        </div>
+
+        <!-- Dirección de recogida en bodega del proveedor -->
+        <div id="cont-oc-dir-recogida" class="hidden">
+          <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Dirección de recogida en bodega del proveedor</label>
+          <textarea id="modal-oc-dir-recogida" rows="2" placeholder="Ej: Av. Industrial # 68-20, Muelle 3..."
+                    class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white outline-none focus:border-indigo-500"></textarea>
+          <span class="text-[9px] text-slate-400">Quedará guardada en la ficha de este proveedor.</span>
+        </div>
+
+        <!-- Pago y WhatsApp -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">💳 Condición de Pago</label>
+            <div class="flex gap-2">
+              <select id="modal-oc-forma-pago" onchange="cambiarFormaPagoOC()" class="flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold bg-white outline-none focus:border-indigo-500">
+                <option value="contado">Contado / Transferencia</option>
+                <option value="contraentrega">Contraentrega en efectivo</option>
+                <option value="credito">Crédito a plazos</option>
+              </select>
+              <select id="modal-oc-dias-credito" class="w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-indigo-900 bg-indigo-50 hidden outline-none">
+                <option value="8">8 días</option>
+                <option value="15" selected>15 días</option>
+                <option value="30">30 días</option>
+                <option value="45">45 días</option>
+                <option value="60">60 días</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">📱 Teléfono WhatsApp Proveedor</label>
+            <input type="text" id="modal-oc-telefono" placeholder="Ej: 3101234567"
+                   class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold bg-white outline-none focus:border-indigo-500">
+            <span class="text-[9px] text-slate-400">Se usará para enviar el enlace de confirmación por WhatsApp.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Tabla Resumen de Ítems a Pedir -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold uppercase tracking-wide text-slate-700">📦 Productos en esta Orden</span>
+          <span id="modal-oc-cant-items" class="text-[10px] text-slate-500 font-semibold">0 productos</span>
+        </div>
+
+        <div class="border border-slate-200 rounded-xl overflow-hidden">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-100 text-slate-600 uppercase font-bold text-[9.5px]">
+              <tr>
+                <th class="px-3 py-2">Producto</th>
+                <th class="px-3 py-2 text-center">Empaque</th>
+                <th class="px-3 py-2 text-right">Cant. Pedida</th>
+                <th class="px-3 py-2 text-right">Precio Est.</th>
+                <th class="px-3 py-2 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="modal-oc-items-body" class="divide-y divide-slate-100 bg-white">
+              <!-- Render dinámico -->
+            </tbody>
+            <tfoot class="bg-slate-50 font-bold border-t border-slate-200 text-xs">
+              <tr>
+                <td colspan="4" class="px-3 py-2.5 text-right text-slate-600 uppercase">Total Estimado de la Orden:</td>
+                <td id="modal-oc-total-val" class="px-3 py-2.5 text-right text-indigo-900 font-black text-sm font-mono">$0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Observaciones Comprador -->
+      <div>
+        <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Observaciones / Instrucciones para el Proveedor (Opcional)</label>
+        <textarea id="modal-oc-observaciones" rows="1" placeholder="Ej: Por favor enviar factura electrónica al correo..."
+                  class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500 text-slate-800"></textarea>
+      </div>
+
+    </div>
+
+    <!-- Modal Footer -->
+    <div class="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+      <button onclick="cerrarModalOrdenCompra()" class="px-4 py-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition">
+        Cancelar
+      </button>
+
+      <button id="btn-generar-oc-submit" onclick="confirmarYEnviarOC()"
+              class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md flex items-center gap-2 transition cursor-pointer">
+        <span>📲 Generar y Enviar por WhatsApp</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+
+// =====================================================================
+// LÓGICA DE ÓRDENES DE COMPRA (OC) Y TOLERANCIA DE PESO VARIABLE
+// =====================================================================
+
+function toggleToleranciaPeso(checked) {
+  const cont = document.getElementById('cont-tolerancia-peso');
+  if (cont) {
+    if (checked) cont.classList.remove('hidden');
+    else cont.classList.add('hidden');
+  }
+}
+
+// Hook al abrir modal de producto
+const _orig_abrirModalProducto = window.abrirModalProducto;
+window.abrirModalProducto = function(p) {
+  if (typeof _orig_abrirModalProducto === 'function') _orig_abrirModalProducto(p);
+  const chkPeso = document.getElementById('mp-peso-variable');
+  const inpTol = document.getElementById('mp-tolerancia-peso');
+  if (chkPeso) chkPeso.checked = p ? !!p.peso_variable : false;
+  if (inpTol) inpTol.value = (p && p.tolerancia_peso_pct !== null && p.tolerancia_peso_pct !== undefined) ? p.tolerancia_peso_pct : '10';
+  toggleToleranciaPeso(chkPeso ? chkPeso.checked : false);
+};
+
+// Variables para el modal de OC
+let oc_modal_pIdx = null;
+let oc_modal_sedes = [];
+
+async function abrirModalOrdenCompra(pIdx) {
+  if (!window.COMPRAS_DATA || !window.COMPRAS_DATA[pIdx]) return;
+  const p = window.COMPRAS_DATA[pIdx];
+  oc_modal_pIdx = pIdx;
+
+  document.getElementById('modal-oc-prov-nombre').textContent = `Proveedor: ${p.proveedor_nombre}`;
+  document.getElementById('modal-oc-telefono').value = p.proveedor_telefono || '';
+  document.getElementById('modal-oc-observaciones').value = '';
+
+  // Modalidad por defecto
+  const selMod = document.getElementById('modal-oc-modalidad');
+  if (selMod) selMod.value = p.modalidad_entrega_defecto || 'sede';
+
+  // Forma de pago por defecto
+  const selPago = document.getElementById('modal-oc-forma-pago');
+  if (selPago) selPago.value = p.forma_pago_defecto || 'contado';
+  const selDias = document.getElementById('modal-oc-dias-credito');
+  if (selDias) selDias.value = String(p.dias_credito || 15);
+  cambiarFormaPagoOC();
+
+  document.getElementById('modal-oc-dir-recogida').value = p.direccion_recogida || '';
+
+  // Cargar sedes activas
+  await cargarSedesParaOC();
+  cambiarModalidadEntregaOC();
+
+  // Renderizar ítems
+  const tbody = document.getElementById('modal-oc-items-body');
+  tbody.innerHTML = '';
+  let totalEstimado = 0;
+
+  (p.productos || []).forEach(prod => {
+    const cantVal = prod.cantidad_sugerida_usuario || prod.paquetes_sugeridos || 1;
+    const precVal = prod.costo_empaque_usuario || prod.precio_presentacion || 0;
+    const subtotal = cantVal * precVal;
+    totalEstimado += subtotal;
+
+    const tr = document.createElement('tr');
+    tr.className = "hover:bg-slate-50";
+    tr.innerHTML = `
+      <td class="px-3 py-2 font-medium text-slate-800">
+        ${prod.producto_nombre}
+        ${prod.peso_variable ? `<span class="ml-1 text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded">⚖️ ±${Math.round(prod.tolerancia_peso_pct || 10)}%</span>` : ''}
+      </td>
+      <td class="px-3 py-2 text-center text-slate-500 font-medium">${prod.presentacion_nombre || 'Unidad'}</td>
+      <td class="px-3 py-2 text-right font-bold text-slate-800">${cantVal}</td>
+      <td class="px-3 py-2 text-right font-medium text-slate-600">${fmtMonC(precVal)}</td>
+      <td class="px-3 py-2 text-right font-black text-indigo-900">${fmtMonC(subtotal)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('modal-oc-cant-items').textContent = `${p.productos.length} producto(s)`;
+  document.getElementById('modal-oc-total-val').textContent = fmtMonC(totalEstimado);
+
+  document.getElementById('modal-generar-oc').classList.remove('hidden');
+}
+
+function cerrarModalOrdenCompra() {
+  document.getElementById('modal-generar-oc').classList.add('hidden');
+  oc_modal_pIdx = null;
+}
+
+async function cargarSedesParaOC() {
+  try {
+    const resp = await fetch('/api/centros-utilidad');
+    const data = await resp.json();
+    if (data.ok && data.centros) {
+      oc_modal_sedes = data.centros.filter(c => c.activo !== false);
+      const sel = document.getElementById('modal-oc-sede');
+      sel.innerHTML = oc_modal_sedes.map(s => `
+        <option value="${s.id}">${s.nombre} (${s.codigo || 'Sede'})</option>
+      `).join('');
+
+      if (oc_modal_sedes.length > 0) {
+        cambiarSedeOC(oc_modal_sedes[0].id);
+      }
+    }
+  } catch (err) {
+    console.error('Error cargando sedes para OC:', err);
+  }
+}
+
+function cambiarSedeOC(sedeId) {
+  const sede = oc_modal_sedes.find(s => String(s.id) === String(sedeId));
+  const txtDir = document.getElementById('modal-oc-dir-sede');
+  if (sede && txtDir) {
+    txtDir.value = sede.direccion_entrega || sede.direccion || '';
+  }
+}
+
+function cambiarModalidadEntregaOC() {
+  const mod = document.getElementById('modal-oc-modalidad')?.value;
+  const contSede = document.getElementById('cont-oc-sede');
+  const contDirSede = document.getElementById('cont-oc-dir-sede');
+  const contDirRecogida = document.getElementById('cont-oc-dir-recogida');
+
+  if (mod === 'recoger') {
+    contSede?.classList.add('hidden');
+    contDirSede?.classList.add('hidden');
+    contDirRecogida?.classList.remove('hidden');
+  } else {
+    contSede?.classList.remove('hidden');
+    contDirSede?.classList.remove('hidden');
+    contDirRecogida?.classList.add('hidden');
+  }
+}
+
+function cambiarFormaPagoOC() {
+  const fp = document.getElementById('modal-oc-forma-pago')?.value;
+  const diasSel = document.getElementById('modal-oc-dias-credito');
+  if (fp === 'credito') {
+    diasSel?.classList.remove('hidden');
+  } else {
+    diasSel?.classList.add('hidden');
+  }
+}
+
+async function confirmarYEnviarOC() {
+  if (oc_modal_pIdx === null || !window.COMPRAS_DATA[oc_modal_pIdx]) return;
+  const p = window.COMPRAS_DATA[oc_modal_pIdx];
+  const btn = document.getElementById('btn-generar-oc-submit');
+  if (btn) btn.disabled = true;
+
+  const mod = document.getElementById('modal-oc-modalidad').value;
+  const sedeSel = document.getElementById('modal-oc-sede');
+  const sedeId = sedeSel ? sedeSel.value : null;
+  const sedeNom = sedeSel ? sedeSel.options[sedeSel.selectedIndex]?.text : 'Sede Principal';
+
+  const items = (p.productos || []).map(prod => {
+    const cant = prod.cantidad_sugerida_usuario || prod.paquetes_sugeridos || 1;
+    const prec = prod.costo_empaque_usuario || prod.precio_presentacion || 0;
+    return {
+      producto_id: prod.producto_id,
+      producto_nombre: prod.producto_nombre,
+      presentacion_id: prod.presentacion_id || null,
+      presentacion_nombre: prod.presentacion_nombre || 'Unidad',
+      unidades_presentacion: prod.unidades_presentacion || 1.0,
+      peso_variable: !!prod.peso_variable,
+      tolerancia_peso_pct: prod.tolerancia_peso_pct || 10.0,
+      cantidad_solicitada: cant,
+      precio_unitario: prec,
+      total_solicitado: cant * prec
+    };
+  });
+
+  const payload = {
+    proveedor_id: p.proveedor_id,
+    modalidad_entrega: mod,
+    sede_id: sedeId,
+    sede_nombre: sedeNom,
+    direccion_entrega: document.getElementById('modal-oc-dir-sede').value.trim(),
+    direccion_recogida: document.getElementById('modal-oc-dir-recogida').value.trim(),
+    forma_pago: document.getElementById('modal-oc-forma-pago').value,
+    dias_credito: parseInt(document.getElementById('modal-oc-dias-credito').value) || 15,
+    telefono_proveedor: document.getElementById('modal-oc-telefono').value.trim(),
+    observaciones: document.getElementById('modal-oc-observaciones').value.trim(),
+    items: items
+  };
+
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ordenes-compra`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const res = await resp.json();
+    if (res.ok) {
+      toast(`✅ Orden ${res.numero_oc} generada con éxito.`);
+      cerrarModalOrdenCompra();
+      cargarOrdenesCompraNegocio();
+
+      // Mostrar modal de éxito con el mensaje estructurado completo
+      mostrarModalExitoOC(res);
+
+      // Intentar abrir WhatsApp en pestaña nueva
+      if (res.whatsapp_url) {
+        try {
+          window.open(res.whatsapp_url, '_blank');
+        } catch(e) {}
+      }
+    } else {
+      alert('Error: ' + (res.error || 'No se pudo generar la orden'));
+    }
+  } catch (err) {
+    alert('Error de conexión al generar la orden');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function cargarOrdenesCompraNegocio() {
+  const cont = document.getElementById('lista-ordenes-compra');
+  if (!cont) return;
+
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ordenes-compra`);
+    const data = await resp.json();
+    if (!data.ok || !data.ordenes || data.ordenes.length === 0) {
+      cont.innerHTML = '<p class="text-xs text-slate-400 italic text-center py-4">No hay órdenes de compra registradas aún.</p>';
+      return;
+    }
+
+    cont.innerHTML = data.ordenes.map(oc => {
+      let badgeHtml = '';
+      if (oc.estado === 'confirmada') {
+        badgeHtml = '<span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1"><i class="bi bi-check-circle-fill"></i> Confirmada</span>';
+      } else if (oc.estado === 'propuesta_cambios') {
+        badgeHtml = '<span class="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1"><i class="bi bi-exclamation-triangle-fill"></i> Propuesta con Cambios</span>';
+      } else if (oc.estado === 'recibida') {
+        badgeHtml = '<span class="bg-blue-100 text-blue-800 border border-blue-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1"><i class="bi bi-box-seam-fill"></i> Recibida en Almacén</span>';
+      } else {
+        badgeHtml = '<span class="bg-sky-100 text-sky-800 border border-sky-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1"><i class="bi bi-clock-fill"></i> Enviada (Esperando)</span>';
+      }
+
+      const totalVal = oc.total_confirmado || oc.total_estimado || 0;
+
+      return `
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs hover:shadow-xs transition space-y-3">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-mono font-black text-xs text-indigo-700 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-md">${oc.numero_oc}</span>
+                <h3 class="text-xs font-bold text-slate-900">${oc.proveedor_nombre}</h3>
+                ${badgeHtml}
+              </div>
+              <p class="text-[11px] text-slate-500 mt-1">
+                📅 Emitida: <b>${oc.fecha_emision_str}</b> • 📦 ${oc.items_count} producto(s)
+                ${oc.fecha_entrega_str ? `• 🚚 Entrega estimada: <b class="text-indigo-900">${oc.fecha_entrega_str}</b>` : ''}
+              </p>
+            </div>
+
+            <div class="text-right">
+              <span class="text-[10px] uppercase font-bold text-slate-500 block">Total Orden</span>
+              <span class="font-mono font-black text-sm text-slate-900">${fmtMonC(totalVal)}</span>
+            </div>
+          </div>
+
+          <div class="border-t border-slate-100 pt-3 flex items-center justify-between gap-2 flex-wrap text-xs">
+            <div class="flex items-center gap-2">
+              ${oc.conversacion_token ? `
+                <a href="/chat/${oc.conversacion_token}" target="_blank"
+                   class="px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-700 font-bold rounded-lg border border-slate-200 hover:border-indigo-200 flex items-center gap-1 transition shadow-2xs">
+                  💬 Abrir Chat
+                </a>
+              ` : ''}
+
+              <button onclick="copiarLinkPublicoOC('${oc.token_publico}')"
+                      class="px-2.5 py-1.5 text-slate-600 hover:text-slate-800 font-medium text-[11px] flex items-center gap-1 cursor-pointer">
+                📋 Copiar Link Proveedor
+              </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+              ${oc.estado === 'propuesta_cambios' ? `
+                <button onclick="aprobarPropuestaCambiosOC(${oc.id})"
+                        class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg shadow-sm flex items-center gap-1 cursor-pointer">
+                  ✅ Aprobar Cambios
+                </button>
+              ` : ''}
+
+              ${oc.estado !== 'recibida' ? `
+                <button onclick="recibirOrdenEnEntradas(${oc.id})"
+                        class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-sm flex items-center gap-1 cursor-pointer">
+                  📥 Recibir en Almacén (Entrada)
+                </button>
+              ` : `
+                <span class="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
+                  <i class="bi bi-check2-all text-sm"></i> Mercancía ingresada al inventario
+                </span>
+              `}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    cont.innerHTML = '<p class="text-xs text-rose-500 italic text-center py-4">Error cargando órdenes de compra.</p>';
+  }
+}
+
+function copiarLinkPublicoOC(token) {
+  const url = `${window.location.origin}/oc/${token}`;
+  navigator.clipboard.writeText(url).then(() => {
+    toast('📋 Link del proveedor copiado al portapapeles.');
+  });
+}
+
+async function aprobarPropuestaCambiosOC(ordenId) {
+  if (!confirm('¿Deseas aceptar los cambios de cantidades y/o precios propuestos por el proveedor?')) return;
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ordenes-compra/${ordenId}/aprobar-cambios`, { method: 'POST' });
+    const res = await resp.json();
+    if (res.ok) {
+      toast('✅ Cambios aprobados. La orden quedó confirmada.');
+      cargarOrdenesCompraNegocio();
+    } else {
+      alert('Error: ' + res.error);
+    }
+  } catch (e) {
+    alert('Error de conexión');
+  }
+}
+
+async function recibirOrdenEnEntradas(ordenId) {
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/ordenes-compra/${ordenId}/datos-entrada`);
+    const data = await resp.json();
+    if (!data.ok) {
+      alert('Error: ' + data.error);
+      return;
+    }
+
+    // Inyectar en el formulario de la pestaña Entradas
+    const contLineas = document.getElementById('entrada-lineas');
+    if (contLineas) contLineas.innerHTML = '';
+    entradaLineas = [];
+
+    const inpProvId = document.getElementById('entrada-proveedor-id');
+    if (inpProvId) inpProvId.value = data.proveedor.proveedor_id || '';
+
+    const inpProvNom = document.getElementById('entrada-proveedor');
+    if (inpProvNom) inpProvNom.value = data.proveedor.proveedor_nombre || '';
+
+    const inpDoc = document.getElementById('entrada-num-doc');
+    if (inpDoc) inpDoc.value = data.documento || '';
+
+    const inpFecha = document.getElementById('entrada-fecha-doc');
+    if (inpFecha) inpFecha.value = data.fecha || '';
+
+    (data.productos || []).forEach(prod => {
+      agregarLineaEntradaConDatos(
+        prod.producto_id,
+        prod.producto_nombre,
+        prod.cantidad_sugerida_unidades,
+        prod.costo_unitario,
+        prod.iva_pct || 0,
+        prod.presentacion_id,
+        prod.presentacion_nombre,
+        prod.unidades_presentacion,
+        prod.cantidad_sugerida_usuario,
+        prod.costo_empaque_usuario,
+        prod.total_costo
+      );
+    });
+
+    calcularTotalesEntrada();
+    mostrarTab('entradas');
+    toast(`✅ Datos de la orden ${data.documento} transferidos a Entradas para su recepción.`);
+  } catch (e) {
+    alert('Error cargando datos para recepción: ' + e);
+  }
+}
+
+// Cargar órdenes cuando se abra la pestaña de compras
+const _orig_mostrarTab = window.mostrarTab;
+window.mostrarTab = function(tabName) {
+  if (typeof _orig_mostrarTab === 'function') _orig_mostrarTab(tabName);
+  if (tabName === 'compras_sugerencias') {
+    cargarOrdenesCompraNegocio();
+  }
+};
+
+
+let oc_ultimo_resultado = null;
+
+function mostrarModalExitoOC(res) {
+  oc_ultimo_resultado = res;
+  const tit = document.getElementById('modal-exito-oc-titulo');
+  if (tit) tit.textContent = `¡Orden ${res.numero_oc} Generada!`;
+  const msg = document.getElementById('modal-exito-oc-mensaje');
+  if (msg) msg.textContent = res.mensaje_whatsapp || '';
+  
+  const btnWa = document.getElementById('btn-exito-abrir-wa');
+  if (btnWa) {
+    btnWa.href = res.whatsapp_url || '#';
+  }
+  
+  document.getElementById('modal-oc-exito')?.classList.remove('hidden');
+}
+
+function cerrarModalExitoOC() {
+  document.getElementById('modal-oc-exito')?.classList.add('hidden');
+}
+
+function copiarMensajeCompletoOC() {
+  if (!oc_ultimo_resultado) return;
+  navigator.clipboard.writeText(oc_ultimo_resultado.mensaje_whatsapp).then(() => {
+    toast('📋 Mensaje completo de WhatsApp copiado al portapapeles.');
+  });
+}
+
+function copiarSoloLinkOC() {
+  if (!oc_ultimo_resultado) return;
+  navigator.clipboard.writeText(oc_ultimo_resultado.url_publica).then(() => {
+    toast('🔗 Enlace público copiado.');
+  });
+}
+
+</script>
+
+<!-- MODAL ÉXITO ORDEN DE COMPRA -->
+<div id="modal-oc-exito" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center hidden p-3 backdrop-blur-xs">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+    <div class="flex items-center gap-2.5">
+      <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-lg">
+        <i class="bi bi-check-circle-fill"></i>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold uppercase text-slate-800" id="modal-exito-oc-titulo">Orden Generada con Éxito</h3>
+        <p class="text-xs text-slate-500">Comparte el pedido con tu proveedor por WhatsApp</p>
+      </div>
+    </div>
+
+    <!-- Mensaje con formato estructurado -->
+    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 font-sans space-y-1 max-h-48 overflow-y-auto custom-scroll whitespace-pre-wrap select-all font-mono" id="modal-exito-oc-mensaje">
+      <!-- Texto estructurado -->
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+      <a id="btn-exito-abrir-wa" href="#" target="_blank"
+         class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition">
+        <i class="bi bi-whatsapp text-sm"></i> Abrir en WhatsApp
+      </a>
+
+      <button onclick="copiarMensajeCompletoOC()"
+              class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition cursor-pointer">
+        <i class="bi bi-clipboard-check text-sm"></i> Copiar Mensaje
+      </button>
+    </div>
+
+    <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+      <button onclick="copiarSoloLinkOC()" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline flex items-center gap-1 cursor-pointer">
+        🔗 Copiar solo enlace
+      </button>
+
+      <button onclick="cerrarModalExitoOC()" class="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg font-bold text-slate-700 cursor-pointer">
+        Entendido
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 
 </html>

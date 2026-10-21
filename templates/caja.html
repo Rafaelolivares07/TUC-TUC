@@ -1421,7 +1421,7 @@ function getMetodosFlashDisponibles() {
 
 function getMetodosDigitalesFlash() {
     const todos = getMetodosFlashDisponibles();
-    const digitales = todos.filter(m => m.codigo !== 'efectivo');
+    const digitales = todos.filter(m => m.codigo !== 'efectivo' && m.codigo !== 'credito');
     return digitales.length ? digitales : todos;
 }
 
@@ -2012,6 +2012,7 @@ function finalizarFacturacionFlashExitosa(d, total, items, pagos, omitidos = [])
                 cliente: 'Venta Flash',
                 telefono: '',
                 cajero: cajeroNombre,
+                entrega: (CENTRO_ACTIVO && CENTRO_ACTIVO.imprimir_tipo_entrega !== false) ? (d.entrega_texto || 'Entrega en el local / caja.') : null,
                 pedido_id: d.pedido_id || null,
                 numero_documento: d.numero_documento || null,
                 fecha: new Date().toISOString(),
@@ -4096,6 +4097,7 @@ async function cobrar() {
                 cliente: nombre,
                 telefono,
                 cajero: cajeroNombre,
+                entrega: (CENTRO_ACTIVO && CENTRO_ACTIVO.imprimir_tipo_entrega !== false) ? (d.entrega_texto || 'Entrega en el local / caja.') : null,
                 pedido_id: d.pedido_id || null,
                 numero_documento: d.numero_documento || null,
                 fecha: fecha || new Date().toISOString(),
@@ -4426,6 +4428,7 @@ function generarHtmlTicketFactura(r, ahora) {
             ${r.numero_documento ? `<div class="centro" style="font-size:12px; font-weight:bold; margin-top:2px;">Doc: ${r.numero_documento}</div>` : `<div class="centro" style="font-size:11px;">Pedido: #${r.pedido_id}</div>`}
             ${r.cajero ? `<div class="centro" style="font-size:11px;">Cajero: ${r.cajero}</div>` : ''}
             ${r.cliente ? `<div class="centro" style="font-size:11px;">Cliente: ${r.cliente}</div>` : ''}
+            ${(CENTRO_ACTIVO && CENTRO_ACTIVO.imprimir_tipo_entrega !== false && r.entrega) ? `<div class="centro" style="font-size:11px;">Entrega: ${r.entrega}</div>` : ''}
             <div class="sep"></div>
             ${lineasItems}
             <div class="sep"></div>
@@ -4999,6 +5002,9 @@ function construirBytesEscPosFactura(r, ahora, esCopia = false) {
     }
     if (r.cajero) builder.line(`Cajero: ${r.cajero}`);
     if (r.cliente) builder.line(`Cliente: ${r.cliente}`);
+    if (CENTRO_ACTIVO && CENTRO_ACTIVO.imprimir_tipo_entrega !== false && r.entrega) {
+        builder.line(`Entrega: ${r.entrega}`);
+    }
     builder.separator('-');
 
     for (const i of r.items || []) {

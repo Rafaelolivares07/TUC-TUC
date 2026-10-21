@@ -29,6 +29,31 @@ _METODOS_PAGO_CATALOGO = [
 ]
 
 
+def _int_o_none(v):
+    try:
+        return int(v) if v is not None and str(v).strip() != '' else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _textos_entrega_default():
+    return {
+        'caja': {
+            'texto': 'Entrega en el local / caja.',
+            'incluir_cajero': True
+        },
+        'domicilio': {
+            'texto': 'Domicilio. Llevar a:'
+        },
+        'recoger': {
+            'texto': 'Cliente recoge en el local.'
+        },
+        'mesa': {
+            'texto': 'Consumo en mesa:'
+        }
+    }
+
+
 def _telegram_label_pago(codigo):
     labels = {
         'efectivo': 'Efectivo',
@@ -75,15 +100,26 @@ def _telegram_resumen_pagos(pagos, metodo_pago, total):
     return ' + '.join(partes) + alerta
 
 
-def _telegram_entrega(tipo_entrega, direccion=None, mesa=None):
-    if tipo_entrega == 'domicilio':
-        return f"Domicilio. Llevar a: {direccion or 'direccion pendiente'}"
-    if tipo_entrega == 'recoger':
-        return "Cliente recoge en el local."
-    if tipo_entrega == 'caja':
-        return "Entrega en el local / caja."
-    if tipo_entrega == 'mesa':
-        return f"Consumo / entrega en mesa: {mesa or 'mesa sin nombre'}"
+def _telegram_entrega(tipo_entrega, direccion=None, mesa=None, nombre_cajero=None, textos_config=None, imprimir_entrega=True):
+    if not imprimir_entrega:
+        return ""
+    cfg = textos_config or {}
+    te = (tipo_entrega or 'caja').strip().lower()
+    if te == 'domicilio':
+        base = (cfg.get('domicilio') or {}).get('texto') or "Domicilio. Llevar a:"
+        return f"{base} {direccion or 'direccion pendiente'}"
+    if te == 'recoger':
+        return (cfg.get('recoger') or {}).get('texto') or "Cliente recoge en el local."
+    if te == 'caja':
+        caja_cfg = cfg.get('caja') or {}
+        base = caja_cfg.get('texto') or "Entrega en el local / caja."
+        incluir_cajero = caja_cfg.get('incluir_cajero', True)
+        if incluir_cajero and nombre_cajero:
+            return f"{base}\nAtendio: {nombre_cajero}"
+        return base
+    if te == 'mesa':
+        base = (cfg.get('mesa') or {}).get('texto') or "Consumo en mesa:"
+        return f"{base} {mesa or 'mesa sin nombre'}"
     return f"{tipo_entrega or 'Pedido'}: {direccion or mesa or 'N/A'}"
 
 
@@ -315,6 +351,8 @@ def init_config_negocio(conn):
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS facturacion_copias INTEGER DEFAULT 1")
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS mostrar_productos_precio_cero BOOLEAN DEFAULT TRUE")
     conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS permitir_inventario_negativo BOOLEAN DEFAULT TRUE")
+    conn.execute("ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS textos_entrega JSONB DEFAULT '{}'")
+    conn.execute("ALTER TABLE centros_utilidad ADD COLUMN IF NOT EXISTS imprimir_tipo_entrega BOOLEAN DEFAULT TRUE")
 
     # Garantizar que el catálogo de métodos de pago esté completo en prod
     conn.execute("""
@@ -375,10 +413,39 @@ def _get_config(conn, tercero_id):
                   cambio_efectivo_modo, mensaje_sin_pedidos,
                   COALESCE(facturacion_copias, 1) AS facturacion_copias,
                   COALESCE(mostrar_productos_precio_cero, TRUE) AS mostrar_productos_precio_cero,
-                  COALESCE(permitir_inventario_negativo, TRUE) AS permitir_inventario_negativo
+                  COALESCE(permitir_inventario_negativo, TRUE) AS permitir_inventario_negativo,
+                  COALESCE(textos_entrega, '{}'::jsonb) AS textos_entrega
            FROM config_negocio WHERE tercero_id=%s""",
         (tercero_id,)
     ).fetchone()
+    centros_rows = []
+    try:
+        centros_rows = conn.execute("""
+            SELECT id, codigo, nombre, tipo, activo, color_badge,
+                   COALESCE(imprimir_tipo_entrega, TRUE) AS imprimir_tipo_entrega
+            FROM centros_utilidad
+            WHERE negocio_id = %s AND activo = TRUE
+            ORDER BY CASE WHEN tipo IN ('principal', 'domicilio', 'movil') THEN 0 ELSE 1 END, id ASC
+        """, (tercero_id,)).fetchall()
+    except Exception:
+        pass
+    centros_list = [dict(c) for c in centros_rows]
+
+    raw_textos = {}
+    try:
+        if row and 'textos_entrega' in row.keys() and row['textos_entrega']:
+            raw_textos = row['textos_entrega'] if isinstance(row['textos_entrega'], dict) else json.loads(row['textos_entrega'])
+    except Exception:
+        raw_textos = {}
+    defs = _textos_entrega_default()
+    for k, v in defs.items():
+        if k not in raw_textos or not isinstance(raw_textos[k], dict):
+            raw_textos[k] = v
+        else:
+            for subk, subv in v.items():
+                if subk not in raw_textos[k]:
+                    raw_textos[k][subk] = subv
+
     if row:
         return {
             'modalidades':  row['modalidades'],
@@ -394,6 +461,8 @@ def _get_config(conn, tercero_id):
             'facturacion_copias': int(row['facturacion_copias'] or 1),
             'mostrar_productos_precio_cero': bool(row['mostrar_productos_precio_cero'] if row['mostrar_productos_precio_cero'] is not None else True),
             'permitir_inventario_negativo': bool(row['permitir_inventario_negativo'] if row['permitir_inventario_negativo'] is not None else True),
+            'textos_entrega': raw_textos,
+            'centros_utilidad': centros_list,
         }
     # Migrar datos existentes de metodos_pago_tienda si los hay
     try:
@@ -756,6 +825,31 @@ def api_config_save(tercero_id):
         ))
         conn.commit()
 
+        if 'centros_entrega' in data and isinstance(data['centros_entrega'], list):
+            for item in data['centros_entrega']:
+                try:
+                    c_id = _int_o_none(item.get('id'))
+                    if c_id:
+                        val_imp = bool(item.get('imprimir_tipo_entrega', True))
+                        conn.execute(
+                            "UPDATE centros_utilidad SET imprimir_tipo_entrega = %s WHERE id = %s AND negocio_id = %s",
+                            (val_imp, c_id, tercero_id)
+                        )
+                except Exception as _e_ce:
+                    print(f"[api_config_save] error actualizando centro entrega: {_e_ce}")
+            conn.commit()
+
+        if 'textos_entrega' in data and isinstance(data['textos_entrega'], dict):
+            try:
+                conn.execute("""
+                    UPDATE config_negocio
+                    SET textos_entrega = %s::jsonb
+                    WHERE tercero_id = %s
+                """, (json.dumps(data['textos_entrega']), tercero_id))
+                conn.commit()
+            except Exception as _e_txt:
+                print(f"[api_config_save] error actualizando textos_entrega: {_e_txt}")
+
         if 'telegram_chat_id' in data:
             tg_val = (data.get('telegram_chat_id') or '').strip() or None
             try:
@@ -846,25 +940,52 @@ def api_config_publica(tercero_id):
     try:
         init_config_negocio(conn)
         config = _get_config(conn, tercero_id)
+        # 1. Intentar cargar métodos directamente desde parametros_metodos_pago_negocio
+        params_rows = []
         try:
-            catalogo = conn.execute(
-                "SELECT nombre, codigo, icono FROM metodos_pago_catalogo WHERE activo=TRUE"
-            ).fetchall()
-            catalogo_dict = {m['codigo']: dict(m) for m in catalogo}
+            params_rows = conn.execute("""
+                SELECT pm.metodo_codigo, 
+                       COALESCE(NULLIF(TRIM(pm.nombre), ''), c.nombre, INITCAP(REPLACE(pm.metodo_codigo, '_', ' '))) AS nombre,
+                       COALESCE(NULLIF(TRIM(pm.icono), ''), c.icono, '💳') AS icono,
+                       COALESCE(pm.cuenta_recaudo_id, pm.cuenta_id) AS cuenta_recaudo_id,
+                       COALESCE(pm.activo_ventas, FALSE) AS activo_ventas,
+                       COALESCE(pm.activo, TRUE) AS activo,
+                       pm.orden
+                FROM parametros_metodos_pago_negocio pm
+                LEFT JOIN metodos_pago_catalogo c ON c.codigo = pm.metodo_codigo
+                WHERE pm.negocio_id = %s
+                ORDER BY pm.orden ASC, pm.id ASC
+            """, (tercero_id,)).fetchall()
         except Exception:
-            catalogo_dict = {'efectivo': {'nombre': 'Efectivo', 'codigo': 'efectivo', 'icono': '💵'}}
-        metodos = [catalogo_dict[c] for c in config['metodos_pago'] if c in catalogo_dict]
-        metodos_params = {}
-        try:
-            metodos_params = {r['metodo_codigo']: r for r in conn.execute(
-                "SELECT metodo_codigo, cuenta_recaudo_id, cuenta_pago_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s",
-                (tercero_id,)
-            ).fetchall()}
-        except Exception:
-            metodos_params = {}
-        for m in metodos:
-            mp = metodos_params.get(m['codigo'])
-            m['tiene_cuenta_contable'] = bool(mp and mp['cuenta_recaudo_id'])
+            params_rows = []
+
+        if params_rows:
+            # Si existen métodos configurados para el negocio, respetamos la matriz de módulos (activo_ventas)
+            activos_ventas = [r for r in params_rows if r['activo'] and r['activo_ventas']]
+            # Si ninguno tiene activo_ventas=True explícito, usamos los activos generales como salvaguarda
+            lista_usar = activos_ventas if activos_ventas else [r for r in params_rows if r['activo']]
+            metodos = []
+            for r in lista_usar:
+                metodos.append({
+                    'codigo': r['metodo_codigo'],
+                    'nombre': r['nombre'],
+                    'icono': r['icono'] if r['icono'] else ('📝' if r['metodo_codigo'] == 'credito' else '💳'),
+                    'tiene_cuenta_contable': bool(r['cuenta_recaudo_id'])
+                })
+        else:
+            # Fallback legacy si no hay registros en parametros_metodos_pago_negocio
+            try:
+                catalogo = conn.execute(
+                    "SELECT nombre, codigo, icono FROM metodos_pago_catalogo WHERE activo=TRUE"
+                ).fetchall()
+                catalogo_dict = {m['codigo']: dict(m) for m in catalogo}
+            except Exception:
+                catalogo_dict = {'efectivo': {'nombre': 'Efectivo', 'codigo': 'efectivo', 'icono': '💵'}}
+            metodos = [catalogo_dict[c] for c in config.get('metodos_pago', []) if c in catalogo_dict]
+            if not metodos:
+                metodos = [{'nombre': 'Efectivo', 'codigo': 'efectivo', 'icono': '💵', 'tiene_cuenta_contable': True}]
+            for m in metodos:
+                m['tiene_cuenta_contable'] = True
         metodos_info = config.get('metodos_info', {})
         # No exponer imágenes QR completas en la respuesta pública — sólo indicar si existe
         info_publica = {}

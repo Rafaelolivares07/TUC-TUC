@@ -1225,14 +1225,14 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
             cuenta_res = None
             if row['cuenta_dinamica'] == 'metodo_pago_pago' and metodo_pago:
                 pm = conn.execute(
-                    "SELECT cuenta_pago_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
+                    "SELECT COALESCE(cuenta_pago_id, cuenta_id) AS cuenta_pago_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
                     (negocio_id, metodo_pago)
                 ).fetchone()
                 if pm and pm['cuenta_pago_id']:
                     cuenta_res = pm['cuenta_pago_id']
             elif row['cuenta_dinamica'] == 'metodo_pago_recaudo' and metodo_pago:
                 pm = conn.execute(
-                    "SELECT cuenta_recaudo_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
+                    "SELECT COALESCE(cuenta_recaudo_id, cuenta_id) AS cuenta_recaudo_id FROM parametros_metodos_pago_negocio WHERE negocio_id = %s AND metodo_codigo = %s",
                     (negocio_id, metodo_pago)
                 ).fetchone()
                 if pm and pm['cuenta_recaudo_id']:

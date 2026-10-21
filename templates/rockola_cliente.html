@@ -1515,15 +1515,38 @@ Sortable.create(listaCola, {
 let cancionActualGlobal = null;
 const guardandoCancionesSet = new Set();
 
+function escChatHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function compartirCancionActualEnChat() {
+  if (!cancionActualGlobal) { showToast('No hay ninguna canción sonando ahora en la sala', 'error'); return; }
   const titEl = document.getElementById('np-titulo-texto');
   const autEl = document.getElementById('np-autor-texto');
   const titulo = (titEl && titEl.textContent !== 'Cargando...') ? titEl.textContent.trim() : (cancionActualGlobal?.nombre || 'Canción');
   const autor = autEl ? autEl.textContent.trim() : (cancionActualGlobal?.owner || '');
-  compartirCancionEnChat(titulo, autor);
+  compartirCancionEnChat(cancionActualGlobal.id, titulo, autor, cancionActualGlobal.youtube_url || '');
 }
 
-function compartirCancionEnChat(titulo, artista) {
+async function compartirCancionEnChat(itemId, titulo, artista, youtubeUrl) {
+  if (!itemId) return;
+  if (String(itemId).startsWith('local-')) {
+    showToast('Canción local del reproductor: aún no se puede compartir', 'error');
+    return;
+  }
+  let convs = [];
+  try {
+    const r = await fetch('/api/chat/mis-conversaciones').then(r => r.json());
+    if (r && r.ok) convs = r.conversaciones || [];
+  } catch (e) { convs = []; }
+  if (!convs.length) {
+    compartirSalaLegacy(titulo, artista);
+    return;
+  }
+  mostrarPickerConversacion(convs, itemId, titulo);
+}
+
+function compartirSalaLegacy(titulo, artista) {
   const safeTitulo = (titulo || 'Canción de la Rockola').replace(/\.[^.]+$/, '');
   const safeArtista = (artista || '').replace(/^Puesta por:\s*/i, '').replace(/^Puesta por ti/i, '').trim();
   if (typeof window.tuctucCompartirContexto === 'function') {
@@ -1540,6 +1563,54 @@ function compartirCancionEnChat(titulo, artista) {
     }).catch(() => {});
   } else {
     prompt('Copia el enlace de esta sala para compartir:', window.location.href);
+  }
+}
+
+function mostrarPickerConversacion(convs, itemId, titulo) {
+  cerrarPickerConversacion();
+  const safeId = String(itemId).replace(/'/g, "\\'");
+  const ov = document.createElement('div');
+  ov.id = 'picker-conv-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  ov.innerHTML = `
+    <div style="background:#1c1917;width:100%;max-width:480px;max-height:70vh;overflow-y:auto;border-radius:16px 16px 0 0;padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-weight:700;color:#f3e7dd">Compartir canción</div>
+        <button onclick="cerrarPickerConversacion()" style="background:none;border:none;color:#a89a90;font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="font-size:12px;color:#a89a90;margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escChatHtml((titulo || 'Canción').replace(/\.[^.]+$/, ''))}</div>
+      ${convs.map(c => `
+        <button onclick="enviarCancionAChat('${c.token}', '${safeId}', this)"
+          style="display:flex;align-items:center;gap:10px;width:100%;padding:10px;border-radius:10px;border:1px solid rgba(201,100,66,.25);background:#292524;margin-bottom:8px;cursor:pointer;text-align:left">
+          <span style="width:34px;height:34px;border-radius:50%;background:#44403c;display:flex;align-items:center;justify-content:center;color:#f3e7dd;font-weight:700;flex-shrink:0">${escChatHtml((c.nombre_otro || '?').slice(0, 1).toUpperCase())}</span>
+          <span style="min-width:0">
+            <span style="display:block;color:#f3e7dd;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escChatHtml(c.nombre_otro || 'Chat')}</span>
+            <span style="display:block;color:#a89a90;font-size:11px">${c.no_leidos ? c.no_leidos + ' sin leer' : 'Toca para enviar'}</span>
+          </span>
+        </button>`).join('')}
+    </div>`;
+  ov.addEventListener('click', (e) => { if (e.target === ov) cerrarPickerConversacion(); });
+  document.body.appendChild(ov);
+}
+
+function cerrarPickerConversacion() {
+  const ov = document.getElementById('picker-conv-ov');
+  if (ov) ov.remove();
+}
+
+async function enviarCancionAChat(token, itemId, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch('/rockola/chat/compartir', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({token, item_id: itemId, sala_id: (typeof SALA !== 'undefined' ? SALA : '')})
+    }).then(r => r.json());
+    if (!r || !r.ok) throw new Error((r && r.error) || 'Error');
+    cerrarPickerConversacion();
+    showToast('Canción compartida en el chat', 'ok');
+  } catch (e) {
+    showToast('No se pudo compartir: ' + (e.message || e), 'error');
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1690,7 +1761,7 @@ function renderCola(cola) {
         <div class="q-sub">${mia ? 'Tu canción' : (c.owner ? 'Puesta por: ' + c.owner : 'Anónimo')}</div>
       </div>
       <div class="q-actions-row" style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
-        <button class="q-dl-btn" onclick='compartirCancionEnChat(${safeNombre}, "${c.owner || ""}")' title="Compartir en el Chat" style="border-color:rgba(201,100,66,0.35); color:#ff9e7d;">💬</button>
+        <button class="q-dl-btn" onclick='compartirCancionEnChat("${c.id}", ${safeNombre}, "${c.owner || ""}", "${c.youtube_url || ""}")' title="Compartir en el Chat" style="border-color:rgba(201,100,66,0.35); color:#ff9e7d;">💬</button>
         <button class="q-dl-btn" onclick='guardarEnMiCelular("${c.id}", ${safeNombre}, "${c.youtube_url || ""}", this)' title="Guardar MP3 en este celular">📥</button>
         <span class="q-pos">${playing
           ? `<span class="wave-mini"><span style="animation-delay:0s"></span><span style="animation-delay:.15s"></span><span style="animation-delay:.3s"></span></span>`

@@ -2295,6 +2295,34 @@ function pollMensajes() {
     });
 }
 
+function ytIdDeUrl(u) {
+  if (!u) return '';
+  const s = String(u);
+  const m = s.match(/[?&]v=([\w-]{6,})/) || s.match(/youtu\.be\/([\w-]{6,})/)
+    || s.match(/\/(?:embed|shorts|live)\/([\w-]{6,})/);
+  return m ? m[1] : '';
+}
+
+async function abrirMiRockola(msgId, btn) {
+  const token = (typeof tokenActivo !== 'undefined' && tokenActivo) ? tokenActivo : '';
+  if (!token) { alert('Abre la conversación para continuar'); return; }
+  const label = '🎶 Abrir en mi rockola';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Abriendo...'; }
+  try {
+    const r = await fetch('/rockola/chat/mi-rockola', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({token_conv: token, msg_id: msgId,
+        es_invitado: (typeof ES_INVITADO !== 'undefined') ? ES_INVITADO : false})
+    }).then(r => r.json());
+    if (!r || !r.ok) throw new Error((r && r.error) || 'Error');
+    window.open(r.reproductor_url || r.cliente_url, '_blank');
+  } catch (e) {
+    alert('No se pudo abrir tu rockola: ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+
 function renderMensajes(msgs, cont) {
   if (!msgs || !msgs.length) return;
   const esInicio = ultimoMsgId === 0;
@@ -2340,6 +2368,31 @@ function renderMensajes(msgs, cont) {
           </div>
           <div class="msg-hora" style="text-align:${esMio ? 'right' : 'left'};margin-top:4px">
             ${formatHora(m.fecha)}
+          </div>
+        </div>`;
+
+    // ── Canción ───────────────────────────────────────────────
+    } else if (m.tipo === 'cancion') {
+      const cp = (typeof m.card_payload === 'string') ? JSON.parse(m.card_payload || '{}') : (m.card_payload || {});
+      const ytId = cp.youtube_id || ytIdDeUrl(cp.youtube_url);
+      const playerCancion = m.url_archivo
+        ? `<audio controls src="${m.url_archivo}" preload="metadata" style="width:100%;height:32px"></audio>`
+        : (ytId
+          ? `<iframe src="https://www.youtube-nocookie.com/embed/${ytId}" style="width:100%;height:160px;border:0;border-radius:8px" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`
+          : (cp.youtube_url ? `<a href="${cp.youtube_url}" target="_blank" style="color:var(--accent)">Ver en YouTube</a>` : ''));
+      div.innerHTML = `
+        <div class="bubble-cancion ${lado}" style="background:linear-gradient(135deg,#1f1b16,#2d1810);border:1px solid rgba(201,100,66,.25);border-radius:12px;padding:10px;max-width:260px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <div style="width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 35% 25%,#e8856a,#8a3b1f 75%);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🎶</div>
+            <div style="min-width:0">
+              <div style="font-size:13px;font-weight:600;color:#f3e7dd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">${escHtml(m.mensaje || cp.nombre || 'Canción')}</div>
+              <div style="font-size:11px;color:#a89a90">Canción · TUC TUC</div>
+            </div>
+          </div>
+          ${playerCancion}
+          <button onclick="abrirMiRockola(${m.id}, this)" style="width:100%;margin-top:8px;padding:7px;border-radius:8px;border:1px solid rgba(201,100,66,.5);background:transparent;color:#ff9e7d;font-size:12px;font-weight:600;cursor:pointer">🎶 Abrir en mi rockola</button>
+          <div class="msg-hora" style="text-align:${esMio ? 'right' : 'left'};margin-top:4px">
+            ${formatHora(m.fecha)}<span id="est-${m.id}">${chulito(m.estado, esMio)}</span>
           </div>
         </div>`;
 

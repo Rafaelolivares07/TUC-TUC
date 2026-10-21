@@ -8,6 +8,7 @@ un fallo de Rockola no tumbe el arranque general de Tuc Tuc.
 
 import json
 import os
+import re
 import threading
 import uuid
 
@@ -788,6 +789,233 @@ def compartir_biblioteca_manifest(share_id):
 def compartir_biblioteca_archivo(share_id, archivo_id):
     return send_from_directory(_share_dir(share_id), archivo_id)
 
+
+# Mensajeria musical: compartir cancion al chat
+
+
+_YT_ID_PATTERNS = (
+    re.compile(r'[?&]v=([\w-]{6,})'),
+    re.compile(r'youtu\.be/([\w-]{6,})'),
+    re.compile(r'/embed/([\w-]{6,})'),
+    re.compile(r'/shorts/([\w-]{6,})'),
+    re.compile(r'/live/([\w-]{6,})'),
+)
+
+
+def _extraer_youtube_id(url):
+    url = (url or '').strip()
+    for rx in _YT_ID_PATTERNS:
+        m = rx.search(url)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _sala_personal_id(tercero_id):
+    return 'u%d' % int(tercero_id)
+
+
+def _payload_cancion_chat(origen, nombre, youtube_url=None, sala_origen=None, archivo_id=None):
+    """Valida y construye (url_archivo, card_payload) para mensaje tipo cancion."""
+    nombre = (nombre or '').strip() or 'Cancion'
+    if origen == 'youtube':
+        yt = (youtube_url or '').strip()
+        if not yt or ('youtube.com' not in yt and 'youtu.be' not in yt):
+            raise ValueError('youtube_url invalida')
+        return '', {'origen': 'youtube', 'nombre': nombre, 'youtube_url': yt,
+                    'youtube_id': _extraer_youtube_id(yt)}
+    if origen == 'archivo':
+        if not sala_origen or not archivo_id:
+            raise ValueError('Faltan sala_origen/archivo_id')
+        aid = (archivo_id or '').strip().replace('/', '').replace(chr(92), '')
+        if not aid or aid != (archivo_id or '').strip():
+            raise ValueError('archivo_id invalido')
+        ruta = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'rockola_tmp',
+                            sala_origen, aid)
+        if not os.path.isfile(ruta):
+            raise ValueError('El archivo ya no esta en el servidor')
+        return ('/rockola/%s/archivo/%s' % (sala_origen, aid),
+                {'origen': 'archivo', 'nombre': nombre, 'sala_origen': sala_origen,
+                 'archivo_id': aid})
+    raise ValueError('origen debe ser youtube|archivo')
+
+
+def _conv_por_token(conn, token):
+    return conn.execute(
+        'SELECT * FROM conversaciones WHERE token = %s AND activa = TRUE', (token,)).fetchone()
+
+
+@bp.route('/chat/compartir', methods=['POST'])
+def chat_compartir_cancion():
+    data = request.get_json() or {}
+    token = (data.get('token') or '').strip()
+    sala_id = (data.get('sala_id') or '').strip()
+    item_id = (data.get('item_id') or '').strip()
+    if not token or not sala_id or not item_id:
+        return jsonify(ok=False, error='Faltan token/sala_id/item_id'), 400
+    if item_id.startswith('local-'):
+        return jsonify(ok=False, error='Cancion local del reproductor: aun no se puede compartir'), 400
+    conn = _connect()
+    try:
+        conv = _conv_por_token(conn, token)
+        if not conv:
+            return jsonify(ok=False, error='Conversacion no valida'), 404
+        remitente = session.get('usuario_id')
+        try:
+            remitente = int(remitente) if remitente else None
+        except (TypeError, ValueError):
+            remitente = None
+        if remitente == conv['creador_id']:
+            destinatario = conv['invitado_id']
+        elif remitente == conv['invitado_id']:
+            destinatario = conv['creador_id']
+        else:
+            return jsonify(ok=False, error='No participas en esta conversacion'), 403
+        item = conn.execute(
+            'SELECT id, nombre, youtube_url FROM rockola_cola WHERE sala_id = %s AND id = %s',
+            (sala_id, item_id)).fetchone()
+        if not item:
+            item = conn.execute(
+                'SELECT archivo_id AS id, nombre, youtube_url FROM rockola_biblioteca '
+                'WHERE sala_id = %s AND archivo_id = %s',
+                (sala_id, item_id)).fetchone()
+        if not item:
+            return jsonify(ok=False, error='Cancion no encontrada en la sala'), 404
+        yt = (item.get('youtube_url') or '').strip()
+        try:
+            if yt:
+                url_archivo, payload = _payload_cancion_chat('youtube', item['nombre'], youtube_url=yt)
+            else:
+                url_archivo, payload = _payload_cancion_chat(
+                    'archivo', item['nombre'], sala_origen=sala_id, archivo_id=item['id'])
+        except ValueError as e:
+            return jsonify(ok=False, error=str(e)), 400
+        nuevo = conn.execute('''
+            INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, url_archivo,
+                                  card_payload, conversacion_id, estado, fecha)
+            VALUES (%s, %s, %s, 'cancion', %s, %s, %s, 'pendiente', CURRENT_TIMESTAMP)
+            RETURNING id
+        ''', (remitente, destinatario, payload['nombre'], url_archivo,
+              json.dumps(payload), conv['id'])).fetchone()
+        conn.commit()
+        return jsonify(ok=True, id=nuevo['id'])
+    finally:
+        conn.close()
+
+
+@bp.route('/chat/cancion/<int:msg_id>')
+def chat_cancion(msg_id):
+    conn = _connect()
+    try:
+        m = conn.execute(
+            "SELECT id, mensaje, url_archivo, card_payload FROM mensajes WHERE id = %s AND tipo = 'cancion'",
+            (msg_id,)).fetchone()
+        if not m:
+            return jsonify(ok=False, error='Cancion no encontrada'), 404
+        cp = m.get('card_payload') or {}
+        if isinstance(cp, str):
+            try:
+                cp = json.loads(cp)
+            except Exception:
+                cp = {}
+        return jsonify(ok=True, cancion={
+            'id': m['id'],
+            'nombre': m.get('mensaje') or cp.get('nombre') or 'Cancion',
+            'origen': cp.get('origen'),
+            'url_archivo': m.get('url_archivo') or '',
+            'youtube_url': cp.get('youtube_url') or '',
+            'youtube_id': cp.get('youtube_id') or '',
+            'sala_origen': cp.get('sala_origen') or '',
+            'archivo_id': cp.get('archivo_id') or '',
+        })
+    finally:
+        conn.close()
+
+
+def _encolar_cancion_chat(conn, sala_id, tercero_id, cp):
+    origen = (cp or {}).get('origen')
+    nombre = (cp or {}).get('nombre') or 'Cancion'
+    if origen == 'youtube':
+        yt = ((cp or {}).get('youtube_url') or '').strip()
+        if not yt:
+            return None
+        dup = conn.execute(
+            'SELECT id FROM rockola_cola WHERE sala_id = %s AND reproducida = FALSE AND youtube_url = %s LIMIT 1',
+            (sala_id, yt)).fetchone()
+        if dup:
+            return dup['id']
+        item_id = 'yt-' + uuid.uuid4().hex[:12]
+        _agregar_a_cola(conn, sala_id, item_id, nombre, tercero_id, youtube_url=yt)
+        _recordar_cancion(conn, sala_id, item_id, nombre, tercero_id, 'youtube-link', youtube_url=yt)
+        return item_id
+    if origen == 'archivo':
+        so, aid = ((cp or {}).get('sala_origen') or ''), ((cp or {}).get('archivo_id') or '')
+        if not so or not aid or '/' in aid or chr(92) in aid:
+            return None
+        src = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'rockola_tmp', so, aid)
+        if not os.path.isfile(src):
+            return None
+        dup = conn.execute(
+            'SELECT id FROM rockola_cola WHERE sala_id = %s AND reproducida = FALSE AND nombre = %s LIMIT 1',
+            (sala_id, nombre)).fetchone()
+        if dup:
+            return dup['id']
+        import shutil
+        ext = os.path.splitext(aid)[1].lower()[:8]
+        item_id = uuid.uuid4().hex + ext
+        dest_dir = _upload_dir(sala_id)
+        shutil.copyfile(src, os.path.join(dest_dir, item_id))
+        _limpiar_archivos_antiguos(dest_dir)
+        _agregar_a_cola(conn, sala_id, item_id, nombre, tercero_id)
+        _recordar_cancion(conn, sala_id, item_id, nombre, tercero_id, 'archivo')
+        return item_id
+    return None
+
+@bp.route('/chat/mi-rockola', methods=['POST'])
+def chat_mi_rockola():
+    data = request.get_json() or {}
+    token = (data.get('token_conv') or '').strip()
+    msg_id = data.get('msg_id')
+    es_invitado = bool(data.get('es_invitado'))
+    if not token:
+        return jsonify(ok=False, error='Falta token_conv'), 400
+    conn = _connect()
+    try:
+        conv = _conv_por_token(conn, token)
+        if not conv:
+            return jsonify(ok=False, error='Conversacion no valida'), 404
+        viewer = session.get('usuario_id')
+        try:
+            viewer = int(viewer) if viewer else None
+        except (TypeError, ValueError):
+            viewer = None
+        if viewer in (conv['creador_id'], conv['invitado_id']):
+            tercero_id = viewer
+        elif es_invitado:
+            tercero_id = conv['invitado_id']
+        else:
+            tercero_id = conv['creador_id']
+        sala_id = _sala_personal_id(tercero_id)
+        _get_sala(conn, sala_id)
+        encolado = None
+        if msg_id:
+            m = conn.execute(
+                "SELECT card_payload FROM mensajes WHERE id = %s AND tipo = 'cancion'",
+                (int(msg_id),)).fetchone()
+            if m:
+                cp = m.get('card_payload') or {}
+                if isinstance(cp, str):
+                    try:
+                        cp = json.loads(cp)
+                    except Exception:
+                        cp = {}
+                encolado = _encolar_cancion_chat(conn, sala_id, tercero_id, cp)
+                conn.commit()
+        return jsonify(ok=True, sala_id=sala_id, encolado=encolado,
+                       reproductor_url='/rockola/%s/reproductor' % sala_id,
+                       cliente_url='/rockola/%s/cliente' % sala_id)
+    finally:
+        conn.close()
 
 @bp.route('/salas')
 def salas():

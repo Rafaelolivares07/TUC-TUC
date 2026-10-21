@@ -496,6 +496,33 @@ function pollMensajes() {
 }
 
 // ── Render mensajes (unificado) ───────────────────────────────────
+function ytIdDeUrl(u) {
+  if (!u) return '';
+  const s = String(u);
+  const m = s.match(/[?&]v=([\w-]{6,})/) || s.match(/youtu\.be\/([\w-]{6,})/)
+    || s.match(/\/(?:embed|shorts|live)\/([\w-]{6,})/);
+  return m ? m[1] : '';
+}
+
+async function abrirMiRockola(msgId, btn) {
+  const token = (typeof tokenActivo !== 'undefined' && tokenActivo) ? tokenActivo : '';
+  if (!token) { alert('Abre la conversación para continuar'); return; }
+  const label = '🎶 Abrir en mi rockola';
+  if (btn) { btn.disabled = true; btn.textContent = '\u23F3 Abriendo...'; }
+  try {
+    const r = await fetch('/rockola/chat/mi-rockola', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({token_conv: token, msg_id: msgId,
+        es_invitado: (typeof ES_INVITADO !== 'undefined') ? ES_INVITADO : false})
+    }).then(r => r.json());
+    if (!r || !r.ok) throw new Error((r && r.error) || 'Error');
+    window.open(r.reproductor_url || r.cliente_url, '_blank');
+  } catch (e) {
+    alert('No se pudo abrir tu rockola: ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
 function renderMensajes(msgs, cont) {
   if (!msgs || !msgs.length) return;
   const esInicio = ultimoMsgId === 0;
@@ -534,6 +561,27 @@ function renderMensajes(msgs, cont) {
       div.innerHTML = `
         <div class="px-3 py-2.5 rounded-2xl ${esMio ? 'bg-blue-600 rounded-br-sm' : 'bg-gray-800 rounded-bl-sm'} max-w-[75%]">
           <audio controls src="${m.url_archivo}" class="max-w-[210px] h-8" preload="metadata"></audio>
+          <div class="text-xs mt-1 ${esMio ? 'text-right' : ''}"><span class="opacity-50">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
+        </div>`;
+    } else if (m.tipo === 'cancion') {
+      const cp = (typeof m.card_payload === 'string') ? JSON.parse(m.card_payload || '{}') : (m.card_payload || {});
+      const ytId = cp.youtube_id || ytIdDeUrl(cp.youtube_url);
+      const playerCancion = m.url_archivo
+        ? `<audio controls src="${m.url_archivo}" class="w-full h-8" preload="metadata"></audio>`
+        : (ytId
+          ? `<iframe src="https://www.youtube-nocookie.com/embed/${ytId}" class="w-full rounded-lg" style="height:160px;border:0" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`
+          : (cp.youtube_url ? `<a href="${cp.youtube_url}" target="_blank" class="text-orange-300 underline">Ver en YouTube</a>` : ''));
+      div.innerHTML = `
+        <div class="px-3 py-2.5 rounded-2xl ${esMio ? 'rounded-br-sm' : 'rounded-bl-sm'} max-w-[75%] w-[260px]" style="background:linear-gradient(135deg,#1f1b16,#2d1810);border:1px solid rgba(201,100,66,.25)">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-base flex-shrink-0" style="background:radial-gradient(circle at 35% 25%,#e8856a,#8a3b1f 75%)">🎶</div>
+            <div class="min-w-0">
+              <div class="text-sm font-semibold truncate" style="color:#f3e7dd">${escHtml(m.mensaje || cp.nombre || 'Canci\u00F3n')}</div>
+              <div class="text-xs" style="color:#a89a90">Canci\u00F3n \u00B7 TUC TUC</div>
+            </div>
+          </div>
+          ${playerCancion}
+          <button onclick="abrirMiRockola(${m.id}, this)" class="w-full mt-2 py-1.5 rounded-lg text-xs font-semibold" style="border:1px solid rgba(201,100,66,.5);background:transparent;color:#ff9e7d">🎶 Abrir en mi rockola</button>
           <div class="text-xs mt-1 ${esMio ? 'text-right' : ''}"><span class="opacity-50">${formatHora(m.fecha)}</span><span id="est-${m.id}">${chulito(m.estado, esMio)}</span></div>
         </div>`;
     } else if (m.tipo === 'imagen' && m.url_archivo) {
@@ -827,7 +875,7 @@ async function cargarConversaciones() {
     el.innerHTML = d.conversaciones.map(c => {
       const nombre = c.nombre_otro || '...';
       const noLeidos = c.no_leidos > 0 ? `<span class="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 ml-1">${c.no_leidos}</span>` : '';
-      const ultimoMsg = c.ultimo_tipo === 'audio' ? '🎵 Audio' : (c.ultimo_tipo === 'imagen' ? '📷 Imagen' : (c.ultimo_tipo === 'card' ? '🛒 Producto' : (c.ultimo_mensaje || '')));
+      const ultimoMsg = c.ultimo_tipo === 'cancion' ? '🎶 Canci\u00F3n' : (c.ultimo_tipo === 'audio' ? '🎵 Audio' : (c.ultimo_tipo === 'imagen' ? '📷 Imagen' : (c.ultimo_tipo === 'card' ? '🛒 Producto' : (c.ultimo_mensaje || ''))));
       const origen = c.origen ? `<span class="text-gray-600 text-xs"> · ${c.origen}</span>` : '';
       const esMerlin = c.tipo_otro === 'merlin';
       const avatarEl = esMerlin

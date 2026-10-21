@@ -1512,11 +1512,74 @@ _GLOBO_CHAT_SNIPPET = """
     _iframeCargado = true;
   }
 
+  // ── Audio de notificación potente ──────────────────────────
+  let _audioGloboCtx = null;
+  function _globoCtx() {
+    if (!_audioGloboCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) _audioGloboCtx = new AC();
+    }
+    return _audioGloboCtx;
+  }
+
+  function _despertarAudio() {
+    const c = _globoCtx();
+    if (c && c.state === 'suspended') {
+      c.resume().catch(() => {});
+    }
+  }
+  ['click', 'touchstart', 'keydown'].forEach(ev => {
+    window.addEventListener(ev, _despertarAudio, { once: true, passive: true });
+  });
+
+  function _tocarChimeFuerte() {
+    try {
+      const c = _globoCtx();
+      if (!c) return;
+      if (c.state === 'suspended') {
+        c.resume().then(() => _emitirChime(c)).catch(() => {});
+      } else {
+        _emitirChime(c);
+      }
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate([200, 100, 200]); } catch (e) {}
+      }
+    } catch(e) {}
+  }
+
+  function _emitirChime(ctx) {
+    const t0 = ctx.currentTime;
+    // Chime doble brillante y de alto volumen (880Hz -> 1320Hz con armónicos)
+    const notas = [
+      { f: 880, start: 0, dur: 0.16, vol: 0.85, type: 'triangle' },
+      { f: 1760, start: 0.01, dur: 0.14, vol: 0.40, type: 'sine' },
+      { f: 1320, start: 0.13, dur: 0.35, vol: 0.90, type: 'triangle' },
+      { f: 2640, start: 0.14, dur: 0.30, vol: 0.45, type: 'sine' }
+    ];
+    notas.forEach(n => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = n.type;
+      osc.frequency.setValueAtTime(n.f, t0 + n.start);
+      gain.gain.setValueAtTime(0, t0 + n.start);
+      gain.gain.linearRampToValueAtTime(n.vol, t0 + n.start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + n.start + n.dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0 + n.start);
+      osc.stop(t0 + n.start + n.dur + 0.04);
+    });
+  }
+
   window.tuctucToggleChatDrawer = function(forzar) {
     const dr = document.getElementById('tuctuc-chat-drawer');
     const toast = document.getElementById('tuctuc-chat-toast');
     if (toast) toast.style.display = 'none';
     if (!dr) return;
+    _despertarAudio();
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
     _ajustarDrawerViewport();
     _detectarContextoRockola();
     const abrir = typeof forzar === 'boolean' ? forzar : !dr.classList.contains('open');
@@ -1594,14 +1657,30 @@ _GLOBO_CHAT_SNIPPET = """
         _ultimoMsgToastId = d.ultimo.id;
         sessionStorage.setItem('tuctuc_last_toast_msg', String(_ultimoMsgToastId));
         _ultimoTokenToast = d.ultimo.token || '';
+
+        // Tocar sonido fuerte y vibrar
+        _tocarChimeFuerte();
+
+        const txt = d.ultimo.tipo === 'audio' ? '🎵 Audio recibido'
+                  : d.ultimo.tipo === 'imagen' ? '🖼 Imagen recibida'
+                  : d.ultimo.tipo === 'card' ? '📌 ' + (d.ultimo.mensaje || 'Enlace / Reporte')
+                  : (d.ultimo.mensaje || 'Nuevo mensaje');
+
+        // Notificación nativa del sistema operativo si la pestaña está en segundo plano o minimizada
+        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            new Notification('💬 ' + (d.ultimo.remitente || 'Mensaje de TUC TUC'), {
+              body: txt,
+              icon: '/static/icons/icon-192.png',
+              tag: 'tuctuc-chat-' + d.ultimo.id
+            });
+          } catch(e) {}
+        }
+
         const dr = document.getElementById('tuctuc-chat-drawer');
         if (!dr || !dr.classList.contains('open')) {
           const toast = document.getElementById('tuctuc-chat-toast');
           if (toast) {
-            const txt = d.ultimo.tipo === 'audio' ? '🎵 Audio recibido'
-                      : d.ultimo.tipo === 'imagen' ? '🖼 Imagen recibida'
-                      : d.ultimo.tipo === 'card' ? '📌 ' + (d.ultimo.mensaje || 'Enlace / Reporte')
-                      : (d.ultimo.mensaje || 'Nuevo mensaje');
             toast.innerHTML = '<div style="font-weight:700;color:#e8856a;margin-bottom:2px">💬 '
               + String(d.ultimo.remitente || 'Mensaje nuevo').replace(/</g,'&lt;')
               + '</div><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'

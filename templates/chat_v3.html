@@ -1407,6 +1407,14 @@ cargarConversaciones();
 setInterval(cargarConversaciones, 15000);
 cargarMiPerfil();
 
+function _solicitarPermisoNotif() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+}
+window.addEventListener('click', _solicitarPermisoNotif, { once: true });
+window.addEventListener('touchstart', _solicitarPermisoNotif, { once: true });
+
 document.getElementById('modal-foto').addEventListener('touchstart', e => { _swipeX = e.touches[0].clientX; }, { passive: true });
 document.getElementById('modal-foto').addEventListener('touchend', e => {
   if (_swipeX === null) return;
@@ -3529,19 +3537,33 @@ async function compartirConversacion() {
   } catch {}
 }
 
-// ── 6F: Web Audio — tonos de notificación ────────────────────────────────
+// ── 6F: Web Audio — tonos de notificación potentes ───────────────────────
 
 let _audioCtx = null;
 let _tonoSeleccionado = parseInt(localStorage.getItem('chat_tono') || '0');
 let _tonoPersonalizado = null;  // AudioBuffer
 
 function _ctx() {
-  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!_audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) _audioCtx = new AC();
+  }
   return _audioCtx;
 }
 
-function _nota(freq, inicio, dur, vol = 0.18, tipo = 'sine') {
+function _despertarAudioChat() {
+  const c = _ctx();
+  if (c && c.state === 'suspended') {
+    c.resume().catch(() => {});
+  }
+}
+['click', 'touchstart', 'keydown'].forEach(ev => {
+  window.addEventListener(ev, _despertarAudioChat, { once: true, passive: true });
+});
+
+function _nota(freq, inicio, dur, vol = 0.85, tipo = 'triangle') {
   const ctx = _ctx();
+  if (!ctx) return;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.connect(gain);
@@ -3549,29 +3571,55 @@ function _nota(freq, inicio, dur, vol = 0.18, tipo = 'sine') {
   osc.type = tipo;
   osc.frequency.setValueAtTime(freq, ctx.currentTime + inicio);
   gain.gain.setValueAtTime(0, ctx.currentTime + inicio);
-  gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + inicio + 0.01);
+  gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + inicio + 0.012);
   gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + inicio + dur);
   osc.start(ctx.currentTime + inicio);
   osc.stop(ctx.currentTime + inicio + dur + 0.05);
 }
 
 const _TONOS = [
-  () => { _nota(880, 0, 0.12); _nota(1320, 0.13, 0.12); },                     // 0: ding suave
-  () => { _nota(660, 0, 0.08); _nota(880, 0.09, 0.08); _nota(1100, 0.18, 0.1); }, // 1: triple ascendente
-  () => { _nota(440, 0, 0.15, 0.14, 'triangle'); },                             // 2: grave suave
-  () => { _nota(1047, 0, 0.06); _nota(1047, 0.08, 0.06); },                     // 3: doble corto
-  () => { _nota(784, 0, 0.2, 0.12, 'sine'); _nota(523, 0.22, 0.15, 0.10); },   // 4: descend
+  // 0: Campanilla brillante (fuerte, dos tonos con armónicos)
+  () => {
+    _nota(880, 0, 0.16, 0.85, 'triangle');
+    _nota(1760, 0.01, 0.14, 0.40, 'sine');
+    _nota(1320, 0.12, 0.35, 0.90, 'triangle');
+    _nota(2640, 0.13, 0.30, 0.45, 'sine');
+  },
+  // 1: Triple ascendente enérgico
+  () => {
+    _nota(660, 0, 0.09, 0.80, 'triangle');
+    _nota(880, 0.09, 0.09, 0.85, 'triangle');
+    _nota(1320, 0.18, 0.28, 0.90, 'triangle');
+  },
+  // 2: Grave resonante
+  () => {
+    _nota(440, 0, 0.18, 0.85, 'triangle');
+    _nota(659.25, 0.10, 0.25, 0.90, 'triangle');
+  },
+  // 3: Doble pop rápido
+  () => {
+    _nota(1047, 0, 0.07, 0.85, 'triangle');
+    _nota(1568, 0.08, 0.18, 0.88, 'triangle');
+  },
+  // 4: Melodía descendente suave
+  () => {
+    _nota(987.77, 0, 0.15, 0.85, 'triangle');
+    _nota(659.25, 0.14, 0.32, 0.90, 'triangle');
+  },
 ];
 
 function tocarTono(idx) {
   const i = (idx !== undefined ? idx : _tonoSeleccionado);
   try {
+    const ctx = _ctx();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     if (i === 5 && _tonoPersonalizado) {
-      const ctx = _ctx();
       const src = ctx.createBufferSource();
       src.buffer = _tonoPersonalizado;
       const gain = ctx.createGain();
-      gain.gain.value = 0.5;
+      gain.gain.value = 0.9;
       src.connect(gain);
       gain.connect(ctx.destination);
       src.start();
@@ -3583,6 +3631,18 @@ function tocarTono(idx) {
 
 function sonarNotificacion() {
   tocarTono();
+  if ('vibrate' in navigator) {
+    try { navigator.vibrate([200, 100, 200]); } catch (e) {}
+  }
+  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification('💬 Mensaje en TUC TUC', {
+        body: 'Tienes mensajes nuevos en la conversación',
+        icon: '/static/icons/icon-192.png',
+        tag: 'tuctuc-chat-msg'
+      });
+    } catch(e) {}
+  }
 }
 
 function seleccionarTono(idx) {

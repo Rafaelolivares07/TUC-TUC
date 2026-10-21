@@ -898,6 +898,21 @@ def chat_compartir_cancion():
         ''', (remitente, destinatario, payload['nombre'], url_archivo,
               json.dumps(payload), conv['id'])).fetchone()
         conn.commit()
+
+        try:
+            from .crm import _despachar_push_asincrono
+            row_rem = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (remitente,)).fetchone()
+            nom_rem = row_rem['nombre'] if row_rem and row_rem['nombre'] else 'Alguien'
+            _despachar_push_asincrono(
+                destinatario,
+                f"🎵 {nom_rem} en TUC TUC",
+                f"Te ha compartido: {payload['nombre']}",
+                token=conv['token'],
+                url=f"/chat2?open_token={conv['token']}"
+            )
+        except Exception:
+            pass
+
         return jsonify(ok=True, id=nuevo['id'])
     finally:
         conn.close()

@@ -1007,13 +1007,17 @@ def _despachar_buffer_agotados_request(response):
     return response
 
 
-def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
+def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None, forzar=False, negocio_id=None,
+                                            solo_dev=False, chat_dev_destino=None,
+                                            producto_id_simular=None, datos_form=None):
     """
     Motor proactivo de alertas para cotizaciones promocionales condicionadas por día de despacho.
     Revisa insumos en estado 'agotado' que tengan cotizaciones activas con promo_dia_semana.
     Si hoy está dentro del rango de anticipación (o es el día del despacho), y no ha superado
     el número máximo de avisos por día configurado, envía la alerta especial de oportunidad a Telegram.
+    Si solo_dev=True, envía EXCLUSIVAMENTE al chat del desarrollador sin notificar sedes ni consumir cuota.
     """
+    negocio_id_param = negocio_id or negocio_id_param
     from datetime import datetime, date
     import requests as req
     import os
@@ -1027,6 +1031,50 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
         'jueves': 3, 'viernes': 4, 'sabado': 5, 'sábado': 5, 'domingo': 6
     }
     NOMBRES_DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
+    # Sincronización proactiva (solo en modo producción)
+    if not solo_dev:
+        try:
+            sync_sql = """
+                SELECT DISTINCT p.id as producto_id, p.negocio_id, COALESCE(s.bodega, 1) as bodega, 
+                       COALESCE(s.stock, 0) as stock_actual, p.nombre as producto_nombre
+                FROM productos p
+                JOIN cotizaciones_compras c ON c.item_id = p.id
+                LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = p.negocio_id
+                WHERE c.promo_dia_semana IS NOT NULL 
+                  AND p.disponible = TRUE
+            """
+            sync_params = []
+            if negocio_id_param:
+                sync_sql += " AND p.negocio_id = %s"
+                sync_params.append(negocio_id_param)
+            
+            candidatos_sync = conn.execute(sync_sql, sync_params).fetchall()
+            for cand in candidatos_sync:
+                st_min, _, _, _ = _obtener_config_stock_minimo(conn, cand['negocio_id'], cand['producto_id'])
+                if float(cand['stock_actual']) <= st_min:
+                    existe_al = conn.execute("""
+                        SELECT id, estado FROM inventario_alertas_agotados
+                        WHERE negocio_id = %s AND bodega = %s AND producto_id = %s
+                        ORDER BY id DESC LIMIT 1
+                    """, (cand['negocio_id'], cand['bodega'], cand['producto_id'])).fetchone()
+                    
+                    if not existe_al:
+                        conn.execute("""
+                            INSERT INTO inventario_alertas_agotados
+                                (negocio_id, bodega, producto_id, estado, primer_aviso_at, ultimo_aviso_at,
+                                 veces_avisado, stock_alerta, stock_minimo, cobertura_dias)
+                            VALUES (%s, %s, %s, 'agotado', NOW(), NOW(), 1, %s, %s, 0.0)
+                        """, (cand['negocio_id'], cand['bodega'], cand['producto_id'], cand['stock_actual'], round(st_min, 2)))
+                    elif existe_al['estado'] != 'agotado':
+                        conn.execute("""
+                            UPDATE inventario_alertas_agotados
+                            SET estado = 'agotado', ultimo_aviso_at = NOW(), stock_alerta = %s
+                            WHERE id = %s
+                        """, (cand['stock_actual'], existe_al['id']))
+            conn.commit()
+        except Exception as _sync_err:
+            print(f"[sincronizar_agotados_promo] Error: {_sync_err}")
 
     sql = """
         SELECT a.id AS alerta_id, a.negocio_id, a.bodega, a.producto_id, p.nombre AS producto_nombre,
@@ -1045,7 +1093,33 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
         
     sql += " ORDER BY a.negocio_id, a.bodega, a.id ASC"
     
-    alertas = conn.execute(sql, params).fetchall()
+    alertas = [dict(a) for a in conn.execute(sql, params).fetchall()]
+
+    # Si estamos en prueba de desarrollo para un producto específico y no está en la lista de agotados, simularlo
+    if solo_dev and producto_id_simular:
+        ya_esta = any(int(a['producto_id']) == int(producto_id_simular) for a in alertas)
+        if not ya_esta:
+            p_row = conn.execute("""
+                SELECT p.id as producto_id, p.nombre as producto_nombre, p.negocio_id,
+                       COALESCE(s.stock, 0) as stock_actual,
+                       COALESCE(p.stock_minimo, 10.0) as stock_minimo
+                FROM productos p
+                LEFT JOIN saldos_inventario s ON s.producto_id = p.id AND s.negocio_id = p.negocio_id
+                WHERE p.id = %s
+            """, (producto_id_simular,)).fetchone()
+            if p_row:
+                alertas.append({
+                    'alerta_id': -999,
+                    'negocio_id': p_row['negocio_id'],
+                    'bodega': 1,
+                    'producto_id': p_row['producto_id'],
+                    'producto_nombre': p_row['producto_nombre'],
+                    'stock_actual': float(p_row['stock_actual']),
+                    'stock_minimo': float(p_row['stock_minimo']),
+                    'avisos_promo_hoy': 0,
+                    'fecha_ultimo_aviso_promo': None
+                })
+
     if not alertas:
         return {'ok': True, 'enviados': 0, 'motivo': 'No hay insumos agotados para evaluar'}
 
@@ -1058,7 +1132,7 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
             continue
 
         # Obtener todas las cotizaciones activas de este producto ordenadas por empaque y precio unitario
-        quotes = conn.execute("""
+        quotes_rows = conn.execute("""
             SELECT c.id, c.tercero_id, t.nombre AS proveedor_nombre, t.telefono AS proveedor_telefono,
                    c.precio, COALESCE(c.unidades_item, 1) AS unidades_item,
                    (c.precio / COALESCE(c.unidades_item, 1)) AS precio_unitario,
@@ -1075,6 +1149,25 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
                 c.fecha_cotizacion DESC NULLS LAST,
                 c.id DESC
         """, (r['producto_id'], r['negocio_id'])).fetchall()
+
+        quotes = [dict(q) for q in quotes_rows]
+
+        # Si se envían datos temporales del formulario para simular en modo desarrollo
+        if solo_dev and datos_form and int(r['producto_id']) == int(producto_id_simular or -1) and datos_form.get('promo_dia_semana'):
+            form_q = {
+                'id': -99,
+                'tercero_id': 0,
+                'proveedor_nombre': datos_form.get('proveedor_nombre') or 'Proveedor Demo',
+                'proveedor_telefono': '',
+                'precio': float(datos_form.get('precio') or 0),
+                'unidades_item': float(datos_form.get('unidades_item') or 1),
+                'precio_unitario': float(datos_form.get('precio') or 0) / max(1.0, float(datos_form.get('unidades_item') or 1)),
+                'descripcion_presentacion': datos_form.get('descripcion_presentacion') or 'Unidad',
+                'promo_dia_semana': datos_form.get('promo_dia_semana'),
+                'promo_dias_anticipacion': int(datos_form.get('promo_dias_anticipacion') or 1),
+                'promo_avisos_por_dia': int(datos_form.get('promo_avisos_por_dia') or 1)
+            }
+            quotes.insert(0, form_q)
 
         if not quotes:
             continue
@@ -1094,25 +1187,23 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
                 dias_faltantes = (dia_promo_idx - dia_hoy_idx) % 7
                 anticipacion = int(q['promo_dias_anticipacion'] or 1)
                 
-                # Ventana de días de aviso
-                if dias_faltantes <= anticipacion:
-                    puesto = idx + 1 # 1 = 1er lugar, 2 = 2do lugar
-                    if puesto <= 2:
-                        promo_candidata = q
-                        promo_candidata_dia_idx = dia_promo_idx
-                        promo_candidata_dias_faltantes = dias_faltantes
-                        puesto_promo = puesto
+                # Ventana de días de aviso (en modo prueba dev simulado se acepta para permitir visualizar la plantilla)
+                if dias_faltantes <= anticipacion or (solo_dev and producto_id_simular and int(r['producto_id']) == int(producto_id_simular)):
+                    puesto = idx + 1
+                    promo_candidata = q
+                    promo_candidata_dia_idx = dia_promo_idx
+                    promo_candidata_dias_faltantes = dias_faltantes
+                    puesto_promo = puesto
                     break
 
-        # Regla: Si está en 3er puesto o superior, DESCARTAR
-        if not promo_candidata or not puesto_promo or puesto_promo > 2:
+        if not promo_candidata or not puesto_promo:
             continue
 
-        # Verificar si superó los avisos permitidos para hoy
+        # En producción verificar si superó los avisos permitidos para hoy (ignorado si forzar=True o solo_dev=True)
         f_ult = r['fecha_ultimo_aviso_promo']
         avisos_hoy = 0 if (not f_ult or str(f_ult)[:10] != str(hoy_date)) else int(r['avisos_promo_hoy'] or 0)
         max_avisos = int(promo_candidata['promo_avisos_por_dia'] or 1)
-        if avisos_hoy >= max_avisos:
+        if not forzar and not solo_dev and avisos_hoy >= max_avisos:
             continue
 
         vistos_por_alerta.add(al_id)
@@ -1137,7 +1228,7 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
             'presentacion': promo_candidata['descripcion_presentacion'] or 'Unidad',
             'unidades_item': float(promo_candidata['unidades_item'] or 1.0)
         }
-        if puesto_promo == 2:
+        if puesto_promo >= 2:
             mejor_reg = quotes[0]
             item_entry['mejor_reg_proveedor'] = mejor_reg['proveedor_nombre']
             item_entry['mejor_reg_precio_unit'] = float(mejor_reg['precio_unitario'] or 0)
@@ -1156,32 +1247,50 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
         pass
     token = token or os.environ.get('TELEGRAM_BOT_TOKEN', '')
 
+    ultimo_msg_enviado = ""
+    chat_notificado_dev = None
+
     for (neg_id, bod_id), items in agrupados.items():
         if not items:
             continue
 
         chats = set()
-        cu_chat = conn.execute("SELECT telegram_chat_id, nombre, codigo FROM centros_utilidad WHERE id = %s", (bod_id,)).fetchone()
-        if cu_chat and cu_chat['telegram_chat_id']:
-            chats.add(str(cu_chat['telegram_chat_id']).strip())
+        if solo_dev:
+            # MODO PRUEBA DESARROLLO: Se envía ÚNICA Y EXCLUSIVAMENTE al celular del desarrollador
+            dev_c = str(chat_dev_destino or '').strip()
+            if not dev_c:
+                try:
+                    cfg_c = conn.execute('SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1').fetchone()
+                    if cfg_c and cfg_c['telegram_chat_id']:
+                        dev_c = str(cfg_c['telegram_chat_id']).strip()
+                except Exception:
+                    pass
+            dev_c = dev_c or '6055213826'
+            chats.add(dev_c)
+            chat_notificado_dev = dev_c
+        else:
+            # MODO PRODUCCIÓN: Sedes, tiendas y administradores del negocio
+            cu_chat = conn.execute("SELECT telegram_chat_id, nombre, codigo FROM centros_utilidad WHERE id = %s", (bod_id,)).fetchone()
+            if cu_chat and cu_chat['telegram_chat_id']:
+                chats.add(str(cu_chat['telegram_chat_id']).strip())
 
-        t_row = conn.execute("SELECT telegram_chat_id, admin_id FROM tiendas WHERE tercero_id = %s", (neg_id,)).fetchone()
-        if not t_row:
-            t_row = conn.execute("SELECT telegram_chat_id, admin_id FROM restaurantes WHERE tercero_id = %s", (neg_id,)).fetchone()
-        if t_row and t_row['telegram_chat_id']:
-            chats.add(str(t_row['telegram_chat_id']).strip())
-        if t_row and t_row['admin_id']:
-            adm_row = conn.execute("SELECT telegram_chat_id FROM terceros WHERE id = %s", (t_row['admin_id'],)).fetchone()
-            if adm_row and adm_row['telegram_chat_id']:
-                chats.add(str(adm_row['telegram_chat_id']).strip())
+            t_row = conn.execute("SELECT telegram_chat_id, admin_id FROM tiendas WHERE tercero_id = %s", (neg_id,)).fetchone()
+            if not t_row:
+                t_row = conn.execute("SELECT telegram_chat_id, admin_id FROM restaurantes WHERE tercero_id = %s", (neg_id,)).fetchone()
+            if t_row and t_row['telegram_chat_id']:
+                chats.add(str(t_row['telegram_chat_id']).strip())
+            if t_row and t_row['admin_id']:
+                adm_row = conn.execute("SELECT telegram_chat_id FROM terceros WHERE id = %s", (t_row['admin_id'],)).fetchone()
+                if adm_row and adm_row['telegram_chat_id']:
+                    chats.add(str(adm_row['telegram_chat_id']).strip())
 
-        if not chats:
-            try:
-                cfg = conn.execute('SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1').fetchone()
-                if cfg and cfg['telegram_chat_id']:
-                    chats.add(str(cfg['telegram_chat_id']).strip())
-            except Exception:
-                pass
+            if not chats:
+                try:
+                    cfg = conn.execute('SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1').fetchone()
+                    if cfg and cfg['telegram_chat_id']:
+                        chats.add(str(cfg['telegram_chat_id']).strip())
+                except Exception:
+                    pass
 
         if not chats or not token:
             continue
@@ -1191,8 +1300,9 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
         if t_neg and t_neg['nombre']:
             neg_nom = t_neg['nombre']
         bod_nom = f"Bodega #{bod_id}"
-        if cu_chat and cu_chat['nombre']:
-            bod_nom = cu_chat['nombre']
+        cu_info = conn.execute("SELECT nombre FROM centros_utilidad WHERE id = %s", (bod_id,)).fetchone()
+        if cu_info and cu_info['nombre']:
+            bod_nom = cu_info['nombre']
 
         lineas_items = []
         for it in items:
@@ -1222,7 +1332,9 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
                 )
 
         bloque = "\n\n".join(lineas_items)
+        header_dev = "🛠️ <b>[PRUEBA DESARROLLO — NO ENVIADO A USUARIO FINAL]</b>\n👤 <i>Enviado a tu celular personal</i>\n\n" if solo_dev else ""
         msg_promo = (
+            f"{header_dev}"
             f"🔔 <b>RECORDATORIO DE COMPRAS EN PROMOCIÓN</b>\n"
             f"🏢 <b>Negocio:</b> {neg_nom}\n"
             f"📍 <b>Sede:</b> {bod_nom}\n\n"
@@ -1230,6 +1342,7 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
             f"{bloque}\n\n"
             f"🛒 <i>Ingresa a Compras Sugeridas para emitir la orden al proveedor.</i>"
         )
+        ultimo_msg_enviado = msg_promo
 
         for c_id in chats:
             try:
@@ -1242,15 +1355,26 @@ def _evaluar_y_despachar_alertas_promociones(conn, negocio_id_param=None):
             except Exception as _e:
                 print(f"[alerta promo] error enviando a {c_id}: {_e}")
 
-        for it in items:
-            conn.execute("""
-                UPDATE inventario_alertas_agotados
-                SET avisos_promo_hoy = %s, fecha_ultimo_aviso_promo = %s
-                WHERE id = %s
-            """, (it['avisos_hoy'], hoy_date, it['alerta_id']))
+        # Solo en producción registramos y consumimos cuotas diarias de avisos
+        if not solo_dev:
+            for it in items:
+                conn.execute("""
+                    UPDATE inventario_alertas_agotados
+                    SET avisos_promo_hoy = %s, fecha_ultimo_aviso_promo = %s
+                    WHERE id = %s
+                """, (it['avisos_hoy'], hoy_date, it['alerta_id']))
 
-    conn.commit()
-    return {'ok': True, 'enviados': total_enviados, 'items_avisados': len(vistos_por_alerta)}
+    if not solo_dev:
+        conn.commit()
+
+    return {
+        'ok': True,
+        'enviados': total_enviados,
+        'items_avisados': len(vistos_por_alerta),
+        'modo_prueba': solo_dev,
+        'destinatario': chat_notificado_dev if solo_dev else None,
+        'mensaje': ultimo_msg_enviado
+    }
 
 
 @bp.route('/api/inventario/cron/alertas-promociones')
@@ -1259,7 +1383,41 @@ def api_cron_alertas_promociones():
     try:
         _crear_tablas(conn)
         neg_param = request.args.get('negocio_id', type=int)
-        res = _evaluar_y_despachar_alertas_promociones(conn, neg_param)
+        forzar = request.args.get('forzar', type=int) == 1
+        res = _evaluar_y_despachar_alertas_promociones(conn, neg_param, forzar=forzar)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/cotizaciones/probar-alerta-dev', methods=['GET', 'POST'])
+def api_cotizaciones_probar_alerta_dev(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    conn = get_db_connection()
+    try:
+        # Validación estricta: Solo usuarios registrados en la tabla usuarios (usuarios de desarrollo/admin)
+        u_row = conn.execute("SELECT id, rol, nombre FROM usuarios WHERE id = %s", (session['usuario_id'],)).fetchone()
+        if not u_row:
+            return jsonify({'ok': False, 'error': 'Acceso exclusivo para usuarios de desarrollo (tabla usuarios)'}), 403
+
+        data = request.get_json(silent=True) or {}
+        prod_id = _int_o_none(data.get('producto_id') or request.args.get('producto_id'))
+
+        cfg = conn.execute('SELECT telegram_chat_id FROM "CONFIGURACION_SISTEMA" WHERE id = 1').fetchone()
+        dev_chat = cfg['telegram_chat_id'] if cfg and cfg['telegram_chat_id'] else '6055213826'
+
+        res = _evaluar_y_despachar_alertas_promociones(
+            conn,
+            negocio_id=negocio_id,
+            forzar=True,
+            solo_dev=True,
+            chat_dev_destino=dev_chat,
+            producto_id_simular=prod_id,
+            datos_form=data if data else None
+        )
         return jsonify(res)
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -8584,6 +8742,13 @@ def admin_inventario(negocio_id, tab_name=None):
             session['centro_utilidad_codigo'] = centro_activo['codigo']
             session['centro_utilidad_color'] = centro_activo.get('color_badge', '#10b981')
 
+        u_id = session.get('usuario_id')
+        es_desarrollo = False
+        if u_id:
+            u_row = conn.execute("SELECT id, rol FROM usuarios WHERE id = %s", (u_id,)).fetchone()
+            if u_row:
+                es_desarrollo = True
+
         return render_template('inventario_admin.html',
                                negocio_id=negocio_id,
                                negocio_nombre=contexto['negocio_nombre'],
@@ -8591,7 +8756,8 @@ def admin_inventario(negocio_id, tab_name=None):
                                volver_label=contexto['volver_label'],
                                centros_utilidad=centros,
                                centro_activo=centro_activo,
-                               tab_inicial=tab_name)
+                               tab_inicial=tab_name,
+                               es_desarrollo=es_desarrollo)
     except Exception as e:
         return f"Error: {e}", 500
     finally:
@@ -9426,11 +9592,13 @@ def api_cotizaciones_crear(negocio_id):
         # Verificar duplicado
         existing = conn.execute("""
             SELECT id FROM cotizaciones_compras
-            WHERE negocio_id = %s AND tercero_id = %s AND item_id = %s 
+            WHERE (negocio_id = %s OR negocio_id IS NULL) AND tercero_id = %s AND item_id = %s 
               AND (presentacion_id = %s OR (presentacion_id IS NULL AND %s IS NULL))
         """, (negocio_id, tercero_id, item_id, presentacion_id, presentacion_id)).fetchone()
         
-        f_vence = fecha_vencimiento or (date.today() + timedelta(days=180))
+        f_vence = fecha_vencimiento
+        if not f_vence or not str(f_vence).strip() or str(f_vence).strip().lower() in ('null', 'none'):
+            f_vence = date.today() + timedelta(days=180)
         
         if existing:
             conn.execute("""
@@ -9438,10 +9606,10 @@ def api_cotizaciones_crear(negocio_id):
                 SET precio = %s, unidades_item = %s, descripcion_presentacion = %s,
                     observaciones = %s, fecha_vencimiento = %s,
                     promo_dia_semana = %s, promo_dias_anticipacion = %s, promo_avisos_por_dia = %s,
-                    updated_at = NOW()
+                    negocio_id = %s, updated_at = NOW()
                 WHERE id = %s
             """, (float(precio), float(unidades_item), descripcion, observaciones, f_vence,
-                  promo_dia_semana, promo_dias_anticipacion, promo_avisos_por_dia, existing['id']))
+                  promo_dia_semana, promo_dias_anticipacion, promo_avisos_por_dia, negocio_id, existing['id']))
             cot_id = existing['id']
         else:
             row = conn.execute("""
@@ -9458,7 +9626,29 @@ def api_cotizaciones_crear(negocio_id):
             cot_id = row['id']
         
         conn.commit()
-        return jsonify({'ok': True, 'id': cot_id, 'mensaje': 'Cotización guardada'})
+
+        # Evaluación inmediata de alertas promocionales para insumos agotados
+        alerta_info = {'enviados': 0}
+        try:
+            if promo_dia_semana:
+                conn.execute("""
+                    UPDATE inventario_alertas_agotados
+                    SET avisos_promo_hoy = 0, fecha_ultimo_aviso_promo = NULL
+                    WHERE negocio_id = %s AND producto_id = %s
+                """, (negocio_id, item_id))
+                conn.commit()
+
+            alerta_res = _evaluar_y_despachar_alertas_promociones(conn, negocio_id, forzar=True)
+            if alerta_res and isinstance(alerta_res, dict):
+                alerta_info = alerta_res
+        except Exception as _e_promo:
+            print(f"[api_cotizaciones_crear] Error evaluando alertas promo: {_e_promo}")
+
+        msg = 'Cotización guardada'
+        if alerta_info.get('enviados', 0) > 0:
+            msg += f" (Se envió alerta a Telegram: {alerta_info.get('enviados')} mensaje(s))"
+
+        return jsonify({'ok': True, 'id': cot_id, 'mensaje': msg, 'alertas_enviadas': alerta_info.get('enviados', 0)})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -9473,18 +9663,26 @@ def api_cotizaciones_actualizar(negocio_id, cot_id):
     data = request.get_json() or {}
     conn = get_db_connection()
     try:
-        existing = conn.execute("SELECT id FROM cotizaciones_compras WHERE id = %s AND negocio_id = %s", (cot_id, negocio_id)).fetchone()
+        existing = conn.execute("SELECT id, item_id, negocio_id FROM cotizaciones_compras WHERE id = %s AND (negocio_id = %s OR negocio_id IS NULL)", (cot_id, negocio_id)).fetchone()
         if not existing:
             return jsonify({'ok': False, 'error': 'Cotización no encontrada'}), 404
         
         updates = []
         params = []
-        if 'precio' in data:
-            updates.append("precio = %s")
-            params.append(float(data['precio']))
-        if 'unidades_item' in data:
-            updates.append("unidades_item = %s")
-            params.append(float(data['unidades_item']))
+        if 'precio' in data and data['precio'] is not None and str(data['precio']).strip() != '':
+            try:
+                updates.append("precio = %s")
+                params.append(float(data['precio']))
+            except (ValueError, TypeError):
+                pass
+        if 'unidades_item' in data and data['unidades_item'] is not None and str(data['unidades_item']).strip() != '':
+            try:
+                val_u = float(data['unidades_item'])
+                if val_u <= 0: val_u = 1.0
+                updates.append("unidades_item = %s")
+                params.append(val_u)
+            except (ValueError, TypeError):
+                pass
         if 'descripcion_presentacion' in data:
             updates.append("descripcion_presentacion = %s")
             params.append(data['descripcion_presentacion'])
@@ -9492,35 +9690,66 @@ def api_cotizaciones_actualizar(negocio_id, cot_id):
             updates.append("observaciones = %s")
             params.append(data['observaciones'])
         if 'fecha_vencimiento' in data:
+            f_venc = data.get('fecha_vencimiento')
+            if not f_venc or not str(f_venc).strip() or str(f_venc).strip().lower() in ('null', 'none'):
+                f_venc = date.today() + timedelta(days=180)
             updates.append("fecha_vencimiento = %s")
-            params.append(data['fecha_vencimiento'])
+            params.append(f_venc)
         if 'presentacion_id' in data:
             updates.append("presentacion_id = %s")
             params.append(_int_o_none(data['presentacion_id']))
         if 'validada_proveedor' in data:
             updates.append("validada_proveedor = %s")
-            params.append(data['validada_proveedor'])
+            params.append(bool(data['validada_proveedor']))
         if 'promo_dia_semana' in data:
             val = (data['promo_dia_semana'] or '').strip().lower() or None
             updates.append("promo_dia_semana = %s")
             params.append(val)
         if 'promo_dias_anticipacion' in data:
-            val = _int_o_none(data['promo_dias_anticipacion']) or 1
+            val = _int_o_none(data['promo_dias_anticipacion'])
+            if val is None or val < 0: val = 1
             updates.append("promo_dias_anticipacion = %s")
             params.append(val)
         if 'promo_avisos_por_dia' in data:
-            val = _int_o_none(data['promo_avisos_por_dia']) or 1
+            val = _int_o_none(data['promo_avisos_por_dia'])
+            if val is None or val < 1: val = 1
             updates.append("promo_avisos_por_dia = %s")
             params.append(val)
         
+        updates.append("negocio_id = %s")
+        params.append(negocio_id)
+
         if not updates:
             return jsonify({'ok': False, 'error': 'Nada que actualizar'}), 400
         
         updates.append("updated_at = NOW()")
-        params.extend([cot_id, negocio_id])
-        conn.execute(f"UPDATE cotizaciones_compras SET {', '.join(updates)} WHERE id = %s AND negocio_id = %s", params)
+        params.append(cot_id)
+        conn.execute(f"UPDATE cotizaciones_compras SET {', '.join(updates)} WHERE id = %s", params)
         conn.commit()
-        return jsonify({'ok': True, 'mensaje': 'Cotización actualizada'})
+
+        # Evaluación inmediata de alertas promocionales para insumos agotados
+        alerta_info = {'enviados': 0}
+        try:
+            item_afectado = existing['item_id']
+            if data.get('promo_dia_semana'):
+                conn.execute("""
+                    UPDATE inventario_alertas_agotados
+                    SET avisos_promo_hoy = 0, fecha_ultimo_aviso_promo = NULL
+                    WHERE negocio_id = %s AND producto_id = %s
+                """, (negocio_id, item_afectado))
+                conn.commit()
+
+            alerta_res = _evaluar_y_despachar_alertas_promociones(conn, negocio_id, forzar=True)
+            if alerta_res and isinstance(alerta_res, dict):
+                alerta_info = alerta_res
+        except Exception as _e_promo:
+            print(f"[api_cotizaciones_actualizar] Error evaluando alertas promo: {_e_promo}")
+
+        msg = 'Cotización actualizada'
+        if alerta_info.get('enviados', 0) > 0:
+            msg += f" (Se envió alerta a Telegram: {alerta_info.get('enviados')} mensaje(s))"
+
+        return jsonify({'ok': True, 'mensaje': msg, 'alertas_enviadas': alerta_info.get('enviados', 0)})
     except Exception as e:
         conn.rollback()
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -15108,7 +15337,8 @@ def api_listar_centros_utilidad(negocio_id):
         es_admin = _puede_gestionar_negocio(_contexto)
 
         centros_db = conn.execute("""
-            SELECT id, codigo, nombre, tipo, direccion, telefono, imagen_url, color_badge, activo, telegram_chat_id
+            SELECT id, codigo, nombre, tipo, direccion, telefono, imagen_url, color_badge, activo, telegram_chat_id,
+                   COALESCE(imprimir_tipo_entrega, TRUE) AS imprimir_tipo_entrega
             FROM centros_utilidad
             WHERE negocio_id = %s AND activo = TRUE
             ORDER BY id ASC

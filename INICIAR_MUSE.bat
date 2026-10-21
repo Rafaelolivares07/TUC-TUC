@@ -2,8 +2,11 @@
 chcp 65001 >nul
 REM ============================================================
 REM  INICIAR_MUSE.bat - Arranque diario de Muse (TUC TUC V2)
-REM  Uso: doble clic cada dia. Deja la terminal lista e invoca muse.
+REM  Uso: doble clic cada dia. Pide tema, chequea entorno,
+REM  abre pestana WT con titulo fijo e invoca muse.
 REM  Idempotente. Directorio de trabajo: raiz (AGENTS.md + V2 + docs).
+REM  Regla cmd: cero parentesis literales en echos dentro de
+REM  bloques (...) - el texto con ) aborta el parseo. Estilo goto.
 REM ============================================================
 setlocal EnableDelayedExpansion
 title Muse - arranque diario
@@ -11,18 +14,20 @@ cd /d "C:\Users\RAFAEL OLIVARES" || (echo No se pudo ir a la raiz & pause & exit
 set "V2=C:\Users\RAFAEL OLIVARES\Documents\TucTucV2"
 set "DOCS=C:\Users\RAFAEL OLIVARES\Documents\docs"
 set "CREDS=C:\Tools\muse-git-credentials"
+set "TEMA=%DOCS%\_conversacion\tema_activo.txt"
+set "SELECTOR=%DOCS%\_conversacion\ELEGIR_TEMA.ps1"
 
-echo [1/6] Directorio: %CD%
+echo [1/8] Directorio: %CD%
 if not exist "%V2%" echo AVISO: falta %V2%
 if not exist "%DOCS%" echo AVISO: falta %DOCS%
 
-echo [2/6] Git identidad + config repo V2
+echo [2/8] Git identidad + config repo V2
 for /f "delims=" %%u in ('git config --global user.name 2^>nul') do echo   user: %%u
 git -C "%V2%" config http.sslbackend openssl >nul
 git -C "%V2%" config --get-all credential.helper 2>nul | findstr /C:"muse-git-credentials" >nul || git -C "%V2%" config credential.helper "store --file C:/Tools/muse-git-credentials" >nul
 echo   sslbackend + credential-helper OK
 
-echo [3/6] PAT para push solo de Muse
+echo [3/8] PAT para push solo de Muse
 if exist "%CREDS%" echo   credenciales OK
 if exist "%CREDS%" goto :pat_ok
 echo   Falta %CREDS% - Muse no podra pushear solo (pedira aprobacion).
@@ -31,7 +36,7 @@ powershell -NoProfile -Command "if ([Console]::IsInputRedirected) { exit 2 }; $s
 if %errorlevel% equ 0 (echo   PAT guardado.) else if %errorlevel% equ 2 (echo   Omitido: sin consola interactiva.) else (echo   Omitido. Re-ejecuta este script cuando tengas el PAT.)
 :pat_ok
 
-echo [4/6] Fetch + estado V2
+echo [4/8] Fetch + estado V2
 git -C "%V2%" fetch origin
 set N=0
 for /f "delims=" %%b in ('git -C "%V2%" status -sb 2^>nul') do (
@@ -40,7 +45,33 @@ for /f "delims=" %%b in ('git -C "%V2%" status -sb 2^>nul') do (
 )
 if !N! gtr 12 echo   ... (!N! lineas en total, ver resto con git status)
 
-echo [5/6] Python global + CLI muse
+echo [5/8] Tema de trabajo
+if exist "%TEMA%" goto :tema_ant
+echo   Sin tema anterior.
+goto :tema_sel
+:tema_ant
+set /p TEMA_ANT=<"%TEMA%"
+echo   Anterior: !TEMA_ANT!
+:tema_sel
+if not exist "%SELECTOR%" echo   AVISO: falta selector, sigo con el tema anterior.
+if not exist "%SELECTOR%" goto :tema_ok
+powershell -NoProfile -Command "if ([Console]::IsInputRedirected) { exit 2 }"
+if %errorlevel% equ 2 goto :tema_noconsola
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SELECTOR%"
+goto :tema_ok
+:tema_noconsola
+echo   Omitido: sin consola interactiva.
+:tema_ok
+
+echo [6/8] Etiqueta de pestana
+set "ETIQUETA=MUSE"
+powershell -NoProfile -Command "$p='C:\Users\RAFAEL OLIVARES\Documents\docs\_conversacion\tema_activo.txt'; $t=''; if (Test-Path $p) { $t=Get-Content $p -TotalCount 1 }; $r='MUSE'; if (-not [string]::IsNullOrWhiteSpace($t)) { $r=(($t -replace '^\d+_','') -replace '\.md$','').ToUpper()+'-MUSE' }; [IO.File]::WriteAllText($env:TEMP+'\muse_etiqueta.txt', $r)"
+set /p ETIQUETA=<"%TEMP%\muse_etiqueta.txt" 2>nul
+if not defined ETIQUETA set "ETIQUETA=MUSE"
+del "%TEMP%\muse_etiqueta.txt" 2>nul
+echo   Pestana: !ETIQUETA!
+
+echo [7/8] Python + CLI muse + acceso
 C:\Tools\Python313\python.exe --version 2>&1
 set "MUSECMD="
 for %%c in (muse muse-code) do (
@@ -48,17 +79,27 @@ for %%c in (muse muse-code) do (
     where %%c >nul 2>nul && set "MUSECMD=%%c"
   )
 )
-if defined MUSECMD (echo   CLI: !MUSECMD!) else (echo   AVISO: 'muse' no esta en PATH. Agregalo o abrelo desde su carpeta.)
-
-echo [6/6] Acceso directo en Escritorio
+if defined MUSECMD (echo   CLI: !MUSECMD!) else (echo   AVISO: muse no esta en PATH.)
 set "LNK=%USERPROFILE%\Desktop\INICIAR MUSE.lnk"
 if exist "%LNK%" echo   acceso OK
 if exist "%LNK%" goto :lnk_ok
 powershell -NoProfile -Command "$w=New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut($env:USERPROFILE+'\Desktop\INICIAR MUSE.lnk'); $s.TargetPath='C:\Users\RAFAEL OLIVARES\Documents\TucTucV2\INICIAR_MUSE.bat'; $s.WorkingDirectory='C:\Users\RAFAEL OLIVARES'; $s.Save()"
 if %errorlevel% equ 0 (echo   acceso creado.) else (echo   no se pudo crear acceso.)
 :lnk_ok
-
-echo.
 if not defined MUSECMD (pause & exit /b 1)
-echo Listo. Invocando !MUSECMD! desde %CD% ...
+
+echo [8/8] Abrir pestana !ETIQUETA!
+where wt >nul 2>nul
+if %errorlevel% neq 0 goto :sin_wt
+echo   wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD!
+wt --title "!ETIQUETA!" --suppressApplicationTitle -d "%CD%" cmd /k !MUSECMD!
+if %errorlevel% neq 0 goto :wt_fallo
+echo   Listo. Trabaja en la pestana !ETIQUETA!.
+exit /b 0
+:wt_fallo
+echo   AVISO: no se pudo abrir Windows Terminal. Pausa y sigo en esta ventana.
+pause
+:sin_wt
+title !ETIQUETA!
+echo   Abriendo !MUSECMD! aqui...
 !MUSECMD!

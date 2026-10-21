@@ -3200,10 +3200,17 @@
             </div>
           </div>
         </div>
-        <div class="flex gap-2 pt-1">
+        <div class="flex gap-2 pt-1 flex-wrap items-center">
           <button type="button" id="btn-guardar-cotz" onclick="guardarCotizacion()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition shadow-xs">
             Guardar Cotización
           </button>
+          {% if es_desarrollo %}
+          <button type="button" id="btn-probar-cotz-dev" onclick="probarAlertaDevEnFormulario()"
+                  class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  title="Enviar prueba a mi celular (Telegram) sin enviar a clientes ni sedes">
+            <span>📱 Probar en mi Telegram (Dev)</span>
+          </button>
+          {% endif %}
           <button type="button" id="btn-cancelar-cotz" onclick="limpiarFormCotz()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-lg transition">
             Limpiar
           </button>
@@ -3216,6 +3223,20 @@
       <input type="text" id="cotz-filtro" placeholder="Buscar por producto, proveedor o presentación..."
              oninput="cargarCotizaciones()" class="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-400 min-w-[220px]">
       
+      <button type="button" id="btn-evaluar-promo-telegram" onclick="despacharAlertasPromoManual()"
+              class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+              title="Evaluar y enviar alertas Telegram de ofertas en insumos agotados">
+        <span>🔔 Despachar Alertas Promo Ahora</span>
+      </button>
+
+      {% if es_desarrollo %}
+      <button type="button" id="btn-evaluar-promo-dev" onclick="despacharAlertasPromoDev()"
+              class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white text-xs font-bold px-3 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+              title="Prueba de desarrollo: envía el reporte a tu celular/Telegram sin notificar al usuario final">
+        <span>📱 Prueba a mi Celular (Dev)</span>
+      </button>
+      {% endif %}
+
       <!-- Selectores independientes de decimales -->
       <div class="flex items-center gap-3 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs flex-wrap">
         <span class="text-[10px] font-extrabold text-indigo-900 uppercase tracking-wider select-none flex items-center gap-1">
@@ -12406,6 +12427,132 @@ async function guardarCotizacion(id) {
     cargarCotizaciones();
   } else {
     toast(data.error || 'Error al guardar', false);
+  }
+}
+
+async function despacharAlertasPromoManual() {
+  const btn = document.getElementById('btn-evaluar-promo-telegram');
+  const originalHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳ Evaluando...</span>';
+  }
+  try {
+    const resp = await fetch(`/api/inventario/cron/alertas-promociones?negocio_id=${NEGOCIO_ID}&forzar=1`);
+    const data = await resp.json();
+    if (data.ok) {
+      if (data.enviados > 0) {
+        toast(`✅ ¡Se despacharon ${data.enviados} alerta(s) de promoción a Telegram!`, true);
+      } else {
+        toast(`ℹ️ No hay insumos agotados con promoción vigente en ventana de despacho`, true);
+      }
+    } else {
+      toast(`Error evaluando alertas: ${data.error || 'Desconocido'}`, false);
+    }
+  } catch (err) {
+    toast(`Error de red al consultar alertas: ${err.message}`, false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml || '<span>🔔 Despachar Alertas Promo Ahora</span>';
+    }
+  }
+}
+
+async function despacharAlertasPromoDev() {
+  const btn = document.getElementById('btn-evaluar-promo-dev');
+  const originalHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳ Evaluando a tu Telegram...</span>';
+  }
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones/probar-alerta-dev`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      if (data.enviados > 0) {
+        toast(`📱 ¡Mensaje de prueba enviado a tu Telegram! (${data.chat_dev || 'Celular'}) - NO enviado a usuarios finales`, true);
+      } else {
+        toast(`ℹ️ Modo Dev: ${data.motivo || 'No hay insumos agotados con promoción en ventana para enviar'}`, true);
+      }
+    } else {
+      toast(`Error evaluando prueba: ${data.error || 'Desconocido'}`, false);
+    }
+  } catch (err) {
+    toast(`Error de red al consultar prueba dev: ${err.message}`, false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml || '<span>📱 Prueba a mi Celular (Dev)</span>';
+    }
+  }
+}
+
+async function probarAlertaDevEnFormulario() {
+  const prodId = document.getElementById('cotz-producto-id')?.value;
+  const precio = document.getElementById('cotz-precio')?.value;
+  const unidades = document.getElementById('cotz-unidades')?.value;
+  const provNombre = document.getElementById('cotz-proveedor-search')?.value;
+  const presNombre = document.getElementById('cotz-presentacion-search')?.value;
+  const esPromo = document.getElementById('cotz-es-promo')?.checked;
+  const promoDia = document.getElementById('cotz-promo-dia')?.value || 'martes';
+  const promoAnticipacion = parseInt(document.getElementById('cotz-promo-anticipacion')?.value, 10) || 1;
+  const promoAvisos = parseInt(document.getElementById('cotz-promo-avisos')?.value, 10) || 1;
+
+  if (!prodId) {
+    toast('Selecciona primero un producto para simular la alerta de prueba', false);
+    return;
+  }
+  if (!esPromo) {
+    toast('Marca la casilla de "Precio promocional..." y configura el día de despacho para probar la alerta', false);
+    return;
+  }
+
+  const btn = document.getElementById('btn-probar-cotz-dev');
+  const originalHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳ Enviando a tu Telegram...</span>';
+  }
+
+  try {
+    const payload = {
+      producto_id: parseInt(prodId),
+      precio: parseFloat(precio) || 0,
+      unidades_item: parseFloat(unidades) || 1,
+      proveedor_nombre: provNombre || 'Proveedor Demo',
+      descripcion_presentacion: presNombre || 'Unidad',
+      promo_dia_semana: promoDia,
+      promo_dias_anticipacion: promoAnticipacion,
+      promo_avisos_por_dia: promoAvisos
+    };
+
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cotizaciones/probar-alerta-dev`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      if (data.enviados > 0) {
+        toast(`📱 ¡Mensaje de prueba enviado con éxito a tu celular! (${data.chat_dev || 'Telegram'}) - Clientes no notificados`, true);
+      } else {
+        toast(`ℹ️ Simulación evaluada: ${data.motivo || 'No se generó mensaje'}`, true);
+      }
+    } else {
+      toast(`Error en prueba dev: ${data.error || 'No autorizado'}`, false);
+    }
+  } catch (err) {
+    toast(`Error de red al enviar prueba: ${err.message}`, false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml || '<span>📱 Probar en mi Telegram (Dev)</span>';
+    }
   }
 }
 

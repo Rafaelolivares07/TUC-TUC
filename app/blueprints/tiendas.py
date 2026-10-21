@@ -536,13 +536,26 @@ def _telegram_resumen_pagos(pagos, metodo_pago, total):
     return ' + '.join(partes) + alerta
 
 
-def _telegram_detalle_entrega_tienda(tipo_entrega, direccion, nombre_cajero):
-    if tipo_entrega == 'domicilio':
-        return f"Domicilio. Llevar a: {direccion or 'direccion pendiente'}"
-    if tipo_entrega == 'caja':
-        return f"Entrega en el local / caja. Atendio: {nombre_cajero or 'caja'}"
-    if tipo_entrega == 'recoger':
-        return "Cliente recoge en el local."
+def _telegram_detalle_entrega_tienda(tipo_entrega, direccion, nombre_cajero, textos_config=None, imprimir_entrega=True):
+    if not imprimir_entrega:
+        return ""
+    cfg = textos_config or {}
+    te = (tipo_entrega or 'caja').strip().lower()
+    if te == 'domicilio':
+        base = (cfg.get('domicilio') or {}).get('texto') or "Domicilio. Llevar a:"
+        return f"{base} {direccion or 'direccion pendiente'}"
+    if te == 'recoger':
+        return (cfg.get('recoger') or {}).get('texto') or "Cliente recoge en el local."
+    if te == 'caja':
+        caja_cfg = cfg.get('caja') or {}
+        base = caja_cfg.get('texto') or "Entrega en el local / caja."
+        incluir_cajero = caja_cfg.get('incluir_cajero', True)
+        if incluir_cajero and nombre_cajero:
+            return f"{base}\nAtendio: {nombre_cajero}"
+        return base
+    if te == 'mesa':
+        base = (cfg.get('mesa') or {}).get('texto') or "Consumo en mesa:"
+        return f"{base} {direccion or 'N/A'}"
     return f"{tipo_entrega or 'Pedido'}: {direccion or 'N/A'}"
 
 
@@ -2790,7 +2803,7 @@ def api_tienda_pedido_crear(slug):
         if centro_utilidad_id:
             try:
                 cu_row = conn.execute(
-                    "SELECT codigo, nombre, tipo, telegram_chat_id FROM centros_utilidad WHERE id = %s",
+                    "SELECT codigo, nombre, tipo, telegram_chat_id, COALESCE(imprimir_tipo_entrega, TRUE) AS imprimir_tipo_entrega FROM centros_utilidad WHERE id = %s",
                     (centro_utilidad_id,)
                 ).fetchone()
             except Exception:
@@ -2814,6 +2827,24 @@ def api_tienda_pedido_crear(slug):
                 except Exception:
                     cu_chat_id = None
 
+        imprimir_entrega = True
+        try:
+            if cu_row and cu_row.get('imprimir_tipo_entrega') is not None:
+                imprimir_entrega = bool(cu_row['imprimir_tipo_entrega'])
+        except Exception:
+            imprimir_entrega = True
+
+        textos_cfg = {}
+        try:
+            if negocio.get('tercero_id'):
+                cn_row = conn.execute("SELECT textos_entrega FROM config_negocio WHERE tercero_id = %s", (negocio['tercero_id'],)).fetchone()
+                if cn_row and cn_row['textos_entrega']:
+                    textos_cfg = cn_row['textos_entrega'] if isinstance(cn_row['textos_entrega'], dict) else json.loads(cn_row['textos_entrega'])
+        except Exception:
+            textos_cfg = {}
+
+        entrega = _telegram_detalle_entrega_tienda(tipo_entrega, direccion_cliente, nombre_cajero, textos_config=textos_cfg, imprimir_entrega=imprimir_entrega)
+
         chats_a_notificar = set()
         if chat_id:
             chats_a_notificar.add(str(chat_id).strip())
@@ -2822,18 +2853,18 @@ def api_tienda_pedido_crear(slug):
 
         if chats_a_notificar:
             items_txt = '\n'.join([f"  {it['cantidad']}x {it['nombre_producto']} - ${it['precio_unitario'] * it['cantidad']:,.0f}" for it in items_validos])
-            entrega = _telegram_detalle_entrega_tienda(tipo_entrega, direccion_cliente, nombre_cajero)
             pagos_txt = _telegram_resumen_pagos(pagos_validos, metodo_pago, total)
             cliente_txt = nombre_cliente or nombre_cajero or 'Cliente en local'
             telefono_txt = telefono_cliente or 'Sin telefono'
             cu_line = f"🏢 <b>Sede / Centro:</b> {cu_info}\n" if cu_info else ""
             doc_line = f" ({numero_documento})" if numero_documento else ""
+            entrega_line = f"📦 Entrega: {entrega}\n" if (imprimir_entrega and entrega) else ""
             msg = (
                 f"🛒 <b>Nuevo pedido en {tienda['nombre']}</b>\n"
                 f"{cu_line}"
                 f"🧾 Pedido #{pedido_id}{doc_line}\n"
                 f"👤 {cliente_txt} - {telefono_txt}\n"
-                f"📦 Entrega: {entrega}\n"
+                f"{entrega_line}"
                 f"💳 Pago elegido: {pagos_txt}\n\n"
                 f"{items_txt}\n\n"
                 f"Subtotal productos: ${subtotal_productos:,.0f}\n"
@@ -2862,7 +2893,7 @@ def api_tienda_pedido_crear(slug):
         except Exception as _pdf_err:
             print(f'[pdf auto-save] error guardando pdf pedido {pedido_id}: {_pdf_err}')
 
-        return jsonify({'ok': True, 'pedido_id': pedido_id, 'total': total, 'numero_documento': numero_documento})
+        return jsonify({'ok': True, 'pedido_id': pedido_id, 'total': total, 'numero_documento': numero_documento, 'entrega_texto': entrega if (imprimir_entrega and entrega) else None})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

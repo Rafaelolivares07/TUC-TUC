@@ -1,5 +1,7 @@
 import os
 import tempfile
+import json
+import threading
 import secrets as _sec
 from flask import Blueprint, render_template, request, session, redirect, jsonify
 from ..db import get_db_connection
@@ -141,6 +143,18 @@ def _asegurar_schema_chat(conn):
         "CREATE SEQUENCE IF NOT EXISTS conversaciones_id_seq",
         "ALTER TABLE conversaciones ALTER COLUMN id SET DEFAULT nextval('conversaciones_id_seq')",
         "SELECT setval('conversaciones_id_seq', COALESCE((SELECT MAX(id) FROM conversaciones), 0) + 1, false)",
+        """CREATE TABLE IF NOT EXISTS chat_push_subscriptions (
+            id SERIAL PRIMARY KEY,
+            tercero_id INTEGER NOT NULL,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            user_agent TEXT,
+            activo BOOLEAN DEFAULT TRUE,
+            creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_chat_push_tercero ON chat_push_subscriptions(tercero_id)",
     ]:
         try:
             conn.execute(sql)
@@ -175,6 +189,167 @@ def _asegurar_tabla_apuntes(conn):
         )
     """)
     conn.commit()
+
+
+# ── Web Push Nativo (VAPID) ────────────────────────────────────────────────
+
+_VAPID_CONFIG_CACHE = None
+
+def _obtener_vapid_config():
+    global _VAPID_CONFIG_CACHE
+    if _VAPID_CONFIG_CACHE is not None:
+        return _VAPID_CONFIG_CACHE
+    keys_path = os.path.join(os.path.dirname(__file__), '..', 'vapid_keys.json')
+    try:
+        if os.path.isfile(keys_path):
+            with open(keys_path, 'r', encoding='utf-8') as f:
+                _VAPID_CONFIG_CACHE = json.load(f)
+                return _VAPID_CONFIG_CACHE
+    except Exception as e:
+        print('[VAPID] Error cargando vapid_keys.json:', e)
+    return None
+
+def _despachar_push_asincrono(destinatario_id, titulo, cuerpo, token='', url='', icono=''):
+    """Envía la notificación Web Push nativa en segundo plano para no demorar la respuesta HTTP."""
+    if not destinatario_id:
+        return
+    try:
+        t = threading.Thread(
+            target=_enviar_push_a_tercero_worker,
+            args=(int(destinatario_id), titulo, cuerpo, token, url, icono),
+            daemon=True
+        )
+        t.start()
+    except Exception as e:
+        print('[VAPID dispatch error]:', e)
+
+def _enviar_push_a_tercero_worker(destinatario_id, titulo, cuerpo, token, url, icono):
+    cfg = _obtener_vapid_config()
+    if not cfg or not cfg.get('private_key'):
+        return
+    try:
+        from pywebpush import webpush, WebPushException
+    except Exception as e:
+        print('[VAPID] pywebpush no disponible:', e)
+        return
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        subs = conn.execute("""
+            SELECT id, endpoint, p256dh, auth
+            FROM chat_push_subscriptions
+            WHERE tercero_id = %s AND activo = TRUE
+        """, (destinatario_id,)).fetchall()
+        if not subs:
+            return
+
+        payload_dict = {
+            'title': titulo or 'Mensaje en TUC TUC',
+            'body': cuerpo or 'Tienes un nuevo mensaje.',
+            'icon': icono or '/static/icons/icon-192.png',
+            'badge': '/static/icons/icon-192.png',
+            'token': token or '',
+            'url': url or (f"/chat2?open_token={token}" if token else "/chat2"),
+            'vibrate': [300, 120, 300, 120, 450]
+        }
+        payload_data = json.dumps(payload_dict)
+        priv_key = cfg['private_key']
+        claims = {'sub': cfg.get('claims_sub') or 'mailto:admin@tuc-tuc.co'}
+
+        for sub in subs:
+            sub_info = {
+                'endpoint': sub['endpoint'],
+                'keys': {
+                    'p256dh': sub['p256dh'],
+                    'auth': sub['auth']
+                }
+            }
+            try:
+                webpush(
+                    subscription_info=sub_info,
+                    data=payload_data,
+                    vapid_private_key=priv_key,
+                    vapid_claims=claims,
+                    timeout=6
+                )
+            except WebPushException as ex:
+                resp = getattr(ex, 'response', None)
+                status_code = getattr(resp, 'status_code', None)
+                if status_code in (404, 410):
+                    try:
+                        conn.execute("UPDATE chat_push_subscriptions SET activo = FALSE WHERE id = %s", (sub['id'],))
+                        conn.commit()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    except Exception as e:
+        print('[VAPID worker error]:', e)
+    finally:
+        if conn:
+            try: conn.close()
+            except Exception: pass
+
+
+@bp.route('/api/chat/vapid-public-key', methods=['GET'])
+def api_chat_vapid_public_key():
+    cfg = _obtener_vapid_config()
+    if not cfg or not cfg.get('public_key'):
+        return jsonify({'ok': False, 'error': 'VAPID no configurado'}), 500
+    return jsonify({'ok': True, 'public_key': cfg['public_key']})
+
+
+@bp.route('/api/chat/push/suscribir', methods=['POST'])
+def api_chat_push_suscribir():
+    data = request.get_json() or {}
+    sub = data.get('subscription') or {}
+    endpoint = (sub.get('endpoint') or '').strip()
+    keys = sub.get('keys') or {}
+    p256dh = (keys.get('p256dh') or '').strip()
+    auth = (keys.get('auth') or '').strip()
+    tercero_id = data.get('tercero_id') or get_chat_tercero_id() or session.get('usuario_id')
+
+    if not endpoint or not p256dh or not auth or not tercero_id:
+        return jsonify({'ok': False, 'error': 'Faltan parámetros de suscripción'}), 400
+
+    try:
+        conn = get_db_connection()
+        _asegurar_schema_chat(conn)
+        ua = request.headers.get('User-Agent', '')[:300]
+        conn.execute("""
+            INSERT INTO chat_push_subscriptions (tercero_id, endpoint, p256dh, auth, user_agent, activo, actualizado_en)
+            VALUES (%s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP)
+            ON CONFLICT (endpoint) DO UPDATE
+            SET tercero_id = EXCLUDED.tercero_id,
+                p256dh = EXCLUDED.p256dh,
+                auth = EXCLUDED.auth,
+                user_agent = EXCLUDED.user_agent,
+                activo = TRUE,
+                actualizado_en = CURRENT_TIMESTAMP
+        """, (int(tercero_id), endpoint, p256dh, auth, ua))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'mensaje': 'Suscripción Web Push guardada'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/chat/push/desuscribir', methods=['POST'])
+def api_chat_push_desuscribir():
+    data = request.get_json() or {}
+    sub = data.get('subscription') or {}
+    endpoint = (sub.get('endpoint') or '').strip()
+    if not endpoint:
+        return jsonify({'ok': False, 'error': 'Falta endpoint'}), 400
+    try:
+        conn = get_db_connection()
+        conn.execute("UPDATE chat_push_subscriptions SET activo = FALSE WHERE endpoint = %s", (endpoint,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # ── API chat ──────────────────────────────────────────────────────────────
@@ -360,6 +535,35 @@ def api_chat_invitado_enviar():
         ''', (remitente_id, destinatario_id, mensaje or '', tipo, url_archivo,
               _json.dumps(card_payload) if card_payload else None, conv['id'])).fetchone()
         conn.commit()
+
+        # Despacho en segundo plano de notificación Web Push nativa (VAPID)
+        try:
+            nombre_rem = 'Alguien'
+            row_rem = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (remitente_id,)).fetchone()
+            if row_rem and row_rem['nombre']:
+                nombre_rem = row_rem['nombre']
+            
+            cuerpo = mensaje or ''
+            if tipo == 'audio':
+                cuerpo = '🎤 Mensaje de voz'
+            elif tipo == 'imagen':
+                cuerpo = '📷 Imagen recibida'
+            elif tipo == 'cancion':
+                cuerpo = '🎵 ' + (cuerpo or 'Canción compartida')
+            elif tipo == 'reporte':
+                cuerpo = '📊 Reporte compartido'
+            elif not cuerpo:
+                cuerpo = 'Nuevo mensaje'
+            
+            if len(cuerpo) > 120:
+                cuerpo = cuerpo[:117] + '...'
+            
+            titulo = f"💬 {nombre_rem} en TUC TUC"
+            url_push = f"/chat2?open_token={conv['token']}"
+            _despachar_push_asincrono(destinatario_id, titulo, cuerpo, token=conv['token'], url=url_push)
+        except Exception as _ex_push:
+            print('[Error despachando push]:', _ex_push)
+
         conn.close()
         return jsonify({'ok': True, 'id': nuevo['id'], 'fecha': str(nuevo['fecha'])})
     except Exception as e:
@@ -1534,6 +1738,7 @@ _GLOBO_CHAT_SNIPPET = """
 
   function _tocarChimeFuerte() {
     try {
+      if (localStorage.getItem('chat_sonido_habilitado') === 'false') return;
       const c = _globoCtx();
       if (!c) return;
       if (c.state === 'suspended') {
@@ -1695,6 +1900,21 @@ _GLOBO_CHAT_SNIPPET = """
 
   _pollGlobo();
   setInterval(_pollGlobo, 8000);
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+    navigator.serviceWorker.addEventListener('message', ev => {
+      if (ev.data && ev.data.type === 'tuctuc_push_click') {
+        if (typeof window.tuctucToggleChatDrawer === 'function') {
+          window.tuctucToggleChatDrawer(true);
+        }
+        if (ev.data.url) {
+          const u = ev.data.url;
+          _cargarIframe(u + (u.includes('?') ? '&' : '?') + 'embed=1');
+        }
+      }
+    });
+  }
 })();
 </script>
 """

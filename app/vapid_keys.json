@@ -1,0 +1,5 @@
+{
+  "public_key": "BE27nqU-3Rb5fRXAHZXHSfWR6_Xr0vAbLDC64dDmLb7kJa41TMVuNVbSg7z9cLv-N_pAKB-WnS_intoqwj0xMmU",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgk90y7M/iZAiwOWwg\nZqHGhwN9vF1JTRv3pY6JBxG7Zq+hRANCAARNu56lPt0W+X0VwB2Vx0n1kev169Lw\nGywwuuHQ5i2+5CWuNUzFbjVW0oO8/XC7/jf6QCgflp0v4p7aKsI9MTJl\n-----END PRIVATE KEY-----\n",
+  "claims_sub": "mailto:admin@tuc-tuc.co"
+}

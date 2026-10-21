@@ -372,13 +372,26 @@ def _telegram_label_pago(codigo):
     return labels.get(key, codigo or 'Pendiente por escoger')
 
 
-def _telegram_detalle_entrega_restaurante(tipo_entrega, direccion, mesa):
-    if tipo_entrega == 'domicilio':
-        return f"Domicilio. Llevar a: {direccion or 'direccion pendiente'}"
-    if tipo_entrega == 'recoger':
-        return "Cliente recoge en el local."
-    if tipo_entrega == 'mesa':
-        return f"Consumo / entrega en mesa: {mesa or 'mesa sin nombre'}"
+def _telegram_detalle_entrega_restaurante(tipo_entrega, direccion, mesa, nombre_cajero=None, textos_config=None, imprimir_entrega=True):
+    if not imprimir_entrega:
+        return ""
+    cfg = textos_config or {}
+    te = (tipo_entrega or 'caja').strip().lower()
+    if te == 'domicilio':
+        base = (cfg.get('domicilio') or {}).get('texto') or "Domicilio. Llevar a:"
+        return f"{base} {direccion or 'direccion pendiente'}"
+    if te == 'recoger':
+        return (cfg.get('recoger') or {}).get('texto') or "Cliente recoge en el local."
+    if te == 'caja':
+        caja_cfg = cfg.get('caja') or {}
+        base = caja_cfg.get('texto') or "Entrega en el local / caja."
+        incluir_cajero = caja_cfg.get('incluir_cajero', True)
+        if incluir_cajero and nombre_cajero:
+            return f"{base}\nAtendio: {nombre_cajero}"
+        return base
+    if te == 'mesa':
+        base = (cfg.get('mesa') or {}).get('texto') or "Consumo en mesa:"
+        return f"{base} {mesa or 'mesa sin nombre'}"
     return f"{tipo_entrega or 'Pedido'}: {direccion or mesa or 'N/A'}"
 
 
@@ -419,7 +432,7 @@ def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo
         if cid_cu:
             try:
                 cu_row = conn.execute(
-                    "SELECT codigo, nombre, tipo, telegram_chat_id FROM centros_utilidad WHERE id = %s",
+                    "SELECT codigo, nombre, tipo, telegram_chat_id, COALESCE(imprimir_tipo_entrega, TRUE) AS imprimir_tipo_entrega FROM centros_utilidad WHERE id = %s",
                     (cid_cu,)
                 ).fetchone()
             except Exception:
@@ -455,19 +468,37 @@ def _notificar_pedido_restaurante(conn, rest, pedido_id, cliente, telefono, tipo
         print(f'[telegram rest] sin chat_id para restaurante {nombre_rest}')
         return
 
+    imprimir_entrega = True
+    try:
+        if cu_row and cu_row.get('imprimir_tipo_entrega') is not None:
+            imprimir_entrega = bool(cu_row['imprimir_tipo_entrega'])
+    except Exception:
+        imprimir_entrega = True
+
+    textos_cfg = {}
+    try:
+        t_id = rest['tercero_id'] if rest and hasattr(rest, 'get') else None
+        if t_id:
+            cn_row = conn.execute("SELECT textos_entrega FROM config_negocio WHERE tercero_id = %s", (t_id,)).fetchone()
+            if cn_row and cn_row['textos_entrega']:
+                textos_cfg = cn_row['textos_entrega'] if isinstance(cn_row['textos_entrega'], dict) else json.loads(cn_row['textos_entrega'])
+    except Exception:
+        textos_cfg = {}
+
     items_txt = '\n'.join(f"  {item}" for item in items) or '  Pedido registrado'
-    entrega = _telegram_detalle_entrega_restaurante(tipo_entrega, direccion, mesa)
+    entrega = _telegram_detalle_entrega_restaurante(tipo_entrega, direccion, mesa, textos_config=textos_cfg, imprimir_entrega=imprimir_entrega)
     pago_txt = _telegram_label_pago(metodo_pago)
     if (metodo_pago or '').lower() == 'contraentrega':
         pago_txt += "\n⚠️ Contraentrega: cobrar efectivo al entregar."
 
     cu_line = f"🏢 <b>Sede / Centro:</b> {cu_info}\n" if cu_info else ""
+    entrega_line = f"📦 Entrega: {entrega}\n" if (imprimir_entrega and entrega) else ""
     msg = (
         f"🍽️ <b>Nuevo pedido en {nombre_rest}</b>\n"
         f"{cu_line}"
         f"🧾 Pedido #{pedido_id}\n"
         f"👤 {cliente or 'Cliente'} - {telefono or 'Sin telefono'}\n"
-        f"📦 Entrega: {entrega}\n"
+        f"{entrega_line}"
         f"💳 Pago elegido: {pago_txt}\n\n"
         f"{items_txt}\n\n"
         f"💰 Total: ${total:,.0f}"

@@ -60,3 +60,6 @@ gevent==24.11.1
 gevent-websocket==0.10.1
 yt-dlp==2026.6.9
 fpdf2==2.8.2
+
+pywebpush>=2.5.0
+py-vapid>=1.9.6

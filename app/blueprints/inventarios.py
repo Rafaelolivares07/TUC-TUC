@@ -5754,7 +5754,8 @@ def api_produccion_sugerencia(negocio_id):
             sugerida = derivada
             excede = cantidad_mp > guia['stock']
         else:
-            sugerida = guia['max_qty']
+            # La sugerencia base no debe exceder el cuello de botella real de bodega
+            sugerida = limitante['max_qty']
             derivada = None
             excede = False
         return jsonify({

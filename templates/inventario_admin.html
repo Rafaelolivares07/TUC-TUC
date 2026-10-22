@@ -2786,23 +2786,7 @@
 
       
 
-      <!-- Accounting impact help box -->
-
-      <div class="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-[11px] text-blue-700 flex flex-col gap-1">
-
-        <span class="font-bold flex items-center gap-1.5">🛈 Registro Contable de Producción:</span>
-
-        <span>Si está habilitada la contabilidad de producción, al registrar se generará un comprobante de reclasificación interna:</span>
-
-        <ul class="list-disc pl-4 mt-1 space-y-0.5">
-
-          <li><b>Crédito (Salida de inventario):</b> Cuentas 14x de los componentes por su costo total consumido.</li>
-
-          <li><b>Débito (Entrada de inventario):</b> Cuenta 14x del producto terminado por el costo total acumulado.</li>
-
-        </ul>
-
-      </div>
+      
 
 
 
@@ -2876,6 +2860,21 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Registro Contable de Producción (Al pie de la vista de producción) -->
+    <div class="mt-8 p-4 bg-blue-50/80 border border-blue-200/80 rounded-2xl text-xs text-blue-900 flex flex-col gap-1.5 shadow-2xs">
+      <div class="flex items-center gap-2 font-bold text-blue-950">
+        <span class="text-base">🛈</span>
+        <span>Información del Registro Contable de Producción</span>
+      </div>
+      <p class="text-[11px] text-blue-800 leading-relaxed">
+        Si tu negocio tiene habilitada la contabilidad de producción, al registrar cada orden se generará automáticamente el comprobante de reclasificación interna:
+      </p>
+      <ul class="list-disc pl-5 text-[11px] space-y-0.5 text-blue-900 font-medium">
+        <li><b>Crédito (Salida de inventario):</b> Cuentas 14x de los componentes/insumos por su costo total consumido.</li>
+        <li><b>Débito (Entrada de inventario):</b> Cuenta 14x del producto terminado fabricado por el costo total acumulado.</li>
+      </ul>
     </div>
 
   </div>
@@ -13418,6 +13417,7 @@ function limpiarPreview() {
   if (sugRealEl) sugRealEl.value = '';
   prodPuedeRegistrar = false;
   activePreviewData = null;
+  _prodRealManualmenteModificada = false;
 }
 
 let _prodCantRecalcTimer = null;
@@ -13436,14 +13436,23 @@ function onInputProdCantidad(valStr) {
   }, 300);
 }
 
-function ajustarCantidadRealProducida(valStr, origen = 'preview') {
-  const topInp = document.getElementById('prod-cantidad');
-  const sugInp = document.getElementById('prod-sug-real-cant');
-  const prevInp = document.getElementById('prod-preview-cant-input');
+let _prodRealManualmenteModificada = false;
 
-  if (origen !== 'top' && topInp) topInp.value = valStr;
-  if (origen !== 'sug' && sugInp) sugInp.value = valStr;
+function ajustarCantidadRealProducida(valStr, origen = 'preview') {
+  if (origen === 'preview') {
+    _prodRealManualmenteModificada = true;
+  } else if (origen === 'restore') {
+    _prodRealManualmenteModificada = false;
+  }
+
+  const prevInp = document.getElementById('prod-preview-cant-input');
+  const sugInp = document.getElementById('prod-sug-real-cant');
+
+  // Solo sincronizar el input de la vista previa si el llamado no vino de él mismo
   if (origen !== 'preview' && prevInp) prevInp.value = valStr;
+  if (sugInp) sugInp.value = valStr;
+  // NOTA: 'Cantidad Real Obtenida' NO debe modificar 'prod-cantidad' (Cantidad a Simular),
+  // para mantener desacoplada la intención teórica de la producción real obtenida.
 
   if (!activePreviewData) return;
 
@@ -13708,7 +13717,16 @@ async function previsualizarProduccion(scrollSmooth = true, forzarDesdeTarjeta =
   if (cantBadgeEl) cantBadgeEl.textContent = `${_fmtProdNum(qty)} Unidades`;
 
   const prevCantInput = document.getElementById('prod-preview-cant-input');
-  if (prevCantInput) prevCantInput.value = qty;
+  if (prevCantInput) {
+    if (!_prodRealManualmenteModificada) {
+      prevCantInput.value = qty;
+    } else {
+      const valManual = parseFloat(prevCantInput.value);
+      if (valManual && !isNaN(valManual) && valManual > 0) {
+        d.cantidad = valManual;
+      }
+    }
+  }
 
   const sugRealEl = document.getElementById('prod-sug-real-cant');
   if (sugRealEl) sugRealEl.value = qty;

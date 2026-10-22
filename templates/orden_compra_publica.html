@@ -142,15 +142,15 @@
               <div class="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 font-medium">
                 <span>📦 {{ it.presentacion_nombre or 'Unidad' }}</span>
                 {% if it.unidades_presentacion and it.unidades_presentacion > 1 %}
-                  <span class="text-slate-400">({{ it.unidades_presentacion|round(1) }} und/paq)</span>
+                  <span class="text-slate-400">({{ it.unidades_presentacion }} und/paq)</span>
                 {% endif %}
               </div>
             </div>
             
             <!-- Precio unitario solicitado -->
             <div class="text-right">
-              <span class="text-xs font-black text-slate-800 block">${{ "{:,.0f}".format((it.precio_unitario or 0)|float) }}</span>
-              <span class="text-[10px] text-slate-600 font-bold">Solicitado: <b>{{ it.cantidad_solicitada|round(2) }}</b></span>
+              <span class="text-xs font-black text-slate-800 block">${{ it.precio_unitario_fmt }}</span>
+              <span class="text-[10px] text-slate-600 font-bold">Solicitado: <b>{{ it.cantidad_solicitada }}</b></span>
             </div>
           </div>
 
@@ -158,10 +158,10 @@
           {% if it.peso_variable %}
             <div class="bg-amber-50/80 border border-amber-200/90 rounded-lg px-2.5 py-1 text-[11px] text-amber-900 flex items-center justify-between">
               <span class="font-bold flex items-center gap-1">
-                ⚖️ Peso Variable (±{{ it.tolerancia_peso_pct|round(0) }}%)
+                ⚖️ Peso Variable (±{{ it.tolerancia_peso_pct }}%)
               </span>
               <span class="font-mono font-semibold text-[10px] text-amber-800">
-                Rango: {{ (it.cantidad_solicitada * (1.0 - (it.tolerancia_peso_pct/100.0)))|round(2) }} — {{ (it.cantidad_solicitada * (1.0 + (it.tolerancia_peso_pct/100.0)))|round(2) }}
+                Rango: {{ it.rango_min }} — {{ it.rango_max }}
               </span>
             </div>
           {% endif %}
@@ -170,8 +170,7 @@
           <div class="bg-slate-50 border border-slate-150 rounded-xl p-2 grid grid-cols-2 gap-2 text-xs">
             <div>
               <label class="block text-[10px] font-extrabold uppercase text-slate-600 mb-0.5">Cant. a Despachar</label>
-              {% set max_val = (it.cantidad_solicitada * (1.0 + (it.tolerancia_peso_pct/100.0)))|round(2) if it.peso_variable else it.cantidad_solicitada %}
-              <input type="number" step="any" min="0" max="{{ max_val }}"
+              <input type="number" step="any" min="0" max="{{ it.rango_max if it.peso_variable else it.cantidad_solicitada }}"
                      value="{{ it.cantidad_confirmada if it.cantidad_confirmada is not none else it.cantidad_solicitada }}"
                      {% if orden.estado in ['confirmada', 'recibida'] %}disabled{% endif %}
                      oninput="recalcularFila(this)"
@@ -180,7 +179,7 @@
 
             <div>
               <label class="block text-[10px] font-extrabold uppercase text-slate-600 mb-0.5">Precio Unitario ($)</label>
-              <input type="number" step="any" min="0"
+              <input type="number" step="1" min="0"
                      value="{{ it.precio_confirmado if it.precio_confirmado is not none else it.precio_unitario }}"
                      {% if orden.estado in ['confirmada', 'recibida'] %}disabled{% endif %}
                      oninput="recalcularFila(this)"
@@ -195,7 +194,7 @@
             </div>
             <div class="ml-auto text-right">
               <span class="text-[10px] text-slate-600 uppercase font-extrabold mr-1">Subtotal:</span>
-              <span class="subtotal-val font-black text-indigo-900">${{ "{:,.0f}".format(((it.total_confirmado if it.total_confirmado is not none else it.total_solicitado) or 0)|float) }}</span>
+              <span class="subtotal-val font-black text-indigo-900">${{ it.total_display_fmt }}</span>
             </div>
           </div>
 
@@ -208,7 +207,7 @@
         <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
           <span class="text-xs font-bold text-slate-600 uppercase">Total de la Orden</span>
           <span id="total-general-conf" class="text-lg font-black text-slate-900 font-mono">
-            ${{ "{:,.0f}".format(((orden.total_confirmado if orden.total_confirmado is not none else orden.total_estimado) or 0)|float) }}
+            ${{ orden.total_display_fmt }}
           </span>
         </div>
 
@@ -391,7 +390,7 @@
       }
 
       const subtotal = cantVal * precVal;
-      subtotalEl.textContent = '$' + subtotal.toLocaleString('es-CO', { maximumFractionDigits: 0 });
+      subtotalEl.textContent = '$' + Math.round(subtotal).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
       evaluarCambiosTotales();
     }
@@ -429,7 +428,7 @@
       });
 
       const totEl = document.getElementById('total-general-conf');
-      if (totEl) totEl.textContent = '$' + totalGral.toLocaleString('es-CO', { maximumFractionDigits: 0 });
+      if (totEl) totEl.textContent = '$' + Math.round(totalGral).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
       const btnAccion = document.getElementById('btn-accion-orden');
       const msgDescargo = document.getElementById('msg-descargo-cambios');

@@ -606,11 +606,13 @@
                     <span id="ticket-vivo-total-transacciones" class="font-mono font-bold">0</span>
                 </div>
 
-                <!-- COMPONENTES OMITIDOS SI LOS HAY -->
-                <div id="ticket-vivo-omitidos-bloque" class="hidden">
+                <!-- COMPONENTES OMITIDOS POR STOCK (Siempre visible para confirmación) -->
+                <div id="ticket-vivo-omitidos-bloque">
                     <div class="border-t-2 border-dashed border-slate-300 my-2"></div>
-                    <div class="text-center font-black text-[11px] text-rose-800 mb-1">COMPONENTES OMITIDOS POR STOCK</div>
-                    <div id="ticket-vivo-omitidos-lista" class="space-y-0.5 text-[10px] text-rose-700"></div>
+                    <div class="text-center font-black text-[11px] text-slate-800 mb-1 flex items-center justify-center gap-1">
+                        <span>🚫</span> <span>COMPONENTES OMITIDOS POR STOCK</span>
+                    </div>
+                    <div id="ticket-vivo-omitidos-lista" class="space-y-0.5 text-[10px]"></div>
                 </div>
 
                 <div class="border-t-2 border-dashed border-slate-300 my-2"></div>
@@ -2402,17 +2404,19 @@ function renderizarTicketVivoFlash() {
 
     // Omitidos
     const omits = Object.values(sess.componentesOmitidos || {});
-    const omitBloque = document.getElementById('ticket-vivo-omitidos-bloque');
     const omitLista = document.getElementById('ticket-vivo-omitidos-lista');
-    if (omitBloque && omitLista) {
+    if (omitLista) {
         if (!omits.length) {
-            omitBloque.classList.add('hidden');
+            omitLista.innerHTML = `
+                <div class="text-center py-1 text-emerald-700 font-semibold flex items-center justify-center gap-1.5">
+                    <span class="text-xs">✓</span> <span>No hubo omisiones de ingredientes por falta de stock.</span>
+                </div>
+            `;
         } else {
-            omitBloque.classList.remove('hidden');
             omitLista.innerHTML = omits.map(o => `
-                <div class="flex items-center justify-between">
+                <div class="flex items-center justify-between text-rose-700 py-0.5">
                     <span>* ${o.nombre}</span>
-                    <span class="font-bold">${o.cantidadOmitida} veces</span>
+                    <span class="font-bold">${o.cantidadOmitida} omisión${o.cantidadOmitida !== 1 ? 'es' : ''}</span>
                 </div>
             `).join('');
         }
@@ -3057,7 +3061,13 @@ function imprimirResumenVentaRapida() {
         omitHtml = `
             <div class="sep"></div>
             <div class="centro" style="font-size:11px; font-weight:bold;">COMPONENTES OMITIDOS POR STOCK</div>
-            ${omits.map(o => `<div class="linea" style="font-size:10px; color:#555;"><span>* ${o.nombre}</span><span>${o.cantidadOmitida} veces</span></div>`).join('')}
+            ${omits.map(o => `<div class="linea" style="font-size:10px; color:#c62828;"><span>* ${o.nombre}</span><span>${o.cantidadOmitida} omisión${o.cantidadOmitida !== 1 ? 'es' : ''}</span></div>`).join('')}
+        `;
+    } else {
+        omitHtml = `
+            <div class="sep"></div>
+            <div class="centro" style="font-size:11px; font-weight:bold;">COMPONENTES OMITIDOS POR STOCK</div>
+            <div class="centro" style="font-size:10px; color:#2e7d32; font-weight:bold; padding:2px 0;">✓ No hubo omisiones de ingredientes por falta de stock.</div>
         `;
     }
 
@@ -5980,12 +5990,14 @@ async function imprimirResumenVentaRapidaBluetooth(titulo, fechaInic, ahora, ses
     builder.bold(true).twoCol('Total Sandwiches / Unds:', `${totalUndsBT} unds`, 48).bold(false);
     builder.twoCol('Transacciones / Clientes:', `${ventasCount || 0}`, 48);
 
+    builder.separator('-');
+    builder.align('center').bold(true).line('COMPONENTES OMITIDOS POR STOCK').bold(false);
     if (omits && omits.length > 0) {
-        builder.separator('-');
-        builder.align('center').bold(true).line('COMPONENTES OMITIDOS POR STOCK').bold(false);
         for (const o of omits) {
-            builder.twoCol(`* ${o.nombre}`, `${o.cantidadOmitida} veces`, 48);
+            builder.twoCol(`* ${o.nombre}`, `${o.cantidadOmitida} omis`, 48);
         }
+    } else {
+        builder.align('center').line('No hubo omisiones por falta de stock');
     }
     builder.separator('-');
     builder.align('center').line('*** FIN RESUMEN ***').feed(3);

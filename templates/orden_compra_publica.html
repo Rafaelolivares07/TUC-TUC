@@ -149,7 +149,7 @@
             
             <!-- Precio unitario solicitado -->
             <div class="text-right">
-              <span class="text-xs font-black text-slate-800 block">${{ "{:,.0f}".format(it.precio_unitario) }}</span>
+              <span class="text-xs font-black text-slate-800 block">${{ "{:,.0f}".format((it.precio_unitario or 0)|float) }}</span>
               <span class="text-[10px] text-slate-600 font-bold">Solicitado: <b>{{ it.cantidad_solicitada|round(2) }}</b></span>
             </div>
           </div>
@@ -172,7 +172,7 @@
               <label class="block text-[10px] font-extrabold uppercase text-slate-600 mb-0.5">Cant. a Despachar</label>
               {% set max_val = (it.cantidad_solicitada * (1.0 + (it.tolerancia_peso_pct/100.0)))|round(2) if it.peso_variable else it.cantidad_solicitada %}
               <input type="number" step="any" min="0" max="{{ max_val }}"
-                     value="{{ it.cantidad_confirmada if it.cantidad_confirmada is not None else it.cantidad_solicitada }}"
+                     value="{{ it.cantidad_confirmada if it.cantidad_confirmada is not none else it.cantidad_solicitada }}"
                      {% if orden.estado in ['confirmada', 'recibida'] %}disabled{% endif %}
                      oninput="recalcularFila(this)"
                      class="inp-cant w-full text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-indigo-500">
@@ -181,7 +181,7 @@
             <div>
               <label class="block text-[10px] font-extrabold uppercase text-slate-600 mb-0.5">Precio Unitario ($)</label>
               <input type="number" step="any" min="0"
-                     value="{{ it.precio_confirmado if it.precio_confirmado is not None else it.precio_unitario }}"
+                     value="{{ it.precio_confirmado if it.precio_confirmado is not none else it.precio_unitario }}"
                      {% if orden.estado in ['confirmada', 'recibida'] %}disabled{% endif %}
                      oninput="recalcularFila(this)"
                      class="inp-prec w-full text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-indigo-500">
@@ -195,7 +195,7 @@
             </div>
             <div class="ml-auto text-right">
               <span class="text-[10px] text-slate-600 uppercase font-extrabold mr-1">Subtotal:</span>
-              <span class="subtotal-val font-black text-indigo-900">${{ "{:,.0f}".format(it.total_confirmado if it.total_confirmado is not None else it.total_solicitado) }}</span>
+              <span class="subtotal-val font-black text-indigo-900">${{ "{:,.0f}".format(((it.total_confirmado if it.total_confirmado is not none else it.total_solicitado) or 0)|float) }}</span>
             </div>
           </div>
 
@@ -208,7 +208,7 @@
         <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
           <span class="text-xs font-bold text-slate-600 uppercase">Total de la Orden</span>
           <span id="total-general-conf" class="text-lg font-black text-slate-900 font-mono">
-            ${{ "{:,.0f}".format(orden.total_confirmado if orden.total_confirmado is not None else orden.total_estimado) }}
+            ${{ "{:,.0f}".format(((orden.total_confirmado if orden.total_confirmado is not none else orden.total_estimado) or 0)|float) }}
           </span>
         </div>
 

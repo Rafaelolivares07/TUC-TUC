@@ -2579,8 +2579,8 @@
           </div>
           <div class="md:col-span-4">
             <label class="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-1.5 flex items-center justify-between">
-              <span><span>🔢</span> Cantidad a producir <span class="text-rose-500">*</span></span>
-              <span class="text-[10px] font-bold text-slate-500 normal-case">Calcula toda la receta</span>
+              <span><span>🔢</span> Cantidad a Simular <span class="text-rose-500">*</span></span>
+              <span class="text-[10px] font-bold text-slate-500 normal-case">Calcula receta teórica</span>
             </label>
             <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1"
                    oninput="onInputProdCantidad(this.value)"
@@ -2590,23 +2590,33 @@
         </div>
 
         <!-- Tira Predictiva Integrada y Armónica -->
-        <div id="prod-sugerencia" class="hidden mb-3 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50/95 via-yellow-50/90 to-amber-50/70 p-4 shadow-2xs transition-all">
-          <!-- Cabecera de la sugerencia -->
-          <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-amber-200/80 text-xs">
+        <div id="prod-sugerencia" class="hidden mb-3 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50/95 via-yellow-50/90 to-amber-50/70 p-3.5 shadow-2xs transition-all">
+          
+          <!-- Barra fija de Advertencia y Tope Real (Siempre visible) -->
+          <div class="flex flex-wrap items-center justify-between gap-2.5 text-xs">
             <div class="flex items-center gap-2">
               <span class="text-lg">⚡</span>
               <div>
-                <span class="font-black text-amber-950 text-sm">
-                  Capacidad sugerida de producción: <span id="prod-sug-max" class="font-mono font-black text-amber-800 text-base"></span> und
+                <span class="font-bold text-amber-950 text-xs sm:text-sm">
+                  Tope máximo por inventario: <span id="prod-sug-max-real" class="font-mono font-black text-amber-900 text-sm sm:text-base">0</span> und
                 </span>
-                <p class="text-[11px] text-amber-900/80 font-normal">Calculado automáticamente según el ingrediente más escaso en inventario.</p>
+                <p class="text-[11px] text-amber-900/80 font-normal">
+                  Insumo limitante: <b id="prod-sug-limita-nombre" class="text-amber-950">-</b> (Stock en bodega: <span id="prod-sug-limita-stock" class="font-mono font-bold">0</span>)
+                </p>
               </div>
             </div>
-            <span id="prod-sug-limita" class="text-[11px] font-bold text-amber-900 bg-amber-200/70 px-3 py-1 rounded-full border border-amber-300 shadow-2xs"></span>
+            
+            <div class="flex items-center gap-2">
+              <span id="prod-sug-sim-info" class="hidden text-[11px] font-bold text-amber-900 bg-amber-200/80 px-2.5 py-1 rounded-lg border border-amber-300 shadow-2xs"></span>
+              <button type="button" id="btn-toggle-mp-sim" onclick="toggleSimulacionMP()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-300 bg-white hover:bg-amber-100 text-amber-900 font-bold text-xs transition shadow-2xs cursor-pointer">
+                <span>🧪 Simular por Materia Prima</span>
+                <span id="prod-mp-toggle-icon" class="text-[10px] transition-transform">▼</span>
+              </button>
+            </div>
           </div>
 
-          <!-- Controles de simulación por materia prima -->
-          <div class="bg-white/90 border border-amber-200/90 rounded-xl p-3.5 mb-2.5 shadow-2xs space-y-3">
+          <!-- Cuerpo Desplegable de Simulación por Materia Prima (Colapsado por defecto) -->
+          <div id="prod-sugerencia-body" class="hidden mt-3 pt-3 border-t border-amber-200/80 space-y-3">
             
             <!-- 1. Ingrediente Guía a Ancho Completo -->
             <div>
@@ -2623,50 +2633,28 @@
               </div>
             </div>
 
-            <!-- Fila inferior: 2. Variación / Simulación de MP y 3. Cantidad Real Obtenida -->
-            <div class="pt-2.5 border-t border-amber-200/70 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs items-end">
-              
-              <!-- 2. Cantidad MP si desea variar -->
-              <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
-                  2. ¿Vas a usar una cantidad diferente de MP? <span class="font-normal text-slate-500 lowercase">(opcional)</span>
-                </label>
-                <div class="flex items-center gap-2">
-                  <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="Digita cant. a usar" onkeydown="if(event.key==='Enter'){event.preventDefault();sugerenciaDesdeMP();}" class="w-36 border border-amber-300 rounded-xl px-3 py-2 text-sm sm:text-base bg-white font-mono font-black text-slate-900 text-right outline-none shadow-sm focus:border-amber-500">
-                  <span id="prod-sug-mp-nombre" class="text-xs text-slate-600 font-semibold truncate max-w-[130px]"></span>
-                  <button type="button" onclick="sugerenciaDesdeMP()" class="px-3.5 py-2 rounded-xl border border-amber-400 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs transition shadow-xs whitespace-nowrap">
-                    Recalcular Insumos
-                  </button>
-                </div>
+            <!-- 2. Variación / Simulación de MP -->
+            <div class="pt-2 border-t border-amber-200/60">
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                2. ¿Vas a usar una cantidad diferente de MP? <span class="font-normal text-slate-500 lowercase">(opcional)</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <input id="prod-sug-mp-cant" type="number" min="0" step="any" placeholder="Digita cant. a usar" onkeydown="if(event.key==='Enter'){event.preventDefault();sugerenciaDesdeMP();}" class="w-40 border border-amber-300 rounded-xl px-3 py-2 text-sm sm:text-base bg-white font-mono font-black text-slate-900 text-right outline-none shadow-sm focus:border-amber-500">
+                <span id="prod-sug-mp-nombre" class="text-xs text-slate-600 font-semibold truncate max-w-[150px]"></span>
+                <button type="button" onclick="sugerenciaDesdeMP()" class="px-3.5 py-2 rounded-xl border border-amber-400 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs transition shadow-xs whitespace-nowrap">
+                  Recalcular Insumos
+                </button>
               </div>
+            </div>
 
-              <!-- 3. Cantidad Final Real Obtenida -->
-              <div class="md:border-l md:border-amber-200/80 md:pl-3">
-                <label class="block text-xs font-extrabold text-rose-700 uppercase tracking-wide mb-1 flex items-center gap-1">
-                  <span>🔥</span> 3. Cantidad Final Real Obtenida <span class="text-[10px] font-bold bg-rose-100 text-rose-800 px-1.5 py-0.2 rounded">🔒 Fija insumos</span>
-                </label>
-                <div class="flex items-center gap-2">
-                  <input id="prod-sug-real-cant" type="number" min="0.0001" step="any" placeholder="Peso/Cant real" oninput="ajustarCantidadRealProducida(this.value, 'sug')" class="w-36 border-2 border-rose-400 rounded-xl px-3 py-2 text-sm sm:text-base bg-rose-50/40 font-mono font-black text-rose-700 text-right outline-none shadow-sm focus:border-rose-600 focus:bg-white" title="Digita la cantidad real que salió del proceso. Los insumos ya calculados no se moverán.">
-                  <span class="text-[11px] text-slate-500 font-semibold leading-tight flex-1">Ajusta lo que realmente salió del horno/proceso</span>
-                </div>
-              </div>
-
+            <!-- Micro-guía explicativa para el usuario -->
+            <div class="flex items-start gap-1.5 text-[11px] text-amber-900/90 bg-amber-100/50 rounded-lg px-3 py-1.5 border border-amber-200/50">
+              <span class="text-xs">💡</span>
+              <span><b>Flujo por Materia Prima:</b> 1) Elige el ingrediente guía, 2) digita cuánto vas a procesar si no es todo el stock y pulsa <b>Recalcular Insumos</b>. Toda la receta se ajustará en vivo.</span>
             </div>
 
           </div>
 
-          <!-- Micro-guía explicativa para el usuario -->
-          <div class="flex items-start gap-1.5 text-[11px] text-amber-900/90 bg-amber-100/50 rounded-lg px-3 py-1.5 border border-amber-200/50">
-            <span class="text-xs">💡</span>
-            <span><b>Flujo por Materia Prima:</b> 1) Elige el ingrediente guía (ej. carne cruda), 2) digita cuánto vas a meter y pulsa <b>Recalcular Insumos</b> para fijar todos los adobos/ingredientes, y 3) escribe en <b>Cantidad Final Real Obtenida</b> cuánto producto terminado salió realmente (sin alterar los insumos consumidos).</span>
-          </div>
-        </div>
-
-        <!-- Botón Generar Vista Previa -->
-        <div class="flex justify-end pt-2">
-          <button type="button" onclick="previsualizarProduccion(true, true)" class="w-full sm:w-auto px-8 py-3 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-sm sm:text-base flex items-center justify-center gap-2 shadow hover:shadow-md transition transform active:scale-98">
-            <span>👁️</span> Generar Vista Previa
-          </button>
         </div>
 
       </div>
@@ -13544,6 +13532,20 @@ async function sugerirProduccion() {
   } catch(e) { console.error(e); if (seq === _sugSeq) toast('Error de red al cargar sugerencia', false); }
 }
 
+function toggleSimulacionMP() {
+  const body = document.getElementById('prod-sugerencia-body');
+  const icon = document.getElementById('prod-mp-toggle-icon');
+  if (!body) return;
+  const colapsado = body.classList.contains('hidden');
+  if (colapsado) {
+    body.classList.remove('hidden');
+    if (icon) icon.textContent = '▲';
+  } else {
+    body.classList.add('hidden');
+    if (icon) icon.textContent = '▼';
+  }
+}
+
 function renderSugerencia(autoPreview = true) {
   const d = prodSugerenciaData;
   if (!d) return;
@@ -13552,12 +13554,27 @@ function renderSugerencia(autoPreview = true) {
   const lim = comps.find(c => c.id === d.limitante_id) || comps[0] || {};
   const prodNombre = d.producto || 'producto a fabricar';
 
-  document.getElementById('prod-sug-max').textContent = _fmtProdNum(d.sugerida);
-  if (d.modo === 'desde_mp') {
-    const cantMP = parseFloat(document.getElementById('prod-sug-mp-cant').value) || 0;
-    document.getElementById('prod-sug-limita').textContent = `Simulación: ${_fmtProdNum(cantMP)} de ${guia.nombre || 'guía'} → Rinde para: ${_fmtProdNum(d.sugerida)} und de ${prodNombre}`;
-  } else {
-    document.getElementById('prod-sug-limita').textContent = `Insumo limitante: ${lim.nombre || '-'} (Stock: ${_fmtProdNum(lim.stock)})`;
+  // 1. Cabecera fija: El tope máximo real según el insumo limitante (cuello de botella de inventario)
+  const maxReal = (d.tope_maximo !== undefined && d.tope_maximo !== null) ? d.tope_maximo : (lim.max_qty || 0);
+  const maxRealEl = document.getElementById('prod-sug-max-real');
+  if (maxRealEl) maxRealEl.textContent = _fmtProdNum(maxReal);
+
+  const limNombreEl = document.getElementById('prod-sug-limita-nombre');
+  if (limNombreEl) limNombreEl.textContent = d.limitante_nombre || lim.nombre || '-';
+
+  const limStockEl = document.getElementById('prod-sug-limita-stock');
+  if (limStockEl) limStockEl.textContent = _fmtProdNum(d.limitante_stock !== undefined ? d.limitante_stock : lim.stock);
+
+  // 2. Información de simulación activa (si está en modo desde_mp)
+  const simInfoEl = document.getElementById('prod-sug-sim-info');
+  if (simInfoEl) {
+    if (d.modo === 'desde_mp') {
+      const cantMP = parseFloat(document.getElementById('prod-sug-mp-cant').value) || 0;
+      simInfoEl.innerHTML = `🔬 Simulación: <b>${_fmtProdNum(cantMP)}</b> de <i>${guia.nombre}</i> → Esperado: <b>${_fmtProdNum(d.sugerida)} und</b>`;
+      simInfoEl.classList.remove('hidden');
+    } else {
+      simInfoEl.classList.add('hidden');
+    }
   }
 
   // 1. Opciones del selector: Mostrar el nombre de la MP y su stock disponible en bodega

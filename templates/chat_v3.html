@@ -3827,6 +3827,23 @@ function _refrescarTonosBtns() {
 
 // ── Web Push Nativo (VAPID) ────────────────────────────────────────────────
 
+async function _obtenerSWReg() {
+  if (!('serviceWorker' in navigator)) return null;
+  try {
+    let r = await navigator.serviceWorker.getRegistration('/sw.js');
+    if (!r) r = await navigator.serviceWorker.getRegistration();
+    if (!r) r = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    if (r && r.active) return r;
+    return new Promise(res => {
+      const t = setTimeout(() => res(r), 2500);
+      navigator.serviceWorker.ready.then(rr => { clearTimeout(t); res(rr); }).catch(() => { clearTimeout(t); res(r); });
+    });
+  } catch (e) {
+    console.warn('Error en _obtenerSWReg:', e);
+    return null;
+  }
+}
+
 function _urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

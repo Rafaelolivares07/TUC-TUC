@@ -259,6 +259,20 @@ def _crear_tablas(conn):
             updated_at TIMESTAMP DEFAULT NOW()
         )""",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_entradas_borradores_neg_user ON entradas_borradores(negocio_id, COALESCE(usuario_id, 0))",
+        """CREATE TABLE IF NOT EXISTS proveedores_productos_alias (
+            id SERIAL PRIMARY KEY,
+            negocio_id INT NOT NULL,
+            proveedor_id INT,
+            texto_origen VARCHAR(255) NOT NULL,
+            codigo_origen VARCHAR(100),
+            producto_id INT NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+            presentacion_id INT REFERENCES presentaciones(id) ON DELETE SET NULL,
+            veces_usado INT DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_ppa_neg_prov_txt ON proveedores_productos_alias(negocio_id, COALESCE(proveedor_id, 0), UPPER(TRIM(texto_origen)))",
+        "CREATE INDEX IF NOT EXISTS idx_ppa_neg_prov_cod ON proveedores_productos_alias(negocio_id, COALESCE(proveedor_id, 0), UPPER(TRIM(codigo_origen)))",
         """CREATE TABLE IF NOT EXISTS auditoria_recosteos (
             id SERIAL PRIMARY KEY,
             negocio_id INTEGER NOT NULL REFERENCES terceros(id),
@@ -2130,6 +2144,27 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
                          origen, validada_proveedor, updated_at, presentacion_id)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'compra', TRUE, NOW(), %s)
                 """, (negocio_id, documento_numero, proveedor_id, ln['producto_id'], f_cot, f_vence, pres_nombre, pres_equiv, precio_cot, pres_id))
+
+        # Guardar / Actualizar memoria de aprendizaje de mapeo del proveedor (proveedores_productos_alias)
+        txt_ocr = _txt(ln.get('texto_ocr') or ln.get('texto_detectado'))
+        cod_ocr = _txt(ln.get('codigo_ocr') or ln.get('codigo_detectado') or ln.get('barcode'))
+        if txt_ocr and len(txt_ocr) >= 2 and proveedor_id:
+            try:
+                conn.execute("""
+                    INSERT INTO proveedores_productos_alias 
+                        (negocio_id, proveedor_id, texto_origen, codigo_origen, producto_id, presentacion_id, veces_usado, updated_at)
+                    VALUES 
+                        (%s, %s, %s, %s, %s, %s, 1, NOW())
+                    ON CONFLICT (negocio_id, COALESCE(proveedor_id, 0), UPPER(TRIM(texto_origen)))
+                    DO UPDATE SET 
+                        producto_id = EXCLUDED.producto_id,
+                        presentacion_id = COALESCE(EXCLUDED.presentacion_id, proveedores_productos_alias.presentacion_id),
+                        codigo_origen = COALESCE(EXCLUDED.codigo_origen, proveedores_productos_alias.codigo_origen),
+                        veces_usado = proveedores_productos_alias.veces_usado + 1,
+                        updated_at = NOW()
+                """, (negocio_id, proveedor_id, txt_ocr.strip(), cod_ocr.strip() if cod_ocr else None, ln['producto_id'], ln.get('presentacion_id')))
+            except Exception as ex_alias:
+                print("Aviso al registrar alias de producto:", ex_alias)
 
     if _asiento_auto:
         try:

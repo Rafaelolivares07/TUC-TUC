@@ -2364,6 +2364,23 @@
       <span class="text-xs font-mono font-bold text-teal-800 bg-teal-100/80 px-2.5 py-1 rounded-xl">CPU Local</span>
     </div>
 
+    <!-- Banner de Alerta de Factura Duplicada -->
+    <div id="banner-factura-duplicada" class="hidden mb-3 p-3.5 bg-rose-50 border border-rose-300 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-xs">
+      <div class="flex items-start gap-2 flex-1">
+        <span class="text-xl">🛑</span>
+        <div>
+          <div class="font-bold text-sm text-rose-950 mb-0.5">¡Factura Posiblemente ya Registrada!</div>
+          <div id="banner-factura-duplicada-msg" class="text-rose-800 text-[11px] font-medium leading-relaxed"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
+        <button type="button" onclick="document.getElementById('banner-factura-duplicada').classList.add('hidden')" class="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[11px] shadow-xs transition">
+          Continuar de todos modos
+        </button>
+        <button type="button" onclick="document.getElementById('banner-factura-duplicada').classList.add('hidden')" class="text-rose-600 hover:text-rose-800 font-bold p-1">&times;</button>
+      </div>
+    </div>
+
     <!-- Banner de Ítems No Identificados Omitidos -->
     <div id="banner-items-omitidos-ocr" class="hidden mb-3 p-3 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-900 shadow-xs">
       <div class="flex items-start justify-between gap-2">
@@ -8873,7 +8890,7 @@ function agregarLineaEntrada() {
 
 
 
-function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valorUnitario, ivaPct, presentacionId = null, presentacionNombre = '', presentacionEquivalencia = 1.0, cantEmpaque = null, costoEmpaque = null, totalLinea = null) {
+function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valorUnitario, ivaPct, presentacionId = null, presentacionNombre = '', presentacionEquivalencia = 1.0, cantEmpaque = null, costoEmpaque = null, totalLinea = null, textoOcr = '', codigoOcr = '') {
 
   const cont = document.getElementById('entrada-lineas');
 
@@ -8904,6 +8921,8 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
 
       <input type="hidden" id="ent-id-${idx}" value="${productoId || ''}">
+      <input type="hidden" id="ent-ocr-txt-${idx}" value="${(textoOcr || '').replace(/"/g,'&quot;')}">
+      <input type="hidden" id="ent-ocr-cod-${idx}" value="${(codigoOcr || '').replace(/"/g,'&quot;')}">
 
     </div>
 
@@ -9945,6 +9964,19 @@ async function escanearFacturaArchivo(archivo) {
 
     const d = res.datos || {};
     
+    // Alerta de Factura Duplicada en Base de Datos
+    const bannerDup = document.getElementById('banner-factura-duplicada');
+    const msgDup = document.getElementById('banner-factura-duplicada-msg');
+    if (d.posible_duplicada && d.posible_duplicada.existe) {
+      if (bannerDup && msgDup) {
+        msgDup.textContent = d.posible_duplicada.mensaje;
+        bannerDup.classList.remove('hidden');
+      }
+      toast(d.posible_duplicada.mensaje, false);
+    } else {
+      if (bannerDup) bannerDup.classList.add('hidden');
+    }
+
     // 1. Número de documento
     if (d.documento_numero) {
       const inpDoc = document.getElementById('entrada-num-doc');
@@ -10021,7 +10053,9 @@ async function escanearFacturaArchivo(archivo) {
           presEquiv,
           cantEmp,
           costoEmp,
-          tot
+          tot,
+          l.texto_detectado || '',
+          l.codigo_detectado || ''
         );
 
         // Pre-cargar historial de cotizaciones de este proveedor para el selector de presentación
@@ -10097,7 +10131,9 @@ window.cargarItemOmitidoAEntrada = function(idx) {
     1.0,
     cant,
     vu,
-    tot
+    tot,
+    item.texto_detectado || '',
+    item.codigo_detectado || ''
   );
   calcularTotalesEntrada();
   actualizarCotejoFactura();
@@ -10531,7 +10567,11 @@ async function registrarEntrada() {
 
       presentacion_nombre: presNombre,
 
-      presentacion_equivalencia: presEquiv
+      presentacion_equivalencia: presEquiv,
+
+      texto_ocr: document.getElementById(`ent-ocr-txt-${i}`)?.value || null,
+
+      codigo_ocr: document.getElementById(`ent-ocr-cod-${i}`)?.value || null
 
     });
 

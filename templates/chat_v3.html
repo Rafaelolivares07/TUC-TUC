@@ -933,6 +933,7 @@
     }
 
     /* Bottom sheet modales (perfil, registro) */
+    .sheet-modal-backdrop.open { display: flex !important; }
     .sheet-modal-backdrop {
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.65);
@@ -3622,6 +3623,7 @@ async function registrarTelefono() {
 function abrirModalPerfil() {
   const modal = document.getElementById('modal-perfil');
   if (modal) {
+    modal.style.display = 'flex';
     modal.classList.add('open');
     if (typeof _refrescarTonosBtns === 'function') _refrescarTonosBtns();
     if (typeof _actualizarUIPush === 'function') _actualizarUIPush();
@@ -3630,7 +3632,10 @@ function abrirModalPerfil() {
 
 function cerrarModalPerfil() {
   const modal = document.getElementById('modal-perfil');
-  if (modal) modal.classList.remove('open');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('open');
+  }
 }
 
 // ── Compartir conversación ────────────────────────────────────────────────

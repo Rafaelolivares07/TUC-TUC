@@ -1904,7 +1904,7 @@ _GLOBO_CHAT_SNIPPET = """
               body: JSON.stringify({ subscription: sub })
             });
             await fetch('/api/chat/push/test', { method: 'POST' });
-            alert('✓ ¡Alertas y sonido activados exitosamente!\nTu dispositivo sonará y avisará en segundo plano.');
+            alert('Alertas Web Push y sonido activados exitosamente en este dispositivo.');
             return;
           }
         }

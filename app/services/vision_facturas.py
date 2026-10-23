@@ -437,6 +437,41 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                         mejor_score = score
                         mejor_prod = p
 
+            # Buscar presentación y empaque previo de cotizaciones del proveedor
+            pres_id = None
+            pres_nombre = "Unidad"
+            pres_equiv = 1.0
+
+            if conn and mejor_prod and negocio_id:
+                try:
+                    c_row = None
+                    if proveedor_id:
+                        c_row = conn.execute("""
+                            SELECT c.presentacion_id, pres.nombre, pres.equivalencia
+                            FROM cotizaciones_compras c
+                            JOIN presentaciones pres ON pres.id = c.presentacion_id
+                            WHERE c.negocio_id = %s AND c.tercero_id = %s AND c.item_id = %s
+                            ORDER BY c.fecha_cotizacion DESC NULLS LAST, c.id DESC
+                            LIMIT 1
+                        """, (negocio_id, proveedor_id, mejor_prod['id'])).fetchone()
+
+                    if not c_row:
+                        c_row = conn.execute("""
+                            SELECT c.presentacion_id, pres.nombre, pres.equivalencia
+                            FROM cotizaciones_compras c
+                            JOIN presentaciones pres ON pres.id = c.presentacion_id
+                            WHERE c.negocio_id = %s AND c.item_id = %s
+                            ORDER BY c.fecha_cotizacion DESC NULLS LAST, c.id DESC
+                            LIMIT 1
+                        """, (negocio_id, mejor_prod['id'])).fetchone()
+
+                    if c_row:
+                        pres_id = c_row['presentacion_id']
+                        pres_nombre = c_row['nombre']
+                        pres_equiv = float(c_row['equivalencia'])
+                except Exception as e:
+                    print("Aviso cotización previa:", e)
+
             items_extraidos.append({
                 'texto_detectado': desc,
                 'cantidad': cant,
@@ -447,7 +482,10 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                 'producto_nombre': mejor_prod['nombre'] if mejor_prod else desc,
                 'iva_pct': float(mejor_prod.get('iva_pct') or 0) if mejor_prod else 0.0,
                 'match_confianza': round(mejor_score * 100, 1) if mejor_prod else 0.0,
-                'identificado': bool(mejor_prod is not None)
+                'identificado': bool(mejor_prod is not None),
+                'presentacion_id': pres_id,
+                'presentacion_nombre': pres_nombre,
+                'presentacion_equivalencia': pres_equiv
             })
 
     # CASO B: FACTURAS TRADICIONALES EN COLUMNAS HORIZONTALES (Sin códigos de barras)
@@ -487,6 +525,41 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                         mejor_prod = p
 
                 vu_calc = round(precio_linea / cant, 2) if (cant > 0 and precio_linea > 0) else 0.0
+
+                pres_id = None
+                pres_nombre = "Unidad"
+                pres_equiv = 1.0
+
+                if conn and mejor_prod and negocio_id:
+                    try:
+                        c_row = None
+                        if proveedor_id:
+                            c_row = conn.execute("""
+                                SELECT c.presentacion_id, pres.nombre, pres.equivalencia
+                                FROM cotizaciones_compras c
+                                JOIN presentaciones pres ON pres.id = c.presentacion_id
+                                WHERE c.negocio_id = %s AND c.tercero_id = %s AND c.item_id = %s
+                                ORDER BY c.fecha_cotizacion DESC NULLS LAST, c.id DESC
+                                LIMIT 1
+                            """, (negocio_id, proveedor_id, mejor_prod['id'])).fetchone()
+
+                        if not c_row:
+                            c_row = conn.execute("""
+                                SELECT c.presentacion_id, pres.nombre, pres.equivalencia
+                                FROM cotizaciones_compras c
+                                JOIN presentaciones pres ON pres.id = c.presentacion_id
+                                WHERE c.negocio_id = %s AND c.item_id = %s
+                                ORDER BY c.fecha_cotizacion DESC NULLS LAST, c.id DESC
+                                LIMIT 1
+                            """, (negocio_id, mejor_prod['id'])).fetchone()
+
+                        if c_row:
+                            pres_id = c_row['presentacion_id']
+                            pres_nombre = c_row['nombre']
+                            pres_equiv = float(c_row['equivalencia'])
+                    except Exception as e:
+                        print("Aviso cotización previa:", e)
+
                 items_extraidos.append({
                     'texto_detectado': nom_it,
                     'cantidad': cant,
@@ -497,7 +570,10 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     'producto_nombre': mejor_prod['nombre'] if mejor_prod else nom_it,
                     'iva_pct': float(mejor_prod.get('iva_pct') or 0) if mejor_prod else 0.0,
                     'match_confianza': round(mejor_score * 100, 1) if mejor_prod else 0.0,
-                    'identificado': bool(mejor_prod is not None)
+                    'identificado': bool(mejor_prod is not None),
+                    'presentacion_id': pres_id,
+                    'presentacion_nombre': pres_nombre,
+                    'presentacion_equivalencia': pres_equiv
                 })
 
     lineas_identificadas = [it for it in items_extraidos if it['identificado']]

@@ -9742,27 +9742,44 @@ async function escanearFacturaArchivo(archivo) {
         entradaLineas = [];
       }
 
-      lineas.forEach(l => {
+      lineas.forEach((l, idx) => {
         const prodId = l.producto_id;
         const prodNom = l.producto_nombre;
-        const cant = l.cantidad || 1;
-        const vu = l.valor_unitario || 0;
+        const cantEmp = l.cantidad || 1;
+        const costoEmp = l.valor_unitario || 0;
+        const tot = l.total_linea || (cantEmp * costoEmp);
         const ivaPct = l.iva_pct || 0;
-        const tot = l.total_linea || (cant * vu);
+        const presId = l.presentacion_id || defaultPresentacionId || null;
+        const presNom = l.presentacion_nombre || 'Unidad';
+        const presEquiv = parseFloat(l.presentacion_equivalencia) || 1.0;
+        const cantBase = cantEmp * presEquiv;
+        const costoBase = presEquiv > 0 ? (costoEmp / presEquiv) : costoEmp;
 
         agregarLineaEntradaConDatos(
           prodId,
           prodNom,
-          cant,
-          vu,
+          cantBase,
+          costoBase,
           ivaPct,
-          defaultPresentacionId || null,
-          'Unidad',
-          1.0,
-          cant,
-          vu,
+          presId,
+          presNom,
+          presEquiv,
+          cantEmp,
+          costoEmp,
           tot
         );
+
+        // Pre-cargar historial de cotizaciones de este proveedor para el selector de presentación
+        if (prodId && d.proveedor_id) {
+          fetch(`/api/inventario/${NEGOCIO_ID}/producto/${prodId}/proveedor/${d.proveedor_id}/historial-presentaciones`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.ok && data.historial) {
+                historialEntradas[idx] = data.historial;
+              }
+            })
+            .catch(() => {});
+        }
       });
 
       calcularTotalesEntrada();

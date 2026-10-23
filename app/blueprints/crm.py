@@ -352,6 +352,47 @@ def api_chat_push_desuscribir():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/chat/push/test', methods=['GET', 'POST'])
+def api_chat_push_test():
+    """Envía una notificación push de prueba al tercero o usuario actual (o a todos los suscritos)."""
+    data = request.get_json(silent=True) or {}
+    tercero_id = data.get('tercero_id') or request.args.get('tercero_id') or get_chat_tercero_id() or session.get('usuario_id')
+    try:
+        tercero_id = int(tercero_id) if tercero_id else None
+    except (ValueError, TypeError):
+        tercero_id = None
+
+    conn = get_db_connection()
+    _asegurar_schema_chat(conn)
+    if tercero_id:
+        subs = conn.execute("SELECT id, endpoint, user_agent, tercero_id FROM chat_push_subscriptions WHERE tercero_id = %s AND activo = TRUE", (tercero_id,)).fetchall()
+        if not subs:
+            subs = conn.execute("SELECT id, endpoint, user_agent, tercero_id FROM chat_push_subscriptions WHERE activo = TRUE").fetchall()
+    else:
+        subs = conn.execute("SELECT id, endpoint, user_agent, tercero_id FROM chat_push_subscriptions WHERE activo = TRUE").fetchall()
+    conn.close()
+
+    if not subs:
+        return jsonify({
+            'ok': False,
+            'subs_count': 0,
+            'error': 'No hay dispositivos suscritos con notificaciones push activas. Primero abre el chat y presiona "Activar alertas con app cerrada".'
+        })
+
+    titulo = "🔔 Prueba de Alerta TUC TUC"
+    cuerpo = "¡Prueba exitosa! Tu dispositivo está recibiendo alertas y sonido en segundo plano."
+    terceros_ids = list(set([s['tercero_id'] for s in subs]))
+    for tid in terceros_ids:
+        _despachar_push_asincrono(tid, titulo, cuerpo, token='', url='/chat2')
+
+    return jsonify({
+        'ok': True,
+        'subs_count': len(subs),
+        'terceros_notificados': len(terceros_ids),
+        'mensaje': f'Notificación Web Push enviada a {len(subs)} dispositivo(s).'
+    })
+
+
 # ── API chat ──────────────────────────────────────────────────────────────
 
 @bp.route('/api/chat/invitar', methods=['POST'])

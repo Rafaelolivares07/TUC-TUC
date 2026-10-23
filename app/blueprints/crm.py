@@ -20,17 +20,14 @@ bp = Blueprint('crm', __name__)
 _AUDIO_TMP = os.path.join(tempfile.gettempdir(), 'tuctuc_audio_chunks')
 os.makedirs(_AUDIO_TMP, exist_ok=True)
 
-_schema_chat_listo = False
-
+_schema_chat_listo = False
 
 def job_verificar_recordatorios():
     """Tarea APScheduler — verifica recordatorios pendientes"""
-    pass
-
+    pass
 
 def get_chat_tercero_id():
-    return session.get('chat_tercero_id') or session.get('usuario_id') or None
-
+    return session.get('chat_tercero_id') or session.get('usuario_id') or None
 
 # ── Páginas ────────────────────────────────────────────────────────────────
 
@@ -42,8 +39,7 @@ def chat_panel():
     return render_template('chat.html',
                            mi_tercero_id=mi_id,
                            es_invitado=False,
-                           token_inicial='')
-
+                           token_inicial='')
 
 @bp.route('/chat2')
 def chat_panel_v2():
@@ -53,8 +49,7 @@ def chat_panel_v2():
     return render_template('chat_v3.html',
                            mi_tercero_id=mi_id,
                            es_invitado=False,
-                           token_inicial='')
-
+                           token_inicial='')
 
 
 @bp.route('/chat/<token>')
@@ -91,8 +86,7 @@ def chat_invitado(token):
                            mi_tercero_id=actual,
                            es_invitado=es_inv,
                            token_inicial=token,
-                           nombre_inicial=nombre_otro or '')
-
+                           nombre_inicial=nombre_otro or '')
 
 # ── Helpers de schema ─────────────────────────────────────────────────────
 
@@ -161,8 +155,7 @@ def _asegurar_schema_chat(conn):
             conn.commit()
         except Exception:
             try: conn.rollback()
-            except Exception: pass
-
+            except Exception: pass
 
 def _crear_tabla_fotos(conn):
     conn.execute('''
@@ -173,8 +166,7 @@ def _crear_tabla_fotos(conn):
             orden INTEGER DEFAULT 0,
             subida_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    ''')
-
+    ''')
 
 def _asegurar_tabla_apuntes(conn):
     conn.execute("""
@@ -188,8 +180,7 @@ def _asegurar_tabla_apuntes(conn):
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    conn.commit()
-
+    conn.commit()
 
 # ── Web Push Nativo (VAPID) ────────────────────────────────────────────────
 
@@ -209,6 +200,22 @@ def _obtener_vapid_config():
         print('[VAPID] Error cargando vapid_keys.json:', e)
     return None
 
+def _asegurar_pywebpush():
+    try:
+        from pywebpush import webpush, WebPushException
+        return webpush, WebPushException
+    except ImportError:
+        import subprocess, sys
+        try:
+            print("[VAPID] pywebpush no instalado, ejecutando auto-instalación...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "pywebpush>=2.5.0", "py-vapid>=1.9.6"], check=True, timeout=90)
+            from pywebpush import webpush, WebPushException
+            return webpush, WebPushException
+        except Exception as e:
+            print("[VAPID] Error al auto-instalar pywebpush:", e)
+            return None, None
+
+
 def _despachar_push_asincrono(destinatario_id, titulo, cuerpo, token='', url='', icono=''):
     """Envía la notificación Web Push nativa en segundo plano para no demorar la respuesta HTTP."""
     if not destinatario_id:
@@ -227,10 +234,9 @@ def _enviar_push_a_tercero_worker(destinatario_id, titulo, cuerpo, token, url, i
     cfg = _obtener_vapid_config()
     if not cfg or not cfg.get('private_key'):
         return
-    try:
-        from pywebpush import webpush, WebPushException
-    except Exception as e:
-        print('[VAPID] pywebpush no disponible:', e)
+    webpush, WebPushException = _asegurar_pywebpush()
+    if not webpush:
+        print('[VAPID] pywebpush no disponible tras intento de instalación')
         return
 
     conn = None
@@ -289,16 +295,14 @@ def _enviar_push_a_tercero_worker(destinatario_id, titulo, cuerpo, token, url, i
     finally:
         if conn:
             try: conn.close()
-            except Exception: pass
-
+            except Exception: pass
 
 @bp.route('/api/chat/vapid-public-key', methods=['GET'])
 def api_chat_vapid_public_key():
     cfg = _obtener_vapid_config()
     if not cfg or not cfg.get('public_key'):
         return jsonify({'ok': False, 'error': 'VAPID no configurado'}), 500
-    return jsonify({'ok': True, 'public_key': cfg['public_key']})
-
+    return jsonify({'ok': True, 'public_key': cfg['public_key']})
 
 @bp.route('/api/chat/push/suscribir', methods=['POST'])
 def api_chat_push_suscribir():
@@ -332,8 +336,7 @@ def api_chat_push_suscribir():
         conn.close()
         return jsonify({'ok': True, 'mensaje': 'Suscripción Web Push guardada'})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/push/desuscribir', methods=['POST'])
 def api_chat_push_desuscribir():
@@ -349,8 +352,7 @@ def api_chat_push_desuscribir():
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/push/test', methods=['GET', 'POST'])
 def api_chat_push_test():
@@ -366,11 +368,9 @@ def api_chat_push_test():
     if not cfg:
         return jsonify({'ok': False, 'error': 'VAPID no configurado en servidor (app/vapid_keys.json)'})
 
-    try:
-        from pywebpush import webpush, WebPushException
-        pywebpush_ok = True
-    except Exception as e:
-        return jsonify({'ok': False, 'error': f'pywebpush no disponible en servidor: {e}'})
+    webpush, WebPushException = _asegurar_pywebpush()
+    if not webpush:
+        return jsonify({'ok': False, 'error': 'pywebpush no disponible en servidor y falló la instalación automática.'})
 
     conn = get_db_connection()
     _asegurar_schema_chat(conn)
@@ -445,8 +445,7 @@ def api_chat_push_test():
         'exitosos': exitosos,
         'resultados': resultados,
         'mensaje': f'Prueba Web Push enviada a {len(subs)} dispositivo(s) ({exitosos} con éxito).'
-    })
-
+    })
 
 @bp.route('/api/chat/invitar', methods=['POST'])
 def api_chat_invitar():
@@ -473,8 +472,7 @@ def api_chat_invitar():
         return jsonify({'ok': True, 'token': token, 'link': f'{host}/chat/{token}',
                         'nombre': nombre, 'conv_id': conv['id']})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/invitado/invitar', methods=['POST'])
 def api_chat_invitado_invitar():
@@ -508,8 +506,7 @@ def api_chat_invitado_invitar():
         return jsonify({'ok': True, 'token': nuevo_token,
                         'link': f'{host}/chat/{nuevo_token}', 'nombre': nombre_nuevo})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/reclamar/<token>', methods=['POST'])
 def api_chat_reclamar(token):
@@ -535,8 +532,7 @@ def api_chat_reclamar(token):
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/invitado/mensajes/<token>', methods=['GET'])
 def api_chat_invitado_mensajes(token):
@@ -586,8 +582,7 @@ def api_chat_invitado_mensajes(token):
         return jsonify({'ok': True, 'conv': dict(conv),
                         'mensajes': [_ser_msg(m) for m in mensajes]})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/invitado/enviar', methods=['POST'])
 def api_chat_invitado_enviar():
@@ -661,8 +656,7 @@ def api_chat_invitado_enviar():
         conn.close()
         return jsonify({'ok': True, 'id': nuevo['id'], 'fecha': str(nuevo['fecha'])})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/invitado/audio', methods=['POST'])
 def api_chat_invitado_audio():
@@ -677,8 +671,7 @@ def api_chat_invitado_audio():
         )
         return jsonify({'ok': True, 'url': result['secure_url']})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/audio/chunk', methods=['POST'])
 def api_chat_audio_chunk():
@@ -695,8 +688,7 @@ def api_chat_audio_chunk():
             f.write(data)
         return jsonify({'ok': True})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/audio/finalizar', methods=['POST'])
 def api_chat_audio_finalizar():
@@ -729,8 +721,7 @@ def api_chat_audio_finalizar():
                 fp = os.path.join(_AUDIO_TMP, fn)
                 if ahora - os.path.getmtime(fp) > 3600:
                     os.remove(fp)
-        except Exception: pass
-
+        except Exception: pass
 
 @bp.route('/api/chat/invitado/imagen', methods=['POST'])
 def api_chat_invitado_imagen():
@@ -744,8 +735,7 @@ def api_chat_invitado_imagen():
         )
         return jsonify({'ok': True, 'url': result['secure_url']})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/mis-conversaciones', methods=['GET'])
 def api_chat_mis_conversaciones():
@@ -783,8 +773,7 @@ def api_chat_mis_conversaciones():
         conn.close()
         return jsonify({'ok': True, 'conversaciones': [dict(c) for c in convs]})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/mi-perfil', methods=['GET'])
 def api_chat_mi_perfil():
@@ -803,8 +792,7 @@ def api_chat_mi_perfil():
                             'tipo_tercero': row['tipo_tercero'] or 'invitado'})
         return jsonify({'ok': False})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)})
-
+        return jsonify({'ok': False, 'error': str(e)})
 
 @bp.route('/api/chat/registrar-telefono', methods=['POST'])
 def api_chat_registrar_telefono():
@@ -861,8 +849,7 @@ def api_chat_registrar_telefono():
     except Exception as e:
         try: conn.rollback()
         except: pass
-        return jsonify({'ok': False, 'error': str(e)})
-
+        return jsonify({'ok': False, 'error': str(e)})
 
 @bp.route('/api/chat/perfil/foto', methods=['POST'])
 def api_chat_perfil_foto():
@@ -892,8 +879,7 @@ def api_chat_perfil_foto():
         conn.close()
         return jsonify({'ok': True, 'url': url})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/eliminar/<token>', methods=['DELETE'])
 def api_chat_eliminar(token):
@@ -926,8 +912,7 @@ def api_chat_eliminar(token):
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 # ── Galería de fotos ───────────────────────────────────────────────────────
 
@@ -971,8 +956,7 @@ def api_chat_fotos_agregar():
         conn.close()
         return jsonify({'ok': True, 'id': nueva['id'], 'url': url, 'orden': orden})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/fotos/ver', methods=['GET'])
 def api_chat_fotos_ver():
@@ -1003,8 +987,7 @@ def api_chat_fotos_ver():
         conn.close()
         return jsonify({'ok': True, 'fotos': resultado})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e), 'fotos': []})
-
+        return jsonify({'ok': False, 'error': str(e), 'fotos': []})
 
 @bp.route('/api/chat/fotos/<int:foto_id>', methods=['DELETE'])
 def api_chat_fotos_eliminar(foto_id):
@@ -1033,8 +1016,7 @@ def api_chat_fotos_eliminar(foto_id):
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 # ── Merlin ─────────────────────────────────────────────────────────────────
 
@@ -1078,8 +1060,7 @@ def api_chat_merlin_iniciar():
     except Exception as e:
         try: conn.rollback(); conn.close()
         except Exception: pass
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 # ── Cards de negocios ──────────────────────────────────────────────────────
 
@@ -1117,8 +1098,7 @@ def api_chat_cards_negocios():
     except Exception as e:
         try: conn.close()
         except Exception: pass
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/cards/items')
 def api_chat_cards_items():
@@ -1162,8 +1142,7 @@ def api_chat_cards_items():
     except Exception as e:
         try: conn.close()
         except Exception: pass
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 # ── Estados de mensajes ────────────────────────────────────────────────────
 
@@ -1184,8 +1163,7 @@ def api_chat_mensajes_estados():
         conn.close()
         return jsonify({'ok': True, 'estados': {str(r['id']): r['estado'] for r in rows}})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 # ── Apuntes ────────────────────────────────────────────────────────────────
 
@@ -1212,8 +1190,7 @@ def api_chat_apunte_crear():
         conn.close()
         return jsonify({'ok': True, 'id': row['id']})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/apuntes/<token>', methods=['GET'])
 def api_chat_apuntes_listar(token):
@@ -1237,8 +1214,7 @@ def api_chat_apuntes_listar(token):
             return d
         return jsonify({'ok': True, 'apuntes': [_ser(r) for r in rows]})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/apunte/<int:apunte_id>', methods=['DELETE'])
 def api_chat_apunte_eliminar(apunte_id):
@@ -1252,8 +1228,7 @@ def api_chat_apunte_eliminar(apunte_id):
         conn.close()
         return jsonify({'ok': True})
     except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 # ── Usuarios (Terceros) de los módulos + Enlazar + Globo flotante ──────────
 
@@ -1304,8 +1279,7 @@ def api_chat_usuarios_buscar():
             conn.close()
         except Exception:
             pass
-        return jsonify({'ok': False, 'error': str(e), 'usuarios': []}), 500
-
+        return jsonify({'ok': False, 'error': str(e), 'usuarios': []}), 500
 
 @bp.route('/api/chat/iniciar-con-usuario', methods=['POST'])
 def api_chat_iniciar_con_usuario():
@@ -1379,8 +1353,7 @@ def api_chat_iniciar_con_usuario():
             conn.close()
         except Exception:
             pass
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/enlazar-usuario', methods=['POST'])
 def api_chat_enlazar_usuario():
@@ -1506,8 +1479,7 @@ def api_chat_enlazar_usuario():
             conn.close()
         except Exception:
             pass
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @bp.route('/api/chat/resumen-globo', methods=['GET'])
 def api_chat_resumen_globo():
@@ -1556,8 +1528,7 @@ def api_chat_resumen_globo():
             conn.close()
         except Exception:
             pass
-        return jsonify({'ok': False, 'error': str(e), 'total_no_leidos': 0})
-
+        return jsonify({'ok': False, 'error': str(e), 'total_no_leidos': 0})
 
 _GLOBO_CHAT_SNIPPET = """
 <!-- ── Globo flotante global de Mensajería TUC TUC ── -->
@@ -2112,8 +2083,7 @@ _GLOBO_CHAT_SNIPPET = """
   }
 })();
 </script>
-"""
-
+"""
 
 @bp.after_app_request
 def _inyectar_globo_chat_global(response):

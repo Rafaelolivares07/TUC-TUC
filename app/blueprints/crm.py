@@ -263,6 +263,9 @@ def _enviar_push_a_tercero_worker(destinatario_id, titulo, cuerpo, token, url, i
         priv_key = cfg['private_key']
         claims = {'sub': cfg.get('claims_sub') or 'mailto:admin@tuc-tuc.co'}
 
+        from py_vapid import Vapid
+        vapid_obj = Vapid.from_pem(priv_key.encode('utf-8'))
+
         for sub in subs:
             sub_info = {
                 'endpoint': sub['endpoint'],
@@ -275,9 +278,9 @@ def _enviar_push_a_tercero_worker(destinatario_id, titulo, cuerpo, token, url, i
                 webpush(
                     subscription_info=sub_info,
                     data=payload_data,
-                    vapid_private_key=priv_key,
+                    vapid_private_key=vapid_obj,
                     vapid_claims=claims,
-                    timeout=6
+                    timeout=8
                 )
             except WebPushException as ex:
                 resp = getattr(ex, 'response', None)
@@ -403,6 +406,9 @@ def api_chat_push_test():
     priv_key = cfg['private_key']
     claims = {'sub': cfg.get('claims_sub') or 'mailto:admin@tuc-tuc.co'}
 
+    from py_vapid import Vapid
+    vapid_obj = Vapid.from_pem(priv_key.encode('utf-8'))
+
     resultados = []
     for s in subs:
         sub_info = {
@@ -414,7 +420,7 @@ def api_chat_push_test():
             resp = webpush(
                 subscription_info=sub_info,
                 data=payload_data,
-                vapid_private_key=priv_key,
+                vapid_private_key=vapid_obj,
                 vapid_claims=claims,
                 timeout=8
             )

@@ -827,7 +827,30 @@
           <span class="text-xs font-bold text-gray-500 uppercase">Producto:</span>
           <p id="tarjeta-nombre-prod" class="text-base font-extrabold text-gray-900 truncate"></p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Selectores interactivos de decimales para la Ficha Técnica -->
+          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg text-xs shadow-2xs">
+            <div class="flex items-center gap-1">
+              <label for="modal-tarjetas-dec-cant" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+                🔢 Cant:
+              </label>
+              <input id="modal-tarjetas-dec-cant" type="number" min="0" max="4" step="1" value="2"
+                     oninput="cambiarDecimalesTarjetasCantidad(this.value)" onchange="cambiarDecimalesTarjetasCantidad(this.value)" onblur="validarDecimalesTarjetasCantidadInput(this)"
+                     class="w-9 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500"
+                     title="Decimales para cantidades de componentes en esta ficha">
+            </div>
+            <div class="h-3 w-px bg-slate-300"></div>
+            <div class="flex items-center gap-1">
+              <label for="modal-tarjetas-dec-mon" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+                💲 Costo:
+              </label>
+              <input id="modal-tarjetas-dec-mon" type="number" min="0" max="6" step="1" value="2"
+                     oninput="cambiarDecimalesTarjetasMoneda(this.value)" onchange="cambiarDecimalesTarjetasMoneda(this.value)" onblur="validarDecimalesTarjetasMonedaInput(this)"
+                     class="w-9 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500"
+                     title="Decimales para costos unitarios y subtotales en esta ficha">
+            </div>
+          </div>
+
           <button type="button" onclick="toggleClonarEscalarPanel()" id="btn-toggle-clonar" class="text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 px-3 py-1.5 rounded-lg border border-amber-200 transition-colors flex items-center gap-1.5">
             📋 Clonar / Multiplicar
           </button>
@@ -1973,15 +1996,27 @@
         </div>
 
         <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
-          <!-- Selector interactivo de decimales para Tarjetas Estándar -->
-          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
-            <label for="tarjetas-decimales-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1">
-              <span>🔢 Decimales:</span>
-            </label>
-            <input id="tarjetas-decimales-input" type="number" min="0" max="6" step="1" value="2"
-                   oninput="cambiarDecimalesTarjetas(this.value)" onchange="cambiarDecimalesTarjetas(this.value)" onblur="validarDecimalesTarjetasInput(this)"
-                   class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
-                   title="Número de decimales visibles para costos, precios y márgenes en Tarjetas Estándar (0 a 6)">
+          <!-- Selector interactivo de decimales para Tarjetas Estándar (Separado Cantidad y Moneda) -->
+          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
+            <div class="flex items-center gap-1">
+              <label for="tarjetas-dec-cant-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+                🔢 Cant:
+              </label>
+              <input id="tarjetas-dec-cant-input" type="number" min="0" max="4" step="1" value="2"
+                     oninput="cambiarDecimalesTarjetasCantidad(this.value)" onchange="cambiarDecimalesTarjetasCantidad(this.value)" onblur="validarDecimalesTarjetasCantidadInput(this)"
+                     class="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                     title="Decimales visibles para cantidades de ingredientes (0 a 4)">
+            </div>
+            <div class="h-3.5 w-px bg-slate-300"></div>
+            <div class="flex items-center gap-1">
+              <label for="tarjetas-dec-mon-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+                💲 Costo:
+              </label>
+              <input id="tarjetas-dec-mon-input" type="number" min="0" max="6" step="1" value="2"
+                     oninput="cambiarDecimalesTarjetasMoneda(this.value)" onchange="cambiarDecimalesTarjetasMoneda(this.value)" onblur="validarDecimalesTarjetasMonedaInput(this)"
+                     class="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                     title="Decimales visibles para costos y precios en Tarjetas Estándar (0 a 6)">
+            </div>
           </div>
 
           <div class="w-full sm:w-64">
@@ -2084,15 +2119,27 @@
           <p class="text-xs text-gray-500 mt-0.5">Costo unitario por insumo. Clic para ver cantidad y costo en cada receta.</p>
         </div>
         <div class="flex items-center gap-3 w-full sm:w-auto flex-wrap">
-          <!-- Selector interactivo de decimales para Vista Insumos -->
-          <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
-            <label for="insumos-decimales-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none flex items-center gap-1">
-              <span>🔢 Decimales:</span>
-            </label>
-            <input id="insumos-decimales-input" type="number" min="0" max="6" step="1" value="2"
-                   oninput="cambiarDecimalesTarjetas(this.value)" onchange="cambiarDecimalesTarjetas(this.value)" onblur="validarDecimalesTarjetasInput(this)"
-                   class="w-12 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1.5 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
-                   title="Número de decimales visibles para costos unitarios y totales en Insumos (0 a 6)">
+          <!-- Selector interactivo de decimales para Vista Insumos (Separado Cantidad y Moneda) -->
+          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl shadow-2xs shrink-0">
+            <div class="flex items-center gap-1">
+              <label for="insumos-dec-cant-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+                🔢 Cant:
+              </label>
+              <input id="insumos-dec-cant-input" type="number" min="0" max="4" step="1" value="2"
+                     oninput="cambiarDecimalesTarjetasCantidad(this.value)" onchange="cambiarDecimalesTarjetasCantidad(this.value)" onblur="validarDecimalesTarjetasCantidadInput(this)"
+                     class="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                     title="Decimales visibles para cantidades (0 a 4)">
+            </div>
+            <div class="h-3.5 w-px bg-slate-300"></div>
+            <div class="flex items-center gap-1">
+              <label for="insumos-dec-mon-input" class="text-[10px] font-extrabold text-slate-600 uppercase tracking-wide select-none">
+                💲 Costo:
+              </label>
+              <input id="insumos-dec-mon-input" type="number" min="0" max="6" step="1" value="2"
+                     oninput="cambiarDecimalesTarjetasMoneda(this.value)" onchange="cambiarDecimalesTarjetasMoneda(this.value)" onblur="validarDecimalesTarjetasMonedaInput(this)"
+                     class="w-10 text-center font-mono font-bold text-xs bg-white border border-slate-300 rounded-lg px-1 py-0.5 outline-none text-slate-800 focus:border-rose-500 focus:ring-1 focus:ring-rose-400"
+                     title="Decimales visibles para costos unitarios y totales en Insumos (0 a 6)">
+            </div>
           </div>
 
           <!-- Botón Ajuste / Reemplazo Masivo de Insumos -->
@@ -7530,7 +7577,7 @@ function recalcularTotalRecetaModal() {
 
   if (totalValEl) {
 
-    totalValEl.textContent = '$' + totalReceta.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    totalValEl.textContent = _fmtTarjetasMon(totalReceta);
 
   }
 
@@ -7630,7 +7677,7 @@ function renderLineasTarjeta() {
 
     
 
-    const qtyFormatted = Number(cantidad.toFixed(4));
+    const qtyFormatted = Number(cantidad.toFixed(_tarjetasDecimalesCantidad));
 
     
 
@@ -7658,13 +7705,13 @@ function renderLineasTarjeta() {
 
         <td class="py-2.5 px-3 text-right num font-mono text-sm text-gray-600">
 
-          $${costoUnd.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+          ${_fmtTarjetasMon(costoUnd)}
 
         </td>
 
         <td id="modal-subtotal-${i}" class="py-2.5 px-3 text-right num font-mono text-sm font-black text-gray-900">
 
-          $${subtotal.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+          ${_fmtTarjetasMon(subtotal)}
 
         </td>
 
@@ -7738,7 +7785,7 @@ function renderLineasTarjeta() {
 
   if (totalValEl) {
 
-    totalValEl.textContent = '$' + totalReceta.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    totalValEl.textContent = _fmtTarjetasMon(totalReceta);
 
   }
 
@@ -16575,16 +16622,23 @@ let sortColumna = 'nombre';
 let sortAscendente = true;
 let expandedRecetas = new Set();
 
-let _tarjetasDecimales = parseInt(localStorage.getItem('tarjetas_decimales_moneda') ?? '2', 10);
-if (isNaN(_tarjetasDecimales) || _tarjetasDecimales < 0) _tarjetasDecimales = 2;
-if (_tarjetasDecimales > 6) _tarjetasDecimales = 6;
+let _tarjetasDecimalesMoneda = parseInt(localStorage.getItem('tarjetas_decimales_moneda') ?? '2', 10);
+if (isNaN(_tarjetasDecimalesMoneda) || _tarjetasDecimalesMoneda < 0) _tarjetasDecimalesMoneda = 2;
+if (_tarjetasDecimalesMoneda > 6) _tarjetasDecimalesMoneda = 6;
+
+let _tarjetasDecimalesCantidad = parseInt(localStorage.getItem('tarjetas_decimales_cantidad') ?? '2', 10);
+if (isNaN(_tarjetasDecimalesCantidad) || _tarjetasDecimalesCantidad < 0) _tarjetasDecimalesCantidad = 2;
+if (_tarjetasDecimalesCantidad > 4) _tarjetasDecimalesCantidad = 4;
+
+// Backward-compatibility alias
+let _tarjetasDecimales = _tarjetasDecimalesMoneda;
 
 function _fmtTarjetasMon(n) {
   if (n == null || isNaN(n)) return '—';
   const val = Number(n);
   return '$ ' + val.toLocaleString('es-CO', { 
-    minimumFractionDigits: _tarjetasDecimales, 
-    maximumFractionDigits: _tarjetasDecimales 
+    minimumFractionDigits: _tarjetasDecimalesMoneda, 
+    maximumFractionDigits: _tarjetasDecimalesMoneda 
   });
 }
 
@@ -16592,8 +16646,8 @@ function _fmtTarjetasPct(n) {
   if (n == null || isNaN(n)) return '—';
   const val = Number(n);
   return val.toLocaleString('es-CO', { 
-    minimumFractionDigits: Math.min(_tarjetasDecimales, 2), 
-    maximumFractionDigits: Math.max(_tarjetasDecimales, 1) 
+    minimumFractionDigits: Math.min(_tarjetasDecimalesMoneda, 2), 
+    maximumFractionDigits: Math.max(_tarjetasDecimalesMoneda, 1) 
   }) + ' %';
 }
 
@@ -16601,41 +16655,83 @@ function _fmtTarjetasNum(n) {
   if (n == null || isNaN(n)) return '0';
   const val = Number(n);
   return val.toLocaleString('es-CO', { 
-    minimumFractionDigits: _tarjetasDecimales, 
-    maximumFractionDigits: _tarjetasDecimales 
+    minimumFractionDigits: _tarjetasDecimalesCantidad, 
+    maximumFractionDigits: _tarjetasDecimalesCantidad 
   });
 }
 
-function cambiarDecimalesTarjetas(val) {
+function cambiarDecimalesTarjetasMoneda(val) {
   let d = parseInt(val, 10);
   if (isNaN(d)) return;
   d = Math.max(0, Math.min(6, d));
+  _tarjetasDecimalesMoneda = d;
   _tarjetasDecimales = d;
   try { localStorage.setItem('tarjetas_decimales_moneda', d); } catch(e) {}
   
-  // Sincronizar inputs en vista recetas y vista insumos
-  const inpRec = document.getElementById('tarjetas-decimales-input');
-  const inpIns = document.getElementById('insumos-decimales-input');
-  if (inpRec && parseInt(inpRec.value, 10) !== d) inpRec.value = d;
-  if (inpIns && parseInt(inpIns.value, 10) !== d) inpIns.value = d;
+  // Sincronizar inputs de moneda en vistas y modal
+  ['tarjetas-dec-mon-input', 'insumos-dec-mon-input', 'modal-tarjetas-dec-mon'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && parseInt(el.value, 10) !== d) el.value = d;
+  });
   
   renderTarjetasTable();
   renderInsumosTable();
+  if (typeof renderLineasTarjeta === 'function') {
+    const ov = document.getElementById('overlay-tarjeta');
+    if (ov && !ov.classList.contains('hidden')) {
+      renderLineasTarjeta();
+    }
+  }
 }
 
-function validarDecimalesTarjetasInput(inputEl) {
+function validarDecimalesTarjetasMonedaInput(inputEl) {
   let d = parseInt(inputEl.value, 10);
   if (isNaN(d) || d < 0) d = 2;
   if (d > 6) d = 6;
   inputEl.value = d;
-  cambiarDecimalesTarjetas(d);
+  cambiarDecimalesTarjetasMoneda(d);
+}
+
+function cambiarDecimalesTarjetasCantidad(val) {
+  let d = parseInt(val, 10);
+  if (isNaN(d)) return;
+  d = Math.max(0, Math.min(4, d));
+  _tarjetasDecimalesCantidad = d;
+  try { localStorage.setItem('tarjetas_decimales_cantidad', d); } catch(e) {}
+  
+  // Sincronizar inputs de cantidad en vistas y modal
+  ['tarjetas-dec-cant-input', 'insumos-dec-cant-input', 'modal-tarjetas-dec-cant'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && parseInt(el.value, 10) !== d) el.value = d;
+  });
+  
+  renderTarjetasTable();
+  renderInsumosTable();
+  if (typeof renderLineasTarjeta === 'function') {
+    const ov = document.getElementById('overlay-tarjeta');
+    if (ov && !ov.classList.contains('hidden')) {
+      renderLineasTarjeta();
+    }
+  }
+}
+
+function validarDecimalesTarjetasCantidadInput(inputEl) {
+  let d = parseInt(inputEl.value, 10);
+  if (isNaN(d) || d < 0) d = 2;
+  if (d > 4) d = 4;
+  inputEl.value = d;
+  cambiarDecimalesTarjetasCantidad(d);
 }
 
 function inicializarDecimalesTarjetas() {
-  const inpRec = document.getElementById('tarjetas-decimales-input');
-  const inpIns = document.getElementById('insumos-decimales-input');
-  if (inpRec) inpRec.value = _tarjetasDecimales;
-  if (inpIns) inpIns.value = _tarjetasDecimales;
+  ['tarjetas-dec-mon-input', 'insumos-dec-mon-input', 'modal-tarjetas-dec-mon'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = _tarjetasDecimalesMoneda;
+  });
+  ['tarjetas-dec-cant-input', 'insumos-dec-cant-input', 'modal-tarjetas-dec-cant'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = _tarjetasDecimalesCantidad;
+  });
 }
 
 

@@ -1907,6 +1907,7 @@ _GLOBO_CHAT_SNIPPET = """
       if ('Notification' in window) {
         const perm = await Notification.requestPermission();
         if (perm === 'granted' && 'serviceWorker' in navigator) {
+          localStorage.setItem('chat_sonido_habilitado', 'true');
           const reg = await _obtenerSWReg();
           const rKey = await fetch('/api/chat/vapid-public-key');
           const dKey = await rKey.json();
@@ -1917,27 +1918,48 @@ _GLOBO_CHAT_SNIPPET = """
             const outputArray = new Uint8Array(rawData.length);
             for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
             let sub = await reg.pushManager.getSubscription();
-            if (!sub) {
+            if (sub) {
+              try { await sub.unsubscribe(); } catch(eUnsub) {}
+              sub = null;
+            }
+            try {
               sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: outputArray });
+            } catch(subErr) {
+              console.warn('Push subscribe error en globo:', subErr);
+              if (btn) {
+                btn.textContent = '✓ Alertas y Timbre OK';
+                btn.style.background = '#10b981';
+                btn.style.borderColor = '#10b981';
+                btn.style.color = '#ffffff';
+              }
+              alert('✓ Sonido y avisos en pantalla activados correctamente.\n\nNota: Para app cerrada tu navegador bloqueó Google FCM. Si usas Brave activa "Google services for push messaging" en brave://settings/privacy.');
+              return;
             }
             await fetch('/api/chat/push/suscribir', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ subscription: sub })
             });
-            if (btn) btn.textContent = '✓ Alertas OK';
-            alert('✓ Alertas Web Push activadas correctamente en este dispositivo.');
+            if (btn) {
+              btn.textContent = '✓ Alertas Push OK';
+              btn.style.background = '#10b981';
+              btn.style.borderColor = '#10b981';
+              btn.style.color = '#ffffff';
+            }
+            alert('✓ Alertas Web Push y timbre activados correctamente en este dispositivo.');
             return;
           }
         }
       }
+      if (btn) btn.textContent = '🔔 Activar Alertas';
+      const ifr = document.getElementById('tuctuc-chat-iframe');
+      if (ifr && ifr.contentWindow) {
+        ifr.contentWindow.postMessage({ type: 'tuctuc_abrir_perfil' }, '*');
+      }
     } catch(e) {
-      console.error('push globo error', e);
-    }
-    if (btn) btn.textContent = '🔔 Activar Alertas';
-    const ifr = document.getElementById('tuctuc-chat-iframe');
-    if (ifr && ifr.contentWindow) {
-      try { ifr.contentWindow.postMessage({ type: 'abrir_perfil' }, '*'); } catch(e) {}
+      console.warn('tuctucActivarPushDesdeGlobo error', e);
+      if (btn) btn.textContent = '🔔 Activar Alertas';
+      alert('Aviso: ' + (e.message || e));
     }
   };
 

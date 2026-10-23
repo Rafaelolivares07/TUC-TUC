@@ -3830,17 +3830,16 @@ function _refrescarTonosBtns() {
 async function _obtenerSWReg() {
   if (!('serviceWorker' in navigator)) return null;
   try {
-    let r = await navigator.serviceWorker.getRegistration('/sw.js');
-    if (!r) r = await navigator.serviceWorker.getRegistration();
-    if (!r) r = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    if (r && r.active) return r;
-    return new Promise(res => {
-      const t = setTimeout(() => res(r), 2500);
-      navigator.serviceWorker.ready.then(rr => { clearTimeout(t); res(rr); }).catch(() => { clearTimeout(t); res(r); });
-    });
+    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    await navigator.serviceWorker.ready;
+    return reg;
   } catch (e) {
-    console.warn('Error en _obtenerSWReg:', e);
-    return null;
+    console.warn('Error en _obtenerSWReg register:', e);
+    try {
+      return await navigator.serviceWorker.getRegistration();
+    } catch (e2) {
+      return null;
+    }
   }
 }
 
@@ -3933,11 +3932,35 @@ async function activarWebPush() {
 
     if (label) label.textContent = 'Suscribiendo en el sistema operativo...';
     let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
+    if (sub) {
+      try { await sub.unsubscribe(); } catch(eUnsub) { console.warn('Aviso unsubscription:', eUnsub); }
+      sub = null;
+    }
+
+    try {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey
       });
+    } catch (subErr) {
+      console.warn('Push subscribe error:', subErr);
+      const errMsg = String(subErr.message || subErr);
+      localStorage.setItem('chat_sonido_habilitado', 'true');
+      if (label) {
+        label.style.color = '#f59e0b';
+        if (errMsg.includes('push service error') || errMsg.includes('Registration failed')) {
+          label.innerHTML = '⚠️ Timbre y avisos en pantalla activos.<br><small style="color:var(--ink-soft);font-size:11px">Para app cerrada: Tu navegador bloqueó Google FCM. Si usas Brave activa "Google services for push messaging" en brave://settings/privacy.</small>';
+        } else {
+          label.textContent = '⚠️ Alertas activas con app abierta (' + errMsg + ')';
+        }
+      }
+      if (btnTxt) btnTxt.textContent = '✓ Alertas y timbre activos';
+      if (btn) {
+        btn.style.background = '#10b981';
+        btn.disabled = false;
+      }
+      tocarTono();
+      return;
     }
 
     if (label) label.textContent = 'Guardando suscripción en tu cuenta...';

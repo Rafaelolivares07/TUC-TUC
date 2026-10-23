@@ -280,7 +280,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     if conn and negocio_id:
         try:
             p_rows = conn.execute("""
-                SELECT id, nombre, costo, precio, iva_pct
+                SELECT id, nombre, costo, precio, iva_pct, codigo_barra
                 FROM productos
                 WHERE negocio_id = %s
                 ORDER BY nombre ASC
@@ -411,19 +411,31 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
             elif total_line == 0.0 and cant > 0 and vu > 0:
                 total_line = round(vu * cant, 2)
 
-            # Cruzar con catálogo de productos usando umbral ESTRICTO (>= 0.70)
+            # Cruzar con catálogo de productos:
             mejor_prod = None
             mejor_score = 0.0
-            nom_upper = desc.upper()
-            for p in productos_db:
-                p_nom = p['nombre'].upper()
-                if len(p_nom) >= 5 and (p_nom in nom_upper or nom_upper in p_nom):
-                    score = 0.85
-                else:
-                    score = difflib.SequenceMatcher(None, nom_upper, p_nom).ratio()
-                if score > mejor_score and score >= 0.70:
-                    mejor_score = score
-                    mejor_prod = p
+
+            # Prioridad 1: Coincidencia por código de barras exacto (100% certero)
+            if bc:
+                for p in productos_db:
+                    cb_db = str(p.get('codigo_barra') or '').strip()
+                    if cb_db and (cb_db == bc or cb_db.lstrip('0') == bc.lstrip('0')):
+                        mejor_prod = p
+                        mejor_score = 1.0
+                        break
+
+            # Prioridad 2: Coincidencia por similitud de texto (umbral estricto >= 0.70)
+            if not mejor_prod:
+                nom_upper = desc.upper()
+                for p in productos_db:
+                    p_nom = p['nombre'].upper()
+                    if len(p_nom) >= 5 and (p_nom in nom_upper or nom_upper in p_nom):
+                        score = 0.85
+                    else:
+                        score = difflib.SequenceMatcher(None, nom_upper, p_nom).ratio()
+                    if score > mejor_score and score >= 0.70:
+                        mejor_score = score
+                        mejor_prod = p
 
             items_extraidos.append({
                 'texto_detectado': desc,

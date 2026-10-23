@@ -8291,25 +8291,27 @@ async function onSelectProductoEntrada(idx, selected) {
     historialEntradas[idx] = [];
   }
 
+  const costoActualFila = parseFloat(document.getElementById(ent-costo-emp-)?.value) || 0;
   if (h0) {
-    document.getElementById(`ent-pres-${idx}`).value = h0.presentacion_nombre || 'Unidad';
-    document.getElementById(`ent-pres-id-${idx}`).value = h0.presentacion_id || defaultPresentacionId || '';
-    document.getElementById(`ent-pres-equiv-${idx}`).value = h0.equivalencia || '1.0';
-    const precioH = (h0.precio != null && h0.precio !== '') ? parseFloat(h0.precio) : 0;
-    if (precioH > 0) {
-      document.getElementById(`ent-costo-emp-${idx}`).value = precioH.toFixed(4);
-    } else if (prod.costo) {
-      document.getElementById(`ent-costo-emp-${idx}`).value = (prod.costo * h0.equivalencia).toFixed(4);
+    document.getElementById(ent-pres-).value = h0.presentacion_nombre || 'Unidad';
+    document.getElementById(ent-pres-id-).value = h0.presentacion_id || defaultPresentacionId || '';
+    document.getElementById(ent-pres-equiv-).value = h0.equivalencia || '1.0';
+    if (costoActualFila <= 0) {
+      const precioH = (h0.precio != null && h0.precio !== '') ? parseFloat(h0.precio) : 0;
+      if (precioH > 0) {
+        document.getElementById(ent-costo-emp-).value = precioH.toFixed(4);
+      } else if (prod.costo) {
+        document.getElementById(ent-costo-emp-).value = (prod.costo * h0.equivalencia).toFixed(4);
+      }
     }
   } else {
-    document.getElementById(`ent-pres-${idx}`).value = 'Unidad';
-    document.getElementById(`ent-pres-id-${idx}`).value = defaultPresentacionId || '';
-    document.getElementById(`ent-pres-equiv-${idx}`).value = '1.0';
-    if (prod.costo) {
-      document.getElementById(`ent-costo-emp-${idx}`).value = prod.costo;
+    document.getElementById(ent-pres-).value = 'Unidad';
+    document.getElementById(ent-pres-id-).value = defaultPresentacionId || '';
+    document.getElementById(ent-pres-equiv-).value = '1.0';
+    if (costoActualFila <= 0 && prod.costo) {
+      document.getElementById(ent-costo-emp-).value = prod.costo;
     }
   }
-
   calcularCostoFilaEmpaque(idx, 'equiv');
 }
 

@@ -3682,17 +3682,26 @@ function _despertarAudioChat() {
 function _nota(freq, inicio, dur, vol = 0.85, tipo = 'triangle') {
   const ctx = _ctx();
   if (!ctx) return;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.type = tipo;
-  osc.frequency.setValueAtTime(freq, ctx.currentTime + inicio);
-  gain.gain.setValueAtTime(0, ctx.currentTime + inicio);
-  gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + inicio + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + inicio + dur);
-  osc.start(ctx.currentTime + inicio);
-  osc.stop(ctx.currentTime + inicio + dur + 0.05);
+  try {
+    const t0 = ctx.currentTime + inicio;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = tipo;
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0.001, t0);
+    gain.gain.linearRampToValueAtTime(vol, t0 + 0.015);
+    gain.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.05);
+    setTimeout(() => {
+      try { osc.stop(); } catch(e) {}
+      try { osc.disconnect(); gain.disconnect(); } catch(e) {}
+    }, (inicio + dur + 0.1) * 1000);
+  } catch(e) {
+    console.warn('_nota err', e);
+  }
 }
 
 const _TONOS = [
@@ -3899,7 +3908,10 @@ async function activarWebPush() {
       throw new Error(dataKey.error || 'Clave VAPID no disponible en servidor');
     }
 
-    const reg = await navigator.serviceWorker.ready;
+    if (label) label.textContent = 'Iniciando servicio de alertas...';
+    const reg = await _obtenerSWReg();
+    if (!reg) throw new Error('No se pudo inicializar el Service Worker');
+
     const applicationServerKey = _urlBase64ToUint8Array(dataKey.public_key);
 
     if (label) label.textContent = 'Suscribiendo en el sistema operativo...';
@@ -3999,7 +4011,7 @@ async function probarNotificacionYTimbre() {
 
 // Registrar Service Worker al iniciar chat
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/static/sw.js').then(reg => {
+  navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(reg => {
     _actualizarUIPush();
     // Auto-registrar suscripción silenciosamente si el permiso ya fue concedido
     if (Notification.permission === 'granted') {

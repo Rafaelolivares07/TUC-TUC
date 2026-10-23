@@ -1682,13 +1682,16 @@ _GLOBO_CHAT_SNIPPET = """
   </div>
   <div class="tuctuc-drawer-actions">
     <button class="tuctuc-ctx-btn" id="tuctuc-btn-ctx-cancion" style="display:none;background:rgba(201,100,66,0.35);border-color:#c96442" onclick="tuctucCompartirCancionActual()">
-      🎵 Compartir canción
+      🎵 Compartir
     </button>
-    <button class="tuctuc-ctx-btn" onclick="tuctucActivarPushDesdeGlobo()" style="background:rgba(16,185,129,0.22);border-color:#10b981;color:#10b981;font-weight:700">
-      🔔 Activar Alertas / Sonido
+    <button class="tuctuc-ctx-btn" id="tuctuc-btn-activar-push" onclick="tuctucActivarPushDesdeGlobo()" style="background:rgba(16,185,129,0.22);border-color:#10b981;color:#10b981;font-weight:700">
+      🔔 Activar Alertas
+    </button>
+    <button class="tuctuc-ctx-btn" id="tuctuc-btn-probar-timbre" onclick="tuctucProbarTimbreDesdeGlobo()" style="background:rgba(232,133,106,0.22);border-color:#e8856a;color:#e8856a;font-weight:700">
+      🔊 Probar Timbre
     </button>
     <button class="tuctuc-ctx-btn" onclick="tuctucCompartirContexto('pregunta')">
-      ❓ Consultar pantalla
+      ❓ Consultar
     </button>
     <button class="tuctuc-ctx-btn" onclick="tuctucCompartirContexto('reporte')">
       📊 Compartir vista
@@ -1797,27 +1800,32 @@ _GLOBO_CHAT_SNIPPET = """
   }
 
   function _emitirChime(ctx) {
-    const t0 = ctx.currentTime;
-    // Chime doble brillante y de alto volumen (880Hz -> 1320Hz con armónicos)
-    const notas = [
-      { f: 880, start: 0, dur: 0.16, vol: 0.85, type: 'triangle' },
-      { f: 1760, start: 0.01, dur: 0.14, vol: 0.40, type: 'sine' },
-      { f: 1320, start: 0.13, dur: 0.35, vol: 0.90, type: 'triangle' },
-      { f: 2640, start: 0.14, dur: 0.30, vol: 0.45, type: 'sine' }
-    ];
-    notas.forEach(n => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = n.type;
-      osc.frequency.setValueAtTime(n.f, t0 + n.start);
-      gain.gain.setValueAtTime(0, t0 + n.start);
-      gain.gain.linearRampToValueAtTime(n.vol, t0 + n.start + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.001, t0 + n.start + n.dur);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t0 + n.start);
-      osc.stop(t0 + n.start + n.dur + 0.04);
-    });
+    try {
+      const t0 = ctx.currentTime;
+      const notas = [
+        { f: 880, start: 0, dur: 0.16, vol: 0.70, type: 'triangle' },
+        { f: 1320, start: 0.12, dur: 0.28, vol: 0.80, type: 'triangle' }
+      ];
+      notas.forEach(n => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = n.type;
+        osc.frequency.setValueAtTime(n.f, t0 + n.start);
+        gain.gain.setValueAtTime(0.001, t0 + n.start);
+        gain.gain.linearRampToValueAtTime(n.vol, t0 + n.start + 0.015);
+        gain.gain.linearRampToValueAtTime(0.0001, t0 + n.start + n.dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t0 + n.start);
+        osc.stop(t0 + n.start + n.dur + 0.05);
+        setTimeout(() => {
+          try { osc.stop(); } catch(e) {}
+          try { osc.disconnect(); gain.disconnect(); } catch(e) {}
+        }, (n.start + n.dur + 0.1) * 1000);
+      });
+    } catch(e) {
+      console.warn('emitirChime error', e);
+    }
   }
 
   window.tuctucToggleChatDrawer = function(forzar) {
@@ -1878,17 +1886,31 @@ _GLOBO_CHAT_SNIPPET = """
     });
   };
 
+  async function _obtenerSWReg() {
+    if (!('serviceWorker' in navigator)) return null;
+    let r = await navigator.serviceWorker.getRegistration('/sw.js');
+    if (!r) r = await navigator.serviceWorker.getRegistration();
+    if (!r) r = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    if (r.active) return r;
+    return new Promise(res => {
+      const t = setTimeout(() => res(r), 3000);
+      navigator.serviceWorker.ready.then(rr => { clearTimeout(t); res(rr); }).catch(() => { clearTimeout(t); res(r); });
+    });
+  }
+
   window.tuctucActivarPushDesdeGlobo = async function() {
     _despertarAudio();
     _tocarChimeFuerte();
-    if ('Notification' in window) {
-      try {
+    const btn = document.getElementById('tuctuc-btn-activar-push');
+    if (btn) btn.textContent = '⏳ Activando...';
+    try {
+      if ('Notification' in window) {
         const perm = await Notification.requestPermission();
         if (perm === 'granted' && 'serviceWorker' in navigator) {
-          const reg = await navigator.serviceWorker.ready;
+          const reg = await _obtenerSWReg();
           const rKey = await fetch('/api/chat/vapid-public-key');
           const dKey = await rKey.json();
-          if (dKey.ok && dKey.public_key) {
+          if (dKey.ok && dKey.public_key && reg) {
             const padding = '='.repeat((4 - dKey.public_key.length % 4) % 4);
             const base64 = (dKey.public_key + padding).replace(/-/g, '+').replace(/_/g, '/');
             const rawData = window.atob(base64);
@@ -1903,19 +1925,28 @@ _GLOBO_CHAT_SNIPPET = """
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ subscription: sub })
             });
-            await fetch('/api/chat/push/test', { method: 'POST' });
-            alert('Alertas Web Push y sonido activados exitosamente en este dispositivo.');
+            if (btn) btn.textContent = '✓ Alertas OK';
+            alert('✓ Alertas Web Push activadas correctamente en este dispositivo.');
             return;
           }
         }
-      } catch(e) {
-        console.error('push globo error', e);
       }
+    } catch(e) {
+      console.error('push globo error', e);
     }
+    if (btn) btn.textContent = '🔔 Activar Alertas';
     const ifr = document.getElementById('tuctuc-chat-iframe');
     if (ifr && ifr.contentWindow) {
       try { ifr.contentWindow.postMessage({ type: 'abrir_perfil' }, '*'); } catch(e) {}
     }
+  };
+
+  window.tuctucProbarTimbreDesdeGlobo = async function() {
+    _despertarAudio();
+    _tocarChimeFuerte();
+    try {
+      await fetch('/api/chat/push/test', { method: 'POST' });
+    } catch(e) {}
   };
 
   window.tuctucAbrirConversacionToast = function() {
@@ -1986,7 +2017,7 @@ _GLOBO_CHAT_SNIPPET = """
   setInterval(_pollGlobo, 8000);
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
     navigator.serviceWorker.addEventListener('message', ev => {
       if (ev.data && ev.data.type === 'tuctuc_push_click') {
         if (typeof window.tuctucToggleChatDrawer === 'function') {

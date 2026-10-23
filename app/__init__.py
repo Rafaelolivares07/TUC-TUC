@@ -126,7 +126,7 @@ def create_app():
 
             if (request.path.startswith('/api/') or request.path.startswith('/static/') or
                     request.path.startswith('/chat') or request.path.startswith('/login') or
-                    request.path.startswith('/admin/login')):
+                    request.path.startswith('/admin/login') or request.path == '/sw.js'):
                 return
             if request.path in ('/manifest.json', '/rockola/pwa/manifest.json', '/pwa/manifest.json'):
                 return pwa_manifest()
@@ -229,8 +229,18 @@ def create_app():
                     return cobrar_mesa_page(slug, mesa_id)
             return restaurante_publico(slug)
 
+    @app.route('/sw.js')
+    def serv_root_sw():
+        from flask import send_from_directory
+        resp = send_from_directory(os.path.join(app.root_path, '..', 'static'), 'sw.js', mimetype='application/javascript')
+        resp.headers['Service-Worker-Allowed'] = '/'
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return resp
+
     @app.after_request
     def add_no_cache_headers(response):
+        if request.path in ('/sw.js', '/static/sw.js'):
+            response.headers['Service-Worker-Allowed'] = '/'
         if not request.path.startswith('/static/'):
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"

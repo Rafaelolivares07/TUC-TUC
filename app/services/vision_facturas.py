@@ -21,28 +21,24 @@ def get_ocr_engine():
 
 def preprocesar_imagen(ruta_origen):
     """
-    Mejora contraste, elimina sombras y ajusta resolución para lectura óptima.
+    Normaliza tamaño de imagen si es excesivamente grande para acelerar inferencia.
     """
     try:
         img = cv2.imread(ruta_origen)
         if img is None:
             return ruta_origen
 
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        h, w = gray.shape
+        h, w = img.shape[:2]
         max_dim = 1800
         if max(h, w) > max_dim:
             scale = max_dim / float(max(h, w))
-            gray = cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        contrast_enhanced = clahe.apply(gray)
-
-        ruta_opt = ruta_origen + ".opt.png"
-        cv2.imwrite(ruta_opt, contrast_enhanced)
-        return ruta_opt
+            img_resized = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+            ruta_opt = ruta_origen + ".opt.png"
+            cv2.imwrite(ruta_opt, img_resized)
+            return ruta_opt
+        return ruta_origen
     except Exception as e:
-        print(f"Aviso: error en preprocesamiento OpenCV ({e}), usando imagen original.")
+        print(f"Aviso en preprocesamiento OpenCV ({e}), usando imagen directa.")
         return ruta_origen
 
 
@@ -162,7 +158,6 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     # 1. FECHA
     # =========================================================================
     fecha_detectada = None
-    # Prioridad: Líneas con Generacion / Fecha / Expedicion / Emision
     for b in bloques:
         txt = b['texto']
         if any(k in txt.lower() for k in ["resolucion", "vigencia", "vence"]):
@@ -184,10 +179,9 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     # 2. NÚMERO DE DOCUMENTO / FACTURA
     # =========================================================================
     num_doc_detectado = ""
-    # A) Patrones colombianos DIAN comunes: Prefijo FOP, SETP, FE, POS
+    # Patrones colombianos DIAN comunes: Prefijo FOP, SETP, FE, POS
     for b in bloques:
         txt = b['texto']
-        # Ej: "Factura Electronica de Venta F0P2172477"
         m_fev = re.search(r'Factura\s+Electronica\s+de\s+Venta\s+([A-Za-z0-9]+)', txt, re.IGNORECASE)
         if m_fev:
             cand = m_fev.group(1).upper()
@@ -202,7 +196,6 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
             num_doc_detectado = cand
             break
 
-    # B) Fallback a patrones estándar si no se halló prefijo electrónico
     if not num_doc_detectado:
         patrones_doc = [
             r'(?:FAC|FACTURA|FACT|TICKET|COMPROBANTE|DOC|REMISION|No\.?|N°)\s*[:#-]?\s*([A-Za-z0-9-]+)',
@@ -261,7 +254,6 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
             nom_terc = re.sub(r'[^A-Z0-9\s]', '', terc['nombre'].upper()).strip()
             if not nom_terc:
                 continue
-            # Coincidencia exacta de palabra (ej: 'D1' en 'D1 SAS NIT...')
             if nom_terc in palabras_doc or nom_terc == txt_clean:
                 mejores_coincidencias.append((1.0, terc['id'], terc['nombre']))
             elif nom_terc in txt_clean:
@@ -300,7 +292,6 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     # =========================================================================
     # 6. EXTRACCIÓN DE ÍTEMS
     # =========================================================================
-    # Detectar si la factura tiene formato retail / D1 con códigos de barra
     y_top_items = 180
     y_bot_items = 999999
     for b in bloques:
@@ -319,13 +310,17 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     if len(barcode_blocks) >= 2:
         barcode_blocks.sort(key=lambda b: b['centro_y'])
         right_blocks = [b for b in bloques_en_zona_items if b['min_x'] > 410]
-        left_blocks = [b for b in bloques_en_zona_items if b['min_x'] < 190 or re.search(r'\bUN\b', b['texto'])]
+        # left_blocks: solo bloques a la izquierda (< 180) que NO sean barcode_blocks
+        left_blocks = [b for b in bloques_en_zona_items if b['min_x'] < 180 and b not in barcode_blocks]
 
         for b in barcode_blocks:
             cy = b['centro_y']
             text = b['texto']
 
-            # A1. Total de la línea: primero verificar si está pegado al final del texto del bloque
+            # A1. Total de la línea
+            # Separar precio y código de barras si vienen pegados (ej: 16,9907700304775071 -> 16,990 7700304775071)
+            text = re.sub(r'([0-9.,]+)(770\d{10})', r'\1 \2', text)
+
             total_line = 0.0
             m_end_tot = re.search(r'([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{3,})[A-Za-z0-9]?$', text)
             if m_end_tot:
@@ -338,7 +333,6 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
             else:
                 text_without_total = text
 
-            # Si no vino pegado al final, buscar en los bloques de la derecha más cercanos
             if total_line == 0.0:
                 c_right = None
                 min_dist_r = 999
@@ -352,31 +346,8 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     if m_tot:
                         total_line = _parse_entero_limpio(m_tot.group(1))
 
-            # A2. Cantidad: buscar en el prefijo del bloque o en el bloque izquierdo más cercano
-            cant = None
-            m_start_cant = re.search(r'^([0-9]{1,2})?\s*([0-9]+)\s*UN', text_without_total)
-            if m_start_cant:
-                cant = float(m_start_cant.group(2))
-
-            if cant is None:
-                c_left = None
-                min_dist_l = 999
-                for lb in left_blocks:
-                    if lb == b: continue
-                    dist = abs(lb['centro_y'] - cy)
-                    if dist < min_dist_l and dist < 24:
-                        min_dist_l = dist
-                        c_left = lb
-                if c_left:
-                    m_c = re.search(r'([0-9]+)\s*(?:/|\s)*([0-9]*)\s*UN', c_left['texto'])
-                    if m_c:
-                        if m_c.group(2): cant = float(m_c.group(2))
-                        else: cant = float(m_c.group(1))
-            if cant is None or cant == 0:
-                cant = 1.0
-
-            # A3. Código de barras y Descripción
-            m_bc = re.search(r'(770\d{10}|0\d{12}|\d{13})', text_without_total)
+            # A2. Código de barras y Descripción
+            m_bc = re.search(r'(770\d{10}|07\d{11}|0\d{12}|\d{13})', text_without_total)
             if m_bc:
                 bc = m_bc.group(1)
                 desc_part = text_without_total[m_bc.end():].strip()
@@ -389,15 +360,50 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
             m_vu = re.search(r'([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]{3,})', pre_part)
             vu = _parse_entero_limpio(m_vu.group(1)) if m_vu else 0.0
 
-            # Limpiezas típicas de caracteres confundidos por OCR
+            # A3. Cantidad: Búsqueda y Reconciliación
+            cant = None
+            # 1. Si el bloque mismo empieza por cantidad UN (ej: "91UN" -> 1 UN)
+            m_start_cant = re.search(r'^(?:[0-9]{1,2})?\s*([0-9]+)\s*UN', text_without_total)
+            if m_start_cant:
+                cant = float(m_start_cant.group(1))
+
+            # 2. Si no, buscar en bloque izquierdo (columna UN más cercana)
+            if cant is None:
+                c_left = None
+                min_dist_l = 999
+                for lb in left_blocks:
+                    dist = abs(lb['centro_y'] - cy)
+                    if dist < min_dist_l and dist < 20:
+                        min_dist_l = dist
+                        c_left = lb
+                if c_left:
+                    m_c = re.search(r'([0-9]+)\s*(?:/|\s)*([0-9]*)\s*UN', c_left['texto'])
+                    if m_c:
+                        if m_c.group(2): cant = float(m_c.group(2))
+                        else: cant = float(m_c.group(1))
+                    elif 'UN' in c_left['texto'].upper():
+                        cant = 1.0
+
+            # 3. Reconciliación aritmética solo si aún no se determinó la cantidad
+            if cant is None and total_line > 0 and vu > 0:
+                cant_calc = round(total_line / vu)
+                if 1 <= cant_calc <= 20 and abs((cant_calc * vu) - total_line) < 5:
+                    cant = float(cant_calc)
+
+            if cant is None or cant == 0:
+                cant = 1.0
+
+            # Limpiezas de OCR
             desc = desc_part.strip()
             desc = re.sub(r'\bH0RTADELA\b', 'MORTADELA', desc)
+            desc = re.sub(r'\bHORTADELA\b', 'MORTADELA', desc)
             desc = re.sub(r'0', 'O', desc)
             desc = re.sub(r'\bOUICKSY\b', 'QUICKSY', desc)
             desc = re.sub(r'\bALIHENTO\b', 'ALIMENTO', desc)
             desc = re.sub(r'\bSALREFISAL1?\b', 'SAL REFISAL', desc)
             desc = re.sub(r'\bACEITEDEGIR\b', 'ACEITE DE GIRASOL', desc)
             desc = re.sub(r'\bAVENA EN HOJU\b', 'AVENA EN HOJUELAS', desc)
+            desc = re.sub(r'\bHORENA\b', 'MORENA', desc)
             desc = re.sub(r'^[0-9\s.,]+', '', desc).strip()
 
             if cant > 0 and total_line > 0:

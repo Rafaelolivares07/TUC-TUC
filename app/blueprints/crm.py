@@ -1555,21 +1555,45 @@ def api_chat_enlazar_usuario():
 
 @bp.route('/api/chat/resumen-globo', methods=['GET'])
 def api_chat_resumen_globo():
-    mid = get_chat_tercero_id()
-    if not mid:
+    # Detectar todos los IDs asociados a la sesión actual (chat_tercero_id, usuario_id y tercero vinculado)
+    mids = set()
+    if session.get('chat_tercero_id'):
+        try: mids.add(int(session['chat_tercero_id']))
+        except: pass
+    if session.get('usuario_id'):
+        try: mids.add(int(session['usuario_id']))
+        except: pass
+
+    conn = get_db_connection()
+    _asegurar_schema_chat(conn)
+
+    # Si hay usuario_id pero no chat_tercero_id, buscar si hay un tercero con el mismo nombre o email
+    if session.get('usuario_id'):
+        try:
+            adm = conn.execute("SELECT nombre, email FROM administradores WHERE id = %s", (session['usuario_id'],)).fetchone()
+            if adm:
+                t = conn.execute("SELECT id FROM terceros WHERE email = %s OR nombre = %s LIMIT 1", (adm['email'], adm['nombre'])).fetchone()
+                if t:
+                    mids.add(t['id'])
+                    session['chat_tercero_id'] = t['id']
+        except Exception:
+            pass
+
+    if not mids:
+        conn.close()
         return jsonify({'ok': True, 'autenticado': False, 'total_no_leidos': 0})
+
+    mids_list = list(mids)
     try:
-        conn = get_db_connection()
-        _asegurar_schema_chat(conn)
         row = conn.execute('''
             SELECT COUNT(*) AS total
             FROM mensajes m
             JOIN conversaciones c ON c.id = m.conversacion_id
             WHERE c.activa = TRUE
-              AND (c.creador_id = %(mid)s OR c.invitado_id = %(mid)s)
-              AND m.remitente_id != %(mid)s
+              AND (c.creador_id = ANY(%s) OR c.invitado_id = ANY(%s))
+              AND NOT (m.remitente_id = ANY(%s))
               AND m.estado = 'pendiente'
-        ''', {'mid': mid}).fetchone()
+        ''', (mids_list, mids_list, mids_list)).fetchone()
         total = int(row['total'] or 0) if row else 0
 
         ultimo = None
@@ -1580,27 +1604,25 @@ def api_chat_resumen_globo():
                 JOIN conversaciones c ON c.id = m.conversacion_id
                 JOIN terceros t ON t.id = m.remitente_id
                 WHERE c.activa = TRUE
-                  AND (c.creador_id = %(mid)s OR c.invitado_id = %(mid)s)
-                  AND m.remitente_id != %(mid)s
+                  AND (c.creador_id = ANY(%s) OR c.invitado_id = ANY(%s))
+                  AND NOT (m.remitente_id = ANY(%s))
                   AND m.estado = 'pendiente'
                 ORDER BY m.id DESC LIMIT 1
-            ''', {'mid': mid}).fetchone()
+            ''', (mids_list, mids_list, mids_list)).fetchone()
             if u:
                 ultimo = dict(u)
         conn.close()
         return jsonify({
             'ok': True,
             'autenticado': True,
-            'mi_tercero_id': mid,
+            'mi_tercero_id': mids_list[0],
             'total_no_leidos': total,
             'ultimo': ultimo
         })
     except Exception as e:
-        try:
-            conn.close()
-        except Exception:
-            pass
-        return jsonify({'ok': False, 'error': str(e), 'total_no_leidos': 0})
+        if conn: conn.close()
+        return jsonify({'ok': False, 'error': str(e), 'total_no_leidos': 0})
+
 
 _GLOBO_CHAT_SNIPPET = """
 <!-- ── Globo flotante global de Mensajería TUC TUC ── -->
@@ -2087,6 +2109,8 @@ _GLOBO_CHAT_SNIPPET = """
         if (total > 0) {
           badge.style.display = 'flex';
           badge.textContent = total > 99 ? '99+' : String(total);
+          badge.style.background = '#ef4444';
+          badge.style.color = '#ffffff';
         } else {
           badge.style.display = 'none';
         }

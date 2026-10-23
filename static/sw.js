@@ -28,7 +28,8 @@ self.addEventListener('push', (event) => {
         image: payload.image || undefined,
         tag: payload.tag || ('chat-' + (token || Date.now())),
         renotify: true,
-        vibrate: [300, 120, 300, 120, 450],
+        silent: false,
+        vibrate: [500, 150, 500, 150, 500],
         requireInteraction: true,
         data: {
             url: targetUrl,

@@ -139,6 +139,22 @@ def _crear_tablas(conn):
             ciclo_fin       TIMESTAMP,
             UNIQUE(negocio_id, producto_id, ciclo_inicio)
         )""",
+        """CREATE TABLE IF NOT EXISTS unidades_medida (
+            id SERIAL PRIMARY KEY,
+            codigo VARCHAR(20) NOT NULL UNIQUE,
+            nombre VARCHAR(50) NOT NULL,
+            magnitud VARCHAR(30) NOT NULL,
+            es_base_sistema BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS equivalencias_unidades (
+            id SERIAL PRIMARY KEY,
+            unidad_origen_id INTEGER NOT NULL REFERENCES unidades_medida(id),
+            unidad_destino_id INTEGER NOT NULL REFERENCES unidades_medida(id),
+            factor NUMERIC(18,8) NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(unidad_origen_id, unidad_destino_id)
+        )""",
     ]
     for sql in sqls:
         try:
@@ -261,6 +277,8 @@ def _crear_tablas(conn):
             fecha_hora TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )""",
         "CREATE INDEX IF NOT EXISTS idx_auditoria_recosteos_negocio ON auditoria_recosteos(negocio_id, fecha_hora DESC)",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS unidad_medida_id INTEGER REFERENCES unidades_medida(id)",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS unidad_visual_id INTEGER REFERENCES unidades_medida(id)",
     ]
     for sql in alters:
         try:
@@ -2444,9 +2462,16 @@ def api_inventario_productos(negocio_id):
                        ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total,
                        lat_emp.ultimo_empaque_id,
                        lat_emp.ultimo_empaque_nombre,
-                       COALESCE(lat_emp.ultimo_empaque_equiv, 1.0) AS ultimo_empaque_equiv
+                       COALESCE(lat_emp.ultimo_empaque_equiv, 1.0) AS ultimo_empaque_equiv,
+                       p.unidad_medida_id, p.unidad_visual_id,
+                       um_base.codigo AS unidad_base_codigo,
+                       um_vis.codigo AS unidad_visual_codigo,
+                       COALESCE(eq_vis.factor, 1.0) AS factor_visual
                 FROM productos p
                 {join_lateral_empaque}
+                LEFT JOIN unidades_medida um_base ON um_base.id = p.unidad_medida_id
+                LEFT JOIN unidades_medida um_vis ON um_vis.id = p.unidad_visual_id
+                LEFT JOIN equivalencias_unidades eq_vis ON eq_vis.unidad_origen_id = p.unidad_medida_id AND eq_vis.unidad_destino_id = p.unidad_visual_id
                 LEFT JOIN (
                     SELECT producto_id, negocio_id, SUM(stock) as stock, 
                            CASE WHEN SUM(stock) > 0 THEN SUM(valor_existencia)/SUM(stock) ELSE AVG(costo_und) END as costo_und
@@ -2475,9 +2500,16 @@ def api_inventario_productos(negocio_id):
                        ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total,
                        lat_emp.ultimo_empaque_id,
                        lat_emp.ultimo_empaque_nombre,
-                       COALESCE(lat_emp.ultimo_empaque_equiv, 1.0) AS ultimo_empaque_equiv
+                       COALESCE(lat_emp.ultimo_empaque_equiv, 1.0) AS ultimo_empaque_equiv,
+                       p.unidad_medida_id, p.unidad_visual_id,
+                       um_base.codigo AS unidad_base_codigo,
+                       um_vis.codigo AS unidad_visual_codigo,
+                       COALESCE(eq_vis.factor, 1.0) AS factor_visual
                 FROM productos p
                 {join_lateral_empaque}
+                LEFT JOIN unidades_medida um_base ON um_base.id = p.unidad_medida_id
+                LEFT JOIN unidades_medida um_vis ON um_vis.id = p.unidad_visual_id
+                LEFT JOIN equivalencias_unidades eq_vis ON eq_vis.unidad_origen_id = p.unidad_medida_id AND eq_vis.unidad_destino_id = p.unidad_visual_id
                 LEFT JOIN saldos_inventario s ON s.producto_id = p.id
                     AND s.negocio_id = p.negocio_id AND s.bodega = %s
                 WHERE p.negocio_id = %s{extra_where}
@@ -2579,9 +2611,16 @@ def api_inventario_tarjeta_ver(producto_id):
             return error
         rows = conn.execute("""
             SELECT te.componente_id, te.cantidad, p.nombre,
-                   COALESCE(s.costo_und, p.costo, 0) AS costo_und
+                   COALESCE(s.costo_und, p.costo, 0) AS costo_und,
+                   p.unidad_medida_id, p.unidad_visual_id,
+                   um_base.codigo AS unidad_base_codigo,
+                   um_vis.codigo AS unidad_visual_codigo,
+                   COALESCE(eq.factor, 1.0) AS factor_visual
             FROM tarjeta_estandar te
             JOIN productos p ON p.id = te.componente_id
+            LEFT JOIN unidades_medida um_base ON um_base.id = p.unidad_medida_id
+            LEFT JOIN unidades_medida um_vis ON um_vis.id = p.unidad_visual_id
+            LEFT JOIN equivalencias_unidades eq ON eq.unidad_origen_id = p.unidad_medida_id AND eq.unidad_destino_id = p.unidad_visual_id
             LEFT JOIN (
                 SELECT DISTINCT ON (producto_id, negocio_id) producto_id, negocio_id, costo_und
                 FROM saldos_inventario
@@ -2595,7 +2634,10 @@ def api_inventario_tarjeta_ver(producto_id):
             'componente_id': r['componente_id'],
             'cantidad': float(r['cantidad']),
             'nombre': r['nombre'],
-            'costo_und': float(r['costo_und'] or 0)
+            'costo_und': float(r['costo_und'] or 0),
+            'unidad_base': r['unidad_base_codigo'],
+            'unidad_visual': r['unidad_visual_codigo'],
+            'factor_visual': float(r['factor_visual'] or 1.0)
         } for r in rows]})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
@@ -9257,10 +9299,17 @@ def api_inventario_tarjetas_resumen(negocio_id):
         recipe_lines = conn.execute("""
             SELECT te.producto_id, te.componente_id, te.cantidad,
                    p.nombre AS componente_nombre,
-                   COALESCE(s.costo_und, p.costo, 0) AS costo_und
+                   COALESCE(s.costo_und, p.costo, 0) AS costo_und,
+                   p.unidad_medida_id, p.unidad_visual_id,
+                   um_base.codigo AS unidad_base_codigo,
+                   um_vis.codigo AS unidad_visual_codigo,
+                   COALESCE(eq.factor, 1.0) AS factor_visual
             FROM tarjeta_estandar te
             JOIN productos prod ON prod.id = te.producto_id
             JOIN productos p ON p.id = te.componente_id
+            LEFT JOIN unidades_medida um_base ON um_base.id = p.unidad_medida_id
+            LEFT JOIN unidades_medida um_vis ON um_vis.id = p.unidad_visual_id
+            LEFT JOIN equivalencias_unidades eq ON eq.unidad_origen_id = p.unidad_medida_id AND eq.unidad_destino_id = p.unidad_visual_id
             LEFT JOIN (
                 SELECT DISTINCT ON (producto_id, negocio_id) producto_id, negocio_id, costo_und
                 FROM saldos_inventario
@@ -9300,7 +9349,10 @@ def api_inventario_tarjetas_resumen(negocio_id):
                         'nombre': line['componente_nombre'],
                         'cantidad': float(cant),
                         'costo_und': float(costo_u),
-                        'costo_total': float(line_cost)
+                        'costo_total': float(line_cost),
+                        'unidad_base': line['unidad_base_codigo'],
+                        'unidad_visual': line['unidad_visual_codigo'],
+                        'factor_visual': float(line['factor_visual'] or 1.0)
                     })
             else:
                 costo_total = Decimal(str(p['costo_base'] or 0))
@@ -9663,6 +9715,7 @@ def api_historial_presentaciones(negocio_id, producto_id, proveedor_id):
         return jsonify({'ok': False, 'error': 'No autenticado'}), 401
     conn = get_db_connection()
     try:
+        # 1. Cotizaciones del proveedor para este producto
         rows = conn.execute("""
             SELECT c.presentacion_id, p.nombre AS presentacion_nombre, p.equivalencia,
                    c.precio, c.fecha_cotizacion, c.numero_cotizacion,
@@ -9673,15 +9726,88 @@ def api_historial_presentaciones(negocio_id, producto_id, proveedor_id):
             ORDER BY c.fecha_cotizacion DESC, c.id DESC
             LIMIT 8
         """, (negocio_id, proveedor_id, producto_id)).fetchall()
-        return jsonify({'ok': True, 'historial': [{
-            'presentacion_id': r['presentacion_id'],
-            'presentacion_nombre': r['presentacion_nombre'],
-            'equivalencia': float(r['equivalencia']),
-            'precio': float(r['precio']) if r['precio'] is not None else None,
-            'fecha_cotizacion': r['fecha_cotizacion'].isoformat() if r['fecha_cotizacion'] else None,
-            'numero_cotizacion': r['numero_cotizacion'],
-            'vigente': bool(r['vigente'])
-        } for r in rows]})
+
+        # Si no hay con este proveedor, buscar cotizaciones de cualquier proveedor
+        if not rows:
+            rows = conn.execute("""
+                SELECT c.presentacion_id, p.nombre AS presentacion_nombre, p.equivalencia,
+                       c.precio, c.fecha_cotizacion, c.numero_cotizacion,
+                       CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN TRUE ELSE FALSE END AS vigente
+                FROM cotizaciones_compras c
+                JOIN presentaciones p ON p.id = c.presentacion_id
+                WHERE c.negocio_id = %s AND c.item_id = %s
+                ORDER BY c.fecha_cotizacion DESC, c.id DESC
+                LIMIT 8
+            """, (negocio_id, producto_id)).fetchall()
+
+        # 2. Movimientos de entrada para determinar cantidades y precios habituales
+        mov_rows = []
+        if proveedor_id:
+            mov_rows = conn.execute("""
+                SELECT m.cantidad, m.valor_unitario, m.valor_total, m.presentacion_id, m.created_at
+                FROM movimientos_inventario m
+                WHERE m.negocio_id = %s AND m.proveedor_id = %s AND m.producto_id = %s AND m.tipo = 'entrada'
+                ORDER BY m.id DESC
+                LIMIT 10
+            """, (negocio_id, proveedor_id, producto_id)).fetchall()
+
+        if not mov_rows:
+            mov_rows = conn.execute("""
+                SELECT m.cantidad, m.valor_unitario, m.valor_total, m.presentacion_id, m.created_at
+                FROM movimientos_inventario m
+                WHERE m.negocio_id = %s AND m.producto_id = %s AND m.tipo = 'entrada'
+                ORDER BY m.id DESC
+                LIMIT 10
+            """, (negocio_id, producto_id)).fetchall()
+
+        # Costo de catálogo por defecto
+        prod_row = conn.execute("""
+            SELECT costo FROM productos WHERE id = %s AND negocio_id = %s
+        """, (producto_id, negocio_id)).fetchone()
+        costo_catalogo = float(prod_row['costo']) if (prod_row and prod_row['costo']) else 0.0
+
+        historial_resultado = []
+        for r in rows:
+            pres_id = r['presentacion_id']
+            equiv = float(r['equivalencia']) if (r['equivalencia'] and float(r['equivalencia']) > 0) else 1.0
+
+            movs_pres = [m for m in mov_rows if m['presentacion_id'] == pres_id]
+            if not movs_pres and mov_rows:
+                movs_pres = mov_rows
+
+            cants_emp = [round(float(m['cantidad']) / equiv, 2) for m in movs_pres if m['cantidad']]
+            precios_emp = [round(float(m['valor_unitario']) * equiv, 2) for m in movs_pres if m['valor_unitario']]
+
+            ultima_cant = cants_emp[0] if cants_emp else None
+            prom_cant = round(sum(cants_emp) / len(cants_emp), 2) if cants_emp else None
+
+            precio_ref = float(r['precio']) if r['precio'] is not None else (precios_emp[0] if precios_emp else (costo_catalogo * equiv if costo_catalogo > 0 else None))
+
+            historial_resultado.append({
+                'presentacion_id': pres_id,
+                'presentacion_nombre': r['presentacion_nombre'],
+                'equivalencia': equiv,
+                'precio': precio_ref,
+                'fecha_cotizacion': r['fecha_cotizacion'].isoformat() if r['fecha_cotizacion'] else None,
+                'numero_cotizacion': r['numero_cotizacion'],
+                'vigente': bool(r['vigente']),
+                'ultima_cantidad': ultima_cant,
+                'promedio_cantidad': prom_cant
+            })
+
+        general_cants = [float(m['cantidad']) for m in mov_rows if m['cantidad']]
+        general_costos = [float(m['valor_unitario']) for m in mov_rows if m['valor_unitario']]
+        referencia_general = {
+            'costo_base': general_costos[0] if general_costos else costo_catalogo,
+            'ultima_cantidad_base': general_cants[0] if general_cants else None,
+            'promedio_cantidad_base': round(sum(general_cants) / len(general_cants), 2) if general_cants else None
+        }
+
+        return jsonify({
+            'ok': True,
+            'historial': historial_resultado,
+            'referencia_general': referencia_general
+        })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:

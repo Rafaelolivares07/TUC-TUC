@@ -106,6 +106,89 @@ def agrupar_en_filas_horizontales(bloques, umbral_y=14):
     return filas
 
 
+
+def _obtener_referencia_item(conn, negocio_id, proveedor_id, producto, cant, vu):
+    """
+    Obtiene la presentación previa, precio histórico de referencia y cantidad habitual.
+    Calcula además los porcentajes de variación para avisos preventivos.
+    """
+    pres_id = None
+    pres_nombre = "Unidad"
+    pres_equiv = 1.0
+    precio_ref = None
+    cant_ref = None
+
+    if not conn or not producto or not negocio_id:
+        return pres_id, pres_nombre, pres_equiv, precio_ref, cant_ref, None, None
+
+    try:
+        c_row = None
+        if proveedor_id:
+            c_row = conn.execute("""
+                SELECT c.presentacion_id, pres.nombre, pres.equivalencia, c.precio
+                FROM cotizaciones_compras c
+                JOIN presentaciones pres ON pres.id = c.presentacion_id
+                WHERE c.negocio_id = %s AND c.tercero_id = %s AND c.item_id = %s
+                ORDER BY c.fecha_cotizacion DESC NULLS LAST, c.id DESC
+                LIMIT 1
+            """, (negocio_id, proveedor_id, producto['id'])).fetchone()
+
+        if not c_row:
+            c_row = conn.execute("""
+                SELECT c.presentacion_id, pres.nombre, pres.equivalencia, c.precio
+                FROM cotizaciones_compras c
+                JOIN presentaciones pres ON pres.id = c.presentacion_id
+                WHERE c.negocio_id = %s AND c.item_id = %s
+                ORDER BY c.fecha_cotizacion DESC NULLS LAST, c.id DESC
+                LIMIT 1
+            """, (negocio_id, producto['id'])).fetchone()
+
+        if c_row:
+            pres_id = c_row['presentacion_id']
+            pres_nombre = c_row['nombre']
+            pres_equiv = float(c_row['equivalencia']) if (c_row['equivalencia'] and float(c_row['equivalencia']) > 0) else 1.0
+            if c_row['precio'] is not None and float(c_row['precio']) > 0:
+                precio_ref = float(c_row['precio'])
+
+        # Cantidad de referencia desde últimos movimientos de entrada
+        m_row = None
+        if proveedor_id:
+            m_row = conn.execute("""
+                SELECT cantidad, presentacion_id, valor_unitario
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND proveedor_id = %s AND producto_id = %s AND tipo = 'entrada'
+                ORDER BY id DESC LIMIT 1
+            """, (negocio_id, proveedor_id, producto['id'])).fetchone()
+        if not m_row:
+            m_row = conn.execute("""
+                SELECT cantidad, presentacion_id, valor_unitario
+                FROM movimientos_inventario
+                WHERE negocio_id = %s AND producto_id = %s AND tipo = 'entrada'
+                ORDER BY id DESC LIMIT 1
+            """, (negocio_id, producto['id'])).fetchone()
+
+        if m_row and m_row['cantidad']:
+            cant_ref = round(float(m_row['cantidad']) / pres_equiv, 2)
+            if precio_ref is None and m_row['valor_unitario']:
+                precio_ref = round(float(m_row['valor_unitario']) * pres_equiv, 2)
+
+    except Exception as e:
+        print("Aviso referencia cotización previa:", e)
+
+    if precio_ref is None and producto.get('costo'):
+        precio_ref = round(float(producto['costo']) * pres_equiv, 2)
+
+    var_precio_pct = None
+    if precio_ref and precio_ref > 0 and vu and vu > 0:
+        var_precio_pct = round(((vu - precio_ref) / precio_ref) * 100, 1)
+
+    var_cant_pct = None
+    if cant_ref and cant_ref > 0 and cant and cant > 0:
+        var_cant_pct = round(((cant - cant_ref) / cant_ref) * 100, 1)
+
+    return pres_id, pres_nombre, pres_equiv, precio_ref, cant_ref, var_precio_pct, var_cant_pct
+
+
 def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     """
     Ejecuta el pipeline de visión y extrae:
@@ -437,40 +520,10 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                         mejor_score = score
                         mejor_prod = p
 
-            # Buscar presentación y empaque previo de cotizaciones del proveedor
-            pres_id = None
-            pres_nombre = "Unidad"
-            pres_equiv = 1.0
-
-            if conn and mejor_prod and negocio_id:
-                try:
-                    c_row = None
-                    if proveedor_id:
-                        c_row = conn.execute("""
-                            SELECT c.presentacion_id, pres.nombre, pres.equivalencia
-                            FROM cotizaciones_compras c
-                            JOIN presentaciones pres ON pres.id = c.presentacion_id
-                            WHERE c.negocio_id = %s AND c.tercero_id = %s AND c.item_id = %s
-                            ORDER BY c.fecha_cotizacion DESC NULLS LAST, c.id DESC
-                            LIMIT 1
-                        """, (negocio_id, proveedor_id, mejor_prod['id'])).fetchone()
-
-                    if not c_row:
-                        c_row = conn.execute("""
-                            SELECT c.presentacion_id, pres.nombre, pres.equivalencia
-                            FROM cotizaciones_compras c
-                            JOIN presentaciones pres ON pres.id = c.presentacion_id
-                            WHERE c.negocio_id = %s AND c.item_id = %s
-                            ORDER BY c.fecha_cotizacion DESC NULLS LAST, c.id DESC
-                            LIMIT 1
-                        """, (negocio_id, mejor_prod['id'])).fetchone()
-
-                    if c_row:
-                        pres_id = c_row['presentacion_id']
-                        pres_nombre = c_row['nombre']
-                        pres_equiv = float(c_row['equivalencia'])
-                except Exception as e:
-                    print("Aviso cotización previa:", e)
+            # Buscar presentación, empaque previo y tolerancias de precio/cantidad
+            pres_id, pres_nombre, pres_equiv, precio_ref, cant_ref, var_p_pct, var_c_pct = _obtener_referencia_item(
+                conn, negocio_id, proveedor_id, mejor_prod, cant, vu
+            )
 
             items_extraidos.append({
                 'texto_detectado': desc,
@@ -485,7 +538,11 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                 'identificado': bool(mejor_prod is not None),
                 'presentacion_id': pres_id,
                 'presentacion_nombre': pres_nombre,
-                'presentacion_equivalencia': pres_equiv
+                'presentacion_equivalencia': pres_equiv,
+                'precio_referencia': precio_ref,
+                'cantidad_referencia': cant_ref,
+                'variacion_precio_pct': var_p_pct,
+                'variacion_cant_pct': var_c_pct
             })
 
     # CASO B: FACTURAS TRADICIONALES EN COLUMNAS HORIZONTALES (Sin códigos de barras)
@@ -526,39 +583,10 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
 
                 vu_calc = round(precio_linea / cant, 2) if (cant > 0 and precio_linea > 0) else 0.0
 
-                pres_id = None
-                pres_nombre = "Unidad"
-                pres_equiv = 1.0
-
-                if conn and mejor_prod and negocio_id:
-                    try:
-                        c_row = None
-                        if proveedor_id:
-                            c_row = conn.execute("""
-                                SELECT c.presentacion_id, pres.nombre, pres.equivalencia
-                                FROM cotizaciones_compras c
-                                JOIN presentaciones pres ON pres.id = c.presentacion_id
-                                WHERE c.negocio_id = %s AND c.tercero_id = %s AND c.item_id = %s
-                                ORDER BY c.fecha_cotizacion DESC NULLS LAST, c.id DESC
-                                LIMIT 1
-                            """, (negocio_id, proveedor_id, mejor_prod['id'])).fetchone()
-
-                        if not c_row:
-                            c_row = conn.execute("""
-                                SELECT c.presentacion_id, pres.nombre, pres.equivalencia
-                                FROM cotizaciones_compras c
-                                JOIN presentaciones pres ON pres.id = c.presentacion_id
-                                WHERE c.negocio_id = %s AND c.item_id = %s
-                                ORDER BY c.fecha_cotizacion DESC NULLS LAST, c.id DESC
-                                LIMIT 1
-                            """, (negocio_id, mejor_prod['id'])).fetchone()
-
-                        if c_row:
-                            pres_id = c_row['presentacion_id']
-                            pres_nombre = c_row['nombre']
-                            pres_equiv = float(c_row['equivalencia'])
-                    except Exception as e:
-                        print("Aviso cotización previa:", e)
+                # Buscar presentación, empaque previo y tolerancias de precio/cantidad
+                pres_id, pres_nombre, pres_equiv, precio_ref, cant_ref, var_p_pct, var_c_pct = _obtener_referencia_item(
+                    conn, negocio_id, proveedor_id, mejor_prod, cant, vu_calc
+                )
 
                 items_extraidos.append({
                     'texto_detectado': nom_it,
@@ -573,7 +601,11 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     'identificado': bool(mejor_prod is not None),
                     'presentacion_id': pres_id,
                     'presentacion_nombre': pres_nombre,
-                    'presentacion_equivalencia': pres_equiv
+                    'presentacion_equivalencia': pres_equiv,
+                    'precio_referencia': precio_ref,
+                    'cantidad_referencia': cant_ref,
+                    'variacion_precio_pct': var_p_pct,
+                    'variacion_cant_pct': var_c_pct
                 })
 
     lineas_identificadas = [it for it in items_extraidos if it['identificado']]

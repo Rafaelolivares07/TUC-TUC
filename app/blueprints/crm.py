@@ -1070,6 +1070,72 @@ def api_chat_merlin_iniciar():
 
 # ── Cards de negocios ──────────────────────────────────────────────────────
 
+@bp.route('/api/chat/merlin/enviar-mensaje', methods=['GET', 'POST'])
+def api_chat_merlin_enviar_mensaje():
+    """Envía un mensaje real de Merlin al usuario Rafael (o especificado) y dispara sonido + Web Push."""
+    data = request.get_json(silent=True) or {}
+    destinatario_id = data.get('destinatario_id') or request.args.get('destinatario_id') or session.get('chat_tercero_id') or session.get('usuario_id')
+    mensaje_texto = data.get('mensaje') or request.args.get('mensaje') or "¡Hola Rafael! Soy Merlin 🧙‍♂️. Este es un mensaje real para probar el sonido y las alertas en tu celular y PC."
+    
+    conn = get_db_connection()
+    _asegurar_schema_chat(conn)
+    merlin = conn.execute("SELECT id FROM terceros WHERE tipo_tercero = 'merlin' LIMIT 1").fetchone()
+    if not merlin:
+        merlin = conn.execute("INSERT INTO terceros (nombre, tipo_tercero) VALUES ('Merlin', 'merlin') RETURNING id").fetchone()
+        conn.commit()
+    merlin_id = merlin['id']
+
+    # Si no hay destinatario_id explícito, buscar el usuario de las suscripciones push activas
+    if not destinatario_id:
+        sub_row = conn.execute("SELECT tercero_id FROM chat_push_subscriptions WHERE activo = TRUE ORDER BY actualizado_en DESC LIMIT 1").fetchone()
+        if sub_row and sub_row['tercero_id']:
+            destinatario_id = sub_row['tercero_id']
+        else:
+            destinatario_id = 16 # Rafael
+
+    destinatario_id = int(destinatario_id)
+
+    # Buscar conversación existente entre destinatario y Merlin
+    conv = conn.execute(
+        """SELECT * FROM conversaciones 
+           WHERE activa = TRUE AND ((creador_id = %s AND invitado_id = %s) OR (creador_id = %s AND invitado_id = %s))
+           LIMIT 1""",
+        (destinatario_id, merlin_id, merlin_id, destinatario_id)
+    ).fetchone()
+
+    if not conv:
+        token = _sec.token_urlsafe(12)
+        conv = conn.execute(
+            """INSERT INTO conversaciones (creador_id, invitado_id, token, nombre_invitado, origen, activa)
+               VALUES (%s, %s, %s, 'Merlin', 'merlin', TRUE) RETURNING *""",
+            (destinatario_id, merlin_id, token)
+        ).fetchone()
+        conn.commit()
+
+    # Insertar el mensaje como pendiente
+    nuevo_msg = conn.execute(
+        """INSERT INTO mensajes (remitente_id, destinatario_id, mensaje, tipo, conversacion_id, estado, fecha)
+           VALUES (%s, %s, %s, 'texto', %s, 'pendiente', CURRENT_TIMESTAMP) RETURNING id, fecha""",
+        (merlin_id, destinatario_id, mensaje_texto, conv['id'])
+    ).fetchone()
+    conn.commit()
+    conn.close()
+
+    # Despachar push a los dispositivos del destinatario
+    titulo = "💬 Merlin en TUC TUC"
+    url_push = f"/chat2?open_token={conv['token']}"
+    _despachar_push_asincrono(destinatario_id, titulo, mensaje_texto, token=conv['token'], url=url_push)
+
+    return jsonify({
+        'ok': True,
+        'mensaje_id': nuevo_msg['id'],
+        'remitente': 'Merlin',
+        'destinatario_id': destinatario_id,
+        'conv_token': conv['token'],
+        'mensaje': mensaje_texto
+    })
+
+
 @bp.route('/api/chat/cards/negocios')
 def api_chat_cards_negocios():
     token_chat = request.args.get('token_chat', '').strip()

@@ -2316,9 +2316,41 @@
         <input type="hidden" id="entrada-proveedor-id">
       </div>
 
-      <div class="sm:col-span-6">
+      <div class="sm:col-span-7">
         <label class="font-bold text-gray-700 mb-1 block">Notas (opcional)</label>
         <input id="entrada-notas" tabindex="7" type="text" placeholder="Notas u observaciones de la factura...">
+      </div>
+
+      <div class="sm:col-span-5 bg-gradient-to-r from-amber-50 to-orange-50/70 border border-amber-300 rounded-xl p-2.5 flex flex-col justify-between shadow-2xs">
+        <div class="flex items-center justify-between text-xs font-bold text-amber-900 mb-1">
+          <span class="flex items-center gap-1.5">
+            <span class="text-sm">🛡️</span>
+            <span>Avisos Preventivos de Variación</span>
+          </span>
+          <span id="badge-total-alertas" class="hidden text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white animate-pulse">
+            0 avisos
+          </span>
+        </div>
+        <div class="flex items-center gap-4 flex-wrap">
+          <div class="flex items-center gap-1.5" title="Tolerancia máxima permitida en subida de precio sobre la cotización previa o costo">
+            <span class="text-[11px] font-bold text-gray-700">Tol. Subida Precio:</span>
+            <div class="relative flex items-center">
+              <input type="number" id="tolerancia-precio-pct" value="10" min="0" max="200" step="1"
+                     oninput="actualizarToleranciasEntrada()"
+                     class="w-14 text-center text-xs font-extrabold py-1 px-1 border border-amber-300 rounded bg-white text-gray-900 focus:ring-1 focus:ring-amber-500">
+              <span class="text-[11px] font-extrabold text-gray-600 ml-1">%</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5" title="Tolerancia máxima permitida en variación de cantidad respecto al histórico habitual">
+            <span class="text-[11px] font-bold text-gray-700">Tol. Cantidad:</span>
+            <div class="relative flex items-center">
+              <input type="number" id="tolerancia-cant-pct" value="25" min="0" max="500" step="1"
+                     oninput="actualizarToleranciasEntrada()"
+                     class="w-14 text-center text-xs font-extrabold py-1 px-1 border border-amber-300 rounded bg-white text-gray-900 focus:ring-1 focus:ring-amber-500">
+              <span class="text-[11px] font-extrabold text-gray-600 ml-1">%</span>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -8369,6 +8401,9 @@ async function onSelectProductoEntrada(idx, selected) {
     }
   }
   calcularCostoFilaEmpaque(idx, 'equiv');
+  if (typeof evaluarToleranciasLinea === 'function') {
+    evaluarToleranciasLinea(idx);
+  }
 }
 
 let sedeConfirmada = false;
@@ -8605,11 +8640,13 @@ function agregarLineaEntrada() {
 
       </select>
 
-      <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
+      <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada(); actualizarContadorAlertas();"
 
               class="text-red-500 hover:text-red-700 font-bold text-xl px-1">×</button>
 
     </div>
+
+    <div id="ent-alerta-${idx}" class="col-span-12 hidden"></div>
 
   `;
   cont.appendChild(div);
@@ -8723,11 +8760,13 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
       </select>
 
-      <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada();"
+      <button onclick="this.closest('.grid').remove(); calcularTotalesEntrada(); actualizarContadorAlertas();"
 
               class="text-red-500 hover:text-red-700 font-bold text-xl px-1">×</button>
 
     </div>
+
+    <div id="ent-alerta-${idx}" class="col-span-12 hidden"></div>
 
   `;
 
@@ -8957,6 +8996,9 @@ function calcularCostoFilaEmpaque(idx, target) {
   
 
   calcularTotalesEntrada();
+  if (typeof evaluarToleranciasLinea === 'function') {
+    evaluarToleranciasLinea(idx);
+  }
 
 }
 
@@ -9776,6 +9818,9 @@ async function escanearFacturaArchivo(archivo) {
             .then(data => {
               if (data.ok && data.historial) {
                 historialEntradas[idx] = data.historial;
+                if (typeof evaluarToleranciasLinea === 'function') {
+                  evaluarToleranciasLinea(idx);
+                }
               }
             })
             .catch(() => {});
@@ -9942,9 +9987,208 @@ window.addEventListener('paste', function(e) {
 });
 
 
+
+// ── CONTROL DE VARIACIONES Y TOLERANCIAS PREVENTIVAS DE COMPRA ──────────────────
+
+function cargarToleranciasEntrada() {
+  try {
+    const tp = localStorage.getItem(`tuctuc_tol_precio_${NEGOCIO_ID}
+cargarToleranciasEntrada();
+document.addEventListener('DOMContentLoaded', cargarToleranciasEntrada);
+`);
+    const tc = localStorage.getItem(`tuctuc_tol_cant_${NEGOCIO_ID}`);
+    const pInput = document.getElementById('tolerancia-precio-pct');
+    const cInput = document.getElementById('tolerancia-cant-pct');
+    if (tp !== null && pInput) pInput.value = tp;
+    if (tc !== null && cInput) cInput.value = tc;
+  } catch(e) {}
+}
+
+function actualizarToleranciasEntrada() {
+  try {
+    const pInput = document.getElementById('tolerancia-precio-pct');
+    const cInput = document.getElementById('tolerancia-cant-pct');
+    const valP = pInput ? (parseFloat(pInput.value) || 0) : 10;
+    const valC = cInput ? (parseFloat(cInput.value) || 0) : 25;
+    localStorage.setItem(`tuctuc_tol_precio_${NEGOCIO_ID}`, valP);
+    localStorage.setItem(`tuctuc_tol_cant_${NEGOCIO_ID}`, valC);
+    recalcularTodasLasTolerancias();
+  } catch(e) {}
+}
+
+function evaluarToleranciasLinea(idx) {
+  const div = entradaLineas[idx];
+  if (!div) return;
+
+  const prodId = document.getElementById(`ent-id-${idx}`)?.value;
+  const cantEmpInput = document.getElementById(`ent-cant-emp-${idx}`);
+  const costoEmpInput = document.getElementById(`ent-costo-emp-${idx}`);
+  const totalInput = document.getElementById(`ent-total-${idx}`);
+  const presEquivInput = document.getElementById(`ent-pres-equiv-${idx}`);
+  const presIdInput = document.getElementById(`ent-pres-id-${idx}`);
+  const alertaDiv = document.getElementById(`ent-alerta-${idx}`);
+
+  // Limpiar estilos previos de advertencia
+  if (costoEmpInput) costoEmpInput.classList.remove('border-rose-400', 'bg-rose-50/60', 'text-rose-950');
+  if (totalInput) totalInput.classList.remove('border-rose-400', 'bg-rose-50/60', 'text-rose-950');
+  if (cantEmpInput) cantEmpInput.classList.remove('border-amber-400', 'bg-amber-50/60', 'text-amber-950');
+
+  if (!prodId) {
+    if (alertaDiv) { alertaDiv.classList.add('hidden'); alertaDiv.innerHTML = ''; }
+    actualizarContadorAlertas();
+    return;
+  }
+
+  const cantEmp = parseFloat(cantEmpInput?.value) || 0;
+  const costoEmp = parseFloat(costoEmpInput?.value) || 0;
+  const presEquiv = parseFloat(presEquivInput?.value) || 1.0;
+  const presId = presIdInput?.value || null;
+
+  // Tolerancias configuradas por el usuario
+  const pInput = document.getElementById('tolerancia-precio-pct');
+  const cInput = document.getElementById('tolerancia-cant-pct');
+  const tolPrecio = pInput ? (parseFloat(pInput.value) || 10) : 10;
+  const tolCant = cInput ? (parseFloat(cInput.value) || 25) : 25;
+
+  // Historial de cotizaciones/movimientos de esta fila
+  const hist = (typeof historialEntradas !== 'undefined' && historialEntradas[idx]) || [];
+  let hMatch = null;
+  if (presId) {
+    hMatch = hist.find(h => String(h.presentacion_id) === String(presId));
+  }
+  if (!hMatch && hist.length > 0) {
+    hMatch = hist[0];
+  }
+
+  const prod = (typeof productos !== 'undefined') ? productos.find(p => String(p.id) === String(prodId)) : null;
+
+  // 1. PRECIO DE REFERENCIA (Cotización previa del proveedor o costo catálogo)
+  let precioRef = null;
+  let fuentePrecio = '';
+  if (hMatch && hMatch.precio != null && parseFloat(hMatch.precio) > 0) {
+    precioRef = parseFloat(hMatch.precio);
+    fuentePrecio = 'Cotización previa';
+  } else if (prod && prod.costo && parseFloat(prod.costo) > 0) {
+    precioRef = parseFloat(prod.costo) * presEquiv;
+    fuentePrecio = 'Costo catálogo';
+  }
+
+  // 2. CANTIDAD DE REFERENCIA (Última cantidad o promedio histórico en empaques)
+  let cantRef = null;
+  if (hMatch && hMatch.ultima_cantidad != null && parseFloat(hMatch.ultima_cantidad) > 0) {
+    cantRef = parseFloat(hMatch.ultima_cantidad);
+  } else if (hMatch && hMatch.promedio_cantidad != null && parseFloat(hMatch.promedio_cantidad) > 0) {
+    cantRef = parseFloat(hMatch.promedio_cantidad);
+  }
+
+  const avisos = [];
+
+  // A. Evaluar variación de precio: reaccionar a subidas de precio que superen la tolerancia
+  if (costoEmp > 0 && precioRef && precioRef > 0) {
+    const diffPrecio = costoEmp - precioRef;
+    const pctSubida = (diffPrecio / precioRef) * 100;
+    if (pctSubida > tolPrecio) {
+      avisos.push({
+        tipo: 'precio',
+        pct: pctSubida,
+        mensaje: `⚠️ Subida de precio: +${pctSubida.toFixed(1)}% (Ref: $${precioRef.toLocaleString('es-CO', {maximumFractionDigits: 0})} ➔ Facturado: $${costoEmp.toLocaleString('es-CO', {maximumFractionDigits: 0})})`,
+        fuente: fuentePrecio
+      });
+      if (costoEmpInput) costoEmpInput.classList.add('border-rose-400', 'bg-rose-50/60', 'text-rose-950');
+      if (totalInput) totalInput.classList.add('border-rose-400', 'bg-rose-50/60', 'text-rose-950');
+    }
+  }
+
+  // B. Evaluar variación de cantidad: compras inusuales vs histórico habitual
+  if (cantEmp > 0 && cantRef && cantRef > 0) {
+    const diffCant = cantEmp - cantRef;
+    const pctVarCant = (diffCant / cantRef) * 100;
+    if (Math.abs(pctVarCant) > tolCant) {
+      avisos.push({
+        tipo: 'cantidad',
+        pct: pctVarCant,
+        mensaje: `⚠️ Cantidad inusual: ${pctVarCant > 0 ? '+' : ''}${pctVarCant.toFixed(0)}% (Habitual: ${cantRef} ➔ Facturado: ${cantEmp} emp.)`
+      });
+      if (cantEmpInput) cantEmpInput.classList.add('border-amber-400', 'bg-amber-50/60', 'text-amber-950');
+    }
+  }
+
+  // Renderizar o esconder avisos preventivos en la fila
+  if (alertaDiv) {
+    if (avisos.length > 0) {
+      alertaDiv.innerHTML = `
+        <div class="col-span-12 mt-1 mb-1 px-3 py-1.5 bg-amber-50/95 border border-amber-300 rounded-lg text-xs font-semibold text-amber-950 flex items-center justify-between shadow-2xs transition-all">
+          <div class="flex items-center gap-2 flex-wrap">
+            ${avisos.map(a => `
+              <span class="inline-flex items-center gap-1.5 ${a.tipo === 'precio' ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-amber-100 text-amber-900 border-amber-300'} px-2 py-0.5 rounded font-bold border text-[11px]">
+                ${a.mensaje}
+              </span>
+            `).join('')}
+          </div>
+          <span class="text-[10px] text-amber-700 italic font-medium ml-2 shrink-0">Aviso preventivo</span>
+        </div>
+      `;
+      alertaDiv.classList.remove('hidden');
+    } else {
+      alertaDiv.classList.add('hidden');
+      alertaDiv.innerHTML = '';
+    }
+  }
+
+  actualizarContadorAlertas();
+}
+
+function actualizarContadorAlertas() {
+  const badge = document.getElementById('badge-total-alertas');
+  if (!badge) return;
+  const cont = document.getElementById('entrada-lineas');
+  if (!cont) return;
+  const abiertas = cont.querySelectorAll('[id^="ent-alerta-"]:not(.hidden)');
+  const n = abiertas.length;
+  if (n > 0) {
+    badge.textContent = `${n} aviso${n > 1 ? 's' : ''} preventivo${n > 1 ? 's' : ''}`;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function contarAlertasToleranciaActivas() {
+  const alertas = [];
+  entradaLineas.forEach((div, idx) => {
+    const alertaDiv = document.getElementById(`ent-alerta-${idx}`);
+    if (alertaDiv && !alertaDiv.classList.contains('hidden')) {
+      const prodNom = document.getElementById(`ent-ac-${idx}`)?.value || `Línea ${idx + 1}`;
+      const txt = alertaDiv.innerText.replace(/Aviso preventivo/g, '').trim();
+      alertas.push({ producto: prodNom, mensaje: txt });
+    }
+  });
+  return alertas;
+}
+
+function recalcularTodasLasTolerancias() {
+  entradaLineas.forEach((_, idx) => {
+    evaluarToleranciasLinea(idx);
+  });
+}
+
+
 async function registrarEntrada() {
   if (!validarConfirmacionEncabezadoEntrada()) {
     return;
+  }
+
+  // Comprobar avisos preventivos de tolerancia
+  if (typeof contarAlertasToleranciaActivas === 'function') {
+    const avisosActivos = contarAlertasToleranciaActivas();
+    if (avisosActivos.length > 0) {
+      const resumenAvisos = avisosActivos.slice(0, 3).map(a => `• ${a.producto}: ${a.mensaje}`).join('\n');
+      const extra = avisosActivos.length > 3 ? `\n...y ${avisosActivos.length - 3} producto(s) más.` : '';
+      const confirmar = confirm(`⚠️ Atención Preventiva:\nHay ${avisosActivos.length} producto(s) con subidas de precio o variaciones de cantidad superiores a la tolerancia configurada:\n\n${resumenAvisos}${extra}\n\n¿Deseas registrar la entrada de inventario de todos modos?`);
+      if (!confirmar) {
+        return;
+      }
+    }
   }
   const centroSel = document.getElementById('entrada-centro-utilidad');
   const centro_utilidad_id = parseInt(centroSel.value);
@@ -16985,9 +17229,15 @@ function renderInsumosTable() {
     const uid = 'ins-' + idx;
     let recetasHtml = '';
     const safeNombre = (ins.nombre || '').replace(/'/g, "\\'");
+    const fv = parseFloat(ins.factor_visual) || 1.0;
+    const hasVisual = Boolean(ins.unidad_visual && fv !== 1.0);
+    const costoVisual = hasVisual ? (ins.costo_und / fv) : ins.costo_und;
+    const unitBadge = hasVisual ? '<span class="ml-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded">/' + ins.unidad_visual + '</span>' : '';
     ins.recetas.forEach(rec => {
       const costoReceta = (rec.cantidad || 0) * ins.costo_und;
-      recetasHtml += '<div class="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0"><span class="text-gray-700 text-sm">' + rec.nombre + '</span><div class="flex items-center gap-4 text-sm"><span class="text-gray-500">' + _fmtTarjetasNum(rec.cantidad) + '</span><span class="font-mono font-semibold text-gray-800">' + _fmtTarjetasMon(costoReceta) + '</span></div></div>';
+      const cantVisual = hasVisual ? (rec.cantidad * fv) : rec.cantidad;
+      const cantUnit = hasVisual ? (' ' + ins.unidad_visual) : '';
+      recetasHtml += '<div class="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0"><span class="text-gray-700 text-sm">' + rec.nombre + '</span><div class="flex items-center gap-4 text-sm"><span class="text-gray-500 font-mono">' + _fmtTarjetasNum(cantVisual) + cantUnit + '</span><span class="font-mono font-semibold text-gray-800">' + _fmtTarjetasMon(costoReceta) + '</span></div></div>';
     });
     html += '<div class="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">'
       + '<button onclick="toggleInsumo(\'' + uid + '\')" class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left">'
@@ -16997,7 +17247,7 @@ function renderInsumosTable() {
       + '<span class="text-xs text-gray-400 hidden sm:inline">' + ins.categoria + '</span>'
       + '</div>'
       + '<div class="flex items-center gap-2 sm:gap-4 flex-shrink-0">'
-      + '<span class="text-sm font-mono text-gray-600">' + _fmtTarjetasMon(ins.costo_und) + '</span>'
+      + '<span class="text-sm font-mono text-gray-600">' + _fmtTarjetasMon(costoVisual) + unitBadge + '</span>'
       + '<span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">' + ins.recetas.length + ' recetas</span>'
       + '<button type="button" onclick="event.stopPropagation(); abrirModalReemplazarInsumo(' + ins.id + ', \'' + safeNombre + '\')" class="px-2.5 py-1 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg transition-colors border border-indigo-200 flex items-center gap-1 shadow-2xs" title="Ajustar cantidades o reemplazar este insumo en las recetas"><span>🔄</span> <span class="hidden sm:inline">Ajustar / Reemplazar</span></button>'
       + '</div></button>'
@@ -17641,14 +17891,28 @@ function renderTarjetasTable() {
                     </tr>
                   </thead>
                   <tbody>
-                    ${compList.map(c => `
+                    ${compList.map(c => {
+                      const fv = parseFloat(c.factor_visual) || 1.0;
+                      const hasVisual = Boolean(c.unidad_visual && fv !== 1.0);
+                      const displayCant = hasVisual ? (c.cantidad * fv) : c.cantidad;
+                      const displayCosto = hasVisual ? (c.costo_und / fv) : c.costo_und;
+                      const unitLabel = hasVisual ? `<span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">${c.unidad_visual}</span>` : '';
+                      return `
                       <tr class="border-b border-gray-200 last:border-0 hover:bg-white transition-colors">
-                        <td class="py-1.5 px-2 text-left font-medium text-gray-700">${c.nombre}</td>
-                        <td class="py-1.5 px-2 text-right num text-gray-600 font-mono">${_fmtTarjetasNum(c.cantidad)}</td>
-                        <td class="py-1.5 px-2 text-right num font-mono text-gray-500">${_fmtTarjetasMon(c.costo_und)}</td>
+                        <td class="py-1.5 px-2 text-left font-medium text-gray-700">
+                          ${c.nombre}
+                          ${hasVisual ? `<span class="ml-1 text-[10px] text-gray-400 font-mono">(${_fmtTarjetasNum(c.cantidad)} ${c.unidad_base})</span>` : ''}
+                        </td>
+                        <td class="py-1.5 px-2 text-right num text-gray-600 font-mono">
+                          ${_fmtTarjetasNum(displayCant)} ${unitLabel}
+                        </td>
+                        <td class="py-1.5 px-2 text-right num font-mono text-gray-500">
+                          ${_fmtTarjetasMon(displayCosto)}
+                          ${hasVisual ? `<span class="text-[9px] text-gray-400 block">/${c.unidad_visual}</span>` : ''}
+                        </td>
                         <td class="py-1.5 px-2 text-right num font-mono font-semibold text-gray-800">${_fmtTarjetasMon(c.costo_total)}</td>
                       </tr>
-                    `).join('')}
+                    `;}).join('')}
                   </tbody>
 
                 </table>

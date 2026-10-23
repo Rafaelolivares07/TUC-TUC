@@ -1932,7 +1932,7 @@ _GLOBO_CHAT_SNIPPET = """
                 btn.style.borderColor = '#10b981';
                 btn.style.color = '#ffffff';
               }
-              alert('✓ Sonido y avisos en pantalla activados correctamente.\n\nNota: Para app cerrada tu navegador bloqueó Google FCM. Si usas Brave activa "Google services for push messaging" en brave://settings/privacy.');
+              alert(`✓ Sonido y avisos en pantalla activados correctamente.\n\nNota: Para app cerrada tu navegador bloqueó Google FCM. Si usas Brave activa "Google services for push messaging" en brave://settings/privacy.`);
               return;
             }
             await fetch('/api/chat/push/suscribir', {

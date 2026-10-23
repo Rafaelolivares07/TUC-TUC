@@ -5165,15 +5165,27 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
 
     }).slice(0, 20);
 
-    // Si no hubo matches locales pero el usuario escribió 2+ caracteres, consultar al servidor automáticamente
-    if (matches.length === 0 && rawQ.trim().length >= 2 && !inp._buscandoEnServidor) {
+    // Si no hubo matches locales pero el usuario escribió 2+ caracteres, consultar al servidor como máximo UNA vez por texto
+    const qClean = rawQ.trim().toLowerCase();
+    if (matches.length === 0 && qClean.length >= 2 && !inp._buscandoEnServidor && inp._ultimoQServidor !== qClean) {
       inp._buscandoEnServidor = true;
+      inp._ultimoQServidor = qClean;
       if (typeof cargarProductosSilencioso === 'function') {
         cargarProductosSilencioso(true).then(() => {
           inp._buscandoEnServidor = false;
-          if (inp === document.activeElement && inp.value === rawQ) {
-            renderAC();
+          // Si el usuario sigue en este campo, reconstruir la lista con los productos recién traídos sin re-consultar al servidor
+          if (inp === document.activeElement && inp.value.trim().toLowerCase() === qClean) {
+            const freshItems = typeof data === 'function' ? data() : (data || []);
+            const freshMatches = (freshItems || []).filter(p => {
+              if (!p || !p.nombre) return false;
+              const nameNorm = normalizeStr(p.nombre);
+              const catNorm = normalizeStr(p.categoria);
+              return nameNorm.includes(qNorm) || catNorm.includes(qNorm);
+            }).slice(0, 20);
+            renderMatchesUI(freshMatches, rawQ);
           }
+        }).catch(() => {
+          inp._buscandoEnServidor = false;
         });
       }
     }
@@ -8897,7 +8909,7 @@ function agregarLineaEntradaConDatos(productoId, productoNombre, cantidad, valor
 
       <div id="ent-ac-list-${idx}" class="ac-list hidden"></div>
 
-      <input type="hidden" id="ent-id-${idx}" value="${productoId}">
+      <input type="hidden" id="ent-id-${idx}" value="${productoId || ''}">
 
     </div>
 
@@ -9972,13 +9984,25 @@ async function escanearFacturaArchivo(archivo) {
 
     // 5. Líneas de productos identificados
     const lineas = d.lineas || [];
-    if (lineas.length > 0) {
-      const cont = document.getElementById('entrada-lineas');
-      if (cont && entradaLineas.length <= 1) {
-        cont.innerHTML = '';
-        entradaLineas = [];
-      }
+    const noIdent = d.lineas_no_identificadas || [];
+    const cont = document.getElementById('entrada-lineas');
 
+    // Si la tabla contiene filas de facturas anteriores, preguntar o limpiar si están vacías
+    const filasConDatos = entradaLineas.filter((_, i) => {
+      const nom = document.getElementById('ent-ac-' + i) ? document.getElementById('ent-ac-' + i).value.trim() : '';
+      const id = document.getElementById('ent-id-' + i) ? document.getElementById('ent-id-' + i).value.trim() : '';
+      return nom || id;
+    });
+
+    if (filasConDatos.length === 0) {
+      if (cont) { cont.innerHTML = ''; entradaLineas = []; }
+    } else if (lineas.length > 0 || noIdent.length > 0) {
+      if (confirm('Se detectó una nueva factura escaneada. ¿Deseas limpiar los productos que estaban en la tabla para cargar los de esta factura?')) {
+        if (cont) { cont.innerHTML = ''; entradaLineas = []; }
+      }
+    }
+
+    if (lineas.length > 0) {
       lineas.forEach((l, idx) => {
         const prodId = l.producto_id;
         const prodNom = l.producto_nombre;
@@ -10068,8 +10092,9 @@ window.cargarItemOmitidoAEntrada = function(idx) {
   const cant = item.cantidad || 1;
   const vu = item.valor_unitario || 0;
   const tot = item.total_linea || (cant * vu);
+  const targetIdx = entradaLineas.length;
   agregarLineaEntradaConDatos(
-    null,
+    '',
     item.texto_detectado,
     cant,
     vu,
@@ -10083,7 +10108,17 @@ window.cargarItemOmitidoAEntrada = function(idx) {
   );
   calcularTotalesEntrada();
   actualizarCotejoFactura();
-  toast(`Fila cargada para "${item.texto_detectado}". Selecciona el producto correspondiente en el buscador.`);
+
+  // Enfocar y auto-seleccionar la casilla del producto para mapearlo fácilmente
+  setTimeout(() => {
+    const acInp = document.getElementById(`ent-ac-${targetIdx}`);
+    if (acInp) {
+      acInp.focus();
+      acInp.select();
+    }
+  }, 100);
+
+  toast(`Fila cargada con los montos de la factura ($${tot.toLocaleString('es-CO')}). Escribe tu producto (ej. SAL MLGR) para mapearlo.`);
 };
 
 // Cargar todos los ítems omitidos a la tabla de entradas
@@ -10095,7 +10130,7 @@ window.cargarTodosLosOmitidos = function() {
     const vu = item.valor_unitario || 0;
     const tot = item.total_linea || (cant * vu);
     agregarLineaEntradaConDatos(
-      null,
+      '',
       item.texto_detectado,
       cant,
       vu,
@@ -10111,7 +10146,7 @@ window.cargarTodosLosOmitidos = function() {
   calcularTotalesEntrada();
   actualizarCotejoFactura();
   document.getElementById('banner-items-omitidos-ocr')?.classList.add('hidden');
-  toast(`Se cargaron ${items.length} filas a la tabla. Asigna o crea los productos correspondientes.`);
+  toast(`Se cargaron ${items.length} filas a la tabla con sus montos. Escribe el nombre del catálogo en cada una para vincularlas.`);
 };
 
 function actualizarCotejoFactura() {
@@ -10187,10 +10222,7 @@ window.addEventListener('paste', function(e) {
 
 function cargarToleranciasEntrada() {
   try {
-    const tp = localStorage.getItem(`tuctuc_tol_precio_${NEGOCIO_ID}
-cargarToleranciasEntrada();
-document.addEventListener('DOMContentLoaded', cargarToleranciasEntrada);
-`);
+    const tp = localStorage.getItem(`tuctuc_tol_precio_${NEGOCIO_ID}`);
     const tc = localStorage.getItem(`tuctuc_tol_cant_${NEGOCIO_ID}`);
     const pInput = document.getElementById('tolerancia-precio-pct');
     const cInput = document.getElementById('tolerancia-cant-pct');
@@ -10198,6 +10230,8 @@ document.addEventListener('DOMContentLoaded', cargarToleranciasEntrada);
     if (tc !== null && cInput) cInput.value = tc;
   } catch(e) {}
 }
+
+document.addEventListener('DOMContentLoaded', cargarToleranciasEntrada);
 
 function actualizarToleranciasEntrada() {
   try {

@@ -29,7 +29,7 @@ def preprocesar_imagen(ruta_origen):
             return ruta_origen
 
         h, w = img.shape[:2]
-        max_dim = 1800
+        max_dim = 1200
         if max(h, w) > max_dim:
             scale = max_dim / float(max(h, w))
             img_resized = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
@@ -269,15 +269,16 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
         if m_fev:
             cand = m_fev.group(1).upper()
             cand = re.sub(r'^F0([A-Z0-9])', r'FO\1', cand)
-            if len(cand) >= 4:
+            if len(cand) >= 4 and not cand.lower() in ('caja', 'turno', 'terminal', 'tpv', 'pos'):
                 num_doc_detectado = cand
                 break
 
-        m_pref = re.search(r'\b(F[0O]P\d{4,}|SETP\d{4,}|FE\d{4,}|POS\d{4,})\b', txt, re.IGNORECASE)
+        m_pref = re.search(r'\b([0-9]{1,2}[A-Z]{2,4}\d{4,}|F[0O]P\d{4,}|SETP\d{4,}|FE\d{4,}|POS\d{4,})\b', txt, re.IGNORECASE)
         if m_pref:
             cand = m_pref.group(1).upper().replace('F0P', 'FOP')
-            num_doc_detectado = cand
-            break
+            if not cand.lower() in ('caja', 'turno', 'terminal', 'tpv', 'pos'):
+                num_doc_detectado = cand
+                break
 
     if not num_doc_detectado:
         patrones_doc = [
@@ -292,7 +293,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                 m = re.search(pat, l_txt, re.IGNORECASE)
                 if m:
                     cand = m.group(1).strip()
-                    if len(cand) >= 2 and not cand.lower() in ('de', 'del', 'la', 'venta', 'electronica', 'cadena', 'turno'):
+                    if len(cand) >= 2 and not cand.lower() in ('de', 'del', 'la', 'venta', 'electronica', 'cadena', 'turno', 'caja', 'terminal', 'tpv', 'pos'):
                         num_doc_detectado = cand
                         break
             if num_doc_detectado:
@@ -302,17 +303,33 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     # 3. TOTAL FACTURA
     # =========================================================================
     total_factura = 0.0
-    for i, fila in enumerate(filas):
+    # Prioridad 1: Filas que expresamente indiquen TOTAL FACTURA, TOTAL A PAGAR, TOTAL COMPRA
+    for fila in filas:
         texto_fila = " ".join(b['texto'] for b in fila).upper()
-        if "TOTAL" in texto_fila and not any(k in texto_fila for k in ["VENTAS", "TRANSACCIONES", "SUBTOTAL", "UNIDADES"]):
-            filas_candidatas = [fila] + filas[i+1:min(i+4, len(filas))]
-            for fc in filas_candidatas:
-                for b in reversed(fc):
-                    m_din = re.search(r'\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)', b['texto'])
-                    if m_din:
-                        val = _limpiar_monto(m_din.group(1))
-                        if val > 100:
-                            total_factura = max(total_factura, val)
+        if any(k in texto_fila for k in ["TOTAL FACTURA", "TOTAL A PAGAR", "TOTAL COMPRA", "VALOR A PAGAR", "TOTAL A CANCELAR"]) and not any(k in texto_fila for k in ["EFECTIVO", "CAMBIO", "VUELTAS", "ITEMS", "DESCUENTO"]):
+            for b in reversed(fila):
+                m_din = re.search(r'\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)', b['texto'])
+                if m_din:
+                    val = _limpiar_monto(m_din.group(1))
+                    if val > 100:
+                        total_factura = val
+                        break
+            if total_factura > 0:
+                break
+
+    # Prioridad 2: Buscar fila con 'TOTAL' excluyendo montos de EFECTIVO, CAMBIO y VUELTAS
+    if total_factura == 0.0:
+        for i, fila in enumerate(filas):
+            texto_fila = " ".join(b['texto'] for b in fila).upper()
+            if "TOTAL" in texto_fila and not any(k in texto_fila for k in ["VENTAS", "TRANSACCIONES", "SUBTOTAL", "UNIDADES", "ITEMS", "DESCUENTO", "EFECTIVO", "CAMBIO", "VUELTAS"]):
+                filas_candidatas = [fila] + [fc for fc in filas[i+1:min(i+3, len(filas))] if not any(k in " ".join(b['texto'] for b in fc).upper() for k in ["EFECTIVO", "CAMBIO", "VUELTAS", "PAGO"])]
+                for fc in filas_candidatas:
+                    for b in reversed(fc):
+                        m_din = re.search(r'\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)', b['texto'])
+                        if m_din:
+                            val = _limpiar_monto(m_din.group(1))
+                            if val > 100:
+                                total_factura = max(total_factura, val)
 
     # =========================================================================
     # 4. PROVEEDOR (Cruce con tabla terceros)
@@ -547,8 +564,115 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
 
     # CASO B: FACTURAS TRADICIONALES EN COLUMNAS HORIZONTALES (Sin códigos de barras)
     else:
+        en_zona_items = False
+
         for fila in filas:
             texto_fila = " ".join(b['texto'] for b in fila).strip()
+            texto_upper = texto_fila.upper()
+
+            # Detectar inicio de tabla de productos en formato POS / Siesa / Éxito
+            if any(k in texto_upper for k in ['CANT.U.M', 'DESCRIPCICN', 'DESCRIPCION', 'REG. | ITEM', 'REG.', 'CANT | DESCRIP', 'CANTIDAD']):
+                en_zona_items = True
+                continue
+
+            # Detectar fin de tabla de productos
+            if en_zona_items and any(k in texto_upper for k in ['TOTAL ITEMS', 'TOTAL SIN DESCUENTOS', 'TOTAL FACTURA', 'TU AHORRO', 'SUBTOTAL', 'TOTAL A PAGAR', 'EFECTIVO']):
+                en_zona_items = False
+                break
+
+            if en_zona_items:
+                # Extraer precio de la fila (último bloque con monto válido)
+                total_line = 0.0
+                precio_block_idx = None
+                for idx in range(len(fila)-1, -1, -1):
+                    b_txt = fila[idx]['texto']
+                    m_p = re.search(r'\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)\*?', b_txt)
+                    if m_p:
+                        p_val = _limpiar_monto(m_p.group(1))
+                        if p_val > 50:
+                            total_line = p_val
+                            precio_block_idx = idx
+                            break
+
+                if total_line > 0:
+                    cant = 1.0
+                    cant_fijada = False
+                    desc_parts = []
+                    for idx, b in enumerate(fila):
+                        if idx == precio_block_idx:
+                            continue
+                        b_txt = b['texto'].strip()
+                        # Unidad explícita (ej: 1.00un, 2 un, 1.5kg, 3 und)
+                        m_cant_unit = re.search(r'^(\d+(?:[.,]\d+)?)\s*(?:un|und|kg|gr|g|lb|paq|x)$', b_txt, re.IGNORECASE)
+                        if m_cant_unit:
+                            try:
+                                cant = float(m_cant_unit.group(1).replace(',', '.'))
+                                cant_fijada = True
+                            except: pass
+                            continue
+
+                        # Si es número de registro o código PLU aislado de 3+ dígitos (ej: 4718)
+                        if re.match(r'^\d{3,8}$', b_txt):
+                            continue
+
+                        # Si es una cantidad numérica entera pequeña antes del nombre
+                        if not cant_fijada and not desc_parts and re.match(r'^\d+(?:[.,]\d+)?$', b_txt):
+                            try:
+                                c_val = float(b_txt.replace(',', '.'))
+                                if c_val <= 100:
+                                    cant = c_val
+                                    cant_fijada = True
+                                    continue
+                            except: pass
+
+                        desc_parts.append(b_txt)
+
+                    nom_it = " ".join(desc_parts).strip()
+                    nom_it = re.sub(r'^[0-9\s.,]+', '', nom_it).strip()
+                    if not nom_it or len(nom_it) < 2:
+                        continue
+
+                    vu_calc = round(total_line / cant, 2) if (cant > 0 and total_line > 0) else total_line
+
+                    mejor_prod = None
+                    mejor_score = 0.0
+                    nom_upper = nom_it.upper()
+                    for p in productos_db:
+                        p_nom = p['nombre'].upper()
+                        if len(p_nom) >= 5 and (p_nom in nom_upper or nom_upper in p_nom):
+                            score = 0.85
+                        else:
+                            score = difflib.SequenceMatcher(None, nom_upper, p_nom).ratio()
+                        if score > mejor_score and score >= 0.70:
+                            mejor_score = score
+                            mejor_prod = p
+
+                    pres_id, pres_nombre, pres_equiv, precio_ref, cant_ref, var_p_pct, var_c_pct = _obtener_referencia_item(
+                        conn, negocio_id, proveedor_id, mejor_prod, cant, vu_calc
+                    )
+
+                    items_extraidos.append({
+                        'texto_detectado': nom_it,
+                        'cantidad': cant,
+                        'total_linea': total_line,
+                        'valor_unitario': vu_calc,
+                        'barcode': "",
+                        'producto_id': mejor_prod['id'] if mejor_prod else None,
+                        'producto_nombre': mejor_prod['nombre'] if mejor_prod else nom_it,
+                        'iva_pct': float(mejor_prod.get('iva_pct') or 0) if mejor_prod else 0.0,
+                        'match_confianza': round(mejor_score * 100, 1) if mejor_prod else 0.0,
+                        'identificado': bool(mejor_prod is not None),
+                        'presentacion_id': pres_id,
+                        'presentacion_nombre': pres_nombre,
+                        'presentacion_equivalencia': pres_equiv,
+                        'precio_referencia': precio_ref,
+                        'cantidad_referencia': cant_ref,
+                        'variacion_precio_pct': var_p_pct,
+                        'variacion_cant_pct': var_c_pct
+                    })
+                    continue
+
+            # Fallback para líneas simples tradicionales tipo "1x LECHUGA 4.620"
             m_it = re.match(r'^(\d+(?:[.,]\d+)?)\s*(?:[xX*]|UND|KG|GR|PAQ)?\s+(.+)$', texto_fila)
             if m_it:
                 cant_str = m_it.group(1).replace(',', '.')
@@ -583,7 +707,6 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
 
                 vu_calc = round(precio_linea / cant, 2) if (cant > 0 and precio_linea > 0) else 0.0
 
-                # Buscar presentación, empaque previo y tolerancias de precio/cantidad
                 pres_id, pres_nombre, pres_equiv, precio_ref, cant_ref, var_p_pct, var_c_pct = _obtener_referencia_item(
                     conn, negocio_id, proveedor_id, mejor_prod, cant, vu_calc
                 )

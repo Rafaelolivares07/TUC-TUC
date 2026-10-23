@@ -131,7 +131,7 @@ def insert_message_to_db(text):
 
 def check_for_agent_replies(token, chat_id):
     """Revisa si hay respuestas pendientes de Merlin para enviarlas a Telegram."""
-    try:
+    return  # Desactivado completamente
         conn = psycopg2.connect(DB_CONN_STR)
         cur = conn.cursor()
         cur.execute("""

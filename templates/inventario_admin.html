@@ -2612,72 +2612,38 @@
           </div>
         </div>
 
-        <!-- Fila 2: Producto a Producir (Unico input de producto) -->
-        <div class="mb-3.5">
-          <label class="block text-xs font-black text-slate-700 uppercase tracking-wide mb-1.5 flex items-center justify-between">
-            <span><span>🔍</span> Producto a Preparar / Producir <span class="text-rose-500">*</span></span>
-            <span class="text-[10px] text-slate-400 font-normal">Escribe el nombre del producto estándar</span>
-          </label>
-          <div class="relative">
-            <input id="prod-ac-input" type="text" placeholder="Buscar producto con tarjeta estándar…" autocomplete="off" class="w-full border-2 border-slate-300 rounded-xl px-3.5 py-2.5 text-base sm:text-lg bg-white font-black text-slate-900 placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-xs">
-            <div id="prod-ac-list" class="ac-list hidden"></div>
-            <input type="hidden" id="prod-ac-id">
-          </div>
-        </div>
-
-        <!-- Fila 3: Cantidad a Simular y Cantidad Real Obtenida (Lado a Lado con Explicación Clara) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3.5">
-          <!-- Col 1: Cantidad a Simular -->
-          <div class="bg-white border-2 border-slate-200/90 rounded-xl p-3.5 shadow-2xs hover:border-slate-300 transition flex flex-col justify-between">
-            <div>
-              <div class="flex items-center justify-between gap-2 mb-1">
-                <label class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                  <span>🔢</span> 1. Cantidad a Simular (Teórica) <span class="text-rose-500">*</span>
-                </label>
-                <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">Calcula Receta</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1"
-                       oninput="onInputProdCantidad(this.value)"
-                       onkeydown="if(event.key==='Enter'){event.preventDefault();previsualizarProduccion(true, true);}"
-                       placeholder="0"
-                       class="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-base sm:text-lg bg-slate-50/60 font-mono font-black text-slate-900 text-right outline-none focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition shadow-2xs">
-                <span class="text-xs font-bold text-slate-500 shrink-0">Und/g</span>
-              </div>
+        <!-- Fila 2: Producto a Preparar (80%) y Cantidad a Simular (20%) en la misma línea -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mb-3.5 items-end">
+          
+          <!-- Columna Producto (~80%) -->
+          <div class="md:col-span-9 lg:col-span-10">
+            <label class="block text-xs font-black text-slate-700 uppercase tracking-wide mb-1.5 flex items-center justify-between">
+              <span><span>🔍</span> Producto a Preparar / Producir <span class="text-rose-500">*</span></span>
+              <span class="text-[10px] text-slate-400 font-normal hidden sm:inline">Escribe el nombre del producto estándar</span>
+            </label>
+            <div class="relative">
+              <input id="prod-ac-input" type="text" placeholder="Buscar producto con tarjeta estándar…" autocomplete="off" class="w-full border-2 border-slate-300 rounded-xl px-3.5 py-2.5 text-base sm:text-lg bg-white font-black text-slate-900 placeholder:text-slate-400 placeholder:font-normal outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-xs">
+              <div id="prod-ac-list" class="ac-list hidden"></div>
+              <input type="hidden" id="prod-ac-id">
             </div>
-            <p class="text-[11px] text-slate-500 mt-2 leading-tight">
-              <b>¿Para qué sirve?:</b> Es tu plan o lote teórico. Al cambiar este valor, el sistema calcula automáticamente cuánta materia prima requieres según la receta oficial.
-            </p>
           </div>
 
-          <!-- Col 2: Cantidad Real Obtenida -->
-          <div class="bg-gradient-to-r from-rose-50/70 via-pink-50/50 to-amber-50/40 border-2 border-rose-300/80 rounded-xl p-3.5 shadow-2xs flex flex-col justify-between">
-            <div>
-              <div class="flex items-center justify-between gap-2 mb-1">
-                <label class="text-xs font-black text-rose-800 uppercase tracking-wide flex items-center gap-1.5">
-                  <span>🔥</span> 2. Cantidad Real Obtenida (Física)
-                </label>
-                <span class="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded border border-emerald-300/60" title="Al editar esta cantidad final, los insumos de la tabla se mantienen fijos">🔒 Insumos fijos</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <input id="prod-preview-cant-input" type="number" min="0.0001" step="any"
-                       oninput="ajustarCantidadRealProducida(this.value, 'preview')"
-                       placeholder="Resultado real de paila/cocina"
-                       class="w-full text-right border-2 border-rose-300 focus:border-rose-600 rounded-lg px-3 py-2 text-base sm:text-lg font-black text-rose-700 font-mono bg-white outline-none transition shadow-2xs"
-                       title="Ajusta la cantidad real producida sin recalcular los insumos">
-                <span class="text-xs font-bold text-rose-600 shrink-0">Und/g</span>
-              </div>
-            </div>
-            <span id="prod-preview-cant-badge" class="hidden"></span>
-            <div>
-              <div id="prod-preview-rendimiento-info" class="w-full mt-1.5 text-[11px] font-bold text-slate-600 flex items-center justify-between gap-1 flex-wrap">
-                <!-- Indicador dinámico de rendimiento/merma -->
-              </div>
-              <p class="text-[11px] text-rose-900/80 mt-1 leading-tight">
-                <b>¿Para qué sirve?:</b> Lo que efectivamente se pesó/contó al salir de cocina. Esto es lo que ingresará a bodega terminado (sin alterar los insumos consumidos).
-              </p>
+          <!-- Columna Cantidad a Simular (~20%) -->
+          <div class="md:col-span-3 lg:col-span-2">
+            <label class="block text-xs font-black text-slate-800 uppercase tracking-wide mb-1.5 flex items-center justify-between" title="Cantidad teórica para calcular la receta">
+              <span class="truncate"><span>🔢</span> Cant. Simular <span class="text-rose-500">*</span></span>
+            </label>
+            <div class="flex items-center gap-1.5">
+              <input id="prod-cantidad" type="number" min="0.0001" step="0.0001" value="1"
+                     oninput="onInputProdCantidad(this.value)"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();previsualizarProduccion(true, true);}"
+                     placeholder="0"
+                     class="w-full border-2 border-slate-300 rounded-xl px-3 py-2.5 text-base sm:text-lg bg-slate-50/70 font-mono font-black text-slate-900 text-right outline-none focus:bg-white focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-xs"
+                     title="Lote o cantidad teórica a simular">
+              <span class="text-xs font-bold text-slate-500 shrink-0">Und/g</span>
             </div>
           </div>
+
         </div>
 
         <!-- Tira Predictiva Integrada y Armónica -->
@@ -2833,53 +2799,95 @@
 
 
 
-      <!-- Notas finales de producción y Botones de Registro -->
-      <div class="mt-5 pt-4 border-t border-gray-200 space-y-3">
-        <div>
-          <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1 flex items-center gap-1.5">
-            <span>📝</span> Notas u observaciones de esta producción <span class="font-normal text-slate-500 lowercase">(opcional)</span>
-          </label>
-          <input id="prod-notas" type="text" placeholder="Ej. Lote matutino, ajuste de fórmula, textura obtenida..." class="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm bg-white text-slate-800 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-2xs">
+      <!-- Contenedor Rosado Unificado: Liquidación Final y Registro del Lote -->
+      <div class="mt-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-rose-50/90 via-pink-50/70 to-rose-50/90 border-2 border-rose-300 shadow-sm space-y-4">
+        
+        <div class="flex items-center justify-between border-b border-rose-200/80 pb-2.5">
+          <div class="flex items-center gap-2">
+            <span class="text-base sm:text-lg">🔥</span>
+            <span class="font-black text-xs sm:text-sm text-rose-950 uppercase tracking-wide">Liquidación y Registro de este Lote</span>
+          </div>
+          <span class="text-[10px] sm:text-xs font-bold text-rose-800 bg-rose-200/60 px-2.5 py-0.5 rounded-lg border border-rose-300">
+            Paso final de producción
+          </span>
         </div>
 
-        <!-- Explicación Didáctica y Botones de Acción -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-2">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
           
-          <!-- Tarjeta Acción 1: Ajuste Permanente de Receta Oficial -->
-          <div class="p-3.5 rounded-2xl bg-indigo-50/70 border-2 border-indigo-200 flex flex-col justify-between gap-2.5 shadow-2xs">
+          <!-- Columna Izquierda: Cantidad Real Obtenida + Notas (7 columnas en lg) -->
+          <div class="lg:col-span-7 flex flex-col justify-between space-y-3.5">
+            <!-- 1. Cantidad Real Obtenida -->
             <div>
-              <div class="flex items-center gap-1.5 font-bold text-indigo-950 text-xs sm:text-sm mb-1">
-                <span>🔄</span>
-                <span>¿Modificaste insumos y quieres cambiar la fórmula oficial?</span>
+              <div class="flex items-center justify-between gap-2 mb-1.5">
+                <label class="text-xs font-black text-rose-950 uppercase tracking-wide flex items-center gap-1.5">
+                  <span>⚖️</span> Cantidad Real Obtenida (Física) <span class="text-rose-600">*</span>
+                </label>
+                <span class="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded border border-emerald-300/60" title="Al editar esta cantidad final, los insumos de la tabla se mantienen fijos">
+                  🔒 Insumos fijos
+                </span>
               </div>
-              <p class="text-[11px] text-indigo-900/80 leading-relaxed">
-                Si en la tabla ajustaste las cantidades (ej. más salsa o menos sal) y quieres que esa sea la <b>nueva receta estándar para siempre</b>, este botón actualiza la base de datos oficial dividiendo los insumos de la tabla entre tu <b>Cantidad Real Obtenida</b> para fijar el nuevo estándar por unidad.
+              <div class="flex items-center gap-2">
+                <input id="prod-preview-cant-input" type="number" min="0.0001" step="any"
+                       oninput="ajustarCantidadRealProducida(this.value, 'preview')"
+                       placeholder="Resultado real de paila/cocina"
+                       class="w-full text-right border-2 border-rose-300 focus:border-rose-600 rounded-xl px-3.5 py-2.5 text-base sm:text-lg font-black text-rose-800 font-mono bg-white outline-none transition shadow-2xs"
+                       title="Ajusta la cantidad real producida sin recalcular los insumos">
+                <span class="text-xs font-bold text-rose-700 shrink-0">Und/g</span>
+              </div>
+              <span id="prod-preview-cant-badge" class="hidden"></span>
+              <div id="prod-preview-rendimiento-info" class="w-full mt-1.5 text-[11px] font-bold text-slate-600 flex items-center justify-between gap-1 flex-wrap"></div>
+              <p class="text-[11px] text-rose-900/80 mt-1 leading-tight">
+                <b>¿Qué es?:</b> Lo que efectivamente se pesó/contó al salir de cocina. Esto ingresará a bodega como producto terminado sin alterar los insumos consumidos.
               </p>
             </div>
-            <button id="prod-btn-receta" onclick="abrirAjusteReceta()" type="button"
-                    class="w-full px-4 py-2.5 border-2 border-indigo-300 text-indigo-900 bg-white hover:bg-indigo-100 font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer">
-              <span>🔄</span> Ajustar Receta Estándar (Permanente)
-            </button>
+
+            <!-- 2. Notas u Observaciones -->
+            <div class="pt-2.5 border-t border-rose-200/60">
+              <label class="block text-xs font-bold text-rose-950 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                <span>📝</span> Notas u observaciones de esta producción <span class="font-normal text-slate-500 lowercase">(opcional)</span>
+              </label>
+              <input id="prod-notas" type="text" placeholder="Ej. Lote matutino, cocción a fuego lento, textura esperada..." 
+                     class="w-full border-2 border-rose-200 rounded-xl px-3.5 py-2 text-xs sm:text-sm bg-white text-slate-800 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-2xs">
+            </div>
           </div>
 
-          <!-- Tarjeta Acción 2: Registrar Lote del Día -->
-          <div class="p-3.5 rounded-2xl bg-rose-50/70 border-2 border-rose-200 flex flex-col justify-between gap-2.5 shadow-2xs">
+          <!-- Columna Derecha: Botón de Registro y Acción (5 columnas en lg) -->
+          <div class="lg:col-span-5 bg-white/80 border-2 border-rose-200/90 rounded-xl p-4 flex flex-col justify-between gap-3 shadow-2xs">
             <div>
               <div class="flex items-center gap-1.5 font-bold text-rose-950 text-xs sm:text-sm mb-1">
                 <span>✨</span>
-                <span>¿Solo vas a asentar la producción realizada hoy?</span>
+                <span>Asentar producción realizada hoy</span>
               </div>
               <p class="text-[11px] text-rose-900/80 leading-relaxed">
-                Descuenta del inventario los insumos consumidos en la tabla e ingresa la <b>Cantidad Real Obtenida</b> como producto terminado en bodega. <b>No modifica</b> la receta maestra futura.
+                Descuenta del inventario los insumos consumidos en la tabla e ingresa la <b>Cantidad Real Obtenida</b> como producto terminado en bodega. <b>No modifica</b> la receta maestra.
               </p>
             </div>
+            
             <button id="prod-btn-registrar" onclick="registrarProduccion()" disabled type="button"
-                    class="w-full px-6 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-98 text-white font-black rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-xs sm:text-sm transition shadow-md flex items-center justify-center gap-2 cursor-pointer">
-              <span>✨</span> Registrar producción (Solo este lote)
+                    class="w-full py-3.5 px-4 bg-rose-600 hover:bg-rose-700 active:scale-98 text-white font-black rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-xs sm:text-sm transition shadow-md flex items-center justify-center gap-2 cursor-pointer">
+              <span>✨</span> REGISTRAR PRODUCCIÓN (SOLO ESTE LOTE)
             </button>
           </div>
 
         </div>
+
+      </div>
+
+      <!-- Acción Secundaria Claramente Fuera del Contenedor: Ajuste Permanente de Receta Oficial -->
+      <div class="mt-4 p-3.5 rounded-2xl bg-indigo-50/40 border border-indigo-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+        <div class="flex-1">
+          <div class="flex items-center gap-1.5 font-bold text-indigo-950 text-xs sm:text-sm">
+            <span>🔄</span>
+            <span>Mantenimiento de Receta: ¿Quieres actualizar la fórmula oficial?</span>
+          </div>
+          <p class="text-[11px] text-indigo-900/75 mt-0.5 leading-tight">
+            Divide los insumos de la tabla entre tu cantidad real para fijar la <b>nueva receta estándar definitiva</b> en el catálogo. Úsalo solo si la fórmula cambió permanentemente.
+          </p>
+        </div>
+        <button id="prod-btn-receta" onclick="abrirAjusteReceta()" type="button"
+                class="shrink-0 px-3.5 py-2 border-2 border-indigo-300 text-indigo-900 bg-white hover:bg-indigo-100 font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+          <span>🔄</span> Ajustar Receta Estándar (Permanente)
+        </button>
       </div>
 
     </div>

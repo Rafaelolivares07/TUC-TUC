@@ -547,6 +547,34 @@
 
       </div>
 
+      <!-- Unidades de Medida y Proyeccion Visual -->
+      <div class="sm:col-span-2 bg-indigo-50/40 border border-indigo-200/80 p-3.5 rounded-xl flex flex-col gap-2.5">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-indigo-950">
+            <span>⚖️</span> Unidades de Medida y Presentación Visual
+          </div>
+          <button type="button" onclick="abrirModalGestionUnidades()" class="text-[11px] text-indigo-700 hover:text-indigo-900 font-bold underline flex items-center gap-1 cursor-pointer">
+            <span>⚙️</span> Gestionar o crear unidades y equivalencias
+          </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-900 uppercase mb-1">Unidad Base del Sistema *</label>
+            <select id="mp-unidad-medida" class="w-full border border-indigo-200 rounded-lg px-2.5 py-2 text-xs font-semibold bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">-- Seleccionar unidad base (ej: mg, g, und) --</option>
+            </select>
+            <span class="text-[9px] text-gray-500 mt-0.5 block">Unidad real donde se guardan saldos y movimientos.</span>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-900 uppercase mb-1">Unidad Visual / Presentación (Opcional)</label>
+            <select id="mp-unidad-visual" class="w-full border border-indigo-200 rounded-lg px-2.5 py-2 text-xs font-semibold bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">-- Sin conversión (Misma que base) --</option>
+            </select>
+            <span class="text-[9px] text-gray-500 mt-0.5 block">Cómo se proyecta en recetas y conteos físicos (ej: g).</span>
+          </div>
+        </div>
+      </div>
+
       <div class="sm:col-span-2 bg-gray-50 border border-gray-200 p-3 rounded-xl flex flex-col gap-1">
 
         <label class="flex items-center gap-2 cursor-pointer select-none">
@@ -632,6 +660,130 @@
 </div>
 
 <!-- ── OVERLAY CONFIGURAR CATEGORÍAS DE ADICIONES / EXTRAS POS ────────── -->
+
+
+<!-- Modal Gestión de Unidades de Medida y Equivalencias -->
+<div id="overlay-unidades-medida" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this) cerrarModalGestionUnidades()">
+  <div class="modal max-w-2xl w-full bg-white rounded-2xl shadow-2xl p-6">
+    <div class="flex items-center justify-between pb-3 border-b border-gray-200">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">⚖️</span>
+        <h3 class="text-lg font-black text-gray-900">Unidades de Medida y Equivalencias</h3>
+      </div>
+      <button onclick="cerrarModalGestionUnidades()" class="text-gray-400 hover:text-gray-600 font-black text-2xl leading-none cursor-pointer">&times;</button>
+    </div>
+
+    <!-- Pestañas del Modal -->
+    <div class="flex gap-2 my-4 border-b border-gray-100 pb-2">
+      <button id="tab-btn-unidades" onclick="cambiarSubtabUnidades('unidades')" class="px-4 py-1.5 text-xs font-extrabold rounded-xl bg-indigo-600 text-white shadow-xs cursor-pointer">
+        1. Unidades de Medida
+      </button>
+      <button id="tab-btn-equivalencias" onclick="cambiarSubtabUnidades('equivalencias')" class="px-4 py-1.5 text-xs font-extrabold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer">
+        2. Factores de Conversión (Equivalencias)
+      </button>
+    </div>
+
+    <!-- Contenido Pestaña 1: Unidades -->
+    <div id="subtab-cont-unidades" class="space-y-4">
+      <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
+        <span class="text-xs font-black text-gray-700 uppercase tracking-wide block mb-2">+ Crear Nueva Unidad de Medida</span>
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+          <div>
+            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Código / Símbolo *</label>
+            <input type="text" id="nueva-u-codigo" placeholder="ej: oz, lb" class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Nombre Descriptivo *</label>
+            <input type="text" id="nueva-u-nombre" placeholder="ej: Onza, Libra" class="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-0.5">Magnitud</label>
+            <select id="nueva-u-magnitud" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+              <option value="peso">Peso (masa)</option>
+              <option value="volumen">Volumen (líquido)</option>
+              <option value="unidad">Unidad (conteo)</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex justify-end mt-2.5">
+          <button type="button" onclick="guardarNuevaUnidad()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-xs transition cursor-pointer">
+            Guardar Unidad
+          </button>
+        </div>
+      </div>
+
+      <div class="max-h-60 overflow-y-auto border border-gray-200 rounded-xl custom-scrollbar">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-gray-100 text-gray-600 font-bold sticky top-0">
+            <tr>
+              <th class="py-2 px-3">Código</th>
+              <th class="py-2 px-3">Nombre</th>
+              <th class="py-2 px-3">Magnitud</th>
+              <th class="py-2 px-3 text-center">Tipo</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-unidades-body" class="divide-y divide-gray-100">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Contenido Pestaña 2: Equivalencias -->
+    <div id="subtab-cont-equivalencias" class="hidden space-y-4">
+      <div class="bg-indigo-50/50 p-3.5 rounded-xl border border-indigo-200">
+        <span class="text-xs font-black text-indigo-950 uppercase tracking-wide block mb-2">+ Crear Nueva Relación / Factor de Conversión</span>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-900 uppercase mb-0.5">1 Unidad Origen</label>
+            <select id="nueva-eq-origen" onchange="actualizarPreviewFormulaEquiv()" class="w-full border border-indigo-200 rounded-lg px-2 py-1.5 text-xs font-bold bg-white outline-none focus:ring-2 focus:ring-indigo-500"></select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-900 uppercase mb-0.5">Factor Multiplicador (=)</label>
+            <input type="number" step="any" min="0.00000001" id="nueva-eq-factor" oninput="actualizarPreviewFormulaEquiv()" placeholder="ej: 0.001" class="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-indigo-900 uppercase mb-0.5">Unidad Destino</label>
+            <select id="nueva-eq-destino" onchange="actualizarPreviewFormulaEquiv()" class="w-full border border-indigo-200 rounded-lg px-2 py-1.5 text-xs font-bold bg-white outline-none focus:ring-2 focus:ring-indigo-500"></select>
+          </div>
+        </div>
+        <p class="text-[11px] text-indigo-700 mt-2 font-mono" id="preview-conversion-texto">
+          Ejemplo: 1 mg * 0.001 = 1 g
+        </p>
+        <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-indigo-200/60 flex-wrap gap-2">
+          <label class="flex items-center gap-1.5 text-xs text-indigo-900 font-semibold cursor-pointer select-none">
+            <input type="checkbox" id="nueva-eq-bidireccional" checked class="accent-indigo-600 rounded">
+            Crear también la conversión inversa recíproca (1 / factor)
+          </label>
+          <button type="button" onclick="guardarNuevaEquivalencia()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-1.5 rounded-lg shadow-xs transition cursor-pointer">
+            Guardar Conversión
+          </button>
+        </div>
+      </div>
+
+      <div class="max-h-60 overflow-y-auto border border-gray-200 rounded-xl custom-scrollbar">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-gray-100 text-gray-600 font-bold sticky top-0">
+            <tr>
+              <th class="py-2 px-3">Conversión</th>
+              <th class="py-2 px-3 font-mono">Factor</th>
+              <th class="py-2 px-3">Fórmula Visual</th>
+              <th class="py-2 px-3 text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-equivalencias-body" class="divide-y divide-gray-100 font-mono">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mt-4 pt-3 border-t border-gray-200 flex justify-end">
+      <button type="button" onclick="cerrarModalGestionUnidades()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition cursor-pointer">
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>
+
 <div id="overlay-categorias-adiciones" class="overlay hidden" style="z-index: 55;" onclick="if(event.target===this)cerrarModalCategoriasAdiciones()">
   <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:580px; width:95%; max-height:90vh; padding:22px; overflow:hidden; position:relative; box-sizing:border-box;">
     <!-- Header -->
@@ -1802,6 +1954,12 @@
                 class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition shadow-2xs flex items-center gap-1 whitespace-nowrap"
                 title="Catálogo de unidades de empaque / presentaciones">
           <span>📦</span> Empaques
+        </button>
+
+        <button type="button" onclick="abrirModalGestionUnidades()"
+                class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 transition shadow-2xs flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                title="Gestionar unidades de medida base (g, mg, ml, l) y factores de conversión visual">
+          <span>⚖️</span> Unidades y Equivalencias
         </button>
 
         <button onclick="abrirModalProducto()"
@@ -7239,6 +7397,10 @@ function abrirModalProducto(pOrId = null) {
   document.getElementById('mp-dias-min-stock').value = (p && p.dias_min_stock !== null && p.dias_min_stock !== undefined) ? p.dias_min_stock : '';
   document.getElementById('mp-dias-max-stock').value = (p && p.dias_max_stock !== null && p.dias_max_stock !== undefined) ? p.dias_max_stock : '';
   document.getElementById('mp-stock-minimo').value   = (p && p.stock_minimo !== null && p.stock_minimo !== undefined) ? p.stock_minimo : '';
+  const selBase = document.getElementById('mp-unidad-medida');
+  const selVis = document.getElementById('mp-unidad-visual');
+  if (selBase) selBase.value = (p && p.unidad_medida_id) ? p.unidad_medida_id : '';
+  if (selVis) selVis.value = (p && p.unidad_visual_id) ? p.unidad_visual_id : '';
 
   document.getElementById('overlay-producto').classList.remove('hidden');
 
@@ -7287,6 +7449,10 @@ async function guardarProducto() {
     dias_max_stock: document.getElementById('mp-dias-max-stock')?.value.trim() ? parseInt(document.getElementById('mp-dias-max-stock').value) : null,
 
     stock_minimo:   document.getElementById('mp-stock-minimo')?.value.trim() ? parseFloat(document.getElementById('mp-stock-minimo').value) : null,
+
+    unidad_medida_id: document.getElementById('mp-unidad-medida')?.value ? parseInt(document.getElementById('mp-unidad-medida').value) : null,
+
+    unidad_visual_id: document.getElementById('mp-unidad-visual')?.value ? parseInt(document.getElementById('mp-unidad-visual').value) : null,
 
   };
 
@@ -21510,3 +21676,231 @@ function copiarSoloLinkOC() {
 </html>
 
 
+
+
+// ── GESTIÓN DE UNIDADES DE MEDIDA Y EQUIVALENCIAS ──────────────────────────────
+let catalogoUnidades = [];
+let catalogoEquivalencias = [];
+
+async function cargarUnidadesYEquivalencias() {
+  try {
+    const res = await fetch('/api/inventario/unidades-medida');
+    const data = await res.json();
+    if (data.ok) {
+      catalogoUnidades = data.unidades || [];
+      catalogoEquivalencias = data.equivalencias || [];
+      poblarSelectsUnidadesProducto();
+    }
+  } catch(e) {
+    console.error('Error cargando unidades:', e);
+  }
+}
+
+function poblarSelectsUnidadesProducto() {
+  const selBase = document.getElementById('mp-unidad-medida');
+  const selVis = document.getElementById('mp-unidad-visual');
+  if (!selBase || !selVis) return;
+  const valBase = selBase.value;
+  const valVis = selVis.value;
+
+  let optsBase = '<option value="">-- Sin especificar (Und) --</option>';
+  let optsVis = '<option value="">-- Sin conversión (Misma que base) --</option>';
+
+  catalogoUnidades.forEach(u => {
+    const label = `${u.nombre} (${u.codigo}) [${u.magnitud}]`;
+    optsBase += `<option value="${u.id}">${label}</option>`;
+    optsVis += `<option value="${u.id}">${label}</option>`;
+  });
+
+  selBase.innerHTML = optsBase;
+  selVis.innerHTML = optsVis;
+  if (valBase) selBase.value = valBase;
+  if (valVis) selVis.value = valVis;
+}
+
+function abrirModalGestionUnidades() {
+  document.getElementById('overlay-unidades-medida').classList.remove('hidden');
+  cambiarSubtabUnidades('unidades');
+  renderTablaUnidades();
+  renderTablaEquivalencias();
+  poblarSelectsNuevaEquivalencia();
+}
+
+function cerrarModalGestionUnidades() {
+  document.getElementById('overlay-unidades-medida').classList.add('hidden');
+  poblarSelectsUnidadesProducto();
+}
+
+function cambiarSubtabUnidades(tab) {
+  const btnU = document.getElementById('tab-btn-unidades');
+  const btnE = document.getElementById('tab-btn-equivalencias');
+  const contU = document.getElementById('subtab-cont-unidades');
+  const contE = document.getElementById('subtab-cont-equivalencias');
+  if (tab === 'unidades') {
+    btnU.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-indigo-600 text-white shadow-xs cursor-pointer';
+    btnE.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer';
+    contU.classList.remove('hidden');
+    contE.classList.add('hidden');
+  } else {
+    btnE.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-indigo-600 text-white shadow-xs cursor-pointer';
+    btnU.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer';
+    contE.classList.remove('hidden');
+    contU.classList.add('hidden');
+  }
+}
+
+function renderTablaUnidades() {
+  const tb = document.getElementById('tabla-unidades-body');
+  if (!tb) return;
+  if (!catalogoUnidades.length) {
+    tb.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-400">No hay unidades registradas.</td></tr>';
+    return;
+  }
+  tb.innerHTML = catalogoUnidades.map(u => `
+    <tr class="hover:bg-gray-50">
+      <td class="py-2 px-3 font-bold text-gray-900 font-mono">${u.codigo}</td>
+      <td class="py-2 px-3 text-gray-700">${u.nombre}</td>
+      <td class="py-2 px-3 capitalize text-gray-500">${u.magnitud}</td>
+      <td class="py-2 px-3 text-center">
+        ${u.es_base_sistema ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Base Sistema</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600">Secundaria</span>'}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderTablaEquivalencias() {
+  const tb = document.getElementById('tabla-equivalencias-body');
+  if (!tb) return;
+  if (!catalogoEquivalencias.length) {
+    tb.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-400">No hay equivalencias registradas.</td></tr>';
+    return;
+  }
+  tb.innerHTML = catalogoEquivalencias.map(eq => `
+    <tr class="hover:bg-indigo-50/40">
+      <td class="py-2 px-3 font-bold text-indigo-950">1 ${eq.origen_codigo} ➔ ${eq.destino_codigo}</td>
+      <td class="py-2 px-3 font-bold text-gray-800">${eq.factor}</td>
+      <td class="py-2 px-3 text-gray-600 text-[11px]">1 ${eq.origen_nombre} = ${eq.factor} ${eq.destino_nombre}</td>
+      <td class="py-2 px-3 text-right">
+        <button type="button" onclick="eliminarEquivalencia(${eq.id})" class="text-red-500 hover:text-red-700 font-bold px-1.5 py-0.5 hover:bg-red-50 rounded transition cursor-pointer" title="Eliminar relación">🗑️</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function poblarSelectsNuevaEquivalencia() {
+  const selO = document.getElementById('nueva-eq-origen');
+  const selD = document.getElementById('nueva-eq-destino');
+  if (!selO || !selD) return;
+  let opts = '';
+  catalogoUnidades.forEach(u => {
+    opts += `<option value="${u.id}">${u.codigo} - ${u.nombre} (${u.magnitud})</option>`;
+  });
+  selO.innerHTML = opts;
+  selD.innerHTML = opts;
+  if (catalogoUnidades.length > 1) {
+    selD.selectedIndex = 1;
+  }
+  actualizarPreviewFormulaEquiv();
+}
+
+function actualizarPreviewFormulaEquiv() {
+  const selO = document.getElementById('nueva-eq-origen');
+  const selD = document.getElementById('nueva-eq-destino');
+  const factor = parseFloat(document.getElementById('nueva-eq-factor')?.value) || 1;
+  const prev = document.getElementById('preview-conversion-texto');
+  if (!selO || !selD || !prev) return;
+  const uO = catalogoUnidades.find(u => Number(u.id) === Number(selO.value));
+  const uD = catalogoUnidades.find(u => Number(u.id) === Number(selD.value));
+  if (uO && uD) {
+    prev.textContent = `Fórmula: 1 ${uO.codigo} * ${factor} = 1 ${uD.codigo} (1 ${uO.nombre} equivale a ${factor} ${uD.nombre})`;
+  }
+}
+
+async function guardarNuevaUnidad() {
+  const codigo = document.getElementById('nueva-u-codigo').value.trim();
+  const nombre = document.getElementById('nueva-u-nombre').value.trim();
+  const magnitud = document.getElementById('nueva-u-magnitud').value;
+  if (!codigo || !nombre) {
+    toast('Código y nombre de unidad son obligatorios', false);
+    return;
+  }
+  try {
+    const res = await fetch('/api/inventario/unidades-medida', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({codigo, nombre, magnitud})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast(`Unidad "${nombre}" guardada exitosamente`);
+      document.getElementById('nueva-u-codigo').value = '';
+      document.getElementById('nueva-u-nombre').value = '';
+      await cargarUnidadesYEquivalencias();
+      renderTablaUnidades();
+      poblarSelectsNuevaEquivalencia();
+    } else {
+      toast(d.error || 'Error al guardar unidad', false);
+    }
+  } catch(e) {
+    toast('Error de red al guardar unidad', false);
+  }
+}
+
+async function guardarNuevaEquivalencia() {
+  const origen_id = document.getElementById('nueva-eq-origen').value;
+  const destino_id = document.getElementById('nueva-eq-destino').value;
+  const factor = parseFloat(document.getElementById('nueva-eq-factor').value);
+  const bidireccional = document.getElementById('nueva-eq-bidireccional').checked;
+  if (!origen_id || !destino_id || isNaN(factor) || factor <= 0) {
+    toast('Define las unidades y un factor mayor a cero', false);
+    return;
+  }
+  if (origen_id === destino_id) {
+    toast('La unidad origen y destino deben ser distintas', false);
+    return;
+  }
+  try {
+    const res = await fetch('/api/inventario/equivalencias-unidades', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({unidad_origen_id: origen_id, unidad_destino_id: destino_id, factor, bidireccional})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast('Equivalencia registrada correctamente');
+      document.getElementById('nueva-eq-factor').value = '';
+      await cargarUnidadesYEquivalencias();
+      renderTablaEquivalencias();
+    } else {
+      toast(d.error || 'Error al guardar equivalencia', false);
+    }
+  } catch(e) {
+    toast('Error de red al guardar equivalencia', false);
+  }
+}
+
+async function eliminarEquivalencia(id) {
+  if (!confirm('¿Estás seguro de eliminar este factor de conversión?')) return;
+  try {
+    const res = await fetch('/api/inventario/equivalencias-unidades', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id})
+    });
+    const d = await res.json();
+    if (d.ok) {
+      toast('Equivalencia eliminada');
+      await cargarUnidadesYEquivalencias();
+      renderTablaEquivalencias();
+    } else {
+      toast(d.error || 'Error al eliminar', false);
+    }
+  } catch(e) {
+    toast('Error de red', false);
+  }
+}
+
+// Cargar unidades al iniciar la pantalla
+document.addEventListener('DOMContentLoaded', () => {
+  cargarUnidadesYEquivalencias();
+});

@@ -2204,13 +2204,16 @@ def api_inventario_producto_crear():
         st_min = float(st_min) if (st_min is not None and str(st_min).strip() != '') else None
         peso_variable = bool(data.get('peso_variable', False))
         tol_peso = float(data.get('tolerancia_peso_pct') or 10.0)
+        unidad_medida_id = _int_o_none(data.get('unidad_medida_id'))
+        unidad_visual_id = _int_o_none(data.get('unidad_visual_id'))
 
         row = conn.execute("""
             INSERT INTO productos (negocio_id, nombre, categoria, precio, costo,
                                    descripcion, codigo_barra, iva_pct, orden,
                                    dias_min_stock, dias_max_stock, stock_minimo,
-                                   peso_variable, tolerancia_peso_pct)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                                   peso_variable, tolerancia_peso_pct,
+                                   unidad_medida_id, unidad_visual_id)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
         """, (
             negocio_id, nombre,
             data.get('categoria') or None,
@@ -2221,7 +2224,8 @@ def api_inventario_producto_crear():
             float(data.get('iva_pct') or 0),
             int(data.get('orden') or 0),
             dias_min, dias_max, st_min,
-            peso_variable, tol_peso
+            peso_variable, tol_peso,
+            unidad_medida_id, unidad_visual_id
         )).fetchone()
         _sync_precio(conn, int(negocio_id), row[0])
         conn.commit()
@@ -5630,13 +5634,16 @@ def api_inventario_producto_editar(producto_id):
         st_min = float(st_min) if (st_min is not None and str(st_min).strip() != '') else None
         peso_variable = bool(data.get('peso_variable', False))
         tol_peso = float(data.get('tolerancia_peso_pct') or 10.0)
+        unidad_medida_id = _int_o_none(data.get('unidad_medida_id'))
+        unidad_visual_id = _int_o_none(data.get('unidad_visual_id'))
 
         conn.execute("""
             UPDATE productos SET
                 nombre=%s, categoria=%s, precio=%s, costo=%s,
                 descripcion=%s, codigo_barra=%s, iva_pct=%s, disponible=%s,
                 dias_min_stock=%s, dias_max_stock=%s, stock_minimo=%s,
-                peso_variable=%s, tolerancia_peso_pct=%s
+                peso_variable=%s, tolerancia_peso_pct=%s,
+                unidad_medida_id=%s, unidad_visual_id=%s
             WHERE id=%s
         """, (
             nombre,
@@ -5652,6 +5659,8 @@ def api_inventario_producto_editar(producto_id):
             st_min,
             peso_variable,
             tol_peso,
+            unidad_medida_id,
+            unidad_visual_id,
             producto_id,
         ))
         conn.commit()
@@ -16413,3 +16422,104 @@ def api_inventario_traslado_pdf(negocio_id, documento_numero):
 
 
 
+
+
+@bp.route('/api/inventario/unidades-medida', methods=['GET', 'POST'])
+def api_inventario_unidades_medida():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        if request.method == 'POST':
+            data = request.get_json() or {}
+            codigo = (data.get('codigo') or '').strip().lower()
+            nombre = (data.get('nombre') or '').strip()
+            magnitud = (data.get('magnitud') or 'peso').strip().lower()
+            es_base = bool(data.get('es_base_sistema', False))
+            if not codigo or not nombre:
+                return jsonify({'ok': False, 'error': 'Código y nombre son requeridos'}), 400
+            row = conn.execute("""
+                INSERT INTO unidades_medida (codigo, nombre, magnitud, es_base_sistema)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (codigo) DO UPDATE SET
+                    nombre = EXCLUDED.nombre,
+                    magnitud = EXCLUDED.magnitud
+                RETURNING id, codigo, nombre, magnitud, es_base_sistema
+            """, (codigo, nombre, magnitud, es_base)).fetchone()
+            conn.commit()
+            return jsonify({'ok': True, 'unidad': dict(row)})
+
+        unidades = conn.execute("""
+            SELECT id, codigo, nombre, magnitud, es_base_sistema
+            FROM unidades_medida
+            ORDER BY magnitud ASC, id ASC
+        """).fetchall()
+        equivalencias = conn.execute("""
+            SELECT eq.id, eq.unidad_origen_id, eq.unidad_destino_id, eq.factor,
+                   u1.codigo AS origen_codigo, u1.nombre AS origen_nombre,
+                   u2.codigo AS destino_codigo, u2.nombre AS destino_nombre
+            FROM equivalencias_unidades eq
+            JOIN unidades_medida u1 ON u1.id = eq.unidad_origen_id
+            JOIN unidades_medida u2 ON u2.id = eq.unidad_destino_id
+            ORDER BY eq.id ASC
+        """).fetchall()
+        return jsonify({
+            'ok': True,
+            'unidades': [dict(u) for u in unidades],
+            'equivalencias': [dict(e) for e in equivalencias]
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/equivalencias-unidades', methods=['POST', 'DELETE'])
+def api_inventario_equivalencias_unidades():
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        data = request.get_json() or {}
+        if request.method == 'DELETE':
+            eq_id = data.get('id')
+            if not eq_id:
+                return jsonify({'ok': False, 'error': 'ID requerido'}), 400
+            conn.execute('DELETE FROM equivalencias_unidades WHERE id = %s', (eq_id,))
+            conn.commit()
+            return jsonify({'ok': True, 'mensaje': 'Equivalencia eliminada'})
+
+        origen_id = int(data.get('unidad_origen_id'))
+        destino_id = int(data.get('unidad_destino_id'))
+        factor = float(data.get('factor'))
+        bidireccional = bool(data.get('bidireccional', True))
+
+        if origen_id == destino_id:
+            return jsonify({'ok': False, 'error': 'La unidad origen y destino no pueden ser iguales'}), 400
+        if factor <= 0:
+            return jsonify({'ok': False, 'error': 'El factor debe ser mayor a 0'}), 400
+
+        conn.execute("""
+            INSERT INTO equivalencias_unidades (unidad_origen_id, unidad_destino_id, factor)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (unidad_origen_id, unidad_destino_id) DO UPDATE SET
+                factor = EXCLUDED.factor
+        """, (origen_id, destino_id, factor))
+
+        if bidireccional and factor > 0:
+            inv_factor = 1.0 / factor
+            conn.execute("""
+                INSERT INTO equivalencias_unidades (unidad_origen_id, unidad_destino_id, factor)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (unidad_origen_id, unidad_destino_id) DO UPDATE SET
+                    factor = EXCLUDED.factor
+            """, (destino_id, origen_id, inv_factor))
+
+        conn.commit()
+        return jsonify({'ok': True, 'mensaje': 'Equivalencia guardada correctamente'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()

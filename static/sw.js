@@ -41,7 +41,22 @@ self.addEventListener('push', (event) => {
     };
 
     event.waitUntil(
-        self.registration.showNotification(title, options)
+        Promise.all([
+            self.registration.showNotification(title, options),
+            clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+                for (const client of clientList) {
+                    try {
+                        client.postMessage({
+                            type: 'tuctuc_push_recibido',
+                            title: title,
+                            body: body,
+                            url: targetUrl,
+                            token: token
+                        });
+                    } catch(e) {}
+                }
+            })
+        ])
     );
 });
 

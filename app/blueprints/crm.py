@@ -354,7 +354,7 @@ def api_chat_push_desuscribir():
 
 @bp.route('/api/chat/push/test', methods=['GET', 'POST'])
 def api_chat_push_test():
-    """Envía una notificación push de prueba al tercero o usuario actual (o a todos los suscritos)."""
+    """Envía una notificación push de prueba síncrona y retorna diagnóstico detallado."""
     data = request.get_json(silent=True) or {}
     tercero_id = data.get('tercero_id') or request.args.get('tercero_id') or get_chat_tercero_id() or session.get('usuario_id')
     try:
@@ -362,17 +362,27 @@ def api_chat_push_test():
     except (ValueError, TypeError):
         tercero_id = None
 
+    cfg = _obtener_vapid_config()
+    if not cfg:
+        return jsonify({'ok': False, 'error': 'VAPID no configurado en servidor (app/vapid_keys.json)'})
+
+    try:
+        from pywebpush import webpush, WebPushException
+        pywebpush_ok = True
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'pywebpush no disponible en servidor: {e}'})
+
     conn = get_db_connection()
     _asegurar_schema_chat(conn)
     if tercero_id:
-        subs = conn.execute("SELECT id, endpoint, user_agent, tercero_id FROM chat_push_subscriptions WHERE tercero_id = %s AND activo = TRUE", (tercero_id,)).fetchall()
+        subs = conn.execute("SELECT id, endpoint, p256dh, auth, user_agent, tercero_id FROM chat_push_subscriptions WHERE tercero_id = %s AND activo = TRUE", (tercero_id,)).fetchall()
         if not subs:
-            subs = conn.execute("SELECT id, endpoint, user_agent, tercero_id FROM chat_push_subscriptions WHERE activo = TRUE").fetchall()
+            subs = conn.execute("SELECT id, endpoint, p256dh, auth, user_agent, tercero_id FROM chat_push_subscriptions WHERE activo = TRUE").fetchall()
     else:
-        subs = conn.execute("SELECT id, endpoint, user_agent, tercero_id FROM chat_push_subscriptions WHERE activo = TRUE").fetchall()
-    conn.close()
+        subs = conn.execute("SELECT id, endpoint, p256dh, auth, user_agent, tercero_id FROM chat_push_subscriptions WHERE activo = TRUE").fetchall()
 
     if not subs:
+        conn.close()
         return jsonify({
             'ok': False,
             'subs_count': 0,
@@ -381,19 +391,62 @@ def api_chat_push_test():
 
     titulo = "🔔 Prueba de Alerta TUC TUC"
     cuerpo = "¡Prueba exitosa! Tu dispositivo está recibiendo alertas y sonido en segundo plano."
-    terceros_ids = list(set([s['tercero_id'] for s in subs]))
-    for tid in terceros_ids:
-        _despachar_push_asincrono(tid, titulo, cuerpo, token='', url='/chat2')
+    payload_dict = {
+        'title': titulo,
+        'body': cuerpo,
+        'icon': '/static/icons/icon-192.png',
+        'badge': '/static/icons/icon-192.png',
+        'url': '/chat2',
+        'vibrate': [300, 120, 300, 120, 450]
+    }
+    payload_data = json.dumps(payload_dict)
+    priv_key = cfg['private_key']
+    claims = {'sub': cfg.get('claims_sub') or 'mailto:admin@tuc-tuc.co'}
 
+    resultados = []
+    for s in subs:
+        sub_info = {
+            'endpoint': s['endpoint'],
+            'keys': {'p256dh': s['p256dh'], 'auth': s['auth']}
+        }
+        res_item = {'id': s['id'], 'endpoint': s['endpoint'][:50] + '...'}
+        try:
+            resp = webpush(
+                subscription_info=sub_info,
+                data=payload_data,
+                vapid_private_key=priv_key,
+                vapid_claims=claims,
+                timeout=8
+            )
+            res_item['ok'] = True
+            res_item['status_code'] = getattr(resp, 'status_code', 200)
+        except WebPushException as ex:
+            res_item['ok'] = False
+            r = getattr(ex, 'response', None)
+            code = getattr(r, 'status_code', None)
+            res_item['status_code'] = code
+            res_item['error'] = str(ex)
+            if code in (404, 410):
+                try:
+                    conn.execute("UPDATE chat_push_subscriptions SET activo = FALSE WHERE id = %s", (s['id'],))
+                    conn.commit()
+                except Exception:
+                    pass
+        except Exception as e:
+            res_item['ok'] = False
+            res_item['error'] = str(e)
+        resultados.append(res_item)
+
+    conn.close()
+    exitosos = sum(1 for r in resultados if r.get('ok'))
     return jsonify({
         'ok': True,
         'subs_count': len(subs),
-        'terceros_notificados': len(terceros_ids),
-        'mensaje': f'Notificación Web Push enviada a {len(subs)} dispositivo(s).'
+        'exitosos': exitosos,
+        'resultados': resultados,
+        'mensaje': f'Prueba Web Push enviada a {len(subs)} dispositivo(s) ({exitosos} con éxito).'
     })
 
-
-# ── API chat ──────────────────────────────────────────────────────────────
 
 @bp.route('/api/chat/invitar', methods=['POST'])
 def api_chat_invitar():
@@ -2041,6 +2094,11 @@ _GLOBO_CHAT_SNIPPET = """
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
     navigator.serviceWorker.addEventListener('message', ev => {
+      if (ev.data && ev.data.type === 'tuctuc_push_recibido') {
+        _despertarAudio();
+        _tocarChimeFuerte();
+        _mostrarToast(ev.data.body || 'Nuevo mensaje en TUC TUC', ev.data.token || '');
+      }
       if (ev.data && ev.data.type === 'tuctuc_push_click') {
         if (typeof window.tuctucToggleChatDrawer === 'function') {
           window.tuctucToggleChatDrawer(true);

@@ -5176,13 +5176,7 @@ function setupAC(inputId, listId, hiddenId, data, onSelect) {
           // Si el usuario sigue en este campo, reconstruir la lista con los productos recién traídos sin re-consultar al servidor
           if (inp === document.activeElement && inp.value.trim().toLowerCase() === qClean) {
             const freshItems = typeof data === 'function' ? data() : (data || []);
-            const freshMatches = (freshItems || []).filter(p => {
-              if (!p || !p.nombre) return false;
-              const nameNorm = normalizeStr(p.nombre);
-              const catNorm = normalizeStr(p.categoria);
-              return nameNorm.includes(qNorm) || catNorm.includes(qNorm);
-            }).slice(0, 20);
-            renderMatchesUI(freshMatches, rawQ);
+            renderAC();
           }
         }).catch(() => {
           inp._buscandoEnServidor = false;
@@ -10054,7 +10048,6 @@ async function escanearFacturaArchivo(archivo) {
     }
 
     // 6. Aviso de productos NO identificados (con opción de cargarlos directamente)
-    const noIdent = d.lineas_no_identificadas || [];
     window.itemsFacturaOmitidos = noIdent;
     if (noIdent.length > 0 && bannerOmitidos && listaOmitidos) {
       listaOmitidos.innerHTML = noIdent.map((ni, idx) => `

@@ -287,7 +287,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     mejor_prod = p
 
             vu_calc = round(precio_linea / cant, 2) if (cant > 0 and precio_linea > 0) else 0.0
-            items_extraidos.append({
+            item_data = {
                 'texto_detectado': nom_it,
                 'cantidad': cant,
                 'total_linea': precio_linea,
@@ -295,8 +295,13 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                 'producto_id': mejor_prod['id'] if mejor_prod else None,
                 'producto_nombre': mejor_prod['nombre'] if mejor_prod else nom_it,
                 'iva_pct': float(mejor_prod.get('iva_pct') or 0) if mejor_prod else 0.0,
-                'match_confianza': round(mejor_score * 100, 1) if mejor_prod else 0.0
-            })
+                'match_confianza': round(mejor_score * 100, 1) if mejor_prod else 0.0,
+                'identificado': bool(mejor_prod is not None)
+            }
+            items_extraidos.append(item_data)
+
+    lineas_identificadas = [it for it in items_extraidos if it['identificado']]
+    lineas_no_identificadas = [it for it in items_extraidos if not it['identificado']]
 
     return {
         'ok': True,
@@ -306,7 +311,8 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
             'total': total_factura,
             'proveedor_id': proveedor_id,
             'proveedor_nombre': proveedor_nombre,
-            'lineas': items_extraidos,
+            'lineas': lineas_identificadas,
+            'lineas_no_identificadas': lineas_no_identificadas,
             'total_lineas_detectadas': len(items_extraidos),
             'lineas_crudas': lineas_texto_completas
         }

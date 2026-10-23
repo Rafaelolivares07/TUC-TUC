@@ -874,6 +874,15 @@ function renderTablaLista(list) {
   body.innerHTML = list.map(p => {
     const itemAjustado = itemsAjustadosEnSesion.get(p.id);
     const estaAjustado = !!itemAjustado;
+    const fv = parseFloat(p.factor_visual) || 1.0;
+    const hasVisual = Boolean(p.unidad_visual_codigo && fv !== 1.0);
+    const stockVisual = hasVisual ? ((parseFloat(p.stock) || 0) * fv) : (parseFloat(p.stock) || 0);
+    const stockEffective = hasVisual ? stockVisual : (parseFloat(p.stock) || 0);
+    const stockDisplay = hasVisual ? Number(stockVisual.toFixed(4)) : p.stock;
+    const visualUnitBadge = hasVisual ? `<span class="ml-1 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">${p.unidad_visual_codigo}</span>` : '';
+    const visualBaseSubtext = hasVisual ? `<span class="block text-[10px] text-gray-400 font-mono font-normal">Base: ${p.stock} ${p.unidad_base_codigo || ''}</span>` : '';
+    const costoVisual = hasVisual ? ((parseFloat(p.costo) || 0) / fv) : (parseFloat(p.costo) || 0);
+    const costoDisplayVal = Number(costoVisual.toFixed(4));
     
     let valQtyDefault = '';
     let valEmpaqueDefault = '';
@@ -940,7 +949,8 @@ function renderTablaLista(list) {
           </div>
         </td>
         <td class="px-5 py-3.5 text-center font-mono font-black text-gray-700 text-base md:text-lg">
-          ${p.stock}
+          ${stockDisplay} ${visualUnitBadge}
+          ${visualBaseSubtext}
         </td>
         <td class="px-5 py-3.5 text-center">
           <div class="flex flex-col items-center gap-2 min-w-[280px] sm:min-w-[320px] max-w-sm mx-auto">
@@ -995,12 +1005,15 @@ function renderTablaLista(list) {
               </div>
             ` : `
               <!-- Sin empaque previo: Entrada directa de unidades -->
-              <input type="number" id="tbl-qty-${p.id}" 
-                     value="${valQtyDefault}"
-                     placeholder="0" step="any"
-                     class="border-2 ${estaAjustado ? 'border-emerald-400 bg-emerald-50/30' : 'border-gray-300 bg-white'} rounded-xl px-3 py-2 text-base md:text-lg w-36 text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs"
-                     oninput="onBaseQtyInput(${p.id}, ${p.stock}, 1)"
-                     onkeydown="if(event.key==='Enter') abrirValidacionFila(${p.id})">
+              <div class="flex items-center justify-center gap-1.5">
+                <input type="number" id="tbl-qty-${p.id}" 
+                       value="${valQtyDefault}"
+                       placeholder="0" step="any"
+                       class="border-2 ${estaAjustado ? 'border-emerald-400 bg-emerald-50/30' : 'border-gray-300 bg-white'} rounded-xl px-3 py-2 text-base md:text-lg w-36 text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs"
+                       oninput="onBaseQtyInput(${p.id}, ${stockEffective}, 1)"
+                       onkeydown="if(event.key==='Enter') abrirValidacionFila(${p.id})">
+                ${visualUnitBadge}
+              </div>
             `}
           </div>
         </td>
@@ -1008,8 +1021,9 @@ function renderTablaLista(list) {
           ${diffBadgeHtml}
         </td>
         <td class="px-5 py-3.5 text-center">
-          <input type="number" id="tbl-cost-${p.id}" value="${p.costo || 0}" step="0.01" min="0"
+          <input type="number" id="tbl-cost-${p.id}" value="${costoDisplayVal}" step="any" min="0"
                  class="border-2 ${(p.costo || 0) > 0 ? 'border-gray-200' : 'border-amber-300 bg-amber-50/50'} rounded-xl px-3 py-2 text-base md:text-lg w-32 text-center font-black font-mono outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition shadow-2xs">
+          ${hasVisual ? `<span class="text-[10px] font-bold text-indigo-700 block mt-0.5">/ ${p.unidad_visual_codigo}</span>` : ''}
           ${p.costo_origen === 'historico_inventario' ? '<span class="text-[10px] font-bold text-blue-600 block mt-0.5" title="Recuperado del último movimiento en Kardex">📜 Histórico</span>' : ''}
           ${p.costo_origen === 'cotizacion' ? '<span class="text-[10px] font-bold text-indigo-600 block mt-0.5" title="Recuperado de cotizaciones de compra">🏷️ Cotización</span>' : ''}
           ${(p.costo || 0) <= 0 ? '<span class="text-[10px] font-bold text-amber-600 block mt-0.5">⚠️ Sin costo</span>' : ''}
@@ -1183,6 +1197,9 @@ function abrirValidacionFila(id) {
   if (!p) return;
   const input = document.getElementById(`tbl-qty-${id}`);
   let physVal = parseFloat(input?.value);
+  const fv = parseFloat(p.factor_visual) || 1.0;
+  const hasVisual = Boolean(p.unidad_visual_codigo && fv !== 1.0);
+  const stockEffective = hasVisual ? ((parseFloat(p.stock) || 0) * fv) : parseFloat(p.stock || 0);
   
   if (isNaN(physVal)) {
     const ajustado = itemsAjustadosEnSesion.get(id);
@@ -1190,7 +1207,7 @@ function abrirValidacionFila(id) {
       // Precargar la cantidad que se había ajustado previamente para facilitar el reajuste inmediato
       input.value = ajustado.stock_nuevo;
       physVal = parseFloat(ajustado.stock_nuevo);
-      calcDiffFila(id, p.stock);
+      calcDiffFila(id, stockEffective);
     } else {
       input.focus();
       toast("Ingresa la cantidad física contada para este producto", false);
@@ -1208,24 +1225,34 @@ function abrirValidacionFila(id) {
 let activeAjustePayload = null;
 
 function abrirModalValidacionGenerica(product, physicalQty, overrideCosto = null) {
-  const sysStock = parseFloat(product.stock || 0);
-  const diff = physicalQty - sysStock;
-  const costo = overrideCosto !== null ? overrideCosto : parseFloat(product.costo || 0.0);
-  const total = Math.abs(diff) * costo;
+  const fv = parseFloat(product.factor_visual) || 1.0;
+  const hasVisual = Boolean(product.unidad_visual_codigo && fv !== 1.0);
+  const sysStockVisual = (parseFloat(product.stock || 0)) * fv;
+  const diffVisual = physicalQty - sysStockVisual;
+  const costoVisual = overrideCosto !== null ? overrideCosto : ((parseFloat(product.costo || 0.0)) / fv);
+  const total = Math.abs(diffVisual) * costoVisual;
+  
+  const basePhysicalQty = physicalQty / fv;
+  const baseCostoUnitario = costoVisual * fv;
+  const baseDiff = basePhysicalQty - parseFloat(product.stock || 0);
   
   activeAjustePayload = {
     producto_id: product.id,
-    cantidad_fisica: physicalQty,
-    costo_unitario: costo,
-    diff: diff
+    cantidad_fisica: basePhysicalQty,
+    costo_unitario: baseCostoUnitario,
+    diff: baseDiff
   };
 
   const chkForzar = document.getElementById("chk-forzar-costo-cero");
   if (chkForzar) chkForzar.checked = false;
 
   document.getElementById("val-prod-nombre").textContent = product.nombre;
-  document.getElementById("val-stock-sistema").textContent = `${sysStock} unidades`;
-  document.getElementById("val-cantidad-fisica").textContent = `${physicalQty} unidades`;
+  document.getElementById("val-stock-sistema").textContent = hasVisual
+    ? `${Number(sysStockVisual.toFixed(4))} ${product.unidad_visual_codigo} (Base: ${product.stock} ${product.unidad_base_codigo || ''})`
+    : `${product.stock} unidades`;
+  document.getElementById("val-cantidad-fisica").textContent = hasVisual
+    ? `${Number(physicalQty.toFixed(4))} ${product.unidad_visual_codigo} (Base: ${Number(basePhysicalQty.toFixed(4))} ${product.unidad_base_codigo || ''})`
+    : `${physicalQty} unidades`;
   
   const diffSpan = document.getElementById("val-diferencia");
   const badgeContainer = document.getElementById("val-badge-container");

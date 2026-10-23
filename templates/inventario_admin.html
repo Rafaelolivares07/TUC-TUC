@@ -7518,12 +7518,18 @@ async function cargarTarjeta(productoId) {
   const r = await fetch(`/api/inventario/producto/${productoId}/tarjeta`);
   const d = await r.json();
   if (!d.ok) return;
-  tarjetaLineas = d.componentes.map(c => ({
-    componente_id: c.componente_id, 
-    nombre: c.nombre, 
-    cantidad: parseFloat(c.cantidad) || 0,
-    costo_und: c.costo_und || 0
-  }));
+  tarjetaLineas = d.componentes.map(c => {
+    const fv = parseFloat(c.factor_visual) || 1.0;
+    return {
+      componente_id: c.componente_id, 
+      nombre: c.nombre, 
+      cantidad: parseFloat(c.cantidad) || 0,
+      costo_und: parseFloat(c.costo_und) || 0,
+      unidad_base: c.unidad_base || '',
+      unidad_visual: c.unidad_visual || '',
+      factor_visual: fv
+    };
+  });
   tarjetaLineasOriginales = JSON.parse(JSON.stringify(tarjetaLineas));
   renderLineasTarjeta();
 
@@ -7567,9 +7573,10 @@ function actualizarCantidadComponente(index, valStr) {
 
   let val = parseFloat(valStr);
 
-  if (isNaN(val) || val <= 0) val = 0.0001;
+  if (isNaN(val) || val <= 0) val = 0.000001;
 
-  tarjetaLineas[index].cantidad = val;
+  const fv = parseFloat(tarjetaLineas[index].factor_visual) || 1.0;
+  tarjetaLineas[index].cantidad = val / fv;
 
   
 
@@ -7709,9 +7716,13 @@ function renderLineasTarjeta() {
 
     
 
-    const qtyFormatted = Number(cantidad.toFixed(_tarjetasDecimalesCantidad));
+    const fv = parseFloat(ln.factor_visual) || 1.0;
+    const hasVisual = Boolean(ln.unidad_visual && fv !== 1.0);
+    const visualQty = hasVisual ? (cantidad * fv) : cantidad;
+    const visualCost = hasVisual ? (costoUnd / fv) : costoUnd;
 
-    
+    const qtyFormatted = Number(visualQty.toFixed(_tarjetasDecimalesCantidad));
+    const unitBadge = hasVisual ? `<span class="inline-flex items-center text-[11px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs" title="Visual: ${ln.unidad_visual} (Base: ${Number(cantidad.toFixed(4))} ${ln.unidad_base})">${ln.unidad_visual}</span>` : '';
 
     return `
 
@@ -7719,25 +7730,30 @@ function renderLineasTarjeta() {
 
         <td class="py-2.5 px-3 text-left font-bold text-gray-800 text-sm sm:text-base truncate max-w-[240px] sm:max-w-[340px]" title="${ln.nombre}">
           ${ln.nombre}
+          ${hasVisual ? `<span class="block text-[11px] font-mono text-gray-400 font-normal">Base: ${Number(cantidad.toFixed(4))} ${ln.unidad_base}</span>` : ''}
         </td>
 
         <td class="py-2.5 px-1 text-center">
 
-          <input type="number" value="${qtyFormatted}" min="0.0001" step="any"
+          <div class="flex items-center justify-center gap-1">
+            <input type="number" value="${qtyFormatted}" min="0.000001" step="any"
 
-                 oninput="actualizarCantidadComponente(${i}, this.value)"
+                   oninput="actualizarCantidadComponente(${i}, this.value)"
 
-                 onblur="if(!this.value || parseFloat(this.value)<=0) { this.value=1; actualizarCantidadComponente(${i}, 1); }"
+                   onblur="if(!this.value || parseFloat(this.value)<=0) { this.value=1; actualizarCantidadComponente(${i}, 1); }"
 
-                 class="w-24 text-center px-2 py-1.5 border border-gray-300 rounded-lg text-sm font-mono font-bold bg-white focus:ring-2 focus:ring-rose-500 outline-none"
+                   class="w-24 text-center px-2 py-1.5 border border-gray-300 rounded-lg text-sm font-mono font-bold bg-white focus:ring-2 focus:ring-rose-500 outline-none"
 
-                 style="height: 36px;">
+                   style="height: 36px;">
+            ${unitBadge}
+          </div>
 
         </td>
 
         <td class="py-2.5 px-3 text-right num font-mono text-sm text-gray-600">
 
-          ${_fmtTarjetasMon(costoUnd)}
+          ${_fmtTarjetasMon(visualCost)}
+          ${hasVisual ? `<span class="block text-[10px] text-gray-400 font-mono">/ ${ln.unidad_visual}</span>` : ''}
 
         </td>
 
@@ -7868,10 +7884,18 @@ function agregarLineaTarjeta() {
   
 
   const costo = prod ? (parseFloat(prod.costo) || 0) : 0;
+  const fv = prod ? (parseFloat(prod.factor_visual) || 1.0) : 1.0;
+  const cantBase = cant / fv;
 
-  
-
-  tarjetaLineas.push({componente_id: id, nombre, cantidad: cant, costo_und: costo});
+  tarjetaLineas.push({
+    componente_id: id, 
+    nombre, 
+    cantidad: cantBase, 
+    costo_und: costo,
+    unidad_base: prod?.unidad_base_codigo || '',
+    unidad_visual: prod?.unidad_visual_codigo || '',
+    factor_visual: fv
+  });
 
   renderLineasTarjeta();
 
@@ -17146,6 +17170,12 @@ function construirInsumosResumen() {
             categoria: baseProd.categoria || 'Sin Categoría',
 
             costo_und: c.costo_und || 0,
+
+            unidad_base: c.unidad_base || '',
+
+            unidad_visual: c.unidad_visual || '',
+
+            factor_visual: parseFloat(c.factor_visual) || 1.0,
 
             recetas: []
 

@@ -415,7 +415,7 @@ def api_chat_push_test():
             'endpoint': s['endpoint'],
             'keys': {'p256dh': s['p256dh'], 'auth': s['auth']}
         }
-        res_item = {'id': s['id'], 'endpoint': s['endpoint'][:50] + '...'}
+        res_item = {'id': s['id'], 'tercero_id': s['tercero_id'], 'ua': s.get('user_agent', '')[:60], 'endpoint': s['endpoint'][:45] + '...'}
         try:
             resp = webpush(
                 subscription_info=sub_info,

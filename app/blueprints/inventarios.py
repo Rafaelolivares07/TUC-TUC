@@ -243,6 +243,24 @@ def _crear_tablas(conn):
             updated_at TIMESTAMP DEFAULT NOW()
         )""",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_entradas_borradores_neg_user ON entradas_borradores(negocio_id, COALESCE(usuario_id, 0))",
+        """CREATE TABLE IF NOT EXISTS auditoria_recosteos (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL REFERENCES terceros(id),
+            producto_id INTEGER REFERENCES productos(id),
+            producto_nombre VARCHAR(255),
+            origen VARCHAR(80),
+            documento_tipo VARCHAR(100),
+            documento_numero VARCHAR(100),
+            usuario_id INTEGER,
+            usuario_nombre VARCHAR(150),
+            costo_anterior NUMERIC(16, 4),
+            costo_nuevo NUMERIC(16, 4),
+            stock_final NUMERIC(16, 4),
+            movimientos_afectados INTEGER DEFAULT 0,
+            detalles JSONB,
+            fecha_hora TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_auditoria_recosteos_negocio ON auditoria_recosteos(negocio_id, fecha_hora DESC)",
     ]
     for sql in alters:
         try:
@@ -5834,9 +5852,9 @@ def api_produccion_registrar(negocio_id):
     documento_numero = (data.get('documento_numero') or '').strip().upper() or None
     tercero_id  = _int_o_none(data.get('tercero_id'))
     tercero_nombre = (data.get('tercero_nombre') or '').strip() or None
-    fecha_raw   = (_txt(data.get('fecha')) or '').strip()
+    # En la pestaña de producción la fecha está estrictamente bloqueada a la fecha actual
     hoy_colombia = _hoy_bogota()
-    fecha_prod  = _fecha_o_none(fecha_raw) or hoy_colombia
+    fecha_prod  = hoy_colombia
     centro_utilidad_id = _int_o_none(data.get('centro_utilidad_id') or data.get('bodega')) or session.get('centro_utilidad_id') or 1
     try:
         centro_utilidad_id = int(centro_utilidad_id)
@@ -6083,10 +6101,10 @@ def api_produccion_registrar(negocio_id):
             except Exception as _e:
                 print(f'[cont] produccion prod={producto_id}: {_e}')
 
-        # Recostear componentes y producto terminado en la bodega
+        # Recostear componentes y producto terminado en la bodega con auditoría
         for c in componentes_datos:
-            _recostear_producto(conn, negocio_id, c['componente_id'], bodega=centro_utilidad_id)
-        _recostear_producto(conn, negocio_id, producto_id, bodega=centro_utilidad_id)
+            _recostear_producto(conn, negocio_id, c['componente_id'], bodega=centro_utilidad_id, origen='produccion', doc_tipo=tipo_documento, doc_num=documento_numero)
+        _recostear_producto(conn, negocio_id, producto_id, bodega=centro_utilidad_id, origen='produccion', doc_tipo=tipo_documento, doc_num=documento_numero)
 
         conn.commit()
         return jsonify({
@@ -6104,7 +6122,7 @@ def api_produccion_registrar(negocio_id):
         conn.close()
 
 
-def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
+def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None, doc_tipo=None, doc_num=None, usuario_id=None, usuario_nombre=None):
     """
     Recalcula cronológicamente los saldos de inventario y el costo promedio de un producto por bodega.
     Si bodega es None, recostea todas las bodegas que tengan movimientos o saldos del producto.
@@ -6620,6 +6638,40 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None):
             WHERE id = %s AND negocio_id = %s
         """, (costo_catalogo, producto_id, negocio_id))
 
+    # --- REGISTRO DE AUDITORÍA DE RECOSTEO ---
+    u_id = usuario_id
+    u_nom = usuario_nombre
+    if not u_id:
+        try:
+            from flask import session as flask_session
+            u_id = flask_session.get('usuario_id')
+            u_nom = u_nom or flask_session.get('nombre') or flask_session.get('username')
+        except Exception:
+            pass
+
+    orig = origen or 'sistema'
+    try:
+        import json
+        conn.execute("""
+            INSERT INTO auditoria_recosteos 
+            (negocio_id, producto_id, producto_nombre, origen, documento_tipo, documento_numero,
+             usuario_id, usuario_nombre, costo_anterior, costo_nuevo, stock_final,
+             movimientos_afectados, detalles, fecha_hora)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, NOW())
+        """, (
+            negocio_id, producto_id, prod_nombre, orig, doc_tipo, str(doc_num) if doc_num is not None else None,
+            u_id, u_nom, costo_anterior_meta, costo_catalogo, float(total_stk),
+            tot_movs_ajust, json.dumps({
+                'movimientos_procesados': tot_movs_proc,
+                'asientos_14_ajustados': tot_as14_ajust,
+                'asientos_cp_ajustados': tot_ascp_ajust,
+                'pedidos_ajustados': tot_ped_ajust,
+                'cambios_detalle': cambios_detalle[:5]
+            })
+        ))
+    except Exception as _e_aud:
+        print(f"[auditoria_recosteo] error registrando: {_e_aud}")
+
     return {
         'producto_id': producto_id,
         'producto_nombre': prod_nombre,
@@ -6846,7 +6898,7 @@ def api_ejecutar_recosteo(negocio_id):
                 (producto_id, negocio_id)
             ).fetchone():
                 return jsonify({'ok': False, 'error': f'Producto no pertenece al negocio: {producto_id}'}), 400
-            res_p = _recostear_producto(conn, negocio_id, producto_id, bodega=bodega_id)
+            res_p = _recostear_producto(conn, negocio_id, producto_id, bodega=bodega_id, origen='manual_kardex', doc_tipo='MANUAL_KARDEX', doc_num=f'Prod #{producto_id}')
             if res_p:
                 detalles.append(res_p)
 
@@ -6920,7 +6972,7 @@ def api_ejecutar_recosteo(negocio_id):
 
         # Re-recostear recetas que hayan cambiado
         for extra_pid in prods_recostear_extra:
-            _recostear_producto(conn, negocio_id, extra_pid, bodega=bodega_id)
+            _recostear_producto(conn, negocio_id, extra_pid, bodega=bodega_id, origen='propagacion_produccion', doc_tipo='PRODUCCION_LOTE', doc_num=f'Prod #{extra_pid}')
         conn.commit()
 
         # --- FASE 3: Sincronizar Ventas de Ensamble con Contabilidad (61*) y Pedidos POS ---
@@ -7051,6 +7103,48 @@ def api_ejecutar_recosteo(negocio_id):
         return jsonify({'ok': False, 'error': 'Lista de productos inválida'}), 400
     except Exception as e:
         conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/recosteo/historial', methods=['GET'])
+def api_historial_recosteo(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _contexto, error = _validar_negocio_json(conn, negocio_id)
+        if error:
+            return error
+        _crear_tablas(conn)
+        limite = min(100, max(10, int(request.args.get('limite', 50))))
+        producto_id = request.args.get('producto_id', type=int)
+
+        params = [negocio_id]
+        where_p = ""
+        if producto_id:
+            where_p = "AND ar.producto_id = %s"
+            params.append(producto_id)
+
+        params.append(limite)
+        rows = conn.execute(f"""
+            SELECT ar.id, ar.producto_id, ar.producto_nombre, ar.origen,
+                   ar.documento_tipo, ar.documento_numero, ar.usuario_nombre,
+                   ar.costo_anterior, ar.costo_nuevo, ar.stock_final,
+                   ar.movimientos_afectados, ar.detalles,
+                   TO_CHAR(ar.fecha_hora AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI:SS') AS fecha_hora
+            FROM auditoria_recosteos ar
+            WHERE ar.negocio_id = %s {where_p}
+            ORDER BY ar.id DESC
+            LIMIT %s
+        """, params).fetchall()
+
+        return jsonify({
+            'ok': True,
+            'historial': [dict(r) for r in rows]
+        })
+    except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()

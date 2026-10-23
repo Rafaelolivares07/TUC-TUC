@@ -79,8 +79,18 @@ def _limpiar_monto(texto_monto):
         return 0.0
 
 
-def agrupar_en_filas_horizontales(bloques, umbral_y=16):
-    """Agrupa bloques de texto que pertenecen a la misma línea horizontal en la factura."""
+def _parse_entero_limpio(v_str):
+    if not v_str:
+        return 0.0
+    t = re.sub(r'[^\d]', '', str(v_str))
+    try:
+        return float(t)
+    except:
+        return 0.0
+
+
+def agrupar_en_filas_horizontales(bloques, umbral_y=14):
+    """Agrupa bloques de texto que pertenecen a la misma línea horizontal."""
     filas = []
     bloques_ordenados = sorted(bloques, key=lambda b: b['centro_y'])
     for b in bloques_ordenados:
@@ -128,7 +138,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     bloques = []
     for item in result:
         box, text, score = item
-        if not text or score < 0.40:
+        if not text or score < 0.35:
             continue
         xs = [pt[0] for pt in box]
         ys = [pt[1] for pt in box]
@@ -145,61 +155,92 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     if not bloques:
         return {'ok': False, 'error': 'No se detectó texto legible.'}
 
-    # Reconstruir en filas horizontales de lectura
     filas = agrupar_en_filas_horizontales(bloques)
     lineas_texto_completas = [" ".join(b['texto'] for b in f) for f in filas]
 
+    # =========================================================================
     # 1. FECHA
+    # =========================================================================
     fecha_detectada = None
-    for l_txt in lineas_texto_completas:
-        m1 = re.search(r'(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})', l_txt)
+    # Prioridad: Líneas con Generacion / Fecha / Expedicion / Emision
+    for b in bloques:
+        txt = b['texto']
+        if any(k in txt.lower() for k in ["resolucion", "vigencia", "vence"]):
+            continue
+        m1 = re.search(r'(?:generacion|fecha|expedicion|emision)?\s*[:#-]?\s*(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})', txt, re.IGNORECASE)
         if m1:
-            d, m, y = m1.group(1), m1.group(2), m1.group(3)
-            if len(y) == 2: y = "20" + y
-            if int(m) <= 12 and int(d) <= 31:
-                fecha_detectada = f"{y}-{int(m):02d}-{int(d):02d}"
+            y, m, d = m1.group(1), int(m1.group(2)), int(m1.group(3))
+            if 1 <= m <= 12 and 1 <= d <= 31 and 2020 <= int(y) <= 2035:
+                fecha_detectada = f"{y}-{m:02d}-{d:02d}"
                 break
-        m2 = re.search(r'(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})', l_txt)
+        m2 = re.search(r'(?:generacion|fecha|expedicion|emision)?\s*[:#-]?\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})', txt, re.IGNORECASE)
         if m2:
-            y, m, d = m2.group(1), m2.group(2), m2.group(3)
-            if int(m) <= 12 and int(d) <= 31:
-                fecha_detectada = f"{y}-{int(m):02d}-{int(d):02d}"
+            d, m, y = int(m2.group(1)), int(m2.group(2)), m2.group(3)
+            if 1 <= m <= 12 and 1 <= d <= 31 and 2020 <= int(y) <= 2035:
+                fecha_detectada = f"{y}-{m:02d}-{d:02d}"
                 break
 
-    # 2. NÚMERO DE DOCUMENTO
+    # =========================================================================
+    # 2. NÚMERO DE DOCUMENTO / FACTURA
+    # =========================================================================
     num_doc_detectado = ""
-    patrones_doc = [
-        r'(?:FAC|FACTURA|FACT|TICKET|COMPROBANTE|DOC|REMISION|No\.?|N°)\s*[:#-]?\s*([A-Za-z0-9-]+)',
-        r'#\s*([0-9]{3,})',
-        r'(?:FAC|FE|POS)\s*([0-9]{3,})'
-    ]
-    for l_txt in lineas_texto_completas:
-        for pat in patrones_doc:
-            m = re.search(pat, l_txt, re.IGNORECASE)
-            if m:
-                cand = m.group(1).strip()
-                if len(cand) >= 2 and not cand.lower() in ('de', 'del', 'la', 'venta', 'electronica', 'turno'):
-                    num_doc_detectado = cand
-                    break
-        if num_doc_detectado:
+    # A) Patrones colombianos DIAN comunes: Prefijo FOP, SETP, FE, POS
+    for b in bloques:
+        txt = b['texto']
+        # Ej: "Factura Electronica de Venta F0P2172477"
+        m_fev = re.search(r'Factura\s+Electronica\s+de\s+Venta\s+([A-Za-z0-9]+)', txt, re.IGNORECASE)
+        if m_fev:
+            cand = m_fev.group(1).upper()
+            cand = re.sub(r'^F0([A-Z0-9])', r'FO\1', cand)
+            if len(cand) >= 4:
+                num_doc_detectado = cand
+                break
+
+        m_pref = re.search(r'\b(F[0O]P\d{4,}|SETP\d{4,}|FE\d{4,}|POS\d{4,})\b', txt, re.IGNORECASE)
+        if m_pref:
+            cand = m_pref.group(1).upper().replace('F0P', 'FOP')
+            num_doc_detectado = cand
             break
 
+    # B) Fallback a patrones estándar si no se halló prefijo electrónico
+    if not num_doc_detectado:
+        patrones_doc = [
+            r'(?:FAC|FACTURA|FACT|TICKET|COMPROBANTE|DOC|REMISION|No\.?|N°)\s*[:#-]?\s*([A-Za-z0-9-]+)',
+            r'#\s*([0-9]{3,})',
+            r'(?:FAC|FE|POS)\s*([0-9]{3,})'
+        ]
+        for l_txt in lineas_texto_completas:
+            if "resolucion" in l_txt.lower() or "dian" in l_txt.lower():
+                continue
+            for pat in patrones_doc:
+                m = re.search(pat, l_txt, re.IGNORECASE)
+                if m:
+                    cand = m.group(1).strip()
+                    if len(cand) >= 2 and not cand.lower() in ('de', 'del', 'la', 'venta', 'electronica', 'cadena', 'turno'):
+                        num_doc_detectado = cand
+                        break
+            if num_doc_detectado:
+                break
+
+    # =========================================================================
     # 3. TOTAL FACTURA
+    # =========================================================================
     total_factura = 0.0
     for i, fila in enumerate(filas):
         texto_fila = " ".join(b['texto'] for b in fila).upper()
         if "TOTAL" in texto_fila and not any(k in texto_fila for k in ["VENTAS", "TRANSACCIONES", "SUBTOTAL", "UNIDADES"]):
-            # Buscar en esta fila y en las 2 siguientes
-            filas_candidatas = [fila] + filas[i+1:min(i+3, len(filas))]
+            filas_candidatas = [fila] + filas[i+1:min(i+4, len(filas))]
             for fc in filas_candidatas:
-                for b in reversed(fc): # El monto suele estar a la derecha
+                for b in reversed(fc):
                     m_din = re.search(r'\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)', b['texto'])
                     if m_din:
                         val = _limpiar_monto(m_din.group(1))
                         if val > 100:
                             total_factura = max(total_factura, val)
 
+    # =========================================================================
     # 4. PROVEEDOR (Cruce con tabla terceros)
+    # =========================================================================
     proveedor_id = None
     proveedor_nombre = ""
     terceros_db = []
@@ -211,16 +252,24 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
             print("Aviso terceros:", e)
 
     mejores_coincidencias = []
-    for l_txt in lineas_texto_completas[:8]:
-        txt_clean = re.sub(r'[^a-zA-Z0-9\s]', '', l_txt).strip().upper()
-        if len(txt_clean) < 3: continue
+    for b in bloques[:14]:
+        txt_clean = re.sub(r'[^A-Z0-9\s]', '', b['texto'].upper()).strip()
+        if len(txt_clean) < 2:
+            continue
+        palabras_doc = txt_clean.split()
         for terc in terceros_db:
-            nom_terc = re.sub(r'[^a-zA-Z0-9\s]', '', terc['nombre']).strip().upper()
-            ratio = difflib.SequenceMatcher(None, txt_clean, nom_terc).ratio()
-            if nom_terc in txt_clean or txt_clean in nom_terc:
-                ratio = max(ratio, 0.85)
-            if ratio > 0.60:
-                mejores_coincidencias.append((ratio, terc['id'], terc['nombre']))
+            nom_terc = re.sub(r'[^A-Z0-9\s]', '', terc['nombre'].upper()).strip()
+            if not nom_terc:
+                continue
+            # Coincidencia exacta de palabra (ej: 'D1' en 'D1 SAS NIT...')
+            if nom_terc in palabras_doc or nom_terc == txt_clean:
+                mejores_coincidencias.append((1.0, terc['id'], terc['nombre']))
+            elif nom_terc in txt_clean:
+                mejores_coincidencias.append((0.85, terc['id'], terc['nombre']))
+            else:
+                ratio = difflib.SequenceMatcher(None, txt_clean, nom_terc).ratio()
+                if ratio >= 0.70:
+                    mejores_coincidencias.append((ratio, terc['id'], terc['nombre']))
 
     if mejores_coincidencias:
         mejores_coincidencias.sort(key=lambda x: x[0], reverse=True)
@@ -232,7 +281,9 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                 proveedor_nombre = l
                 break
 
-    # 5. CATÁLOGO DE PRODUCTOS
+    # =========================================================================
+    # 5. CATÁLOGO DE PRODUCTOS (Para cruce y sugerencias)
+    # =========================================================================
     productos_db = []
     if conn and negocio_id:
         try:
@@ -246,59 +297,190 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
         except Exception as e:
             print("Aviso productos:", e)
 
-    # 6. ÍTEMS DETECTADOS (Fila por fila)
-    items_extraidos = []
-    for fila in filas:
-        texto_fila = " ".join(b['texto'] for b in fila).strip()
-        # Detectar patrón de cantidad y producto
-        # Ej: "17X SANDWICH POLLO TOCINETA $170.000"
-        m_it = re.match(r'^(\d+(?:[.,]\d+)?)\s*(?:[xX*]|UND|KG|GR|PAQ)?\s+(.+)$', texto_fila)
-        if m_it:
-            cant_str = m_it.group(1).replace(',', '.')
-            try: cant = float(cant_str)
-            except: cant = 1.0
-            resto = m_it.group(2).strip()
-            
-            # Extraer precio de la derecha de la fila si existe
-            precio_linea = 0.0
-            for b in reversed(fila):
-                m_p = re.search(r'\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)', b['texto'])
-                if m_p:
-                    p_val = _limpiar_monto(m_p.group(1))
-                    if p_val > 0 and p_val != cant:
-                        precio_linea = p_val
-                        break
-            
-            # Limpiar nombre del ítem quitándole el precio si estaba pegado
-            nom_it = re.sub(r'\$?\s*[0-9]{1,3}(?:[.,][0-9]{3})*.*$', '', resto).strip()
-            if not nom_it: nom_it = resto
+    # =========================================================================
+    # 6. EXTRACCIÓN DE ÍTEMS
+    # =========================================================================
+    # Detectar si la factura tiene formato retail / D1 con códigos de barra
+    y_top_items = 180
+    y_bot_items = 999999
+    for b in bloques:
+        if "DESCRIPCION" in b['texto'].upper():
+            y_top_items = max(y_top_items, b['min_y'])
+        if b['texto'].strip().upper() == "TOTAL":
+            y_bot_items = min(y_bot_items, b['min_y'])
+            break
 
-            # Cruzar con catálogo de productos
+    bloques_en_zona_items = [b for b in bloques if y_top_items <= b['centro_y'] <= y_bot_items]
+    barcode_blocks = [b for b in bloques_en_zona_items if re.search(r'(770\d{10}|0\d{12}|\d{13})', b['texto'])]
+
+    items_extraidos = []
+
+    # CASO A: FACTURAS RETAIL / D1 CON CÓDIGOS DE BARRA ANCLADOS
+    if len(barcode_blocks) >= 2:
+        barcode_blocks.sort(key=lambda b: b['centro_y'])
+        right_blocks = [b for b in bloques_en_zona_items if b['min_x'] > 410]
+        left_blocks = [b for b in bloques_en_zona_items if b['min_x'] < 190 or re.search(r'\bUN\b', b['texto'])]
+
+        for b in barcode_blocks:
+            cy = b['centro_y']
+            text = b['texto']
+
+            # A1. Total de la línea: primero verificar si está pegado al final del texto del bloque
+            total_line = 0.0
+            m_end_tot = re.search(r'([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{3,})[A-Za-z0-9]?$', text)
+            if m_end_tot:
+                val_end = _parse_entero_limpio(m_end_tot.group(1))
+                if val_end > 0 and len(str(int(val_end))) <= 7:
+                    total_line = val_end
+                    text_without_total = text[:m_end_tot.start()].strip()
+                else:
+                    text_without_total = text
+            else:
+                text_without_total = text
+
+            # Si no vino pegado al final, buscar en los bloques de la derecha más cercanos
+            if total_line == 0.0:
+                c_right = None
+                min_dist_r = 999
+                for rb in right_blocks:
+                    dist = abs(rb['centro_y'] - cy)
+                    if dist < min_dist_r and dist < 18:
+                        min_dist_r = dist
+                        c_right = rb
+                if c_right:
+                    m_tot = re.search(r'([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{2,})', c_right['texto'])
+                    if m_tot:
+                        total_line = _parse_entero_limpio(m_tot.group(1))
+
+            # A2. Cantidad: buscar en el prefijo del bloque o en el bloque izquierdo más cercano
+            cant = None
+            m_start_cant = re.search(r'^([0-9]{1,2})?\s*([0-9]+)\s*UN', text_without_total)
+            if m_start_cant:
+                cant = float(m_start_cant.group(2))
+
+            if cant is None:
+                c_left = None
+                min_dist_l = 999
+                for lb in left_blocks:
+                    if lb == b: continue
+                    dist = abs(lb['centro_y'] - cy)
+                    if dist < min_dist_l and dist < 24:
+                        min_dist_l = dist
+                        c_left = lb
+                if c_left:
+                    m_c = re.search(r'([0-9]+)\s*(?:/|\s)*([0-9]*)\s*UN', c_left['texto'])
+                    if m_c:
+                        if m_c.group(2): cant = float(m_c.group(2))
+                        else: cant = float(m_c.group(1))
+            if cant is None or cant == 0:
+                cant = 1.0
+
+            # A3. Código de barras y Descripción
+            m_bc = re.search(r'(770\d{10}|0\d{12}|\d{13})', text_without_total)
+            if m_bc:
+                bc = m_bc.group(1)
+                desc_part = text_without_total[m_bc.end():].strip()
+                pre_part = text_without_total[:m_bc.start()].strip()
+            else:
+                bc = ""
+                desc_part = text_without_total
+                pre_part = ""
+
+            m_vu = re.search(r'([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]{3,})', pre_part)
+            vu = _parse_entero_limpio(m_vu.group(1)) if m_vu else 0.0
+
+            # Limpiezas típicas de caracteres confundidos por OCR
+            desc = desc_part.strip()
+            desc = re.sub(r'\bH0RTADELA\b', 'MORTADELA', desc)
+            desc = re.sub(r'0', 'O', desc)
+            desc = re.sub(r'\bOUICKSY\b', 'QUICKSY', desc)
+            desc = re.sub(r'\bALIHENTO\b', 'ALIMENTO', desc)
+            desc = re.sub(r'\bSALREFISAL1?\b', 'SAL REFISAL', desc)
+            desc = re.sub(r'\bACEITEDEGIR\b', 'ACEITE DE GIRASOL', desc)
+            desc = re.sub(r'\bAVENA EN HOJU\b', 'AVENA EN HOJUELAS', desc)
+            desc = re.sub(r'^[0-9\s.,]+', '', desc).strip()
+
+            if cant > 0 and total_line > 0:
+                vu = round(total_line / cant, 2)
+            elif total_line == 0.0 and cant > 0 and vu > 0:
+                total_line = round(vu * cant, 2)
+
+            # Cruzar con catálogo de productos usando umbral ESTRICTO (>= 0.70)
             mejor_prod = None
             mejor_score = 0.0
-            nom_upper = nom_it.upper()
+            nom_upper = desc.upper()
             for p in productos_db:
                 p_nom = p['nombre'].upper()
-                score = difflib.SequenceMatcher(None, nom_upper, p_nom).ratio()
-                if p_nom in nom_upper or nom_upper in p_nom:
-                    score = max(score, 0.80)
-                if score > mejor_score and score >= 0.45:
+                if len(p_nom) >= 5 and (p_nom in nom_upper or nom_upper in p_nom):
+                    score = 0.85
+                else:
+                    score = difflib.SequenceMatcher(None, nom_upper, p_nom).ratio()
+                if score > mejor_score and score >= 0.70:
                     mejor_score = score
                     mejor_prod = p
 
-            vu_calc = round(precio_linea / cant, 2) if (cant > 0 and precio_linea > 0) else 0.0
-            item_data = {
-                'texto_detectado': nom_it,
+            items_extraidos.append({
+                'texto_detectado': desc,
                 'cantidad': cant,
-                'total_linea': precio_linea,
-                'valor_unitario': vu_calc,
+                'total_linea': total_line,
+                'valor_unitario': vu,
+                'barcode': bc,
                 'producto_id': mejor_prod['id'] if mejor_prod else None,
-                'producto_nombre': mejor_prod['nombre'] if mejor_prod else nom_it,
+                'producto_nombre': mejor_prod['nombre'] if mejor_prod else desc,
                 'iva_pct': float(mejor_prod.get('iva_pct') or 0) if mejor_prod else 0.0,
                 'match_confianza': round(mejor_score * 100, 1) if mejor_prod else 0.0,
                 'identificado': bool(mejor_prod is not None)
-            }
-            items_extraidos.append(item_data)
+            })
+
+    # CASO B: FACTURAS TRADICIONALES EN COLUMNAS HORIZONTALES (Sin códigos de barras)
+    else:
+        for fila in filas:
+            texto_fila = " ".join(b['texto'] for b in fila).strip()
+            m_it = re.match(r'^(\d+(?:[.,]\d+)?)\s*(?:[xX*]|UND|KG|GR|PAQ)?\s+(.+)$', texto_fila)
+            if m_it:
+                cant_str = m_it.group(1).replace(',', '.')
+                try: cant = float(cant_str)
+                except: cant = 1.0
+                resto = m_it.group(2).strip()
+
+                precio_linea = 0.0
+                for b in reversed(fila):
+                    m_p = re.search(r'\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)', b['texto'])
+                    if m_p:
+                        p_val = _limpiar_monto(m_p.group(1))
+                        if p_val > 0 and p_val != cant:
+                            precio_linea = p_val
+                            break
+
+                nom_it = re.sub(r'\$?\s*[0-9]{1,3}(?:[.,][0-9]{3})*.*$', '', resto).strip()
+                if not nom_it: nom_it = resto
+
+                mejor_prod = None
+                mejor_score = 0.0
+                nom_upper = nom_it.upper()
+                for p in productos_db:
+                    p_nom = p['nombre'].upper()
+                    if len(p_nom) >= 5 and (p_nom in nom_upper or nom_upper in p_nom):
+                        score = 0.85
+                    else:
+                        score = difflib.SequenceMatcher(None, nom_upper, p_nom).ratio()
+                    if score > mejor_score and score >= 0.70:
+                        mejor_score = score
+                        mejor_prod = p
+
+                vu_calc = round(precio_linea / cant, 2) if (cant > 0 and precio_linea > 0) else 0.0
+                items_extraidos.append({
+                    'texto_detectado': nom_it,
+                    'cantidad': cant,
+                    'total_linea': precio_linea,
+                    'valor_unitario': vu_calc,
+                    'barcode': "",
+                    'producto_id': mejor_prod['id'] if mejor_prod else None,
+                    'producto_nombre': mejor_prod['nombre'] if mejor_prod else nom_it,
+                    'iva_pct': float(mejor_prod.get('iva_pct') or 0) if mejor_prod else 0.0,
+                    'match_confianza': round(mejor_score * 100, 1) if mejor_prod else 0.0,
+                    'identificado': bool(mejor_prod is not None)
+                })
 
     lineas_identificadas = [it for it in items_extraidos if it['identificado']]
     lineas_no_identificadas = [it for it in items_extraidos if not it['identificado']]

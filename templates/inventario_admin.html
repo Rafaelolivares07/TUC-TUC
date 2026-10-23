@@ -2157,11 +2157,16 @@
     <!-- Banner de Ítems No Identificados Omitidos -->
     <div id="banner-items-omitidos-ocr" class="hidden mb-3 p-3 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-900 shadow-xs">
       <div class="flex items-start justify-between gap-2">
-        <div class="flex items-start gap-2">
+        <div class="flex items-start gap-2 flex-1">
           <span class="text-base">⚠️</span>
-          <div>
-            <span class="font-black text-amber-950 block">Ítems de la factura no encontrados en el catálogo (omitidos):</span>
-            <div id="lista-items-omitidos-ocr" class="mt-1 space-y-0.5 text-[11px] text-amber-800 font-medium"></div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between gap-2 mb-1">
+              <span class="font-black text-amber-950 block">Ítems de la factura pendientes de vincular:</span>
+              <button type="button" onclick="cargarTodosLosOmitidos()" class="text-[11px] px-2.5 py-1 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold transition shadow-xs">
+                ➕ Cargar todos a la tabla
+              </button>
+            </div>
+            <div id="lista-items-omitidos-ocr" class="mt-1 space-y-1 text-[11px] text-amber-800 font-medium"></div>
           </div>
         </div>
         <button type="button" onclick="this.closest('#banner-items-omitidos-ocr').classList.add('hidden')" class="text-amber-600 hover:text-amber-800 font-bold p-1">&times;</button>
@@ -2595,11 +2600,9 @@
           </div>
           <div>
             <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Fecha documento</label>
-            <input id="prod-fecha" type="date" class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-white font-semibold text-slate-800 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition">
-            <div id="aviso-prod-reemplazo" class="hidden mt-1.5 text-xs font-bold text-amber-900 bg-amber-50 border border-amber-300 rounded-xl p-2 cursor-pointer hover:bg-amber-100 transition shadow-xs flex items-center justify-between" onclick="aplicarFechaProduccionReemplazo()">
-              <span>💡 Reemplazo de producción: Clic para aplicar fecha original (<b id="aviso-prod-reemplazo-fecha"></b>)</span>
-              <span class="text-xs bg-amber-200 text-amber-900 px-2 py-0.5 rounded-lg shrink-0">Usar</span>
-            </div>
+            <input id="prod-fecha" type="date" readonly class="w-full border-2 border-slate-200 rounded-xl px-3.5 py-2.5 text-sm sm:text-base bg-slate-100 font-semibold text-slate-700 outline-none cursor-not-allowed" title="Solo fecha actual">
+            <p class="mt-1 text-xs text-slate-500 font-medium">🔒 Registrado con fecha actual (no modificable)</p>
+
           </div>
           <div class="relative">
             <label class="block text-sm font-bold text-slate-600 uppercase tracking-wide mb-1.5">Responsable (Tercero)</label>
@@ -4245,6 +4248,41 @@
 
     </div>
 
+    <!-- Historial y Registro de Procesos de Recosteo -->
+    <div class="mt-8 pt-5 border-t border-gray-200">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div>
+          <h3 class="text-sm font-extrabold text-gray-800 flex items-center gap-1.5">
+            <span>📋</span> Historial y Registro de Procesos de Recosteo
+          </h3>
+          <p class="text-xs text-gray-500">Auditoría detallada de cuándo, quién y qué documento o producto ejecutó un recosteo.</p>
+        </div>
+        <button type="button" onclick="cargarHistorialRecosteos()" class="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-1 shadow-2xs">
+          🔄 Actualizar registro
+        </button>
+      </div>
+
+      <div class="overflow-x-auto border border-gray-200 rounded-xl shadow-xs bg-white">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500 border-b border-gray-200">
+            <tr>
+              <th class="px-3 py-2.5">Fecha y Hora</th>
+              <th class="px-3 py-2.5">Producto</th>
+              <th class="px-3 py-2.5">Origen / Proceso</th>
+              <th class="px-3 py-2.5">Documento</th>
+              <th class="px-3 py-2.5">Responsable</th>
+              <th class="px-3 py-2.5 text-right">Costo Antes</th>
+              <th class="px-3 py-2.5 text-right">Costo Nuevo</th>
+              <th class="px-3 py-2.5 text-center">Movs Ajustados</th>
+            </tr>
+          </thead>
+          <tbody id="historial-recosteos-body" class="divide-y divide-gray-100">
+            <tr><td colspan="8" class="text-center py-6 text-gray-400 italic">Cargando historial de recosteos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
 
@@ -4467,6 +4505,7 @@ function mostrarTab(t) {
   if (t === 'recosteo') {
 
     cargarAuditoriaRecosteo();
+    cargarHistorialRecosteos();
 
   }
 
@@ -9675,13 +9714,19 @@ async function escanearFacturaArchivo(archivo) {
       toast('ℹ️ Factura leída, pero no se reconocieron productos vinculados al catálogo.', false);
     }
 
-    // 6. Aviso de productos NO identificados (omitidos)
+    // 6. Aviso de productos NO identificados (con opción de cargarlos directamente)
     const noIdent = d.lineas_no_identificadas || [];
+    window.itemsFacturaOmitidos = noIdent;
     if (noIdent.length > 0 && bannerOmitidos && listaOmitidos) {
-      listaOmitidos.innerHTML = noIdent.map(ni => `
-        <div class="flex items-center justify-between border-b border-amber-200/60 py-0.5 last:border-0">
-          <span>• <b>${ni.cantidad}x</b> ${ni.texto_detectado}</span>
-          <span class="font-mono font-bold">$${(ni.total_linea || 0).toLocaleString('es-CO')}</span>
+      listaOmitidos.innerHTML = noIdent.map((ni, idx) => `
+        <div class="flex items-center justify-between border-b border-amber-200/60 py-1 last:border-0">
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="cargarItemOmitidoAEntrada(${idx})" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[10px] shadow-xs transition">
+              ➕ Cargar
+            </button>
+            <span>• <b>${ni.cantidad}x</b> ${ni.texto_detectado}</span>
+          </div>
+          <span class="font-mono font-bold text-amber-950">$${(ni.total_linea || 0).toLocaleString('es-CO')}</span>
         </div>
       `).join('');
       bannerOmitidos.classList.remove('hidden');
@@ -9700,6 +9745,60 @@ async function escanearFacturaArchivo(archivo) {
 }
 
 // Función de Cotejo Automático: Compara total esperado de la factura con el total calculado de los ítems
+
+// Cargar ítem detectado de la factura pero no vinculado automáticamente al catálogo
+window.cargarItemOmitidoAEntrada = function(idx) {
+  const item = (window.itemsFacturaOmitidos || [])[idx];
+  if (!item) return;
+  const cant = item.cantidad || 1;
+  const vu = item.valor_unitario || 0;
+  const tot = item.total_linea || (cant * vu);
+  agregarLineaEntradaConDatos(
+    null,
+    item.texto_detectado,
+    cant,
+    vu,
+    0,
+    defaultPresentacionId || null,
+    'Unidad',
+    1.0,
+    cant,
+    vu,
+    tot
+  );
+  calcularTotalesEntrada();
+  actualizarCotejoFactura();
+  toast(`Fila cargada para "${item.texto_detectado}". Selecciona el producto correspondiente en el buscador.`);
+};
+
+// Cargar todos los ítems omitidos a la tabla de entradas
+window.cargarTodosLosOmitidos = function() {
+  const items = window.itemsFacturaOmitidos || [];
+  if (!items.length) return;
+  items.forEach(item => {
+    const cant = item.cantidad || 1;
+    const vu = item.valor_unitario || 0;
+    const tot = item.total_linea || (cant * vu);
+    agregarLineaEntradaConDatos(
+      null,
+      item.texto_detectado,
+      cant,
+      vu,
+      0,
+      defaultPresentacionId || null,
+      'Unidad',
+      1.0,
+      cant,
+      vu,
+      tot
+    );
+  });
+  calcularTotalesEntrada();
+  actualizarCotejoFactura();
+  document.getElementById('banner-items-omitidos-ocr')?.classList.add('hidden');
+  toast(`Se cargaron ${items.length} filas a la tabla. Asigna o crea los productos correspondientes.`);
+};
+
 function actualizarCotejoFactura() {
   const inpExp = document.getElementById('entrada-total-factura-esperado');
   const badge = document.getElementById('entrada-cotejo-badge');
@@ -14725,20 +14824,48 @@ function actualizarAvisoProduccionReemplazo() {
 }
 
 function aplicarFechaProduccionReemplazo() {
-  const raw = sessionStorage.getItem('tuctuc_produccion_reemplazo');
-  if (!raw) return;
+  toast('La fecha de producción está bloqueada estrictamente a la fecha actual.', false);
+}
+
+async function cargarHistorialRecosteos() {
+  const tbody = document.getElementById('historial-recosteos-body');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400 italic">Cargando historial de recosteos...</td></tr>';
   try {
-    const data = JSON.parse(raw);
-    if (data && data.fecha) {
-      const el = document.getElementById('prod-fecha');
-      if (el) {
-        el.value = data.fecha;
-        el.classList.add('ring-4', 'ring-amber-300');
-        setTimeout(() => el.classList.remove('ring-4', 'ring-amber-300'), 1500);
-        toast(`Fecha original (${data.fecha}) aplicada al documento.`);
-      }
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/recosteo/historial?limite=50`);
+    const d = await r.json();
+    if (!d.ok || !d.historial || !d.historial.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400 italic">No hay registros de recosteo recientes.</td></tr>';
+      return;
     }
-  } catch(e) {}
+    tbody.innerHTML = d.historial.map(h => {
+      const origLabels = {
+        'manual_kardex': '<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold text-[10px]">Manual Kardex</span>',
+        'recosteo_global': '<span class="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-bold text-[10px]">Recosteo Global</span>',
+        'produccion': '<span class="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Producción</span>',
+        'compra': '<span class="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Factura Compra</span>',
+        'ajuste': '<span class="bg-rose-50 text-rose-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Ajuste Inv.</span>',
+        'anulacion_produccion': '<span class="bg-red-50 text-red-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Anulación Prod.</span>'
+      };
+      const origBadge = origLabels[h.origen] || `<span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-bold text-[10px]">${h.origen || 'Sistema'}</span>`;
+      const docStr = (h.documento_tipo || h.documento_numero) ? `${h.documento_tipo || ''} #${h.documento_numero || ''}`.trim() : '—';
+      const cantAjust = h.movimientos_afectados > 0 ? `<span class="font-bold text-amber-600">${h.movimientos_afectados}</span>` : '<span class="text-gray-400">0</span>';
+      return `
+        <tr class="hover:bg-slate-50 transition">
+          <td class="px-3 py-2 font-mono text-gray-700 whitespace-nowrap">${h.fecha_hora}</td>
+          <td class="px-3 py-2 font-bold text-gray-900">${h.producto_nombre || 'Producto #' + h.producto_id}</td>
+          <td class="px-3 py-2">${origBadge}</td>
+          <td class="px-3 py-2 font-mono text-gray-600">${docStr}</td>
+          <td class="px-3 py-2 text-gray-700">${h.usuario_nombre || 'Sistema'}</td>
+          <td class="px-3 py-2 text-right font-mono text-gray-500">$${(Number(h.costo_anterior) || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+          <td class="px-3 py-2 text-right font-mono font-bold text-gray-800">$${(Number(h.costo_nuevo) || 0).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+          <td class="px-3 py-2 text-center">${cantAjust}</td>
+        </tr>
+      `;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-500 font-bold">Error cargando historial: ${e.message}</td></tr>`;
+  }
 }
 
 

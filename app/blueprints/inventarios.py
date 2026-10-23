@@ -16433,20 +16433,34 @@ def api_inventario_unidades_medida():
         _crear_tablas(conn)
         if request.method == 'POST':
             data = request.get_json() or {}
+            unidad_id = data.get('id')
             codigo = (data.get('codigo') or '').strip().lower()
             nombre = (data.get('nombre') or '').strip()
             magnitud = (data.get('magnitud') or 'peso').strip().lower()
             es_base = bool(data.get('es_base_sistema', False))
             if not codigo or not nombre:
                 return jsonify({'ok': False, 'error': 'Código y nombre son requeridos'}), 400
-            row = conn.execute("""
-                INSERT INTO unidades_medida (codigo, nombre, magnitud, es_base_sistema)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (codigo) DO UPDATE SET
-                    nombre = EXCLUDED.nombre,
-                    magnitud = EXCLUDED.magnitud
-                RETURNING id, codigo, nombre, magnitud, es_base_sistema
-            """, (codigo, nombre, magnitud, es_base)).fetchone()
+            if unidad_id:
+                dup = conn.execute("SELECT id FROM unidades_medida WHERE codigo = %s AND id != %s", (codigo, unidad_id)).fetchone()
+                if dup:
+                    return jsonify({'ok': False, 'error': f'Ya existe otra unidad con el código "{codigo}"'}), 400
+                row = conn.execute("""
+                    UPDATE unidades_medida
+                    SET codigo = %s, nombre = %s, magnitud = %s
+                    WHERE id = %s
+                    RETURNING id, codigo, nombre, magnitud, es_base_sistema
+                """, (codigo, nombre, magnitud, unidad_id)).fetchone()
+                if not row:
+                    return jsonify({'ok': False, 'error': 'Unidad no encontrada'}), 404
+            else:
+                row = conn.execute("""
+                    INSERT INTO unidades_medida (codigo, nombre, magnitud, es_base_sistema)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (codigo) DO UPDATE SET
+                        nombre = EXCLUDED.nombre,
+                        magnitud = EXCLUDED.magnitud
+                    RETURNING id, codigo, nombre, magnitud, es_base_sistema
+                """, (codigo, nombre, magnitud, es_base)).fetchone()
             conn.commit()
             return jsonify({'ok': True, 'unidad': dict(row)})
 

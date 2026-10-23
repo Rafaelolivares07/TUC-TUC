@@ -2768,6 +2768,44 @@ def api_inventario_tarjetas_reemplazar_componente(negocio_id):
 
 # ── Entrada de mercancía ───────────────────────────────────────────────────────
 
+@bp.route('/api/inventario/<int:negocio_id>/escanear-factura', methods=['POST'])
+def api_inventario_escanear_factura(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    
+    if 'imagen' not in request.files:
+        return jsonify({'ok': False, 'error': 'No se recibió ninguna imagen'}), 400
+        
+    archivo = request.files['imagen']
+    if not archivo.filename:
+        return jsonify({'ok': False, 'error': 'Archivo vacío'}), 400
+        
+    import tempfile
+    import os
+    from app.services.vision_facturas import extraer_datos_factura
+    
+    conn = get_db_connection()
+    try:
+        suffix = os.path.splitext(archivo.filename)[1] or '.png'
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            archivo.save(tmp.name)
+            tmp_path = tmp.name
+            
+        try:
+            res = extraer_datos_factura(tmp_path, conn=conn, negocio_id=negocio_id)
+            return jsonify(res)
+        finally:
+            if os.path.exists(tmp_path):
+                try: os.remove(tmp_path)
+                except: pass
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': f'Error procesando imagen: {str(e)}'}), 500
+    finally:
+        conn.close()
+
+
 @bp.route('/api/inventario/<int:negocio_id>/entrada', methods=['POST'])
 def api_inventario_entrada(negocio_id):
     if 'usuario_id' not in session:

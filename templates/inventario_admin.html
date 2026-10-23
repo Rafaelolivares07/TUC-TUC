@@ -21627,55 +21627,6 @@ function copiarSoloLinkOC() {
   });
 }
 
-</script>
-
-<!-- MODAL ÉXITO ORDEN DE COMPRA -->
-<div id="modal-oc-exito" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center hidden p-3 backdrop-blur-xs">
-  <div class="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4">
-    <div class="flex items-center gap-2.5">
-      <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-lg">
-        <i class="bi bi-check-circle-fill"></i>
-      </div>
-      <div>
-        <h3 class="text-sm font-bold uppercase text-slate-800" id="modal-exito-oc-titulo">Orden Generada con Éxito</h3>
-        <p class="text-xs text-slate-500">Comparte el pedido con tu proveedor por WhatsApp</p>
-      </div>
-    </div>
-
-    <!-- Mensaje con formato estructurado -->
-    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 font-sans space-y-1 max-h-48 overflow-y-auto custom-scroll whitespace-pre-wrap select-all font-mono" id="modal-exito-oc-mensaje">
-      <!-- Texto estructurado -->
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-      <a id="btn-exito-abrir-wa" href="#" target="_blank"
-         class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition">
-        <i class="bi bi-whatsapp text-sm"></i> Abrir en WhatsApp
-      </a>
-
-      <button onclick="copiarMensajeCompletoOC()"
-              class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition cursor-pointer">
-        <i class="bi bi-clipboard-check text-sm"></i> Copiar Mensaje
-      </button>
-    </div>
-
-    <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-      <button onclick="copiarSoloLinkOC()" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline flex items-center gap-1 cursor-pointer">
-        🔗 Copiar solo enlace
-      </button>
-
-      <button onclick="cerrarModalExitoOC()" class="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg font-bold text-slate-700 cursor-pointer">
-        Entendido
-      </button>
-    </div>
-  </div>
-</div>
-
-</body>
-
-</html>
-
-
 
 
 // ── GESTIÓN DE UNIDADES DE MEDIDA Y EQUIVALENCIAS ──────────────────────────────
@@ -21904,3 +21855,50 @@ async function eliminarEquivalencia(id) {
 document.addEventListener('DOMContentLoaded', () => {
   cargarUnidadesYEquivalencias();
 });
+</script>
+
+<!-- MODAL ÉXITO ORDEN DE COMPRA -->
+<div id="modal-oc-exito" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center hidden p-3 backdrop-blur-xs">
+  <div class="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+    <div class="flex items-center gap-2.5">
+      <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-lg">
+        <i class="bi bi-check-circle-fill"></i>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold uppercase text-slate-800" id="modal-exito-oc-titulo">Orden Generada con Éxito</h3>
+        <p class="text-xs text-slate-500">Comparte el pedido con tu proveedor por WhatsApp</p>
+      </div>
+    </div>
+
+    <!-- Mensaje con formato estructurado -->
+    <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 font-sans space-y-1 max-h-48 overflow-y-auto custom-scroll whitespace-pre-wrap select-all font-mono" id="modal-exito-oc-mensaje">
+      <!-- Texto estructurado -->
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+      <a id="btn-exito-abrir-wa" href="#" target="_blank"
+         class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition">
+        <i class="bi bi-whatsapp text-sm"></i> Abrir en WhatsApp
+      </a>
+
+      <button onclick="copiarMensajeCompletoOC()"
+              class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition cursor-pointer">
+        <i class="bi bi-clipboard-check text-sm"></i> Copiar Mensaje
+      </button>
+    </div>
+
+    <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+      <button onclick="copiarSoloLinkOC()" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline flex items-center gap-1 cursor-pointer">
+        🔗 Copiar solo enlace
+      </button>
+
+      <button onclick="cerrarModalExitoOC()" class="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg font-bold text-slate-700 cursor-pointer">
+        Entendido
+      </button>
+    </div>
+  </div>
+</div>
+
+</body>
+
+</html>

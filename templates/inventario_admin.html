@@ -21698,11 +21698,15 @@ function cambiarSubtabUnidades(tab) {
     btnE.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer';
     contU.classList.remove('hidden');
     contE.classList.add('hidden');
+    renderTablaUnidades();
   } else {
     btnE.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-indigo-600 text-white shadow-xs cursor-pointer';
     btnU.className = 'px-4 py-1.5 text-xs font-extrabold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer';
     contE.classList.remove('hidden');
     contU.classList.add('hidden');
+    poblarSelectsNuevaEquivalencia();
+    renderTablaEquivalencias();
+    actualizarPreviewFormulaEquiv();
   }
 }
 
@@ -21783,16 +21787,23 @@ function renderTablaEquivalencias() {
     tb.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-400">No hay equivalencias registradas.</td></tr>';
     return;
   }
-  tb.innerHTML = catalogoEquivalencias.map(eq => `
+  tb.innerHTML = catalogoEquivalencias.map(eq => {
+    const uO = catalogoUnidades.find(u => Number(u.id) === Number(eq.unidad_origen_id));
+    const uD = catalogoUnidades.find(u => Number(u.id) === Number(eq.unidad_destino_id));
+    const origCod = uO ? uO.codigo : (eq.origen_codigo || '');
+    const origNom = uO ? uO.nombre : (eq.origen_nombre || '');
+    const destCod = uD ? uD.codigo : (eq.destino_codigo || '');
+    const destNom = uD ? uD.nombre : (eq.destino_nombre || '');
+    return `
     <tr class="hover:bg-indigo-50/40">
-      <td class="py-2 px-3 font-bold text-indigo-950">1 ${eq.origen_codigo} ➔ ${eq.destino_codigo}</td>
-      <td class="py-2 px-3 font-bold text-gray-800">${eq.factor}</td>
-      <td class="py-2 px-3 text-gray-600 text-[11px]">1 ${eq.origen_nombre} = ${eq.factor} ${eq.destino_nombre}</td>
+      <td class="py-2 px-3 font-bold text-indigo-950 font-mono">1 ${origCod} ➔ ${destCod}</td>
+      <td class="py-2 px-3 font-bold text-gray-800">${parseFloat(eq.factor)}</td>
+      <td class="py-2 px-3 text-gray-600 text-[11px]">1 ${origNom} = ${parseFloat(eq.factor)} ${destNom}</td>
       <td class="py-2 px-3 text-right">
         <button type="button" onclick="eliminarEquivalencia(${eq.id})" class="text-red-500 hover:text-red-700 font-bold px-1.5 py-0.5 hover:bg-red-50 rounded transition cursor-pointer" title="Eliminar relación">🗑️</button>
       </td>
     </tr>
-  `).join('');
+  `;}).join('');
 }
 
 function poblarSelectsNuevaEquivalencia() {
@@ -21851,7 +21862,9 @@ async function guardarNuevaUnidad() {
       cancelarEdicionUnidad();
       await cargarUnidadesYEquivalencias();
       renderTablaUnidades();
+      renderTablaEquivalencias();
       poblarSelectsNuevaEquivalencia();
+      actualizarPreviewFormulaEquiv();
     } else {
       toast(d.error || 'Error al guardar unidad', false);
     }

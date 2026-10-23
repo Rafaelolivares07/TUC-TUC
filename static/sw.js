@@ -26,7 +26,7 @@ self.addEventListener('push', (event) => {
         icon: icon,
         badge: badge,
         image: payload.image || undefined,
-        tag: payload.tag || ('chat-' + (token || Date.now())),
+        tag: payload.tag || ('tuctuc-' + (token ? token + '-' : '') + Date.now()),
         renotify: true,
         silent: false,
         vibrate: [500, 150, 500, 150, 500],

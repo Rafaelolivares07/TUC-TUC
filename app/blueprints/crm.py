@@ -286,7 +286,8 @@ def _enviar_push_a_tercero_worker(destinatario_id, titulo, cuerpo, token, url, i
             'badge': '/static/icons/icon-192.png',
             'token': token or '',
             'url': url or (f"/chat2?open_token={token}" if token else "/chat2"),
-            'vibrate': [300, 120, 300, 120, 450]
+            'vibrate': [500, 150, 500, 150, 500],
+            'tag': f'tuctuc-{token}-{int(time.time()*1000)}'
         }
         payload_data = json.dumps(payload_dict)
         priv_key = cfg['private_key']

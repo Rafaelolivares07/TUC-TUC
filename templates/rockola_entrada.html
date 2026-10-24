@@ -176,6 +176,62 @@ input[type=text]:focus { border-color:var(--ac1); }
   .rk-vinyl-disc, .rk-logo-reveal { animation: none; }
   #rk-splash { transition: none; }
 }
+/* Switch para Sala Predeterminada */
+.toggle-pred-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255,255,255,0.08);
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-pred-label.active {
+  color: #00d4ff;
+  font-weight: 700;
+}
+.rk-switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.rk-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.rk-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(255, 255, 255, 0.15);
+  transition: .25s ease;
+  border-radius: 20px;
+}
+.rk-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .25s ease;
+  border-radius: 50%;
+}
+.rk-switch input:checked + .rk-slider {
+  background-color: #00d4ff;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+.rk-switch input:checked + .rk-slider:before {
+  transform: translateX(14px);
+  background-color: #00101b;
+}
 </style>
 </head>
 <body>
@@ -321,8 +377,57 @@ input[type=text]:focus { border-color:var(--ac1); }
 (function(){var sp=document.getElementById('rk-splash');if(!sp)return;var done=function(){sp.classList.add('hide');setTimeout(function(){sp.remove();},600);};if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches){done();return;}setTimeout(done,2600);})();
 const DEVICE_KEY = 'rockola_device_id';
 const DEVICE_NAME_KEY = 'rockola_device_name';
+const PRED_KEY = 'rockola_sala_predeterminada';
 let modoActual = 'rockola';
 let salasCache = [];
+
+// Chequeo de entrada directa automática
+(function checkEntradaDirecta() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const cambiarSala = urlParams.get('cambiar_sala') || urlParams.get('selector') || urlParams.get('cambiar');
+  const salaPred = (localStorage.getItem(PRED_KEY) || '').trim();
+  if (salaPred && !cambiarSala) {
+    recordarSalaLocal(salaPred);
+    window.location.replace(`${rockolaBase()}/reproductor/${encodeURIComponent(salaPred)}`);
+  }
+})();
+
+function actualizarBannerPredeterminada() {
+  const banner = document.getElementById('banner-predeterminada');
+  const nombreEl = document.getElementById('nombre-sala-pred');
+  const salaPred = (localStorage.getItem(PRED_KEY) || '').trim();
+  if (banner && nombreEl) {
+    if (salaPred) {
+      nombreEl.textContent = salaPred.toUpperCase();
+      banner.style.display = 'flex';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+}
+
+function toggleSalaPredeterminada(salaId, activo) {
+  if (activo) {
+    localStorage.setItem(PRED_KEY, salaId.toLowerCase());
+  } else {
+    if ((localStorage.getItem(PRED_KEY) || '').toLowerCase() === salaId.toLowerCase()) {
+      localStorage.removeItem(PRED_KEY);
+    }
+  }
+  actualizarBannerPredeterminada();
+  if (salasCache.length) {
+    const recientes = JSON.parse(localStorage.getItem('rockola_salas_recientes') || '[]')
+      .filter(sId => !salasCache.some(s => s.sala_id === sId))
+      .map(sId => ({ sala_id:sId, disponible_reproductor:true, dispositivo_reproductor_nombre:getDeviceName() }));
+    renderSalas([...recientes, ...salasCache]);
+  }
+}
+
+function quitarSalaPredeterminada() {
+  localStorage.removeItem(PRED_KEY);
+  actualizarBannerPredeterminada();
+  cargarSalas();
+}
 
 function rockolaBase() {
   const host = window.location.hostname;
@@ -413,11 +518,15 @@ function renderSala(sala, disponible) {
   const nota = disponible
     ? 'Esta sala puede reproducirse desde este dispositivo.'
     : `Esta sala suena en ${dueno}. Desde aqui puedes agregar canciones, pero no reproducir.`;
+  
+  const predActual = (localStorage.getItem(PRED_KEY) || '').toLowerCase();
+  const esPred = disponible && predActual === nombre.toLowerCase();
+
   return `
-    <div class="room ${disponible ? '' : 'disabled'}">
+    <div class="room ${disponible ? '' : 'disabled'}" style="${esPred ? 'border-color:rgba(0,212,255,0.4); box-shadow:0 0 16px rgba(0,212,255,0.12);' : ''}">
       <div class="room-head">
-        <div class="room-name">${nombre}</div>
-        <div class="pill ${disponible ? '' : 'off'}">${disponible ? 'Disponible' : 'Remota'}</div>
+        <div class="room-name">${esPred ? '⭐ ' : ''}${nombre}</div>
+        <div class="pill ${disponible ? '' : 'off'}">${disponible ? (esPred ? 'Predeterminada' : 'Disponible') : 'Remota'}</div>
       </div>
       <div class="room-note">${nota}</div>
       <div class="room-actions">
@@ -426,6 +535,15 @@ function renderSala(sala, disponible) {
           : `<button class="btn small" style="background:linear-gradient(135deg, #ff9800, #ff5722); color:#fff; font-weight:800;" onclick="reclamarSala('${nombre}')">Tomar control</button><button class="btn secondary small" onclick="agregarComoCliente('${nombre}')">Agregar canciones</button>`
         }
       </div>
+      ${disponible ? `
+        <label class="toggle-pred-label ${esPred ? 'active' : ''}" onclick="event.stopPropagation();">
+          <span>⭐ Entrada directa a esta sala</span>
+          <span class="rk-switch">
+            <input type="checkbox" ${esPred ? 'checked' : ''} onchange="toggleSalaPredeterminada('${nombre}', this.checked)">
+            <span class="rk-slider"></span>
+          </span>
+        </label>
+      ` : ''}
     </div>
   `;
 }

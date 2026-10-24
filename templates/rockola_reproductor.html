@@ -740,6 +740,59 @@ input:checked + .slider:before {
   .rk-vinyl-disc, .rk-logo-reveal { animation: none; }
   #rk-splash { transition: none; }
 }
+/* Switch para Sala Predeterminada */
+.toggle-pred-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-pred-label.active {
+  color: #00d4ff;
+  font-weight: 700;
+}
+.rk-switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.rk-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.rk-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(255, 255, 255, 0.15);
+  transition: .25s ease;
+  border-radius: 20px;
+}
+.rk-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .25s ease;
+  border-radius: 50%;
+}
+.rk-switch input:checked + .rk-slider {
+  background-color: #00d4ff;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+.rk-switch input:checked + .rk-slider:before {
+  transform: translateX(14px);
+  background-color: #00101b;
+}
 </style>
 </head>
 <body>
@@ -843,9 +896,18 @@ input:checked + .slider:before {
     <button class="btn-control" onclick="entrarComoCliente()">Agregar canciones</button>
     <button class="btn-control" onclick="abrirControl()">Control</button>
   </div>
+  
+  <label class="toggle-pred-label" id="label-pred-activar" style="margin:0 auto 14px; max-width:280px; display:none; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; cursor:pointer;" onclick="event.stopPropagation();">
+    <span style="font-size:12px; font-weight:700;">⭐ Entrada directa a esta sala</span>
+    <span class="rk-switch">
+      <input type="checkbox" id="check-pred-activar" onchange="togglePredeterminadaDesdeReproductor(this.checked)">
+      <span class="rk-slider"></span>
+    </span>
+  </label>
+
   <button class="btn-activar" id="btn-activar" onclick="activar()">Activar Rockola</button>
   <button class="btn-activar" id="btn-reclamar" style="display:none; background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); color: #fff; margin-bottom: 12px;" onclick="reclamarReproductor()">Tomar Control de la Rockola</button>
-  <button class="btn-back" onclick="window.location.href='/rockola/'">← Volver</button>
+  <button class="btn-back" onclick="window.location.href='/rockola/?cambiar_sala=1'">← Volver</button>
 </div>
 
 <!-- PRINCIPAL -->
@@ -853,8 +915,10 @@ input:checked + .slider:before {
   <div class="inner">
 
     <div class="header">
-      <button class="header-back" onclick="window.location.href='/rockola/'">← Salir</button>
-      <div class="sala-badge">{{ sala_id | upper }} <span style="font-size:9px;opacity:0.5;margin-left:4px;">v3.3.0</span></div>
+      <button class="header-back" onclick="window.location.href='/rockola/?cambiar_sala=1'" title="Volver al selector de salas">← Salir</button>
+      <div class="sala-badge" id="sala-badge-header" onclick="togglePredStarHeader()" style="cursor:pointer;" title="Toca para activar/desactivar entrada directa">
+        <span id="star-pred-icon" style="color:var(--muted); margin-right:4px;">☆</span>{{ sala_id | upper }} <span style="font-size:9px;opacity:0.5;margin-left:4px;">v3.3.0</span>
+      </div>
       <button class="btn-control" onclick="abrirControl()">Control</button>
     </div>
 
@@ -1300,6 +1364,45 @@ function getDeviceName() {
   return name;
 }
 
+
+const PRED_KEY = 'rockola_sala_predeterminada';
+
+function esSalaPredeterminada() {
+  return (localStorage.getItem(PRED_KEY) || '').toLowerCase() === SALA.toLowerCase();
+}
+
+function actualizarStarBadgeHeader(esPred) {
+  const icon = document.getElementById('star-pred-icon');
+  const badge = document.getElementById('sala-badge-header');
+  if (icon) {
+    icon.textContent = esPred ? '⭐' : '☆';
+    icon.style.color = esPred ? '#ffc107' : 'var(--muted)';
+  }
+  if (badge) {
+    badge.title = esPred ? '⭐ Sala predeterminada (Entrada directa activa). Toca para cambiar.' : '☆ Toca para fijar como sala predeterminada';
+  }
+}
+
+function togglePredStarHeader() {
+  const nuevoEstado = !esSalaPredeterminada();
+  togglePredeterminadaDesdeReproductor(nuevoEstado);
+}
+
+function togglePredeterminadaDesdeReproductor(activa) {
+  if (activa) {
+    localStorage.setItem(PRED_KEY, SALA.toLowerCase());
+    mostrarMensaje(`⭐ ${SALA.toUpperCase()} es tu sala predeterminada. Entrarás directo cada vez.`, 'ok');
+  } else {
+    if (esSalaPredeterminada()) {
+      localStorage.removeItem(PRED_KEY);
+      mostrarMensaje(`Se desactivó la entrada directa de ${SALA.toUpperCase()}`, '');
+    }
+  }
+  const check = document.getElementById('check-pred-activar');
+  if (check) check.checked = activa;
+  actualizarStarBadgeHeader(activa);
+}
+
 function setDeviceMessage(texto, warn=false) {
   if (!deviceState) return;
   deviceState.textContent = texto;
@@ -1320,6 +1423,19 @@ async function verificarDispositivoSala() {
       btnActivar.style.display = 'inline-block';
       btnReclamar.style.display = 'none';
       deviceActions.classList.remove('visible');
+
+      const predActual = (localStorage.getItem('rockola_sala_predeterminada') || '').toLowerCase();
+      const esPred = predActual === SALA.toLowerCase();
+      const checkPred = document.getElementById('check-pred-activar');
+      const labelPred = document.getElementById('label-pred-activar');
+      if (checkPred) checkPred.checked = esPred;
+      if (labelPred) labelPred.style.display = 'flex';
+      actualizarStarBadgeHeader(esPred);
+
+      // Si esta sala está configurada para Entrada Directa y este dispositivo está habilitado, saltar directo al reproductor
+      if (esPred && salaDisponible) {
+        activar(true);
+      }
     } else {
       setDeviceMessage(`Esta sala suena en ${sala.dispositivo_reproductor_nombre || 'otro dispositivo'}.`, true);
       btnActivar.style.display = 'none';

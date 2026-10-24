@@ -354,11 +354,13 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   padding: 16px;
   margin-bottom: 10px;
   display: flex;
-  align-items: stretch;
-  gap: 10px;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 .now-main {
-  flex: 1;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -366,76 +368,78 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   text-align: center;
   min-width: 0;
 }
-.volume-sidebar {
-  width: 54px;
+.volume-horiz-bar {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 10px 0 14px;
+  padding: 8px 14px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 16px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
   box-sizing: border-box;
 }
 .volume-icon {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   color: var(--ac1);
   display: flex;
   align-items: center;
   justify-content: center;
   user-select: none;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 .volume-svg {
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   color: var(--ac1);
   transition: transform 0.2s;
 }
-.volume-sidebar:hover .volume-svg {
+.volume-horiz-bar:hover .volume-svg {
   transform: scale(1.15);
 }
-.volume-slider-vert {
-  -webkit-appearance: slider-vertical;
-  writing-mode: bt-lr;
-  width: 10px;
-  height: 82%;
+.volume-slider-horiz {
+  flex: 1;
+  height: 8px;
   accent-color: var(--ac1);
-  background: rgba(255,255,255,0.05);
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
   cursor: pointer;
-  margin: 10px 0;
+  margin: 0;
   padding: 0;
 }
-.volume-val-vert {
-  font-size: 10px;
+.volume-val-horiz {
+  font-size: 11px;
   font-weight: 800;
   color: var(--ac1);
-  margin-top: 4px;
+  min-width: 34px;
+  text-align: right;
+  flex-shrink: 0;
 }
 .player-controls {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 28px;
-  margin-top: 10px;
+  margin: 8px 0 12px;
   width: 100%;
 }
 .btn-control-round {
-  width: 72px;
-  height: 72px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
-  font-size: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   outline: none;
+  flex-shrink: 0;
 }
 .btn-control-round:hover {
   border-color: var(--ac1);
@@ -443,39 +447,42 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   background: rgba(0, 212, 255, 0.1);
   transform: scale(1.08);
 }
+.btn-control-round:active {
+  transform: scale(0.96);
+}
+.btn-play-main, .btn-play-round {
+  width: 92px !important;
+  height: 92px !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, var(--ac1) 0%, #0066ff 100%) !important;
+  border: 2px solid rgba(0, 212, 255, 0.7) !important;
+  color: #00101b !important;
+  box-shadow: 0 0 32px rgba(0, 212, 255, 0.45) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.btn-play-main:hover, .btn-play-round:hover {
+  background: linear-gradient(135deg, #33e0ff 0%, #0077ff 100%) !important;
+  box-shadow: 0 0 45px rgba(0, 212, 255, 0.75) !important;
+  color: #000 !important;
+  transform: scale(1.08) !important;
+}
+.btn-play-main:active, .btn-play-round:active {
+  transform: scale(0.95) !important;
+}
 .vinyl-container {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 110px;
-  height: 110px;
+  width: 104px;
+  height: 104px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(12px);
-  cursor: pointer;
-  margin: 8px auto 10px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.vinyl-container:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: var(--ac1);
-  box-shadow: 0 0 25px rgba(0, 212, 255, 0.4);
-  transform: scale(1.05);
-}
-.vinyl-container:active {
-  transform: scale(0.96);
-}
-.vinyl-play-icon {
-  width: 64px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  transition: all 0.2s ease;
+  background: radial-gradient(circle, #0e192c 0%, #060b14 100%);
+  border: 2px solid rgba(0, 212, 255, 0.25);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  margin: 6px auto 10px;
+  user-select: none;
+  pointer-events: none;
 }
 .progress-container {
   width: 100%;
@@ -924,15 +931,19 @@ input:checked + .slider:before {
 
     <div class="now-card">
       <div class="now-main">
-        <div class="wave-viz" id="wave-viz" onclick="abrirVisualizerFullscreen()" style="cursor:pointer; width:100%; height:80px; position:relative;" title="Toca para pantalla completa">
+        <div class="wave-viz" id="wave-viz" onclick="abrirVisualizerFullscreen()" style="cursor:pointer; width:100%; height:76px; position:relative;" title="Toca para pantalla completa (Modo exclusivo)">
           <canvas id="visualizer-canvas" style="width:100%; height:100%; border-radius:12px; display:block;"></canvas>
+          <span style="position:absolute; bottom:6px; right:10px; font-size:9px; color:rgba(0,212,255,0.7); font-weight:800; pointer-events:none;">⛶ Pantalla completa</span>
         </div>
 
         <div class="np-label">Sonando ahora</div>
         <div class="np-nombre" id="nombre-actual">Esperando canciones...</div>
 
-        <div class="vinyl-container" id="vinyl-btn" onclick="togglePlayPause()">
-          <div class="vinyl-play-icon" id="vinyl-play-icon"><svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+        <!-- Vinilo como animación gráfica giratoria (sin botón play redundante) -->
+        <div class="vinyl-container" id="vinyl-spin">
+          <div style="width:30px; height:30px; border-radius:50%; background:var(--ac1); display:flex; align-items:center; justify-content:center; box-shadow:0 0 12px rgba(0,212,255,0.7);">
+            <span style="font-size:13px; color:#00101b; font-weight:900;">♪</span>
+          </div>
         </div>
 
         <div id="yt-player-wrap-1" class="yt-wrap-audio-only">
@@ -951,18 +962,30 @@ input:checked + .slider:before {
           <span class="time-label" id="time-total">0:00</span>
         </div>
 
-        <!-- Controles Prev / Play-Pause / Next -->
+        <!-- Barra de Volumen Horizontal (Ancho completo arriba de los botones) -->
+        <div class="volume-horiz-bar">
+          <span class="volume-icon" onclick="toggleMute()" title="Silenciar / Activar sonido">
+            <svg class="volume-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+          </span>
+          <input id="volumen" type="range" min="0" max="100" value="80" class="volume-slider-horiz" oninput="programarGuardarVolumen()">
+          <span class="volume-val-horiz" id="volumen-valor">80%</span>
+        </div>
+
+        <!-- Controles Prev / ÚNICO Play-Pause GRANDE / Next -->
         <div class="player-controls">
-          <button class="btn-control-round" onclick="anteriorCancion()" title="Anterior (Retroceder)">
-            <svg style="width:24px;height:24px;display:block;margin:auto;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          <button class="btn-control-round btn-skip" onclick="anteriorCancion()" title="Anterior (Retroceder)">
+            <svg style="width:26px;height:26px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           </button>
-          <button class="btn-control-round btn-play-round" id="btn-play-pause-ctrl" onclick="togglePlayPause()" title="Reproducir / Pausar">
+          <button class="btn-control-round btn-play-main" id="btn-play-pause-ctrl" onclick="togglePlayPause()" title="Reproducir / Pausar">
             <span id="ctrl-play-icon" style="display:flex;align-items:center;justify-content:center;">
-              <svg style="width:30px;height:30px;margin-left:4px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <svg style="width:42px;height:42px;margin-left:4px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
             </span>
           </button>
-          <button class="btn-control-round" onclick="saltarActual()" title="Siguiente (Saltar)">
-            <svg style="width:24px;height:24px;display:block;margin:auto;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6zm9-12h2v12h-2z"/></svg>
+          <button class="btn-control-round btn-skip" onclick="saltarActual()" title="Siguiente (Saltar)">
+            <svg style="width:26px;height:26px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6zm9-12h2v12h-2z"/></svg>
           </button>
         </div>
 
@@ -1001,17 +1024,6 @@ input:checked + .slider:before {
         <!-- Dos elementos audio invisibles alternantes -->
         <audio id="player1" style="display:none;"></audio>
         <audio id="player2" style="display:none;"></audio>
-      </div>
-
-      <div class="volume-sidebar">
-        <span class="volume-icon" onclick="toggleMute()" style="cursor:pointer;" title="Silenciar">
-          <svg class="volume-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-          </svg>
-        </span>
-        <input id="volumen" type="range" min="0" max="100" value="80" class="volume-slider-vert" oninput="programarGuardarVolumen()">
-        <span class="volume-val-vert" id="volumen-valor">80%</span>
       </div>
     </div>
 
@@ -1192,17 +1204,53 @@ input:checked + .slider:before {
   </div>
 </div>
 
-<div id="visualizer-fullscreen" style="display:none; position:fixed; inset:0; z-index:300; background:#000; flex-direction:column; align-items:center; justify-content:center;" onclick="cerrarVisualizerFullscreen()">
-  <canvas id="visualizer-fs-canvas" style="width:100%; height:100%;"></canvas>
-  <div id="visualizer-mode-bar" style="position:absolute; bottom:20px; display:flex; gap:8px; z-index:301;" onclick="event.stopPropagation()">
-    <button onclick="cambiarModoVisualizer('barras')" class="viz-mode-btn" data-mode="barras">Barras</button>
-    <button onclick="cambiarModoVisualizer('onda')" class="viz-mode-btn" data-mode="onda">Onda</button>
-    <button onclick="cambiarModoVisualizer('circular')" class="viz-mode-btn" data-mode="circular">Circular</button>
-    <button onclick="cambiarModoVisualizer('particulas')" class="viz-mode-btn" data-mode="particulas">Partículas</button>
-    <button onclick="cambiarModoVisualizer('gradiente')" class="viz-mode-btn" data-mode="gradiente">Gradiente</button>
+<div id="visualizer-fullscreen" style="display:none; position:fixed; inset:0; z-index:300; background:#040810; flex-direction:column; justify-content:space-between;" onclick="cerrarVisualizerFullscreen()">
+  <!-- Canvas de animación a pantalla completa -->
+  <canvas id="visualizer-fs-canvas" style="position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none;"></canvas>
+
+  <!-- Cabecera HUD en modo exclusivo -->
+  <div style="position:relative; z-index:10; display:flex; justify-content:space-between; align-items:center; padding:16px 20px; background:linear-gradient(180deg, rgba(0,0,0,0.88) 0%, transparent 100%); pointer-events:auto;" onclick="event.stopPropagation()">
+    <div style="display:flex; flex-direction:column; min-width:0; flex:1; margin-right:12px;">
+      <span style="font-size:10px; font-weight:800; letter-spacing:1px; color:var(--ac1); text-transform:uppercase;">Modo Exclusivo · Sala {{ sala_id | upper }}</span>
+      <span id="fs-song-name" style="font-size:15px; font-weight:800; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-shadow:0 2px 10px rgba(0,0,0,0.9);">Esperando canciones...</span>
+    </div>
+    <button class="btn-control" style="font-size:12px; padding:6px 12px; flex-shrink:0; background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.2);" onclick="cerrarVisualizerFullscreen()">✕ Salir</button>
   </div>
-  <div style="position:absolute; top:16px; right:16px; z-index:301; font-size:12px; color:rgba(255,255,255,.5);" onclick="event.stopPropagation()">
-    Toca fuera para cerrar
+
+  <!-- Controles compartidos en modo exclusivo -->
+  <div style="position:relative; z-index:10; display:flex; flex-direction:column; align-items:center; padding:14px 20px 22px; background:linear-gradient(0deg, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0.6) 70%, transparent 100%); pointer-events:auto;" onclick="event.stopPropagation()">
+    <!-- Progreso en modo exclusivo -->
+    <div style="width:100%; max-width:440px; display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+      <span class="time-label" id="fs-time-current" style="color:rgba(255,255,255,0.8); font-size:11px;">0:00</span>
+      <div class="progress-bar-wrap" style="flex:1; height:6px; background:rgba(255,255,255,0.15);" onclick="seekAudio(event)" ontouchstart="seekAudio(event)">
+        <div class="progress-bar-fill" id="fs-progress-fill" style="width:0%; background:var(--ac-grad);"></div>
+      </div>
+      <span class="time-label" id="fs-time-total" style="color:rgba(255,255,255,0.8); font-size:11px;">0:00</span>
+    </div>
+
+    <!-- Los 3 controles compartidos en modo exclusivo -->
+    <div class="player-controls" style="margin-bottom:12px; gap:26px;">
+      <button class="btn-control-round btn-skip" onclick="anteriorCancion()" title="Anterior">
+        <svg style="width:24px;height:24px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+      </button>
+      <button class="btn-control-round btn-play-main" id="fs-btn-play" onclick="togglePlayPause()" title="Reproducir / Pausar">
+        <span id="fs-ctrl-play-icon" style="display:flex;align-items:center;justify-content:center;">
+          <svg style="width:40px;height:40px;margin-left:4px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </span>
+      </button>
+      <button class="btn-control-round btn-skip" onclick="saltarActual()" title="Siguiente">
+        <svg style="width:24px;height:24px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6zm9-12h2v12h-2z"/></svg>
+      </button>
+    </div>
+
+    <!-- Modos de animación -->
+    <div id="visualizer-mode-bar" style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
+      <button onclick="cambiarModoVisualizer('barras')" class="viz-mode-btn" data-mode="barras">Barras</button>
+      <button onclick="cambiarModoVisualizer('onda')" class="viz-mode-btn" data-mode="onda">Onda</button>
+      <button onclick="cambiarModoVisualizer('circular')" class="viz-mode-btn" data-mode="circular">Circular</button>
+      <button onclick="cambiarModoVisualizer('particulas')" class="viz-mode-btn" data-mode="particulas">Partículas</button>
+      <button onclick="cambiarModoVisualizer('gradiente')" class="viz-mode-btn" data-mode="gradiente">Gradiente</button>
+    </div>
   </div>
 </div>
 <style>
@@ -1862,6 +1910,12 @@ function iniciarYtProgresoTimer() {
         if (tCur) tCur.textContent = formatTime(curr);
         const tTot = document.getElementById('time-total');
         if (tTot) tTot.textContent = formatTime(dur);
+        const fsFill = document.getElementById('fs-progress-fill');
+        if (fsFill) fsFill.style.width = pct + '%';
+        const fsCur = document.getElementById('fs-time-current');
+        if (fsCur) fsCur.textContent = formatTime(curr);
+        const fsTot = document.getElementById('fs-time-total');
+        if (fsTot) fsTot.textContent = formatTime(dur);
 
         const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
         const crossfadeAnticipation = parseInt(document.getElementById('fundido-segundos').value) || 12;
@@ -3753,6 +3807,12 @@ function actualizarProgreso() {
   document.getElementById('progress-fill').style.width = percent + '%';
   document.getElementById('time-current').textContent = formatTime(current);
   document.getElementById('time-total').textContent = formatTime(total);
+  const fsFill = document.getElementById('fs-progress-fill');
+  if (fsFill) fsFill.style.width = percent + '%';
+  const fsCur = document.getElementById('fs-time-current');
+  if (fsCur) fsCur.textContent = formatTime(current);
+  const fsTot = document.getElementById('fs-time-total');
+  if (fsTot) fsTot.textContent = formatTime(total);
 }
 
 function formatTime(secs) {
@@ -3844,6 +3904,74 @@ function initProgressBarDrag() {
 }
 
 async function togglePlayPause() {
+  if (esYouTubeActual) {
+    const activo = getYtPlayerActivo();
+    if (activo && isYtActivoReady() && typeof activo.getPlayerState === 'function') {
+      const state = activo.getPlayerState();
+      if (state === YT.PlayerState.PLAYING) {
+        activo.pauseVideo();
+        reproduciendo = false;
+        setVinylSpinning(false);
+        actualizarPlayPauseBtn(false);
+      } else {
+        activo.playVideo();
+        reproduciendo = true;
+        setVinylSpinning(true);
+        iniciarVisualizerCompacto();
+        actualizarPlayPauseBtn(true);
+      }
+    }
+    return;
+  }
+
+  // Si player ya tiene audio cargado, simplemente alternar play/pause en el segundo exacto
+  if (player.src) {
+    if (player.paused) {
+      player.play().then(async () => {
+        reproduciendo = true;
+        playPendiente = false;
+        fallosPlay = 0;
+        setVinylSpinning(true);
+        iniciarVisualizerCompacto();
+        actualizarPlayPauseBtn(true);
+        estadoEl.textContent = 'Reproduciendo ✓';
+        await fetch(`/rockola/${SALA}/sync_control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            estado: 'play',
+            pos: player.currentTime,
+            ts: Date.now() / 1000,
+            modo: 'reproductor'
+          })
+        });
+      }).catch((err) => {
+        console.warn('Play manual falló:', err.name || err.message);
+        fallosPlay++;
+        estadoEl.textContent = 'Canción bloqueada — toca play de nuevo';
+      });
+    } else {
+      player.pause();
+      reproduciendo = false;
+      setVinylSpinning(false);
+      if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+      dibujarIdle('visualizer-canvas');
+      actualizarPlayPauseBtn(false);
+      await fetch(`/rockola/${SALA}/sync_control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          estado: 'pause',
+          pos: player.currentTime,
+          ts: Date.now() / 1000,
+          modo: 'reproductor'
+        })
+      });
+    }
+    return;
+  }
+
+  // Si no había ninguna canción sonando, arrancar la primera de la cola
   if (!reproduciendo) {
     const c = (currentCola && currentCola.length > 0) ? (currentCola.find(s => s.id === cancionActual) || currentCola[0]) : null;
     if (c) {
@@ -3852,92 +3980,26 @@ async function togglePlayPause() {
       return;
     }
   }
-
-  if (esYouTubeActual) {
-    const activo = getYtPlayerActivo();
-    if (activo && isYtActivoReady() && typeof activo.getPlayerState === 'function') {
-      const state = activo.getPlayerState();
-      if (state === YT.PlayerState.PLAYING) {
-        activo.pauseVideo();
-      } else {
-        activo.playVideo();
-      }
-    }
-    return;
-  }
-
-  if (!player.src) return;
-
-  if (player.paused) {
-    player.play().then(async () => {
-      reproduciendo = true;
-      playPendiente = false;
-      fallosPlay = 0;
-      setVinylSpinning(true);
-      iniciarVisualizerCompacto();
-      actualizarPlayPauseBtn(true);
-      estadoEl.textContent = 'Reproduciendo ✓';
-      await fetch(`/rockola/${SALA}/sync_control`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          estado: 'play',
-          pos: player.currentTime,
-          ts: Date.now() / 1000,
-          modo: 'reproductor'
-        })
-      });
-    }).catch((err) => {
-      console.warn('Play manual falló:', err.name || err.message);
-      fallosPlay++;
-      estadoEl.textContent = 'Canción bloqueada — revisa el navegador';
-    });
-  } else {
-    player.pause();
-    reproduciendo = false;
-    setVinylSpinning(false);
-    if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
-    dibujarIdle('visualizer-canvas');
-    actualizarPlayPauseBtn(false);
-    await fetch(`/rockola/${SALA}/sync_control`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        estado: 'pause',
-        pos: player.currentTime,
-        ts: Date.now() / 1000,
-        modo: 'reproductor'
-      })
-    });
-  }
 }
 
 function actualizarPlayPauseBtn(isPlaying) {
-  const icon = document.getElementById('vinyl-play-icon');
-  const container = document.querySelector('.vinyl-container');
   const ctrlIcon = document.getElementById('ctrl-play-icon');
+  const fsCtrlIcon = document.getElementById('fs-ctrl-play-icon');
 
-  if (icon && container) {
-    if (isPlaying) {
-      icon.innerHTML = '<svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-      icon.style.marginLeft = '0';
-      container.classList.remove('paused');
-      container.classList.add('playing');
-    } else {
-      icon.innerHTML = '<svg style="width:52px;height:52px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-      icon.style.marginLeft = '6px';
-      container.classList.remove('playing');
-      container.classList.add('paused');
-    }
-  }
+  const pauseSvg = '<svg style="width:40px;height:40px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+  const playSvg = '<svg style="width:40px;height:40px;margin-left:4px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 
   if (ctrlIcon) {
-    if (isPlaying) {
-      ctrlIcon.innerHTML = '<svg style="width:28px;height:28px;" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-      ctrlIcon.style.marginLeft = '0';
-    } else {
-      ctrlIcon.innerHTML = '<svg style="width:28px;height:28px;margin-left:3px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-    }
+    ctrlIcon.innerHTML = isPlaying ? pauseSvg : playSvg;
+  }
+  if (fsCtrlIcon) {
+    fsCtrlIcon.innerHTML = isPlaying ? pauseSvg : playSvg;
+  }
+
+  // Sincronizar título en modo exclusivo
+  const fsTitle = document.getElementById('fs-song-name');
+  if (fsTitle && nombreEl) {
+    fsTitle.textContent = nombreEl.textContent;
   }
 }
 

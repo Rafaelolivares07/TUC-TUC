@@ -2506,21 +2506,23 @@
             <span class="font-extrabold text-amber-950 text-[11px] whitespace-nowrap">Alertas si:</span>
           </div>
 
-          <div class="flex items-center gap-1" title="Avisar si el precio unitario sube más de este porcentaje">
-            <span class="text-[11px] font-semibold text-amber-900 whitespace-nowrap">Precio sube &gt;</span>
+          <div class="flex items-center gap-1.5" title="Avisar si el precio unitario sube más de este porcentaje">
+            <span class="text-[11px] font-bold text-amber-900 whitespace-nowrap">Precio sube &gt;</span>
             <input type="text" inputmode="numeric" id="tolerancia-precio-pct" value="10"
                    oninput="this.value = this.value.replace(/[^0-9]/g, ''); actualizarToleranciasEntrada();"
-                   class="w-10 text-center text-xs font-black py-0.5 px-1 border border-amber-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-amber-500 shadow-2xs">
+                   class="w-12 text-center text-xs font-black py-0.5 px-1 border border-amber-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-amber-500 shadow-2xs leading-normal"
+                   style="min-width: 48px; max-width: 54px; box-sizing: border-box; text-align: center;">
             <span class="text-[11px] font-black text-amber-800">%</span>
           </div>
 
           <div class="h-4 w-px bg-amber-300/80 mx-0.5"></div>
 
-          <div class="flex items-center gap-1" title="Avisar si la cantidad varía más de este porcentaje respecto a compras habituales">
-            <span class="text-[11px] font-semibold text-amber-900 whitespace-nowrap">Cantidad varía &gt;</span>
+          <div class="flex items-center gap-1.5" title="Avisar si la cantidad varía más de este porcentaje respecto a compras habituales">
+            <span class="text-[11px] font-bold text-amber-900 whitespace-nowrap">Cantidad varía &gt;</span>
             <input type="text" inputmode="numeric" id="tolerancia-cant-pct" value="25"
                    oninput="this.value = this.value.replace(/[^0-9]/g, ''); actualizarToleranciasEntrada();"
-                   class="w-10 text-center text-xs font-black py-0.5 px-1 border border-amber-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-amber-500 shadow-2xs">
+                   class="w-12 text-center text-xs font-black py-0.5 px-1 border border-amber-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-amber-500 shadow-2xs leading-normal"
+                   style="min-width: 48px; max-width: 54px; box-sizing: border-box; text-align: center;">
             <span class="text-[11px] font-black text-amber-800">%</span>
           </div>
 
@@ -10663,7 +10665,7 @@ window.seleccionarProductoVincular = function(id, nom) {
   }
 };
 
-window.confirmarVinculacionItem = function() {
+window.confirmarVinculacionItem = async function() {
   const idx = parseInt(document.getElementById('modal-vincular-item-idx').value);
   const prodId = parseInt(document.getElementById('modal-vincular-producto-id').value);
   const recordar = document.getElementById('modal-vincular-recordar-alias')?.checked;
@@ -10674,25 +10676,72 @@ window.confirmarVinculacionItem = function() {
   const prods = (typeof productos !== 'undefined' && Array.isArray(productos)) ? productos : [];
   const prod = prods.find(p => p.id === prodId);
   const provId = document.getElementById('entrada-proveedor-id')?.value;
-  const cant = item.cantidad || 1;
-  const vu = item.valor_unitario || 0;
-  const tot = item.total_linea || (cant * vu);
+  const cantEmp = item.cantidad || 1;
+  const costoEmp = item.valor_unitario || 0;
+  const tot = item.total_linea || (cantEmp * costoEmp);
+
+  let presId = defaultPresentacionId || null;
+  let presNom = 'Unidad';
+  let presEquiv = 1.0;
+  let historial = null;
+
+  // 1. Consultar historial de cotizaciones y presentaciones de este proveedor para el producto
+  if (provId) {
+    try {
+      const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/producto/${prodId}/proveedor/${provId}/historial-presentaciones`);
+      const data = await resp.json();
+      if (data.ok) {
+        if (data.historial && data.historial.length > 0) {
+          historial = data.historial;
+          const p0 = data.historial[0];
+          if (p0.presentacion_id) {
+            presId = p0.presentacion_id;
+            presNom = p0.presentacion_nombre || presNom;
+            presEquiv = parseFloat(p0.equivalencia) || 1.0;
+          }
+        } else if (data.presentacion_id) {
+          presId = data.presentacion_id;
+          presNom = data.presentacion_nombre || presNom;
+          presEquiv = parseFloat(data.equivalencia) || 1.0;
+        }
+      }
+    } catch(e) {}
+  }
+
+  // 2. Si no se encontró por proveedor, buscar si el producto tiene presentaciones asociadas
+  if (presId === null && prod?.presentaciones && prod.presentaciones.length > 0) {
+    const pdef = prod.presentaciones.find(p => p.es_defecto) || prod.presentaciones[0];
+    presId = pdef.id;
+    presNom = pdef.nombre;
+    presEquiv = parseFloat(pdef.equivalencia) || 1.0;
+  }
+
+  const cantBase = cantEmp * presEquiv;
+  const costoBase = presEquiv > 0 ? (costoEmp / presEquiv) : costoEmp;
 
   agregarLineaEntradaConDatos(
     prodId,
     prod ? prod.nombre : item.texto_detectado,
-    cant,
-    vu,
+    cantBase,
+    costoBase,
     prod?.iva_pct || 0,
-    defaultPresentacionId || null,
-    'Unidad',
-    1.0,
-    cant,
-    vu,
+    presId,
+    presNom,
+    presEquiv,
+    cantEmp,
+    costoEmp,
     tot,
     item.texto_detectado || '',
     item.codigo_detectado || ''
   );
+
+  const targetIdx = entradaLineas.length - 1;
+  if (historial && targetIdx >= 0) {
+    historialEntradas[targetIdx] = historial;
+    if (typeof evaluarToleranciasLinea === 'function') {
+      evaluarToleranciasLinea(targetIdx);
+    }
+  }
 
   if (recordar && item.texto_detectado) {
     try {
@@ -10704,7 +10753,8 @@ window.confirmarVinculacionItem = function() {
           texto_origen: item.texto_detectado,
           codigo_origen: item.codigo_detectado || null,
           tipo_destino: 'inventario',
-          producto_id: prodId
+          producto_id: prodId,
+          presentacion_id: presId
         })
       });
     } catch(e) {}
@@ -10716,7 +10766,7 @@ window.confirmarVinculacionItem = function() {
   calcularTotalesEntrada();
   renderItemsOmitidosBanner();
   actualizarCotejoFactura();
-  toast(`🔗 Insumo vinculado y recordado en la memoria del proveedor.`);
+  toast(`🔗 Insumo vinculado con empaque "${presNom}" y registrado en memoria.`);
 };
 
 // ── CREAR INSUMO PRE-LLENADO DESDE ÍTEM OMITIDO ────────────────────────────────
@@ -10736,27 +10786,46 @@ window.crearInsumoDesdeOmitido = function(idx) {
 };
 
 // Hook cuando se guarda un producto nuevo si vino desde un ítem de factura
-window.verificarHookPostCrearProducto = function(nuevoProdId, nuevoProdNombre) {
+window.verificarHookPostCrearProducto = async function(nuevoProdId, nuevoProdNombre) {
   if (!window._itemCreandoDesdeOmitido) return;
   const { idx, item } = window._itemCreandoDesdeOmitido;
   window._itemCreandoDesdeOmitido = null;
 
   const provId = document.getElementById('entrada-proveedor-id')?.value;
-  const cant = item.cantidad || 1;
-  const vu = item.valor_unitario || 0;
-  const tot = item.total_linea || (cant * vu);
+  const cantEmp = item.cantidad || 1;
+  const costoEmp = item.valor_unitario || 0;
+  const tot = item.total_linea || (cantEmp * costoEmp);
+
+  let presId = defaultPresentacionId || null;
+  let presNom = 'Unidad';
+  let presEquiv = 1.0;
+
+  // Si se crearon presentaciones para el nuevo producto, consultar la recién creada
+  try {
+    const r = await fetch(`/api/inventario/${NEGOCIO_ID}/presentaciones?producto_id=${nuevoProdId}`);
+    const data = await r.json();
+    if (data.ok && data.presentaciones && data.presentaciones.length > 0) {
+      const pdef = data.presentaciones.find(p => p.es_defecto) || data.presentaciones[0];
+      presId = pdef.id;
+      presNom = pdef.nombre;
+      presEquiv = parseFloat(pdef.equivalencia) || 1.0;
+    }
+  } catch(e) {}
+
+  const cantBase = cantEmp * presEquiv;
+  const costoBase = presEquiv > 0 ? (costoEmp / presEquiv) : costoEmp;
 
   agregarLineaEntradaConDatos(
     nuevoProdId,
     nuevoProdNombre || item.texto_detectado,
-    cant,
-    vu,
+    cantBase,
+    costoBase,
     0,
-    defaultPresentacionId || null,
-    'Unidad',
-    1.0,
-    cant,
-    vu,
+    presId,
+    presNom,
+    presEquiv,
+    cantEmp,
+    costoEmp,
     tot,
     item.texto_detectado || '',
     item.codigo_detectado || ''
@@ -10772,7 +10841,8 @@ window.verificarHookPostCrearProducto = function(nuevoProdId, nuevoProdNombre) {
           texto_origen: item.texto_detectado,
           codigo_origen: item.codigo_detectado || null,
           tipo_destino: 'inventario',
-          producto_id: nuevoProdId
+          producto_id: nuevoProdId,
+          presentacion_id: presId
         })
       });
     } catch(e) {}
@@ -10786,7 +10856,7 @@ window.verificarHookPostCrearProducto = function(nuevoProdId, nuevoProdNombre) {
   calcularTotalesEntrada();
   renderItemsOmitidosBanner();
   actualizarCotejoFactura();
-  toast(`➕ ¡Producto creado, vinculado a la factura y memorizado para siempre!`);
+  toast(`➕ ¡Producto creado, vinculado con empaque "${presNom}" y memorizado para siempre!`);
 };
 
 // Cargar todos los ítems omitidos a la tabla de entradas (Bulk)

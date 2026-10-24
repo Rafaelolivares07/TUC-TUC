@@ -226,6 +226,43 @@ def _obtener_referencia_item(conn, negocio_id, proveedor_id, producto, cant, vu)
     return pres_id, pres_nombre, pres_equiv, precio_ref, cant_ref, var_precio_pct, var_cant_pct
 
 
+def _buscar_en_alias(alias_map, texto, codigo=None):
+    """
+    Busca coincidencias en la memoria de alias del proveedor por código o por texto
+    (incluyendo normalización sin espacios ni caracteres especiales).
+    """
+    if not alias_map:
+        return None
+
+    # 1. Por código (barcode o plu)
+    if codigo:
+        cod_clean = str(codigo).strip()
+        if cod_clean:
+            for al in alias_map:
+                c_orig = str(al.get('codigo_origen') or '').strip()
+                if c_orig and (c_orig == cod_clean or c_orig.lstrip('0') == cod_clean.lstrip('0')):
+                    return al
+
+    # 2. Por texto (exacto o normalizado sin espacios ni caracteres especiales)
+    if texto:
+        txt_up = texto.upper().strip()
+        txt_norm = re.sub(r'[^A-Z0-9]', '', txt_up)
+        for al in alias_map:
+            al_orig = (al.get('texto_origen') or '').upper().strip()
+            if not al_orig:
+                continue
+            if al_orig == txt_up or al_orig in txt_up or txt_up in al_orig:
+                return al
+            al_norm = re.sub(r'[^A-Z0-9]', '', al_orig)
+            if al_norm and len(al_norm) >= 4 and len(txt_norm) >= 4:
+                if al_norm == txt_norm or al_norm in txt_norm or txt_norm in al_norm:
+                    return al
+                ratio = difflib.SequenceMatcher(None, txt_norm, al_norm).ratio()
+                if ratio >= 0.75:
+                    return al
+    return None
+
+
 def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     """
     Ejecuta el pipeline de visión y extrae:
@@ -624,12 +661,39 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
             elif total_line == 0.0 and cant > 0 and vu > 0:
                 total_line = round(vu * cant, 2)
 
-            # Cruzar con catálogo de productos:
+            # Cruzar con catálogo de productos y memoria del proveedor:
             mejor_prod = None
             mejor_score = 0.0
+            pres_id, pres_nombre, pres_equiv = None, "Unidad", 1.0
+            matched_alias = None
+            es_gasto = False
+            descartado = False
+            cuenta_id = None
+            cuenta_codigo = None
+            cuenta_nombre = None
+            tipo_destino = 'inventario'
+
+            # Prioridad 0: Memoria aprendida de este proveedor (Alias)
+            matched_alias = _buscar_en_alias(alias_map, desc, bc)
+            if matched_alias:
+                tipo_dest = matched_alias.get('tipo_destino') or 'inventario'
+                tipo_destino = tipo_dest
+                if tipo_dest == 'descartar':
+                    descartado = True
+                elif tipo_dest in ('gasto', 'costo'):
+                    es_gasto = True
+                    cuenta_id = matched_alias.get('cuenta_id')
+                    cuenta_codigo = matched_alias.get('cuenta_codigo')
+                    cuenta_nombre = matched_alias.get('cuenta_nombre')
+                else:
+                    mejor_prod = {'id': matched_alias['producto_id'], 'nombre': matched_alias['producto_nombre'], 'iva_pct': matched_alias.get('iva_pct', 0)}
+                    mejor_score = 1.0
+                    pres_id = matched_alias.get('presentacion_id')
+                    pres_nombre = matched_alias.get('pres_nombre') or "Unidad"
+                    pres_equiv = float(matched_alias.get('pres_equiv') or 1.0)
 
             # Prioridad 1: Coincidencia por código de barras exacto (100% certero)
-            if bc:
+            if not mejor_prod and not es_gasto and not descartado and bc:
                 for p in productos_db:
                     cb_db = str(p.get('codigo_barra') or '').strip()
                     if cb_db and (cb_db == bc or cb_db.lstrip('0') == bc.lstrip('0')):
@@ -638,7 +702,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                         break
 
             # Prioridad 2: Coincidencia por similitud de texto (umbral estricto >= 0.70)
-            if not mejor_prod:
+            if not mejor_prod and not es_gasto and not descartado:
                 nom_upper = desc.upper()
                 for p in productos_db:
                     p_nom = p['nombre'].upper()
@@ -651,9 +715,13 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                         mejor_prod = p
 
             # Buscar presentación, empaque previo y tolerancias de precio/cantidad
-            pres_id, pres_nombre, pres_equiv, precio_ref, cant_ref, var_p_pct, var_c_pct = _obtener_referencia_item(
+            pres_ref_id, pres_ref_nom, pres_ref_eq, precio_ref, cant_ref, var_p_pct, var_c_pct = _obtener_referencia_item(
                 conn, negocio_id, proveedor_id, mejor_prod, cant, vu
             )
+            if not pres_id:
+                pres_id = pres_ref_id
+                pres_nombre = pres_ref_nom
+                pres_equiv = pres_ref_eq
 
             items_extraidos.append({
                 'texto_detectado': desc,
@@ -672,7 +740,13 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                 'precio_referencia': precio_ref,
                 'cantidad_referencia': cant_ref,
                 'variacion_precio_pct': var_p_pct,
-                'variacion_cant_pct': var_c_pct
+                'variacion_cant_pct': var_c_pct,
+                'tipo_destino': tipo_destino,
+                'es_gasto': es_gasto,
+                'descartado': descartado,
+                'cuenta_id': cuenta_id,
+                'cuenta_codigo': cuenta_codigo,
+                'cuenta_nombre': cuenta_nombre
             })
 
     # CASO B: FACTURAS TRADICIONALES EN COLUMNAS HORIZONTALES (Sin códigos de barras)
@@ -772,21 +846,8 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     cuenta_nombre = None
                     tipo_destino = 'inventario'
 
-                    # Paso 1: Memoria de este proveedor por Código
-                    if cod_proveedor:
-                        for al in alias_map:
-                            if al.get('codigo_origen') and al['codigo_origen'] == cod_proveedor:
-                                matched_alias = al
-                                break
-
-                    # Paso 2: Memoria de este proveedor por Texto
-                    if not matched_alias:
-                        nom_up = nom_it.upper()
-                        for al in alias_map:
-                            al_txt = (al.get('texto_origen') or '').upper()
-                            if al_txt and (al_txt == nom_up or al_txt in nom_up or nom_up in al_txt):
-                                matched_alias = al
-                                break
+                    # Paso 1 y 2: Memoria de este proveedor por Código o Texto inteligente
+                    matched_alias = _buscar_en_alias(alias_map, nom_it, cod_proveedor)
 
                     if matched_alias:
                         tipo_dest = matched_alias.get('tipo_destino') or 'inventario'
@@ -915,22 +976,54 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
 
                 mejor_prod = None
                 mejor_score = 0.0
-                nom_upper = nom_it.upper()
-                for p in productos_db:
-                    p_nom = p['nombre'].upper()
-                    if len(p_nom) >= 5 and (p_nom in nom_upper or nom_upper in p_nom):
-                        score = 0.85
+                pres_id, pres_nombre, pres_equiv = None, "Unidad", 1.0
+                matched_alias = None
+                es_gasto = False
+                descartado = False
+                cuenta_id = None
+                cuenta_codigo = None
+                cuenta_nombre = None
+                tipo_destino = 'inventario'
+
+                matched_alias = _buscar_en_alias(alias_map, nom_it, "")
+                if matched_alias:
+                    tipo_dest = matched_alias.get('tipo_destino') or 'inventario'
+                    tipo_destino = tipo_dest
+                    if tipo_dest == 'descartar':
+                        descartado = True
+                    elif tipo_dest in ('gasto', 'costo'):
+                        es_gasto = True
+                        cuenta_id = matched_alias.get('cuenta_id')
+                        cuenta_codigo = matched_alias.get('cuenta_codigo')
+                        cuenta_nombre = matched_alias.get('cuenta_nombre')
                     else:
-                        score = difflib.SequenceMatcher(None, nom_upper, p_nom).ratio()
-                    if score > mejor_score and score >= 0.70:
-                        mejor_score = score
-                        mejor_prod = p
+                        mejor_prod = {'id': matched_alias['producto_id'], 'nombre': matched_alias['producto_nombre'], 'iva_pct': matched_alias.get('iva_pct', 0)}
+                        mejor_score = 1.0
+                        pres_id = matched_alias.get('presentacion_id')
+                        pres_nombre = matched_alias.get('pres_nombre') or "Unidad"
+                        pres_equiv = float(matched_alias.get('pres_equiv') or 1.0)
+
+                if not mejor_prod and not es_gasto and not descartado:
+                    nom_upper = nom_it.upper()
+                    for p in productos_db:
+                        p_nom = p['nombre'].upper()
+                        if len(p_nom) >= 5 and (p_nom in nom_upper or nom_upper in p_nom):
+                            score = 0.85
+                        else:
+                            score = difflib.SequenceMatcher(None, nom_upper, p_nom).ratio()
+                        if score > mejor_score and score >= 0.70:
+                            mejor_score = score
+                            mejor_prod = p
 
                 vu_calc = round(precio_linea / cant, 2) if (cant > 0 and precio_linea > 0) else 0.0
 
-                pres_id, pres_nombre, pres_equiv, precio_ref, cant_ref, var_p_pct, var_c_pct = _obtener_referencia_item(
+                pres_ref_id, pres_ref_nom, pres_ref_eq, precio_ref, cant_ref, var_p_pct, var_c_pct = _obtener_referencia_item(
                     conn, negocio_id, proveedor_id, mejor_prod, cant, vu_calc
                 )
+                if not pres_id:
+                    pres_id = pres_ref_id
+                    pres_nombre = pres_ref_nom
+                    pres_equiv = pres_ref_eq
 
                 items_extraidos.append({
                     'texto_detectado': nom_it,
@@ -949,7 +1042,13 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     'precio_referencia': precio_ref,
                     'cantidad_referencia': cant_ref,
                     'variacion_precio_pct': var_p_pct,
-                    'variacion_cant_pct': var_c_pct
+                    'variacion_cant_pct': var_c_pct,
+                    'tipo_destino': tipo_destino,
+                    'es_gasto': es_gasto,
+                    'descartado': descartado,
+                    'cuenta_id': cuenta_id,
+                    'cuenta_codigo': cuenta_codigo,
+                    'cuenta_nombre': cuenta_nombre
                 })
 
     lineas_identificadas = [it for it in items_extraidos if it.get('identificado') and not it.get('es_gasto') and not it.get('descartado')]

@@ -420,8 +420,15 @@
       font-weight: 800;
       text-shadow: 0 0 4px rgba(255, 255, 255, 0.35);
     }
+    .chulito.escuchado {
+      color: #38bdf8;
+      font-weight: 800;
+      letter-spacing: normal;
+      text-shadow: 0 0 5px rgba(56, 189, 248, 0.5);
+    }
     .bubble-card .chulito.enviado { color: var(--ink-soft); }
     .bubble-card .chulito.leido { color: var(--accent); text-shadow: none; }
+    .bubble-card .chulito.escuchado { color: #0284c7; text-shadow: none; }
 
     /* Traducción */
     .trad-bubble {
@@ -1415,6 +1422,27 @@
 </div>
 
 
+<!-- Modal Guía Micrófono -->
+<div id="modal-guia-mic" class="modal-backdrop" style="display:none;z-index:9999" onclick="cerrarGuiaMic()">
+  <div class="modal-box" style="max-width:380px;width:92%;text-align:center" onclick="event.stopPropagation()">
+    <div style="width:54px;height:54px;border-radius:50%;background:rgba(232,133,106,0.18);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 14px">🎙️</div>
+    <h2 class="modal-title" style="margin-bottom:8px">Permiso del Micrófono</h2>
+    <p style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px;text-align:left">
+      El navegador no pudo acceder al micrófono para grabar la nota de voz.
+    </p>
+    <div style="background:var(--bg);border:1px solid var(--hairline);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--ink);text-align:left;margin-bottom:18px;line-height:1.6">
+      1. Toca el ícono de <b>ajustes / candado 🔒</b> al lado de la barra de direcciones.<br>
+      2. Entra en <b>"Permisos"</b> y activa <b>"Micrófono"</b> (Permitir).<br>
+      3. Luego pulsa el botón <b>"Probar Ahora"</b> aquí abajo.
+    </div>
+    <div class="modal-btn-row">
+      <button type="button" class="btn-cancel" onclick="cerrarGuiaMic()">Cerrar</button>
+      <button type="button" class="btn-primary" id="btn-probar-mic" onclick="probarPermisoMic()" style="flex:1.4">🎙️ Probar Ahora</button>
+    </div>
+    <div id="mic-test-status" style="font-size:12px;margin-top:12px;display:none;font-weight:600"></div>
+  </div>
+</div>
+
 <!-- Input imagen global -->
 <input id="inp-chat-imagen" type="file" accept="image/*" style="display:none" onchange="enviarImagen(this)">
 
@@ -2314,9 +2342,21 @@ function seleccionarLang(code) {
 
 function chulito(estado, esMio) {
   if (!esMio) return '';
+  if (estado === 'escuchado' || estado === 'reproducido') {
+    return '<span class="chulito escuchado" title="Audio escuchado por el receptor">🎧 ✓✓</span>';
+  }
   if (estado === 'leido') return '<span class="chulito leido" title="Recibido y leído">✓✓</span>';
   return '<span class="chulito enviado" title="Enviado al servidor">✓</span>';
 }
+
+window.marcarAudioEscuchado = async function(msgId, esMio) {
+  if (esMio) return;
+  try {
+    await fetch(`/api/chat/mensajes/${msgId}/escuchado`, { method: 'POST' });
+  } catch (e) {
+    console.warn('marcarAudioEscuchado error:', e);
+  }
+};
 
 function _esCreadorConv(tok) {
   const c = convData[tok] || convInfo;
@@ -2330,10 +2370,15 @@ async function actualizarEstados() {
   const r = await fetch(`/api/chat/mensajes/estados?ids=${ids}`).then(r => r.json()).catch(() => null);
   if (!r?.ok) return;
   for (const [id, estado] of Object.entries(r.estados)) {
-    if (estado === 'leido') {
-      const el = document.getElementById(`est-${id}`);
-      if (el) el.innerHTML = chulito('leido', true);
+    const el = document.getElementById(`est-${id}`);
+    if (el) el.innerHTML = chulito(estado, true);
+    if (estado === 'escuchado') {
       _pendientesEstado.delete(Number(id));
+    } else if (estado === 'leido') {
+      const esAudio = el && el.closest('.bubble-audio');
+      if (!esAudio) {
+        _pendientesEstado.delete(Number(id));
+      }
     }
   }
 }
@@ -2420,7 +2465,7 @@ function renderMensajes(msgs, cont) {
       div.innerHTML = `
         <div class="bubble-audio ${lado}">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;max-width:100%">
-            <audio controls src="${m.url_archivo}" preload="metadata" style="width:185px;max-width:calc(100% - 26px);min-width:0;height:32px"></audio>
+            <audio controls src="${m.url_archivo}" preload="metadata" onplay="marcarAudioEscuchado(${m.id}, ${esMio})" style="width:185px;max-width:calc(100% - 26px);min-width:0;height:32px"></audio>
             <span id="est-${m.id}" style="flex-shrink:0;line-height:1">${chulito(m.estado, esMio)}</span>
           </div>
           <div class="msg-hora" style="text-align:${esMio ? 'right' : 'left'};margin-top:4px">
@@ -2518,7 +2563,13 @@ function renderMensajes(msgs, cont) {
 
     if (div.innerHTML) {
       cont.appendChild(div);
-      if (esMio && m.estado !== 'leido') _pendientesEstado.add(m.id);
+      if (esMio) {
+        if (m.tipo === 'audio') {
+          if (m.estado !== 'escuchado') _pendientesEstado.add(m.id);
+        } else {
+          if (m.estado !== 'leido' && m.estado !== 'escuchado') _pendientesEstado.add(m.id);
+        }
+      }
 
       // TTS / Nativo — solo mensajes ajenos nuevos (no al cargar historial)
       if (!esInicio && !esMio && m.tipo === 'texto' && m.mensaje) {
@@ -2669,11 +2720,51 @@ async function toggleGrabacion() {
       _setMicUI(true);
 
     } catch (e) {
-      alert('No se pudo acceder al micrófono. Verifica los permisos.');
+      console.warn('No se pudo acceder al micrófono:', e);
+      abrirGuiaMic();
     }
   } else {
     mediaRecorder.stop();
     grabando = false;
+  }
+}
+
+function abrirGuiaMic() {
+  const m = document.getElementById('modal-guia-mic');
+  if (m) m.style.display = 'flex';
+}
+
+function cerrarGuiaMic() {
+  const m = document.getElementById('modal-guia-mic');
+  if (m) m.style.display = 'none';
+  const st = document.getElementById('mic-test-status');
+  if (st) st.style.display = 'none';
+}
+
+async function probarPermisoMic() {
+  const st = document.getElementById('mic-test-status');
+  const btn = document.getElementById('btn-probar-mic');
+  if (btn) btn.disabled = true;
+  if (st) {
+    st.style.display = 'block';
+    st.style.color = 'var(--muted)';
+    st.textContent = 'Solicitando acceso al micrófono...';
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+    if (st) {
+      st.style.color = '#10b981';
+      st.textContent = '✅ ¡Micrófono activado con éxito! Ya puedes enviar audios.';
+    }
+    setTimeout(() => { cerrarGuiaMic(); }, 1800);
+  } catch (err) {
+    if (st) {
+      st.style.color = '#ef4444';
+      st.textContent = '❌ Aún no está permitido. Revisa los permisos del navegador.';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 

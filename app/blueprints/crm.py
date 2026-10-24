@@ -1294,6 +1294,24 @@ def api_chat_mensajes_estados():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+
+
+# -- Marcar audio como escuchado --------------------------------------------
+
+@bp.route('/api/chat/mensajes/<int:msg_id>/escuchado', methods=['POST'])
+def api_chat_mensajes_marcar_escuchado(msg_id):
+    try:
+        conn = get_db_connection()
+        conn.execute('''
+            UPDATE mensajes
+            SET estado = 'escuchado'
+            WHERE id = %s AND tipo = 'audio'
+        ''', (msg_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True, 'msg_id': msg_id, 'estado': 'escuchado'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 # ── Apuntes ────────────────────────────────────────────────────────────────
 
 @bp.route('/api/chat/apunte', methods=['POST'])
@@ -1881,7 +1899,7 @@ _GLOBO_CHAT_SNIPPET = """
       📊 Compartir vista
     </button>
   </div>
-  <iframe id="tuctuc-chat-iframe" src="about:blank" style="flex:1;width:100%;max-width:100%;min-width:0;border:none;background:#f5f1e8;display:block"></iframe>
+  <iframe id="tuctuc-chat-iframe" src="about:blank" allow="microphone; camera; display-capture; autoplay; clipboard-write" style="flex:1;width:100%;max-width:100%;min-width:0;border:none;background:#f5f1e8;display:block"></iframe>
 </div>
 
 <script>

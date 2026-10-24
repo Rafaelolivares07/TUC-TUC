@@ -7813,10 +7813,12 @@ def api_gastos_linea_centro_put(negocio_id, line_id):
         return jsonify({'ok': False, 'error': 'Centro de utilidad requerido'}), 400
     
     from ..db import get_db_connection
+    import json
     conn = get_db_connection()
     try:
         line = conn.execute("""
-            SELECT id, fecha FROM movimientos_contables 
+            SELECT id, fecha, comprobante_id, tipo_documento, numero_documento 
+            FROM movimientos_contables 
             WHERE id = %s AND negocio_id = %s
         """, (line_id, negocio_id)).fetchone()
         
@@ -7826,11 +7828,54 @@ def api_gastos_linea_centro_put(negocio_id, line_id):
             
         _verificar_periodo_cerrado(conn, negocio_id, line['fecha'])
         
-        conn.execute("""
-            UPDATE movimientos_contables
-            SET centro_utilidad_id = %s
-            WHERE id = %s AND negocio_id = %s
-        """, (int(centro_id), line_id, negocio_id))
+        cid = int(centro_id)
+        comp_id = line['comprobante_id']
+        tipo_doc = line['tipo_documento']
+        num_doc = line['numero_documento']
+
+        # 1. Actualizar la línea y todas las líneas contables vinculadas al comprobante
+        if comp_id:
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET centro_utilidad_id = %s
+                WHERE comprobante_id = %s AND negocio_id = %s
+            """, (cid, comp_id, negocio_id))
+        elif tipo_doc and num_doc:
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET centro_utilidad_id = %s
+                WHERE (id = %s OR movimiento_origen_id = %s) AND negocio_id = %s
+            """, (cid, line_id, line_id, negocio_id))
+        else:
+            conn.execute("""
+                UPDATE movimientos_contables
+                SET centro_utilidad_id = %s
+                WHERE id = %s AND negocio_id = %s
+            """, (cid, line_id, negocio_id))
+
+        # 2. Si es un activo o diferido con amortización futura programada, sincronizar programaciones_contables
+        doc_tag = f"{tipo_doc}-{num_doc}" if (tipo_doc and num_doc) else ""
+        progs = conn.execute("""
+            SELECT id, variables_h FROM programaciones_contables
+            WHERE negocio_id = %s AND activo = TRUE
+              AND (
+                variables_h->>'movimiento_origen_id' = %s
+                OR (%s != '' AND variables_h->>'doc_origen' = %s)
+              )
+        """, (negocio_id, str(line_id), doc_tag, doc_tag)).fetchall()
+
+        for prg in progs:
+            vars_h = prg['variables_h'] or {}
+            if isinstance(vars_h, str):
+                try: vars_h = json.loads(vars_h)
+                except: vars_h = {}
+            vars_h['centro_utilidad_id'] = cid
+            conn.execute("""
+                UPDATE programaciones_contables
+                SET variables_h = %s::jsonb
+                WHERE id = %s
+            """, (json.dumps(vars_h), prg['id']))
+
         conn.commit()
         conn.close()
         return jsonify({'ok': True})

@@ -91,8 +91,8 @@ body {
   background: rgba(6, 12, 24, 0.95);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  padding: 8px 12px 6px;
-  margin: -12px -12px 8px -12px;
+  padding: 8px 12px 5px;
+  margin: -12px -12px 2px -12px;
   border-bottom: 1px solid rgba(0, 212, 255, 0.14);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
@@ -246,7 +246,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 24px;
-  padding: 16px;
+  padding: 6px 14px 14px;
   margin-bottom: 10px;
   text-align: center;
 }
@@ -1188,7 +1188,7 @@ input:checked + .slider:before {
         </div>
 
         <!-- Textos y controles pequeños colocados exclusivamente abajo del escenario -->
-        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin:8px 0 10px; padding:0 4px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; margin:3px 0 5px; padding:0 4px;">
           <button type="button" class="viz-quick-mode-btn" onclick="ciclarModoVisualizer(event)" style="position:static; margin:0;" title="Cambiar animación visual">
             <span id="viz-mode-indicator">Barras</span> ▾
           </button>
@@ -1642,7 +1642,37 @@ const player2 = document.getElementById('player2');
 let player = player1;
 let standbyPlayer = player2;
 let transitioning = false;
+let fadeIntervalTimer = null;
 let currentCola = [];
+
+function cancelarCrossfadeActivo() {
+  if (transitioning || fadeIntervalTimer) {
+    console.log('[Rockola] Cancelando fundido cruzado para priorizar repetición de canción actual');
+    transitioning = false;
+    if (fadeIntervalTimer) {
+      clearInterval(fadeIntervalTimer);
+      fadeIntervalTimer = null;
+    }
+    const maxLocalVol = volumenActual / 100;
+    if (!esYouTubeActual && player) {
+      player.volume = maxLocalVol;
+      if (standbyPlayer) {
+        standbyPlayer.pause();
+        standbyPlayer.volume = 0;
+        standbyPlayer.removeAttribute('src');
+      }
+    } else if (esYouTubeActual) {
+      const activo = getYtPlayerActivo();
+      if (activo && typeof activo.setVolume === 'function') {
+        activo.setVolume(volumenActual);
+      }
+      const standby = getYtPlayerStandby();
+      if (standby && typeof standby.stopVideo === 'function') {
+        try { standby.stopVideo(); } catch(e) {}
+      }
+    }
+  }
+}
 
 // Visualizer State Variables (Declaradas en el tope para evitar TDZ ReferenceError)
 let audioCtx = null;
@@ -1941,13 +1971,18 @@ async function activar(skipUnlock = false) {
 function handlePlayerEnded(e) {
   const p = e.target;
   if (p !== player) return;
-  if (transitioning) return;
   
-  // Repetir cancion 1 sola vez
+  // Repetir cancion 1 sola vez con máxima prioridad (cancela cualquier transicion pendiente)
   if (modoRepetirCancion && cancionActual) {
     console.log('[Rockola] Repitiendo cancion actual 1 vez (+1):', cancionActual);
+    transitioning = false;
+    if (fadeIntervalTimer) {
+      clearInterval(fadeIntervalTimer);
+      fadeIntervalTimer = null;
+    }
     desactivarRepetirCancionUnaVez();
     p.currentTime = 0;
+    p.volume = volumenActual / 100;
     p.play().then(() => {
       reproduciendo = true;
       setVinylSpinning(true);
@@ -1959,6 +1994,8 @@ function handlePlayerEnded(e) {
     });
     return;
   }
+
+  if (transitioning) return;
 
   // Si se termina la ultima cancion y Repetir lista estaba activo
   if (modoRepetirLista && currentCola && currentCola.length <= 1 && memoriaListaCola.length > 0) {
@@ -2006,11 +2043,13 @@ function handlePlayerTimeUpdate(e) {
   actualizarProgreso();
   
   const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
-  const crossfadeAnticipation = parseInt(document.getElementById('fundido-segundos').value) || 12;
   const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
   const nextSong = currentCola && currentCola[1];
   const recienAgregada = (Date.now() - ultimaCancionAgregadaTs) < 5000;
-  if (crossfadeEnabled && nextSong && p.duration && (p.duration - p.currentTime <= crossfadeAnticipation) && !transitioning && !recienAgregada) {
+  const timeLeft = p.duration ? (p.duration - p.currentTime) : 999;
+  
+  // El fundido audible corre exactamente durante los ultimos crossfadeDuration segundos y NUNCA si la cancion esta programada para repetir
+  if (!modoRepetirCancion && crossfadeEnabled && nextSong && p.duration && (timeLeft <= crossfadeDuration) && !transitioning && !recienAgregada) {
     iniciarCrossfade(crossfadeDuration);
   }
 }
@@ -2345,12 +2384,13 @@ function iniciarYtProgresoTimer() {
         if (fsTot) fsTot.textContent = formatTime(dur);
 
         const crossfadeEnabled = document.getElementById('fundido-toggle').checked;
-        const crossfadeAnticipation = parseInt(document.getElementById('fundido-segundos').value) || 12;
         const crossfadeDuration = parseInt(document.getElementById('fundido-duracion').value) || 5;
         const nextSong = currentCola && currentCola[1];
         const recienAgregada = (Date.now() - ultimaCancionAgregadaTs) < 5000;
+        const timeLeft = dur - curr;
 
-        if (crossfadeEnabled && nextSong && (dur - curr <= crossfadeAnticipation) && !transitioning && !recienAgregada) {
+        // El fundido audible corre exactamente durante los ultimos crossfadeDuration segundos y NUNCA si la cancion esta programada para repetir
+        if (!modoRepetirCancion && crossfadeEnabled && nextSong && (timeLeft <= crossfadeDuration) && !transitioning && !recienAgregada) {
           iniciarCrossfade(crossfadeDuration);
         }
       }
@@ -4306,6 +4346,9 @@ function toggleModoAleatorio(checked) {
 function toggleModoRepetirCancion(checked) {
   modoRepetirCancion = !!checked;
   localStorage.setItem('rockola_repetir_cancion', modoRepetirCancion ? '1' : '0');
+  if (modoRepetirCancion) {
+    cancelarCrossfadeActivo();
+  }
   actualizarRepetirCancionStatus();
 }
 
@@ -4809,11 +4852,13 @@ async function iniciarCrossfade(secs, targetSong = null) {
   const maxLocalVol = volumenActual / 100;
   const stepMs = Math.max(50, Math.floor((secs * 1000) / 20));
   
-  const fadeInterval = setInterval(() => {
+  if (fadeIntervalTimer) clearInterval(fadeIntervalTimer);
+  fadeIntervalTimer = setInterval(() => {
     fadeProgress += 0.05;
     if (fadeProgress >= 1) {
       fadeProgress = 1;
-      clearInterval(fadeInterval);
+      clearInterval(fadeIntervalTimer);
+      fadeIntervalTimer = null;
       
       // Limpieza de la pista saliente
       if (actualEsYt && salienteYt) {

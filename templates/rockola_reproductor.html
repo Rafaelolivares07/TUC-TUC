@@ -157,18 +157,28 @@ body {
   justify-content: center;
   box-shadow: 0 0 25px rgba(0, 212, 255, 0.35), 0 10px 30px rgba(0, 0, 0, 0.8);
   transform-origin: center center;
-  transition: transform 0.2s ease;
-}
-.vinyl-disc-wrap.spinning {
-  animation: rk-spin-vinyl 3s linear infinite;
-}
-.vinyl-disc-wrap.paused {
-  animation: rk-spin-vinyl 3s linear infinite;
+  animation: spin 3s linear infinite;
   animation-play-state: paused;
 }
-@keyframes rk-spin-vinyl {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.vinyl-disc-wrap.spinning {
+  animation: spin 3s linear infinite;
+  animation-play-state: running;
+}
+.vinyl-disc-wrap.paused {
+  animation: spin 3s linear infinite;
+  animation-play-state: paused;
+}
+@keyframes dj-scratch-disc {
+  0%   { transform: rotate(0deg); }
+  15%  { transform: rotate(-60deg); }
+  30%  { transform: rotate(50deg); }
+  45%  { transform: rotate(-85deg); }
+  60%  { transform: rotate(70deg); }
+  75%  { transform: rotate(-35deg); }
+  100% { transform: rotate(360deg); }
+}
+.vinyl-disc-wrap.dj-scratching {
+  animation: dj-scratch-disc 0.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite !important;
 }
 .activar-vinyl { margin-bottom: 32px; }
 .activar-tag { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
@@ -1175,12 +1185,10 @@ input:checked + .slider:before {
                 <!-- Galleta central -->
                 <circle cx="150" cy="150" r="58" fill="url(#v-label)" stroke="#00d4ff" stroke-width="2" />
                 <circle cx="150" cy="150" r="52" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="0.8" />
-                <text x="150" y="155" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="14" text-anchor="middle" fill="#ffffff" letter-spacing="-0.3">
-                  TUC<tspan fill="#00d4ff">TUC</tspan>
-                </text>
-                <!-- Eje central -->
-                <circle cx="150" cy="150" r="8" fill="#04060a" stroke="#00d4ff" stroke-width="1.2" />
-                <circle cx="150" cy="150" r="3" fill="#ffffff" opacity="0.85" />
+                <!-- TUC-TUC con centro negro del longplay como guión '-' -->
+                <text x="138" y="155" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="14" text-anchor="end" fill="#ffffff" letter-spacing="0.5">TUC</text>
+                <circle cx="150" cy="150" r="6" fill="#04060a" stroke="#00d4ff" stroke-width="1.3" />
+                <text x="162" y="155" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="14" text-anchor="start" fill="#00d4ff" letter-spacing="0.5">TUC</text>
               </svg>
             </div>
           </div>
@@ -1312,6 +1320,17 @@ input:checked + .slider:before {
               <span id="repetir-lista-status" style="font-size:10px; font-weight:700; color:var(--ac1);"></span>
               <label class="switch" style="margin:0;" title="Repetir la lista 1 sola vez al finalizar">
                 <input type="checkbox" id="repetir-lista-toggle" onchange="toggleModoRepetirLista(this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Autoreproducir al entrar: toggle independiente alineado a la derecha -->
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
+            <span id="autoplay-reproductor-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Autoreproducir al entrar</span>
+            <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+              <label class="switch" style="margin:0;" title="Iniciar reproducción automáticamente al entrar a la sala">
+                <input type="checkbox" id="autoplay-reproductor-toggle" onchange="toggleAutoplayDesdeReproductor(this.checked)">
                 <span class="slider"></span>
               </label>
             </div>
@@ -1558,11 +1577,10 @@ input:checked + .slider:before {
         <!-- Galleta central -->
         <circle cx="150" cy="150" r="58" fill="url(#v-label-fs)" stroke="#00d4ff" stroke-width="2" />
         <circle cx="150" cy="150" r="52" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="0.8" />
-        <text x="150" y="155" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="14" text-anchor="middle" fill="#ffffff" letter-spacing="-0.3">
-          TUC<tspan fill="#00d4ff">TUC</tspan>
-        </text>
-        <circle cx="150" cy="150" r="8" fill="#04060a" stroke="#00d4ff" stroke-width="1.2" />
-        <circle cx="150" cy="150" r="3" fill="#ffffff" opacity="0.85" />
+        <!-- TUC-TUC con centro negro del longplay como guión '-' -->
+        <text x="138" y="155" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="14" text-anchor="end" fill="#ffffff" letter-spacing="0.5">TUC</text>
+        <circle cx="150" cy="150" r="6" fill="#04060a" stroke="#00d4ff" stroke-width="1.3" />
+        <text x="162" y="155" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="14" text-anchor="start" fill="#00d4ff" letter-spacing="0.5">TUC</text>
       </svg>
     </div>
   </div>
@@ -1646,6 +1664,7 @@ let fadeIntervalTimer = null;
 let currentCola = [];
 
 function cancelarCrossfadeActivo() {
+  setVinylScratching(false);
   if (transitioning || fadeIntervalTimer) {
     console.log('[Rockola] Cancelando fundido cruzado para priorizar repetición de canción actual');
     transitioning = false;
@@ -2545,18 +2564,83 @@ async function intentarReproducir(c) {
         }
       }, 1500);
     } else {
-      estadoEl.textContent = 'Cancion bloqueada — toca ▶ para iniciar';
+      habilitarDesbloqueoPorToque();
+      estadoEl.innerHTML = '<span style="color:var(--ac1); cursor:pointer;" onclick="alternarReproduccion()">🔊 Toca la pantalla para activar el audio</span>';
     }
   }
 }
 
 let primeraVerificacionCola = true;
 
+// Sincronizar parámetro 'autoplay' de URL a localStorage si viene especificado
+const _urlAp = new URLSearchParams(window.location.search).get('autoplay');
+if (_urlAp === '1') {
+  localStorage.setItem('rockola_autoreproducir', '1');
+} else if (_urlAp === '0') {
+  localStorage.setItem('rockola_autoreproducir', '0');
+}
+
 function debeAutoreproducirAlEntrar() {
-  const urlParam = new URLSearchParams(window.location.search).get('autoplay');
-  if (urlParam === '1') return true;
-  if (urlParam === '0') return false;
   return localStorage.getItem('rockola_autoreproducir') === '1';
+}
+
+function actualizarAutoplayStatus() {
+  const activo = debeAutoreproducirAlEntrar();
+  const toggle = document.getElementById('autoplay-reproductor-toggle');
+  const label = document.getElementById('autoplay-reproductor-label');
+  if (toggle) toggle.checked = activo;
+  if (label) {
+    label.style.color = activo ? 'var(--ac1)' : 'var(--muted)';
+  }
+}
+
+function toggleAutoplayDesdeReproductor(activo) {
+  localStorage.setItem('rockola_autoreproducir', activo ? '1' : '0');
+  actualizarAutoplayStatus();
+  mostrarMensaje(activo ? 'Autoreproducir al entrar activado' : 'Autoreproducir al entrar desactivado', activo ? 'ok' : '');
+}
+
+let unlockAutoplayListenerActivo = false;
+function habilitarDesbloqueoPorToque() {
+  if (unlockAutoplayListenerActivo) return;
+  unlockAutoplayListenerActivo = true;
+
+  const intentarDesbloqueo = async () => {
+    if (!reproduciendo && debeAutoreproducirAlEntrar()) {
+      try {
+        if (esYouTubeActual) {
+          const activo = getYtPlayerActivo();
+          if (activo && typeof activo.playVideo === 'function') {
+            activo.playVideo();
+          }
+        } else if (player) {
+          if (!player.src && currentCola && currentCola.length > 0) {
+            await intentarReproducir(currentCola[0]);
+          } else {
+            await player.play();
+            reproduciendo = true;
+            fallosPlay = 0;
+            setVinylSpinning(true);
+            iniciarVisualizerCompacto();
+            actualizarPlayPauseBtn(true);
+            estadoEl.textContent = 'Reproduciendo ✓';
+          }
+        }
+      } catch(e) {
+        console.warn('[Autoplay] Esperando interacción de usuario:', e);
+      }
+    }
+    if (reproduciendo) {
+      ['click', 'touchstart', 'pointerdown'].forEach(ev => {
+        window.removeEventListener(ev, intentarDesbloqueo, true);
+      });
+      unlockAutoplayListenerActivo = false;
+    }
+  };
+
+  ['click', 'touchstart', 'pointerdown'].forEach(ev => {
+    window.addEventListener(ev, intentarDesbloqueo, true);
+  });
 }
 
 async function prepararCancionEnPausa(c) {
@@ -4409,25 +4493,19 @@ try {
   actualizarShuffleStatus();
   actualizarRepetirCancionStatus();
   actualizarRepetirListaStatus();
+  actualizarAutoplayStatus();
   actualizarVisibilidadModoVisualizer();
 
-  // Autoreproduccion al entrar si esta activo
-  const autoplayPermitido = debeAutoreproducirAlEntrar();
-  if (autoplayPermitido) {
-    const intentarDesbloqueoAudio = () => {
-      if (!reproduciendo && cancionActual && player) {
-        player.play().then(() => {
-          reproduciendo = true;
-          setVinylSpinning(true);
-          iniciarVisualizerCompacto();
-          actualizarPlayPauseBtn(true);
-        }).catch(() => {});
-      }
-      window.removeEventListener('click', intentarDesbloqueoAudio);
-      window.removeEventListener('touchstart', intentarDesbloqueoAudio);
-    };
-    window.addEventListener('click', intentarDesbloqueoAudio, { once: true });
-    window.addEventListener('touchstart', intentarDesbloqueoAudio, { once: true });
+  // Pre-desbloqueo al tocar la pantalla de bienvenida o cualquier parte
+  const pantActivarEl = document.getElementById('pantalla-activar');
+  if (pantActivarEl) {
+    pantActivarEl.addEventListener('pointerdown', () => {
+      if (player) player.play().then(() => player.pause()).catch(() => {});
+    }, { passive: true });
+  }
+
+  if (debeAutoreproducirAlEntrar()) {
+    habilitarDesbloqueoPorToque();
   }
 } catch(e) { console.warn('Error en init de modos:', e); }
 
@@ -4698,36 +4776,85 @@ function actualizarPlayPauseBtn(isPlaying) {
   }
 }
 
+let saltandoCancion = false;
+
 async function saltarActual() {
+  if (saltandoCancion) {
+    console.log('[Rockola] saltarActual ignorado: ya hay un salto en proceso');
+    return;
+  }
+  saltandoCancion = true;
+
+  // Si estaba programada para repetir canción, el usuario pidió saltar: desactivar repetición
+  if (modoRepetirCancion) {
+    desactivarRepetirCancionUnaVez();
+  }
+
+  cancelarCrossfadeActivo();
   if (esYouTubeActual) {
     detenerVideoYouTube();
     esYouTubeActual = false;
   }
 
   const idTerminada = cancionActual;
-  reproduciendo = false;
-  playPendiente = false;
-  cancionActual = null;
+  const siguiente = (currentCola && currentCola.length > 1) ? currentCola[1] : null;
+
+  // Detener audio anterior de inmediato
   player.pause();
   player.removeAttribute('src');
-  if (transitioning) {
-    standbyPlayer.pause();
-    standbyPlayer.removeAttribute('src');
-    transitioning = false;
-  }
-  actualizarPlayPauseBtn(false);
   fallosPlay = 0;
-  
-  await fetch(`/rockola/${SALA}/saltar`, {
+
+  // Enviar /saltar al backend en segundo plano sin congelar la interfaz ni vacilar
+  const reqSaltar = fetch(`/rockola/${SALA}/saltar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: idTerminada, admin_key: ADMIN_KEY, modo: 'reproductor' })
   });
-  
+
+  if (siguiente) {
+    // Avance optimista inmediato: arranca la música al instante sin 2 segundos de silencio
+    cancionActual = siguiente.id;
+    nombreEl.textContent = limpiarNombre(siguiente.nombre);
+    actualizarPlayPauseBtn(false);
+    estadoEl.textContent = 'Cargando siguiente...';
+    try {
+      await intentarReproducir(siguiente);
+    } catch(e) {
+      console.warn('Error al reproducir siguiente optimista:', e);
+    }
+  } else {
+    reproduciendo = false;
+    playPendiente = false;
+    cancionActual = null;
+    actualizarPlayPauseBtn(false);
+    setVinylSpinning(false);
+    if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+    dibujarIdle('visualizer-canvas');
+    nombreEl.textContent = 'Esperando canciones...';
+    estadoEl.textContent = 'Cola finalizada';
+  }
+
+  try {
+    await reqSaltar;
+  } catch(e) {}
+
+  saltandoCancion = false;
   verificarCola();
 }
 
+let retrocediendoCancion = false;
+
 async function anteriorCancion() {
+  if (retrocediendoCancion) return;
+  retrocediendoCancion = true;
+  try {
+    await _ejecutarAnteriorCancion();
+  } finally {
+    retrocediendoCancion = false;
+  }
+}
+
+async function _ejecutarAnteriorCancion() {
   if (esYouTubeActual) {
     const activo = getYtPlayerActivo();
     if (activo && isYtActivoReady() && typeof activo.getCurrentTime === 'function') {
@@ -4848,6 +4975,9 @@ async function iniciarCrossfade(secs, targetSong = null) {
     }
   }
   
+  // Activar scratch de DJ en el vinilo durante el fundido
+  setVinylScratching(true);
+
   let fadeProgress = 0;
   const maxLocalVol = volumenActual / 100;
   const stepMs = Math.max(50, Math.floor((secs * 1000) / 20));
@@ -4859,6 +4989,8 @@ async function iniciarCrossfade(secs, targetSong = null) {
       fadeProgress = 1;
       clearInterval(fadeIntervalTimer);
       fadeIntervalTimer = null;
+      setVinylScratching(false);
+      setVinylSpinning(true);
       
       // Limpieza de la pista saliente
       if (actualEsYt && salienteYt) {
@@ -4928,10 +5060,28 @@ async function iniciarCrossfade(secs, targetSong = null) {
   }, stepMs);
 }
 
+function setVinylScratching(on) {
+  const discs = [document.getElementById('vinyl-spin'), document.getElementById('fs-vinyl-spin')];
+  discs.forEach(d => {
+    if (d) {
+      if (on) {
+        d.classList.add('dj-scratching');
+      } else {
+        d.classList.remove('dj-scratching');
+      }
+    }
+  });
+}
+
 function setVinylSpinning(on) {
   const discs = [document.getElementById('vinyl-spin'), document.getElementById('fs-vinyl-spin')];
   discs.forEach(d => {
-    if (d) d.style.animation = on ? 'spin 3s linear infinite' : 'none';
+    if (d) {
+      if (!d.style.animation || !d.style.animation.includes('spin')) {
+        d.style.animation = 'spin 3s linear infinite';
+      }
+      d.style.animationPlayState = on ? 'running' : 'paused';
+    }
   });
 }
 

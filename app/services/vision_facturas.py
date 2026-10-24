@@ -438,12 +438,16 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     if conn and negocio_id and proveedor_id:
         try:
             a_rows = conn.execute("""
-                SELECT a.texto_origen, a.codigo_origen, a.producto_id, a.presentacion_id,
+                SELECT a.id as alias_id, a.texto_origen, a.codigo_origen,
+                       COALESCE(a.tipo_destino, 'inventario') as tipo_destino,
+                       a.producto_id, a.presentacion_id, a.cuenta_id,
                        p.nombre as producto_nombre, p.iva_pct,
-                       pr.nombre as pres_nombre, pr.equivalencia as pres_equiv
+                       pr.nombre as pres_nombre, pr.equivalencia as pres_equiv,
+                       c.codigo as cuenta_codigo, c.nombre as cuenta_nombre
                 FROM proveedores_productos_alias a
-                JOIN productos p ON p.id = a.producto_id
+                LEFT JOIN productos p ON p.id = a.producto_id
                 LEFT JOIN presentaciones pr ON pr.id = a.presentacion_id
+                LEFT JOIN cuentas_puc c ON c.id = a.cuenta_id
                 WHERE a.negocio_id = %s AND (a.proveedor_id = %s OR a.proveedor_id IS NULL)
                 ORDER BY a.veces_usado DESC
             """, (negocio_id, proveedor_id)).fetchall()
@@ -760,33 +764,49 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     mejor_prod = None
                     mejor_score = 0.0
                     pres_id, pres_nombre, pres_equiv = None, "Unidad", 1.0
+                    matched_alias = None
+                    es_gasto = False
+                    descartado = False
+                    cuenta_id = None
+                    cuenta_codigo = None
+                    cuenta_nombre = None
+                    tipo_destino = 'inventario'
 
                     # Paso 1: Memoria de este proveedor por Código
                     if cod_proveedor:
                         for al in alias_map:
                             if al.get('codigo_origen') and al['codigo_origen'] == cod_proveedor:
-                                mejor_prod = {'id': al['producto_id'], 'nombre': al['producto_nombre'], 'iva_pct': al.get('iva_pct', 0)}
-                                mejor_score = 1.0
-                                pres_id = al.get('presentacion_id')
-                                pres_nombre = al.get('pres_nombre') or "Unidad"
-                                pres_equiv = float(al.get('pres_equiv') or 1.0)
+                                matched_alias = al
                                 break
 
                     # Paso 2: Memoria de este proveedor por Texto
-                    if not mejor_prod:
+                    if not matched_alias:
                         nom_up = nom_it.upper()
                         for al in alias_map:
                             al_txt = (al.get('texto_origen') or '').upper()
                             if al_txt and (al_txt == nom_up or al_txt in nom_up or nom_up in al_txt):
-                                mejor_prod = {'id': al['producto_id'], 'nombre': al['producto_nombre'], 'iva_pct': al.get('iva_pct', 0)}
-                                mejor_score = 1.0
-                                pres_id = al.get('presentacion_id')
-                                pres_nombre = al.get('pres_nombre') or "Unidad"
-                                pres_equiv = float(al.get('pres_equiv') or 1.0)
+                                matched_alias = al
                                 break
 
+                    if matched_alias:
+                        tipo_dest = matched_alias.get('tipo_destino') or 'inventario'
+                        tipo_destino = tipo_dest
+                        if tipo_dest == 'descartar':
+                            descartado = True
+                        elif tipo_dest in ('gasto', 'costo'):
+                            es_gasto = True
+                            cuenta_id = matched_alias.get('cuenta_id')
+                            cuenta_codigo = matched_alias.get('cuenta_codigo')
+                            cuenta_nombre = matched_alias.get('cuenta_nombre')
+                        else:
+                            mejor_prod = {'id': matched_alias['producto_id'], 'nombre': matched_alias['producto_nombre'], 'iva_pct': matched_alias.get('iva_pct', 0)}
+                            mejor_score = 1.0
+                            pres_id = matched_alias.get('presentacion_id')
+                            pres_nombre = matched_alias.get('pres_nombre') or "Unidad"
+                            pres_equiv = float(matched_alias.get('pres_equiv') or 1.0)
+
                     # Paso 3: Diccionario Bilingüe y Catálogo General
-                    if not mejor_prod:
+                    if not mejor_prod and not es_gasto and not descartado:
                         nom_trad = traducir_texto(nom_it).upper()
                         for p in productos_db:
                             p_nom = p['nombre'].upper()
@@ -835,7 +855,13 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                                 'precio_referencia': precio_ref,
                                 'cantidad_referencia': cant_ref,
                                 'variacion_precio_pct': var_p_pct,
-                                'variacion_cant_pct': var_c_pct
+                                'variacion_cant_pct': var_c_pct,
+                                'tipo_destino': tipo_destino,
+                                'es_gasto': es_gasto,
+                                'descartado': descartado,
+                                'cuenta_id': cuenta_id,
+                                'cuenta_codigo': cuenta_codigo,
+                                'cuenta_nombre': cuenta_nombre
                             })
                         continue
 
@@ -857,7 +883,13 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                         'precio_referencia': precio_ref,
                         'cantidad_referencia': cant_ref,
                         'variacion_precio_pct': var_p_pct,
-                        'variacion_cant_pct': var_c_pct
+                        'variacion_cant_pct': var_c_pct,
+                        'tipo_destino': tipo_destino,
+                        'es_gasto': es_gasto,
+                        'descartado': descartado,
+                        'cuenta_id': cuenta_id,
+                        'cuenta_codigo': cuenta_codigo,
+                        'cuenta_nombre': cuenta_nombre
                     })
                     continue
 
@@ -920,8 +952,10 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     'variacion_cant_pct': var_c_pct
                 })
 
-    lineas_identificadas = [it for it in items_extraidos if it['identificado']]
-    lineas_no_identificadas = [it for it in items_extraidos if not it['identificado']]
+    lineas_identificadas = [it for it in items_extraidos if it.get('identificado') and not it.get('es_gasto') and not it.get('descartado')]
+    lineas_gastos = [it for it in items_extraidos if it.get('es_gasto')]
+    lineas_descartadas = [it for it in items_extraidos if it.get('descartado')]
+    lineas_no_identificadas = [it for it in items_extraidos if not it.get('identificado') and not it.get('es_gasto') and not it.get('descartado')]
 
     return {
         'ok': True,
@@ -932,6 +966,8 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
             'proveedor_id': proveedor_id,
             'proveedor_nombre': proveedor_nombre,
             'lineas': lineas_identificadas,
+            'lineas_gastos': lineas_gastos,
+            'lineas_descartadas': lineas_descartadas,
             'lineas_no_identificadas': lineas_no_identificadas,
             'total_lineas_detectadas': len(items_extraidos),
             'lineas_crudas': lineas_texto_completas,

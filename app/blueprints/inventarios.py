@@ -265,12 +265,17 @@ def _crear_tablas(conn):
             proveedor_id INT,
             texto_origen VARCHAR(255) NOT NULL,
             codigo_origen VARCHAR(100),
-            producto_id INT NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+            producto_id INT REFERENCES productos(id) ON DELETE CASCADE,
             presentacion_id INT REFERENCES presentaciones(id) ON DELETE SET NULL,
+            tipo_destino VARCHAR(20) DEFAULT 'inventario',
+            cuenta_id INT REFERENCES cuentas_puc(id) ON DELETE SET NULL,
             veces_usado INT DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        "ALTER TABLE proveedores_productos_alias ALTER COLUMN producto_id DROP NOT NULL",
+        "ALTER TABLE proveedores_productos_alias ADD COLUMN IF NOT EXISTS tipo_destino VARCHAR(20) DEFAULT 'inventario'",
+        "ALTER TABLE proveedores_productos_alias ADD COLUMN IF NOT EXISTS cuenta_id INTEGER REFERENCES cuentas_puc(id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_ppa_neg_prov_txt ON proveedores_productos_alias(negocio_id, COALESCE(proveedor_id, 0), UPPER(TRIM(texto_origen)))",
         "CREATE INDEX IF NOT EXISTS idx_ppa_neg_prov_cod ON proveedores_productos_alias(negocio_id, COALESCE(proveedor_id, 0), UPPER(TRIM(codigo_origen)))",
         """CREATE TABLE IF NOT EXISTS auditoria_recosteos (
@@ -2186,6 +2191,72 @@ def _registrar_entrada_inventario(conn, negocio_id, data, usuario_id):
         except Exception as _e:
             raise _e
 
+    # Procesar líneas de gastos operativos / costos comerciales asignados desde la factura
+    lineas_gastos = data.get('lineas_gastos', [])
+    for lg in lineas_gastos:
+        cta_id = _int_o_none(lg.get('cuenta_id'))
+        monto_g = Decimal(str(lg.get('valor') or lg.get('total') or 0))
+        concepto_g = _txt(lg.get('concepto') or lg.get('texto_ocr') or 'Gasto operativo factura')
+        if cta_id and monto_g > 0:
+            cta_row = conn.execute("SELECT codigo, nombre FROM cuentas_puc WHERE id = %s", (cta_id,)).fetchone()
+            if cta_row:
+                cta_cod = cta_row['codigo']
+                try:
+                    conn.execute("""
+                        INSERT INTO movimientos_contables
+                            (negocio_id, cuenta_id, cuenta, concepto, tipo, monto,
+                             registrado_por, tercero_id, tipo_documento_id, numero_documento, fecha,
+                             tipo_documento, origen_tipo, origen_id, centro_utilidad_id)
+                        VALUES
+                            (%s, %s, %s, %s, 'debito', %s, %s, %s, %s, %s, %s, %s, 'inventario_gasto', %s, %s)
+                    """, (negocio_id, cta_id, cta_cod, f"{concepto_g} (Factura {documento_numero})",
+                          monto_g, usuario_id, proveedor_id, tipo_doc_id, documento_numero, documento_fecha,
+                          tipo_documento, f"{tipo_documento}:{documento_numero}", bodega_entrada))
+                except Exception as ex_mc:
+                    print("Aviso al asentar gasto de factura:", ex_mc)
+
+        txt_ocr_gasto = _txt(lg.get('texto_ocr') or lg.get('concepto'))
+        if txt_ocr_gasto and len(txt_ocr_gasto) >= 2 and proveedor_id and cta_id:
+            try:
+                conn.execute("""
+                    INSERT INTO proveedores_productos_alias
+                        (negocio_id, proveedor_id, texto_origen, tipo_destino, cuenta_id, veces_usado, updated_at)
+                    VALUES
+                        (%s, %s, %s, 'gasto', %s, 1, NOW())
+                    ON CONFLICT (negocio_id, COALESCE(proveedor_id, 0), UPPER(TRIM(texto_origen)))
+                    DO UPDATE SET
+                        tipo_destino = 'gasto',
+                        cuenta_id = EXCLUDED.cuenta_id,
+                        producto_id = NULL,
+                        presentacion_id = NULL,
+                        veces_usado = proveedores_productos_alias.veces_usado + 1,
+                        updated_at = NOW()
+                """, (negocio_id, proveedor_id, txt_ocr_gasto.strip(), cta_id))
+            except Exception as ex_ag:
+                print("Aviso al guardar alias gasto:", ex_ag)
+
+    descartados_rec = data.get('descartados_recordar', [])
+    for d_rec in descartados_rec:
+        txt_d = _txt(d_rec.get('texto_ocr') or d_rec.get('concepto'))
+        if txt_d and len(txt_d) >= 2 and proveedor_id:
+            try:
+                conn.execute("""
+                    INSERT INTO proveedores_productos_alias
+                        (negocio_id, proveedor_id, texto_origen, tipo_destino, veces_usado, updated_at)
+                    VALUES
+                        (%s, %s, %s, 'descartar', 1, NOW())
+                    ON CONFLICT (negocio_id, COALESCE(proveedor_id, 0), UPPER(TRIM(texto_origen)))
+                    DO UPDATE SET
+                        tipo_destino = 'descartar',
+                        cuenta_id = NULL,
+                        producto_id = NULL,
+                        presentacion_id = NULL,
+                        veces_usado = proveedores_productos_alias.veces_usado + 1,
+                        updated_at = NOW()
+                """, (negocio_id, proveedor_id, txt_d.strip()))
+            except Exception:
+                pass
+
     # Recostear solo si es modificacion de documento existente
     # (se elimino y re-registro, cambiando los movimientos)
     # Compra nueva NO necesita recosteo — solo actualiza saldos_inventario
@@ -2901,6 +2972,137 @@ def api_inventario_escanear_factura(negocio_id):
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': f'Error procesando imagen: {str(e)}'}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/cuentas-gastos-costos', methods=['GET'])
+def api_cuentas_gastos_costos(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        q = (request.args.get('q') or '').strip()
+        where = [
+            "LEFT(codigo, 1) IN ('5', '6')",
+            "acepta_movimiento = TRUE",
+            "activo = TRUE",
+            "(creada_por_negocio_id = %s OR creada_por_negocio_id IS NULL)"
+        ]
+        params = [negocio_id]
+        if q:
+            where.append("(LOWER(nombre) LIKE LOWER(%s) OR codigo LIKE %s)")
+            params.extend([f"%{q}%", f"{q}%"])
+        
+        sql = f"""
+            SELECT id, codigo, nombre, nivel, naturaleza
+            FROM cuentas_puc
+            WHERE {' AND '.join(where)}
+            ORDER BY codigo ASC
+            LIMIT 150
+        """
+        rows = conn.execute(sql, tuple(params)).fetchall()
+        cuentas = [dict(r) for r in rows]
+        return jsonify({'ok': True, 'cuentas': cuentas})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/alias', methods=['GET', 'POST'])
+def api_inventario_alias(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        _crear_tablas(conn)
+        if request.method == 'GET':
+            prov_id = request.args.get('proveedor_id')
+            where = ["a.negocio_id = %s"]
+            params = [negocio_id]
+            if prov_id:
+                where.append("(a.proveedor_id = %s OR a.proveedor_id IS NULL)")
+                params.append(int(prov_id))
+            
+            sql = f"""
+                SELECT a.id, a.negocio_id, a.proveedor_id, a.texto_origen, a.codigo_origen,
+                       COALESCE(a.tipo_destino, 'inventario') as tipo_destino,
+                       a.producto_id, a.presentacion_id, a.cuenta_id,
+                       a.veces_usado, a.created_at, a.updated_at,
+                       p.nombre as producto_nombre,
+                       pr.nombre as pres_nombre,
+                       c.codigo as cuenta_codigo, c.nombre as cuenta_nombre,
+                       t.nombre as proveedor_nombre
+                FROM proveedores_productos_alias a
+                LEFT JOIN productos p ON p.id = a.producto_id
+                LEFT JOIN presentaciones pr ON pr.id = a.presentacion_id
+                LEFT JOIN cuentas_puc c ON c.id = a.cuenta_id
+                LEFT JOIN terceros t ON t.id = a.proveedor_id
+                WHERE {' AND '.join(where)}
+                ORDER BY a.updated_at DESC, a.veces_usado DESC
+            """
+            rows = conn.execute(sql, tuple(params)).fetchall()
+            return jsonify({'ok': True, 'alias': [dict(r) for r in rows]})
+            
+        elif request.method == 'POST':
+            data = request.get_json() or {}
+            texto_origen = (data.get('texto_origen') or '').strip()
+            codigo_origen = (data.get('codigo_origen') or '').strip() or None
+            prov_id = data.get('proveedor_id')
+            prov_id = int(prov_id) if prov_id else None
+            tipo_destino = data.get('tipo_destino') or 'inventario'
+            producto_id = data.get('producto_id')
+            producto_id = int(producto_id) if producto_id else None
+            presentacion_id = data.get('presentacion_id')
+            presentacion_id = int(presentacion_id) if presentacion_id else None
+            cuenta_id = data.get('cuenta_id')
+            cuenta_id = int(cuenta_id) if cuenta_id else None
+            
+            if not texto_origen:
+                return jsonify({'ok': False, 'error': 'texto_origen requerido'}), 400
+                
+            conn.execute("""
+                INSERT INTO proveedores_productos_alias
+                    (negocio_id, proveedor_id, texto_origen, codigo_origen, tipo_destino,
+                     producto_id, presentacion_id, cuenta_id, veces_usado, updated_at)
+                VALUES
+                    (%s, %s, %s, %s, %s, %s, %s, %s, 1, NOW())
+                ON CONFLICT (negocio_id, COALESCE(proveedor_id, 0), UPPER(TRIM(texto_origen)))
+                DO UPDATE SET
+                    tipo_destino = EXCLUDED.tipo_destino,
+                    producto_id = EXCLUDED.producto_id,
+                    presentacion_id = EXCLUDED.presentacion_id,
+                    cuenta_id = EXCLUDED.cuenta_id,
+                    codigo_origen = COALESCE(EXCLUDED.codigo_origen, proveedores_productos_alias.codigo_origen),
+                    veces_usado = proveedores_productos_alias.veces_usado + 1,
+                    updated_at = NOW()
+            """, (negocio_id, prov_id, texto_origen, codigo_origen, tipo_destino,
+                  producto_id, presentacion_id, cuenta_id))
+            conn.commit()
+            return jsonify({'ok': True, 'mensaje': 'Mapeo guardado exitosamente'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@bp.route('/api/inventario/<int:negocio_id>/alias/<int:alias_id>', methods=['DELETE'])
+def api_inventario_alias_eliminar(negocio_id, alias_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autenticado'}), 401
+    conn = get_db_connection()
+    try:
+        conn.execute("""
+            DELETE FROM proveedores_productos_alias
+            WHERE id = %s AND negocio_id = %s
+        """, (alias_id, negocio_id))
+        conn.commit()
+        return jsonify({'ok': True, 'mensaje': 'Equivalencia eliminada'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
 

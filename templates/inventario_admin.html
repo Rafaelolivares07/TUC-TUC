@@ -964,6 +964,169 @@
   </div>
 </div>
 
+<!-- ── OVERLAY ASIGNAR ÍTEM A GASTO / COSTO OPERATIVO ────────────── -->
+<div id="overlay-asignar-gasto" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this)cerrarModalAsignarGasto()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:540px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
+      <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5">
+        <span>💸 Enviar a Gasto / Costo Operativo</span>
+      </h3>
+      <button onclick="cerrarModalAsignarGasto()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none cursor-pointer">&times;</button>
+    </div>
+
+    <!-- Info del ítem detectado -->
+    <div class="bg-purple-50/70 border border-purple-200 rounded-xl p-3 mb-3 text-xs flex items-center justify-between">
+      <div>
+        <span class="text-[10px] font-bold uppercase tracking-wider text-purple-700 block">Ítem en factura:</span>
+        <span id="modal-gasto-texto-item" class="font-extrabold text-purple-950 text-sm"></span>
+      </div>
+      <span id="modal-gasto-monto-item" class="font-mono font-black text-purple-900 text-base">$0</span>
+    </div>
+
+    <input type="hidden" id="modal-gasto-item-idx">
+    <input type="hidden" id="modal-gasto-cuenta-id">
+
+    <!-- Buscador de cuenta -->
+    <div class="mb-2">
+      <label class="text-xs font-bold text-gray-700 block mb-1">Selecciona la Cuenta de Costo o Gasto (Clase 5 o 6):</label>
+      <input type="text" id="modal-gasto-buscar-cuenta" placeholder="Escribe para buscar (ej: aseo, empaque, papelería, servicios...)"
+             oninput="filtrarCuentasGastos(this.value)"
+             class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-purple-500">
+    </div>
+
+    <!-- Lista de cuentas con scroll -->
+    <div id="modal-gasto-lista-cuentas" class="border border-gray-200 rounded-xl max-h-56 overflow-y-auto divide-y divide-gray-100 bg-white mb-3 shadow-2xs">
+      <div class="p-4 text-center text-xs text-gray-400">Cargando cuentas contables de costos y gastos...</div>
+    </div>
+
+    <!-- Checkbox de memoria -->
+    <div class="bg-gray-50 border border-gray-200 rounded-xl p-2.5 mb-4 text-xs">
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" id="modal-gasto-recordar-alias" class="w-4 h-4 accent-purple-600 rounded cursor-pointer" checked>
+        <span class="font-semibold text-gray-700">Recordar para futuras facturas de este proveedor</span>
+      </label>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex gap-2 justify-end pt-2 border-t border-gray-100">
+      <button onclick="cerrarModalAsignarGasto()" class="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 cursor-pointer">Cancelar</button>
+      <button onclick="confirmarAsignacionGasto()" id="btn-confirmar-asignacion-gasto" disabled class="px-5 py-2 rounded-xl bg-purple-600 text-white font-bold text-xs hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs cursor-pointer">
+        Confirmar como Gasto
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── OVERLAY VINCULAR ÍTEM A INSUMO EXISTENTE ────────────── -->
+<div id="overlay-vincular-item" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this)cerrarModalVincularItem()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:540px; width:95%; padding:22px; position:relative; box-sizing:border-box;">
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
+      <h3 class="text-base font-bold text-gray-800 flex items-center gap-1.5">
+        <span>🔗 Vincular a Insumo del Catálogo</span>
+      </h3>
+      <button onclick="cerrarModalVincularItem()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none cursor-pointer">&times;</button>
+    </div>
+
+    <!-- Info del ítem detectado -->
+    <div class="bg-blue-50/70 border border-blue-200 rounded-xl p-3 mb-3 text-xs flex items-center justify-between">
+      <div>
+        <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700 block">Ítem en factura:</span>
+        <span id="modal-vincular-texto-item" class="font-extrabold text-blue-950 text-sm"></span>
+      </div>
+      <span id="modal-vincular-monto-item" class="font-mono font-black text-blue-900 text-base">$0</span>
+    </div>
+
+    <input type="hidden" id="modal-vincular-item-idx">
+    <input type="hidden" id="modal-vincular-producto-id">
+
+    <!-- Buscador en catálogo -->
+    <div class="mb-2">
+      <label class="text-xs font-bold text-gray-700 block mb-1">Buscar producto en tu catálogo:</label>
+      <input type="text" id="modal-vincular-buscar-producto" placeholder="Escribe el nombre de tu insumo (ej: Mostaza, Sal, Lechuga...)"
+             oninput="filtrarProductosVincular(this.value)"
+             class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-blue-500">
+    </div>
+
+    <!-- Lista de productos con scroll -->
+    <div id="modal-vincular-lista-productos" class="border border-gray-200 rounded-xl max-h-56 overflow-y-auto divide-y divide-gray-100 bg-white mb-3 shadow-2xs">
+      <div class="p-4 text-center text-xs text-gray-400">Escribe para buscar un producto...</div>
+    </div>
+
+    <!-- Checkbox de memoria -->
+    <div class="bg-gray-50 border border-gray-200 rounded-xl p-2.5 mb-4 text-xs">
+      <label class="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" id="modal-vincular-recordar-alias" class="w-4 h-4 accent-blue-600 rounded cursor-pointer" checked>
+        <span class="font-semibold text-gray-700">Recordar este mapeo para siempre con este proveedor</span>
+      </label>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex gap-2 justify-end pt-2 border-t border-gray-100">
+      <button onclick="cerrarModalVincularItem()" class="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 cursor-pointer">Cancelar</button>
+      <button onclick="confirmarVinculacionItem()" id="btn-confirmar-vinculacion-item" disabled class="px-5 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-xs cursor-pointer">
+        Vincular Insumo
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── OVERLAY DICCIONARIO DE EQUIVALENCIAS Y MEMORIA DE PROVEEDOR ────────────── -->
+<div id="overlay-diccionario-alias" class="overlay hidden" style="z-index: 60;" onclick="if(event.target===this)cerrarModalDiccionarioAlias()">
+  <div class="modal shadow-2xl border border-gray-100 flex flex-col" style="max-width:850px; width:95%; max-height:85vh; padding:22px; position:relative; box-sizing:border-box;">
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-2 mb-3 border-b border-gray-100">
+      <div>
+        <h3 class="text-base font-extrabold text-gray-900 flex items-center gap-2">
+          <span>📖 Memoria y Equivalencias de Facturas</span>
+        </h3>
+        <p class="text-xs text-gray-500 mt-0.5">Mapeos aprendidos para vincular automáticamente ítems escaneados a insumos o gastos.</p>
+      </div>
+      <button onclick="cerrarModalDiccionarioAlias()" class="text-gray-400 hover:text-gray-600 font-bold text-xl leading-none cursor-pointer">&times;</button>
+    </div>
+
+    <!-- Filtros -->
+    <div class="flex items-center gap-3 mb-3 flex-wrap">
+      <div class="flex-1 min-w-[200px]">
+        <input type="text" id="filtro-buscar-alias" placeholder="Filtrar por texto de factura o destino..."
+               oninput="filtrarTablaAlias(this.value)"
+               class="w-full bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-amber-500">
+      </div>
+      <div class="flex items-center gap-1.5 text-xs text-gray-600">
+        <span class="font-bold">Proveedor:</span>
+        <select id="filtro-proveedor-alias" onchange="cargarListaDiccionarioAlias()" class="border border-gray-200 rounded-xl px-2.5 py-1 text-xs font-medium bg-white">
+          <option value="">Todos los proveedores</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Tabla de alias con scroll -->
+    <div class="flex-1 overflow-y-auto border border-gray-200 rounded-xl bg-white shadow-2xs mb-3">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead class="bg-slate-50 text-slate-600 font-black text-[10px] uppercase tracking-wider sticky top-0 border-b border-gray-200">
+          <tr>
+            <th class="p-2.5">Texto en Factura</th>
+            <th class="p-2.5">Proveedor</th>
+            <th class="p-2.5">Destino</th>
+            <th class="p-2.5">Mapeado a</th>
+            <th class="p-2.5 text-center">Usado</th>
+            <th class="p-2.5 text-right">Acción</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-diccionario-alias" class="divide-y divide-gray-100">
+          <tr><td colspan="6" class="p-4 text-center text-gray-400">Cargando equivalencias...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex justify-end pt-2 border-t border-gray-100">
+      <button onclick="cerrarModalDiccionarioAlias()" class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-bold text-gray-700 cursor-pointer">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── OVERLAY MODAL TARJETA ESTÁNDAR ──────────────────────────────── -->
 
 <div id="overlay-tarjeta" class="overlay hidden" onclick="if(event.target===this)cerrarModalTarjeta()">
@@ -2340,6 +2503,12 @@
                 class="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer">
           <span class="text-sm">📷</span> <span>Escanear Factura (IA)</span>
         </button>
+        <button type="button" onclick="abrirModalDiccionarioAlias()"
+                id="btn-memoria-proveedor"
+                class="px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                title="Consultar y gestionar las equivalencias y memoria aprendidas para proveedores">
+          <span>📖</span> <span class="hidden sm:inline">Memoria /</span> Equivalencias
+        </button>
         <input type="file" id="input-escanear-factura" accept="image/*" capture="environment" class="hidden" onchange="escanearFacturaConIA(this)">
         <button type="button" onclick="abrirModalGestionPresentaciones()"
                 class="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 flex items-center gap-1.5 transition shadow-2xs cursor-pointer">
@@ -2581,6 +2750,19 @@
     </button>
 
 
+
+    <!-- Tarjeta de Gastos / Costos Operativos de la Factura (No inventariables) -->
+    <div id="card-gastos-factura" class="hidden mb-4 p-4 bg-purple-50/70 border border-purple-200 rounded-2xl text-xs shadow-xs">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="text-base">🏛️</span>
+          <span class="font-extrabold text-purple-950 text-sm">Gastos / Costos Operativos de esta Factura</span>
+          <span class="text-[11px] text-purple-700 font-medium">(Se imputan a cuentas 5x/6x sin sumar stock a recetas)</span>
+        </div>
+        <span id="badge-total-gastos-factura" class="font-mono font-black text-purple-900 bg-purple-100 px-2.5 py-1 rounded-xl text-xs border border-purple-300">$0</span>
+      </div>
+      <div id="lista-gastos-factura" class="space-y-1.5 mt-2"></div>
+    </div>
 
     <!-- Totales del Documento en tiempo real y Botón de Registro -->
 
@@ -7510,6 +7692,10 @@ async function guardarProducto() {
 
     notificarCambioProductos();
 
+    if (!id && typeof window.verificarHookPostCrearProducto === 'function') {
+      window.verificarHookPostCrearProducto(d.id, nombre);
+    }
+
     
 
     if (!id && activeACInputId && activeACHiddenId) {
@@ -9934,11 +10120,14 @@ function escanearFacturaConIA(input) {
   input.value = '';
 }
 
+window.itemsFacturaGastos = [];
+window.itemsFacturaDescartados = [];
+window.itemsFacturaOmitidos = [];
+
 async function escanearFacturaArchivo(archivo) {
   const banner = document.getElementById('banner-escaner-ia-cargando');
   const btnScan = document.getElementById('btn-escanear-factura-ia');
   const bannerOmitidos = document.getElementById('banner-items-omitidos-ocr');
-  const listaOmitidos = document.getElementById('lista-items-omitidos-ocr');
   
   if (banner) banner.classList.remove('hidden');
   if (bannerOmitidos) bannerOmitidos.classList.add('hidden');
@@ -10008,12 +10197,17 @@ async function escanearFacturaArchivo(archivo) {
       if (inpTotExp) inpTotExp.value = Math.round(d.total);
     }
 
-    // 5. Líneas de productos identificados
+    // 5. Cargar colecciones
     const lineas = d.lineas || [];
     const noIdent = d.lineas_no_identificadas || [];
-    const cont = document.getElementById('entrada-lineas');
+    const gastosAuto = d.lineas_gastos || [];
+    const descartadosAuto = d.lineas_descartadas || [];
 
-    // Si la tabla contiene filas de facturas anteriores, preguntar o limpiar si están vacías
+    window.itemsFacturaGastos = gastosAuto;
+    window.itemsFacturaDescartados = descartadosAuto;
+    window.itemsFacturaOmitidos = noIdent;
+
+    const cont = document.getElementById('entrada-lineas');
     const filasConDatos = entradaLineas.filter((_, i) => {
       const nom = document.getElementById('ent-ac-' + i) ? document.getElementById('ent-ac-' + i).value.trim() : '';
       const id = document.getElementById('ent-id-' + i) ? document.getElementById('ent-id-' + i).value.trim() : '';
@@ -10058,7 +10252,6 @@ async function escanearFacturaArchivo(archivo) {
           l.codigo_detectado || ''
         );
 
-        // Pre-cargar historial de cotizaciones de este proveedor para el selector de presentación
         if (prodId && d.proveedor_id) {
           fetch(`/api/inventario/${NEGOCIO_ID}/producto/${prodId}/proveedor/${d.proveedor_id}/historial-presentaciones`)
             .then(r => r.json())
@@ -10075,28 +10268,19 @@ async function escanearFacturaArchivo(archivo) {
       });
 
       calcularTotalesEntrada();
-      actualizarCotejoFactura();
-      toast(`✅ ¡Factura escaneada! Se cargaron ${lineas.length} productos identificados.`);
+      toast(`✅ ¡Factura escaneada! Se cargaron ${lineas.length} insumos de inventario.`);
     } else {
-      toast('ℹ️ Factura leída, pero no se reconocieron productos vinculados al catálogo.', false);
+      toast('ℹ️ Factura leída. Revisa las líneas pendientes de clasificar.', false);
     }
 
-    // 6. Aviso de productos NO identificados (con opción de cargarlos directamente)
-    window.itemsFacturaOmitidos = noIdent;
-    if (noIdent.length > 0 && bannerOmitidos && listaOmitidos) {
-      listaOmitidos.innerHTML = noIdent.map((ni, idx) => `
-        <div class="flex items-center justify-between border-b border-amber-200/60 py-1 last:border-0">
-          <div class="flex items-center gap-2">
-            <button type="button" onclick="cargarItemOmitidoAEntrada(${idx})" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[10px] shadow-xs transition">
-              ➕ Cargar
-            </button>
-            <span>• <b>${ni.cantidad}x</b> ${ni.texto_detectado}</span>
-          </div>
-          <span class="font-mono font-bold text-amber-950">$${(ni.total_linea || 0).toLocaleString('es-CO')}</span>
-        </div>
-      `).join('');
-      bannerOmitidos.classList.remove('hidden');
-    }
+    // Renderizar Gastos de la factura si hubo
+    renderGastosFactura();
+
+    // Renderizar banner de pendientes
+    renderItemsOmitidosBanner();
+
+    // Actualizar Cotejo
+    actualizarCotejoFactura();
 
   } catch (err) {
     console.error('Error escaneando factura:', err);
@@ -10110,19 +10294,433 @@ async function escanearFacturaArchivo(archivo) {
   }
 }
 
-// Función de Cotejo Automático: Compara total esperado de la factura con el total calculado de los ítems
+// ── BANNER DE ÍTEMS NO IDENTIFICADOS / ACCIONES DIRECTAS ────────────────────────
+function renderItemsOmitidosBanner() {
+  const bannerOmitidos = document.getElementById('banner-items-omitidos-ocr');
+  const listaOmitidos = document.getElementById('lista-items-omitidos-ocr');
+  const items = window.itemsFacturaOmitidos || [];
+  const descartados = window.itemsFacturaDescartados || [];
 
-// Cargar ítem detectado de la factura pero no vinculado automáticamente al catálogo
-window.cargarItemOmitidoAEntrada = function(idx) {
+  if (!bannerOmitidos || !listaOmitidos) return;
+
+  if (items.length === 0 && descartados.length === 0) {
+    bannerOmitidos.classList.add('hidden');
+    return;
+  }
+
+  bannerOmitidos.classList.remove('hidden');
+
+  let htmlItems = '';
+  if (items.length > 0) {
+    htmlItems = items.map((ni, idx) => `
+      <div class="flex items-center justify-between border-b border-amber-200/60 py-1.5 last:border-0 gap-2 flex-wrap sm:flex-nowrap">
+        <div class="flex items-center gap-1.5 min-w-0 flex-1">
+          <span class="font-bold text-amber-950 truncate" title="${ni.texto_detectado}">• <b>${ni.cantidad}x</b> ${ni.texto_detectado}</span>
+          ${ni.codigo_detectado ? `<span class="text-[10px] font-mono text-amber-700 bg-amber-100/70 px-1.5 py-0.2 rounded border border-amber-200">#${ni.codigo_detectado}</span>` : ''}
+          <span class="font-mono font-black text-amber-950 text-xs ml-1 shrink-0">$${(ni.total_linea || (ni.cantidad * ni.valor_unitario) || 0).toLocaleString('es-CO')}</span>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button type="button" onclick="abrirModalVincularItem(${idx})"
+                  class="px-2 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-[10px] shadow-2xs transition cursor-pointer"
+                  title="Vincular a un insumo existente de tu catálogo (Aprende memoria)">
+            🔗 Vincular
+          </button>
+          <button type="button" onclick="crearInsumoDesdeOmitido(${idx})"
+                  class="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[10px] shadow-2xs transition cursor-pointer"
+                  title="Crear como nuevo insumo en catálogo pre-llenando nombre y costo">
+            ➕ Crear
+          </button>
+          <button type="button" onclick="abrirModalAsignarGasto(${idx})"
+                  class="px-2 py-0.5 rounded-lg bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold text-[10px] shadow-2xs transition cursor-pointer"
+                  title="Enviar a Gasto o Costo Operativo (Cuentas 5 o 6 - Aseo, empaques, servicios...)">
+            💸 A Gasto
+          </button>
+          <button type="button" onclick="descartarItemPersonal(${idx})"
+                  class="px-1.5 py-0.5 rounded-lg bg-gray-200 hover:bg-rose-100 text-gray-700 hover:text-rose-700 font-bold text-[10px] transition cursor-pointer"
+                  title="Descartar como gasto personal (resta del cotejo de la factura sin crear descuadre)">
+            🚫 Descartar
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    htmlItems = '<div class="text-[11px] text-emerald-800 font-bold py-1">✅ Todos los ítems de la factura han sido clasificados o vinculados.</div>';
+  }
+
+  let htmlDescartados = '';
+  if (descartados.length > 0) {
+    htmlDescartados = `
+      <div class="mt-2 pt-2 border-t border-amber-200/60 flex items-center gap-1.5 flex-wrap text-[10px] text-gray-600">
+        <span class="font-bold text-gray-700">🚫 Excluidos como personal (${descartados.length}):</span>
+        ${descartados.map((d, i) => `
+          <span class="inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded-md border border-gray-200 text-gray-600">
+            <span class="line-through">${d.texto_detectado} ($${(d.total_linea || 0).toLocaleString('es-CO')})</span>
+            <button type="button" onclick="restaurarItemDescartado(${i})" class="text-indigo-600 hover:text-indigo-800 font-black cursor-pointer" title="Restaurar a pendientes">↩</button>
+          </span>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  listaOmitidos.innerHTML = htmlItems + htmlDescartados;
+}
+
+// ── MANEJO DE GASTOS / COSTOS DE LA FACTURA ────────────────────────────────────
+function renderGastosFactura() {
+  const card = document.getElementById('card-gastos-factura');
+  const lista = document.getElementById('lista-gastos-factura');
+  const badgeTotal = document.getElementById('badge-total-gastos-factura');
+  const gastos = window.itemsFacturaGastos || [];
+
+  if (!card || !lista) return;
+
+  if (gastos.length === 0) {
+    card.classList.add('hidden');
+    return;
+  }
+
+  card.classList.remove('hidden');
+  const totalG = gastos.reduce((acc, g) => acc + (parseFloat(g.valor || g.total_linea || 0) || 0), 0);
+  if (badgeTotal) badgeTotal.textContent = '$' + Math.round(totalG).toLocaleString('es-CO');
+
+  lista.innerHTML = gastos.map((g, idx) => `
+    <div class="flex items-center justify-between bg-white p-2.5 rounded-xl border border-purple-100 shadow-2xs gap-3">
+      <div class="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+        <span class="font-bold text-gray-800 text-xs">${g.concepto || g.texto_detectado || 'Gasto'}</span>
+        <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-800 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200">
+          <span>${g.cuenta_nombre || 'Gasto'}</span>
+          <span class="font-mono text-gray-500 text-[10px]">(${g.cuenta_codigo || ''})</span>
+        </span>
+      </div>
+      <div class="flex items-center gap-3 shrink-0">
+        <span class="font-mono font-black text-purple-950 text-xs">$${Math.round(parseFloat(g.valor || g.total_linea || 0)).toLocaleString('es-CO')}</span>
+        <button type="button" onclick="quitarGastoFactura(${idx})" class="text-rose-600 hover:text-rose-800 text-xs font-bold p-1 cursor-pointer" title="Quitar este gasto y devolver a pendientes">
+          🗑️
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.quitarGastoFactura = function(idx) {
+  const g = (window.itemsFacturaGastos || [])[idx];
+  if (!g) return;
+  window.itemsFacturaGastos.splice(idx, 1);
+  window.itemsFacturaOmitidos.push({
+    texto_detectado: g.texto_detectado || g.concepto,
+    cantidad: 1,
+    valor_unitario: g.valor || g.total_linea,
+    total_linea: g.valor || g.total_linea
+  });
+  renderGastosFactura();
+  renderItemsOmitidosBanner();
+  actualizarCotejoFactura();
+  toast('Gasto removido de la factura.');
+};
+
+// ── MODAL ASIGNAR GASTO / COSTO (Cuentas 5 y 6 con Acepta Movimiento) ───────────
+window._cacheCuentasGastos = null;
+
+window.abrirModalAsignarGasto = async function(idx) {
   const item = (window.itemsFacturaOmitidos || [])[idx];
   if (!item) return;
+
+  document.getElementById('modal-gasto-item-idx').value = idx;
+  document.getElementById('modal-gasto-cuenta-id').value = '';
+  document.getElementById('modal-gasto-texto-item').textContent = `${item.cantidad || 1}x ${item.texto_detectado}`;
+  const tot = item.total_linea || ((item.cantidad || 1) * (item.valor_unitario || 0));
+  document.getElementById('modal-gasto-monto-item').textContent = '$' + tot.toLocaleString('es-CO');
+  document.getElementById('modal-gasto-buscar-cuenta').value = '';
+  document.getElementById('btn-confirmar-asignacion-gasto').disabled = true;
+
+  document.getElementById('overlay-asignar-gasto')?.classList.remove('hidden');
+
+  if (!window._cacheCuentasGastos) {
+    try {
+      const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/cuentas-gastos-costos`);
+      const d = await resp.json();
+      if (d.ok) {
+        window._cacheCuentasGastos = d.cuentas || [];
+      }
+    } catch(e) {
+      console.error('Error cargando cuentas:', e);
+    }
+  }
+
+  filtrarCuentasGastos('');
+  setTimeout(() => document.getElementById('modal-gasto-buscar-cuenta')?.focus(), 100);
+};
+
+window.cerrarModalAsignarGasto = function() {
+  document.getElementById('overlay-asignar-gasto')?.classList.add('hidden');
+};
+
+window.filtrarCuentasGastos = function(q) {
+  const cont = document.getElementById('modal-gasto-lista-cuentas');
+  if (!cont) return;
+  const cuentas = window._cacheCuentasGastos || [];
+  const term = (q || '').trim().toLowerCase();
+
+  const filtradas = cuentas.filter(c => {
+    if (!term) return true;
+    return (c.nombre && c.nombre.toLowerCase().includes(term)) || (c.codigo && c.codigo.startsWith(term));
+  });
+
+  if (filtradas.length === 0) {
+    cont.innerHTML = '<div class="p-4 text-center text-xs text-gray-400">No se encontraron cuentas activas de Clase 5 o 6 que coincidan.</div>';
+    return;
+  }
+
+  cont.innerHTML = filtradas.map(c => `
+    <div onclick="seleccionarCuentaGasto(${c.id}, '${c.codigo}', '${c.nombre.replace(/'/g, "\'")}')"
+         class="p-2.5 hover:bg-purple-50 cursor-pointer transition flex items-center justify-between text-xs group">
+      <div>
+        <span class="font-bold text-gray-800 group-hover:text-purple-950 block">${c.nombre}</span>
+      </div>
+      <span class="font-mono text-[11px] font-semibold text-gray-500 bg-gray-100 group-hover:bg-purple-100 group-hover:text-purple-800 px-2 py-0.5 rounded-md">
+        ${c.codigo}
+      </span>
+    </div>
+  `).join('');
+};
+
+window.seleccionarCuentaGasto = function(id, cod, nom) {
+  document.getElementById('modal-gasto-cuenta-id').value = id;
+  const btn = document.getElementById('btn-confirmar-asignacion-gasto');
+  if (btn) btn.disabled = false;
+
+  // Resaltar visualmente en la lista
+  const cont = document.getElementById('modal-gasto-lista-cuentas');
+  if (cont) {
+    [...cont.children].forEach(el => el.classList.remove('bg-purple-100', 'font-bold'));
+    const clicked = event?.currentTarget;
+    if (clicked) clicked.classList.add('bg-purple-100');
+  }
+};
+
+window.confirmarAsignacionGasto = async function() {
+  const idx = parseInt(document.getElementById('modal-gasto-item-idx').value);
+  const ctaId = parseInt(document.getElementById('modal-gasto-cuenta-id').value);
+  const recordar = document.getElementById('modal-gasto-recordar-alias')?.checked;
+  const item = (window.itemsFacturaOmitidos || [])[idx];
+
+  if (!item || !ctaId) return;
+
+  const cta = (window._cacheCuentasGastos || []).find(c => c.id === ctaId);
+  const provId = document.getElementById('entrada-proveedor-id')?.value;
+
+  const tot = item.total_linea || ((item.cantidad || 1) * (item.valor_unitario || 0));
+
+  window.itemsFacturaGastos.push({
+    concepto: item.texto_detectado,
+    texto_ocr: item.texto_detectado,
+    valor: tot,
+    cuenta_id: ctaId,
+    cuenta_codigo: cta ? cta.codigo : '',
+    cuenta_nombre: cta ? cta.nombre : 'Gasto'
+  });
+
+  if (recordar && item.texto_detectado) {
+    try {
+      fetch(`/api/inventario/${NEGOCIO_ID}/alias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proveedor_id: provId || null,
+          texto_origen: item.texto_detectado,
+          codigo_origen: item.codigo_detectado || null,
+          tipo_destino: 'gasto',
+          cuenta_id: ctaId
+        })
+      });
+    } catch(e) {}
+  }
+
+  window.itemsFacturaOmitidos.splice(idx, 1);
+
+  cerrarModalAsignarGasto();
+  renderGastosFactura();
+  renderItemsOmitidosBanner();
+  actualizarCotejoFactura();
+  toast(`💸 Asignado como gasto: ${cta ? cta.nombre : ''} (${cta ? cta.codigo : ''})`);
+};
+
+// ── DESCARTAR ÍTEM PERSONAL (Restar del cotejo) ────────────────────────────────
+window.descartarItemPersonal = function(idx) {
+  const item = (window.itemsFacturaOmitidos || [])[idx];
+  if (!item) return;
+
+  window.itemsFacturaDescartados.push(item);
+  window.itemsFacturaOmitidos.splice(idx, 1);
+
+  renderItemsOmitidosBanner();
+  actualizarCotejoFactura();
+  toast(`🚫 Ítem excluido como gasto personal. El total esperado del cotejo se ajustó.`);
+};
+
+window.restaurarItemDescartado = function(idx) {
+  const item = (window.itemsFacturaDescartados || [])[idx];
+  if (!item) return;
+
+  window.itemsFacturaOmitidos.push(item);
+  window.itemsFacturaDescartados.splice(idx, 1);
+
+  renderItemsOmitidosBanner();
+  actualizarCotejoFactura();
+  toast(`↩️ Ítem restaurado a pendientes.`);
+};
+
+// ── VINCULAR A INSUMO EXISTENTE DEL CATÁLOGO ───────────────────────────────────
+window.abrirModalVincularItem = function(idx) {
+  const item = (window.itemsFacturaOmitidos || [])[idx];
+  if (!item) return;
+
+  document.getElementById('modal-vincular-item-idx').value = idx;
+  document.getElementById('modal-vincular-producto-id').value = '';
+  document.getElementById('modal-vincular-texto-item').textContent = `${item.cantidad || 1}x ${item.texto_detectado}`;
+  const tot = item.total_linea || ((item.cantidad || 1) * (item.valor_unitario || 0));
+  document.getElementById('modal-vincular-monto-item').textContent = '$' + tot.toLocaleString('es-CO');
+  document.getElementById('modal-vincular-buscar-producto').value = item.texto_detectado;
+  document.getElementById('btn-confirmar-vinculacion-item').disabled = true;
+
+  document.getElementById('overlay-vincular-item')?.classList.remove('hidden');
+
+  filtrarProductosVincular(item.texto_detectado);
+  setTimeout(() => document.getElementById('modal-vincular-buscar-producto')?.focus(), 100);
+};
+
+window.cerrarModalVincularItem = function() {
+  document.getElementById('overlay-vincular-item')?.classList.add('hidden');
+};
+
+window.filtrarProductosVincular = function(q) {
+  const cont = document.getElementById('modal-vincular-lista-productos');
+  if (!cont) return;
+  const prods = window.productosCatalogo || [];
+  const term = (q || '').trim().toLowerCase();
+
+  const filtrados = prods.filter(p => {
+    if (!term) return true;
+    return p.nombre && p.nombre.toLowerCase().includes(term);
+  }).slice(0, 30);
+
+  if (filtrados.length === 0) {
+    cont.innerHTML = '<div class="p-4 text-center text-xs text-gray-400">No se encontraron productos en el catálogo que coincidan.</div>';
+    return;
+  }
+
+  cont.innerHTML = filtrados.map(p => `
+    <div onclick="seleccionarProductoVincular(${p.id}, '${p.nombre.replace(/'/g, "\'")}')"
+         class="p-2.5 hover:bg-blue-50 cursor-pointer transition flex items-center justify-between text-xs group">
+      <div>
+        <span class="font-bold text-gray-800 group-hover:text-blue-950 block">${p.nombre}</span>
+        <span class="text-[10px] text-gray-400">${p.categoria || 'Sin categoría'}</span>
+      </div>
+      <span class="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+        Seleccionar
+      </span>
+    </div>
+  `).join('');
+};
+
+window.seleccionarProductoVincular = function(id, nom) {
+  document.getElementById('modal-vincular-producto-id').value = id;
+  const btn = document.getElementById('btn-confirmar-vinculacion-item');
+  if (btn) btn.disabled = false;
+
+  const cont = document.getElementById('modal-vincular-lista-productos');
+  if (cont) {
+    [...cont.children].forEach(el => el.classList.remove('bg-blue-100', 'font-bold'));
+    const clicked = event?.currentTarget;
+    if (clicked) clicked.classList.add('bg-blue-100');
+  }
+};
+
+window.confirmarVinculacionItem = function() {
+  const idx = parseInt(document.getElementById('modal-vincular-item-idx').value);
+  const prodId = parseInt(document.getElementById('modal-vincular-producto-id').value);
+  const recordar = document.getElementById('modal-vincular-recordar-alias')?.checked;
+  const item = (window.itemsFacturaOmitidos || [])[idx];
+
+  if (!item || !prodId) return;
+
+  const prod = (window.productosCatalogo || []).find(p => p.id === prodId);
+  const provId = document.getElementById('entrada-proveedor-id')?.value;
   const cant = item.cantidad || 1;
   const vu = item.valor_unitario || 0;
   const tot = item.total_linea || (cant * vu);
-  const targetIdx = entradaLineas.length;
+
   agregarLineaEntradaConDatos(
-    '',
-    item.texto_detectado,
+    prodId,
+    prod ? prod.nombre : item.texto_detectado,
+    cant,
+    vu,
+    prod?.iva_pct || 0,
+    defaultPresentacionId || null,
+    'Unidad',
+    1.0,
+    cant,
+    vu,
+    tot,
+    item.texto_detectado || '',
+    item.codigo_detectado || ''
+  );
+
+  if (recordar && item.texto_detectado) {
+    try {
+      fetch(`/api/inventario/${NEGOCIO_ID}/alias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proveedor_id: provId || null,
+          texto_origen: item.texto_detectado,
+          codigo_origen: item.codigo_detectado || null,
+          tipo_destino: 'inventario',
+          producto_id: prodId
+        })
+      });
+    } catch(e) {}
+  }
+
+  window.itemsFacturaOmitidos.splice(idx, 1);
+
+  cerrarModalVincularItem();
+  calcularTotalesEntrada();
+  renderItemsOmitidosBanner();
+  actualizarCotejoFactura();
+  toast(`🔗 Insumo vinculado y recordado en la memoria del proveedor.`);
+};
+
+// ── CREAR INSUMO PRE-LLENADO DESDE ÍTEM OMITIDO ────────────────────────────────
+window.crearInsumoDesdeOmitido = function(idx) {
+  const item = (window.itemsFacturaOmitidos || [])[idx];
+  if (!item) return;
+
+  window._itemCreandoDesdeOmitido = { idx, item };
+
+  if (typeof abrirModalProducto === 'function') {
+    abrirModalProducto();
+    const inpNom = document.getElementById('mp-nombre');
+    const inpCosto = document.getElementById('mp-costo');
+    if (inpNom) inpNom.value = item.texto_detectado;
+    if (inpCosto) inpCosto.value = item.valor_unitario || 0;
+  }
+};
+
+// Hook cuando se guarda un producto nuevo si vino desde un ítem de factura
+window.verificarHookPostCrearProducto = function(nuevoProdId, nuevoProdNombre) {
+  if (!window._itemCreandoDesdeOmitido) return;
+  const { idx, item } = window._itemCreandoDesdeOmitido;
+  window._itemCreandoDesdeOmitido = null;
+
+  const provId = document.getElementById('entrada-proveedor-id')?.value;
+  const cant = item.cantidad || 1;
+  const vu = item.valor_unitario || 0;
+  const tot = item.total_linea || (cant * vu);
+
+  agregarLineaEntradaConDatos(
+    nuevoProdId,
+    nuevoProdNombre || item.texto_detectado,
     cant,
     vu,
     0,
@@ -10135,22 +10733,35 @@ window.cargarItemOmitidoAEntrada = function(idx) {
     item.texto_detectado || '',
     item.codigo_detectado || ''
   );
+
+  if (item.texto_detectado) {
+    try {
+      fetch(`/api/inventario/${NEGOCIO_ID}/alias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          proveedor_id: provId || null,
+          texto_origen: item.texto_detectado,
+          codigo_origen: item.codigo_detectado || null,
+          tipo_destino: 'inventario',
+          producto_id: nuevoProdId
+        })
+      });
+    } catch(e) {}
+  }
+
+  const findIdx = (window.itemsFacturaOmitidos || []).findIndex(it => it.texto_detectado === item.texto_detectado);
+  if (findIdx !== -1) {
+    window.itemsFacturaOmitidos.splice(findIdx, 1);
+  }
+
   calcularTotalesEntrada();
+  renderItemsOmitidosBanner();
   actualizarCotejoFactura();
-
-  // Enfocar y auto-seleccionar la casilla del producto para mapearlo fácilmente
-  setTimeout(() => {
-    const acInp = document.getElementById(`ent-ac-${targetIdx}`);
-    if (acInp) {
-      acInp.focus();
-      acInp.select();
-    }
-  }, 100);
-
-  toast(`Fila cargada con los montos de la factura ($${tot.toLocaleString('es-CO')}). Escribe tu producto (ej. SAL MLGR) para mapearlo.`);
+  toast(`➕ ¡Producto creado, vinculado a la factura y memorizado para siempre!`);
 };
 
-// Cargar todos los ítems omitidos a la tabla de entradas
+// Cargar todos los ítems omitidos a la tabla de entradas (Bulk)
 window.cargarTodosLosOmitidos = function() {
   const items = window.itemsFacturaOmitidos || [];
   if (!items.length) return;
@@ -10169,31 +10780,150 @@ window.cargarTodosLosOmitidos = function() {
       1.0,
       cant,
       vu,
-      tot
+      tot,
+      item.texto_detectado || '',
+      item.codigo_detectado || ''
     );
   });
+  window.itemsFacturaOmitidos = [];
   calcularTotalesEntrada();
+  renderItemsOmitidosBanner();
   actualizarCotejoFactura();
-  document.getElementById('banner-items-omitidos-ocr')?.classList.add('hidden');
-  toast(`Se cargaron ${items.length} filas a la tabla con sus montos. Escribe el nombre del catálogo en cada una para vincularlas.`);
+  toast(`Se cargaron ${items.length} filas a la tabla. Mapea cada una a tu catálogo.`);
 };
 
+// ── DICCIONARIO DE EQUIVALENCIAS Y MEMORIA DE PROVEEDORES (Opción C) ───────────
+window._cacheListaAlias = [];
+
+window.abrirModalDiccionarioAlias = function() {
+  document.getElementById('overlay-diccionario-alias')?.classList.remove('hidden');
+  
+  // Rellenar select de proveedores
+  const sel = document.getElementById('filtro-proveedor-alias');
+  if (sel) {
+    const provActualId = document.getElementById('entrada-proveedor-id')?.value;
+    const provActualNom = document.getElementById('entrada-proveedor')?.value;
+    let opts = '<option value="">Todos los proveedores</option>';
+    if (provActualId && provActualNom) {
+      opts += `<option value="${provActualId}" selected>${provActualNom} (Actual)</option>`;
+    }
+    sel.innerHTML = opts;
+  }
+
+  cargarListaDiccionarioAlias();
+};
+
+window.cerrarModalDiccionarioAlias = function() {
+  document.getElementById('overlay-diccionario-alias')?.classList.add('hidden');
+};
+
+window.cargarListaDiccionarioAlias = async function() {
+  const tbody = document.getElementById('tbody-diccionario-alias');
+  const selProv = document.getElementById('filtro-proveedor-alias');
+  const provId = selProv ? selProv.value : '';
+
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">Consultando memoria...</td></tr>';
+
+  try {
+    const url = `/api/inventario/${NEGOCIO_ID}/alias${provId ? `?proveedor_id=${provId}` : ''}`;
+    const resp = await fetch(url);
+    const d = await resp.json();
+    if (!d.ok) throw new Error(d.error);
+
+    window._cacheListaAlias = d.alias || [];
+    filtrarTablaAlias(document.getElementById('filtro-buscar-alias')?.value || '');
+  } catch(e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-rose-500 font-bold">Error cargando equivalencias: ${e.message}</td></tr>`;
+  }
+};
+
+window.filtrarTablaAlias = function(q) {
+  const tbody = document.getElementById('tbody-diccionario-alias');
+  if (!tbody) return;
+  const list = window._cacheListaAlias || [];
+  const term = (q || '').trim().toLowerCase();
+
+  const filtrados = list.filter(a => {
+    if (!term) return true;
+    return (a.texto_origen && a.texto_origen.toLowerCase().includes(term)) ||
+           (a.producto_nombre && a.producto_nombre.toLowerCase().includes(term)) ||
+           (a.cuenta_nombre && a.cuenta_nombre.toLowerCase().includes(term)) ||
+           (a.proveedor_nombre && a.proveedor_nombre.toLowerCase().includes(term));
+  });
+
+  if (filtrados.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">No se encontraron equivalencias registradas.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtrados.map(a => {
+    let destBadge = '';
+    let destinoTexto = '';
+
+    if (a.tipo_destino === 'gasto' || a.tipo_destino === 'costo') {
+      destBadge = '<span class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-[10px] font-bold">💸 Gasto/Costo</span>';
+      destinoTexto = `<span class="font-bold text-gray-800">${a.cuenta_nombre || 'Gasto'}</span> <span class="font-mono text-gray-500 text-[10px]">(${a.cuenta_codigo || ''})</span>`;
+    } else if (a.tipo_destino === 'descartar') {
+      destBadge = '<span class="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-[10px] font-bold">🚫 Personal</span>';
+      destinoTexto = '<span class="italic text-gray-500">Excluir siempre del cotejo</span>';
+    } else {
+      destBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">🟢 Insumo</span>';
+      destinoTexto = `<span class="font-bold text-gray-800">${a.producto_nombre || 'Producto'}</span>`;
+    }
+
+    return `
+      <tr class="hover:bg-slate-50 transition">
+        <td class="p-2.5">
+          <div class="font-bold text-gray-900">${a.texto_origen}</div>
+          ${a.codigo_origen ? `<div class="font-mono text-[10px] text-gray-400">#${a.codigo_origen}</div>` : ''}
+        </td>
+        <td class="p-2.5 text-gray-600 font-medium">${a.proveedor_nombre || 'Global'}</td>
+        <td class="p-2.5">${destBadge}</td>
+        <td class="p-2.5">${destinoTexto}</td>
+        <td class="p-2.5 text-center font-mono font-bold text-gray-500">${a.veces_usado || 1}</td>
+        <td class="p-2.5 text-right">
+          <button type="button" onclick="eliminarAlias(${a.id})" class="text-rose-600 hover:text-rose-800 p-1 font-bold transition cursor-pointer" title="Eliminar equivalencia">
+            🗑️
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+};
+
+window.eliminarAlias = async function(aliasId) {
+  if (!confirm('¿Deseas eliminar esta equivalencia aprendida?')) return;
+  try {
+    const resp = await fetch(`/api/inventario/${NEGOCIO_ID}/alias/${aliasId}`, { method: 'DELETE' });
+    const d = await resp.json();
+    if (d.ok) {
+      toast('Equivalencia eliminada.');
+      cargarListaDiccionarioAlias();
+    } else {
+      toast(d.error || 'No se pudo eliminar', false);
+    }
+  } catch(e) {
+    toast('Error de conexión', false);
+  }
+};
+
+// ── RECONCILIACIÓN Y COTEJO INTELIGENTE DE FACTURA ──────────────────────────────
 function actualizarCotejoFactura() {
   const inpExp = document.getElementById('entrada-total-factura-esperado');
   const badge = document.getElementById('entrada-cotejo-badge');
   if (!inpExp || !badge) return;
   
-  const esperado = parseFloat(inpExp.value.replace(/[^0-9.-]/g, '')) || 0;
-  if (esperado <= 0) {
+  const totalFacturaFisica = parseFloat(inpExp.value.replace(/[^0-9.-]/g, '')) || 0;
+  if (totalFacturaFisica <= 0) {
     badge.classList.add('hidden');
     return;
   }
 
-  // Calcular total actual de las líneas
+  // 1. Total Inventario (líneas en la tabla)
   const cont = document.getElementById('entrada-lineas');
   const divs = cont ? [...cont.querySelectorAll('.grid')] : [];
-  let subtotal = 0;
-  let ivaTotal = 0;
+  let subtotalInv = 0;
+  let ivaTotalInv = 0;
   divs.forEach(div => {
     const totalInput = div.querySelector('input[id^="ent-total-"]');
     const ivaSelect = div.querySelector('select[id^="ent-iva-pct-"]');
@@ -10205,24 +10935,45 @@ function actualizarCotejoFactura() {
       const vu = vuInput ? (parseFloat(vuInput.value) || 0) : 0;
       const ivaPct = parseFloat(ivaSelect.value) || 0;
       const lineSubtotal = totalVal > 0 ? totalVal : (cantBase * vu);
-      subtotal += lineSubtotal;
-      ivaTotal += lineSubtotal * (ivaPct / 100);
+      subtotalInv += lineSubtotal;
+      ivaTotalInv += lineSubtotal * (ivaPct / 100);
     }
   });
+  const totalInventario = Math.round(subtotalInv + ivaTotalInv);
 
-  const actual = Math.round(subtotal + ivaTotal);
-  const diff = Math.round(esperado - actual);
+  // 2. Total Gastos de la factura
+  const totalGastos = (window.itemsFacturaGastos || []).reduce((acc, g) => acc + (parseFloat(g.valor || g.total_linea || 0) || 0), 0);
+
+  // 3. Total Ítems Descartados (Personal)
+  const totalDescartados = (window.itemsFacturaDescartados || []).reduce((acc, d) => acc + (parseFloat(d.total_linea || (d.cantidad * d.valor_unitario) || 0) || 0), 0);
+
+  // 4. Comparativo por partida doble
+  const totalJustificadoNegocio = totalInventario + Math.round(totalGastos);
+  const totalEsperadoJustificar = Math.round(totalFacturaFisica - totalDescartados);
+  const diff = Math.round(totalEsperadoJustificar - totalJustificadoNegocio);
 
   badge.classList.remove('hidden');
+
+  let desglosePills = '';
+  if (totalGastos > 0 || totalDescartados > 0) {
+    desglosePills = `
+      <div class="flex items-center gap-1.5 ml-2 border-l border-current/20 pl-2 text-[10px] font-medium">
+        <span>📦 Inv: $${totalInventario.toLocaleString('es-CO')}</span>
+        ${totalGastos > 0 ? `<span class="bg-purple-200/70 text-purple-900 px-1 rounded">💸 Gasto: $${Math.round(totalGastos).toLocaleString('es-CO')}</span>` : ''}
+        ${totalDescartados > 0 ? `<span class="bg-gray-200 text-gray-700 line-through px-1 rounded">🚫 Personal: $${Math.round(totalDescartados).toLocaleString('es-CO')}</span>` : ''}
+      </div>
+    `;
+  }
+
   if (Math.abs(diff) === 0) {
-    badge.className = "text-xs font-bold px-2.5 py-1 rounded-xl shadow-2xs transition bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1";
-    badge.innerHTML = "<span>✅</span> <span>Coincide exacto con la factura</span>";
+    badge.className = "text-xs font-bold px-2.5 py-1 rounded-xl shadow-2xs transition bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 flex-wrap";
+    badge.innerHTML = `<span>✅</span> <span>Coincide exacto con la factura ($${totalFacturaFisica.toLocaleString('es-CO')})</span>${desglosePills}`;
   } else if (diff > 0) {
-    badge.className = "text-xs font-bold px-2.5 py-1 rounded-xl shadow-2xs transition bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1";
-    badge.innerHTML = `<span>⚠️</span> <span>Faltan $${diff.toLocaleString('es-CO')} para igualar factura</span>`;
+    badge.className = "text-xs font-bold px-2.5 py-1 rounded-xl shadow-2xs transition bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 flex-wrap";
+    badge.innerHTML = `<span>⚠️</span> <span>Faltan $${diff.toLocaleString('es-CO')} para igualar factura</span>${desglosePills}`;
   } else {
-    badge.className = "text-xs font-bold px-2.5 py-1 rounded-xl shadow-2xs transition bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1";
-    badge.innerHTML = `<span>⚠️</span> <span>Supera factura por $${Math.abs(diff).toLocaleString('es-CO')}</span>`;
+    badge.className = "text-xs font-bold px-2.5 py-1 rounded-xl shadow-2xs transition bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1 flex-wrap";
+    badge.innerHTML = `<span>⚠️</span> <span>Supera factura por $${Math.abs(diff).toLocaleString('es-CO')}</span>${desglosePills}`;
   }
 }
 
@@ -10602,7 +11353,8 @@ async function registrarEntrada() {
       fecha_documento, proveedor_nombre, proveedor_id, iva: ivaAcumulado,
       metodo_pago, es_modificacion: esModificacionDoc,
       centro_utilidad_id: centro_utilidad_id,
-      bodega: centro_utilidad_id
+      bodega: centro_utilidad_id,
+      lineas_gastos: window.itemsFacturaGastos || []
     })
 
   });

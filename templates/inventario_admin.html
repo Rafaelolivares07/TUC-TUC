@@ -10534,7 +10534,7 @@ window.confirmarAsignacionGasto = async function() {
         body: JSON.stringify({
           proveedor_id: provId || null,
           texto_origen: item.texto_detectado,
-          codigo_origen: item.codigo_detectado || null,
+          codigo_origen: item.codigo_detectado || item.barcode || null,
           tipo_destino: 'gasto',
           cuenta_id: ctaId
         })
@@ -10751,7 +10751,7 @@ window.confirmarVinculacionItem = async function() {
         body: JSON.stringify({
           proveedor_id: provId || null,
           texto_origen: item.texto_detectado,
-          codigo_origen: item.codigo_detectado || null,
+          codigo_origen: item.codigo_detectado || item.barcode || null,
           tipo_destino: 'inventario',
           producto_id: prodId,
           presentacion_id: presId
@@ -10839,7 +10839,7 @@ window.verificarHookPostCrearProducto = async function(nuevoProdId, nuevoProdNom
         body: JSON.stringify({
           proveedor_id: provId || null,
           texto_origen: item.texto_detectado,
-          codigo_origen: item.codigo_detectado || null,
+          codigo_origen: item.codigo_detectado || item.barcode || null,
           tipo_destino: 'inventario',
           producto_id: nuevoProdId,
           presentacion_id: presId

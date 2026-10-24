@@ -228,13 +228,15 @@ def _obtener_referencia_item(conn, negocio_id, proveedor_id, producto, cant, vu)
 
 def _buscar_en_alias(alias_map, texto, codigo=None):
     """
-    Busca coincidencias en la memoria de alias del proveedor por código o por texto
-    (incluyendo normalización sin espacios ni caracteres especiales).
+    Busca coincidencias en la memoria de alias del proveedor:
+    1. Por código (barcode o plu exacto).
+    2. Por texto exacto (insensible a mayúsculas/minúsculas y normalizando espacios múltiples).
+    NO realiza coincidencias parciales ni eliminación de espacios para evitar falsos positivos.
     """
     if not alias_map:
         return None
 
-    # 1. Por código (barcode o plu)
+    # 1. Por código (barcode o plu exacto)
     if codigo:
         cod_clean = str(codigo).strip()
         if cod_clean:
@@ -243,23 +245,15 @@ def _buscar_en_alias(alias_map, texto, codigo=None):
                 if c_orig and (c_orig == cod_clean or c_orig.lstrip('0') == cod_clean.lstrip('0')):
                     return al
 
-    # 2. Por texto (exacto o normalizado sin espacios ni caracteres especiales)
+    # 2. Por texto exacto
     if texto:
-        txt_up = texto.upper().strip()
-        txt_norm = re.sub(r'[^A-Z0-9]', '', txt_up)
-        for al in alias_map:
-            al_orig = (al.get('texto_origen') or '').upper().strip()
-            if not al_orig:
-                continue
-            if al_orig == txt_up or al_orig in txt_up or txt_up in al_orig:
-                return al
-            al_norm = re.sub(r'[^A-Z0-9]', '', al_orig)
-            if al_norm and len(al_norm) >= 4 and len(txt_norm) >= 4:
-                if al_norm == txt_norm or al_norm in txt_norm or txt_norm in al_norm:
+        txt_clean = " ".join(texto.upper().split())
+        if txt_clean:
+            for al in alias_map:
+                al_orig = " ".join((al.get('texto_origen') or '').upper().split())
+                if al_orig and al_orig == txt_clean:
                     return al
-                ratio = difflib.SequenceMatcher(None, txt_norm, al_norm).ratio()
-                if ratio >= 0.75:
-                    return al
+
     return None
 
 
@@ -646,14 +640,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
             # Limpiezas de OCR
             desc = desc_part.strip()
             desc = re.sub(r'\bH0RTADELA\b', 'MORTADELA', desc)
-            desc = re.sub(r'\bHORTADELA\b', 'MORTADELA', desc)
-            desc = re.sub(r'0', 'O', desc)
-            desc = re.sub(r'\bOUICKSY\b', 'QUICKSY', desc)
             desc = re.sub(r'\bALIHENTO\b', 'ALIMENTO', desc)
-            desc = re.sub(r'\bSALREFISAL1?\b', 'SAL REFISAL', desc)
-            desc = re.sub(r'\bACEITEDEGIR\b', 'ACEITE DE GIRASOL', desc)
-            desc = re.sub(r'\bAVENA EN HOJU\b', 'AVENA EN HOJUELAS', desc)
-            desc = re.sub(r'\bHORENA\b', 'MORENA', desc)
             desc = re.sub(r'^[0-9\s.,]+', '', desc).strip()
 
             if cant > 0 and total_line > 0:
@@ -725,6 +712,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
 
             items_extraidos.append({
                 'texto_detectado': desc,
+                'codigo_detectado': bc,
                 'cantidad': cant,
                 'total_linea': total_line,
                 'valor_unitario': vu,

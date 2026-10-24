@@ -449,12 +449,14 @@ const PRED_KEY = 'rockola_sala_predeterminada';
 const AUTOPLAY_KEY = 'rockola_autoreproducir';
 
 function esAutoplayActivo() {
-  const v = localStorage.getItem(AUTOPLAY_KEY);
-  return v === null ? true : v === '1';
+  return localStorage.getItem(AUTOPLAY_KEY) === '1';
 }
 
 function toggleAutoplayEntrada(activo) {
   localStorage.setItem(AUTOPLAY_KEY, activo ? '1' : '0');
+  document.querySelectorAll('input[id^="autoplay-toggle-"]').forEach(cb => {
+    cb.checked = activo;
+  });
 }
 
 let modoActual = 'rockola';
@@ -467,7 +469,7 @@ let salasCache = [];
   const salaPred = (localStorage.getItem(PRED_KEY) || '').trim();
   if (salaPred && !cambiarSala) {
     recordarSalaLocal(salaPred);
-    const apPred = esAutoplayActivo() ? '?autoplay=1' : '';
+    const apPred = esAutoplayActivo() ? '?autoplay=1' : '?autoplay=0';
     window.location.replace(`${rockolaBase()}/reproductor/${encodeURIComponent(salaPred)}${apPred}`);
   }
 })();
@@ -563,7 +565,7 @@ function recordarSalaLocal(salaId) {
 
 function abrirReproductor(salaId) {
   recordarSalaLocal(salaId);
-  const ap = esAutoplayActivo() ? '?autoplay=1' : '';
+  const ap = esAutoplayActivo() ? '?autoplay=1' : '?autoplay=0';
   window.location.href = `${rockolaBase()}/reproductor/${encodeURIComponent(salaId)}${ap}`;
 }
 
@@ -627,7 +629,7 @@ function renderSala(sala, disponible) {
         <div class="direct-entry-toggle" onclick="event.stopPropagation();" style="border-top:1px solid rgba(255,255,255,0.06); margin-top:4px; padding-top:6px;">
           <span class="direct-entry-label">Autoreproducir al entrar</span>
           <label class="switch" style="margin:0;">
-            <input type="checkbox" ${esAutoplayActivo() ? 'checked' : ''} onchange="toggleAutoplayEntrada(this.checked)">
+            <input type="checkbox" id="autoplay-toggle-${nombre}" ${esAutoplayActivo() ? 'checked' : ''} onchange="toggleAutoplayEntrada(this.checked)">
             <span class="slider"></span>
           </label>
         </div>

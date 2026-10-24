@@ -2508,6 +2508,53 @@ async function intentarReproducir(c) {
   }
 }
 
+let primeraVerificacionCola = true;
+
+function debeAutoreproducirAlEntrar() {
+  const urlParam = new URLSearchParams(window.location.search).get('autoplay');
+  if (urlParam === '1') return true;
+  if (urlParam === '0') return false;
+  return localStorage.getItem('rockola_autoreproducir') === '1';
+}
+
+async function prepararCancionEnPausa(c) {
+  if (!c || !c.id) return;
+  cancionActual = c.id;
+  nombreEl.textContent = limpiarNombre(c.nombre);
+  actualizarPlayPauseBtn(false);
+  setVinylSpinning(false);
+  if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+  dibujarIdle('visualizer-canvas');
+  estadoEl.textContent = 'En pausa — toca ▶ para iniciar';
+
+  if (c.youtube_url) {
+    esYouTubeActual = true;
+    player.pause();
+    player.removeAttribute('src');
+    actualizarVisibilidadYtWraps();
+    const vidId = extractYouTubeId(c.youtube_url);
+    if (vidId) {
+      const activo = getYtPlayerActivo();
+      if (activo && typeof activo.cueVideoById === 'function') {
+        activo.cueVideoById(vidId);
+      }
+    }
+  } else {
+    esYouTubeActual = false;
+    detenerVideoYouTube();
+    let resAudio;
+    try {
+      resAudio = await obtenerUrlDeAudio(c);
+    } catch(e) {
+      resAudio = { url: `/rockola/${SALA}/archivo/${c.id}`, esLocal: false };
+    }
+    localObjectUrl = resAudio.esLocal ? resAudio.url : null;
+    player.src = resAudio.url;
+    player.load();
+    player.pause();
+  }
+}
+
 async function verificarCola() {
   try {
     const res  = await fetch(`/rockola/${SALA}/cola`);
@@ -2571,6 +2618,14 @@ async function verificarCola() {
     if (!reproduciendo && !playPendiente && cola.length > 0) {
       const c = cola[0];
       if (c.id !== cancionActual || (!player.src && !esYouTubeActual)) {
+        if (primeraVerificacionCola) {
+          primeraVerificacionCola = false;
+          if (!debeAutoreproducirAlEntrar()) {
+            console.log('[Rockola] Autoreproducir al entrar DESACTIVADO. Canción cargada en pausa.');
+            await prepararCancionEnPausa(c);
+            return;
+          }
+        }
         cancionActual = c.id;
         fallosPlay = 0;
         await intentarReproducir(c);
@@ -4312,8 +4367,7 @@ try {
   actualizarVisibilidadModoVisualizer();
 
   // Autoreproduccion al entrar si esta activo
-  const urlParamsEntrada = new URLSearchParams(window.location.search);
-  const autoplayPermitido = urlParamsEntrada.get('autoplay') === '1' || localStorage.getItem('rockola_autoreproducir') !== '0';
+  const autoplayPermitido = debeAutoreproducirAlEntrar();
   if (autoplayPermitido) {
     const intentarDesbloqueoAudio = () => {
       if (!reproduciendo && cancionActual && player) {

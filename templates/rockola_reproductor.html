@@ -1094,6 +1094,7 @@ input:checked + .slider:before {
         <div class="sala-badge" id="sala-badge-header" onclick="toggleCompartirHeader()" style="cursor:pointer; display:flex; align-items:center; gap:5px;" title="Toca para compartir esta sala">
           <span style="font-weight:400; opacity:0.75; font-size:11px; letter-spacing:0.4px;">SALA</span>
           <span style="font-weight:900; color:var(--text); letter-spacing:0.6px;">{{ sala_id | upper }}</span>
+          <span id="header-conn-status" style="font-size:9px; font-weight:700; color:var(--ac1); margin-left:3px; padding:1px 5px; border-radius:6px; background:rgba(0,212,255,0.12);">● En línea</span>
           <span id="header-share-arrow" style="font-size:10px; color:var(--ac1); transition:transform .2s; margin-left:2px;">▾</span>
         </div>
         <button class="btn-control" onclick="abrirControl()">Control</button>
@@ -1419,7 +1420,6 @@ input:checked + .slider:before {
         <button class="btn-control" onclick="abrirSelectorCarpeta()" title="Importar carpeta y auto-organizar listas por género">📁 Agregar carpeta</button>
         <button class="btn-control" onclick="abrirSelectorAudios()" title="Agregar canciones individuales">🎵 Agregar canciones</button>
         <button class="btn-control" onclick="compartirMiBiblioteca()">Compartir</button>
-        <button class="btn-control" onclick="window.location.href='/rockola/pwa/offline'" style="border-color:rgba(0,212,255,0.4);" title="Abrir reproductor sin internet">📴 Modo offline</button>
       </div>
       <div class="share-panel" id="share-panel">
         <div class="library-origin">Enlace temporal para que otro dispositivo guarde canciones de esta biblioteca</div>
@@ -1890,6 +1890,14 @@ function setDeviceMessage(texto, warn=false) {
 }
 
 async function verificarDispositivoSala() {
+  if (SALA === 'local' || !navigator.onLine) {
+    salaDisponible = true;
+    actualizarEstadoModoLocal(true);
+    setTimeout(async () => {
+      await activar(true);
+    }, 350);
+    return;
+  }
   try {
     const res = await fetch(`/rockola/${SALA}/info?device_id=${encodeURIComponent(getDeviceId())}`);
     const data = await res.json();
@@ -1919,7 +1927,12 @@ async function verificarDispositivoSala() {
       if (deviceActions) deviceActions.classList.add('visible');
     }
   } catch(e) {
-    setDeviceMessage('No pude verificar la sala. Revisa la conexion.', true);
+    console.warn('Sin conexión al verificar sala, activando modo local directamente:', e);
+    salaDisponible = true;
+    actualizarEstadoModoLocal(true);
+    setTimeout(async () => {
+      await activar(true);
+    }, 350);
   }
 }
 
@@ -2681,10 +2694,55 @@ async function prepararCancionEnPausa(c) {
   }
 }
 
+function actualizarEstadoModoLocal(esLocal) {
+  const badge = document.getElementById('header-conn-status');
+  if (badge) {
+    if (esLocal) {
+      badge.textContent = '⚡ Local';
+      badge.style.color = '#ffb703';
+      badge.style.background = 'rgba(255, 183, 3, 0.15)';
+      badge.title = 'Modo Local autónomo (Sin conexión al servidor)';
+    } else {
+      badge.textContent = '● En línea';
+      badge.style.color = 'var(--ac1)';
+      badge.style.background = 'rgba(0, 212, 255, 0.12)';
+      badge.title = 'Conectado a la sala en el servidor';
+    }
+  }
+}
+
+function gestionarColaLocalOffline() {
+  actualizarEstadoModoLocal(true);
+  renderCola(currentCola);
+  if (!reproduciendo && !playPendiente && currentCola && currentCola.length > 0) {
+    const c = currentCola[0];
+    if (c.id !== cancionActual || (!player.src && !esYouTubeActual)) {
+      cancionActual = c.id;
+      fallosPlay = 0;
+      intentarReproducir(c);
+    }
+  }
+  if (!reproduciendo && !playPendiente && (!currentCola || currentCola.length === 0)) {
+    nombreEl.textContent = 'Esperando canciones...';
+    cancionActual = null;
+    actualizarPlayPauseBtn(false);
+  }
+  estadoEl.textContent = 'Modo Local (Autónomo) ⚡';
+}
+
 async function verificarCola() {
+  if (transitioning) return;
+
+  if (SALA === 'local' || !navigator.onLine) {
+    gestionarColaLocalOffline();
+    return;
+  }
+
   try {
     const res  = await fetch(`/rockola/${SALA}/cola`);
+    if (!res.ok) throw new Error('Servidor no disponible');
     const data = await res.json();
+    actualizarEstadoModoLocal(false);
     const cola = data.cola || [];
     currentCola = cola;
     if (cola.length > memoriaListaCola.length) {
@@ -2767,7 +2825,7 @@ async function verificarCola() {
 
     estadoEl.textContent = 'Activo ✓ · ' + new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
   } catch(e) {
-    estadoEl.textContent = 'Sin conexión ✗';
+    gestionarColaLocalOffline();
   }
 }
 
@@ -3830,14 +3888,28 @@ async function agregarListaACola(lista) {
   for (const songId of lista.canciones || []) {
     const cancion = cancionesLocales.find(c => c.id === songId) || await obtenerCancionLocal(songId);
     if (!cancion) continue;
-    const res = await fetch(`/rockola/${SALA}/local`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ local_id:idLocalCola(cancion.id), nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId() })
-    });
-    const data = await res.json();
-    if (data.ok) agregadas++;
+    const localId = idLocalCola(cancion.id);
+    const itemCola = {
+      id: localId,
+      nombre: cancion.nombre,
+      owner: OWNER,
+      tercero_id: null
+    };
+    currentCola.push(itemCola);
+    agregadas++;
+
+    // Sincronizar en segundo plano si hay red
+    if (navigator.onLine && SALA !== 'local') {
+      try {
+        fetch(`/rockola/${SALA}/local`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ local_id: localId, nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId() })
+        }).catch(() => {});
+      } catch(e) {}
+    }
   }
+  renderCola(currentCola);
   return agregadas;
 }
 
@@ -4054,20 +4126,45 @@ async function ponerLocal(id, modo = 'final') {
     currentCola.splice(1, 0, nuevo);
     renderCola(currentCola);
   }
-  const body = { local_id: localIdCola, nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId(), modo: modo };
-  console.log('[Rockola] body:', JSON.stringify(body));
-  const res = await fetch(`/rockola/${SALA}/local`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify(body)
-  });
-  const data = await res.json();
-  console.log('[Rockola] respuesta POST /local:', JSON.stringify(data));
-  if (data.ok) {
-    mostrarMensaje('Cancion local en cola', 'ok');
-    verificarCola();
+  const itemCola = {
+    id: localIdCola,
+    nombre: cancion.nombre,
+    owner: OWNER,
+    tercero_id: null
+  };
+
+  // Encolar localmente de inmediato (latencia 0 ms con o sin internet)
+  if (modo === 'ya') {
+    currentCola = [itemCola, ...currentCola.filter(i => i.id !== itemCola.id)];
+    cancionActual = itemCola.id;
+    intentarReproducir(itemCola);
+  } else if (modo === 'siguiente') {
+    currentCola = currentCola.filter(i => i.id !== itemCola.id);
+    currentCola.splice(1, 0, itemCola);
   } else {
-    mostrarMensaje(data.error || 'No se pudo poner en cola', 'error');
+    currentCola = currentCola.filter(i => i.id !== itemCola.id);
+    currentCola.push(itemCola);
+  }
+  renderCola(currentCola);
+
+  if (!reproduciendo && currentCola.length > 0) {
+    cancionActual = currentCola[0].id;
+    intentarReproducir(currentCola[0]);
+  }
+  mostrarMensaje('Cancion local en cola', 'ok');
+
+  // Si hay red y estamos en una sala remota, sincronizar en segundo plano
+  if (navigator.onLine && SALA !== 'local') {
+    try {
+      const body = { local_id: localIdCola, nombre:cancion.nombre, owner:OWNER, device_id:getDeviceId(), modo: modo };
+      fetch(`/rockola/${SALA}/local`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      }).then(r => r.json()).then(data => {
+        if (data && data.ok) verificarCola();
+      }).catch(() => {});
+    } catch(e) {}
   }
 }
 
@@ -4508,6 +4605,16 @@ try {
     habilitarDesbloqueoPorToque();
   }
 } catch(e) { console.warn('Error en init de modos:', e); }
+
+// Escuchar cambios de red para conmutar estado automáticamente
+window.addEventListener('online', () => {
+  actualizarEstadoModoLocal(false);
+  verificarCola();
+});
+window.addEventListener('offline', () => {
+  actualizarEstadoModoLocal(true);
+  gestionarColaLocalOffline();
+});
 
 // Iniciar verificación y transición al reproductor de forma segura
 verificarDispositivoSala();

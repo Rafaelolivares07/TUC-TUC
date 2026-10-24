@@ -621,7 +621,7 @@ def pwa_manifest():
 @bp.route('/pwa/sw.js')
 def pwa_sw():
     js = """
-const CACHE = 'rockola-pwa-v6';
+const CACHE = 'rockola-pwa-v7';
 const CORE = [
   '/rockola',
   '/rockola/',
@@ -705,7 +705,9 @@ self.addEventListener('fetch', event => {
 
 @bp.route('/pwa/offline')
 def pwa_offline():
-    return render_template('rockola_offline.html')
+    resp = make_response(render_template('rockola_reproductor.html', sala_id='local', admin_key=''))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return resp
 
 
 @bp.route('/compartir/biblioteca', methods=['POST'])

@@ -1535,6 +1535,14 @@ let player = player1;
 let standbyPlayer = player2;
 let transitioning = false;
 let currentCola = [];
+
+// Visualizer State Variables (Declaradas en el tope para evitar TDZ ReferenceError)
+let audioCtx = null;
+let analyser = null;
+let vizSourceConnected = false;
+let vizAnimFrame = null;
+let modoVisualizer = localStorage.getItem('rockola_viz_mode') || 'barras';
+let particlesArray = [];
 const nombreEl    = document.getElementById('nombre-actual');
 const listaCola   = document.getElementById('lista-cola');
 const estadoEl    = document.getElementById('estado');
@@ -4089,13 +4097,17 @@ async function desordenarColaAleatorio() {
   }
 }
 
-aplicarVolumen(volumenEl.value);
-actualizarFundidoStatus();
-if (document.getElementById('shuffle-toggle')) document.getElementById('shuffle-toggle').checked = modoAleatorio;
-if (document.getElementById('repetir-toggle')) document.getElementById('repetir-toggle').checked = modoRepetir;
-actualizarShuffleStatus();
-actualizarRepetirStatus();
-actualizarVisibilidadModoVisualizer();
+try { aplicarVolumen(volumenEl.value); } catch(e) { console.warn(e); }
+try { actualizarFundidoStatus(); } catch(e) { console.warn(e); }
+try {
+  if (document.getElementById('shuffle-toggle')) document.getElementById('shuffle-toggle').checked = modoAleatorio;
+  if (document.getElementById('repetir-toggle')) document.getElementById('repetir-toggle').checked = modoRepetir;
+  actualizarShuffleStatus();
+  actualizarRepetirStatus();
+  actualizarVisibilidadModoVisualizer();
+} catch(e) { console.warn('Error en init de modos:', e); }
+
+// Iniciar verificación y transición al reproductor de forma segura
 verificarDispositivoSala();
 initProgressBarDrag();
 
@@ -4657,12 +4669,7 @@ if ('serviceWorker' in navigator) {
 /* ═══════════════════════════════════════════
    VISUALIZADOR DE AUDIO - 5 modos + fullscreen
    ═══════════════════════════════════════════ */
-let audioCtx = null;
-let analyser = null;
-let vizSourceConnected = false;
-let vizAnimFrame = null;
-let modoVisualizer = localStorage.getItem('rockola_viz_mode') || 'barras';
-let particlesArray = [];
+// Visualizer variables inicializadas en el tope del script
 
 function initAudioContext() {
   if (audioCtx) {

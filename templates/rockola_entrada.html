@@ -176,61 +176,134 @@ input[type=text]:focus { border-color:var(--ac1); }
   .rk-vinyl-disc, .rk-logo-reveal { animation: none; }
   #rk-splash { transition: none; }
 }
-/* Switch para Sala Predeterminada */
-.toggle-pred-label {
+/* Control Cyber-Neon para Entrada Directa */
+.cyber-toggle-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(255,255,255,0.08);
-  font-size: 11px;
-  color: var(--muted);
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(0, 212, 255, 0.03);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 12px;
   cursor: pointer;
   user-select: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.toggle-pred-label.active {
-  color: #00d4ff;
-  font-weight: 700;
+.cyber-toggle-bar:hover {
+  background: rgba(0, 212, 255, 0.07);
+  border-color: rgba(0, 212, 255, 0.35);
 }
-.rk-switch {
+.cyber-toggle-bar.active {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 212, 255, 0.55);
+  box-shadow: 0 0 18px rgba(0, 212, 255, 0.18);
+}
+.cyber-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cyber-toggle-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+.cyber-toggle-bar.active .cyber-toggle-title {
+  color: var(--ac1);
+}
+.cyber-toggle-icon {
+  font-size: 14px;
+  color: var(--muted);
+  transition: color 0.2s, transform 0.2s;
+}
+.cyber-toggle-bar.active .cyber-toggle-icon {
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+  transform: scale(1.15);
+}
+.cyber-toggle-sub {
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.cyber-toggle-switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   position: relative;
-  display: inline-block;
-  width: 34px;
-  height: 20px;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+  box-sizing: border-box;
+}
+.cyber-toggle-switch.checked {
+  background: linear-gradient(135deg, var(--ac1) 0%, var(--ac2) 100%);
+  border-color: var(--ac1);
+  box-shadow: 0 0 14px rgba(0, 212, 255, 0.6);
+}
+.cyber-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+.cyber-toggle-switch.checked .cyber-toggle-thumb {
+  transform: translateX(20px);
+  background: #00101b;
+}
+
+/* Banner de entrada directa en selector de salas */
+.banner-pred {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+}
+.banner-pred-text {
+  font-size: 12.5px;
+  color: var(--text);
+  font-weight: 600;
+}
+.banner-pred-text strong {
+  color: var(--ac1);
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
+.banner-pred-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 90, 90, 0.4);
+  color: #ff7777;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
   flex-shrink: 0;
 }
-.rk-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.rk-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: rgba(255, 255, 255, 0.15);
-  transition: .25s ease;
-  border-radius: 20px;
-}
-.rk-slider:before {
-  position: absolute;
-  content: "";
-  height: 14px;
-  width: 14px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: .25s ease;
-  border-radius: 50%;
-}
-.rk-switch input:checked + .rk-slider {
-  background-color: #00d4ff;
-  box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
-}
-.rk-switch input:checked + .rk-slider:before {
-  transform: translateX(14px);
-  background-color: #00101b;
+.banner-pred-btn:hover {
+  background: rgba(255, 90, 90, 0.15);
+  border-color: #ff5555;
+  color: #fff;
 }
 </style>
 </head>
@@ -323,6 +396,13 @@ input[type=text]:focus { border-color:var(--ac1); }
   <div class="tabs">
     <button class="tab active" id="tab-rockola" onclick="setModo('rockola')">Mi Rockola</button>
     <button class="tab" id="tab-emisora" onclick="setModo('emisora')">Tu Emisora</button>
+  </div>
+
+  <div id="banner-predeterminada" class="banner-pred" style="display:none;">
+    <div class="banner-pred-text">
+      <span>★ Entrada directa activa en:</span> <strong id="nombre-sala-pred"></strong>
+    </div>
+    <button class="banner-pred-btn" onclick="quitarSalaPredeterminada()">Desactivar</button>
   </div>
 
   <section class="section active" id="sec-rockola">
@@ -536,13 +616,18 @@ function renderSala(sala, disponible) {
         }
       </div>
       ${disponible ? `
-        <label class="toggle-pred-label ${esPred ? 'active' : ''}" onclick="event.stopPropagation();">
-          <span>⭐ Entrada directa a esta sala</span>
-          <span class="rk-switch">
-            <input type="checkbox" ${esPred ? 'checked' : ''} onchange="toggleSalaPredeterminada('${nombre}', this.checked)">
-            <span class="rk-slider"></span>
-          </span>
-        </label>
+        <div class="cyber-toggle-bar ${esPred ? 'active' : ''}" onclick="event.stopPropagation(); toggleSalaPredeterminada('${nombre}', !${esPred})">
+          <div class="cyber-toggle-info">
+            <div class="cyber-toggle-title">
+              <span class="cyber-toggle-icon">${esPred ? '★' : '☆'}</span>
+              <span>Entrada directa a esta sala</span>
+            </div>
+            <div class="cyber-toggle-sub">${esPred ? 'Activada — Al entrar irás directo al reproductor' : 'Toca para entrar siempre a esta sala sin pasar por este menú'}</div>
+          </div>
+          <div class="cyber-toggle-switch ${esPred ? 'checked' : ''}">
+            <span class="cyber-toggle-thumb"></span>
+          </div>
+        </div>
       ` : ''}
     </div>
   `;
@@ -621,6 +706,7 @@ async function eliminarSala(salaId) {
 }
 
 async function cargarSalas() {
+  actualizarBannerPredeterminada();
   const deviceId = getDeviceId();
   document.getElementById('device-name').textContent = getDeviceName();
   try {

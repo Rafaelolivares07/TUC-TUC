@@ -52,7 +52,7 @@ body {
 @keyframes wave   { 0%,100%{height:5px} 50%{height:22px} }
 @keyframes pulse  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.85)} }
 
-/* ── ACTIVAR ── */
+/* ── PANTALLA TRANSITORIA / ACTIVAR ── */
 #pantalla-activar {
   min-height: 100vh;
   display: flex;
@@ -62,6 +62,51 @@ body {
   padding: 32px 24px;
   text-align: center;
   animation: fadeUp .4s ease;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s ease;
+}
+#pantalla-activar.transitory-out {
+  opacity: 0;
+  transform: scale(0.95);
+  pointer-events: none;
+}
+.brand-top-splash {
+  font-size: clamp(28px, 7vw, 42px);
+  font-weight: 900;
+  letter-spacing: -0.8px;
+  text-align: center;
+  color: #ffffff;
+  margin-bottom: 24px;
+  text-shadow: 0 0 35px rgba(0, 212, 255, 0.6);
+}
+.brand-top-splash span {
+  color: var(--ac1);
+}
+
+/* Barra Superior Sticky en Reproductor */
+.reproductor-sticky-bar {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(6, 12, 24, 0.94);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  padding: 12px 14px 8px;
+  margin: -12px -12px 14px -12px;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.14);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+.brand-sticky-title {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  text-align: center;
+  color: #ffffff;
+  margin-bottom: 8px;
+  text-shadow: 0 0 20px rgba(0, 212, 255, 0.45);
+}
+.brand-sticky-title span {
+  color: var(--ac1);
 }
 .activar-vinyl { margin-bottom: 32px; }
 .activar-tag { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
@@ -882,8 +927,9 @@ input:checked + .slider:before {
   </div>
 </div>
 
-<!-- ACTIVAR -->
+<!-- PANTALLA TRANSITORIA / ACTIVAR -->
 <div id="pantalla-activar">
+  <div class="brand-top-splash">Mi <span>Rockola</span></div>
   <div class="activar-vinyl">
     <svg width="100" height="100" viewBox="0 0 40 40">
       <circle cx="20" cy="20" r="19" fill="#0d1a2e" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.4"/>
@@ -895,38 +941,34 @@ input:checked + .slider:before {
       <circle cx="20" cy="20" r="11" fill="none" stroke="#00d4ff" stroke-width="0.4" stroke-opacity="0.2"/>
     </svg>
   </div>
-  <div class="activar-tag">Reproductor del local</div>
+  <div class="activar-tag">Conectando Sala</div>
   <div class="activar-titulo">Sala <span>{{ sala_id | upper }}</span></div>
-  <div class="activar-sub">La sala queda asociada al dispositivo que reproduce la musica.</div>
+  <div class="activar-sub">Iniciando ambiente musical en este equipo...</div>
   <div class="device-state" id="device-state">Verificando este dispositivo...</div>
+  
   <div class="device-actions" id="device-actions">
     <button class="btn-control" onclick="entrarComoCliente()">Agregar canciones</button>
     <button class="btn-control" onclick="abrirControl()">Control</button>
   </div>
-  
-  <label class="toggle-pred-label" id="label-pred-activar" style="margin:0 auto 14px; max-width:280px; display:none; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; cursor:pointer;" onclick="event.stopPropagation();">
-    <span style="font-size:12px; font-weight:700;">⭐ Entrada directa a esta sala</span>
-    <span class="rk-switch">
-      <input type="checkbox" id="check-pred-activar" onchange="togglePredeterminadaDesdeReproductor(this.checked)">
-      <span class="rk-slider"></span>
-    </span>
-  </label>
 
-  <button class="btn-activar" id="btn-activar" onclick="activar()">Activar Rockola</button>
-  <button class="btn-activar" id="btn-reclamar" style="display:none; background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); color: #fff; margin-bottom: 12px;" onclick="reclamarReproductor()">Tomar Control de la Rockola</button>
-  <button class="btn-back" onclick="window.location.href='/rockola/?cambiar_sala=1'">← Volver</button>
+  <button class="btn-activar" id="btn-reclamar" style="display:none; background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); color: #fff; margin-top: 14px;" onclick="reclamarReproductor()">Tomar Control de la Rockola</button>
+  <button class="btn-back" onclick="window.location.href='/rockola/?cambiar_sala=1'">← Salir al selector de salas</button>
 </div>
 
 <!-- PRINCIPAL -->
 <div id="pantalla-principal">
   <div class="inner">
 
-    <div class="header">
-      <button class="header-back" onclick="window.location.href='/rockola/?cambiar_sala=1'" title="Volver al selector de salas">← Salir</button>
-      <div class="sala-badge" id="sala-badge-header" onclick="togglePredStarHeader()" style="cursor:pointer;" title="Toca para activar/desactivar entrada directa">
-        <span id="star-pred-icon" style="color:var(--muted); margin-right:4px;">☆</span>{{ sala_id | upper }} <span style="font-size:9px;opacity:0.5;margin-left:4px;">v3.3.0</span>
+    <!-- BARRA SUPERIOR STICKY CON EL TITULO MI ROCKOLA -->
+    <div class="reproductor-sticky-bar">
+      <div class="brand-sticky-title">Mi <span>Rockola</span></div>
+      <div class="header">
+        <button class="header-back" onclick="window.location.href='/rockola/?cambiar_sala=1'" title="Volver al selector de salas">← Salir</button>
+        <div class="sala-badge" id="sala-badge-header" onclick="togglePredStarHeader()" style="cursor:pointer;" title="Toca para activar/desactivar entrada directa">
+          <span id="star-pred-icon" style="color:var(--muted); margin-right:4px;">☆</span>{{ sala_id | upper }} <span style="font-size:9px;opacity:0.5;margin-left:4px;">v3.3.0</span>
+        </div>
+        <button class="btn-control" onclick="abrirControl()">Control</button>
       </div>
-      <button class="btn-control" onclick="abrirControl()">Control</button>
     </div>
 
     <div class="now-card">
@@ -1469,32 +1511,28 @@ async function verificarDispositivoSala() {
     const data = await res.json();
     const sala = data.sala || {};
     salaDisponible = !!sala.disponible_reproductor;
+
+    const predActual = (localStorage.getItem(PRED_KEY) || '').toLowerCase();
+    const esPred = predActual === SALA.toLowerCase();
+    actualizarStarBadgeHeader(esPred);
+
     if (salaDisponible || sala.sin_reproductor) {
       setDeviceMessage(salaDisponible
-        ? `Disponible en este dispositivo: ${getDeviceName()}.`
-        : `Esta sala aun no tiene reproductor. Puedes tomarla en ${getDeviceName()}.`);
-      btnActivar.disabled = false;
-      btnActivar.style.display = 'inline-block';
-      btnReclamar.style.display = 'none';
-      deviceActions.classList.remove('visible');
+        ? `Disponible en este dispositivo: ${getDeviceName()}`
+        : `Asignando sala a este dispositivo: ${getDeviceName()}...`);
+      
+      if (btnReclamar) btnReclamar.style.display = 'none';
+      if (deviceActions) deviceActions.classList.remove('visible');
 
-      const predActual = (localStorage.getItem('rockola_sala_predeterminada') || '').toLowerCase();
-      const esPred = predActual === SALA.toLowerCase();
-      const checkPred = document.getElementById('check-pred-activar');
-      const labelPred = document.getElementById('label-pred-activar');
-      if (checkPred) checkPred.checked = esPred;
-      if (labelPred) labelPred.style.display = 'flex';
-      actualizarStarBadgeHeader(esPred);
-
-      // Si esta sala está configurada para Entrada Directa y este dispositivo está habilitado, saltar directo al reproductor
-      if (esPred && salaDisponible) {
-        activar(true);
-      }
+      // Transición fluida automática al reproductor sin necesidad de botón
+      // Breve pausa para mostrar la pantalla transitoria y desvanecerla
+      setTimeout(async () => {
+        await activar(true);
+      }, 700);
     } else {
       setDeviceMessage(`Esta sala suena en ${sala.dispositivo_reproductor_nombre || 'otro dispositivo'}.`, true);
-      btnActivar.style.display = 'none';
-      btnReclamar.style.display = 'inline-block';
-      deviceActions.classList.add('visible');
+      if (btnReclamar) btnReclamar.style.display = 'inline-block';
+      if (deviceActions) deviceActions.classList.add('visible');
     }
   } catch(e) {
     setDeviceMessage('No pude verificar la sala. Revisa la conexion.', true);
@@ -1511,9 +1549,8 @@ async function vincularEsteReproductor(tomarControl = false) {
   if (!data.ok) {
     const sala = data.sala || {};
     setDeviceMessage(`Esta sala suena en ${sala.dispositivo_reproductor_nombre || 'otro dispositivo'}.`, true);
-    btnActivar.style.display = 'none';
-    btnReclamar.style.display = 'inline-block';
-    deviceActions.classList.add('visible');
+    if (btnReclamar) btnReclamar.style.display = 'inline-block';
+    if (deviceActions) deviceActions.classList.add('visible');
     return false;
   }
   salaDisponible = true;
@@ -1521,25 +1558,32 @@ async function vincularEsteReproductor(tomarControl = false) {
 }
 
 async function reclamarReproductor() {
-  // Synchronously unlock player before the async await call breaks the gesture context
   player.play().then(() => player.pause()).catch(() => {});
-  
   if (await vincularEsteReproductor(true)) {
-    btnReclamar.style.display = 'none';
-    btnActivar.style.display = 'inline-block';
-    activar(true);
+    if (btnReclamar) btnReclamar.style.display = 'none';
+    setDeviceMessage('Control obtenido ✓ Conectando...');
+    setTimeout(async () => {
+      await activar(true);
+    }, 400);
   }
 }
 
 async function activar(skipUnlock = false) {
   if (!skipUnlock) {
-    // Synchronously unlock player before the async await call breaks the gesture context
     player.play().then(() => player.pause()).catch(() => {});
   }
   
   if (!(await vincularEsteReproductor())) return;
-  document.getElementById('pantalla-activar').style.display = 'none';
-  document.getElementById('pantalla-principal').style.display = 'block';
+
+  const pantActivar = document.getElementById('pantalla-activar');
+  const pantPrincipal = document.getElementById('pantalla-principal');
+  if (pantActivar && pantPrincipal) {
+    pantActivar.classList.add('transitory-out');
+    setTimeout(() => {
+      pantActivar.style.display = 'none';
+      pantPrincipal.style.display = 'block';
+    }, 450);
+  }
   
   if (window.YT && window.YT.Player) {
     crearAmbosYtPlayers();

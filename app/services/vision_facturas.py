@@ -955,12 +955,20 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     m_p = re.search(r'\$?\s*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)', b['texto'])
                     if m_p:
                         p_val = _limpiar_monto(m_p.group(1))
-                        if p_val > 0 and p_val != cant:
+                        if p_val > 50 and p_val != cant:
                             precio_linea = p_val
                             break
 
+                # Una línea válida de producto en el fallback DEBE tener un precio mayor a 0
+                if precio_linea <= 0:
+                    continue
+
                 nom_it = re.sub(r'\$?\s*[0-9]{1,3}(?:[.,][0-9]{3})*.*$', '', resto).strip()
                 if not nom_it: nom_it = resto
+
+                # Ignorar si es solo una unidad de medida suelta o texto demasiado corto
+                if len(nom_it) < 3 or nom_it.upper() in ('UN', 'UND', 'UNIDAD', 'UNIDADES', 'KG', 'KILOS', 'GR', 'GRAMOS', 'G', 'LB', 'LBS', 'PAQ', 'PAQUETE'):
+                    continue
 
                 mejor_prod = None
                 mejor_score = 0.0
@@ -995,7 +1003,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     nom_upper = nom_it.upper()
                     for p in productos_db:
                         p_nom = p['nombre'].upper()
-                        if len(p_nom) >= 5 and (p_nom in nom_upper or nom_upper in p_nom):
+                        if len(nom_upper) >= 5 and len(p_nom) >= 5 and (p_nom in nom_upper or nom_upper in p_nom):
                             score = 0.85
                         else:
                             score = difflib.SequenceMatcher(None, nom_upper, p_nom).ratio()

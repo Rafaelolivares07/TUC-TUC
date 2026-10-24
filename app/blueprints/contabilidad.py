@@ -4820,6 +4820,7 @@ def api_reporte_movimientos(negocio_id):
     tercero_id = request.args.get('tercero_id')
     agrupar = request.args.get('agrupar', 'sin_agrupar') # 'sin_agrupar', 'cuenta', 'tercero'
     centro_utilidad_id = request.args.get('centro_utilidad_id')
+    nota = (request.args.get('nota') or '').strip()
 
     if not desde or not hasta:
         return jsonify({'ok': False, 'error': 'Fechas desde y hasta son requeridas'}), 400
@@ -4860,6 +4861,14 @@ def api_reporte_movimientos(negocio_id):
             where_periodo.append("m.centro_utilidad_id = %s")
             params_periodo.append(centro_id)
 
+        if nota:
+            cond_nota = "(m.concepto ILIKE %s OR m.descripcion_general ILIKE %s OR cc.notas ILIKE %s OR cc.descripcion ILIKE %s)"
+            param_nota = f"%{nota}%"
+            where_anterior.append(cond_nota)
+            params_anterior.extend([param_nota, param_nota, param_nota, param_nota])
+            where_periodo.append(cond_nota)
+            params_periodo.extend([param_nota, param_nota, param_nota, param_nota])
+
         if cuenta_id and tercero_id:
             agrupar = 'sin_agrupar'
 
@@ -4871,6 +4880,7 @@ def api_reporte_movimientos(negocio_id):
                     COALESCE(SUM(CASE WHEN m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS total_debitos,
                     COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS total_credits
                 FROM movimientos_contables m
+                LEFT JOIN comprobantes_contables cc ON cc.id = m.comprobante_id
                 WHERE {" AND ".join(where_anterior)}
             """, params_anterior).fetchone()
 
@@ -4888,11 +4898,15 @@ def api_reporte_movimientos(negocio_id):
                     m.tercero_id,
                     t.nombre AS tercero_nombre,
                     m.concepto,
+                    m.descripcion_general,
+                    cc.notas AS comprobante_notas,
+                    cc.descripcion AS comprobante_descripcion,
                     m.tipo AS tipo_mov,
                     m.monto,
                     COALESCE(cu.codigo, 'MOV-01') AS centro_codigo,
                     COALESCE(cu.nombre, 'Puntos Móviles') AS centro_nombre
                 FROM movimientos_contables m
+                LEFT JOIN comprobantes_contables cc ON cc.id = m.comprobante_id
                 LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
                 LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
@@ -4931,6 +4945,8 @@ def api_reporte_movimientos(negocio_id):
                     'tercero_id': r['tercero_id'],
                     'tercero_nombre': r['tercero_nombre'] or 'Tercero Ocasional',
                     'concepto': r['concepto'],
+                    'descripcion_general': r['descripcion_general'],
+                    'notas': r['comprobante_notas'],
                     'debito': deb_val,
                     'credito': cred_val,
                     'saldo': saldo_acc,
@@ -4956,6 +4972,7 @@ def api_reporte_movimientos(negocio_id):
                     COALESCE(SUM(CASE WHEN m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS total_debitos,
                     COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS total_credits
                 FROM movimientos_contables m
+                LEFT JOIN comprobantes_contables cc ON cc.id = m.comprobante_id
                 JOIN cuentas_puc p ON p.id = m.cuenta_id
                 WHERE {" AND ".join(where_anterior)}
                 GROUP BY m.cuenta_id, p.codigo, p.nombre
@@ -4980,11 +4997,15 @@ def api_reporte_movimientos(negocio_id):
                     m.tercero_id,
                     t.nombre AS tercero_nombre,
                     m.concepto,
+                    m.descripcion_general,
+                    cc.notas AS comprobante_notas,
+                    cc.descripcion AS comprobante_descripcion,
                     m.tipo AS tipo_mov,
                     m.monto,
                     COALESCE(cu.codigo, 'MOV-01') AS centro_codigo,
                     COALESCE(cu.nombre, 'Puntos Móviles') AS centro_nombre
                 FROM movimientos_contables m
+                LEFT JOIN comprobantes_contables cc ON cc.id = m.comprobante_id
                 LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
                 JOIN cuentas_puc p ON p.id = m.cuenta_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
@@ -5038,6 +5059,8 @@ def api_reporte_movimientos(negocio_id):
                         'tercero_id': r['tercero_id'],
                         'tercero_nombre': r['tercero_nombre'] or 'Tercero Ocasional',
                         'concepto': r['concepto'],
+                        'descripcion_general': r['descripcion_general'],
+                        'notas': r['comprobante_notas'],
                         'debito': deb_val,
                         'credito': cred_val,
                         'saldo': saldo_acc,
@@ -5065,6 +5088,7 @@ def api_reporte_movimientos(negocio_id):
                     COALESCE(SUM(CASE WHEN m.tipo IN ('debito', 'D') THEN m.monto ELSE 0 END), 0) AS total_debitos,
                     COALESCE(SUM(CASE WHEN m.tipo IN ('credito', 'C') THEN m.monto ELSE 0 END), 0) AS total_credits
                 FROM movimientos_contables m
+                LEFT JOIN comprobantes_contables cc ON cc.id = m.comprobante_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
                 WHERE {" AND ".join(where_anterior)}
                 GROUP BY m.tercero_id, t.nombre
@@ -5089,11 +5113,15 @@ def api_reporte_movimientos(negocio_id):
                     m.tercero_id,
                     t.nombre AS tercero_nombre,
                     m.concepto,
+                    m.descripcion_general,
+                    cc.notas AS comprobante_notas,
+                    cc.descripcion AS comprobante_descripcion,
                     m.tipo AS tipo_mov,
                     m.monto,
                     COALESCE(cu.codigo, 'MOV-01') AS centro_codigo,
                     COALESCE(cu.nombre, 'Puntos Móviles') AS centro_nombre
                 FROM movimientos_contables m
+                LEFT JOIN comprobantes_contables cc ON cc.id = m.comprobante_id
                 LEFT JOIN tipos_documento_negocio tdn ON tdn.id = m.tipo_documento_id
                 LEFT JOIN cuentas_puc p ON p.id = m.cuenta_id
                 LEFT JOIN terceros t ON t.id = m.tercero_id
@@ -5150,6 +5178,8 @@ def api_reporte_movimientos(negocio_id):
                         'cuenta_codigo': r['cuenta_codigo'],
                         'cuenta_nombre': r['cuenta_nombre'],
                         'concepto': r['concepto'],
+                        'descripcion_general': r['descripcion_general'],
+                        'notas': r['comprobante_notas'],
                         'debito': deb_val,
                         'credito': cred_val,
                         'saldo': saldo_acc,
@@ -5176,7 +5206,6 @@ def api_reporte_movimientos(negocio_id):
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
         conn.close()
-
 
 # ── API: Balance de Comprobación ──────────────────────────────
 

@@ -699,14 +699,14 @@
     <!-- ═══ TAB: CONSULTA MOVIMIENTOS ═══ -->
     <div id="panel-consulta" class="p-5 hidden">
       <!-- Filtros de Consulta -->
-      <div class="grid grid-cols-1 md:grid-cols-6 gap-3 mb-5 items-end">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-5 items-end">
         <div>
           <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha Desde</label>
-          <input id="cons-desde" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
+          <input id="cons-desde" type="date" class="border rounded-lg px-3 py-2 text-sm w-full bg-white">
         </div>
         <div>
           <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha Hasta</label>
-          <input id="cons-hasta" type="date" class="border rounded-lg px-3 py-2 text-sm w-full">
+          <input id="cons-hasta" type="date" class="border rounded-lg px-3 py-2 text-sm w-full bg-white">
         </div>
         <div>
           <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Centro de Utilidad</label>
@@ -718,7 +718,7 @@
           <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Cuenta PUC</label>
           <div class="flex items-center relative">
             <input id="cons-cuenta-txt" type="text" placeholder="Todas las cuentas..."
-                   class="border rounded-lg pl-3 pr-8 py-2 text-sm w-full"
+                   class="border rounded-lg pl-3 pr-8 py-2 text-sm w-full bg-white"
                    oninput="onInputConsCuenta(this)"
                    onfocus="onFocusConsCuenta(this)">
             <button onclick="clearConsCuenta()" class="absolute right-2 text-gray-400 hover:text-gray-600 focus:outline-none text-lg">
@@ -732,7 +732,7 @@
           <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tercero</label>
           <div class="flex items-center relative">
             <input id="cons-tercero-txt" type="text" placeholder="Todos los terceros..."
-                   class="border rounded-lg pl-3 pr-8 py-2 text-sm w-full"
+                   class="border rounded-lg pl-3 pr-8 py-2 text-sm w-full bg-white"
                    oninput="onInputConsTercero(this)"
                    onfocus="onFocusConsTercero(this)">
             <button onclick="clearConsTercero()" class="absolute right-2 text-gray-400 hover:text-gray-600 focus:outline-none text-lg">
@@ -743,8 +743,21 @@
           <div id="cons-tercero-ac" class="ac-drop hidden"></div>
         </div>
         <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">📝 Nota / Concepto</label>
+          <div class="flex items-center relative">
+            <input id="cons-nota" type="text" placeholder="Buscar en notas..."
+                   class="border border-slate-300 rounded-lg pl-3 pr-7 py-2 text-sm w-full bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                   onkeydown="if(event.key==='Enter') consultarMovimientos()">
+            <button onclick="document.getElementById('cons-nota').value=''; consultarMovimientos();" 
+                    class="absolute right-2 text-gray-400 hover:text-gray-600 focus:outline-none text-base cursor-pointer"
+                    title="Limpiar búsqueda en nota">
+              &times;
+            </button>
+          </div>
+        </div>
+        <div>
           <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Agrupación</label>
-          <select id="cons-agrupar" class="border rounded-lg px-3 py-2 text-sm w-full">
+          <select id="cons-agrupar" class="border rounded-lg px-3 py-2 text-sm w-full bg-white">
             <option value="sin_agrupar">Cronológico (sin agrupar)</option>
             <option value="cuenta">Agrupado por Cuenta PUC</option>
             <option value="tercero">Agrupado por Tercero</option>
@@ -3387,6 +3400,15 @@ function auditoriaFiltrarDocumento(tipoDoc, numDoc) {
   window.open(url, '_blank');
 }
 
+function highlightQueryMatch(text, query) {
+  if (!text) return '';
+  if (!query) return escapeHtml(text);
+  const qClean = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!qClean) return escapeHtml(text);
+  const reg = new RegExp(`(${qClean})`, 'gi');
+  return escapeHtml(text).replace(reg, '<mark class="bg-amber-200 text-amber-950 font-bold px-1 rounded shadow-2xs">$1</mark>');
+}
+
 async function consultarMovimientos() {
   const desde = document.getElementById('cons-desde').value;
   const hasta = document.getElementById('cons-hasta').value;
@@ -3394,6 +3416,7 @@ async function consultarMovimientos() {
   const cuentaId = document.getElementById('cons-cuenta-id').value;
   const terceroId = document.getElementById('cons-tercero-id').value;
   const agrupar = document.getElementById('cons-agrupar').value;
+  const nota = (document.getElementById('cons-nota')?.value || '').trim();
 
   if (!desde || !hasta) {
     toast('Fechas desde y hasta son requeridas', false);
@@ -3409,6 +3432,7 @@ async function consultarMovimientos() {
   try {
     let url = `/api/contabilidad/${NEGOCIO_ID}/reporte-movimientos?desde=${desde}&hasta=${hasta}&cuenta_id=${cuentaId}&tercero_id=${terceroId}&agrupar=${agrupar}`;
     if (centroId) url += `&centro_utilidad_id=${encodeURIComponent(centroId)}`;
+    if (nota) url += `&nota=${encodeURIComponent(nota)}`;
     const resp = await fetch(url);
     const data = await resp.json();
 
@@ -3455,7 +3479,18 @@ async function consultarMovimientos() {
             </td>
             ${cuentaTd}
             ${terceroTd}
-            <td class="px-3 py-2.5 text-xs text-gray-600 text-left">${l.concepto || ''}</td>
+            <td class="px-3 py-2.5 text-xs text-left">
+              <div class="font-medium text-gray-800">${highlightQueryMatch(l.concepto || '', nota)}</div>
+              ${(() => {
+                const descGen = (l.descripcion_general && l.descripcion_general !== l.concepto && l.descripcion_general !== 'FACTURA_DE_VENTA') ? l.descripcion_general : '';
+                const notaComp = (l.notas && l.notas !== l.concepto && l.notas !== descGen) ? l.notas : '';
+                if (descGen || notaComp) {
+                  const combined = [descGen, notaComp].filter(Boolean).join(' • ');
+                  return `<div class="text-[11px] text-gray-500 italic mt-0.5">${highlightQueryMatch(combined, nota)}</div>`;
+                }
+                return '';
+              })()}
+            </td>
             <td class="px-3 py-2.5 text-xs text-right font-mono text-emerald-700">${l.debito > 0 ? formatMoni(l.debito) : '—'}</td>
             <td class="px-3 py-2.5 text-xs text-right font-mono text-rose-700">${l.credito > 0 ? formatMoni(l.credito) : '—'}</td>
             <td class="px-3 py-2.5 text-xs text-right font-mono font-semibold text-gray-800">${formatMoni(l.saldo)}</td>
@@ -4662,6 +4697,10 @@ if (activeTab && TABS.includes(activeTab)) {
     if (cuentaId) {
       document.getElementById('cons-cuenta-id').value = cuentaId;
       document.getElementById('cons-cuenta-txt').value = `${cuentaCodigo} - ${cuentaNombre}`;
+    }
+    const qNota = urlParams.get('nota');
+    if (qNota && document.getElementById('cons-nota')) {
+      document.getElementById('cons-nota').value = qNota;
     }
     
     setTimeout(consultarMovimientos, 150);

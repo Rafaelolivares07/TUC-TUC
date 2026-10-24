@@ -1232,17 +1232,17 @@
         <button onclick="cerrarModalLiquidadosAnteriores()" class="text-gray-400 hover:text-gray-600 text-2xl p-1 leading-none rounded-xl hover:bg-gray-100 transition cursor-pointer">&times;</button>
       </div>
 
-      <!-- Barra de Filtros y B?squeda -->
+      <!-- Barra de Filtros y Búsqueda -->
       <div class="p-4 bg-gray-50/80 border-b border-gray-200/80 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
         <div class="sm:col-span-8 relative">
           <span class="absolute left-3 top-2.5 text-gray-400 text-sm">🔍</span>
-          <input type="text" id="modal-liq-search-input" oninput="filtrarTablaLiquidados()" placeholder="Buscar por consecutivo (#), proveedor, concepto o m?todo de desembolso..."
+          <input type="text" id="modal-liq-search-input" oninput="filtrarTablaLiquidados()" placeholder="Buscar por consecutivo (#), proveedor, concepto o método de desembolso..."
                  class="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-xl text-xs sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
         </div>
         <div class="sm:col-span-4 flex items-center gap-2">
           <select id="modal-liq-tipo-select" onchange="cargarDesembolsosLiquidados(true)"
                   class="w-full py-2 px-3 bg-white border border-gray-300 rounded-xl text-xs sm:text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500">
-            <!-- Din?mico -->
+            <!-- Dinámico -->
           </select>
         </div>
       </div>
@@ -1257,7 +1257,7 @@
         </div>
 
         <div id="modal-liq-list" class="space-y-2.5">
-          <!-- Generado din?micamente -->
+          <!-- Generado dinámicamente -->
         </div>
       </div>
 
@@ -1389,7 +1389,7 @@
   }
 
   // Carga los detalles (líneas y fecha) de la relación seleccionada
-  // Carga los detalles (l?neas y fecha) de la relaci?n seleccionada (o documento anterior en modo consulta)
+  // Carga los detalles (líneas y fecha) de la relación seleccionada (o documento anterior en modo consulta)
   async function cargarRelacionGastoActiva(numDocOverride) {
     const sel = document.getElementById('gas-tipo-doc');
     const codigo = sel.value;
@@ -1419,7 +1419,7 @@
       gasRelacionFecha = fechaDefinitiva;
     }
 
-    // Gestionar visualizaci?n de banner y controles en modo consulta vs modo activo
+    // Gestionar visualización de banner y controles en modo consulta vs modo activo
     const bannerConsulta = document.getElementById('gas-banner-modo-consulta');
     const formCont = document.getElementById('gas-form-container');
     const metCont = document.getElementById('gas-metodo-pago-container');
@@ -1444,12 +1444,12 @@
       if (btnPdf) btnPdf.textContent = '🖨️ Relación Abierta';
     }
     
-    // Obtener las l?neas y cuentas del documento
+    // Obtener las líneas y cuentas del documento
     try {
       const r = await fetch(`/api/contabilidad/${NEGOCIO_ID}/gastos/relacion/${codigo}/${numDocFinal}/lineas`);
       const d = await r.json();
       if (!d.ok) {
-        toast(d.error || 'Error al obtener l?neas del gasto', false);
+        toast(d.error || 'Error al obtener líneas del gasto', false);
         return;
       }
 
@@ -1477,12 +1477,12 @@
       });
       clearGasConcepto();
       
-      // Renderizar L?neas
+      // Renderizar Líneas
       const tbody = document.getElementById('gas-lineas-body');
       tbody.innerHTML = '';
       
       if (!d.lineas || d.lineas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-gray-400 text-xs">No hay desembolsos agregados en esta relaci?n.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-4 text-center text-gray-400 text-xs">No hay desembolsos agregados en esta relación.</td></tr>';
         document.getElementById('gas-total-gastos').textContent = '$0.00';
       } else {
         let total = 0.0;
@@ -1497,10 +1497,10 @@
           const matchSoporte = displayConcepto.match(/\[Soporte:\s*([^\]]+)\]/i);
           if (matchSoporte) {
             soporteValor = matchSoporte[1].trim();
-            soporteBadge = `<button type="button" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition shadow-2xs" onclick="abrirModalEditarSoporte(${l.id}, '${escapeJsString(soporteValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para modificar el N? de recibo/factura">?? ${escapeGasHtml(soporteValor)} <span class="text-[9px] text-amber-600 opacity-70">??</span></button>`;
+            soporteBadge = `<button type="button" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 ml-1 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition shadow-2xs" onclick="abrirModalEditarSoporte(${l.id}, '${escapeJsString(soporteValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para modificar el Nº de recibo/factura">📎 ${escapeGasHtml(soporteValor)} <span class="text-[9px] text-amber-600 opacity-70">✏️</span></button>`;
             displayConcepto = displayConcepto.replace(/\[Soporte:\s*[^\]]+\]/i, '').trim();
           } else {
-            soporteBadge = `<button type="button" onclick="abrirModalEditarSoporte(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-amber-700 bg-gray-50 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-gray-200 ml-1 font-mono" title="Asociar n?mero de recibo o factura a este desembolso">?? + Soporte</button>`;
+            soporteBadge = `<button type="button" onclick="abrirModalEditarSoporte(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-amber-700 bg-gray-50 hover:bg-amber-50 px-1.5 py-0.5 rounded transition border border-gray-200 ml-1 font-mono" title="Asociar número de recibo o factura a este desembolso">📎 + Soporte</button>`;
           }
 
           let notaValor = '';
@@ -1512,9 +1512,9 @@
 
           let notaCell = '';
           if (notaValor) {
-            notaCell = `<button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-amber-50/70 text-amber-900 border border-amber-200/90 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition max-w-xs text-left shadow-2xs group" onclick="abrirModalEditarNota(${l.id}, '${escapeJsString(notaValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para editar la nota explicativa"><span class="text-amber-600">??</span> <span class="italic truncate max-w-[180px]">${escapeGasHtml(notaValor)}</span> <span class="text-[9px] text-amber-500 opacity-60 group-hover:opacity-100 transition">??</span></button>`;
+            notaCell = `<button type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-amber-50/70 text-amber-900 border border-amber-200/90 cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition max-w-xs text-left shadow-2xs group" onclick="abrirModalEditarNota(${l.id}, '${escapeJsString(notaValor)}', '${escapeJsString(displayConcepto)}')" title="Haga clic para editar la nota explicativa"><span class="text-amber-600">📝</span> <span class="italic truncate max-w-[180px]">${escapeGasHtml(notaValor)}</span> <span class="text-[9px] text-amber-500 opacity-60 group-hover:opacity-100 transition">✏️</span></button>`;
           } else {
-            notaCell = `<button type="button" onclick="abrirModalEditarNota(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 active:scale-95 border border-amber-200/80 rounded-lg transition shadow-2xs" title="A?adir nota explicativa a este desembolso"><span>??</span> <span>+ A?adir Nota</span></button>`;
+            notaCell = `<button type="button" onclick="abrirModalEditarNota(${l.id}, '', '${escapeJsString(displayConcepto)}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 active:scale-95 border border-amber-200/80 rounded-lg transition shadow-2xs" title="Añadir nota explicativa a este desembolso"><span>📝</span> <span>+ Añadir Nota</span></button>`;
           }
 
           // Badge de Centro de Utilidad (Sede)
@@ -1523,10 +1523,10 @@
           const centroBadge = `<button type="button" onclick="abrirModalCambiarCentroLinea(${l.id}, ${l.centro_utilidad_id || 1}, '${escapeJsString(displayConcepto)}')"
                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border transition cursor-pointer shadow-2xs bg-${centroBadgeColor}-50 text-${centroBadgeColor}-700 border-${centroBadgeColor}-200 hover:bg-${centroBadgeColor}-100"
                                        title="Haga clic para reasignar este gasto a otra sede">
-                                 <span>??</span> <span>${escapeGasHtml(centroNombre)}</span>
+                                 <span>🏢</span> <span>${escapeGasHtml(centroNombre)}</span>
                                </button>`;
 
-          // Badge de Categor?a y Plazo (Gasto / Activo / Diferido)
+          // Badge de Categoría y Plazo (Gasto / Activo / Diferido)
           const duracion = parseInt(l.meses_duracion || 1);
           const cuotaAct = parseInt(l.cuota_numero || 1);
           const cuotaTot = parseInt(l.cuota_total || 1);
@@ -1540,15 +1540,15 @@
 
           if (catStr === 'activo') {
             tipoPlazoBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200" title="Activo Fijo / Equipos (Amortizado a ${duracion} meses)">
-                                <span>??</span> Activo (${duracion}m)
+                                <span>📦</span> Activo (${duracion}m)
                               </span>`;
           } else if (catStr === 'diferido') {
             tipoPlazoBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200" title="Gasto Anticipado / Diferido (${duracion} meses)">
-                                <span>?</span> Diferido (${duracion}m)
+                                <span>⏳</span> Diferido (${duracion}m)
                               </span>`;
           } else {
             tipoPlazoBadge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Gasto corriente del mes">
-                                <span>??</span> Mes
+                                <span>⚡</span> Mes
                               </span>`;
           }
 
@@ -1565,22 +1565,22 @@
             <td class="px-4 py-2.5 text-center whitespace-nowrap">
               ${_modoConsultaLiquidado ? `
                 <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                  <span>?</span> Liquidado
+                  <span>✅</span> Liquidado
                 </span>
               ` : `
                 <div class="inline-flex items-center gap-1.5 justify-center">
                   <button onclick="abrirModalReclasificarLinea(${l.id}, '${escapeJsString(displayConcepto)}', '${catStr}', ${duracion}, ${parseFloat(l.monto)}, '${modalidadStr}', ${cuota1Val})"
                           class="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold rounded-lg border border-blue-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
                           title="Reclasificar este desembolso (Gasto / Activo / Diferido y plazo)">
-                    <span>??</span> Reclasificar
+                    <span>🔀</span> Reclasificar
                   </button>
                   <button onclick="abrirModalCierreIndividual(${l.id}, '${escapeJsString(displayConcepto)}', ${parseFloat(l.monto)}, ${duracion}, ${l.tercero_id || 'null'}, '${escapeJsString(l.tercero_nombre || '')}', '${escapeJsString(soporteValor || '')}')"
                           class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200 shadow-2xs transition flex items-center gap-1 cursor-pointer"
-                          title="Liquidar individualmente esta erogaci?n con el consecutivo actual">
-                    <span>?</span> Liquidar
+                          title="Liquidar individualmente esta erogación con el consecutivo actual">
+                    <span>⚡</span> Liquidar
                   </button>
-                  <button onclick="eliminarLineaGasto(${l.id})" class="text-red-500 hover:text-red-700 font-bold hover:bg-red-50 px-2 py-1 rounded transition text-xs cursor-pointer" title="Eliminar este desembolso">
-                    ?
+                  <button onclick="eliminarLineaGasto(${l.id})" class="px-2 py-1 text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 shadow-2xs transition font-bold text-xs flex items-center gap-1 cursor-pointer" title="Eliminar este desembolso de la relación">
+                    <span>🗑️</span>
                   </button>
                 </div>
               `}
@@ -1591,11 +1591,11 @@
         document.getElementById('gas-total-gastos').textContent = '$' + total.toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
       }
       
-      // Cargar m?todos de pago v?lidos para gastos
+      // Cargar métodos de pago válidos para gastos
       await cargarMetodosPagoGastos();
     } catch(e) {
       console.error(e);
-      toast('Error al consultar datos de la relaci?n', false);
+      toast('Error al consultar datos de la relación', false);
     }
   }
 
@@ -4767,7 +4767,7 @@
     }
   });
 
-  // ??? GESTI?N E IMPRESI?N DE DESEMBOLSOS LIQUIDADOS ANTERIORES ???
+  // ═══ GESTIÓN E IMPRESIÓN DE DESEMBOLSOS LIQUIDADOS ANTERIORES ═══
   async function actualizarBadgeLiquidadosCount() {
     try {
       const tipoDoc = document.getElementById('gas-tipo-doc')?.value || '';

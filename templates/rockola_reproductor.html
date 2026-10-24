@@ -88,22 +88,29 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(6, 12, 24, 0.94);
+  background: rgba(6, 12, 24, 0.95);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  padding: 12px 14px 8px;
-  margin: -12px -12px 14px -12px;
+  padding: 8px 12px 6px;
+  margin: -12px -12px 8px -12px;
   border-bottom: 1px solid rgba(0, 212, 255, 0.14);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
+.reproductor-sticky-bar .header {
+  margin-bottom: 2px !important;
+}
 .brand-sticky-title {
-  font-size: clamp(28px, 6.8vw, 32px);
+  font-size: clamp(24px, 6vw, 28px);
   font-weight: 900;
   letter-spacing: -0.8px;
   text-align: center;
-  margin: 0 0 6px;
+  margin: 0 0 2px;
   line-height: 1.05;
   user-select: none;
+}
+.np-nombre.programada-repetir {
+  color: #00d4ff !important;
+  text-shadow: 0 0 16px rgba(0, 212, 255, 0.8), 0 0 30px rgba(0, 119, 255, 0.4) !important;
 }
 .brand-word-mi {
   background: linear-gradient(135deg, #cdeeff 0%, #70c9ff 50%, #00d4ff 100%);
@@ -1188,8 +1195,13 @@ input:checked + .slider:before {
           </span>
         </div>
 
-        <div class="np-label">Sonando ahora</div>
-        <div class="np-nombre" id="nombre-actual">Esperando canciones...</div>
+        <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:2px;">
+          <span class="np-label" style="margin-bottom:0;">Sonando ahora</span>
+          <span id="badge-repetir-cancion" onclick="toggleModoRepetirCancionDirecto()" style="display:none; cursor:pointer; font-size:10px; font-weight:800; padding:2px 8px; border-radius:12px; background:rgba(0,212,255,0.18); border:1px solid var(--ac1); color:var(--ac1); box-shadow:0 0 10px rgba(0,212,255,0.4); transition:all 0.25s;" title="Canción programada para repetir 1 vez. Toca para desactivar">
+            🔂 Repetir 1x
+          </span>
+        </div>
+        <div class="np-nombre" id="nombre-actual" onclick="toggleModoRepetirCancionDirecto()" style="cursor:pointer;" title="Toca para programar repetir esta canción 1 vez">Esperando canciones...</div>
 
         <div id="yt-player-wrap-1" class="yt-wrap-audio-only">
           <div id="yt-iframe-player-1"></div>
@@ -1237,14 +1249,12 @@ input:checked + .slider:before {
         <!-- Opciones de Reproducción (Fundido, Desordenar, Repetir) -->
         <div class="playback-options-group" style="border-top:1px solid rgba(255,255,255,0.06); padding-top:4px; margin-top:8px; width:100%;">
           
-          <!-- Fundido cruzado: flecha a la izquierda, tiempos explícitos y toggle alineado a la derecha -->
+          <!-- Fundido cruzado: textos alineados a la izquierda sin caracteres basura, chevron y switch a la derecha -->
           <div onclick="toggleFundidoPanel()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:6px 0;">
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span id="fundido-arrow" style="font-size:10px; color:var(--muted); transition:transform .2s;">▸</span>
-              <span id="fundido-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Fundido cruzado</span>
-            </div>
-            <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+            <span id="fundido-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Fundido cruzado</span>
+            <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
               <span id="fundido-status" style="font-size:10px; font-weight:700; color:var(--ac1); letter-spacing:0.2px;">12s → 5s</span>
+              <span id="fundido-arrow" style="font-size:10px; color:var(--muted); transition:transform .2s; margin-right:4px;">▾</span>
               <label class="switch" style="margin:0;" onclick="event.stopPropagation()">
                 <input type="checkbox" id="fundido-toggle" checked onchange="guardarFundidoSettings()">
                 <span class="slider"></span>
@@ -1269,7 +1279,7 @@ input:checked + .slider:before {
             </div>
           </div>
 
-          <!-- Desordenar lista (Shuffle): toggle alineado a la derecha -->
+          <!-- Desordenar lista (Shuffle): alineado a la izquierda -->
           <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
             <span id="shuffle-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Desordenar lista</span>
             <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
@@ -1281,13 +1291,25 @@ input:checked + .slider:before {
             </div>
           </div>
 
-          <!-- Repetir reproducción (Loop): toggle alineado a la derecha -->
+          <!-- Repetir canción (1 vez): toggle independiente alineado a la derecha -->
           <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
-            <span id="repetir-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Repetir reproducción</span>
+            <span id="repetir-cancion-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Repetir canción (1 vez)</span>
             <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
-              <span id="repetir-status" style="font-size:10px; font-weight:700; color:var(--ac1);"></span>
-              <label class="switch" style="margin:0;" title="Repetir lista al finalizar">
-                <input type="checkbox" id="repetir-toggle" onchange="toggleModoRepetir(this.checked)">
+              <span id="repetir-cancion-status" style="font-size:10px; font-weight:700; color:var(--ac1);"></span>
+              <label class="switch" style="margin:0;" title="Repetir esta canción 1 sola vez y continuar con la siguiente">
+                <input type="checkbox" id="repetir-cancion-toggle" onchange="toggleModoRepetirCancion(this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Repetir lista (1 vez): toggle independiente alineado a la derecha -->
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
+            <span id="repetir-lista-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Repetir lista (1 vez)</span>
+            <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+              <span id="repetir-lista-status" style="font-size:10px; font-weight:700; color:var(--ac1);"></span>
+              <label class="switch" style="margin:0;" title="Repetir la lista 1 sola vez al finalizar">
+                <input type="checkbox" id="repetir-lista-toggle" onchange="toggleModoRepetirLista(this.checked)">
                 <span class="slider"></span>
               </label>
             </div>
@@ -1473,9 +1495,9 @@ input:checked + .slider:before {
   <!-- Canvas de animación a pantalla completa -->
   <canvas id="visualizer-fs-canvas" style="position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none;"></canvas>
 
-  <!-- Vinilo a pantalla completa en modo exclusivo -->
-  <div id="fs-vinyl-wrap" style="display:none; position:absolute; inset:0; z-index:2; align-items:center; justify-content:center; pointer-events:none;">
-    <div class="vinyl-disc-wrap" id="fs-vinyl-spin" style="width:min(76vw, 76vh); height:min(76vw, 76vh); max-width:540px; max-height:540px;">
+  <!-- Vinilo a pantalla completa en modo exclusivo (crecido 20% y centrado arriba) -->
+  <div id="fs-vinyl-wrap" style="display:none; position:absolute; inset:0; z-index:2; align-items:center; justify-content:center; padding-bottom:95px; pointer-events:none;">
+    <div class="vinyl-disc-wrap" id="fs-vinyl-spin" style="width:min(90vw, 90vh); height:min(90vw, 90vh); max-width:650px; max-height:650px;">
       <svg viewBox="0 0 300 300" width="100%" height="100%">
         <defs>
           <radialGradient id="v-body-fs" cx="50%" cy="50%" r="50%">
@@ -1919,6 +1941,47 @@ function handlePlayerEnded(e) {
   if (p !== player) return;
   if (transitioning) return;
   
+  // Repetir cancion 1 sola vez
+  if (modoRepetirCancion && cancionActual) {
+    console.log('[Rockola] Repitiendo cancion actual 1 vez (+1):', cancionActual);
+    desactivarRepetirCancionUnaVez();
+    p.currentTime = 0;
+    p.play().then(() => {
+      reproduciendo = true;
+      setVinylSpinning(true);
+      iniciarVisualizerCompacto();
+      actualizarPlayPauseBtn(true);
+      estadoEl.textContent = 'Reproduciendo (Repeticion 1x) ✓';
+    }).catch(() => {
+      saltarActual();
+    });
+    return;
+  }
+
+  // Si se termina la ultima cancion y Repetir lista estaba activo
+  if (modoRepetirLista && currentCola && currentCola.length <= 1 && memoriaListaCola.length > 0) {
+    console.log('[Rockola] Repitiendo lista completa 1 vez (+1)');
+    desactivarRepetirListaUnaVez();
+    const listaARepetir = [...memoriaListaCola];
+    fetch(`/rockola/${SALA}/siguiente`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: cancionActual })
+    }).then(async () => {
+      for (const item of listaARepetir) {
+        try {
+          await fetch(`/rockola/${SALA}/agregar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cancion: item, admin_key: ADMIN_KEY, modo: 'final' })
+          });
+        } catch(e) {}
+      }
+      verificarCola();
+    }).catch(() => verificarCola());
+    return;
+  }
+
   const idTerminada = cancionActual;
   reproduciendo = false;
   playPendiente = false;
@@ -2156,6 +2219,13 @@ function onYtPlayerStateChange(index, event) {
     } else if (event.data === YT.PlayerState.ENDED) {
       detenerYtProgresoTimer();
       if (!transitioning) {
+        if (modoRepetirCancion && cancionActual && ytPlayerActual) {
+          console.log('[YouTube] Repitiendo video 1 vez (+1):', cancionActual);
+          desactivarRepetirCancionUnaVez();
+          ytPlayerActual.seekTo(0);
+          ytPlayerActual.playVideo();
+          return;
+        }
         console.log('[YouTube] Video terminado, pasando a siguiente cancion');
         saltarActual();
       }
@@ -2444,6 +2514,9 @@ async function verificarCola() {
     const data = await res.json();
     const cola = data.cola || [];
     currentCola = cola;
+    if (cola.length > memoriaListaCola.length) {
+      memoriaListaCola = [...cola];
+    }
 
     aplicarVolumen(data.volumen);
     
@@ -4112,7 +4185,9 @@ async function guardarFundidoSettings() {
    MODOS DE REPRODUCCIÓN: ALEATORIO Y REPETIR
    ═══════════════════════════════════════════ */
 let modoAleatorio = localStorage.getItem('rockola_shuffle') === '1';
-let modoRepetir = localStorage.getItem('rockola_repetir') === '1';
+let modoRepetirCancion = localStorage.getItem('rockola_repetir_cancion') === '1';
+let modoRepetirLista = localStorage.getItem('rockola_repetir_lista') === '1';
+let memoriaListaCola = [];
 
 function actualizarShuffleStatus() {
   const toggle = document.getElementById('shuffle-toggle');
@@ -4129,22 +4204,36 @@ function actualizarShuffleStatus() {
   }
 }
 
-function actualizarRepetirStatus() {
-  const toggle = document.getElementById('repetir-toggle');
-  const isRepetir = toggle ? toggle.checked : false;
-  const labelEl = document.getElementById('repetir-label');
-  const statusEl = document.getElementById('repetir-status');
-  if (statusEl) {
-    statusEl.textContent = isRepetir ? 'Activo' : '';
-  }
+function actualizarRepetirCancionStatus() {
+  const toggle = document.getElementById('repetir-cancion-toggle');
+  const labelEl = document.getElementById('repetir-cancion-label');
+  const statusEl = document.getElementById('repetir-cancion-status');
+  const badgeEl = document.getElementById('badge-repetir-cancion');
+  const nombreEl = document.getElementById('nombre-actual');
+
+  if (toggle) toggle.checked = modoRepetirCancion;
+  if (statusEl) statusEl.textContent = modoRepetirCancion ? 'Activo (+1)' : '';
   if (labelEl) {
-    if (isRepetir) {
-      labelEl.style.color = 'var(--ac1)';
-      labelEl.style.textShadow = '0 0 10px rgba(0, 212, 255, 0.4)';
-    } else {
-      labelEl.style.color = 'var(--muted)';
-      labelEl.style.textShadow = 'none';
-    }
+    labelEl.style.color = modoRepetirCancion ? 'var(--ac1)' : 'var(--muted)';
+    labelEl.style.textShadow = modoRepetirCancion ? '0 0 10px rgba(0, 212, 255, 0.4)' : 'none';
+  }
+  if (badgeEl) badgeEl.style.display = modoRepetirCancion ? 'inline-flex' : 'none';
+  if (nombreEl) {
+    if (modoRepetirCancion) nombreEl.classList.add('programada-repetir');
+    else nombreEl.classList.remove('programada-repetir');
+  }
+}
+
+function actualizarRepetirListaStatus() {
+  const toggle = document.getElementById('repetir-lista-toggle');
+  const labelEl = document.getElementById('repetir-lista-label');
+  const statusEl = document.getElementById('repetir-lista-status');
+
+  if (toggle) toggle.checked = modoRepetirLista;
+  if (statusEl) statusEl.textContent = modoRepetirLista ? 'Activo (+1)' : '';
+  if (labelEl) {
+    labelEl.style.color = modoRepetirLista ? 'var(--ac1)' : 'var(--muted)';
+    labelEl.style.textShadow = modoRepetirLista ? '0 0 10px rgba(0, 212, 255, 0.4)' : 'none';
   }
 }
 
@@ -4157,10 +4246,35 @@ function toggleModoAleatorio(checked) {
   }
 }
 
-function toggleModoRepetir(checked) {
-  modoRepetir = !!checked;
-  localStorage.setItem('rockola_repetir', modoRepetir ? '1' : '0');
-  actualizarRepetirStatus();
+function toggleModoRepetirCancion(checked) {
+  modoRepetirCancion = !!checked;
+  localStorage.setItem('rockola_repetir_cancion', modoRepetirCancion ? '1' : '0');
+  actualizarRepetirCancionStatus();
+}
+
+function toggleModoRepetirCancionDirecto() {
+  toggleModoRepetirCancion(!modoRepetirCancion);
+}
+
+function desactivarRepetirCancionUnaVez() {
+  modoRepetirCancion = false;
+  localStorage.setItem('rockola_repetir_cancion', '0');
+  actualizarRepetirCancionStatus();
+}
+
+function toggleModoRepetirLista(checked) {
+  modoRepetirLista = !!checked;
+  localStorage.setItem('rockola_repetir_lista', modoRepetirLista ? '1' : '0');
+  if (modoRepetirLista && currentCola && currentCola.length > 0) {
+    memoriaListaCola = [...currentCola];
+  }
+  actualizarRepetirListaStatus();
+}
+
+function desactivarRepetirListaUnaVez() {
+  modoRepetirLista = false;
+  localStorage.setItem('rockola_repetir_lista', '0');
+  actualizarRepetirListaStatus();
 }
 
 async function desordenarColaAleatorio() {
@@ -4192,10 +4306,30 @@ try { aplicarVolumen(volumenEl.value); } catch(e) { console.warn(e); }
 try { actualizarFundidoStatus(); } catch(e) { console.warn(e); }
 try {
   if (document.getElementById('shuffle-toggle')) document.getElementById('shuffle-toggle').checked = modoAleatorio;
-  if (document.getElementById('repetir-toggle')) document.getElementById('repetir-toggle').checked = modoRepetir;
   actualizarShuffleStatus();
-  actualizarRepetirStatus();
+  actualizarRepetirCancionStatus();
+  actualizarRepetirListaStatus();
   actualizarVisibilidadModoVisualizer();
+
+  // Autoreproduccion al entrar si esta activo
+  const urlParamsEntrada = new URLSearchParams(window.location.search);
+  const autoplayPermitido = urlParamsEntrada.get('autoplay') === '1' || localStorage.getItem('rockola_autoreproducir') !== '0';
+  if (autoplayPermitido) {
+    const intentarDesbloqueoAudio = () => {
+      if (!reproduciendo && cancionActual && player) {
+        player.play().then(() => {
+          reproduciendo = true;
+          setVinylSpinning(true);
+          iniciarVisualizerCompacto();
+          actualizarPlayPauseBtn(true);
+        }).catch(() => {});
+      }
+      window.removeEventListener('click', intentarDesbloqueoAudio);
+      window.removeEventListener('touchstart', intentarDesbloqueoAudio);
+    };
+    window.addEventListener('click', intentarDesbloqueoAudio, { once: true });
+    window.addEventListener('touchstart', intentarDesbloqueoAudio, { once: true });
+  }
 } catch(e) { console.warn('Error en init de modos:', e); }
 
 // Iniciar verificación y transición al reproductor de forma segura

@@ -446,6 +446,17 @@ input:checked + .slider:before {
 const DEVICE_KEY = 'rockola_device_id';
 const DEVICE_NAME_KEY = 'rockola_device_name';
 const PRED_KEY = 'rockola_sala_predeterminada';
+const AUTOPLAY_KEY = 'rockola_autoreproducir';
+
+function esAutoplayActivo() {
+  const v = localStorage.getItem(AUTOPLAY_KEY);
+  return v === null ? true : v === '1';
+}
+
+function toggleAutoplayEntrada(activo) {
+  localStorage.setItem(AUTOPLAY_KEY, activo ? '1' : '0');
+}
+
 let modoActual = 'rockola';
 let salasCache = [];
 
@@ -456,7 +467,8 @@ let salasCache = [];
   const salaPred = (localStorage.getItem(PRED_KEY) || '').trim();
   if (salaPred && !cambiarSala) {
     recordarSalaLocal(salaPred);
-    window.location.replace(`${rockolaBase()}/reproductor/${encodeURIComponent(salaPred)}`);
+    const apPred = esAutoplayActivo() ? '?autoplay=1' : '';
+    window.location.replace(`${rockolaBase()}/reproductor/${encodeURIComponent(salaPred)}${apPred}`);
   }
 })();
 
@@ -551,7 +563,8 @@ function recordarSalaLocal(salaId) {
 
 function abrirReproductor(salaId) {
   recordarSalaLocal(salaId);
-  window.location.href = `${rockolaBase()}/reproductor/${encodeURIComponent(salaId)}`;
+  const ap = esAutoplayActivo() ? '?autoplay=1' : '';
+  window.location.href = `${rockolaBase()}/reproductor/${encodeURIComponent(salaId)}${ap}`;
 }
 
 function agregarComoCliente(salaId) {
@@ -608,6 +621,13 @@ function renderSala(sala, disponible) {
           <span class="direct-entry-label">Entrada directa a esta sala</span>
           <label class="switch" style="margin:0;">
             <input type="checkbox" ${esPred ? 'checked' : ''} onchange="toggleSalaPredeterminada('${nombre}', this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="direct-entry-toggle" onclick="event.stopPropagation();" style="border-top:1px solid rgba(255,255,255,0.06); margin-top:4px; padding-top:6px;">
+          <span class="direct-entry-label">Autoreproducir al entrar</span>
+          <label class="switch" style="margin:0;">
+            <input type="checkbox" ${esAutoplayActivo() ? 'checked' : ''} onchange="toggleAutoplayEntrada(this.checked)">
             <span class="slider"></span>
           </label>
         </div>

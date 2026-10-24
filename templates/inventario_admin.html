@@ -2492,12 +2492,36 @@
 
   <div id="tab-entradas" class="hidden bg-white rounded-2xl shadow p-5">
 
-    <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
+    <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
       <div class="flex items-center gap-3">
-        <h2 class="font-bold text-gray-700">Registrar entrada de mercancía</h2>
+        <h2 class="font-bold text-gray-700 text-base">Registrar entrada de mercancía</h2>
         <span id="indicador-auto-guardado-borrador" class="hidden text-[11px] font-bold text-emerald-600 font-mono transition-all"></span>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- Avisos Preventivos de Variación compacto en la misma barra superior -->
+        <div class="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50/70 border border-amber-300 rounded-xl px-2.5 py-1 text-xs shadow-2xs"
+             title="Avisos preventivos: tolerancias en subida de precio o variación de cantidad respecto al histórico">
+          <span class="text-sm select-none">🛡️</span>
+          <div class="flex items-center gap-1">
+            <span class="text-[11px] font-bold text-amber-900 select-none whitespace-nowrap">Tol. Precio:</span>
+            <input type="number" id="tolerancia-precio-pct" value="10" min="0" max="200" step="1"
+                   oninput="actualizarToleranciasEntrada()"
+                   class="w-12 text-center text-xs font-black py-0.5 px-0.5 border border-amber-300 rounded-lg bg-white text-gray-900 focus:ring-1 focus:ring-amber-500">
+            <span class="text-[10px] font-extrabold text-amber-800">%</span>
+          </div>
+          <div class="h-3.5 w-px bg-amber-300/70 mx-0.5"></div>
+          <div class="flex items-center gap-1">
+            <span class="text-[11px] font-bold text-amber-900 select-none whitespace-nowrap">Tol. Cantidad:</span>
+            <input type="number" id="tolerancia-cant-pct" value="25" min="0" max="500" step="1"
+                   oninput="actualizarToleranciasEntrada()"
+                   class="w-12 text-center text-xs font-black py-0.5 px-0.5 border border-amber-300 rounded-lg bg-white text-gray-900 focus:ring-1 focus:ring-amber-500">
+            <span class="text-[10px] font-extrabold text-amber-800">%</span>
+          </div>
+          <span id="badge-total-alertas" class="hidden text-[10px] font-black px-1.5 py-0.2 rounded-full bg-amber-500 text-white animate-pulse">
+            0 avisos
+          </span>
+        </div>
+
         <button type="button" onclick="document.getElementById('input-escanear-factura').click()"
                 id="btn-escanear-factura-ia"
                 class="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition cursor-pointer">
@@ -2665,41 +2689,9 @@
         <input type="hidden" id="entrada-proveedor-id">
       </div>
 
-      <div class="sm:col-span-7">
+      <div class="sm:col-span-12">
         <label class="font-bold text-gray-700 mb-1 block">Notas (opcional)</label>
         <input id="entrada-notas" tabindex="7" type="text" placeholder="Notas u observaciones de la factura...">
-      </div>
-
-      <div class="sm:col-span-5 bg-gradient-to-r from-amber-50 to-orange-50/70 border border-amber-300 rounded-xl p-2.5 flex flex-col justify-between shadow-2xs">
-        <div class="flex items-center justify-between text-xs font-bold text-amber-900 mb-1">
-          <span class="flex items-center gap-1.5">
-            <span class="text-sm">🛡️</span>
-            <span>Avisos Preventivos de Variación</span>
-          </span>
-          <span id="badge-total-alertas" class="hidden text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white animate-pulse">
-            0 avisos
-          </span>
-        </div>
-        <div class="flex items-center gap-4 flex-wrap">
-          <div class="flex items-center gap-1.5" title="Tolerancia máxima permitida en subida de precio sobre la cotización previa o costo">
-            <span class="text-[11px] font-bold text-gray-700">Tol. Subida Precio:</span>
-            <div class="relative flex items-center">
-              <input type="number" id="tolerancia-precio-pct" value="10" min="0" max="200" step="1"
-                     oninput="actualizarToleranciasEntrada()"
-                     class="w-14 text-center text-xs font-extrabold py-1 px-1 border border-amber-300 rounded bg-white text-gray-900 focus:ring-1 focus:ring-amber-500">
-              <span class="text-[11px] font-extrabold text-gray-600 ml-1">%</span>
-            </div>
-          </div>
-          <div class="flex items-center gap-1.5" title="Tolerancia máxima permitida en variación de cantidad respecto al histórico habitual">
-            <span class="text-[11px] font-bold text-gray-700">Tol. Cantidad:</span>
-            <div class="relative flex items-center">
-              <input type="number" id="tolerancia-cant-pct" value="25" min="0" max="500" step="1"
-                     oninput="actualizarToleranciasEntrada()"
-                     class="w-14 text-center text-xs font-extrabold py-1 px-1 border border-amber-300 rounded bg-white text-gray-900 focus:ring-1 focus:ring-amber-500">
-              <span class="text-[11px] font-extrabold text-gray-600 ml-1">%</span>
-            </div>
-          </div>
-        </div>
       </div>
 
     </div>
@@ -10571,7 +10563,7 @@ window.restaurarItemDescartado = function(idx) {
 };
 
 // ── VINCULAR A INSUMO EXISTENTE DEL CATÁLOGO ───────────────────────────────────
-window.abrirModalVincularItem = function(idx) {
+window.abrirModalVincularItem = async function(idx) {
   const item = (window.itemsFacturaOmitidos || [])[idx];
   if (!item) return;
 
@@ -10580,13 +10572,24 @@ window.abrirModalVincularItem = function(idx) {
   document.getElementById('modal-vincular-texto-item').textContent = `${item.cantidad || 1}x ${item.texto_detectado}`;
   const tot = item.total_linea || ((item.cantidad || 1) * (item.valor_unitario || 0));
   document.getElementById('modal-vincular-monto-item').textContent = '$' + tot.toLocaleString('es-CO');
-  document.getElementById('modal-vincular-buscar-producto').value = item.texto_detectado;
+  
+  // Limpiar término inicial para buscar palabras clave o dejar que el usuario escriba
+  const defaultTerm = (item.texto_detectado || '').split(' ')[0] || '';
+  document.getElementById('modal-vincular-buscar-producto').value = defaultTerm;
   document.getElementById('btn-confirmar-vinculacion-item').disabled = true;
 
   document.getElementById('overlay-vincular-item')?.classList.remove('hidden');
 
-  filtrarProductosVincular(item.texto_detectado);
-  setTimeout(() => document.getElementById('modal-vincular-buscar-producto')?.focus(), 100);
+  // Asegurar que la lista de productos esté cargada
+  if ((typeof productos === 'undefined' || !productos.length) && typeof cargarProductos === 'function') {
+    try { await cargarProductos(); } catch(e) {}
+  }
+
+  filtrarProductosVincular(defaultTerm);
+  setTimeout(() => {
+    const inp = document.getElementById('modal-vincular-buscar-producto');
+    if (inp) { inp.focus(); inp.select(); }
+  }, 100);
 };
 
 window.cerrarModalVincularItem = function() {
@@ -10596,27 +10599,39 @@ window.cerrarModalVincularItem = function() {
 window.filtrarProductosVincular = function(q) {
   const cont = document.getElementById('modal-vincular-lista-productos');
   if (!cont) return;
-  const prods = window.productosCatalogo || [];
-  const term = (q || '').trim().toLowerCase();
+
+  // Acceder a la variable global 'productos'
+  const prods = (typeof productos !== 'undefined' && Array.isArray(productos)) ? productos : [];
+  const term = (q || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  if (prods.length === 0) {
+    cont.innerHTML = '<div class="p-4 text-center text-xs text-gray-400">Cargando catálogo de productos...</div>';
+    if (typeof cargarProductos === 'function') {
+      cargarProductos().then(() => filtrarProductosVincular(q));
+    }
+    return;
+  }
 
   const filtrados = prods.filter(p => {
     if (!term) return true;
-    return p.nombre && p.nombre.toLowerCase().includes(term);
-  }).slice(0, 30);
+    const pNom = (p.nombre || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const pCat = (p.categoria || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return pNom.includes(term) || pCat.includes(term);
+  }).slice(0, 50);
 
   if (filtrados.length === 0) {
-    cont.innerHTML = '<div class="p-4 text-center text-xs text-gray-400">No se encontraron productos en el catálogo que coincidan.</div>';
+    cont.innerHTML = '<div class="p-4 text-center text-xs text-gray-400">No se encontraron productos en el catálogo que coincidan con "' + (q || '') + '".</div>';
     return;
   }
 
   cont.innerHTML = filtrados.map(p => `
-    <div onclick="seleccionarProductoVincular(${p.id}, '${p.nombre.replace(/'/g, "\'")}')"
+    <div onclick="seleccionarProductoVincular(${p.id}, '${(p.nombre || '').replace(/'/g, "\\'")}')"
          class="p-2.5 hover:bg-blue-50 cursor-pointer transition flex items-center justify-between text-xs group">
       <div>
         <span class="font-bold text-gray-800 group-hover:text-blue-950 block">${p.nombre}</span>
         <span class="text-[10px] text-gray-400">${p.categoria || 'Sin categoría'}</span>
       </div>
-      <span class="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+      <span class="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2 py-0.5 rounded transition">
         Seleccionar
       </span>
     </div>
@@ -10644,7 +10659,8 @@ window.confirmarVinculacionItem = function() {
 
   if (!item || !prodId) return;
 
-  const prod = (window.productosCatalogo || []).find(p => p.id === prodId);
+  const prods = (typeof productos !== 'undefined' && Array.isArray(productos)) ? productos : [];
+  const prod = prods.find(p => p.id === prodId);
   const provId = document.getElementById('entrada-proveedor-id')?.value;
   const cant = item.cantidad || 1;
   const vu = item.valor_unitario || 0;

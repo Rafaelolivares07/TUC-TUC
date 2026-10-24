@@ -1872,6 +1872,19 @@ def quitar(sala_id):
     return jsonify(ok=True)
 
 
+@bp.route('/<sala_id>/vaciar', methods=['POST'])
+def vaciar_cola(sala_id):
+    conn = _connect()
+    try:
+        with _lock:
+            conn.execute("DELETE FROM rockola_cola WHERE sala_id = %s", (sala_id,))
+            _reset_sync(conn, sala_id)
+            conn.commit()
+    finally:
+        conn.close()
+    return jsonify(ok=True)
+
+
 @bp.route('/<sala_id>/reordenar', methods=['POST'])
 def reordenar(sala_id):
     data = request.get_json(silent=True) or {}

@@ -2498,25 +2498,37 @@
         <span id="indicador-auto-guardado-borrador" class="hidden text-[11px] font-bold text-emerald-600 font-mono transition-all"></span>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
-        <!-- Avisos Preventivos de Variación compacto en la misma barra superior -->
-        <div class="flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50/70 border border-amber-300 rounded-xl px-2.5 py-1 text-xs shadow-2xs"
-             title="Avisos preventivos: tolerancias en subida de precio o variación de cantidad respecto al histórico">
-          <span class="text-sm select-none">🛡️</span>
+        <!-- Avisos Preventivos de Variación / Alertas de Compra -->
+        <div class="flex items-center gap-2 bg-gradient-to-r from-amber-50 to-orange-50/80 border border-amber-300 rounded-xl px-3 py-1 text-xs shadow-2xs"
+             title="🛡️ Avisos Preventivos: El sistema te alertará en amarillo si algún producto sube de precio o varía en cantidad más de estos porcentajes respecto al historial.">
           <div class="flex items-center gap-1">
-            <span class="text-[11px] font-bold text-amber-900 select-none whitespace-nowrap">Tol. Precio:</span>
-            <input type="number" id="tolerancia-precio-pct" value="10" min="0" max="200" step="1"
-                   oninput="actualizarToleranciasEntrada()"
-                   class="w-12 text-center text-xs font-black py-0.5 px-0.5 border border-amber-300 rounded-lg bg-white text-gray-900 focus:ring-1 focus:ring-amber-500">
-            <span class="text-[10px] font-extrabold text-amber-800">%</span>
+            <span class="text-base select-none">🛡️</span>
+            <span class="font-extrabold text-amber-950 text-[11px] whitespace-nowrap">Alertas si:</span>
           </div>
-          <div class="h-3.5 w-px bg-amber-300/70 mx-0.5"></div>
-          <div class="flex items-center gap-1">
-            <span class="text-[11px] font-bold text-amber-900 select-none whitespace-nowrap">Tol. Cantidad:</span>
-            <input type="number" id="tolerancia-cant-pct" value="25" min="0" max="500" step="1"
-                   oninput="actualizarToleranciasEntrada()"
-                   class="w-12 text-center text-xs font-black py-0.5 px-0.5 border border-amber-300 rounded-lg bg-white text-gray-900 focus:ring-1 focus:ring-amber-500">
-            <span class="text-[10px] font-extrabold text-amber-800">%</span>
+
+          <div class="flex items-center gap-1" title="Avisar si el precio unitario sube más de este porcentaje">
+            <span class="text-[11px] font-semibold text-amber-900 whitespace-nowrap">Precio sube &gt;</span>
+            <input type="text" inputmode="numeric" id="tolerancia-precio-pct" value="10"
+                   oninput="this.value = this.value.replace(/[^0-9]/g, ''); actualizarToleranciasEntrada();"
+                   class="w-10 text-center text-xs font-black py-0.5 px-1 border border-amber-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-amber-500 shadow-2xs">
+            <span class="text-[11px] font-black text-amber-800">%</span>
           </div>
+
+          <div class="h-4 w-px bg-amber-300/80 mx-0.5"></div>
+
+          <div class="flex items-center gap-1" title="Avisar si la cantidad varía más de este porcentaje respecto a compras habituales">
+            <span class="text-[11px] font-semibold text-amber-900 whitespace-nowrap">Cantidad varía &gt;</span>
+            <input type="text" inputmode="numeric" id="tolerancia-cant-pct" value="25"
+                   oninput="this.value = this.value.replace(/[^0-9]/g, ''); actualizarToleranciasEntrada();"
+                   class="w-10 text-center text-xs font-black py-0.5 px-1 border border-amber-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-amber-500 shadow-2xs">
+            <span class="text-[11px] font-black text-amber-800">%</span>
+          </div>
+
+          <span class="text-amber-700 hover:text-amber-900 cursor-help text-xs ml-0.5" 
+                title="🛡️ Avisos Preventivos: Al ingresar o escanear una factura, el sistema resaltará en amarillo las filas cuyos precios hayan subido por encima de este porcentaje (respecto a la última compra o cotización), o cuya cantidad varíe anormalmente.">
+            ℹ️
+          </span>
+
           <span id="badge-total-alertas" class="hidden text-[10px] font-black px-1.5 py-0.2 rounded-full bg-amber-500 text-white animate-pulse">
             0 avisos
           </span>

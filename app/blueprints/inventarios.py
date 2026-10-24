@@ -311,36 +311,32 @@ def _crear_tablas(conn):
 
     # Migrar productos_tienda → productos si la tabla origen existe y aún no se migró
     try:
-        conn.execute("""
-            INSERT INTO productos (id, negocio_id, nombre, categoria, precio, costo,
-                                   imagen, descripcion, codigo_barra, iva_pct,
-                                   disponible, orden, created_at)
-            SELECT pt.id, t.tercero_id, pt.nombre, pt.categoria, pt.precio, 0,
-                   pt.imagen, pt.descripcion, pt.codigo_barra, COALESCE(pt.iva_pct, 0),
-                   pt.disponible, pt.orden, pt.created_at
-            FROM productos_tienda pt
-            JOIN tiendas t ON t.id = pt.tienda_id
-            WHERE t.tercero_id IS NOT NULL
-            ON CONFLICT DO NOTHING
-        """)
-        conn.commit()
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
+        r_chk = conn.execute("SELECT to_regclass('productos_tienda')").fetchone()
+        if r_chk and r_chk[0]:
+            conn.execute("""
+                INSERT INTO productos (id, negocio_id, nombre, categoria, precio, costo,
+                                       imagen, descripcion, codigo_barra, iva_pct,
+                                       disponible, orden, created_at)
+                SELECT pt.id, t.tercero_id, pt.nombre, pt.categoria, pt.precio, 0,
+                       pt.imagen, pt.descripcion, pt.codigo_barra, COALESCE(pt.iva_pct, 0),
+                       pt.disponible, pt.orden, pt.created_at
+                FROM productos_tienda pt
+                JOIN tiendas t ON t.id = pt.tienda_id
+                WHERE t.tercero_id IS NOT NULL
+                ON CONFLICT DO NOTHING
+            """)
+            conn.commit()
 
-    try:
-        # Migrar stock actual a saldos_inventario
-        conn.execute("""
-            INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock)
-            SELECT t.tercero_id, pt.id, 1, COALESCE(pt.stock, 0)
-            FROM productos_tienda pt
-            JOIN tiendas t ON t.id = pt.tienda_id
-            WHERE t.tercero_id IS NOT NULL AND COALESCE(pt.stock, 0) > 0
-            ON CONFLICT DO NOTHING
-        """)
-        conn.commit()
+            # Migrar stock actual a saldos_inventario
+            conn.execute("""
+                INSERT INTO saldos_inventario (negocio_id, producto_id, bodega, stock)
+                SELECT t.tercero_id, pt.id, 1, COALESCE(pt.stock, 0)
+                FROM productos_tienda pt
+                JOIN tiendas t ON t.id = pt.tienda_id
+                WHERE t.tercero_id IS NOT NULL AND COALESCE(pt.stock, 0) > 0
+                ON CONFLICT DO NOTHING
+            """)
+            conn.commit()
     except Exception:
         try:
             conn.rollback()

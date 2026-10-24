@@ -1459,6 +1459,76 @@ input:checked + .slider:before {
   <!-- Canvas de animación a pantalla completa -->
   <canvas id="visualizer-fs-canvas" style="position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none;"></canvas>
 
+  <!-- Vinilo a pantalla completa en modo exclusivo -->
+  <div id="fs-vinyl-wrap" style="display:none; position:absolute; inset:0; z-index:2; align-items:center; justify-content:center; pointer-events:none;">
+    <div class="vinyl-disc-wrap" id="fs-vinyl-spin" style="width:min(76vw, 76vh); height:min(76vw, 76vh); max-width:540px; max-height:540px;">
+      <svg viewBox="0 0 300 300" width="100%" height="100%">
+        <defs>
+          <radialGradient id="v-body-fs" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#070b12" />
+            <stop offset="35%" stop-color="#141c2a" />
+            <stop offset="39%" stop-color="#0a0f17" />
+            <stop offset="65%" stop-color="#172233" />
+            <stop offset="69%" stop-color="#090e16" />
+            <stop offset="95%" stop-color="#192436" />
+            <stop offset="100%" stop-color="#04060a" />
+          </radialGradient>
+          <linearGradient id="v-sheen-fs" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="rgba(0,212,255,0.25)" />
+            <stop offset="30%" stop-color="rgba(255,255,255,0.03)" />
+            <stop offset="50%" stop-color="rgba(0,212,255,0.30)" />
+            <stop offset="70%" stop-color="rgba(255,255,255,0.03)" />
+            <stop offset="100%" stop-color="rgba(0,212,255,0.25)" />
+          </linearGradient>
+          <linearGradient id="v-label-fs" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00d4ff" />
+            <stop offset="60%" stop-color="#0055dd" />
+            <stop offset="100%" stop-color="#001844" />
+          </linearGradient>
+        </defs>
+
+        <circle cx="150" cy="150" r="146" fill="url(#v-body-fs)" stroke="rgba(0,212,255,0.4)" stroke-width="1.5" />
+        <circle cx="150" cy="150" r="146" fill="url(#v-sheen-fs)" />
+
+        <!-- Surcos estándar -->
+        <circle cx="150" cy="150" r="140" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.6" />
+        <circle cx="150" cy="150" r="134" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+        <circle cx="150" cy="150" r="128" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.6" />
+        
+        <!-- Cambio de Pista 1 -->
+        <circle cx="150" cy="150" r="121" fill="none" stroke="rgba(0,212,255,0.55)" stroke-width="1.6" stroke-dasharray="7 3" />
+        
+        <circle cx="150" cy="150" r="114" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
+        <circle cx="150" cy="150" r="108" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.6" />
+        <circle cx="150" cy="150" r="101" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+
+        <!-- Cambio de Pista 2 -->
+        <circle cx="150" cy="150" r="94" fill="none" stroke="rgba(0,212,255,0.55)" stroke-width="1.6" stroke-dasharray="9 4" />
+
+        <circle cx="150" cy="150" r="87" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" />
+        <circle cx="150" cy="150" r="80" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="0.6" />
+
+        <!-- Cambio de Pista 3 -->
+        <circle cx="150" cy="150" r="73" fill="none" stroke="rgba(0,212,255,0.55)" stroke-width="1.6" stroke-dasharray="6 3" />
+
+        <!-- Micro-imperfecciones / rayoncitos tenues que acusan el giro -->
+        <path d="M 60 140 A 95 95 0 0 1 110 80" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="0.6" stroke-dasharray="14 8 4 6" />
+        <path d="M 180 230 A 110 110 0 0 1 245 170" fill="none" stroke="rgba(0,212,255,0.22)" stroke-width="0.7" stroke-dasharray="18 12 6 8" />
+        <path d="M 130 50 A 130 130 0 0 1 230 110" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" stroke-dasharray="10 15 3 10" />
+        <path d="M 85 215 A 85 85 0 0 0 165 240" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.6" stroke-dasharray="8 6 12 8" />
+
+        <!-- Galleta central -->
+        <circle cx="150" cy="150" r="58" fill="url(#v-label-fs)" stroke="#00d4ff" stroke-width="2" />
+        <circle cx="150" cy="150" r="52" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="0.8" />
+        <text x="150" y="155" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="14" text-anchor="middle" fill="#ffffff" letter-spacing="-0.3">
+          TUC<tspan fill="#00d4ff">TUC</tspan>
+        </text>
+        <circle cx="150" cy="150" r="8" fill="#04060a" stroke="#00d4ff" stroke-width="1.2" />
+        <circle cx="150" cy="150" r="3" fill="#ffffff" opacity="0.85" />
+      </svg>
+    </div>
+  </div>
+
   <!-- Cabecera HUD en modo exclusivo -->
   <div style="position:relative; z-index:10; display:flex; justify-content:space-between; align-items:center; padding:16px 20px; background:linear-gradient(180deg, rgba(0,0,0,0.88) 0%, transparent 100%); pointer-events:auto;" onclick="event.stopPropagation()">
     <div style="display:flex; flex-direction:column; min-width:0; flex:1; margin-right:12px;">
@@ -4603,9 +4673,10 @@ async function iniciarCrossfade(secs, targetSong = null) {
 }
 
 function setVinylSpinning(on) {
-  if (vinylSpin) {
-    vinylSpin.style.animation = on ? 'spin 3s linear infinite' : 'none';
-  }
+  const discs = [document.getElementById('vinyl-spin'), document.getElementById('fs-vinyl-spin')];
+  discs.forEach(d => {
+    if (d) d.style.animation = on ? 'spin 3s linear infinite' : 'none';
+  });
 }
 
 function setWaveActive(on) {
@@ -4977,6 +5048,8 @@ function cambiarModoVisualizer(modo) {
     const fs = document.getElementById('visualizer-fullscreen');
     const isFs = fs && fs.style.display === 'flex';
     loopVisualizer(isFs ? 'visualizer-fs-canvas' : 'visualizer-canvas');
+  } else {
+    setVinylSpinning(reproduciendo);
   }
 }
 
@@ -4985,25 +5058,37 @@ function abrirVisualizerFullscreen() {
   try { initAudioContext(); } catch(e) {}
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   const fs = document.getElementById('visualizer-fullscreen');
-  fs.style.display = 'flex';
+  if (fs) fs.style.display = 'flex';
   document.querySelectorAll('.viz-mode-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === modoVisualizer);
   });
+  actualizarVisibilidadModoVisualizer();
+  setVinylSpinning(reproduciendo);
   if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
-  loopVisualizer('visualizer-fs-canvas');
+  if (modoVisualizer !== 'vinilo') {
+    loopVisualizer('visualizer-fs-canvas');
+  }
 }
 
 function cerrarVisualizerFullscreen() {
   const fs = document.getElementById('visualizer-fullscreen');
-  fs.style.display = 'none';
+  if (fs) fs.style.display = 'none';
   if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
-  loopVisualizer('visualizer-canvas');
+  actualizarVisibilidadModoVisualizer();
+  setVinylSpinning(reproduciendo);
+  if (reproduciendo && modoVisualizer !== 'vinilo') {
+    loopVisualizer('visualizer-canvas');
+  }
 }
 
 function iniciarVisualizerCompacto() {
   try { initAudioContext(); } catch(e) {}
+  actualizarVisibilidadModoVisualizer();
+  setVinylSpinning(reproduciendo);
   if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
-  loopVisualizer('visualizer-canvas');
+  if (modoVisualizer !== 'vinilo') {
+    loopVisualizer('visualizer-canvas');
+  }
 }
 
 dibujarIdle('visualizer-canvas');

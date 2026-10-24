@@ -1351,7 +1351,7 @@ function renderPlaylists() {
             <div class="genre-count">${cant} canción(es) disponible(s)</div>
           </div>
           <div class="genre-btns">
-            <button class="mini-btn" onclick="toggleVerCancionesListaOffline('${p.id}')" title="Ver canciones de esta lista">${isExpanded ? '▲ Cerrar' : '👁 Ver (' + cant + ')'}</button>
+            <button class="mini-btn" onclick="toggleVerCancionesListaOffline('${p.id}')" title="Ver canciones de esta lista">${isExpanded ? 'Cerrar' : 'Ver (' + cant + ')'}</button>
             <button class="mini-btn primary" onclick="sonarLista('${p.id}', false)" title="Reproducir toda la lista">▶</button>
             <button class="mini-btn" onclick="sonarLista('${p.id}', true)" title="Modo aleatorio">🔀</button>
             <button class="mini-btn del" onclick="eliminarLista('${p.id}')" title="Eliminar lista">✕</button>

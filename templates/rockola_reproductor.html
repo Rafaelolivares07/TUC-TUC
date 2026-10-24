@@ -97,16 +97,71 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 .brand-sticky-title {
-  font-size: 22px;
+  font-size: clamp(28px, 6.8vw, 32px);
   font-weight: 900;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.8px;
   text-align: center;
-  color: #ffffff;
-  margin-bottom: 8px;
-  text-shadow: 0 0 20px rgba(0, 212, 255, 0.45);
+  margin: 0 0 6px;
+  line-height: 1.05;
+  user-select: none;
 }
-.brand-sticky-title span {
+.brand-word-mi {
+  background: linear-gradient(135deg, #cdeeff 0%, #70c9ff 50%, #00d4ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 16px rgba(0, 212, 255, 0.4));
+}
+.brand-word-rockola {
+  background: linear-gradient(135deg, #00d4ff 0%, #0077ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 22px rgba(0, 212, 255, 0.6));
+  margin-left: 2px;
+}
+.viz-quick-mode-btn {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 212, 255, 0.35);
   color: var(--ac1);
+  border-radius: 8px;
+  padding: 4px 9px;
+  font-size: 10.5px;
+  font-weight: 800;
+  cursor: pointer;
+  z-index: 5;
+  backdrop-filter: blur(8px);
+  transition: all 0.2s;
+}
+.viz-quick-mode-btn:hover {
+  background: rgba(0, 212, 255, 0.18);
+  border-color: var(--ac1);
+  color: #ffffff;
+}
+.vinyl-disc-wrap {
+  width: 96px;
+  height: 96px;
+  max-width: 95%;
+  max-height: 95%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 25px rgba(0, 212, 255, 0.35), 0 10px 30px rgba(0, 0, 0, 0.8);
+  transform-origin: center center;
+  transition: transform 0.2s ease;
+}
+.vinyl-disc-wrap.spinning {
+  animation: rk-spin-vinyl 3s linear infinite;
+}
+.vinyl-disc-wrap.paused {
+  animation: rk-spin-vinyl 3s linear infinite;
+  animation-play-state: paused;
+}
+@keyframes rk-spin-vinyl {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .activar-vinyl { margin-bottom: 32px; }
 .activar-tag { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
@@ -190,7 +245,21 @@ body {
 }
 .vinyl-wrap { display: flex; justify-content: center; margin-bottom: 10px; }
 .np-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-.np-nombre { width: 100%; max-width: 100%; font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 10px; min-height: 22px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; white-space: normal; line-height: 1.2; }
+.np-nombre {
+  width: 100%;
+  max-width: 100%;
+  font-size: clamp(23px, 6vw, 26px);
+  font-weight: 800;
+  color: var(--text);
+  margin: 8px 0 14px;
+  min-height: 32px;
+  display: block;
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.25;
+  word-break: break-word;
+  text-align: center;
+}
 .wave-viz { display: block; margin-bottom: 10px; }
 .wave-viz canvas { width: 100%; height: 80px; border-radius: 12px; display: block; }
 .wave-bar { width: 3px; border-radius: 2px; background: var(--ac1); }
@@ -302,7 +371,46 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 }
 .playlist-input:focus { border-color:var(--ac1); }
 .playlist-actions { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-.playlist-mini { border:1px solid var(--border); background:transparent; color:var(--muted); border-radius:9px; padding:7px 9px; font-weight:900; cursor:pointer; }
+.playlist-mini {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 9px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.playlist-mini:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.playlist-btn-ver {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--ac1);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.playlist-btn-ver:hover {
+  background: rgba(0, 212, 255, 0.2);
+  border-color: var(--ac1);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.35);
+  transform: translateY(-1px);
+}
+.playlist-btn-ver:active {
+  transform: scale(0.96);
+}
 .playlist-screen {
   position:fixed;
   inset:0;
@@ -929,7 +1037,7 @@ input:checked + .slider:before {
 
 <!-- PANTALLA TRANSITORIA / ACTIVAR -->
 <div id="pantalla-activar">
-  <div class="brand-top-splash">Mi <span>Rockola</span></div>
+  <div class="brand-top-splash"><span class="brand-word-mi">Mi</span> <span class="brand-word-rockola">Rockola</span></div>
   <div class="activar-vinyl">
     <svg width="100" height="100" viewBox="0 0 40 40">
       <circle cx="20" cy="20" r="19" fill="#0d1a2e" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.4"/>
@@ -961,11 +1069,11 @@ input:checked + .slider:before {
 
     <!-- BARRA SUPERIOR STICKY CON EL TITULO MI ROCKOLA -->
     <div class="reproductor-sticky-bar">
-      <div class="brand-sticky-title">Mi <span>Rockola</span></div>
+      <div class="brand-sticky-title"><span class="brand-word-mi">Mi</span> <span class="brand-word-rockola">Rockola</span></div>
       <div class="header">
         <button class="header-back" onclick="window.location.href='/rockola/?cambiar_sala=1'" title="Volver al selector de salas">← Salir</button>
         <div class="sala-badge" id="sala-badge-header" onclick="togglePredStarHeader()" style="cursor:pointer;" title="Toca para activar/desactivar entrada directa">
-          <span id="star-pred-icon" style="color:var(--muted); margin-right:4px;">☆</span>{{ sala_id | upper }} <span style="font-size:9px;opacity:0.5;margin-left:4px;">v3.3.0</span>
+          <span id="star-pred-icon" style="display:none;"></span>{{ sala_id | upper }} <span style="font-size:9px;opacity:0.5;margin-left:4px;">v3.3.0</span>
         </div>
         <button class="btn-control" onclick="abrirControl()">Control</button>
       </div>
@@ -973,20 +1081,94 @@ input:checked + .slider:before {
 
     <div class="now-card">
       <div class="now-main">
-        <div class="wave-viz" id="wave-viz" onclick="abrirVisualizerFullscreen()" style="cursor:pointer; width:100%; height:76px; position:relative;" title="Toca para pantalla completa (Modo exclusivo)">
-          <canvas id="visualizer-canvas" style="width:100%; height:100%; border-radius:12px; display:block;"></canvas>
-          <span style="position:absolute; bottom:6px; right:10px; font-size:9px; color:rgba(0,212,255,0.7); font-weight:800; pointer-events:none;">⛶ Pantalla completa</span>
+        <!-- Escenario unificado de visualización / Vinilo -->
+        <div class="wave-viz" id="wave-viz" style="position:relative; width:100%; height:106px; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:14px; background:rgba(0,0,0,0.32); border:1px solid rgba(0,212,255,0.14);">
+          
+          <!-- Canvas para modos: Barras, Onda, Circular, Partículas, Gradiente -->
+          <canvas id="visualizer-canvas" onclick="abrirVisualizerFullscreen()" style="width:100%; height:100%; border-radius:12px; display:block; cursor:pointer;" title="Toca para pantalla completa (Modo exclusivo)"></canvas>
+          
+          <!-- Modo Vinilo integrado en el mismo lugar de las barras -->
+          <div id="compact-vinyl-wrap" onclick="abrirVisualizerFullscreen()" style="display:none; width:100%; height:100%; align-items:center; justify-content:center; cursor:pointer;" title="Toca para pantalla completa">
+            <div class="vinyl-disc-wrap" id="vinyl-spin">
+              <svg viewBox="0 0 300 300" width="100%" height="100%">
+                <defs>
+                  <radialGradient id="v-body" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#070b12" />
+                    <stop offset="35%" stop-color="#141c2a" />
+                    <stop offset="39%" stop-color="#0a0f17" />
+                    <stop offset="65%" stop-color="#172233" />
+                    <stop offset="69%" stop-color="#090e16" />
+                    <stop offset="95%" stop-color="#192436" />
+                    <stop offset="100%" stop-color="#04060a" />
+                  </radialGradient>
+                  <linearGradient id="v-sheen" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="rgba(0,212,255,0.25)" />
+                    <stop offset="30%" stop-color="rgba(255,255,255,0.03)" />
+                    <stop offset="50%" stop-color="rgba(0,212,255,0.30)" />
+                    <stop offset="70%" stop-color="rgba(255,255,255,0.03)" />
+                    <stop offset="100%" stop-color="rgba(0,212,255,0.25)" />
+                  </linearGradient>
+                  <linearGradient id="v-label" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00d4ff" />
+                    <stop offset="60%" stop-color="#0055dd" />
+                    <stop offset="100%" stop-color="#001844" />
+                  </linearGradient>
+                </defs>
+
+                <!-- Cuerpo principal del vinilo y reflejo de luz giratorio -->
+                <circle cx="150" cy="150" r="146" fill="url(#v-body)" stroke="rgba(0,212,255,0.4)" stroke-width="1.5" />
+                <circle cx="150" cy="150" r="146" fill="url(#v-sheen)" />
+
+                <!-- Pistas y micro-surcos tenues -->
+                <circle cx="150" cy="150" r="140" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.6" />
+                <circle cx="150" cy="150" r="134" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+                <circle cx="150" cy="150" r="128" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.6" />
+                
+                <!-- Cambio de Pista 1 -->
+                <circle cx="150" cy="150" r="121" fill="none" stroke="rgba(0,212,255,0.55)" stroke-width="1.6" stroke-dasharray="7 3" />
+                
+                <circle cx="150" cy="150" r="114" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" />
+                <circle cx="150" cy="150" r="108" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.6" />
+                <circle cx="150" cy="150" r="101" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.5" />
+
+                <!-- Cambio de Pista 2 -->
+                <circle cx="150" cy="150" r="94" fill="none" stroke="rgba(0,212,255,0.55)" stroke-width="1.6" stroke-dasharray="9 4" />
+
+                <circle cx="150" cy="150" r="87" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" />
+                <circle cx="150" cy="150" r="80" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="0.6" />
+
+                <!-- Cambio de Pista 3 -->
+                <circle cx="150" cy="150" r="73" fill="none" stroke="rgba(0,212,255,0.55)" stroke-width="1.6" stroke-dasharray="6 3" />
+
+                <!-- Micro-imperfecciones / rayoncitos tenues para acentuar el giro -->
+                <path d="M 60 140 A 95 95 0 0 1 110 80" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="0.6" stroke-dasharray="14 8 4 6" />
+                <path d="M 180 230 A 110 110 0 0 1 245 170" fill="none" stroke="rgba(0,212,255,0.22)" stroke-width="0.7" stroke-dasharray="18 12 6 8" />
+                <path d="M 130 50 A 130 130 0 0 1 230 110" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="0.5" stroke-dasharray="10 15 3 10" />
+                <path d="M 85 215 A 85 85 0 0 0 165 240" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="0.6" stroke-dasharray="8 6 12 8" />
+
+                <!-- Galleta central -->
+                <circle cx="150" cy="150" r="58" fill="url(#v-label)" stroke="#00d4ff" stroke-width="2" />
+                <circle cx="150" cy="150" r="52" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="0.8" />
+                <text x="150" y="155" font-family="'Space Grotesk', sans-serif" font-weight="900" font-size="14" text-anchor="middle" fill="#ffffff" letter-spacing="-0.3">
+                  TUC<tspan fill="#00d4ff">TUC</tspan>
+                </text>
+                <!-- Eje central -->
+                <circle cx="150" cy="150" r="8" fill="#04060a" stroke="#00d4ff" stroke-width="1.2" />
+                <circle cx="150" cy="150" r="3" fill="#ffffff" opacity="0.85" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- Selector rápido de modo de visualización -->
+          <button type="button" class="viz-quick-mode-btn" onclick="ciclarModoVisualizer(event)" title="Cambiar animación visual">
+            <span id="viz-mode-indicator">Barras</span> ▾
+          </button>
+          
+          <span onclick="abrirVisualizerFullscreen()" style="position:absolute; bottom:6px; right:10px; font-size:9px; color:rgba(0,212,255,0.7); font-weight:800; cursor:pointer;">⛶ Pantalla completa</span>
         </div>
 
         <div class="np-label">Sonando ahora</div>
         <div class="np-nombre" id="nombre-actual">Esperando canciones...</div>
-
-        <!-- Vinilo como animación gráfica giratoria (sin botón play redundante) -->
-        <div class="vinyl-container" id="vinyl-spin">
-          <div style="width:30px; height:30px; border-radius:50%; background:var(--ac1); display:flex; align-items:center; justify-content:center; box-shadow:0 0 12px rgba(0,212,255,0.7);">
-            <span style="font-size:13px; color:#00101b; font-weight:900;">♪</span>
-          </div>
-        </div>
 
         <div id="yt-player-wrap-1" class="yt-wrap-audio-only">
           <div id="yt-iframe-player-1"></div>
@@ -1031,10 +1213,12 @@ input:checked + .slider:before {
           </button>
         </div>
 
-        <!-- Fundido cruzado - compacto -->
-        <div style="border-top:1px solid rgba(255,255,255,0.06); padding-top:6px; margin-top:8px; width:100%;">
-          <div onclick="toggleFundidoPanel()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 0;">
-            <span style="font-size:12px; font-weight:700; color:var(--muted);">Fundido cruzado</span>
+        <!-- Opciones de Reproducción (Fundido, Desordenar, Repetir) -->
+        <div class="playback-options-group" style="border-top:1px solid rgba(255,255,255,0.06); padding-top:4px; margin-top:8px; width:100%;">
+          
+          <!-- Fundido cruzado con cambio de color reactivo en el texto -->
+          <div onclick="toggleFundidoPanel()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:6px 0;">
+            <span id="fundido-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Fundido cruzado</span>
             <div style="display:flex; align-items:center; gap:8px;">
               <span id="fundido-status" style="font-size:10px; color:var(--ac1);"></span>
               <label class="switch" style="margin:0;" onclick="event.stopPropagation()">
@@ -1061,6 +1245,31 @@ input:checked + .slider:before {
               <div id="fundido-hint" style="font-size:9px; color:var(--muted); text-align:right; min-height:12px;"></div>
             </div>
           </div>
+
+          <!-- Desordenar lista (Shuffle) -->
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
+            <span id="shuffle-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Desordenar lista</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button class="playlist-mini" onclick="desordenarColaAleatorio()" style="padding:3px 8px; font-size:10.5px; border-radius:7px;" title="Mezclar ahora el orden de la lista en cola">Mezclar ya</button>
+              <label class="switch" style="margin:0;" title="Activar modo aleatorio">
+                <input type="checkbox" id="shuffle-toggle" onchange="toggleModoAleatorio(this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Repetir reproducción (Loop) -->
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid rgba(255,255,255,0.04);">
+            <span id="repetir-label" style="font-size:12px; font-weight:700; color:var(--muted); transition:color 0.25s, text-shadow 0.25s;">Repetir reproducción</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span id="repetir-status" style="font-size:10px; color:var(--ac1);"></span>
+              <label class="switch" style="margin:0;" title="Repetir lista al finalizar">
+                <input type="checkbox" id="repetir-toggle" onchange="toggleModoRepetir(this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
         </div>
 
         <!-- Dos elementos audio invisibles alternantes -->
@@ -1287,6 +1496,7 @@ input:checked + .slider:before {
 
     <!-- Modos de animación -->
     <div id="visualizer-mode-bar" style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
+      <button onclick="cambiarModoVisualizer('vinilo')" class="viz-mode-btn" data-mode="vinilo">Vinilo</button>
       <button onclick="cambiarModoVisualizer('barras')" class="viz-mode-btn" data-mode="barras">Barras</button>
       <button onclick="cambiarModoVisualizer('onda')" class="viz-mode-btn" data-mode="onda">Onda</button>
       <button onclick="cambiarModoVisualizer('circular')" class="viz-mode-btn" data-mode="circular">Circular</button>
@@ -1487,7 +1697,7 @@ function togglePredStarHeader() {
 function togglePredeterminadaDesdeReproductor(activa) {
   if (activa) {
     localStorage.setItem(PRED_KEY, SALA.toLowerCase());
-    mostrarMensaje(`⭐ ${SALA.toUpperCase()} es tu sala predeterminada. Entrarás directo cada vez.`, 'ok');
+    mostrarMensaje(`${SALA.toUpperCase()} es tu sala predeterminada. Entrarás directo cada vez.`, 'ok');
   } else {
     if (esSalaPredeterminada()) {
       localStorage.removeItem(PRED_KEY);
@@ -3247,7 +3457,7 @@ function renderListasLocales() {
           <div class="local-meta">${cant} cancion(es) · Toca para ver</div>
         </div>
         <div class="playlist-actions">
-          <button class="playlist-mini" onclick="abrirEditorLista('${p.id}')" title="Ver canciones de esta carpeta/lista">👁 Ver</button>
+          <button class="playlist-btn-ver" onclick="abrirEditorLista('${p.id}')" title="Ver canciones de esta carpeta/lista">Ver</button>
           <button class="library-btn" onclick="ponerListaAhora('${p.id}')" title="Reproducir esta lista ahora">▶ Ahora</button>
           <button class="playlist-mini" onclick="ponerLista('${p.id}')" title="Añadir canciones a la cola">+ Cola</button>
         </div>
@@ -3762,6 +3972,25 @@ document.getElementById('fundido-toggle').addEventListener('change', guardarFund
 document.getElementById('fundido-segundos').addEventListener('change', guardarFundidoSettings);
 document.getElementById('fundido-duracion').addEventListener('change', guardarFundidoSettings);
 
+function actualizarFundidoStatus() {
+  const toggle = document.getElementById('fundido-toggle');
+  const isCruzado = toggle ? toggle.checked : true;
+  const statusEl = document.getElementById('fundido-status');
+  const labelEl = document.getElementById('fundido-label');
+  if (statusEl) {
+    statusEl.textContent = isCruzado ? 'Activo' : 'Inactivo';
+  }
+  if (labelEl) {
+    if (isCruzado) {
+      labelEl.style.color = 'var(--ac1)';
+      labelEl.style.textShadow = '0 0 10px rgba(0, 212, 255, 0.4)';
+    } else {
+      labelEl.style.color = 'var(--muted)';
+      labelEl.style.textShadow = 'none';
+    }
+  }
+}
+
 async function guardarFundidoSettings() {
   actualizarFundidoStatus();
   const isCruzado = document.getElementById('fundido-toggle').checked;
@@ -3779,8 +4008,94 @@ async function guardarFundidoSettings() {
     })
   });
 }
+
+/* ═══════════════════════════════════════════
+   MODOS DE REPRODUCCIÓN: ALEATORIO Y REPETIR
+   ═══════════════════════════════════════════ */
+let modoAleatorio = localStorage.getItem('rockola_shuffle') === '1';
+let modoRepetir = localStorage.getItem('rockola_repetir') === '1';
+
+function actualizarShuffleStatus() {
+  const toggle = document.getElementById('shuffle-toggle');
+  const isShuffle = toggle ? toggle.checked : false;
+  const labelEl = document.getElementById('shuffle-label');
+  if (labelEl) {
+    if (isShuffle) {
+      labelEl.style.color = 'var(--ac1)';
+      labelEl.style.textShadow = '0 0 10px rgba(0, 212, 255, 0.4)';
+    } else {
+      labelEl.style.color = 'var(--muted)';
+      labelEl.style.textShadow = 'none';
+    }
+  }
+}
+
+function actualizarRepetirStatus() {
+  const toggle = document.getElementById('repetir-toggle');
+  const isRepetir = toggle ? toggle.checked : false;
+  const labelEl = document.getElementById('repetir-label');
+  const statusEl = document.getElementById('repetir-status');
+  if (statusEl) {
+    statusEl.textContent = isRepetir ? 'Activo' : '';
+  }
+  if (labelEl) {
+    if (isRepetir) {
+      labelEl.style.color = 'var(--ac1)';
+      labelEl.style.textShadow = '0 0 10px rgba(0, 212, 255, 0.4)';
+    } else {
+      labelEl.style.color = 'var(--muted)';
+      labelEl.style.textShadow = 'none';
+    }
+  }
+}
+
+function toggleModoAleatorio(checked) {
+  modoAleatorio = !!checked;
+  localStorage.setItem('rockola_shuffle', modoAleatorio ? '1' : '0');
+  actualizarShuffleStatus();
+  if (modoAleatorio) {
+    desordenarColaAleatorio();
+  }
+}
+
+function toggleModoRepetir(checked) {
+  modoRepetir = !!checked;
+  localStorage.setItem('rockola_repetir', modoRepetir ? '1' : '0');
+  actualizarRepetirStatus();
+}
+
+async function desordenarColaAleatorio() {
+  if (!currentCola || currentCola.length <= 1) {
+    mostrarMensaje('No hay suficientes canciones en cola para mezclar', '');
+    return;
+  }
+  const primera = currentCola[0];
+  const restantes = currentCola.slice(1);
+  for (let i = restantes.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [restantes[i], restantes[j]] = [restantes[j], restantes[i]];
+  }
+  const nuevoOrden = [primera.id, ...restantes.map(s => s.id)];
+  try {
+    await fetch(`/rockola/${SALA}/reordenar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orden: nuevoOrden, admin_key: ADMIN_KEY, modo: 'reproductor' })
+    });
+    mostrarMensaje('Lista desordenada aleatoriamente ✓', 'ok');
+    verificarCola();
+  } catch(e) {
+    console.warn('Error al reordenar:', e);
+  }
+}
+
 aplicarVolumen(volumenEl.value);
 actualizarFundidoStatus();
+if (document.getElementById('shuffle-toggle')) document.getElementById('shuffle-toggle').checked = modoAleatorio;
+if (document.getElementById('repetir-toggle')) document.getElementById('repetir-toggle').checked = modoRepetir;
+actualizarShuffleStatus();
+actualizarRepetirStatus();
+actualizarVisibilidadModoVisualizer();
 verificarDispositivoSala();
 initProgressBarDrag();
 
@@ -4354,13 +4669,22 @@ function initAudioContext() {
     if (audioCtx.state === 'suspended') audioCtx.resume();
     return;
   }
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 256;
-  const source = audioCtx.createMediaElementSource(player);
-  source.connect(analyser);
-  analyser.connect(audioCtx.destination);
-  vizSourceConnected = true;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    [player1, player2].forEach(p => {
+      try {
+        p.crossOrigin = "anonymous";
+        const src = audioCtx.createMediaElementSource(p);
+        src.connect(analyser);
+      } catch(e) {}
+    });
+    analyser.connect(audioCtx.destination);
+    vizSourceConnected = true;
+  } catch(e) {
+    console.warn('initAudioContext error:', e);
+  }
 }
 
 function getCanvasCtx(id) {
@@ -4369,10 +4693,14 @@ function getCanvasCtx(id) {
   const rect = c.getBoundingClientRect();
   if (rect.width < 1 || rect.height < 1) return null;
   const dpr = window.devicePixelRatio || 1;
-  c.width = rect.width * dpr;
-  c.height = rect.height * dpr;
+  const expW = Math.floor(rect.width * dpr);
+  const expH = Math.floor(rect.height * dpr);
+  if (c.width !== expW || c.height !== expH) {
+    c.width = expW;
+    c.height = expH;
+  }
   const ctx = c.getContext('2d');
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { ctx, w: rect.width, h: rect.height };
 }
 
@@ -4536,17 +4864,46 @@ function dibujarGradiente(ctx, w, h, data) {
 }
 
 function loopVisualizer(canvasId) {
-  if (!analyser) return;
-  const info = getCanvasCtx(canvasId);
-  if (!info) return;
-  const { ctx, w, h } = info;
-  const freqData = new Uint8Array(analyser.frequencyBinCount);
-  const timeData = new Uint8Array(analyser.fftSize);
+  actualizarVisibilidadModoVisualizer();
+  if (modoVisualizer === 'vinilo') return;
+
+  const freqData = new Uint8Array(analyser ? analyser.frequencyBinCount : 128);
+  const timeData = new Uint8Array(analyser ? analyser.fftSize : 256);
 
   function draw() {
     vizAnimFrame = requestAnimationFrame(draw);
-    analyser.getByteFrequencyData(freqData);
-    analyser.getByteTimeDomainData(timeData);
+    if (modoVisualizer === 'vinilo') return;
+
+    const info = getCanvasCtx(canvasId);
+    if (!info) return;
+    const { ctx, w, h } = info;
+
+    let hasRealData = false;
+    if (analyser) {
+      analyser.getByteFrequencyData(freqData);
+      analyser.getByteTimeDomainData(timeData);
+      for (let i = 0; i < 20; i++) {
+        if (freqData[i] > 6) { hasRealData = true; break; }
+      }
+    }
+
+    // Si no hay datos analógicos del analizador (ej. audio de YouTube o CORS bloqueado) y está reproduciendo,
+    // sintetizar bandas rítmicas para que las barras NUNCA desaparezcan ni se oculten
+    if (!hasRealData && reproduciendo) {
+      const t = performance.now() / 1000;
+      for (let i = 0; i < freqData.length; i++) {
+        const factor = i / freqData.length;
+        const bass = Math.pow(Math.max(0, Math.sin(t * 3.8)), 2) * 190 * (1 - factor);
+        const mid = (Math.sin(t * 6.5 + i * 0.4) * 0.5 + 0.5) * 135 * Math.sin(factor * Math.PI);
+        const treb = (Math.sin(t * 12.0 + i * 1.1) * 0.5 + 0.5) * 75 * factor;
+        freqData[i] = Math.min(255, Math.floor(bass + mid + treb + 16));
+        timeData[i] = Math.floor(128 + Math.sin(t * 5.0 + i * 0.12) * 40);
+      }
+    } else if (!hasRealData && !reproduciendo) {
+      dibujarIdle(canvasId);
+      return;
+    }
+
     switch (modoVisualizer) {
       case 'barras': dibujarBarras(ctx, w, h, freqData); break;
       case 'onda': dibujarOnda(ctx, w, h, timeData); break;
@@ -4556,6 +4913,40 @@ function loopVisualizer(canvasId) {
     }
   }
   draw();
+}
+
+const MODOS_VIZ = ['barras', 'vinilo', 'onda', 'circular', 'particulas', 'gradiente'];
+
+function ciclarModoVisualizer(e) {
+  if (e) e.stopPropagation();
+  const currentIdx = MODOS_VIZ.indexOf(modoVisualizer);
+  const nextIdx = (currentIdx + 1) % MODOS_VIZ.length;
+  cambiarModoVisualizer(MODOS_VIZ[nextIdx]);
+}
+
+function actualizarVisibilidadModoVisualizer() {
+  const cCanvas = document.getElementById('visualizer-canvas');
+  const cVinyl = document.getElementById('compact-vinyl-wrap');
+  const fsCanvas = document.getElementById('visualizer-fs-canvas');
+  const fsVinyl = document.getElementById('fs-vinyl-wrap');
+  const indEl = document.getElementById('viz-mode-indicator');
+  
+  if (indEl) {
+    const nombres = { barras:'Barras', vinilo:'Vinilo', onda:'Onda', circular:'Circular', particulas:'Partículas', gradiente:'Gradiente' };
+    indEl.textContent = nombres[modoVisualizer] || modoVisualizer;
+  }
+
+  if (modoVisualizer === 'vinilo') {
+    if (cCanvas) cCanvas.style.display = 'none';
+    if (cVinyl) cVinyl.style.display = 'flex';
+    if (fsCanvas) fsCanvas.style.display = 'none';
+    if (fsVinyl) fsVinyl.style.display = 'flex';
+  } else {
+    if (cVinyl) cVinyl.style.display = 'none';
+    if (cCanvas) cCanvas.style.display = 'block';
+    if (fsVinyl) fsVinyl.style.display = 'none';
+    if (fsCanvas) fsCanvas.style.display = 'block';
+  }
 }
 
 function dibujarIdle(canvasId) {
@@ -4573,6 +4964,13 @@ function cambiarModoVisualizer(modo) {
   document.querySelectorAll('.viz-mode-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === modo);
   });
+  actualizarVisibilidadModoVisualizer();
+  if (modo !== 'vinilo') {
+    if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+    const fs = document.getElementById('visualizer-fullscreen');
+    const isFs = fs && fs.style.display === 'flex';
+    loopVisualizer(isFs ? 'visualizer-fs-canvas' : 'visualizer-canvas');
+  }
 }
 
 function abrirVisualizerFullscreen() {

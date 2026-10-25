@@ -10937,8 +10937,7 @@ def registrar_conteo_fisico_unificado(
     f_doc = fecha_doc or date.today()
 
     # 3. Acta Inmutable (Audit Trail que no se altera con recosteos)
-    cur = conn.cursor()
-    cur.execute("""
+    row_acta = conn.execute("""
         INSERT INTO inventario_fisico_actas
             (negocio_id, centro_utilidad_id, producto_id, producto_nombre,
              usuario_id, usuario_nombre, modulo_origen, metodologia,
@@ -10951,8 +10950,8 @@ def registrar_conteo_fisico_unificado(
         usuario_id, usuario_nombre or "Operario", str(modulo_origen), str(metodologia),
         s_tipo_doc, s_doc_num, cantidad_contada_float, stock_sistema,
         diff, costo_definitivo, valor_diferencia, notas or ""
-    ))
-    acta_id = cur.fetchone()[0]
+    )).fetchone()
+    acta_id = row_acta[0] if row_acta else None
 
     # 4. Movimiento Kardex
     if not es_conforme:

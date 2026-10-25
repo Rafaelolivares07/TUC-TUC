@@ -7,9 +7,12 @@ Servicio de Visión por Computadora e Inteligencia Artificial Local para Factura
 import os
 import re
 import cv2
+import threading
+import gc
 import difflib
 
 _ocr_engine = None
+_ocr_lock = threading.Lock()
 
 DICCIONARIO_TRADUCCION = {
     'MUSTARD': 'MOSTAZA',
@@ -51,6 +54,10 @@ def traducir_texto(texto):
 def get_ocr_engine():
     global _ocr_engine
     if _ocr_engine is None:
+        import os
+        os.environ.setdefault("OMP_NUM_THREADS", "1")
+        os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+        os.environ.setdefault("MKL_NUM_THREADS", "1")
         from rapidocr_onnxruntime import RapidOCR
         _ocr_engine = RapidOCR()
     return _ocr_engine
@@ -59,6 +66,7 @@ def get_ocr_engine():
 def preprocesar_imagen(ruta_origen):
     """
     Normaliza tamaño de imagen si es excesivamente grande para acelerar inferencia.
+    Escribe en JPEG rápido y libera memoria inmediatamente.
     """
     try:
         img = cv2.imread(ruta_origen)
@@ -70,9 +78,12 @@ def preprocesar_imagen(ruta_origen):
         if max(h, w) > max_dim:
             scale = max_dim / float(max(h, w))
             img_resized = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-            ruta_opt = ruta_origen + ".opt.png"
-            cv2.imwrite(ruta_opt, img_resized)
+            ruta_opt = ruta_origen + ".opt.jpg"
+            cv2.imwrite(ruta_opt, img_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+            del img
+            del img_resized
             return ruta_opt
+        del img
         return ruta_origen
     except Exception as e:
         print(f"Aviso en preprocesamiento OpenCV ({e}), usando imagen directa.")
@@ -266,15 +277,24 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
     - Total de la factura
     - Líneas de productos con sugerencias del catálogo
     """
+    acquired = _ocr_lock.acquire(timeout=45)
+    if not acquired:
+        return {
+            'ok': False,
+            'error': 'El servidor está procesando otro escaneo. Por favor espera unos segundos e intenta nuevamente.'
+        }
+
     engine = get_ocr_engine()
-    ruta_proc = preprocesar_imagen(ruta_imagen)
-    
+    ruta_proc = ruta_imagen
     try:
+        ruta_proc = preprocesar_imagen(ruta_imagen)
         result, elapse_list = engine(ruta_proc)
     finally:
         if ruta_proc != ruta_imagen and os.path.exists(ruta_proc):
             try: os.remove(ruta_proc)
-            except: pass
+            except Exception: pass
+        _ocr_lock.release()
+        gc.collect()
 
     if not result:
         return {

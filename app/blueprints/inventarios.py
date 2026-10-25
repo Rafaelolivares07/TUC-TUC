@@ -2948,9 +2948,11 @@ def api_inventario_escanear_factura(negocio_id):
         
     import tempfile
     import os
+    import gc
     from app.services.vision_facturas import extraer_datos_factura
     
     conn = get_db_connection()
+    tmp_path = None
     try:
         suffix = os.path.splitext(archivo.filename)[1] or '.png'
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -2961,15 +2963,24 @@ def api_inventario_escanear_factura(negocio_id):
             res = extraer_datos_factura(tmp_path, conn=conn, negocio_id=negocio_id)
             return jsonify(res)
         finally:
-            if os.path.exists(tmp_path):
-                try: os.remove(tmp_path)
-                except: pass
+            if tmp_path:
+                for f_tmp in [tmp_path, tmp_path + ".opt.png", tmp_path + ".opt.jpg"]:
+                    if os.path.exists(f_tmp):
+                        try: os.remove(f_tmp)
+                        except Exception: pass
+            gc.collect()
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({'ok': False, 'error': f'Error procesando imagen: {str(e)}'}), 500
     finally:
+        if tmp_path:
+            for f_tmp in [tmp_path, tmp_path + ".opt.png", tmp_path + ".opt.jpg"]:
+                if os.path.exists(f_tmp):
+                    try: os.remove(f_tmp)
+                    except Exception: pass
         conn.close()
+        gc.collect()
 
 
 @bp.route('/api/inventario/<int:negocio_id>/cuentas-gastos-costos', methods=['GET'])

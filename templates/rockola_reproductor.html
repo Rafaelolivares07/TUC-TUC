@@ -1578,13 +1578,13 @@ input:checked + .slider:before {
         Guarda el archivo MP3 en tu celular y lo deja disponible en la Biblioteca Local offline.
       </div>
 
-      <!-- Botón Secundario (Menú del sistema Android / Descargas directas en PC) -->
-      <button id="btn-modal-guardar-secundario" onclick="ejecutarGuardadoSecundario()" style="width:100%; padding:11px 12px; margin-bottom:6px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
-        <span id="btn-modal-guardar-secundario-ico" style="font-size:14px;">📤</span>
-        <span id="btn-modal-guardar-secundario-txt">Abrir en el menú de Android ("Guardar en...")</span>
+      <!-- Botón Secundario solo para PC -->
+      <button id="btn-modal-guardar-secundario" onclick="ejecutarGuardadoSecundario()" style="display:none; width:100%; padding:11px 12px; margin-bottom:6px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12.5px; cursor:pointer; align-items:center; justify-content:center; gap:8px;">
+        <span id="btn-modal-guardar-secundario-ico" style="font-size:14px;">⬇️</span>
+        <span id="btn-modal-guardar-secundario-txt">Guardar directo en "Descargas"</span>
       </button>
-      <div id="modal-guardar-secundario-desc" style="font-size:10.5px; color:var(--muted2); text-align:center; margin-bottom:14px; line-height:1.3;">
-        Abre el menú de opciones del sistema para copiarlo a otra aplicación o archivo.
+      <div id="modal-guardar-secundario-desc" style="display:none; font-size:10.5px; color:var(--muted2); text-align:center; margin-bottom:14px; line-height:1.3;">
+        Descarga rápida a la carpeta Descargas estándar del sistema.
       </div>
     </div>
 
@@ -4471,21 +4471,12 @@ function cambiarModalDescargaListo(safeName, blob) {
     if (descS) descS.textContent = 'Descarga rápida a la carpeta Descargas estándar.';
     if (btnSecEl) btnSecEl.style.display = 'flex';
   } else if (esMovil) {
-    // Modo celular
-    if (btnP) btnP.textContent = 'Descargar canción (MP3)';
+    // Modo celular: Descarga limpia directa sin menús confusos
+    if (btnP) btnP.textContent = 'Guardar en mi celular (Descargas)';
     if (icoP) icoP.textContent = '📥';
-    if (descP) descP.textContent = 'Descarga limpia a tu teléfono y guardado en tu Biblioteca Local para sonar offline.';
-    
-    // Si soporta Web Share, dar la opción de enviar a otra app o "Guardar en archivos"
-    if (navigator.canShare) {
-      if (btnS) btnS.textContent = 'Menú del sistema ("Guardar en..." / Compartir)';
-      if (icoS) icoS.textContent = '📤';
-      if (descS) descS.textContent = 'Abre el menú de tu teléfono por si deseas usar "Guardar en archivos", Drive o WhatsApp.';
-      if (btnSecEl) btnSecEl.style.display = 'flex';
-    } else {
-      if (btnSecEl) btnSecEl.style.display = 'none';
-      if (descS) descS.style.display = 'none';
-    }
+    if (descP) descP.textContent = 'Se guarda en tu carpeta Descargas y queda en tu Biblioteca Local para sonar offline.';
+    if (btnSecEl) btnSecEl.style.display = 'none';
+    if (descS) descS.style.display = 'none';
   } else {
     // Navegador estándar de escritorio sin file picker
     if (btnP) btnP.textContent = 'Descargar archivo MP3';

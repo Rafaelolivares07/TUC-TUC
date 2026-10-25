@@ -1422,6 +1422,33 @@
 </div>
 
 
+<!-- Modal Cámara PC / Visor WebRTC -->
+<div id="modal-camara-pc" class="modal-backdrop" style="display:none;z-index:9999" onclick="cerrarCamaraPC()">
+  <div class="modal-box" style="max-width:520px;width:94%;padding:16px;text-align:center" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:16px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:6px">
+        <span>📷</span> Tomar Foto
+      </div>
+      <button onclick="cerrarCamaraPC()" style="width:30px;height:30px;border-radius:50%;background:var(--surface2);color:var(--ink-soft);font-size:15px;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>
+    
+    <div style="position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:14px;overflow:hidden;margin-bottom:14px;display:flex;align-items:center;justify-content:center">
+      <video id="video-camara-pc" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
+      <canvas id="canvas-camara-pc" style="display:none"></canvas>
+      <div id="camara-pc-loading" style="position:absolute;color:#fff;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:8px">
+        <span>Iniciando cámara...</span>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px">
+      <button type="button" class="btn-cancel" onclick="cerrarCamaraPC()" style="padding:10px 18px">Cancelar</button>
+      <button type="button" class="btn-primary" id="btn-disparar-camara-pc" onclick="capturarFotoPC()" style="padding:10px 24px;display:inline-flex;align-items:center;gap:8px;font-weight:700">
+        <span style="font-size:16px">📸</span> Tomar y Enviar
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Música Activa / Conflicto Bluetooth -->
 <div id="modal-musica-activa" class="modal-backdrop" style="display:none;z-index:9999" onclick="cerrarModalMusica(false)">
   <div class="modal-box" style="max-width:390px;width:92%;text-align:center" onclick="event.stopPropagation()">
@@ -1790,7 +1817,7 @@ function abrirPlusMenu() {
       <div class="sheet-handle"></div>
       <p class="sheet-eyebrow">Añadir al mensaje</p>
       <div class="plus-grid">
-        <button class="plus-item" onclick="document.getElementById('inp-chat-camara').click();cerrarSheet()">
+        <button class="plus-item" onclick="cerrarSheet();abrirFotoSegunDispositivo()">
           <span class="plus-item-icon">📷</span>
           <span class="plus-item-label">Foto</span>
           <span class="plus-item-sub">Cámara</span>
@@ -2951,6 +2978,85 @@ async function probarPermisoMic() {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+
+// ── Cámara en PC y Móvil ─────────────────────────────────────────
+let _streamCamaraPC = null;
+
+function esDispositivoMovil() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+         (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+}
+
+function abrirFotoSegunDispositivo() {
+  if (esDispositivoMovil()) {
+    document.getElementById('inp-chat-camara')?.click();
+  } else {
+    abrirCamaraPC();
+  }
+}
+
+async function abrirCamaraPC() {
+  const modal = document.getElementById('modal-camara-pc');
+  const video = document.getElementById('video-camara-pc');
+  const loading = document.getElementById('camara-pc-loading');
+  if (!modal || !video) return;
+
+  modal.style.display = 'flex';
+  if (loading) loading.style.display = 'flex';
+
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Tu navegador en este PC no soporta acceso directo a la cámara.');
+    }
+    _streamCamaraPC = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+      audio: false
+    });
+    video.srcObject = _streamCamaraPC;
+    await video.play();
+    if (loading) loading.style.display = 'none';
+  } catch (err) {
+    console.warn('Error accediendo a cámara en PC:', err);
+    cerrarCamaraPC();
+    // Fallback: abrir selector de archivo si no tiene webcam o denegó permiso
+    document.getElementById('inp-chat-camara')?.click();
+  }
+}
+
+function cerrarCamaraPC() {
+  const modal = document.getElementById('modal-camara-pc');
+  const video = document.getElementById('video-camara-pc');
+  if (modal) modal.style.display = 'none';
+  if (_streamCamaraPC) {
+    _streamCamaraPC.getTracks().forEach(t => t.stop());
+    _streamCamaraPC = null;
+  }
+  if (video) video.srcObject = null;
+}
+
+function capturarFotoPC() {
+  const video = document.getElementById('video-camara-pc');
+  const canvas = document.getElementById('canvas-camara-pc');
+  const btn = document.getElementById('btn-disparar-camara-pc');
+  if (!video || !canvas || !_streamCamaraPC) return;
+
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  if (btn) btn.disabled = true;
+
+  canvas.toBlob(blob => {
+    cerrarCamaraPC();
+    if (btn) btn.disabled = false;
+    if (blob) {
+      const file = new File([blob], 'foto_camara_' + Date.now() + '.jpg', { type: 'image/jpeg' });
+      enviarImagenFile(file);
+    }
+  }, 'image/jpeg', 0.9);
 }
 
 // ── Imagen ───────────────────────────────────────────────────────

@@ -1566,23 +1566,26 @@ input:checked + .slider:before {
     <!-- ESTADO 2: LISTO PARA GUARDAR -->
     <div id="modal-descarga-sec-listo" style="display:none;">
       <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px; line-height:1.4;">
-        Elige cómo deseas guardar la canción en tu dispositivo:
+        El audio está listo. Elige cómo deseas guardarlo:
       </div>
 
-      <!-- Opción 1: Explorador de carpetas / Guardar en el dispositivo -->
-      <button id="btn-modal-guardar-explorador" onclick="ejecutarGuardadoElegirCarpeta()" style="width:100%; padding:14px 12px; margin-bottom:6px; border:none; border-radius:12px; background:var(--ac-grad); color:#00101b; font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:13.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
-        <span style="font-size:16px;">📂</span>
-        <span id="btn-modal-guardar-explorador-txt">Elegir carpeta en mi celular</span>
+      <!-- Botón Principal (Descarga limpia directa en Celular / Selector en PC) -->
+      <button id="btn-modal-guardar-principal" onclick="ejecutarGuardadoPrincipal()" style="width:100%; padding:14px 12px; margin-bottom:6px; border:none; border-radius:12px; background:var(--ac-grad); color:#00101b; font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 14px rgba(0,212,255,0.25);">
+        <span id="btn-modal-guardar-principal-ico" style="font-size:16px;">📥</span>
+        <span id="btn-modal-guardar-principal-txt">Descargar archivo MP3</span>
       </button>
-      <div id="modal-guardar-explorador-desc" style="font-size:11px; color:var(--muted2); text-align:center; margin-bottom:14px; line-height:1.3;">
-        Abre el explorador de tu teléfono para navegar y guardarla en tu carpeta de Música o cualquier otra.
+      <div id="modal-guardar-principal-desc" style="font-size:11px; color:var(--muted); text-align:center; margin-bottom:12px; line-height:1.3;">
+        Guarda el archivo MP3 en tu celular y lo deja disponible en la Biblioteca Local offline.
       </div>
 
-      <!-- Opción 2: Descarga directa a carpeta Descargas -->
-      <button onclick="ejecutarGuardadoNativoDescargas()" style="width:100%; padding:12px; margin-bottom:8px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
-        <span style="font-size:14px;">⬇️</span>
-        <span>Guardar directo en "Descargas"</span>
+      <!-- Botón Secundario (Menú del sistema Android / Descargas directas en PC) -->
+      <button id="btn-modal-guardar-secundario" onclick="ejecutarGuardadoSecundario()" style="width:100%; padding:11px 12px; margin-bottom:6px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+        <span id="btn-modal-guardar-secundario-ico" style="font-size:14px;">📤</span>
+        <span id="btn-modal-guardar-secundario-txt">Abrir en el menú de Android ("Guardar en...")</span>
       </button>
+      <div id="modal-guardar-secundario-desc" style="font-size:10.5px; color:var(--muted2); text-align:center; margin-bottom:14px; line-height:1.3;">
+        Abre el menú de opciones del sistema para copiarlo a otra aplicación o archivo.
+      </div>
     </div>
 
     <!-- ESTADO 3: ERROR -->
@@ -4446,16 +4449,50 @@ function cambiarModalDescargaListo(safeName, blob) {
   const titEl = document.getElementById('modal-descarga-titulo');
   if (titEl) titEl.textContent = safeName;
 
-  const btnTxt = document.getElementById('btn-modal-guardar-explorador-txt');
-  const descEl = document.getElementById('modal-guardar-explorador-desc');
   const esMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (btnTxt) {
-    btnTxt.textContent = esMovil ? 'Elegir carpeta en mi celular' : 'Elegir carpeta en mi PC';
-  }
-  if (descEl) {
-    descEl.textContent = esMovil ? 
-      'Abre el explorador de tu teléfono para navegar y guardarla en tu carpeta de Música o cualquier otra.' : 
-      'Abre la ventana de Windows/PC ("Guardar como...") para elegir la carpeta exacta.';
+  const soportaPicker = typeof window.showSaveFilePicker === 'function';
+
+  const btnP = document.getElementById('btn-modal-guardar-principal-txt');
+  const icoP = document.getElementById('btn-modal-guardar-principal-ico');
+  const descP = document.getElementById('modal-guardar-principal-desc');
+
+  const btnS = document.getElementById('btn-modal-guardar-secundario-txt');
+  const icoS = document.getElementById('btn-modal-guardar-secundario-ico');
+  const descS = document.getElementById('modal-guardar-secundario-desc');
+  const btnSecEl = document.getElementById('btn-modal-guardar-secundario');
+
+  if (soportaPicker) {
+    // Modo PC de escritorio con selector real de carpetas
+    if (btnP) btnP.textContent = 'Elegir carpeta en mi PC ("Guardar como...")';
+    if (icoP) icoP.textContent = '📂';
+    if (descP) descP.textContent = 'Abre el explorador de Windows/PC para elegir la carpeta en tu disco duro.';
+    if (btnS) btnS.textContent = 'Guardar directo en "Descargas"';
+    if (icoS) icoS.textContent = '⬇️';
+    if (descS) descS.textContent = 'Descarga rápida a la carpeta Descargas estándar.';
+    if (btnSecEl) btnSecEl.style.display = 'flex';
+  } else if (esMovil) {
+    // Modo celular
+    if (btnP) btnP.textContent = 'Descargar canción (MP3)';
+    if (icoP) icoP.textContent = '📥';
+    if (descP) descP.textContent = 'Descarga limpia a tu teléfono y guardado en tu Biblioteca Local para sonar offline.';
+    
+    // Si soporta Web Share, dar la opción de enviar a otra app o "Guardar en archivos"
+    if (navigator.canShare) {
+      if (btnS) btnS.textContent = 'Menú del sistema ("Guardar en..." / Compartir)';
+      if (icoS) icoS.textContent = '📤';
+      if (descS) descS.textContent = 'Abre el menú de tu teléfono por si deseas usar "Guardar en archivos", Drive o WhatsApp.';
+      if (btnSecEl) btnSecEl.style.display = 'flex';
+    } else {
+      if (btnSecEl) btnSecEl.style.display = 'none';
+      if (descS) descS.style.display = 'none';
+    }
+  } else {
+    // Navegador estándar de escritorio sin file picker
+    if (btnP) btnP.textContent = 'Descargar archivo MP3';
+    if (icoP) icoP.textContent = '📥';
+    if (descP) descP.textContent = 'Se guardará en tu carpeta de Descargas y en tu Biblioteca Local.';
+    if (btnSecEl) btnSecEl.style.display = 'none';
+    if (descS) descS.style.display = 'none';
   }
 
   const secCargando = document.getElementById('modal-descarga-sec-cargando');
@@ -4467,6 +4504,70 @@ function cambiarModalDescargaListo(safeName, blob) {
   if (secCargando) secCargando.style.display = 'none';
   if (secListo) secListo.style.display = 'block';
   if (secError) secError.style.display = 'none';
+}
+
+async function ejecutarGuardadoPrincipal() {
+  if (!modalDescargaBlob) return;
+  const safeName = modalDescargaSafeName || 'cancion.mp3';
+  const blob = modalDescargaBlob;
+
+  // Si está en PC con soporte para showSaveFilePicker:
+  if (typeof window.showSaveFilePicker === 'function') {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: safeName,
+        types: [{
+          description: 'Audio MP3',
+          accept: { 'audio/mpeg': ['.mp3'] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      mostrarMensaje(`✓ Canción guardada en: ${handle.name}`, 'ok');
+      cerrarModalGuardarDescarga();
+      return;
+    } catch(err) {
+      if (err.name === 'AbortError') return;
+      console.warn('showSaveFilePicker cancelado o falló:', err);
+    }
+  }
+
+  // En celular o fallback estándar: descarga directa y limpia al teléfono
+  ejecutarGuardadoNativoDescargas();
+}
+
+async function ejecutarGuardadoSecundario() {
+  if (!modalDescargaBlob) return;
+  const safeName = modalDescargaSafeName || 'cancion.mp3';
+  const blob = modalDescargaBlob;
+  const soportaPicker = typeof window.showSaveFilePicker === 'function';
+
+  if (soportaPicker) {
+    // En PC, la opción secundaria es descarga rápida a Descargas
+    ejecutarGuardadoNativoDescargas();
+    return;
+  }
+
+  // En celular, abrir la hoja de compartir del sistema (para "Guardar en archivos" / "Copiar a...")
+  try {
+    const file = new File([blob], safeName, { type: blob.type || 'audio/mpeg' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: safeName,
+        text: 'Guardar canción en tu dispositivo'
+      });
+      mostrarMensaje(`✓ Canción procesada: ${safeName}`, 'ok');
+      cerrarModalGuardarDescarga();
+      return;
+    }
+  } catch(errShare) {
+    if (errShare.name === 'AbortError') return;
+    console.warn('Share de archivo cancelado:', errShare);
+  }
+
+  ejecutarGuardadoNativoDescargas();
 }
 
 function cambiarModalDescargaError(mensaje) {

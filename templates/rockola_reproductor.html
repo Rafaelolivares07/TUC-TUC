@@ -1421,6 +1421,14 @@ input:checked + .slider:before {
         <button class="btn-control" onclick="abrirSelectorAudios()" title="Agregar canciones individuales">🎵 Agregar canciones</button>
         <button class="btn-control" onclick="compartirMiBiblioteca()">Compartir</button>
       </div>
+      <!-- Carpeta parametrizable para descargas y archivos locales -->
+      <div id="info-carpeta-destino" style="margin: 8px 0 10px; padding: 7px 12px; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.18); border-radius: 8px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        <span style="color: var(--muted); display:flex; align-items:center; gap:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          <span>📁</span> Carpeta de descargas:
+          <strong id="label-carpeta-descarga" style="color: var(--ac1); font-weight:800;">Descargas del navegador</strong>
+        </span>
+        <button type="button" class="btn-control" style="font-size: 10px; padding: 2px 8px; margin: 0; white-space:nowrap;" onclick="seleccionarCarpetaDescargasPersonalizada()">Cambiar</button>
+      </div>
       <div class="share-panel" id="share-panel">
         <div class="library-origin">Enlace temporal para que otro dispositivo guarde canciones de esta biblioteca</div>
         <div class="share-link" id="share-link"></div>
@@ -2292,11 +2300,18 @@ function onYtPlayerStateChange(index, event) {
     } else if (event.data === YT.PlayerState.ENDED) {
       detenerYtProgresoTimer();
       if (!transitioning) {
-        if (modoRepetirCancion && cancionActual && ytPlayerActual) {
+        const activo = getYtPlayerActivo();
+        if (modoRepetirCancion && cancionActual && activo) {
           console.log('[YouTube] Repitiendo video 1 vez (+1):', cancionActual);
           desactivarRepetirCancionUnaVez();
-          ytPlayerActual.seekTo(0);
-          ytPlayerActual.playVideo();
+          activo.seekTo(0, true);
+          activo.playVideo();
+          reproduciendo = true;
+          setVinylSpinning(true);
+          iniciarVisualizerCompacto();
+          iniciarYtProgresoTimer();
+          actualizarPlayPauseBtn(true);
+          estadoEl.textContent = 'Reproduciendo (YouTube Repetición 1x) ✓';
           return;
         }
         console.log('[YouTube] Video terminado, pasando a siguiente cancion');
@@ -4317,34 +4332,137 @@ function renderCola(cola) {
   `).join('');
 }
 
+function actualizarInfoCarpetaDescarga() {
+  const label = document.getElementById('label-carpeta-descarga');
+  if (!label) return;
+  const nombreGuardado = localStorage.getItem('rockola_carpeta_descarga_nombre');
+  if (directorioFisicoHandle && directorioFisicoHandle.name) {
+    label.textContent = directorioFisicoHandle.name;
+    label.title = `Carpeta física vinculada: ${directorioFisicoHandle.name}`;
+  } else if (nombreGuardado) {
+    label.textContent = nombreGuardado;
+    label.title = `Carpeta seleccionada: ${nombreGuardado}`;
+  } else {
+    label.textContent = 'Descargas del navegador';
+    label.title = 'Se guardará en la carpeta Descargas estándar del sistema';
+  }
+}
+
+async function seleccionarCarpetaDescargasPersonalizada() {
+  if (typeof window.showDirectoryPicker === 'function') {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      await guardarDirectorioHandle(handle);
+      localStorage.setItem('rockola_carpeta_descarga_nombre', handle.name);
+      actualizarInfoCarpetaDescarga();
+      mostrarMensaje(`Carpeta de descargas fijada en: ${handle.name} ✓`, 'ok');
+    } catch(e) {
+      if (e.name !== 'AbortError') {
+        mostrarMensaje('No se pudo abrir la carpeta: ' + e.message, 'error');
+      }
+    }
+  } else {
+    const defaultVal = localStorage.getItem('rockola_carpeta_descarga_nombre') || 'Descargas';
+    const nueva = prompt('Nombre o ruta de la carpeta para organizar tus descargas de música:', defaultVal);
+    if (nueva && nueva.trim().length > 0) {
+      localStorage.setItem('rockola_carpeta_descarga_nombre', nueva.trim());
+      actualizarInfoCarpetaDescarga();
+      mostrarMensaje(`Descargas parametrizadas hacia: ${nueva.trim()}`, 'ok');
+    }
+  }
+}
+
 async function bajarLink(id, btn) {
   const item = (currentCola || []).find(x => x.id === id);
-  if (!item || !item.youtube_url) return;
-  const label = btn ? btn.textContent : '';
-  if (btn) { btn.textContent = '...'; btn.disabled = true; }
-  estadoEl.textContent = 'Bajando link...';
+  if (!item) return;
+  const nombreCancion = limpiarNombre(item.nombre || 'Cancion');
+  const label = btn ? btn.innerHTML : '⬇';
+  if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
+  
+  mostrarMensaje(`Descargando audio de: ${nombreCancion}...`, '');
+  estadoEl.textContent = 'Descargando audio del enlace...';
+
   try {
-    const r = await fetch(`/rockola/${SALA}/resolver`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+    const payload = { id, url: item.youtube_url || '' };
+    const r = await fetch(`/rockola/${SALA}/resolver`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
     const d = await r.json();
-    if (!d.ok || !d.url) throw new Error(d.error || 'sin audio');
+    if (!d.ok || !d.url) throw new Error(d.error || 'No se pudo resolver el audio del enlace');
+
     const br = await fetch(d.url);
-    if (!br.ok) throw new Error('descarga fallo');
+    if (!br.ok) throw new Error('Error al descargar los datos del audio');
     const blob = await br.blob();
+    const safeName = limpiarNombreArchivo(nombreCancion) + '.mp3';
+
+    // 1. Guardar físicamente en la carpeta parametrizada si está vinculada
+    let guardadoEnCarpeta = false;
+    let nombreCarpeta = '';
+    const handle = await obtenerDirectorioHandle();
+    const permiso = handle ? await verificarPermisosDirectorio(handle, true) : false;
+
+    if (handle && permiso) {
+      try {
+        const fileHandle = await handle.getFileHandle(safeName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        guardadoEnCarpeta = true;
+        nombreCarpeta = handle.name;
+      } catch(errFisico) {
+        console.warn('No se pudo escribir en el directorio handle:', errFisico);
+      }
+    }
+
+    // 2. Si no hay carpeta física vinculada (o falló permiso), disparar descarga nativa del navegador
+    if (!guardadoEnCarpeta) {
+      const urlBlob = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = urlBlob;
+      a.download = safeName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(urlBlob), 15000);
+      nombreCarpeta = localStorage.getItem('rockola_carpeta_descarga_nombre') || 'Descargas';
+    }
+
+    // 3. Registrar en IndexedDB de la biblioteca local para disponibilidad inmediata
     const db = await abrirDbLocal();
     await new Promise((resolve, reject) => {
       const tx = db.transaction('songs', 'readwrite');
-      tx.objectStore('songs').put({ id: item.id, deviceId: getDeviceId(), nombre: item.nombre, tipo: blob.type || 'audio/mpeg', size: blob.size, actualizado: Date.now(), blob: blob });
+      tx.objectStore('songs').put({
+        id: item.id,
+        deviceId: getDeviceId(),
+        nombre: safeName,
+        tipo: blob.type || 'audio/mpeg',
+        size: blob.size,
+        actualizado: Date.now(),
+        blob: blob,
+        esFisico: guardadoEnCarpeta
+      });
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
     });
     db.close();
+
     await cargarBibliotecaLocal();
     sincronizarCatalogoLocal();
-    estadoEl.textContent = 'Guardada en este dispositivo';
+
+    const destMsg = guardadoEnCarpeta ? `en tu carpeta vinculada [${nombreCarpeta}]` : `en la carpeta [${nombreCarpeta}]`;
+    mostrarMensaje(`✓ Canción guardada ${destMsg}: ${safeName}`, 'ok');
+    estadoEl.textContent = `Descarga completada ✓ (${nombreCarpeta})`;
+    if (btn) btn.innerHTML = '✓';
   } catch(e) {
-    estadoEl.textContent = 'No se pudo bajar: ' + (e.message || 'error');
+    console.error('Error en bajarLink:', e);
+    mostrarMensaje('No se pudo bajar el audio: ' + (e.message || 'Error desconocido'), 'error');
+    estadoEl.textContent = 'Error al descargar enlace';
+    if (btn) btn.innerHTML = label;
   } finally {
-    if (btn) { btn.textContent = label; btn.disabled = false; }
+    if (btn && btn.innerHTML !== '✓') { btn.innerHTML = label; }
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -4591,6 +4709,7 @@ try {
   actualizarRepetirCancionStatus();
   actualizarRepetirListaStatus();
   actualizarAutoplayStatus();
+  actualizarInfoCarpetaDescarga();
   actualizarVisibilidadModoVisualizer();
 
   // Pre-desbloqueo al tocar la pantalla de bienvenida o cualquier parte

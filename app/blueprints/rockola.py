@@ -1710,9 +1710,15 @@ def poner_desde_biblioteca(sala_id, archivo_id):
             nombre = row['nombre']
             yt_url = row.get('youtube_url')
             upload = _upload_dir(sala_id)
-            origen = os.path.join(upload, archivo_id)
-            if os.path.exists(origen):
-                nuevo_id = str(uuid.uuid4()) + os.path.splitext(archivo_id)[1]
+            candidatos = [archivo_id, archivo_id + '.mp3', archivo_id + '.m4a']
+            origen = None
+            for cand in candidatos:
+                p = os.path.join(upload, cand)
+                if os.path.isfile(p):
+                    origen = p
+                    break
+            if origen:
+                nuevo_id = str(uuid.uuid4()) + os.path.splitext(origen)[1]
                 destino = os.path.join(upload, nuevo_id)
                 with open(origen, 'rb') as src, open(destino, 'wb') as dst:
                     while True:

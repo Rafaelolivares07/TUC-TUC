@@ -533,6 +533,40 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
   color: #ffffff;
   transform: scale(1.08);
 }
+.q-saved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(0, 225, 207, 0.12);
+  border: 1px solid rgba(0, 225, 207, 0.35);
+  color: #00e1cf;
+  white-space: nowrap;
+  user-select: none;
+  vertical-align: middle;
+}
+.library-del-btn {
+  border: 1px solid rgba(255, 77, 109, 0.35);
+  background: rgba(255, 77, 109, 0.08);
+  color: #ff4d6d;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+.library-del-btn:hover {
+  background: rgba(255, 77, 109, 0.22);
+  border-color: #ff4d6d;
+  transform: scale(1.05);
+}
 .queue-empty { text-align: center; color: var(--muted2); font-size: 13px; padding: 20px 0; }
 
 #estado { text-align: center; font-size: 11px; color: var(--muted2); margin-top: 12px; }
@@ -3848,8 +3882,32 @@ function renderBibliotecaLocal() {
       </div>
       <button class="playlist-mini" onclick="agregarCancionALista('${c.id}')">Lista</button>
       <button class="library-btn" onclick="abrirModalPoner('${c.id}', '${escapeJs(limpiarNombre(c.nombre))}')">Poner</button>
+      <button class="library-del-btn" onclick="eliminarCancionLocal('${c.id}', '${escapeJs(limpiarNombre(c.nombre))}')" title="Eliminar de la biblioteca de este dispositivo">🗑️</button>
     </li>
   `).join('');
+}
+
+async function eliminarCancionLocal(id, nombre) {
+  if (!confirm(`¿Eliminar "${nombre}" de la biblioteca de este dispositivo?`)) return;
+  try {
+    const db = await abrirDbLocal();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('songs', 'readwrite');
+      tx.objectStore('songs').delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+
+    cancionesLocales = cancionesLocales.filter(c => c.id !== id);
+    renderBibliotecaLocal();
+    sincronizarCatalogoLocal();
+    renderCola(currentCola);
+    mostrarMensaje(`✓ Canción eliminada de la biblioteca local`, 'ok');
+  } catch(e) {
+    console.error('Error al eliminar canción local:', e);
+    mostrarMensaje('No se pudo eliminar la canción: ' + e.message, 'error');
+  }
 }
 
 function idLista(nombre) {
@@ -4396,6 +4454,21 @@ function toggleQueueBox() {
   }
 }
 
+function estaCancionGuardadaLocal(c) {
+  if (!c || !cancionesLocales || !cancionesLocales.length) return false;
+  if (c.id && c.id.startsWith('local-')) return true;
+  const nombreNorm = limpiarNombre(c.nombre || '').toLowerCase().trim();
+  return cancionesLocales.some(s => {
+    if (s.id === c.id) return true;
+    const sNombreNorm = limpiarNombre(s.nombre || '').toLowerCase().trim();
+    if (nombreNorm && sNombreNorm) {
+      if (sNombreNorm === nombreNorm) return true;
+      if (sNombreNorm === nombreNorm + '.mp3' || sNombreNorm.replace(/\.mp3$/i, '') === nombreNorm) return true;
+    }
+    return false;
+  });
+}
+
 function renderCola(cola) {
   const badge = document.getElementById('queue-count-badge');
   if (badge) badge.textContent = cola.length;
@@ -4404,15 +4477,26 @@ function renderCola(cola) {
     listaCola.innerHTML = '<li class="queue-empty">Cola vacía</li>';
     return;
   }
-  listaCola.innerHTML = cola.map((c, i) => `
+  listaCola.innerHTML = cola.map((c, i) => {
+    const yaGuardada = estaCancionGuardadaLocal(c);
+    return `
     <li class="queue-item ${i === 0 ? 'is-playing' : ''}" data-id="${c.id}">
       <span class="handle" style="${i === 0 ? 'visibility:hidden;pointer-events:none;' : ''}">⠿</span>
       <span class="q-num">${i === 0 ? '▶' : '#'+(i + 1)}</span>
       <span class="q-nombre">${limpiarNombre(c.nombre)}</span>
-      ${c.youtube_url ? `<span class="q-link" title="Enlace de YouTube: suena al llegar su turno">🔗</span><button class="q-download-btn" onclick="bajarLink('${c.id}', this)" title="Descargar y guardar en tu carpeta de música"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></button>` : (!c.id.startsWith('local-') ? `<button class="q-download-btn" onclick="bajarCancionServidor('${c.id}', '${escapeJs(c.nombre)}', this)" title="Descargar y guardar en tu carpeta de música"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></button>` : '')}
+      ${c.youtube_url ? (
+        yaGuardada ? 
+          `<span class="q-saved-badge" title="Canción guardada en la biblioteca de este dispositivo"><svg style="width:11px; height:11px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> Guardada</span>` : 
+          `<span class="q-link" title="Enlace de YouTube: suena al llegar su turno">🔗</span><button class="q-download-btn" onclick="bajarLink('${c.id}', this)" title="Descargar y guardar en tu celular / PC"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></button>`
+      ) : (!c.id.startsWith('local-') ? (
+        yaGuardada ? 
+          `<span class="q-saved-badge" title="Canción guardada en la biblioteca de este dispositivo"><svg style="width:11px; height:11px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> Guardada</span>` : 
+          `<button class="q-download-btn" onclick="bajarCancionServidor('${c.id}', '${escapeJs(c.nombre)}', this)" title="Descargar y guardar en tu celular / PC"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></button>`
+      ) : '')}
       <button class="q-remove" onclick="quitar('${c.id}')">Quitar</button>
     </li>
-  `).join('');
+  `;
+  }).join('');
 }
 
 let modalDescargaBlob = null;

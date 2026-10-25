@@ -1541,6 +1541,43 @@ input:checked + .slider:before {
   </div>
 </div>
 
+<div id="modal-guardar-descarga" style="display:none; position:fixed; inset:0; z-index:250; background:rgba(0,0,0,.7); align-items:flex-end; justify-content:center;" onclick="if(event.target===this)cerrarModalGuardarDescarga()">
+  <div style="width:100%; max-width:440px; background:var(--surface); border:1px solid var(--border); border-radius:20px 20px 0 0; padding:20px 18px 28px; animation:fadeUp .2s ease; box-shadow:0 -10px 40px rgba(0,0,0,.6);">
+    <div style="width:40px; height:4px; background:var(--muted2); border-radius:2px; margin:0 auto 16px;"></div>
+    
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+      <div style="width:40px; height:40px; border-radius:10px; background:rgba(0,212,255,0.15); border:1px solid rgba(0,212,255,0.35); display:flex; align-items:center; justify-content:center; color:var(--ac1); font-size:20px; flex-shrink:0;">
+        <svg style="width:20px; height:20px; fill:none; stroke:var(--ac1); stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg>
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.8px; color:var(--ac1); font-weight:800;">Audio listo para guardar</div>
+        <div id="modal-descarga-titulo" style="font-size:14px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+      </div>
+    </div>
+
+    <div style="font-size:12px; color:var(--muted); margin-bottom:16px; line-height:1.4;">
+      Elige cómo deseas guardar la canción en tu dispositivo:
+    </div>
+
+    <!-- Opción 1: Explorador de carpetas / Guardar en el dispositivo -->
+    <button id="btn-modal-guardar-explorador" onclick="ejecutarGuardadoElegirCarpeta()" style="width:100%; padding:14px 12px; margin-bottom:6px; border:none; border-radius:12px; background:var(--ac-grad); color:#00101b; font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:13.5px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+      <span style="font-size:16px;">📂</span>
+      <span id="btn-modal-guardar-explorador-txt">Elegir carpeta en mi celular</span>
+    </button>
+    <div id="modal-guardar-explorador-desc" style="font-size:11px; color:var(--muted2); text-align:center; margin-bottom:14px; line-height:1.3;">
+      Abre el explorador de tu teléfono para navegar y guardarla en tu carpeta de Música o cualquier otra.
+    </div>
+
+    <!-- Opción 2: Descarga directa a carpeta Descargas -->
+    <button onclick="ejecutarGuardadoNativoDescargas()" style="width:100%; padding:12px; margin-bottom:8px; border:1px solid var(--border); border-radius:12px; background:var(--surface2); color:var(--text); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+      <span style="font-size:14px;">⬇️</span>
+      <span>Guardar directo en "Descargas"</span>
+    </button>
+
+    <button onclick="cerrarModalGuardarDescarga()" style="width:100%; padding:10px; border:none; border-radius:12px; background:transparent; color:var(--muted); font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:12px; cursor:pointer; margin-top:2px;">Cerrar</button>
+  </div>
+</div>
+
 <div id="visualizer-fullscreen" style="display:none; position:fixed; inset:0; z-index:300; background:#040810; flex-direction:column; justify-content:space-between;" onclick="cerrarVisualizerFullscreen()">
   <!-- Canvas de animación a pantalla completa -->
   <canvas id="visualizer-fs-canvas" style="position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none;"></canvas>
@@ -4347,22 +4384,131 @@ function renderCola(cola) {
       <span class="handle" style="${i === 0 ? 'visibility:hidden;pointer-events:none;' : ''}">⠿</span>
       <span class="q-num">${i === 0 ? '▶' : '#'+(i + 1)}</span>
       <span class="q-nombre">${limpiarNombre(c.nombre)}</span>
-      ${c.youtube_url ? `<span class="q-link" title="Enlace de YouTube: suena al llegar su turno">🔗</span><button class="q-download-btn" onclick="bajarLink('${c.id}', this)" title="Descargar y guardar en tu carpeta de música"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></button>` : (!c.id.startsWith('local-') ? `<a href="/rockola/${SALA}/archivo/${c.id}" download="${c.nombre}.mp3" class="q-download-btn" title="Descargar MP3"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></a>` : '')}
+      ${c.youtube_url ? `<span class="q-link" title="Enlace de YouTube: suena al llegar su turno">🔗</span><button class="q-download-btn" onclick="bajarLink('${c.id}', this)" title="Descargar y guardar en tu carpeta de música"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></button>` : (!c.id.startsWith('local-') ? `<button class="q-download-btn" onclick="bajarCancionServidor('${c.id}', '${escapeJs(c.nombre)}', this)" title="Descargar y guardar en tu carpeta de música"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></button>` : '')}
       <button class="q-remove" onclick="quitar('${c.id}')">Quitar</button>
     </li>
   `).join('');
+}
+
+let modalDescargaBlob = null;
+let modalDescargaSafeName = '';
+let modalDescargaId = '';
+
+function abrirModalGuardarDescarga(blob, safeName, id) {
+  modalDescargaBlob = blob;
+  modalDescargaSafeName = safeName;
+  modalDescargaId = id || '';
+  
+  const titEl = document.getElementById('modal-descarga-titulo');
+  if (titEl) titEl.textContent = safeName;
+
+  const btnTxt = document.getElementById('btn-modal-guardar-explorador-txt');
+  const descEl = document.getElementById('modal-guardar-explorador-desc');
+  const esMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (btnTxt) {
+    btnTxt.textContent = esMovil ? 'Elegir carpeta en mi celular' : 'Elegir carpeta en mi PC';
+  }
+  if (descEl) {
+    descEl.textContent = esMovil ? 
+      'Abre el explorador de tu teléfono para navegar y guardarla en tu carpeta de Música o cualquier otra.' : 
+      'Abre la ventana de Windows/PC ("Guardar como...") para elegir la carpeta exacta.';
+  }
+
+  const modal = document.getElementById('modal-guardar-descarga');
+  if (modal) modal.style.display = 'flex';
+}
+
+function cerrarModalGuardarDescarga() {
+  const modal = document.getElementById('modal-guardar-descarga');
+  if (modal) modal.style.display = 'none';
+  modalDescargaBlob = null;
+  modalDescargaSafeName = '';
+  modalDescargaId = '';
+}
+
+async function ejecutarGuardadoElegirCarpeta() {
+  if (!modalDescargaBlob) return;
+  const safeName = modalDescargaSafeName || 'cancion.mp3';
+  const blob = modalDescargaBlob;
+  
+  // 1. En teléfonos móviles / navegadores con soporte Web Share de archivos:
+  // Dispara la hoja del sistema Android ("Guardar en el dispositivo" / "Archivos")
+  try {
+    const file = new File([blob], safeName, { type: blob.type || 'audio/mpeg' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: safeName,
+        text: 'Guardar canción en tu dispositivo'
+      });
+      mostrarMensaje(`✓ Canción guardada: ${safeName}`, 'ok');
+      cerrarModalGuardarDescarga();
+      return;
+    }
+  } catch (errShare) {
+    if (errShare.name === 'AbortError') {
+      // El usuario cerró el menú del sistema sin guardar
+      return;
+    }
+    console.warn('Share de archivo no disponible o cancelado:', errShare);
+  }
+
+  // 2. En PC de escritorio: showSaveFilePicker ("Guardar como..." de Windows/Mac/Linux)
+  if (typeof window.showSaveFilePicker === 'function') {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: safeName,
+        types: [{
+          description: 'Audio MP3',
+          accept: { 'audio/mpeg': ['.mp3'] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      mostrarMensaje(`✓ Guardada en: ${handle.name}`, 'ok');
+      cerrarModalGuardarDescarga();
+      return;
+    } catch (errPicker) {
+      if (errPicker.name === 'AbortError') return;
+      console.warn('showSaveFilePicker error:', errPicker);
+    }
+  }
+
+  // 3. Fallback: descarga directa
+  ejecutarGuardadoNativoDescargas();
+}
+
+function ejecutarGuardadoNativoDescargas() {
+  if (!modalDescargaBlob) return;
+  const safeName = modalDescargaSafeName || 'cancion.mp3';
+  const urlBlob = URL.createObjectURL(modalDescargaBlob);
+  const a = document.createElement('a');
+  a.href = urlBlob;
+  a.download = safeName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(urlBlob), 15000);
+  mostrarMensaje(`✓ Descarga enviada: ${safeName}`, 'ok');
+  cerrarModalGuardarDescarga();
 }
 
 function actualizarInfoCarpetaDescarga() {
   const label = document.getElementById('label-carpeta-descarga');
   if (!label) return;
   const nombreGuardado = localStorage.getItem('rockola_carpeta_descarga_nombre');
+  const esMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
   if (directorioFisicoHandle && directorioFisicoHandle.name) {
     label.textContent = directorioFisicoHandle.name;
     label.title = `Carpeta física vinculada: ${directorioFisicoHandle.name}`;
-  } else if (nombreGuardado) {
+  } else if (typeof window.showDirectoryPicker === 'function' && nombreGuardado) {
     label.textContent = nombreGuardado;
     label.title = `Carpeta seleccionada: ${nombreGuardado}`;
+  } else if (esMovil) {
+    label.textContent = 'Explorador del celular / Descargas';
+    label.title = 'Al pulsar descargar, puedes elegir la carpeta en tu teléfono';
   } else {
     label.textContent = 'Descargas del navegador';
     label.title = 'Se guardará en la carpeta Descargas estándar del sistema';
@@ -4383,12 +4529,17 @@ async function seleccionarCarpetaDescargasPersonalizada() {
       }
     }
   } else {
-    const defaultVal = localStorage.getItem('rockola_carpeta_descarga_nombre') || 'Descargas';
-    const nueva = prompt('Nombre o ruta de la carpeta para organizar tus descargas de música:', defaultVal);
-    if (nueva && nueva.trim().length > 0) {
-      localStorage.setItem('rockola_carpeta_descarga_nombre', nueva.trim());
-      actualizarInfoCarpetaDescarga();
-      mostrarMensaje(`Descargas parametrizadas hacia: ${nueva.trim()}`, 'ok');
+    const esMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (esMovil) {
+      alert('ℹ️ En celulares, el navegador no permite dejar fijada una sola carpeta por seguridad del sistema.\n\n¡Pero no te preocupes! Al tocar el botón de descarga (⬇) en cualquier canción, el reproductor te permite elegir "📂 Elegir carpeta en mi celular" para abrir tu explorador de archivos y guardarla exactamente en la carpeta que quieras (Música, SD, etc.).');
+    } else {
+      const defaultVal = localStorage.getItem('rockola_carpeta_descarga_nombre') || 'Descargas';
+      const nueva = prompt('Nombre o ruta de la carpeta para organizar tus descargas de música:', defaultVal);
+      if (nueva && nueva.trim().length > 0) {
+        localStorage.setItem('rockola_carpeta_descarga_nombre', nueva.trim());
+        actualizarInfoCarpetaDescarga();
+        mostrarMensaje(`Descargas parametrizadas hacia: ${nueva.trim()}`, 'ok');
+      }
     }
   }
 }
@@ -4418,7 +4569,7 @@ async function bajarLink(id, btn) {
     const blob = await br.blob();
     const safeName = limpiarNombreArchivo(nombreCancion) + '.mp3';
 
-    // 1. Guardar físicamente en la carpeta parametrizada si está vinculada
+    // 1. Guardar físicamente si hay una carpeta física vinculada directamente (Desktop)
     let guardadoEnCarpeta = false;
     let nombreCarpeta = '';
     const handle = await obtenerDirectorioHandle();
@@ -4437,20 +4588,7 @@ async function bajarLink(id, btn) {
       }
     }
 
-    // 2. Si no hay carpeta física vinculada (o falló permiso), disparar descarga nativa del navegador
-    if (!guardadoEnCarpeta) {
-      const urlBlob = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = urlBlob;
-      a.download = safeName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(urlBlob), 15000);
-      nombreCarpeta = localStorage.getItem('rockola_carpeta_descarga_nombre') || 'Descargas';
-    }
-
-    // 3. Registrar en IndexedDB de la biblioteca local para disponibilidad inmediata
+    // 2. Registrar en IndexedDB de la biblioteca local para disponibilidad inmediata offline
     const db = await abrirDbLocal();
     await new Promise((resolve, reject) => {
       const tx = db.transaction('songs', 'readwrite');
@@ -4472,14 +4610,74 @@ async function bajarLink(id, btn) {
     await cargarBibliotecaLocal();
     sincronizarCatalogoLocal();
 
-    const destMsg = guardadoEnCarpeta ? `en tu carpeta vinculada [${nombreCarpeta}]` : `en la carpeta [${nombreCarpeta}]`;
-    mostrarMensaje(`✓ Canción guardada ${destMsg}: ${safeName}`, 'ok');
-    estadoEl.textContent = `Descarga completada ✓ (${nombreCarpeta})`;
-    if (btn) btn.innerHTML = '✓';
+    if (guardadoEnCarpeta) {
+      mostrarMensaje(`✓ Canción guardada en tu carpeta vinculada [${nombreCarpeta}]: ${safeName}`, 'ok');
+      estadoEl.textContent = `Descarga completada ✓ (${nombreCarpeta})`;
+      if (btn) btn.innerHTML = '✓';
+    } else {
+      estadoEl.textContent = `Descarga lista: ${safeName}`;
+      if (btn) btn.innerHTML = '✓';
+      abrirModalGuardarDescarga(blob, safeName, item.id);
+    }
   } catch(e) {
     console.error('Error en bajarLink:', e);
     mostrarMensaje('No se pudo bajar el audio: ' + (e.message || 'Error desconocido'), 'error');
     estadoEl.textContent = 'Error al descargar enlace';
+    if (btn) btn.innerHTML = label;
+  } finally {
+    if (btn && btn.innerHTML !== '✓') { btn.innerHTML = label; }
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function bajarCancionServidor(id, nombre, btn) {
+  const safeName = limpiarNombreArchivo(limpiarNombre(nombre || 'Cancion')) + '.mp3';
+  const label = btn ? btn.innerHTML : '';
+  if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
+  mostrarMensaje(`Descargando ${safeName}...`, '');
+  try {
+    const res = await fetch(`/rockola/${SALA}/archivo/${id}`);
+    if (!res.ok) throw new Error('Error al obtener archivo del servidor');
+    const blob = await res.blob();
+    
+    // Registrar en IndexedDB
+    const db = await abrirDbLocal();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('songs', 'readwrite');
+      tx.objectStore('songs').put({
+        id: id,
+        deviceId: getDeviceId(),
+        nombre: safeName,
+        tipo: blob.type || 'audio/mpeg',
+        size: blob.size,
+        actualizado: Date.now(),
+        blob: blob,
+        esFisico: false
+      });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    await cargarBibliotecaLocal();
+    sincronizarCatalogoLocal();
+
+    const handle = await obtenerDirectorioHandle();
+    const permiso = handle ? await verificarPermisosDirectorio(handle, true) : false;
+    if (handle && permiso) {
+      try {
+        const fileHandle = await handle.getFileHandle(safeName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        mostrarMensaje(`✓ Guardado en [${handle.name}]: ${safeName}`, 'ok');
+        if (btn) btn.innerHTML = '✓';
+        return;
+      } catch(e) {}
+    }
+    if (btn) btn.innerHTML = '✓';
+    abrirModalGuardarDescarga(blob, safeName, id);
+  } catch(e) {
+    mostrarMensaje('Error al descargar: ' + e.message, 'error');
     if (btn) btn.innerHTML = label;
   } finally {
     if (btn && btn.innerHTML !== '✓') { btn.innerHTML = label; }

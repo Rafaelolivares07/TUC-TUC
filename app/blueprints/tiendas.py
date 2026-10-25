@@ -2515,44 +2515,37 @@ def api_tienda_pedido_crear(slug):
                     except (ValueError, TypeError):
                         numero_documento = f"{tipo_doc_codigo}-{res_num}"
 
-        # Procesar ajustes en caliente antes de validar el stock
+        # Procesar ajustes en caliente antes de validar el stock mediante motor unificado
         adjustments = data.get('adjustments') or []
         applied_adjustments = False
         adjusted_product_ids = set()
         if adjustments:
+            from .inventarios import registrar_conteo_fisico_unificado
             for adj in adjustments:
                 prod_id = int(adj.get('producto_id') or 0)
                 qty_physical = float(adj.get('cantidad_fisica') or 0.0)
                 cost_unit = float(adj.get('costo_unitario') or 0.0)
+                adj_nota = adj.get('notas') or f"Ajuste en caliente POS - Factura {numero_documento}"
                 if not prod_id:
                     continue
                 
-                # Obtener stock en base de datos
-                saldo = conn.execute(
-                    "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = %s",
-                    (negocio['tercero_id'], prod_id, centro_utilidad_id)
-                ).fetchone()
-                qty_system = float(saldo['stock'] if saldo else 0.0)
-                diff = qty_physical - qty_system
-                if abs(diff) < 0.000001:
-                    continue
-                
-                # Registrar el movimiento de ajuste con los datos de la factura
-                _mov_directo(
-                    conn, negocio['tercero_id'], prod_id, abs(diff), 'entrada' if diff > 0 else 'salida', 'ajuste',
-                    registrado_por=session.get('usuario_id'),
-                    valor_unitario=cost_unit,
-                    bodega=centro_utilidad_id,
-                    tipo_documento=tipo_doc_codigo or 'Factura de Venta',
+                res_adj = registrar_conteo_fisico_unificado(
+                    conn, negocio['tercero_id'], prod_id, qty_physical,
+                    centro_utilidad_id=centro_utilidad_id,
+                    usuario_id=session.get('usuario_id'),
+                    usuario_nombre=session.get('nombre'),
+                    modulo_origen='caja_pos_tienda',
+                    metodologia='caliente_pos',
+                    notas=adj_nota,
+                    costo_unitario=cost_unit,
                     documento_numero=numero_documento,
-                    documento_fecha=fecha_pedido,
                     tipo_documento_id=tipo_doc_id,
-                    referencia_tipo='pedido_tienda'
+                    tipo_doc_codigo=tipo_doc_codigo or 'Factura de Venta',
+                    contabilizar=False,  # Se contabiliza en el comprobante general de la factura
+                    fecha_doc=fecha_pedido
                 )
-                
-                # Recostear inmediatamente para actualizar el costo promedio en el balance antes de la venta
-                _recostear_producto(conn, negocio['tercero_id'], prod_id)
-                applied_adjustments = True
+                if not res_adj['es_conforme']:
+                    applied_adjustments = True
                 adjusted_product_ids.add(prod_id)
 
         # Si un componente fue ajustado en caliente, se garantiza que NO sea excluido de la receta

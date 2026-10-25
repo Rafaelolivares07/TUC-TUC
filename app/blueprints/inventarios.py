@@ -298,6 +298,31 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_auditoria_recosteos_negocio ON auditoria_recosteos(negocio_id, fecha_hora DESC)",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS unidad_medida_id INTEGER REFERENCES unidades_medida(id)",
         "ALTER TABLE productos ADD COLUMN IF NOT EXISTS unidad_visual_id INTEGER REFERENCES unidades_medida(id)",
+        """CREATE TABLE IF NOT EXISTS inventario_fisico_actas (
+            id SERIAL PRIMARY KEY,
+            negocio_id INTEGER NOT NULL REFERENCES terceros(id),
+            centro_utilidad_id INTEGER DEFAULT 1,
+            producto_id INTEGER NOT NULL REFERENCES productos(id),
+            producto_nombre VARCHAR(255),
+            fecha_hora TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            usuario_id INTEGER,
+            usuario_nombre VARCHAR(150),
+            modulo_origen VARCHAR(60) NOT NULL,
+            metodologia VARCHAR(60) NOT NULL,
+            tipo_documento VARCHAR(50),
+            documento_numero VARCHAR(100),
+            cantidad_contada NUMERIC(16, 4) NOT NULL,
+            stock_sistema NUMERIC(16, 4) NOT NULL,
+            diferencia NUMERIC(16, 4) NOT NULL,
+            costo_unitario NUMERIC(16, 6) DEFAULT 0,
+            valor_diferencia NUMERIC(16, 2) DEFAULT 0,
+            notas TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_ifa_neg_prod ON inventario_fisico_actas(negocio_id, producto_id)",
+        "CREATE INDEX IF NOT EXISTS idx_ifa_neg_fecha ON inventario_fisico_actas(negocio_id, fecha_hora DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_ifa_doc ON inventario_fisico_actas(negocio_id, documento_numero)",
+        "CREATE INDEX IF NOT EXISTS idx_ifa_modulo ON inventario_fisico_actas(negocio_id, modulo_origen)",
     ]
     for sql in alters:
         try:
@@ -10822,6 +10847,174 @@ def _contabilizar_ajuste_item(conn, negocio_id, producto_id, diff, costo_unitari
     return True, None
 
 
+def registrar_conteo_fisico_unificado(
+    conn,
+    negocio_id: int,
+    producto_id: int,
+    cantidad_contada: float,
+    centro_utilidad_id: int = 1,
+    usuario_id: int = None,
+    usuario_nombre: str = None,
+    modulo_origen: str = "inventario_fisico",
+    metodologia: str = "completo",
+    notas: str = "",
+    costo_unitario: float = None,
+    documento_numero: str = None,
+    tipo_documento_id: int = None,
+    tipo_doc_codigo: str = None,
+    tercero_id: int = None,
+    tercero_nombre: str = None,
+    comp_id: int = None,
+    contabilizar: bool = True,
+    fecha_doc = None
+):
+    """
+    Motor centralizado e inmutable de ajustes por inventarios físicos.
+    Registra el acta inmutable de conteo físico en `inventario_fisico_actas`
+    (inmune a futuros recálculos o recosteos), y si hay diferencia real:
+      1. Genera el movimiento en Kardex (_mov_directo)
+      2. Asienta en contabilidad (_contabilizar_ajuste_item) si corresponde
+      3. Ejecuta el recosteo (_recostear_producto)
+    Si no hay diferencia (conteo conforme), congela el conteo físico en el acta inmutable.
+    """
+    try:
+        centro_utilidad_id = int(centro_utilidad_id or 1)
+    except (ValueError, TypeError):
+        centro_utilidad_id = 1
+
+    if not usuario_id:
+        try:
+            from flask import session
+            usuario_id = session.get("usuario_id")
+        except Exception:
+            usuario_id = None
+
+    if not usuario_nombre:
+        try:
+            from flask import session
+            usuario_nombre = session.get("nombre") or session.get("nombre_usuario")
+        except Exception:
+            pass
+        if not usuario_nombre and usuario_id:
+            u = conn.execute("SELECT nombre FROM usuarios WHERE id = %s", (usuario_id,)).fetchone()
+            if u:
+                usuario_nombre = u["nombre"]
+
+    # 1. Obtener producto y saldo actual en la sede
+    prod = conn.execute(
+        "SELECT id, nombre, categoria, costo FROM productos WHERE id=%s AND negocio_id=%s",
+        (producto_id, negocio_id)
+    ).fetchone()
+    prod_nombre = prod["nombre"] if prod else f"Producto #{producto_id}"
+    prod_costo_base = float(prod["costo"] or 0.0) if prod else 0.0
+
+    saldo = conn.execute(
+        "SELECT stock, costo_und, valor_existencia FROM saldos_inventario WHERE negocio_id=%s AND producto_id=%s AND bodega=%s",
+        (negocio_id, producto_id, centro_utilidad_id)
+    ).fetchone()
+    stock_sistema = float(saldo["stock"] if saldo and saldo["stock"] is not None else 0.0)
+    costo_promedio_saldo = float(saldo["costo_und"] if saldo and saldo["costo_und"] is not None else prod_costo_base)
+
+    cantidad_contada_float = float(cantidad_contada if cantidad_contada is not None else 0.0)
+    diff = cantidad_contada_float - stock_sistema
+    es_conforme = abs(diff) < 0.000001
+
+    # 2. Determinar costo unitario definitivo
+    if es_conforme:
+        costo_definitivo = costo_promedio_saldo
+    elif diff > 0:
+        if costo_unitario is not None and float(costo_unitario) > 0:
+            costo_definitivo = abs(float(costo_unitario))
+        else:
+            costo_definitivo = costo_promedio_saldo
+    else:
+        # Faltante: estrictamente al costo promedio ponderado de la bodega
+        costo_definitivo = costo_promedio_saldo
+
+    valor_diferencia = round(abs(diff) * costo_definitivo, 2)
+    s_doc_num = str(documento_numero) if documento_numero is not None else None
+    s_tipo_doc = str(tipo_doc_codigo) if tipo_doc_codigo is not None else None
+    f_doc = fecha_doc or date.today()
+
+    # 3. Acta Inmutable (Audit Trail que no se altera con recosteos)
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO inventario_fisico_actas
+            (negocio_id, centro_utilidad_id, producto_id, producto_nombre,
+             usuario_id, usuario_nombre, modulo_origen, metodologia,
+             tipo_documento, documento_numero, cantidad_contada, stock_sistema,
+             diferencia, costo_unitario, valor_diferencia, notas, fecha_hora)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        RETURNING id
+    """, (
+        negocio_id, centro_utilidad_id, producto_id, prod_nombre,
+        usuario_id, usuario_nombre or "Operario", str(modulo_origen), str(metodologia),
+        s_tipo_doc, s_doc_num, cantidad_contada_float, stock_sistema,
+        diff, costo_definitivo, valor_diferencia, notas or ""
+    ))
+    acta_id = cur.fetchone()[0]
+
+    # 4. Movimiento Kardex
+    if not es_conforme:
+        tipo_mov = "entrada" if diff > 0 else "salida"
+        _mov_directo(
+            conn, negocio_id, producto_id, abs(diff), tipo_mov, "ajuste",
+            registrado_por=usuario_id,
+            valor_unitario=costo_definitivo,
+            notas=notas or f"Ajuste Físico [{metodologia}]",
+            bodega=centro_utilidad_id,
+            tipo_documento=s_tipo_doc or "AJUSTE_INV",
+            documento_numero=s_doc_num,
+            documento_fecha=f_doc,
+            tipo_documento_id=tipo_documento_id,
+            proveedor_id=tercero_id,
+            proveedor_nombre=tercero_nombre
+        )
+        _recostear_producto(conn, negocio_id, producto_id)
+    elif modulo_origen == "inventario_fisico":
+        _mov_directo(
+            conn, negocio_id, producto_id, 0.0, "entrada", "conteo_conforme",
+            registrado_por=usuario_id,
+            valor_unitario=costo_definitivo,
+            notas=notas or "Conteo físico verificado conforme",
+            bodega=centro_utilidad_id,
+            tipo_documento=s_tipo_doc or "AJUSTE_INV",
+            documento_numero=s_doc_num,
+            documento_fecha=f_doc,
+            tipo_documento_id=tipo_documento_id,
+            proveedor_id=tercero_id,
+            proveedor_nombre=tercero_nombre
+        )
+
+    # 5. Contabilidad (si aplica y no fue conforme)
+    if contabilizar and not es_conforme:
+        if not comp_id:
+            comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
+        desc_asiento = f"Ajuste físico de inventario - {s_doc_num or ''} ({metodologia})"
+        _contabilizar_ajuste_item(
+            conn, negocio_id, producto_id, diff, costo_definitivo, comp_id,
+            s_doc_num, tipo_documento_id, s_tipo_doc or "AJUSTE_INV",
+            desc_asiento=desc_asiento,
+            usuario_id=usuario_id, tercero_id=tercero_id,
+            fecha_doc=f_doc, origen_tipo=f"ajuste_{modulo_origen}",
+            centro_utilidad_id=centro_utilidad_id
+        )
+
+    return {
+        "ok": True,
+        "acta_id": acta_id,
+        "diferencia": diff,
+        "es_conforme": es_conforme,
+        "stock_sistema": stock_sistema,
+        "cantidad_contada": cantidad_contada_float,
+        "costo_definitivo": costo_definitivo,
+        "valor_diferencia": valor_diferencia,
+        "documento_numero": s_doc_num,
+        "tipo_documento": s_tipo_doc,
+        "comp_id": comp_id
+    }
+
+
 @bp.route('/api/inventario/<int:negocio_id>/mantenimiento/ajuste-rapido', methods=['POST'])
 def api_tienda_ajuste_rapido(negocio_id):
     if 'usuario_id' not in session:
@@ -11168,42 +11361,28 @@ def api_ajuste_guardar_item(negocio_id):
             comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
             consecutivo_actualizado = True
 
-        # 3. Determinar costo unitario definitivo según tipo de movimiento
-        if es_conforme:
-            tipo_mov = 'entrada'
-            motivo_mov = 'conteo_conforme'
-            cant_mov = 0.0
-            costo_definitivo = abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
-        elif diff > 0:
-            tipo_mov = 'entrada'
-            motivo_mov = 'ajuste'
-            cant_mov = abs(diff)
-            # Para entradas (sobrante), se permite el costo provisto o el base de bodega si no viene
-            costo_definitivo = abs(float(costo_unitario)) if costo_unitario is not None else abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
-        else:
-            tipo_mov = 'salida'
-            motivo_mov = 'ajuste'
-            cant_mov = abs(diff)
-            # Para salidas de inventario por ajuste (faltante), NUNCA se permite costo arbitrario.
-            # Siempre se liquida al costo promedio ponderado vigente en la sede.
-            costo_definitivo = abs(float(saldo['costo_und'] if saldo and saldo['costo_und'] is not None else (prod['costo'] or 0.0)))
-
-        # Registrar el movimiento en movimientos_inventario (Kardex) asignando la bodega
-        _mov_directo(conn, negocio_id, producto_id, cant_mov, tipo_mov, motivo_mov,
-                     registrado_por=session.get('usuario_id'),
-                     valor_unitario=costo_definitivo,
-                     notas=notas,
-                     bodega=centro_utilidad_id,
-                     tipo_documento=tipo_code,
-                     documento_numero=doc_num_final,
-                     documento_fecha=date.today(),
-                     tipo_documento_id=tipo_documento_id,
-                     proveedor_id=tercero_id,
-                     proveedor_nombre=tercero_nombre)
-                     
-        # 4. Recostear el producto (solo si hubo diferencia real de existencias)
-        if not es_conforme:
-            _recostear_producto(conn, negocio_id, producto_id)
+        # 3. Ejecutar ajuste mediante motor unificado (genera acta inmutable, kardex, recosteo y contabilidad)
+        modalidad_conteo = data.get('modalidad') or 'completo'
+        res_ajuste = registrar_conteo_fisico_unificado(
+            conn, negocio_id, producto_id, cantidad_fisica,
+            centro_utilidad_id=centro_utilidad_id,
+            usuario_id=session.get('usuario_id'),
+            usuario_nombre=session.get('nombre') or session.get('nombre_usuario'),
+            modulo_origen='inventario_fisico',
+            metodologia=modalidad_conteo,
+            notas=notas,
+            costo_unitario=costo_unitario,
+            documento_numero=doc_num_final,
+            tipo_documento_id=tipo_documento_id,
+            tipo_doc_codigo=tipo_code,
+            tercero_id=tercero_id,
+            tercero_nombre=tercero_nombre,
+            comp_id=comp_id,
+            contabilizar=True
+        )
+        costo_definitivo = res_ajuste['costo_definitivo']
+        diff = res_ajuste['diferencia']
+        es_conforme = res_ajuste['es_conforme']
         
         # 5. Auto-guardar cotización de compra si hay proveedor y costo en entrada
         cotizacion_creada = False
@@ -11240,17 +11419,7 @@ def api_ajuste_guardar_item(negocio_id):
                 """, (negocio_id, tercero_id, producto_id, f_cot, f_vence, precio_cot, pres_id_default))
             cotizacion_creada = True
         
-        # 6. Integración contable individualizada mediante motor unificado (con centro_utilidad_id)
-        warnings = []
-        ok_contab, err_contab = _contabilizar_ajuste_item(
-            conn, negocio_id, producto_id, diff, costo_definitivo, comp_id,
-            doc_num_final, tipo_documento_id, tipo_code, desc_asiento=desc_asiento,
-            usuario_id=session.get('usuario_id'), tercero_id=tercero_id, origen_tipo='ajuste_fisico',
-            centro_utilidad_id=centro_utilidad_id
-        )
-        if not ok_contab:
-            conn.rollback(); conn.close()
-            return jsonify({'ok': False, 'error': f'Error en contabilización del ajuste: {err_contab}'}), 400
+# Contabilización ejecutada dentro de registrar_conteo_fisico_unificado
             
         conn.commit()
         return jsonify({
@@ -14225,9 +14394,12 @@ def inv_dist_conteo(negocio_id):
                 VALUES (%s, %s, %s, 'contado', NOW(), 1, %s, %s, %s)
             """, (negocio_id, producto_id, usuario_id, usuario_nombre, ciclo_inicio, centro_id))
 
-        # Si hay diferencia, registrar ajuste con consecutivo y contabilidad vía grupos_inventario
+        # Resolver consecutivo oficial de IFD si hay diferencia
         ajuste_monto = 0
         doc_num_final = None
+        tipo_doc_id = None
+        tipo_code = 'IFD'
+        notas_conteo = data.get('notas') or f"Inventario Distribuido - Contado por {usuario_nombre or 'Operario'}"
         if abs(diff) > 0.0001:
             from .contabilidad import obtener_o_crear_tipo_doc_distribuido
             tipo_doc = obtener_o_crear_tipo_doc_distribuido(conn, negocio_id)
@@ -14239,33 +14411,22 @@ def inv_dist_conteo(negocio_id):
             conn.execute("UPDATE tipos_documento_negocio SET consecutivo = %s WHERE id = %s", (nuevo_consecutivo, tipo_doc_id))
             doc_num_final = str(nuevo_consecutivo)
             
-            prod = conn.execute("SELECT id, nombre, categoria, costo FROM productos WHERE id = %s AND negocio_id = %s", (producto_id, negocio_id)).fetchone()
-            costo_unitario = float(sal['costo_und'] if sal and sal['costo_und'] else (prod['costo'] or 0.0))
-            ajuste_monto = abs(diff) * costo_unitario
-            
-            comp_id = conn.execute("SELECT nextval('seq_comprobante_id')").fetchone()[0]
-            desc_asiento = f"Ajuste Físico Distribuido: {prod['nombre'] if prod else 'Insumo'}"
-            
-            # Contabilización mediante motor unificado con centro_utilidad_id
-            _contabilizar_ajuste_item(
-                conn, negocio_id, producto_id, diff, costo_unitario, comp_id,
-                doc_num_final, tipo_doc_id, tipo_code, desc_asiento=desc_asiento,
-                usuario_id=usuario_id, origen_tipo='inventario_distribuido',
-                centro_utilidad_id=centro_id
-            )
-                              
-            # Movimiento en Kardex (movimientos_inventario) con bodega=centro_id
-            tipo_mov = 'entrada' if diff > 0 else 'salida'
-            _mov_directo(conn, negocio_id, producto_id, abs(diff), tipo_mov, 'ajuste',
-                         registrado_por=usuario_id,
-                         valor_unitario=costo_unitario,
-                         notas=f"Inventario Distribuido #{doc_num_final} - Contado por {usuario_nombre or 'Operario'}",
-                         bodega=centro_id,
-                         tipo_documento=tipo_code,
-                         documento_numero=doc_num_final,
-                         documento_fecha=date.today(),
-                         tipo_documento_id=tipo_doc_id)
-            _recostear_producto(conn, negocio_id, producto_id)
+        # Ejecutar ajuste físico y registrar acta inmutable (tanto si hay diferencia como si es conforme)
+        res_dist = registrar_conteo_fisico_unificado(
+            conn, negocio_id, producto_id, cantidad_fisica,
+            centro_utilidad_id=centro_id,
+            usuario_id=usuario_id,
+            usuario_nombre=usuario_nombre,
+            modulo_origen='inventario_distribuido',
+            metodologia='distribuido_rotativo',
+            notas=notas_conteo,
+            documento_numero=doc_num_final,
+            tipo_documento_id=tipo_doc_id,
+            tipo_doc_codigo=tipo_code,
+            contabilizar=True
+        )
+        ajuste_monto = res_dist['valor_diferencia']
+        diff = res_dist['diferencia']
 
         conn.commit()
         conn.close()
@@ -16779,5 +16940,50 @@ def api_inventario_equivalencias_unidades():
         return jsonify({'ok': True, 'mensaje': 'Equivalencia guardada correctamente'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@bp.route('/api/inventario/<int:negocio_id>/actas-fisico', methods=['GET'])
+def api_inventario_actas_fisico(negocio_id):
+    if 'usuario_id' not in session:
+        return jsonify({'ok': False, 'error': 'No autorizado'}), 403
+    
+    conn = get_db_connection()
+    try:
+        producto_id = request.args.get('producto_id', type=int)
+        centro_id = request.args.get('centro_utilidad_id', type=int)
+        modulo = request.args.get('modulo_origen')
+        limit = min(request.args.get('limit', default=100, type=int), 500)
+        
+        q = """
+            SELECT a.id, a.fecha_hora, a.producto_id, a.producto_nombre,
+                   a.centro_utilidad_id, cu.nombre AS centro_nombre, cu.codigo AS centro_codigo,
+                   a.usuario_id, a.usuario_nombre, a.modulo_origen, a.metodologia,
+                   a.tipo_documento, a.documento_numero, a.cantidad_contada,
+                   a.stock_sistema, a.diferencia, a.costo_unitario, a.valor_diferencia,
+                   a.notas
+            FROM inventario_fisico_actas a
+            LEFT JOIN centros_utilidad cu ON cu.id = a.centro_utilidad_id
+            WHERE a.negocio_id = %s
+        """
+        params = [negocio_id]
+        if producto_id:
+            q += " AND a.producto_id = %s"
+            params.append(producto_id)
+        if centro_id:
+            q += " AND a.centro_utilidad_id = %s"
+            params.append(centro_id)
+        if modulo:
+            q += " AND a.modulo_origen = %s"
+            params.append(modulo)
+            
+        q += " ORDER BY a.fecha_hora DESC LIMIT %s"
+        params.append(limit)
+        
+        rows = conn.execute(q, tuple(params)).fetchall()
+        return jsonify({
+            'ok': True,
+            'actas': [dict(r) for r in rows]
+        })
     finally:
         conn.close()

@@ -995,6 +995,10 @@ function renderShortages(shortages) {
                             <input type="number" step="any" id="adj-costo-${idx}" value="${s.ultimo_costo}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 text-xs text-white font-semibold focus:outline-none focus:ring-1 focus:ring-amber-500">
                         </div>
                     </div>
+                    <div class="mt-1.5">
+                        <label class="text-[10px] text-gray-400 block mb-0.5">Observación / Motivo (Opcional)</label>
+                        <input type="text" id="adj-nota-${idx}" placeholder="Ej: Se encontraron en cocina..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500">
+                    </div>
                 </div>
 
                 ${showExcludeCheckbox ? `
@@ -1131,10 +1135,12 @@ async function ejecutarAjusteStockCaja() {
         const cantInp = document.getElementById(`adj-cant-${idx}`);
         const costoInp = document.getElementById(`adj-costo-${idx}`);
         if (cantInp && costoInp) {
+            const notaInp = document.getElementById(`adj-nota-${idx}`);
             adjustments.push({
                 producto_id: s.producto_id,
                 cantidad_fisica: parseFloat(cantInp.value) || 0,
-                costo_unitario: parseFloat(costoInp.value) || 0
+                costo_unitario: parseFloat(costoInp.value) || 0,
+                notas: (notaInp?.value || '').trim() || 'Ajuste en caliente POS Restaurante'
             });
         }
     });

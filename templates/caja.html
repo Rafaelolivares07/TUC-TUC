@@ -4916,6 +4916,10 @@ function renderShortages(shortages) {
                             <input type="number" step="any" id="adj-costo-${idx}" value="${s.ultimo_costo}" class="w-full border rounded-lg px-2 py-1 text-xs text-gray-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500">
                         </div>
                     </div>
+                    <div class="mt-1.5">
+                        <label class="text-[10px] text-gray-400 block mb-0.5">Observación / Motivo (Opcional)</label>
+                        <input type="text" id="adj-nota-${idx}" placeholder="Ej: Se encontraron en mostrador..." class="w-full border rounded-lg px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-gray-50/50">
+                    </div>
                 </div>
 
                 ${showExcludeCheckbox ? `
@@ -5054,10 +5058,12 @@ async function ejecutarAjusteStockCaja() {
         const costoInp = document.getElementById(`adj-costo-${idx}`);
         if (cantInp && costoInp) {
             const pId = parseInt(s.producto_id);
+            const notaInp = document.getElementById(`adj-nota-${idx}`);
             adjustments.push({
                 producto_id: pId,
                 cantidad_fisica: parseFloat(cantInp.value) || 0,
-                costo_unitario: parseFloat(costoInp.value) || 0
+                costo_unitario: parseFloat(costoInp.value) || 0,
+                notas: (notaInp?.value || '').trim() || 'Ajuste en caliente en Caja POS'
             });
             adjustedIds.add(pId);
         }

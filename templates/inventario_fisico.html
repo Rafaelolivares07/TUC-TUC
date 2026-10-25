@@ -101,6 +101,13 @@
             </div>
           </div>
         </div>
+        
+        <!-- Observaciones / Anotaciones Descriptivas del Conteo -->
+        <div class="mt-3">
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Notas / Observaciones del Conteo (Opcional)</label>
+          <input type="text" id="val-notas-input" placeholder="Ej: Se encontraron unidades detrás de estantería, rotura..." 
+                 class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-gray-50">
+        </div>
       </div>
       <div class="flex justify-between pt-2">
         <span class="text-gray-500 font-bold">Valor Total del Ajuste:</span>
@@ -1498,7 +1505,8 @@ async function guardarAjusteConfirmado() {
     producto_id: activeAjustePayload.producto_id,
     cantidad_fisica: activeAjustePayload.cantidad_fisica,
     costo_unitario: Math.abs(parseFloat(activeAjustePayload.costo_unitario) || 0.0),
-    notas: "Ajuste físico en caliente",
+    notas: (document.getElementById("val-notas-input")?.value || "").trim() || "Ajuste físico formal",
+    modalidad: document.getElementById("select-modalidad")?.value || "completo",
     tercero_id: parseInt(terceroId) || null,
     tercero_nombre: terceroNombre || null,
     centro_utilidad_id: parseInt(centroId) || null

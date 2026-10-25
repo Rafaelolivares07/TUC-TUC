@@ -2121,34 +2121,30 @@ def api_pedido_crear(slug):
             applied_adjustments = False
             adjusted_product_ids = set()
             if adjustments and rest['tercero_id']:
+                from .inventarios import registrar_conteo_fisico_unificado
                 for adj in adjustments:
                     prod_id = int(adj.get('producto_id') or 0)
                     qty_physical = float(adj.get('cantidad_fisica') or 0.0)
                     cost_unit = float(adj.get('costo_unitario') or 0.0)
+                    adj_nota = adj.get('notas') or "Ajuste en caliente POS Restaurante"
                     if not prod_id:
                         continue
                     
-                    saldo = conn.execute(
-                        "SELECT stock FROM saldos_inventario WHERE negocio_id = %s AND producto_id = %s AND bodega = 1",
-                        (rest['tercero_id'], prod_id)
-                    ).fetchone()
-                    qty_system = float(saldo['stock'] if saldo else 0.0)
-                    diff = qty_physical - qty_system
-                    if abs(diff) < 0.000001:
-                        continue
-                    
-                    _mov_directo(
-                        conn, rest['tercero_id'], prod_id, abs(diff), 'entrada' if diff > 0 else 'salida', 'ajuste',
-                        registrado_por=session.get('usuario_id'),
-                        valor_unitario=cost_unit,
-                        bodega=1,
-                        tipo_documento='PED_AJUSTE',
+                    res_adj = registrar_conteo_fisico_unificado(
+                        conn, rest['tercero_id'], prod_id, qty_physical,
+                        centro_utilidad_id=1,
+                        usuario_id=session.get('usuario_id'),
+                        usuario_nombre=session.get('nombre'),
+                        modulo_origen='pos_restaurante',
+                        metodologia='caliente_pos',
+                        notas=adj_nota,
+                        costo_unitario=cost_unit,
+                        tipo_doc_codigo='PED_AJUSTE',
                         documento_numero='AJUSTE_TMP',
-                        referencia_tipo='pedido_restaurante'
+                        contabilizar=False
                     )
-                    
-                    _recostear_producto(conn, rest['tercero_id'], prod_id)
-                    applied_adjustments = True
+                    if not res_adj['es_conforme']:
+                        applied_adjustments = True
                     adjusted_product_ids.add(prod_id)
 
             # Si un componente fue ajustado en caliente, se garantiza que NO sea excluido de la receta

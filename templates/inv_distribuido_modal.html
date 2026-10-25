@@ -99,6 +99,14 @@
                onfocus="this.select()" onkeydown="if(event.key==='Enter') invDistWidgetContar()">
       </div>
 
+      <div class="mb-4">
+        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 text-center">
+          Observaciones / Anotaciones (Opcional)
+        </label>
+        <input type="text" id="invdist-notas" placeholder="Ej: Empaque dañado, producto próximo a vencer..."
+               class="w-full border border-slate-200 focus:border-blue-500 rounded-xl px-3 py-2 text-xs text-slate-700 outline-none transition bg-slate-50 focus:bg-white text-center">
+      </div>
+
       <!-- Botones de Acción -->
       <div class="flex gap-2">
         <button onclick="invDistWidgetContar()" id="btn-invdist-contar"
@@ -349,6 +357,7 @@ async function invDistWidgetSiguiente() {
     }
 
     document.getElementById('invdist-cantidad').value = '';
+  if (document.getElementById('invdist-notas')) document.getElementById('invdist-notas').value = '';
     const msg = document.getElementById('invdist-mensaje');
     msg.classList.add('hidden');
     msg.textContent = '';

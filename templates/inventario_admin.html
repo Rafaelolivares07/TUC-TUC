@@ -2680,6 +2680,7 @@
             <span>💳 Método de Pago</span>
             <span class="text-rose-500 font-extrabold">*</span>
           </label>
+          <span id="badge-metodo-sugerido-ocr" class="hidden text-[10px] font-bold px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 transition-all"></span>
           <span id="badge-confirma-metodo" class="text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800 transition-all">Por confirmar ⚠️</span>
         </div>
         <select id="entrada-metodo-pago" tabindex="5" onchange="actualizarConfirmacionMetodoPago()"
@@ -10197,6 +10198,54 @@ async function escanearFacturaArchivo(archivo) {
       if (btnCrearProv) btnCrearProv.classList.remove('hidden');
     }
 
+    // 3B. Método de Pago Detectado por OCR
+    const selMetodo = document.getElementById('entrada-metodo-pago');
+    const badgeSugerido = document.getElementById('badge-metodo-sugerido-ocr');
+    if (d.metodo_pago && selMetodo) {
+      const mpUpper = d.metodo_pago.toUpperCase();
+      let matchedCode = null;
+      let labelSugerido = `💡 Tirilla: ${d.metodo_pago}`;
+
+      if (mpUpper.includes('DEBITO') || mpUpper.includes('TARJETA DEBITO')) {
+        // En compras con tarjeta débito, el dinero se debita de la cuenta Bancolombia
+        const optBancolombia = Array.from(selMetodo.options).find(o => o.value.toLowerCase().includes('bancolombia') && !o.value.toLowerCase().includes('visa'));
+        if (optBancolombia) {
+          matchedCode = optBancolombia.value;
+          labelSugerido = `💡 Tirilla: Débito → ${optBancolombia.text.trim()}`;
+        }
+      } else if (mpUpper.includes('CREDITO') || mpUpper.includes('TARJETA CREDITO')) {
+        const optCred = Array.from(selMetodo.options).find(o => o.value.toLowerCase().includes('visa') || o.value.toLowerCase().includes('credito') || o.value.toLowerCase().includes('american'));
+        if (optCred) {
+          matchedCode = optCred.value;
+          labelSugerido = `💡 Tirilla: Crédito → ${optCred.text.trim()}`;
+        }
+      } else if (mpUpper.includes('EFECTIVO')) {
+        const optEf = Array.from(selMetodo.options).find(o => o.value.toLowerCase() === 'efectivo');
+        if (optEf) {
+          matchedCode = optEf.value;
+          labelSugerido = `💡 Tirilla: Efectivo`;
+        }
+      } else if (mpUpper.includes('TRANSFERENCIA') || mpUpper.includes('NEQUI') || mpUpper.includes('DAVIPLATA')) {
+        const optTr = Array.from(selMetodo.options).find(o => o.value.toLowerCase().includes('transferencia') || o.value.toLowerCase().includes('bancolombia'));
+        if (optTr) {
+          matchedCode = optTr.value;
+          labelSugerido = `💡 Tirilla: ${d.metodo_pago} → ${optTr.text.trim()}`;
+        }
+      }
+
+      if (matchedCode) {
+        selMetodo.value = matchedCode;
+        actualizarConfirmacionMetodoPago();
+      }
+
+      if (badgeSugerido) {
+        badgeSugerido.textContent = labelSugerido;
+        badgeSugerido.classList.remove('hidden');
+      }
+    } else {
+      if (badgeSugerido) badgeSugerido.classList.add('hidden');
+    }
+
     // 4. Total Factura Esperado (para cotejo y cuadre)
     if (d.total && d.total > 0) {
       const inpTotExp = document.getElementById('entrada-total-factura-esperado');
@@ -11497,6 +11546,8 @@ async function registrarEntrada() {
     if (centroSel) centroSel.value = '';
     const entMp = document.getElementById('entrada-metodo-pago');
     if (entMp) entMp.value = '';
+    const bSug = document.getElementById('badge-metodo-sugerido-ocr');
+    if (bSug) bSug.classList.add('hidden');
     actualizarConfirmacionSede();
     actualizarConfirmacionMetodoPago();
 

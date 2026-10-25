@@ -1261,7 +1261,7 @@ def _descargar_youtube_con_cobalt(url, tmp_path):
                 method='POST',
             )
             try:
-                with urllib.request.urlopen(req, timeout=14) as response:
+                with urllib.request.urlopen(req, timeout=6) as response:
                     cobalt = _json.loads(response.read())
             except urllib.error.HTTPError as error:
                 body = error.read().decode('utf-8', errors='ignore')[:300]
@@ -1322,8 +1322,7 @@ def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
         'no_warnings': True,
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'ios', 'tvhtml5', 'web_creator'],
-                'player_skip': ['configs', 'webpage']
+                'player_client': ['android', 'ios']
             }
         },
         'http_headers': {
@@ -1427,11 +1426,14 @@ def resolver(sala_id):
 
     destino = os.path.join(upload_dir, item_id + '.mp3')
     try:
-        descarga, error_cobalt = _descargar_youtube_con_cobalt(target_url, destino)
+        # 1. Intentar primero con yt-dlp (emulando cliente oficial móvil para evitar anti-bot)
+        descarga, error_ytdlp = _descargar_youtube_con_ytdlp(target_url, upload_dir, item_id)
         if not descarga:
-            descarga, error_ytdlp = _descargar_youtube_con_ytdlp(target_url, upload_dir, item_id)
+            # 2. Fallback con cobalt
+            descarga, error_cobalt = _descargar_youtube_con_cobalt(target_url, destino)
             if not descarga:
-                return jsonify(ok=False, error=error_ytdlp or error_cobalt or 'No se pudo resolver el audio'), 200
+                err_final = error_ytdlp or error_cobalt or 'No se pudo resolver el audio de este enlace'
+                return jsonify(ok=False, error=err_final), 200
         _limpiar_archivos_antiguos(upload_dir)
     except Exception as error:
         return jsonify(ok=False, error=f'No se pudo resolver el audio: {error}'), 502

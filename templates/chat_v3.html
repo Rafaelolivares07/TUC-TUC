@@ -1422,6 +1422,30 @@
 </div>
 
 
+<!-- Modal Música Activa / Conflicto Bluetooth -->
+<div id="modal-musica-activa" class="modal-backdrop" style="display:none;z-index:9999" onclick="cerrarModalMusica(false)">
+  <div class="modal-box" style="max-width:390px;width:92%;text-align:center" onclick="event.stopPropagation()">
+    <div style="width:58px;height:58px;border-radius:50%;background:rgba(201,100,66,0.18);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px">🎵</div>
+    <h2 class="modal-title" style="margin-bottom:8px">Música en reproducción</h2>
+    <p id="modal-musica-subtitulo" style="font-size:13px;color:var(--ink-soft);line-height:1.5;margin-bottom:12px;text-align:center">
+      Hay música sonando en este momento.
+    </p>
+    <div style="background:var(--bg);border:1px solid var(--hairline);border-radius:14px;padding:12px 14px;font-size:12.5px;color:var(--muted);text-align:left;margin-bottom:18px;line-height:1.5">
+      💡 <b>¿Por qué te avisamos?</b><br>
+      Al activar el micrófono en celulares, el sistema prioriza llamadas y desvía el audio del Bluetooth al parlante del teléfono.
+      Para hablar y escuchar traducciones con total claridad, es recomendable pausar la música temporalmente.
+    </div>
+    <div class="modal-btn-row" style="flex-direction:column;gap:8px">
+      <button type="button" class="btn-primary" onclick="confirmarPausaMusica()" style="width:100%;padding:11px 16px;font-weight:700">
+        ⏸️ Pausar música y continuar
+      </button>
+      <button type="button" class="btn-cancel" onclick="cerrarModalMusica(false)" style="width:100%;padding:10px 16px;border-radius:99px">
+        🎶 Mantener música (Cancelar)
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Guía Micrófono -->
 <div id="modal-guia-mic" class="modal-backdrop" style="display:none;z-index:9999" onclick="cerrarGuiaMic()">
   <div class="modal-box" style="max-width:380px;width:92%;text-align:center" onclick="event.stopPropagation()">
@@ -1977,7 +2001,9 @@ function initMicDrag() {
       applyOffset(1, true);
       setTimeout(() => {
         reset(false);
-        if (typeof entrarNativo === 'function') entrarNativo();
+        solicitarAccionAudioConCheckMusica(() => {
+          if (typeof entrarNativo === 'function') entrarNativo();
+        });
       }, 150);
     } else {
       reset(true);
@@ -2189,6 +2215,158 @@ function _nativoEscHandler(e) {
 }
 
 // ── Entrar / salir ───────────────────────────────────────────────
+
+// ── Detección de música activa y gestión Bluetooth ───────────────────
+let _musicaPausadaPorChat = false;
+let _callbackAccionAudioPendiente = null;
+
+function detectarMusicaActiva() {
+  try {
+    const p = (window.parent && window.parent !== window) ? window.parent : window;
+    
+    // 1. Audios HTML5 sonando en la ventana padre
+    const audios = p.document.querySelectorAll('audio');
+    for (let i = 0; i < audios.length; i++) {
+      if (!audios[i].paused && audios[i].currentTime > 0 && !audios[i].ended) {
+        return { activa: true, player: audios[i], tipo: 'html5' };
+      }
+    }
+    
+    // 2. Variable global de reproducción en la Rockola
+    if (p.reproduciendo === true) {
+      return { activa: true, tipo: 'rockola_global' };
+    }
+    
+    // 3. YouTube Player activo en Rockola
+    if (typeof p.getYtPlayerActivo === 'function') {
+      const yt = p.getYtPlayerActivo();
+      if (yt && typeof yt.getPlayerState === 'function' && typeof p.YT !== 'undefined') {
+        if (yt.getPlayerState() === p.YT.PlayerState.PLAYING) {
+          return { activa: true, tipo: 'youtube' };
+        }
+      }
+    }
+
+    // 4. Si hay canción activa global informada
+    if (p.cancionActualGlobal && p.cancionActualGlobal.nombre) {
+      // Verificar si además no está pausado
+      const titEl = p.document.getElementById('sonando') || p.document.getElementById('np-titulo-texto');
+      if (titEl && titEl.textContent && !titEl.textContent.includes('Esperando') && !titEl.textContent.includes('Cargando')) {
+        // En cliente/control si no hay audios locales, la sala puede estar en reproducción
+        return { activa: true, tipo: 'cancion_sala' };
+      }
+    }
+  } catch (e) {}
+  return { activa: false };
+}
+
+function pausarMusicaSistema() {
+  try {
+    const p = (window.parent && window.parent !== window) ? window.parent : window;
+    
+    // 1. Pausar elementos de audio HTML5
+    const audios = p.document.querySelectorAll('audio');
+    audios.forEach(a => { if (!a.paused) a.pause(); });
+    
+    // 2. Si existe togglePlayPause o player en rockola_reproductor
+    if (typeof p.togglePlayPause === 'function' && p.reproduciendo) {
+      p.togglePlayPause();
+      _musicaPausadaPorChat = true;
+      return;
+    }
+
+    // 3. Si es reproductor directo
+    if (p.player && typeof p.player.pause === 'function' && !p.player.paused) {
+      p.player.pause();
+      p.reproduciendo = false;
+      if (typeof p.setVinylSpinning === 'function') p.setVinylSpinning(false);
+      _musicaPausadaPorChat = true;
+      return;
+    }
+
+    // 4. Pausar YouTube
+    if (typeof p.getYtPlayerActivo === 'function') {
+      const yt = p.getYtPlayerActivo();
+      if (yt && typeof yt.pauseVideo === 'function') {
+        yt.pauseVideo();
+        p.reproduciendo = false;
+        _musicaPausadaPorChat = true;
+        return;
+      }
+    }
+
+    // 5. Enviar señal de pausa a la sala si estamos en una sala de Rockola
+    const sala = p.SALA || (new URLSearchParams(p.location.search)).get('sala');
+    if (sala) {
+      fetch(`/rockola/${sala}/sync_control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'pause', pos: 0, ts: Date.now() / 1000, modo: 'chat_nativo' })
+      }).catch(() => {});
+      _musicaPausadaPorChat = true;
+    }
+  } catch (e) {
+    console.warn('Error pausando música:', e);
+  }
+}
+
+function reanudarMusicaSiFuePausada() {
+  if (!_musicaPausadaPorChat) return;
+  _musicaPausadaPorChat = false;
+  try {
+    const p = (window.parent && window.parent !== window) ? window.parent : window;
+    if (typeof p.togglePlayPause === 'function' && !p.reproduciendo) {
+      p.togglePlayPause();
+      return;
+    }
+    if (p.player && typeof p.player.play === 'function' && p.player.paused) {
+      p.player.play().catch(() => {});
+      p.reproduciendo = true;
+      if (typeof p.setVinylSpinning === 'function') p.setVinylSpinning(true);
+      return;
+    }
+    const sala = p.SALA || (new URLSearchParams(p.location.search)).get('sala');
+    if (sala) {
+      fetch(`/rockola/${sala}/sync_control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'play', pos: 0, ts: Date.now() / 1000, modo: 'chat_nativo' })
+      }).catch(() => {});
+    }
+  } catch (e) {
+    console.warn('Error reanudando música:', e);
+  }
+}
+
+function solicitarAccionAudioConCheckMusica(onContinuar) {
+  const estado = detectarMusicaActiva();
+  if (estado.activa) {
+    _callbackAccionAudioPendiente = onContinuar;
+    const modal = document.getElementById('modal-musica-activa');
+    if (modal) modal.style.display = 'flex';
+  } else {
+    onContinuar();
+  }
+}
+
+function cerrarModalMusica(ejecutar) {
+  const modal = document.getElementById('modal-musica-activa');
+  if (modal) modal.style.display = 'none';
+  if (!ejecutar) {
+    _callbackAccionAudioPendiente = null;
+  }
+}
+
+function confirmarPausaMusica() {
+  pausarMusicaSistema();
+  cerrarModalMusica(true);
+  if (typeof _callbackAccionAudioPendiente === 'function') {
+    const fn = _callbackAccionAudioPendiente;
+    _callbackAccionAudioPendiente = null;
+    fn();
+  }
+}
+
 function entrarNativo() {
   nativoActivo = true;
   const ov = document.getElementById('nativo-overlay');
@@ -2197,6 +2375,7 @@ function entrarNativo() {
 
 function salirNativo() {
   nativoActivo = false;
+  reanudarMusicaSiFuePausada();
   const ov = document.getElementById('nativo-overlay');
   if (ov) {
     ov.style.transition = 'transform 0.3s cubic-bezier(0.2,0.7,0.3,1)';

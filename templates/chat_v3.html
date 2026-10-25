@@ -2985,8 +2985,10 @@ async function probarPermisoMic() {
 let _streamCamaraPC = null;
 
 function esDispositivoMovil() {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-         (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+  // Solo consideramos móvil teléfonos/tablets reales por UserAgent o pantallas pequeñas con touch
+  const ua = navigator.userAgent || '';
+  const esMovilUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  return esMovilUA && (window.innerWidth <= 800);
 }
 
 function abrirFotoSegunDispositivo() {
@@ -3004,24 +3006,32 @@ async function abrirCamaraPC() {
   if (!modal || !video) return;
 
   modal.style.display = 'flex';
-  if (loading) loading.style.display = 'flex';
+  if (loading) {
+    loading.style.display = 'flex';
+    loading.innerHTML = '<span>Solicitando acceso a la cámara...</span>';
+  }
 
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error('Tu navegador en este PC no soporta acceso directo a la cámara.');
+      throw new Error('Navegador sin soporte de cámara directa (WebRTC)');
     }
     _streamCamaraPC = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+      video: true,
       audio: false
     });
     video.srcObject = _streamCamaraPC;
-    await video.play();
-    if (loading) loading.style.display = 'none';
+    video.onloadedmetadata = () => {
+      video.play().catch(() => {});
+      if (loading) loading.style.display = 'none';
+    };
   } catch (err) {
     console.warn('Error accediendo a cámara en PC:', err);
-    cerrarCamaraPC();
-    // Fallback: abrir selector de archivo si no tiene webcam o denegó permiso
-    document.getElementById('inp-chat-camara')?.click();
+    if (loading) {
+      loading.innerHTML = `<span style="color:#f87171;padding:0 20px;line-height:1.4">
+        No se pudo acceder a la cámara (${err.name || err.message}).<br>
+        Verifica los permisos del navegador o la conexión de tu webcam.
+      </span>`;
+    }
   }
 }
 

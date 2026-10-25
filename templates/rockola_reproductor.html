@@ -1454,7 +1454,7 @@ input:checked + .slider:before {
         <div class="panel-title" style="margin:0;">📂 Listas de reproducción / Carpetas (<span id="count-playlists-reproductor">0</span>)</div>
         <div style="display:flex; gap:6px;">
           <button class="btn-control" style="font-size:11px; padding:4px 8px; font-weight:800;" onclick="abrirSelectorCarpeta()" title="Seleccionar carpeta principal de música">📁 Agregar carpeta</button>
-          <button class="btn-control" style="font-size:11px; padding:4px 8px;" onclick="abrirSelectorAudios()" title="Agregar canciones sueltas">🎵 Agregar canciones</button>
+          <label for="local-files-input" class="btn-control" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:4px; font-size:11px; padding:4px 8px; margin:0;" title="Agregar canciones sueltas">🎵 Agregar canciones</label>
         </div>
       </div>
       <p style="font-size:12px; color:var(--muted); margin:0 0 10px;">Tus subcarpetas de música (ej. Salsa, Rock, Vallenato) se organizan aquí automáticamente como listas.</p>
@@ -1473,7 +1473,7 @@ input:checked + .slider:before {
       <div class="panel-title">Biblioteca de este dispositivo</div>
       <div class="local-actions">
         <button class="btn-control" onclick="abrirSelectorCarpeta()" title="Importar carpeta y auto-organizar listas por género">📁 Agregar carpeta</button>
-        <button class="btn-control" onclick="abrirSelectorAudios()" title="Agregar canciones individuales">🎵 Agregar canciones</button>
+        <label for="local-files-input" class="btn-control" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:4px; margin:0;" title="Agregar canciones individuales">🎵 Agregar canciones</label>
         <button class="btn-control" onclick="compartirMiBiblioteca()">Compartir</button>
       </div>
       <!-- Carpeta parametrizable para descargas y archivos locales -->
@@ -3816,51 +3816,58 @@ async function indexarArchivosLocales(fileList) {
   const allFiles = [...(fileList || [])];
   const files = allFiles.filter(file => esArchivoAudio(file.name, file.type));
   if (!files.length) {
-    mostrarMensaje('No encontré canciones de audio válidas (se descartaron imágenes/carátulas)', 'error');
+    alert('No se encontraron archivos de audio compatibles (se buscan formatos .mp3, .m4a, .wav, .flac, .ogg).');
     return;
   }
-  mostrarMensaje(`Guardando ${files.length} canción(es) en este dispositivo...`, '');
-  const listasMap = {};
-  let guardadas = 0;
-  for (const file of files) {
-    const cancion = await guardarCancionLocal(file);
-    guardadas++;
-    const genero = extraerGeneroDePath(file.webkitRelativePath);
-    if (genero && genero.trim().length >= 2) {
-      const gNorm = genero.trim();
-      if (!listasMap[gNorm]) listasMap[gNorm] = [];
-      listasMap[gNorm].push(cancion.id);
-    }
-  }
-
-  const generosCreados = Object.keys(listasMap);
-  for (const genero of generosCreados) {
-    const listaId = idLista(genero);
-    let lista = playlistsLocales.find(p => p.nombre.toLowerCase() === genero.toLowerCase());
-    if (!lista) {
-      lista = {
-        id: listaId,
-        deviceId: getDeviceId(),
-        nombre: genero,
-        canciones: [],
-        actualizado: Date.now()
-      };
-    }
-    for (const sid of listasMap[genero]) {
-      if (!lista.canciones.includes(sid)) {
-        lista.canciones.push(sid);
+  mostrarCargando("Guardando en este dispositivo...", `Registrando ${files.length} archivo(s) de audio...`);
+  try {
+    const listasMap = {};
+    let guardadas = 0;
+    for (const file of files) {
+      const cancion = await guardarCancionLocal(file);
+      guardadas++;
+      const genero = extraerGeneroDePath(file.webkitRelativePath);
+      if (genero && genero.trim().length >= 2) {
+        const gNorm = genero.trim();
+        if (!listasMap[gNorm]) listasMap[gNorm] = [];
+        listasMap[gNorm].push(cancion.id);
       }
     }
-    lista.actualizado = Date.now();
-    await guardarLista(lista);
-  }
 
-  document.getElementById('folder-input').value = '';
-  document.getElementById('local-files-input').value = '';
-  await cargarBibliotecaLocal();
-  await cargarListasLocales();
-  const extraMsg = generosCreados.length > 0 ? ` (organizadas en ${generosCreados.length} lista(s)/género(s))` : '';
-  mostrarMensaje(`${guardadas} canción(es) disponibles en este dispositivo${extraMsg}`, 'ok');
+    const generosCreados = Object.keys(listasMap);
+    for (const genero of generosCreados) {
+      const listaId = idLista(genero);
+      let lista = playlistsLocales.find(p => p.nombre.toLowerCase() === genero.toLowerCase());
+      if (!lista) {
+        lista = {
+          id: listaId,
+          deviceId: getDeviceId(),
+          nombre: genero,
+          canciones: [],
+          actualizado: Date.now()
+        };
+      }
+      for (const sid of listasMap[genero]) {
+        if (!lista.canciones.includes(sid)) {
+          lista.canciones.push(sid);
+        }
+      }
+      lista.actualizado = Date.now();
+      await guardarLista(lista);
+    }
+
+    document.getElementById('folder-input').value = '';
+    document.getElementById('local-files-input').value = '';
+    await cargarBibliotecaLocal();
+    await cargarListasLocales();
+    renderCola(currentCola);
+    ocultarCargando();
+    mostrarMensaje(`✓ Se guardaron ${guardadas} canción(es) en este dispositivo`, 'ok');
+  } catch(err) {
+    console.error('Error al indexar archivos locales:', err);
+    ocultarCargando();
+    alert('Error al guardar canciones: ' + err.message);
+  }
 }
 
 function renderBibliotecaLocal() {

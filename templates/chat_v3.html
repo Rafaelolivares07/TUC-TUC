@@ -1780,6 +1780,11 @@ function abrirPlusMenu() {
           <span class="plus-item-label">Producto</span>
           <span class="plus-item-sub">De tus negocios</span>
         </button>
+        <button class="plus-item" onclick="cerrarSheet();compartirCancionDesdeChat()">
+          <span class="plus-item-icon">🎵</span>
+          <span class="plus-item-label">Canción</span>
+          <span class="plus-item-sub">Música actual</span>
+        </button>
         <button class="plus-item" onclick="cerrarSheet();prepararCompartirUrlManual()">
           <span class="plus-item-icon">📊</span>
           <span class="plus-item-label">Reporte / URL</span>
@@ -3601,6 +3606,45 @@ function cancelarShareContexto() {
     bar.style.display = 'none';
     bar.innerHTML = '';
   }
+}
+
+function compartirCancionDesdeChat() {
+  let titulo = '';
+  let artista = '';
+  let sala = '';
+  let url = location.origin + '/rockola';
+  try {
+    const p = (window.parent && window.parent !== window) ? window.parent : window;
+    if (typeof p.cancionActualGlobal === 'object' && p.cancionActualGlobal?.nombre) {
+      titulo = p.cancionActualGlobal.nombre.replace(/\.[^.]+$/, '');
+      artista = p.cancionActualGlobal.owner || '';
+    } else {
+      const titEl = p.document.getElementById('np-titulo-texto') || p.document.getElementById('sonando');
+      if (titEl && titEl.textContent && !titEl.textContent.includes('Cargando') && !titEl.textContent.includes('Esperando')) {
+        titulo = titEl.textContent.trim();
+      }
+      const autEl = p.document.getElementById('np-autor-texto');
+      if (autEl) artista = autEl.textContent.trim();
+    }
+    if (typeof p.SALA !== 'undefined') sala = p.SALA;
+    if (p.location && p.location.pathname.includes('/rockola')) url = p.location.href;
+  } catch(e) {}
+
+  if (!titulo) {
+    titulo = prompt('Nombre o título de la canción a compartir:', '') || '';
+    if (!titulo.trim()) return;
+    artista = prompt('Artista o autor (opcional):', '') || '';
+  }
+
+  _pendingShareContext = {
+    url: url,
+    title: titulo.trim(),
+    mode: 'cancion',
+    cancion: titulo.trim(),
+    artista: (artista || '').trim(),
+    sala: sala || ''
+  };
+  _renderShareCtxBar();
 }
 
 function prepararCompartirUrlManual() {

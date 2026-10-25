@@ -1815,36 +1815,44 @@ _GLOBO_CHAT_SNIPPET = """
   }
   .tuctuc-drawer-actions {
     background: #2b2925;
-    padding: 6px 8px;
+    padding: 6px 10px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
     flex-shrink: 0;
+    scrollbar-width: none;
+  }
+  .tuctuc-drawer-actions::-webkit-scrollbar {
+    display: none;
   }
   .tuctuc-ctx-btn {
-    flex: 1;
-    min-width: 0;
+    flex: 0 0 auto;
     border: 1px solid rgba(252, 249, 243, 0.2);
     background: rgba(255, 255, 255, 0.08);
     color: #fcf9f3;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
-    padding: 5px 8px;
+    padding: 5px 12px;
     border-radius: 999px;
     cursor: pointer;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     text-align: center;
-    transition: background 0.15s;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    user-select: none;
   }
   .tuctuc-ctx-btn:hover {
     background: #c96442;
     border-color: #c96442;
+  }
+  .tuctuc-ctx-btn:active {
+    transform: scale(0.96);
   }
   @media (max-width: 640px) {
     #tuctuc-chat-globo { right: 74px; bottom: 18px; width: 46px; height: 46px; }
@@ -1883,9 +1891,6 @@ _GLOBO_CHAT_SNIPPET = """
     </div>
   </div>
   <div class="tuctuc-drawer-actions">
-    <button class="tuctuc-ctx-btn" id="tuctuc-btn-ctx-cancion" style="display:none;background:rgba(201,100,66,0.35);border-color:#c96442" onclick="tuctucCompartirCancionActual()">
-      🎵 Compartir
-    </button>
     <button class="tuctuc-ctx-btn" id="tuctuc-btn-activar-push" onclick="tuctucActivarPushDesdeGlobo()" style="background:rgba(16,185,129,0.22);border-color:#10b981;color:#10b981;font-weight:700">
       🔔 Activar Alertas
     </button>

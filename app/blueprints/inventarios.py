@@ -3478,11 +3478,32 @@ def api_inventario_kardex(producto_id):
                    m.bodega,
                    m.presentacion_id,
                    pres.nombre AS presentacion_nombre,
-                   pres.equivalencia AS presentacion_equivalencia
+                   pres.equivalencia AS presentacion_equivalencia,
+                   act.id AS acta_id,
+                   act.cantidad_contada AS acta_cantidad_contada,
+                   act.stock_sistema AS acta_stock_sistema,
+                   act.diferencia AS acta_diferencia,
+                   act.usuario_nombre AS acta_usuario_nombre,
+                   act.modulo_origen AS acta_modulo_origen,
+                   act.metodologia AS acta_metodologia,
+                   act.notas AS acta_notas
             FROM movimientos_inventario m
             LEFT JOIN terceros t ON t.id = m.proveedor_id
             LEFT JOIN productos p_padre ON p_padre.id = m.producto_padre_id
             LEFT JOIN presentaciones pres ON pres.id = m.presentacion_id
+            LEFT JOIN LATERAL (
+                SELECT act.id, act.cantidad_contada, act.stock_sistema, act.diferencia,
+                       act.usuario_nombre, act.modulo_origen, act.metodologia, act.notas
+                FROM inventario_fisico_actas act
+                WHERE act.producto_id = m.producto_id
+                  AND act.negocio_id = m.negocio_id
+                  AND (
+                      (m.documento_numero IS NOT NULL AND act.documento_numero = m.documento_numero)
+                      OR (m.motivo IN ('ajuste', 'conteo_conforme') AND DATE(act.fecha_hora) = COALESCE(m.documento_fecha, m.created_at::date))
+                  )
+                ORDER BY (CASE WHEN act.documento_numero = m.documento_numero THEN 0 ELSE 1 END), act.id DESC
+                LIMIT 1
+            ) act ON m.motivo IN ('ajuste', 'conteo_conforme')
             WHERE m.producto_id = %s {filtro_bodega_sql}
             ORDER BY COALESCE(m.documento_fecha, m.created_at::date) ASC, m.created_at ASC, m.id ASC
         """, tuple(params_kardex)).fetchall()

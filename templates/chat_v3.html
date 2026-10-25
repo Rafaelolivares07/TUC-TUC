@@ -3647,19 +3647,26 @@ function compartirCancionDesdeChat() {
   _renderShareCtxBar();
 }
 
-function prepararCompartirUrlManual() {
+function prepararCompartirUrlManual(modo) {
   let defaultUrl = '';
   let defaultTitle = '';
   try {
-    if (window.parent && window.parent !== window && window.parent.location) {
-      defaultUrl = window.parent.location.href;
-      defaultTitle = (window.parent.document.title || '').replace('— TUC TUC', '').trim();
+    const p = (window.parent && window.parent !== window) ? window.parent : window;
+    if (p.location) {
+      defaultUrl = p.location.href;
+      defaultTitle = (p.document.title || '').replace('— TUC TUC', '').trim();
     }
   } catch (e) {}
-  const url = prompt('Pega o confirma la URL del reporte o pantalla de la App:', defaultUrl || location.origin + '/');
+  const esPregunta = (modo === 'pregunta');
+  const accionTexto = esPregunta ? 'Consultar sobre' : 'Compartir';
+  const url = prompt(accionTexto + ' pantalla / URL de la App:', defaultUrl || location.origin + '/');
   if (!url || !url.trim()) return;
-  const title = prompt('Título o nombre del reporte / pantalla:', defaultTitle || 'Vista / Reporte de la App') || 'Vista / Reporte de la App';
-  _pendingShareContext = { url: url.trim(), title: title.trim(), mode: 'reporte' };
+  const title = prompt('Título o nombre de la pantalla / reporte:', defaultTitle || (esPregunta ? 'Consulta de pantalla' : 'Reporte / Vista de la App')) || 'Pantalla de la App';
+  _pendingShareContext = {
+    url: url.trim(),
+    title: title.trim(),
+    mode: esPregunta ? 'pregunta' : 'reporte'
+  };
   _renderShareCtxBar();
 }
 

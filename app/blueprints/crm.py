@@ -1897,12 +1897,6 @@ _GLOBO_CHAT_SNIPPET = """
     <button class="tuctuc-ctx-btn" id="tuctuc-btn-probar-timbre" onclick="tuctucProbarTimbreDesdeGlobo()" style="background:rgba(232,133,106,0.22);border-color:#e8856a;color:#e8856a;font-weight:700">
       🔊 Probar Timbre
     </button>
-    <button class="tuctuc-ctx-btn" onclick="tuctucCompartirContexto('pregunta')">
-      ❓ Consultar
-    </button>
-    <button class="tuctuc-ctx-btn" onclick="tuctucCompartirContexto('reporte')">
-      📊 Compartir vista
-    </button>
   </div>
   <iframe id="tuctuc-chat-iframe" src="about:blank" allow="microphone; camera; display-capture; autoplay; clipboard-write" style="flex:1;width:100%;max-width:100%;min-width:0;border:none;background:#f5f1e8;display:block"></iframe>
 </div>

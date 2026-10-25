@@ -1445,6 +1445,7 @@
 
 <!-- Input imagen global -->
 <input id="inp-chat-imagen" type="file" accept="image/*" style="display:none" onchange="enviarImagen(this)">
+<input id="inp-chat-camara" type="file" accept="image/*" capture="environment" style="display:none" onchange="enviarImagen(this)">
 
 <!-- Overlay drag & drop -->
 <div id="drop-overlay">
@@ -1765,7 +1766,7 @@ function abrirPlusMenu() {
       <div class="sheet-handle"></div>
       <p class="sheet-eyebrow">Añadir al mensaje</p>
       <div class="plus-grid">
-        <button class="plus-item" onclick="document.getElementById('inp-chat-imagen').click();cerrarSheet()">
+        <button class="plus-item" onclick="document.getElementById('inp-chat-camara').click();cerrarSheet()">
           <span class="plus-item-icon">📷</span>
           <span class="plus-item-label">Foto</span>
           <span class="plus-item-sub">Cámara</span>

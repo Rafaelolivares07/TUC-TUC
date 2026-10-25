@@ -1261,7 +1261,7 @@ def _descargar_youtube_con_cobalt(url, tmp_path):
                 method='POST',
             )
             try:
-                with urllib.request.urlopen(req, timeout=6) as response:
+                with urllib.request.urlopen(req, timeout=14) as response:
                     cobalt = _json.loads(response.read())
             except urllib.error.HTTPError as error:
                 body = error.read().decode('utf-8', errors='ignore')[:300]
@@ -1320,6 +1320,16 @@ def _descargar_youtube_con_ytdlp(url, upload_dir, nombre_id):
         'noplaylist': True,
         'quiet': True,
         'no_warnings': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'tvhtml5', 'web_creator'],
+                'player_skip': ['configs', 'webpage']
+            }
+        },
+        'http_headers': {
+            'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 11) gzip',
+            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+        }
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:

@@ -511,7 +511,28 @@ audio { width: 100%; filter: invert(1) hue-rotate(180deg); opacity: .75; }
 .handle { color: var(--muted); cursor: grab; font-size: 14px; flex-shrink: 0; }
 .q-nombre { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-remove { border:1px solid rgba(255,77,109,.35); background:rgba(255,77,109,.1); color:#ff4d6d; border-radius:6px; padding:4px 8px; font-size:11px; font-weight:800; cursor:pointer; }
-.q-download-btn { border:1px solid rgba(0,180,216,.35); background:rgba(0,180,216,.1); color:#00b4d8; border-radius:6px; padding:4px 8px; font-size:11px; font-weight:800; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+.q-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1.5px solid rgba(0, 212, 255, 0.45);
+  background: rgba(0, 212, 255, 0.12);
+  color: var(--ac1);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: all 0.2s ease;
+  vertical-align: middle;
+}
+.q-download-btn:hover {
+  background: rgba(0, 212, 255, 0.28);
+  border-color: var(--ac1);
+  color: #ffffff;
+  transform: scale(1.08);
+}
 .queue-empty { text-align: center; color: var(--muted2); font-size: 13px; padding: 20px 0; }
 
 #estado { text-align: center; font-size: 11px; color: var(--muted2); margin-top: 12px; }
@@ -4326,7 +4347,7 @@ function renderCola(cola) {
       <span class="handle" style="${i === 0 ? 'visibility:hidden;pointer-events:none;' : ''}">⠿</span>
       <span class="q-num">${i === 0 ? '▶' : '#'+(i + 1)}</span>
       <span class="q-nombre">${limpiarNombre(c.nombre)}</span>
-      ${c.youtube_url ? `<span class="q-link" title="Enlace de YouTube: suena al llegar su turno">🔗</span><button class="q-download-btn" onclick="bajarLink('${c.id}', this)" title="Bajar a este dispositivo">⬇</button>` : (!c.id.startsWith('local-') ? `<a href="/rockola/${SALA}/archivo/${c.id}" download="${c.nombre}.mp3" class="q-download-btn" title="Descargar MP3">📥</a>` : '')}
+      ${c.youtube_url ? `<span class="q-link" title="Enlace de YouTube: suena al llegar su turno">🔗</span><button class="q-download-btn" onclick="bajarLink('${c.id}', this)" title="Descargar y guardar en tu carpeta de música"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></button>` : (!c.id.startsWith('local-') ? `<a href="/rockola/${SALA}/archivo/${c.id}" download="${c.nombre}.mp3" class="q-download-btn" title="Descargar MP3"><svg style="width:15px; height:15px; display:block; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M12 3v13m0 0l-5-5m5 5l5-5M4 19h16"/></svg></a>` : '')}
       <button class="q-remove" onclick="quitar('${c.id}')">Quitar</button>
     </li>
   `).join('');

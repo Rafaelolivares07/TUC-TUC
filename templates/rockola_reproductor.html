@@ -1454,7 +1454,7 @@ input:checked + .slider:before {
         <div class="panel-title" style="margin:0;">📂 Listas de reproducción / Carpetas (<span id="count-playlists-reproductor">0</span>)</div>
         <div style="display:flex; gap:6px;">
           <button class="btn-control" style="font-size:11px; padding:4px 8px; font-weight:800;" onclick="abrirSelectorCarpeta()" title="Seleccionar carpeta principal de música">📁 Agregar carpeta</button>
-          <label for="local-files-input" class="btn-control" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:4px; font-size:11px; padding:4px 8px; margin:0;" title="Agregar canciones sueltas">🎵 Agregar canciones</label>
+          <label for="local-files-input" class="btn-control" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:4px; font-size:11px; padding:4px 8px; margin:0;" title="Agregar canción suelta">🎵 Agregar canción</label>
         </div>
       </div>
       <p style="font-size:12px; color:var(--muted); margin:0 0 10px;">Tus subcarpetas de música (ej. Salsa, Rock, Vallenato) se organizan aquí automáticamente como listas.</p>
@@ -1473,7 +1473,7 @@ input:checked + .slider:before {
       <div class="panel-title">Biblioteca de este dispositivo</div>
       <div class="local-actions">
         <button class="btn-control" onclick="abrirSelectorCarpeta()" title="Importar carpeta y auto-organizar listas por género">📁 Agregar carpeta</button>
-        <label for="local-files-input" class="btn-control" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:4px; margin:0;" title="Agregar canciones individuales">🎵 Agregar canciones</label>
+        <label for="local-files-input" class="btn-control" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:4px; margin:0;" title="Agregar canción individual">🎵 Agregar canción</label>
         <button class="btn-control" onclick="compartirMiBiblioteca()">Compartir</button>
       </div>
       <!-- Carpeta parametrizable para descargas y archivos locales -->
@@ -1489,8 +1489,8 @@ input:checked + .slider:before {
         <div class="share-link" id="share-link"></div>
         <div class="share-qr" id="share-qr"></div>
       </div>
-      <input class="hidden-input" id="folder-input" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" webkitdirectory directory multiple onchange="indexarArchivosLocales(this.files)">
-      <input class="hidden-input" id="local-files-input" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="indexarArchivosLocales(this.files)">
+      <input class="hidden-input" id="folder-input" type="file" accept="audio/*,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/flac,audio/ogg,.mp3,.m4a,.aac,.wav,.ogg,.flac" webkitdirectory directory multiple onchange="indexarArchivosLocales(this.files)">
+      <input class="hidden-input" id="local-files-input" type="file" accept="audio/*,audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/flac,audio/ogg,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple onchange="indexarArchivosLocales(this.files)">
       <input class="local-search" id="local-search" type="search" placeholder="Buscar en este dispositivo..." oninput="renderBibliotecaLocal()">
       <div id="banner-permiso-directorio" style="display:none; background: rgba(255, 193, 7, 0.15); border: 1px solid #ffc107; border-radius: 6px; padding: 10px; margin-bottom: 12px; font-size: 0.9rem; color: #ffc107; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
         <span>⚠️ TucTuc necesita permiso para acceder a tu carpeta vinculada.</span>

@@ -7223,15 +7223,22 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
                     if hasattr(fb, 'date'): fb = fb.date()
                     if fa and fb:
                         diff_days = abs((fa - fb).days)
-                        if diff_days <= 7:
+                        if diff_days <= 2:
                             alertas_compras.append({
                                 'tipo': 'posible_duplicado',
+                                'fecha': str(fa),
                                 'valor_total': vt_val,
                                 'doc1': item_a['doc'],
                                 'doc2': item_b['doc'],
                                 'proveedor': item_a['prov'],
                                 'mensaje': f"Posible compra duplicada por ${vt_val:,.0f} a {item_a['prov']}: {item_a['doc']} ({fa}) y {item_b['doc']} ({fb}). Revise si una debe ser anulada antes de recostear."
                             })
+
+    dups = [a for a in alertas_compras if a['tipo'] == 'posible_duplicado']
+    vars_c = [a for a in alertas_compras if a['tipo'] != 'posible_duplicado']
+    dups.reverse()
+    vars_c.reverse()
+    alertas_compras = dups + vars_c
 
     stock_inconsistente = bool(saldo and diferente(saldo['stock'], stock))
     costo_inconsistente = bool(saldo and (stock > 0 or Decimal(str(saldo['stock'] or 0)) > 0) and diferente(saldo['costo_und'], costo_und))

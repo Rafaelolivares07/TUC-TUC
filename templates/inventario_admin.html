@@ -12770,6 +12770,7 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
   const difVal = Math.abs(auditoria.diferencia_valor || 0);
   const difClass = difVal > 0.01 ? 'text-red-600 font-bold' : 'text-emerald-600 font-bold';
   const requiereRecosteo = alertas.length > 0 || difVal > 0.01 || auditoria.stock_inconsistente || auditoria.costo_inconsistente;
+  const tieneAlertasCompras = auditoria.alertas_compras && auditoria.alertas_compras.length > 0;
 
   const detalle = [
     ...(auditoria.negativos_intermedios || []).map(x => `Mov #${x.movimiento_id}: stock negativo (${_fmtKardexQty(x.stock)})`),
@@ -12779,30 +12780,34 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
     ...(auditoria.valor_inconsistente ? ['Valor no coincide con reconstrucción'] : [])
   ];
 
-  el.className = `mb-2 rounded-lg border px-3 py-1.5 text-xs flex flex-wrap items-center justify-between gap-2 shadow-2xs ${requiereRecosteo ? 'border-amber-300 bg-amber-50/70' : 'border-emerald-200 bg-emerald-50/40'}`;
+  el.className = `mb-3 rounded-xl border p-3 text-xs flex flex-col gap-2.5 shadow-2xs ${requiereRecosteo ? 'border-amber-300 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/40'}`;
 
   el.innerHTML = `
-    <div class="flex items-center gap-2 flex-wrap shrink-0">
-      <span class="text-[11px] font-extrabold text-gray-700">Auditoría:</span>
-      ${alertas.length ? alertas.join('') : '<span class="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 font-bold text-[10px]">✓ Sin inconsistencias</span>'}
+    <!-- FILA SUPERIOR: RESUMEN DE AUDITORÍA Y TOTALES DE EXISTENCIA -->
+    <div class="flex items-center justify-between flex-wrap gap-2 pb-1 border-b border-gray-200/50">
+      <div class="flex items-center gap-2 flex-wrap shrink-0">
+        <span class="text-[11px] font-extrabold text-gray-700">Auditoría:</span>
+        ${alertas.length ? alertas.join('') : '<span class="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700 font-bold text-[10px]">✓ Sin inconsistencias</span>'}
+      </div>
+
+      <div class="flex items-center gap-3 text-[11px] font-mono text-gray-600 shrink-0">
+        <span>Alm: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_almacenado)}</strong></span>
+        <span>Rec: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_reconstruido)}</strong></span>
+        <span>Dif: <span class="${difClass}">${_fmtKardexMon(auditoria.diferencia_valor)}</span></span>
+        ${detalle.length ? `
+          <details class="inline-block relative">
+            <summary class="cursor-pointer text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline ml-1">Detalle</summary>
+            <div class="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg p-2.5 shadow-lg z-20 w-64 text-[10px] space-y-1 font-sans text-gray-700">
+              ${detalle.map(x => `<div>• ${x}</div>`).join('')}
+            </div>
+          </details>
+        ` : ''}
+      </div>
     </div>
 
-    <div class="flex-1 flex items-center justify-center gap-2 px-2">
-      ${requiereRecosteo ? `
-        <span class="text-[11px] font-semibold text-amber-900 flex items-center gap-1">
-          <span>⚠️</span> <span>Recomendación: ejecutar recosteo para sincronizar saldos</span>
-        </span>
-        <button type="button" onclick="ejecutarRecosteoKardex(${productoId})" id="btn-recosteo-kardex"
-                class="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
-                title="Recalcular cronológicamente los saldos y el costo promedio de este producto">
-          <span>⚡</span> <span>Ejecutar Recosteo</span>
-        </button>
-      ` : `
-        <span class="text-[10px] text-gray-400 font-medium hidden md:inline">Saldos y costos sincronizados con la historia</span>
-      `}
-    </div>
-    ${auditoria.alertas_compras && auditoria.alertas_compras.length ? `
-      <div class="w-full bg-rose-50 border-2 border-rose-300 rounded-xl p-3 text-rose-950 text-xs shadow-xs mt-1">
+    <!-- 1. ALERTAS CRÍTICAS DE COMPRAS (PRIMERO EN LA JERARQUÍA VISUAL) -->
+    ${tieneAlertasCompras ? `
+      <div class="w-full bg-rose-50 border-2 border-rose-300 rounded-xl p-3 text-rose-950 text-xs shadow-xs">
         <div class="flex items-start gap-2.5">
           <span class="text-xl shrink-0">🚨</span>
           <div class="flex-1">
@@ -12836,8 +12841,10 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
         </div>
       </div>
     ` : ''}
+
+    <!-- 2. ALERTA DE EFECTO CASCADA EN RECETAS / ENSAMBLES -->
     ${auditoria.cascada_ensambles && auditoria.cascada_ensambles.es_insumo ? `
-      <div class="w-full bg-amber-50/90 border-2 border-amber-300 rounded-xl p-3 text-amber-950 text-xs shadow-xs mt-2">
+      <div class="w-full bg-amber-50/90 border-2 border-amber-300 rounded-xl p-3 text-amber-950 text-xs shadow-xs">
         <div class="flex items-start gap-2.5">
           <span class="text-xl shrink-0">⚠️</span>
           <div class="flex-1">
@@ -12862,18 +12869,32 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
       </div>
     ` : ''}
 
-    <div class="flex items-center gap-3 text-[11px] font-mono text-gray-600 shrink-0">
-      <span>Alm: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_almacenado)}</strong></span>
-      <span>Rec: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_reconstruido)}</strong></span>
-      <span>Dif: <span class="${difClass}">${_fmtKardexMon(auditoria.diferencia_valor)}</span></span>
-      ${detalle.length ? `
-        <details class="inline-block relative">
-          <summary class="cursor-pointer text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline ml-1">Detalle</summary>
-          <div class="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg p-2.5 shadow-lg z-20 w-64 text-[10px] space-y-1 font-sans text-gray-700">
-            ${detalle.map(x => `<div>• ${x}</div>`).join('')}
-          </div>
-        </details>
-      ` : ''}
+    <!-- 3. ACCIÓN DE RECOSTEO (UBICADO ABAJO DE LAS ADVERTENCIAS) -->
+    <div class="flex items-center justify-between gap-3 pt-1 border-t border-gray-200/50 flex-wrap">
+      ${requiereRecosteo ? `
+        <div class="flex items-center gap-2 text-[11px] font-medium">
+          ${tieneAlertasCompras ? `
+            <span class="text-rose-800 font-semibold flex items-center gap-1.5">
+              <span>⚠️</span>
+              <span>Si ya verificó las alertas de compras anteriores y desea continuar:</span>
+            </span>
+          ` : `
+            <span class="text-amber-900 font-semibold flex items-center gap-1.5">
+              <span>⚠️</span>
+              <span>Recomendación: ejecutar recosteo para sincronizar saldos</span>
+            </span>
+          `}
+        </div>
+        <button type="button" onclick="ejecutarRecosteoKardex(${productoId})" id="btn-recosteo-kardex"
+                class="px-3 py-1.5 ${tieneAlertasCompras ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'} text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer ml-auto shrink-0"
+                title="Recalcular cronológicamente los saldos y el costo promedio de este producto">
+          <span>⚡</span> <span>${tieneAlertasCompras ? 'Recostear de todos modos' : 'Ejecutar Recosteo'}</span>
+        </button>
+      ` : `
+        <span class="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
+          <span>✓</span> <span>Saldos y costos sincronizados con la historia</span>
+        </span>
+      `}
     </div>
   `;
 }

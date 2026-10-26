@@ -1719,3 +1719,53 @@ def core_pantallas_catalogo():
     
     return render_template('pantallas_catalogo.html', 
                            pantallas=[dict(r) for r in rows])
+
+
+# ── BUSCADOR OMNIBOX Y VISOR DE MANUALES ─────────────────────────────────────
+
+@bp.route('/docs/<path:manual_slug>')
+def core_ver_manual(manual_slug):
+    import os
+    from ..buscador_motor import MANUALES_MAPA
+    
+    archivo_info = MANUALES_MAPA.get(manual_slug)
+    if not archivo_info:
+        nombre_archivo = f"{manual_slug}_usuario.md"
+        titulo_doc = manual_slug.replace('-', ' ').title()
+    else:
+        nombre_archivo = archivo_info[0]
+        titulo_doc = archivo_info[1]
+        
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    docs_path = os.path.join(base_dir, 'docs', 'manuales', nombre_archivo)
+    if not os.path.exists(docs_path):
+        dev_docs = os.path.join(os.path.expanduser('~'), 'Documents', 'docs', 'manuales', 'tuctuc', nombre_archivo)
+        if os.path.exists(dev_docs):
+            docs_path = dev_docs
+        else:
+            return "Manual no encontrado", 404
+            
+    try:
+        with open(docs_path, encoding='utf-8') as f:
+            contenido_md = f.read()
+    except Exception as e:
+        return f"Error al leer manual: {e}", 500
+        
+    back_url = request.referrer or '/inicio'
+    return render_template('docs_viewer.html',
+                           titulo=f"{titulo_doc} — Manual de Usuario",
+                           tipo_badge="Manual de Usuario",
+                           contenido_md=contenido_md,
+                           fecha="2026-10-26",
+                           back_url=back_url)
+
+
+@bp.route('/api/buscador/omni', methods=['GET'])
+def api_buscador_omni():
+    from ..buscador_motor import buscar_omni
+    q = request.args.get('q', '').strip()
+    negocio_id = request.args.get('negocio_id') or session.get('active_negocio_id')
+    slug = session.get('negocio_slug')
+    
+    res = buscar_omni(q, negocio_id=negocio_id, slug=slug)
+    return jsonify(res)

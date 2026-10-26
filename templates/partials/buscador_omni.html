@@ -1,0 +1,392 @@
+{# templates/partials/buscador_omni.html #}
+{# Buscador Corporativo Global (Omnibox / Spotlight) para TUC TUC V2 #}
+
+<div id="omni-search-wrapper" class="relative w-full max-w-md sm:max-w-lg select-none">
+  <!-- Barra de entrada corporativa -->
+  <div class="relative flex items-center bg-gray-50/80 hover:bg-white focus-within:bg-white border border-gray-200 focus-within:border-indigo-500 rounded-2xl px-3 py-2 transition-all duration-150 shadow-xs focus-within:shadow-md focus-within:ring-2 focus-within:ring-indigo-100">
+    <div class="text-gray-400 flex items-center justify-center shrink-0 me-2.5">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+    </div>
+    
+    <input type="text" id="omni-input" 
+           placeholder="Buscar pantallas, pestañas o ayuda..." 
+           autocomplete="off" spellcheck="false"
+           class="w-full bg-transparent text-xs sm:text-sm font-medium text-gray-800 placeholder-gray-400 outline-none">
+           
+    <!-- Atajo de teclado sutil -->
+    <div id="omni-shortcut-badge" class="hidden sm:flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-lg border border-gray-200 bg-white text-[10px] font-mono font-bold text-gray-400 shadow-2xs">
+      <span>Ctrl</span><span>K</span>
+    </div>
+    
+    <!-- Spinner de carga -->
+    <div id="omni-loading" class="hidden shrink-0 ms-2 text-indigo-500 animate-spin">
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Desplegable Omnibox (Absolute dentro de Relative - Doctrina de UI) -->
+  <div id="omni-dropdown" 
+       class="hidden absolute left-0 right-0 z-50 mt-1.5 bg-white border border-gray-150 rounded-2xl shadow-xl overflow-hidden divide-y divide-gray-100 max-h-[75vh] overflow-y-auto">
+       
+    <!-- Contenedor dinámico de resultados -->
+    <div id="omni-results-body" class="p-2 space-y-3">
+      <!-- Se llena por JavaScript -->
+    </div>
+    
+    <!-- Footer de atajos rápidos -->
+    <div class="px-3 py-2 bg-gray-50/80 flex items-center justify-between text-[11px] text-gray-400">
+      <div class="flex items-center gap-3">
+        <span><kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px]">↑</kbd> <kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px]">↓</kbd> Navegar</span>
+        <span><kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px]">Enter</kbd> Seleccionar</span>
+        <span><kbd class="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono text-[10px]">Esc</kbd> Cerrar</span>
+      </div>
+      <span class="text-[10px] font-semibold text-gray-400">TUC TUC Omnibox</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const wrapper = document.getElementById('omni-search-wrapper');
+  const input = document.getElementById('omni-input');
+  const dropdown = document.getElementById('omni-dropdown');
+  const resultsBody = document.getElementById('omni-results-body');
+  const loading = document.getElementById('omni-loading');
+
+  let debounceTimer = null;
+  let selectedIndex = -1;
+  let itemsColeccion = []; // Almacena elementos navegables con teclado
+
+  // Contexto activo (si existe en la URL o variable global)
+  function obtenerContextoNegocioId() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('negocio_id')) return urlParams.get('negocio_id');
+    const pathParts = window.location.pathname.split('/');
+    for (let i = 0; i < pathParts.length; i++) {
+      if ((pathParts[i] === 'contabilidad' || pathParts[i] === 'inventario') && pathParts[i + 1]) {
+        const parsed = parseInt(pathParts[i + 1]);
+        if (!isNaN(parsed)) return parsed;
+      }
+    }
+    return '';
+  }
+
+  // ── HISTORIAL DE RECIENTES EN LOCALSTORAGE ─────────────────────────
+  const STORAGE_KEY_RECIENTES = 'omni_recientes_v1';
+
+  function obtenerRecientes() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY_RECIENTES)) || [];
+    } catch(e) {
+      return [];
+    }
+  }
+
+  function guardarEnRecientes(item) {
+    try {
+      let lista = obtenerRecientes();
+      lista = lista.filter(r => r.url !== item.url);
+      lista.unshift({
+        titulo: item.titulo,
+        modulo: item.modulo || 'Reciente',
+        icono: item.icono || '📍',
+        url: item.url
+      });
+      if (lista.length > 5) lista = lista.slice(0, 5);
+      localStorage.setItem(STORAGE_KEY_RECIENTES, JSON.stringify(lista));
+    } catch(e) {}
+  }
+
+  window.omniEliminarReciente = function(event, url) {
+    event.stopPropagation();
+    try {
+      let lista = obtenerRecientes().filter(r => r.url !== url);
+      localStorage.setItem(STORAGE_KEY_RECIENTES, JSON.stringify(lista));
+      mostrarEstadoInicial();
+    } catch(e) {}
+  };
+
+  // ── MOSTRAR / OCULTAR DROPDOWN ─────────────────────────────────────
+  function abrirDropdown() {
+    dropdown.classList.remove('hidden');
+    if (!input.value.trim()) {
+      mostrarEstadoInicial();
+    }
+  }
+
+  function cerrarDropdown() {
+    dropdown.classList.add('hidden');
+    selectedIndex = -1;
+  }
+
+  // ── RENDERIZADO DEL ESTADO INICIAL (VACÍO / ENFOQUE) ────────────────
+  async function mostrarEstadoInicial() {
+    const recientes = obtenerRecientes();
+    itemsColeccion = [];
+    selectedIndex = -1;
+
+    let html = '';
+
+    if (recientes.length > 0) {
+      html += `
+        <div>
+          <div class="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between">
+            <span class="flex items-center gap-1.5">🕒 Últimos Visitados</span>
+            <span class="text-[10px] font-normal text-gray-300">Automático</span>
+          </div>
+          <div class="mt-1 space-y-1">
+      `;
+      recientes.forEach((rec, idx) => {
+        itemsColeccion.push({ ...rec, tipo: 'ruta' });
+        const itemIdx = itemsColeccion.length - 1;
+        html += `
+          <div data-omni-index="${itemIdx}" onclick="omniNavegarA('${rec.url}', '${rec.titulo}', '${rec.modulo}', '${rec.icono}')"
+               class="omni-item group flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer hover:bg-indigo-50/70 transition">
+            <div class="flex items-center gap-2.5 truncate">
+              <span class="text-base">${rec.icono}</span>
+              <div class="truncate">
+                <div class="text-xs font-bold text-gray-800 group-hover:text-indigo-900 truncate">${rec.titulo}</div>
+                <div class="text-[10px] text-gray-400 font-mono truncate">${rec.modulo}</div>
+              </div>
+            </div>
+            <button type="button" onclick="omniEliminarReciente(event, '${rec.url}')" 
+                    class="text-gray-300 hover:text-red-500 p-1 text-xs opacity-0 group-hover:opacity-100 transition" title="Quitar de recientes">
+              ✕
+            </button>
+          </div>
+        `;
+      });
+      html += `</div></div>`;
+    }
+
+    // Sugerencias fijas del sistema
+    try {
+      const nid = obtenerContextoNegocioId();
+      const r = await fetch('/api/buscador/omni?q=&negocio_id=' + encodeURIComponent(nid));
+      const data = await r.json();
+      if (data.ok && data.rutas && data.rutas.length > 0) {
+        html += `
+          <div>
+            <div class="px-2 py-1 text-[11px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span>⭐ Accesos Rápidos Frecuentes</span>
+            </div>
+            <div class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+        `;
+        data.rutas.forEach(item => {
+          itemsColeccion.push({ ...item, tipo: 'ruta' });
+          const itemIdx = itemsColeccion.length - 1;
+          html += `
+            <div data-omni-index="${itemIdx}" onclick="omniNavegarA('${item.url}', '${item.titulo}', '${item.modulo}', '${item.icono}')"
+                 class="omni-item flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/50 transition">
+              <span class="text-base shrink-0">${item.icono}</span>
+              <div class="truncate">
+                <div class="text-xs font-bold text-gray-800 truncate">${item.titulo}</div>
+                <div class="text-[10px] text-gray-400 truncate">${item.modulo}</div>
+              </div>
+            </div>
+          `;
+        });
+        html += `</div></div>`;
+      }
+    } catch(e) {}
+
+    resultsBody.innerHTML = html || `
+      <div class="py-6 text-center text-gray-400 text-xs font-medium">
+        Escribe para buscar pantallas, pestañas o manuales...
+      </div>
+    `;
+  }
+
+  // ── EJECUTAR BÚSQUEDA REACTIVA ─────────────────────────────────────
+  async function ejecutarBusqueda(query) {
+    const q = query.trim();
+    if (!q) {
+      mostrarEstadoInicial();
+      return;
+    }
+
+    loading.classList.remove('hidden');
+    itemsColeccion = [];
+    selectedIndex = -1;
+
+    try {
+      const nid = obtenerContextoNegocioId();
+      const resp = await fetch('/api/buscador/omni?q=' + encodeURIComponent(q) + '&negocio_id=' + encodeURIComponent(nid));
+      const d = await resp.json();
+      loading.classList.add('hidden');
+
+      if (!d.ok) {
+        resultsBody.innerHTML = `<div class="p-4 text-center text-red-500 text-xs">Error al consultar el buscador</div>`;
+        return;
+      }
+
+      const rutas = d.rutas || [];
+      const ayuda = d.ayuda || [];
+
+      if (rutas.length === 0 && ayuda.length === 0) {
+        resultsBody.innerHTML = `
+          <div class="py-8 text-center text-gray-400">
+            <span class="text-2xl block mb-1">🔍</span>
+            <p class="text-xs font-bold text-gray-600">No encontramos resultados para "${q}"</p>
+            <p class="text-[11px] text-gray-400 mt-0.5">Prueba con palabras como "puc", "gasto", "kardex", "receta" o "iva".</p>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+
+      // 1. Grupo de Rutas y Pestañas
+      if (rutas.length > 0) {
+        html += `
+          <div>
+            <div class="px-2 py-1 text-[11px] font-bold text-indigo-600 uppercase tracking-wider flex items-center justify-between">
+              <span class="flex items-center gap-1.5">📍 Pantallas y Pestañas (${rutas.length})</span>
+            </div>
+            <div class="mt-1 space-y-1">
+        `;
+        rutas.forEach(r => {
+          itemsColeccion.push({ ...r, tipo: 'ruta' });
+          const itemIdx = itemsColeccion.length - 1;
+          html += `
+            <div data-omni-index="${itemIdx}" onclick="omniNavegarA('${r.url}', '${r.titulo}', '${r.modulo}', '${r.icono}')"
+                 class="omni-item flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer hover:bg-indigo-50/80 transition">
+              <div class="flex items-center gap-2.5 truncate">
+                <span class="text-lg shrink-0">${r.icono}</span>
+                <div class="truncate">
+                  <div class="text-xs font-bold text-gray-900 truncate">${r.titulo}</div>
+                  <div class="text-[10px] text-gray-400 font-medium truncate">${r.modulo}</div>
+                </div>
+              </div>
+              <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md shrink-0">Saltar ➔</span>
+            </div>
+          `;
+        });
+        html += `</div></div>`;
+      }
+
+      // 2. Grupo de Ayuda y Manuales
+      if (ayuda.length > 0) {
+        html += `
+          <div>
+            <div class="px-2 py-1 text-[11px] font-bold text-emerald-600 uppercase tracking-wider flex items-center justify-between">
+              <span class="flex items-center gap-1.5">📖 Manual y Explicaciones (${ayuda.length})</span>
+            </div>
+            <div class="mt-1 space-y-1.5">
+        `;
+        ayuda.forEach(a => {
+          itemsColeccion.push({ ...a, tipo: 'ayuda' });
+          const itemIdx = itemsColeccion.length - 1;
+          html += `
+            <div data-omni-index="${itemIdx}" onclick="omniNavegarA('${a.url}', '${a.titulo}', '${a.manual}', '📖')"
+                 class="omni-item p-2.5 rounded-xl cursor-pointer hover:bg-emerald-50/70 border border-gray-100 hover:border-emerald-200 transition">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <span class="text-xs font-bold text-gray-900 truncate">${a.titulo}</span>
+                <span class="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">${a.manual}</span>
+              </div>
+              <p class="text-[11px] text-gray-500 leading-snug line-clamp-2">${a.resumen}</p>
+            </div>
+          `;
+        });
+        html += `</div></div>`;
+      }
+
+      resultsBody.innerHTML = html;
+      resaltarElemento(0); // Preseleccionar el primer resultado
+    } catch(err) {
+      loading.classList.add('hidden');
+      resultsBody.innerHTML = `<div class="p-4 text-center text-red-500 text-xs">Error de conexión con el buscador</div>`;
+    }
+  }
+
+  // ── SELECCIÓN Y NAVEGACIÓN ─────────────────────────────────────────
+  window.omniNavegarA = function(url, titulo, modulo, icono) {
+    if (titulo) {
+      guardarEnRecientes({ titulo, modulo, icono, url });
+    }
+    cerrarDropdown();
+    window.location.href = url;
+  };
+
+  function resaltarElemento(index) {
+    const elementos = resultsBody.querySelectorAll('.omni-item');
+    elementos.forEach(el => el.classList.remove('bg-indigo-100', 'bg-emerald-100', 'ring-2', 'ring-indigo-300'));
+
+    if (index >= 0 && index < elementos.length) {
+      selectedIndex = index;
+      const el = elementos[index];
+      el.classList.add('bg-indigo-100', 'ring-2', 'ring-indigo-300');
+      el.scrollIntoView({ block: 'nearest' });
+    } else {
+      selectedIndex = -1;
+    }
+  }
+
+  // ── EVENTOS DEL INPUT Y TECLADO ────────────────────────────────────
+  input.addEventListener('focus', () => {
+    abrirDropdown();
+  });
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      ejecutarBusqueda(input.value);
+    }, 280); // Debounce de 280ms
+  });
+
+  input.addEventListener('keydown', (e) => {
+    const total = itemsColeccion.length;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (dropdown.classList.contains('hidden')) abrirDropdown();
+      if (total > 0) {
+        let next = selectedIndex + 1;
+        if (next >= total) next = 0;
+        resaltarElemento(next);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (total > 0) {
+        let prev = selectedIndex - 1;
+        if (prev < 0) prev = total - 1;
+        resaltarElemento(prev);
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (selectedIndex >= 0 && selectedIndex < total) {
+        const item = itemsColeccion[selectedIndex];
+        omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || '📍');
+      } else if (total > 0) {
+        const item = itemsColeccion[0];
+        omniNavegarA(item.url, item.titulo, item.modulo || item.manual, item.icono || '📍');
+      }
+    } else if (e.key === 'Escape') {
+      cerrarDropdown();
+      input.blur();
+    }
+  });
+
+  // Atajo global Ctrl+K o Cmd+K
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      input.focus();
+      input.select();
+      abrirDropdown();
+    }
+  });
+
+  // Cerrar al hacer clic afuera
+  document.addEventListener('click', (e) => {
+    if (!wrapper.contains(e.target)) {
+      cerrarDropdown();
+    }
+  });
+})();
+</script>

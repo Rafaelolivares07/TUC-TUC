@@ -74,16 +74,10 @@
     </div>
     {% endif %}
 
-    <!-- Buscador Reactivo -->
-    {% if pantallas_autorizadas %}
-    <div class="bg-white rounded-2xl p-3 shadow-sm border border-gray-150 mb-6 flex items-center gap-2">
-      <div class="text-gray-400 ps-1.5">
-        <i class="bi bi-search"></i>
-      </div>
-      <input type="text" id="filtro-menu" placeholder="Buscar herramienta..." oninput="filtrarHerramientas()"
-             class="w-full text-xs font-medium text-gray-700 placeholder-gray-400 bg-transparent outline-none">
+    <!-- Buscador Corporativo Global Omnibox -->
+    <div class="mb-6">
+      {% include 'partials/buscador_omni.html' %}
     </div>
-    {% endif %}
 
     <!-- Grilla de Accesos Autorizados -->
     {% if pantallas_autorizadas %}

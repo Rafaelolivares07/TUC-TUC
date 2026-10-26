@@ -7261,8 +7261,11 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
 
     cascada_ensambles = None
     if padres_rows:
+        fechas_dups = [str(d.get('fecha'))[:10] for d in dups if d.get('fecha')]
         fechas_alertas = [str(a.get('fecha'))[:10] for a in alertas_compras if a.get('fecha')]
-        if fechas_alertas:
+        if fechas_dups:
+            f_desde = min(fechas_dups)
+        elif fechas_alertas:
             f_desde = min(fechas_alertas)
         elif movimientos:
             f_desde = str(movimientos[0]['documento_fecha'] or movimientos[0]['created_at'])[:10]

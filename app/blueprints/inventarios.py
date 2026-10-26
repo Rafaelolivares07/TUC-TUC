@@ -7267,14 +7267,14 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
         elif movimientos:
             f_desde = str(movimientos[0]['documento_fecha'] or movimientos[0]['created_at'])[:10]
         else:
-            f_desde = datetime.date.today().isoformat()
+            f_desde = date.today().isoformat()
         
         cascada_ensambles = {
             'es_insumo': True,
             'total_productos_padre': len(padres_rows),
             'productos_padre': [{'id': r['producto_id'], 'nombre': r['producto_nombre'], 'cantidad': float(r['cantidad'])} for r in padres_rows],
             'fecha_desde': str(f_desde)[:10],
-            'fecha_hasta': datetime.date.today().isoformat()
+            'fecha_hasta': date.today().isoformat()
         }
 
     stock_inconsistente = bool(saldo and diferente(saldo['stock'], stock))

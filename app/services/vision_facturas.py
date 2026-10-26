@@ -559,13 +559,20 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
         except Exception as e:
             print("Aviso alias_map:", e)
 
-    # 5C. DETECCIÓN PREVENTIVA DE FACTURA DUPLICADA O YA REGISTRADA
+    # 5C. DETECCIÓN PREVENTIVA DE FACTURA DUPLICADA O YA REGISTRADA (Ventana máxima 2 días en duplicados por valor)
     posible_duplicada = None
     if conn and negocio_id and proveedor_id:
         try:
+            prov_nombre_final = proveedor_nombre
+            if not prov_nombre_final:
+                row_p = conn.execute("SELECT nombre FROM terceros WHERE id = %s", (proveedor_id,)).fetchone()
+                if row_p:
+                    prov_nombre_final = row_p['nombre']
+
             if num_doc_detectado:
                 exist_mov = conn.execute("""
-                    SELECT m.id, m.documento_fecha, m.documento_numero, m.documento_total, t.nombre as tipo_doc_nombre
+                    SELECT m.id, m.documento_fecha, m.documento_numero, m.documento_total, m.tipo_documento_id,
+                           t.nombre as tipo_doc_nombre, t.codigo as tipo_doc_codigo
                     FROM movimientos_inventario m
                     LEFT JOIN tipos_documento_negocio t ON t.id = m.tipo_documento_id
                     WHERE m.negocio_id = %s AND m.tipo = 'entrada' AND m.proveedor_id = %s
@@ -579,17 +586,24 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                         'tipo': 'NUMERO_DOCUMENTO',
                         'movimiento_id': exist_mov['id'],
                         'documento_numero': exist_mov['documento_numero'],
+                        'tipo_documento_id': exist_mov['tipo_documento_id'],
+                        'tipo_documento_codigo': exist_mov.get('tipo_doc_codigo') or 'FC',
+                        'tipo_documento_nombre': exist_mov.get('tipo_doc_nombre') or 'Factura Proveedor',
+                        'proveedor_id': proveedor_id,
+                        'proveedor_nombre': prov_nombre_final or '',
                         'fecha': f_str,
                         'total': float(exist_mov['documento_total'] or 0),
                         'mensaje': f"⚠️ ¡Atención! La factura/recibo N° {exist_mov['documento_numero']} ya fue ingresada el {f_str} para este proveedor."
                     }
             if not posible_duplicada and total_factura > 0:
                 exist_tot = conn.execute("""
-                    SELECT m.id, m.documento_fecha, m.documento_numero, m.documento_total
+                    SELECT m.id, m.documento_fecha, m.documento_numero, m.documento_total, m.tipo_documento_id,
+                           t.nombre as tipo_doc_nombre, t.codigo as tipo_doc_codigo
                     FROM movimientos_inventario m
+                    LEFT JOIN tipos_documento_negocio t ON t.id = m.tipo_documento_id
                     WHERE m.negocio_id = %s AND m.tipo = 'entrada' AND m.proveedor_id = %s
                       AND ABS(m.documento_total - %s) <= 50
-                      AND m.created_at >= (CURRENT_DATE - INTERVAL '15 days')
+                      AND m.created_at >= (CURRENT_DATE - INTERVAL '2 days')
                     LIMIT 1
                 """, (negocio_id, proveedor_id, total_factura)).fetchone()
                 if exist_tot:
@@ -599,6 +613,11 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                         'tipo': 'TOTAL_RECIENTE',
                         'movimiento_id': exist_tot['id'],
                         'documento_numero': exist_tot['documento_numero'],
+                        'tipo_documento_id': exist_tot['tipo_documento_id'],
+                        'tipo_documento_codigo': exist_tot.get('tipo_doc_codigo') or 'FC',
+                        'tipo_documento_nombre': exist_tot.get('tipo_doc_nombre') or 'Factura Proveedor',
+                        'proveedor_id': proveedor_id,
+                        'proveedor_nombre': prov_nombre_final or '',
                         'fecha': f_str,
                         'total': float(exist_tot['documento_total'] or 0),
                         'mensaje': f"⚠️ Posible factura duplicada: Ya existe una entrada registrada el {f_str} por el mismo valor exacto (${total_factura:,.0f})."
@@ -606,7 +625,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
         except Exception as e:
             print("Aviso detección duplicada:", e)
 
-    # =========================================================================
+# =========================================================================
     # 6. EXTRACCIÓN DE ÍTEMS
     # =========================================================================
     y_top_items = 180

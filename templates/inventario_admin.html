@@ -2581,11 +2581,16 @@
           <div id="banner-factura-duplicada-msg" class="text-rose-800 text-[11px] font-medium leading-relaxed"></div>
         </div>
       </div>
-      <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
-        <button type="button" onclick="document.getElementById('banner-factura-duplicada').classList.add('hidden')" class="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[11px] shadow-xs transition">
+      <div class="flex items-center gap-2 self-end sm:self-auto shrink-0 flex-wrap">
+        <a id="banner-factura-duplicada-link" href="#" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+           title="Abrir y consultar la entrada previa en otra pestaña con todos sus ítems">
+          <span>📋</span> Ver / Comparar Entrada Previa ↗
+        </a>
+        <button type="button" onclick="document.getElementById('banner-factura-duplicada').classList.add('hidden')" class="px-2.5 py-1.5 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 font-semibold text-[11px] transition">
           Continuar de todos modos
         </button>
-        <button type="button" onclick="document.getElementById('banner-factura-duplicada').classList.add('hidden')" class="text-rose-600 hover:text-rose-800 font-bold p-1">&times;</button>
+        <button type="button" onclick="document.getElementById('banner-factura-duplicada').classList.add('hidden')" class="text-rose-600 hover:text-rose-800 font-bold p-1 text-base leading-none">&times;</button>
       </div>
     </div>
 
@@ -10236,9 +10241,26 @@ async function escanearFacturaArchivo(archivo) {
     // Alerta de Factura Duplicada en Base de Datos
     const bannerDup = document.getElementById('banner-factura-duplicada');
     const msgDup = document.getElementById('banner-factura-duplicada-msg');
+    const linkDup = document.getElementById('banner-factura-duplicada-link');
+
     if (d.posible_duplicada && d.posible_duplicada.existe) {
       if (bannerDup && msgDup) {
         msgDup.textContent = d.posible_duplicada.mensaje;
+
+        if (linkDup) {
+          const tipoDoc = d.posible_duplicada.tipo_documento_id || d.posible_duplicada.tipo_documento_codigo || 'factura';
+          const docNum = d.posible_duplicada.documento_numero || '';
+          const provId = d.posible_duplicada.proveedor_id || '';
+          const provNom = d.posible_duplicada.proveedor_nombre || '';
+
+          if (docNum) {
+            linkDup.href = `/admin/inventario/${NEGOCIO_ID}?tipo_doc=${encodeURIComponent(tipoDoc)}&num_doc=${encodeURIComponent(docNum)}&prov_id=${encodeURIComponent(provId)}&prov_nom=${encodeURIComponent(provNom)}#entradas`;
+            linkDup.classList.remove('hidden');
+          } else {
+            linkDup.classList.add('hidden');
+          }
+        }
+
         bannerDup.classList.remove('hidden');
       }
       toast(d.posible_duplicada.mensaje, false);

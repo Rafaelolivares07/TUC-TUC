@@ -12738,26 +12738,8 @@ async function guardarFechaDocumento() {
 
 
 function irAAuditoriaEnsambles(fechaIni, fechaFin) {
-  if (typeof mostrarTab === 'function') {
-    mostrarTab('ensambles_historicos');
-  }
-  const repIni = document.getElementById('reparador-fecha-ini');
-  const repFin = document.getElementById('reparador-fecha-fin');
-  if (repIni && fechaIni) repIni.value = fechaIni;
-  if (repFin && fechaFin) repFin.value = fechaFin;
-
-  const ensIni = document.getElementById('ensambles-fecha-ini');
-  const ensFin = document.getElementById('ensambles-fecha-fin');
-  if (ensIni && fechaIni) ensIni.value = fechaIni;
-  if (ensFin && fechaFin) ensFin.value = fechaFin;
-
-  if (typeof repararCostosPreview === 'function') {
-    setTimeout(() => {
-      repararCostosPreview();
-      const sec = document.getElementById('ensambles-reparador');
-      if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 200);
-  }
+  const url = `/admin/inventario/${NEGOCIO_ID}/ensambles_historicos?fecha_desde=${encodeURIComponent(fechaIni || '')}&fecha_hasta=${encodeURIComponent(fechaFin || '')}&auto_preview=1`;
+  window.open(url, '_blank');
 }
 
 function renderizarAuditoriaKardex(auditoria, productoId) {
@@ -12836,7 +12818,7 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
               <button type="button" 
                       onclick="irAAuditoriaEnsambles('${auditoria.cascada_ensambles.fecha_desde}', '${auditoria.cascada_ensambles.fecha_hasta}')" 
                       class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer">
-                <span>🔍</span> <span>Ir a Auditoría de Ensambles Históricos (${auditoria.cascada_ensambles.fecha_desde} al ${auditoria.cascada_ensambles.fecha_hasta})</span>
+                <span>🔍</span> <span>Auditar Ensambles Históricos (${auditoria.cascada_ensambles.fecha_desde} al ${auditoria.cascada_ensambles.fecha_hasta}) ↗</span>
               </button>
               <span class="text-[10px] text-amber-800 font-semibold">Podrá auditar cada documento individualmente y reparar sus costos contables.</span>
             </div>
@@ -17931,6 +17913,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await cargarMetodosPagoEntrada();
   abrirTarjetaInicialDesdeUrl();
+
+  // Si la pestaña inicial es ensambles_historicos desde URL con fechas predefinidas
+  if (activeTab === 'ensambles_historicos') {
+    const qDesde = initUrlParams.get('fecha_desde');
+    const qHasta = initUrlParams.get('fecha_hasta');
+    const qAutoPreview = initUrlParams.get('auto_preview');
+    if (qDesde) {
+      const rIni = document.getElementById('reparador-fecha-ini');
+      const eIni = document.getElementById('ensambles-fecha-ini');
+      if (rIni) rIni.value = qDesde;
+      if (eIni) eIni.value = qDesde;
+    }
+    if (qHasta) {
+      const rFin = document.getElementById('reparador-fecha-fin');
+      const eFin = document.getElementById('ensambles-fecha-fin');
+      if (rFin) rFin.value = qHasta;
+      if (eFin) eFin.value = qHasta;
+    }
+    if (qAutoPreview === '1' && typeof repararCostosPreview === 'function') {
+      setTimeout(() => {
+        repararCostosPreview();
+        const sec = document.getElementById('ensambles-reparador');
+        if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 500);
+    }
+  }
 
   // Si la pestaña inicial es Kardex con producto específico desde URL
   if (activeTab === 'kardex') {

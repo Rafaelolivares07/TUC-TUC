@@ -12255,7 +12255,18 @@ function renderizarTablaKardex(d) {
         <td class="px-3 py-2 text-right num font-mono text-sm border-r border-gray-100/50 ${entradaClass}">${entradaQty}</td>
         <td class="px-3 py-2 text-right num font-mono text-sm border-r border-gray-100/50 ${salidaClass}">${salidaQty}</td>
         <td class="px-3 py-2 text-right num font-mono text-sm font-semibold text-gray-900 bg-gray-100/5">${_fmtKardexQty(m.saldo_calculado ?? m.stock_nuevo)}</td>
-        <td class="px-2.5 py-2 text-right num font-mono text-sm text-gray-600 border-r border-gray-100/50 kardex-col-valores">${_fmtKardexUnit(transCostVal)}</td>
+        <td class="px-2.5 py-2 text-right num font-mono text-sm text-gray-600 border-r border-gray-100/50 kardex-col-valores">
+          <div>${_fmtKardexUnit(transCostVal)}</div>
+          ${m.alerta_variacion_costo ? `
+            <div class="mt-0.5">
+              <span class="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-black ${m.alerta_variacion_costo.diff_pct > 0 ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}" 
+                    title="Variación de ${m.alerta_variacion_costo.diff_pct > 0 ? '+' : ''}${m.alerta_variacion_costo.diff_pct}% frente al costo promedio ponderado ($${m.alerta_variacion_costo.costo_promedio_anterior}). Tolerancia: ${m.alerta_variacion_costo.tolerancia_pct}%">
+                ${m.alerta_variacion_costo.diff_pct > 0 ? '🔺' : '🔻'} ${m.alerta_variacion_costo.diff_pct > 0 ? '+' : ''}${m.alerta_variacion_costo.diff_pct}%
+              </span>
+              ${m.alerta_variacion_costo.es_multiplo_empaque ? '<span class="block text-[9px] text-amber-700 font-bold" title="El costo unitario es múltiplo exacto de una presentación">⚠️ Posible empaque</span>' : ''}
+            </div>
+          ` : ''}
+        </td>
         <td class="px-2.5 py-2 text-right num font-mono text-sm text-gray-600 kardex-col-valores">${_fmtKardexUnit(avgCostVal)}</td>
         <td class="px-3 py-2 text-right num font-mono text-sm font-semibold text-gray-900 kardex-col-valores">${_fmtKardexMon(lineTotal)}</td>
         <td class="px-3 py-2 text-right num font-mono text-sm font-bold text-emerald-700 bg-emerald-50/20 kardex-col-valores">${_fmtKardexMon(Number((m.saldo_calculado ?? m.stock_nuevo) || 0) * Number(avgCostVal || 0))}</td>
@@ -12761,6 +12772,19 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
         <span class="text-[10px] text-gray-400 font-medium hidden md:inline">Saldos y costos sincronizados con la historia</span>
       `}
     </div>
+    ${auditoria.alertas_compras && auditoria.alertas_compras.length ? `
+      <div class="w-full bg-rose-50 border-2 border-rose-300 rounded-xl p-3 text-rose-950 text-xs shadow-xs mt-1">
+        <div class="flex items-start gap-2.5">
+          <span class="text-xl shrink-0">🚨</span>
+          <div class="flex-1">
+            <span class="font-black text-rose-950 block text-xs uppercase tracking-wide">¡Alertas Críticas de Compras! Revise antes de recostear:</span>
+            <ul class="list-disc pl-4 mt-1.5 space-y-1 text-[11px] text-rose-900 font-semibold">
+              ${auditoria.alertas_compras.map(al => `<li><strong>${al.tipo === 'posible_duplicado' ? 'Posible compra duplicada' : 'Variación atípica de costo'}:</strong> ${al.mensaje}</li>`).join('')}
+            </ul>
+          </div>
+        </div>
+      </div>
+    ` : ''}
 
     <div class="flex items-center gap-3 text-[11px] font-mono text-gray-600 shrink-0">
       <span>Alm: <strong class="text-gray-800">${_fmtKardexMon(auditoria.valor_almacenado)}</strong></span>

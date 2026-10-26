@@ -323,6 +323,7 @@ def _crear_tablas(conn):
         "CREATE INDEX IF NOT EXISTS idx_ifa_neg_fecha ON inventario_fisico_actas(negocio_id, fecha_hora DESC)",
         "CREATE INDEX IF NOT EXISTS idx_ifa_doc ON inventario_fisico_actas(negocio_id, documento_numero)",
         "CREATE INDEX IF NOT EXISTS idx_ifa_modulo ON inventario_fisico_actas(negocio_id, modulo_origen)",
+        "ALTER TABLE productos ADD COLUMN IF NOT EXISTS tolerancia_costo_pct NUMERIC(5,2) DEFAULT 15.0",
     ]
     for sql in alters:
         try:
@@ -3510,13 +3511,47 @@ def api_inventario_kardex(producto_id):
 
         movimientos_con_saldo = []
         saldo_acumulado = Decimal('0')
+        costo_prom_acumulado = Decimal('0')
+        val_existencia_acumulado = Decimal('0')
+        
+        # Obtener tolerancia_costo_pct del producto
+        tol_costo_p = 15.0
+        try:
+            prod_tol_row = conn.execute("SELECT COALESCE(tolerancia_costo_pct, 15.0) AS tol FROM productos WHERE id = %s", (producto_id,)).fetchone()
+            if prod_tol_row and prod_tol_row['tol'] is not None:
+                tol_costo_p = float(prod_tol_row['tol'])
+        except Exception:
+            pass
+
         for r in rows:
             m_dict = dict(r)
             cant = Decimal(str(m_dict.get('cantidad') or 0))
-            if m_dict.get('tipo') == 'entrada':
+            tipo_m = m_dict.get('tipo')
+            vu_m = Decimal(str(m_dict.get('valor_unitario') or 0)) if m_dict.get('valor_unitario') is not None else None
+
+            # Comparar costo de compra contra el costo promedio ponderado vigente
+            if tipo_m == 'entrada' and vu_m is not None and vu_m > Decimal('0') and costo_prom_acumulado > Decimal('0'):
+                diff_pct = ((vu_m - costo_prom_acumulado) / costo_prom_acumulado) * Decimal('100')
+                if abs(diff_pct) > Decimal(str(tol_costo_p)):
+                    ratio = vu_m / costo_prom_acumulado
+                    es_multiplo = any(abs(ratio - Decimal(str(f))) < Decimal('0.15') or abs(ratio - Decimal(str(1/f))) < Decimal('0.05') for f in (2, 3, 4, 6, 12, 24))
+                    m_dict['alerta_variacion_costo'] = {
+                        'diff_pct': round(float(diff_pct), 1),
+                        'costo_promedio_anterior': round(float(costo_prom_acumulado), 2),
+                        'costo_transaccion': round(float(vu_m), 2),
+                        'tolerancia_pct': tol_costo_p,
+                        'es_multiplo_empaque': es_multiplo
+                    }
+
+            if tipo_m == 'entrada':
                 saldo_acumulado += cant
-            elif m_dict.get('tipo') == 'salida':
+                if m_dict.get('costo_und') is not None and Decimal(str(m_dict.get('costo_und'))) > 0:
+                    costo_prom_acumulado = Decimal(str(m_dict.get('costo_und')))
+            elif tipo_m == 'salida':
                 saldo_acumulado -= cant
+                if m_dict.get('costo_und') is not None and Decimal(str(m_dict.get('costo_und'))) > 0:
+                    costo_prom_acumulado = Decimal(str(m_dict.get('costo_und')))
+            
             m_dict['saldo_calculado'] = float(saldo_acumulado)
             movimientos_con_saldo.append(m_dict)
 
@@ -7032,7 +7067,7 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
 def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
     """Reconstruye un producto sin modificarlo y devuelve sus inconsistencias por bodega."""
     producto = conn.execute(
-        "SELECT id, nombre, costo FROM productos WHERE id = %s AND negocio_id = %s",
+        "SELECT id, nombre, costo, COALESCE(tolerancia_costo_pct, 15.0) AS tolerancia_costo_pct FROM productos WHERE id = %s AND negocio_id = %s",
         (producto_id, negocio_id)
     ).fetchone()
     if not producto:
@@ -7045,8 +7080,9 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
         where_b = ""
 
     movimientos = conn.execute(f"""
-        SELECT id, tipo, cantidad, valor_unitario, stock_anterior,
-               stock_nuevo, costo_und, documento_fecha, created_at, COALESCE(bodega, 1) AS bodega
+        SELECT id, tipo, motivo, cantidad, valor_unitario, valor_total, stock_anterior,
+               stock_nuevo, costo_und, documento_fecha, created_at, COALESCE(bodega, 1) AS bodega,
+               tipo_documento, documento_numero, proveedor_id, proveedor_nombre
         FROM movimientos_inventario
         WHERE negocio_id = %s AND producto_id = %s {where_b}
         ORDER BY COALESCE(documento_fecha, created_at::date) ASC,
@@ -7118,6 +7154,85 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
             WHERE negocio_id = %s AND producto_id = %s
         """, (negocio_id, producto_id)).fetchone()
 
+    # Detección de posibles compras duplicadas y saltos atípicos de costo
+    alertas_compras = []
+    tol_costo_prod = Decimal(str(producto['tolerancia_costo_pct'] if 'tolerancia_costo_pct' in producto else 15.0))
+    
+    # 1. Saltos atípicos de costo frente al costo promedio ponderado vigente
+    costo_prom_anterior = Decimal('0')
+    val_ex_track = Decimal('0')
+    stock_track = Decimal('0')
+    for m_chk in movimientos:
+        cant_c = Decimal(str(m_chk['cantidad'] or 0))
+        signo_c = Decimal('1') if m_chk['tipo'] == 'entrada' else Decimal('-1')
+        stock_ant_c = stock_track
+        stock_nue_c = stock_ant_c + cant_c * signo_c
+        vu_c = Decimal(str(m_chk['valor_unitario'])) if m_chk['valor_unitario'] is not None else None
+
+        if m_chk['tipo'] == 'entrada' and vu_c is not None and vu_c > 0:
+            if costo_prom_anterior > Decimal('0'):
+                diff_pct = ((vu_c - costo_prom_anterior) / costo_prom_anterior) * Decimal('100')
+                if abs(diff_pct) > tol_costo_prod:
+                    ratio = vu_c / costo_prom_anterior
+                    es_multiplo = any(abs(ratio - Decimal(str(f))) < Decimal('0.15') or abs(ratio - Decimal(str(1/f))) < Decimal('0.05') for f in (2, 3, 4, 6, 12, 24))
+                    f_txt = str(m_chk['documento_fecha'] or m_chk['created_at'] or '')[:10]
+                    doc_label = f"{m_chk['tipo_documento'] or 'Doc'} #{m_chk['documento_numero'] or m_chk['id']}"
+                    alertas_compras.append({
+                        'tipo': 'variacion_costo',
+                        'movimiento_id': m_chk['id'],
+                        'fecha': f_txt,
+                        'documento': doc_label,
+                        'costo_transaccion': float(vu_c),
+                        'costo_promedio_anterior': float(costo_prom_anterior),
+                        'variacion_pct': round(float(diff_pct), 1),
+                        'tolerancia_pct': float(tol_costo_prod),
+                        'es_multiplo_empaque': es_multiplo,
+                        'mensaje': f"{doc_label} ({f_txt}): Costo compra a ${float(vu_c):,.2f} ({diff_pct:+0.1f}% vs promedio anterior ${float(costo_prom_anterior):,.2f}). Excede tolerancia de {float(tol_costo_prod)}%.{' Posible confusión de empaque/unidad.' if es_multiplo else ''}"
+                    })
+            # Actualizar costo promedio track
+            costo_prom_anterior = ((val_ex_track + cant_c * vu_c) / stock_nue_c) if stock_nue_c > 0 else vu_c
+            val_ex_track = stock_nue_c * costo_prom_anterior if stock_nue_c > 0 else Decimal('0')
+        else:
+            val_ex_track = stock_nue_c * costo_prom_anterior if stock_nue_c > 0 else Decimal('0')
+        stock_track = stock_nue_c
+
+    # 2. Detección de posibles facturas duplicadas
+    compras_map = {}
+    for m_d in movimientos:
+        if m_d['tipo'] == 'entrada' and m_d.get('valor_total') and Decimal(str(m_d['valor_total'])) > Decimal('0'):
+            vt_key = round(float(m_d['valor_total']))
+            f_d = m_d['documento_fecha'] or m_d['created_at']
+            compras_map.setdefault(vt_key, []).append({
+                'id': m_d['id'],
+                'doc': f"{m_d.get('tipo_documento') or 'Doc'} #{m_d.get('documento_numero') or m_d['id']}",
+                'fecha': f_d,
+                'cant': float(m_d.get('cantidad') or 0),
+                'vu': float(m_d.get('valor_unitario') or 0),
+                'prov': m_d.get('proveedor_nombre') or 'Proveedor'
+            })
+    
+    for vt_val, list_c in compras_map.items():
+        if len(list_c) >= 2:
+            for idx_a in range(len(list_c)):
+                for idx_b in range(idx_a + 1, len(list_c)):
+                    item_a = list_c[idx_a]
+                    item_b = list_c[idx_b]
+                    fa = item_a['fecha']
+                    fb = item_b['fecha']
+                    if hasattr(fa, 'date'): fa = fa.date()
+                    if hasattr(fb, 'date'): fb = fb.date()
+                    if fa and fb:
+                        diff_days = abs((fa - fb).days)
+                        if diff_days <= 7:
+                            alertas_compras.append({
+                                'tipo': 'posible_duplicado',
+                                'valor_total': vt_val,
+                                'doc1': item_a['doc'],
+                                'doc2': item_b['doc'],
+                                'proveedor': item_a['prov'],
+                                'mensaje': f"Posible compra duplicada por ${vt_val:,.0f} a {item_a['prov']}: {item_a['doc']} ({fa}) y {item_b['doc']} ({fb}). Revise si una debe ser anulada antes de recostear."
+                            })
+
     stock_inconsistente = bool(saldo and diferente(saldo['stock'], stock))
     costo_inconsistente = bool(saldo and (stock > 0 or Decimal(str(saldo['stock'] or 0)) > 0) and diferente(saldo['costo_und'], costo_und))
     valor_inconsistente = bool(
@@ -7144,6 +7259,7 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
         'negativo_final': stock < 0,
         'negativos_intermedios': negativos,
         'inconsistencias_movimientos': inconsistencias,
+        'alertas_compras': alertas_compras,
         'problemas': bool(stock < 0 or negativos or inconsistencias
                           or stock_inconsistente or costo_inconsistente
                           or valor_inconsistente)

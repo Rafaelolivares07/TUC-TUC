@@ -9454,6 +9454,8 @@ def api_anular_documento(negocio_id):
 
 @bp.route('/admin/inventario/<int:negocio_id>')
 @bp.route('/admin/inventario/<int:negocio_id>/<tab_name>')
+@bp.route('/inventario/<int:negocio_id>')
+@bp.route('/inventario/<int:negocio_id>/<tab_name>')
 def admin_inventario(negocio_id, tab_name=None):
     if 'usuario_id' not in session:
         return redirect(url_for('auth.admin_login'))

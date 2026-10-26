@@ -2103,6 +2103,8 @@ def contabilidad_por_slug(tipo, slug):
 
 @bp.route('/admin/contabilidad/<int:negocio_id>')
 @bp.route('/admin/contabilidad/<int:negocio_id>/<tab_name>')
+@bp.route('/contabilidad/<int:negocio_id>')
+@bp.route('/contabilidad/<int:negocio_id>/<tab_name>')
 def admin_contabilidad(negocio_id, tab_name=None):
     if not session.get('usuario_id'):
         return __import__('flask').redirect('/login')

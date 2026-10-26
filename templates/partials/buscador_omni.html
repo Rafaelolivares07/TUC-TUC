@@ -310,6 +310,28 @@
       guardarEnRecientes({ titulo, modulo, icono, url });
     }
     cerrarDropdown();
+
+    try {
+      const targetUrlObj = new URL(url, window.location.origin);
+      const targetTab = targetUrlObj.searchParams.get('tab');
+      
+      const esContabilidad = window.location.pathname.includes('/contabilidad');
+      const esInventario = window.location.pathname.includes('/inventario');
+      
+      if (targetTab) {
+        if (esContabilidad && targetUrlObj.pathname.includes('/contabilidad') && typeof cambiarTab === 'function') {
+          cambiarTab(targetTab);
+          history.pushState(null, '', window.location.pathname + '?tab=' + targetTab);
+          return;
+        }
+        if (esInventario && targetUrlObj.pathname.includes('/inventario') && typeof mostrarTab === 'function') {
+          mostrarTab(targetTab);
+          history.pushState(null, '', window.location.pathname + '?tab=' + targetTab);
+          return;
+        }
+      }
+    } catch(err) {}
+
     window.location.href = url;
   };
 

@@ -12803,7 +12803,7 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
           <div class="flex-1">
             <span class="font-black text-rose-950 block text-xs uppercase tracking-wide">¡Alertas Críticas de Compras! Revise antes de recostear:</span>
             <ul class="list-disc pl-4 mt-1.5 space-y-1 text-[11px] text-rose-900 font-semibold">
-              ${auditoria.alertas_compras.map(al => {
+              ${auditoria.alertas_compras.slice(0, 5).map(al => {
                 let lbl = 'Variación atípica de costo';
                 let icon = '🔺';
                 if (al.tipo === 'posible_duplicado') { lbl = 'Posible compra duplicada'; icon = '🚨'; }
@@ -12811,6 +12811,22 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
                 return `<li><strong>${icon} ${lbl}:</strong> ${al.mensaje}</li>`;
               }).join('')}
             </ul>
+            ${auditoria.alertas_compras.length > 5 ? `
+              <details class="mt-2 text-[11px] text-rose-950 font-semibold">
+                <summary class="cursor-pointer text-rose-800 hover:text-rose-950 hover:underline select-none">
+                  📁 Ver ${auditoria.alertas_compras.length - 5} alertas históricas anteriores...
+                </summary>
+                <ul class="list-disc pl-4 mt-1.5 space-y-1 text-[11px] text-rose-900 font-medium">
+                  ${auditoria.alertas_compras.slice(5).map(al => {
+                    let lbl = 'Variación atípica de costo';
+                    let icon = '🔺';
+                    if (al.tipo === 'posible_duplicado') { lbl = 'Posible compra duplicada'; icon = '🚨'; }
+                    else if (al.tipo === 'registro_retroactivo') { lbl = 'Entrada retroactiva'; icon = '⏱️'; }
+                    return `<li><strong>${icon} ${lbl}:</strong> ${al.mensaje}</li>`;
+                  }).join('')}
+                </ul>
+              </details>
+            ` : ''}
           </div>
         </div>
       </div>

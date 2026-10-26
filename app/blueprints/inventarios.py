@@ -3536,6 +3536,21 @@ def api_inventario_kardex(producto_id):
             vu_m = Decimal(str(m_dict.get('valor_unitario') or 0)) if m_dict.get('valor_unitario') is not None else None
 
             # Comparar costo de compra contra el costo promedio ponderado vigente
+            # Timestamps y detección de registros retroactivos
+            cr_at = m_dict.get('created_at')
+            doc_f = m_dict.get('documento_fecha')
+            if cr_at and hasattr(cr_at, 'strftime'):
+                m_dict['created_at_fmt'] = cr_at.strftime('%d/%m/%Y %I:%M %p')
+                m_dict['created_at_hora'] = cr_at.strftime('%I:%M %p')
+            elif cr_at:
+                m_dict['created_at_fmt'] = str(cr_at)[:16]
+                m_dict['created_at_hora'] = str(cr_at)[11:16]
+
+            if doc_f and cr_at and hasattr(cr_at, 'date'):
+                diff_d = (cr_at.date() - doc_f).days
+                if diff_d >= 2:
+                    m_dict['desfase_dias'] = diff_d
+
             if tipo_m == 'entrada' and vu_m is not None and vu_m > Decimal('0') and costo_prom_acumulado > Decimal('0'):
                 diff_pct = ((vu_m - costo_prom_acumulado) / costo_prom_acumulado) * Decimal('100')
                 if abs(diff_pct) > Decimal(str(tol_costo_p)):
@@ -7206,7 +7221,7 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
             val_ex_track = stock_nue_c * costo_prom_anterior if stock_nue_c > 0 else Decimal('0')
         stock_track = stock_nue_c
 
-    # 2. Detección de posibles facturas duplicadas
+    # 2. Detección inteligente de posibles facturas duplicadas usando timestamps físicos (created_at)
     compras_map = {}
     for m_d in movimientos:
         if m_d['tipo'] == 'entrada' and m_d.get('valor_total') and Decimal(str(m_d['valor_total'])) > Decimal('0'):
@@ -7216,6 +7231,7 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
                 'id': m_d['id'],
                 'doc': f"{m_d.get('tipo_documento') or 'Doc'} #{m_d.get('documento_numero') or m_d['id']}",
                 'fecha': f_d,
+                'created_at': m_d.get('created_at'),
                 'cant': float(m_d.get('cantidad') or 0),
                 'vu': float(m_d.get('valor_unitario') or 0),
                 'prov': m_d.get('proveedor_nombre') or 'Proveedor'
@@ -7227,28 +7243,90 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
                 for idx_b in range(idx_a + 1, len(list_c)):
                     item_a = list_c[idx_a]
                     item_b = list_c[idx_b]
+                    ca = item_a.get('created_at')
+                    cb = item_b.get('created_at')
                     fa = item_a['fecha']
                     fb = item_b['fecha']
                     if hasattr(fa, 'date'): fa = fa.date()
                     if hasattr(fb, 'date'): fb = fb.date()
-                    if fa and fb:
-                        diff_days = abs((fa - fb).days)
-                        if diff_days <= 2:
-                            alertas_compras.append({
-                                'tipo': 'posible_duplicado',
-                                'fecha': str(fa),
-                                'valor_total': vt_val,
-                                'doc1': item_a['doc'],
-                                'doc2': item_b['doc'],
-                                'proveedor': item_a['prov'],
-                                'mensaje': f"Posible compra duplicada por ${vt_val:,.0f} a {item_a['prov']}: {item_a['doc']} ({fa}) y {item_b['doc']} ({fb}). Revise si una debe ser anulada antes de recostear."
-                            })
+                    
+                    diff_created_sec = abs((ca - cb).total_seconds()) if (ca and cb and hasattr(ca - cb, 'total_seconds')) else None
+                    diff_doc_days = abs((fa - fb).days) if (fa and fb) else 999
+                    
+                    es_duplicado = False
+                    detalle_tiempo = ""
+                    
+                    # Creadas en el mismo turno o jornada de trabajo (<= 24 horas de diferencia en el servidor)
+                    if diff_created_sec is not None and diff_created_sec <= 24 * 3600:
+                        es_duplicado = True
+                        mins = round(diff_created_sec / 60)
+                        if mins < 60:
+                            detalle_tiempo = f"digitadas con apenas {mins} min de diferencia (mismo turno)"
+                        else:
+                            hrs = round(mins / 60, 1)
+                            detalle_tiempo = f"digitadas con {hrs} h de diferencia (mismo día de trabajo)"
+                    elif diff_doc_days <= 1 and diff_created_sec is not None and diff_created_sec <= 48 * 3600:
+                        es_duplicado = True
+                        detalle_tiempo = f"misma fecha comercial ({fa}) y grabadas con poca diferencia de tiempo"
+                    
+                    if es_duplicado:
+                        ca_fmt = ca.strftime('%d/%m/%Y %I:%M %p') if (ca and hasattr(ca, 'strftime')) else str(ca or '')[:16]
+                        cb_fmt = cb.strftime('%d/%m/%Y %I:%M %p') if (cb and hasattr(cb, 'strftime')) else str(cb or '')[:16]
+                        desfase_a = (ca.date() - fa).days if (ca and hasattr(ca, 'date') and fa) else 0
+                        desfase_b = (cb.date() - fb).days if (cb and hasattr(cb, 'date') and fb) else 0
+                        retro_txt = ""
+                        if desfase_a >= 2 or desfase_b >= 2:
+                            retro_txt = f" (ambas digitadas retroactivamente con fecha comercial {fa})"
+                            
+                        alertas_compras.append({
+                            'tipo': 'posible_duplicado',
+                            'fecha': str(fa),
+                            'valor_total': vt_val,
+                            'doc1': item_a['doc'],
+                            'doc2': item_b['doc'],
+                            'proveedor': item_a['prov'],
+                            'created_at_1': ca_fmt,
+                            'created_at_2': cb_fmt,
+                            'mensaje': (
+                                f"Posible compra duplicada por ${vt_val:,.0f} a {item_a['prov']}: "
+                                f"{item_a['doc']} (grabada el {ca_fmt}) y {item_b['doc']} (grabada el {cb_fmt}) — "
+                                f"{detalle_tiempo}{retro_txt}. Revise si una debe ser anulada antes de recostear."
+                            )
+                        })
+
+    # 3. Detección de entradas retroactivas que rompen la cronología histórica
+    for m_chk in movimientos:
+        if m_chk['tipo'] == 'entrada':
+            doc_f = m_chk['documento_fecha']
+            cr_at = m_chk['created_at']
+            if doc_f and cr_at and hasattr(cr_at, 'date'):
+                diff_retro = (cr_at.date() - doc_f).days
+                if diff_retro >= 2:
+                    f_txt = str(doc_f)[:10]
+                    cr_txt = cr_at.strftime('%d/%m/%Y %I:%M %p') if hasattr(cr_at, 'strftime') else str(cr_at)[:16]
+                    doc_lbl = f"{m_chk['tipo_documento'] or 'Doc'} #{m_chk['documento_numero'] or m_chk['id']}"
+                    ya_en_dup = any(doc_lbl in a.get('mensaje', '') for a in alertas_compras if a.get('tipo') == 'posible_duplicado')
+                    if not ya_en_dup:
+                        alertas_compras.append({
+                            'tipo': 'registro_retroactivo',
+                            'fecha': f_txt,
+                            'movimiento_id': m_chk['id'],
+                            'desfase_dias': diff_retro,
+                            'documento': doc_lbl,
+                            'created_at': cr_txt,
+                            'mensaje': (
+                                f"{doc_lbl}: Fecha del documento {f_txt}, pero digitada en el sistema {diff_retro} días después ({cr_txt}). "
+                                f"Esta entrada retroactiva alteró el costo promedio y saldos de ventas intermedias."
+                            )
+                        })
 
     dups = [a for a in alertas_compras if a['tipo'] == 'posible_duplicado']
-    vars_c = [a for a in alertas_compras if a['tipo'] != 'posible_duplicado']
+    retros = [a for a in alertas_compras if a['tipo'] == 'registro_retroactivo']
+    vars_c = [a for a in alertas_compras if a['tipo'] not in ('posible_duplicado', 'registro_retroactivo')]
     dups.reverse()
+    retros.reverse()
     vars_c.reverse()
-    alertas_compras = dups + vars_c
+    alertas_compras = dups + retros + vars_c
 
     # Detección de productos padre según tarjeta_estandar (Efecto Cascada en Costo de Ventas)
     padres_rows = conn.execute("""

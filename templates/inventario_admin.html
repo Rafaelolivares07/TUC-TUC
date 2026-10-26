@@ -12239,9 +12239,17 @@ function renderizarTablaKardex(d) {
       ? `<span class="inline-block text-gray-300 hover:text-indigo-600 cursor-grab active:cursor-grabbing mr-1.5 select-none font-bold text-base" title="Arrastra para reordenar la hora de este documento en el Kardex">⠿</span>`
       : '';
 
+    const desfaseBadge = (m.desfase_dias && m.desfase_dias >= 2)
+      ? `<span class="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300" title="Registro retroactivo: fecha documento ${fechaKardex}, pero digitado en servidor ${m.desfase_dias} días después (${m.created_at_fmt || ''})">⏱️ +${m.desfase_dias}d reg</span>`
+      : '';
+
+    const horaSubtext = m.created_at_hora
+      ? `<div class="text-[10px] text-gray-400 font-mono leading-none mt-0.5 flex items-center gap-1"><span>${m.created_at_hora}</span>${desfaseBadge}</div>`
+      : (desfaseBadge ? `<div class="mt-0.5">${desfaseBadge}</div>` : '');
+
     const fechaCelda = esDocValido
-      ? `<button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm" title="Clic para cambiar fecha/hora o arrastra la fila">${m.fecha}</button>`
-      : `<span class="text-sm font-medium text-gray-600">${m.fecha}</span>`;
+      ? `<div><button type="button" onclick="abrirModalFechaDocumento(${m.tipo_documento_id || 'null'}, '${encodeURIComponent(String(m.documento_numero))}', '${fechaKardex}', '${horaDoc}', '${encodeURIComponent(String(m.tipo_documento || ''))}')" class="text-left text-blue-600 hover:text-blue-800 hover:underline font-semibold text-sm leading-tight block" title="Clic para cambiar fecha/hora o arrastra la fila">${m.fecha}</button>${horaSubtext}</div>`
+      : `<div><span class="text-sm font-medium text-gray-600 leading-tight block">${m.fecha}</span>${horaSubtext}</div>`;
 
     const dragAttrs = esDocValido
       ? `draggable="true" ondragstart="kardexDragStart(event)" ondragover="kardexDragOver(event)" ondragleave="kardexDragLeave(event)" ondrop="kardexDrop(event)" ondragend="kardexDragEnd(event)"`
@@ -12795,7 +12803,13 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
           <div class="flex-1">
             <span class="font-black text-rose-950 block text-xs uppercase tracking-wide">¡Alertas Críticas de Compras! Revise antes de recostear:</span>
             <ul class="list-disc pl-4 mt-1.5 space-y-1 text-[11px] text-rose-900 font-semibold">
-              ${auditoria.alertas_compras.map(al => `<li><strong>${al.tipo === 'posible_duplicado' ? 'Posible compra duplicada' : 'Variación atípica de costo'}:</strong> ${al.mensaje}</li>`).join('')}
+              ${auditoria.alertas_compras.map(al => {
+                let lbl = 'Variación atípica de costo';
+                let icon = '🔺';
+                if (al.tipo === 'posible_duplicado') { lbl = 'Posible compra duplicada'; icon = '🚨'; }
+                else if (al.tipo === 'registro_retroactivo') { lbl = 'Entrada retroactiva (desfase temporal)'; icon = '⏱️'; }
+                return `<li><strong>${icon} ${lbl}:</strong> ${al.mensaje}</li>`;
+              }).join('')}
             </ul>
           </div>
         </div>

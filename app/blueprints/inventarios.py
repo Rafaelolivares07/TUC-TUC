@@ -2335,13 +2335,16 @@ def api_inventario_producto_crear():
         unidad_medida_id = _int_o_none(data.get('unidad_medida_id'))
         unidad_visual_id = _int_o_none(data.get('unidad_visual_id'))
 
+        tol_costo = float(data.get('tolerancia_costo_pct') or 15.0)
+
         row = conn.execute("""
             INSERT INTO productos (negocio_id, nombre, categoria, precio, costo,
                                    descripcion, codigo_barra, iva_pct, orden,
                                    dias_min_stock, dias_max_stock, stock_minimo,
                                    peso_variable, tolerancia_peso_pct,
-                                   unidad_medida_id, unidad_visual_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                                   unidad_medida_id, unidad_visual_id,
+                                   tolerancia_costo_pct)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
         """, (
             negocio_id, nombre,
             data.get('categoria') or None,
@@ -2353,7 +2356,8 @@ def api_inventario_producto_crear():
             int(data.get('orden') or 0),
             dias_min, dias_max, st_min,
             peso_variable, tol_peso,
-            unidad_medida_id, unidad_visual_id
+            unidad_medida_id, unidad_visual_id,
+            tol_costo
         )).fetchone()
         _sync_precio(conn, int(negocio_id), row[0])
         conn.commit()
@@ -2589,6 +2593,7 @@ def api_inventario_productos(negocio_id):
                        p.dias_min_stock, p.dias_max_stock, p.stock_minimo,
                        COALESCE(p.peso_variable, FALSE) AS peso_variable,
                        COALESCE(p.tolerancia_peso_pct, 10.0) AS tolerancia_peso_pct,
+                       COALESCE(p.tolerancia_costo_pct, 15.0) AS tolerancia_costo_pct,
                        COALESCE(s.stock, 0) AS stock,
                        {sql_rotacion} AS rotacion_30d,
                        ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total,
@@ -2627,6 +2632,7 @@ def api_inventario_productos(negocio_id):
                        p.dias_min_stock, p.dias_max_stock, p.stock_minimo,
                        COALESCE(p.peso_variable, FALSE) AS peso_variable,
                        COALESCE(p.tolerancia_peso_pct, 10.0) AS tolerancia_peso_pct,
+                       COALESCE(p.tolerancia_costo_pct, 15.0) AS tolerancia_costo_pct,
                        COALESCE(s.stock, 0) AS stock,
                        {sql_rotacion} AS rotacion_30d,
                        ROUND((COALESCE(s.stock, 0) * ({sql_costo_fallback}))::numeric, 2) AS valor_total,
@@ -5962,13 +5968,16 @@ def api_inventario_producto_editar(producto_id):
         unidad_medida_id = _int_o_none(data.get('unidad_medida_id'))
         unidad_visual_id = _int_o_none(data.get('unidad_visual_id'))
 
+        tol_costo = float(data.get('tolerancia_costo_pct') or 15.0)
+
         conn.execute("""
             UPDATE productos SET
                 nombre=%s, categoria=%s, precio=%s, costo=%s,
                 descripcion=%s, codigo_barra=%s, iva_pct=%s, disponible=%s,
                 dias_min_stock=%s, dias_max_stock=%s, stock_minimo=%s,
                 peso_variable=%s, tolerancia_peso_pct=%s,
-                unidad_medida_id=%s, unidad_visual_id=%s
+                unidad_medida_id=%s, unidad_visual_id=%s,
+                tolerancia_costo_pct=%s
             WHERE id=%s
         """, (
             nombre,
@@ -5986,6 +5995,7 @@ def api_inventario_producto_editar(producto_id):
             tol_peso,
             unidad_medida_id,
             unidad_visual_id,
+            tol_costo,
             producto_id,
         ))
         conn.commit()
@@ -7240,6 +7250,33 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
     vars_c.reverse()
     alertas_compras = dups + vars_c
 
+    # Detección de productos padre según tarjeta_estandar (Efecto Cascada en Costo de Ventas)
+    padres_rows = conn.execute("""
+        SELECT te.producto_id, p.nombre AS producto_nombre, te.cantidad
+        FROM tarjeta_estandar te
+        JOIN productos p ON p.id = te.producto_id
+        WHERE te.componente_id = %s AND p.negocio_id = %s
+        ORDER BY p.nombre ASC
+    """, (producto_id, negocio_id)).fetchall()
+
+    cascada_ensambles = None
+    if padres_rows:
+        fechas_alertas = [str(a.get('fecha'))[:10] for a in alertas_compras if a.get('fecha')]
+        if fechas_alertas:
+            f_desde = min(fechas_alertas)
+        elif movimientos:
+            f_desde = str(movimientos[0]['documento_fecha'] or movimientos[0]['created_at'])[:10]
+        else:
+            f_desde = datetime.date.today().isoformat()
+        
+        cascada_ensambles = {
+            'es_insumo': True,
+            'total_productos_padre': len(padres_rows),
+            'productos_padre': [{'id': r['producto_id'], 'nombre': r['producto_nombre'], 'cantidad': float(r['cantidad'])} for r in padres_rows],
+            'fecha_desde': str(f_desde)[:10],
+            'fecha_hasta': datetime.date.today().isoformat()
+        }
+
     stock_inconsistente = bool(saldo and diferente(saldo['stock'], stock))
     costo_inconsistente = bool(saldo and (stock > 0 or Decimal(str(saldo['stock'] or 0)) > 0) and diferente(saldo['costo_und'], costo_und))
     valor_inconsistente = bool(
@@ -7267,6 +7304,7 @@ def _auditar_producto_recosteo(conn, negocio_id, producto_id, bodega=None):
         'negativos_intermedios': negativos,
         'inconsistencias_movimientos': inconsistencias,
         'alertas_compras': alertas_compras,
+        'cascada_ensambles': cascada_ensambles,
         'problemas': bool(stock < 0 or negativos or inconsistencias
                           or stock_inconsistente or costo_inconsistente
                           or valor_inconsistente)

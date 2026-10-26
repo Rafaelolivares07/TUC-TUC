@@ -547,6 +547,17 @@
 
       </div>
 
+      <div>
+
+        <label class="flex items-center gap-1">
+          Tolerancia Costo %
+          <span class="text-gray-400 cursor-help" title="Margen de tolerancia para detectar variaciones atípicas de costo en compras vs costo promedio ponderado (por defecto 15%).">ℹ️</span>
+        </label>
+
+        <input id="mp-tolerancia-costo" type="number" min="0" max="1000" step="0.1" placeholder="15.0">
+
+      </div>
+
       <!-- Unidades de Medida y Proyeccion Visual -->
       <div class="sm:col-span-2 bg-indigo-50/40 border border-indigo-200/80 p-3.5 rounded-xl flex flex-col gap-2.5">
         <div class="flex items-center justify-between flex-wrap gap-2">
@@ -4480,9 +4491,7 @@
           <button id="btn-vincular-global" onclick="vincularIdsGlobal()" class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer">
             🔗 Vincular IDs (Global)
           </button>
-          <button id="btn-reparar-global" onclick="repararCostosGlobal()" class="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer">
-            ⚡ Reparar Todo el Período
-          </button>
+          <!-- Reparación global desactivada para evitar inconsistencias por lote; se repara puntual documento por documento -->
         </div>
       </div>
 
@@ -7686,6 +7695,7 @@ function abrirModalProducto(pOrId = null) {
   document.getElementById('mp-costo').value    = p ? p.costo : '0';
 
   document.getElementById('mp-iva').value      = p ? (p.iva_pct || '0') : '0';
+  document.getElementById('mp-tolerancia-costo').value = (p && p.tolerancia_costo_pct !== null && p.tolerancia_costo_pct !== undefined) ? p.tolerancia_costo_pct : '15.0';
 
   document.getElementById('mp-disponible').checked = p ? !!p.disponible : true;
   document.getElementById('mp-descripcion').value  = p ? (p.descripcion || '') : '';
@@ -7734,6 +7744,7 @@ async function guardarProducto() {
     costo:        parseFloat(document.getElementById('mp-costo').value) || 0,
 
     iva_pct:      parseFloat(document.getElementById('mp-iva').value) || 0,
+    tolerancia_costo_pct: parseFloat(document.getElementById('mp-tolerancia-costo')?.value) || 15.0,
 
     disponible:   document.getElementById('mp-disponible').checked,
 
@@ -12726,6 +12737,29 @@ async function guardarFechaDocumento() {
 
 
 
+function irAAuditoriaEnsambles(fechaIni, fechaFin) {
+  if (typeof mostrarTab === 'function') {
+    mostrarTab('ensambles_historicos');
+  }
+  const repIni = document.getElementById('reparador-fecha-ini');
+  const repFin = document.getElementById('reparador-fecha-fin');
+  if (repIni && fechaIni) repIni.value = fechaIni;
+  if (repFin && fechaFin) repFin.value = fechaFin;
+
+  const ensIni = document.getElementById('ensambles-fecha-ini');
+  const ensFin = document.getElementById('ensambles-fecha-fin');
+  if (ensIni && fechaIni) ensIni.value = fechaIni;
+  if (ensFin && fechaFin) ensFin.value = fechaFin;
+
+  if (typeof repararCostosPreview === 'function') {
+    setTimeout(() => {
+      repararCostosPreview();
+      const sec = document.getElementById('ensambles-reparador');
+      if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
+  }
+}
+
 function renderizarAuditoriaKardex(auditoria, productoId) {
   const el = document.getElementById('kardex-auditoria');
   if (!el || !auditoria) return;
@@ -12781,6 +12815,31 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
             <ul class="list-disc pl-4 mt-1.5 space-y-1 text-[11px] text-rose-900 font-semibold">
               ${auditoria.alertas_compras.map(al => `<li><strong>${al.tipo === 'posible_duplicado' ? 'Posible compra duplicada' : 'Variación atípica de costo'}:</strong> ${al.mensaje}</li>`).join('')}
             </ul>
+          </div>
+        </div>
+      </div>
+    ` : ''}
+    ${auditoria.cascada_ensambles && auditoria.cascada_ensambles.es_insumo ? `
+      <div class="w-full bg-amber-50/90 border-2 border-amber-300 rounded-xl p-3 text-amber-950 text-xs shadow-xs mt-2">
+        <div class="flex items-start gap-2.5">
+          <span class="text-xl shrink-0">⚠️</span>
+          <div class="flex-1">
+            <span class="font-black text-amber-950 block text-xs uppercase tracking-wide">
+              Efecto Cascada en Costo de Ventas (Contabilidad):
+            </span>
+            <p class="mt-1 text-[11px] text-amber-900 leading-relaxed font-medium">
+              Este ítem es insumo en la Tarjeta Estándar de <strong>${auditoria.cascada_ensambles.total_productos_padre} productos terminados</strong>
+              (<em>${auditoria.cascada_ensambles.productos_padre.slice(0, 4).map(p => p.nombre).join(', ')}${auditoria.cascada_ensambles.total_productos_padre > 4 ? '...' : ''}</em>).
+              Cualquier alteración de costos o recosteo afecta los asientos contables de Costo de Ventas (Cuenta 6135 / Salidas 1405) generados en las ventas de dichos productos.
+            </p>
+            <div class="mt-2.5 flex items-center gap-2 flex-wrap">
+              <button type="button" 
+                      onclick="irAAuditoriaEnsambles('${auditoria.cascada_ensambles.fecha_desde}', '${auditoria.cascada_ensambles.fecha_hasta}')" 
+                      class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                <span>🔍</span> <span>Ir a Auditoría de Ensambles Históricos (${auditoria.cascada_ensambles.fecha_desde} al ${auditoria.cascada_ensambles.fecha_hasta})</span>
+              </button>
+              <span class="text-[10px] text-amber-800 font-semibold">Podrá auditar cada documento individualmente y reparar sus costos contables.</span>
+            </div>
           </div>
         </div>
       </div>
@@ -20526,8 +20585,8 @@ async function cargarReporteEnsambles() {
             : `<button type="button" disabled title="No hay IDs vinculados para desvincular" class="min-w-[150px] px-4 py-2 bg-gray-50 text-gray-400 border border-gray-200 text-xs font-semibold rounded-xl opacity-70 cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none">🔓 Desvincular</button>`;
 
           const btnRepararProd = tieneDifProd
-            ? `<button type="button" onclick="repararCostosProducto(${prod.producto_padre_id})" class="min-w-[170px] px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">⚡ Reparar Producto</button>`
-            : `<button type="button" disabled title="Todos los documentos de este producto están cuadrados ($0 diferencia)" class="min-w-[170px] px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-bold rounded-xl opacity-90 cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none">✔️ Cuadrado ($0)</button>`;
+            ? `<span class="px-3 py-1.5 bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1 shadow-none">👇 Despliegue para reparar por documento</span>`
+            : `<button type="button" disabled title="Todos los documentos de este producto están cuadrados ($0 diferencia)" class="min-w-[170px] px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-bold rounded-xl opacity-90 cursor-default flex items-center justify-center gap-1.5 shadow-none">✅ Cuadrado ($0)</button>`;
 
           const totalCantProd = prod.facturas.reduce((s, ff) => s + parseFloat(ff.cantidad_base || 0), 0);
           const esProdGeneral = prod.facturas.some(ff => ff.grupo_tipo === 'produccion');

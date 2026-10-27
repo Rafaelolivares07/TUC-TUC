@@ -12416,9 +12416,19 @@ def api_reporte_ventas_costos_detalle(negocio_id):
                 pi.costo_unitario,
                 (pi.cantidad * pi.precio_unitario) AS total_venta,
                 (pi.cantidad * pi.costo_unitario) AS total_costo,
+                COALESCE(kardex.costo_kardex, 0) AS total_costo_kardex,
+                (COALESCE(kardex.costo_kardex, 0) - (pi.cantidad * pi.costo_unitario)) AS desfase_kardex,
                 ped.metodo_pago
             FROM pedido_items pi
             JOIN pedidos ped ON ped.id = pi.pedido_id
+            LEFT JOIN LATERAL (
+                SELECT SUM(mi.valor_total) AS costo_kardex
+                FROM movimientos_inventario mi
+                WHERE mi.negocio_id = ped.negocio_id
+                  AND (mi.referencia_id = ped.id OR mi.numero_documento = ped.numero_documento)
+                  AND mi.tipo = 'salida'
+                  AND COALESCE(mi.producto_padre_id, mi.producto_id) = pi.producto_id
+            ) kardex ON true
             WHERE ped.negocio_id = %s
               AND pi.producto_id = %s
               AND (ped.estado IS NULL OR ped.estado = '' OR ped.estado NOT IN ('anulado', 'premontado'))
@@ -12433,8 +12443,9 @@ def api_reporte_ventas_costos_detalle(negocio_id):
             d = dict(r)
             if d.get('fecha'):
                 d['fecha'] = d['fecha'].strftime('%Y-%m-%d') if hasattr(d['fecha'], 'strftime') else str(d['fecha'])
-            for k in ('cantidad', 'precio_unitario', 'costo_unitario', 'total_venta', 'total_costo'):
+            for k in ('cantidad', 'precio_unitario', 'costo_unitario', 'total_venta', 'total_costo', 'total_costo_kardex', 'desfase_kardex'):
                 d[k] = float(d[k]) if d.get(k) is not None else 0.0
+            d['tiene_desfase'] = abs(d['desfase_kardex']) > 100
             documentos.append(d)
         conn.close()
         return jsonify({'ok': True, 'documentos': documentos})

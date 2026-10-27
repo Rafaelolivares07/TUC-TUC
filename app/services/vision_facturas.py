@@ -372,10 +372,10 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                 # Excluir explícitamente teléfonos, clientes, resoluciones o fechas
                 if any(k in t.upper() for k in ['FECHA', 'HORA', 'RESOLUCION', 'RANGO', 'VIGENCIA', 'TELEFONO', 'TEL:', 'CEL:', 'WHATSAPP', 'CC', 'NIT', 'VENDEDOR', 'DIRECCION']):
                     continue
-                # Buscar patrón alfanumérico de factura (ej: IAAC16741, FEV1234, SETP556, FOP9988)
-                m = re.search(r'\b([A-Z]{1,5}\d{3,10})\b', t, re.I)
+                # Buscar patrón alfanumérico de factura (ej: IAAC16741, FEV1234, SETP556, FOP9988, PG-198374, PG 198374)
+                m = re.search(r'\b([A-Z]{1,5}\s*[-]?\s*\d{3,10})\b', t, re.I)
                 if m:
-                    cand_doc = m.group(1).upper()
+                    cand_doc = re.sub(r'\s+', '', m.group(1)).upper()
                     if not any(k in cand_doc for k in ['FACT', 'VENT', 'ELEC', 'POS', 'DIAN', 'RES', 'CAJA', 'TURNO']):
                         num_doc_detectado = cand_doc
                         break
@@ -421,7 +421,7 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     # Si tiene 10 dígitos y empieza por 3, es un teléfono colombiano, descartarlo
                     if len(cand) == 10 and cand.startswith('3'):
                         continue
-                    if re.match(r'^(?:202[0-9]|203[0-9])$', cand):
+                    if re.match(r'^(?:202\d|203\d)', cand):
                         continue
                     if len(cand) >= 2 and not cand.lower() in ('de', 'del', 'la', 'venta', 'electronica', 'cadena', 'turno', 'caja', 'terminal', 'tpv', 'pos'):
                         num_doc_detectado = cand
@@ -623,9 +623,15 @@ def extraer_datos_factura(ruta_imagen, conn=None, negocio_id=None):
                     FROM movimientos_inventario m
                     LEFT JOIN tipos_documento_negocio t ON t.id = m.tipo_documento_id
                     WHERE m.negocio_id = %s AND m.tipo = 'entrada' AND m.proveedor_id = %s
-                      AND UPPER(TRIM(m.documento_numero)) = UPPER(TRIM(%s))
+                      AND (
+                          UPPER(TRIM(m.documento_numero)) = UPPER(TRIM(%s))
+                          OR (
+                              LENGTH(REGEXP_REPLACE(m.documento_numero, '[^0-9]', '', 'g')) >= 4
+                              AND REGEXP_REPLACE(m.documento_numero, '[^0-9]', '', 'g') = REGEXP_REPLACE(%s, '[^0-9]', '', 'g')
+                          )
+                      )
                     LIMIT 1
-                """, (negocio_id, proveedor_id, num_doc_detectado)).fetchone()
+                """, (negocio_id, proveedor_id, num_doc_detectado, num_doc_detectado)).fetchone()
                 if exist_mov:
                     f_str = str(exist_mov['documento_fecha']) if exist_mov['documento_fecha'] else 'Fecha previa'
                     posible_duplicada = {

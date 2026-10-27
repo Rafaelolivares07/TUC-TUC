@@ -19807,6 +19807,8 @@ function renderTablaVC() {
   let totalCostos = 0;
   let totalInsumos = 0;
   let totalMod = 0;
+  let totalMinPrep = 0;
+  let totalMinEns = 0;
 
   const desgHiddenCls = desgloseVisibleVC ? '' : 'hidden';
   const prodsFiltrados = filtroSoloAlertasVC 
@@ -19819,11 +19821,20 @@ function renderTablaVC() {
   }
 
   tbody.innerHTML = prodsFiltrados.map(r => {
-    totalCant += (r.cantidad || 0);
+    const cant = (r.cantidad || 0);
+    const minPrepUnit = (parseFloat(r.tiempo_preparacion_min) || 0);
+    const minEnsUnit = (parseFloat(r.tiempo_ensamble_min) || 0);
+    const minPrepTotal = minPrepUnit * cant;
+    const minEnsTotal = minEnsUnit * cant;
+    const minGlobalTotal = minPrepTotal + minEnsTotal;
+
+    totalCant += cant;
     totalVentas += (r.total_venta || 0);
     totalCostos += (r.total_costo || 0);
     totalInsumos += (r.total_costo_insumos || 0);
     totalMod += (r.total_mod || 0);
+    totalMinPrep += minPrepTotal;
+    totalMinEns += minEnsTotal;
 
     const pctCls = r.margen_porcentual >= 30 ? 'text-emerald-600' : (r.margen_porcentual >= 15 ? 'text-amber-600' : 'text-rose-600');
 
@@ -19848,12 +19859,12 @@ function renderTablaVC() {
           <div class="inline-flex items-center gap-1">
             <span class="text-[10px] text-gray-400 font-bold" title="Minutos Preparación Previa">🍳</span>
             <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_preparacion_min || 0}"
-                   title="Preparación / Cocción previa (minutos)"
+                   title="Preparación previa: ${minPrepUnit} min/und — Total período: ${fmt(minPrepTotal)} min (${fmt(minPrepTotal/60)} hrs)"
                    onchange="actualizarTiempoProdVC(${r.producto_id}, this.value, null)"
                    class="w-10 text-center font-mono text-[11px] font-bold border border-gray-300 rounded-lg py-0.5 px-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs">
             <span class="text-[10px] text-gray-400 font-bold" title="Minutos Ensamble y Entrega">📦</span>
             <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_ensamble_min || 0}"
-                   title="Ensamble y entrega al despachar (minutos)"
+                   title="Ensamble y entrega: ${minEnsUnit} min/und — Total período: ${fmt(minEnsTotal)} min (${fmt(minEnsTotal/60)} hrs)"
                    onchange="actualizarTiempoProdVC(${r.producto_id}, null, this.value)"
                    class="w-10 text-center font-mono text-[11px] font-bold border border-gray-300 rounded-lg py-0.5 px-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs">
             <span id="save-ind-${r.producto_id}" class="text-[11px] opacity-0 transition-opacity w-2.5 inline-block">✓</span>
@@ -19869,7 +19880,7 @@ function renderTablaVC() {
 
         <!-- Desglose total colapsado por defecto -->
         <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-slate-700 bg-slate-50/60 whitespace-nowrap">${fmtMon(r.total_costo_insumos || 0)}</td>
-        <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-amber-900 bg-amber-50/30 font-semibold whitespace-nowrap">${fmtMon(r.total_mod || 0)}</td>
+        <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2 text-right num font-mono text-amber-900 bg-amber-50/30 font-semibold whitespace-nowrap" title="Tiempo total mano de obra: ${fmt(minGlobalTotal)} min (${fmt(minGlobalTotal/60)} hrs) @ ${fmtMon(costoHoraModVC)}/h">${fmtMon(r.total_mod || 0)}</td>
 
         <td class="px-2 py-2 text-right num font-mono text-rose-700 font-bold whitespace-nowrap">${fmtMon(r.total_costo)}</td>
         <td class="px-2 py-2 text-right num font-mono font-semibold whitespace-nowrap ${r.margen_total >= 0 ? 'text-indigo-700' : 'text-rose-600'}">${fmtMon(r.margen_total)}</td>
@@ -19879,6 +19890,11 @@ function renderTablaVC() {
     `;
   }).join('');
 
+  const totalMinGlobal = totalMinPrep + totalMinEns;
+  const totalHorasPrep = totalMinPrep / 60.0;
+  const totalHorasEns = totalMinEns / 60.0;
+  const totalHorasGlobal = totalMinGlobal / 60.0;
+
   const margenTotalGeneral = totalVentas - totalCostos;
   const pctMargenGeneral = totalVentas > 0 ? (margenTotalGeneral / totalVentas * 100.0) : 0.0;
 
@@ -19886,7 +19902,7 @@ function renderTablaVC() {
   document.getElementById('vc-kpi-costos').textContent = fmtMon(totalCostos);
   const subKpi = document.getElementById('vc-kpi-costos-sub');
   if (subKpi) {
-    subKpi.textContent = `Insumos: ${fmtMon(totalInsumos)} | MOD Est: ${fmtMon(totalMod)}`;
+    subKpi.textContent = `Insumos: ${fmtMon(totalInsumos)} | MOD Est: ${fmtMon(totalMod)} (${fmt(totalHorasGlobal)}h tot)`;
   }
   document.getElementById('vc-kpi-margen').textContent = fmtMon(margenTotalGeneral);
   document.getElementById('vc-kpi-pct').textContent = fmt(pctMargenGeneral) + '%';
@@ -19908,7 +19924,19 @@ function renderTablaVC() {
       <!-- Desglose unitario footer -->
       <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-slate-700 bg-slate-100/80 whitespace-nowrap">${fmtMon(promInsumosPonderado)}</td>
       <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-amber-900 bg-amber-100/60 whitespace-nowrap">${fmtMon(promModPonderado)}</td>
-      <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-2.5 text-center font-mono text-[10px] text-amber-700 bg-amber-50/50 whitespace-nowrap">—</td>
+      <td class="vc-col-desglose ${desgHiddenCls} px-1.5 py-1 text-center font-mono whitespace-nowrap bg-amber-50/70 border-x border-amber-200" title="Tiempos totales acumulados en el período (minutos unitarios × cantidad vendida)">
+        <div class="flex flex-col items-center justify-center text-[10px] leading-tight">
+          <div class="text-amber-900 font-bold" title="Tiempo total preparación: ${fmt(totalMinPrep)} minutos (${fmt(totalHorasPrep)} horas)">
+            🍳 ${fmt(totalMinPrep)}m <span class="text-[9px] font-semibold text-amber-700">(${fmt(totalHorasPrep)}h)</span>
+          </div>
+          <div class="text-amber-900 font-bold mt-0.5" title="Tiempo total ensamble: ${fmt(totalMinEns)} minutos (${fmt(totalHorasEns)} horas)">
+            📦 ${fmt(totalMinEns)}m <span class="text-[9px] font-semibold text-amber-700">(${fmt(totalHorasEns)}h)</span>
+          </div>
+          <div class="mt-1 pt-0.5 border-t border-amber-300 font-extrabold text-amber-950 text-[10px]" title="Mano de obra total acumulada: ${fmt(totalMinGlobal)} minutos (${fmt(totalHorasGlobal)} horas)">
+            ⏱️ ${fmt(totalHorasGlobal)} hrs tot
+          </div>
+        </div>
+      </td>
 
       <!-- Costo Unitario y Margen Unitario footer -->
       <td class="px-2 py-2.5 text-right num font-mono font-extrabold text-rose-800 bg-rose-50/30 whitespace-nowrap">${fmtMon(promCostoPonderado)}</td>
@@ -19919,7 +19947,10 @@ function renderTablaVC() {
 
       <!-- Desglose total footer -->
       <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-slate-700 bg-slate-100/80 whitespace-nowrap">${fmtMon(totalInsumos)}</td>
-      <td class="vc-col-desglose ${desgHiddenCls} px-2 py-2.5 text-right num font-mono font-extrabold text-amber-900 bg-amber-100/60 whitespace-nowrap">${fmtMon(totalMod)}</td>
+      <td class="vc-col-desglose ${desgHiddenCls} px-2 py-1.5 text-right num font-mono font-extrabold text-amber-900 bg-amber-100/60 whitespace-nowrap" title="Costo MOD Total: ${fmtMon(totalMod)} (${fmt(totalHorasGlobal)} horas estimadas a ${fmtMon(costoHoraModVC)}/h)">
+        <div>${fmtMon(totalMod)}</div>
+        <div class="text-[9px] font-semibold text-amber-700">(${fmt(totalHorasGlobal)} hrs tot)</div>
+      </td>
 
       <td class="px-2 py-2.5 text-right num font-mono font-extrabold text-rose-800 whitespace-nowrap">${fmtMon(totalCostos)}</td>
       <td class="px-2 py-2.5 text-right num font-mono font-extrabold whitespace-nowrap ${margenTotalGeneral >= 0 ? 'text-indigo-800' : 'text-rose-700'}">${fmtMon(margenTotalGeneral)}</td>

@@ -12247,7 +12247,17 @@ def api_reporte_ventas_costos(negocio_id):
         costo_hora_mod = float(cfg_row['costo_hora_mod']) if cfg_row and cfg_row['costo_hora_mod'] is not None else 0.0
 
         datos = _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad_id=centro_utilidad_id, costo_hora_mod=costo_hora_mod)
-        return jsonify({'ok': True, 'reporte': datos, 'costo_hora_mod': costo_hora_mod})
+
+        # Resumen de alertas de auditoría
+        alertas = {
+            'total_con_desfase': sum(1 for d in datos if d.get('tiene_desfase')),
+            'total_con_costo_cero': sum(1 for d in datos if d.get('tiene_costo_cero')),
+            'total_con_margen_neg': sum(1 for d in datos if d.get('tiene_margen_negativo')),
+            'desfase_neto_total': sum(d.get('desfase_kardex', 0) for d in datos if d.get('tiene_desfase')),
+            'desfase_abs_total': sum(abs(d.get('desfase_kardex', 0)) for d in datos if d.get('tiene_desfase')),
+        }
+
+        return jsonify({'ok': True, 'reporte': datos, 'costo_hora_mod': costo_hora_mod, 'alertas': alertas})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
     finally:
@@ -12266,7 +12276,30 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
         except (ValueError, TypeError):
             pass
 
+    # Agregar negocio_id para costos_kardex
+    params.append(negocio_id)
+
     rows = conn.execute(f"""
+        WITH pedidos_periodo AS (
+            SELECT ped.id, ped.numero_documento
+            FROM pedidos ped
+            WHERE ped.negocio_id = %s
+              AND (ped.estado IS NULL OR ped.estado = '' OR ped.estado NOT IN ('anulado', 'premontado'))
+              AND ped.numero_documento IS NOT NULL AND ped.numero_documento != ''
+              AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date
+              AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
+              {cond_cu}
+        ),
+        costos_kardex AS (
+            SELECT 
+                COALESCE(mi.producto_padre_id, mi.producto_id) AS producto_id,
+                SUM(mi.valor_total) AS costo_kardex_total
+            FROM movimientos_inventario mi
+            JOIN pedidos_periodo pp ON (mi.referencia_id = pp.id OR mi.numero_documento = pp.numero_documento)
+            WHERE mi.negocio_id = %s
+              AND mi.tipo = 'salida'
+            GROUP BY COALESCE(mi.producto_padre_id, mi.producto_id)
+        )
         SELECT 
             pi.producto_id,
             p.nombre AS nombre_producto,
@@ -12274,17 +12307,14 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
             COALESCE(p.tiempo_ensamble_min, 0) AS tiempo_ensamble_min,
             SUM(pi.cantidad) AS cantidad_vendida,
             SUM(pi.cantidad * pi.precio_unitario) AS total_ventas_pesos,
-            SUM(pi.cantidad * pi.costo_unitario) AS total_costo_pesos
+            SUM(pi.cantidad * pi.costo_unitario) AS total_costo_pesos,
+            COALESCE(ck.costo_kardex_total, 0) AS total_costo_kardex
         FROM pedido_items pi
         JOIN pedidos ped ON ped.id = pi.pedido_id
         JOIN productos p ON p.id = pi.producto_id
-        WHERE ped.negocio_id = %s 
-          AND (ped.estado IS NULL OR ped.estado = '' OR ped.estado NOT IN ('anulado', 'premontado'))
-          AND ped.numero_documento IS NOT NULL AND ped.numero_documento != ''
-          AND COALESCE(ped.fecha, ped.created_at::date) >= %s::date 
-          AND COALESCE(ped.fecha, ped.created_at::date) <= %s::date
-          {cond_cu}
-        GROUP BY pi.producto_id, p.nombre, p.tiempo_preparacion_min, p.tiempo_ensamble_min
+        LEFT JOIN costos_kardex ck ON ck.producto_id = pi.producto_id
+        WHERE ped.id IN (SELECT id FROM pedidos_periodo)
+        GROUP BY pi.producto_id, p.nombre, p.tiempo_preparacion_min, p.tiempo_ensamble_min, ck.costo_kardex_total
         ORDER BY total_ventas_pesos DESC
     """, tuple(params)).fetchall()
 
@@ -12295,6 +12325,7 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
         cant = float(r['cantidad_vendida'])
         ventas_tot = float(r['total_ventas_pesos'])
         costos_insumos_tot = float(r['total_costo_pesos'])
+        costos_kardex_tot = float(r['total_costo_kardex'] or 0.0)
 
         tiempo_prep = float(r['tiempo_preparacion_min'] or 0.0)
         tiempo_ens = float(r['tiempo_ensamble_min'] or 0.0)
@@ -12312,6 +12343,13 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
         margen_total = ventas_tot - costo_primo_tot
         margen_porcentual = (margen_total / ventas_tot * 100.0) if ventas_tot > 0 else 0.0
 
+        # Análisis comparativo con Kardex
+        desfase_kardex = costos_insumos_tot - costos_kardex_tot
+        abs_desfase = abs(desfase_kardex)
+        tiene_desfase = abs_desfase > 100.0 and cant > 0
+        tiene_costo_cero = costos_insumos_tot <= 0 and cant > 0
+        tiene_margen_negativo = margen_total < 0
+
         datos.append({
             'producto_id': r['producto_id'],
             'nombre_producto': r['nombre_producto'],
@@ -12320,6 +12358,11 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
             'total_venta': ventas_tot,
             'costo_insumos_unitario': cx_insumos_prom,
             'total_costo_insumos': costos_insumos_tot,
+            'total_costo_kardex': costos_kardex_tot,
+            'desfase_kardex': round(desfase_kardex, 2),
+            'tiene_desfase': tiene_desfase,
+            'tiene_costo_cero': tiene_costo_cero,
+            'tiene_margen_negativo': tiene_margen_negativo,
             'tiempo_preparacion_min': tiempo_prep,
             'tiempo_ensamble_min': tiempo_ens,
             'mod_unitario': mod_unitario,

@@ -4565,6 +4565,26 @@
 
 
 
+    <!-- BANNER DE AUDITORÍA COMPARATIVO CON KARDEX -->
+    <div id="vc-banner-auditoria" class="hidden mb-4 bg-amber-50/90 border border-amber-300/80 rounded-2xl p-3.5 flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-3 flex-wrap text-xs">
+        <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-200 text-amber-900 font-extrabold rounded-lg text-[11px] uppercase tracking-wide">
+          ⚠️ Auditoría de Costos
+        </span>
+        <span id="vc-auditoria-desc" class="text-gray-700 font-medium"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-filtro-alertas-vc" onclick="toggleFiltroAlertasVC()" type="button"
+                class="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl border border-amber-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🔍</span> <span id="btn-filtro-alertas-txt">Ver solo productos con alertas</span>
+        </button>
+        <button onclick="mostrarTab('ensambles_historicos')" type="button"
+                class="px-3 py-1.5 bg-amber-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>⚡</span> <span>Ir a Ensambles Históricos</span>
+        </button>
+      </div>
+    </div>
+
     <!-- BANNER PARÁMETROS MOD -->
     <div class="bg-gradient-to-r from-amber-50/80 via-orange-50/50 to-amber-50/30 border border-amber-200/80 rounded-2xl p-3.5 mb-5 flex items-center justify-between flex-wrap gap-3">
       <div class="flex items-center gap-3 flex-wrap">
@@ -19474,6 +19494,44 @@ let sortColVC = 'total_venta';
 let sortAscVC = false;
 let costoHoraModVC = 0;
 let desgloseVisibleVC = false;
+let alertasVC = {};
+let filtroSoloAlertasVC = false;
+
+function actualizarBannerAuditoriaVC(alertas) {
+  const banner = document.getElementById('vc-banner-auditoria');
+  const desc = document.getElementById('vc-auditoria-desc');
+  if (!banner || !desc) return;
+
+  const desfases = alertas.total_con_desfase || 0;
+  const costoCero = alertas.total_con_costo_cero || 0;
+  const margenNeg = alertas.total_con_margen_neg || 0;
+
+  if (desfases > 0 || costoCero > 0 || margenNeg > 0) {
+    banner.classList.remove('hidden');
+    let msgs = [];
+    if (desfases > 0) {
+      msgs.push(`<strong>${desfases} producto(s) con desfase vs. Kardex</strong> (Diferencia acumulada: <strong>${fmtMon(alertas.desfase_abs_total || 0)}</strong>)`);
+    }
+    if (costoCero > 0) {
+      msgs.push(`<strong>${costoCero} con costo $0</strong>`);
+    }
+    if (margenNeg > 0) {
+      msgs.push(`<strong>${margenNeg} con margen negativo</strong>`);
+    }
+    desc.innerHTML = `Se detectaron inconsistencias en este período: ${msgs.join(' · ')}.`;
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+function toggleFiltroAlertasVC() {
+  filtroSoloAlertasVC = !filtroSoloAlertasVC;
+  const btnTxt = document.getElementById('btn-filtro-alertas-txt');
+  if (btnTxt) {
+    btnTxt.textContent = filtroSoloAlertasVC ? 'Ver todos los productos' : 'Ver solo productos con alertas';
+  }
+  renderTablaVC();
+}
 
 function toggleDesgloseVC() {
   desgloseVisibleVC = !desgloseVisibleVC;
@@ -19671,6 +19729,8 @@ async function consultarVentasCostos() {
       actualizarBadgeMinutoVC(costoHoraModVC);
 
       datosVC = d.reporte || [];
+      alertasVC = d.alertas || {};
+      actualizarBannerAuditoriaVC(alertasVC);
       datosVC.sort((a, b) => b.total_venta - a.total_venta);
       renderTablaVC();
 
@@ -19749,8 +19809,16 @@ function renderTablaVC() {
   let totalMod = 0;
 
   const desgHiddenCls = desgloseVisibleVC ? '' : 'hidden';
+  const prodsFiltrados = filtroSoloAlertasVC 
+    ? datosVC.filter(p => p.tiene_desfase || p.tiene_costo_cero || p.tiene_margen_negativo) 
+    : datosVC;
 
-  tbody.innerHTML = datosVC.map(r => {
+  if (filtroSoloAlertasVC && !prodsFiltrados.length) {
+    tbody.innerHTML = `<tr><td colspan="${colsSpan}" class="text-center text-emerald-600 font-bold py-8">✓ No hay productos con alertas en este período.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = prodsFiltrados.map(r => {
     totalCant += (r.cantidad || 0);
     totalVentas += (r.total_venta || 0);
     totalCostos += (r.total_costo || 0);
@@ -19762,7 +19830,13 @@ function renderTablaVC() {
     return `
       <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs cursor-pointer transition-colors" onclick="toggleDetalleVC(this, ${r.producto_id})" data-producto="${r.producto_id}">
         <td class="px-3 py-2 font-semibold text-gray-800">
-          <span class="vc-arrow text-gray-400 mr-1 text-[10px]">▶</span> ${r.nombre_producto}
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="vc-arrow text-gray-400 mr-1 text-[10px]">▶</span>
+            <span>${r.nombre_producto}</span>
+            ${r.tiene_desfase ? `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300" title="Costo POS: ${fmtMon(r.total_costo_insumos)} vs Kardex Real: ${fmtMon(r.total_costo_kardex)} | Diferencia: ${r.desfase_kardex > 0 ? '+' : ''}${fmtMon(r.desfase_kardex)}">⚠️ Desfase Kardex ${r.desfase_kardex > 0 ? '+' : ''}${fmtMon(r.desfase_kardex)}</span>` : ''}
+            ${r.tiene_costo_cero ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300" title="Este producto tiene costo $0 en este período">🔴 Costo $0</span>` : ''}
+            ${r.tiene_margen_negativo ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300" title="Margen negativo: Se vendió por debajo de su costo">📉 Margen Negativo</span>` : ''}
+          </div>
         </td>
         <td class="px-2 py-2 text-right num text-gray-600 whitespace-nowrap">${fmt(r.cantidad)}</td>
         <td class="px-2 py-2 text-right num font-mono text-gray-600 whitespace-nowrap">${fmtMon(r.precio_unitario)}</td>

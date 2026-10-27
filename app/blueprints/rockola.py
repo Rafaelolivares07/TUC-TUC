@@ -143,6 +143,25 @@ def _ensure_db():
                     creado_en     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
                 CREATE INDEX IF NOT EXISTS idx_rockola_compartidos_token ON rockola_compartidos(token);
+
+                CREATE TABLE IF NOT EXISTS rockola_peticiones (
+                    id                    SERIAL PRIMARY KEY,
+                    sala_id               TEXT NOT NULL,
+                    token_origen          TEXT NOT NULL,
+                    solicitante_nombre    TEXT,
+                    solicitante_telefono  TEXT,
+                    tercero_id           INTEGER REFERENCES terceros(id) ON DELETE SET NULL,
+                    cancion_solicitada    TEXT NOT NULL,
+                    estado                TEXT NOT NULL DEFAULT 'pendiente',
+                    respuesta_nombre      TEXT,
+                    respuesta_origen      TEXT,
+                    respuesta_youtube_url TEXT,
+                    respuesta_archivo_id  TEXT,
+                    creado_en             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    despachado_en         TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS idx_rockola_peticiones_token ON rockola_peticiones(token_origen);
+                CREATE INDEX IF NOT EXISTS idx_rockola_peticiones_sala ON rockola_peticiones(sala_id, estado);
             """)
             try:
                 conn.execute("ALTER TABLE rockola_cola DROP COLUMN IF EXISTS owner;")
@@ -841,6 +860,24 @@ def compartir_cancion_generar():
 
     conn = _connect()
     try:
+        # Si no se pasó archivo_id, verificar si la canción ya existe en el servidor para reutilizarla
+        if origen == 'archivo' and not archivo_id:
+            row_prev = conn.execute("""
+                SELECT archivo_id FROM rockola_compartidos 
+                WHERE sala_id = %s AND LOWER(TRIM(nombre)) = LOWER(TRIM(%s)) 
+                  AND archivo_id IS NOT NULL AND archivo_id != ''
+                ORDER BY creado_en DESC LIMIT 1
+            """, (sala_id, nombre)).fetchone()
+            if not row_prev:
+                row_prev = conn.execute("""
+                    SELECT archivo_id FROM rockola_biblioteca 
+                    WHERE sala_id = %s AND LOWER(TRIM(nombre)) = LOWER(TRIM(%s)) 
+                      AND archivo_id IS NOT NULL AND archivo_id != ''
+                    ORDER BY creado_en DESC LIMIT 1
+                """, (sala_id, nombre)).fetchone()
+            if row_prev and row_prev['archivo_id']:
+                archivo_id = row_prev['archivo_id']
+
         tercero_id = None
         tel_limpio = ''.join(c for c in amigo_telefono if c.isdigit())
         if tel_limpio:
@@ -1059,6 +1096,190 @@ def registro_rapido_rockola():
         return jsonify(ok=True, tercero_id=tercero_id, nombre=nombre_final, telefono=tel_limpio)
     finally:
         conn.close()
+
+
+@bp.route('/c/<token>/pedir', methods=['POST'])
+def peticion_cancion_compartida(token):
+    """El oyente remoto pide una cancion al DJ en vivo desde el vinilo web."""
+    data = request.get_json(silent=True) or {}
+    cancion = (data.get('cancion') or '').strip()
+    nombre = (data.get('nombre') or '').strip()
+    telefono = (data.get('telefono') or '').strip()
+
+    if not cancion:
+        return jsonify(ok=False, error='Escribe el nombre de la canción o artista'), 400
+
+    conn = _connect()
+    try:
+        # Obtener sala y datos del token original
+        row_comp = conn.execute("SELECT * FROM rockola_compartidos WHERE token = %s", (token,)).fetchone()
+        if not row_comp:
+            return jsonify(ok=False, error='Token no válido'), 404
+
+        sala_id = row_comp['sala_id']
+        tercero_id = row_comp['tercero_id']
+
+        tel_limpio = ''.join(c for c in telefono if c.isdigit())
+        if tel_limpio and len(tel_limpio) >= 7:
+            row_t = conn.execute(
+                "SELECT id, nombre FROM terceros WHERE REGEXP_REPLACE(COALESCE(telefono, ''), '[^0-9]', '', 'g') = %s LIMIT 1",
+                (tel_limpio,)
+            ).fetchone()
+            if row_t:
+                tercero_id = row_t['id']
+                if nombre and (not row_t['nombre'] or row_t['nombre'].lower() in ('invitado', 'cliente', 'amigo')):
+                    conn.execute("UPDATE terceros SET nombre = %s WHERE id = %s", (nombre, tercero_id))
+                nombre = row_t['nombre'] or nombre
+            else:
+                cur = conn.execute(
+                    "INSERT INTO terceros (nombre, telefono, tipo_tercero) VALUES (%s, %s, 'invitado') RETURNING id",
+                    (nombre or 'Oyente Remoto', tel_limpio)
+                )
+                tercero_id = cur.fetchone()['id']
+        elif not nombre and tercero_id:
+            row_t = conn.execute("SELECT nombre, telefono FROM terceros WHERE id = %s", (tercero_id,)).fetchone()
+            if row_t:
+                nombre = row_t['nombre'] or 'Oyente'
+                tel_limpio = row_t['telefono'] or ''
+
+        # Insertar la peticion
+        cur_p = conn.execute("""
+            INSERT INTO rockola_peticiones (
+                sala_id, token_origen, solicitante_nombre, solicitante_telefono,
+                tercero_id, cancion_solicitada, estado
+            ) VALUES (%s, %s, %s, %s, %s, %s, 'pendiente')
+            RETURNING id
+        """, (sala_id, token, nombre or 'Oyente', tel_limpio or '', tercero_id, cancion))
+        peticion_id = cur_p.fetchone()['id']
+        conn.commit()
+
+        return jsonify(ok=True, peticion_id=peticion_id, mensaje='Petición enviada al DJ')
+    finally:
+        conn.close()
+
+
+@bp.route('/c/<token>/estado-peticion')
+def estado_peticion_compartida(token):
+    """Consulta en tiempo real para el oyente remoto sobre si su peticion fue despachada."""
+    conn = _connect()
+    try:
+        row = conn.execute("""
+            SELECT * FROM rockola_peticiones
+            WHERE token_origen = %s
+            ORDER BY id DESC LIMIT 1
+        """, (token,)).fetchone()
+
+        if not row:
+            return jsonify(ok=True, tiene_peticion=False)
+
+        if row['estado'] == 'pendiente':
+            return jsonify(ok=True, tiene_peticion=True, estado='pendiente', cancion_solicitada=row['cancion_solicitada'])
+
+        if row['estado'] == 'despachada':
+            yt_id = _extraer_youtube_id(row['respuesta_youtube_url']) if row['respuesta_youtube_url'] else ''
+            return jsonify(
+                ok=True,
+                tiene_peticion=True,
+                estado='despachada',
+                cancion={
+                    'nombre': row['respuesta_nombre'],
+                    'origen': row['respuesta_origen'],
+                    'youtube_url': row['respuesta_youtube_url'] or '',
+                    'youtube_id': yt_id,
+                    'archivo_id': row['respuesta_archivo_id'] or ''
+                }
+            )
+
+        return jsonify(ok=True, tiene_peticion=True, estado=row['estado'])
+    finally:
+        conn.close()
+
+
+@bp.route('/api/<sala_id>/peticiones')
+@bp.route('/peticiones/<sala_id>')
+def listar_peticiones_dj(sala_id):
+    """El reproductor consulta las peticiones en vivo hechas por oyentes remotos."""
+    conn = _connect()
+    try:
+        rows = conn.execute("""
+            SELECT id, sala_id, token_origen, solicitante_nombre, solicitante_telefono,
+                   cancion_solicitada, estado, creado_en
+            FROM rockola_peticiones
+            WHERE sala_id = %s AND estado = 'pendiente'
+            ORDER BY creado_en ASC
+        """, (sala_id,)).fetchall()
+        peticiones = []
+        for r in rows:
+            peticiones.append({
+                'id': r['id'],
+                'sala_id': r['sala_id'],
+                'token_origen': r['token_origen'],
+                'solicitante_nombre': r['solicitante_nombre'] or 'Oyente',
+                'solicitante_telefono': r['solicitante_telefono'] or '',
+                'cancion_solicitada': r['cancion_solicitada'],
+                'creado_en': r['creado_en'].strftime('%H:%M') if r['creado_en'] else ''
+            })
+        return jsonify(ok=True, peticiones=peticiones)
+    finally:
+        conn.close()
+
+
+@bp.route('/api/peticiones/<int:peticion_id>/despachar', methods=['POST'])
+def despachar_peticion_dj(peticion_id):
+    """El DJ despacha la peticion asignandole una cancion de YouTube o archivo del servidor."""
+    data = request.get_json(silent=True) or {}
+    nombre = (data.get('nombre') or '').strip()
+    origen = data.get('origen', 'youtube')
+    youtube_url = data.get('youtube_url', '')
+    archivo_id = data.get('archivo_id', '')
+
+    if not nombre:
+        return jsonify(ok=False, error='Nombre de la canción requerido'), 400
+
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT * FROM rockola_peticiones WHERE id = %s", (peticion_id,)).fetchone()
+        if not row:
+            return jsonify(ok=False, error='Petición no encontrada'), 404
+
+        conn.execute("""
+            UPDATE rockola_peticiones
+            SET estado = 'despachada',
+                respuesta_nombre = %s,
+                respuesta_origen = %s,
+                respuesta_youtube_url = %s,
+                respuesta_archivo_id = %s,
+                despachado_en = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (nombre, origen, youtube_url, archivo_id, peticion_id))
+
+        # Actualizar la entrada de rockola_compartidos para este token de modo que si recarga escuche la nueva
+        conn.execute("""
+            UPDATE rockola_compartidos
+            SET nombre = %s,
+                origen = %s,
+                youtube_url = %s,
+                archivo_id = %s
+            WHERE token = %s
+        """, (nombre, origen, youtube_url, archivo_id, row['token_origen']))
+        conn.commit()
+
+        return jsonify(ok=True, mensaje='Petición despachada exitosamente')
+    finally:
+        conn.close()
+
+
+@bp.route('/api/peticiones/<int:peticion_id>/descartar', methods=['POST'])
+def descartar_peticion_dj(peticion_id):
+    """El DJ descarta una peticion."""
+    conn = _connect()
+    try:
+        conn.execute("UPDATE rockola_peticiones SET estado = 'descartada' WHERE id = %s", (peticion_id,))
+        conn.commit()
+        return jsonify(ok=True)
+    finally:
+        conn.close()
+
 
 
 @bp.route('/buscar-terceros')

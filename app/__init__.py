@@ -139,13 +139,21 @@ def create_app():
             RUTAS_FIJAS_ROCKOLA = {
                 'verificar-telefono', 'identificar', 'actualizar-perfil', 'salas',
                 'pwa', 'compartir', 'catalogo', 'admin', 'chat', 'chat2',
-                'buscar-terceros', 'registro-rapido', 'c'
+                'buscar-terceros', 'registro-rapido', 'c', 'peticiones', 'api'
             }
 
             if partes[0] == 'c' and len(partes) >= 2:
-                from .blueprints.rockola import escuchar_cancion_compartida, audio_cancion_compartida
-                if len(partes) >= 3 and partes[2] == 'audio':
-                    return audio_cancion_compartida(partes[1])
+                from .blueprints.rockola import (
+                    escuchar_cancion_compartida, audio_cancion_compartida,
+                    peticion_cancion_compartida, estado_peticion_compartida
+                )
+                if len(partes) >= 3:
+                    if partes[2] == 'audio':
+                        return audio_cancion_compartida(partes[1])
+                    if partes[2] == 'pedir':
+                        return peticion_cancion_compartida(partes[1])
+                    if partes[2] == 'estado-peticion':
+                        return estado_peticion_compartida(partes[1])
                 return escuchar_cancion_compartida(partes[1])
             if partes[0] == 'buscar-terceros':
                 from .blueprints.rockola import buscar_terceros_rockola
@@ -153,6 +161,9 @@ def create_app():
             if partes[0] == 'registro-rapido':
                 from .blueprints.rockola import registro_rapido_rockola
                 return registro_rapido_rockola()
+            if partes[0] == 'peticiones' and len(partes) >= 2:
+                from .blueprints.rockola import listar_peticiones_dj
+                return listar_peticiones_dj(partes[1])
 
             if partes[0] == 'rockola':
                 if len(partes) == 1:

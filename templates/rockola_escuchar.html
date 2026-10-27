@@ -289,6 +289,55 @@
       margin-top: 18px;
     }
 
+    /* Banner Estado Petición DJ (En Vivo) */
+    .dj-banner {
+      width: 100%;
+      background: rgba(12, 22, 38, 0.95);
+      border: 1px solid var(--ac1);
+      border-radius: 18px;
+      padding: 16px 18px;
+      margin-top: 14px;
+      box-shadow: 0 0 25px rgba(0, 212, 255, 0.25);
+      animation: fadeInDown 0.4s ease;
+      text-align: left;
+      position: relative;
+      overflow: hidden;
+    }
+    .dj-banner-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .dj-pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #00ff88;
+      box-shadow: 0 0 10px #00ff88;
+      animation: pulseDot 1.5s infinite;
+    }
+    .dj-banner-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .dj-banner-song {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ac1);
+      margin-bottom: 4px;
+      word-break: break-word;
+    }
+    .dj-banner-sub {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
     /* Modal Registro / Identificación */
     .modal-backdrop {
       display: none;
@@ -503,53 +552,61 @@
       </div>
     </div>
 
-    <!-- Botón Principal: Pedir Más Canciones -->
-    <button class="btn-cta" onclick="handlePedirMasCanciones()">
+    <!-- Botón Principal: Pedir Canción al DJ -->
+    <button class="btn-cta" id="btn-pedir-cancion" onclick="abrirModalPeticion()">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
       </svg>
-      Pedir más canciones
+      Pedir una canción al DJ 🎧
     </button>
+
+    <!-- Banner Estado Petición DJ (En Vivo) -->
+    <div id="dj-status-banner" class="dj-banner" style="display:none;">
+      <div class="dj-banner-header">
+        <div class="dj-pulse-dot"></div>
+        <div class="dj-banner-title">Petición enviada al DJ</div>
+      </div>
+      <div class="dj-banner-song" id="dj-banner-song">Preparando...</div>
+      <div class="dj-banner-sub">¡El DJ la está preparando! No te vayas; seguirá sonando tu música y apenas esté lista sonará con fundido en vivo.</div>
+    </div>
 
     <div class="footer-note">
       Mi Rockola · Tu música favorita en vivo
     </div>
   </div>
 
-  <!-- Audio Player si es archivo -->
-  {% if cancion.origen == 'archivo' and cancion.archivo_id %}
-  <audio id="audio-player" src="/rockola/c/{{ token }}/audio" playsinline preload="auto"></audio>
-  {% endif %}
+  <!-- Audio Player siempre presente para transiciones y crossfade -->
+  <audio id="audio-player" {% if cancion.origen == 'archivo' and cancion.archivo_id %}src="/rockola/c/{{ token }}/audio"{% endif %} playsinline preload="auto"></audio>
 
   <!-- Contenedor YouTube Iframe -->
   <div id="yt-hidden-wrap">
     <div id="yt-player-target"></div>
   </div>
 
-  <!-- Modal Captura de Nombre / Registro Rápido -->
-  <div class="modal-backdrop" id="modal-registro">
+  <!-- Modal Pedir Canción al DJ -->
+  <div class="modal-backdrop" id="modal-peticion">
     <div class="modal-sheet">
       <div class="modal-handle"></div>
-      <div class="modal-title">¿Cómo te llamas? 🎵</div>
+      <div class="modal-title">¿Qué canción quieres escuchar? 🎵</div>
       <div class="modal-sub">
-        Ingresa tus datos una sola vez para que la rockola muestre tus canciones a tu nombre.
+        Escribe la canción o artista que quieras y nuestro DJ te la busca y despacha en vivo.
       </div>
 
       <div class="input-grp">
-        <label class="input-label" for="input-reg-nombre">Tu Nombre</label>
-        <input type="text" id="input-reg-nombre" class="input-field" placeholder="Ej: Carlos" autocomplete="name" autofocus>
+        <label class="input-label" for="input-pet-cancion">Canción o Artista</label>
+        <input type="text" id="input-pet-cancion" class="input-field" placeholder="Ej: Diomedes Díaz - Mi Muchacho" autofocus>
       </div>
 
-      <div class="input-grp">
-        <label class="input-label" for="input-reg-tel">Tu WhatsApp / Celular</label>
-        <input type="tel" id="input-reg-tel" class="input-field" placeholder="Ej: 3101234567" autocomplete="tel">
+      <div class="input-grp" id="grp-pet-nombre">
+        <label class="input-label" for="input-pet-nombre">Tu Nombre</label>
+        <input type="text" id="input-pet-nombre" class="input-field" placeholder="Ej: Carlos" autocomplete="name">
       </div>
 
-      <button class="btn-submit-modal" id="btn-submit-reg" onclick="guardarYContinuar()">
-        Continuar a la Rockola
+      <button class="btn-submit-modal" id="btn-submit-pet" onclick="enviarPeticionDJ()">
+        Enviar Petición al DJ 🚀
       </button>
-      <button class="btn-cancel-modal" onclick="cerrarModalRegistro()">
-        Solo quiero escuchar
+      <button class="btn-cancel-modal" onclick="cerrarModalPeticion()">
+        Cancelar
       </button>
     </div>
   </div>
@@ -584,11 +641,13 @@
 
     // Inicialización del reproductor
     window.addEventListener('DOMContentLoaded', () => {
-      if (CANCION.origen === 'youtube' && CANCION.youtube_id) {
-        cargarYouTubeAPI();
-      } else if (audioEl) {
+      if (audioEl) {
         configurarAudioLocal();
       }
+      if (CANCION.origen === 'youtube' && CANCION.youtube_id) {
+        cargarYouTubeAPI();
+      }
+      verificarPeticionInicial();
     });
 
     // Configuración para archivos locales
@@ -802,76 +861,227 @@
       return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
-    // Botón: Pedir Más Canciones
-    function handlePedirMasCanciones() {
-      // 1. ¿Ya tiene nombre en la base de datos o en localStorage?
-      const localNombre = localStorage.getItem('rockola_nombre');
-      const localTel = localStorage.getItem('rockola_telefono');
+    // Gestión de Peticiones en Vivo al DJ
+    let pollingPeticionTimer = null;
+    let ultimaCancionDespachadaNombre = '';
 
-      if (DESTINATARIO_ID || (localNombre && localNombre !== 'Anónimo' && localNombre.trim().length > 0)) {
-        // Redirigir de una a la sala de cliente
-        window.location.href = `/rockola/${SALA_ID}/cliente`;
-        return;
+    function abrirModalPeticion() {
+      const localNombre = localStorage.getItem('rockola_nombre') || DESTINATARIO_NOMBRE || '';
+      const inputNom = document.getElementById('input-pet-nombre');
+      if (inputNom && localNombre && localNombre !== 'Anónimo') {
+        inputNom.value = localNombre;
       }
-
-      // 2. Si vino de un grupo sin nombre: abrir modal para capturar
-      document.getElementById('modal-registro').classList.add('visible');
+      document.getElementById('modal-peticion').classList.add('visible');
       setTimeout(() => {
-        document.getElementById('input-reg-nombre').focus();
+        const inp = document.getElementById('input-pet-cancion');
+        if (inp) inp.focus();
       }, 150);
     }
 
-    function cerrarModalRegistro() {
-      document.getElementById('modal-registro').classList.remove('visible');
+    function cerrarModalPeticion() {
+      document.getElementById('modal-peticion').classList.remove('visible');
     }
 
-    async function guardarYContinuar() {
-      const inputNom = document.getElementById('input-reg-nombre');
-      const inputTel = document.getElementById('input-reg-tel');
-      const nombre = inputNom.value.trim();
-      const telefono = inputTel.value.trim();
-      const btn = document.getElementById('btn-submit-reg');
-
-      if (!nombre) {
-        alert('Por favor escribe tu nombre');
-        inputNom.focus();
-        return;
+    async function verificarPeticionInicial() {
+      try {
+        const res = await fetch(`/rockola/c/${TOKEN}/estado-peticion?t=${Date.now()}`);
+        const data = await res.json();
+        if (data.ok && data.tiene_peticion) {
+          if (data.estado === 'pendiente') {
+            const banner = document.getElementById('dj-status-banner');
+            const songLabel = document.getElementById('dj-banner-song');
+            if (banner && songLabel) {
+              songLabel.textContent = `Petición: "${data.cancion_solicitada}"`;
+              banner.style.display = 'block';
+            }
+            const btn = document.getElementById('btn-pedir-cancion');
+            if (btn) btn.style.display = 'none';
+            iniciarPollingPeticion();
+          }
+        }
+      } catch(e) {
+        // Silencioso
       }
+    }
 
-      const telLimpio = telefono.replace(/\D/g, '');
-      if (telLimpio.length < 7) {
-        alert('Por favor escribe un número de teléfono o WhatsApp válido');
-        inputTel.focus();
+    async function enviarPeticionDJ() {
+      const inputCancion = document.getElementById('input-pet-cancion');
+      const inputNom = document.getElementById('input-pet-nombre');
+      const cancionTxt = (inputCancion.value || '').trim();
+      const nombreTxt = (inputNom.value || '').trim() || localStorage.getItem('rockola_nombre') || DESTINATARIO_NOMBRE || 'Oyente';
+      const telTxt = localStorage.getItem('rockola_telefono') || DESTINATARIO_TELEFONO || '';
+      const btn = document.getElementById('btn-submit-pet');
+
+      if (!cancionTxt) {
+        alert('Por favor escribe el nombre de la canción o artista');
+        inputCancion.focus();
         return;
       }
 
       btn.disabled = true;
-      btn.textContent = 'Guardando...';
+      btn.textContent = 'Enviando al DJ...';
 
       try {
-        const res = await fetch('/rockola/registro-rapido', {
+        const res = await fetch(`/rockola/c/${TOKEN}/pedir`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nombre, telefono: telLimpio })
+          body: JSON.stringify({
+            cancion: cancionTxt,
+            nombre: nombreTxt,
+            telefono: telTxt
+          })
         });
         const data = await res.json();
-
         if (data.ok) {
-          localStorage.setItem('rockola_nombre', data.nombre);
-          localStorage.setItem('rockola_telefono', data.telefono);
-          window.location.href = `/rockola/${SALA_ID}/cliente`;
+          if (nombreTxt && nombreTxt !== 'Oyente') {
+            localStorage.setItem('rockola_nombre', nombreTxt);
+          }
+          cerrarModalPeticion();
+          inputCancion.value = '';
+
+          // Mostrar banner de espera activa
+          const banner = document.getElementById('dj-status-banner');
+          const songLabel = document.getElementById('dj-banner-song');
+          if (banner && songLabel) {
+            songLabel.textContent = `Petición: "${cancionTxt}"`;
+            banner.style.display = 'block';
+          }
+
+          // Ocultar botón de pedir mientras está pendiente
+          const btnPedir = document.getElementById('btn-pedir-cancion');
+          if (btnPedir) btnPedir.style.display = 'none';
+
+          iniciarPollingPeticion();
         } else {
-          alert(data.error || 'No se pudo guardar');
-          btn.disabled = false;
-          btn.textContent = 'Continuar a la Rockola';
+          alert(data.error || 'No se pudo enviar la petición');
         }
-      } catch (e) {
+      } catch(e) {
         console.error(e);
-        // Fallback local
-        localStorage.setItem('rockola_nombre', nombre);
-        localStorage.setItem('rockola_telefono', telLimpio);
-        window.location.href = `/rockola/${SALA_ID}/cliente`;
+        alert('Error al conectar con la Rockola');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar Petición al DJ 🚀';
       }
+    }
+
+    function iniciarPollingPeticion() {
+      if (pollingPeticionTimer) clearInterval(pollingPeticionTimer);
+      pollingPeticionTimer = setInterval(async () => {
+        try {
+          const res = await fetch(`/rockola/c/${TOKEN}/estado-peticion?t=${Date.now()}`);
+          const data = await res.json();
+          if (data.ok && data.tiene_peticion && data.estado === 'despachada' && data.cancion) {
+            if (data.cancion.nombre !== ultimaCancionDespachadaNombre) {
+              clearInterval(pollingPeticionTimer);
+              pollingPeticionTimer = null;
+              ultimaCancionDespachadaNombre = data.cancion.nombre;
+              await ejecutarCrossfadeNuevaCancion(data.cancion);
+            }
+          }
+        } catch(err) {
+          console.warn("Polling peticion:", err);
+        }
+      }, 3500);
+    }
+
+    async function ejecutarCrossfadeNuevaCancion(nuevaCancion) {
+      const banner = document.getElementById('dj-status-banner');
+      const songLabel = document.getElementById('dj-banner-song');
+      if (banner && songLabel) {
+        banner.style.borderColor = '#00ff88';
+        songLabel.textContent = `¡Despachada por el DJ: ${nuevaCancion.nombre}! 🎶`;
+      }
+
+      const FADE_MS = 2500;
+      const STEPS = 25;
+      const STEP_TIME = FADE_MS / STEPS;
+
+      // 1. Fade Out del audio actual
+      if (audioEl && isPlaying && (!ytPlayer || audioEl.src)) {
+        let vol = audioEl.volume;
+        for (let i = 0; i < STEPS; i++) {
+          vol = Math.max(0, vol - (1 / STEPS));
+          audioEl.volume = vol;
+          await new Promise(r => setTimeout(r, STEP_TIME));
+        }
+        audioEl.pause();
+      } else if (ytPlayer && isPlaying) {
+        let vol = 100;
+        try { vol = ytPlayer.getVolume() || 100; } catch(e){}
+        for (let i = 0; i < STEPS; i++) {
+          vol = Math.max(0, vol - (100 / STEPS));
+          try { ytPlayer.setVolume(vol); } catch(e){}
+          await new Promise(r => setTimeout(r, STEP_TIME));
+        }
+        try { ytPlayer.pauseVideo(); } catch(e){}
+      }
+
+      // 2. Actualizar título y carátula en UI
+      const stEl = document.getElementById('song-title');
+      if (stEl) stEl.textContent = nuevaCancion.nombre;
+      document.title = `🎵 ${nuevaCancion.nombre} · Mi Rockola`;
+      if (progressFill) progressFill.style.width = '0%';
+      if (currTimeLabel) currTimeLabel.textContent = '0:00';
+      if (durTimeLabel) durTimeLabel.textContent = '0:00';
+
+      // 3. Fade In de la nueva canción despachada
+      if (nuevaCancion.origen === 'archivo') {
+        if (ytPlayer) {
+          try { ytPlayer.stopVideo(); } catch(e){}
+        }
+        audioEl.src = `/rockola/c/${TOKEN}/audio?t=${Date.now()}`;
+        audioEl.volume = 0;
+        try {
+          await audioEl.play();
+          isPlaying = true;
+          vinylDisc.classList.add('spinning');
+          playOverlay.classList.add('hidden');
+          iniciarTimerProgreso();
+          let inVol = 0;
+          for (let i = 0; i < STEPS; i++) {
+            inVol = Math.min(1, inVol + (1 / STEPS));
+            audioEl.volume = inVol;
+            await new Promise(r => setTimeout(r, STEP_TIME));
+          }
+        } catch(e) {
+          console.warn("Autoplay bloqueado al fundir:", e);
+          playOverlay.classList.remove('hidden');
+        }
+      } else if (nuevaCancion.origen === 'youtube' && nuevaCancion.youtube_id) {
+        if (audioEl) audioEl.pause();
+        if (ytPlayer && ytReady) {
+          try {
+            ytPlayer.setVolume(0);
+            ytPlayer.loadVideoById(nuevaCancion.youtube_id);
+            ytPlayer.playVideo();
+            isPlaying = true;
+            vinylDisc.classList.add('spinning');
+            playOverlay.classList.add('hidden');
+            iniciarTimerProgreso();
+            let inVol = 0;
+            for (let i = 0; i < STEPS; i++) {
+              inVol = Math.min(100, inVol + (100 / STEPS));
+              ytPlayer.setVolume(inVol);
+              await new Promise(r => setTimeout(r, STEP_TIME));
+            }
+          } catch(e) {
+            console.warn("Error cargando YouTube:", e);
+          }
+        }
+      }
+
+      // Re-habilitar botón para pedir otra después de unos segundos
+      setTimeout(() => {
+        const btn = document.getElementById('btn-pedir-cancion');
+        if (btn) {
+          btn.style.display = 'flex';
+          btn.textContent = 'Pedir otra canción al DJ 🎧';
+        }
+        if (banner) {
+          banner.style.display = 'none';
+          banner.style.borderColor = 'var(--ac1)';
+        }
+      }, 7000);
     }
   </script>
 </body>

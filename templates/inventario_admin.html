@@ -21509,11 +21509,48 @@ async function cargarReporteEnsambles() {
               html += `<div class="text-[11px] text-gray-500 mt-0.5">Total Insumos Receta (Kardex): <b class="text-gray-800 font-mono">$${kardexMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b></div>`;
               html += `</div>`;
 
+              const tieneDifPos = Math.abs(difCostoUnit) > 0.01;
+              const tieneDifCogs = Math.abs(difDoc) > 0.01;
+
               html += `<div class="p-2.5 bg-slate-50 rounded-lg border border-gray-200">`;
-              html += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Contable: Costo de Venta (61* Débito) & Pedido</span>`;
-              html += `<div class="font-mono font-bold text-gray-800 text-xs">Asiento 61* (Déb): <span class="text-gray-900">$${cogsMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> | Pedido Unit: <span class="text-gray-900">$${costoUnitPi.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></div>`;
-              const clsU = Math.abs(difCostoUnit) > 0.01 ? 'text-red-600' : 'text-green-600';
-              html += `<div class="text-[11px] font-bold ${clsU} mt-0.5">Dif Costo Venta (61* Déb vs Kardex): $${(cogsMontoDoc - kardexMontoDoc).toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
+              html += `<span class="text-[10px] text-gray-600 font-bold uppercase block mb-1">🏛️ Costo de Venta (Contabilidad 61* vs Costo POS)</span>`;
+              html += `<div class="font-mono text-xs text-gray-800 flex flex-col gap-0.5">`;
+              html += `  <div class="flex items-center justify-between">`;
+              html += `    <span>Asiento 61* (Débito):</span>`;
+              html += `    <b class="text-gray-900 font-bold">$${cogsMontoDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</b>`;
+              html += `  </div>`;
+              html += `  <div class="flex items-center justify-between">`;
+              html += `    <span>Costo Grabado en Pedido (POS):</span>`;
+              html += `    <b class="text-gray-900 font-bold">$${costoUnitPi.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})} / und</b>`;
+              html += `  </div>`;
+
+              // Expresión clara y destacada del Desfase con el Pedido POS
+              if (tieneDifPos) {
+                html += `  <div class="flex items-center justify-between pt-1 mt-1 border-t border-rose-200 text-rose-700 font-extrabold text-[11px] bg-rose-50/80 px-1.5 py-0.5 rounded">`;
+                html += `    <span class="flex items-center gap-1">⚠️ Desfase Costo POS vs Kardex:</span>`;
+                html += `    <span>${difCostoUnit > 0 ? '+' : ''}$${difCostoUnit.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})} / und (Total: ${difPiDoc > 0 ? '+' : ''}$${difPiDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})})</span>`;
+                html += `  </div>`;
+              } else {
+                html += `  <div class="flex items-center justify-between pt-1 mt-1 border-t border-gray-200 text-emerald-700 font-bold text-[11px]">`;
+                html += `    <span class="flex items-center gap-1">✅ Costo POS vs Kardex:</span>`;
+                html += `    <span>$0,00 (Cuadrado)</span>`;
+                html += `  </div>`;
+              }
+
+              // Comparación Contabilidad 61* vs Kardex
+              if (tieneDifCogs) {
+                html += `  <div class="flex items-center justify-between text-[10px] text-amber-700 font-semibold pt-0.5">`;
+                html += `    <span>Dif Contabilidad (61* vs Kardex):</span>`;
+                html += `    <span>${difDoc > 0 ? '+' : ''}$${difDoc.toLocaleString('es-CO', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>`;
+                html += `  </div>`;
+              } else {
+                html += `  <div class="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">`;
+                html += `    <span>Contabilidad vs Kardex:</span>`;
+                html += `    <span class="text-emerald-700 font-medium">Cuadrado ($0)</span>`;
+                html += `  </div>`;
+              }
+
+              html += `</div>`;
               html += `</div>`;
               html += `</div>`;
             }

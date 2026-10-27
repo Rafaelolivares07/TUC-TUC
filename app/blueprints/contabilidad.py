@@ -1805,23 +1805,35 @@ def _ejecutar_asiento_automatico(conn, negocio_id, tipo_doc_identificador, varia
             
             if cta_cod.startswith('14') and m['tipo_mov'] == 'C' and p_id:
                 # Línea de inventario 14* credito
-                conn.execute("""
+                inv_res = conn.execute("""
                     UPDATE movimientos_inventario
                     SET asiento_inventario_id = %s
                     WHERE negocio_id = %s AND (documento_numero = %s OR numero_documento = %s)
                       AND producto_id = %s AND (producto_padre_id = %s OR (producto_padre_id IS NULL AND %s IS NULL))
                       AND asiento_inventario_id IS NULL
-                """, (c_id, negocio_id, doc_str, doc_str, p_id, p_padre, p_padre))
+                    RETURNING id
+                """, (c_id, negocio_id, doc_str, doc_str, p_id, p_padre, p_padre)).fetchone()
+                if inv_res and inv_res['id']:
+                    try:
+                        conn.execute("UPDATE movimientos_contables SET movimiento_inventario_id = %s WHERE id = %s", (inv_res['id'], c_id))
+                    except Exception:
+                        pass
             elif cta_cod.startswith('61') and m['tipo_mov'] == 'D' and (p_padre or p_id):
                 # Línea de costo 61* debito
                 t_padre = p_padre or p_id
-                conn.execute("""
+                cp_res = conn.execute("""
                     UPDATE movimientos_inventario
                     SET asiento_contrapartida_id = %s
                     WHERE negocio_id = %s AND (documento_numero = %s OR numero_documento = %s)
                       AND (producto_padre_id = %s OR (producto_padre_id IS NULL AND producto_id = %s))
                       AND asiento_contrapartida_id IS NULL
-                """, (c_id, negocio_id, doc_str, doc_str, t_padre, t_padre))
+                    RETURNING id
+                """, (c_id, negocio_id, doc_str, doc_str, t_padre, t_padre)).fetchone()
+                if cp_res and cp_res['id']:
+                    try:
+                        conn.execute("UPDATE movimientos_contables SET movimiento_inventario_id = %s WHERE id = %s AND movimiento_inventario_id IS NULL", (cp_res['id'], c_id))
+                    except Exception:
+                        pass
 
     return comp_id
 

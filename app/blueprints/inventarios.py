@@ -330,6 +330,8 @@ def _crear_tablas(conn):
         "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS horas_semana_mod NUMERIC(5,2) DEFAULT 42.0",
         "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS dias_semana_mod NUMERIC(4,2) DEFAULT 6.0",
         "ALTER TABLE config_negocio ADD COLUMN IF NOT EXISTS personas_mod NUMERIC(4,1) DEFAULT 1.0",
+        "ALTER TABLE movimientos_contables ADD COLUMN IF NOT EXISTS movimiento_inventario_id INTEGER",
+        "CREATE INDEX IF NOT EXISTS idx_mov_contables_mov_inv_id ON movimientos_contables(movimiento_inventario_id)",
     ]
     for sql in alters:
         try:
@@ -1631,6 +1633,17 @@ def _mov_directo(conn, negocio_id, producto_id, cantidad, tipo, motivo,
         asiento_inventario_id, asiento_contrapartida_id
     )).fetchone()
     mov_id = mov_res['id'] if mov_res else None
+
+    if mov_id and asiento_inventario_id:
+        try:
+            conn.execute("UPDATE movimientos_contables SET movimiento_inventario_id = %s WHERE id = %s", (mov_id, asiento_inventario_id))
+        except Exception:
+            pass
+    if mov_id and asiento_contrapartida_id:
+        try:
+            conn.execute("UPDATE movimientos_contables SET movimiento_inventario_id = %s WHERE id = %s AND movimiento_inventario_id IS NULL", (mov_id, asiento_contrapartida_id))
+        except Exception:
+            pass
 
     if saldo:
         conn.execute("""
@@ -6776,6 +6789,10 @@ def _recostear_producto(conn, negocio_id, producto_id, bodega=None, origen=None,
                     as_inv_id = mc_inv['id']
                     comp_id_inv = mc_inv['comprobante_id']
                     conn.execute("UPDATE movimientos_inventario SET asiento_inventario_id = %s WHERE id = %s", (as_inv_id, m['id']))
+                    try:
+                        conn.execute("UPDATE movimientos_contables SET movimiento_inventario_id = %s WHERE id = %s", (m['id'], as_inv_id))
+                    except Exception:
+                        pass
 
             # Actualizar línea 14* en contabilidad (excepto en facturas de compra a proveedor para no alterar valores facturados)
             if as_inv_id and not es_compra_mov:

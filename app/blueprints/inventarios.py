@@ -12317,6 +12317,7 @@ def _query_reporte_ventas_costos(conn, negocio_id, desde, hasta, centro_utilidad
             'nombre_producto': r['nombre_producto'],
             'cantidad': cant,
             'precio_unitario': px_prom,
+            'total_venta': ventas_tot,
             'costo_insumos_unitario': cx_insumos_prom,
             'total_costo_insumos': costos_insumos_tot,
             'tiempo_preparacion_min': tiempo_prep,

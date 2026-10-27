@@ -4175,7 +4175,7 @@
         <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
           <span class="text-base">⚡</span>
           <div class="text-[11px] leading-relaxed">
-            <b>Recosteo automático en cascada:</b> Al confirmar, se actualizará la fecha y hora de este documento en <b>Kardex</b>, <b>Contabilidad</b> y <b>Saldos</b>. Todos los movimientos posteriores de los productos listados arriba serán recalculados cronológicamente.
+            <b>Recosteo automático en cascada:</b> Al confirmar, se actualizará la fecha y hora de este documento en <b>Kardex</b>, <b>Contabilidad</b> y <b>Saldos</b>. Todos los movimientos posteriores de los productos listados arriba serán recalculados cronológicamente, impactando el costo de los insumos y el margen de los productos terminados donde participan.
           </div>
         </div>
 
@@ -12853,12 +12853,12 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
           <span class="text-xl shrink-0">⚠️</span>
           <div class="flex-1">
             <span class="font-black text-amber-950 block text-xs uppercase tracking-wide">
-              Efecto Cascada en Costo de Ventas (Contabilidad):
+              ⚠️ Efecto Cascada en Costo de Ventas y Márgenes de Ganancia:
             </span>
             <p class="mt-1 text-[11px] text-amber-900 leading-relaxed font-medium">
               Este ítem es insumo en la Tarjeta Estándar de <strong>${auditoria.cascada_ensambles.total_productos_padre} productos terminados</strong>
               (<em>${auditoria.cascada_ensambles.productos_padre.slice(0, 4).map(p => p.nombre).join(', ')}${auditoria.cascada_ensambles.total_productos_padre > 4 ? '...' : ''}</em>).
-              Cualquier alteración de costos o recosteo afecta los asientos contables de Costo de Ventas (Cuenta 6135 / Salidas 1405) generados en las ventas de dichos productos.
+              Cualquier alteración de costos o recosteo afecta los asientos contables de Costo de Ventas (Cuenta 6135 / Salidas 1405) y la rentabilidad calculada en el Reporte de Ventas y Costos (Margen de Ganancia Bruto) de dichos productos.
             </p>
             <div class="mt-2.5 flex items-center gap-2 flex-wrap">
               <button type="button" 
@@ -12866,7 +12866,7 @@ function renderizarAuditoriaKardex(auditoria, productoId) {
                       class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer">
                 <span>🔍</span> <span>Auditar Ensambles Históricos (${auditoria.cascada_ensambles.fecha_desde} al ${auditoria.cascada_ensambles.fecha_hasta}) ↗</span>
               </button>
-              <span class="text-[10px] text-amber-800 font-semibold">Podrá auditar cada documento individualmente y reparar sus costos contables.</span>
+              <span class="text-[10px] text-amber-800 font-semibold">Podrá auditar cada documento individualmente y sincronizar tanto su asiento contable como el costo y margen de la venta.</span>
             </div>
           </div>
         </div>

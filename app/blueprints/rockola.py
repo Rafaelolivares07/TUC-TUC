@@ -994,7 +994,7 @@ def escuchar_cancion_compartida(token):
 
 @bp.route('/c/<token>/audio')
 def audio_cancion_compartida(token):
-    """Streaming de audio para la cancion compartida si es archivo."""
+    """Streaming de audio con soporte de HTTP Range y búsqueda flexible para la canción compartida."""
     conn = _connect()
     try:
         row = conn.execute("SELECT * FROM rockola_compartidos WHERE token = %s", (token,)).fetchone()
@@ -1002,7 +1002,16 @@ def audio_cancion_compartida(token):
             return jsonify(ok=False, error='No encontrada'), 404
         if row['origen'] == 'archivo' and row['archivo_id']:
             upload_dir = _upload_dir(row['sala_id'])
-            return send_from_directory(upload_dir, row['archivo_id'])
+            target_dir = upload_dir
+            target_file = row['archivo_id']
+            if not os.path.exists(os.path.join(upload_dir, target_file)):
+                # Buscar en toda la estructura de static/rockola_tmp
+                base_tmp = os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'rockola_tmp')
+                for root, _, files in os.walk(base_tmp):
+                    if target_file in files:
+                        target_dir = root
+                        break
+            return send_from_directory(target_dir, target_file, conditional=True, mimetype='audio/mpeg')
         return jsonify(ok=False, error='Audio no disponible'), 400
     finally:
         conn.close()

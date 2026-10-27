@@ -5079,6 +5079,91 @@ async function seleccionarContactoModal() {
   }
 }
 
+async function obtenerBlobAudioParaCompartir(c) {
+  if (!c) return null;
+  if (c.blob instanceof Blob) return c.blob;
+
+  const rawId = String(c.id || '');
+  const baseId = rawId.split('__q__')[0];
+  const nombreLimpio = (c.nombre || '').trim().toLowerCase();
+
+  // 1. Buscar en memoria: cancionesLocales
+  if (typeof cancionesLocales !== 'undefined' && Array.isArray(cancionesLocales)) {
+    const mem = cancionesLocales.find(s =>
+      s && (s.id === rawId || s.id === baseId || (s.nombre && s.nombre.trim().toLowerCase() === nombreLimpio))
+    );
+    if (mem && mem.blob instanceof Blob) return mem.blob;
+  }
+
+  // 2. Buscar en IndexedDB por id y baseId
+  try {
+    const db = await abrirDbLocal();
+    const ids = [rawId, baseId];
+    if (baseId.startsWith('local-')) ids.push(baseId.replace('local-', ''));
+    if (!isNaN(baseId)) ids.push(Number(baseId));
+
+    for (const cid of ids) {
+      if (!cid) continue;
+      const res = await new Promise(r => {
+        try {
+          const tx = db.transaction('songs', 'readonly');
+          const req = tx.objectStore('songs').get(cid);
+          req.onsuccess = () => r(req.result);
+          req.onerror = () => r(null);
+        } catch (e) { r(null); }
+      });
+      if (res && res.blob instanceof Blob) {
+        db.close();
+        return res.blob;
+      }
+    }
+
+    // Si aún no se encontró por ID, buscar por nombre en el store
+    if (nombreLimpio) {
+      const match = await new Promise(r => {
+        try {
+          const tx = db.transaction('songs', 'readonly');
+          const req = tx.objectStore('songs').openCursor();
+          req.onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+              const val = cursor.value;
+              if (val && val.nombre && val.nombre.trim().toLowerCase() === nombreLimpio && val.blob instanceof Blob) {
+                r(val.blob);
+                return;
+              }
+              cursor.continue();
+            } else {
+              r(null);
+            }
+          };
+          req.onerror = () => r(null);
+        } catch (e) { r(null); }
+      });
+      db.close();
+      if (match) return match;
+    } else {
+      db.close();
+    }
+  } catch (err) {
+    console.warn('Error buscando blob local en IndexedDB:', err);
+  }
+
+  // 3. Si la canción está sonando actualmente y player.src es un blob URL
+  if (typeof player !== 'undefined' && player && player.src && player.src.startsWith('blob:')) {
+    try {
+      const resp = await fetch(player.src);
+      if (resp.ok) {
+        return await resp.blob();
+      }
+    } catch (e) {
+      console.warn('No se pudo extraer blob desde player.src:', e);
+    }
+  }
+
+  return null;
+}
+
 async function ejecutarCompartirWhatsApp() {
   if (!cancionACompartir) return;
 
@@ -5093,37 +5178,34 @@ async function ejecutarCompartirWhatsApp() {
 
   try {
     let archivoId = cancionACompartir.archivo_id || '';
+    const esYt = !!(cancionACompartir.youtube_url || (cancionACompartir.origen === 'youtube'));
 
-    if (cancionACompartir.es_local && !archivoId && !cancionACompartir.youtube_url) {
-      btn.innerHTML = '<span>☁️ Subiendo al servidor...</span>';
-      const db = await abrirDbLocal();
-      const songData = await new Promise((res, rej) => {
-        const tx = db.transaction('songs', 'readonly');
-        const req = tx.objectStore('songs').get(cancionACompartir.id);
-        req.onsuccess = () => res(req.result);
-        req.onerror = () => rej(req.error);
-      });
-      db.close();
-
-      if (songData && songData.blob) {
+    if (!esYt && !archivoId) {
+      btn.innerHTML = '<span>☁️ Buscando audio local...</span>';
+      const blob = await obtenerBlobAudioParaCompartir(cancionACompartir);
+      if (blob) {
+        btn.innerHTML = '<span>☁️ Subiendo audio al servidor...</span>';
         const fd = new FormData();
-        fd.append('archivo', songData.blob, cancionACompartir.nombre + '.mp3');
-        fd.append('nombre', cancionACompartir.nombre);
+        const ext = blob.type && blob.type.includes('ogg') ? '.ogg' : '.mp3';
+        fd.append('archivo', blob, (cancionACompartir.nombre || 'audio') + ext);
+        fd.append('nombre', cancionACompartir.nombre || 'Canción');
         const upRes = await fetch(`/rockola/${SALA_ID}/compartir-local`, {
           method: 'POST',
           body: fd
         });
         const upText = await upRes.text();
         let upData;
-        try {
-          upData = JSON.parse(upText);
-        } catch (e) {
-          throw new Error('El servidor no pudo procesar el archivo local');
-        }
+        try { upData = JSON.parse(upText); } catch (e) {}
         if (upData && upData.ok) {
           archivoId = upData.archivo_id;
         } else {
-          throw new Error((upData && upData.error) || 'No se pudo subir el archivo local');
+          throw new Error((upData && upData.error) || 'No se pudo subir el archivo de audio al servidor');
+        }
+      } else {
+        if (cancionACompartir.id && !String(cancionACompartir.id).startsWith('local-')) {
+          archivoId = cancionACompartir.id;
+        } else {
+          throw new Error('No se encontró el archivo de audio local. Asegúrate de tener la canción en tu dispositivo.');
         }
       }
     }

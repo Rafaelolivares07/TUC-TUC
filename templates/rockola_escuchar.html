@@ -605,17 +605,31 @@
         vinylDisc.classList.remove('spinning');
         playOverlay.classList.remove('hidden');
         detenerTimerProgreso();
+        progressFill.style.width = '0%';
+        currTimeLabel.textContent = '0:00';
       });
 
       audioEl.addEventListener('loadedmetadata', () => {
-        durTimeLabel.textContent = formatTime(audioEl.duration);
+        if (durTimeLabel && audioEl.duration) {
+          durTimeLabel.textContent = formatTime(audioEl.duration);
+        }
       });
 
-      // Intento de auto-play suave
+      audioEl.addEventListener('durationchange', () => {
+        if (durTimeLabel && audioEl.duration) {
+          durTimeLabel.textContent = formatTime(audioEl.duration);
+        }
+      });
+
+      audioEl.addEventListener('error', (e) => {
+        console.warn('Error en elemento audio:', audioEl.error);
+      });
+
+      // Intento de auto-play suave al cargar
       const p = audioEl.play();
       if (p !== undefined) {
         p.catch(() => {
-          // Bloqueado por el navegador: se muestra el botón de play
+          // Bloqueado por política del navegador: el botón play queda listo para 1 solo toque
           playOverlay.classList.remove('hidden');
         });
       }
@@ -676,9 +690,11 @@
       }
     }
 
-    // Control Play / Pause
+    // Control Play / Pause inmediato (1 solo toque)
     function togglePlayPause(e) {
-      if (e) e.stopPropagation();
+      if (e) {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+      }
 
       if (CANCION.origen === 'youtube' && ytPlayer && ytReady) {
         if (isPlaying) {
@@ -687,13 +703,33 @@
           ytPlayer.playVideo();
         }
       } else if (audioEl) {
-        if (audioEl.paused) {
-          audioEl.play().catch(() => {});
+        if (audioEl.paused || audioEl.ended) {
+          if (audioEl.ended) audioEl.currentTime = 0;
+          const pr = audioEl.play();
+          if (pr && typeof pr.catch === 'function') {
+            pr.catch((err) => {
+              console.warn('Play falló:', err);
+            });
+          }
         } else {
           audioEl.pause();
         }
       }
     }
+
+    // Registrar listeners táctiles directos para evitar doble toque en móviles
+    window.addEventListener('DOMContentLoaded', () => {
+      const playBtn = document.getElementById('play-overlay');
+      if (playBtn) {
+        ['pointerdown', 'touchend', 'click'].forEach(evtName => {
+          playBtn.addEventListener(evtName, (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            togglePlayPause(ev);
+          }, { passive: false });
+        });
+      }
+    });
 
     // Repetir canción al tocar el título
     function reiniciarCancion() {

@@ -12672,8 +12672,8 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=
 
     has_mod = (float(costo_hora_mod or 0) > 0 or total_mod > 0)
     if has_mod:
-        col_w = [52, 12, 18, 18, 18, 22, 22, 20, 14]
-        headers = ['Producto', 'Cant', 'P.Unit', 'C.Insumo', 'MOD Est.', 'Costo Tot', 'Total Venta', 'Margen', '%']
+        col_w = [46, 11, 16, 16, 17, 17, 19, 19, 19, 12]
+        headers = ['Producto', 'Cant', 'P.Unit', 'Marg.Unit', 'C.Insumo', 'MOD Est.', 'Costo Tot', 'Venta Tot', 'Margen Tot', '%']
     else:
         col_w = [56, 14, 20, 20, 24, 24, 24, 14]
         headers = ['Producto', 'Cant', 'P.Unit', 'C.Unit', 'Total Venta', 'Total Costo', 'Margen', '%']
@@ -12693,6 +12693,7 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=
                 nombre,
                 f"{d['cantidad']:.0f}",
                 _pdf_money(d['precio_unitario']),
+                _pdf_money(d['margen_unitario']),
                 _pdf_money(d.get('total_costo_insumos', 0)),
                 _pdf_money(d.get('total_mod', 0)),
                 _pdf_money(d['total_costo']),
@@ -12727,8 +12728,11 @@ def _pdf_reporte_ventas_costos(nombre_negocio, desde, hasta, datos, centro_info=
     pdf.set_fill_color(235, 245, 235)
     total_cant = sum(d['cantidad'] for d in datos)
     if has_mod:
-        foot = ['TOTALES', f"{total_cant:.0f}", '', _pdf_money(total_insumos),
-                _pdf_money(total_mod), _pdf_money(total_costos),
+        prom_p = (total_ventas / total_cant) if total_cant else 0.0
+        prom_c = (total_costos / total_cant) if total_cant else 0.0
+        prom_m = prom_p - prom_c
+        foot = ['TOTALES', f"{total_cant:.0f}", _pdf_money(prom_p), _pdf_money(prom_m),
+                _pdf_money(total_insumos), _pdf_money(total_mod), _pdf_money(total_costos),
                 _pdf_money(total_ventas), _pdf_money(total_margen), f"{pct:.1f}"]
     else:
         foot = ['TOTALES', f"{total_cant:.0f}", '', '',

@@ -4620,21 +4620,49 @@
       <table class="w-full text-left border-collapse">
         <thead>
           <tr class="bg-gray-50 text-[10px] uppercase text-gray-500 border-b border-gray-150 select-none">
-            <th onclick="ordenarVC('nombre_producto')" class="px-3 py-3 text-left cursor-pointer hover:bg-gray-100 transition-colors min-w-[190px]">Producto <span id="sort-vc-nombre" class="text-gray-400">↕</span></th>
-            <th onclick="ordenarVC('cantidad')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap">Cant. Vendida <span id="sort-vc-cantidad" class="text-gray-400">↕</span></th>
-            <th onclick="ordenarVC('precio_unitario')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap">Precio Prom. Venta <span id="sort-vc-precio" class="text-gray-400">↕</span></th>
-            <th onclick="ordenarVC('total_costo_insumos')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap">Costo Insumos <span id="sort-vc-cinsumos" class="text-gray-400">↕</span></th>
-            <th class="vc-col-tiempos hidden px-3 py-3 text-center transition-all bg-amber-50/60 text-amber-900 border-x border-amber-200 whitespace-nowrap">
-              <span title="Tiempos estimados: 🍳 Prep previa / 📦 Ensamble y despacho">⏱️ Tiempos (Prep / Ens)</span>
+            <th onclick="ordenarVC('nombre_producto')" class="px-3 py-2 text-left cursor-pointer hover:bg-gray-100 transition-colors min-w-[170px] align-bottom">
+              <span>Producto</span> <span id="sort-vc-nombre" class="text-gray-400 text-[9px]">↕</span>
             </th>
-            <th onclick="ordenarVC('total_mod')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors text-amber-900 bg-amber-50/30 whitespace-nowrap">
-              MOD (Estimada) <span id="sort-vc-mod" class="text-gray-400">↕</span>
+            <th onclick="ordenarVC('cantidad')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom">
+              <div>Cant.</div>
+              <div>Vendida <span id="sort-vc-cantidad" class="text-gray-400 text-[9px]">↕</span></div>
             </th>
-            <th onclick="ordenarVC('total_costo')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors font-bold text-gray-700 whitespace-nowrap">Costo Total <span id="sort-vc-tcosto" class="text-gray-400">↕</span></th>
-            <th onclick="ordenarVC('total_venta')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap">Venta Total <span id="sort-vc-tventa" class="text-gray-400">↕</span></th>
-            <th onclick="ordenarVC('margen_unitario')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap">Margen Unit. <span id="sort-vc-munit" class="text-gray-400">↕</span></th>
-            <th onclick="ordenarVC('margen_total')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap">Margen Total <span id="sort-vc-mtot" class="text-gray-400">↕</span></th>
-            <th onclick="ordenarVC('margen_porcentual')" class="px-2.5 py-3 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap">% Margen <span id="sort-vc-mpct" class="text-gray-400">↕</span></th>
+            <th onclick="ordenarVC('precio_unitario')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom">
+              <div>Precio Prom.</div>
+              <div>Venta <span id="sort-vc-precio" class="text-gray-400 text-[9px]">↕</span></div>
+            </th>
+            <th onclick="ordenarVC('margen_unitario')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom text-indigo-900 bg-indigo-50/20">
+              <div>Margen</div>
+              <div>Unitario <span id="sort-vc-munit" class="text-gray-400 text-[9px]">↕</span></div>
+            </th>
+            <th onclick="ordenarVC('total_costo_insumos')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom">
+              <div>Costo</div>
+              <div>Insumos <span id="sort-vc-cinsumos" class="text-gray-400 text-[9px]">↕</span></div>
+            </th>
+            <th class="vc-col-tiempos hidden px-2 py-2 text-center transition-all bg-amber-50/60 text-amber-900 border-x border-amber-200 whitespace-nowrap align-bottom">
+              <div title="Tiempos estimados: 🍳 Prep previa / 📦 Ensamble y despacho">Tiempos</div>
+              <div class="text-[9px] text-amber-700">(Prep / Ens)</div>
+            </th>
+            <th onclick="ordenarVC('total_mod')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors text-amber-900 bg-amber-50/30 whitespace-nowrap align-bottom">
+              <div>MOD</div>
+              <div>(Estimada) <span id="sort-vc-mod" class="text-gray-400 text-[9px]">↕</span></div>
+            </th>
+            <th onclick="ordenarVC('total_costo')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors font-bold text-gray-700 whitespace-nowrap align-bottom">
+              <div>Costo</div>
+              <div>Total <span id="sort-vc-tcosto" class="text-gray-400 text-[9px]">↕</span></div>
+            </th>
+            <th onclick="ordenarVC('total_venta')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom">
+              <div>Venta</div>
+              <div>Total <span id="sort-vc-tventa" class="text-gray-400 text-[9px]">↕</span></div>
+            </th>
+            <th onclick="ordenarVC('margen_total')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom font-bold text-indigo-900">
+              <div>Margen</div>
+              <div>Total <span id="sort-vc-mtot" class="text-gray-400 text-[9px]">↕</span></div>
+            </th>
+            <th onclick="ordenarVC('margen_porcentual')" class="px-2 py-2 text-right num cursor-pointer hover:bg-gray-100 transition-colors whitespace-nowrap align-bottom font-extrabold">
+              <div>%</div>
+              <div>Margen <span id="sort-vc-mpct" class="text-gray-400 text-[9px]">↕</span></div>
+            </th>
           </tr>
         </thead>
 
@@ -19711,35 +19739,36 @@ function renderTablaVC() {
 
     return `
       <tr class="hover:bg-gray-50 border-b border-gray-100 text-xs cursor-pointer transition-colors" onclick="toggleDetalleVC(this, ${r.producto_id})" data-producto="${r.producto_id}">
-        <td class="px-3 py-2.5 font-semibold text-gray-800">
+        <td class="px-3 py-2 font-semibold text-gray-800">
           <span class="vc-arrow text-gray-400 mr-1 text-[10px]">▶</span> ${r.nombre_producto}
         </td>
-        <td class="px-2.5 py-2.5 text-right num text-gray-600 whitespace-nowrap">${fmt(r.cantidad)}</td>
-        <td class="px-2.5 py-2.5 text-right num font-mono text-gray-600 whitespace-nowrap">${fmtMon(r.precio_unitario)}</td>
-        <td class="px-2.5 py-2.5 text-right num font-mono text-gray-600 whitespace-nowrap">${fmtMon(r.total_costo_insumos || 0)}</td>
+        <td class="px-2 py-2 text-right num text-gray-600 whitespace-nowrap">${fmt(r.cantidad)}</td>
+        <td class="px-2 py-2 text-right num font-mono text-gray-600 whitespace-nowrap">${fmtMon(r.precio_unitario)}</td>
+        <td class="px-2 py-2 text-right num font-mono whitespace-nowrap font-medium ${r.margen_unitario >= 0 ? 'text-indigo-800' : 'text-rose-600'} bg-indigo-50/15">${fmtMon(r.margen_unitario)}</td>
+
+        <td class="px-2 py-2 text-right num font-mono text-gray-600 whitespace-nowrap">${fmtMon(r.total_costo_insumos || 0)}</td>
         
-        <td class="vc-col-tiempos ${tiemposHiddenCls} px-2 py-2 text-center whitespace-nowrap bg-amber-50/40 border-x border-amber-200" onclick="event.stopPropagation()">
+        <td class="vc-col-tiempos ${tiemposHiddenCls} px-1.5 py-1.5 text-center whitespace-nowrap bg-amber-50/40 border-x border-amber-200" onclick="event.stopPropagation()">
           <div class="inline-flex items-center gap-1">
             <span class="text-[10px] text-gray-400 font-bold" title="Minutos Preparación Previa">🍳</span>
             <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_preparacion_min || 0}"
                    title="Preparación / Cocción previa (minutos)"
                    onchange="actualizarTiempoProdVC(${r.producto_id}, this.value, null)"
-                   class="w-11 text-center font-mono text-[11px] font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs">
+                   class="w-10 text-center font-mono text-[11px] font-bold border border-gray-300 rounded-lg py-0.5 px-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs">
             <span class="text-[10px] text-gray-400 font-bold" title="Minutos Ensamble y Entrega">📦</span>
             <input type="number" min="0" max="999" step="0.5" value="${r.tiempo_ensamble_min || 0}"
                    title="Ensamble y entrega al despachar (minutos)"
                    onchange="actualizarTiempoProdVC(${r.producto_id}, null, this.value)"
-                   class="w-11 text-center font-mono text-[11px] font-bold border border-gray-300 rounded-lg py-0.5 px-1 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs">
-            <span id="save-ind-${r.producto_id}" class="text-[11px] opacity-0 transition-opacity w-3 inline-block">✓</span>
+                   class="w-10 text-center font-mono text-[11px] font-bold border border-gray-300 rounded-lg py-0.5 px-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs">
+            <span id="save-ind-${r.producto_id}" class="text-[11px] opacity-0 transition-opacity w-2.5 inline-block">✓</span>
           </div>
         </td>
 
-        <td class="px-2.5 py-2.5 text-right num font-mono text-amber-900 bg-amber-50/20 font-semibold whitespace-nowrap">${fmtMon(r.total_mod || 0)}</td>
-        <td class="px-2.5 py-2.5 text-right num font-mono text-rose-700 font-bold whitespace-nowrap">${fmtMon(r.total_costo)}</td>
-        <td class="px-2.5 py-2.5 text-right num font-mono font-bold text-emerald-700 whitespace-nowrap">${fmtMon(r.total_venta)}</td>
-        <td class="px-2.5 py-2.5 text-right num font-mono whitespace-nowrap ${r.margen_unitario >= 0 ? 'text-gray-700' : 'text-rose-600'}">${fmtMon(r.margen_unitario)}</td>
-        <td class="px-2.5 py-2.5 text-right num font-mono font-semibold whitespace-nowrap ${r.margen_total >= 0 ? 'text-indigo-700' : 'text-rose-600'}">${fmtMon(r.margen_total)}</td>
-        <td class="px-2.5 py-2.5 text-right num font-extrabold whitespace-nowrap ${pctCls}">${fmt(r.margen_porcentual)}%</td>
+        <td class="px-2 py-2 text-right num font-mono text-amber-900 bg-amber-50/20 font-semibold whitespace-nowrap">${fmtMon(r.total_mod || 0)}</td>
+        <td class="px-2 py-2 text-right num font-mono text-rose-700 font-bold whitespace-nowrap">${fmtMon(r.total_costo)}</td>
+        <td class="px-2 py-2 text-right num font-mono font-bold text-emerald-700 whitespace-nowrap">${fmtMon(r.total_venta)}</td>
+        <td class="px-2 py-2 text-right num font-mono font-semibold whitespace-nowrap ${r.margen_total >= 0 ? 'text-indigo-700' : 'text-rose-600'}">${fmtMon(r.margen_total)}</td>
+        <td class="px-2 py-2 text-right num font-extrabold whitespace-nowrap ${pctCls}">${fmt(r.margen_porcentual)}%</td>
       </tr>
       <tr class="vc-detalle-${r.producto_id} hidden"><td colspan="${colsSpan}" class="px-3 py-2 bg-gray-50/50"><p class="text-[10px] text-gray-400 animate-pulse">Cargando documentos...</p></td></tr>
     `;
@@ -19765,17 +19794,17 @@ function renderTablaVC() {
 
   tfoot.innerHTML = `
     <tr class="bg-gray-100/90 text-xs text-gray-800">
-      <td class="px-3 py-3 text-left font-extrabold">TOTAL / RESUMEN</td>
-      <td class="px-2.5 py-3 text-right num font-extrabold whitespace-nowrap">${fmt(totalCant)}</td>
-      <td class="px-2.5 py-3 text-right num font-mono font-extrabold text-gray-600 whitespace-nowrap">${fmtMon(promPrecioPonderado)}</td>
-      <td class="px-2.5 py-3 text-right num font-mono font-extrabold text-gray-700 whitespace-nowrap">${fmtMon(totalInsumos)}</td>
-      <td class="vc-col-tiempos ${tiemposHiddenCls} px-2 py-3 text-center font-mono text-[10px] text-amber-700 bg-amber-50/50 whitespace-nowrap">—</td>
-      <td class="px-2.5 py-3 text-right num font-mono font-extrabold text-amber-900 bg-amber-50/30 whitespace-nowrap">${fmtMon(totalMod)}</td>
-      <td class="px-2.5 py-3 text-right num font-mono font-extrabold text-rose-800 whitespace-nowrap">${fmtMon(totalCostos)}</td>
-      <td class="px-2.5 py-3 text-right num font-mono font-extrabold text-emerald-800 whitespace-nowrap">${fmtMon(totalVentas)}</td>
-      <td class="px-2.5 py-3 text-right num font-mono font-extrabold whitespace-nowrap ${promMargenPonderado >= 0 ? 'text-gray-800' : 'text-rose-700'}">${fmtMon(promMargenPonderado)}</td>
-      <td class="px-2.5 py-3 text-right num font-mono font-extrabold whitespace-nowrap ${margenTotalGeneral >= 0 ? 'text-indigo-800' : 'text-rose-700'}">${fmtMon(margenTotalGeneral)}</td>
-      <td class="px-2.5 py-3 text-right num font-extrabold whitespace-nowrap ${pctGeneralCls}">${fmt(pctMargenGeneral)}%</td>
+      <td class="px-3 py-2.5 text-left font-extrabold">TOTAL / RESUMEN</td>
+      <td class="px-2 py-2.5 text-right num font-extrabold whitespace-nowrap">${fmt(totalCant)}</td>
+      <td class="px-2 py-2.5 text-right num font-mono font-extrabold text-gray-600 whitespace-nowrap">${fmtMon(promPrecioPonderado)}</td>
+      <td class="px-2 py-2.5 text-right num font-mono font-extrabold whitespace-nowrap ${promMargenPonderado >= 0 ? 'text-indigo-900' : 'text-rose-700'} bg-indigo-50/20">${fmtMon(promMargenPonderado)}</td>
+      <td class="px-2 py-2.5 text-right num font-mono font-extrabold text-gray-700 whitespace-nowrap">${fmtMon(totalInsumos)}</td>
+      <td class="vc-col-tiempos ${tiemposHiddenCls} px-1.5 py-2.5 text-center font-mono text-[10px] text-amber-700 bg-amber-50/50 whitespace-nowrap">—</td>
+      <td class="px-2 py-2.5 text-right num font-mono font-extrabold text-amber-900 bg-amber-50/30 whitespace-nowrap">${fmtMon(totalMod)}</td>
+      <td class="px-2 py-2.5 text-right num font-mono font-extrabold text-rose-800 whitespace-nowrap">${fmtMon(totalCostos)}</td>
+      <td class="px-2 py-2.5 text-right num font-mono font-extrabold text-emerald-800 whitespace-nowrap">${fmtMon(totalVentas)}</td>
+      <td class="px-2 py-2.5 text-right num font-mono font-extrabold whitespace-nowrap ${margenTotalGeneral >= 0 ? 'text-indigo-800' : 'text-rose-700'}">${fmtMon(margenTotalGeneral)}</td>
+      <td class="px-2 py-2.5 text-right num font-extrabold whitespace-nowrap ${pctGeneralCls}">${fmt(pctMargenGeneral)}%</td>
     </tr>
   `;
 }

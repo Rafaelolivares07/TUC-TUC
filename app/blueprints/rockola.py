@@ -1010,6 +1010,38 @@ def registro_rapido_rockola():
         conn.close()
 
 
+@bp.route('/buscar-terceros')
+def buscar_terceros_rockola():
+    """Autocompletado de contactos desde la tabla terceros (nombre o telefono)."""
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify(ok=True, contactos=[])
+    q_digits = ''.join(c for c in q if c.isdigit())
+    conn = _connect()
+    try:
+        if q_digits:
+            rows = conn.execute("""
+                SELECT id, nombre, telefono
+                FROM terceros
+                WHERE nombre ILIKE %s
+                   OR REGEXP_REPLACE(COALESCE(telefono, ''), '[^0-9]', '', 'g') ILIKE %s
+                ORDER BY nombre
+                LIMIT 10
+            """, ('%' + q + '%', '%' + q_digits + '%')).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT id, nombre, telefono
+                FROM terceros
+                WHERE nombre ILIKE %s
+                ORDER BY nombre
+                LIMIT 10
+            """, ('%' + q + '%',)).fetchall()
+        contactos = [{'id': r['id'], 'nombre': r['nombre'] or '', 'telefono': r['telefono'] or ''} for r in rows]
+        return jsonify(ok=True, contactos=contactos)
+    finally:
+        conn.close()
+
+
 # Mensajeria musical: compartir cancion al chat
 
 

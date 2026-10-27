@@ -1665,21 +1665,24 @@ input:checked + .slider:before {
       </div>
     </div>
 
-    <!-- Botón Contact Picker (si el navegador lo soporta) -->
+    <!-- Botón Contact Picker (si el dispositivo móvil lo soporta) -->
     <button type="button" id="btn-modal-seleccionar-contacto" onclick="seleccionarContactoModal()" style="display:none; width:100%; padding:11px 12px; border-radius:12px; background:rgba(0,212,255,0.10); border:1px solid rgba(0,212,255,0.35); color:var(--ac1); font-family:'Space Grotesk',sans-serif; font-weight:800; font-size:13px; cursor:pointer; align-items:center; justify-content:center; gap:8px; margin-bottom:12px;">
       <svg style="width:16px; height:16px; fill:currentColor;" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-      Seleccionar de mis contactos
+      Seleccionar de la libreta de contactos
     </button>
 
-    <div style="margin-bottom:12px;">
+    <div style="position:relative; margin-bottom:12px;">
       <label style="display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.5px;">Para quién es (opcional para grupos)</label>
-      <input type="text" id="modal-compartir-input-nombre" placeholder="Ej: Carlos" style="width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(0,212,255,0.2); background:rgba(0,0,0,0.35); color:#fff; font-family:inherit; font-size:14px; outline:none;">
+      <input type="text" id="modal-compartir-input-nombre" oninput="buscarContactosTerceros(this.value)" placeholder="Escribe el nombre o busca un contacto..." style="width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(0,212,255,0.2); background:rgba(0,0,0,0.35); color:#fff; font-family:inherit; font-size:14px; outline:none;" autocomplete="off">
+      
+      <!-- Lista flotante de contactos encontrados en la BD -->
+      <div id="modal-compartir-autocomplete" style="display:none; position:absolute; left:0; right:0; top:100%; z-index:350; background:#0c182c; border:1px solid var(--ac1); border-radius:10px; max-height:190px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.85); margin-top:4px;"></div>
     </div>
 
     <div style="margin-bottom:16px;">
       <label style="display:block; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.5px;">Teléfono o WhatsApp (opcional)</label>
-      <input type="tel" id="modal-compartir-input-tel" placeholder="Ej: 3101234567" style="width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(0,212,255,0.2); background:rgba(0,0,0,0.35); color:#fff; font-family:inherit; font-size:14px; outline:none;">
-      <div style="font-size:11px; color:var(--muted); margin-top:4px;">Si lo dejas en blanco, generará un enlace general listo para compartir a cualquier grupo o chat.</div>
+      <input type="tel" id="modal-compartir-input-tel" oninput="buscarContactosTerceros(this.value)" placeholder="Ej: 3101234567" style="width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(0,212,255,0.2); background:rgba(0,0,0,0.35); color:#fff; font-family:inherit; font-size:14px; outline:none;">
+      <div style="font-size:11px; color:var(--muted); margin-top:4px;">Escribe el nombre o teléfono para buscar entre tus contactos registrados de Tuc Tuc.</div>
     </div>
 
     <button type="button" id="btn-modal-ejecutar-compartir" onclick="ejecutarCompartirWhatsApp()" style="width:100%; padding:14px; border-radius:12px; border:none; background:#25d366; color:#05140b; font-family:'Space Grotesk',sans-serif; font-weight:900; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 16px rgba(37,211,102,0.35);">
@@ -2664,6 +2667,7 @@ async function intentarReproducir(c) {
   if (!c || !c.id) return;
   playPendiente = true;
   cancionActual = c.id;
+  cancionActualObjeto = c;
   nombreEl.textContent = limpiarNombre(c.nombre);
   actualizarPlayPauseBtn(false);
 
@@ -4841,19 +4845,41 @@ function reintentarUltimaDescarga() {
 }
 
 let cancionACompartir = null;
+let cancionActualObjeto = null;
+let _timerBuscarContactos = null;
 
 function abrirModalCompartirActual() {
-  if (!currentTrack || (!currentTrack.id && !currentTrack.nombre)) {
+  let track = cancionActualObjeto;
+  if (!track && typeof currentCola !== 'undefined' && currentCola && currentCola.length > 0) {
+    track = currentCola[0];
+  }
+  if (!track && typeof cancionActual !== 'undefined' && cancionActual) {
+    track = (typeof currentCola !== 'undefined' && currentCola ? currentCola.find(x => x.id === cancionActual) : null)
+      || (typeof cancionesLocales !== 'undefined' && cancionesLocales ? cancionesLocales.find(x => x.id === cancionActual) : null);
+  }
+  if (!track) {
+    const el = document.getElementById('nombre-actual');
+    const txt = el ? el.textContent.trim() : '';
+    if (txt && !txt.toLowerCase().includes('esperando') && !txt.toLowerCase().includes('saltando')) {
+      track = {
+        id: (typeof cancionActual !== 'undefined' && cancionActual) ? cancionActual : 'actual',
+        nombre: txt
+      };
+    }
+  }
+
+  if (!track || !track.nombre) {
     mostrarMensaje('No hay ninguna canción sonando ahora mismo', 'err');
     return;
   }
-  const yt = (currentTrack.youtube_url || (currentTrack.id && currentTrack.id.includes('youtube') ? currentTrack.id : '')).trim();
-  const esLocal = currentTrack.id && currentTrack.id.startsWith('local-');
-  const archivoId = (!yt && !esLocal) ? currentTrack.id : '';
+
+  const yt = (track.youtube_url || (track.id && String(track.id).includes('youtube') ? track.id : '')).trim();
+  const esLocal = track.id && String(track.id).startsWith('local-');
+  const archivoId = (!yt && !esLocal && track.id !== 'actual') ? track.id : '';
 
   cancionACompartir = {
-    id: currentTrack.id,
-    nombre: currentTrack.nombre || 'Canción',
+    id: track.id,
+    nombre: track.nombre || 'Canción',
     origen: yt ? 'youtube' : 'archivo',
     youtube_url: yt,
     archivo_id: archivoId,
@@ -4864,7 +4890,7 @@ function abrirModalCompartirActual() {
 
 function abrirModalCompartirItem(id, nombre, youtube_url) {
   const yt = (youtube_url || '').trim();
-  const esLocal = id && id.startsWith('local-');
+  const esLocal = id && String(id).startsWith('local-');
   const archivoId = (!yt && !esLocal) ? id : '';
 
   cancionACompartir = {
@@ -4896,6 +4922,8 @@ function abrirModalCompartirUI(nombreCancion) {
   document.getElementById('modal-compartir-titulo-cancion').textContent = limpiarNombre(nombreCancion || 'Canción');
   document.getElementById('modal-compartir-input-nombre').value = '';
   document.getElementById('modal-compartir-input-tel').value = '';
+  const box = document.getElementById('modal-compartir-autocomplete');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
 
   const btnContacts = document.getElementById('btn-modal-seleccionar-contacto');
   if (btnContacts) {
@@ -4918,10 +4946,53 @@ function abrirModalCompartirUI(nombreCancion) {
 function cerrarModalCompartir() {
   const modal = document.getElementById('modal-compartir-cancion');
   if (modal) modal.style.display = 'none';
+  const box = document.getElementById('modal-compartir-autocomplete');
+  if (box) box.style.display = 'none';
   cancionACompartir = null;
 }
 
+function buscarContactosTerceros(val) {
+  clearTimeout(_timerBuscarContactos);
+  const box = document.getElementById('modal-compartir-autocomplete');
+  const q = (val || '').trim();
+  if (q.length < 2) {
+    if (box) box.style.display = 'none';
+    return;
+  }
+  _timerBuscarContactos = setTimeout(async () => {
+    try {
+      const res = await fetch('/rockola/buscar-terceros?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      const list = data.contactos || [];
+      if (!list.length) {
+        if (box) box.style.display = 'none';
+        return;
+      }
+      box.innerHTML = list.map(c => `
+        <div onclick="seleccionarTerceroCompartir('${escapeJs(c.nombre)}', '${escapeJs(c.telefono)}')" style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.08); cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:700; color:#fff; font-size:13px;">${limpiarNombre(c.nombre)}</span>
+          <span style="font-size:11px; color:var(--ac1);">${c.telefono || 'Sin tel'}</span>
+        </div>
+      `).join('');
+      box.style.display = 'block';
+    } catch (e) {
+      if (box) box.style.display = 'none';
+    }
+  }, 250);
+}
+
+function seleccionarTerceroCompartir(nombre, telefono) {
+  document.getElementById('modal-compartir-input-nombre').value = nombre;
+  document.getElementById('modal-compartir-input-tel').value = telefono;
+  const box = document.getElementById('modal-compartir-autocomplete');
+  if (box) box.style.display = 'none';
+}
+
 async function seleccionarContactoModal() {
+  if (!('contacts' in navigator) || !navigator.contacts || !navigator.contacts.select) {
+    alert('Tu navegador no permite acceso directo a la libreta local. Puedes escribir o buscar el contacto directamente en el campo de texto.');
+    return;
+  }
   try {
     const contactos = await navigator.contacts.select(['name', 'tel'], { multiple: false });
     if (contactos && contactos.length > 0) {
